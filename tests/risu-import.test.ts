@@ -1104,3 +1104,122 @@ test('lore directives decide activation and never reach the model as prose', () 
   expect(codes).toContain('lore-decorators');
   expect(codes).toContain('lore-decorator-position');
 });
+
+// Every surface the card carries and the import does not reproduce has to reach the reader.
+const SURFACE_CODES = [
+  'view-screen',
+  'emotion-assets',
+  'utility-bot',
+  'card-license',
+  'card-source',
+  'image-generation',
+  'depth-prompt',
+  'card-metadata',
+  'asset-role',
+];
+
+test('card surfaces the import cannot carry are reported instead of dropped in silence', () => {
+  const store = database();
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
+    'base64'
+  );
+  const value = card();
+  Object.assign(value.data, {
+    creator_notes: 'Written by the card author.',
+    tags: ['sci-fi'],
+    creator: 'Author',
+    character_version: '2',
+    nickname: 'Pilot',
+    assets: [
+      { name: 'main', uri: 'embeded://assets/main.png', type: 'icon', ext: 'png' },
+      { name: 'happy', uri: 'embeded://assets/happy.png', type: 'emotion', ext: 'png' },
+    ],
+    extensions: {
+      depth_prompt: { prompt: 'Stay close.', depth: 4 },
+      sd_prompt: 'a portrait',
+      risuai: {
+        viewScreen: 'emotion',
+        inlayViewScreen: true,
+        emotions: [['happy', '__asset:happy']],
+        additionalAssets: [['extra', '__asset:extra', 'png']],
+        utilityBot: true,
+        license: 'CC0',
+        source: ['https://example.invalid/card'],
+        sdData: [['prompt', 'a portrait']],
+      },
+    },
+  });
+  const source = {
+    name: 'surfaces.charx',
+    base64: zip([
+      ['card.json', Buffer.from(JSON.stringify(value))],
+      ['assets/main.png', png],
+      ['assets/happy.png', png],
+    ]).toString('base64'),
+  };
+  const preview = prepareRisuImport({ source });
+  const levels = Object.fromEntries(
+    preview.findings.map((finding) => [finding.code, finding.level])
+  );
+  for (const code of SURFACE_CODES) expect(levels).toHaveProperty(code);
+  expect(levels['view-screen']).toBe('unsupported');
+  expect(levels['emotion-assets']).toBe('unsupported');
+  for (const code of SURFACE_CODES.slice(2)) expect(levels[code]).toBe('info');
+  // The settings that now have their own notice no longer fall into the generic bucket.
+  expect(levels['extension-settings']).toBeUndefined();
+  const saved = applyRisuImport(store, {
+    source,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: true,
+    idempotencyKey: 'surfaces',
+  });
+  const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
+  expect(bot.description).toBe('Written by the card author.');
+  expect(bot.package!.description).toBe('Written by the card author.');
+  // Both typed assets arrive as ordinary package images; only their names survive.
+  expect(bot.package!.images!.map((image) => image.title)).toEqual(['main', 'happy']);
+
+  const plain = sourceOf(card());
+  const plainPreview = prepareRisuImport({ source: plain });
+  const plainCodes = plainPreview.findings.map((finding) => finding.code);
+  for (const code of [...SURFACE_CODES, 'creator-notes-truncated'])
+    expect(plainCodes).not.toContain(code);
+  expect(plainPreview.findings.filter((finding) => finding.level === 'unsupported')).toEqual([]);
+  const plainSaved = applyRisuImport(store, {
+    source: plain,
+    digest: plainPreview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'plain-card',
+  });
+  // A card without creator notes keeps the generated line naming the file it came from.
+  expect(
+    store.product.get<Content>('content', plainSaved.receipt.items[0].id).description
+  ).toContain('synthetic-card.json');
+});
+
+test('creator notes beyond the description limit are cut with an ellipsis and a notice', () => {
+  const store = database();
+  const original = card();
+  const source = sourceOf({
+    ...original,
+    data: { ...original.data, creator_notes: 'A'.repeat(4200) },
+  });
+  const preview = prepareRisuImport({ source });
+  expect(preview.findings).toContainEqual(
+    expect.objectContaining({ code: 'creator-notes-truncated', level: 'info' })
+  );
+  const saved = applyRisuImport(store, {
+    source,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'long-notes',
+  });
+  const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
+  expect(bot.description).toHaveLength(4000);
+  expect(bot.description.endsWith('A…')).toBe(true);
+  expect(bot.package!.description).toBe(bot.description);
+});

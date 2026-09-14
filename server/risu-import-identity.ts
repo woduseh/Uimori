@@ -3,12 +3,18 @@ import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import { text } from './request-validation.js';
 import { importRisuVariableDefaults } from './risu-variable-defaults.js';
 import {
+  present,
   string,
   type RisuCard,
   type RisuCardExtension,
   type RisuCardInput,
 } from './risu-import-card.js';
 import type { RisuImportFindings } from './risu-import-findings.js';
+
+/** The package description limit `validateContentPackage` enforces in core/content-package.ts. */
+const DESCRIPTION_LIMIT = 4000;
+/** Card metadata the package has no field for; the preserved original keeps it. */
+const METADATA_FIELDS = ['tags', 'creator', 'character_version', 'nickname'];
 
 /**
  * Opens the package a card becomes: its identity and description, the notice about an original the
@@ -27,15 +33,19 @@ export function importRisuIdentity({
 }): { pkg: ContentPackage; title: string } {
   const { hash, source, kind } = input;
   const title = text(card.name, 'card name', 200);
+  // The creator's own notes describe the material better than any generated line, so they become
+  // the description; a card without notes keeps the generated one naming the file it came from.
+  const notes = string(card.creator_notes);
+  const written =
+    kind === 'module' || notes.trim() ? notes : `Risu 캐릭터 카드에서 가져온 자료 · ${source.name}`;
+  const description =
+    written.length > DESCRIPTION_LIMIT ? `${written.slice(0, DESCRIPTION_LIMIT - 1)}…` : written;
   const pkg: ContentPackage = {
     version: 1,
     id: `card-${hash.slice(0, 32)}`,
     revision: 1,
     title,
-    description:
-      kind === 'module'
-        ? string(card.creator_notes).slice(0, 4000)
-        : `Risu 캐릭터 카드에서 가져온 자료 · ${source.name}`.slice(0, 4000),
+    description,
     body: '',
     ...(kind === 'bot' ? { identity: { name: title, description: '' } } : {}),
     lore: [],
@@ -45,6 +55,18 @@ export function importRisuIdentity({
     starts: [],
     images: [],
   };
+  if (description !== written)
+    findings.add(
+      'creator-notes-truncated',
+      'info',
+      `제작자 코멘트가 ${DESCRIPTION_LIMIT}자를 넘어 자료 설명에는 앞부분만 담고 뒤를 줄임표로 줄였어요. 전체 내용은 원본 파일에 보존해요.`
+    );
+  if (METADATA_FIELDS.some((field) => present(card[field])))
+    findings.add(
+      'card-metadata',
+      'info',
+      '태그·제작자·카드 버전·별칭은 자료 필드로 옮기지 않아요. 보존한 원본 파일에만 남으며 검색이나 표시에 쓰지 않아요.'
+    );
   if (source.base64 === undefined)
     findings.add(
       'source-file-not-retained',
