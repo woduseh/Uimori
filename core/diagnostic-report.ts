@@ -171,6 +171,8 @@ export type DiagnosticReport = {
     platform: string;
     architecture: string;
     testMode: boolean;
+    /** Whether this app is holding new writes, so a shared report shows an update in progress. */
+    maintenance: { status: 'open' | 'closed'; epoch: number };
   };
   scope: 'system' | 'chat' | 'run';
   coverage: {

@@ -4,7 +4,7 @@
 
 ## 포함 범위
 
-`uimori-diagnostic-report` v1은 작품 백업과 별도 형식이에요. 시스템 범위에는 build·DB/지원 schema·Node·OS·architecture와 합성 모드 여부만 포함해요. 채팅 범위에는 그 채팅의 최신 Run 요약과 attempt 요약을, Run 범위에는 선택한 Run과 `run_id`로 직접 연결된 attempt만 포함해요. 보조 작업·도우미의 독립 진행 이력은 아직 포함하지 않아요.
+`uimori-diagnostic-report` v1은 작품 백업과 별도 형식이에요. 시스템 범위에는 build·DB/지원 schema·Node·OS·architecture·합성 모드 여부와 [유지보수 상태](SELF-HOST.md#유지보수-모드)의 열림/닫힘·구간 번호만 포함해요. 채팅 범위에는 그 채팅의 최신 Run 요약과 attempt 요약을, Run 범위에는 선택한 Run과 `run_id`로 직접 연결된 attempt만 포함해요. 보조 작업·도우미의 독립 진행 이력은 아직 포함하지 않아요.
 
 - Run 상태, 알려진 오류 코드, 입력/도구 호출 수, 거절 도구 수, 원문 확정/부분 출력 여부, 상태 준비 상태, 사용량을 포함해요.
 - attempt에는 보고서 내부 별칭으로 된 연결 관계, 프로토콜, 역할, 상태, 알려진 오류 코드·HTTP 상태·허용된 거절 필드, 사용량을 포함해요. 알 수 없는 비용과 토큰은 `null`이에요.
