@@ -28,6 +28,7 @@ describe('pure Risu Lua adaptation', () => {
       ['risu-lua-0-output', ['after-turn'], undefined],
       ['risu-lua-0-start', ['before-turn'], undefined],
       ['risu-lua-0-onButtonClick', ['user'], undefined],
+      ['risu-lua-0-editRequest', ['before-turn'], 'edit-request'],
       ['risu-lua-0-editInput', ['before-turn'], 'edit-input'],
     ]);
     expect(converted.sources).toEqual([{ triggerIndex: 0, effectIndex: 0, source }]);
@@ -35,7 +36,7 @@ describe('pure Risu Lua adaptation', () => {
       converted.findings
         .filter((finding) => finding.code === 'RISU_LUA_PHASE_UNSUPPORTED')
         .map((finding) => finding.event)
-    ).toEqual(['editRequest', 'editDisplay', 'editOutput']);
+    ).toEqual(['editDisplay', 'editOutput']);
     for (const action of converted.actions)
       expect(validateExtensionProgram(action.program).language).toBe('lua');
   });
@@ -49,6 +50,7 @@ describe('pure Risu Lua adaptation', () => {
     // Risu runs edit callbacks from the edit path, which never evaluates trigger conditions.
     expect(converted.actions.map((action) => [action.id, action.hook])).toEqual([
       ['risu-lua-0-onButtonClick', undefined],
+      ['risu-lua-0-editRequest', 'edit-request'],
       ['risu-lua-0-editInput', 'edit-input'],
     ]);
     expect(
@@ -265,6 +267,7 @@ describe('Risu Lua automatic conditions', () => {
       ]);
       expect(converted.actions.map((action) => [action.id, action.hook])).toEqual([
         ['risu-lua-0-onButtonClick', undefined],
+        ['risu-lua-0-editRequest', 'edit-request'],
         ['risu-lua-0-editInput', 'edit-input'],
       ]);
       expect(converted.actions.every((action) => action.when === undefined)).toBe(true);
@@ -286,6 +289,7 @@ describe('Risu Lua automatic conditions', () => {
     const converted = adaptRisuLuaTriggers(input);
     expect(converted.actions.map((item) => [item.id, item.hook])).toEqual([
       ['risu-lua-0-onButtonClick', undefined],
+      ['risu-lua-0-editRequest', 'edit-request'],
       ['risu-lua-0-editInput', 'edit-input'],
     ]);
     expect(input).toEqual(before);

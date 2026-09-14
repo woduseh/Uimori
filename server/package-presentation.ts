@@ -59,6 +59,10 @@ export async function buildPackagePresentation(
   const inputTransform = currentPromptInputTransform(snapshot);
   if (snapshot.promptInputTransforms?.error)
     issues.push('전송 전 텍스트 변환에 실패해 원래 입력으로 진행했어요.');
+  if (snapshot.extensionMessageEdit?.skipped)
+    issues.push(
+      '가져온 자료의 전송문 편집은 대화 읽기 허용이 없거나 대화가 실행 한도를 넘어 건너뛰었어요. 원문 대화를 그대로 보냈어요.'
+    );
   const translation = source.translation
     ? await applyPackageTransforms(source.translation.text, rules, 'translation')
     : undefined;

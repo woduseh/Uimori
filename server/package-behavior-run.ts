@@ -6,6 +6,7 @@ import {
   BehaviorEvaluationError,
   behaviorActionAllowed,
   behaviorActionTriggers,
+  behaviorEditResultMessages,
   behaviorEditResultText,
   behaviorHookBeforeRequest,
   behaviorHookOrder,
@@ -26,14 +27,21 @@ import {
   withoutPackageBehavior,
 } from '../core/package-behavior-tools.js';
 import type { PackageAttachment } from '../core/content-package.js';
-import type { RuntimeValue } from '../core/prompt-program.js';
+import type { PromptHistoryMessage, RuntimeValue } from '../core/prompt-program.js';
 import {
   EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS,
   ExtensionProgramError,
   type ExtensionProgramReceipt,
   type ResolvedExtensionProgram,
 } from '../core/extension-program.js';
-import { buildExtensionRequestEdit, extensionEditHookInput } from './extension-request-edit.js';
+import {
+  buildExtensionMessageEdit,
+  buildExtensionRequestEdit,
+  extensionEditHookInput,
+  extensionEditRequestInput,
+  requestEditMessages,
+} from './extension-request-edit.js';
+import { assertExtensionConversationReadAccess } from './extension-conversation-access.js';
 import type { ExtensionModelBinding } from '../core/extension-model.js';
 import { createExtensionProgramReceipt } from './extension-program-receipt.js';
 import type { AfterResponseProgress } from '../core/after-response.js';
@@ -156,13 +164,22 @@ function automaticActions(snapshot: RunSnapshot) {
     .sort((a, b) => behaviorHookOrder(a.action) - behaviorHookOrder(b.action));
 }
 /** Host-owned edit phases receive the running text; other automatic actions keep their declaration. */
-function automaticInput(action: BehaviorAction, editedRequest: string): RuntimeValue {
-  return action.hook === 'edit-input'
-    ? extensionEditHookInput(editedRequest)
-    : (action.automaticInput ?? {});
+function automaticInput(
+  action: BehaviorAction,
+  edited: { request: string; messages: PromptHistoryMessage[] }
+): RuntimeValue | undefined {
+  if (action.hook === 'edit-input') return extensionEditHookInput(edited.request);
+  if (action.hook === 'edit-request') return extensionEditRequestInput(edited.messages);
+  return action.automaticInput ?? {};
 }
 const editResultLimit = (action: BehaviorAction) =>
-  action.hook === 'edit-input' ? { maxResultChars: EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS } : {};
+  action.hook === undefined ? {} : { maxResultChars: EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS };
+/** The transmitted copy a request hook edits: the frozen conversation plus the edited request. */
+function editedMessages(snapshot: RunSnapshot, request: string, chain: string[][]) {
+  const base = requestEditMessages(snapshot, request);
+  const texts = chain.at(-1);
+  return texts ? base.map((message, index) => ({ ...message, text: texts[index] })) : base;
+}
 export function runBehaviorProgress(store: Store, runId: string): RunBehaviorProgress | undefined {
   const row = store.db
     .prepare('SELECT body FROM package_behavior_runs WHERE run_id=?')
@@ -711,23 +728,45 @@ export function preparedBehaviorSnapshot(
       )
     )
   );
-  const edited = entries.filter((entry) => hooks.get(entryKey(entry)) === 'edit-input');
+  const edited = new Set(
+    entries.filter((entry) => hooks.get(entryKey(entry))?.startsWith('edit-'))
+  );
   // The reserved request stays the stored original; only its transmitted copy carries the edit.
   const extensionRequestEdit = buildExtensionRequestEdit(
     base.request,
-    edited.map((entry) => ({
-      id: entryKey(entry),
-      text: behaviorEditResultText(entry.result),
-    }))
+    entries
+      .filter((entry) => hooks.get(entryKey(entry)) === 'edit-input')
+      .map((entry) => ({ id: entryKey(entry), text: behaviorEditResultText(entry.result) }))
   );
+  const requestHooks = [...hooks].filter(([, hook]) => hook === 'edit-request');
+  const requestEdits = entries.filter((entry) => hooks.get(entryKey(entry)) === 'edit-request');
+  // A declared request hook without a recorded entry was skipped by grant, limit or condition.
+  const skippedRequestHook = requestHooks.some(
+    ([key]) => !entries.some((entry) => entryKey(entry) === key)
+  );
+  let chained = requestEdits.length
+    ? requestEditMessages(base, extensionRequestEdit?.text ?? base.request)
+    : [];
+  const extensionMessageEdit = requestHooks.length
+    ? buildExtensionMessageEdit(
+        chained,
+        requestEdits.map((entry) => {
+          const texts = behaviorEditResultMessages(entry.result, chained);
+          chained = chained.map((message, index) => ({ ...message, text: texts[index] }));
+          return { id: entryKey(entry), texts };
+        }),
+        skippedRequestHook
+      )
+    : undefined;
   const automaticResults = entries
-    .filter((entry) => !edited.includes(entry))
+    .filter((entry) => !edited.has(entry))
     .map(({ instanceId, actionId, result }) => ({ instanceId, actionId, result }));
   if (
     isDeepStrictEqual(states, base.packageStates) &&
     isDeepStrictEqual(automaticResults, base.behaviorExecution.automaticResults) &&
     isDeepStrictEqual(variableState, variableStateFromProfile(base.profile)) &&
-    isDeepStrictEqual(extensionRequestEdit, base.extensionRequestEdit)
+    isDeepStrictEqual(extensionRequestEdit, base.extensionRequestEdit) &&
+    isDeepStrictEqual(extensionMessageEdit, base.extensionMessageEdit)
   )
     return base;
   const projected: RunSnapshot = {
@@ -739,6 +778,8 @@ export function preparedBehaviorSnapshot(
   };
   if (extensionRequestEdit) projected.extensionRequestEdit = extensionRequestEdit;
   else delete projected.extensionRequestEdit;
+  if (extensionMessageEdit) projected.extensionMessageEdit = extensionMessageEdit;
+  else delete projected.extensionMessageEdit;
   return projected;
 }
 const automaticWork = new WeakMap<
@@ -791,6 +832,15 @@ export async function prepareAutomaticRunBehavior(
   const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
   if (signal?.aborted) abort();
+  const granted = (d: { ref: PackageAttachment; action: BehaviorAction }) => {
+    try {
+      assertExtensionConversationReadAccess(store, reserved.profile, d.ref, d.action.program!);
+      return true;
+    } catch (error) {
+      if (error instanceof ExtensionProgramError) return false;
+      throw error;
+    }
+  };
   const work = (async () => {
     const local = store.transaction(() => {
       const run = store.run(runId);
@@ -807,50 +857,61 @@ export async function prepareAutomaticRunBehavior(
     onProgress?.();
     try {
       const actions = automaticActions(reserved);
-      // Risu chains every edit callback over the running text in declaration order.
+      // Risu chains every edit callback over the running value in declaration order.
       let editedRequest = reserved.request;
+      const messageChain: string[][] = [];
       for (const d of actions) {
+        const messages = editedMessages(reserved, editedRequest, messageChain);
         const chain = (entry: RunBehaviorEntry) => {
           if (d.action.hook === 'edit-input') editedRequest = behaviorEditResultText(entry.result);
+          if (d.action.hook === 'edit-request')
+            messageChain.push(behaviorEditResultMessages(entry.result, messages));
         };
-        const input = automaticInput(d.action, editedRequest);
-        const step = store.transaction(() => {
-          const current = preparationProgress(store, runId);
-          if (current.preparation.status !== 'running') return null;
-          if (controller.signal.aborted) fail('BEHAVIOR_RUN_CANCELLED');
-          validateOwner(store, store.run(runId));
-          const before = local.states.find((s) => s.instanceId === d.instanceId)!;
-          if (
-            !behaviorActionAllowed(
-              d.action,
-              before.state,
-              input,
-              executionContext(progressSnapshot(reserved, local), 'main', d.ref)
-            )
-          )
-            return { skipped: true as const };
-          const resolution = actionResolution(
-            store,
-            reserved,
-            local,
-            d.ref,
-            d.action,
-            input,
-            'before-turn'
-          );
-          if (resolution.entry || !d.action.program) {
-            const entry = finishActionResolution(
-              store,
-              local,
-              d.action,
-              input,
-              'before-turn',
-              resolution
-            );
-            return { skipped: true as const, entry };
-          }
-          return { program: d.action.program, state: resolution.before.state };
-        });
+        const input = automaticInput(d.action, { request: editedRequest, messages });
+        // A conversation copy needs the same grant as any conversation read, and a conversation
+        // beyond the guest limit is skipped instead of being handed over in part.
+        const unavailable =
+          input === undefined || (d.action.hook === 'edit-request' && !granted(d));
+        const step = unavailable
+          ? { skipped: true as const }
+          : store.transaction(() => {
+              const value = input!;
+              const current = preparationProgress(store, runId);
+              if (current.preparation.status !== 'running') return null;
+              if (controller.signal.aborted) fail('BEHAVIOR_RUN_CANCELLED');
+              validateOwner(store, store.run(runId));
+              const before = local.states.find((s) => s.instanceId === d.instanceId)!;
+              if (
+                !behaviorActionAllowed(
+                  d.action,
+                  before.state,
+                  value,
+                  executionContext(progressSnapshot(reserved, local), 'main', d.ref)
+                )
+              )
+                return { skipped: true as const };
+              const resolution = actionResolution(
+                store,
+                reserved,
+                local,
+                d.ref,
+                d.action,
+                value,
+                'before-turn'
+              );
+              if (resolution.entry || !d.action.program) {
+                const entry = finishActionResolution(
+                  store,
+                  local,
+                  d.action,
+                  value,
+                  'before-turn',
+                  resolution
+                );
+                return { skipped: true as const, entry };
+              }
+              return { program: d.action.program, state: resolution.before.state };
+            });
         if (!step) return;
         if ('entry' in step) chain(step.entry!);
         if ('program' in step) {
@@ -868,7 +929,7 @@ export async function prepareAutomaticRunBehavior(
           };
           const execution = executePackageExtensionProgram(
             step.program!,
-            { state: step.state!, input },
+            { state: step.state!, input: input! },
             controller.signal,
             {
               waitForSlot: true,
@@ -902,7 +963,7 @@ export async function prepareAutomaticRunBehavior(
             if (output.variables && Object.keys(output.variables.changes).length)
               assertExtensionVariableWriteAccess(store, reserved.profile, d.ref, step.program!);
             chain(
-              resolveAction(store, reserved, local, d.ref, d.action, input, 'before-turn', {
+              resolveAction(store, reserved, local, d.ref, d.action, input!, 'before-turn', {
                 ...output,
                 programHash: hash(step.program),
               })

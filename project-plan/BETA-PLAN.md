@@ -34,7 +34,7 @@
 
 | 권장 순서 | 남은 사용자 결과 | 먼저 사용할 구현 경로 | 완료를 판단할 근거 |
 | --- | --- | --- | --- |
-| 1. 입력·요청 훅 | `onInput`·`listenEdit(editInput)` 연결 다음으로 `listenEdit(editRequest)`가 실제 모델 전송 시점에 실행되고 상태·전송문에 반영돼요. | `server/risu-lua-adapter.ts`; `package-behavior-run.ts`의 `prepareAutomaticRunBehavior`·`preparedBehaviorSnapshot`; `app.ts`; `model-runner.ts`; 기존 `prompt-transforms.ts` | 파일 가져오기부터 실제 전송 사본까지 연결해요. 원래 요청·snapshot을 보존하고 적용한 변경을 사용자에게 알리며 실패·건너뛰기·취소가 채팅을 막지 않아요. |
+| 1. 입력·요청 훅 (완료) | `onInput`·`listenEdit(editInput)`·`listenEdit(editRequest)`가 실제 제출·모델 전송 시점에 실행되고 상태·전송문에 반영돼요. | `server/risu-lua-adapter.ts`; `package-behavior-run.ts`의 `prepareAutomaticRunBehavior`·`preparedBehaviorSnapshot`; `app.ts`; `model-runner.ts`; 기존 `prompt-transforms.ts` | 파일 가져오기부터 실제 전송 사본까지 연결해요. 원래 요청·snapshot을 보존하고 적용한 변경을 사용자에게 알리며 실패·건너뛰기·취소가 채팅을 막지 않아요. |
 | 2. 출력·표시 훅과 동적 화면 | `editOutput/editDisplay`와 상태 변화가 응답 표시·상태창·선택기에 반영돼요. 버튼은 같은 사용자 행동 API를 사용해요. | `app.ts`의 `stageRunOutput`·`prepareAfterResponse`; `package-after-response.ts`, `package-presentation.ts`, `package-requests.ts`; [패널 계약](../docs/PACKAGE-PANELS.md) | 원래 응답과 표시용 결과의 관계를 보존하고 명시 실행에서만 계산해요. 새로고침·분기·복원은 저장 결과를 읽으며 코드·모델을 재실행하지 않아요. HTML은 기존 격리 패널 경계를 사용해요. |
 | 3. 필요한 나머지 Risu 효과 연결 | 위 흐름을 막는 혼합 트리거·지원하지 않는 CBS 쓰기/조건·자료/UI·구조화된 모델 요청 등을 공통 API에 대응해요. | `risu-import.ts`, `risu-lua-adapter.ts`, `risu-cbs.ts`; `package-extension-execution.ts`와 기존 Host 모듈 | 미지원 안내와 실제 고정 Risu 동작을 근거로 필요한 기능부터 연결해요. 선언 순서·효과·실패 의미를 보존하고 특정 봇의 규칙을 본체에 추가하지 않아요. 전체 Risu API 구현을 이 묶음의 선행 조건으로 삼지 않아요. |
 
@@ -43,6 +43,10 @@
 2026-09-14 사용자가 이번 작업을 작은 구현 단계로 한정해 **`onInput` 콜백 연결만 완료**했어요. 공통 자동 준비에서 입력 단계를 `onStart`와 구분하고 입력 전 대화·선언 순서·조건을 유지해요. 기존 상태/변수 영수증과 본문 성공 시 채택을 사용하며 원래 요청·snapshot을 바꾸지 않아요. `editInput`·`editRequest`·출력/표시 훅·화면 확장은 다음 단계예요. 최종 `quality`가 통과했어요. 어댑터/계약 81개와 기존 준비·대화·복원 62개를 확인했고, 입력 전 대화 영수증의 저장 경계 누락을 고친 뒤 Lua 통합 6개를 재확인했어요. 실제 앱 제출 검사에서는 준비 변수가 예약 profile을 덮어쓰던 문제를 확인해 `persistedContextSnapshot`이 원래 profile을 보존하도록 수정했어요. 이후 앱 제출·합성 전송·상태 저장과 Lua 통합 9개, 문맥·확장 모델 준비 21개가 통과했어요. 단계별 실패/재검사 로그는 ignored `output/input-hooks-work/`에 보존해요. 전체 검사·빌드·smoke·브라우저·실모델·전체 표본 인수는 실행하지 않았어요.
 
 2026-09-14 이어서 **`listenEdit("editInput")` 연결**을 마쳤어요. 공통 자동 준비에 Host가 입력을 소유하는 `hook: 'edit-input'` 단계를 추가해 입력 단계 다음·시작 단계 앞에서 실행하고, 등록 순서대로 이어 넘긴 텍스트를 이번 요청의 **전송 사본**에만 투영해요. 예약 snapshot·저장 요청·hash·편집 기준과 대화 읽기 Host의 본문은 그대로예요. 프리셋 전송 정규식·문맥 크기 계산·실제 전송·후보·포크·복원이 같은 투영을 사용하고 Reader의 요청 항목에서 원문과 전송문을 비교해요. Risu의 편집 경로와 같이 트리거 조건을 적용하지 않고 `nil` 반환은 직전 값을 유지하며, 문자열이 아니거나 100,000자를 넘는 결과는 준비 묶음 실패로 처리해 원래 요청으로 계속해요. 편집 텍스트는 모델 문맥의 `automaticResults`에 넣지 않고, 미리보기·예산 계산에서는 제작자 코드를 실행하지 않아 저장 원문을 보여줘요. 최종 `npm run quality`와 `npm run test:tooling`이 PASS이고, 전체 `npm test`는 2,494 PASS·23 FAIL이에요. 실패 23개는 같은 변경 전 트리에서도 동일하게 실패하는 `tests/harness.test.ts`·`tests/server.test.ts`의 로컬 환경(Node 26·tmp 심볼릭 링크) 항목이에요. Lua 통합 8개(편집 투영·원문 보존·Reader 표시·백업/복원·비문자열 결과 실패 포함), 어댑터·계약 83개, 준비·대화·복원·변환 72개를 확인했어요. 빌드·브라우저·실모델·전체 표본 인수는 실행하지 않았어요. `editRequest`·`editOutput`·`editDisplay`와 출력·표시 훅, 동적 화면은 다음 단계예요.
+
+이어서 **`listenEdit("editRequest")` 연결**까지 마쳤어요. 사용자가 범위를 **전송용 원문 대화와 이번 요청만 `{role, content}` 목록으로 전달**하는 쪽으로 정했어요. 시스템 프롬프트·로어·다른 자료의 지침과 프롬프트 프리셋은 넘기지 않고, 메시지 수·역할은 고정하며 본문만 바뀔 수 있어요. 같은 대화 본문을 넘기므로 기존 **대화 읽기 허용**을 그대로 요구하고, 허용이 없거나 대화가 실행 한도(메시지 1,000개·메시지당 100,000자·합계 100,000자)를 넘으면 그 행동만 건너뛰고 Reader 안내로 알려요. 새 권한은 추가하지 않았어요. 실행 순서는 입력 → 입력 편집 → 생성 전 → 전송문 편집이고, 계산한 편집 결과를 프리셋 전송 정규식의 입력으로 사용해요. Risu는 정규식을 먼저 적용하므로 이 순서 차이를 문서에 남겼어요. 투영은 예약 snapshot이 아니라 준비 영수증에서 파생하며 문맥 축소 전송에서도 원래 메시지 index를 유지해요.
+
+이 묶음의 최종 `npm run quality` PASS, 전체 `npm test`는 2,497 PASS·23 FAIL이고 실패 23개는 변경 전 트리와 같은 `tests/harness.test.ts`·`tests/server.test.ts`의 로컬 환경 항목이에요. Lua 통합 11개(입력·전송문 편집 투영, 원문 보존, 허용 없음·형식 위반·한도 초과의 건너뜀/실패, Reader 표시, 백업·archive 복원)와 어댑터·계약 83개를 확인했어요. 빌드·브라우저·실모델·전체 표본 인수는 실행하지 않았어요.
 
 대화 권한은 이미 결정됐어요. 정확한 자료 개정에 별도 허용한 **현재 선택 분기의 사용자 가시 대화 전체**가 범위이며 모델 문맥 절삭과 별도예요. [대화 Host](../docs/EXTENSION-PROGRAMS.md#host-api로-현재-분기-대화-읽기)의 고정 참조·최신 권한·영수증·복원 경계를 사용해요. 새 요청으로 가시 대화가 달라지면 자동 동작 묶음을 재계산하지만 source/state에 따른 추첨 entropy는 유지해요. 진행 대기와 여러 채팅의 동시 사용도 기존 기능이에요.
 
@@ -74,7 +78,7 @@
 
 **현재 상태의 기준은 이 절과 아래 단계 표예요(2026-09-14).** 날짜별 구현·검증 기록의 ‘현재’·‘남아 있음’은 해당 작업 당시의 상태이며, 이후 구현과 상충하면 이 절을 따라요. 과거 검사 수·run ID·hash는 당시 근거로 보존하며 현재 소스의 새 검증 결과로 재사용하지 않아요.
 
-현재 DB는 **19**, 전체 archive는 **15**, 채팅 백업은 **1**이에요. `user`·`model`·`before-turn`·`after-turn`의 JavaScript·Lua 격리 계산과 공통 변수·자기 자료·현재 분기 대화·모델 Host API를 제공해요. 카드/모듈 가져오기의 독립 Lua는 `onInput`·`listenEdit("editInput")`·`onStart`·`onOutput`·`onButtonClick`, 지원하는 조건과 대화 조회 함수를 기존 행동 경로에 연결했어요. 기본 변수·지원 CBS 읽기·사용자 공유 변수·예약 고정·분기/백업 보존은 기존 공통 경로를 사용해요. **현재 남은 구현은 요청/출력/표시 편집 이벤트, 혼합 트리거, 나머지 자료/UI API와 동적 화면 연결**이에요. 입력 편집(`editInput`)은 전송 사본 투영으로 연결했어요. 일반 HTTP·공유 자료 권한·확장 설치 관리도 아직 미완이며 필요한 기능만 현재 흐름에 보완해요. Plugin v3 주요 스펙, 대용량 자료·Linux/Docker Update·배포는 별도 후속 범위이고 전체 표본 실사용은 사용자가 평가해요. 현재 연결을 요청 전체·전체 표본·베타 완료로 표시하지 않아요.
+현재 DB는 **19**, 전체 archive는 **15**, 채팅 백업은 **1**이에요. `user`·`model`·`before-turn`·`after-turn`의 JavaScript·Lua 격리 계산과 공통 변수·자기 자료·현재 분기 대화·모델 Host API를 제공해요. 카드/모듈 가져오기의 독립 Lua는 `onInput`·`listenEdit("editInput")`·`onStart`·`listenEdit("editRequest")`·`onOutput`·`onButtonClick`, 지원하는 조건과 대화 조회 함수를 기존 행동 경로에 연결했어요. 기본 변수·지원 CBS 읽기·사용자 공유 변수·예약 고정·분기/백업 보존은 기존 공통 경로를 사용해요. **현재 남은 구현은 출력/표시 편집 이벤트, 혼합 트리거, 나머지 자료/UI API와 동적 화면 연결**이에요. 입력 편집(`editInput`)과 전송문 편집(`editRequest`)은 전송 사본 투영으로 연결했어요. 일반 HTTP·공유 자료 권한·확장 설치 관리도 아직 미완이며 필요한 기능만 현재 흐름에 보완해요. Plugin v3 주요 스펙, 대용량 자료·Linux/Docker Update·배포는 별도 후속 범위이고 전체 표본 실사용은 사용자가 평가해요. 현재 연결을 요청 전체·전체 표본·베타 완료로 표시하지 않아요.
 
 | 단계 | 해야 할 일 | 얻어야 할 결과 | 현재 상태 |
 | --- | --- | --- | --- |

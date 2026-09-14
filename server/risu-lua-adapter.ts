@@ -5,7 +5,9 @@ import {
 } from '../core/extension-program.js';
 import {
   BEHAVIOR_EDIT_INPUT_SCHEMA,
+  BEHAVIOR_EDIT_REQUEST_SCHEMA,
   type BehaviorAction,
+  type BehaviorActionHook,
   type BehaviorActionTrigger,
 } from '../core/package-behavior.js';
 import {
@@ -441,8 +443,14 @@ export function adaptRisuLuaTriggers(
     input: 'before-turn',
     editInput: 'before-turn',
     start: 'before-turn',
+    editRequest: 'before-turn',
     output: 'after-turn',
     onButtonClick: 'user',
+  };
+  const hooks: Partial<Record<RisuLuaEvent, BehaviorActionHook>> = {
+    input: 'input',
+    editInput: 'edit-input',
+    editRequest: 'edit-request',
   };
   triggers.forEach((value, triggerIndex) => {
     const trigger = record(value);
@@ -493,7 +501,7 @@ export function adaptRisuLuaTriggers(
         );
       }
       for (const event of RISU_LUA_EVENTS) {
-        if (event.startsWith('edit') && event !== 'editInput') {
+        if (event === 'editDisplay' || event === 'editOutput') {
           report(
             'RISU_LUA_PHASE_UNSUPPORTED',
             `${event} 변환은 원문이나 표시 결과를 안전하게 반영할 공통 실행 단계가 필요해 아직 연결하지 않았어요.`,
@@ -511,11 +519,17 @@ export function adaptRisuLuaTriggers(
           continue;
         }
         // Risu runs listenEdit callbacks from the edit path itself, which ignores trigger conditions.
-        const edit = event === 'editInput';
-        if (edit)
+        const edit = event === 'editInput' || event === 'editRequest';
+        if (event === 'editInput')
           report(
             'RISU_LUA_EDIT_INPUT_PROJECTION',
             'editInput은 저장한 요청 원문을 바꾸지 않고 이번 전송 사본에만 적용해요. 원문과 전송문은 Reader에서 비교할 수 있어요. Risu와 같이 트리거 조건은 이 콜백에 적용하지 않고, 대화 읽기에는 이번 입력을 덧붙이지 않아요.',
+            event
+          );
+        if (event === 'editRequest')
+          report(
+            'RISU_LUA_EDIT_REQUEST_SCOPE',
+            'editRequest는 전송용 원문 대화와 이번 요청만 {role,content} 목록으로 받아요. 시스템 프롬프트·로어·다른 자료의 지침은 넘기지 않고 메시지 수와 역할도 바꿀 수 없어요. 이 채팅에서 해당 자료 개정에 대화 읽기를 허용해야 실행하며, 대화가 실행 한도를 넘으면 편집을 건너뛰고 원문 그대로 보내요.',
             event
           );
         if (!edit && event !== 'onButtonClick' && !conditionPlan) continue;
@@ -526,12 +540,13 @@ export function adaptRisuLuaTriggers(
             label: `Lua ${event}`,
             inputSchema: button
               ? { type: 'string', maxLength: 8000 }
-              : edit
+              : event === 'editInput'
                 ? structuredClone(BEHAVIOR_EDIT_INPUT_SCHEMA)
-                : { type: 'record', properties: {} },
+                : event === 'editRequest'
+                  ? structuredClone(BEHAVIOR_EDIT_REQUEST_SCHEMA)
+                  : { type: 'record', properties: {} },
             triggers: [nativeTrigger],
-            ...(event === 'input' ? { hook: 'input' as const } : {}),
-            ...(edit ? { hook: 'edit-input' as const } : {}),
+            ...(hooks[event] ? { hook: hooks[event]! } : {}),
             ...(button || edit ? {} : { automaticInput: {} }),
             ...(!button && !edit && conditionPlan?.when ? { when: conditionPlan.when } : {}),
             effects: [],

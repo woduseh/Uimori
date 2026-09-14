@@ -89,6 +89,7 @@ export function persistedContextSnapshot(
     'behaviorExecution',
     'packageBehaviorUnavailable',
     'extensionRequestEdit',
+    'extensionMessageEdit',
   ] as const) {
     if (key in reserved) persisted[key] = structuredClone(reserved[key]) as never;
     else delete persisted[key];
