@@ -78,6 +78,12 @@ export type ContentPackage = {
   panels?: PackagePanel[];
   behavior?: PackageBehavior;
   transforms: PackageTransform[];
+  /**
+   * Fields whose authored text keeps its original Risu CBS instead of a converted template. The
+   * declaration is data: the text is evaluated once at reservation by the compat evaluator, and a
+   * package without a matching receipt renders the preserved text unchanged.
+   */
+  compat?: { risuCbs: { fields: string[] } };
 };
 export class ContentPackageError extends Error {
   readonly statusCode = 400;
@@ -166,6 +172,7 @@ export function validateContentPackage(value: unknown): ContentPackage {
     'panels',
     'behavior',
     'transforms',
+    'compat',
   ]);
   if (p.version !== 1) fail('PACKAGE_VERSION_UNSUPPORTED');
   id(p.id);
@@ -357,6 +364,24 @@ export function validateContentPackage(value: unknown): ContentPackage {
   } catch (error) {
     if (error instanceof ContentPackageError) throw error;
     fail(error instanceof Error ? error.message : 'PACKAGE_FEATURE_INVALID');
+  }
+  if (p.compat !== undefined) {
+    const declaration = object(p.compat, ['risuCbs']);
+    const risuCbs = object(declaration.risuCbs, ['fields']);
+    list(risuCbs.fields, 500);
+    unique(risuCbs.fields as string[]);
+    // Every declared id has to name a field this package actually stores, so the evaluator and the
+    // receipt cannot disagree about what was preserved.
+    const declarable = new Set<string>([
+      ...(p.body === undefined ? [] : ['body']),
+      ...loreIds.map((loreId) => `lore:${loreId}`),
+      ...instructionIds.map((instructionId) => `instruction:${instructionId}`),
+      ...((p.starts as PackageStart[] | undefined) ?? []).map((start) => `start:${start.id}`),
+    ]);
+    for (const field of risuCbs.fields) {
+      string(field, 200);
+      if (!declarable.has(field)) fail('PACKAGE_COMPAT_FIELD', field);
+    }
   }
   list(p.transforms, 32);
   const transforms = p.transforms.map(validatePackageTransform);

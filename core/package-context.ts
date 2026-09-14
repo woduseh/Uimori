@@ -11,6 +11,7 @@ import type { Resource, RunSnapshot } from './types.js';
 import { executionContext, packageInstanceId } from './execution-context.js';
 import { projectChatPackageCompilation } from './chat-overrides.js';
 import { packageIdentityFromProfile } from './package-identity.js';
+import { projectRisuCompatReceipt, type RisuCompatReceipt } from './risu-compat.js';
 
 export type ResolvedPackage = CompiledPackageAttachment & {
   attachment: PackageAttachment;
@@ -18,6 +19,8 @@ export type ResolvedPackage = CompiledPackageAttachment & {
 };
 export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): ResolvedPackage[] {
   const profile = snapshot.profile;
+  // TODO: RunSnapshot gains `risuCompat?: RisuCompatReceipt` when reservation stores the receipt.
+  const receipt = (snapshot as { risuCompat?: RisuCompatReceipt }).risuCompat;
   return (profile?.packageAttachments ?? []).flatMap((attachment) => {
     const pkg = profile?.packages?.find(
       (p) => p.id === attachment.id && p.revision === attachment.revision
@@ -37,6 +40,7 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       )?.code,
       values:
         profile?.packageValues?.[`${attachment.id}@${attachment.revision}:${attachment.role}`],
+      ...(receipt ? { compat: projectRisuCompatReceipt(receipt, attachment) } : {}),
     });
     const projected = projectChatPackageCompilation(
       profile!,

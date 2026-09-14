@@ -51,6 +51,19 @@ function analyze(
   const regex = importRisuDisplayRegex(risu.customScripts);
   pkg.transforms = regex.transforms;
   findings.append(regex.findings);
+  // Which stored fields kept their original CBS. The declaration is what tells the run to evaluate
+  // them; the stages above decided it by failing to convert the text.
+  const compatFields = [
+    ...(pkg.body !== undefined && cardText.compatTexts.has(pkg.body) ? ['body'] : []),
+    ...pkg.lore.filter((item) => cardText.compatTexts.has(item.text)).map((i) => `lore:${i.id}`),
+    ...(pkg.starts ?? [])
+      .filter((item) => cardText.compatTexts.has(item.text))
+      .map((item) => `start:${item.id}`),
+    ...pkg.instructions
+      .filter((item) => cardText.compatTexts.has(item.text))
+      .map((item) => `instruction:${item.id}`),
+  ];
+  if (compatFields.length) pkg.compat = { risuCbs: { fields: compatFields } };
   const behavior = importRisuTriggers({ risu, findings });
   if (behavior) pkg.behavior = behavior;
   scanRisuExtensionSurfaces({ input, card, risu, findings });

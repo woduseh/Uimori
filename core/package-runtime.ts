@@ -47,6 +47,8 @@ export function compilePackageAttachment(
     slots?: Record<string, string>;
     resourcesOnly?: boolean;
     behaviorUnavailable?: string;
+    /** Frozen Risu CBS results for the fields this package declares, by field id. */
+    compat?: Record<string, string>;
     /** Host-only shared budget for all optional instruction evaluations. */
     budget?: PromptBudget;
   }
@@ -74,7 +76,16 @@ export function compilePackageAttachment(
   // Resources are reconstructed during model input and archive validation. Elapsed CPU time
   // must not change their text; deterministic step/value/output limits still bound evaluation.
   const textBudget = new PromptBudget({ maxOutputChars: 1_000_000 }, 'deterministic');
+  // A declared field keeps its Risu CBS instead of a template. With a receipt the frozen evaluation
+  // is used; without one - previews and runs reserved before the receipt existed - the preserved
+  // text is returned unchanged rather than half-rendered.
+  const compatDeclared = (id: string) => pkg.compat?.risuCbs.fields.includes(id) === true;
+  const compatText = (id: string) => {
+    const evaluated = context.compat?.[id];
+    return typeof evaluated === 'string' ? evaluated : undefined;
+  };
   const renderedText = (id: string, original: string, template?: PromptTemplate) => {
+    if (compatDeclared(id)) return compatText(id) ?? original;
     if (!template) return original;
     try {
       if (identity.variableDefaultsError && templateReadsVariables(template))
@@ -168,10 +179,15 @@ export function compilePackageAttachment(
   const instructions: CompiledPackageAttachment['instructions'] = [];
   let outputChars = 0;
   for (const instruction of selected) {
+    const compatId = `instruction:${instruction.id}`;
+    const declared = compatDeclared(compatId);
+    const template: PromptTemplate = declared
+      ? [{ kind: 'text', text: compatText(compatId) ?? instruction.text }]
+      : (instruction.template ?? [{ kind: 'text', text: instruction.text }]);
     try {
       if (
         identity.variableDefaultsError &&
-        templateReadsVariables([instruction.template, instruction.when])
+        templateReadsVariables([declared ? undefined : instruction.template, instruction.when])
       )
         throw new PromptEvaluationError(identity.variableDefaultsError);
       const compilation = compilePromptProgram(
@@ -184,7 +200,7 @@ export function compilePackageAttachment(
               title: instruction.id,
               kind: 'message',
               role: 'system',
-              template: instruction.template ?? [{ kind: 'text', text: instruction.text }],
+              template,
               ...(instruction.when === undefined ? {} : { when: instruction.when }),
             },
             { id: '__package_current__', title: 'Runtime placeholder', kind: 'current' },
