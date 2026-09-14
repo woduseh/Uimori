@@ -1,4 +1,7 @@
-/** Static reading of a Risu plugin file. No plugin code runs at any point. */
+/**
+ * Static reading of a Risu plugin file. Nothing runs while the file is read or imported; the code
+ * only runs later, as the isolated module actions server/risu-plugin-adapter.ts builds from it.
+ */
 export const RISU_PLUGIN_MAX_BYTES = 4 * 1024 * 1024;
 export type RisuPluginArgument = { key: string; type: 'int' | 'string'; description: string };
 export type RisuPluginApiSupport = 'mapped' | 'unimplemented' | 'out-of-scope';
@@ -31,17 +34,22 @@ export const RISU_PLUGIN_API_SUPPORT: Record<
   ...group(
     ['getArgument', 'getArg'],
     'mapped',
-    '플러그인 인자 읽기는 자료 옵션과 같은 선언형 값으로 옮길 수 있어요.'
+    '플러그인 인자는 `//@arg` 선언마다 만드는 자료 옵션을 읽어요. `getArg`는 이 플러그인 자신의 이름만 읽고 다른 플러그인 이름은 거절해요.'
   ),
   ...group(
-    ['addRisuReplacer', 'removeRisuReplacer', 'addRisuScriptHandler', 'removeRisuScriptHandler'],
+    ['addRisuScriptHandler', 'removeRisuScriptHandler'],
     'mapped',
-    '입력·출력·표시 텍스트 처리는 공통 텍스트 변환과 편집 훅 단계에 대응해요. 편집 훅은 메시지 수와 역할을 그대로 유지해야 해요.'
+    'input은 입력 편집, output은 출력 편집, display는 표시 편집 단계로 옮겨요. 편집 훅은 메시지 수와 역할을 그대로 유지해야 하고 process 단계는 아직 연결하지 않았어요.'
+  ),
+  ...group(
+    ['addRisuReplacer', 'removeRisuReplacer'],
+    'mapped',
+    'beforeRequest는 전송문 편집, afterRequest는 출력 편집 단계로 옮겨요. 전송문 편집은 메시지 수와 역할을 유지하며 채팅의 대화 읽기 허용이 필요해요.'
   ),
   ...group(
     ['addRisuChatListener', 'removeRisuChatListener'],
     'mapped',
-    '대화 이벤트는 생성 전·응답 후 자동 행동에 대응해요.'
+    "대화 이벤트 'output'은 응답 후 자동 행동에 대응해요. 대화 읽기를 허용하지 않으면 빈 기록을 넘겨요."
   ),
   ...group(
     ['getCurrentLorebookEntries', 'getCharacter', 'getChar'],
@@ -52,28 +60,32 @@ export const RISU_PLUGIN_API_SUPPORT: Record<
   ...group(
     ['apiVersion', 'apiVersionCompatibleWith', 'getRuntimeInfo'],
     'mapped',
-    '실행 환경과 버전 정보는 공통 실행기가 소유해요.'
+    "실행 환경과 버전 정보는 공통 실행기가 소유해요. getRuntimeInfo는 apiVersion '3.0'과 platform·saveMethod 'uimori'라는 고정값을 돌려줘요."
   ),
   ...group(
     ['setArgument', 'setArg'],
     'unimplemented',
-    '플러그인 인자를 저장하는 곳이 아직 없어요. 인자 읽기는 나중에 꾸러미 옵션으로 옮길 수 있어요.'
+    '플러그인이 자기 인자를 저장하는 곳이 아직 없어요. 값은 자료 옵션에서 사용자가 바꾸고 플러그인은 읽기만 해요.'
   ),
   ...group(
     ['pluginStorage', 'getLocalPluginStorage', 'safeLocalStorage'],
-    'unimplemented',
-    '앱 전역 JSON 저장소는 사용자 허용을 받는 분기 범위 문자열 변수와 달라서 아직 대응하지 않아요.'
+    'mapped',
+    '세 저장소는 이 채팅 분기의 공유 변수를 사용해요. Risu처럼 플러그인 사이에 키를 공유하고, 쓰려면 채팅에서 이 자료 개정에 공유 변수 변경을 허용해야 해요. 앱 전역이나 기기 로컬 저장이 아니에요.'
   ),
   ...group(
     ['parseRisuChat'],
     'unimplemented',
     'CBS 변환은 가져오기 시점 작업이라 실행 중에 부르는 경로는 아직 없어요.'
   ),
-  ...group(['onUnload'], 'unimplemented', '상주 인스턴스가 없어서 해제 훅을 아직 제공하지 않아요.'),
+  ...group(
+    ['onUnload'],
+    'mapped',
+    '상주 인스턴스가 없어서 해제 시점도 없어요. 등록한 콜백은 받아 두기만 하고 부르지 않아요.'
+  ),
   ...group(
     ['log'],
-    'unimplemented',
-    '플러그인이 직접 기록을 남기는 Host 메서드가 아직 없어요. 진단은 실행 영수증이 소유해요.'
+    'mapped',
+    '플러그인이 직접 기록을 남기는 Host 메서드가 없어서 호출을 받아 무시해요. 진단은 실행 영수증이 소유해요.'
   ),
   ...group(
     ['risuFetch'],

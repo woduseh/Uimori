@@ -22,14 +22,19 @@ export function buildRisuTransfer({
   images,
   lore,
   findings,
+  plugin,
 }: {
-  input: RisuCardInput;
+  /** Every reader that reaches this builder: a character card, a module, or a plugin file. */
+  input: Pick<RisuCardInput, 'hash' | 'source' | 'kind'> & {
+    format: RisuImportPreview['format'];
+  };
   card: RisuCard;
   pkg: ContentPackage;
   title: string;
   images: NativeTransferFile['images'];
   lore: RisuImportPreview['lore'];
   findings: RisuImportFindings;
+  plugin?: RisuImportPreview['plugin'];
 }): { file: NativeTransferFile; preview: RisuImportPreview } {
   const { hash, source, kind } = input;
   const file: NativeTransferFile = {
@@ -67,7 +72,9 @@ export function buildRisuTransfer({
               mediaType:
                 input.format === 'charx' || input.format === 'risu-module-project-zip'
                   ? 'application/zip'
-                  : 'application/json',
+                  : input.format === 'risu-plugin-js'
+                    ? 'text/javascript'
+                    : 'application/json',
               hash,
               base64: source.base64,
             },
@@ -87,6 +94,7 @@ export function buildRisuTransfer({
     description: string(card.creator_notes),
     format: input.format,
     summary: { lore: pkg.lore.length, starts: pkg.starts!.length, images: pkg.images!.length },
+    ...(plugin ? { plugin } : {}),
     lore,
     findings: findings.list,
   };

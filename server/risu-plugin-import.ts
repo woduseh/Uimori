@@ -1,31 +1,38 @@
-import type { FastifyInstance } from 'fastify';
 import {
   RISU_PLUGIN_API_SUPPORT,
   RISU_PLUGIN_MAX_BYTES,
   type RisuPluginArgument,
   type RisuPluginPreview,
 } from '../core/risu-plugin.js';
-import { readImportEnvelope } from './import-envelope.js';
-import { HttpError, record } from './request-validation.js';
+import { readImportEnvelope, type InlineImportEnvelope } from './import-envelope.js';
+import { HttpError } from './request-validation.js';
 
 const invalid = (): never => {
   throw new HttpError(400, 'RISU_PLUGIN_INVALID_FILE');
 };
-/** Plugin code is never executed, compiled or transformed; only its declared metadata is read. */
+/** Reading a plugin never executes, compiles or transforms it; only its declarations are read. */
 const MEMBER = /(?:^|[^\w$.])(?:risuai|Risuai)\s*\.\s*([A-Za-z_$][\w$]*)/gu;
 const DESTRUCTURED = /\{([^{}]{0,2000})\}\s*=\s*(?:await\s+)?(?:risuai|Risuai)\b/gu;
 /** Only the plain `const r = risuai` shape; the alias is named, never resolved. */
 const ALIAS = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:risuai|Risuai)\s*(?![\w$.[])/gu;
 
-export function readRisuPlugin(value: unknown): RisuPluginPreview {
+/** The declared preview, the exact text the adapter turns into module actions, and the envelope. */
+export function readRisuPluginFile(value: unknown): {
+  preview: RisuPluginPreview;
+  code: string;
+  file: InlineImportEnvelope;
+  /** Names the file binds the API object to. The adapter cannot see what they register. */
+  aliases: string[];
+} {
   // A plugin never reaches the staged upload path: the client stages only above the far larger
   // import limit, so anything staged would exceed RISU_PLUGIN_MAX_BYTES and be refused here.
-  const { bytes, sha256 } = readImportEnvelope(value, {
+  const envelope = readImportEnvelope(value, {
     maxBytes: RISU_PLUGIN_MAX_BYTES,
     extensions: /\.js$/iu,
     invalid: 'RISU_PLUGIN_INVALID_FILE',
     tooLarge: 'RISU_PLUGIN_TOO_LARGE',
   });
+  const { bytes, sha256 } = envelope;
   const source = bytes.toString('utf8').replace(/^\uFEFF/u, '');
   if (source.includes('\u0000')) invalid();
   const findings: RisuPluginPreview['findings'] = [];
@@ -99,7 +106,7 @@ export function readRisuPlugin(value: unknown): RisuPluginPreview {
   finding(
     'plugin-not-executed',
     'info',
-    '플러그인 코드는 실행하지 않고 선언한 정보만 읽어요. 지금은 자료로 등록하지도 않으므로 이 화면은 지원 범위 확인용이에요.'
+    '가져오는 동안에는 플러그인 코드를 실행하지 않고 선언한 정보만 읽어요. 코드는 가져온 뒤 격리된 자료 행동으로만 실행해요.'
   );
   finding(
     'plugin-api-detection',
@@ -138,26 +145,26 @@ export function readRisuPlugin(value: unknown): RisuPluginPreview {
       '알려진 목록에 없는 이름도 사용해요. 이 이름들은 판정하지 않고 그대로 보고해요.'
     );
   return {
-    name: pluginName.slice(0, 200),
-    displayName: (displayName || pluginName).slice(0, 200),
-    apiVersion,
-    pluginVersion,
-    updateUrl,
-    allowedIpc,
-    links,
-    arguments: args,
-    apis,
-    unknownApis: unknownApis.slice(0, 200),
-    findings,
-    bytes: bytes.length,
-    sha256,
+    preview: {
+      name: pluginName.slice(0, 200),
+      displayName: (displayName || pluginName).slice(0, 200),
+      apiVersion,
+      pluginVersion,
+      updateUrl,
+      allowedIpc,
+      links,
+      arguments: args,
+      apis,
+      unknownApis: unknownApis.slice(0, 200),
+      findings,
+      bytes: bytes.length,
+      sha256,
+    },
+    code: source,
+    file: envelope,
+    aliases,
   };
 }
 
-export function risuPluginRoutes(app: FastifyInstance) {
-  app.post(
-    '/api/risu-plugin-imports/prepare',
-    { bodyLimit: Math.ceil(RISU_PLUGIN_MAX_BYTES / 3) * 4 + 1024 * 1024 },
-    async (request) => readRisuPlugin(record(request.body).source)
-  );
-}
+export const readRisuPlugin = (value: unknown): RisuPluginPreview =>
+  readRisuPluginFile(value).preview;

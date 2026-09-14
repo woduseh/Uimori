@@ -1,19 +1,12 @@
 import type { RisuPluginApiSupport, RisuPluginPreview } from '../core/risu-plugin.js';
 
-/** Only a finding that blocks the plugin reads as an error; the rest stay quiet. */
-const LEVEL_CLASS: Record<RisuPluginPreview['findings'][number]['level'], string | undefined> = {
-  info: 'muted',
-  warning: undefined,
-  unsupported: 'error',
-};
-
 const SUPPORT: Record<RisuPluginApiSupport, string> = {
   mapped: '대응 가능',
   unimplemented: '미구현',
   'out-of-scope': '제공하지 않음',
 };
 
-/** Reads a plugin's own declarations back to the user. Nothing is registered or executed. */
+/** Reads a plugin's own declarations back to the user. Nothing runs while the file is read. */
 export function RisuPluginReport({ preview }: { preview: RisuPluginPreview }) {
   const groups = (['out-of-scope', 'unimplemented', 'mapped'] as const)
     .map((support) => ({ support, apis: preview.apis.filter((api) => api.support === support) }))
@@ -27,8 +20,8 @@ export function RisuPluginReport({ preview }: { preview: RisuPluginPreview }) {
         {Math.max(1, Math.round(preview.bytes / 1024))} KiB
       </small>
       <p className="muted">
-        코드를 실행하지 않고 파일이 선언한 내용만 읽었어요. 이 화면은 지원 범위 확인용이고 자료로
-        등록하지 않아요.
+        가져오는 동안에는 코드를 실행하지 않고 파일이 선언한 내용만 읽었어요. 가져온 뒤에는 이
+        코드가 격리된 자료 행동으로만, 아래 안내가 말하는 범위에서 실행돼요.
       </p>
       {preview.updateUrl && <p className="muted">업데이트 주소: {preview.updateUrl}</p>}
       {preview.allowedIpc.length > 0 && (
@@ -63,13 +56,6 @@ export function RisuPluginReport({ preview }: { preview: RisuPluginPreview }) {
       {preview.unknownApis.length > 0 && (
         <p className="muted">판정하지 않은 이름: {preview.unknownApis.join(', ')}</p>
       )}
-      <ul>
-        {preview.findings.map((finding) => (
-          <li key={finding.code} className={LEVEL_CLASS[finding.level]}>
-            {finding.message}
-          </li>
-        ))}
-      </ul>
       <small className="muted">
         {preview.name} · SHA-256 {preview.sha256.slice(0, 16)}…
       </small>
