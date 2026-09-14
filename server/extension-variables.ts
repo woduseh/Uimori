@@ -1,15 +1,8 @@
 import type { PackageAttachment } from '../core/content-package.js';
 import { packageInstanceId } from '../core/execution-context.js';
-import { ExtensionProgramError, type ExtensionProgram } from '../core/extension-program.js';
+import type { ExtensionProgram } from '../core/extension-program.js';
 import { BehaviorError } from '../core/package-behavior.js';
-import {
-  HOST_LIST_PAGE_DEFAULT,
-  HOST_LIST_PAGE_MAX,
-  HOST_TEXT_PAGE_DEFAULT,
-  HOST_TEXT_PAGE_MAX,
-  pageSlice,
-  pageText,
-} from '../core/paging.js';
+import { pageSlice, pageText } from '../core/paging.js';
 import { historicalPersonaExcluded } from '../core/persona-scope.js';
 import type { ProfileSnapshot } from '../core/product.js';
 import { PromptEvaluationError, type RuntimeValue } from '../core/prompt-values.js';
@@ -22,13 +15,16 @@ import {
   type ChatVariableState,
 } from '../core/chat-variables.js';
 import { readChatVariables, writeChatVariablesInTransaction } from './chat-variables.js';
+import {
+  createHostDispatcher,
+  failHost as fail,
+  hostArguments,
+  type HostMethodOf,
+} from './extension-host-methods.js';
 import { behaviorPayloadHash } from './package-behavior-store.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
-const fail = (code: string): never => {
-  throw new ExtensionProgramError(code);
-};
 export const variableStateFromProfile = (profile: ProfileSnapshot | undefined): ChatVariableState =>
   validateChatVariableState(profile?.variableState ?? { revision: 0, values: {} });
 export const chatVariableStateHash = (state: ChatVariableState) =>
@@ -171,23 +167,6 @@ export function adoptExtensionVariableMutation(
   }
 }
 
-function argumentsFor(value: RuntimeValue, keys: readonly string[]) {
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    Array.isArray(value) ||
-    Object.keys(value).some((key) => !keys.includes(key))
-  )
-    fail('BEHAVIOR_HOST_ARGUMENTS');
-  return value as Record<string, RuntimeValue>;
-}
-function integer(value: RuntimeValue | undefined, fallback: number, max: number) {
-  if (value === undefined) return fallback;
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > max)
-    fail('BEHAVIOR_HOST_ARGUMENTS');
-  return value as number;
-}
-
 /** Stages branch-local effects in memory. Guest results cannot forge this receipt. */
 export function createExtensionVariableSession(
   program: ExtensionProgram,
@@ -216,6 +195,35 @@ export function createExtensionVariableSession(
       fail('BEHAVIOR_HOST_VARIABLES_DENIED');
     assertWriteAccess!();
   };
+  let resolvedAt = -1;
+  let resolvedValues: Record<string, string> = {};
+  /** The staged view the guest reads. Unresolvable declarations are a limit, not an argument. */
+  const resolved = () => {
+    if (resolvedAt !== generation) {
+      const context = resolveTemplateVariableContext(
+        profileWithExtensionVariables(captured, state)
+      );
+      if (context.variableDefaultsError) fail('BEHAVIOR_HOST_VARIABLES_LIMIT');
+      resolvedValues = context.variables ?? {};
+      resolvedAt = generation;
+    }
+    return resolvedValues;
+  };
+  const stage = (key: string, value: string | null): null => {
+    const next = { ...changes, [key]: value };
+    let projected: ChatVariableState;
+    try {
+      projected = projectExtensionVariableMutation(before, { ...mutation(), changes: next });
+    } catch (error) {
+      if (error instanceof PromptEvaluationError) fail('BEHAVIOR_HOST_VARIABLES_LIMIT');
+      throw error;
+    }
+    Object.assign(changes, next);
+    state = projected;
+    used = true;
+    generation++;
+    return null;
+  };
   return {
     get generation() {
       return generation;
@@ -225,94 +233,66 @@ export function createExtensionVariableSession(
     assertWriteAccess: () => {
       if (Object.keys(changes).length) requireWrite();
     },
-    async host(method: string, value: RuntimeValue, signal: AbortSignal): Promise<RuntimeValue> {
-      if (signal.aborted) fail('BEHAVIOR_HOST_ABORTED');
-      if (
-        !attached(captured, ref) ||
-        !['variables.list', 'variables.read', 'variables.set', 'variables.delete'].includes(method)
-      )
-        fail('BEHAVIOR_HOST_VARIABLES_DENIED');
-      assertCurrent();
-      const write = method === 'variables.set' || method === 'variables.delete';
-      if (write) requireWrite();
-      else if (!program.capabilities?.includes('variables.read'))
-        fail('BEHAVIOR_HOST_VARIABLES_DENIED');
-      const args = argumentsFor(
-        value,
-        method === 'variables.list'
-          ? ['offset', 'limit']
-          : method === 'variables.read'
-            ? ['key', 'offset', 'limit']
-            : method === 'variables.set'
-              ? ['key', 'value']
-              : ['key']
-      );
-      if (method !== 'variables.list' && typeof args.key !== 'string')
-        fail('BEHAVIOR_HOST_ARGUMENTS');
-      const key = args.key as string;
-      if (method !== 'variables.list') {
-        try {
-          validateChatVariableValues({ [key]: '' });
-        } catch (error) {
-          if (error instanceof PromptEvaluationError) fail('BEHAVIOR_HOST_ARGUMENTS');
-          throw error;
+    host: createHostDispatcher<HostMethodOf<'variables'>>({
+      // The attachment, not the capability, admits a method here; the capability is a gate below.
+      denied: 'BEHAVIOR_HOST_VARIABLES_DENIED',
+      granted: () => attached(captured, ref) === true,
+      screen: hostArguments,
+      gate: (entry) => {
+        assertCurrent();
+        if (entry.capability === 'variables.write') requireWrite();
+        else if (!program.capabilities?.includes(entry.capability))
+          fail('BEHAVIOR_HOST_VARIABLES_DENIED');
+      },
+      // A key and the staged view are both refused before any page argument is read.
+      precheck: (entry, args) => {
+        if (entry.args.includes('key')) {
+          if (typeof args.key !== 'string') fail('BEHAVIOR_HOST_ARGUMENTS');
+          try {
+            validateChatVariableValues({ [args.key]: '' });
+          } catch (error) {
+            if (error instanceof PromptEvaluationError) fail('BEHAVIOR_HOST_ARGUMENTS');
+            throw error;
+          }
         }
-      }
-      if (write) {
-        if (method === 'variables.set' && typeof args.value !== 'string')
-          fail('BEHAVIOR_HOST_ARGUMENTS');
-        const next = {
-          ...changes,
-          [key]: method === 'variables.delete' ? null : (args.value as string),
-        };
-        let projected: ChatVariableState;
-        try {
-          projected = projectExtensionVariableMutation(before, { ...mutation(), changes: next });
-        } catch (error) {
-          if (error instanceof PromptEvaluationError) fail('BEHAVIOR_HOST_VARIABLES_LIMIT');
-          throw error;
-        }
-        Object.assign(changes, next);
-        state = projected;
-        used = true;
-        generation++;
-        return null;
-      }
-      const context = resolveTemplateVariableContext(
-        profileWithExtensionVariables(captured, state)
-      );
-      if (context.variableDefaultsError) fail('BEHAVIOR_HOST_VARIABLES_LIMIT');
-      const resolved = context.variables ?? {};
-      const offset = integer(args.offset, 0, Number.MAX_SAFE_INTEGER);
-      const limit = integer(
-        args.limit,
-        method === 'variables.list' ? HOST_LIST_PAGE_DEFAULT : HOST_TEXT_PAGE_DEFAULT,
-        method === 'variables.list' ? HOST_LIST_PAGE_MAX : HOST_TEXT_PAGE_MAX
-      );
-      if (limit === 0) fail('BEHAVIOR_HOST_ARGUMENTS');
-      used = true;
-      if (method === 'variables.list') {
-        const page = pageSlice(Object.keys(resolved).sort(), offset, limit);
-        return {
-          items: page.items.map((key) => ({
-            key,
-            totalChars: resolved[key].length,
+        if (entry.capability === 'variables.read') resolved();
+      },
+      handlers: {
+        'variables.set': async ({ args }) => {
+          if (typeof args.value !== 'string') fail('BEHAVIOR_HOST_ARGUMENTS');
+          return stage(args.key as string, args.value);
+        },
+        'variables.delete': async ({ args }) => stage(args.key as string, null),
+        'variables.list': async ({ offset, limit }) => {
+          const values = resolved();
+          used = true;
+          const page = pageSlice(Object.keys(values).sort(), offset, limit);
+          return {
+            items: page.items.map((key) => ({
+              key,
+              totalChars: values[key].length,
+              overridden: Object.hasOwn(state.values, key),
+            })),
+            nextOffset: page.nextOffset,
+            total: page.total,
+          };
+        },
+        'variables.read': async ({ args, offset, limit }) => {
+          const values = resolved();
+          const key = args.key as string;
+          used = true;
+          if (!Object.hasOwn(values, key))
+            return { value: null, offset: 0, nextOffset: null, totalChars: 0, overridden: false };
+          const page = pageText(values[key], offset, limit);
+          return {
+            value: page.text,
             overridden: Object.hasOwn(state.values, key),
-          })),
-          nextOffset: page.nextOffset,
-          total: page.total,
-        };
-      }
-      if (!Object.hasOwn(resolved, key))
-        return { value: null, offset: 0, nextOffset: null, totalChars: 0, overridden: false };
-      const page = pageText(resolved[key], offset, limit);
-      return {
-        value: page.text,
-        overridden: Object.hasOwn(state.values, key),
-        offset: page.offset,
-        nextOffset: page.nextOffset,
-        totalChars: page.totalChars,
-      };
-    },
+            offset: page.offset,
+            nextOffset: page.nextOffset,
+            totalChars: page.totalChars,
+          };
+        },
+      },
+    }),
   };
 }

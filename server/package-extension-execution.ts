@@ -2,6 +2,7 @@ import type { PackageAttachment } from '../core/content-package.js';
 import { ExtensionProgramError, type ExtensionProgram } from '../core/extension-program.js';
 import type { ProfileSnapshot } from '../core/product.js';
 import type { RuntimeValue } from '../core/prompt-values.js';
+import { HOST_METHODS, hostMethodOwner } from './extension-host-methods.js';
 import { createPackageExtensionHost } from './extension-materials.js';
 import { executeExtensionProgram, type ExtensionHostHandler } from './extension-runtime.js';
 import { createExtensionVariableSession } from './extension-variables.js';
@@ -45,7 +46,8 @@ export async function executePackageExtensionProgram(
   signal: AbortSignal | undefined,
   options: Options
 ): Promise<ExecutionResult> {
-  const usesModel = program.capabilities?.includes('model.generate') === true;
+  const usesModel =
+    program.capabilities?.includes(HOST_METHODS['model.generate'].capability) === true;
   const services = usesModel ? options.modelServices : undefined;
   const variables = program.capabilities?.some((capability) => capability.startsWith('variables.'))
     ? createExtensionVariableSession(
@@ -74,8 +76,10 @@ export async function executePackageExtensionProgram(
     awaitHostSettlement: usesModel,
     host: async (method, args, hostSignal) => {
       if (conversationRead) options.conversation!.assertReadAccess();
-      if (method.startsWith('conversation.')) {
-        if (!program.capabilities?.includes('conversation.read'))
+      // One table decides the owner; an unlisted method reaches the module that refuses it.
+      const owner = hostMethodOwner(method);
+      if (owner === 'conversation') {
+        if (!program.capabilities?.includes(HOST_METHODS['conversation.read'].capability))
           throw new ExtensionProgramError('BEHAVIOR_HOST_CONVERSATION_DENIED');
         if (!options.conversation)
           throw new ExtensionProgramError('BEHAVIOR_HOST_CONVERSATION_UNAVAILABLE');
@@ -96,13 +100,14 @@ export async function executePackageExtensionProgram(
         conversationRead = true;
         return result;
       }
-      if (method.startsWith('variables.')) {
+      if (owner === 'variables') {
         if (!variables) throw new ExtensionProgramError('BEHAVIOR_HOST_VARIABLES_DENIED');
         return variables.host(method, args, hostSignal);
       }
-      if (method === 'model.generate') {
+      if (owner === 'model') {
         if (!services) throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
         options.assertCurrent();
+        // extension-model.ts owns the prompt contract, not just the argument keys.
         const value = await services.modelGenerate(args, hostSignal);
         modelResultRead = true;
         return value;
@@ -116,7 +121,7 @@ export async function executePackageExtensionProgram(
         );
         materialGeneration = variables.generation;
       }
-      return method.startsWith('response.') && options.responseHost
+      return owner === 'response' && options.responseHost
         ? options.responseHost(method, args, hostSignal)
         : materials(method, args, hostSignal);
     },

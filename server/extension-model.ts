@@ -17,6 +17,7 @@ import {
   type ProviderRequest,
 } from '../core/transport.js';
 import type { RunSnapshot, Usage } from '../core/types.js';
+import { HOST_METHODS, hostArguments } from './extension-host-methods.js';
 import { HttpError } from './request-validation.js';
 import type { MainHooks } from './model-runner.js';
 import type { Store } from './store.js';
@@ -67,18 +68,14 @@ export function authorizeExtensionModelAccess(
 }
 
 function argumentsFor(value: RuntimeValue): { prompt: string } {
+  const args = hostArguments(value, HOST_METHODS['model.generate'].args);
   if (
-    !value ||
-    typeof value !== 'object' ||
-    Array.isArray(value) ||
-    Object.keys(value).length !== 1 ||
-    !Object.hasOwn(value, 'prompt') ||
-    typeof value.prompt !== 'string' ||
-    !value.prompt.length ||
-    value.prompt.length > MAX_PROMPT_CHARS
+    typeof args.prompt !== 'string' ||
+    !args.prompt.length ||
+    args.prompt.length > MAX_PROMPT_CHARS
   )
     fail('BEHAVIOR_HOST_ARGUMENTS');
-  return { prompt: value.prompt };
+  return { prompt: args.prompt };
 }
 
 function addUsage(total: Usage, result: ProviderResult) {
