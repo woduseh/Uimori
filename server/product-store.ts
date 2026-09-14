@@ -145,6 +145,7 @@ import {
 } from '../core/content-package.js';
 import { packageInstanceId } from '../core/execution-context.js';
 import { compilePackageAttachment } from '../core/package-runtime.js';
+import { risuCompatRequestsVariableWrite } from '../core/risu-compat.js';
 import {
   packageBehaviorTables,
   validatePackageBehaviorArchive,
@@ -1697,8 +1698,9 @@ function packageRequestsExtensionGrant(
   capability: ExtensionGrantCapability
 ) {
   return (
-    pkg?.behavior?.actions.some((action) => action.program?.capabilities?.includes(capability)) ??
-    false
+    (capability === 'variables.write' && risuCompatRequestsVariableWrite(pkg)) ||
+    (pkg?.behavior?.actions.some((action) => action.program?.capabilities?.includes(capability)) ??
+      false)
   );
 }
 function packageControlValues(

@@ -12,6 +12,7 @@ import {
   type PackageStartSnapshot,
 } from '../core/package-start.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
+import { projectRisuCompatReceipt } from '../core/risu-compat.js';
 import { chatVariableProfile } from './chat-variable-context.js';
 import type { Store } from './store.js';
 import { packageControlKey, type PackageAttachment } from '../core/content-package.js';
@@ -43,6 +44,25 @@ export function validatePackageStartCommand(value: unknown): PackageStartCommand
     expectedProfileRevision: number(body.expectedProfileRevision, 'profile revision'),
     idempotencyKey: text(body.idempotencyKey, 'idempotency key', 120),
   };
+}
+
+/**
+ * The exact text an authored opening commits. `packageStart.text` stays the rendered selection the
+ * archive compares, and a card that kept its Risu CBS commits the reservation's frozen evaluation of
+ * the same field instead - the projection every other compilation of that field reads. A Run reserved
+ * before the receipt existed has no entry and keeps committing the stored text.
+ */
+function startText(snapshot: RunSnapshot): string {
+  const start = snapshot.packageStart!;
+  const attachment = snapshot.profile?.packageAttachments?.find(
+    (item) =>
+      item.role === 'bot' && item.id === start.packageId && item.revision === start.packageRevision
+  );
+  const evaluated =
+    snapshot.risuCompat && attachment
+      ? projectRisuCompatReceipt(snapshot.risuCompat, attachment)[`start:${start.startId}`]
+      : undefined;
+  return evaluated ?? start.text;
 }
 
 /** Check authorship against immutable package/source records, never the current edited source. */
@@ -97,7 +117,7 @@ export function validateArchivedPackageStart(store: Store, run: Run, snapshot: R
     if (
       original.chatId !== run.chatId ||
       original.runId !== run.id ||
-      original.text !== expected.text
+      original.text !== startText(snapshot)
     )
       throw new HttpError(400, 'PACKAGE_START_ARCHIVE_SOURCE_MISMATCH');
   }
@@ -239,7 +259,7 @@ export function createPackageStart(
       .run(result.run.id);
     store.completeRunInTransaction(
       result.run.id,
-      result.run.snapshot.packageStart.text,
+      startText(result.run.snapshot),
       { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
       result.run.snapshot.settings
     );

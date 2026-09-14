@@ -103,10 +103,13 @@ export function freezeReservationSnapshot(
   if (options.purpose === 'run') frozen = prepareRunBehavior(store, options.runId, frozen);
   // The compat evaluation is an input, so it freezes here: the clock, profile and history it reads
   // are final, and every later compilation - reservation's own, a deferred one, a candidate's clone
-  // or an archive replay - projects this receipt instead of evaluating the card again.
-  if (options.purpose === 'run') {
+  // or an archive replay - projects this receipt instead of evaluating the card again. An authored
+  // opening freezes the same receipt: the exact text its source commits is the evaluated one.
+  if (options.purpose === 'run' || options.purpose === 'authored') {
     const risuCompat = prepareRisuCompatReceipt(frozen, options.runId);
     if (risuCompat) frozen = { ...frozen, risuCompat };
+  }
+  if (options.purpose === 'run') {
     // The keyword scan reads the same frozen history and request, so it freezes here for the same
     // reason: which lore a run sent must not change when the run is compiled again.
     const loreActivation = prepareLoreActivationReceipt(frozen, options.runId);

@@ -249,7 +249,11 @@ function evaluationInputs(context: RisuCompatContext, field: { fieldId: string; 
     // Uimori history entries are the chat's sources - the written turns - and the reserved request
     // is the turn being answered, exactly as requestEditMessages projects them.
     ...snapshot.history.map((entry) => ({ role: 'char' as const, data: entry.text, time: 0 })),
-    ...(snapshot.request ? [{ role: 'user' as const, data: snapshot.request, time: 0 }] : []),
+    // An authored opening is the greeting Risu evaluates against an empty chat. Its reserved request
+    // is the synthetic selection marker, not a turn anyone wrote, so it never becomes a user message.
+    ...(snapshot.request && snapshot.packageStart?.mode !== 'authored'
+      ? [{ role: 'user' as const, data: snapshot.request, time: 0 }]
+      : []),
   ];
   // The run id seeds the entropy but is deliberately outside the hash: a fork or a chat-backup
   // restore copies the frozen receipt onto a new run id, and the hash has to keep binding the
@@ -360,8 +364,9 @@ export function evaluateRisuCompat(
     getUserName: () => userName,
     getPersonaPrompt: () => personaBody,
     getChatVar: (variable) => (Object.hasOwn(variables, variable) ? variables[variable] : 'null'),
-    // Writes land on this evaluation's own copy so a later read in the same text sees them. They are
-    // recorded, not persisted: adopting them into the chat's shared variables is a separate step.
+    // Writes land on this evaluation's own copy so a later read in the same text sees them; the
+    // other fields of the same run keep reading the reserved state. Recording them here is what
+    // lets the source save adopt them onto the branch under the chat's own grant.
     setChatVar: (variable, value) => {
       variables[variable] = value;
       writes.push({ key: variable, value });
@@ -414,7 +419,17 @@ export function evaluateRisuCompat(
     : unsupported.length
       ? 'unsupported-names'
       : undefined;
-  return { key, inputHash, text: result.text, unsupported, ...(partial ? { partial } : {}) };
+  return {
+    key,
+    inputHash,
+    text: result.text,
+    unsupported,
+    // Past the limit the entry keeps only the first writes and stays `variable-write`; that mark
+    // already says the writes are partial, so nothing else records the truncation. An abandoned
+    // evaluation above returns no writes at all: its reads never finished.
+    ...(writes.length ? { writes: writes.slice(0, RISU_COMPAT_LIMITS.writes) } : {}),
+    ...(partial ? { partial } : {}),
+  };
 }
 
 /**

@@ -1,21 +1,30 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
+import { packageInstanceId } from '../core/execution-context.js';
 import type { Content } from '../core/product.js';
 import type { ModelInput, RunSnapshot } from '../core/types.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
+import { readChatVariables, writeChatVariablesInTransaction } from '../server/chat-variables.js';
+import { validateChatVariablesArchive } from '../server/chat-variables-archive.js';
+import { createPackageStart, validateArchivedPackageStart } from '../server/package-start.js';
 import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
 import { validateRunSnapshot } from '../server/snapshot-archive.js';
 import { Store } from '../server/store.js';
 
 // The compat evaluation is a reservation input: it freezes with the Run, the compiled prompt carries
 // the evaluated text instead of the card's literal braces, and every archive path either reproduces
-// the receipt from that same snapshot or refuses the Run.
+// the receipt from that same snapshot or refuses the Run. What the evaluation wrote travels on the
+// same receipt and reaches the branch shared variables when the source is saved.
 
 const DESCRIPTION = '{{#if 1}}HP {{getvar::hp}} left{{/if}} and {{calc::1+2}}';
 const EVALUATED = 'HP 10 left and 3';
+// `setvar` and `calc` are what the AST converter refuses, so these fields keep their original CBS
+// and are evaluated at reservation instead of being imported as templates.
+const WRITING_DESCRIPTION = '{{setvar::hp::20}}HP {{getvar::hp}}';
+const GREETING = 'Welcome, HP {{getvar::hp}} and {{calc::1+2}}';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -40,7 +49,7 @@ function database() {
   return store;
 }
 
-const sourceOf = () => ({
+const sourceOf = (description = DESCRIPTION, greeting = 'The pilot waits.') => ({
   name: 'synthetic-compat-card.json',
   base64: Buffer.from(
     JSON.stringify({
@@ -48,17 +57,18 @@ const sourceOf = () => ({
       spec_version: '3.0',
       data: {
         name: 'Synthetic Pilot',
-        description: DESCRIPTION,
-        first_mes: 'The pilot waits.',
+        description,
+        first_mes: greeting,
         extensions: { risuai: { defaultVariables: 'hp=10' } },
       },
     })
   ).toString('base64'),
 });
 
-function reserved(request = 'Where next?') {
+/** Imports one card into its own chat and leaves the bot attached, with no Run reserved yet. */
+function imported(description = DESCRIPTION, greeting = 'The pilot waits.') {
   const store = database();
-  const source = sourceOf();
+  const source = sourceOf(description, greeting);
   const preview = prepareRisuImport({ source });
   const saved = applyRisuImport(store, {
     source,
@@ -70,7 +80,36 @@ function reserved(request = 'Where next?') {
   });
   const chat = saved.chat!;
   const content = store.product.get<Content>('content', saved.receipt.items[0].id);
+  return { store, chat, content };
+}
+
+/** The chat's own 공유 변수 변경 허용 for this exact material revision, as the editor writes it. */
+function grantVariableWrites(store: Store, chatId: string, contentId: string) {
+  const profile = store.product.profile(chatId);
+  const attachment = profile.packageAttachments!.find((item) => item.id === contentId)!;
+  store.product.updateProfile(chatId, {
+    expectedRevision: profile.revision,
+    attachments: profile.attachments,
+    packageAttachments: profile.packageAttachments,
+    image: profile.image,
+    extensionGrants: {
+      ...(profile.extensionGrants ?? {}),
+      [packageInstanceId(attachment)]: {
+        packageRevision: attachment.revision,
+        capabilities: ['variables.write'],
+      },
+    },
+  });
+}
+
+const events = (store: Store, chatId: string) =>
+  store.events(chatId, 0).map((item) => (item as { kind: string }).kind);
+
+function reserved(options: { request?: string; description?: string; grant?: boolean } = {}) {
+  const request = options.request ?? 'Where next?';
+  const { store, chat, content } = imported(options.description);
   expect(content.package!.compat).toEqual({ risuCbs: { fields: ['body'] } });
+  if (options.grant) grantVariableWrites(store, chat.id, content.id);
   const profile = store.product.snapshot(chat.id);
   const current = store.chat(chat.id);
   const { run } = store.createRun(
@@ -189,4 +228,127 @@ test('a chat backup restore keeps the frozen receipt on the copied Run', () => {
   expect(carried.id).not.toBe(run.id);
   expect(carried.snapshot.risuCompat).toEqual(run.snapshot.risuCompat);
   expect(JSON.stringify(carried.snapshot.promptCompilation!.messages)).toContain(EVALUATED);
+});
+
+test('the receipt records what the card wrote and the branch adopts it under the grant', () => {
+  const fixture = reserved({ description: WRITING_DESCRIPTION, grant: true });
+  const entry = fixture.run.snapshot.risuCompat!.entries[0];
+  expect(entry.writes).toEqual([{ key: 'hp', value: '20' }]);
+  expect(entry.partial).toBe('variable-write');
+  expect(entry.text).toBe('HP 20');
+  const branchId = fixture.store.product.branch(fixture.chat.id).id;
+  expect(readChatVariables(fixture.store, fixture.chat.id, branchId).values).toEqual({});
+  completed(fixture);
+  expect(readChatVariables(fixture.store, fixture.chat.id, branchId)).toEqual({
+    revision: 1,
+    values: { hp: '20' },
+  });
+});
+
+test('without the chat grant the writes are skipped and the branch is left alone', () => {
+  const fixture = reserved({ description: WRITING_DESCRIPTION });
+  completed(fixture);
+  const branchId = fixture.store.product.branch(fixture.chat.id).id;
+  expect(readChatVariables(fixture.store, fixture.chat.id, branchId)).toEqual({
+    revision: 0,
+    values: {},
+  });
+  expect(events(fixture.store, fixture.chat.id)).toContain('risu.compat.variables.skipped');
+});
+
+test('writes evaluated against variables the branch has since changed are skipped as stale', () => {
+  const fixture = reserved({ description: WRITING_DESCRIPTION, grant: true });
+  const branchId = fixture.store.product.branch(fixture.chat.id).id;
+  // Another writer inside the reserved Run's own window; the evaluation never saw this value.
+  fixture.store.transaction(() =>
+    writeChatVariablesInTransaction(fixture.store, fixture.chat.id, branchId, {
+      expectedRevision: 0,
+      expectedSourceHash: null,
+      idempotencyKey: 'user-edit',
+      values: { hp: '99' },
+    })
+  );
+  completed(fixture);
+  expect(readChatVariables(fixture.store, fixture.chat.id, branchId).values).toEqual({ hp: '99' });
+  expect(events(fixture.store, fixture.chat.id)).toContain('risu.compat.variables.stale');
+});
+
+test('a chat backup copy carries the adopted variable state and its archive still validates', () => {
+  const fixture = reserved({ description: WRITING_DESCRIPTION, grant: true });
+  completed(fixture);
+  const copy = importChatBackup(fixture.store, {
+    backup: exportChatBackup(fixture.store, fixture.chat.id),
+    idempotencyKey: 'compat-variables-copy',
+  });
+  const branchId = fixture.store.product.branch(copy.chat.id).id;
+  expect(readChatVariables(fixture.store, copy.chat.id, branchId)).toEqual({
+    revision: 1,
+    values: { hp: '20' },
+  });
+  expect(() => validateChatVariablesArchive(fixture.store)).not.toThrow();
+});
+
+test('the input hash binds the evaluated inputs only, never the writes the entry carries', () => {
+  const fixture = reserved({ description: WRITING_DESCRIPTION, grant: true });
+  const run = completed(fixture);
+  const withoutWrites: RunSnapshot = structuredClone(run.snapshot);
+  delete withoutWrites.risuCompat!.entries[0].writes;
+  // The same snapshot recomputes the same hash with and without them, so dropping them is not a
+  // receipt mismatch - only the branch adoption reads the writes.
+  expect(() => validateRunSnapshot(fixture.store, withoutWrites, run.id)).not.toThrow();
+});
+
+/** Confirms the card's only authored opening, which commits its source inside the same transaction. */
+function confirmedStart() {
+  const { store, chat, content } = imported(DESCRIPTION, GREETING);
+  const start = content.package!.starts![0];
+  expect(content.package!.compat!.risuCbs.fields).toContain(`start:${start.id}`);
+  const current = store.chat(chat.id);
+  const { run } = createPackageStart(store, chat.id, {
+    packageId: content.id,
+    packageRevision: content.revision,
+    startId: start.id,
+    expectedSettingsRevision: current.settingsRevision,
+    expectedProfileRevision: store.product.profile(chat.id).revision,
+    idempotencyKey: randomUUID(),
+  });
+  return { store, chat, content, start, run };
+}
+
+test('an authored start commits the compat evaluation of its own greeting', () => {
+  const { store, run, start } = confirmedStart();
+  const entry = run.snapshot.risuCompat!.entries.find((item) =>
+    item.key.endsWith(`:bot:start:${start.id}`)
+  )!;
+  expect(entry.text).toBe('Welcome, HP 10 and 3');
+  expect(run.snapshot.packageStart!.text).toBe(GREETING);
+  expect(store.source(run.sourceRevision!).text).toBe('Welcome, HP 10 and 3');
+  expect(() => validateRunSnapshot(store, run.snapshot, run.id)).not.toThrow();
+  expect(() => validateArchivedPackageStart(store, run, run.snapshot)).not.toThrow();
+});
+
+test('an authored start reserved before the receipt existed still validates without one', () => {
+  const { store, run } = confirmedStart();
+  const withoutReceipt: RunSnapshot = structuredClone(run.snapshot);
+  delete withoutReceipt.risuCompat;
+  // The stored selection text is what such a Run committed, so the archive compares against it.
+  const committed = run.snapshot.packageStart!.text;
+  store.db
+    .prepare('UPDATE sources SET text=?,hash=? WHERE id=?')
+    .run(
+      committed,
+      createHash('sha256').update(committed).digest('hex'),
+      run.sourceRevision as string
+    );
+  expect(() => validateArchivedPackageStart(store, run, withoutReceipt)).not.toThrow();
+});
+
+test('an authored start whose receipt text was swapped is refused by the archive', () => {
+  const { store, run, start } = confirmedStart();
+  const forged: RunSnapshot = structuredClone(run.snapshot);
+  forged.risuCompat!.entries.find((item) => item.key.endsWith(`:bot:start:${start.id}`))!.text =
+    'Welcome, HP 999 and 3';
+  expect(() => validateArchivedPackageStart(store, run, forged)).toThrow(
+    'PACKAGE_START_ARCHIVE_SOURCE_MISMATCH'
+  );
 });

@@ -8,6 +8,7 @@ import { ContentPicker } from './ContentPicker.js';
 import { reconcilePromptValues } from '../core/prompt-program.js';
 import { packageInstanceId } from '../core/execution-context.js';
 import type { ExtensionGrantCapability } from '../core/extension-program.js';
+import { risuCompatRequestsVariableWrite } from '../core/risu-compat.js';
 import { Switch } from './BooleanControls.js';
 import './package-authoring.css';
 const keyOf = (ref: PackageAttachment) => `${ref.id}@${ref.revision}:${ref.role}`;
@@ -83,8 +84,9 @@ export function updateExtensionGrantCapability(
 }
 
 const requestsCapability = (pkg: ContentPackage, capability: ExtensionGrantCapability) =>
-  pkg.behavior?.actions.some((action) => action.program?.capabilities?.includes(capability)) ??
-  false;
+  (capability === 'variables.write' && risuCompatRequestsVariableWrite(pkg)) ||
+  (pkg.behavior?.actions.some((action) => action.program?.capabilities?.includes(capability)) ??
+    false);
 
 export function PackageAttachments({
   profile,

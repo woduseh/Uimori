@@ -39,6 +39,7 @@ import { ContextStore } from './context-store.js';
 import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { checkpointChatVariablesInTransaction } from './chat-variables.js';
 import { restoreCandidateChatVariables } from './chat-variables-archive.js';
+import { commitRunCompatVariables } from './risu-compat-variables.js';
 import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
 import { IDENTITY_PATTERN } from '../core/identity.js';
 import {
@@ -806,6 +807,12 @@ export class Store {
       // Illustrations never block the source commit; reservation problems become visible jobs.
       if (!run.snapshot.candidateOf) scheduleAutomaticIllustration(this, source);
     }
+    // A card's preserved Risu CBS wrote through its own frozen evaluation, so its writes are adopted
+    // here rather than in the behavior path: an authored opening has no behavior outputs to complete,
+    // and a Run without behavior definitions never reaches completePackageOutputs' commit at all.
+    // Adopting after that commit keeps the behavior path's own staleness check reading the branch the
+    // reservation froze; the checkpoint below then carries both writers' result onto this source.
+    commitRunCompatVariables(this, run, source);
     checkpointChatVariablesInTransaction(this, source.id, source.chatId, branch.id);
     this.event(source.chatId, 'source.ready', source.id);
     this.event(source.chatId, 'run.completed', id);
