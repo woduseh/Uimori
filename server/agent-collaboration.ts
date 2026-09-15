@@ -47,6 +47,9 @@ export function buildAgentProviderRequest(
   return {
     role: 'main',
     modelId: target.modelId,
+    ...(target.providerOptions !== undefined
+      ? { providerOptions: structuredClone(target.providerOptions) }
+      : {}),
     stable: {
       contract: `${CONTRACT}\n${AUTHOR_NOTE_GUIDANCE}${input.outline ? `\nFor advice about the planned writing unit: ${OUTLINE_CONTRACT}` : ''}\nKeep the final advice within ${agent.maxOutputChars} characters.\n\nShared instructions:\n${collaboration.sharedInstructions}\n\nAdvisor instructions:\n${agent.instructions}`,
       tools: structuredClone(tools),

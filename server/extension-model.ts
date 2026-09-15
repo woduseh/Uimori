@@ -237,6 +237,9 @@ export function createExtensionModelService(
         role: 'state',
         modelId: target.modelId,
         pricingSnapshot: target.pricingSnapshot,
+        ...(target.providerOptions !== undefined
+          ? { providerOptions: structuredClone(target.providerOptions) }
+          : {}),
         generation: generationFromModel(target),
         contextBudget: contextBudgetForModel(target),
         stable: {

@@ -17,6 +17,13 @@ const connection: Connection = {
   catalog: [],
   catalogError: null,
 };
+const vercelConnection: Connection = {
+  ...connection,
+  id: 'vercel',
+  title: 'Vercel AI Gateway',
+  protocol: 'vercel-chat-v1',
+  endpoint: 'https://ai-gateway.vercel.sh/v1',
+};
 
 describe('model numeric drafts', () => {
   test.each(['', ' ', '0', '-1', '1.5', 'NaN', 'Infinity', '500001'])(
@@ -45,6 +52,37 @@ describe('model numeric drafts', () => {
       draft.evaluationToolsEnabled = true;
       draft.evaluationTools.maximumToolRounds = maximumToolRounds;
       expect(modelDraftError(draft, connection)).not.toBe('');
+    }
+  );
+
+  test('keeps Vercel providerOptions as JSON and leaves it out of other protocols', () => {
+    const draft = {
+      ...initialModel(),
+      modelId: 'openai/gpt-5.6-sol',
+      providerOptions: '{\n  "gateway": {\n    "only": ["openai"]\n  }\n}',
+    };
+    expect(modelDraftError(draft, vercelConnection)).toBe('');
+    expect(modelPayload(draft, vercelConnection).providerOptions).toEqual({
+      gateway: { only: ['openai'] },
+    });
+    expect(modelPayload(draft, connection)).not.toHaveProperty('providerOptions');
+    const restored = modelDraft({
+      ...modelPayload(draft, vercelConnection),
+      id: 'model',
+      revision: 1,
+    } as ModelPreset);
+    expect(JSON.parse(restored.providerOptions)).toEqual({ gateway: { only: ['openai'] } });
+  });
+
+  test.each(['{', '{"gateway":{"apiKey":"secret"}}'])(
+    'reports invalid Vercel providerOptions %s without saving',
+    (providerOptions) => {
+      expect(
+        modelDraftError(
+          { ...initialModel(), modelId: 'openai/gpt-5.6-sol', providerOptions },
+          vercelConnection
+        )
+      ).toMatch(/providerOptions/);
     }
   );
 });

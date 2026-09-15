@@ -134,6 +134,9 @@ export async function compactToolReads(
     role: 'context',
     modelId: target.modelId,
     pricingSnapshot: target.pricingSnapshot,
+    ...(target.providerOptions !== undefined
+      ? { providerOptions: structuredClone(target.providerOptions) }
+      : {}),
     generation,
     contextBudget: budget,
     stable: {

@@ -290,7 +290,8 @@ function providerInput(
   generation: ProviderRequest['generation'],
   opaqueState: Json | undefined,
   snapshot: RunSnapshot,
-  evaluation?: ReturnType<typeof createEvaluationToolSession>
+  evaluation?: ReturnType<typeof createEvaluationToolSession>,
+  providerOptions?: ProviderRequest['providerOptions']
 ): ProviderRequest {
   const task =
     input.role === 'translation'
@@ -328,6 +329,7 @@ function providerInput(
       ],
     },
     generation,
+    ...(providerOptions !== undefined ? { providerOptions: structuredClone(providerOptions) } : {}),
     ...(evaluation?.bootstrap.length
       ? {
           bootstrap: evaluation.bootstrap.map((item) => ({
@@ -508,7 +510,8 @@ export async function runAuxiliaryJob(
           evaluation ? evaluation.generation(generation, completedToolResults) : generation,
           opaqueState,
           snapshot,
-          evaluation
+          evaluation,
+          target.providerOptions
         ),
         contextBudget: contextBudgetForModel(target),
         pricingSnapshot: target.pricingSnapshot,
@@ -631,6 +634,9 @@ export async function runAuxiliaryJob(
             },
             generation: generationFromModel(classifier),
             pricingSnapshot: classifier.pricingSnapshot,
+            ...(classifier.providerOptions !== undefined
+              ? { providerOptions: structuredClone(classifier.providerOptions) }
+              : {}),
             contextBudget: contextBudgetForModel(classifier),
             input: {
               task: 'Classify the response prefix.',

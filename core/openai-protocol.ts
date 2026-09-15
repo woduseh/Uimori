@@ -13,6 +13,7 @@ import type {
 import { nativeHostInstruction, planNativeMessages } from './provider-messages.js';
 import { validateModelOptions } from './model-capabilities.js';
 import { planProviderCache } from './provider-cache.js';
+import { ProviderOptionsError, validateProviderOptions } from './provider-options.js';
 
 export class OpenAIProtocolError extends Error {
   constructor(readonly code: string) {
@@ -96,6 +97,14 @@ function prepare(
     : 'openai-responses-v1'
 ) {
   if (!nonempty(request.modelId) || request.modelId.length > 200) reject('INVALID_MODEL_ID');
+  if (request.providerOptions !== undefined) {
+    if (protocol !== 'vercel-chat-v1') reject('UNSUPPORTED_PROVIDER_OPTIONS');
+    try {
+      validateProviderOptions(request.providerOptions);
+    } catch (error) {
+      reject(error instanceof ProviderOptionsError ? error.code : 'PROVIDER_OPTIONS_JSON');
+    }
+  }
   const generation = request.generation;
   if (generation) validateModelOptions(generation, protocol);
   const { results: rawResults, ...input } = request.input;
@@ -115,6 +124,9 @@ function prepare(
         input,
         prompt: request.prompt ?? null,
         bootstrap,
+        ...(request.providerOptions !== undefined
+          ? { providerOptions: request.providerOptions }
+          : {}),
         ...(plan ? { protocol, capabilityVersion: plan.capabilityVersion } : {}),
       },
       'INVALID_OPENAI_REQUEST'

@@ -228,6 +228,9 @@ export function buildMainProviderRequest(
     role: 'main',
     modelId: target.modelId,
     pricingSnapshot: target.pricingSnapshot,
+    ...(target.providerOptions !== undefined
+      ? { providerOptions: structuredClone(target.providerOptions) }
+      : {}),
     stable: {
       contract,
       tools: [

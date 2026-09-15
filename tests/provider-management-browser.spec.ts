@@ -205,6 +205,36 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   expect(observed.legacyReads).toEqual([]);
 });
 
+test('PMUI providerOptions is available only for Vercel models and is saved as JSON', async ({
+  page,
+  request,
+}) => {
+  const title = 'PMUI providerOptions ' + Date.now();
+  const connection = await api<Connection>(request, '/connections', {
+    title,
+    protocol: 'vercel-chat-v1',
+    endpoint: 'https://ai-gateway.vercel.sh/v1',
+    credentialEnv: 'PM_SYNTHETIC_KEY',
+    enabled: true,
+  });
+  await settings(page);
+  await page.getByRole('button', { name: '새 모델 입력', exact: true }).first().click();
+  const form = page.getByRole('form', { name: '모델 편집 양식' });
+  await form.getByLabel('모델 프리셋 이름').fill(title + ' 모델');
+  await form.getByLabel('프로바이더', { exact: true }).selectOption(connection.id);
+  await form.getByLabel('모델 ID', { exact: true }).fill('openai/gpt-5.6-sol');
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  const providerOptions = form.getByLabel('providerOptions (JSON)', { exact: true });
+  await expect(providerOptions).toBeVisible();
+  await providerOptions.fill('{"gateway":{"only":["openai"]}}');
+  await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: title + ' 모델 모델 프리셋 등록됨' })
+  ).toBeVisible();
+  const saved = (await library(request)).models.find((item) => item.title === title + ' 모델')!;
+  expect(saved.providerOptions).toEqual({ gateway: { only: ['openai'] } });
+});
+
 test('PMUI02 connection clone requires review and stale edits retain their draft and CAS revision until explicit reload', async ({
   page,
   request,

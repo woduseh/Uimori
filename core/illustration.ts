@@ -312,6 +312,9 @@ export function illustrationPromptRequest(
     stable: { contract: ILLUSTRATION_PROMPT_CONTRACT, tools: [] },
     generation,
     pricingSnapshot: model.pricingSnapshot,
+    ...(model.providerOptions !== undefined
+      ? { providerOptions: structuredClone(model.providerOptions) }
+      : {}),
     input: {
       task: 'Write the illustration prompt JSON for this scene.',
       controls: { purpose: 'illustration-prompt', allowSkip: scene.allowSkip },

@@ -163,6 +163,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       'Vercel의 공식 API 기본 주소에서 Chat Completions 형식을 사용해요.',
       '번역 JSON Schema는 명시 선택할 때만 요청하며 모델별 옵션·도구 지원은 미확인이에요.',
+      '고급 설정의 providerOptions는 JSON 객체로 Vercel AI Gateway 요청에 전달해요. gateway.only 같은 라우팅 제한을 지정할 수 있지만 인증정보는 넣을 수 없어요.',
     ],
   }),
   definition({

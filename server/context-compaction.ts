@@ -117,6 +117,9 @@ function summaryRequest(
     role: 'context',
     pricingSnapshot: target.pricingSnapshot,
     modelId: target.modelId,
+    ...(target.providerOptions !== undefined
+      ? { providerOptions: structuredClone(target.providerOptions) }
+      : {}),
     stable: {
       contract: `${SUMMARY_CONTRACT}\nThe complete rewritten working memory should use about ${targetSummaryTokens} tokens at most. This budget applies to old and new information together.`,
       tools: [],
