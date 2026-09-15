@@ -13,6 +13,7 @@ import { listBehaviorTools } from './package-behavior-tools.js';
 import { OUTLINE_CONTRACT, type OutlineSnapshot } from './outline.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 import { storyInputState } from './story.js';
+import type { PromptCompilerVersion } from './prompt-program.js';
 
 // These are host permissions, never instructions read from a content package.
 const ALLOWED_TOOLS = Object.freeze([
@@ -27,6 +28,8 @@ export const CATALOG_SUMMARY_CHARS = 160;
 export const CATALOG_CHARS = 24_000;
 export const CATALOG_READ_GUIDANCE =
   'The catalog lists reference summaries, not their text. Before writing, choose the entries the current request needs and read them with knowledge.read; use knowledge.search for entries the catalog does not list. Skip entries unrelated to the request.';
+/** Item cap of the `uimori-prompt-1` catalog, which listed every entry's full metadata. */
+const LEGACY_CATALOG_ITEMS = 100;
 
 const metadata = ({ text: _text, chatId: _chatId, ...item }: Resource) => item;
 const scopedMetadata = (item: Resource, allowedIds: Set<string>) => ({
@@ -52,6 +55,17 @@ const catalogEntry = (
     ...(pinned ? { loading: 'pinned' as const } : {}),
     ...(item.relatedIds ? { relatedIds: item.relatedIds.filter((id) => allowedIds.has(id)) } : {}),
   };
+};
+/** Entries that fit the serialized budget; the first entry is always listed. */
+const budgetedCatalogLength = (catalog: MainInput['catalog']) => {
+  let used = 1, // the enclosing brackets, less the separator the first entry does not need
+    listed = 0;
+  for (const item of catalog) {
+    used += JSON.stringify(item).length + 1;
+    if (listed && used > CATALOG_CHARS) break;
+    listed++;
+  }
+  return listed;
 };
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 export function roleResources(
@@ -141,11 +155,14 @@ export function pinnedSlotSources(
 /** Fixed contract, provenance-bearing pinned content, catalog and observed reads stay separate. */
 export function buildMainInput(
   snapshot: RunSnapshot,
-  results: readonly ToolEvent[] = []
+  results: readonly ToolEvent[] = [],
+  options: { compilerVersion?: PromptCompilerVersion } = {}
 ): MainInput {
   const packages = compiledPackages(snapshot, 'main'),
     resources = collectRoleResources(snapshot, 'main', packages);
   const allowedIds = new Set(resources.map((item) => item.id));
+  // A stored compilation is replayed with the catalog shape its version listed.
+  const legacyCatalog = options.compilerVersion === 'uimori-prompt-1';
   const input: MainInput = {
     role: 'main',
     contract: '',
@@ -153,7 +170,9 @@ export function buildMainInput(
     preset: snapshot.settings.preset,
     facts: [],
     history: structuredClone(snapshot.history),
-    catalog: resources.map((item) => catalogEntry(item, allowedIds)),
+    catalog: resources.map((item) =>
+      legacyCatalog ? scopedMetadata(item, allowedIds) : catalogEntry(item, allowedIds)
+    ),
     prefetch: [],
     tools: [...ALLOWED_TOOLS],
     results: structuredClone([...results]),
@@ -254,14 +273,10 @@ export function buildMainInput(
   }
   // The catalog rides uncached in every request, so a large library is listed only up to a
   // character budget. The rest stays reachable through the read tools.
-  const total = input.catalog.length;
-  let used = 1, // the enclosing brackets, less the separator the first entry does not need
-    listed = 0;
-  for (const item of input.catalog) {
-    used += JSON.stringify(item).length + 1;
-    if (listed && used > CATALOG_CHARS) break;
-    listed++;
-  }
+  const total = input.catalog.length,
+    listed = legacyCatalog
+      ? Math.min(total, LEGACY_CATALOG_ITEMS)
+      : budgetedCatalogLength(input.catalog);
   if (listed < total) {
     input.catalogPage = {
       total,
@@ -508,7 +523,9 @@ export async function executeMain(
     ) {
       throw Object.assign(new Error('Model call budget exhausted'), { name: 'BudgetError' });
     }
-    const input = buildMainInput(fixed, results);
+    const input = buildMainInput(fixed, results, {
+      compilerVersion: fixed.promptCompilation?.compilerVersion,
+    });
     modelCalls++;
     // This is the exact mock-provider input, copied only to prevent log-hook writes.
     await hooks.onInput(structuredClone(input));

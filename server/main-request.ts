@@ -133,7 +133,9 @@ export function buildMainProviderRequest(
     ),
     target = fixed.profile?.models.main;
   if (!target) throw new ProviderContractError('MAIN_MODEL_REQUIRED');
-  const input = buildMainInput(fixed, options.results ?? []),
+  const input = buildMainInput(fixed, options.results ?? [], {
+      compilerVersion: fixed.promptCompilation?.compilerVersion,
+    }),
     terminal = storySubmissionEnabled(fixed);
   if (options.disabledBehaviorTools?.length)
     input.tools = input.tools.filter((name) => !options.disabledBehaviorTools!.includes(name));

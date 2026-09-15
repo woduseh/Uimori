@@ -4,6 +4,7 @@ import { attachMainHostContext } from './main-host-context.js';
 import { buildMainInput, pinnedSlotSources } from '../core/provider.js';
 import {
   compilePromptProgram,
+  type PromptCompilerVersion,
   type PromptHistoryMessage,
   type PromptProgram,
   type PromptValue,
@@ -72,9 +73,10 @@ function contextFromPackages(
   snapshot: RunSnapshot,
   packages: readonly ResolvedPackage[],
   program?: PromptProgram,
-  values?: Record<string, PromptValue>
+  values?: Record<string, PromptValue>,
+  compilerVersion?: PromptCompilerVersion
 ) {
-  const input = buildMainInput(snapshot);
+  const input = buildMainInput(snapshot, [], { compilerVersion });
   const contents = snapshot.profile?.contents ?? [];
   const body = (slot: string) =>
     pinnedSlotSources(input, slot)
@@ -159,10 +161,12 @@ function contextFromPackages(
       : undefined,
   };
 }
+/** Pass `compilerVersion` only to reproduce a stored compilation; a fresh one takes the current stamp. */
 export function compileSnapshotPrompt(
   snapshot: RunSnapshot,
   program?: PromptProgram,
-  values?: Record<string, PromptValue>
+  values?: Record<string, PromptValue>,
+  options: { compilerVersion?: PromptCompilerVersion } = {}
 ): RunSnapshot {
   if (snapshot.story?.waiting || snapshot.contextPlan?.status === 'pending') return snapshot;
   const selected =
@@ -203,10 +207,17 @@ export function compileSnapshotPrompt(
       });
     }
   }
-  const context = contextFromPackages(snapshot, packages, selected, values);
+  const context = contextFromPackages(
+    snapshot,
+    packages,
+    selected,
+    values,
+    options.compilerVersion
+  );
   const promptCompilation = compilePromptProgram(selected, {
     ...context,
     ...(values ? { values } : {}),
+    ...(options.compilerVersion ? { compilerVersion: options.compilerVersion } : {}),
   });
   promptCompilation.warnings.push(...context.transformWarnings);
   if (context.runtime.variableDefaultsError === 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT')

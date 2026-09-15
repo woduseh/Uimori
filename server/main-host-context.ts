@@ -66,7 +66,10 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
 /** Explicit dynamic data boundary. Existing user-authored roles, order and cache IDs stay unchanged. */
 export function attachMainHostContext(snapshot: RunSnapshot): RunSnapshot {
   if (!snapshot.promptCompilation) return snapshot;
-  const input = buildMainInput(snapshot),
+  // The stored stamp reproduces the catalog shape the compilation was built with.
+  const input = buildMainInput(snapshot, [], {
+      compilerVersion: snapshot.promptCompilation.compilerVersion,
+    }),
     text = nativeHostContextText({ input: requestInput(snapshot, input) });
   const compilation = structuredClone(snapshot.promptCompilation),
     existing = compilation.messages.find((message) => message.id === NATIVE_HOST_CONTEXT_ID);

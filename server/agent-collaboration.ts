@@ -33,7 +33,9 @@ export function buildAgentProviderRequest(
   previousConsultations: readonly ToolEvent[] = [],
   consultationContext?: AgentConsultationContext
 ): ProviderRequest {
-  const input = buildMainInput(snapshot);
+  const input = buildMainInput(snapshot, [], {
+    compilerVersion: snapshot.promptCompilation?.compilerVersion,
+  });
   const collaboration = snapshot.profile!.promptPresets!.main!.program.collaboration!;
   const tools = MAIN_READ_TOOLS.filter(
     (tool) =>
@@ -229,7 +231,9 @@ export function createAgentCollaboration(
         previousByAgent.get(agent.id),
         consultationContext
       );
-      const input = buildMainInput(snapshot, results);
+      const input = buildMainInput(snapshot, results, {
+        compilerVersion: snapshot.promptCompilation?.compilerVersion,
+      });
       await hooks.onInput({
         ...input,
         agentId: agent.id,

@@ -24,6 +24,8 @@
 
 `authored`는 실제 `packageStart.mode === 'authored'` 또는 `transcriptImport` 표식과 일치해야 해요. story·before-turn 행동·context 준비를 생략하지만 기존 compile은 유지해요. 일반 `run`도 상태 또는 context가 대기 중이면 기존 `compileSnapshotPrompt` 정책에 따라 최종 compile을 미뤄요.
 
+compile 결과 `promptCompilation`은 컴파일러 stamp `compilerVersion`을 함께 저장해요. archive 가져오기의 검증(`validateRunSnapshot`)과 후보·재시도의 host context 부착은 저장된 stamp로 다시 컴파일해 대조하므로, [로어 목록](LORE-CONTEXT.md)처럼 host 투영이 바뀌어도 이전 Run의 검증과 재사용은 그대로 통과해요. 포크·채팅 백업 가져오기·미리보기·예약은 현재 stamp `uimori-prompt-2`로 새로 컴파일해요.
+
 preview는 기존대로 채팅 옵션 freeze와 context seed를 실행하지 않아요. 이 통합은 미리보기의 의미를 새로 바꾸지 않아요. 기존 원문의 번역 미리보기는 그 원문 Run의 snapshot과 source hash를 사용해요.
 
 ## snapshot 영수증
