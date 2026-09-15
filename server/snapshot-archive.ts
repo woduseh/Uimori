@@ -250,10 +250,12 @@ export function validateRunSnapshot(
       values: p.values,
     });
     const matched = compilationCandidates.find(({ compilation }) => {
-      const expected = compileSnapshotPrompt({
-        ...compilation,
-        promptCompilation: undefined,
-      });
+      const expected = compileSnapshotPrompt(
+        { ...compilation, promptCompilation: undefined },
+        undefined,
+        undefined,
+        { compilerVersion: p.compilerVersion }
+      );
       return isDeepStrictEqual(expected.promptCompilation, p);
     });
     if (!matched) return reject('compiled prompt mismatch');

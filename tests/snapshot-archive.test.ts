@@ -8,7 +8,9 @@ import { afterEach, expect, test } from 'vitest';
 import { Store } from '../server/store.js';
 import { mapForkSnapshot, validateRunSnapshot } from '../server/snapshot-archive.js';
 import type { Content, PromptPreset } from '../core/product.js';
-import type { RunSnapshot } from '../core/types.js';
+import type { Resource, RunSnapshot } from '../core/types.js';
+import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
+import { NATIVE_HOST_CONTEXT_ID } from '../core/provider-messages.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { forkChat } from '../server/chat-fork.js';
 import { chatDeletionImpact, deleteChat } from '../server/chat-deletion.js';
@@ -132,6 +134,43 @@ test('ordinary Runs retain archived logical-history and compiled-prompt validati
   const missingPrompt = structuredClone(snapshot);
   delete missingPrompt.promptCompilation;
   expect(() => validateRunSnapshot(store, missingPrompt)).toThrow('compiled prompt missing');
+});
+
+test('a Run compiled as uimori-prompt-1 validates through its stored version and still rejects forgery', async () => {
+  const { store, chat, second } = await fixture();
+  const resources: Resource[] = Array.from({ length: 120 }, (_, index) => ({
+    id: `legacy-lore-${index}`,
+    chatId: chat.id,
+    kind: 'lore',
+    revision: 1,
+    title: `Synthetic reference ${index}`,
+    description: `Synthetic catalog description ${index}. `.repeat(20),
+    text: `Local fictional body ${index}.`,
+    sourceKind: 'module',
+    loading: 'discoverable',
+  }));
+  const base: RunSnapshot = { ...second.run.snapshot, resources, promptCompilation: undefined };
+  const legacy = compileSnapshotPrompt(base, undefined, undefined, {
+    compilerVersion: 'uimori-prompt-1',
+  });
+  const current = compileSnapshotPrompt(base);
+  const host = (candidate: RunSnapshot) =>
+    candidate.promptCompilation!.messages.find((m) => m.id === NATIVE_HOST_CONTEXT_ID)!.content[0]
+      .text;
+  expect(legacy.promptCompilation!.compilerVersion).toBe('uimori-prompt-1');
+  expect(current.promptCompilation!.compilerVersion).toBe('uimori-prompt-2');
+  expect(host(legacy)).toContain('"listed":100');
+  expect(host(legacy)).not.toBe(host(current));
+  expect(() => validateRunSnapshot(store, legacy)).not.toThrow();
+  expect(() => validateRunSnapshot(store, current)).not.toThrow();
+  const restamped = structuredClone(legacy);
+  restamped.promptCompilation!.compilerVersion = 'uimori-prompt-2';
+  expect(() => validateRunSnapshot(store, restamped)).toThrow('compiled prompt mismatch');
+  const forged = structuredClone(legacy);
+  forged.promptCompilation!.messages.find(
+    (m) => m.id === NATIVE_HOST_CONTEXT_ID
+  )!.content[0].text += ' ';
+  expect(() => validateRunSnapshot(store, forged)).toThrow('compiled prompt mismatch');
 });
 
 test('ordinary fork remapping preserves text and hashes while rebinding history, summary, cache and trace identities', async () => {

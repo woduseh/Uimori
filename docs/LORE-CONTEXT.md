@@ -17,7 +17,7 @@
 
 기본 PromptProgram은 **고정 배경 자료 → 이전 대화와 조회 자료 → 메모·고정 장면 자료 → 변동 host 정보 → 현재 입력** 순서예요. 사용자 정의 PromptProgram의 역할·순서·cache anchor는 유지해요. 실제 실행한 `references`, `bot`/`description`, `persona`, `lore`/`lorebook`, `backgroundLore`, `sceneLore` 슬롯이 이미 제공한 자료는 자동 삽입에서 제외해요. 꺼진 블록이나 선택되지 않은 조건 분기는 자료를 제공한 것으로 계산하지 않아요. 사용자가 같은 본문을 여러 슬롯에 직접 작성한 중복까지 제거하지는 않아요.
 
-변동 host 정보에는 `discoverable` 로어가 **목록**으로만 실려요. 항목마다 ID·revision·종류·제목과 설명을 160자로 줄인 요약이 들어가고 본문과 `loreContext`는 빠져요. 고정 자료는 이미 본문을 보내므로 목록에는 제목만 남기고 요약은 비워요. 목록 전체는 직렬화 기준 24,000자 예산 안에서 앞에서부터 싣고, 예산을 넘어 빠진 항목은 `catalogPage`로 개수를 알리며 `knowledge.search`로 찾도록 안내해요. 요청 contract에는 쓰기 전에 이번 요청에 필요한 항목을 골라 `knowledge.read`로 읽으라는 안내를 함께 넣어요.
+변동 host 정보에는 `discoverable` 로어가 **목록**으로만 실려요. 항목마다 ID·revision·종류·제목과 설명을 160자로 줄인 요약이 들어가고 본문과 `loreContext`는 빠져요. 고정 자료는 이미 본문을 보내므로 목록에는 제목만 남기고 요약은 비워요. 목록 전체는 직렬화 기준 24,000자 예산 안에서 앞에서부터 싣고, 예산을 넘어 빠진 항목은 `catalogPage`로 개수를 알리며 `knowledge.search`로 찾도록 안내해요. 요청 contract에는 쓰기 전에 이번 요청에 필요한 항목을 골라 `knowledge.read`로 읽으라는 안내를 함께 넣어요. 이 압축 목록은 `uimori-prompt-2`로 컴파일한 새 Run에만 적용돼요. 2026-09-14 이전에 컴파일된 Run(`promptCompilation.compilerVersion`이 `uimori-prompt-1`)을 검증하거나 후보로 다시 돌릴 때는 이전처럼 항목마다 전체 메타데이터를 100개까지 싣던 목록을 그대로 재현해요.
 
 ## 키워드 활성화
 

@@ -179,10 +179,22 @@ export type PromptCacheAnchor = {
   afterMessageId: string;
   policy: 'prefer' | 'require';
 };
+/**
+ * Stamp of the compiler that produced a stored compilation. Replay and validation recompile with
+ * the stored stamp so a projection change never invalidates existing Runs: `uimori-prompt-1` lists
+ * the full metadata of up to 100 catalog entries in the host context; `uimori-prompt-2` lists the
+ * compact catalog under a character budget.
+ */
+export type PromptCompilerVersion = 'uimori-prompt-1' | 'uimori-prompt-2';
+export const PROMPT_COMPILER_VERSION: PromptCompilerVersion = 'uimori-prompt-2';
+const PROMPT_COMPILER_VERSIONS: ReadonlySet<unknown> = new Set<PromptCompilerVersion>([
+  'uimori-prompt-1',
+  'uimori-prompt-2',
+]);
 export type PromptCompilation = {
   usedSlots?: string[];
   execution?: { storySubmission: boolean };
-  compilerVersion: 'uimori-prompt-1';
+  compilerVersion: PromptCompilerVersion;
   values: Record<string, PromptValue>;
   messages: LogicalMessage[];
   cachePlan: PromptCacheAnchor[];
@@ -303,7 +315,7 @@ export function validateProviderPrompt(value: unknown): ProviderPrompt {
   inspectAst(value, 1_500_000);
   const p = object(value, ['compilerVersion', 'messages', 'cachePlan', 'values']);
   if (
-    p.compilerVersion !== 'uimori-prompt-1' ||
+    !PROMPT_COMPILER_VERSIONS.has(p.compilerVersion) ||
     !Array.isArray(p.messages) ||
     p.messages.length < 1 ||
     p.messages.length > 1000 ||
@@ -1488,6 +1500,8 @@ export function compilePromptProgram(
     limits?: PromptEvaluationLimits;
     /** Host-only evaluation budget; never included in the compiled program or snapshot. */
     budget?: PromptBudget;
+    /** Stamp to reproduce; a fresh compilation takes the current version. */
+    compilerVersion?: PromptCompilerVersion;
   }
 ): PromptCompilation {
   validatePromptProgram(program);
@@ -1629,7 +1643,7 @@ export function compilePromptProgram(
   return {
     usedSlots: [...evaluator.usedSlots],
     ...(execution ? { execution } : {}),
-    compilerVersion: 'uimori-prompt-1',
+    compilerVersion: context.compilerVersion ?? PROMPT_COMPILER_VERSION,
     values,
     messages,
     cachePlan,
