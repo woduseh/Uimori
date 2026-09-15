@@ -92,6 +92,9 @@ export function encodeChat(
     stream: true,
     stream_options: { include_usage: true },
     ...plan?.options,
+    ...(protocol === 'vercel-chat-v1' && request.providerOptions !== undefined
+      ? { providerOptions: copy(request.providerOptions, 'PROVIDER_OPTIONS_JSON') }
+      : {}),
     ...(generation
       ? {
           [deepseek ? 'max_tokens' : 'max_completion_tokens']: generation.maxOutputTokens,

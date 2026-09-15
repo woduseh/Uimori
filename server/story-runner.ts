@@ -274,6 +274,9 @@ export async function runStoryJob(
         pricingSnapshot: target.pricingSnapshot,
         role: job.kind,
         modelId: target.modelId,
+        ...(target.providerOptions !== undefined
+          ? { providerOptions: structuredClone(target.providerOptions) }
+          : {}),
         stable: {
           contract: `${base.contract}\nOutput schema: ${JSON.stringify(base.outputSchema)}${evaluation ? '\nThe selected evaluation tool set is scoped to this model preset and run. eval_submit_artifact content becomes the task output.' : ''}`,
           tools: [

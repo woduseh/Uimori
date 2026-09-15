@@ -153,6 +153,31 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     delete input.generation!.serviceTier;
     expect(record(encodeChat(input, 'vercel-chat-v1').body)).not.toHaveProperty('service_tier');
   });
+  test('Vercel forwards providerOptions and binds it across tool continuation', () => {
+    const input = request();
+    input.modelId = 'openai/gpt-5.6-sol';
+    input.providerOptions = {
+      gateway: { only: ['openai'], order: ['openai', 'bedrock'] },
+      provider: { compatibility: 'strict' },
+    };
+    const encoded = encodeChat(input, 'vercel-chat-v1');
+    expect(record(encoded.body).providerOptions).toEqual(input.providerOptions);
+    const decoder = new ChatDecoder(encoded.context);
+    decoder.accept(chunk({ tool_calls: [tool()] }, 'tool_calls'));
+    decoder.accept('[DONE]');
+    const continued = next(input, decoder.finish());
+    expect(record(encodeChat(continued, 'vercel-chat-v1').body).providerOptions).toEqual(
+      input.providerOptions
+    );
+    continued.providerOptions = { gateway: { only: ['bedrock'] } };
+    expect(() => encodeChat(continued, 'vercel-chat-v1')).toThrow('OPENAI_CONTINUATION_MISMATCH');
+  });
+  test('does not silently send providerOptions through non-Vercel Chat adapters', () => {
+    const input = request();
+    input.providerOptions = { gateway: { only: ['openai'] } };
+    expect(() => encodeChat(input)).toThrow('UNSUPPORTED_PROVIDER_OPTIONS');
+    expect(() => encodeChat(input, 'deepseek-chat-v1')).toThrow('UNSUPPORTED_PROVIDER_OPTIONS');
+  });
   test.each([
     { verbosity: 'low' },
     { reasoningMode: 'pro' },

@@ -269,6 +269,35 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  test('stores Vercel providerOptions and freezes them in a model snapshot', async () => {
+    const app = await application();
+    const connection = await request<Connection>(
+      app,
+      '/connections',
+      connectionBody('vercel-chat-v1')
+    );
+    const providerOptions = {
+      gateway: { only: ['openai'], order: ['openai', 'bedrock'] },
+      provider: { compatibility: 'strict' },
+    };
+    const model = await request<ModelPreset>(
+      app,
+      '/model-presets',
+      modelBody(connection, { modelId: 'openai/gpt-5.6-sol', providerOptions })
+    );
+    expect(model.providerOptions).toEqual(providerOptions);
+    expect(app.store.product.modelSnapshot(model.id).providerOptions).toEqual(providerOptions);
+    await request(
+      app,
+      '/model-presets',
+      modelBody(connection, {
+        modelId: 'openai/gpt-5.6-sol',
+        providerOptions: { gateway: { apiKey: 'must-not-save' } },
+      }),
+      400
+    );
+  });
+
   test('rejects cross-provider options and inconsistent thinking budgets without storing a model', async () => {
     const app = await application();
     for (const protocol of PROVIDER_PROTOCOLS) {
@@ -302,6 +331,9 @@ describe('provider settings, catalogs and archive contracts', () => {
               ];
       for (const changes of [
         ...forbidden,
+        ...(protocol === 'vercel-chat-v1'
+          ? []
+          : [{ providerOptions: { gateway: { only: ['openai'] } } }]),
         { structuredOutput: null },
         { structuredOutput: 1 },
         { reasoningEffort: 'ultra' },

@@ -22,6 +22,7 @@ import {
 import { validateContextBudget } from './context-budget.js';
 import { providerOriginApproval } from './provider-origin-policy.js';
 import { validatePricingSnapshot } from './model-pricing.js';
+import { ProviderOptionsError, validateProviderOptions } from './provider-options.js';
 import type { CatalogModel, ProviderConnection, ProviderRequest } from './transport.js';
 
 export function reject(code: string): never {
@@ -131,6 +132,7 @@ export function validateRequest(value: unknown): ProviderRequest {
     'generation',
     'generationBinding',
     'contextBudget',
+    'providerOptions',
     'input',
     'opaqueState',
     'prompt',
@@ -148,6 +150,13 @@ export function validateRequest(value: unknown): ProviderRequest {
   if (!MODEL_ROLES.includes(value.role as ModelRole)) reject('INVALID_ROLE');
   string(value.modelId);
   if (value.generation !== undefined) validateGeneration(value.generation);
+  if (value.providerOptions !== undefined) {
+    try {
+      validateProviderOptions(value.providerOptions);
+    } catch (error) {
+      reject(error instanceof ProviderOptionsError ? error.code : 'PROVIDER_OPTIONS_JSON');
+    }
+  }
   if (value.contextBudget !== undefined) validateContextBudget(value.contextBudget);
   if (value.generationBinding !== undefined) {
     validateGeneration(value.generationBinding);

@@ -1,4 +1,5 @@
 import type { EvaluationToolOptions } from './evaluation-tool-config.js';
+import type { ProviderOptions } from './provider-options.js';
 export const PROVIDER_PROTOCOLS = [
   'fixture-sse-v1',
   'vertex-gemini-v1',
@@ -199,6 +200,8 @@ export type ModelPreset = ContentRef &
     evaluationTools?: EvaluationToolOptions;
     /** Opt-in main-role context tools: model-written working summary, window switch and story.list. */
     contextTools?: boolean;
+    /** Optional JSON passed to Vercel AI Gateway; never used as a credential container. */
+    providerOptions?: ProviderOptions;
     pricing?: import('./pricing-types.js').ModelPricing;
     source?: { kind: 'catalog' | 'manual'; catalogUpdatedAt: string | null };
   };

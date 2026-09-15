@@ -13,9 +13,11 @@ import {
 } from '../core/model-capabilities.js';
 import { modelHints, type ModelHints } from '../core/model-hints.js';
 import type { EvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import { PROVIDER_OPTIONS_MAX_CHARS } from '../core/provider-options.js';
 import {
   forcedServiceTierError,
   modelDraftError,
+  providerOptionsDraftError,
   type ModelDraft,
 } from './provider-model-draft.js';
 export {
@@ -300,6 +302,12 @@ export function ProviderModelFields({
   const cacheTtlAvailable = value.cacheMode === 'explicit' || value.cacheMode === 'automatic';
   const optionsError =
     connection && value.modelId ? modelDraftError(value, connection, forcedVertexTier) : '';
+  const providerOptionsError =
+    connection && protocol === 'vercel-chat-v1' ? providerOptionsDraftError(value, connection) : '';
+  const providerOptionsRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    providerOptionsRef.current?.setCustomValidity(providerOptionsError);
+  }, [providerOptionsError]);
   const modelChoices = connection
     ? [
         ...new Map(
@@ -422,6 +430,26 @@ export function ProviderModelFields({
           </label>
         )}
         <h4 className="provider-field-heading full">생성 옵션</h4>
+        {protocol === 'vercel-chat-v1' && (
+          <label className="full">
+            providerOptions (JSON)
+            <textarea
+              ref={providerOptionsRef}
+              aria-label="providerOptions (JSON)"
+              aria-invalid={providerOptionsError ? true : undefined}
+              maxLength={PROVIDER_OPTIONS_MAX_CHARS}
+              rows={8}
+              spellCheck={false}
+              value={value.providerOptions}
+              onChange={(event) => update({ providerOptions: event.target.value })}
+              placeholder={'{\n  "gateway": {\n    "only": ["openai"]\n  }\n}'}
+            />
+            <small>
+              Vercel AI Gateway에 전달할 JSON 객체예요. 예를 들어 gateway.only로 공급자를 제한할 수
+              있어요. API 키·토큰은 넣지 말고 서버 환경변수 인증을 사용하세요.
+            </small>
+          </label>
+        )}
         {/* Options the protocol cannot send stay visible while a value is set, so it can be cleared. */}
         {(hints?.thinkingModes || value.thinkingMode) && (
           <ModelOptionSelect

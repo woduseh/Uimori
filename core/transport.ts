@@ -20,6 +20,7 @@ import { assertContextBudget, type ContextBudget } from './context-budget.js';
 import { validatePricingSnapshot } from './model-pricing.js';
 import type { PricingSnapshot } from './pricing-types.js';
 import { createPublicTextProgress, type ProviderProgress } from './provider-progress.js';
+import type { ProviderOptions } from './provider-options.js';
 export type { ProviderProgress } from './provider-progress.js';
 export { ProviderContractError } from './provider-errors.js';
 export {
@@ -62,6 +63,8 @@ export type ProviderRequest = {
   contextBudget?: ContextBudget;
   /** Host baseline used only for continuation binding when an intermediate evaluation round lowers tokens or effort. Never sent to a provider. */
   generationBinding?: ModelGeneration;
+  /** Optional provider-specific JSON; currently forwarded only by the Vercel Chat adapter. */
+  providerOptions?: ProviderOptions;
   prompt?: ProviderPrompt;
   bootstrap?: {
     callId: string;
@@ -207,6 +210,8 @@ export async function executeProvider(
   requestValue: ProviderRequest,
   options: ProviderExecutionOptions
 ): Promise<ProviderResult> {
+  if (requestValue.providerOptions !== undefined && connectionValue.protocol !== 'vercel-chat-v1')
+    reject('UNSUPPORTED_PROVIDER_OPTIONS');
   if (requestValue.pricingSnapshot) {
     let pricingSnapshot = validatePricingSnapshot(requestValue.pricingSnapshot);
     if (

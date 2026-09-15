@@ -11,6 +11,11 @@ import {
   validateEvaluationToolOptions,
   type EvaluationToolOptions,
 } from '../core/evaluation-tool-config.js';
+import {
+  ProviderOptionsError,
+  parseProviderOptionsText,
+  PROVIDER_OPTIONS_MAX_CHARS,
+} from '../core/provider-options.js';
 
 export type RateDraft = Record<keyof Required<TokenRates>, string>;
 type PricingDraft = {
@@ -85,6 +90,7 @@ export type ModelDraft = {
   evaluationToolsEnabled: boolean;
   evaluationTools: Omit<EvaluationToolOptions, 'maximumToolRounds'> & { maximumToolRounds: string };
   contextToolsEnabled: boolean;
+  providerOptions: string;
   pricing: PricingDraft;
 };
 export const initialModel = (): ModelDraft => ({
@@ -115,6 +121,7 @@ export const initialModel = (): ModelDraft => ({
     maximumToolRounds: String(defaultEvaluationToolOptions().maximumToolRounds),
   },
   contextToolsEnabled: false,
+  providerOptions: '',
   pricing: pricingDraft(),
 });
 export function modelDraft(value: ModelPreset): ModelDraft {
@@ -149,6 +156,8 @@ export function modelDraft(value: ModelPreset): ModelDraft {
       ),
     },
     contextToolsEnabled: value.contextTools === true,
+    providerOptions:
+      value.providerOptions === undefined ? '' : JSON.stringify(value.providerOptions, null, 2),
     pricing: pricingDraft(value.pricing),
   };
 }
@@ -157,6 +166,10 @@ export function selectModelConnection(draft: ModelDraft, connection: Connection)
   return { ...draft, connectionRef: connection.id, modelId: '' };
 }
 export function modelPayload(draft: ModelDraft, connection: Connection) {
+  const providerOptions =
+    connection.protocol === 'vercel-chat-v1'
+      ? parseProviderOptionsText(draft.providerOptions)
+      : undefined;
   return {
     title: draft.title,
     connectionId: connection.id,
@@ -192,8 +205,29 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
         }
       : {}),
     ...(draft.contextToolsEnabled ? { contextTools: true } : {}),
+    ...(providerOptions !== undefined ? { providerOptions } : {}),
     pricing: pricingPayload(draft.pricing),
   };
+}
+
+export function providerOptionsDraftError(draft: ModelDraft, connection: Connection): string {
+  if (connection.protocol !== 'vercel-chat-v1') return '';
+  try {
+    parseProviderOptionsText(draft.providerOptions);
+    return '';
+  } catch (error) {
+    switch (error instanceof ProviderOptionsError ? error.code : undefined) {
+      case 'PROVIDER_OPTIONS_OBJECT':
+      case 'PROVIDER_OPTIONS_JSON':
+        return 'providerOptions는 JSON 객체로 입력해 주세요.';
+      case 'PROVIDER_OPTIONS_TOO_LARGE':
+        return `providerOptions가 너무 커요. ${PROVIDER_OPTIONS_MAX_CHARS.toLocaleString()}자 이하로 줄여 주세요.`;
+      case 'PROVIDER_OPTIONS_SENSITIVE_FIELD':
+        return 'providerOptions에 API 키·토큰·비밀값을 넣지 마세요. 프로바이더 인증은 서버 환경변수로 설정해 주세요.';
+      default:
+        return 'providerOptions JSON을 확인해 주세요.';
+    }
+  }
 }
 export function forcedServiceTierError(
   draft: ModelDraft,
@@ -212,6 +246,8 @@ export function modelDraftError(
   connection: Connection,
   forcedVertexTier?: VertexRequestTier
 ): string {
+  const providerError = providerOptionsDraftError(draft, connection);
+  if (providerError) return providerError;
   try {
     validateModelPricing(pricingPayload(draft.pricing));
     if (!draft.maxOutputTokens.trim()) return '최대 출력 토큰을 입력해 주세요.';

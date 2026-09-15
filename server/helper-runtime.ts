@@ -987,6 +987,9 @@ export class HelperRuntime {
       role: 'helper',
       modelId: target.modelId,
       pricingSnapshot: target.pricingSnapshot,
+      ...(target.providerOptions !== undefined
+        ? { providerOptions: structuredClone(target.providerOptions) }
+        : {}),
       generation: generationFromModel(target),
       contextBudget: contextBudgetForModel(target),
       stable: {
@@ -1108,6 +1111,9 @@ export class HelperRuntime {
         role: 'context',
         modelId: target.modelId,
         pricingSnapshot: target.pricingSnapshot,
+        ...(target.providerOptions !== undefined
+          ? { providerOptions: structuredClone(target.providerOptions) }
+          : {}),
         generation: policy.generation,
         contextBudget: contextBudgetForModel(target),
         stable: {

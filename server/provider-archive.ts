@@ -12,6 +12,7 @@ import {
 } from '../core/model-capabilities.js';
 import { validCredentialEnv } from '../core/credential-reference.js';
 import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import { ProviderOptionsError, validateProviderOptions } from '../core/provider-options.js';
 import {
   validateProviderEndpoint,
   PROVIDER_PROTOCOLS,
@@ -52,6 +53,7 @@ export const modelOptionKeys = [
   'evaluationTools',
   'contextTools',
   'inputTokenLimit',
+  'providerOptions',
 ];
 
 export function catalogTimestamp(value: unknown): string | null {
@@ -95,6 +97,18 @@ export function validateModelGeneration(value: Row, protocol?: Connection['proto
       throw new HttpError(400, 'Invalid evaluation tool options');
     }
   if (value.contextTools !== undefined) boolean(value.contextTools);
+  if (value.providerOptions !== undefined) {
+    try {
+      validateProviderOptions(value.providerOptions);
+    } catch (error) {
+      throw new HttpError(
+        400,
+        error instanceof ProviderOptionsError ? error.code : 'Invalid provider options'
+      );
+    }
+    if (protocol !== undefined && protocol !== 'vercel-chat-v1')
+      throw new HttpError(400, 'providerOptions requires a Vercel AI Gateway connection');
+  }
   if (value.timeoutMs !== undefined)
     number(value.timeoutMs, 'timeout', 1, protocol === 'fixture-sse-v1' ? 600000 : 1800000);
   const generation = generationFromModel(value as ModelPreset);

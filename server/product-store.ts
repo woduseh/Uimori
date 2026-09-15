@@ -615,6 +615,9 @@ export class ProductStore {
         ? { evaluationTools: validateEvaluationToolOptions(b.evaluationTools) }
         : {}),
       ...(b.contextTools === true ? { contextTools: true } : {}),
+      ...(b.providerOptions !== undefined
+        ? { providerOptions: structuredClone(b.providerOptions) }
+        : {}),
       ...(b.enabled !== undefined ? { enabled: boolean(b.enabled) } : {}),
       ...(b.pricing !== undefined ? { pricing: modelPricing(b.pricing) } : {}),
       source: {
@@ -2142,10 +2145,12 @@ function validateArchiveGraph(product: ProductStore) {
   for (const row of rows('provider_settings'))
     if (row.kind === 'model') {
       const model = record(parse(row.body));
-      product.get<Connection>('connection', model.connectionId);
+      const connection = product.get<Connection>('connection', model.connectionId);
       validateModelGeneration(
         model,
-        choice(model.capabilityProtocol, [...PROVIDER_PROTOCOLS], 'model protocol')
+        model.capabilityProtocol === undefined
+          ? connection.protocol
+          : choice(model.capabilityProtocol, [...PROVIDER_PROTOCOLS], 'model protocol')
       );
     }
   for (const row of rows('profiles')) validateArchiveProfile(product, parse(row.body), row.chat_id);
