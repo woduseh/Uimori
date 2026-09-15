@@ -13,6 +13,8 @@
 !core/**
 !server/
 !server/**
+!third_party/
+!third_party/**
 !web/
 !web/**
 !src/
