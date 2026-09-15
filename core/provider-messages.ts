@@ -94,7 +94,9 @@ export function planNativeMessages(
     const parts = message.content.map(
       (part): Record<string, Json> =>
         responses
-          ? { type: 'input_text', text: part.text }
+          ? role === 'assistant'
+            ? { type: 'output_text', text: part.text, annotations: [] }
+            : { type: 'input_text', text: part.text }
           : vertex
             ? { text: part.text }
             : { type: 'text', text: part.text }

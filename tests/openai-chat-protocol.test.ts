@@ -464,7 +464,7 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     expect(() => encodeChat(next(input, decoder.finish()))).toThrow('OPENAI_CONTINUATION_MISMATCH');
   });
 
-  test('plain translation keeps tools and complete source across continuation without a JSON format', () => {
+  test('explicit structured translation keeps tools and source-bound JSON format across continuation', () => {
     const input = request();
     input.role = 'translation';
     input.input.source = {
@@ -474,12 +474,18 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     };
     input.generation!.structuredOutput = true;
     const wire = record(encodeChat(input).body);
-    expect(wire).not.toHaveProperty('response_format');
+    expect(wire.response_format).toMatchObject({
+      type: 'json_schema',
+      json_schema: {
+        name: 'translation_result',
+        strict: true,
+        schema: { properties: { sourceRevision: { enum: ['source-1'] } } },
+      },
+    });
     expect(JSON.stringify(wire.messages)).toContain('Turn LEFT.');
-    expect(wire.messages[0].content).toContain('complete translated text only');
-    expect(wire.messages[0].content).not.toContain('Korean number words');
+    expect(wire.messages[0].content).toContain('provider-supplied translation schema');
     const continued = next(input, called(input));
-    expect(record(encodeChat(continued).body)).not.toHaveProperty('response_format');
+    expect(record(encodeChat(continued).body).response_format).toEqual(wire.response_format);
     record(continued.input.source!).text = 'Different source';
     expect(() => encodeChat(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
   });

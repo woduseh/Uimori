@@ -310,11 +310,21 @@ describe('Anthropic Messages request and opaque continuation', () => {
       expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
     }
   );
-  test('plain translation accepts natural digits and direction words without an output envelope', () => {
+  test('explicit structured translation uses a source-bound JSON output format', () => {
     const { input } = translationRequest();
     input.generation!.structuredOutput = true;
     const wire = native(encodeAnthropic(input).body);
-    expect(wire).not.toHaveProperty('output_config');
+    expect(wire.output_config).toMatchObject({
+      format: {
+        type: 'json_schema',
+        schema: {
+          properties: {
+            sourceRevision: { enum: ['source-translation'] },
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(wire.system)).toContain('provider-supplied translation schema');
     const prose = '그는 40년 동안 근무했다. 계기는 사십을 가리켰다. 왼쪽으로 돌아라.';
     const { decoder } = start(input);
     begin(decoder);

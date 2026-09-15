@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import {
   displayInput,
   executeAuxiliary,
+  parseStructuredTranslation,
   presentationInput,
   scriptedAuxiliary,
   splitSource,
@@ -281,6 +282,31 @@ describe('M1 source-bound auxiliary roles', () => {
     expect(() => translationInput({ ...raw, hash: 'wrong' }, context(), snapshot())).toThrow(
       'SOURCE_IDENTITY_INVALID'
     );
+  });
+
+  test('structured translation unwraps only a matching source-bound envelope', () => {
+    const raw = source('A source.');
+    expect(
+      parseStructuredTranslation(raw, {
+        sourceRevision: raw.id,
+        sourceHash: raw.hash,
+        text: '번역된 본문이에요.',
+      })
+    ).toBe('번역된 본문이에요.');
+    expect(() =>
+      parseStructuredTranslation(raw, {
+        sourceRevision: 'foreign-source',
+        sourceHash: raw.hash,
+        text: '다른 본문',
+      })
+    ).toThrow('SOURCE_DEPENDENCY_MISMATCH');
+    expect(() =>
+      parseStructuredTranslation(raw, {
+        sourceRevision: raw.id,
+        sourceHash: raw.hash,
+        text: '',
+      })
+    ).toThrow('OUTPUT_SCHEMA_INVALID');
   });
 
   test('reader and image paragraph anchors retain exact fenced code offsets', () => {

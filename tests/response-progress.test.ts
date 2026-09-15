@@ -251,8 +251,10 @@ describe('public response progress through real decoders and synthetic HTTP', ()
     '%s withholds all unvalidated content',
     async (mode) => {
       const input = request();
-      if (mode === 'structured-output') input.generation!.structuredOutput = true;
-      else
+      if (mode === 'structured-output') {
+        input.role = 'translation';
+        input.generation!.structuredOutput = true;
+      } else
         input.stable.tools.push({
           name: mode,
           description: 'Final submission',

@@ -54,6 +54,11 @@ for extra in [['--commit','bad'],['--release-dir','/opt/uimori/releases/../app']
     try: m.arguments(base+extra)
     except SystemExit as e: assert e.code==2
     else: raise AssertionError('unsafe argument accepted')
+branch=m.arguments(base+['--source-ref','codex/beta-foundations'])
+assert branch.source_ref=='codex/beta-foundations'
+try: m.arguments(base+['--source-ref','../main'])
+except SystemExit as e: assert e.code==2
+else: raise AssertionError('unsafe source ref accepted')
 `));
 
 test('environment update preserves unrelated lines and full rollback restores original bytes', () =>
@@ -111,7 +116,7 @@ class Fake(m.Runner):
     def run(self,*args,cwd=None,**kwargs):
         events.append(args[:2])
         if args[:2]==('git','status'): return ''
-        if args[:2]==('git','rev-parse'): return 'a'*40 if cwd or args[-1]=='origin/main' else 'b'*40
+        if args[:2]==('git','rev-parse'): return 'a'*40 if cwd or args[-1] in ('origin/main','FETCH_HEAD') else 'b'*40
         if args[:2]==('git','ls-remote'): return 'a'*40+' refs/heads/main'
         return ''
     def inspect(self): return {'HostConfig':{'PortBindings':{'4310/tcp':[{'HostIp':'127.0.0.1','HostPort':'4310'}]}},'State':{'Health':{'Status':'healthy'}},'Image':'sha256:old','Mounts':[{'Destination':'/data','Type':'volume','Name':'old'}],'Config':{'Env':['NR_PUBLIC_ORIGIN=https://example.test']}}
@@ -128,7 +133,7 @@ class Fake(m.Runner):
 with tempfile.TemporaryDirectory() as temp:
     base=pathlib.Path(temp).resolve(); app=base/'app'; app.mkdir(); release=base/'release'; release.mkdir()
     (app/'.env.self-host').write_text('NR_PUBLIC_ORIGIN=https://example.test\\n')
-    args=SimpleNamespace(app_dir=str(app),release_dir=str(release),commit='a'*40,build_id='c'*64,dist_hash='d'*64,fresh=False,check_only=True,image=None,expected_origin='https://example.test')
+    args=SimpleNamespace(app_dir=str(app),release_dir=str(release),commit='a'*40,build_id='c'*64,dist_hash='d'*64,fresh=False,check_only=True,image=None,expected_origin='https://example.test',source_ref='main')
     r=Fake(args); r.execute()
     assert r.summary['status']=='PASS'
     assert events.count(('docker','build'))==1

@@ -1,6 +1,7 @@
 export { compileTranslationPrompt } from './translation-prompt.js';
 import { imageCatalogPage, imageMetadata, type ImageMetadata } from './image-catalog.js';
 import { createHash } from 'node:crypto';
+import { TRANSLATION_TEXT_MAX_CHARS } from './content-limits.js';
 import { executeTool, type ToolAction } from './provider.js';
 import { createToolCorrectionPolicy } from './tool-outcome.js';
 import type { Resource, RunSnapshot, ToolEvent } from './types.js';
@@ -217,6 +218,13 @@ export function translationInput(
     ...(snapshot.profile?.promptPresets?.translation ? { customPrompt: true } : {}),
     outputSchema: {},
   };
+}
+/** Unwraps the explicit provider JSON envelope while keeping source identity host-owned. */
+export function parseStructuredTranslation(source: AuxiliarySource, output: unknown): string {
+  const value = parsed(output);
+  only(value, ['sourceRevision', 'sourceHash', 'text']);
+  identity(value, source.id, source.hash);
+  return textField(value.text, TRANSLATION_TEXT_MAX_CHARS);
 }
 export function displayInput(
   source: AuxiliarySource,

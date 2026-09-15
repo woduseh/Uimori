@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import {
   CUSTOM_TRANSLATION_FORMAT_INSTRUCTION,
+  STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION,
   TRANSLATION_FORMAT_INSTRUCTION,
+  translationJsonSchema,
 } from './provider-format.js';
 import type {
   Json,
@@ -108,6 +110,18 @@ function prepare(
   const generation = request.generation;
   if (generation) validateModelOptions(generation, protocol);
   const { results: rawResults, ...input } = request.input;
+  const structuredTranslation =
+    request.role === 'translation' &&
+    generation?.structuredOutput === true &&
+    input.controls.purpose !== 'translation-refusal';
+  let schema: Json | undefined;
+  if (structuredTranslation) {
+    try {
+      schema = translationJsonSchema(input.source);
+    } catch {
+      reject('INVALID_TRANSLATION_SOURCE');
+    }
+  }
   const results = copy(rawResults ?? [], 'TOOL_RESULT_MISMATCH');
   if (!Array.isArray(results)) return reject('TOOL_RESULT_MISMATCH');
   const plan = planNativeMessages(request, protocol);
@@ -196,14 +210,19 @@ function prepare(
     (request.role === 'translation' && input.controls.purpose !== 'translation-refusal'
       ? '\n\n' +
         (input.controls.customPrompt === true
-          ? CUSTOM_TRANSLATION_FORMAT_INSTRUCTION
-          : TRANSLATION_FORMAT_INSTRUCTION)
+          ? structuredTranslation
+            ? STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION
+            : CUSTOM_TRANSLATION_FORMAT_INSTRUCTION
+          : structuredTranslation
+            ? STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION
+            : TRANSLATION_FORMAT_INSTRUCTION)
       : '');
   return {
     generation,
     results,
     bindingHash,
     aliases,
+    schema,
     wireInput,
     previous,
     fresh,
@@ -366,7 +385,7 @@ export const openAIProtocol = {
 /** Stateless Responses requests replay every original output item, including encrypted reasoning. */
 export function encodeResponses(request: ProviderRequest): { body: Json; context: OpenAITurn } {
   const prepared = prepare(request, 'openai-responses-turn-v1', 'openai-responses-v1');
-  const { generation, aliases, previous, fresh, plan, bootstrap } = prepared;
+  const { generation, aliases, schema, previous, fresh, plan, bootstrap } = prepared;
   const bootstrapInput: Json[] = [];
   for (const item of bootstrap as Record<string, Json>[]) {
     bootstrapInput.push(
@@ -418,6 +437,9 @@ export function encodeResponses(request: ProviderRequest): { body: Json; context
   };
   const text: Record<string, Json> = {
     ...(generation?.verbosity !== undefined ? { verbosity: generation.verbosity } : {}),
+    ...(schema
+      ? { format: { type: 'json_schema', name: 'translation_result', strict: true, schema } }
+      : {}),
   };
   const cacheOptions = plan?.options ?? planProviderCache(request, 'openai-responses-v1').options;
   const body: Json = {
@@ -774,6 +796,9 @@ export class ResponsesDecoder {
   }
   publicText(): string {
     return this.result.text;
+  }
+  isTerminal(): boolean {
+    return this.terminal;
   }
   snapshot(): ProviderResult {
     return withState(

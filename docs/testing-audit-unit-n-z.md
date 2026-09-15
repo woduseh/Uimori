@@ -90,7 +90,7 @@
 | rejects changed IDs and names for an already indexed tool delta | KEEP | 위 계약 그룹의 고유 경계 유지 |
 | binds continuation to original %s | KEEP | 위 계약 그룹의 고유 경계 유지 |
 | rejects wrong result names, reused call IDs, old-result mutation and cross-protocol continuation | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| plain translation keeps tools and complete source across continuation without a JSON format | KEEP | 위 계약 그룹의 고유 경계 유지 |
+| explicit structured translation keeps tools and source-bound JSON format across continuation | KEEP | 위 계약 그룹의 고유 경계 유지 |
 | refusal classification does not receive translation output instructions | KEEP | 위 계약 그룹의 고유 경계 유지 |
 | rejects foreign generation option %s | KEEP | 위 계약 그룹의 고유 경계 유지 |
 | rejects multiple choices, swapped response IDs, negative usage and data after finish | KEEP | 위 계약 그룹의 고유 경계 유지 |
@@ -112,7 +112,7 @@
 | rejects malformed tool %s without fallback | KEEP | 위 계약 그룹의 고유 경계 유지 |
 | binds continuation to original %s | KEEP | 위 계약 그룹의 고유 경계 유지 |
 | rejects %s tool continuation | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| translation requests complete prose without native JSON formatting | KEEP | 위 계약 그룹의 고유 경계 유지 |
+| explicit structured translation requests use a source-bound Responses schema | KEEP | 위 계약 그룹의 고유 경계 유지 |
 | keeps every selected Responses option alongside plain translation and signed continuation | KEEP | 위 계약 그룹의 고유 경계 유지 |
 | omits unselected reasoning and verbosity while rejecting unsupported Astra effort | KEEP | 위 계약 그룹의 고유 경계 유지 |
 | Responses cache %s reaches requests without a native prompt and preserves translation formatting | KEEP | 위 계약 그룹의 고유 경계 유지 |

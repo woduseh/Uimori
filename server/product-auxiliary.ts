@@ -4,6 +4,7 @@ import {
   compileTranslationPrompt,
   displayInput,
   executeAuxiliary,
+  parseStructuredTranslation,
   presentationInput,
   scriptedAuxiliary,
   translationInput,
@@ -520,7 +521,6 @@ export async function runAuxiliaryJob(
       if (generationBinding) body.generationBinding = generationBinding;
       stage = job.kind;
       const result = await callProvider(target, body, evaluation);
-      if (job.kind === 'translation' && result.text) candidateText = result.text;
       if (result.status === 'tool_calls') {
         opaqueState = result.opaqueState;
         return {
@@ -544,7 +544,12 @@ export async function runAuxiliaryJob(
                 : `AUXILIARY_PROVIDER_${result.error?.code ?? 'ERROR'}`,
           result.status === 'refused' && !result.error
         );
-      return result.text;
+      const output =
+        job.kind === 'translation' && target.structuredOutput === true
+          ? parseStructuredTranslation(source, result.text)
+          : result.text;
+      if (job.kind === 'translation' && output) candidateText = output;
+      return output;
     };
     return executeAuxiliary(packet, snapshot, request, {
       assetCatalog: assets,

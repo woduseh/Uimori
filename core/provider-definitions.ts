@@ -124,6 +124,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       '서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.',
       'Responses API 호환 여부와 개별 모델의 옵션·도구 지원은 공급자에서 확인해야 해요. 실제 외부 호환성은 확인하지 않았어요.',
+      '번역 구조화 출력을 켜면 source-bound JSON Schema를 Responses의 text.format으로 보내요. 기본값은 자유 텍스트예요.',
     ],
   }),
   definition({
@@ -148,6 +149,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       '공식 API 기본 주소와 x-api-key 인증을 사용해요.',
       'Claude Opus 5의 Output Effort와 Thinking을 모델별 조합에 맞게 사용해요.',
+      '번역 구조화 출력을 켜면 source-bound JSON Schema를 output_config.format으로 보내요. 기본값은 자유 텍스트예요.',
       '모델 기본값은 해당 API 필드를 생략해요. 실제 외부 실행은 사용자가 확인해요.',
     ],
   }),
@@ -162,7 +164,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/openai-chat-protocol.ts#encodeChat',
     limitations: [
       'Vercel의 공식 API 기본 주소에서 Chat Completions 형식을 사용해요.',
-      '번역 JSON Schema는 명시 선택할 때만 요청하며 모델별 옵션·도구 지원은 미확인이에요.',
+      '번역 구조화 출력을 켜면 source-bound JSON Schema를 response_format으로 보내요. 기본값은 자유 텍스트예요. 모델별 옵션·도구 지원은 미확인이에요.',
       '고급 설정의 providerOptions는 JSON 객체로 Vercel AI Gateway 요청에 전달해요. gateway.only 같은 라우팅 제한을 지정할 수 있지만 인증정보는 넣을 수 없어요.',
     ],
   }),
@@ -193,7 +195,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       '서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.',
       '인증이 필요한 공급자에는 서버 환경변수 이름을 지정해 주세요.',
-      'Chat Completions 지원 여부는 공급자에서 확인해 주세요. 번역 구조화 출력은 필요할 때 직접 켜요.',
+      'Chat Completions 지원 여부는 공급자에서 확인해 주세요. 번역 구조화 출력은 켜면 response_format으로 source-bound JSON Schema를 보내요.',
     ],
   }),
 ]);
