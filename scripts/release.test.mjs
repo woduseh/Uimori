@@ -256,6 +256,11 @@ test('Oracle configuration rejects remote shell options, overlapping paths and e
     accessEnvFile: '/env',
   };
   const config = validateConfig(valid);
+  assert.equal(config.sourceRef, 'main');
+  assert.equal(
+    validateConfig({ ...valid, sourceRef: 'codex/beta-foundations' }).sourceRef,
+    'codex/beta-foundations'
+  );
   assert.ok(sshOptions(config).includes('StrictHostKeyChecking=yes'));
   for (const change of [
     { host: '-oProxyCommand=bad' },
@@ -263,6 +268,7 @@ test('Oracle configuration rejects remote shell options, overlapping paths and e
     { releaseRoot: '/opt/uimori/app/releases' },
     { accessToken: 'secret' },
     { releaseRoot: '/opt/uimori/../other' },
+    { sourceRef: '../main' },
   ])
     assert.throws(() => validateConfig({ ...valid, ...change }));
   const command = remoteCommand({
@@ -271,11 +277,12 @@ test('Oracle configuration rejects remote shell options, overlapping paths and e
     build,
     releaseDirectory: '/opt/uimori/releases/run',
     origin: 'https://example.test',
+    sourceRef: 'codex/beta-foundations',
     fresh: true,
     image: 'ghcr.io/team/uimori@sha256:' + 'f'.repeat(64),
     checkOnly: true,
   });
-  for (const flag of ['--fresh', '--image', '--check-only', '--expected-origin'])
+  for (const flag of ['--fresh', '--image', '--check-only', '--expected-origin', '--source-ref'])
     assert.ok(command.includes(shellQuote(flag)));
   assert.throws(() =>
     remoteCommand({
@@ -296,6 +303,7 @@ async function releaseFixture(
   {
     dirty = false,
     remoteCommit = commit,
+    sourceRef = 'main',
     malformedRemote = false,
     badSmoke = false,
     missingOrigin = false,
@@ -310,6 +318,7 @@ async function releaseFixture(
     identityFile: 'key',
     knownHostsFile: 'hosts',
     accessEnvFile: 'env',
+    sourceRef,
   });
   const checks = await checksFixture(t);
   const receipt = await checks.run();
@@ -336,7 +345,8 @@ async function releaseFixture(
       if (executable === 'git') {
         if (args[0] === 'rev-parse') return { code: 0, output: commit };
         if (args[0] === 'status') return { code: 0, output: dirty ? ' M file' : '' };
-        if (args[0] === 'ls-remote') return { code: 0, output: `${remoteCommit}\trefs/heads/main` };
+        if (args[0] === 'ls-remote')
+          return { code: 0, output: `${remoteCommit}\trefs/heads/${sourceRef}` };
         throw new Error('Unexpected git write');
       }
       const command = args.at(-1);
@@ -350,6 +360,7 @@ async function releaseFixture(
               JSON.stringify({
                 status: 'PASS',
                 commit,
+                sourceRef,
                 buildId: build.buildId,
                 distHash: build.distHash,
                 mode: command.includes("'--fresh'") ? 'fresh' : 'update',

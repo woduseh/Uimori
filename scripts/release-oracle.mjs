@@ -35,6 +35,19 @@ function remoteDirectory(value, label) {
   return value;
 }
 
+export function validateSourceRef(value = 'main') {
+  if (
+    typeof value !== 'string' ||
+    !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/u.test(value) ||
+    value.includes('..') ||
+    value.includes('/./') ||
+    value.endsWith('/') ||
+    value.endsWith('.')
+  )
+    throw new Error('Invalid sourceRef');
+  return value;
+}
+
 export function validateConfig(input, configDirectory = root) {
   const allowed = new Set([
     'host',
@@ -44,6 +57,7 @@ export function validateConfig(input, configDirectory = root) {
     'releaseRoot',
     'accessEnvFile',
     'area',
+    'sourceRef',
   ]);
   if (!input || typeof input !== 'object' || Array.isArray(input))
     throw new Error('Oracle configuration must be an object');
@@ -53,6 +67,7 @@ export function validateConfig(input, configDirectory = root) {
     throw new Error('Invalid SSH host');
   const appDirectory = remoteDirectory(input.appDirectory ?? '/opt/uimori/app', 'appDirectory');
   const releaseRoot = remoteDirectory(input.releaseRoot ?? '/opt/uimori/releases', 'releaseRoot');
+  const sourceRef = validateSourceRef(input.sourceRef ?? 'main');
   if (releaseRoot !== '/opt/uimori/releases')
     throw new Error('This Oracle runner uses /opt/uimori/releases as its dedicated release root');
   if (
@@ -66,6 +81,7 @@ export function validateConfig(input, configDirectory = root) {
     appDirectory,
     releaseRoot,
     area: input.area ?? 'verify:browser-smoke',
+    sourceRef,
   };
   for (const key of ['identityFile', 'knownHostsFile', 'accessEnvFile']) {
     if (typeof input[key] !== 'string' || !input[key] || /[\0\r\n]/u.test(input[key]))
@@ -108,6 +124,7 @@ export function remoteCommand({
   build,
   releaseDirectory,
   origin,
+  sourceRef = 'main',
   fresh,
   image,
   checkOnly,
@@ -119,6 +136,7 @@ export function remoteCommand({
   )
     throw new Error('Invalid release identity');
   remoteDirectory(releaseDirectory, 'releaseDirectory');
+  sourceRef = validateSourceRef(sourceRef);
   if (!releaseDirectory.startsWith(config.releaseRoot + '/'))
     throw new Error('Release directory escaped configured root');
   if (image && !/^[a-zA-Z0-9][a-zA-Z0-9._:/@-]{0,499}$/u.test(image))
@@ -134,6 +152,8 @@ export function remoteCommand({
     build.buildId,
     '--dist-hash',
     build.distHash,
+    '--source-ref',
+    sourceRef,
     '--release-dir',
     releaseDirectory,
     '--expected-origin',
@@ -170,6 +190,7 @@ export async function releaseOracle(options, dependencies = {}) {
     throw new Error('Oracle configuration is missing or invalid JSON');
   }
   const config = validateConfig(input, path.dirname(configuration));
+  const sourceRef = validateSourceRef(options.sourceRef ?? config.sourceRef);
   for (const key of ['identityFile', 'knownHostsFile', 'accessEnvFile'])
     if (!(await stat(config[key])).isFile())
       throw new Error(`${key} must be an existing private file`);
@@ -192,6 +213,7 @@ export async function releaseOracle(options, dependencies = {}) {
     schema: 1,
     status: 'FAIL',
     commit,
+    sourceRef,
     mode: options.fresh ? 'fresh' : 'update',
     imageSource: options.image ?? 'remote-build',
     host: config.host,
@@ -210,9 +232,17 @@ export async function releaseOracle(options, dependencies = {}) {
     throw new Error(
       'Review and commit local changes before deploying; the release command never stages, commits or pushes'
     );
-  const remoteHead = await git('ls-remote', '--exit-code', '--heads', 'origin', 'refs/heads/main');
+  const remoteHead = await git(
+    'ls-remote',
+    '--exit-code',
+    '--heads',
+    'origin',
+    `refs/heads/${sourceRef}`
+  );
   if (remoteHead.split(/\s+/u)[0] !== commit)
-    throw new Error('HEAD must match origin/main; push the reviewed commit before deploying');
+    throw new Error(
+      `HEAD must match origin/${sourceRef}; push the reviewed commit before deploying`
+    );
   const outputDirectory = path.join(
     dependencies.outputRoot ?? path.join(root, 'output/release/oracle'),
     runId
@@ -252,6 +282,7 @@ export async function releaseOracle(options, dependencies = {}) {
     const command = remoteCommand({
       config,
       commit,
+      sourceRef,
       build,
       releaseDirectory,
       origin: access.origin,
@@ -319,6 +350,7 @@ export async function releaseOracle(options, dependencies = {}) {
       if (summary.remote.status !== 'PASS') throw new Error('Oracle runner did not report PASS');
       if (
         summary.remote.commit !== commit ||
+        summary.remote.sourceRef !== sourceRef ||
         summary.remote.buildId !== build.buildId ||
         summary.remote.distHash !== build.distHash ||
         summary.remote.mode !== summary.mode ||
@@ -357,12 +389,12 @@ export async function releaseOracle(options, dependencies = {}) {
 if (isMain(import.meta.url)) {
   try {
     const options = parseOptions(process.argv.slice(2), {
-      values: ['config', 'area', 'image'],
+      values: ['config', 'area', 'image', 'source-ref'],
       flags: ['full', 'fresh', 'check-only', 'plan', 'help'],
     });
     if (options.help)
       console.log(
-        'npm run release:oracle -- [--config .local/oracle-release.json] [--area verify:browser-smoke] [--full] [--fresh] [--image reference] [--check-only | --plan]'
+        'npm run release:oracle -- [--config .local/oracle-release.json] [--source-ref branch] [--area verify:browser-smoke] [--full] [--fresh] [--image reference] [--check-only | --plan]'
       );
     else {
       const controller = new AbortController();
@@ -370,7 +402,11 @@ if (isMain(import.meta.url)) {
       process.once('SIGINT', cancel);
       process.once('SIGTERM', cancel);
       try {
-        const result = await releaseOracle({ ...options, signal: controller.signal });
+        const result = await releaseOracle({
+          ...options,
+          sourceRef: options['source-ref'],
+          signal: controller.signal,
+        });
         if (options.plan) console.log(JSON.stringify(result, null, 2));
         process.exitCode = ['PASS', 'PLAN'].includes(result.status) ? 0 : 1;
       } finally {

@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import {
   CUSTOM_TRANSLATION_FORMAT_INSTRUCTION,
+  STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION,
   TRANSLATION_FORMAT_INSTRUCTION,
+  translationJsonSchema,
 } from './provider-format.js';
 import type {
   Json,
@@ -128,6 +130,10 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
     reject('INVALID_ANTHROPIC_REQUEST');
   const generation = request.generation;
   if (generation) validateModelOptions(generation, 'anthropic-messages-v1');
+  const structuredTranslation =
+    request.role === 'translation' &&
+    generation?.structuredOutput === true &&
+    request.input.controls.purpose !== 'translation-refusal';
   if (
     request.toolChoice !== undefined &&
     request.toolChoice !== 'auto' &&
@@ -161,6 +167,14 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
     };
   });
   const { results: rawResults, ...input } = request.input;
+  let schema: Json | undefined;
+  if (structuredTranslation) {
+    try {
+      schema = translationJsonSchema(input.source);
+    } catch {
+      reject('INVALID_TRANSLATION_SOURCE');
+    }
+  }
   const results = copy(rawResults ?? [], 'TOOL_RESULT_MISMATCH');
   if (!Array.isArray(results)) reject('TOOL_RESULT_MISMATCH');
   const plan = planNativeMessages(request, 'anthropic-messages-v1');
@@ -294,6 +308,7 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
   }
   const outputConfig: Record<string, Json> = {
     ...(effort !== undefined ? { effort } : {}),
+    ...(schema ? { format: { type: 'json_schema', schema } } : {}),
   };
   const body: Json = {
     model: request.modelId,
@@ -315,8 +330,12 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
               type: 'text',
               text:
                 input.controls.customPrompt === true
-                  ? CUSTOM_TRANSLATION_FORMAT_INSTRUCTION
-                  : TRANSLATION_FORMAT_INSTRUCTION,
+                  ? structuredTranslation
+                    ? STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION
+                    : CUSTOM_TRANSLATION_FORMAT_INSTRUCTION
+                  : structuredTranslation
+                    ? STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION
+                    : TRANSLATION_FORMAT_INSTRUCTION,
             },
           ]
         : []),
@@ -658,6 +677,9 @@ export class AnthropicDecoder {
       .filter((block) => block.content.type === 'text')
       .map((block) => block.content.text as string)
       .join('');
+  }
+  isTerminal(): boolean {
+    return this.stopped;
   }
   snapshot(): ProviderResult {
     const text = this.publicText();

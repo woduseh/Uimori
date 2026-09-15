@@ -1,12 +1,12 @@
 # Oracle 릴리스
 
-이 문서는 기존 Oracle Uimori 서비스에 검증한 `origin/main`을 반복 배포하는 현재 절차예요. 2026-09-11 운영 앱 기준은 commit `96d3cf610888bbbac051975abae695056d0fe9f4`, schema v15, `/opt/uimori/app`, loopback `127.0.0.1:4310`이에요. 공개 주소는 [https://uimori.taila7874d.ts.net/](https://uimori.taila7874d.ts.net/)이며 Tailscale Funnel의 기본 HTTPS 포트 443을 사용해요. PocketRisu 서비스와 이전 8443 라우팅은 제거된 상태이므로 배포 전후 검사에서 PocketRisu를 요구하지 않아요.
+이 문서는 기존 Oracle Uimori 서비스에 검증한 원격 branch를 반복 배포하는 현재 절차예요. 기본 branch는 `main`이며 `--source-ref`로 검토·push한 다른 branch를 명시할 수 있어요. 2026-09-11 운영 앱 기준은 commit `96d3cf610888bbbac051975abae695056d0fe9f4`, schema v15, `/opt/uimori/app`, loopback `127.0.0.1:4310`이에요. 공개 주소는 [https://uimori.taila7874d.ts.net/](https://uimori.taila7874d.ts.net/)이며 Tailscale Funnel의 기본 HTTPS 포트 443을 사용해요. PocketRisu 서비스와 이전 8443 라우팅은 제거된 상태이므로 배포 전후 검사에서 PocketRisu를 요구하지 않아요.
 
 과거 v14/v15 일회성 스크립트와 `output/oracle-release-*` 기록은 당시 배포 증거일 뿐 현재 실행 절차가 아니에요. 특히 과거 볼륨명, 선택적 행 삭제, 70개 표 전체 hash, PocketRisu 보존 검사를 새 배포에 복사하지 않아요.
 
 ## 준비
 
-Node 24.14 이상 24.x에서 clean checkout을 사용해요. 실행기는 `HEAD`와 `origin/main`의 전체 SHA가 같아야 진행하며 source를 stage, commit, push하지 않아요. 변경 검토와 push는 배포 명령 전에 직접 끝내요.
+Node 24.14 이상 24.x에서 clean checkout을 사용해요. 실행기는 `HEAD`와 설정 또는 명령의 `origin/<sourceRef>` 전체 SHA가 같아야 진행하며 source를 stage, commit, push하지 않아요. 변경 검토와 push는 배포 명령 전에 직접 끝내요.
 
 로컬 전체 검사에는 원격 실행기의 회귀 검사를 위한 Python 3가 필요해요. Windows에서는 `python`, Linux에서는 `python3`를 사용해요. Oracle 서버에도 Python 3, Docker와 Compose, Git이 준비돼 있어야 해요.
 
@@ -20,6 +20,7 @@ SSH 키, `known_hosts`, 운영 접속 설정은 Git에 넣지 않고 `.local/ora
   "appDirectory": "/opt/uimori/app",
   "releaseRoot": "/opt/uimori/releases",
   "accessEnvFile": "C:/private/production.env",
+  "sourceRef": "main",
   "area": "verify:browser-smoke"
 }
 ```
@@ -41,6 +42,12 @@ npm run release:check -- --area verify:browser-smoke
 npm run release:oracle -- --config .local/oracle-release.json --area verify:browser-smoke
 ```
 
+다른 branch를 배포할 때는 해당 branch를 먼저 검토·commit·push한 뒤 source ref를 명시해요.
+
+```powershell
+npm run release:oracle -- --config .local/oracle-release.json --source-ref codex/beta-foundations --area verify:providers
+```
+
 `release:oracle`도 같은 검증을 요구해요. 현재 source와 실행 환경·검사 계약 지문이 모두 같은 성공 영수증은 검사별로 재사용해요. 성공 검사의 빌드만 없거나 stale이면 검사를 반복하지 않고 build만 복구한 뒤 현재 source와 artifact 일치를 다시 확인해요. source나 실행 환경·검사 계약이 달라졌으면 stale로 판정해 다시 실행해요. 같은 source에 실패 기록이 있으면 `--area`를 줄이거나 `--full`을 빼서 우회할 수 없어요. 실패 원인을 해결하고 그 범위를 다시 통과해야 해요. 커밋 때문에 내용이 바뀌지 않았다면 커밋 전 성공한 영수증도 clean HEAD가 된 뒤 재사용할 수 있어요.
 
 `--area`는 변경 영역에 맞는 기존 `verify:*` npm script를 선택해요. 기본값은 `verify:browser-smoke`예요. 공통 UI, 공통 실행·저장 경계처럼 여러 기능에 걸친 변경이나 안정화 릴리스에는 두 명령 모두 `--full`을 붙여 전체 `verify:redesign`까지 실행해요. 작은 수정의 배포마다 `--full`을 요구하지 않아요. 선택 기준은 [코드 품질 검사](QUALITY.md)와 [검사 운영 정리](TESTING-AUDIT.md)에 있어요.
@@ -51,7 +58,7 @@ npm run release:oracle -- --config .local/oracle-release.json --area verify:brow
 
 | 명령 | 동작 |
 | --- | --- |
-| `npm run release:oracle -- --config .local/oracle-release.json --plan` | 설정과 로컬 검증 상태만 확인해요. SSH 연결이나 서버 변경은 없어요. |
+| `npm run release:oracle -- --config .local/oracle-release.json --source-ref <branch> --plan` | 설정과 로컬 검증 상태만 확인해요. SSH 연결이나 서버 변경은 없어요. |
 | `npm run release:oracle -- --config .local/oracle-release.json --check-only` | 원격 전제와 이미지를 검증하고 기본 경로에서는 서버 이미지를 빌드해요. 실행 중인 앱을 중지하거나 DB를 초기화하거나 활성 앱을 바꾸지 않아요. |
 | `npm run release:oracle -- --config .local/oracle-release.json` | 현재 DB를 백업한 뒤 같은 운영 볼륨으로 업데이트하고, health와 HTTPS/API smoke까지 확인해요. |
 | `npm run release:oracle -- --config .local/oracle-release.json --fresh` | 새 운영 볼륨으로 시작해요. 이전 볼륨은 rollback용으로 남겨요. |

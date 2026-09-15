@@ -50,17 +50,18 @@ function scrub(value: Json, token: string): Json {
 /** Strict SSE framing: byte boundaries, CRLF, comments and multiline data are independent of JSON. */
 export async function consumeSse(
   reader: ReadableStreamDefaultReader<Uint8Array>,
-  onData: (value: unknown) => void | Promise<void>,
+  onData: (value: unknown) => boolean | Promise<boolean>,
   signal: AbortSignal,
   allowDone = false
 ): Promise<void> {
   const decoder = new TextDecoder('utf-8', { fatal: true });
-  let buffer = '';
+  let lineBuffer = '';
+  let pendingLf = false;
   let data: string[] = [];
   let dataBytes = 0;
   let totalBytes = 0;
-  const dispatch = async () => {
-    if (!data.length) return;
+  const dispatch = async (): Promise<boolean> => {
+    if (!data.length) return false;
     const payload = data.join('\n');
     data = [];
     dataBytes = 0;
@@ -70,21 +71,46 @@ export async function consumeSse(
     } catch {
       throw new ProviderContractError('INVALID_EVENT');
     }
-    await onData(value);
+    return await onData(value);
   };
-  const line = async (raw: string) => {
-    const value = raw.replace(/\r$/u, '');
-    if (!value) await dispatch();
-    else if (value.startsWith('data:')) {
-      const part = value.slice(5).replace(/^ /u, '');
+  const line = async (raw: string): Promise<boolean> => {
+    if (!raw) return dispatch();
+    if (raw.startsWith('data:')) {
+      const part = raw.slice(5).replace(/^ /u, '');
       data.push(part);
       dataBytes += part.length;
       if (dataBytes > 1_000_000) throw new ProviderContractError('EVENT_TOO_LARGE');
     }
+    return false;
+  };
+  const text = async (value: string): Promise<boolean> => {
+    for (const character of value) {
+      if (pendingLf) {
+        pendingLf = false;
+        if (character === '\n') continue;
+      }
+      if (character === '\r' || character === '\n') {
+        const shouldStop = await line(lineBuffer);
+        lineBuffer = '';
+        if (shouldStop) return true;
+        if (character === '\r') pendingLf = true;
+      } else {
+        lineBuffer += character;
+        if (lineBuffer.length > 1_000_000) throw new ProviderContractError('EVENT_TOO_LARGE');
+      }
+    }
+    return false;
   };
   // A response body may outlive fetch's abort propagation; close its pending read explicitly.
   const abortReader = () => {
     void reader.cancel(signal.reason).catch(() => undefined);
+  };
+  const cancelAfterTerminal = async () => {
+    try {
+      await reader.cancel();
+    } catch {
+      /* The body may already have closed between the terminal event and cancellation. */
+    }
   };
   signal.addEventListener('abort', abortReader, { once: true });
   try {
@@ -94,27 +120,29 @@ export async function consumeSse(
       signal.throwIfAborted();
       if (next.done) {
         try {
-          buffer += decoder.decode();
+          if (await text(decoder.decode())) return;
         } catch {
           throw new ProviderContractError('INVALID_UTF8');
         }
-        if (buffer.length) await line(buffer);
-        await dispatch();
+        if (lineBuffer.length) {
+          if (await line(lineBuffer)) return;
+          lineBuffer = '';
+        }
+        if (await dispatch()) return;
         return;
       }
       totalBytes += next.value.byteLength;
       if (totalBytes > 8_000_000) throw new ProviderContractError('RESPONSE_TOO_LARGE');
+      let decoded: string;
       try {
-        buffer += decoder.decode(next.value, { stream: true });
+        decoded = decoder.decode(next.value, { stream: true });
       } catch {
         throw new ProviderContractError('INVALID_UTF8');
       }
-      let newline: number;
-      while ((newline = buffer.indexOf('\n')) >= 0) {
-        await line(buffer.slice(0, newline));
-        buffer = buffer.slice(newline + 1);
+      if (await text(decoded)) {
+        await cancelAfterTerminal();
+        return;
       }
-      if (buffer.length > 1_000_000) throw new ProviderContractError('EVENT_TOO_LARGE');
     }
   } finally {
     signal.removeEventListener('abort', abortReader);
@@ -239,6 +267,7 @@ export async function executeVertexProvider(
       async (value) => {
         decoder!.accept(value);
         await progress(decoder!.publicText());
+        return false;
       },
       signal
     );

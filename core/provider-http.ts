@@ -35,6 +35,7 @@ import type {
 
 type Decoder = {
   accept(value: unknown): void;
+  isTerminal(): boolean;
   publicText(): string;
   snapshot(): ProviderResult;
   finish(): ProviderResult;
@@ -188,6 +189,7 @@ export async function executeNativeProvider(
         async (value) => {
           decoder!.accept(value);
           await progress(decoder!.publicText());
+          return decoder!.isTerminal();
         },
         signal,
         allowDone

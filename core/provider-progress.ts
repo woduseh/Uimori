@@ -5,11 +5,15 @@ import { ProviderContractError } from './provider-errors.js';
 /** Public assistant prose only. Offset is the UTF-16 end offset within one provider attempt. */
 export type ProviderProgress = { text: string; offset: number };
 
-/** Final-submission envelopes and evaluation rounds have no safe incremental public body. */
+/** Final-submission envelopes and structured translation JSON have no safe incremental public body. */
 export function publicProgressAllowed(request: ProviderRequest, protocol: ProviderProtocol) {
   return (
     protocol !== 'codex-app-server-v1' &&
-    request.generation?.structuredOutput !== true &&
+    !(
+      request.role === 'translation' &&
+      request.input.controls.purpose !== 'translation-refusal' &&
+      request.generation?.structuredOutput === true
+    ) &&
     !request.stable.tools.some((tool) =>
       ['story.submit', 'eval_submit_artifact'].includes(tool.name)
     )

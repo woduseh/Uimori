@@ -112,7 +112,7 @@ Run snapshot 불변·참조·설정 삭제·위조 archive·attempt 귀속을 DB
 | 'Fable 5.1 preserves the exact system, tools, message prefix and signed thinking across tool rounds' | KEEP |
 | 'Fable 5.1 rejects forced tool selection and disabled thinking without changing user options' | KEEP |
 | 'Claude cache %s reaches requests without a native prompt and preserves translation formatting' | KEEP |
-| 'plain translation accepts natural digits and direction words without an output envelope' | KEEP |
+| 'explicit structured translation uses a source-bound JSON output format' | KEEP |
 | 'refusal classification does not receive translation output instructions' | KEEP |
 | 'does not send translation formatting for %s' | KEEP |
 | 'preserves signed, redacted and opaque content in order across parallel and sequential tool rounds' | KEEP |

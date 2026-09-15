@@ -25,7 +25,7 @@ export function encodeChat(
 ): { body: Json; context: OpenAITurn } {
   const prepared = prepare(request, 'openai-chat-turn-v1', protocol);
   const deepseek = protocol === 'deepseek-chat-v1';
-  const { generation, aliases, previous, fresh, plan, bootstrap } = prepared;
+  const { generation, aliases, schema, previous, fresh, plan, bootstrap } = prepared;
   const bootstrapMessages: Json[] = [];
   for (const item of bootstrap as Record<string, Json>[]) {
     bootstrapMessages.push(
@@ -110,6 +110,14 @@ export function encodeChat(
               ? { reasoning_effort: generation.reasoningEffort }
               : {}),
           ...(generation.serviceTier !== undefined ? { service_tier: generation.serviceTier } : {}),
+        }
+      : {}),
+    ...(schema
+      ? {
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: 'translation_result', strict: true, schema },
+          },
         }
       : {}),
     ...(aliases.length
@@ -349,6 +357,9 @@ export class ChatDecoder {
   }
   publicText(): string {
     return this.result.text;
+  }
+  isTerminal(): boolean {
+    return this.done;
   }
   snapshot(): ProviderResult {
     return withState(this.result, this.context, [copy(this.assistant)]);

@@ -8,6 +8,7 @@ import {
   type ProviderRequest,
   type WireRecord,
 } from '../core/transport.js';
+import { consumeSse } from '../core/vertex.js';
 const secret = 'synthetic-provider-secret-never-a-real-key';
 const variants = [
   { protocol: 'openai-responses-v1', endpoint: 'https://api.openai.com/v1', path: '/responses' },
@@ -192,6 +193,56 @@ afterEach(() => {
 
 // fetch is always replaced. No live network, provider SDK, real credential environment or paid call.
 describe('native provider HTTP boundary with synthetic fetch', () => {
+  test.each(variants)(
+    '$protocol returns after its protocol terminal even when the HTTP body stays open',
+    async (variant) => {
+      const response = stream(events(variant), true);
+      const fetch = vi.fn(async () => response.response);
+      const controller = new AbortController();
+      const fallback = setTimeout(() => controller.abort(), 1000);
+      vi.stubGlobal('fetch', fetch);
+      const result = await executeProvider(connection(variant), request(variant), {
+        ...options(variant),
+        signal: controller.signal,
+      });
+      clearTimeout(fallback);
+      expect(result).toMatchObject({
+        status: 'completed',
+        text: '등대 🌊',
+        usage: { inputTokens: 5, outputTokens: 2 },
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  test.each([
+    ['LF', ['data: {"value":1}\n\ndata: {"value":2}\n\n']],
+    ['CRLF split across chunks', ['data: {"value":1}\r', '\n\r', '\ndata: {"value":2}\r\n\r\n']],
+    ['standalone CR', ['data: {"value":1}\r\rdata: {"value":2}\r\r']],
+  ])('consumes %s SSE line endings across byte chunks', async (_label, chunks) => {
+    let cancelled = 0;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk));
+        controller.close();
+      },
+      cancel() {
+        cancelled++;
+      },
+    });
+    const values: unknown[] = [];
+    await consumeSse(
+      body.getReader(),
+      (value) => {
+        values.push(value);
+        return false;
+      },
+      new AbortController().signal
+    );
+    expect(values).toEqual([{ value: 1 }, { value: 2 }]);
+    expect(cancelled).toBe(0);
+  });
+
   test.each(variants.slice(0, 2))(
     '$protocol sends unlisted official models and surfaces the rejected option field',
     async (variant) => {

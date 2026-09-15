@@ -104,7 +104,17 @@ describe('native provider wire (synthetic, no live calls)', () => {
       'assistant',
       'user',
     ]);
-    expect(responses.input[2].content[0].text).toBe('COMPLETED_PROSE');
+    expect(responses.input.map((m: any) => m.content.map((part: any) => part.type))).toEqual([
+      ['input_text'],
+      ['input_text'],
+      ['output_text'],
+      ['input_text'],
+    ]);
+    expect(responses.input[2].content[0]).toEqual({
+      type: 'output_text',
+      text: 'COMPLETED_PROSE',
+      annotations: [],
+    });
     const chat = wire(encodeChat(r).body);
     expect(chat.messages.map((m: any) => m.role)).toEqual([
       'system',
@@ -126,6 +136,32 @@ describe('native provider wire (synthetic, no live calls)', () => {
       );
       expect(encoded.split('CURRENT_REQUEST')).toHaveLength(2);
     }
+    expect(r).toEqual(before);
+  });
+  test('Responses keeps assistant-first and multi-part history as output text', () => {
+    const r = request();
+    r.prompt!.messages = [
+      message('assistant-first', 'assistant', 'FIRST_OUTPUT'),
+      {
+        ...message('assistant-multi', 'assistant', 'SECOND_OUTPUT'),
+        content: [
+          { type: 'text', text: 'SECOND_OUTPUT_ONE' },
+          { type: 'text', text: 'SECOND_OUTPUT_TWO' },
+        ],
+      },
+      message('current', 'user', 'CURRENT_REQUEST'),
+    ];
+    const before = structuredClone(r);
+    const body = wire(encodeResponses(r).body);
+    expect(body.input.map((m: any) => m.role)).toEqual(['assistant', 'assistant', 'user']);
+    expect(body.input.map((m: any) => m.content)).toEqual([
+      [{ type: 'output_text', text: 'FIRST_OUTPUT', annotations: [] }],
+      [
+        { type: 'output_text', text: 'SECOND_OUTPUT_ONE', annotations: [] },
+        { type: 'output_text', text: 'SECOND_OUTPUT_TWO', annotations: [] },
+      ],
+      [{ type: 'input_text', text: 'CURRENT_REQUEST' }],
+    ]);
     expect(r).toEqual(before);
   });
   test('native cache is explicit for eligible Responses and Anthropic while compatible chat remains unsupported', () => {

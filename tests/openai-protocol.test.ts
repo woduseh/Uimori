@@ -418,7 +418,7 @@ describe('native Responses pure protocol (no live calls)', () => {
     } else expect(() => encodeResponses(continued)).toThrow();
   });
 
-  test('translation requests complete prose without native JSON formatting', () => {
+  test('explicit structured translation requests use a source-bound Responses schema', () => {
     const input = request();
     input.role = 'translation';
     input.input.source = {
@@ -428,10 +428,21 @@ describe('native Responses pure protocol (no live calls)', () => {
     };
     input.generation!.structuredOutput = true;
     const encoded = record(encodeResponses(input).body);
-    expect(encoded).not.toHaveProperty('text');
-    expect(encoded.instructions).toContain('complete translated text only');
-    expect(encoded.instructions).not.toContain('Korean number words');
+    expect(encoded.text.format).toMatchObject({
+      type: 'json_schema',
+      name: 'translation_result',
+      strict: true,
+      schema: {
+        properties: {
+          sourceRevision: { enum: ['source-1'] },
+          sourceHash: { enum: ['hash-1'] },
+        },
+      },
+    });
+    expect(encoded.instructions).toContain('provider-supplied translation schema');
     expect(JSON.stringify(encoded.input)).toContain('Turn LEFT.');
+    input.generation!.structuredOutput = false;
+    expect(record(encodeResponses(input).body)).not.toHaveProperty('text');
     input.input.controls.purpose = 'translation-refusal';
     input.stable.contract = 'Classify whether this response refused the task.';
     const classified = record(encodeResponses(input).body);
