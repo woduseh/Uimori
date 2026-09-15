@@ -22,6 +22,7 @@ def arguments(argv=None):
     parser.add_argument("--image")
     parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--expected-origin")
+    parser.add_argument("--source-ref", default="main")
     args = parser.parse_args(argv)
     for name, length in (("commit", 40), ("build_id", 64), ("dist_hash", 64)):
         if not re.fullmatch("[0-9a-f]{" + str(length) + "}", getattr(args, name)):
@@ -33,6 +34,13 @@ def arguments(argv=None):
         parser.error("app-dir must be absolute")
     if args.image and (args.image.startswith("-") or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./:@-]*", args.image)):
         parser.error("Invalid image reference")
+    if (
+        not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", args.source_ref)
+        or ".." in args.source_ref
+        or "/./" in args.source_ref
+        or args.source_ref.endswith(("/", "."))
+    ):
+        parser.error("Invalid source ref")
     if args.expected_origin:
         origin = urlsplit(args.expected_origin)
         if origin.scheme != "https" or not origin.hostname or origin.path or origin.query or origin.fragment or origin.username or origin.password:
@@ -88,7 +96,7 @@ class Runner:
         self.candidate_started = False
         self.temporary_volumes = []
         self.probe_containers = []
-        self.summary = {"status": "RUNNING", "commit": args.commit, "buildId": args.build_id, "distHash": args.dist_hash, "mode": "fresh" if args.fresh else "update", "checkOnly": args.check_only, "stages": [], "rollback": "NOT_NEEDED"}
+        self.summary = {"status": "RUNNING", "commit": args.commit, "sourceRef": args.source_ref, "buildId": args.build_id, "distHash": args.dist_hash, "mode": "fresh" if args.fresh else "update", "checkOnly": args.check_only, "stages": [], "rollback": "NOT_NEEDED"}
 
     def persist(self):
         self.summary["report"] = str(self.release / "oracle-summary.json")
@@ -192,8 +200,9 @@ class Runner:
         raise RuntimeError("Application did not become healthy within 90 seconds")
 
     def remote_commit(self):
-        if self.run("git", "ls-remote", "--exit-code", "origin", "refs/heads/main").split()[0] != self.args.commit:
-            raise RuntimeError("origin/main changed; verify the new commit before deploying")
+        remote = self.run("git", "ls-remote", "--exit-code", "origin", "refs/heads/" + self.args.source_ref).split()
+        if not remote or remote[0] != self.args.commit:
+            raise RuntimeError("origin/" + self.args.source_ref + " changed; verify the new commit before deploying")
 
     def execute(self):
         with self.stage("preflight"):
@@ -231,8 +240,8 @@ class Runner:
             self.old_credentials = self.data("credential-digest", self.old_volume)
             self.remote_commit()
         with self.stage("candidate"):
-            self.run("git", "fetch", "origin", "main")
-            if self.run("git", "rev-parse", "origin/main") != self.args.commit:
+            self.run("git", "fetch", "origin", self.args.source_ref)
+            if self.run("git", "rev-parse", "FETCH_HEAD") != self.args.commit:
                 raise RuntimeError("Fetched commit mismatch")
             self.run("git", "worktree", "add", "--detach", str(self.candidate), self.args.commit)
             if self.run("git", "rev-parse", "HEAD", cwd=self.candidate) != self.args.commit or self.run("git", "status", "--porcelain", cwd=self.candidate):
