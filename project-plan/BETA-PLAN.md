@@ -36,6 +36,18 @@
 
 위치 지시문(D-5)과 Plugin 상주 모델(D-8b)은 2026-09-14 사용자가 현재 동작 유지로, E3은 하지 않기로 결정해 이 계획의 열린 결정은 없어요. V5의 예산 단위는 같은 날 채팅 설정의 조회 로어 문자 한도로 결정됐어요. E1의 두 소형 후속도 `eaec1a8`로 끝났어요. 호환 평가의 `setvar`류 쓰기는 영수증 `writes`에 기록돼 원문 저장 때 그 자료 개정의 공유 변수 변경 허용 아래에서 분기에 채택되고(허용 없음·분기 변경·한도 초과는 이벤트를 남기고 건너뜀, 저장은 실패하지 않음), authored 시작문은 `authored` 예약도 같은 영수증을 계산해 `start:<id>` 평가문을 원문으로 저장해요. `eaec1a8` 내보내기 검증은 `quality:full` PASS(2,766 tests), `verify:smoke` PASS, `verify:packages` 24 PASS·2 FAIL이에요. `CHATVARUI01`은 경쟁 저장 뒤 화면이 서버 이벤트로 먼저 갱신되면 저장 버튼이 충돌 상태로 비활성화되어 테스트가 기대한 409 요청이 나가지 않는 검사 자체의 타이밍 경합으로, 같은 단계·같은 화면 상태의 실패가 `af52a07`·`cb2f972` 트리에서도 재현됐고 통과·실패가 실행 시각에 따라 갈려요. 같은 날 `45ee08b`가 경쟁 저장을 화면의 저장 요청을 잡아 둔 route 안에서 실행하도록 검사를 고쳐 닫았고, 같은 트리에서 이 사례 6회 반복과 `verify:packages` 묶음 2회가 통과했어요(묶음의 유일한 실패는 번갈아 나타나는 기존 `EXTPANELUI01`·`PANELUI01` 한 건). 원문 CBS의 쓰기 부수효과를 기존 공유 변수 쓰기 허용으로 다루는 것은 가정이며 반대가 있으면 읽기 전용으로 시작해요.
 
+### 로어 조회 보완 · 2026-09-14
+
+> 로어 167개 native 봇의 실사용에서 모델 조회가 로어를 하나도 읽지 않고 카탈로그만 약 3만 토큰을 차지한 문제를 해결한다. 결정은 [로어 조회 방식](../docs/DECISIONS-2026-09-12-BETA.md#로어-조회-방식--2026-09-14-후속-선택)이 소유하고 이 절은 상태와 완료 근거만 관리한다.
+
+| 항목 | 내용 | 완료 근거 | 상태 |
+| --- | --- | --- | --- |
+| G1 카탈로그 압축·읽기 지시 | 항목당 제목·160자 요약, 직렬화 24,000자 예산, 고정 자료는 제목만, contract에 읽기 안내 | `quality`, `tests/main-catalog.test.ts` 3건과 catalog를 쓰는 기존 검사 | 완료(`c5f5be3`) |
+| G2 로어 선별 단계 | `loreActivation.mode = 'model'`, 예약 뒤 문맥 정리 모델 1회 호출 → 영수증 `RunSnapshot.loreSelection` → 고른 로어를 그 Run의 고정 자료로 compile, 나머지는 discoverable 유지, 실패 비차단 | `tests/lore-selection.test.ts` 8건, `tests/lore-selection-run.test.ts` 12건(예약→선별→compile→archive·백업 왕복, 예산 절단, 후보 재사용, 호출 한도에 이전 호출 반영, 모델 미지정, archive 그래프의 context 시도 상한) | 완료(`96a0a44`) |
+| G3 컴파일 버전 분리 | G1이 host context의 카탈로그 형식을 바꿔 그 전에 컴파일된 Run의 archive 가져오기·포크·후보 생성이 재컴파일 불일치로 거절되던 문제. `promptCompilation.compilerVersion`을 `uimori-prompt-2`로 올리고 `uimori-prompt-1` 컴파일은 이전 전체 카탈로그로 재현 | `MIG11` 통과, 옛 컴파일의 attach·검증 검사 | 미착수 · 2026-09-15 할당량 제한으로 중단 |
+
+G3가 끝나기 전에는 `c5f5be3`·`96a0a44`를 push하지 않아요. `compileSnapshotPrompt`가 host context 메시지까지 포함한 컴파일 결과를 저장하고, archive 가져오기(`validateRunSnapshot`)·기존 채팅 포크(`chat-fork.ts`)·옛 Run의 후보 생성(`attachMainHostContext`의 충돌 검사)이 그 결과를 현재 코드로 다시 컴파일해 바이트 단위로 대조하기 때문에, G1 이후 코드로는 그 전에 컴파일된 Run을 가져오거나 포크하거나 후보로 다시 돌릴 수 없어요(`tests/schema-migrations.test.ts`의 `MIG11`이 이 상태를 잡아요). 채팅 백업 가져오기는 새로 컴파일해 저장하므로 영향이 없어요. 구현 방향은 정해져 있어요. `promptCompilation.compilerVersion`을 `'uimori-prompt-1' | 'uimori-prompt-2'` 합집합으로 넓혀 새 컴파일은 `uimori-prompt-2`를 찍고, `buildMainInput`·`compileSnapshotPrompt`가 버전 옵션을 받아 `uimori-prompt-1`에는 이전 전체 메타데이터 카탈로그와 100개 상한을 그대로 재현하며, `attachMainHostContext`는 snapshot에 있는 컴파일의 버전으로 host context 문장을 만들고, `snapshot-archive.ts`의 재컴파일은 저장된 `p.compilerVersion`을 넘겨요. 포크·백업의 새 컴파일과 미리보기·예약은 기본 버전을 써요. 검사는 `MIG11` 무수정 통과, 두 버전의 컴파일 결과 대조, 옛 컴파일의 attach 무충돌·검증 통과, 위조 거절이에요. 상세 명세는 이 저장소의 git 제외 폴더 `output/handoff/compiler-version-fix-spec.md`에 있어요(선별 단계 명세 `lore-selection-spec.md`도 같은 폴더).
+
 이전 인계(2026-09-14 오전)의 완료 항목은 [베타 계획 기록](history/BETA-PLAN-2026-09.md#이전-인계-기록--2026-09-14-오전)에 당시 문구로 보존해요. `onInput`·`listenEdit` 4종·출력/표시 훅·유지보수 경계·선언형 `setvar`·혼합 트리거·`runLLM`/`extractRegex`·대용량 staged 가져오기·`@@` 지시문 분리·플러그인 파일 보고·운영자 CLI controller는 완료했고, 실제 Docker 호스트 검증과 전체 표본 실사용은 사용자가 맡아요.
 
 ### 완료한 첫 흐름: Risu 프리셋 가져오기와 실제 적용
