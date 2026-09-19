@@ -45,7 +45,7 @@
 
 [REVIEW.md](REVIEW.md)는 초기 v0.6.1 명세 검토 기록이에요. `KIT_VALIDATION.json`은 당시 계획 묶음의 구조 검사이며 앱·모델 품질 검증 결과가 아니에요.
 
-[첫 M0 작업 지시](prompts/01-build-M0.ko.md)는 초기 착수 기록으로 보존해요. 후속 작업에는 [이어가기 지시](prompts/03-continue.ko.md), 별도 검토에는 [독립 검토 지시](prompts/02-review.ko.md)를 참고해요. 이미 구현한 M0를 다시 착수하거나 과거 지시를 동시에 실행하지 않아요. [AGENTS 템플릿](templates/AGENTS.md.template)도 초기 참고 자료이며 현재 지도는 [루트 AGENTS.md](../AGENTS.md)예요.
+[첫 M0 작업 지시](prompts/01-build-M0.ko.md)는 초기 착수 기록으로 보존해요. 후속 작업에는 [이어가기 지시](prompts/03-continue.ko.md), 별도 검토에는 [독립 검토 지시](prompts/02-review.ko.md)를 참고해요. 현재 프로젝트 지침은 [루트 AGENTS.md](../AGENTS.md)이며 초기 M0 지시나 폐기한 [AGENTS 템플릿](templates/AGENTS.md.template)을 다시 적용하지 않아요.
 
 ## 자료와 증거
 
