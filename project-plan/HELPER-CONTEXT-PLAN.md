@@ -198,7 +198,7 @@ HTTP와 모델 도구는 같은 서비스를 호출해요. 수정 요청에는 �
 | HC14 | 412/2560px에서 패널/뒤로가기·입력 초안·독서 위치·스크롤이 유지되고 번역/이미지/상태/제목/옵션이 회귀하지 않아요. |
 | HC15 | v15 archive/backup 복원에서 도우미·초안·산출물 개정·요약·정정·허가/변경 이력이 복원되고 활성 작업이 자동 재전송되지 않아요. |
 
-기존 관련 단위/통합 검사를 확장하고 표 행마다 새 파일을 만들지 않아요. 현재 검사 시점은 [QUALITY](../docs/QUALITY.md#실행-시점)를 따라요. 작은 코드 구현·커밋은 `npm run quality`와 영향받는 집중 검사, 이 사용자 사용 흐름 완료·통합은 `quality:full`·smoke·관련 `verify:*`로 확인해요. `dist`를 쓰는 검사에는 일치하는 빌드를 사용하고 전체 `verify:redesign`은 넓은 변경·안정화 릴리스에서 선택해요. 공통 브라우저 runner의 source/build 일치·fresh DB/port·reporter·cleanup 증거를 사용해요. 문서만 바꾼 단계에는 제품 전체 검사를 실행할 필요가 없어요.
+Choose development checks using [QUALITY](../docs/QUALITY.md#verification) and the acceptance claims above. Use [DEVELOPMENT](../docs/DEVELOPMENT.md) for runner and build details.
 
 실모델 평가는 승인된 모델·합성/허가 자료·호출 범위에서 별도로 진행해요. 같은 작문 모델·예산으로 오래된 약속, 관계 변화, 비공개 지식, 명시적 정정, 반복 압축, 검색 없이 떠올려야 하는 사건, 문체 유지, 세그먼트 뒤 작업 연속성을 비교해요. 실제 비용/추정, 합성 계약/의미 품질/실기기를 구분하고 결과를 보기 전에 평가 기준을 기록해요.
 

@@ -1,24 +1,18 @@
-# Uimori 개발 지침
+# Uimori
 
-## 작업 범위와 완료
+Respond in concise Korean (해요체), with the result, relevant evidence, and remaining limits.
 
-- 한국어 해요체로 결과·근거·남은 한계를 간결하게 설명해요.
-- 구현 요청은 관련 검증까지 완료하고, 범위 안의 기술 선택·리팩터링·로컬 커밋은 자율적으로 진행해요. 제품 의미·권한·공개 범위·데이터 손실에 관한 미결정 사항은 근거와 추천안을 준비해 질문하고, 독립 작업은 계속해요.
-- push·배포·운영 데이터 변경·유료 호출은 해당 범위의 승인을 확인해요. 현재 요청과 기존 승인이 같은 예산·자료·대상·목적을 포함하면 다시 묻지 않아요.
-- 독립 작업의 병렬 진행이 도움이 되면 서브 에이전트에 담당 범위와 완료 근거를 정해 위임하고, 주 작업자가 통합해요.
+Carry implementation requests through to a working result, appropriate verification, and local commits. Make routine technical decisions independently. Use the current request and established approvals; ask only when missing input or authorization materially changes the outcome, and continue independent work meanwhile.
 
-## 보존할 경계
+Delegate independent work when it improves speed or quality, and integrate the results.
 
-- 기존 작업과 사용자 데이터를 보존해요. 검사는 별도 DB·포트·임시 경로를 사용하고 사용자 표본은 읽기 전용 입력으로 다뤄요. 개인 자료·키·요청 본문은 공개 fixture나 일반 로그에 넣지 않아요.
-- 원문·수정본·표시 결과를 구분하고 생성 당시 source/hash·Run snapshot을 보존해요. CAS·idempotency·worker 소유권·transaction 경계를 유지하며, 취소 뒤 늦은 결과 채택과 불확실한 외부 호출의 자동 재전송을 막아요.
-- 제작자 코드는 격리 실행과 공통 Host API를 거쳐 정확한 자료 개정·최신 권한을 확인해요. 일반 저장·조회·복원이 임의 코드나 모델 실행을 유발하지 않게 해요. 세부 실행·보존 계약은 아래 코드 지도에서 찾아요.
+## References
 
-## 필요할 때 볼 문서
+Read what the task needs; use known entry points directly.
 
-- 베타 범위·제품 선택: [결정](docs/DECISIONS-2026-09-12-BETA.md). 현재 작업·기존 평가 승인: [BETA-PLAN](project-plan/BETA-PLAN.md).
-- 기능 계약·코드 위치: [CODE-MAP](project-plan/CODE-MAP.md)의 관련 항목. 알려진 진입점은 바로 사용해요.
-- 검사 선택·완료 기준: [QUALITY](docs/QUALITY.md#실행-시점). 필요한 검사 뒤에는 새 변경·실패·구체적인 우려가 있을 때만 재검사해요. 합성·실모델·실기기·운영 증거를 구분하고 미검증·실패를 PASS로 표시하지 않아요.
-- Windows PowerShell 환경·실행·복구: [DEVELOPMENT](docs/DEVELOPMENT.md). Node 버전은 `.nvmrc`와 `package.json`을 따라요.
-- AGPL-3.0-only·Risu 스냅샷 재사용·배포 소스 조건: [LICENSE](LICENSE), [제3자 고지](THIRD_PARTY_NOTICES.md).
+- Product decisions and current work: [beta decisions](docs/DECISIONS-2026-09-12-BETA.md), [BETA-PLAN](project-plan/BETA-PLAN.md).
+- Feature contracts and code locations: [CODE-MAP](project-plan/CODE-MAP.md).
+- Check selection and completion: [QUALITY](docs/QUALITY.md#verification).
+- Setup, commands, and troubleshooting: [DEVELOPMENT](docs/DEVELOPMENT.md).
 
-계약이 바뀌면 소유 문서, 베타 진행이 바뀌면 BETA-PLAN을 갱신해요. 이 파일에는 세부 구현이나 과거 결과를 누적하지 않아요.
+Update the owning document when a contract changes and BETA-PLAN when beta progress changes. Keep implementation details and execution history out of this file.

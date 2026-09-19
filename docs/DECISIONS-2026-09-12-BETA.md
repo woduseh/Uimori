@@ -43,9 +43,9 @@ Uimori는 개인이 설치해 자기 API 키로 사용하는 AI 소설·채팅 �
 
 독립 `.risum` 파일 가져오기는 베타 지원 목표에서 제외해요. CharX 안에 담긴 `module.risum`을 해독하는 것은 필요한 CharX 콘텐츠를 읽는 내부 구현과 구분해요. 히든 스토리 같은 모듈의 기능 보존 목표는 유지하되 기존 프로젝트 추출이나 CharX 경로를 사용해요.
 
-### 검사 시점 조정 · 2026-09-13 후속 선택
+### Development verification · updated 2026-09-19
 
-사용자는 기능 구현을 우선하도록 검사 시점과 문서를 조정하도록 요청했어요. 작은 코드 구현·커밋은 정적 검사와 영향받는 집중 검사, 사용자 사용 흐름 완료·통합은 전체 품질·smoke·관련 영역 검사로 나눠요. 저장·권한·공통 실행 경계의 위험은 즉시 확인하며 문서만 바꿀 때 앱 전체 검사를 요구하지 않아요. 작은 후속 수정은 영향받는 범위만 다시 확인하고, 이전 전체 검사와 이후 결과를 구분해요. 세부 실행·빌드·재검사 기준은 [QUALITY](QUALITY.md#실행-시점)가 소유하며 릴리스·CI·공개 인수 조건은 유지해요.
+[QUALITY](QUALITY.md#verification) owns development check selection. The 2026-09-19 guidance rewrite replaces the fixed integration bundle adopted on 2026-09-13 with checks chosen for the change and its plausible failures. CI and release commands retain their implemented gates.
 
 ### 호환 실행의 범위 · 2026-09-14 후속 선택
 

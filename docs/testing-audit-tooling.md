@@ -53,6 +53,6 @@ Node suite는 기존 30개에서 새 지문 회귀 1개를 더한 31개예요. �
 - `playwright.config.ts`: 실제 실패의 screenshot/trace는 기본으로 유지해요. 성공 화면의 반복 캡처·추가 폭·정밀 배치만 `NR_VISUAL_REVIEW=1`로 분리해요.
 - `scripts/browser-verification.mjs`: 필수 case, reporter 오류, fixture 오류, 취소, cleanup, DB, 비밀 canary 검사는 그대로예요. 성공 PNG 필수 검사는 시각 모드만 적용해요.
 - `scripts/lib.mjs`, `build-runner.mjs`, `verify.mjs`, `verify-story.mjs`, `verify-ui.mjs`: 빌드 입력 지문과 전체 검증 입력 지문을 분리해요. 앱·빌드 설정·빌드 실행기는 재빌드를 요구하고 테스트/다른 검증 실행기 수정은 요구하지 않아요. 실행 도중 어느 쪽이 바뀌어도 해당 증거는 실패해요.
-- `quality:full`은 사용자 사용 흐름 완료·통합 및 CI 검사로 유지해요. 작은 구현·커밋의 검사 시점은 [QUALITY](QUALITY.md#실행-시점)를 따라요. 기본 전체 브라우저 실행을 CI에 추가하지 않아요. 작은 `verify:browser-smoke`, 기존 도메인별 `verify:*`, 전체 `verify:redesign`, 별도 `verify:visual`, `benchmark:story`의 용도를 구분해요.
+- Current development and CI check selection is defined in [QUALITY](QUALITY.md#verification). The runner descriptions here record the audit findings.
 - `scripts/verify-live-retry.mjs`: 이미 무조건 종료하던 가드 뒤의 구간 DB 복사/재시도 구현을 제거했어요. 빈 인자·preflight·execute 모두 source 읽기/복사/인증/요청 없이 같은 퇴역 상태를 반환하는 실제 CLI 검사는 `live-journey.test.ts`에 통합했어요.
 - `scripts/verify-live.mjs`: 폐기된 `profile.prompts`, `result.segments`, `job.chunks`를 사용하는 이전 유료 시나리오를 제거했어요. 빌드/설정 파일 존재의 메타데이터 검사와 결과 기록은 유지해요. 환경 준비와 평가 계획 준비를 구분하고 양 모드 모두 새 계약 계획 미완료로 BLOCKED예요. 새 거절 판정 모델을 자동 선택하거나 유료 실행을 시도하지 않아요.

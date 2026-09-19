@@ -1,127 +1,70 @@
-# 개발과 검증
+# Development
 
-현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. 지원하는 이전 DB를 보존하며 올리는 migration을 제공하고 공개 베타의 보존·업데이트를 [베타 계획](../project-plan/BETA-PLAN.md)에 따라 준비해요. 모든 과거 개발 버전의 이관을 약속하지 않아요. 테스트용 개발 DB를 다시 시작하려면 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
+Use [QUALITY](QUALITY.md#verification) to choose checks and [CODE-MAP](../project-plan/CODE-MAP.md) to find feature contracts and entry points. This page covers running the tools.
 
-[시작하기](../README.md) · [코드 품질](QUALITY.md) · [검증 계약](../project-plan/VERIFICATION.md)
+## Environment and setup
 
-기능별 계약과 코드 위치는 [코드 지도](../project-plan/CODE-MAP.md)에서 찾아요.
-
-## 변경과 검증
-
-[QUALITY의 검사 시점](QUALITY.md#실행-시점)에 따라 최소 앱 확인이 필요할 때 `npm run verify:smoke`를 사용해요. 기존 M0 실행기의 F02·F03·F06을 선택해 환경 진단 → 타입·빌드 → 새 서버의 ready/DB identity → 생성·중복/충돌·재접속의 단위/브라우저 검사 → 실패 감지 selftest → 종료·정리를 연결해요. 전체 M0·UI 회귀를 대신하지 않아요. 종료 코드를 확인하고 출력된 `summary.json`의 scope·scenarios·cleanup을 함께 읽어요. 아래 설치·doctor 명령은 첫 환경 준비나 관련 환경 문제를 해결할 때 선택해요. 매 작업 시작마다 재설치·환경 진단을 반복하는 절차가 아니에요.
+Use Node 24.x, at least 24.14.0, as specified by [package.json](../package.json) and [.nvmrc](../.nvmrc). Windows PowerShell is the primary development environment; the browser helpers also discover Chrome and Edge on macOS and Linux.
 
 ```powershell
-npm ci --offline --no-audit --no-fund
-npm run doctor
-npm run verify:smoke
+npm ci --no-audit --no-fund
+npm run dev
 ```
 
-오프라인 설치는 npm 캐시가 준비된 환경에서만 가능해요. 캐시가 없으면 허용된 네트워크 환경에서 `npm ci --no-audit --no-fund`가 필요해요. `doctor`는 Node **24.14 이상 24.x**, 자식 프로세스의 준비·종료, 파일 SQLite, loopback HTTP, 실제 Chromium 시작을 각각 확인해요. `npm run doctor -- --no-browser`는 API 환경 진단만 요청하며 브라우저를 `NOT_RUN`으로 표시해요. 전체 검증용 브라우저 전제는 기존 Chrome/Edge 또는 `NR_BROWSER_PATH`예요.
+For an offline install with a populated npm cache, add `--offline`. `dev` builds and starts the server; `npm start` uses the existing build. See [README](../README.md) for app configuration.
 
-2026-09-08 Windows의 현재 제한 환경에서는 새 소스 사본의 오프라인 설치와 품질·하네스 회귀가 통과했지만, Node/Chrome 자식 실행은 `EPERM`으로 차단됐어요. `verify:smoke`가 제품 검사를 시작하지 않고 BLOCKED·nonzero와 cleanup 근거를 남기는 것까지 확인했어요. 권한을 변경하지 않았으며, 이 결과는 브라우저 흐름 통과의 증거가 아니에요.
+Run `npm run doctor` when diagnosing the environment. It checks Node, child processes, SQLite, loopback HTTP, and Chromium. `--no-browser` checks only the API environment. Set `NR_BROWSER_PATH` to use a browser outside the discovered locations.
 
-변경 종류에 따른 검사·빌드 조건, 병렬 작업의 검사 순서, 재검사·릴리스 기준은 [검사 시점](QUALITY.md#실행-시점)에서 선택해요. 이 문서는 명령의 실행 방법과 환경 복구를 안내해요. 아래 목록 전체를 매번 실행하는 절차가 아니에요.
+## Verification runners
+
+Use a build matching the current app source for checks that execute `dist`. Focused tests that import source modules do not need a build. [QUALITY](QUALITY.md) explains build reuse and check selection.
+
+| Command | Purpose |
+| --- | --- |
+| `npm run verify:smoke` | M0 F02/F03/F06: environment, build, server identity, generation/conflicts/reconnection, runner selftest, and cleanup. |
+| `npm run verify:browser-smoke` | Small browser suite for chat and global prompt settings. |
+| Feature-specific `verify:*` scripts | Suites such as `verify:packages`, `verify:providers`, `verify:library`, and `verify:navigation`; see [package scripts](../package.json). |
+| `npm run verify:redesign` | Full local synthetic browser regression. |
+| `npm run verify:selfhost` | Local synthetic HTTPS proxy, session, and reconnection checks using Chromium. |
+| `npm run verify:visual` | Extra viewport and layout checks with screenshots for visual inspection. |
+| `npm run verify:gallery` | Screen and journey captures; see [UI-GALLERY](UI-GALLERY.md). |
+| `npm run benchmark:story` | Repeated long-story performance measurements. |
+| `npm run verify:selftest` | Runner failure-detection tests. |
+
+The [test audit](TESTING-AUDIT.md) records suite coverage and historical consolidation decisions.
+
+For a specific milestone or case:
 
 ```powershell
-npm run quality
-npm run quality:full
-npm run verify:ui
-npm run verify:evaluation
-npm run verify:packages
-npm run verify:providers
-npm run verify:loading
-npm run verify:library
-npm run verify:navigation
-npm run verify:turn-activity
-npm run verify:redesign
-npm run verify:selfhost
-npm run verify -- --milestone M0
-npm run verify -- --milestone M1-local
-npm run verify -- --milestone M2-local
 npm run verify -- --milestone M1-local --case P07,P08
 npm run verify -- --case F04
-npm run verify:selftest
-npm run cleanup
-npm run cleanup -- --run <summary에 나온 run-id>
 ```
 
-`check`는 TypeScript 타입 검사이고, `build`는 실행 파일과 빌드 식별 정보를 만들어요. `verify:ui`는 **현재 소스와 일치하는 최신 빌드가 이미 있어야 실행**되며 스스로 빌드하지 않아요. 별도 파일 DB·포트에서 안전한 원고 렌더링 단위 검사와 UI 브라우저 검사를 실행하고 소스·빌드 동일성, 새 reporter의 필수 검사·skip·실패, 소유 프로세스와 임시 파일 정리를 확인해요. 보고서와 화면은 `output/playwright/ui-<run-id>/`에 남아요. 이 명령은 M0/M1-local 회귀, 별도의 시각적 검토·성능 측정·실제 기기 검증을 대체하지 않아요.
+`M0`, `M1-local`, and `M2-local` run local synthetic checks. Full `M1` and `M2` modes return BLOCKED when live-provider, quality, or device evidence is missing; passing their local checks does not satisfy those claims.
 
-`verify:redesign`은 최신 일치 빌드에서 봇별 채팅·폴더, 패키지 편집·표시, 프롬프트 옵션 조합과 기존 브라우저 회귀를 통합 검사해요. 새 DB·포트와 합성 공급자 등록 fixture를 사용하고 `output/playwright/redesign-<run-id>/`에 reporter·화면·summary를 남겨요. 앱 소스·빌드 입력이 바뀌면 현재 빌드를 준비하고 테스트만 바뀌면 기존 일치 빌드에서 해당 검사를 다시 실행해요. 실제 사용자 자료·유료 호출·기기 검증을 수행하는 명령은 아니에요.
-
-`verify:selfhost`는 새 DB·포트·공개 합성 TLS 인증서로 HTTPS 프록시를 만들고 데스크톱/390px Chromium의 로그인·쿠키·원문 공유·SSE·탭 재진입·세션 해제 후 재로그인을 검사해요. 인증서 오류 무시는 이 검증에만 적용하며 실제 도메인·Linux·Docker·Nginx 실행이나 휴대폰 검증을 대신하지 않아요. `output/playwright/self-host-<run-id>/`에 summary·reporter·화면과 격리 DB 근거를 남겨요. Chromium이 없다면 Playwright의 브라우저를 설치하거나 `NR_BROWSER_PATH`로 지정해요. 서버 배포에는 브라우저 설치가 필요하지 않아요.
-
-`verify`는 선택한 milestone·case에 맞춰 타입 검사·빌드, 새 서버의 ready/build/DB identity 확인, 해당 Vitest와 브라우저 검사를 실행하고 소유 프로세스·임시 DB를 정리해요. M0/M1의 doctor는 F01 또는 브라우저 case가 포함될 때 실행하고, M2는 별도 실행기에서 doctor를 실행해요. Playwright는 선택한 case에 브라우저 검사가 있을 때만, 실패 감지 selftest는 M0의 F06이 포함될 때만 실행해요. selftest만 확인하려면 `npm run verify:selftest`를 사용해요.
-
-reporter JSON, 커밋 경계 DB 백업, 실제 입력·이벤트, 해당 화면과 `summary.json`은 `output/playwright/<run-id>/`에 남아요. 핵심 검사는 retry 0이고, 필수 skip/0개/누락/실패를 성공으로 바꾸지 않아요. source와 build의 SHA-256은 실행 전후 확인해요. 같은 source의 오래된 다른 서버를 재사용하지 않아요.
-
-`M0`는 F01–F06 회귀와 검증기 selftest를 실행하고, `M1-local`은 P01–P13의 로컬 계약을 검사해요. `--milestone M1`은 같은 로컬 검사 후 미충족 live/device/quality 전제를 포함해 **BLOCKED와 nonzero exit**를 반환해요. M1-local PASS를 M1 전체 완료로 취급하지 않아요.
-
-브라우저가 없거나 권한이 막히면 해당 관찰은 BLOCKED예요. 가능한 서버·자료 조회 검사는 계속 실행해요. Windows sandbox의 `spawn EPERM`은 환경 차단으로 기록하고 필요한 권한에서 동일 명령을 확인해요. 실패 증거는 성공 기록으로 덮어쓰지 않아요.
-
-F01의 두 작업트리 격리는 Git 기준 commit이 준비된 뒤 별도로 확인해요. 각 작업트리에 의존성을 따로 설치하고 빌드한 다음 실행해요.
+The worktree isolation runner takes two prepared, clean worktrees at the same commit, each with dependencies and a build:
 
 ```powershell
-node scripts/verify-worktrees.mjs --a '<준비된 작업트리 A>' --b '<준비된 작업트리 B>'
+node scripts/verify-worktrees.mjs --a '<worktree A>' --b '<worktree B>'
 ```
 
-이 명령은 같은 commit/source의 깨끗한 두 작업트리에서 서버와 브라우저를 동시에 실행하고, 독립 포트·파일 DB·profile·temp·원문을 확인한 후 정리해요. 작업트리 생성이나 사용자 파일 삭제는 이 스크립트가 수행하지 않아요.
+It verifies separate server/browser resources without creating worktrees.
 
-`verify:evaluation`도 최신 빌드를 먼저 준비해야 해요. `M2-local`은 S01–S07 합성 검사를 실행하며, `--milestone M2`는 로컬 검사가 통과해도 실제 Q04 평가를 수행하지 않으므로 BLOCKED로 종료해요. 지정 자료 이식은 `nativePort: SEPARATE_EVIDENCE`로 구분하며 이 하네스가 이식 완료 여부를 판정하지 않아요.
+## Results and troubleshooting
 
-`dist`를 실행하는 전용 검증에는 최신 소스와 일치하는 빌드가 필요해요. 소스 모듈만 읽는 집중 단위 검사는 빌드 없이 실행해요. 변경과 관련된 검사를 선택하고, 위 명령을 매번 전부 실행할 필요는 없어요.
+Browser reports, screenshots, traces, and `summary.json` are under `output/playwright/<run-id>/`. The common runner uses fresh DBs and ports, records source/build identity, and cleans up its processes. Its exit code and summary distinguish failed checks, missing prerequisites, and cleanup failures.
 
-| 명령 | 범위 |
-| --- | --- |
-| `npm test` | Vitest 단위·통합 검사. 서버 재시작 검사를 위해 최신 빌드가 필요해요. 브라우저·실제 공급자 검사를 대신하지 않아요. |
-| `npm run verify:packages` | 공통 프롬프트 조립·패키지 요청 예약·원문 구간 편집과 Reader·번역 표시. |
-| `npm run verify:providers` | 합성 공급자 등록·모델 선택·관리 화면 |
-| `npm run verify:loading` | 합성 자료의 로딩·페이지/SSE 갱신 화면 |
-| `npm run verify:library` | 서재·프롬프트 분리, 폴더·다중 이동·대표 이미지·선택 흐름 |
-| `npm run verify:navigation` | 봇별 채팅 폴더·순서 이동·진행 표시 |
-| `npm run verify:turn-activity` | 응답별 작업 이력 펼침·진단 조회·생성 완료 전환 |
-| `node scripts/verify-deletion.mjs` | 자료·설정·채팅·이미지 삭제와 참조·실행 보호 |
+- **Child-process or browser failure:** `spawn EPERM` or a missing browser is an environment blocker. Diagnose with `doctor` and rerun in an environment that can execute the required process.
+- **Stale build:** Rebuild when app inputs changed. The runners check build identity separately from test inputs.
+- **Unexpected shared settings:** Inspect the preserved SQLite at `output/playwright/<run-id>/evidence-db/app.sqlite` before replaying a long browser suite.
+- **Loopback hangs behind a proxy:** Browser launch options include `--no-proxy-server` for local traffic.
 
-검증 산출물인 `output/`, 사용자 데이터 `.local/`, 빌드 `dist/`는 Git에 포함하지 않아요. 결과 문서의 `output/` 링크는 해당 실행을 보관한 로컬 환경에서만 열려요.
+Local fixtures, browser emulation, live providers, and physical devices establish different evidence. Report which one actually ran.
 
-서재·탐색·삭제·패키지·전체 개편과 입력창 옵션/재시도 검증은 [공통 브라우저 실행기](../scripts/browser-verification.mjs)를 사용해요. 각 진입점은 검사 파일·필수 case·timeout을 선택하고, 실행기는 새 DB/포트, 소스·빌드 지문, reporter, 소유권·취소·cleanup과 증거 보관을 관리해요. 필수 검사 누락·0개·skip·재시도·cleanup 실패는 PASS로 처리하지 않아요. [하네스 회귀](../tests/harness.test.ts)는 이 실패 경계와 수동 cleanup 명령의 소유권 호환을 확인해요. 전용 HTTPS 등 다른 실행 계약의 하네스는 독립적으로 유지해요.
+## Reset and cleanup
 
-## 실행 환경과 조사 방법
+`npm run cleanup -- --run <run-id>` cleans up resources owned by that run. Reports and evidence are separate from live process cleanup.
 
-CI는 Windows / Node 24.14.0에서 돌지만 검토와 수정은 macOS·Linux에서도 해요. 두 환경의 차이 때문에 반복해서 시간을 쓰던 것들을 정리해요.
+`npm run reset:dev` deletes this checkout's default `.local/narrative.sqlite`, its SQLite sidecars, and recognized legacy backups. Stop the server first. The command rejects an in-use database or unsafe paths and does not reset an arbitrary `NR_DB`.
 
-**Node는 `.nvmrc`의 24.14.0을 써요.** `engines`가 `>=24.14 <25`이고 `verify-*`는 그 밖의 버전을 거부해요. Node 26에서 `npm test`를 돌리면 `tests/harness.test.ts`가 BLOCKED, `tests/server.test.ts`의 F03이 실패하는데 둘 다 환경 문제예요. `nvm use`로 맞추거나 `npx -y node@24 scripts/verify-x.mjs`처럼 실행기를 지정해요.
-
-**브라우저는 자동으로 찾아요.** `browserPath()`와 `playwright.config.ts`가 Windows·macOS·Linux의 Chrome·Edge 경로를 탐색해요. 다른 빌드를 쓰려면 `NR_BROWSER_PATH`로 지정해요. 사내 PAC 프록시가 loopback을 가로채면 Playwright가 멈추므로 `--no-proxy-server`를 유지해요.
-
-**빌드 지문에 드는 것과 아닌 것을 구분해요.** `core`·`server`·`web`·`src`와 `package*.json`·`tsconfig*`·`vite.config.*`·`.gitattributes`, 그리고 `scripts/build.mjs`·`build-runner.mjs`·`lib.mjs`가 입력이에요. 이것들을 고친 뒤 `dist`를 사용하는 검사에는 새 빌드가 필요하고, `verify-*` 실행 도중에 고치면 그 실행이 무효가 돼요. `tests/`·`docs/`·`playwright.config.ts`·`verify-*.mjs`는 지문 밖이지만, 실행 도중 `tests/`를 바꾸면 그 증거는 저장소 규칙상 무효예요.
-
-**전역 상태가 의심되면 보존된 실행 DB부터 열어요.** 하네스가 종료 시점 SQLite를 `output/playwright/<runId>/evidence-db/app.sqlite`에 남겨요. 같은 브라우저 실행의 spec들이 서버와 DB를 공유하면 앞선 spec이 남긴 전역 프롬프트·모델 설정이 뒤의 실패로 나타날 수 있어요. 전체 순서를 재생하기 전에 보존된 실행 DB에서 관련 설정을 좁혀 조회해요.
-
-```
-node --input-type=module -e "
-import { DatabaseSync } from 'node:sqlite';
-const db = new DatabaseSync('output/playwright/<runId>/evidence-db/app.sqlite', { readOnly: true });
-const w = JSON.parse(db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get().body);
-console.log(w.main.program.controls.map((c) => c.id));
-"
-```
-
-**회귀의 귀속이 불명확하면 부모와 비교해요.** 먼저 실패한 검사·변경 diff·관련 실행 경로에서 원인을 좁혀요. 이 근거로 해결할 수 있으면 별도 checkout 비교를 반복하지 않아요. 귀속 판정이 수정 방향이나 완료 판단을 바꿀 때만 대상과 부모를 분리된 작업트리/스크래치에서 같은 환경·집중 검사로 비교해요. 각 경로의 의존성과 빌드는 필요에 따라 준비하며 원래 미저장 변경은 보존해요. `HEAD`에서도 실패한다는 사실만으로 그 HEAD의 변경을 면제하지 않아요.
-
-**실행 정리와 증거 보존을 구분해요.** `npm run cleanup -- --run <run-id>`는 소유한 실행 자원을 정리하는 기존 계약을 따라요. 이를 오래된 증거 전체 삭제 명령으로 해석하지 않아요. 실패 원인·진행 중 작업·인수에 필요한 trace/DB/보고서는 보존하고 큰 산출물 정리는 요청 범위와 실제 경로를 확인해 별도로 수행해요.
-
-## 코드의 경계
-
-- `web/`: 서재·프롬프트 관리, 봇별 탐색·채팅·패키지 편집, 안전한 원고 표시, 탭별 URL/초안/독서 위치, 페이지 읽기·SSE 갱신과 늦은 HTTP 응답 폐기.
-- `core/`: 공통 ContentPackage와 역할별 문맥, PromptProgram 데이터 AST·선택형 문법·TypeScript 제작 API, native JSON 검증, 공급자 adapter와 상태·문맥 요약·메모·원문 조회, 번역·표현 검증. 개발용 지침과 앱 자료는 별개예요.
-- `server/`: 현재 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)의 저장 구조, SQLite WAL, revision/idempotency, 봇 소속·채팅 폴더·서재 분류와 폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
-- `tests/`: 실제 파일 DB/HTTP/프로세스 재시작과 Playwright 브라우저 검사. `scripts/`는 기존 reporter와 작은 수명주기 코드를 연결해요.
-
-원문·Run 완료·적격 보조 예약은 한 트랜잭션에 저장하고 worker는 커밋 뒤에 실행해요. job 결과·완료도 한 트랜잭션이며 source/hash와 worker generation/owner를 검사해요. 재시작은 완료 원문을 다시 생성하지 않아요. 실행 중이던 메인 요청은 `interrupted`로 남고, 로컬 결정적 모의 job만 재개해요. 표시 상태는 다음 원고의 사실로 주입하지 않아요.
-
-조직 테이블은 `chats`와 별도로 보관해요. 채팅 소속 봇은 고정하고 폴더 이동은 CAS로 보호하며 포크는 원래 소속·폴더를 상속해요. 프롬프트의 전역 옵션 조합은 정확한 prompt revision에 연결하고, 생성 당시 Run 입력을 변경하지 않아요. 패키지 행동은 공통 순수 함수로 계산하며 자동·모델 호출의 효과를 원문 완료 때 게시해요. 패키지 상태창·표시 정규식도 저장 원문과 분리해요.
-
-Risu 파일과 native JSON의 현재 지원 범위·검토·저장 절차는 [가져오기](RISU-IMPORT.md)가 소유해요. 기존 단방향 가져오기 API를 먼저 재사용하고 지원 밖의 자료별 수동 작성은 [Risu 이식](RISU-PORTING.md)을 참고해요. 프롬프트 제작 방식은 [제작 안내](PROMPT-AUTHORING.md)를 봐요. 파일 파싱이나 등록 성공을 원본 전체 실행 지원으로 표시하지 않아요.
-
-현재 코드/검증 증거와 남은 범위는 [CURRENT](../project-plan/CURRENT.md), [M1 결과](../project-plan/M1-RESULTS.md), 제품 계약은 [계획 시작점](../project-plan/README.md)에 있어요. 작업별 호출·시간·출력 한도와 전송 전 attempt 기록을 유지해요. 추정 비용과 실제 공급자 사용량의 계약은 [모델 요금](MODEL-PRICING.md)이 소유해요. 실제 모델 호출·배포는 현재 요청과 기존 승인 범위를 확인하고, 같은 범위의 후속 작업에 승인을 반복 요구하지 않아요.
+Current data formats and supported upgrades are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).
