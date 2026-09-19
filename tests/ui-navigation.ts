@@ -316,6 +316,14 @@ export async function openChatSettings(page: Page) {
     .getByRole('button', { name: '채팅 설정', exact: true })
     .click();
 }
+/** Opens the conditionally available advanced settings for package variables, state and actions. */
+export async function openPackageBehaviorSettings(page: Page) {
+  await openChatSettings(page);
+  await selectChatSettingsSection(page, '자료 기능');
+  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
+  await expect(panel).toBeVisible();
+  return panel;
+}
 function compactLayout(page: Page) {
   return (page.viewportSize()?.width ?? MOBILE_WIDTH) <= 760;
 }

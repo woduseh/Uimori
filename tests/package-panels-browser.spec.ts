@@ -4,7 +4,7 @@ import { createPanelPackage } from './fixtures/panel-package.js';
 import {
   createLibraryContent,
   navigationAction,
-  openChatSettings,
+  openPackageBehaviorSettings,
   revealLibraryEditor,
   selectChatSettingsSection,
   selectPackageSection,
@@ -56,14 +56,13 @@ test('PROGTOOLUI01 creators enable model and response code hooks without a user 
   expect(created.ok(), await created.text()).toBe(true);
   const chat = await created.json();
   await page.goto(`/?chat=${chat.id}`);
-  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
+  const panel = await openPackageBehaviorSettings(page);
   await expect(panel.getByText('모델 요청', { exact: true })).toBeVisible();
   await expect(panel.getByText('응답 후 자동', { exact: true })).toBeVisible();
   await expect(panel.getByText('코드 계산', { exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: '중복 없는 항목 세기', exact: true })).toHaveCount(
     0
   );
-  await openChatSettings(page);
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   const attachment = settings
@@ -355,6 +354,7 @@ test('EXTPANELUI01 code action updates its panel and a failed action preserves c
   const chat = await seed(request, false, true);
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
   await page.goto(`/?chat=${chat.id}`);
+  await openPackageBehaviorSettings(page);
   const custom = page.getByRole('region', { name: '탐험 준비', exact: true });
   const iframe = page.frameLocator('iframe[title="탐험 준비 패키지 패널"]');
   await expect(custom).toHaveAttribute('aria-busy', 'false');
@@ -364,6 +364,7 @@ test('EXTPANELUI01 code action updates its panel and a failed action preserves c
     'Synthetic adult explorers.|apple pear'
   );
   await page.reload();
+  await openPackageBehaviorSettings(page);
   await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(
     'Synthetic adult explorers.|apple pear'
   );
@@ -421,6 +422,7 @@ test('VARWRITEUI01 user code changes shared variables only with the exact chat g
 
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
   await page.goto(`/?chat=${chat.id}`);
+  await openPackageBehaviorSettings(page);
   const custom = page.getByRole('region', { name: '탐험 준비', exact: true });
   const iframe = page.frameLocator('iframe[title="탐험 준비 패키지 패널"]');
   await expect(custom).toHaveAttribute('aria-busy', 'false');
@@ -430,7 +432,6 @@ test('VARWRITEUI01 user code changes shared variables only with the exact chat g
   expect(await variables()).toMatchObject({ revision: 0, values: {}, resolved: { phase: '0' } });
   expect((await behavior()).instances[0]).toMatchObject({ stateRevision: 0, state: { note: '' } });
 
-  await openChatSettings(page);
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   const attachment = settings
@@ -451,6 +452,7 @@ test('VARWRITEUI01 user code changes shared variables only with the exact chat g
   expect((await profileSave).ok()).toBe(true);
   await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
 
+  await openPackageBehaviorSettings(page);
   await iframe.getByRole('textbox', { name: '준비 메모', exact: true }).fill('run with grant');
   await iframe.getByRole('button', { name: '메모 반영', exact: true }).click();
   await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue('1');
@@ -462,7 +464,6 @@ test('VARWRITEUI01 user code changes shared variables only with the exact chat g
     JSON.stringify({ phase: '1' }, null, 2)
   );
 
-  await openChatSettings(page);
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   await expect(grant).toBeChecked();
   await grant.uncheck();
@@ -475,6 +476,7 @@ test('VARWRITEUI01 user code changes shared variables only with the exact chat g
   expect((await profileSave).ok()).toBe(true);
   await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
 
+  await openPackageBehaviorSettings(page);
   await iframe.getByRole('textbox', { name: '준비 메모', exact: true }).fill('run after revoke');
   await iframe.getByRole('button', { name: '메모 반영', exact: true }).click();
   await expect(custom.getByRole('alert')).toBeVisible();
@@ -493,7 +495,7 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH])
     const detail = async () => await (await request.get(endpoint)).json();
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?chat=${chat.id}`);
-    const owner = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
+    const owner = await openPackageBehaviorSettings(page);
     const custom = page.getByRole('region', { name: '탐험 준비', exact: true });
     const iframe = page.frameLocator('iframe[title="탐험 준비 패키지 패널"]');
     await expect(custom).toHaveAttribute('aria-busy', 'false');
@@ -544,6 +546,7 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH])
     await expect.poll(async () => (await detail()).instances[0].state.note).toBe(note);
     await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(note);
     await page.reload();
+    await openPackageBehaviorSettings(page);
     await expect(iframe.locator('#route')).toHaveText('harbor');
     await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(note);
     await owner.getByText('기본 상태와 행동', { exact: true }).click();
@@ -570,6 +573,7 @@ test('PANELUI02 markup cannot access app DOM, navigate, fetch remote resources o
   });
   await page.route('https://panel-probe.invalid/**', (route) => route.abort());
   await page.goto(`/?chat=${chat.id}`);
+  await openPackageBehaviorSettings(page);
   const custom = page.getByRole('region', { name: '탐험 준비', exact: true });
   await expect(custom).toHaveAttribute('aria-busy', 'false');
   const frame = (await (await custom.locator('iframe').elementHandle())!.contentFrame())!;

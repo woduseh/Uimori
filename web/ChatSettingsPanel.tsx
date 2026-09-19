@@ -8,6 +8,8 @@ import { StoryPanel } from './StoryPanel.js';
 import { AssetEditor } from './AssetEditor.js';
 import { IllustrationReferencesEditor } from './IllustrationReferences.js';
 import { SettingsEditor } from './RuntimeSettings.js';
+import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
+import { api } from './api.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { useSettingsHistory } from './useSettingsHistory.js';
 import type { StoryState } from './useStory.js';
@@ -22,7 +24,7 @@ import {
 } from './ui-icons.js';
 import './chat-settings.css';
 
-export type Section = ProfileSection | 'story' | 'images' | 'runtime';
+export type Section = ProfileSection | 'story' | 'images' | 'runtime' | 'packages';
 // Two groups: the basics every chat needs, then the advanced automation sections.
 // Reading settings live in their own dialog (chat ⋯ menu), not here.
 const categories = [
@@ -68,6 +70,13 @@ const categories = [
     description: '장면 해설과 호출 한도',
     group: '고급',
   },
+  {
+    id: 'packages',
+    title: '자료 기능',
+    icon: BehaviorIcon,
+    description: '공유 변수와 자료 상태·행동',
+    group: '고급',
+  },
 ] as const;
 const isProfile = (section: Section): section is ProfileSection =>
   ['characters', 'prompts', 'models'].includes(section);
@@ -77,12 +86,14 @@ export function ChatSettingsPanel({
   onClose,
   initialSection,
   onGlobalSettings,
+  onRunRequest,
 }: {
   state: StoryState;
   onClose: () => void;
   /** Open directly on this section (compact widths open its detail); the list is the default. */
   initialSection?: Section;
   onGlobalSettings: (section: 'models' | 'prompts') => void;
+  onRunRequest: (text: string, requestId: string) => void;
 }) {
   const [active, setActive] = useState<Section>(initialSection ?? 'characters');
   const [profileTab, setProfileTab] = useState<ProfileSection>(
@@ -95,6 +106,7 @@ export function ChatSettingsPanel({
   const [imageDirty, setImageDirty] = useState(false);
   const [referenceDirty, setReferenceDirty] = useState(false);
   const [runtimeDirty, setRuntimeDirty] = useState(false);
+  const [packageFeatures, setPackageFeatures] = useState(false);
   const [discard, setDiscard] = useState(false);
   const dirty = profileDirty || storyDirty || imageDirty || referenceDirty || runtimeDirty;
   const compact = useCompactLayout();
@@ -215,6 +227,65 @@ export function ChatSettingsPanel({
   }, [compact]);
   const detail = state.detail;
   const library = state.library;
+  const branchId = state.branch?.id;
+  const packageScope = `${state.selected}:${branchId ?? ''}`;
+  const packageAvailabilityKey = `${detail?.profile?.revision ?? 0}:${detail?.reader.cursor ?? 0}`;
+  const previousPackageScope = useRef(packageScope);
+  useEffect(() => {
+    let current = true;
+    if (previousPackageScope.current !== packageScope) {
+      previousPackageScope.current = packageScope;
+      setPackageFeatures(false);
+    }
+    void packageAvailabilityKey;
+    const query = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    let hasDraft = false;
+    try {
+      hasDraft =
+        sessionStorage.getItem(
+          `uimori:chat-variable-draft:${state.selected}:${branchId ?? 'current'}`
+        ) !== null;
+    } catch {
+      // The server-owned feature checks still work when browser draft storage is unavailable.
+    }
+    void Promise.allSettled([
+      api<{
+        pendingRequest?: unknown;
+        instances: unknown[];
+        operations?: unknown[];
+        standalonePanels?: { panels: unknown[] }[];
+      }>(`/chats/${encodeURIComponent(state.selected)}/package-behaviors${query}`),
+      api<{
+        values: Record<string, string>;
+        defaults: Record<string, string>;
+        variableDefaultsError?: string;
+      }>(`/chats/${encodeURIComponent(state.selected)}/variables${query}`),
+    ]).then(([behaviorResult, variableResult]) => {
+      if (!current) return;
+      const behavior = behaviorResult.status === 'fulfilled' ? behaviorResult.value : null;
+      const variables = variableResult.status === 'fulfilled' ? variableResult.value : null;
+      setPackageFeatures(
+        hasDraft ||
+          Boolean(
+            behavior &&
+              (behavior.instances.length > 0 ||
+                behavior.pendingRequest ||
+                behavior.operations?.length ||
+                behavior.standalonePanels?.some((item) => item.panels.length > 0))
+          ) ||
+          Boolean(
+            variables &&
+              (Object.keys(variables.values).length > 0 ||
+                Object.keys(variables.defaults).length > 0 ||
+                variables.variableDefaultsError)
+          )
+      );
+    });
+    return () => {
+      current = false;
+    };
+  }, [branchId, packageAvailabilityKey, packageScope, state.selected]);
+  const visibleCategories = categories.filter((item) => item.id !== 'packages' || packageFeatures);
   return (
     <Dialog
       open
@@ -242,7 +313,7 @@ export function ChatSettingsPanel({
       >
         <SectionNavigation
           label="채팅 설정 분류"
-          items={categories.map((item) => ({ ...item, panelId: panelId(item.id) }))}
+          items={visibleCategories.map((item) => ({ ...item, panelId: panelId(item.id) }))}
           value={active}
           onSelect={select}
           compact={compact}
@@ -339,6 +410,19 @@ export function ChatSettingsPanel({
                         onError={state.setError}
                         hideHeading
                         onDirtyChange={setRuntimeDirty}
+                      />
+                    )}
+                    {section === 'packages' && packageFeatures && (
+                      <PackageBehaviorPanel
+                        chatId={state.selected}
+                        branchId={branchId}
+                        refreshKey={state.detail?.reader.cursor ?? 0}
+                        onRunRequest={(text, requestId) =>
+                          requestClose(() => onRunRequest(text, requestId))
+                        }
+                        onChange={() => {
+                          void state.refresh(state.selected);
+                        }}
                       />
                     )}
                   </>

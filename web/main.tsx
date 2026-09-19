@@ -53,7 +53,6 @@ import { ContentAvatar } from './ContentAvatar.js';
 import type { PackageRole } from '../core/content-package.js';
 import { SourceReader } from './SourceReader.js';
 import { TurnActivity } from './TurnActivity.js';
-import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
 import { SessionGate } from './SessionGate.js';
 import { MaintenanceBanner } from './MaintenanceBanner.js';
 import { Dialog } from './Dialog.js';
@@ -1169,18 +1168,6 @@ function App() {
                         onSelect={s.chooseSource}
                         end
                       />
-                      <PackageBehaviorPanel
-                        chatId={s.selected}
-                        branchId={s.branch?.id}
-                        refreshKey={s.detail.reader.cursor}
-                        onRunRequest={(text, id) => {
-                          s.editDraft(text, id);
-                          s.input.current?.focus();
-                        }}
-                        onChange={() => {
-                          void s.refresh(s.selected);
-                        }}
-                      />
                     </>
                   )}
                 </section>
@@ -1644,6 +1631,10 @@ function App() {
           onGlobalSettings={(section) => {
             setSettingsTab(section);
             setPanel('settings');
+          }}
+          onRunRequest={(text, id) => {
+            s.editDraft(text, id);
+            requestAnimationFrame(() => s.input.current?.focus());
           }}
         />
       )}

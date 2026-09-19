@@ -1,5 +1,5 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, openPackageBehaviorSettings } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -420,8 +420,7 @@ test('CHATVARUI01 shared variable overrides save explicitly, restore defaults an
 
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
-  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
-  await expect(panel).toBeVisible();
+  const panel = await openPackageBehaviorSettings(page);
   const variables = panel.locator('.chat-variables');
   await variables.getByText('공유 변수', { exact: true }).click();
   const editor = variables.getByLabel('공유 변수 재정의 · JSON', { exact: true });
@@ -465,7 +464,7 @@ test('CHATVARUI01 shared variable overrides save explicitly, restore defaults an
   expect(server.values).toEqual({ empty: '' });
 
   await page.reload();
-  const reopenedPanel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
+  const reopenedPanel = await openPackageBehaviorSettings(page);
   const reopened = reopenedPanel.locator('.chat-variables');
   await reopened.getByText('공유 변수', { exact: true }).click();
   const reopenedEditor = reopened.getByLabel('공유 변수 재정의 · JSON', { exact: true });
@@ -473,6 +472,7 @@ test('CHATVARUI01 shared variable overrides save explicitly, restore defaults an
   const localDraft = JSON.stringify({ mood: 'draft', empty: '' }, null, 2);
   await reopenedEditor.fill(localDraft);
   await page.reload();
+  await openPackageBehaviorSettings(page);
   const restoredVariables = page.locator('.chat-variables');
   await restoredVariables.getByText('공유 변수', { exact: true }).click();
   const restoredEditor = restoredVariables.getByLabel('공유 변수 재정의 · JSON', {
@@ -571,6 +571,7 @@ test('CHATVARUI01 shared variable overrides save explicitly, restore defaults an
   });
 
   await page.reload();
+  await openPackageBehaviorSettings(page);
   const retryVariables = page.locator('.chat-variables');
   await retryVariables.getByText('공유 변수', { exact: true }).click();
   const retryEditor = retryVariables.getByLabel('공유 변수 재정의 · JSON', { exact: true });

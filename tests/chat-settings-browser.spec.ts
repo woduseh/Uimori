@@ -86,12 +86,13 @@ async function expectUnchanged(
   expect(after.attempts ?? []).toHaveLength(0);
 }
 
-test('CSUI01 chat settings list and seven details fit six widths with accessible navigation and no writes', async ({
+test('CSUI01 chat settings list and conditional details fit six widths with accessible navigation and no writes', async ({
   page,
   request,
 }, info) => {
   test.setTimeout(90000);
   const { before, writes, errors } = await prepare(page, request, `CSUI01 ${Date.now()}`);
+  await expect(page.getByRole('region', { name: '채팅 상태와 행동', exact: true })).toHaveCount(0);
   for (const width of reviewWidths([320, 360, 390, 412, 768, 1440])) {
     await page.setViewportSize({ width, height: 900 });
     const dialog = await openSettings(page);
@@ -100,6 +101,9 @@ test('CSUI01 chat settings list and seven details fit six widths with accessible
     await expect(nav).toBeVisible();
     const actions = nav.getByRole(compact ? 'button' : 'tab');
     await expect(actions).toHaveCount(sections.length);
+    await expect(
+      nav.getByRole(compact ? 'button' : 'tab', { name: '자료 기능', exact: true })
+    ).toHaveCount(0);
     for (const name of sections) {
       const action = nav.getByRole(compact ? 'button' : 'tab', { name, exact: true });
       await expectTouchTarget(action);
