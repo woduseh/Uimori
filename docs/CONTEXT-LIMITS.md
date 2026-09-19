@@ -77,8 +77,6 @@
 
 서버에서도 `ContextStore.current`가 활성 상태만 읽고 `detail`이 화면용 checkpoint·작업 이력을 추가해요. 두 경로의 revision·메모 revision·원문 head·사용 가능 여부는 같은 함수에서 계산해요. 활성 checkpoint의 hash와 현재 의존성은 조회마다 검사하며 전역 캐시를 두지 않아요. `tests/helper-context-read.test.ts`는 이력이 10개에서 100개로, 작업이 5개에서 50개로 늘어나도 모델 조회가 같은 활성 plan 1개만 읽는지 확인해요.
 
-2026-09-10 Windows/Node 24.14.0의 동일 합성 DB(활성 요약 1개, 각 32,768자인 과거 후보 100개와 취소 작업 50개, 원문 4개)에서 이전 detail 후 projection 경로와 활성 조회 경로를 번갈아 측정했어요. warmup 3회 뒤 9개 표본을 수집했고 표본마다 10회 조회했어요. 중앙 조회 시간은 **25.46ms → 2.19ms**, 디코드한 checkpoint plan·job snapshot JSON은 조회당 **5,499,254 → 754바이트**예요. 시간 측정에는 바이트 계측·결과 직렬화를 넣지 않았으며, 바이트는 전체 DB I/O나 원문·프로필 처리량이 아니에요. 결과 JSON 938바이트와 내용은 두 경로에서 같고, 화면의 이력·작업 계약도 유지돼요. warm-cache 로컬 진단이며 성능 수치 자체를 테스트 통과 기준으로 쓰지 않아요. 원시 표본·환경·소스 hash는 `output/benchmarks/context-read-2026-09-10T12-54-41.362Z/context-read.json`에 있어요.
-
 반복 측정은 PowerShell에서 다음과 같이 실행해요. 결과는 새 `output/benchmarks/context-read-*/context-read.json`에 보존해요.
 
 ```powershell
@@ -116,17 +114,9 @@ finally { Remove-Item Env:NR_CONTEXT_READ_BENCHMARK }
 
 저장·CAS 규칙은 기존 checkpoint와 같아요. 모델 checkpoint도 `context_checkpoints`에 `origin: 'model'`로 저장하고, 예약 시점의 활성 revision·메모 revision·원문 prefix가 그대로일 때만 활성화해요. 사용자가 실행 도중 요약이나 메모를 고치면 모델의 늦은 저장은 비활성 후보로 남고 결과에도 `activated: false`로 표시해요. 같은 Run이 이미 자신의 checkpoint를 활성화했다면 뒤따르는 저장은 그 위에 이어서 활성화해요(`ContextStore.rebase`). **Run snapshot은 예약 시점의 입력이며 실행 중 바꾸지 않아요.** 모델의 저장·전환은 `tool_events`와 checkpoint에 남고, 다음 Run이 활성 checkpoint를 통해 이어받아요. 화면의 요약 출처 표시는 `모델 작성`이고 편집·되돌리기·수동 압축은 모델 요약에도 그대로 적용돼요.
 
-거절 코드: 인자 오류·빈 요약은 `INVALID_ARGUMENTS`/`SUMMARY_INVALID`, 정리 대상이 있는데 요약이 없으면 `SUMMARY_REQUIRED`, 다른 도구와 함께 부르면 `CONTEXT_NEW_MUST_BE_ALONE`, 저장 실패는 `CONTEXT_WRITE_FAILED`, 크기 초과가 아닌 재투영 실패는 `CONTEXT_PROJECTION_FAILED`예요. 이들은 재시도 가능한 거절이라 모델이 고쳐서 다시 부를 수 있고, 반복되면 기존 도구 정정 한도에서 실행이 끝나요. 저장에 실패한 요약을 저장된 것처럼 참조하지 않아요.
+거절 코드: 인자 오류·빈 요약은 `INVALID_ARGUMENTS`/`SUMMARY_INVALID`, 정리 대상이 있는데 요약이 없으면 `SUMMARY_REQUIRED`, 다른 도구와 함께 부르면 `CONTEXT_NEW_MUST_BE_ALONE`, 저장 실패는 `CONTEXT_WRITE_FAILED`, 크기 초과가 아닌 재투영 실패는 `CONTEXT_PROJECTION_FAILED`예요. 이들은 재시도 가능한 거절이라 모델이 고쳐서 다시 부를 수 있고, 호출·시간·입력 예산 안에서 계속할 수 있어요. 저장에 실패한 요약을 저장된 것처럼 참조하지 않아요.
 
 지원 경로: 일반 API 프로토콜(Responses·Chat·Anthropic·Vertex·fixture)은 새 창을 bootstrap이 있는 새 요청으로 보내고, Codex 실행기는 같은 JSON envelope에 도구·bootstrap을 담아요. 지속 문맥·원문·checkpoint의 관리 소유자는 Uimori예요. Codex의 단일 ephemeral turn 내부 자동 압축은 허용하지만 Uimori의 저장 문맥과 다음 실행 예약을 대체하지 않아요.
-
-### 결정 기록 (2026-09-09)
-
-- **채택**: 모델 주도 메모·전환·회수를 선택 기능으로 추가하고, 메모를 별도 저장소 대신 기존 요약 checkpoint로 저장했어요. 이유: 사용자 편집 우선·되돌리기·포크·archive 검증을 그대로 재사용하고, 스키마를 바꾸지 않아 v15 데이터가 그대로 유지돼요. 새 창은 Run 안의 세그먼트 경계로 구현해 기존 도구 루프·attempt·usage 계약을 유지했어요.
-- **채택**: 한도 알림은 도구 결과에만 붙여요. 이유: 호스트 문맥이나 bootstrap을 라운드마다 바꾸면 opaque 연속의 binding hash가 깨지고 archive의 재측정 검증과 어긋나요.
-- **비채택**: 별도 메모 파일·테이블, 매 턴 기억 추출 모델, 임베딩 검색 추가, 기존 자동 요약의 제거나 전체 기본값 전환. 기존 키워드 검색에 목록 탐색과 관대한 매칭을 더하는 것으로 충분한지 먼저 확인해요.
-- **참고**: 공개 openai/codex `rust-v0.153.0`의 토큰 예산 알림·`notes.*`·`new_context`·`history.*` 구조를 참고했어요. 코드는 복사하지 않았고 Uimori 저장·권한·CAS 계약으로 독립 구현했어요. 참고 사실과 Uimori에서의 효과 검증은 별개예요.
-- **미검증**: 실제 모델이 알림을 보고 적시에 요약을 쓰고 전환을 요청하는지, 전환 뒤 이전 주제로 돌아왔을 때 스스로 원문을 회수하는지는 합성 검사로 확인할 수 없어요. 구조 검증만 완료했고 창작 품질·비용은 별도 실모델 평가가 필요해요.
 
 ## 재사용·실패·복원
 
@@ -139,7 +129,7 @@ finally { Remove-Item Env:NR_CONTEXT_READ_BENCHMARK }
 - 선택 지점 포크는 그 시점에 포함되는 원문·메모·요약만 새 ID/hash로 연결해요. 선택 지점 이후 요약, 타 분기와 미래의 메모는 복사하지 않아요. 수동으로 만든 Run 없는 checkpoint도 같은 검증을 받아요.
 - DB와 교환 형식의 버전은 [migration](DATA-MIGRATIONS.md)을 봐요. 현재 export/import·backup/restore는 불변 checkpoint·활성 참조·메모·작업·전송 소유권을 검증하고 진행 중 작업을 자동 재전송하지 않아요. v14 이하 DB/archive를 이관하거나 제거한 기억 형식을 자동 변환하지 않아요.
 
-도우미 대화도 같은 checkpoint 형식을 사용하지만 본편과 별도 scope에 저장해요. 긴 도우미 작업의 세그먼트 경계와 권한·변경 영수증은 [도우미 계획과 인수 계약](../project-plan/HELPER-CONTEXT-PLAN.md)에 있어요.
+도우미 대화도 같은 checkpoint 형식을 사용하지만 본편과 별도 scope에 저장해요. 도우미의 대화·작업 방식은 [사용 안내](USAGE.md#도우미와-독립-가정-장면)를 봐요.
 
 도우미는 85%를 압축 시도 기준으로 사용하며, 후보가 원래 요청보다 작고 실제 입력 상한 이내이면 채택해요. 정상 완료한 후보가 도움이 되지 않아도 원래 요청이 한도 안이면 원래 이력·결과·공급자 연속 정보를 유지해요. 둘 다 보낼 수 없으면 `HELPER_COMPACTION_NO_PROGRESS`로 중단해요. 정리할 내용이 없는 고정 입력은 실제 상한을 넘을 때 `HELPER_FIXED_CONTEXT_TOO_LARGE`로 중단해요.
 
@@ -165,8 +155,6 @@ EOF는 공급자 스트림이 정상 완료 신호 없이 끝났다는 뜻이에
 `tiktoken@1.0.22`의 로컬 WASM `o200k_base`를 사용해 최대 4,096 UTF-16 단위의 조각으로 계산하고 같은 요청의 동일 조각은 재사용해요. 합계에 10% 여유를 더해요. 문자열·키·토큰을 외부 계산 서비스로 보내지 않아요. 다른 모델 tokenizer·공급자 내부 포맷·조각 경계 차이가 있으므로 실제 청구 토큰이나 상한 보장은 아니에요. 같은 내용의 body라도 실행마다 새로 만드는 Run·메시지 ID와 해시 때문에 추정값이 조금씩 달라져요. 관측한 예로 직렬화 길이가 15,887 UTF-16 단위로 동일한 body에서 추정값이 6,943–7,011 토큰(약 1%) 범위로 움직였어요. 85%·75% 판정은 이 편차보다 큰 여유가 있을 때만 결정적이므로, 합성 검사도 픽스처를 경계 1% 안쪽에 두지 않아요.
 
 구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/context-tools.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tool-compaction.ts`, `server/model-runner.ts`, `server/context-tools.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 모델 주도 경로는 `tests/context-tools.test.ts`(도구 루프·세그먼트 경계·네 native 인코더의 새 요청 형식)와 `tests/context-model-driven-integration.test.ts`(실제 App·SQLite에서 저장·전환·회수·다음 Run 재사용·사용자 편집 우선·archive/fork)로 확인해요. 실행 중 조회 결과 정리와 결과 반환 후 알림은 `tests/context-tools.test.ts`, 단계별 EOF는 `tests/context-compaction.test.ts`와 `tests/helper-draft-runtime.test.ts`에도 회귀가 있어요. 실제 요약의 의미 품질·공급자 인증·계정별 문맥 상한·물리적 휴대폰 검증은 별도예요.
-
-2026-09-10의 [61장 실제 문맥 평가](../project-plan/LIVE-MEMORY-RESULTS-2026-09-10.md)는 약속 조건 오류·일반 조회 한도·응답 EOF로 중단된 실행이며 전체 PASS가 아니에요. 위 2026-09-09의 미검증 기록과 구분해요. 그 뒤 추가한 장면 번호 조회, 실행 중 조회 결과 정리와 단계별 EOF 구분은 2026-09-11 안정화의 로컬 검사와 새 승인 실모델 평가로 확인했어요. R3는 16k 입력에서 문맥 정리 보류·채택 후 실제 전송을 확인했지만 호출 수 16회를 소진해 답변에 실패했어요. R4는 32k·32회 조건에서 5회 호출로 원문 재조회와 명시 요청의 정정 답변을 완료했어요. 장기 요약의 귀속·조건 손실은 남아 전체 의미 품질 PASS가 아니에요. 각 소스 지문·실패·검증 결과는 [안정화 결과](../project-plan/STABILIZATION-RESULTS-2026-09-11.md)에 구분해요.
 
 ## 전체 원문 번역
 

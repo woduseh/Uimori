@@ -70,4 +70,4 @@ M2의 최근 이력에서 원래 위치가 빠지면 여전히 유효한 자료�
 
 포크는 실행 tool log를 복제하지 않고 검증된 읽기 증거를 새 원문/Run/자료 ID에 맞춰 복제해요. 보관 복원은 당시 원문과 읽기 범위뿐 아니라 바로 이전 Run의 유지 자료·새 성공 읽기로 가능한 전이인지 검사해요. 추가 예산 정리는 순서를 유지한 통째 항목 제외만 허용하고, 앞서 reset·예산 정리로 제외한 오래된 읽기는 되살리지 않아요. 원본 채팅 없는 독립 포크도 복원할 수 있어요. 나중에 수정된 원문이나 메모 변경의 **과거 증거 보존**과 **현재 요청에서 다시 사용할 권한**은 별도로 검사해요. 보관 파일 전체를 신뢰할 수 있는 서명으로 인증하는 기능은 아니에요.
 
-구현은 [선택·유지](../server/lore-context.ts), [범위·배치](../core/lore-context.ts), [보관 검증](../server/lore-context-archive.ts), [요청 조립](../server/prompt-snapshot.ts)에 있어요. 합성 검증 결과는 [작업 결과](../project-plan/LORE-CONTEXT-RESULTS.md)에 기록해요. 실제 모델의 설정 준수율·lost-in-the-middle 완화·cached input 사용량·청구액은 별도 실모델 평가가 필요해요.
+구현은 [선택·유지](../server/lore-context.ts), [범위·배치](../core/lore-context.ts), [보관 검증](../server/lore-context-archive.ts), [요청 조립](../server/prompt-snapshot.ts)에 있어요. 실제 모델의 설정 준수율·lost-in-the-middle 완화·cached input 사용량·청구액은 별도 실모델 평가가 필요해요.

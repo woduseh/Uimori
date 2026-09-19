@@ -1,6 +1,6 @@
 # 상태 준비와 본문 진행
 
-정상적으로 진행할 수 있는 이야기 상태 준비는 기다리고, 실패하거나 사용자가 건너뛰면 같은 Run으로 본문을 계속해요. 원칙은 [베타 결정](DECISIONS-2026-09-12-BETA.md), 구현은 `server/story-store.ts`·`server/story-routes.ts`, 입력 계약은 `core/story.ts`예요. 패키지 내부 상태와 행동의 별도 실행은 [PACKAGE-BEHAVIOR](PACKAGE-BEHAVIOR.md)를 봐요.
+정상적으로 진행할 수 있는 이야기 상태 준비는 기다리고, 실패하거나 사용자가 건너뛰면 같은 Run으로 본문을 계속해요. 구현은 `server/story-store.ts`·`server/story-routes.ts`, 입력 계약은 `core/story.ts`예요. 패키지 내부 상태와 행동의 별도 실행은 [PACKAGE-BEHAVIOR](PACKAGE-BEHAVIOR.md)를 봐요.
 
 ## 준비 상태
 
@@ -25,4 +25,4 @@
 
 ## 확인한 범위
 
-`tests/story.test.ts`, `tests/story-state-dependencies.test.ts`, `tests/story-browser.spec.ts`의 S02/BPREP 검사가 파일 SQLite·HTTP·화면·지연 결과·중복·재시작을 합성 자료로 확인해요. 실제 상태 추출 모델의 의미 정확성은 별도 검증이에요. 전체 영수증은 [베타 진행 기록](../project-plan/BETA-PLAN.md)을 봐요.
+`tests/story.test.ts`, `tests/story-state-dependencies.test.ts`, `tests/story-browser.spec.ts`의 S02/BPREP 검사가 파일 SQLite·HTTP·화면·지연 결과·중복·재시작을 합성 자료로 확인해요. 실제 상태 추출 모델의 의미 정확성은 별도 검증이에요.

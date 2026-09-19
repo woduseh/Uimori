@@ -1,6 +1,6 @@
 # 예약 snapshot 고정 체인
 
-2026-09-10 [결정 6](DECISIONS-2026-09-10.md)의 예약 체인 통합 계약이에요. 공통 실행은 `server/reservation-snapshot.ts`의 동기 함수 `freezeReservationSnapshot`이 맡고, 호출자가 명시적인 `purpose`를 전달해요.
+공통 실행은 `server/reservation-snapshot.ts`의 동기 함수 `freezeReservationSnapshot`이 맡고, 호출자가 명시적인 `purpose`를 전달해요.
 
 ## 소유권
 

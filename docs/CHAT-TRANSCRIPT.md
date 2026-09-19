@@ -1,6 +1,6 @@
 # 채팅 본문 추출과 가져오기
 
-한 분기의 **요청·원문·최신 번역·사용자 메모**를 담는 작은 JSON 형식이에요. 2026-09-10 [방향 결정 7](DECISIONS-2026-09-10.md)에서 시작했으며, 외부에서 작성한 본문을 새 채팅으로 읽거나 글만 교환할 때 사용해요. 모든 분기·자료 본문·이미지·상태·실행 기록까지 보존하려면 [채팅 전체 백업](CHAT-BACKUP.md)을 사용해요. 파일 형식의 버전은 SQLite schema와 독립이며, 지원하지 않는 파일 버전은 거절해요.
+한 분기의 **요청·원문·최신 번역·사용자 메모**를 담는 작은 JSON 형식이에요. 외부에서 작성한 본문을 새 채팅으로 읽거나 글만 교환할 때 사용해요. 모든 분기·자료 본문·이미지·상태·실행 기록까지 보존하려면 [채팅 전체 백업](CHAT-BACKUP.md)을 사용해요. 파일 형식의 버전은 SQLite schema와 독립이며, 지원하지 않는 파일 버전은 거절해요.
 
 ## 형식 · `uimori-chat-transcript` v1
 
@@ -39,7 +39,7 @@
 - 전체 JSON archive 복원은 영수증을 그대로 보존해요. 새 ID로 만드는 채팅 백업 복원은 두 transcript 이벤트를 `.history`로 보존하며 목적지의 가져오기 키로 사용하지 않아요.
 - 검증 실패는 아무것도 쓰지 않고 400으로 끝나요. 오류 코드는 `CHAT_TRANSCRIPT_*`예요.
 
-모든 항목은 하나의 transaction으로 저장해요. 검사는 `tests/chat-transcript.test.ts`에서 최대 원문·제목, 저장 증가 구조, 수정 뒤 ancestry, 포크·archive·다음 예약, HTTP 경로를 확인해요. 반복 측정 스크립트는 `scripts/measure-transcript-import.mjs`이며 실행 결과와 통합 검증 상태는 [안정화 기록](STABILIZATION-2026-09-11.md)에 기록해요. 실제 공급자 호출이나 작품 의미 품질은 이 가져오기 검사의 범위가 아니에요.
+모든 항목은 하나의 transaction으로 저장해요. 검사는 `tests/chat-transcript.test.ts`에서 최대 원문·제목, 저장 증가 구조, 수정 뒤 ancestry, 포크·archive·다음 예약, HTTP 경로를 확인해요. 반복 측정 스크립트는 `scripts/measure-transcript-import.mjs`예요. 실제 공급자 호출이나 작품 의미 품질은 이 가져오기 검사의 범위가 아니에요.
 
 ## 개발 단계의 사용 순서
 

@@ -2,11 +2,9 @@
 
 긴 원고를 읽고 다음 장면을 이어 쓰는 개인용 창작 웹앱이에요. 봇별 채팅·폴더, 봇·페르소나·모듈 패키지, 프롬프트와 창작 프리셋, 원문·번역 편집, 포크, 상태·장기기억과 백업을 제공해요.
 
-현재는 `0.0.1` 개발 버전이며 [v0.1.0 베타 준비](project-plan/BETA-PLAN.md)를 진행하고 있어요. [확정한 제품 원칙](docs/DECISIONS-2026-09-12-BETA.md)과 [표본별 지원·검증 상태](project-plan/BETA-SAMPLES.md)를 구분해 안내해요. 계획에 있는 호환·확장·업데이트 기능이 모두 구현된 상태는 아니에요.
+현재는 `0.0.1` 개발 버전이에요. Risu 가져오기와 선택적 호환 실행의 지원 범위는 [가져오기 안내](docs/RISU-IMPORT.md), 설치와 업데이트의 현재 제한은 [업데이트 안내](docs/UPDATES.md)를 확인해요.
 
 개인 ChatGPT 구독으로 에이전트를 실행하려면 [Codex 연결 안내](docs/CODEX.md)를 따라 서버 실행기를 준비하고 **설정 → 에이전트**에서 로그인해요.
-
-M0와 M1·M2 로컬 기능을 바탕으로 봇 중심 화면과 패키지·프롬프트 편집을 확장했어요. 실제 휴대폰 사용, 모델의 창작·번역·장기기억 품질과 특정 사용자 자료의 완전한 이식은 별도 확인이 필요해요. [현재 상태와 남은 작업](project-plan/CURRENT.md)
 
 ## Windows에서 실행
 
@@ -14,7 +12,6 @@ Node **24.14 이상 24.x**, npm, Chrome 또는 Edge가 필요해요. SQLite는 N
 
 ```powershell
 npm ci
-npm run doctor
 npm run dev
 ```
 
@@ -27,7 +24,7 @@ npm run dev
 
 ## 개인 Linux 서버에서 사용
 
-[Self-host 안내](docs/SELF-HOST.md)에 Docker Compose와 Nginx HTTPS 구성을 준비했어요. 도메인·인증서·접속 토큰을 설정하면 PC와 휴대폰에서 같은 작업실에 접속하는 방식이에요. 앱 포트는 내부 네트워크에 두고 SQLite는 영구 volume에 저장해요. 개인 Oracle 운영 이력은 있지만, 새 사용자의 일반 설치·업데이트·복구와 실제 기기 접속의 베타 인수는 아직 완료하지 않았어요. 현재 근거는 [현재 상태](project-plan/CURRENT.md), 별도 Linux 격리 실험은 [베타 진행 기록](project-plan/BETA-PLAN.md)에서 확인해요.
+[Self-host 안내](docs/SELF-HOST.md)에 Docker Compose와 Nginx HTTPS 구성이 있어요. 도메인·인증서·접속 토큰을 설정하면 PC와 휴대폰에서 같은 작업실에 접속할 수 있어요. SQLite는 영구 volume에 저장해요. 업데이트 CLI와 앱 내 Update UI의 지원 차이는 [업데이트 안내](docs/UPDATES.md)를 확인해요.
 
 ## 사용·설정 안내
 
@@ -38,7 +35,7 @@ npm run dev
 | [Risu·Native JSON 가져오기](docs/RISU-IMPORT.md) | 카드 `.charx`·JSON, 추출한 모듈 JSON·프로젝트 ZIP의 기본 자료와 native 자료·프롬프트 가져오기. Lua 콜백·선언형 트리거 일부를 격리 실행으로 연결하고 전체 호환은 미지원 |
 | [자료 파일 이동](docs/NATIVE-TRANSFER.md) | 저장된 자료·연결 모듈·이미지·프롬프트 옵션을 함께 옮기고 새 사본으로 가져오기 |
 | [문제 보고용 진단](docs/DIAGNOSTICS.md) | 원문·키를 제외한 보고서 미리보기와 다운로드 |
-| [에이전트의 Risu 자료 이식](docs/RISU-PORTING.md) | RisuToki MCP·스킬로 조사하고 native JSON·손실 보고·검증 결과 작성 |
+| [Risu 자료 수동 이식](docs/RISU-PORTING.md) | 기본 가져오기로 처리하지 못하는 자료의 native 변환 참고 |
 | [패키지](docs/PACKAGES.md) · [상태와 행동](docs/PACKAGE-BEHAVIOR.md) | 역할별 자료·옵션, 상태 전이·자동/사용자/모델 행동·기록된 추첨 |
 | [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |
 | [프롬프트 제작 방식](docs/PROMPT-AUTHORING.md) | 선택형 템플릿 문법과 TypeScript 제작 API 비교 |
@@ -46,18 +43,14 @@ npm run dev
 | [개발과 검증](docs/DEVELOPMENT.md) · [코드 품질](docs/QUALITY.md) | 검사·정리 명령, 격리 실행, 코드 구조와 증거 보관 |
 | [개인 서버 배포](docs/SELF-HOST.md) | Docker Compose, HTTPS, 로그인, 영구 데이터, 모델 API 키와 업데이트 |
 | [커밋·푸시·Oracle 업데이트](docs/ORACLE-RELEASE.md) | 현재 PC의 빠른 배포 명령, 데이터 보존, 실패 대응, 정식 자동화 설계 |
-| [계획과 인수 기준](project-plan/README.md) | M0–M3 범위, 설계 계약과 단계별 결과 |
+| [코드 지도](docs/CODE-MAP.md) | 기능별 현행 문서와 구현 진입점 |
 
 ## 데이터와 접속
 
-- 기본 DB는 `.local/narrative.sqlite`예요. DB 스키마와 자료 교환 형식의 현재 버전·지원 범위는 [현재 계약](project-plan/CURRENT.md)을 확인해요. 공개 베타의 데이터 보존·업데이트는 [베타 계획](project-plan/BETA-PLAN.md)에 따라 준비하고 있어요. 테스트용 개발 DB를 초기화하려면 서버 종료 후 `npm run reset:dev`를 실행해요.
+- 기본 DB는 `.local/narrative.sqlite`예요. 현재 DB·자료 교환 버전과 지원 업그레이드는 [DB migration](docs/DATA-MIGRATIONS.md)을 확인해요. 테스트용 개발 DB를 초기화하려면 서버 종료 후 `npm run reset:dev`를 실행해요.
 - **설정 → 데이터 관리 → 내보내기와 복원**에서 JSON 또는 SQLite 백업을 저장해요. JSON은 새 빈 DB로 복원해요. [백업·격리 DB 사용법](docs/USAGE.md)
 - 기본은 `127.0.0.1` 로컬 모드이며 `NR_ACCESS_TOKEN` 인증을 선택할 수 있어요. 개인 서버 모드는 `NR_PUBLIC_ORIGIN`에 HTTPS 주소 하나를 지정하고 32자 이상 접속 토큰을 필수로 사용해요. `NR_HOST`로 수신 주소를 정하며 외부 수신은 개인 서버 모드에서만 허용해요. [접속 조건](docs/SELF-HOST.md#프록시와-접속-조건)
 - 인증 정보는 서버 환경변수·서버가 읽는 파일로 설정해요. 사용자 데이터·인증 파일·실행 산출물은 Git에서 제외해요.
-
-## 검증 상태
-
-검사 수·실행 시점·소스와 빌드 일치 여부는 [현재 검증 근거와 한계](project-plan/CURRENT.md)에서 확인해요. 합성 로컬 검증은 실제 모델 품질과 실제 기기 검증을 대신하지 않아요. 상세 결과의 `output/` 링크는 Git에 포함되지 않은 로컬 실행 기록이에요.
 
 ## 라이선스
 

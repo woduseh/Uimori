@@ -1,6 +1,6 @@
 # RisuAI 스냅샷 · cad8595a
 
-[RisuAI](https://github.com/kwaroran/RisuAI) 커밋 `cad8595aa39620df4246f56918f0962c2aa0263a`에서 가져온 코드예요. Uimori가 Risu 자료를 읽고 호환 실행하는 데 필요한 조각만 담고, 어떤 파일도 자동으로 갱신하지 않아요. 도입 결정과 범위는 [베타 결정](../../../docs/DECISIONS-2026-09-12-BETA.md#호환-실행의-범위--2026-09-14-후속-선택)이 소유해요.
+[RisuAI](https://github.com/kwaroran/RisuAI) 커밋 `cad8595aa39620df4246f56918f0962c2aa0263a`에서 가져온 코드예요. Uimori가 Risu 자료를 읽고 호환 실행하는 데 필요한 조각만 담고, 어떤 파일도 자동으로 갱신하지 않아요.
 
 ## 라이선스
 
@@ -20,4 +20,4 @@
 node scripts/risu-vendor-diff.mjs --risu /path/to/RisuAI --ref HEAD
 ```
 
-반영 여부는 [베타 결정](../../../docs/DECISIONS-2026-09-12-BETA.md)의 "새 Risu 버전은 별도 지원 판단" 원칙대로 사람이 정해요. 반영할 때는 디렉터리 이름의 커밋과 매니페스트를 함께 바꿔요.
+새 버전을 반영할 때는 디렉터리 이름의 커밋과 매니페스트를 함께 바꿔요.

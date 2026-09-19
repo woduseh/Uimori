@@ -1,6 +1,6 @@
 # DB migration과 교환 형식
 
-구현은 `server/schema-migrations.ts`, DB 시작 경계는 `server/store.ts`예요. 베타의 보존 원칙은 [방향 결정](DECISIONS-2026-09-12-BETA.md)을 따르고 일반 설치자의 Update·사전 백업·컨테이너 전환·복구는 [베타 계획](../project-plan/BETA-PLAN.md)의 후속 범위예요.
+구현은 `server/schema-migrations.ts`, DB 시작 경계는 `server/store.ts`예요. 설치·백업·컨테이너 전환은 [업데이트 안내](UPDATES.md)를 봐요.
 
 ## 현재 버전
 
@@ -43,4 +43,4 @@ migration은 실행 중이던 Run/job의 상태를 직접 바꾸지 않아요. �
 
 `tests/fixtures/schema-v15.sql`과 `schema-v15-data.json`은 시작 소스의 실제 v15 구조와 합성 사용자 데이터를 고정한 fixture예요. 최신 Store를 만든 뒤 버전 숫자만 낮춘 것을 유일한 이전 버전 증거로 사용하지 않아요.
 
-`tests/schema-migrations.test.ts`는 fresh·재개방, 알려진 v15 변형, 행/BLOB/snapshot 보존, 충돌·future 버전 거절, 중간/최종 실패 rollback과 소유권 복구, SQLite·archive15·chat-backup1 왕복을 확인해요. 전체 결과는 [베타 진행 기록](../project-plan/BETA-PLAN.md)에 기록하며 실제 사용자 DB나 Linux 운영 업데이트 완료로 해석하지 않아요.
+`tests/schema-migrations.test.ts`는 fresh·재개방, 알려진 v15 변형, 행/BLOB/snapshot 보존, 충돌·future 버전 거절, 중간/최종 실패 rollback과 소유권 복구, SQLite·archive15·chat-backup1 왕복을 확인해요.

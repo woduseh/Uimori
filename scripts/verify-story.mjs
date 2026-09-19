@@ -53,7 +53,7 @@ export async function verifyStory(selection) {
       nativePort: {
         status: 'SEPARATE_EVIDENCE',
         reason:
-          'The example-specific runtimes were merged into the common package, prompt and source-segment contracts; project-plan/NATIVE-PORTING.md and CURRENT.md are historical evidence of that porting round, not a map of current code. This synthetic M2 runner certifies neither.',
+          'Current import and porting scope is documented in docs/RISU-IMPORT.md and docs/RISU-PORTING.md. This synthetic M2 runner does not establish complete compatibility with user materials.',
       },
     },
     limitations: [

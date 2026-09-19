@@ -10,7 +10,7 @@
 
 [자동·사용자·모델 호출 예제](../fixtures/hybrid-actions-behavior.json)는 자동 날씨·10% 조우, 사용자 d6 버튼, 모델의 설득 판정을 같은 실행기로 처리해요.
 
-이 문서가 현재 API이고 [복잡한 봇 확장 계획](../project-plan/PACKAGE-BEHAVIOR-PLAN.md)의 전체 항목이 구현됐다는 뜻은 아니에요. CBS 호환 파서·임의 코드 실행·전체 표본 이식은 [베타 결정](DECISIONS-2026-09-12-BETA.md)·[실행 계획](../project-plan/BETA-PLAN.md)의 대상이에요. 아래 실패 격리는 기존 선언형 패키지에 적용한 기반이며 모든 확장 실패의 처리 완료를 의미하지 않아요.
+코드 실행은 [확장 프로그램](EXTENSION-PROGRAMS.md), Risu 자료의 변환·호환 범위는 [가져오기 안내](RISU-IMPORT.md)를 봐요.
 
 ## 읽기 문맥과 계산
 
@@ -121,7 +121,7 @@ candidate는 원래 Run의 자동 결과·판정 기회를 사용하고, 새 분
 
 업데이트 journal은 `previousScope`와 이전 상태를 보존해요. 새 정의의 현재 추첨 값은 비우며 화면에서 먼저 안내해요. 과거 추첨 이력·원문·과거 snapshot과 확장 호출 허가는 변경하지 않아요. DB schema 추가 없이 기존 상태·journal을 사용해요. 제작 코드의 입력과 예제는 [상태 변환 코드](EXTENSION-PROGRAMS.md#자료-상태-변환-코드)를 봐요.
 
-분기는 선택한 원문 직후 상태를 사용해요. 과거 원문이 바뀐 후보는 거부하고 새 분기의 상태는 stale로 유지해요. 현재 DB schema와 archive는 현재 상태뿐 아니라 판정 기회·임시 실행·결과·출처의 일치도 검증하며, 현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. 지원하는 이전 DB는 migration으로 보존하며 올리고, **v0.1.0부터 지원 업그레이드의 데이터 보존**은 [베타 결정](DECISIONS-2026-09-12-BETA.md)을 따라 준비해요. 테스트용 개발 DB를 새로 시작하는 방법은 [개발 안내](DEVELOPMENT.md)를 봐요.
+분기는 선택한 원문 직후 상태를 사용해요. 과거 원문이 바뀐 후보는 거부하고 새 분기의 상태는 stale로 유지해요. 현재 DB schema와 archive는 현재 상태뿐 아니라 판정 기회·임시 실행·결과·출처의 일치도 검증하며, 현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. 지원하는 이전 DB는 migration으로 보존하며 올려요. 테스트용 개발 DB를 새로 시작하는 방법은 [개발 안내](DEVELOPMENT.md)를 봐요.
 
 ## 제공 범위와 검증
 
