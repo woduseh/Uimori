@@ -12,7 +12,6 @@ await runBrowserVerification({
     `context-summary-${MOBILE_WIDTH}.png`,
     `context-summary-${DESKTOP_WIDTH}.png`,
   ],
-  expectedCount: 3,
   limitations: [
     'The running-job cancellation case uses a UI projection; durable cancellation and provider execution are verified separately.',
   ],

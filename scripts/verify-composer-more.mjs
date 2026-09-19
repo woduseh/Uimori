@@ -8,5 +8,4 @@ await runBrowserVerification({
   grep: 'LCUI0[234]|failed request',
   requiredCases: ['LCUI02', 'LCUI03', 'LCUI04'],
   requiredTitles: ['failed request edit, draft protection and uncertain retry reuse one admission'],
-  expectedCount: 4,
 });

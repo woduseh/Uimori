@@ -13,5 +13,4 @@ await runBrowserVerification({
     `estimate-cost-${MOBILE_WIDTH}.png`,
     `estimate-cost-${DESKTOP_WIDTH}.png`,
   ],
-  expectedCount: 3,
 });

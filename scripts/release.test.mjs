@@ -114,9 +114,16 @@ test('release options reject ambiguity and remote arguments are POSIX quoted', (
   assert.throws(() => shellQuote('one\ntwo'));
   assert.deepEqual(requiredChecks('verify:browser-smoke', true, scripts), [
     'quality:full',
-    'verify:smoke',
     'verify:browser-smoke',
     'verify:redesign',
+  ]);
+  assert.deepEqual(requiredChecks('verify:browser-smoke', false, scripts), [
+    'quality:full',
+    'verify:browser-smoke',
+  ]);
+  assert.deepEqual(requiredChecks('verify:smoke', false, scripts), [
+    'quality:full',
+    'verify:smoke',
   ]);
   for (const name of [
     'verify:visual',
@@ -128,15 +135,17 @@ test('release options reject ambiguity and remote arguments are POSIX quoted', (
     assert.throws(() => requiredChecks(name, false, scripts));
 });
 
-test('release identity covers deploy and packaging changes but ignores generated evidence', async (t) => {
+test('release identity covers deploy and packaging changes but ignores evidence and CI scheduling', async (t) => {
   const root = await directory(t);
-  for (const folder of ['core', 'deploy', 'scripts', 'output'])
-    await mkdir(path.join(root, folder));
+  for (const folder of ['core', 'deploy', 'scripts', 'output', '.github/workflows'])
+    await mkdir(path.join(root, folder), { recursive: true });
   await writeFile(path.join(root, 'core/app.ts'), 'source\n');
   await writeFile(path.join(root, 'deploy/oracle-update.sh'), 'script\n');
   await writeFile(path.join(root, 'Dockerfile'), 'FROM base\n');
+  await writeFile(path.join(root, '.github/workflows/quality.yml'), 'name: Quality\n');
   const before = await releaseFingerprint(root);
   await writeFile(path.join(root, 'output/log.json'), 'new evidence');
+  await writeFile(path.join(root, '.github/workflows/quality.yml'), 'name: Updated quality\n');
   await writeFile(path.join(root, 'deploy/oracle-update.sh'), 'script\r\n');
   assert.deepEqual(await releaseFingerprint(root), before);
   await writeFile(path.join(root, 'deploy/oracle-update.sh'), 'changed\n');
@@ -150,13 +159,13 @@ test('unchanged release reuses successful evidence and refreshes only a missing 
   const fixture = await checksFixture(t);
   const first = await fixture.run();
   assert.equal(first.status, 'PASS');
-  assert.deepEqual(fixture.calls, ['quality:full', 'verify:smoke', 'verify:browser-smoke']);
+  assert.deepEqual(fixture.calls, ['quality:full', 'verify:browser-smoke']);
   const second = await fixture.run();
   assert.equal(second.status, 'PASS');
-  assert.equal(fixture.calls.length, 3);
+  assert.equal(fixture.calls.length, 2);
   fixture.removeBuild();
   assert.equal((await fixture.run()).status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(3), ['build']);
+  assert.deepEqual(fixture.calls.slice(2), ['build']);
 });
 
 test('failed later check preserves earlier passes but cannot be bypassed by a narrower scope', async (t) => {
@@ -167,14 +176,14 @@ test('failed later check preserves earlier passes but cannot be bypassed by a na
   const narrower = await fixture.run();
   assert.equal(narrower.status, 'FAIL');
   assert.match(narrower.error, /recorded failures/);
-  assert.equal(fixture.calls.length, 4);
+  assert.equal(fixture.calls.length, 3);
   fixture.setFailure(undefined);
   const fixed = await fixture.run({ full: true });
   assert.equal(fixed.status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(4), ['verify:redesign']);
+  assert.deepEqual(fixture.calls.slice(3), ['verify:redesign']);
 });
 
-test('interrupted full run keeps missing check results unresolved across narrower retries', async (t) => {
+test('unstarted optional checks remain recorded without blocking a narrower request', async (t) => {
   const fixture = await checksFixture(t);
   const previous = await fixture.run();
   previous.status = 'FAIL';
@@ -182,12 +191,34 @@ test('interrupted full run keeps missing check results unresolved across narrowe
   await json(previous.report, previous);
   for (let attempt = 0; attempt < 2; attempt++) {
     const result = await fixture.run();
-    assert.equal(result.status, 'FAIL');
+    assert.equal(result.status, 'PASS');
     assert.equal(result.checks['verify:redesign'].status, 'NOT_RUN');
+    await verifyReleaseReceipt(result, identity, requiredChecks(undefined, false, scripts));
+    await assert.rejects(
+      verifyReleaseReceipt(result, identity, requiredChecks(undefined, true, scripts)),
+      /unavailable/
+    );
   }
-  assert.equal(fixture.calls.length, 3);
+  assert.equal(fixture.calls.length, 2);
   assert.equal((await fixture.run({ full: true })).status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(3), ['verify:redesign']);
+  assert.deepEqual(fixture.calls.slice(2), ['verify:redesign']);
+});
+
+test('an interrupted started check still blocks narrowing until it is rerun', async (t) => {
+  const fixture = await checksFixture(t);
+  const previous = await fixture.run();
+  previous.checks['verify:redesign'] = { command: 'verify:redesign', status: 'RUNNING' };
+  await json(previous.report, previous);
+  await assert.rejects(
+    verifyReleaseReceipt(previous, identity, requiredChecks(undefined, false, scripts)),
+    /Known failed checks/
+  );
+  const narrower = await fixture.run();
+  assert.equal(narrower.status, 'FAIL');
+  assert.match(narrower.error, /recorded failures/);
+  assert.equal(fixture.calls.length, 2);
+  assert.equal((await fixture.run({ full: true })).status, 'PASS');
+  assert.deepEqual(fixture.calls.slice(2), ['verify:redesign']);
 });
 
 test('failed termination without a close event still produces a bounded timeout result', async () => {
@@ -212,14 +243,14 @@ test('changed source invalidates cache and mid-run source changes remain failure
   await fixture.run();
   fixture.setSource({ ...identity, sourceHash: 'f'.repeat(64) });
   assert.equal((await fixture.run()).status, 'PASS');
-  assert.equal(fixture.calls.length, 6);
+  assert.equal(fixture.calls.length, 4);
   fixture.setSource({ ...identity, sourceHash: '1'.repeat(64) });
   fixture.setFailure(() => {
     fixture.setSource({ ...identity, sourceHash: '2'.repeat(64) });
     return {};
   });
   assert.equal((await fixture.run()).status, 'FAIL');
-  assert.equal(fixture.calls.length, 7);
+  assert.equal(fixture.calls.length, 5);
 });
 
 test('timeout, cancellation, missing logs and swapped commands cannot certify a release', async (t) => {

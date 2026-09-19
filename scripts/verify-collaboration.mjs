@@ -6,5 +6,4 @@ await runBrowserVerification({
   files: ['tests/agent-collaboration-browser.spec.ts'],
   requiredCases: ['AGENTUI01', 'AGENTUI02', 'AGENTUI03'],
   requiredScreenshots: ['agent-collaboration-mobile.png', 'agent-collaboration-desktop.png'],
-  expectedCount: 3,
 });

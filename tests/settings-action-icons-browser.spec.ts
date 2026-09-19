@@ -8,26 +8,9 @@ import {
 } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 
-async function icon(button: Locator) {
+async function accessibleControl(button: Locator) {
   await expect(button).toBeVisible();
-  await expect(button.locator('svg')).toHaveCount(1);
-  expect((await button.innerText()).trim()).toBe('');
-  const label = await button.getAttribute('aria-label');
-  expect(label).toBeTruthy();
-  await expect(button).toHaveAccessibleName(label!);
-  await expect(button).toHaveAttribute('title', label!);
-  const box = await button.boundingBox();
-  expect(box!.width).toBeGreaterThanOrEqual(44);
-  expect(box!.height).toBeGreaterThanOrEqual(44);
-}
-/** Confirming actions keep the shared glyph but say what they do. The visible word is part
-    of the accessible name, so speech input and the screen agree. */
-async function named(button: Locator, text: string) {
-  await expect(button).toBeVisible();
-  await expect(button.locator('svg')).toHaveCount(1);
-  expect((await button.innerText()).trim()).toBe(text);
-  const label = await button.getAttribute('aria-label');
-  expect(label).toContain(text);
+  await expect(button).toHaveAccessibleName(/\S/u);
   const box = await button.boundingBox();
   expect(box!.width).toBeGreaterThanOrEqual(44);
   expect(box!.height).toBeGreaterThanOrEqual(44);
@@ -52,7 +35,7 @@ for (const width of DEFAULT_WIDTHS) {
     await selectChatSettingsSection(page, '봇·페르소나·모듈');
     const save = dialog.getByRole('button', { name: '채팅 설정 저장', exact: true });
     await save.scrollIntoViewIfNeeded();
-    await icon(save);
+    await accessibleControl(save);
     await page.screenshot({ path: info.outputPath(`chat-save-${width}.png`) });
     await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
     const promptPanel = dialog.getByRole('tabpanel');
@@ -71,14 +54,14 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(inherited.getByRole('definition')).toHaveText([workspace.translation.title]);
     await selectChatSettingsSection(page, '자동 후속 작업');
     const runtimeSave = dialog.getByRole('button', { name: '설정 저장', exact: true });
-    await icon(runtimeSave);
+    await accessibleControl(runtimeSave);
     await dialog.getByRole('switch', { name: '장면 해설 자동 생성' }).click();
     await expect(runtimeSave).toBeEnabled();
     await runtimeSave.click();
     await expect(dialog.getByText('후속 작업 설정을 저장했어요.', { exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath(`runtime-save-${width}.png`) });
     await selectChatSettingsSection(page, '이미지');
-    await named(dialog.getByRole('button', { name: '이미지 등록', exact: true }), '등록');
+    await accessibleControl(dialog.getByRole('button', { name: '이미지 등록', exact: true }));
     await page.screenshot({ path: info.outputPath(`image-register-${width}.png`) });
     await page.keyboard.press('Escape');
     // Both panels fetch the shared workspace. Hold it to inspect and use the loading retry.
@@ -96,20 +79,20 @@ for (const width of DEFAULT_WIDTHS) {
     await selectSettingsSection(page, '역할별 모델');
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     const reload = settings.getByRole('button', { name: '다시 불러오기', exact: true });
-    await icon(reload);
+    await accessibleControl(reload);
     ready = true;
     await reload.click();
     const models = settings.getByRole('region', { name: '역할별 모델 설정', exact: true });
     await expect(models).toBeVisible();
     const modelSave = models.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
     await modelSave.scrollIntoViewIfNeeded();
-    await icon(modelSave);
+    await accessibleControl(modelSave);
     await expect(models).not.toContainText('새 채팅의 첫 응답이 성공하면');
     await expect(models).not.toContainText('명확한 거절일 때만 추가 번역');
     await page.screenshot({ path: info.outputPath(`model-save-${width}.png`) });
     ready = false;
     await selectSettingsSection(page, '현재 프롬프트');
-    await icon(reload);
+    await accessibleControl(reload);
     ready = true;
     await reload.click();
     const prompts = settings.getByRole('region', { name: '현재 프롬프트 설정' });

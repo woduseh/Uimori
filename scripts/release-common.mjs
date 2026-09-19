@@ -49,7 +49,6 @@ export async function releaseFingerprint(repository = root) {
     'Dockerfile',
     '.dockerignore',
     'compose.tailscale.yaml',
-    '.github/workflows/quality.yml',
     ...(await filesBelow(path.join(repository, 'deploy'))).map((file) =>
       path.relative(repository, file).replaceAll('\\', '/')
     ),

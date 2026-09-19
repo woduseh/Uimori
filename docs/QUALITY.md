@@ -29,13 +29,13 @@ Tests that import source directly need no build. A check that executes `dist` ne
 
 Reuse relevant results while their source, environment, and test assumptions remain applicable. After a small follow-up edit, run affected checks and distinguish that result from an earlier full run. Report what actually ran, including failures and blocked checks; synthetic checks support different claims from provider, device, or production observations. An environment failure such as Windows `spawn EPERM` is a blocked observation, not an application result. See [DEVELOPMENT](DEVELOPMENT.md) for recovery.
 
-Browser defaults are defined in [`fixtures/browser-viewports.json`](../fixtures/browser-viewports.json). Shared runners preserve failure screenshots and traces; `NR_VISUAL_REVIEW=1` enables extra visual checks and successful screenshots for a selected domain. Inspect the rendered output when making a visual claim.
+Browser defaults are defined in [`fixtures/browser-viewports.json`](../fixtures/browser-viewports.json). Shared runners accept `--grep` for focused cases and `--visual` (or `NR_VISUAL_REVIEW=1`) for extra visual checks and screenshots. Failure screenshots and traces are retained. Inspect the rendered output when making a visual claim.
 
 ## Release checks
 
-The current [`release-check` runner](../scripts/release-check.mjs) requires `quality:full`, `verify:smoke`, and the selected local feature `verify:*` command. The default area is `verify:browser-smoke`; `--full` adds `verify:redesign`. Choose wider coverage when the release changes shared behavior broadly or is intended to establish a stabilization baseline. Release/self-host tooling normally uses `--area verify:selfhost`.
+The [`release-check` runner](../scripts/release-check.mjs) runs `quality:full` and the selected local feature `verify:*` command. The default area is `verify:browser-smoke`; `--full` adds `verify:redesign`. The older `verify:smoke` bundle remains available as an explicit area, but is not repeated automatically. Release/self-host tooling normally uses `--area verify:selfhost`.
 
-The runner writes a receipt to `output/release/checks/`. It reuses each successful check only when source, verification inputs, Node version, platform, and the saved log hash match. A missing or stale build can be rebuilt without repeating still-valid checks. Recorded failed or incomplete checks must be resolved; narrowing the requested area does not clear them. Plain terminal output from separately run commands is not an importable receipt. Deployment behavior and additional source/remote requirements are in [ORACLE-RELEASE](ORACLE-RELEASE.md).
+The runner writes a receipt to `output/release/checks/`. It reuses successful checks when source, verification inputs, Node version, platform, and the saved log hash match. A missing or stale build can be rebuilt without repeating valid checks. Failed or interrupted checks remain unresolved; checks never started may stay `NOT_RUN` outside the current selection. Plain terminal output from separately run commands is not an importable receipt. Deployment behavior and source/remote requirements are in [ORACLE-RELEASE](ORACLE-RELEASE.md).
 
 ## Static checks and CI
 
