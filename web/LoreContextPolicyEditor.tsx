@@ -283,8 +283,8 @@ export function LoreContextPolicyEditor({
           </div>
           <p className="muted">
             Jev는 선택 로어의 관련성을 한 번에 판단해요. 상시 로어와 카드의 명시적 조건은 유지해요.
-            토큰 수는 호스트 추정값이에요. 서버의 TYPESAFE_API_KEY 설정이 필요하며 작문·문맥 요약
-            모델은 바뀌지 않아요.
+            토큰 수는 호스트 추정값이에요. 프로바이더·모델 등록의 JEV 판단에서 API 키를 연결하고
+            테스트할 수 있어요. 작문·문맥 요약 모델은 바뀌지 않아요.
           </p>
         </>
       )}

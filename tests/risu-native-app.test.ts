@@ -28,12 +28,14 @@ test.each([false, true])(
   'server native turn keeps Lua calls, request edits and archive with JEV=%s',
   async (withJev) => {
     let judgments = 0;
+    const savedJevKey = 'synthetic-native-turn-saved-jev-key';
+    vi.stubEnv('TYPESAFE_API_KEY', '');
     if (withJev) {
       const fallback = globalThis.fetch;
-      vi.stubEnv('TYPESAFE_API_KEY', 'test-only-key');
       vi.stubGlobal('fetch', async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
         if (url !== JEV_ENDPOINT) return fallback(url, init);
         judgments++;
+        expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${savedJevKey}`);
         const body = JSON.parse(String(init?.body));
         expect(body.state.entries).toHaveLength(2);
         return new Response(
@@ -66,6 +68,19 @@ test.each([false, true])(
     });
     owned.push({ app, path, close: provider.close });
     await app.ready();
+    if (withJev) {
+      const initial = await app.inject({ method: 'GET', url: '/api/provider-management/jev' });
+      expect(initial.statusCode, initial.body).toBe(200);
+      expect(initial.json()).toMatchObject({ configured: false, credentialSource: 'missing' });
+      const saved = await app.inject({
+        method: 'PUT',
+        url: '/api/provider-management/jev',
+        payload: { expectedRevision: initial.json().revision, apiKey: savedJevKey },
+      });
+      expect(saved.statusCode, saved.body).toBe(200);
+      expect(saved.json()).toMatchObject({ configured: true, credentialSource: 'saved' });
+      expect(saved.body).not.toContain(savedJevKey);
+    }
     const connection = app.store.product.connection({
       title: 'Fixture',
       protocol: 'fixture-sse-v1',
@@ -261,5 +276,6 @@ function onOutput(id) setChatVar(id,'completed','yes') end
     validateRunSnapshot(app.store, run.snapshot, id);
     const archive = app.store.product.export();
     expect(archive.tables.attempts).toHaveLength(withJev ? 3 : 2);
+    expect(JSON.stringify(archive)).not.toContain(savedJevKey);
   }
 );

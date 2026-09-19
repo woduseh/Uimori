@@ -1,0 +1,71 @@
+.jev-provider-settings:not([hidden]) {
+  display: grid;
+  gap: 18px;
+  max-width: 760px;
+  min-width: 0;
+  margin-top: 24px;
+}
+.jev-provider-settings p,
+.jev-provider-settings h4 {
+  margin: 0;
+}
+.jev-provider-settings form,
+.jev-provider-test,
+.jev-test-result {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.jev-provider-settings form > label {
+  display: grid;
+  gap: 8px;
+}
+.jev-provider-settings input {
+  min-width: 0;
+  width: 100%;
+}
+.jev-provider-settings small {
+  color: var(--muted);
+  line-height: 1.7;
+}
+.jev-provider-links {
+  display: flex;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+}
+.jev-provider-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 0;
+}
+.jev-provider-details dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.jev-provider-details dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .provider-workspace-navigation {
+    flex-wrap: wrap;
+  }
+  .provider-workspace-navigation > button:not(.provider-refresh) {
+    padding-inline: 8px;
+    gap: 5px;
+  }
+}
+.jev-provider-test {
+  border-block: 1px solid var(--border);
+  padding: 20px 0;
+}
+.jev-provider-test > button {
+  justify-self: start;
+}
+.jev-test-result {
+  border-radius: 8px;
+  background: var(--surface-raised);
+  padding: 14px;
+  overflow-wrap: anywhere;
+}

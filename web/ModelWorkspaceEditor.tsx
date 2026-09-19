@@ -210,8 +210,8 @@ export function ModelWorkspaceEditor({
                   }
                 />
                 <small>
-                  0.5 초과–1. 모호하거나 상충하는 판정은 후보를 보존하고 중단해요. 서버의
-                  TYPESAFE_API_KEY 설정이 필요해요.
+                  0.5 초과–1. 모호하거나 상충하는 판정은 후보를 보존하고 중단해요. 프로바이더·모델
+                  등록의 JEV 판단에서 API 키를 연결하고 테스트할 수 있어요.
                 </small>
               </label>
             ) : (

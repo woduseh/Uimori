@@ -7,4 +7,5 @@ output/
 *.sqlite*
 .env*
 *.vertex-credentials/
+*.jev-credentials/
 *.codex/
