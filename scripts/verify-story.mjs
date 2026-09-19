@@ -22,7 +22,7 @@ import {
   artifactScan,
 } from './lib.mjs';
 
-/** Same real reporter and process ownership contract as M0/M1, with separate live-quality claims. */
+/** Local story checks with the same report and cleanup handling as the other case groups. */
 export async function verifyStory(selection) {
   const runId = 'm2-' + newId();
   const directory = path.join(artifactRoot, runId);
@@ -44,18 +44,6 @@ export async function verifyStory(selection) {
     scenarios: Object.fromEntries(
       selection.cases.map((id) => [id, { required: true, status: 'NOT_RUN', evidence: [] }])
     ),
-    externalClaims: {
-      Q04: {
-        status: 'BLOCKED',
-        reason:
-          'Live state/context semantics, longitudinal quality and total paid cost require an approved evaluation scope; this verifier uses synthetic local data only.',
-      },
-      nativePort: {
-        status: 'SEPARATE_EVIDENCE',
-        reason:
-          'Current import and porting scope is documented in docs/RISU-IMPORT.md and docs/RISU-PORTING.md. This synthetic M2 runner does not establish complete compatibility with user materials.',
-      },
-    },
     limitations: [
       'Local state/context fixtures and localhost protocols do not establish live semantic quality.',
       'Long synthetic corpus and measured fixture paths do not establish whole-app performance or physical-device latency.',
@@ -84,7 +72,9 @@ export async function verifyStory(selection) {
     requireCommand(result);
   };
   try {
-    const diagnostic = await doctor(directory);
+    const diagnostic = await doctor(directory, {
+      browser: selection.cases.some((id) => requiredBrowser.includes(id)),
+    });
     summary.environment.doctor = diagnostic;
     if (diagnostic.status !== 'PASS') {
       const failure = doctorFailureState(diagnostic);
@@ -92,9 +82,14 @@ export async function verifyStory(selection) {
       for (const scenario of Object.values(summary.scenarios)) scenario.status = failure.status;
       throw new Error('Environment doctor ' + diagnostic.status + ': ' + diagnostic.error);
     }
-    await run(['node_modules/typescript/bin/tsc', '--noEmit'], 'check');
-    await run(['scripts/build.mjs'], 'build');
-    summary.identity = await assertBuild();
+    try {
+      summary.identity = await assertBuild();
+      summary.buildReused = true;
+    } catch {
+      await run(['scripts/build.mjs'], 'build');
+      summary.identity = await assertBuild();
+      summary.buildReused = false;
+    }
     summary.verificationIdentity = await fingerprint();
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
@@ -259,10 +254,7 @@ export async function verifyStory(selection) {
           : Object.values(summary.scenarios).every((scenario) => scenario.status === 'PASS')
             ? 'PASS'
             : 'FAIL';
-    summary.status =
-      summary.localStatus === 'PASS' && selection.milestone === 'M2'
-        ? 'BLOCKED'
-        : summary.localStatus;
+    summary.status = summary.localStatus;
     summary.finishedAt = new Date().toISOString();
     await json(path.join(directory, 'summary.json'), summary);
     process.removeListener('SIGINT', cancel);

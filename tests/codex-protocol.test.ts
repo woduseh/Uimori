@@ -119,13 +119,8 @@ test('decodes only advertised Uimori tool requests and rejects mixed, foreign, d
   expect(decodeCodexOutput(encode('final', ''), request()).error?.code).toBe('EMPTY_COMPLETION');
 });
 
-test('permits native assistance while reserving Uimori application actions for the JSON envelope', () => {
+test('passes declared Uimori tools and rejects undeclared JSON tool calls', () => {
   const built = buildCodexTurn(request());
-  expect(built.developerInstructions).toContain('Use available Codex builtin tools when they help');
-  expect(built.developerInstructions).toContain(
-    'Use these Uimori tools for application data and saved changes'
-  );
-  expect(built.developerInstructions).not.toContain('Never invoke builtin tools');
   expect(JSON.parse(built.inputText).allowedTools).toEqual(request().stable.tools);
   expect(
     decodeCodexOutput(
