@@ -71,6 +71,8 @@ function phases() {
     summary: 'Previously accepted summary',
   };
   const store = {
+    source: () => ({ runId: 'previous-run' }),
+    run: () => ({ snapshot: {} }),
     product: {
       profile: () => base.profile,
       resources: () => {

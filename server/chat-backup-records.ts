@@ -6,6 +6,7 @@ import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { measureMainContext } from './context-planning.js';
 import { forkImageInput } from './package-images.js';
 import type { BackupRemap, BackupRow } from './chat-backup-remap.js';
+import { remapNativeRisuSnapshot } from './risu-native-archive.js';
 
 const parse = (value: string | null) => (value === null ? null : JSON.parse(value));
 
@@ -150,6 +151,7 @@ export function finishBackupSnapshots(ctx: BackupRemap): void {
       snapshot.outline = sealOutlineSnapshot(ctx.structured(outline));
     }
     if (isSourceOnlyTranscript(snapshot)) return;
+    remapNativeRisuSnapshot(snapshot, ctx.id, ctx.id);
     if (snapshot.promptCompilation) {
       const compiled = compileSnapshotPrompt({ ...snapshot, promptCompilation: undefined });
       snapshot.promptCompilation = compiled.promptCompilation;

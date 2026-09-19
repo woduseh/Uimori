@@ -36,6 +36,7 @@ export type RisuImportPreview = {
     | 'character-card-json'
     | 'risu-module-json'
     | 'risu-module-project-zip'
+    | 'risu-module-binary'
     | 'risu-plugin-js';
   summary: { lore: number; starts: number; images: number };
   /** The plugin file's own declarations, so one screen can report both views of a `.js` import. */
@@ -50,6 +51,7 @@ export type RisuImportPreview = {
     /** The preserved Risu activation keys, when the entry has any, so the screen can name them. */
     keys?: string;
   }[];
+  imageHandoff?: import('./risu-image-handoff.js').RisuImageHandoff;
   findings: RisuImportFinding[];
 };
 export type RisuImportApply = {
@@ -57,6 +59,7 @@ export type RisuImportApply = {
   kind?: RisuImportKind;
   digest: string;
   memoryIds: string[];
+  imageHandoffIds?: string[];
   allowPartial: boolean;
   idempotencyKey: string;
 };

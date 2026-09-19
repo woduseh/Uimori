@@ -4,6 +4,8 @@ import { contextBudgetForModel } from '../core/context-budget.js';
 import { CONTEXT_CONTINUATION_GUIDANCE } from '../core/context-summary-policy.js';
 import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
+import { nativeRisuPresetPending } from './risu-native-preset.js';
+import { nativeRisuPending } from './risu-native-run.js';
 import { attachMainHostContext, requestInput } from './main-host-context.js';
 import { hasPromptInputTransforms, validatePromptInputTransforms } from './prompt-transforms.js';
 import { buildMainInput, CATALOG_READ_GUIDANCE, type MainInput } from '../core/provider.js';
@@ -48,11 +50,21 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
   {
     name: 'knowledge.read',
     description:
-      'Read an approved reference by its discovered id; returns source revision, text range and continuation.',
+      'Read missing approved reference text by known id, or fetch up to 16 ids in one call. Search is not required for catalog ids. Batch reads return independent per-entry results and continuations; limit is at most 4096 per entry for batches.',
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'string', maxLength: 200 }, ...pagination(16384) },
-      required: ['id'],
+      properties: {
+        id: { type: 'string', maxLength: 200 },
+        ids: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 16,
+          uniqueItems: true,
+          items: { type: 'string', minLength: 1, maxLength: 200 },
+        },
+        ...pagination(16384),
+      },
+      anyOf: [{ required: ['id'] }, { required: ['ids'] }],
       additionalProperties: false,
     },
   },
@@ -116,6 +128,9 @@ export function buildMainProviderRequest(
     completedToolHistory?: readonly ToolEvent[];
   } = {}
 ): { snapshot: RunSnapshot; input: MainInput; request: ProviderRequest } {
+  if (nativeRisuPending(snapshot)) throw new ProviderContractError('RISU_NATIVE_EXECUTION_PENDING');
+  if (nativeRisuPresetPending(snapshot))
+    throw new ProviderContractError('RISU_NATIVE_PRESET_PENDING');
   if (hasPromptInputTransforms(snapshot)) {
     if (
       !snapshot.promptInputTransforms ||

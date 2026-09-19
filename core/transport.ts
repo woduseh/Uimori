@@ -114,13 +114,16 @@ export type ProviderResult = {
   };
 };
 export type WireRecord = {
+  nativeScript?: { method: 'LLM' | 'axLLM' | 'simpleLLM'; event: string };
+  /** Host-only typed judgment attribution; this is not a generative provider protocol. */
+  judgment?: { kind: 'lore-selection' | 'translation-refusal'; inputHash: string };
   pricingSnapshot?: PricingSnapshot;
   pricingStartedAt?: string;
   /** Host-only attribution. Never supplied by model output or serialized to the provider. */
   agentId?: string;
   extensionAction?: import('./extension-model.js').ExtensionModelAttribution;
   connectionId: string;
-  protocol: ProviderConnection['protocol'];
+  protocol: ProviderConnection['protocol'] | 'typesafe-systemone-v1';
   role: ProviderRole;
   modelId: string;
   method: 'POST' | 'RPC';

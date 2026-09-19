@@ -157,6 +157,9 @@ export function compilePackageAttachment(
           'lore'
         ),
         ...(lore.loreContext ? { loreContext: structuredClone(lore.loreContext) } : {}),
+        ...(pkg.nativeRisu && lore.nativeRisuPosition
+          ? { nativeRisuPosition: structuredClone(lore.nativeRisuPosition) }
+          : {}),
         ...(lore.relatedIds
           ? { relatedIds: lore.relatedIds.map((id) => `${prefix}:lore:${id}`) }
           : {}),

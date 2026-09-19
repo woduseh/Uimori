@@ -30,7 +30,20 @@ export function candidateCompilationSnapshot(
     contextPlan: _plan,
     loreContext: _lore,
     ...input
-  }: RunSnapshot) => input;
+  }: RunSnapshot) => {
+    if (!input.nativeRisuExecution) return input;
+    // Each candidate shares prepared inputs but owns fresh request/output callback results.
+    const {
+      variables: _variables,
+      messages: _messages,
+      output: _output,
+      requestEdits: _requestEdits,
+      issues: _issues,
+      historyRevision: _historyRevision,
+      ...prepared
+    } = input.nativeRisuExecution;
+    return { ...input, nativeRisuExecution: prepared };
+  };
   let original = snapshot;
   let owner = runId;
   const seen = new Set<string>(owner ? [owner] : []);
@@ -116,6 +129,13 @@ export function contextDependencyKey(snapshot: RunSnapshot): string {
     sourceSegments: snapshot.sourceSegments ?? null,
     canon: snapshot.story?.canonHash ?? null,
     resources: snapshot.resources,
+    ...((snapshot.nativeRisuExecution?.inputHistoryRevision ?? snapshot.nativeRisuHistoryRevision)
+      ? {
+          nativeHistory:
+            snapshot.nativeRisuExecution?.inputHistoryRevision ??
+            snapshot.nativeRisuHistoryRevision,
+        }
+      : {}),
   });
 }
 export function seedContextPlan(

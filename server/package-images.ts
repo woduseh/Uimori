@@ -24,7 +24,7 @@ export function decodeImage(
   encoded: unknown
 ): { bytes: Buffer; mime: PackageImageBlob['mime']; hash: string } {
   if (!PACKAGE_IMAGE_MIMES.includes(mime as PackageImageBlob['mime']))
-    throw new HttpError(400, 'PNG, JPEG 또는 WebP 이미지를 선택해 주세요.');
+    throw new HttpError(400, 'PNG, JPEG, WebP, AVIF 또는 GIF 이미지를 선택해 주세요.');
   const base64 = text(encoded, 'image bytes', 3_000_000);
   if (!/^[A-Za-z0-9+/]+={0,2}$/u.test(base64)) throw new HttpError(400, 'Invalid image encoding');
   const bytes = Buffer.from(base64, 'base64');
@@ -37,11 +37,25 @@ export function decodeImage(
           bytes[1] === 216 &&
           bytes.at(-2) === 255 &&
           bytes.at(-1) === 217
-        : bytes.length >= 20 &&
-          bytes.toString('ascii', 0, 4) === 'RIFF' &&
-          bytes.toString('ascii', 8, 12) === 'WEBP' &&
-          bytes.readUInt32LE(4) + 8 === bytes.length &&
-          ['VP8 ', 'VP8L', 'VP8X'].includes(bytes.toString('ascii', 12, 16));
+        : mime === 'image/avif'
+          ? bytes.length >= 24 &&
+            bytes.toString('ascii', 4, 8) === 'ftyp' &&
+            bytes.readUInt32BE(0) >= 24 &&
+            bytes.readUInt32BE(0) <= bytes.length &&
+            (bytes.toString('ascii', 8, 12) === 'avif' ||
+              bytes.toString('ascii', 8, 12) === 'avis' ||
+              Array.from({ length: Math.floor((bytes.readUInt32BE(0) - 16) / 4) }, (_, index) =>
+                bytes.toString('ascii', 16 + index * 4, 20 + index * 4)
+              ).some((brand) => brand === 'avif' || brand === 'avis'))
+          : mime === 'image/gif'
+            ? bytes.length >= 14 &&
+              ['GIF87a', 'GIF89a'].includes(bytes.toString('ascii', 0, 6)) &&
+              bytes.at(-1) === 0x3b
+            : bytes.length >= 20 &&
+              bytes.toString('ascii', 0, 4) === 'RIFF' &&
+              bytes.toString('ascii', 8, 12) === 'WEBP' &&
+              bytes.readUInt32LE(4) + 8 === bytes.length &&
+              ['VP8 ', 'VP8L', 'VP8X'].includes(bytes.toString('ascii', 12, 16));
   if (base64 !== bytes.toString('base64') || bytes.length > 2_000_000 || !valid)
     throw new HttpError(400, 'Invalid image bytes');
   return {

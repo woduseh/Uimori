@@ -101,7 +101,7 @@ export function attachMainHostContext(snapshot: RunSnapshot): RunSnapshot {
       .map((item) => `${item.id}@${item.revision}:${item.hash}`)
   );
   const uncovered = (input.pinnedSources ?? []).filter(
-    (item) => !delivered.has(`${item.id}@${item.revision}:${item.hash}`)
+    (item) => !item.nativeRisuPosition && !delivered.has(`${item.id}@${item.revision}:${item.hash}`)
   );
   const addFallback = (items: typeof uncovered, scene: boolean) => {
     if (!items.length) return;

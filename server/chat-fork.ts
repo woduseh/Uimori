@@ -99,6 +99,8 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           !store.validateHistory(run.snapshot.history, source.parentRevision))
       )
         throw new HttpError(400, 'Invalid completed fork source');
+      if (run.snapshot.nativeRisuExecution || run.snapshot.nativeRisuAuthored)
+        validateRunSnapshot(store, run.snapshot, run.id);
     }
     // Conversation reads also depend on visible failed requests with no adopted source.
     // Follow only the frozen references; never collect unrelated chat or branch activity.
@@ -467,7 +469,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           };
       }
       if (snapshot.contextPlan) snapshot.contextPlan.dependencyKey = contextDependencyKey(snapshot);
-      if (!isSourceOnlyTranscript(snapshot))
+      if (!isSourceOnlyTranscript(snapshot) && !snapshot.nativeRisuAuthored)
         snapshot = compileSnapshotPrompt({ ...snapshot, promptCompilation: undefined });
       if (snapshot.contextPlan?.status === 'ready')
         snapshot.contextPlan.estimatedInputTokens =
@@ -509,7 +511,8 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           };
         mapForkSnapshot(mapped, sourceIds, runIds);
         if (mapped.contextPlan) mapped.contextPlan.dependencyKey = contextDependencyKey(mapped);
-        mapped = compileSnapshotPrompt({ ...mapped, promptCompilation: undefined });
+        if (!mapped.nativeRisuAuthored)
+          mapped = compileSnapshotPrompt({ ...mapped, promptCompilation: undefined });
         if (mapped.contextPlan?.status === 'ready')
           mapped.contextPlan.estimatedInputTokens = measureMainContext(mapped).estimatedInputTokens;
         return mapped;
@@ -532,6 +535,9 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         'promptCompilation',
         'contextPlan',
         'contextBase',
+        'nativeRisuExecution',
+        'nativeRisuAuthored',
+        'nativeRisuPresetProgram',
       ] as const) {
         delete snapshot[field];
         if (main[field] !== undefined)

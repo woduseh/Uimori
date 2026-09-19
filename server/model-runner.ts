@@ -15,6 +15,7 @@ import {
   type ProviderResult,
   type WireRecord,
   type ProviderProgress,
+  type ProviderRequest,
   transportConnection,
 } from '../core/transport.js';
 import type { ModelInput, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
@@ -53,6 +54,7 @@ export type MainResult = {
   usage: Usage;
 };
 export type MainHooks = {
+  prepareRequest?: (request: ProviderRequest, usage: Usage) => Promise<ProviderRequest>;
   initialUsage?: Usage;
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
@@ -285,7 +287,15 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         }
       }
     }
-    const { input, request } = built;
+    const { input } = built;
+    let { request } = built;
+    if (hooks.prepareRequest) {
+      try {
+        request = await hooks.prepareRequest(request, usage);
+      } catch (error) {
+        throw new ModelRunError(error, structuredClone(usage));
+      }
+    }
     if (evaluation && request.generation) {
       const configured = request.generation;
       request.generation = evaluation.generation(configured, results.length);

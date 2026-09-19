@@ -35,6 +35,7 @@ export async function runBrowserVerification({
   requiredTitles = [],
   requiredScreenshots = [],
   providerFixture = false,
+  privateMaterials = false,
   timeout = 600_000,
   limitations = [],
 }) {
@@ -70,7 +71,9 @@ export async function runBrowserVerification({
     failures,
     cleanup: { status: 'NOT_RUN' },
     limitations: [
-      'Synthetic prompts, packages and source text only; no private materials are copied into these tests.',
+      privateMaterials
+        ? 'Explicitly opted-in private local materials are read without modification. Screenshots and failure traces may contain private rendered content; no original files are added to the repository.'
+        : 'Synthetic prompts, packages and source text only; no private materials are copied into these tests.',
       'Local SQLite and browser actions only. No paid provider, external deployment, literary quality or physical-device IME claim.',
       'Screenshots support visual inspection; their existence alone does not establish visual correctness.',
       ...limitations,
@@ -247,6 +250,9 @@ export async function runBrowserVerification({
     await json(path.join(directory, 'ownership.json'), ownership);
     try {
       summary.artifactScan = await artifactScan(directory);
+      if (privateMaterials)
+        summary.artifactScan.scope =
+          'Known synthetic secret canary only; opted-in private rendered content may appear in artifacts. This scan does not establish the absence of real secrets or private prose.';
     } catch (error) {
       failures.push(error.message);
       summary.artifactScan = { status: 'FAIL', error: error.message };

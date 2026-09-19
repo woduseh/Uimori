@@ -1,17 +1,23 @@
 import Fastify, { type FastifyInstance } from 'fastify';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { Content } from '../core/product.js';
+import type { ContentPackage } from '../core/content-package.js';
+import type { NativeTransferFile } from '../core/native-transfer.js';
 import { packageInstanceId } from '../core/execution-context.js';
 import type { RunSnapshot } from '../core/types.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 import { chatVariableProfile } from '../server/chat-variable-context.js';
 import { readChatVariables } from '../server/chat-variables.js';
 import * as extensionRuntime from '../server/extension-runtime.js';
-import { nativeTransferOriginal } from '../server/native-transfer.js';
+import {
+  applyNativeTransfer,
+  nativeTransferOriginal,
+  prepareNativeTransfer,
+} from '../server/native-transfer.js';
 import { prepareAfterResponse } from '../server/package-after-response.js';
 import { behaviorDetail } from '../server/package-behavior-host.js';
 import {
@@ -22,10 +28,11 @@ import {
 import { productRoutes } from '../server/product-routes.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { extensionEditRequestInput } from '../server/extension-request-edit.js';
-import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
 import { Store } from '../server/store.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
 import { luaActionIds } from './fixtures/risu-lua.js';
+import { adaptRisuLuaTriggers } from './fixtures/legacy-risu/risu-lua-adapter.js';
+import { RisuCbs } from './fixtures/legacy-risu/risu-cbs.js';
 
 const owned: { store: Store; app: FastifyInstance; directory: string }[] = [];
 const [buttonAction] = luaActionIds(['onButtonClick']);
@@ -86,20 +93,81 @@ function sourceOf(lua: string, description = 'Synthetic Lua integration') {
   };
 }
 
-function imported(lua: string, description?: string) {
+/** Earlier saved wrappers remain executable; new Risu imports no longer produce this format. */
+function imported(lua: string, description = 'Synthetic Lua integration') {
   const { store, app } = database();
   const source = sourceOf(lua, description);
-  const preview = prepareRisuImport({ source });
-  const saved = applyRisuImport(store, {
-    source,
+  const cbs = new RisuCbs(new Map(), { names: 'context' });
+  const adapted = adaptRisuLuaTriggers([
+    { type: 'start', conditions: [], effect: [{ type: 'triggerlua', code: lua }] },
+  ]);
+  const pkg: ContentPackage = {
+    version: 1,
+    id: 'legacy-lua',
+    revision: 1,
+    title: 'Synthetic Lua Pilot',
+    description: '',
+    body: description,
+    bodyTemplate: cbs.template(description),
+    identity: { name: 'Synthetic Lua Pilot', description: 'Synthetic Lua integration' },
+    variableDefaults: { values: { fallback: 'authored-default' }, attachmentRoles: ['bot'] },
+    lore: [],
+    instructions: [],
+    controls: [],
+    transforms: [],
+    starts: [{ id: 'start-0', title: 'Opening', mode: 'authored', text: 'The pilot waits.' }],
+    behavior: {
+      revision: 1,
+      schemaVersion: 1,
+      stateSchema: { type: 'record', properties: {} },
+      initialState: {},
+      actions: adapted.actions,
+      outputParsers: [],
+    },
+  };
+  const file: NativeTransferFile = {
+    format: 'uimori-native-transfer',
+    version: 1,
+    roots: [{ kind: 'content', key: 'bot' }],
+    contents: [
+      {
+        key: 'bot',
+        source: {
+          id: pkg.id,
+          revision: 1,
+          kind: 'bot',
+          title: pkg.title,
+          description: '',
+          text: description,
+          loading: 'pinned',
+          relatedIds: [],
+          package: pkg,
+        },
+        modules: [],
+      },
+    ],
+    prompts: [],
+    images: [],
+    sourceFiles: [
+      {
+        entryKey: 'bot',
+        name: source.name,
+        mediaType: 'application/json',
+        hash: createHash('sha256').update(Buffer.from(source.base64, 'base64')).digest('hex'),
+        base64: source.base64,
+      },
+    ],
+  };
+  const preview = prepareNativeTransfer({ file });
+  const receipt = applyNativeTransfer(store, {
+    file,
     digest: preview.digest,
-    memoryIds: [],
-    // Input/edit phases and unsupported Risu APIs stay explicit pending findings.
-    allowPartial: true,
+    modelBindings: [],
     idempotencyKey: randomUUID(),
   });
-  const chat = saved.chat!;
-  const content = store.product.get<Content>('content', saved.receipt.items[0].id);
+  const chat = store.createChat(pkg.title, undefined, { botId: receipt.items[0]!.id });
+  const content = store.product.get<Content>('content', receipt.items[0]!.id);
+  const saved = { receipt, chat };
   const attachment = store.product
     .profile(chat.id)
     .packageAttachments!.find((item) => item.id === content.id)!;
@@ -596,26 +664,13 @@ async function postButton(fixture: Fixture, payload: ReturnType<typeof buttonCom
   });
 }
 
-test('Risu import and passive restores preserve native Lua actions and source bytes without execution', () => {
+test('legacy saved Lua wrappers and passive restores preserve actions and source bytes without execution', () => {
   const execute = vi.spyOn(extensionRuntime, 'executeExtensionProgram');
   const fixture = imported('error("IMPORT_OR_RESTORE_MUST_NOT_EXECUTE")');
 
   expect(execute).not.toHaveBeenCalled();
-  expect(fixture.preview.findings).toContainEqual(
-    expect.objectContaining({ code: 'lua-actions', level: 'warning' })
-  );
-  // Every Risu callback phase is connected now; the remaining notices are API and scope limits.
-  expect(
-    fixture.preview.findings.some((finding) =>
-      finding.code.startsWith('RISU_LUA_PHASE_UNSUPPORTED:')
-    )
-  ).toBe(false);
-  expect(
-    fixture.preview.findings.some(
-      (finding) =>
-        finding.level === 'unsupported' && finding.code.startsWith('RISU_LUA_PARTIAL_HOST:')
-    )
-  ).toBe(true);
+  expect(fixture.content.package!.nativeRisu).toBeUndefined();
+  expect(fixture.content.package!.bodyTemplate).toBeDefined();
   const phases = [
     ['input', ['before-turn']],
     ['output', ['after-turn']],

@@ -7,7 +7,14 @@ import { Store } from '../server/store.js';
 import { HelperWorkspace, directHelperGrants } from '../server/helper-workspace.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
-import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import {
+  modelWorkspace,
+  updateModelWorkspace,
+  updatePromptWorkspace,
+} from '../server/prompt-workspace.js';
+import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
+import { importRisuPresetProgram } from '../server/risu-preset-program.js';
+import { readChatVariables } from '../server/chat-variables.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import * as transport from '../core/transport.js';
 import type { HelperTaskSnapshot } from '../core/helper.js';
@@ -723,6 +730,144 @@ test('independent artifact receives writing context and duplicate operation does
   restored.product.import(f.store.product.export());
   expect(new HelperWorkspace(restored).artifact(artifact.id, 2).text).toBe(edited.text);
   expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+});
+
+test('native artifacts evaluate fresh copies without card callbacks, state commits or extra paid calls', async () => {
+  const f = fixture();
+  const preset = importRisuPresetProgram({
+    name: 'Native artifact',
+    templateDefaultVariables: 'mode=initial',
+    promptTemplate: [
+      { type: 'plain', role: 'system', text: 'PRESET {{getvar::mode}} / {{lastmessage}}' },
+      { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+    ],
+    regex: [{ type: 'editinput', in: 'FIRST', out: 'CONVERTED' }],
+  });
+  updatePromptWorkspace(f.store, {
+    expectedRevision: modelWorkspace(f.store).revision,
+    main: { title: preset.title, program: preset.program, values: {} },
+  });
+  const source = {
+    name: 'synthetic.json',
+    base64: Buffer.from(
+      JSON.stringify({
+        spec: 'chara_card_v3',
+        data: {
+          name: 'Native artifact',
+          description: '{{setvar::mode::copy}}Body {{getvar::mode}}',
+          first_mes: 'Opening',
+          extensions: {
+            risuai: {
+              triggerscript: [
+                {
+                  type: 'start',
+                  effect: [
+                    { type: 'triggerlua', code: 'error("CANONICAL_CALLBACK_MUST_NOT_RUN")' },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      })
+    ).toString('base64'),
+  };
+  const preview = prepareRisuImport({ source });
+  const saved = applyRisuImport(f.store, {
+    source,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'native-import',
+  });
+  const chatId = saved.chat!.id,
+    branchId = `main:${chatId}`;
+  const before = {
+    head: f.store.chat(chatId).headRevision,
+    variables: readChatVariables(f.store, chatId, branchId),
+    runs: f.store.detail(chatId).runs.length,
+  };
+  const conversation = f.workspace.open({ kind: 'chat', chatId, branchId });
+  const calls: transport.ProviderRequest[] = [];
+  mockSend((request) => {
+    calls.push(structuredClone(request));
+    if (request.role === 'main') return { ...structuredClone(success), text: 'Independent scene' };
+    if (calls.filter((item) => item.role === 'helper').length === 1)
+      return {
+        ...structuredClone(success),
+        status: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            id: 'native-artifact',
+            name: 'artifact.generate',
+            arguments: { request: 'FIRST', operationId: 'native-one' },
+          },
+        ],
+      };
+    return success;
+  });
+  const task = f.runtime.enqueue(conversation.id, 'native-artifact', '독립 가정 장면을 써줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id)).toMatchObject({
+    status: 'completed',
+    usage: { modelCalls: 3 },
+  });
+  expect(calls.map((call) => call.role)).toEqual(['helper', 'main', 'helper']);
+  expect(JSON.stringify(calls.find((call) => call.role === 'main')!.prompt)).toContain(
+    'PRESET copy / CONVERTED'
+  );
+  const artifact = f.workspace.artifact(
+    String(f.store.db.prepare('SELECT id FROM helper_artifacts').get()?.id)
+  );
+  expect(artifact.snapshot.nativeRisuExecution!.issues).toContain(
+    'RISU_NATIVE_ARTIFACT_CALLBACKS_DEFERRED'
+  );
+  expect(artifact.snapshot.nativeRisuExecution!.variables.mode).toBe('copy');
+  expect({
+    head: f.store.chat(chatId).headRevision,
+    variables: readChatVariables(f.store, chatId, branchId),
+    runs: f.store.detail(chatId).runs.length,
+  }).toEqual(before);
+  const revisionCalls: transport.ProviderRequest[] = [];
+  mockSend((request) => {
+    revisionCalls.push(structuredClone(request));
+    if (request.role === 'main')
+      return { ...structuredClone(success), text: 'Revised independent scene' };
+    if (revisionCalls.filter((item) => item.role === 'helper').length === 1)
+      return {
+        ...structuredClone(success),
+        status: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            id: 'native-revise',
+            name: 'artifact.generate',
+            arguments: {
+              request: 'SECOND',
+              operationId: 'native-two',
+              artifactId: artifact.id,
+              expectedRevision: 1,
+            },
+          },
+        ],
+      };
+    return success;
+  });
+  const revised = f.runtime.enqueue(conversation.id, 'native-revise', '이 가정 장면을 수정해줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(revised.id)).toMatchObject({
+    status: 'completed',
+    usage: { modelCalls: 3 },
+  });
+  expect(f.workspace.artifact(artifact.id, 2).snapshot.nativeRisuExecution!.request).toMatch(
+    /^SECOND/u
+  );
+  expect(f.workspace.artifact(artifact.id, 1).snapshot.nativeRisuExecution!.request).toBe(
+    'CONVERTED'
+  );
+  const restored = emptyStore();
+  expect(() => restored.product.import(f.store.product.export())).not.toThrow();
 });
 
 function emptyStore() {

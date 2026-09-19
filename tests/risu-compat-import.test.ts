@@ -6,8 +6,7 @@ import { Store } from '../server/store.js';
 import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
 import type { Content } from '../core/product.js';
 
-// What the import does with CBS it cannot convert: the text stays as written, the field is declared
-// for the compat evaluator, and the reader is told which functions will evaluate to nothing.
+// New imports preserve all CBS in native Risu fields; the legacy compat projection is no longer authored.
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -55,29 +54,31 @@ function imported(description: string, key: string, allowPartial = false) {
   return { preview, bot };
 }
 
-test('a body the converter cannot express is declared for the compat evaluator', () => {
+test('new imports preserve stateful CBS in the native document without a compat conversion', () => {
   const description = '{{#if 1}}{{getvar::hp}} left{{/if}} and {{calc::1+2}}';
-  // `{{#if` also trips the older lore-directive heuristic in convert(), which reports separately.
   const { preview, bot } = imported(description, 'compat-body', true);
   const levels = Object.fromEntries(preview.findings.map((item) => [item.code, item.level]));
-  expect(levels['compat-evaluation']).toBe('warning');
+  expect(levels['compat-evaluation']).toBeUndefined();
   expect(levels['dynamic-text']).toBeUndefined();
   expect(levels['compat-unsupported-names']).toBeUndefined();
-  expect(bot.package!.compat).toEqual({ risuCbs: { fields: ['body'] } });
-  // The original text is what the evaluator reads, so it is stored exactly as it was written.
+  expect(bot.package!.compat).toBeUndefined();
+  expect(bot.package!.bodyTemplate).toBeUndefined();
+  expect(bot.package!.nativeRisu!.card.description).toBe(description);
   expect(bot.package!.body).toBe(description);
 });
 
-test('a body asking for a display function names it as unsupported', () => {
+test('new imports retain display CBS for the native renderer without the old function blacklist', () => {
   const { preview, bot } = imported('{{char}} shows {{asset::sunset}}.', 'compat-asset', true);
   const finding = preview.findings.find((item) => item.code === 'compat-unsupported-names');
-  expect(finding?.level).toBe('unsupported');
-  expect(finding?.message).toContain('asset');
-  expect(bot.package!.compat).toEqual({ risuCbs: { fields: ['body'] } });
+  expect(finding).toBeUndefined();
+  expect(bot.package!.compat).toBeUndefined();
+  expect(bot.package!.nativeRisu!.card.description).toBe('{{char}} shows {{asset::sunset}}.');
 });
 
-test('a body the converter fully supports declares no compat field', () => {
+test('simple names also remain native CBS instead of a second template program', () => {
   const { preview, bot } = imported('{{char}} greets {{user}}.', 'compat-plain');
   expect(preview.findings.map((item) => item.code)).not.toContain('compat-evaluation');
   expect(bot.package!.compat).toBeUndefined();
+  expect(bot.package!.bodyTemplate).toBeUndefined();
+  expect(bot.package!.nativeRisu!.card.description).toBe('{{char}} greets {{user}}.');
 });

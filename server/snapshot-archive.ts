@@ -31,6 +31,8 @@ import {
   loreSelectionTargets,
 } from './lore-selection.js';
 import { resolveExtensionConversation } from './extension-conversation.js';
+import { validateNativeRisuExecution, nativeRisuPending } from './risu-native-run.js';
+import { mapNativeMessageId, remapNativeRisuSnapshot } from './risu-native-archive.js';
 
 const reject: ArchiveReject = archiveRejector('Invalid snapshot archive');
 
@@ -137,10 +139,25 @@ function validateLoreSelection(store: Store, snapshot: RunSnapshot, runId?: stri
     if (!target || target.inputHash !== entry.inputHash) reject('lore selection receipt mismatch');
     const decided = [
       ...entry.selected,
-      ...entry.omitted.filter((item) => item.reason === 'budget').map((item) => item.id),
+      ...entry.omitted.filter((item) => item.reason !== 'unknown').map((item) => item.id),
     ];
     for (const id of decided)
       if (!target!.lore.has(id)) reject('lore selection decided an unknown lore');
+    if (entry.judgment) {
+      const policy = snapshot.profile?.loreContext?.judgment;
+      if (
+        !policy ||
+        entry.judgment.threshold !== policy.threshold ||
+        entry.judgment.maxSelectedTokens !== policy.maxSelectedTokens
+      )
+        reject('lore judgment policy mismatch');
+      const scores = new Map(entry.judgment.scores.map((score) => [score.id, score.probability]));
+      if (
+        entry.judgment.scores.some((score) => !target!.lore.has(score.id)) ||
+        entry.selected.some((id) => (scores.get(id) ?? -1) < policy!.threshold)
+      )
+        reject('lore judgment selection mismatch');
+    }
   }
 }
 
@@ -165,6 +182,34 @@ export function validateRunSnapshot(
   snapshot: RunSnapshot,
   runId?: string
 ): RunSnapshot {
+  if (snapshot.nativeRisuAuthored) {
+    const authored = snapshot.nativeRisuAuthored;
+    if (
+      authored.version !== 1 ||
+      typeof authored.action !== 'string' ||
+      !Array.isArray(authored.messages) ||
+      authored.messages.some(
+        (message) =>
+          !['user', 'char'].includes(message.role) ||
+          typeof message.data !== 'string' ||
+          message.data.length > 2_000_000
+      ) ||
+      authored.messages.filter((message) => message.role === 'char').length > 1 ||
+      snapshot.promptCompilation
+    )
+      reject('native authored message mismatch');
+    if (runId) {
+      const run = store.run(runId);
+      if (run.inputs.length || run.toolEvents.length) reject('native action has story model input');
+      if (
+        run.sourceRevision &&
+        store.sourceOriginal(run.sourceRevision).text !==
+          (authored.messages.find((message) => message.role === 'char')?.data ?? '')
+      )
+        reject('native authored source mismatch');
+    }
+    return snapshot;
+  }
   if (snapshot.extensionConversation !== undefined) {
     try {
       if (runId && snapshot.extensionConversation.admissionRunId !== runId)
@@ -193,6 +238,9 @@ export function validateRunSnapshot(
   // The receipt froze on the reserved snapshot, before any behavior projection reached the profile,
   // so it is checked against the stored reservation rather than the execution view.
   validateRisuCompat(store, snapshot, runId);
+  validateNativeRisuExecution(snapshot);
+  if (nativeRisuPending(snapshot) && runId && store.run(runId).inputs.length)
+    reject('native execution receipt missing');
   validateLoreActivation(store, snapshot, runId);
   validateLoreSelection(store, snapshot, runId);
   const executionSnapshot = behaviorExecutionProjection(store, snapshot, runId);
@@ -307,9 +355,7 @@ export function mapForkSnapshot(
   if (snapshot.logicalHistory)
     snapshot.logicalHistory = snapshot.logicalHistory.map((item) => ({
       ...item,
-      id: item.sourceRevision
-        ? `${item.role === 'user' ? 'request' : 'source'}:${source(item.sourceRevision)}`
-        : item.id,
+      id: mapNativeMessageId(item.id, (id) => source(id)!),
       ...(item.sourceRevision ? { sourceRevision: source(item.sourceRevision) } : {}),
       ...(item.runId ? { runId: run(item.runId) } : {}),
     }));
@@ -338,7 +384,8 @@ export function mapForkSnapshot(
       if (message.provenance.origin !== 'history' || !message.provenance.sourceRevision) continue;
       const p = message.provenance;
       const mapped = source(p.sourceRevision);
-      const id = `${p.blockId}:${message.role === 'user' ? 'request' : 'source'}:${mapped}`;
+      const suffix = message.id.slice(`${p.blockId}:`.length);
+      const id = `${p.blockId}:${mapNativeMessageId(suffix, (id) => source(id)!)}`;
       ids.set(message.id, id);
       message.id = id;
       p.sourceRevision = mapped;
@@ -349,4 +396,9 @@ export function mapForkSnapshot(
     for (const trace of snapshot.promptCompilation.trace)
       trace.messageIds = trace.messageIds.map((id) => ids.get(id) ?? id);
   }
+  remapNativeRisuSnapshot(
+    snapshot,
+    (id) => source(id)!,
+    (id) => run(id)!
+  );
 }

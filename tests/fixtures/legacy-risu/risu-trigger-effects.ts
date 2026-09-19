@@ -1,6 +1,7 @@
-import { EXTENSION_PROGRAM_API, type ExtensionProgram } from '../core/extension-program.js';
-import { HOST_TEXT_PAGE_MAX } from '../core/paging.js';
-import type { PromptExpression } from '../core/prompt-program.js';
+// Test-only builder for previously stored wrapper programs; not a product import path.
+import { EXTENSION_PROGRAM_API, type ExtensionProgram } from '../../../core/extension-program.js';
+import { HOST_TEXT_PAGE_MAX } from '../../../core/paging.js';
+import type { PromptExpression } from '../../../core/prompt-program.js';
 import { RisuCbs, UnsupportedCbs } from './risu-cbs.js';
 
 /** Risu computes these with JavaScript Number and String, so the guest language is JavaScript. */

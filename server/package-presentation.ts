@@ -6,6 +6,9 @@ import type { RunSnapshot } from '../core/types.js';
 import { applyPackageTransforms } from './package-transforms.js';
 import { packageImages } from '../core/package-images.js';
 import { applyPromptDisplayTransforms, currentPromptInputTransform } from './prompt-transforms.js';
+import { nativeRisuContext } from './risu-native-context.js';
+import { executeRisuNative } from './risu-native-runtime.js';
+import { renderNativeRisuMessage } from './risu-native-render.js';
 
 export type PackagePresentationSource = {
   id: string;
@@ -23,6 +26,16 @@ export async function buildPackagePresentation(
     skipSourceTransforms?: boolean;
     /** Stored output/display hook result for this exact response; never recomputed here. */
     displayEdit?: { text: string; changed: boolean; applied: string[] };
+    nativeMessageIndex?: number;
+    nativeDisplayText?: string;
+    nativeTranslationText?: string;
+    /** One immutable source may own additional script-authored user/character messages. */
+    nativeMessages?: {
+      text: string;
+      index: number;
+      role: 'user' | 'assistant';
+      primary: boolean;
+    }[];
   } = {}
 ) {
   if (
@@ -38,6 +51,85 @@ export async function buildPackagePresentation(
     throw new ContentPackageError('PACKAGE_PRESENTATION_TRANSLATION_MISMATCH');
   if (state && (state.sourceRevision !== source.id || state.sourceHash !== source.hash))
     throw new ContentPackageError('PACKAGE_PRESENTATION_STATE_MISMATCH');
+  const native = nativeRisuContext(snapshot);
+  if (native) {
+    const index =
+      options.nativeMessageIndex ??
+      (snapshot.packageStart?.mode === 'authored' || snapshot.nativeRisuAuthored?.greeting
+        ? -1
+        : native.messages.length);
+    const display = async (value: string, index: number) => {
+      const edited = await executeRisuNative({
+        ...native,
+        event: 'editDisplay',
+        text: value,
+        meta: { index },
+      });
+      const result = await renderNativeRisuMessage({
+        native: native.native,
+        text: edited.text ?? value,
+        context: { ...native, variables: edited.variables, messageIndex: index, displaying: true },
+      });
+      return {
+        text: value,
+        changed: true,
+        applied: [] as string[],
+        ...result,
+        issues: [...new Set([...result.issues, ...edited.warnings])],
+      };
+    };
+    const messages = options.nativeMessages ?? [
+      {
+        text: options.nativeDisplayText ?? source.text,
+        index,
+        role: 'assistant' as const,
+        primary: true,
+      },
+    ];
+    const parts: Awaited<ReturnType<typeof display>>[] = [];
+    for (const message of messages) parts.push(await display(message.text, message.index));
+    const combine = (values: typeof parts) =>
+      values.length === 1
+        ? values[0]!
+        : {
+            text: values.map((value) => value.text).join('\n\n'),
+            changed: true,
+            applied: [] as string[],
+            html: values
+              .map(
+                (value, at) =>
+                  `<section data-risu-message-index="${messages[at]!.index}" data-risu-message-role="${messages[at]!.role}">${value.html}</section>`
+              )
+              .join('\n'),
+            css: values.map((value) => value.css).join('\n'),
+            issues: [...new Set(values.flatMap((value) => value.issues))],
+          };
+    const original = combine(parts);
+    const primary = messages.findIndex((message) => message.primary);
+    let translation: ReturnType<typeof combine> | undefined;
+    if (source.translation && primary !== -1) {
+      // A translation and its image anchors belong only to the stored canonical source body.
+      // Extra script messages retain their original content in either reading mode.
+      const translated = [...parts];
+      translated[primary] = await display(
+        options.nativeTranslationText ?? source.translation.text,
+        messages[primary]!.index
+      );
+      translation = combine(translated);
+    }
+    return {
+      sourceRevision: source.id,
+      sourceHash: source.hash,
+      format: 'risu-html' as const,
+      original,
+      ...(translation ? { translation } : {}),
+      issues: [...original.issues, ...(translation?.issues ?? [])],
+      stateViews: [],
+      inlineImageUrls: undefined,
+      inputTransform: undefined,
+      request: { text: snapshot.request, changed: false, applied: [] as string[] },
+    };
+  }
   // Presentation uses all attachments even when persona reference is disabled for main writing.
   const packages = compiledPackages(snapshot, 'status');
   const rules = packages.flatMap((p) => p.transforms);

@@ -15,6 +15,8 @@ import { loreSelectionPending } from './lore-selection.js';
 import { hasPromptInputTransforms } from './prompt-transforms.js';
 import { chatVariableProfile } from './chat-variable-context.js';
 import { captureRunConversation } from './package-conversation.js';
+import { nativeRisuPending } from './risu-native-run.js';
+import { nativeRisuPresetPending } from './risu-native-preset.js';
 
 export type ReservationPurpose =
   | {
@@ -42,7 +44,9 @@ export function freezeReservationSnapshot(
   options: ReservationPurpose
 ): RunSnapshot {
   if (options.purpose === 'resume-state')
-    return base.behaviorExecution?.deferredAutomatic ||
+    return nativeRisuPending(base) ||
+      nativeRisuPresetPending(base) ||
+      base.behaviorExecution?.deferredAutomatic ||
       hasPromptInputTransforms(base) ||
       loreSelectionPending(base)
       ? base
@@ -54,9 +58,16 @@ export function freezeReservationSnapshot(
   const translationPreview = options.purpose === 'preview-translation';
   if (
     reserved &&
-    authored !== (base.packageStart?.mode === 'authored' || base.transcriptImport !== undefined)
+    authored !==
+      (base.packageStart?.mode === 'authored' ||
+        base.transcriptImport !== undefined ||
+        base.nativeRisuAuthored !== undefined)
   )
     throw new Error('RESERVATION_AUTHORSHIP_MISMATCH');
+
+  // A native card action already executed in an isolated worker. Adopting its authored
+  // messages must not execute the card again or prepare a story-model request.
+  if (base.nativeRisuAuthored) return base;
 
   if (authored && isSourceOnlyTranscript(base)) {
     validateSourceOnlyTranscript(base);
@@ -98,6 +109,13 @@ export function freezeReservationSnapshot(
   if (reserved && options.sceneCommandId)
     frozen = freezeOutline(store, options.sceneCommandId, frozen);
   frozen = { ...frozen, logicalHistory: captureLogicalHistory(store, frozen) };
+  const previousNative = frozen.history.at(-1);
+  if (previousNative) {
+    const previous = store.run(store.source(previousNative.revision).runId).snapshot;
+    const revision =
+      previous.nativeRisuExecution?.historyRevision ?? previous.nativeRisuHistoryRevision;
+    if (revision) frozen.nativeRisuHistoryRevision = revision;
+  }
   if (options.purpose === 'preview-main' || options.purpose === 'preview-translation')
     frozen = { ...frozen, executionClock: options.executionClock() };
   frozen = freezePackageStates(store, frozen, reserved);
@@ -122,7 +140,9 @@ export function freezeReservationSnapshot(
   // snapshot that still owes one reserves uncompiled and the worker compiles after the answer lands.
   if (
     options.purpose === 'run' &&
-    (frozen.behaviorExecution?.deferredAutomatic ||
+    (nativeRisuPending(frozen) ||
+      nativeRisuPresetPending(frozen) ||
+      frozen.behaviorExecution?.deferredAutomatic ||
       hasPromptInputTransforms(frozen) ||
       loreSelectionPending(frozen))
   ) {

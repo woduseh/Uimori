@@ -27,7 +27,7 @@ export const CATALOG_SUMMARY_CHARS = 160;
 /** Serialized length budget for the whole catalog list, which rides in every main request. */
 export const CATALOG_CHARS = 24_000;
 export const CATALOG_READ_GUIDANCE =
-  'The catalog lists reference summaries, not their text. Before writing, choose the entries the current request needs and read them with knowledge.read; use knowledge.search for entries the catalog does not list. Skip entries unrelated to the request.';
+  'Relevant references may already be included in the input; do not read them again. The catalog contains summaries of additional references. If the reply needs missing detail, fetch known ids together with knowledge.read({ids:[...]}); one id also works. Use knowledge.search only when the needed entry is not identifiable from the catalog. Retrieval is optional when the supplied context is sufficient.';
 /** Item cap of the `uimori-prompt-1` catalog, which listed every entry's full metadata. */
 const LEGACY_CATALOG_ITEMS = 100;
 
@@ -116,6 +116,7 @@ export type MainInput = ModelInput & {
     hash: string;
     text: string;
     loreContext?: LorePlacement;
+    nativeRisuPosition?: import('./risu-native.js').NativeRisuLorePosition;
   }[];
   state?: {
     values: import('./state.js').StateValues;
@@ -139,7 +140,7 @@ export function pinnedSlotSources(
   input: MainInput,
   slot: string
 ): NonNullable<MainInput['pinnedSources']> {
-  const sources = input.pinnedSources ?? [];
+  const sources = (input.pinnedSources ?? []).filter((item) => !item.nativeRisuPosition);
   if (slot === 'references') return sources;
   if (slot === 'backgroundLore')
     return sources.filter((item) => item.loreContext?.placement !== 'scene');
@@ -166,7 +167,7 @@ export function buildMainInput(
   const input: MainInput = {
     role: 'main',
     contract: '',
-    task: snapshot.request,
+    task: snapshot.nativeRisuExecution?.request ?? snapshot.request,
     preset: snapshot.settings.preset,
     facts: [],
     history: structuredClone(snapshot.history),
@@ -224,6 +225,9 @@ export function buildMainInput(
         kind: r.sourceKind ?? r.kind,
         text: r.text,
         ...(r.loreContext ? { loreContext: structuredClone(r.loreContext) } : {}),
+        ...(r.nativeRisuPosition
+          ? { nativeRisuPosition: structuredClone(r.nativeRisuPosition) }
+          : {}),
       })),
       ...packageData.instructions.map((n) => ({ ...n, kind: 'instruction' })),
     ].map((r) => ({ ...r, hash: hash(r.text) }));
@@ -314,6 +318,23 @@ export type ToolAction = {
   recoveredFromTruncation?: boolean;
 };
 
+export type KnowledgeReadResult = {
+  source: { id: string; revision: number; hash: string };
+  range: { start: number; end: number };
+  text: string;
+};
+/** Callers verify the full event against executeTool before treating these as durable receipts. */
+export function knowledgeReadResults(event: ToolEvent): KnowledgeReadResult[] {
+  if (event.denied || event.name !== 'knowledge.read') return [];
+  const data = event.result as Record<string, unknown>;
+  if (Array.isArray(data.items))
+    return data.items.flatMap((item) => {
+      const entry = item as { denied?: boolean; read?: KnowledgeReadResult };
+      return entry.denied === false && entry.read ? [entry.read] : [];
+    });
+  return [data as unknown as KnowledgeReadResult];
+}
+
 /** Execute a reusable read action against the immutable Run's local corpus. */
 export function executeTool(
   snapshot: RunSnapshot,
@@ -347,6 +368,34 @@ export function executeTool(
   // Scope applies before search, counts, pagination, and individual reads alike.
   const scope = roleResources(snapshot, role);
   const { args } = action;
+  if (action.name === 'knowledge.read' && Object.hasOwn(args, 'ids')) {
+    if (
+      Object.keys(args).some((key) => !['ids', 'offset', 'limit'].includes(key)) ||
+      !Array.isArray(args.ids) ||
+      args.ids.length < 1 ||
+      args.ids.length > 16 ||
+      args.ids.some((id) => typeof id !== 'string' || !id || id.length > 200) ||
+      new Set(args.ids).size !== args.ids.length
+    )
+      return denied('INVALID_ARGUMENTS');
+    const offset = pageNumber(args.offset, 0, Number.MAX_SAFE_INTEGER);
+    const limit = pageNumber(args.limit, 4096, 4096);
+    if (offset === null || limit === null || limit === 0) return denied('INVALID_ARGUMENTS');
+    const items = args.ids.map((id) => {
+      const result = executeTool(
+        snapshot,
+        { callId: action.callId, name: 'knowledge.read', args: { id, offset, limit } },
+        signal,
+        role
+      );
+      return {
+        id,
+        denied: result.denied,
+        ...(result.denied ? { error: result.result } : { read: result.result }),
+      };
+    });
+    return { ...action, args: { ids: args.ids, offset, limit }, denied: false, result: { items } };
+  }
   const search = action.name === 'knowledge.search' || action.name === 'skills.list';
   if (
     Object.keys(args).some(

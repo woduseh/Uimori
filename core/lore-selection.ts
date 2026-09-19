@@ -22,7 +22,8 @@ export type LoreSelectionEntry = {
    * `budget` names a candidate the trim dropped. `unknown` names an id the answer invented, which is
    * deliberately not a candidate of this attachment and decides nothing.
    */
-  omitted: { id: string; reason: 'budget' | 'unknown' }[];
+  omitted: { id: string; reason: 'budget' | 'unknown' | 'irrelevant' }[];
+  judgment?: import('./judgment.js').JevJudgmentReceipt;
   /** The context model the request used. Absent when no provider request was made. */
   model?: string;
   /** The candidate list reached `LORE_SELECTION_LIMITS.catalogChars` and was cut. */
@@ -80,7 +81,7 @@ export function projectLoreSelectionReceipt(
   return new Set(entry.selected);
 }
 
-const REASONS = ['budget', 'unknown'];
+const REASONS = ['budget', 'unknown', 'irrelevant'];
 function record(value: unknown, keys: string[]): Record<string, unknown> {
   if (
     !value ||
@@ -112,6 +113,7 @@ export function validateLoreSelectionReceipt(value: unknown): LoreSelectionRecei
       'model',
       'partial',
       'error',
+      'judgment',
     ]);
     text(entry.key, 400);
     keys.push(entry.key);
@@ -139,6 +141,47 @@ export function validateLoreSelectionReceipt(value: unknown): LoreSelectionRecei
     if (entry.model !== undefined) text(entry.model, 400);
     if (entry.partial !== undefined && entry.partial !== 'catalog') fail('LORE_SELECTION_PARTIAL');
     if (entry.error !== undefined) text(entry.error, 400);
+    if (entry.judgment !== undefined) {
+      const judgment = record(entry.judgment, [
+        'backend',
+        'threshold',
+        'maxSelectedTokens',
+        'selectedTokens',
+        'scores',
+        'attemptId',
+      ]);
+      if (
+        judgment.backend !== 'jev' ||
+        typeof judgment.threshold !== 'number' ||
+        !Number.isFinite(judgment.threshold) ||
+        judgment.threshold < 0 ||
+        judgment.threshold > 1 ||
+        !Number.isSafeInteger(judgment.maxSelectedTokens) ||
+        Number(judgment.maxSelectedTokens) < 0 ||
+        Number(judgment.maxSelectedTokens) > 100_000 ||
+        !Number.isSafeInteger(judgment.selectedTokens) ||
+        Number(judgment.selectedTokens) < 0 ||
+        Number(judgment.selectedTokens) > Number(judgment.maxSelectedTokens) ||
+        !Array.isArray(judgment.scores) ||
+        judgment.scores.length > LORE_SELECTION_LIMITS.ids
+      )
+        fail('LORE_SELECTION_JUDGMENT');
+      const scoreIds = new Set<string>();
+      for (const rawScore of judgment.scores as unknown[]) {
+        const score = record(rawScore, ['id', 'probability']);
+        text(score.id, 200);
+        if (
+          scoreIds.has(score.id) ||
+          typeof score.probability !== 'number' ||
+          !Number.isFinite(score.probability) ||
+          score.probability < 0 ||
+          score.probability > 1
+        )
+          fail('LORE_SELECTION_JUDGMENT');
+        scoreIds.add(score.id);
+      }
+      if (judgment.attemptId !== undefined) text(judgment.attemptId, 200);
+    }
   }
   if (new Set(keys).size !== keys.length) fail('LORE_SELECTION_DUPLICATE_KEY');
   return structuredClone(value) as LoreSelectionReceipt;

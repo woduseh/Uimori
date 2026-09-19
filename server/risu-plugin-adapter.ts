@@ -18,7 +18,7 @@ import { RISU_PLUGIN_API_SUPPORT, type RisuPluginPreview } from '../core/risu-pl
 /**
  * The five phases a Risu plugin's registrations can reach on the current execution model. A plugin
  * is imported as a module package whose actions wrap the plugin file in a `risuai` shim, exactly as
- * server/risu-lua-adapter.ts wraps Lua: there is no resident instance, so the file re-runs per
+ * previously stored Lua wrappers: there is no resident instance, so the file re-runs per
  * event and only the registrations made during that run are dispatched for that event.
  */
 export const RISU_PLUGIN_EVENTS = [

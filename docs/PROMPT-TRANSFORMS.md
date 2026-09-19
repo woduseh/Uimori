@@ -29,8 +29,8 @@ type PromptTextTransform = {
 
 동적 치환은 기존 `PromptTemplate` AST를 사용해요. 옵션 값, `bot.name`, `user.name`, `variables`, `message.text/role/index/lastIndex/current`만 읽어요. index는 요약 전 전송 가능 원문 메시지 목록의 0부터 시작하는 위치예요. input의 마지막은 현재 요청, display의 마지막은 해당 시점의 완성 응답이에요. `message.text`는 앞선 규칙의 출력이 아닌 원래 대상 텍스트예요. `char` 슬롯은 봇 이름, `slot`은 빈 문자열이에요. 임의 DB·상태·통신 접근은 없어요. 계산된 값의 `$`는 리터럴로 처리하며 제작자가 text 노드에 작성한 캡처 토큰은 유지해요. 치환문을 직접 수정하면 이전 동적 템플릿이 해제되고 안내해요. 복잡한 AST는 기존 전체 구성 JSON 편집을 사용해요.
 
-`server/risu-preset-regex.ts`는 고정 Risu 구현의 `editprocess`→`input`, `editdisplay`→`display`, order·기본 flags·개행·캡처·지원 CBS 조건을 이 구조로 변환해요. Risu `#if`의 줄 들여쓰기 제거는 일반 AST의 `trimIndent`로 표현해요. 프리셋 이름·특정 패턴·봇 전용 분기는 없어요.
+이전 Risu 프리셋 가져오기가 만든 `editprocess`→`input`, `editdisplay`→`display` 변환은 저장된 AST로 계속 실행해요. Risu `#if`의 줄 들여쓰기 제거는 그 AST의 `trimIndent`로 표현돼요. 이를 만들던 별도 변환기는 제거했으며, 새 RISUP는 [네이티브 프리셋](RISU-IMPORT.md#risu-프리셋)으로 원본 정규식과 CBS를 실행해요.
 
-`editinput`·`editoutput`, 동적 패턴·상태 변경·주입/이동 명령, CBS와 캡처를 섞어 평가 순서가 달라지는 규칙은 미지원으로 보존해요. Risu의 변환 후 전체 메시지 CBS 재평가는 수행하지 않아요. `{{data}}`는 고정 Risu 소스에서 캡처 치환이 아니므로 임의로 `$&`로 바꾸지 않아요. 미지원·실행 차이는 가져오기 화면에서 확인해요.
+이전 변환 AST에는 `editinput`·`editoutput`, 동적 패턴·상태 변경·주입/이동 명령이나 변환 후 전체 메시지 CBS 재평가가 없어요. 이 제한을 새 네이티브 실행에 적용하지 않으며, 네이티브의 지원 단계와 남은 host 특수 명령 차이는 가져오기 안내와 위 문서를 기준으로 확인해요. 기존 저장 AST의 캡처나 `{{data}}` 의미를 새 규칙으로 바꾸지 않아요.
 
 검증 근거는 `tests/prompt-transform-flow.test.ts`의 합성 native HTTP 전송·후보·fork/archive, `tests/prompt-transforms.test.ts`의 내용 결합·동일 문장 index·시간 초과·값 이스케이프·표시/전송 분리와 기존 표시 검사의 공통 실행기 회귀예요. 브라우저는 `verify:packages`의 프리셋 저장·재개방·요청 비교를 사용해요. 개인 Phēmē 표본은 로컬 실행만 확인했고 실제 외부 모델의 창작 품질이나 전체 표본 인수를 뜻하지 않아요.

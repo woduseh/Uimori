@@ -125,8 +125,8 @@ export function RisuPresetImport({
       >
         <section className="risu-import-body" aria-label="Risu 프리셋 검토" aria-busy={busy}>
           <p className="muted">
-            프롬프트·토글·정규식의 지원 범위를 확인하고 새 작문 프롬프트로 저장해요. 원본 파일도
-            보존해요. 가져온 뒤 현재 채팅의 작문 프롬프트로 선택해서 사용할 수 있어요.
+            Risu 프롬프트·토글·정규식 원본을 새 작문 프롬프트로 저장해요. 원본 파일도 보존해요.
+            가져온 뒤 현재 채팅의 작문 프롬프트로 선택해서 사용할 수 있어요.
           </p>
           <p className="muted">모델 연결과 전역 기본 프롬프트는 바뀌지 않아요.</p>
           <label className="risu-import-file">

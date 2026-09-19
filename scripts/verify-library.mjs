@@ -36,6 +36,7 @@ await runBrowserVerification({
     'LIMG05',
     'DEL01',
     'NSUI01',
+    'NSUI02',
     'PKUI01',
     'PKUI03',
     'PKUI04',

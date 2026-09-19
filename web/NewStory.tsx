@@ -1,3 +1,4 @@
+import { RisuStartPreview } from './RisuStartPreview.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Chat } from '../core/types.js';
 import type { Content, Library } from '../core/product.js';
@@ -98,7 +99,13 @@ export function NewStory({
   const [title, setTitle] = useState('');
   const [loadedContents, setLoadedContents] = useState<Record<string, Content>>({});
   const [packageLoading, setPackageLoading] = useState(false);
-  const [start, setStart] = useState('');
+  const [start, setStart] = useState(
+    initialBot?.package?.nativeRisu &&
+      initialBot.package.starts?.some((item) => item.id === 'start-0')
+      ? 'start-0'
+      : ''
+  );
+  const initializedStart = useRef<string | null>(null);
   const [packageValues, setPackageValues] = useState<Record<string, Record<string, PromptValue>>>(
     {}
   );
@@ -356,6 +363,17 @@ export function NewStory({
     (initialBot && refValue(initialBot) === bot
       ? initialBot
       : contents.find((item) => refValue(item) === bot));
+  const activeStartKey = activeBot ? refValue(activeBot) : '';
+  useEffect(() => {
+    if (!activeBot?.package || initializedStart.current === activeStartKey) return;
+    initializedStart.current = activeStartKey;
+    setStart(
+      activeBot.package.nativeRisu &&
+        activeBot.package.starts?.some((item) => item.id === 'start-0')
+        ? 'start-0'
+        : ''
+    );
+  }, [activeStartKey, activeBot]);
   const activePersona = frozen
     ? frozen.persona
     : persona
@@ -450,6 +468,7 @@ export function NewStory({
             selectedContent={activeBot}
             onChange={(value) => {
               setBot(value);
+              initializedStart.current = null;
               setStart('');
             }}
             disabled={locked}
@@ -553,12 +572,20 @@ export function NewStory({
                 aria-label="시작 미리보기"
                 style={{ whiteSpace: 'pre-wrap', maxHeight: 260, overflow: 'auto' }}
               >
-                <Prose
-                  text={opening.text}
-                  allowedImageUrls={(activeBot.package.images ?? [])
-                    .filter((image) => image.allowedUse !== 'profile')
-                    .map((image) => `/api/package-image-blobs/${image.blobHash}`)}
-                />
+                {activeBot.package.nativeRisu ? (
+                  <RisuStartPreview
+                    content={activeBot}
+                    startId={start}
+                    userName={activePersona?.package?.identity?.name ?? activePersona?.title}
+                  />
+                ) : (
+                  <Prose
+                    text={opening.text}
+                    allowedImageUrls={(activeBot.package.images ?? [])
+                      .filter((image) => image.allowedUse !== 'profile')
+                      .map((image) => `/api/package-image-blobs/${image.blobHash}`)}
+                  />
+                )}
               </div>
               <p className="muted">
                 {opening.mode === 'authored'

@@ -30,6 +30,8 @@ compilePromptProgram(program, { values, slots, history, runtime, limits }): Prom
 
 `PromptProgram.variableDefaults?: Record<string,string>`와 `ContentPackage.variableDefaults?: {values: Record<string,string>, attachmentRoles?: PackageRole[]}`는 쓰기 권한이 없는 읽기 기본값이에요. `core/template-variables.ts`의 `resolveTemplateVariableContext`는 고정 profile의 공유 변수 override를 먼저 읽고, 허용 역할의 attachment 선언 순서와 main 프롬프트 기본값으로 없는 키를 보충해요. `resolveTemplateVariables`는 같은 결과의 값만 돌려주는 facade예요. 본문·로어·시작문·지침·패널·실행 문맥·모델의 자료 읽기·프리셋 정규식은 이 계산을 공유해요.
 
+네이티브 RISUP는 `PromptProgram.nativeRisuPreset`의 Risu 프롬프트 원본이 기준이에요. `blocks`·`controls`·`variableDefaults`는 원본에서 파생하며 저장 검증 시 불일치를 거절해요. 생성 전에 native CBS worker가 필드들을 순서대로 평가하고 `RunSnapshot.nativeRisuPresetProgram`에 결과·변수를 고정해요. 재컴파일은 이 결과와 현재 고정 문맥의 슬롯·히스토리를 결합하며, 준비되지 않은 네이티브 프롬프트는 모델 요청으로 보내지 않아요. Risu 채팅 블록의 역할 변경과 authornote 기본값도 파생 프로그램에 반영하고, 모델 설정은 원본 프롬프트와 분리해요.
+
 Host가 `context.variables`를 제공하면 `{op:'get',args:[{context:['variables']},'key']}`로 읽어요. 없는 값은 native null이며 빈 문자열은 그대로 유지해요. JSON 데이터는 재해석하지 않아요. 기본값 선언은 자료/프롬프트 개정과 Run profile에 보존하고 저장 상태의 초기값으로 복사하지 않아요. 이후 자료를 수정해도 과거 예약·시작문·복원의 해석은 바뀌지 않아요. 선언과 공유 변수 snapshot이 없는 과거 profile에는 빈 변수 필드를 추가하지 않아요.
 
 선언은 최대 2,000개 키·값당 200,000자·JSON 합계 1,000,000자이며 기존 unsafe key/JSON 검사를 공유해요. 여러 자료의 합산이 한도를 넘으면 일부 키만 채택하지 않고 변수층 전체를 미적용해요. 본문·로어와 변수 참조 시작문은 보존 원문, 지침은 기존 사용 불가 경고, main 프롬프트는 `TEMPLATE_VARIABLE_DEFAULTS_LIMIT` 경고와 없는 변수 조회로 계속해요. 시작문 경고는 미리보기에서 표시하고 snapshot에도 보존해요. 기존 상태를 초기화하거나 본문 채팅을 금지하지 않아요.
@@ -48,7 +50,7 @@ Host가 `context.variables`를 제공하면 `{op:'get',args:[{context:['variable
 
 제작자 JavaScript 행동도 [공유 변수 Host API](EXTENSION-PROGRAMS.md#host-api로-분기-공유-변수-읽기와-쓰기)를 사용할 수 있어요. `variables.read/write` 선언과 쓰기의 자료 개정별 사용자 grant를 확인하고 계산 중에는 임시 변경만 적용해요. 사용자 행동은 상태·공유 변수·후속 요청을 함께 채택하며, 생성 전/모델 행동은 전역 실행 순서대로 source에 채택해요. 응답 후에는 성공한 패키지의 값만 뒤 패키지가 이어받고 실패한 임시 변경은 폐기해요.
 
-이후 행동·생성 전 지침·자료 읽기는 파생 profile의 공유 상태를 읽지만 원래 Run snapshot과 이미 주 모델에 전송한 프롬프트는 다시 작성하지 않아요. Host의 변수 영수증은 읽기 의존성과 변경분을 기록하며 과거 무변수 영수증은 그대로 보존해요. Risu trigger·Lua의 직접 실행 어댑터는 [Lua 콜백 가져오기](RISU-IMPORT.md#lua-콜백-가져오기)로 구현했어요. 그 어댑터나 공통 Host 연결을 특정 표본의 전체 실행 완료로 해석하지 않아요.
+이후 행동·생성 전 지침·자료 읽기는 파생 profile의 공유 상태를 읽지만 원래 Run snapshot과 이미 주 모델에 전송한 프롬프트는 다시 작성하지 않아요. Host의 변수 영수증은 읽기 의존성과 변경분을 기록하며 과거 무변수 영수증은 그대로 보존해요. 새 Risu 자료는 [네이티브 트리거·Lua 런타임](RISU-IMPORT.md)을 사용하고, 과거 저장 wrapper는 기존 Host 실행을 유지해요. API 연결만으로 특정 봇의 전체 실행이 검증됐다고 해석하지 않아요.
 
 ## 데이터 AST
 

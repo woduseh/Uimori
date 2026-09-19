@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import type { RisuPresetImportApply } from '../core/risu-preset.js';
-import { navigationAction, selectPromptSection } from './ui-navigation.js';
+import { navigationAction } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import type { ChatDetail } from '../core/types.js';
+import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 
 test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission through dialog close', async ({
   page,
@@ -87,7 +88,7 @@ test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission th
 test('RISUPRESETUI02 imports a real preset document into the existing prompt editor', async ({
   page,
   request,
-}) => {
+}, info) => {
   const title = `RISUPRESETUI02 ${Date.now()}`;
   const source = {
     name: title,
@@ -133,41 +134,38 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await dialog.getByRole('button', { name: '가져온 프롬프트 편집', exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(title);
-  await selectPromptSection(
-    page.getByRole('region', { name: '프롬프트 구성', exact: true }),
-    '기본 옵션'
+  const composer = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집', exact: true });
+  await expect(composer).toBeVisible();
+  await expect(composer.getByLabel('Imported Mood', { exact: true })).toHaveValue('null');
+  await composer.getByLabel('Imported Mood', { exact: true }).selectOption('"1"');
+  await composer.getByText('1. plain', { exact: true }).click();
+  await expect(composer.getByLabel('1번 프롬프트 본문')).toHaveValue(
+    source.promptTemplate[0]!.text!
   );
-  await expect(page.getByLabel('Imported Mood', { exact: true })).toHaveValue('null');
-  await page.getByLabel('Imported Mood', { exact: true }).selectOption('"1"');
-  await expect(page.getByLabel('Imported Mood', { exact: true })).toHaveValue('"1"');
-  const composer = page.getByRole('region', { name: '프롬프트 구성', exact: true });
-  await selectPromptSection(composer, '미리보기');
-  await composer.getByRole('button', { name: '미리보기 갱신', exact: true }).click();
-  await expect(composer.locator('.pc-message-list')).toContainText('VIVID DECLARED_LOCATION');
-  await selectPromptSection(
-    page.getByRole('region', { name: '프롬프트 구성', exact: true }),
-    '텍스트 변환'
-  );
-  await page.getByRole('button', { name: '변환 추가', exact: true }).click();
-  const rule = page.getByRole('group', { name: '텍스트 변환 1', exact: true });
-  await rule.getByLabel('변환 이름', { exact: true }).fill('요청 치환');
-  await rule.getByLabel('변환 적용 단계', { exact: true }).selectOption('input');
-  await rule.getByLabel('변환 대상', { exact: true }).selectOption('user');
-  await rule.getByLabel('변환 정규식 패턴', { exact: true }).fill('원래');
-  await rule.getByLabel('변환 치환문', { exact: true }).fill('전송');
-  await rule.getByRole('checkbox', { name: '사용', exact: true }).check();
+  if (process.env.NR_VISUAL_REVIEW === '1') {
+    await page.screenshot({
+      path: info.outputPath('risup-native-editor-mobile.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+    await page.screenshot({
+      path: info.outputPath('risup-native-editor-desktop.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  }
+  await composer.getByText('정규식 스크립트', { exact: true }).click();
+  const regex = [{ in: '원래', out: '전송', type: 'editinput', ableFlag: true, flag: 'g' }];
+  await composer.getByLabel('Risu 정규식 원본 JSON').fill(JSON.stringify(regex));
   await page.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   await expect(page.getByText('프롬프트를 저장했어요.', { exact: true })).toBeVisible();
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
-  await selectPromptSection(
-    page.getByRole('region', { name: '프롬프트 구성', exact: true }),
-    '텍스트 변환'
+  await expect(composer.getByLabel('Imported Mood', { exact: true })).toHaveValue('"1"');
+  await composer.getByText('정규식 스크립트', { exact: true }).click();
+  await expect(composer.getByLabel('Risu 정규식 원본 JSON')).toHaveValue(
+    JSON.stringify(regex, null, 2)
   );
-  await expect(rule.getByLabel('변환 정규식 패턴', { exact: true })).toHaveValue('원래');
-  await expect(rule.getByLabel('변환 치환문', { exact: true })).toHaveValue('전송');
-  await expect(rule.getByLabel('변환 적용 단계', { exact: true })).toHaveValue('input');
-  await expect(rule.getByRole('checkbox', { name: '사용', exact: true })).toBeChecked();
   expect(await (await request.get('/api/model-workspace')).json()).toEqual(before);
 });
 
@@ -197,7 +195,7 @@ test('RISUPRESETUI03 request projection keeps the original edit value and expose
     })
     .toBe('completed');
   // Synthetic presentation isolates the UI contract; server transformation has separate coverage.
-  await page.route('**/api/chats/*/sources/*/presentation', async (route) => {
+  await page.route(/\/api\/chats\/[^/]+\/sources\/[^/]+\/presentation(?:\?|$)/u, async (route) => {
     const result = await (await route.fetch()).json();
     await route.fulfill({
       json: {

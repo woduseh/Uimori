@@ -153,6 +153,7 @@ const runFailed = (status: string) =>
   ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(status);
 function App() {
   const s = useStory();
+  const [nativeNotices, setNativeNotices] = useState<string[]>([]);
   const testMode = useTestMode();
   const compact = useCompactLayout();
 
@@ -978,6 +979,7 @@ function App() {
                           const { source, index } = entry;
                           return (
                             <SourceReader
+                              branchId={s.branch?.id}
                               latest={source.id === s.sources.at(-1)?.id}
                               onModelSettings={() => {
                                 setSettingsTab('models');
@@ -1017,6 +1019,9 @@ function App() {
                               refresh={() => s.refresh(s.selected)}
                               onError={s.setError}
                               onFork={s.fork}
+                              onNativeNotice={(messages) =>
+                                setNativeNotices((previous) => [...previous, ...messages])
+                              }
                               onRetry={
                                 s.canReuseRun(source.runId)
                                   ? async () => {
@@ -1707,7 +1712,17 @@ function App() {
     </div>
   );
   return (
-    <ReadingPreferencesContext value={reading.settings}>{workspace}</ReadingPreferencesContext>
+    <ReadingPreferencesContext value={reading.settings}>
+      {workspace}
+      <Dialog
+        open={nativeNotices.length > 0}
+        title="카드 알림"
+        onClose={() => setNativeNotices((notices) => notices.slice(1))}
+      >
+        <p style={{ whiteSpace: 'pre-wrap' }}>{nativeNotices[0]}</p>
+        <button onClick={() => setNativeNotices((notices) => notices.slice(1))}>확인</button>
+      </Dialog>
+    </ReadingPreferencesContext>
   );
 }
 createRoot(document.getElementById('root')!).render(

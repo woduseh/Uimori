@@ -98,6 +98,7 @@ export type PromptWorkspace = {
   translation: CurrentPrompt;
   translationPolicy: {
     refusalModel: ModelRef | null;
+    judgment?: import('./translation-settings.js').TranslationJudgmentPolicy;
     maxRetries: number;
     maxCalls: number;
   };

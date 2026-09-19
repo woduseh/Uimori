@@ -120,7 +120,7 @@ curl -sS -X POST https://story.example.com/api/maintenance \
 
 [Nginx 설정](../deploy/nginx.conf)은 요청의 원래 `Host`와 `Origin`을 그대로 전달해 앱이 `NR_PUBLIC_ORIGIN`과 비교하게 해요. 임의 Host를 허용된 Host로 덮어쓰면 이 검사가 약해져요. SSE용 응답 버퍼링·캐시는 끄고 응답 읽기 간격 제한을 3600초로 설정했어요. Docker DNS를 다시 조회하므로 앱 컨테이너 교체 후 새 주소를 사용해요. [Nginx Host 전달·버퍼링·timeout](https://nginx.org/en/docs/http/ngx_http_proxy_module.html), [DNS resolver](https://nginx.org/en/docs/http/ngx_http_core_module.html#resolver)
 
-프록시 요청 본문 한도는 archive import의 최대 64 MiB에 맞췄어요. 서버는 RISU 검사 24 MiB, 원문·번역 직접 저장 8 MiB 등 더 작은 route별 한도를 계속 적용해요. [Nginx 본문 크기 제한](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
+프록시 요청 본문 한도는 native transfer·archive import의 256 MiB 파일에 요청 wrapper 여유를 더한 257 MiB예요. 서버는 RISU 본문 검사 24 MiB, 원문·번역 직접 저장 8 MiB 등 더 작은 route별 한도를 계속 적용해요. 원본 CHARX staged 업로드와 채팅 백업도 각각 256 MiB까지 받아요. [Nginx 본문 크기 제한](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
 
 다른 리버스 프록시를 사용한다면 동일한 조건을 유지해요. 호스트에서 앱을 직접 실행할 때는 Node `>=24.14.0 <25`, 빌드 산출물, 영구 `NR_DB` 경로를 준비하고 `NR_HOST=127.0.0.1`로 프록시만 접근하게 할 수 있어요. `/uimori` 같은 하위 경로 배포는 지원하지 않아요.
 

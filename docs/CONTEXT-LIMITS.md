@@ -69,6 +69,8 @@
 
 요약 직접 편집과 이전 요약으로 되돌리기도 본문 Run 없이 저장할 수 있어요. 자동·수동·직접 편집은 같은 불변 checkpoint 형식을 사용해요. 저장은 활성 revision과 선택 분기 head를 비교하고, 같은 요청 키를 재전송하면 기존 결과를 돌려줘요. 되돌리기는 현재 원문·메모·구간 의존성에 맞는 과거 요약으로 새 revision을 만들어요.
 
+네이티브 Risu 자료와 RISUP를 사용하는 수동 압축·요약 편집은 작업 입력의 사본에서 CBS·정규식을 먼저 평가해요. 도우미의 같은 문맥 도구도 이 경계를 사용해요. 평가 결과를 작업에 고정하며 Lua/V2 콜백·지속 VM·추가 모델 호출·채팅 변수 쓰기는 실행하지 않아요. 수동 압축에 필요한 요약 모델 호출과 checkpoint 저장은 기존 예산·CAS 계약을 유지해요.
+
 자동 정리를 기다리는 동안 사용자가 요약이나 메모를 고치면 늦은 결과는 비활성 후보로 남아요. 다음 요청의 활성 요약을 되돌리지 않으며, 그 자동 결과로 실제 실행된 과거 Run은 자신이 사용한 checkpoint를 계속 가리켜요. 원문이 추가되더라도 기존 prefix가 동일해야 활성화할 수 있고, 편집·분기 변경으로 prefix가 달라지면 활성화하지 않아요.
 
 `GET /api/chats/:id/context`, `PUT /context/summary`, `POST /context/compact`와 `/context/jobs/:jobId`의 조회·취소가 이 계약을 사용해요. 각 짧은 경로 앞에는 `/api/chats/:id`가 붙어요. 자동·수동 결과는 `context_checkpoints`, 활성 포인터는 `context_heads`, 수동 실행과 전송 영수증은 `context_jobs/context_job_attempts`에 보존해요.

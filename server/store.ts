@@ -37,9 +37,14 @@ import { initMaintenance } from './maintenance.js';
 import { completeAuthoredPackageStartStatesInTransaction } from './package-start.js';
 import { ContextStore } from './context-store.js';
 import { freezeReservationSnapshot } from './reservation-snapshot.js';
-import { checkpointChatVariablesInTransaction } from './chat-variables.js';
+import {
+  checkpointChatVariablesInTransaction,
+  writeChatVariablesInTransaction,
+} from './chat-variables.js';
 import { restoreCandidateChatVariables } from './chat-variables-archive.js';
 import { commitRunCompatVariables } from './risu-compat-variables.js';
+import { resetNativeRisuCandidate } from './risu-native-archive.js';
+import { nativeRisuPending } from './risu-native-run.js';
 import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
 import { IDENTITY_PATTERN } from '../core/identity.js';
 import {
@@ -409,7 +414,10 @@ export class Store {
       branchId: branch.id,
     };
     // Authored openings and transcript imports commit their exact text; nothing is prepared for a model.
-    const authored = base.packageStart?.mode === 'authored' || base.transcriptImport !== undefined;
+    const authored =
+      base.packageStart?.mode === 'authored' ||
+      base.transcriptImport !== undefined ||
+      base.nativeRisuAuthored !== undefined;
     const frozen = freezeReservationSnapshot(this, base, {
       purpose: authored ? 'authored' : 'run',
       runId: id,
@@ -473,7 +481,10 @@ export class Store {
       }
       if (['queued', 'running', 'waiting_for_state'].includes(original.status))
         throw new HttpError(409, 'Original run is still active');
-      if (original.snapshot.packageStart?.mode === 'authored')
+      if (
+        original.snapshot.packageStart?.mode === 'authored' ||
+        original.snapshot.nativeRisuAuthored
+      )
         throw new HttpError(409, 'Authored opening has no model request to repeat');
       const profile = this.product.snapshot(original.chatId);
       const chat = this.chat(original.chatId);
@@ -532,7 +543,10 @@ export class Store {
   ): { run: Run; created: boolean } {
     return this.transaction(() => {
       const original = this.run(runId);
-      if (original.snapshot.packageStart?.mode === 'authored')
+      if (
+        original.snapshot.packageStart?.mode === 'authored' ||
+        original.snapshot.nativeRisuAuthored
+      )
         throw new HttpError(409, 'Authored opening cannot be regenerated as a model candidate');
       if (['queued', 'running', 'waiting_for_state'].includes(original.status))
         throw new HttpError(409, 'Original run is still active');
@@ -545,6 +559,11 @@ export class Store {
           throw new HttpError(409, 'Idempotency key reused with different command');
         return { run: this.run(prior.id), created: false };
       }
+      if (nativeRisuPending(original.snapshot))
+        throw new HttpError(
+          409,
+          '카드 실행 준비가 끝나지 않은 요청이에요. 현재 설정으로 다시 요청해 주세요.'
+        );
       validate?.(original.snapshot);
       if (
         original.snapshot.history.some(
@@ -563,6 +582,7 @@ export class Store {
         branchId: branch.id,
         candidateOf: original.id,
       };
+      resetNativeRisuCandidate(snapshot);
       if (snapshot.contextPlan?.status === 'ready' && snapshot.promptCompilation) {
         snapshot.contextPlan.summaryCalls = 0;
         snapshot.contextPlan.usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
@@ -749,6 +769,14 @@ export class Store {
       hash: createHash('sha256').update(text).digest('hex'),
       createdAt: now(),
     };
+    const native = run.snapshot.nativeRisuExecution;
+    if (native)
+      writeChatVariablesInTransaction(this, run.chatId, branch.id, {
+        expectedRevision: native.beforeVariableRevision,
+        expectedSourceHash: branch.headRevision ? this.source(branch.headRevision).hash : null,
+        idempotencyKey: `native-run:${run.id}`,
+        values: native.output?.variables ?? native.variables,
+      });
     this.db
       .prepare('INSERT INTO sources VALUES(?,?,?,?,?,?,?)')
       .run(
@@ -772,7 +800,12 @@ export class Store {
     if (branch.default)
       this.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(source.id, source.chatId);
     for (const kind of ['status', 'image'] as const) {
-      if (run.snapshot.packageStart?.mode === 'authored' || run.snapshot.transcriptImport) continue;
+      if (
+        run.snapshot.packageStart?.mode === 'authored' ||
+        run.snapshot.transcriptImport ||
+        run.snapshot.nativeRisuAuthored
+      )
+        continue;
       if (!(kind === 'image' ? run.snapshot.profile?.image : settings[kind])) continue;
       if (kind === 'image' && !imageJobInput(this, run.snapshot).imageCatalog.entries.length)
         continue;
@@ -801,7 +834,7 @@ export class Store {
     }
     if (run.snapshot.packageStart?.mode === 'authored')
       completeAuthoredPackageStartStatesInTransaction(this, run, source);
-    else if (!run.snapshot.transcriptImport) {
+    else if (!run.snapshot.transcriptImport && !run.snapshot.nativeRisuAuthored) {
       this.story.reserveSourceInTransaction(source, run);
       completePackageOutputs(this, run, source);
       // Illustrations never block the source commit; reservation problems become visible jobs.

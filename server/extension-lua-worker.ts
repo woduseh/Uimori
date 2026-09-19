@@ -310,8 +310,9 @@ api.host = {call=function(method, args)
   if calls > ${limits.hostCalls} then error('BEHAVIOR_HOST_CALL_LIMIT', 0) end
   local ok, argsJSON = pcall(encode, args)
   if not ok then error('BEHAVIOR_HOST_ARGUMENTS', 0) end
-  local success, text = yield(method, argsJSON)
+  local success, text, reset = yield(method, argsJSON)
   if not success then error(text, 0) end
+  if reset then calls, resultBytes = 0, 0 end
   resultBytes = resultBytes + #text
   if #text > ${limits.guestJsonBytes} or resultBytes > ${limits.hostResultBytes} then error('BEHAVIOR_HOST_RESULT_LIMIT', 0) end
   return decode(text)
@@ -409,6 +410,7 @@ async function run() {
   let args = 2;
   let phaseSequence = 0;
   let hostId = 0;
+  let invocationCalls = 0;
   let hostResultBytes = 0;
   const phase = (value: ExtensionWorkerPhase, hostIds: number[]) =>
     port.postMessage({ type: 'phase', phase: value, sequence: ++phaseSequence, hostIds });
@@ -451,11 +453,12 @@ async function run() {
         );
       return;
     }
-    if (status.resultCount !== 2 || ++hostId > limits.hostCalls) throw new Error('LUA_PROTOCOL');
+    if (status.resultCount !== 2 || ++invocationCalls > limits.hostCalls)
+      throw new Error('LUA_PROTOCOL');
     const method = stringAt(-2, limits.hostMethodChars);
     const argsJson = stringAt(-1, limits.guestJsonBytes);
     thread.pop(2);
-    const id = hostId;
+    const id = ++hostId;
     const response = new Promise<ExtensionHostReply>((resolve, reject) => {
       port.once('message', (value: ExtensionHostReply) => {
         if (
@@ -471,6 +474,14 @@ async function run() {
     port.postMessage({ type: 'host-call', id, method, argsJson });
     phase('host-wait', [id]);
     const result = await response;
+    // Only the trusted host can begin another invocation in a persistent native session.
+    // Guest RPC arguments cannot change the CPU allowance.
+    if (result.ok && result.resetBudget === true) {
+      cpuRemaining = limits.cpuMs;
+      timedOut = false;
+      hostResultBytes = 0;
+      invocationCalls = 0;
+    }
     if (result.ok) {
       if (typeof result.json !== 'string') throw new Error('LUA_PROTOCOL');
       hostResultBytes += Buffer.byteLength(result.json);
@@ -490,7 +501,8 @@ async function run() {
         input.hostErrorCodes.includes(result.code) ? result.code : 'BEHAVIOR_HOST_CALL_FAILED'
       );
     }
-    args = 2;
+    thread.pushValue(result.ok && result.resetBudget === true);
+    args = 3;
   }
 }
 

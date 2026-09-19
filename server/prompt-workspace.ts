@@ -13,6 +13,7 @@ import type {
   PromptCombinationOwner,
 } from '../core/product.js';
 import { workspaceModelRef } from '../core/product.js';
+import { validateTranslationJudgmentPolicy } from '../core/translation-settings.js';
 import { builtinCurrentPrompt } from './builtin-prompts.js';
 import {
   resolvePromptValues,
@@ -73,7 +74,15 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'extensionModel',
   ]);
   const policy = record(b.translationPolicy);
-  fields(policy, ['refusalModel', 'maxRetries', 'maxCalls']);
+  fields(policy, ['refusalModel', 'maxRetries', 'maxCalls', 'judgment']);
+  let judgment: ReturnType<typeof validateTranslationJudgmentPolicy> | undefined;
+  if (policy.judgment !== undefined) {
+    try {
+      judgment = validateTranslationJudgmentPolicy(policy.judgment);
+    } catch {
+      throw new HttpError(400, 'Invalid translation judgment policy');
+    }
+  }
   let refusalModel = null;
   if (policy.refusalModel !== null) {
     const model = record(policy.refusalModel);
@@ -93,6 +102,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     translation: validateCurrentPrompt(b.translation, 'translation'),
     translationPolicy: {
       refusalModel,
+      ...(judgment ? { judgment } : {}),
       maxRetries: number(policy.maxRetries, 'translation automatic retries', 0, 5),
       maxCalls: number(policy.maxCalls, 'translation call limit', 2, 64),
     },

@@ -130,6 +130,26 @@ export function readCharacterCard(
   });
   const { name, bytes, sha256: hash } = envelope;
   const source: RisuImportSource | RisuImportStagedSource = envelope.source;
+  if (/\.risum$/iu.test(name) || (bytes[0] === 111 && bytes[1] === 0)) {
+    if (kind === 'bot') throw new HttpError(400, 'RISU_IMPORT_KIND');
+    const { module, assets } = readEmbeddedRisuModule(bytes);
+    const members = new Map<string, () => Buffer>();
+    const card = moduleJsonDocument(
+      { type: 'risuModule', module },
+      members,
+      assets.map((asset) => () => asset)
+    );
+    return {
+      source,
+      hash,
+      format: 'risu-module-binary' as const,
+      kind: 'module' as const,
+      card,
+      nativeCard: {},
+      nativeModule: module,
+      members,
+    };
+  }
   const zipped = /\.(?:charx|zip)$/iu.test(name) || bytes.readUInt16LE(0) === 0x4b50;
   let members = zipped ? cardZip(bytes) : new Map<string, () => Buffer>();
   const projectFiles = [...members.keys()].filter((path) => /(?:^|\/)module\.json$/u.test(path));
@@ -204,6 +224,8 @@ export function readCharacterCard(
       hash,
       format: moduleProject ? ('risu-module-project-zip' as const) : ('risu-module-json' as const),
       kind: 'module' as const,
+      nativeCard: {},
+      nativeModule: record(outer.module),
       card: moduleJsonDocument(
         outer,
         members,
@@ -218,18 +240,39 @@ export function readCharacterCard(
   if (outer.spec !== undefined && !['chara_card_v2', 'chara_card_v3'].includes(String(outer.spec)))
     return invalid();
   let card = outer.data === undefined ? outer : record(outer.data);
+  const nativeCard = structuredClone(card);
   if (typeof card.name !== 'string' || !card.name.trim() || typeof card.description !== 'string')
     return invalid();
   const embeddedBytes = members.get('module.risum')?.();
   let embeddedModule: { assetCount: number } | undefined;
+  let nativeModule: Record<string, unknown> | undefined;
   if (embeddedBytes) {
     const { module, assets } = readEmbeddedRisuModule(embeddedBytes);
+    nativeModule = module;
+    const moduleMembers = new Map<string, () => Buffer>();
+    const assetCard = moduleJsonDocument(
+      { type: 'risuModule', module: { ...module, name: module.name || card.name } },
+      moduleMembers,
+      assets.map((asset) => () => asset)
+    );
+    const moduleAssets = (assetCard.assets as { name: string; uri: string; type: string }[]).map(
+      (asset) => {
+        const path = asset.uri.replace(/^embeded:\/\//u, '');
+        const read = moduleMembers.get(path);
+        if (!read) return asset;
+        const target = `__risu_module__/${path}`;
+        if (members.has(target)) return invalid();
+        members.set(target, read);
+        return { ...asset, uri: `embeded://${target}` };
+      }
+    );
     const extensions = card.extensions == null ? {} : record(card.extensions);
     const risu = extensions.risuai == null ? {} : record(extensions.risuai);
     // This is the card's serialized script/lore section, not another attached package.
     // Empty arrays deliberately replace inline data; only absent/null lore falls back.
     card = {
       ...card,
+      assets: [...(Array.isArray(card.assets) ? card.assets : []), ...moduleAssets],
       extensions: {
         ...extensions,
         risuai: {
@@ -246,5 +289,15 @@ export function readCharacterCard(
       };
     embeddedModule = { assetCount: assets.length };
   }
-  return { source, hash, format, kind: kind ?? 'bot', card, members, embeddedModule };
+  return {
+    source,
+    hash,
+    format,
+    kind: kind ?? 'bot',
+    card,
+    nativeCard,
+    nativeModule,
+    members,
+    embeddedModule,
+  };
 }

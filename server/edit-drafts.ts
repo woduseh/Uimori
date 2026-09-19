@@ -53,17 +53,34 @@ function modelValue(kind: EditDraftKind, value: unknown): EditDraftModel {
         ? ['title', 'role', 'program', 'values']
         : ['main', 'translation']
   );
-  if (json(body).length > 5_000_000) throw new HttpError(400, 'Draft model too large');
+  if (
+    Buffer.byteLength(json(body)) >
+    (kind === 'content' && (body.package as { nativeRisu?: unknown } | undefined)?.nativeRisu
+      ? 16 * 1024 * 1024
+      : 5_000_000)
+  )
+    throw new HttpError(400, 'Draft model too large');
   return structuredClone(body) as EditDraftModel;
 }
 function rawValues(value: unknown): Record<string, string> {
   const body = record(value);
-  if (Object.keys(body).length > 1500 || json(body).length > 6_000_000)
+  if (
+    Object.keys(body).length > 1500 ||
+    Buffer.byteLength(json(body)) >
+      (Object.keys(body).some((path) => path.startsWith('package.native.'))
+        ? 24 * 1024 * 1024
+        : 6_000_000)
+  )
     throw new HttpError(400, 'Draft buffers too large');
   return Object.fromEntries(
     Object.entries(body).map(([path, value]) => [
       text(path, 'draft field path', 500),
-      text(value, 'draft field text', 1_000_000, true),
+      text(
+        value,
+        'draft field text',
+        path.startsWith('package.native.') ? 16 * 1024 * 1024 : 1_000_000,
+        true
+      ),
     ])
   );
 }
@@ -851,7 +868,7 @@ export function editDraftRoutes(app: FastifyInstance, service: EditDraftService)
         : text(request.query.editorKey, 'editor key', 200)
     )
   );
-  app.post('/api/edit-drafts', { bodyLimit: 12_000_000 }, async (request) =>
+  app.post('/api/edit-drafts', { bodyLimit: 48 * 1024 * 1024 }, async (request) =>
     service.create(request.body, ui(record(request.body).operationId))
   );
   app.get<{ Params: { id: string } }>('/api/edit-drafts/:id', async (request) =>
@@ -859,7 +876,7 @@ export function editDraftRoutes(app: FastifyInstance, service: EditDraftService)
   );
   app.patch<{ Params: { id: string } }>(
     '/api/edit-drafts/:id',
-    { bodyLimit: 12_000_000 },
+    { bodyLimit: 48 * 1024 * 1024 },
     async (request) =>
       service.patch(request.params.id, request.body, ui(record(request.body).operationId))
   );

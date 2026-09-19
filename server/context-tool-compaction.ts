@@ -64,6 +64,21 @@ function returnedReadMetadata(event: ToolEvent): Json | undefined {
       'totalChars',
       'nextOffset',
     ]);
+  if (event.name === 'knowledge.read' && Array.isArray(result.items))
+    return {
+      items: result.items.flatMap((item) => {
+        const entry = record(item),
+          read = record(entry?.read);
+        return entry && read
+          ? [
+              {
+                id: entry.id as Json,
+                ...pick(read, ['source', 'range', 'totalLength', 'truncated', 'continuation']),
+              },
+            ]
+          : [];
+      }),
+    };
   if (event.name === 'knowledge.read' || event.name === 'skills.load')
     return pick(result, ['source', 'range', 'totalLength', 'truncated', 'continuation']);
   return undefined;
