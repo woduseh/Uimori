@@ -10,7 +10,6 @@ import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 import { readChatVariables, writeChatVariablesInTransaction } from '../server/chat-variables.js';
 import { validateChatVariablesArchive } from '../server/chat-variables-archive.js';
 import { createPackageStart, validateArchivedPackageStart } from '../server/package-start.js';
-import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
 import { validateRunSnapshot } from '../server/snapshot-archive.js';
 import { Store } from '../server/store.js';
 
@@ -21,8 +20,7 @@ import { Store } from '../server/store.js';
 
 const DESCRIPTION = '{{#if 1}}HP {{getvar::hp}} left{{/if}} and {{calc::1+2}}';
 const EVALUATED = 'HP 10 left and 3';
-// `setvar` and `calc` are what the AST converter refuses, so these fields keep their original CBS
-// and are evaluated at reservation instead of being imported as templates.
+// Earlier saved compat fields keep their original CBS and are evaluated at reservation.
 const WRITING_DESCRIPTION = '{{setvar::hp::20}}HP {{getvar::hp}}';
 const GREETING = 'Welcome, HP {{getvar::hp}} and {{calc::1+2}}';
 
@@ -49,37 +47,35 @@ function database() {
   return store;
 }
 
-const sourceOf = (description = DESCRIPTION, greeting = 'The pilot waits.') => ({
-  name: 'synthetic-compat-card.json',
-  base64: Buffer.from(
-    JSON.stringify({
-      spec: 'chara_card_v3',
-      spec_version: '3.0',
-      data: {
-        name: 'Synthetic Pilot',
-        description,
-        first_mes: greeting,
-        extensions: { risuai: { defaultVariables: 'hp=10' } },
-      },
-    })
-  ).toString('base64'),
-});
-
-/** Imports one card into its own chat and leaves the bot attached, with no Run reserved yet. */
+/** Restore the earlier compat package shape; new imports now preserve a native Risu document. */
 function imported(description = DESCRIPTION, greeting = 'The pilot waits.') {
   const store = database();
-  const source = sourceOf(description, greeting);
-  const preview = prepareRisuImport({ source });
-  const saved = applyRisuImport(store, {
-    source,
-    digest: preview.digest,
-    memoryIds: [],
-    // The card's `{{#if}}`/`{{calc}}` body is exactly what the AST converter refuses.
-    allowPartial: true,
-    idempotencyKey: randomUUID(),
-  });
-  const chat = saved.chat!;
-  const content = store.product.get<Content>('content', saved.receipt.items[0].id);
+  const content = store.product.content({
+    kind: 'bot',
+    title: 'Synthetic Pilot',
+    description: '',
+    text: description,
+    loading: 'pinned',
+    relatedIds: [],
+    package: {
+      version: 1,
+      id: 'legacy-compat',
+      revision: 1,
+      title: 'Synthetic Pilot',
+      description: '',
+      body: description,
+      variableDefaults: { values: { hp: '10' }, attachmentRoles: ['bot'] },
+      starts: [{ id: 'start-0', title: 'Opening', mode: 'authored', text: greeting }],
+      lore: [],
+      instructions: [],
+      controls: [],
+      transforms: [],
+      compat: {
+        risuCbs: { fields: ['body', ...(greeting.includes('{{') ? ['start:start-0'] : [])] },
+      },
+    },
+  }) as Content;
+  const chat = store.createChat(content.title, undefined, { botId: content.id });
   return { store, chat, content };
 }
 

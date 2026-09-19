@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { renderPromptTemplate } from '../core/prompt-program.js';
-import { RisuCbs } from '../server/risu-cbs.js';
+import { RisuCbs } from './fixtures/legacy-risu/risu-cbs.js';
 import { importRisuVariableDefaults } from '../server/risu-variable-defaults.js';
 import { importRisuPresetProgram } from '../server/risu-preset-program.js';
 
@@ -73,16 +73,11 @@ test('a comment renders as nothing and never fails the field it sits in', () => 
   });
 });
 
-test('invalid preset defaults remain explicit partial import instead of unsafe declarations', () => {
-  const imported = importRisuPresetProgram({
-    templateDefaultVariables: 'constructor=bad',
-    promptTemplate: [{ type: 'plain', text: '{{getvar::safe}}', role: 'system' }],
-  });
-  expect(imported.program.variableDefaults).toBeUndefined();
-  expect(imported.findings).toContainEqual(
-    expect.objectContaining({
-      code: 'RISU_PRESET_CHAT_VARIABLE_DEFAULTS_INVALID',
-      level: 'unsupported',
+test('invalid native preset defaults are rejected without unsafe declarations', () => {
+  expect(() =>
+    importRisuPresetProgram({
+      templateDefaultVariables: 'constructor=bad',
+      promptTemplate: [{ type: 'plain', text: '{{getvar::safe}}', role: 'system' }],
     })
-  );
+  ).toThrow();
 });

@@ -1,3 +1,4 @@
+import { RisuNativeFields } from './RisuNativeFields.js';
 import { IconButton } from './IconButton.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
@@ -1051,6 +1052,12 @@ function ContentEditor({
         : copying
           ? packageFromContent(value)
           : undefined;
+      if (copying && pkg?.nativeRisu) {
+        pkg.nativeRisu = structuredClone(pkg.nativeRisu);
+        if (!Object.keys(pkg.nativeRisu.card).length && pkg.nativeRisu.module)
+          pkg.nativeRisu.module.name = value.title + ' 사본';
+        else pkg.nativeRisu.card.name = value.title + ' 사본';
+      }
       const model: ContentDraftModel = {
         kind: copyKind ?? value.kind,
         title: copying ? value.title + ' 사본' : value.title,
@@ -1243,7 +1250,16 @@ function ContentEditor({
           }}
         >
           <fieldset className="editor-fields full" disabled={editorUnavailable}>
-            {value.package ? (
+            {value.package?.nativeRisu ? (
+              <RisuNativeFields
+                value={value.package}
+                onChange={(pkg) =>
+                  setValue((current) => ({ ...current, title: pkg.title, package: pkg }))
+                }
+                onDraftChange={setBehaviorDraftDirty}
+                onPortraitBusy={setPortraitBusy}
+              />
+            ) : value.package ? (
               <PackageFields
                 value={value.package}
                 onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
@@ -1272,7 +1288,7 @@ function ContentEditor({
                     setError('');
                   }}
                   onError={setError}
-                  disabled={behaviorDraftDirty}
+                  disabled={behaviorDraftDirty || (!!value.package?.nativeRisu && dirty)}
                 />
                 {importedPackage && (
                   <div className="library-import-preview">

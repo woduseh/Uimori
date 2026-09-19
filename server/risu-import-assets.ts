@@ -16,11 +16,13 @@ export function importRisuAssets({
   kind,
   members,
   findings,
+  native = false,
 }: {
   card: RisuCard;
   kind: RisuImportKind;
   members: Map<string, () => Buffer>;
   findings: RisuImportFindings;
+  native?: boolean;
 }): {
   images: NativeTransferFile['images'];
   packageImages: NonNullable<ContentPackage['images']>;
@@ -57,12 +59,16 @@ export function importRisuAssets({
         ? 'image/jpeg'
         : bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP'
           ? 'image/webp'
-          : null;
+          : bytes.toString('ascii', 4, 8) === 'ftyp'
+            ? 'image/avif'
+            : ['GIF87a', 'GIF89a'].includes(bytes.toString('ascii', 0, 6))
+              ? 'image/gif'
+              : null;
     if (!mime) {
       findings.add(
         'asset-format',
         'unsupported',
-        'PNG·JPEG·WebP 이외의 첨부 자료는 아직 사용할 수 없어요.'
+        'PNG·JPEG·WebP·AVIF·GIF 이외의 첨부 자료는 아직 사용할 수 없어요.'
       );
       continue;
     }
@@ -104,7 +110,7 @@ export function importRisuAssets({
     assetUrls.set(`{{image::${name}}}`, `![${name.replace(/[\[\]]/gu, '')}](${url})`);
     assetUrls.set(`{{img::${name}}}`, `![${name.replace(/[\[\]]/gu, '')}](${url})`);
   }
-  if (typedAsset)
+  if (typedAsset && !native)
     findings.add(
       'asset-role',
       'info',

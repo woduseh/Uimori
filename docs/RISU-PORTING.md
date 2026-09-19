@@ -1,6 +1,8 @@
 # Manual Risu porting
 
-Use the [built-in importer](RISU-IMPORT.md) first. Manual conversion is useful when a requested behavior needs a native Uimori representation beyond the importer's support. Inspect the relevant source behavior and dependencies; consult the source runtime when its semantics are unclear.
+The [built-in importer](RISU-IMPORT.md) now keeps CHARX, CBS, regex, Lua, and RISUP prompt source in their original formats and executes them through the native Risu runtime. Converting a bot into a separate Uimori AST or panel language is not an import prerequisite. Unsupported native behavior should normally be addressed in that runtime with a regression example.
+
+This document covers optional rewrites into Uimori's independent authoring formats, including maintenance of already converted packages. Such a rewrite creates a different authored representation and is useful only when that is the intended outcome. Earlier conversion-first guidance is superseded by the native import contract.
 
 ## Native representations
 

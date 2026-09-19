@@ -103,7 +103,9 @@ export function requestTranslation(
     }
     const workspace = promptWorkspace(store);
     const selected = workspaceModelRef(workspace, 'translation');
-    const refusal = workspaceModelRef(workspace, 'refusal');
+    const refusal = workspace.translationPolicy.judgment
+      ? null
+      : workspaceModelRef(workspace, 'refusal');
     const profile = store.product.snapshot(source.chatId, 'translation');
     const automatic = profile?.imageTranslation !== false;
     const selection = automatic

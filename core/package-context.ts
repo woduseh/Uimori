@@ -14,6 +14,8 @@ import { packageIdentityFromProfile } from './package-identity.js';
 import { projectRisuCompatReceipt } from './risu-compat.js';
 import { projectLoreActivationReceipt } from './lore-activation.js';
 import { loreSelectionKey, projectLoreSelectionReceipt } from './lore-selection.js';
+import { projectNativeRisuFields } from './risu-native-execution.js';
+import { projectRisuImageHandoff } from './risu-image-handoff.js';
 
 export type ResolvedPackage = CompiledPackageAttachment & {
   attachment: PackageAttachment;
@@ -25,9 +27,13 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
   const activation = snapshot.loreActivation;
   const selection = snapshot.loreSelection;
   return (profile?.packageAttachments ?? []).flatMap((attachment) => {
-    const pkg = profile?.packages?.find(
+    const stored = profile?.packages?.find(
       (p) => p.id === attachment.id && p.revision === attachment.revision
     );
+    const authored =
+      stored && projectRisuImageHandoff(stored, target === 'main' && profile?.image === true);
+    const pkg =
+      authored && projectNativeRisuFields(authored, attachment, snapshot.nativeRisuExecution);
     if (!pkg) throw new ContentPackageError('PACKAGE_SNAPSHOT_REVISION_MISSING', attachment.id);
     if (historicalPersonaExcluded(profile, attachment.role, target)) {
       validateContentPackage(pkg);

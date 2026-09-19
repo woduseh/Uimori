@@ -1,3 +1,10 @@
+import { detectRisuImageHandoff, type RisuImageHandoff } from '../core/risu-image-handoff.js';
+import { validateNativeRisuContent } from '../core/risu-native.js';
+import { projectNativeRisuPackage } from './risu-native-projection.js';
+import { validateNativeScriptAttempt } from './risu-native-host.js';
+import { JEV_ENDPOINT, JEV_MODEL } from './jev-judgment.js';
+import { validateTranslationJudgmentWire } from './jev-attribution.js';
+import { loreSelectionAttemptInputHashes } from './lore-selection.js';
 import {
   EXTENSION_OPERATION_TABLES,
   normalizeExtensionOperationArchiveRow,
@@ -394,7 +401,7 @@ export class ProductStore {
     return result;
   }
   content(value: unknown, id?: string, inTransaction = false, createId?: string) {
-    const b = record(value);
+    const b = { ...record(value) };
     fields(b, [
       'kind',
       'title',
@@ -414,17 +421,36 @@ export class ProductStore {
       this.db.prepare('SELECT 1 FROM chat_organization WHERE bot_id=? LIMIT 1').get(id)
     )
       throw new HttpError(400, 'A chat owner must remain available as a bot or package');
+    const kind = choice(b.kind, ['bot', 'persona', 'module'], 'content kind');
+    let packageInput = b.package;
+    if (packageInput && record(packageInput).nativeRisu) {
+      const raw = record(packageInput),
+        native = validateNativeRisuContent(raw.nativeRisu);
+      const { imageHandoff: _old, ...rest } = raw;
+      const handoff = detectRisuImageHandoff(
+        native,
+        raw.imageHandoff as RisuImageHandoff | undefined
+      );
+      packageInput = { ...rest, ...(handoff ? { imageHandoff: handoff } : {}) };
+    }
+    let pkg = packageInput !== undefined ? validateContentPackage(packageInput) : undefined;
+    if (pkg?.nativeRisu) {
+      pkg = validateContentPackage(projectNativeRisuPackage(pkg, kind).pkg);
+      b.title = pkg.title;
+      b.description = pkg.description;
+      b.text = pkg.body ?? '';
+    }
     return (inTransaction ? this.saveInTransaction : this.save).call(
       this,
       'content',
       {
-        kind: choice(b.kind, ['bot', 'persona', 'module'], 'content kind'),
+        kind,
         title: text(b.title, 'title', 200),
         description: text(b.description, 'description', b.package ? 4000 : 2000, true),
         text: text(b.text, 'text', b.package ? 1_000_000 : 100000, !!b.package),
         loading: choice(b.loading, ['pinned', 'discoverable'], 'loading'),
         relatedIds: [...new Set(b.relatedIds.map((x: unknown) => text(x, 'related ID', 100)))],
-        ...(b.package !== undefined ? { package: validateContentPackage(b.package) } : {}),
+        ...(pkg ? { package: pkg } : {}),
       },
       id,
       id ? number(b.expectedRevision, 'revision') : undefined,
@@ -2229,11 +2255,13 @@ function validateArchiveGraph(product: ProductStore) {
           .all(run.id) as Row[];
         // 모델 선별 calls share the context role and are made before any compaction call, so a Run
         // carrying that receipt may hold more context attempts than the compaction receipt counts -
-        // but only as many as the receipt itself records, one per entry that reached a model. An
-        // entry without a model made no request, and without the receipt the count must match.
-        const selectionCalls = ((snapshot as RunSnapshot).loreSelection?.entries ?? []).filter(
-          (entry) => entry.model !== undefined
-        ).length;
+        // but only as many as the receipt records. A JEV batch shares an attempt across packages.
+        // An entry without a model made no request; without a receipt the count must match.
+        const selectionCalls = new Set(
+          ((snapshot as RunSnapshot).loreSelection?.entries ?? [])
+            .filter((entry) => entry.model !== undefined)
+            .map((entry) => entry.judgment?.attemptId ?? entry.key)
+        ).size;
         const extraCalls = summaries.length - context.summaryCalls;
         if (extraCalls < 0 || extraCalls > selectionCalls)
           throw new HttpError(400, 'Context attempt count mismatch');
@@ -2430,11 +2458,58 @@ function validateArchiveGraph(product: ProductStore) {
       (attempt.run_id !== null
         ? attempt.role !== 'main' &&
           attempt.role !== 'title' &&
-          !(attempt.role === 'state' && request.extensionAction !== undefined) &&
+          !(
+            attempt.role === 'state' &&
+            (request.extensionAction !== undefined || request.nativeScript !== undefined)
+          ) &&
+          !(attempt.role === 'context' && request.judgment !== undefined) &&
           !(attempt.role === 'context' && parse(runs.get(attempt.run_id)!.snapshot).contextPlan)
         : jobs.get(attempt.job_id)?.kind !== attempt.role)
     )
       throw new HttpError(400, 'Attempt role mismatch');
+    if (request.nativeScript !== undefined) {
+      if (attempt.run_id === null) throw new HttpError(400, 'Native script attempt owner mismatch');
+      validateNativeScriptAttempt(
+        parse(runs.get(attempt.run_id)!.snapshot),
+        request as import('../core/transport.js').WireRecord
+      );
+    }
+    if (request.judgment !== undefined) {
+      if (request.judgment.kind === 'translation-refusal') {
+        const owner = attempt.job_id !== null ? jobs.get(attempt.job_id) : undefined;
+        if (!owner || owner.kind !== 'translation')
+          throw new HttpError(400, 'Judgment attempt owner mismatch');
+        validateTranslationJudgmentWire(
+          owner.source_hash,
+          record(parse(owner.input)).translationPolicy?.judgment,
+          request as import('../core/transport.js').WireRecord
+        );
+      } else {
+        const snapshot =
+          attempt.run_id !== null
+            ? (parse(runs.get(attempt.run_id)?.snapshot ?? '{}') as RunSnapshot)
+            : undefined;
+        if (
+          snapshot?.profile?.loreContext?.judgment?.backend !== 'jev' ||
+          request.judgment.kind !== 'lore-selection' ||
+          request.protocol !== 'typesafe-systemone-v1' ||
+          request.connectionId !== 'typesafe-judgment' ||
+          request.modelId !== JEV_MODEL ||
+          request.role !== 'context' ||
+          request.url !== JEV_ENDPOINT ||
+          request.method !== 'POST' ||
+          request.extensionAction ||
+          request.agentId ||
+          request.nativeScript ||
+          !(
+            snapshot.loreSelection?.entries.some(
+              (entry) => entry.inputHash === request.judgment.inputHash
+            ) || loreSelectionAttemptInputHashes(snapshot).includes(request.judgment.inputHash)
+          )
+        )
+          throw new HttpError(400, 'Judgment attempt attribution mismatch');
+      }
+    }
     if (request.extensionAction !== undefined && !extensionOwner) {
       if (
         attempt.run_id === null ||

@@ -8,7 +8,7 @@ import { preparePromptInputTransforms } from './prompt-transforms.js';
 export type ContextRouteHooks = {
   signal: AbortSignal;
   track: (work: Promise<void>) => void;
-  snapshot: (chatId: string, branchId?: string) => RunSnapshot;
+  snapshot: (chatId: string, branchId?: string) => RunSnapshot | Promise<RunSnapshot>;
   execute: (job: ContextJob, signal: AbortSignal) => Promise<RunSnapshot>;
 };
 /** Standalone user operations; provider execution is injected by the application owner. */
@@ -27,7 +27,7 @@ export function contextRoutes(app: FastifyInstance, store: Store, hooks: Context
   app.put<{ Params: { id: string } }>('/api/chats/:id/context/summary', async (request) => {
     const body = record(request.body),
       snapshot = await preparePromptInputTransforms(
-        hooks.snapshot(request.params.id, body.branchId)
+        await hooks.snapshot(request.params.id, body.branchId)
       );
     const value = store.context.edit(request.params.id, body, snapshot);
     return { ...value, jobs: value.jobs.map(publicJob) };
@@ -37,7 +37,7 @@ export function contextRoutes(app: FastifyInstance, store: Store, hooks: Context
       job = store.context.schedule(
         request.params.id,
         body,
-        hooks.snapshot(request.params.id, body.branchId)
+        await hooks.snapshot(request.params.id, body.branchId)
       );
     if (job.status === 'queued' && !active.has(job.id) && !hooks.signal.aborted) {
       const controller = new AbortController();

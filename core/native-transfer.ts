@@ -11,7 +11,7 @@ import type { PackageImage } from './package-images.js';
 
 export const NATIVE_TRANSFER_FORMAT = 'uimori-native-transfer';
 export const NATIVE_TRANSFER_VERSION = 1;
-export const NATIVE_TRANSFER_MAX_BYTES = 64 * 1024 * 1024;
+export const NATIVE_TRANSFER_MAX_BYTES = 256 * 1024 * 1024;
 export type NativeTransferKind = 'content' | 'prompt-preset';
 export type NativeTransferRef = { kind: NativeTransferKind; key: string };
 export type NativeTransferOrigin = {

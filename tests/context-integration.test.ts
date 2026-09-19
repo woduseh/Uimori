@@ -17,6 +17,9 @@ import { Store } from '../server/store.js';
 import { forkChat } from '../server/chat-fork.js';
 import { estimateContextTokens } from '../core/context-budget.js';
 import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
+import { importRisuPresetProgram } from '../server/risu-preset-program.js';
+import { readChatVariables } from '../server/chat-variables.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { Run, RunSnapshot, Source } from '../core/types.js';
 
@@ -518,6 +521,99 @@ async function contextTerminal(app: App, id: string) {
   return app.store.context.job(id);
 }
 describe('standalone context summaries and explicit corrections', () => {
+  test('native manual context edits and compaction prepare isolated inputs without executing card callbacks', async () => {
+    const { app, chatId } = await setup({ count: 4, short: true });
+    const preset = importRisuPresetProgram({
+      name: 'Native context',
+      promptTemplate: [
+        { type: 'plain', role: 'system', text: 'Context {{getvar::mode}}' },
+        { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+      ],
+    });
+    updatePromptWorkspace(app.store, {
+      expectedRevision: modelWorkspace(app.store).revision,
+      main: { title: preset.title, program: preset.program, values: {} },
+    });
+    const source = {
+      name: 'synthetic.json',
+      base64: Buffer.from(
+        JSON.stringify({
+          spec: 'chara_card_v3',
+          data: {
+            name: 'Native context module',
+            description: '{{setvar::mode::copy}}Context body',
+            extensions: {
+              risuai: {
+                triggerscript: [
+                  {
+                    type: 'start',
+                    effect: [
+                      { type: 'triggerlua', code: 'error("CANONICAL_CALLBACK_MUST_NOT_RUN")' },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        })
+      ).toString('base64'),
+    };
+    const preview = prepareRisuImport({ source, kind: 'module' });
+    const saved = applyRisuImport(app.store, {
+      source,
+      kind: 'module',
+      digest: preview.digest,
+      memoryIds: [],
+      allowPartial: false,
+      idempotencyKey: 'native-context',
+    });
+    const profile = app.store.product.profile(chatId);
+    app.store.product.updateProfile(chatId, {
+      expectedRevision: profile.revision,
+      attachments: profile.attachments,
+      image: profile.image,
+      packageAttachments: [
+        ...(profile.packageAttachments ?? []),
+        { id: saved.receipt.items[0]!.id, revision: 1, role: 'module' },
+      ],
+    });
+    const branchId = `main:${chatId}`;
+    const before = {
+      head: app.store.chat(chatId).headRevision,
+      variables: readChatVariables(app.store, chatId, branchId),
+      runs: app.store.detail(chatId).runs.length,
+    };
+    const initial = await contextApi(app, chatId, 'GET', '/context');
+    const bodies: Body[] = [];
+    recordRequests(app, bodies);
+    const job = await contextTerminal(
+      app,
+      (await contextApi(app, chatId, 'POST', '/context/compact', contextCommand(initial))).id
+    );
+    expect(job.status, job.error ?? '').toBe('completed');
+    expect(job.snapshot.nativeRisuExecution).toMatchObject({
+      variables: { mode: 'copy' },
+      issues: ['RISU_NATIVE_CONTEXT_CALLBACKS_DEFERRED'],
+    });
+    expect(JSON.stringify(job.snapshot.nativeRisuPresetProgram)).toContain('Context copy');
+    expect(bodies.map((body) => body.role)).toEqual(['context']);
+    const current = await contextApi(app, chatId, 'GET', '/context');
+    const edited = await contextApi(app, chatId, 'PUT', '/context/summary', {
+      ...contextCommand(current),
+      summary: 'User native summary',
+    });
+    expect(edited.checkpoint.plan.summary).toBe('User native summary');
+    expect(bodies).toHaveLength(1);
+    expect({
+      head: app.store.chat(chatId).headRevision,
+      variables: readChatVariables(app.store, chatId, branchId),
+      runs: app.store.detail(chatId).runs.length,
+    }).toEqual(before);
+    const copy = await restored(app.store.product.export());
+    expect(copy.context.job(job.id).snapshot.nativeRisuExecution).toEqual(
+      job.snapshot.nativeRisuExecution
+    );
+  });
   test('an unset main model rejects new summary operations while preserving accepted command receipts', async () => {
     const { app, chatId } = await setup({ count: 0 });
     const initial = await contextApi(app, chatId, 'GET', '/context');

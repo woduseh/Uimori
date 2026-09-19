@@ -6,6 +6,7 @@ import { useModelSelection } from './model-selection.js';
 import { RefreshIcon, SettingsIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
+import { DEFAULT_TRANSLATION_JUDGMENT } from '../core/translation-settings.js';
 import './settings-actions.css';
 
 export function ModelWorkspaceEditor({
@@ -162,11 +163,64 @@ export function ModelWorkspaceEditor({
             번역 오류 감지와 재시도 <small>세부 설정</small>
           </summary>
           <div className="control-grid">
-            {selector('번역 거절 판정 모델', draft.translationPolicy.refusalModel, (ref) =>
-              change({
-                ...draft,
-                translationPolicy: { ...draft.translationPolicy, refusalModel: ref },
-              })
+            <label>
+              번역 거절 판정 방식
+              <select
+                aria-label="번역 거절 판정 방식"
+                value={draft.translationPolicy.judgment ? 'jev' : 'model'}
+                onChange={(event) =>
+                  change({
+                    ...draft,
+                    translationPolicy: {
+                      ...draft.translationPolicy,
+                      judgment:
+                        event.target.value === 'jev'
+                          ? { ...DEFAULT_TRANSLATION_JUDGMENT }
+                          : undefined,
+                    },
+                  })
+                }
+              >
+                <option value="model">지정 모델</option>
+                <option value="jev">Jev</option>
+              </select>
+            </label>
+            {draft.translationPolicy.judgment ? (
+              <label>
+                판정 확신 기준
+                <input
+                  aria-label="번역 Jev 판정 확신 기준"
+                  type="number"
+                  min="0.51"
+                  max="1"
+                  step="0.01"
+                  value={
+                    Number.isFinite(draft.translationPolicy.judgment.threshold)
+                      ? draft.translationPolicy.judgment.threshold
+                      : ''
+                  }
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      translationPolicy: {
+                        ...draft.translationPolicy,
+                        judgment: { backend: 'jev', threshold: event.target.valueAsNumber },
+                      },
+                    })
+                  }
+                />
+                <small>
+                  0.5 초과–1. 모호하거나 상충하는 판정은 후보를 보존하고 중단해요. 서버의
+                  TYPESAFE_API_KEY 설정이 필요해요.
+                </small>
+              </label>
+            ) : (
+              selector('번역 거절 판정 모델', draft.translationPolicy.refusalModel, (ref) =>
+                change({
+                  ...draft,
+                  translationPolicy: { ...draft.translationPolicy, refusalModel: ref },
+                })
+              )
             )}
             <label>
               자동 재요청 횟수
@@ -245,7 +299,11 @@ export function ModelWorkspaceEditor({
               draft.translationPolicy.maxRetries > 5 ||
               !Number.isInteger(draft.translationPolicy.maxCalls) ||
               draft.translationPolicy.maxCalls < 2 ||
-              draft.translationPolicy.maxCalls > 64
+              draft.translationPolicy.maxCalls > 64 ||
+              (!!draft.translationPolicy.judgment &&
+                (!Number.isFinite(draft.translationPolicy.judgment.threshold) ||
+                  draft.translationPolicy.judgment.threshold <= 0.5 ||
+                  draft.translationPolicy.judgment.threshold > 1))
             }
             onClick={() => {
               if (lock.current) return;

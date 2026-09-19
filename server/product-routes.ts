@@ -1,3 +1,4 @@
+import { nativeRisuPreview } from './risu-native-preview.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { chatDeletionRoutes } from './chat-deletion.js';
 import { assetDeletionRoutes } from './asset-deletion.js';
@@ -200,16 +201,24 @@ export function productRoutes(
     assertLibraryVisible(store, 'content', request.params.id);
     return product.get('content', request.params.id);
   });
+  app.get<{
+    Params: { id: string };
+    Querystring: { revision?: string; startId?: string; userName?: string };
+  }>('/api/content/:id/risu-preview', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    assertLibraryVisible(store, 'content', request.params.id);
+    return nativeRisuPreview(store, request.params.id, request.query);
+  });
   app.get<{ Params: { id: string } }>('/api/prompt-presets/:id', async (request) => {
     assertLibraryVisible(store, 'prompt-preset', request.params.id);
     return product.get('prompt-preset', request.params.id);
   });
-  app.post('/api/content', { bodyLimit: 5_000_000 }, async (request) =>
+  app.post('/api/content', { bodyLimit: 16 * 1024 * 1024 }, async (request) =>
     product.content(request.body)
   );
   app.put<{ Params: { id: string } }>(
     '/api/content/:id',
-    { bodyLimit: 5_000_000 },
+    { bodyLimit: 16 * 1024 * 1024 },
     async (request) => product.content(request.body, request.params.id)
   );
   app.post('/api/prompt-combinations', async (request) => product.promptCombination(request.body));
@@ -481,7 +490,7 @@ export function productRoutes(
   app.get('/api/import/status', async (_request, reply) =>
     reply.header('Cache-Control', 'no-store').send(product.importStatus())
   );
-  app.post('/api/import', { bodyLimit: 64 * 1024 * 1024 }, async (request) => {
+  app.post('/api/import', { bodyLimit: 256 * 1024 * 1024 + 1024 }, async (request) => {
     const b = record(request.body);
     fields(b, ['archive']);
     return product.import(b.archive);

@@ -1,4 +1,5 @@
 import type { PromptHistoryMessage } from './prompt-program.js';
+import { validateJevJudgmentPolicy, type JevJudgmentPolicy } from './judgment.js';
 
 export type LorePlacement = { placement: 'background' | 'scene'; group?: string; order?: number };
 export type LoreContextPolicy = {
@@ -6,6 +7,7 @@ export type LoreContextPolicy = {
   maxRetainedChars: number;
   maxRetainedEntries: number;
   maxPinnedChars: number;
+  judgment?: JevJudgmentPolicy;
 };
 export const DEFAULT_LORE_CONTEXT: LoreContextPolicy = Object.freeze({
   enabled: true,
@@ -19,7 +21,7 @@ export function validateLoreContextPolicy(value: unknown): LoreContextPolicy {
     throw new Error('LORE_CONTEXT_POLICY_INVALID');
   const p = value as LoreContextPolicy;
   if (
-    Object.keys(p).some((k) => !Object.hasOwn(DEFAULT_LORE_CONTEXT, k)) ||
+    Object.keys(p).some((k) => k !== 'judgment' && !Object.hasOwn(DEFAULT_LORE_CONTEXT, k)) ||
     typeof p.enabled !== 'boolean' ||
     !Number.isSafeInteger(p.maxRetainedChars) ||
     p.maxRetainedChars < 0 ||
@@ -32,7 +34,10 @@ export function validateLoreContextPolicy(value: unknown): LoreContextPolicy {
     p.maxPinnedChars > 2_000_000
   )
     throw new Error('LORE_CONTEXT_POLICY_INVALID');
-  return { ...p };
+  return {
+    ...p,
+    ...(p.judgment === undefined ? {} : { judgment: validateJevJudgmentPolicy(p.judgment) }),
+  };
 }
 export type LoreDependency = { sourceRevision: string; sourceHash: string };
 export type RetainedLore = {

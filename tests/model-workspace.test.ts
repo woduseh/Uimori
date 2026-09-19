@@ -105,6 +105,36 @@ function complete(store: Store, chatId: string) {
   return { run: store.run(run.id), source };
 }
 
+test('optional Jev translation policy survives workspace save, job freeze and backup without a refusal model', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Jev translation settings'),
+    translator = model(store, 'Translator');
+  select(store, translator.id);
+  const current = modelWorkspace(store),
+    judgment = { backend: 'jev' as const, threshold: 0.92 };
+  updateModelWorkspace(store, {
+    expectedRevision: current.revision,
+    routes: current.routes,
+    translationPolicy: { refusalModel: null, judgment, maxRetries: 1, maxCalls: 16 },
+  });
+  expect(modelWorkspace(store).translationPolicy.judgment).toEqual(judgment);
+  const { source } = complete(store, chat.id),
+    job = store.requestTranslation(source.id);
+  expect(job.input).toMatchObject({ translationPolicy: { judgment, refusalModel: null } });
+  const restored = database();
+  expect(restored.product.import(store.product.export()).restored).toBe(true);
+  expect(modelWorkspace(restored).translationPolicy.judgment).toEqual(judgment);
+  expect(restored.job(job.id).input).toMatchObject({ translationPolicy: { judgment } });
+  const latest = modelWorkspace(store);
+  expect(() =>
+    updateModelWorkspace(store, {
+      expectedRevision: latest.revision,
+      routes: latest.routes,
+      translationPolicy: { ...latest.translationPolicy, judgment: { ...judgment, threshold: 0.5 } },
+    })
+  ).toThrow('Invalid translation judgment policy');
+});
+
 test('legacy chat selections never seed global defaults and reading current settings does not migrate stored data', () => {
   const store = database(),
     chat = createFixtureChat(store, 'Legacy chat'),

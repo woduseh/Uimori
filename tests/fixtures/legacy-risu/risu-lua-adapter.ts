@@ -1,22 +1,23 @@
+// Test-only builder for previously stored wrapper programs; not a product import path.
 import {
   EXTENSION_PROGRAM_API,
   EXTENSION_PROGRAM_MAX_SOURCE_BYTES,
   extensionProgramSourceBytes,
   type ExtensionProgram,
-} from '../core/extension-program.js';
+} from '../../../core/extension-program.js';
 import {
   BEHAVIOR_EDIT_INPUT_SCHEMA,
   BEHAVIOR_EDIT_REQUEST_SCHEMA,
   type BehaviorAction,
   type BehaviorActionHook,
   type BehaviorActionTrigger,
-} from '../core/package-behavior.js';
-import { HOST_LIST_PAGE_MAX, HOST_TEXT_PAGE_MAX } from '../core/paging.js';
+} from '../../../core/package-behavior.js';
+import { HOST_LIST_PAGE_MAX, HOST_TEXT_PAGE_MAX } from '../../../core/paging.js';
 import {
   validatePromptExpression,
   type PromptExpression,
   type PromptOperation,
-} from '../core/prompt-program.js';
+} from '../../../core/prompt-program.js';
 import { RisuCbs, UnsupportedCbs } from './risu-cbs.js';
 import { buildRisuEffectProgram, type RisuEffectOptions } from './risu-trigger-effects.js';
 

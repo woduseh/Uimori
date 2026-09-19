@@ -1,3 +1,4 @@
+import { RisuImageHandoffFields } from './RisuImageHandoffFields.js';
 import { readImportSource, readLargeImportSource as readSource } from './import-source.js';
 import { useRef, useState } from 'react';
 import { RISU_IMPORT_MAX_BYTES, RISU_IMPORT_MAX_UPLOAD_BYTES } from '../core/risu-import.js';
@@ -54,6 +55,7 @@ export function RisuImport({
   const [source, setSource] = useState<RisuImportSource | RisuImportStagedSource | null>(null);
   const [kind, setKind] = useState<RisuImportKind | ''>('');
   const [preview, setPreview] = useState<RisuImportPreview | null>(null);
+  const [imageHandoffIds, setImageHandoffIds] = useState<string[]>([]);
   const [memoryIds, setMemoryIds] = useState<string[]>([]);
   const [allowPartial, setAllowPartial] = useState(false);
   const [uncertain, setUncertain] = useState(false);
@@ -79,9 +81,9 @@ export function RisuImport({
     setError('');
     setNotice('');
     try {
-      if (!/\.(charx|json|zip|js)$/i.test(file.name))
+      if (!/\.(charx|risum|json|zip|js)$/i.test(file.name))
         throw new Error(
-          '.charx, 카드·모듈 JSON, 모듈 프로젝트 ZIP 또는 플러그인 .js를 선택해 주세요.'
+          '.charx, .risum, 카드·모듈 JSON, 모듈 프로젝트 ZIP 또는 플러그인 .js를 선택해 주세요.'
         );
       if (file.size === 0) throw new Error('빈 파일은 가져올 수 없어요.');
       const isPlugin = /\.js$/iu.test(file.name);
@@ -106,6 +108,11 @@ export function RisuImport({
       });
       setSource(nextSource);
       setPreview(nextPreview);
+      setImageHandoffIds(
+        nextPreview.imageHandoff?.ranges
+          .filter((range) => range.enabled)
+          .map((range) => range.id) ?? []
+      );
       setMemoryIds([]);
       setAllowPartial(false);
       setResult(null);
@@ -137,6 +144,11 @@ export function RisuImport({
       });
       setKind(nextKind);
       setPreview(nextPreview);
+      setImageHandoffIds(
+        nextPreview.imageHandoff?.ranges
+          .filter((range) => range.enabled)
+          .map((range) => range.id) ?? []
+      );
       setMemoryIds([]);
       setAllowPartial(false);
       selectionChanged();
@@ -178,6 +190,7 @@ export function RisuImport({
           ? []
           : preview.lore.filter((entry) => memoryIds.includes(entry.id)).map((entry) => entry.id),
       allowPartial,
+      imageHandoffIds,
       idempotencyKey: (requestKey.current ??= crypto.randomUUID()),
     };
     submission.current = payload;
@@ -267,7 +280,7 @@ export function RisuImport({
             <input
               type="file"
               aria-label="Risu 파일 선택"
-              accept=".charx,.json,.zip,.js,application/json,application/zip,text/javascript"
+              accept=".charx,.risum,.json,.zip,.js,application/json,application/zip,text/javascript"
               disabled={busy || uncertain}
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -321,6 +334,17 @@ export function RisuImport({
                   로어북의 사용 중인 항목은 별도로 선택하지 않아도{' '}
                   {preview.kind === 'module' ? '모듈' : '봇'}의 설정으로 가져와요.
                 </p>
+              )}
+              {preview.imageHandoff && (
+                <RisuImageHandoffFields
+                  policy={preview.imageHandoff}
+                  selected={imageHandoffIds}
+                  disabled={locked}
+                  onChange={(ids) => {
+                    setImageHandoffIds(ids);
+                    selectionChanged();
+                  }}
+                />
               )}
               {preview.kind === 'module' && preview.lore.length > 0 && (
                 <details className="risu-import-preview" key={preview.digest}>

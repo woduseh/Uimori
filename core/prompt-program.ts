@@ -3,6 +3,11 @@ import { validateAgentCollaboration } from './agent-collaboration.js';
 import { validateTextTransformRule, type TextTransformRule } from './text-transform.js';
 import { validateTemplateVariableDefaults } from './template-variables.js';
 import {
+  validateNativeRisuPreset,
+  nativeRisuPresetProjection,
+  type NativeRisuPreset,
+} from './risu-native-preset.js';
+import {
   PromptBudget,
   evaluationFail,
   inspectRuntimeValue,
@@ -126,8 +131,14 @@ export type PromptBlock = {
       template: PromptTemplate;
       completion?: 'complete' | 'prefill';
     }
-  | { kind: 'slot'; role: PromptRoleName; slot: string; template?: PromptTemplate }
-  | { kind: 'history'; from: number; to: number | 'end' }
+  | {
+      kind: 'slot';
+      role: PromptRoleName;
+      slot: string;
+      template?: PromptTemplate;
+      fallback?: string;
+    }
+  | { kind: 'history'; from: number; to: number | 'end'; role?: PromptRoleName }
   | { kind: 'current' }
   | {
       kind: 'cache';
@@ -147,6 +158,7 @@ export type PromptTextTransform = TextTransformRule & {
 };
 export type PromptProgram = {
   version: 1;
+  nativeRisuPreset?: NativeRisuPreset;
   variableDefaults?: Record<string, string>;
   controls: PromptControl[];
   blocks: PromptBlock[];
@@ -532,7 +544,18 @@ export function validatePromptProgram(value: unknown): PromptProgram {
     'execution',
     'collaboration',
     'provenance',
+    'nativeRisuPreset',
   ]);
+  if (raw.nativeRisuPreset !== undefined) {
+    const native = validateNativeRisuPreset(raw.nativeRisuPreset);
+    const projected = nativeRisuPresetProjection(native);
+    if (
+      JSON.stringify(raw.blocks) !== JSON.stringify(projected.blocks) ||
+      JSON.stringify(raw.controls) !== JSON.stringify(projected.controls) ||
+      JSON.stringify(raw.variableDefaults) !== JSON.stringify(projected.variableDefaults)
+    )
+      fail('RISU_NATIVE_PRESET_PROJECTION_MISMATCH');
+  }
   if (raw.variableDefaults !== undefined) validateTemplateVariableDefaults(raw.variableDefaults);
   if (
     raw.version !== 1 ||
@@ -640,6 +663,7 @@ export function validatePromptProgram(value: unknown): PromptProgram {
       'kind',
       'role',
       'template',
+      'fallback',
       'completion',
       'slot',
       'from',
@@ -665,10 +689,13 @@ export function validatePromptProgram(value: unknown): PromptProgram {
       if (b.completion === 'prefill' && b.role !== 'assistant') fail('PROMPT_PREFILL_ROLE', b.id);
     } else if (b.kind === 'slot') {
       id(b.slot);
+      if (b.fallback !== undefined) str(b.fallback, 200_000);
       if (b.template !== undefined) template(b.template, controls);
     } else if (b.kind === 'history') {
       if (!Number.isSafeInteger(b.from) || (b.to !== 'end' && !Number.isSafeInteger(b.to)))
         fail('PROMPT_INVALID_HISTORY_RANGE', b.id);
+      if (b.role !== undefined && !['system', 'user', 'assistant'].includes(String(b.role)))
+        fail('PROMPT_INVALID_ROLE', b.id);
     } else if (b.kind === 'cache') {
       if (
         !Number.isSafeInteger(b.depth) ||
@@ -1530,13 +1557,13 @@ export function compilePromptProgram(
           storySubmission:
             submission.when === undefined || truth(evaluator.evaluate(submission.when)),
         };
-  const appendHistory = (item: PromptHistoryMessage, blockId: string) => {
+  const appendHistory = (item: PromptHistoryMessage, blockId: string, role?: PromptRoleName) => {
     if (used.has(item.id)) fail('PROMPT_DUPLICATE_HISTORY', blockId);
     evaluator.claimOutput(item.text.length);
     used.add(item.id);
     messages.push({
       id: `${blockId}:${item.id}`,
-      role: item.role,
+      role: role ?? item.role,
       content: [{ type: 'text', text: item.text }],
       completion: 'complete',
       provenance: {
@@ -1566,7 +1593,7 @@ export function compilePromptProgram(
     if (block.kind === 'message' || block.kind === 'slot') {
       if (block.kind === 'slot' && !Object.hasOwn(context.slots, block.slot))
         throw new PromptProgramError('PROMPT_UNKNOWN_SLOT', block.id, block.slot);
-      const slot = block.kind === 'slot' ? context.slots[block.slot] : '';
+      const slot = block.kind === 'slot' ? context.slots[block.slot] || block.fallback || '' : '';
       const render = (nodes: PromptTemplate, slots: Record<string, string>) => {
         try {
           return evaluator.render(nodes, slots);
@@ -1607,7 +1634,7 @@ export function compilePromptProgram(
         to = block.to === 'end' ? size : offset(block.to);
       if (from > to) fail('PROMPT_REVERSED_HISTORY', block.id);
       context.history.slice(from, to).forEach((item) => {
-        appendHistory(item, block.id);
+        appendHistory(item, block.id, block.role);
       });
     } else if (block.kind === 'current')
       context.history

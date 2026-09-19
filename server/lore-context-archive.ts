@@ -6,7 +6,12 @@ import {
   type LoreDependency,
   type RetainedLore,
 } from '../core/lore-context.js';
-import { buildMainInput, executeTool, roleResources } from '../core/provider.js';
+import {
+  buildMainInput,
+  executeTool,
+  roleResources,
+  knowledgeReadResults,
+} from '../core/provider.js';
 import type { Resource, Run, RunSnapshot } from '../core/types.js';
 import { loreDependencies, selectLoreContext } from './lore-context.js';
 import type { Store } from './store.js';
@@ -126,29 +131,26 @@ export function historicalRunLoreReads(store: Store, run: Run): RetainedLore[] {
         args: event.args,
       });
       if (!isDeepStrictEqual(expected, event)) continue;
-      const data = expected.result as {
-        source: { id: string; revision: number; hash: string };
-        range: { start: number; end: number };
-        text: string;
-      };
-      const resource = resources.find((item) => item.id === data.source.id);
-      if (!resource || !data.text || data.range.end <= data.range.start) continue;
-      result.push({
-        id: data.source.id,
-        revision: data.source.revision,
-        hash: data.source.hash,
-        title: resource.title,
-        start: data.range.start,
-        end: data.range.end,
-        text: data.text,
-        origin: {
-          sourceRevision: source.id,
-          sourceHash: source.hash,
-          runId: run.id,
-          callId: event.callId,
-        },
-        lastUsed: source.id,
-      });
+      for (const data of knowledgeReadResults(expected)) {
+        const resource = resources.find((item) => item.id === data.source.id);
+        if (!resource || !data.text || data.range.end <= data.range.start) continue;
+        result.push({
+          id: data.source.id,
+          revision: data.source.revision,
+          hash: data.source.hash,
+          title: resource.title,
+          start: data.range.start,
+          end: data.range.end,
+          text: data.text,
+          origin: {
+            sourceRevision: source.id,
+            sourceHash: source.hash,
+            runId: run.id,
+            callId: event.callId,
+          },
+          lastUsed: source.id,
+        });
+      }
     } catch {
       /* Malformed execution logs never confer read authority. */
     }

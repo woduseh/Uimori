@@ -148,7 +148,7 @@ export function PackageImagesEditor({ value, onChange, onDirtyChange }: Props) {
               void addFiles(files);
             }}
           />
-          <small>PNG · JPEG · WebP, 파일마다 2MB 이하</small>
+          <small>PNG · JPEG · WebP · AVIF · GIF, 파일마다 2MB 이하</small>
         </label>
         <label>
           이미지 검색

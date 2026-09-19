@@ -116,6 +116,13 @@ export function executionContext(
   );
   return {
     ...resolveTemplateVariableContext(profile, target),
+    ...(snapshot.nativeRisuExecution
+      ? {
+          variables:
+            snapshot.nativeRisuExecution.preRequest?.variables ??
+            snapshot.nativeRisuExecution.variables,
+        }
+      : {}),
     chat: {
       id: snapshot.chatId,
       branchId: snapshot.branchId ?? `main:${snapshot.chatId}`,
@@ -124,7 +131,7 @@ export function executionContext(
     },
     bot: identity(bot, 'bot'),
     user: identity(persona, 'persona'),
-    input: { text: snapshot.request },
+    input: { text: snapshot.nativeRisuExecution?.request ?? snapshot.request },
     history: {
       recent,
       total: messages.length,

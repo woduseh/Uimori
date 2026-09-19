@@ -8,7 +8,8 @@ import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import { buildMainInput, executeTool } from '../core/provider.js';
 import type { ModelInput, RunSnapshot } from '../core/types.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
-import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
+import { importRisuLore } from '../server/risu-import-lore.js';
+import { createRisuImportFindings } from '../server/risu-import-findings.js';
 import { validateRunSnapshot } from '../server/snapshot-archive.js';
 import { Store } from '../server/store.js';
 
@@ -94,16 +95,31 @@ const STATION = 'lore-0',
 function reserved(edit?: (snapshot: RunSnapshot) => void) {
   const store = database();
   const source = sourceOf();
-  const preview = prepareRisuImport({ source });
-  const saved = applyRisuImport(store, {
-    source,
-    digest: preview.digest,
-    memoryIds: [],
-    allowPartial: true,
-    idempotencyKey: randomUUID(),
-  });
-  const chat = saved.chat!;
-  const content = store.product.get<Content>('content', saved.receipt.items[0].id);
+  const card = JSON.parse(Buffer.from(source.base64, 'base64').toString('utf8')).data;
+  const { lore, loreActivation } = importRisuLore({ card, findings: createRisuImportFindings() });
+  // Frozen legacy keyword packages still use their original reservation/receipt contract.
+  const content = store.product.content({
+    kind: 'bot',
+    title: card.name,
+    description: '',
+    text: card.description,
+    loading: 'pinned',
+    relatedIds: [],
+    package: {
+      version: 1,
+      id: 'legacy-keyword',
+      revision: 1,
+      title: card.name,
+      description: '',
+      body: card.description,
+      lore,
+      loreActivation: { ...loreActivation, mode: 'keyword' },
+      instructions: [],
+      controls: [],
+      transforms: [],
+    },
+  }) as Content;
+  const chat = store.createChat(content.title, undefined, { botId: content.id });
   const profile = store.product.snapshot(chat.id);
   const current = store.chat(chat.id);
   const { run } = store.createRun(
@@ -149,7 +165,7 @@ const catalogIds = (snapshot: RunSnapshot) => buildMainInput(snapshot).catalog.m
 const loreResourceId = (snapshot: RunSnapshot, loreId: string) =>
   `package:${snapshot.profile!.packageAttachments![0].id}:bot:lore:${loreId}`;
 
-test('the import preserves the lorebook rules and puts the package in keyword mode', () => {
+test('a saved legacy keyword package retains its lorebook rules and mode', () => {
   const { content } = reserved();
   expect(content.package!.loreActivation).toEqual({
     mode: 'keyword',

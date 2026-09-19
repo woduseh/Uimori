@@ -1,3 +1,4 @@
+import { validateRisuImageHandoff, type RisuImageHandoff } from './risu-image-handoff.js';
 import {
   validatePromptProgram,
   type PromptControl,
@@ -12,6 +13,7 @@ import { validatePackageModules, type PackageModuleRef } from './package-feature
 import { validatePackageIdentityTemplate } from './package-identity.js';
 import { validatePackagePanels, type PackagePanel } from './package-panels.js';
 import { validateTemplateVariableDefaults } from './template-variables.js';
+import { validateNativeRisuContent, type NativeRisuContent } from './risu-native.js';
 
 export const PACKAGE_ROLES = ['bot', 'persona', 'module'] as const;
 export type PackageRole = (typeof PACKAGE_ROLES)[number];
@@ -45,6 +47,7 @@ export type PackageLore = {
   relatedIds?: string[];
   folderId?: string;
   loreContext?: import('./lore-context.js').LorePlacement;
+  nativeRisuPosition?: import('./risu-native.js').NativeRisuLorePosition;
   /** Applied only while the package is in keyword mode; kept as data when it is not. */
   activation?: PackageLoreActivation;
 };
@@ -113,6 +116,8 @@ export type ContentPackage = {
    * package without a matching receipt renders the preserved text unchanged.
    */
   compat?: { risuCbs: { fields: string[] } };
+  nativeRisu?: NativeRisuContent;
+  imageHandoff?: RisuImageHandoff;
 };
 export class ContentPackageError extends Error {
   readonly statusCode = 400;
@@ -237,6 +242,8 @@ export function validateContentPackage(value: unknown): ContentPackage {
     'transforms',
     'loreActivation',
     'compat',
+    'nativeRisu',
+    'imageHandoff',
   ]);
   if (p.version !== 1) fail('PACKAGE_VERSION_UNSUPPORTED');
   id(p.id);
@@ -292,6 +299,7 @@ export function validateContentPackage(value: unknown): ContentPackage {
       'relatedIds',
       'folderId',
       'loreContext',
+      'nativeRisuPosition',
       'activation',
     ]);
     id(l.id);
@@ -300,6 +308,20 @@ export function validateContentPackage(value: unknown): ContentPackage {
     string(l.description, 4000);
     string(l.text, 1_000_000);
     if (l.loading !== 'pinned' && l.loading !== 'discoverable') fail('PACKAGE_LORE_LOADING', l.id);
+    if (l.nativeRisuPosition !== undefined) {
+      const position = object(l.nativeRisuPosition, ['mode', 'depth', 'role', 'order']);
+      if (
+        !p.nativeRisu ||
+        !['lore', 'depth', 'reverse_depth'].includes(position.mode as string) ||
+        !['system', 'user', 'assistant'].includes(position.role as string) ||
+        !Number.isSafeInteger(position.depth) ||
+        (position.depth as number) < 0 ||
+        (position.depth as number) > 1_000_000 ||
+        !Number.isSafeInteger(position.order) ||
+        Math.abs(position.order as number) > 1_000_000
+      )
+        fail('PACKAGE_NATIVE_RISU_LORE_POSITION', l.id);
+    }
     if (l.loreContext !== undefined) {
       const placement = object(l.loreContext, ['placement', 'group', 'order']);
       if (placement.placement !== 'background' && placement.placement !== 'scene')
@@ -404,6 +426,15 @@ export function validateContentPackage(value: unknown): ContentPackage {
   }
   if (p.behavior !== undefined) validatePackageBehavior(p.behavior);
   try {
+    if (p.nativeRisu !== undefined) {
+      const native = validateNativeRisuContent(p.nativeRisu);
+      if (p.imageHandoff !== undefined) validateRisuImageHandoff(p.imageHandoff, native);
+      for (const asset of native.assets)
+        if (!(p.images as PackageImage[] | undefined)?.some((image) => image.id === asset.imageId))
+          fail('PACKAGE_NATIVE_RISU_ASSET_REFERENCE');
+    }
+    if (p.imageHandoff !== undefined && p.nativeRisu === undefined)
+      fail('PACKAGE_IMAGE_HANDOFF_NATIVE_REQUIRED');
     if (p.panels !== undefined)
       validatePackagePanels(p.panels, {
         controls: p.controls as PromptControl[],
@@ -472,6 +503,12 @@ export function validateContentPackage(value: unknown): ContentPackage {
   list(p.transforms, 32);
   const transforms = p.transforms.map(validatePackageTransform);
   unique(transforms.map((t) => t.id));
-  if (JSON.stringify(value).length > 4_000_000) fail('PACKAGE_SIZE_LIMIT');
+  const serialized = JSON.stringify(value);
+  if (
+    p.nativeRisu
+      ? new TextEncoder().encode(serialized).byteLength > 12 * 1024 * 1024
+      : serialized.length > 4_000_000
+  )
+    fail('PACKAGE_SIZE_LIMIT');
   return structuredClone(value) as ContentPackage;
 }

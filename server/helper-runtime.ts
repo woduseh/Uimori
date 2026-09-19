@@ -25,6 +25,7 @@ import {
 } from '../core/transport.js';
 import { promptWorkspace } from './prompt-workspace.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
+import { prepareNativeRisuReadOnly } from './risu-native-readonly.js';
 import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { previousContextPlan, seedContextPlan } from './context-planning.js';
 import { prepareInputContext } from './context-compaction.js';
@@ -1470,6 +1471,7 @@ export class HelperRuntime {
         maxCalls: Math.min(snapshot.settings.maxCalls, remaining),
       };
       const retainedPlan = previous ? snapshot.contextPlan : undefined;
+      snapshot = await prepareNativeRisuReadOnly(snapshot, 'artifact');
       delete snapshot.promptCompilation;
       snapshot = seedContextPlan(snapshot);
       const prior =

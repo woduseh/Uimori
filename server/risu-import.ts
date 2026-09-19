@@ -7,29 +7,18 @@ import {
   type RisuImportKind,
 } from '../core/risu-import.js';
 import { readCharacterCard } from './character-card-file.js';
-import { importRisuDisplayRegex } from './risu-regex.js';
 import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js';
 import { deleteUpload, readUpload } from './uploads.js';
 import { fields, HttpError, record, text } from './request-validation.js';
-import { object, type RisuCard, type RisuCardExtension } from './risu-import-card.js';
 import { createRisuImportFindings } from './risu-import-findings.js';
-import { importRisuIdentity } from './risu-import-identity.js';
-import { importRisuAssets } from './risu-import-assets.js';
-import { createRisuImportText } from './risu-import-text.js';
-import { importRisuBody, importRisuGreetings } from './risu-import-body.js';
-import { importRisuLore } from './risu-import-lore.js';
-import { importRisuTriggers } from './risu-import-triggers.js';
-import { scanRisuExtensionSurfaces } from './risu-import-surfaces.js';
+import { analyzeNativeRisuImport } from './risu-native-import.js';
 import { buildRisuTransfer } from './risu-import-transfer.js';
 import { adaptRisuPlugin } from './risu-plugin-adapter.js';
 import { readRisuPluginFile } from './risu-plugin-import.js';
 import type { Store } from './store.js';
+import { createPackageStart } from './package-start.js';
+import type { Content } from '../core/product.js';
 
-/**
- * A one-way format adapter. No Risu runtime or source-specific behavior enters the package.
- * Each stage reads the card and reports what it could not carry over, and the order they run in is
- * the order the preview lists its findings.
- */
 /**
  * A plugin file becomes one module package whose behavior actions wrap the preserved plugin source
  * in the `risuai` shim. Nothing runs here: the adapter only builds sources, options and findings.
@@ -112,52 +101,7 @@ function analyze(
 ) {
   // A plugin declares its format in its name, and its reader owns the 4 MiB limit and `.js` rule.
   if (/\.js$/iu.test(String(record(value).name))) return analyzePlugin(value, requestedKind);
-  const input = readCharacterCard(value, requestedKind, readStaged);
-  const card = input.card as RisuCard;
-  const risu = object(object(card.extensions).risuai) as RisuCardExtension;
-  const findings = createRisuImportFindings();
-  const { pkg, title } = importRisuIdentity({ input, card, risu, findings });
-  const assets = importRisuAssets({ card, kind: input.kind, members: input.members, findings });
-  pkg.images = assets.packageImages;
-  if (assets.portraitImageId !== undefined) pkg.portraitImageId = assets.portraitImageId;
-  const cardText = createRisuImportText(assets.assetUrls, findings);
-  const body = importRisuBody({ card, cardText, findings });
-  pkg.body = body.body;
-  if (body.bodyTemplate) pkg.bodyTemplate = body.bodyTemplate;
-  pkg.instructions.push(...body.instructions);
-  pkg.starts = importRisuGreetings({ card, cardText, findings });
-  const lore = importRisuLore({ card, cardText, findings });
-  pkg.lore.push(...lore.lore);
-  if (lore.loreActivation) pkg.loreActivation = lore.loreActivation;
-  const regex = importRisuDisplayRegex(risu.customScripts);
-  pkg.transforms = regex.transforms;
-  findings.append(regex.findings);
-  // Which stored fields kept their original CBS. The declaration is what tells the run to evaluate
-  // them; the stages above decided it by failing to convert the text.
-  const compatFields = [
-    ...(pkg.body !== undefined && cardText.compatTexts.has(pkg.body) ? ['body'] : []),
-    ...pkg.lore.filter((item) => cardText.compatTexts.has(item.text)).map((i) => `lore:${i.id}`),
-    ...(pkg.starts ?? [])
-      .filter((item) => cardText.compatTexts.has(item.text))
-      .map((item) => `start:${item.id}`),
-    ...pkg.instructions
-      .filter((item) => cardText.compatTexts.has(item.text))
-      .map((item) => `instruction:${item.id}`),
-  ];
-  if (compatFields.length) pkg.compat = { risuCbs: { fields: compatFields } };
-  const behavior = importRisuTriggers({ risu, findings });
-  if (behavior) pkg.behavior = behavior;
-  scanRisuExtensionSurfaces({ input, card, risu, findings });
-  const { file, preview } = buildRisuTransfer({
-    input,
-    card,
-    pkg,
-    title,
-    images: assets.images,
-    lore: lore.preview,
-    findings,
-  });
-  return { file, preview, hash: input.hash };
+  return analyzeNativeRisuImport(readCharacterCard(value, requestedKind, readStaged));
 }
 
 export function prepareRisuImport(
@@ -175,7 +119,15 @@ export function applyRisuImport(
   readStaged?: (uploadId: string) => Buffer
 ): RisuImportResult {
   const body = record(value);
-  fields(body, ['source', 'kind', 'digest', 'memoryIds', 'allowPartial', 'idempotencyKey']);
+  fields(body, [
+    'source',
+    'kind',
+    'digest',
+    'memoryIds',
+    'imageHandoffIds',
+    'allowPartial',
+    'idempotencyKey',
+  ]);
   const requestKey = text(body.idempotencyKey, 'request key', 100);
   const { file, preview, hash } = analyze(
     body.source,
@@ -199,11 +151,40 @@ export function applyRisuImport(
     )
   )
     throw new HttpError(400, 'RISU_IMPORT_MEMORY_SELECTION');
+  if (body.imageHandoffIds !== undefined) {
+    const policy = file.contents[0].source.package!.imageHandoff;
+    if (
+      !Array.isArray(body.imageHandoffIds) ||
+      body.imageHandoffIds.length > 64 ||
+      body.imageHandoffIds.some(
+        (id: unknown) => typeof id !== 'string' || !policy?.ranges.some((range) => range.id === id)
+      )
+    )
+      throw new HttpError(400, 'RISU_IMPORT_IMAGE_HANDOFF_SELECTION');
+    if (policy)
+      policy.ranges = policy.ranges.map((range) => ({
+        ...range,
+        enabled: body.imageHandoffIds.includes(range.id),
+      }));
+  }
   const selected = new Set<string>(body.memoryIds);
   const memories = preview.lore.filter((item) => selected.has(item.id));
   file.contents[0].source.package!.lore = file.contents[0].source.package!.lore.filter(
     (item) => !selected.has(item.id)
   );
+  const native = file.contents[0].source.package!.nativeRisu;
+  if (native && selected.size) {
+    const entries =
+      native.module?.lorebook ??
+      (native.card.character_book as { entries?: unknown[] } | undefined)?.entries;
+    if (Array.isArray(entries)) {
+      const updated = entries.map((entry, index) =>
+        selected.has(`lore-${index}`) ? { ...record(entry), enabled: false } : entry
+      );
+      if (native.module?.lorebook != null) native.module.lorebook = updated;
+      else native.card.character_book = { ...record(native.card.character_book), entries: updated };
+    }
+  }
   const prepared = prepareNativeTransfer({ file });
   return store.transaction(() => {
     const receipt = applyNativeTransfer(store, {
@@ -230,7 +211,22 @@ export function applyRisuImport(
         expectedHeadRevision: null,
         idempotencyKey: `import:${memory.id}`,
       });
-    return { receipt, chat };
+    const content = store.product.get<Content>('content', botId);
+    const first =
+      content.package?.nativeRisu &&
+      content.package.starts?.find(
+        (start) => start.id === 'start-0' && start.mode === 'authored' && start.text.trim()
+      );
+    if (first)
+      createPackageStart(store, chat.id, {
+        packageId: content.id,
+        packageRevision: content.revision,
+        startId: first.id,
+        expectedSettingsRevision: chat.settingsRevision,
+        expectedProfileRevision: store.product.profile(chat.id).revision,
+        idempotencyKey: `risu-start:${requestKey}`,
+      });
+    return { receipt, chat: store.chat(chat.id) };
   });
 }
 

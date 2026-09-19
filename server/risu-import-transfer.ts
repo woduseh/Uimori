@@ -72,9 +72,11 @@ export function buildRisuTransfer({
               mediaType:
                 input.format === 'charx' || input.format === 'risu-module-project-zip'
                   ? 'application/zip'
-                  : input.format === 'risu-plugin-js'
-                    ? 'text/javascript'
-                    : 'application/json',
+                  : input.format === 'risu-module-binary'
+                    ? 'application/octet-stream'
+                    : input.format === 'risu-plugin-js'
+                      ? 'text/javascript'
+                      : 'application/json',
               hash,
               base64: source.base64,
             },
@@ -97,6 +99,7 @@ export function buildRisuTransfer({
     ...(plugin ? { plugin } : {}),
     lore,
     findings: findings.list,
+    ...(pkg.imageHandoff ? { imageHandoff: pkg.imageHandoff } : {}),
   };
   return { file, preview };
 }

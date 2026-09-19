@@ -25,6 +25,8 @@ import { api, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
+import { RisuMessageFrame } from './RisuMessageFrame.js';
+import { RisuInteractionDialog } from './RisuInteractionDialog.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
@@ -42,6 +44,7 @@ type ReaderMode = 'original' | 'translation';
 /** Scene header pieces the activity panel places inside its summary row. */
 type SceneHeaderSlots = { leading: ReactNode; badges: ReactNode };
 type ReaderProps = {
+  branchId?: string;
   source: Source;
   index: number;
   jobs: Job[];
@@ -50,6 +53,7 @@ type ReaderProps = {
   assets: Asset[];
   refresh: () => Promise<void>;
   onError: (error: string) => void;
+  onNativeNotice?: (messages: string[]) => void;
   onFork: (sourceId: string) => Promise<void>;
   onRetry?: () => Promise<void>;
   onModelSettings?: () => void;
@@ -137,6 +141,8 @@ function SourceReaderContent({
   illustrations = [],
   assets,
   refresh: refreshSource,
+  onError,
+  onNativeNotice,
   onFork,
   onRetry,
   onModelSettings,
@@ -154,6 +160,7 @@ function SourceReaderContent({
   sourceSegments,
   hasPackages,
   presentationRefreshKey,
+  branchId,
 }: ReaderProps) {
   const onRequestEditing = useCallback(
     (editing: boolean) => {
@@ -185,7 +192,8 @@ function SourceReaderContent({
     source,
     displayTranslation,
     hasPackages === true,
-    `${presentationRefreshKey ?? ''}:${jobs.map((job) => `${job.id}:${job.status}`).join(',')}`
+    `${presentationRefreshKey ?? ''}:${jobs.map((job) => `${job.id}:${job.status}`).join(',')}`,
+    branchId
   );
   // Only a source that really carries declared boundaries is read through the segment reader; the
   // server drops source transforms for exactly those, and translation display keeps its own.
@@ -199,6 +207,26 @@ function SourceReaderContent({
     [sourceSegments, source.id, source.hash, source.text]
   );
   const projected = presentation?.data;
+  const nativeAction = async (kind: 'trigger' | 'button', name: string) => {
+    if (!projected?.nativeAction) return;
+    try {
+      const result = await api<{ notifications?: { kind: string; message: string }[] }>(
+        `/chats/${source.chatId}/sources/${source.id}/risu-action`,
+        {
+          ...projected.nativeAction,
+          kind,
+          name,
+          idempotencyKey: crypto.randomUUID(),
+        }
+      );
+      if (result.notifications?.length)
+        onNativeNotice?.(result.notifications.map((notice) => notice.message));
+      await refresh();
+    } catch (error) {
+      onError((error as Error).message);
+      throw error;
+    }
+  };
   const [mode, setMode] = useState<ReaderMode>(() =>
     initialMode(source.id, !!displayTranslation?.result)
   );
@@ -449,6 +477,9 @@ function SourceReaderContent({
       data-testid="source"
       data-source-id={source.id}
     >
+      {latest && projected?.format === 'risu-html' && (
+        <RisuInteractionDialog chatId={source.chatId} branchId={branchId} onError={onError} />
+      )}
       {packageStart?.mode === 'authored' && (
         <p className="muted" data-testid="authored-start">
           작성된 도입문 · {packageStart.title}
@@ -497,7 +528,22 @@ function SourceReaderContent({
       {validTranslation && translation?.status !== 'completed' && mode === 'translation' && (
         <p role="status">이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.</p>
       )}
-      {segmented && sourceSegments && mode === 'original' ? (
+      {hasPackages && !presentation ? (
+        <p role="status">봇 화면을 준비하고 있어요.</p>
+      ) : projected?.format === 'risu-html' &&
+        (mode === 'original' || (validTranslation && projected.translation?.html !== undefined)) ? (
+        <div data-testid={mode === 'original' ? 'source-text' : 'translation-text'}>
+          <RisuMessageFrame
+            html={
+              (mode === 'original' ? projected.original.html : projected.translation?.html) ?? ''
+            }
+            css={mode === 'original' ? projected.original.css : projected.translation?.css}
+            onAction={nativeAction}
+            disabled={presentation?.pending}
+            revisionKey={`${source.id}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
+          />
+        </div>
+      ) : segmented && sourceSegments && mode === 'original' ? (
         <SourceSegmentBody
           source={source}
           config={sourceSegments}

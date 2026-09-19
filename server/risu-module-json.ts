@@ -74,7 +74,9 @@ export function moduleJsonDocument(
   const addAsset = (name: unknown, value: unknown, type: string, projectAsset?: () => Buffer) => {
     const title = typeof name === 'string' && name ? name : `이미지 ${assets.length + 1}`;
     const raw = typeof value === 'string' ? value : '';
-    const data = raw.match(/^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/u);
+    const data = raw.match(
+      /^data:image\/(?:png|jpeg|webp|avif|gif);base64,([A-Za-z0-9+/]+={0,2})$/u
+    );
     const uri = data || projectAsset ? `embeded://module-assets/${assets.length}` : raw;
     if (data || projectAsset) {
       const bytes = projectAsset ? projectAsset() : Buffer.from(data![1], 'base64');

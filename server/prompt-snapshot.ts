@@ -1,4 +1,5 @@
 import { loreHistory } from '../core/lore-context.js';
+import { placeNativeRisuLore } from '../core/risu-native-lore.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { attachMainHostContext } from './main-host-context.js';
 import { buildMainInput, pinnedSlotSources } from '../core/provider.js';
@@ -17,6 +18,7 @@ import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { compiledPackages, type ResolvedPackage } from '../core/package-context.js';
 import { executionContext } from '../core/execution-context.js';
 import { projectedLogicalHistory } from '../core/context-projection.js';
+import { nativeRisuPresetPending, projectNativeRisuPresetProgram } from './risu-native-preset.js';
 import { projectPromptInputTransforms } from './prompt-transforms.js';
 import {
   projectExtensionMessageEdits,
@@ -26,7 +28,7 @@ import {
 /** Pair each exact source version with its actual user request; never infer roles from prose. */
 export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): PromptHistoryMessage[] {
   const entries = snapshot.history;
-  return entries.flatMap((entry) => {
+  return entries.reduce<PromptHistoryMessage[]>((accumulated, entry) => {
     const source = entry.contentHash
       ? store.sourceAtHash(entry.revision, entry.contentHash)
       : store.sourceOriginal(entry.revision);
@@ -41,7 +43,44 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
       sourceHash: entry.contentHash ?? source.hash,
       runId: source.runId,
     };
-    return [
+    const owner = store.run(source.runId).snapshot;
+    const native = owner.nativeRisuAuthored;
+    const output = owner.nativeRisuExecution?.output;
+    if (output) {
+      const prior = new Map(accumulated.map((message) => [message.id, message]));
+      return [
+        ...accumulated.filter((message) => message.sourceKind === 'authored-start'),
+        ...output.messages.map((message, index) => {
+          const existing = message.id ? prior.get(message.id) : undefined;
+          const current = message.id === 'current-output';
+          return {
+            ...(existing ?? provenance),
+            id:
+              existing?.id ??
+              (current
+                ? `source:${entry.revision}`
+                : message.id === 'current-input'
+                  ? `request:${entry.revision}`
+                  : `native:${entry.revision}:${index}`),
+            role: message.role === 'user' ? ('user' as const) : ('assistant' as const),
+            text: current ? entry.text : message.data,
+          };
+        }),
+      ];
+    }
+    if (native) {
+      accumulated.push(
+        ...native.messages.map((message, index) => ({
+          id: `native:${entry.revision}:${index}`,
+          role: message.role === 'user' ? ('user' as const) : ('assistant' as const),
+          text: message.role === 'char' ? entry.text : message.data,
+          ...provenance,
+          ...(native.greeting ? { sourceKind: 'authored-start' as const } : {}),
+        }))
+      );
+      return accumulated;
+    }
+    accumulated.push(
       ...(row.startMode === 'authored'
         ? []
         : [
@@ -58,9 +97,10 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
         text: entry.text,
         ...provenance,
         ...(row.startMode === 'authored' ? { sourceKind: 'authored-start' as const } : {}),
-      },
-    ];
-  });
+      }
+    );
+    return accumulated;
+  }, []);
 }
 export function promptContext(
   snapshot: RunSnapshot,
@@ -102,7 +142,9 @@ function contextFromPackages(
       .map((item) => JSON.stringify(item))
       .join('\n'),
     references: JSON.stringify(
-      input.pinnedSources?.length ? { pinnedSources: input.pinnedSources } : { facts: input.facts }
+      input.pinnedSources?.length
+        ? { pinnedSources: pinnedSlotSources(input, 'references') }
+        : { facts: input.facts }
     ),
     catalog: JSON.stringify(input.catalog),
     source: '',
@@ -120,6 +162,7 @@ function contextFromPackages(
         .join('\n\n');
   const inputHistoryIds = new Set(input.history.map((entry) => entry.revision));
   const logical = (
+    snapshot.nativeRisuExecution?.history ??
     snapshot.logicalHistory ??
     input.history.map((entry) => ({
       id: `source:${entry.revision}`,
@@ -169,10 +212,11 @@ export function compileSnapshotPrompt(
   options: { compilerVersion?: PromptCompilerVersion } = {}
 ): RunSnapshot {
   if (snapshot.story?.waiting || snapshot.contextPlan?.status === 'pending') return snapshot;
-  const selected =
+  const authored =
     program ??
     snapshot.profile?.promptPresets?.main?.program ??
     createDefaultPromptProgram(DEFAULT_MAIN_PROMPT);
+  const selected = projectNativeRisuPresetProgram(snapshot, authored);
   const packages = compiledPackages(snapshot, 'main');
   const positioned = packages.flatMap((p) => p.instructions).filter((n) => n.position);
   if (positioned.length) {
@@ -220,6 +264,8 @@ export function compileSnapshotPrompt(
     ...(options.compilerVersion ? { compilerVersion: options.compilerVersion } : {}),
   });
   promptCompilation.warnings.push(...context.transformWarnings);
+  if (nativeRisuPresetPending(snapshot))
+    promptCompilation.warnings.push('RISU_NATIVE_PRESET_PENDING');
   if (context.runtime.variableDefaultsError === 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT')
     promptCompilation.warnings.push('TEMPLATE_VARIABLE_DEFAULTS_LIMIT');
   for (const pkg of packages)
@@ -233,5 +279,12 @@ export function compileSnapshotPrompt(
         `PACKAGE_TEXT_TEMPLATE_FALLBACK:${JSON.stringify({ instanceId: `${pkg.attachment.id}:${pkg.attachment.role}`, resourceId: item.id, code: item.code })}`
       );
 
-  return attachMainHostContext({ ...snapshot, promptCompilation });
+  const hosted = attachMainHostContext({ ...snapshot, promptCompilation });
+  return {
+    ...hosted,
+    promptCompilation: placeNativeRisuLore(
+      hosted.promptCompilation!,
+      buildMainInput(snapshot, [], options).pinnedSources ?? []
+    ),
+  };
 }

@@ -8,12 +8,13 @@ import { Store } from '../server/store.js';
 import { applyRisuImport, prepareRisuImport, risuImportRoutes } from '../server/risu-import.js';
 import { nativeTransferOriginal } from '../server/native-transfer.js';
 import type { Content } from '../core/product.js';
-import { applyPackageTransforms } from '../server/package-transforms.js';
+import { nativeRisuRegex } from '../core/risu-native.js';
 import { resolvePackageStart } from '../core/package-start.js';
 import { createPackageStart } from '../server/package-start.js';
 import { compilePackageAttachment } from '../core/package-runtime.js';
 import { modelWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { decodeRPack } from '../server/compat/risu/rpack.js';
 import { convertCharbook } from '../server/compat/risu/lorebook.js';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -73,7 +74,7 @@ const sourceOf = (value: unknown) => ({
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
 });
 
-test('imported bot and preset defaults share one read context with module lore and frozen openings', () => {
+test('imported bot and preset defaults share one read context with module lore and frozen openings', async () => {
   const store = database();
   const preset = importRisuPresetProgram({
     name: 'Variable preset',
@@ -149,7 +150,7 @@ test('imported bot and preset defaults share one read context with module lore a
     idempotencyKey: 'reader-module',
   });
   const module = store.product.get<Content>('content', importedModule.receipt.items[0].id);
-  const chat = saved.chat!,
+  const chat = store.createChat('Variable opening', undefined, { botId: bot.id }),
     profile = store.product.profile(chat.id);
   store.product.updateProfile(chat.id, {
     expectedRevision: profile.revision,
@@ -161,17 +162,19 @@ test('imported bot and preset defaults share one read context with module lore a
     ],
   });
   const frozen = store.product.snapshot(chat.id)!;
-  const snapshot = compileSnapshotPrompt({
-    chatId: chat.id,
-    parentRevision: null,
-    settingsRevision: chat.settingsRevision,
-    settings: chat.settings,
-    request: 'Continue.',
-    history: [],
-    logicalHistory: [],
-    profile: frozen,
-    resources: store.product.resources(chat.id, frozen),
-  });
+  const snapshot = compileSnapshotPrompt(
+    await prepareNativeRisuRun({
+      chatId: chat.id,
+      parentRevision: null,
+      settingsRevision: chat.settingsRevision,
+      settings: chat.settings,
+      request: 'Continue.',
+      history: [],
+      logicalHistory: [],
+      profile: frozen,
+      resources: store.product.resources(chat.id, frozen),
+    })
+  );
   const input = JSON.stringify(snapshot.promptCompilation!.messages);
   for (const expected of ['BODY:BOT', 'PRESET:BOT/FALLBACK', 'MODULE:BOT/FALLBACK', 'GUIDANCE:BOT'])
     expect(input).toContain(expected);
@@ -184,7 +187,9 @@ test('imported bot and preset defaults share one read context with module lore a
     expectedProfileRevision: frozen.revision,
     idempotencyKey: 'variables-opening',
   });
-  expect(store.sourceOriginal(opened.run.sourceRevision!).text).toBe('OPEN:BOT/FALLBACK');
+  expect(store.sourceOriginal(opened.run.sourceRevision!).text).toBe(
+    'OPEN:{{getvar::shared}}/{{getvar::fallback}}'
+  );
   store.product.content(
     {
       kind: bot.kind,
@@ -207,11 +212,13 @@ test('imported bot and preset defaults share one read context with module lore a
   );
   const restored = database();
   expect(() => restored.product.import(store.product.export())).not.toThrow();
-  expect(restored.sourceOriginal(opened.run.sourceRevision!).text).toBe('OPEN:BOT/FALLBACK');
+  expect(restored.sourceOriginal(opened.run.sourceRevision!).text).toBe(
+    'OPEN:{{getvar::shared}}/{{getvar::fallback}}'
+  );
 });
 
 test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
-  'card guidance supplements the selected prompt; excluded legacy fields stay only in source: %s',
+  'card fields stay authored while importing cannot replace the selected prompt: %s',
   (globalNote) => {
     const store = database();
     const workspace = modelWorkspace(store);
@@ -250,13 +257,7 @@ test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
     });
     const preview = prepareRisuImport({ source });
     expect(preview.findings.filter((finding) => finding.level === 'unsupported')).toEqual([]);
-    expect(preview.findings.map((finding) => finding.code)).toEqual(
-      expect.arrayContaining([
-        'legacy-character-fields',
-        'main-prompt-override',
-        'global-note-as-guidance',
-      ])
-    );
+    expect(preview.findings.map((finding) => finding.code)).toContain('native-risu');
     const saved = applyRisuImport(store, {
       source,
       digest: preview.digest,
@@ -280,14 +281,21 @@ test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
     });
     const delivered = JSON.stringify(compiled.promptCompilation!.messages);
     expect(delivered.match(/KEEP_SELECTED_MAIN/gu)).toHaveLength(1);
-    expect(delivered).not.toMatch(/EXCLUDED_|\{\{original\}\}/u);
-    if (globalNote.includes('Give')) {
-      expect(delivered).toContain('Give Synthetic Pilot room to act.');
-      expect(content.package!.instructions[0]).toMatchObject({
+    expect(content.package!.nativeRisu!.card).toMatchObject({
+      personality: 'EXCLUDED_PERSONALITY {{setvar::x::1}}',
+      scenario: 'EXCLUDED_SCENARIO',
+      system_prompt: 'EXCLUDED_MAIN',
+      post_history_instructions: globalNote,
+    });
+    if (globalNote) {
+      expect(
+        content.package!.instructions.find((item) => item.id === 'writing-guidance')
+      ).toMatchObject({
         id: 'writing-guidance',
         target: 'main',
+        text: globalNote,
       });
-    } else expect(content.package!.instructions).toEqual([]);
+    }
     expect(modelWorkspace(store)).toEqual(before);
     expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
       source.base64
@@ -361,11 +369,12 @@ test('module JSON registers a reusable module without a bot, chat or memory', as
     }
   );
   expect(compiled.resources.find((item) => item.id.endsWith(':lore:lore-0'))?.text).toBe(
-    'Mira visits a green moon.'
+    '{{user}} visits a green moon.'
   );
-  expect(
-    (await applyPackageTransforms('<status>ready</status>', pkg.transforms, 'source')).text
-  ).toBe('**ready**');
+  expect(pkg.transforms).toEqual([]);
+  expect(nativeRisuRegex(pkg.nativeRisu!)).toEqual([
+    expect.objectContaining({ in: '<status>(.*?)</status>', out: '**$1**' }),
+  ]);
   expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0].base64).toBe(
     source.base64
   );
@@ -419,14 +428,14 @@ test('module lorebook keys, secondary keys and mode reach the preserved activati
     idempotencyKey: 'module-keyed',
   });
   const pkg = store.product.get<Content>('content', result.receipt.items[0].id).package!;
-  expect(pkg.loreActivation).toEqual({ mode: 'keyword' });
+  expect(pkg.loreActivation).toEqual({ mode: 'model' });
   expect(pkg.lore.map((item) => item.activation)).toEqual([
     { keys: '/harbor/i', regex: true },
     { keys: 'storm', secondaryKeys: 'rain', selective: true, child: true },
   ]);
 });
 
-test('module scripts remain explicit unsupported findings and module import cannot create memory', () => {
+test('module scripts remain native source and module import cannot create memory', () => {
   const store = database();
   const source = sourceOf({
     type: 'risuModule',
@@ -441,7 +450,7 @@ test('module scripts remain explicit unsupported findings and module import cann
     },
   });
   const preview = prepareRisuImport({ source });
-  expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(true);
+  expect(preview.findings.some((item) => item.code === 'native-risu')).toBe(true);
   const body = {
     source,
     digest: preview.digest,
@@ -449,7 +458,11 @@ test('module scripts remain explicit unsupported findings and module import cann
     allowPartial: false,
     idempotencyKey: 'scripted-module',
   };
-  expect(() => applyRisuImport(store, body)).toThrow('RISU_IMPORT_PARTIAL_REQUIRED');
+  const saved = applyRisuImport(store, body);
+  expect(
+    store.product.get<Content>('content', saved.receipt.items[0].id).package!.nativeRisu!.module!
+      .trigger
+  ).toEqual([{ type: 'output', effect: [{ type: 'triggerlua', code: 'return "not executed"' }] }]);
   expect(() =>
     applyRisuImport(store, { ...body, allowPartial: true, memoryIds: ['lore-0'] })
   ).toThrow('RISU_IMPORT_MEMORY_SELECTION');
@@ -461,7 +474,7 @@ test('module scripts remain explicit unsupported findings and module import cann
   ).toThrow('RISU_IMPORT_INVALID_FILE');
 });
 
-test('card display regex is imported through the shared package renderer', async () => {
+test('card display regex stays native without creating a second transform program', () => {
   const store = database();
   const value = card();
   Object.assign(value.data, {
@@ -482,7 +495,7 @@ test('card display regex is imported through the shared package renderer', async
   const source = sourceOf(value),
     preview = prepareRisuImport({ source });
   expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(false);
-  expect(preview.findings).toContainEqual(expect.objectContaining({ code: 'display-regex' }));
+  expect(preview.findings).toContainEqual(expect.objectContaining({ code: 'native-risu' }));
   const saved = applyRisuImport(store, {
     source,
     digest: preview.digest,
@@ -491,17 +504,22 @@ test('card display regex is imported through the shared package renderer', async
     idempotencyKey: 'display-regex',
   });
   const content = store.product.get<Content>('content', saved.receipt.items[0].id);
-  expect(content.package!.transforms).toHaveLength(1);
-  expect(
-    (await applyPackageTransforms('<state>HP 3</state>', content.package!.transforms, 'source'))
-      .text
-  ).toBe('**상태**\nHP 3');
+  expect(content.package!.transforms).toEqual([]);
+  expect(nativeRisuRegex(content.package!.nativeRisu!)).toEqual([
+    {
+      type: 'editdisplay',
+      in: '<state>([\\s\\S]*?)</state>',
+      out: '**상태**$n$1',
+      ableFlag: true,
+      flag: 'g',
+    },
+  ]);
   expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
     source.base64
   );
 });
 
-test('imported opening identity tokens become native templates while source bytes stay intact', () => {
+test('imported opening identity tokens stay native until the opening runtime evaluates them', () => {
   const store = database(),
     value = card();
   value.data.first_mes = '{{char}} welcomes {{user}}.';
@@ -523,18 +541,9 @@ test('imported opening identity tokens become native templates while source byte
       {},
       { bot: { name: 'Pilot' }, user: { name: '{{user}}' } }
     ).text
-  ).toBe('Pilot welcomes {{user}}.');
-  const opened = createPackageStart(store, saved.chat!.id, {
-    packageId: content.id,
-    packageRevision: content.revision,
-    startId: 'start-0',
-    expectedSettingsRevision: saved.chat!.settingsRevision,
-    expectedProfileRevision: store.product.profile(saved.chat!.id).revision,
-    idempotencyKey: 'open',
-  });
-  expect(store.sourceOriginal(opened.run.sourceRevision!).text).toBe(
-    'Synthetic Pilot welcomes User.'
-  );
+  ).toBe('{{char}} welcomes {{user}}.');
+  expect(saved.chat!.headRevision).not.toBeNull();
+  expect(store.sourceOriginal(saved.chat!.headRevision!).text).toBe(value.data.first_mes);
   expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
     source.base64
   );
@@ -581,11 +590,11 @@ test('card routes import a usable bot and chat; memory separation is opt-in, exa
       store.product.snapshot(result.chat.id)!
     );
     expect(resources.find((item) => item.id.endsWith(':body'))?.text).toBe(
-      'Synthetic Pilot explores an imaginary planet.'
+      '{{char}} explores an imaginary planet.'
     );
     // Risu's decorator reader trims an entry's body, blank lines around it included.
     expect(resources.find((item) => item.id.endsWith(':lore:lore-1'))?.text).toBe(
-      'Earlier travel with User.'
+      'Earlier travel with {{user}}.'
     );
     expect(store.story.notes.revision(result.chat.id)).toBe(0);
     expect(JSON.stringify(bot)).not.toContain(source.base64);
@@ -606,7 +615,7 @@ test('card routes import a usable bot and chat; memory separation is opt-in, exa
     expect(
       store.db.prepare('SELECT count(*) AS n FROM sources WHERE chat_id=?').get(selected.chat!.id)!
         .n
-    ).toBe(0);
+    ).toBe(1);
     expect(nativeTransferOriginal(store, selected.receipt.id).sourceFiles![0].base64).toBe(
       source.base64
     );
@@ -766,7 +775,8 @@ test('one CharX imports as a module, attaches to a bot, and uses canonical lore 
     text: 'SOURCE',
     hash: createHash('sha256').update('SOURCE').digest('hex'),
   });
-  expect(display.original.text).toBe('DISPLAY');
+  expect(display.original.text).toBe('SOURCE');
+  expect('html' in display.original && display.original.html).toContain('DISPLAY');
   const original = nativeTransferOriginal(store, saved.receipt.id);
   expect(original.sourceFiles).toHaveLength(1);
   expect(original.sourceFiles![0].base64).toBe(source.base64);
@@ -874,7 +884,10 @@ test('module project ZIP reads ordered asset files within one project folder wit
     idempotencyKey: 'module-project',
   });
   const content = store.product.get<Content>('content', result.receipt.items[0].id);
-  expect(content.package!.lore[0].text).toMatch(/^!\[green\]\(\/api\/package-image-blobs\//u);
+  expect(content.package!.lore[0].text).toBe('{{image::green}}');
+  expect(content.package!.nativeRisu!.assets).toEqual([
+    expect.objectContaining({ name: 'green', imageId: 'image-0' }),
+  ]);
   expect(content.package!.images).toHaveLength(1);
   expect(result.chat).toBeNull();
   expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0]).toMatchObject({
@@ -939,7 +952,7 @@ test('charx keeps card-owned images while reading its embedded module; corrupt f
   const preview = prepareRisuImport({ source });
   expect(preview.summary.images).toBe(1);
   expect(preview.findings).toContainEqual(
-    expect.objectContaining({ code: 'embedded-module', level: 'info' })
+    expect.objectContaining({ code: 'native-risu', level: 'info' })
   );
   const body = {
     source,
@@ -948,12 +961,14 @@ test('charx keeps card-owned images while reading its embedded module; corrupt f
     allowPartial: false,
     idempotencyKey: 'charx',
   };
-  expect(() => applyRisuImport(store, body)).toThrow('RISU_IMPORT_PARTIAL_REQUIRED');
   expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
-  const result = applyRisuImport(store, { ...body, allowPartial: true });
+  const result = applyRisuImport(store, body);
   const pkg = store.product.get<Content>('content', result.receipt.items[0].id).package!;
   expect(pkg.images).toHaveLength(1);
-  expect(pkg.starts![0].text).toMatch(/^!\[main\]\(\/api\/package-image-blobs\//u);
+  expect(pkg.starts![0].text).toBe('{{image::main}}');
+  expect(pkg.nativeRisu!.assets).toEqual([
+    { name: 'main', uri: 'embeded://assets/main.png', imageId: 'image-0' },
+  ]);
   expect(() =>
     prepareRisuImport({
       source: { name: 'bad.charx', base64: bytes.subarray(0, -5).toString('base64') },
@@ -1063,31 +1078,7 @@ test('an expansion bomb and an oversized member stay refused whatever the contai
   expect(() => cardZip(oversized)).toThrow('RISU_IMPORT_INVALID_FILE');
 });
 
-test('the unhandled trigger notice follows only what the adapter left unconnected', () => {
-  const codes = (triggerscript: unknown) => {
-    const original = card();
-    return prepareRisuImport({
-      source: sourceOf({
-        ...original,
-        data: { ...original.data, extensions: { risuai: { triggerscript } } },
-      }),
-    }).findings.map((item) => item.code);
-  };
-  const connected = {
-    type: 'start',
-    conditions: [],
-    effect: [{ type: 'setvar', operator: '=', var: 'phase', value: 'ready' }],
-  };
-  expect(codes([connected])).not.toContain('trigger-effects-unsupported');
-  expect(codes([{ ...connected, effect: [{ type: 'cutchat', start: '0', end: '1' }] }])).toContain(
-    'trigger-effects-unsupported'
-  );
-  expect(codes([{ ...connected, type: 'display' }])).toContain('trigger-effects-unsupported');
-  expect(codes([null])).toContain('trigger-effects-unsupported');
-  expect(codes('one inline trigger')).toContain('trigger-effects-unsupported');
-});
-
-test('a comment in card text keeps the whole field converted instead of names only', () => {
+test('a comment in card text stays in native source without a converted template', () => {
   const store = database(),
     original = card();
   const source = sourceOf({
@@ -1104,25 +1095,9 @@ test('a comment in card text keeps the whole field converted instead of names on
     idempotencyKey: 'comment',
   });
   const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
-  expect(JSON.stringify(bot.package!.bodyTemplate)).not.toContain('{{');
-});
-
-test('a CBS block opener is not mistaken for a legacy lore directive', () => {
-  const original = card();
-  const cbsOnly = prepareRisuImport({
-    source: sourceOf({
-      ...original,
-      data: { ...original.data, description: '{{#if {{getvar::flag}}}}armed{{/if}} {{char}}' },
-    }),
-  });
-  expect(cbsOnly.findings.map((item) => item.code)).not.toContain('dynamic-markup');
-  const legacy = prepareRisuImport({
-    source: sourceOf({
-      ...original,
-      data: { ...original.data, description: '{#if flag#}armed{#/if#} {{char}}' },
-    }),
-  });
-  expect(legacy.findings.map((item) => item.code)).toContain('dynamic-markup');
+  expect(bot.package!.bodyTemplate).toBeUndefined();
+  expect(bot.package!.body).toBe('{{// hidden}}{{char}} reads {{getvar::flag}}.');
+  expect(bot.package!.nativeRisu!.card.description).toBe(bot.package!.body);
 });
 
 // An entry another frontend wrote as CCv3 `extensions`, which Risu migrates into `@@` lines on import.
@@ -1209,23 +1184,19 @@ test('lore directives decide activation and never reach the model as prose', () 
   );
   expect(levels['lore-not-activated']).toBe('warning');
   // The keyword rules are carried now, so neither notice about dropping them is raised any more.
-  expect(levels['lore-keyword']).toBe('info');
+  expect(levels['native-lore-model']).toBe('info');
   expect(levels).not.toHaveProperty('lore-discovery');
   expect(levels).not.toHaveProperty('lore-rules');
   expect(levels['lore-decorator-position']).toBe('unsupported');
   // One finding per decorator the lorebook carries, instead of one aggregate notice for all of them.
   expect(levels).not.toHaveProperty('lore-decorators');
-  // Only the decorators the keyword engine cannot apply are still reported; the ones it settles at
-  // reservation - the key, recursion and probability lines - carry no finding at all.
-  expect(levels['lore-decorator:depth']).toBe('unsupported');
-  expect(levels['lore-decorator:role']).toBe('unsupported');
+  // Native depth/role placement and supported activation decorators no longer carry loss findings.
+  expect(levels).not.toHaveProperty('lore-decorator:depth');
+  expect(levels).not.toHaveProperty('lore-decorator:role');
   expect(levels).not.toHaveProperty('lore-decorator:exclude_keys_all');
   expect(levels).not.toHaveProperty('lore-decorator:recursive');
   expect(levels).not.toHaveProperty('lore-decorator:activate');
   expect(levels).not.toHaveProperty('lore-decorator:dont_activate');
-  const depth = preview.findings.find((finding) => finding.code === 'lore-decorator:depth');
-  expect(depth?.message).toContain('@@depth');
-  expect(depth?.message).toContain('아직 적용하지 않아요');
   const unknown = preview.findings.find((finding) => finding.code === 'lore-decorator-unknown');
   expect(unknown?.level).toBe('unsupported');
   expect(unknown?.message).toContain('@@ACTIVATE');
@@ -1252,7 +1223,7 @@ const SURFACE_CODES = [
   'asset-role',
 ];
 
-test('card surfaces the import cannot carry are reported instead of dropped in silence', () => {
+test('card metadata and typed assets remain in native source without conversion findings', () => {
   const store = database();
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
@@ -1296,10 +1267,8 @@ test('card surfaces the import cannot carry are reported instead of dropped in s
   const levels = Object.fromEntries(
     preview.findings.map((finding) => [finding.code, finding.level])
   );
-  for (const code of SURFACE_CODES) expect(levels).toHaveProperty(code);
-  expect(levels['view-screen']).toBe('unsupported');
-  expect(levels['emotion-assets']).toBe('unsupported');
-  for (const code of SURFACE_CODES.slice(2)) expect(levels[code]).toBe('info');
+  for (const code of SURFACE_CODES) expect(levels).not.toHaveProperty(code);
+  expect(levels['native-risu']).toBe('info');
   // The settings that now have their own notice no longer fall into the generic bucket.
   expect(levels['extension-settings']).toBeUndefined();
   const saved = applyRisuImport(store, {
@@ -1312,7 +1281,8 @@ test('card surfaces the import cannot carry are reported instead of dropped in s
   const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
   expect(bot.description).toBe('Written by the card author.');
   expect(bot.package!.description).toBe('Written by the card author.');
-  // Both typed assets arrive as ordinary package images; only their names survive.
+  expect(bot.package!.nativeRisu!.card).toEqual(value.data);
+  // Image projections link storage; the source keeps their authored roles and extension fields.
   expect(bot.package!.images!.map((image) => image.title)).toEqual(['main', 'happy']);
 
   const plain = sourceOf(card());

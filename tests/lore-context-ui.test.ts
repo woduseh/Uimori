@@ -99,4 +99,23 @@ describe('lore context UI boundaries', () => {
     expect(html).not.toContain('<img');
     expect(snapshot).toEqual(before);
   });
+  it('keeps Jev optional and validates its threshold and token budgets before saving', () => {
+    const draft = {
+      ...valid,
+      jev: true,
+      threshold: '0.7',
+      maxSelectedTokens: '5000',
+      maxInputTokens: '28000',
+    };
+    expect(parseLorePolicyDraft(draft).judgment).toEqual({
+      backend: 'jev',
+      threshold: 0.7,
+      maxSelectedTokens: 5000,
+      maxInputTokens: 28000,
+    });
+    expect(parseLorePolicyDraft({ ...draft, jev: false })).toEqual(DEFAULT_LORE_CONTEXT);
+    expect(() => parseLorePolicyDraft({ ...draft, threshold: '1.1' })).toThrow('0–1');
+    expect(() => parseLorePolicyDraft({ ...draft, maxInputTokens: '30001' })).toThrow('30,000');
+    expect(() => parseLorePolicyDraft({ ...draft, maxSelectedTokens: '' })).toThrow('입력');
+  });
 });

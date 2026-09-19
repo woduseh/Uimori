@@ -95,7 +95,7 @@ test('review is read-only; explicit import, reuse, source preservation and archi
   );
 });
 
-test('unsupported prompt semantics and regex require explicit partial import without dropping original bytes', () => {
+test('native variable writes and output regex import without conversion or loss', () => {
   const { store } = fixture();
   const source = sourceOf({
     ...document(),
@@ -103,17 +103,17 @@ test('unsupported prompt semantics and regex require explicit partial import wit
     regex: [{ type: 'editoutput', in: 'x', out: 'y' }],
   });
   const preview = prepareRisuPresetImport({ source });
-  const before = store.product.export().tables;
   const command = {
     source,
     digest: preview.digest,
     allowPartial: false,
     idempotencyKey: 'partial',
   };
-  expect(() => applyRisuPresetImport(store, command)).toThrow('RISU_IMPORT_PARTIAL_REQUIRED');
-  expect(store.product.export().tables).toEqual(before);
-  const result = applyRisuPresetImport(store, { ...command, allowPartial: true });
-  expect(result.preset.program.blocks[0].enabled).toBe(false);
+  const result = applyRisuPresetImport(store, command);
+  expect(result.preset.program.blocks[0].enabled).not.toBe(false);
+  expect(result.preset.program.nativeRisuPreset?.preset.regex).toEqual([
+    { type: 'editoutput', in: 'x', out: 'y' },
+  ]);
   expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0].base64).toBe(
     source.base64
   );
@@ -140,11 +140,10 @@ test('supported preset text stages import without partial consent and preserve o
     allowPartial: false,
     idempotencyKey: 'supported-regex',
   });
-  expect(imported.preset.program.transforms?.map((rule) => rule.stage)).toEqual([
-    'input',
-    'display',
-  ]);
-  expect(imported.preset.program.transforms?.[0].replacementTemplate).toBeDefined();
+  expect(imported.preset.program.transforms).toBeUndefined();
+  expect(imported.preset.program.nativeRisuPreset?.preset.regex).toEqual(
+    JSON.parse(Buffer.from(source.base64, 'base64').toString()).regex
+  );
   expect(nativeTransferOriginal(store, imported.receipt.id).sourceFiles![0].base64).toBe(
     source.base64
   );

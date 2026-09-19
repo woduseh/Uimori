@@ -40,10 +40,23 @@ import {
   runBehaviorProgress,
 } from './package-behavior-run.js';
 import { authorizeExtensionModelAccess, createExtensionModelService } from './extension-model.js';
+import { prepareNativeRisuRun, prepareNativeRisuOutput } from './risu-native-run.js';
+import { prepareNativeRisuReadOnly } from './risu-native-readonly.js';
+import { createNativeRisuHost } from './risu-native-host.js';
+import { nativeInteractionRoutes } from './risu-native-interactions.js';
+import { disposeAllNativeRisuSessions, disposeNativeRisuSession } from './risu-native-runtime.js';
+import { nativeRisuSessionKey } from './risu-native-context.js';
+import { prepareNativeRisuRequest } from './risu-native-request.js';
 import { createExtensionOperationRunner } from './extension-operation-runner.js';
 import { prepareAfterResponse } from './package-after-response.js';
 import { freezeLoreContext } from './lore-context.js';
-import { loreSelectionPending, prepareLoreSelection } from './lore-selection.js';
+import {
+  loreSelectionPending,
+  prepareLoreSelection,
+  loreSelectionAttemptInputHashes,
+} from './lore-selection.js';
+import { JEV_ENDPOINT, JEV_MODEL } from './jev-judgment.js';
+import { validateTranslationJudgmentWire } from './jev-attribution.js';
 import { hasPromptInputTransforms, preparePromptInputTransforms } from './prompt-transforms.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
@@ -54,6 +67,7 @@ import { outlineRoutes } from './outline-routes.js';
 import { packageImageRoutes } from './package-images.js';
 import { nativeTransferRoutes } from './native-transfer.js';
 import { risuImportRoutes } from './risu-import.js';
+import { applyNativeRisuAction } from './risu-native-actions.js';
 import { pruneUploads, uploadRoutes } from './uploads.js';
 import { admissionOpen, maintenanceRoutes, maintenanceStatus } from './maintenance.js';
 import { risuPresetImportRoutes } from './risu-preset-import.js';
@@ -137,7 +151,8 @@ export async function createApp(options: AppOptions): Promise<App> {
     requireModel(snapshot.profile?.models[job.kind], job.kind);
     if (job.kind === 'translation' && !options.testMode) {
       const input = record(job.input);
-      requireModel(record(input.translationPolicy).refusalModel, 'translation-refusal');
+      const policy = record(input.translationPolicy);
+      if (!policy.judgment) requireModel(policy.refusalModel, 'translation-refusal');
     }
   };
   const credentials = new VertexCredentialStore(options.dbPath);
@@ -338,7 +353,10 @@ export async function createApp(options: AppOptions): Promise<App> {
             ...base,
             author: '사용자 도우미 요청',
           });
-        const snapshot = helperWritingSnapshot(store, scope.chatId, scope.branchId, 'context');
+        const snapshot = await prepareNativeRisuReadOnly(
+          helperWritingSnapshot(store, scope.chatId, scope.branchId, 'context'),
+          'context'
+        );
         if (name === 'context.edit')
           return store.context.edit(
             scope.chatId,
@@ -454,7 +472,23 @@ export async function createApp(options: AppOptions): Promise<App> {
               executeCodex,
               authorize: (connection) => store.product.authorize(connection),
               vertexRequestTier: options.vertexRequestTier,
-              onAttemptStart: (wire) => store.product.startAttempt(chatId, null, id, wire),
+              onAttemptStart: (wire) => {
+                if (wire.judgment) {
+                  const current = store.job(id);
+                  if (
+                    current.status !== 'running' ||
+                    signal.aborted ||
+                    current.kind !== 'translation'
+                  )
+                    throw new Error('Judgment job is inactive');
+                  validateTranslationJudgmentWire(
+                    current.sourceHash,
+                    record(record(current.input).translationPolicy).judgment,
+                    wire
+                  );
+                }
+                return store.product.startAttempt(chatId, null, id, wire);
+              },
               onAttemptFinish: (attempt, result) => store.product.finishAttempt(attempt, result),
               onInput: (_id, input) => {
                 log('inputs', input);
@@ -581,6 +615,23 @@ export async function createApp(options: AppOptions): Promise<App> {
           publish(run.chatId);
           await controls.wait('run', controller.signal);
           const hooks: MainHooks = {
+            prepareRequest: async (request, usage) => {
+              const current = store.run(id).snapshot;
+              const prepared = await prepareNativeRisuRequest(current, request, {
+                signal: controller.signal,
+                host: createNativeRisuHost(store, id, current, usage, hooks, 'editRequest', true),
+              });
+              if (prepared.snapshot !== current) {
+                store.transaction(() => {
+                  assertCurrent();
+                  store.db
+                    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+                    .run(JSON.stringify(prepared.snapshot), id);
+                });
+                executionSnapshot.nativeRisuExecution = prepared.snapshot.nativeRisuExecution;
+              }
+              return prepared.request;
+            },
             signal: controller.signal,
             onResponseProgress: response.progress,
             onInput: (input) => {
@@ -618,6 +669,24 @@ export async function createApp(options: AppOptions): Promise<App> {
             onAttemptStart: (wire) => {
               if (controller.signal.aborted || store.run(id).status !== 'running')
                 throw new Error('Run cancelled');
+              if (wire.judgment) {
+                const current = store.run(id).snapshot;
+                if (
+                  current.profile?.loreContext?.judgment?.backend !== 'jev' ||
+                  wire.judgment.kind !== 'lore-selection' ||
+                  wire.protocol !== 'typesafe-systemone-v1' ||
+                  wire.connectionId !== 'typesafe-judgment' ||
+                  wire.modelId !== JEV_MODEL ||
+                  wire.role !== 'context' ||
+                  wire.url !== JEV_ENDPOINT ||
+                  wire.method !== 'POST' ||
+                  wire.extensionAction ||
+                  wire.agentId ||
+                  !loreSelectionAttemptInputHashes(current).includes(wire.judgment.inputHash)
+                )
+                  throw new Error('Invalid judgment attempt');
+                return store.product.startAttempt(run.chatId, id, null, wire);
+              }
               let target =
                 wire.extensionAction !== undefined
                   ? run.snapshot.profile?.extensionModel
@@ -703,11 +772,46 @@ export async function createApp(options: AppOptions): Promise<App> {
           const reservedCompilationSnapshot = candidateCompilationSnapshot(store, run.snapshot, id);
           let executionSnapshot = preparedBehaviorSnapshot(store, id, run.snapshot),
             compilationSnapshot = preparedBehaviorSnapshot(store, id, reservedCompilationSnapshot);
+          executionSnapshot = await prepareNativeRisuRun(executionSnapshot, {
+            signal: controller.signal,
+            host: createNativeRisuHost(
+              store,
+              id,
+              executionSnapshot,
+              priorUsage,
+              hooks,
+              'before-turn',
+              true
+            ),
+          });
+          hooks.initialUsage = structuredClone(priorUsage);
+          compilationSnapshot =
+            reservedCompilationSnapshot === run.snapshot
+              ? executionSnapshot
+              : {
+                  ...compilationSnapshot,
+                  nativeRisuExecution: executionSnapshot.nativeRisuExecution,
+                  nativeRisuPresetProgram: executionSnapshot.nativeRisuPresetProgram,
+                };
+          if (executionSnapshot.nativeRisuExecution) {
+            store.transaction(() => {
+              assertCurrent();
+              store.db
+                .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
+                .run(
+                  JSON.stringify(
+                    persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                  ),
+                  new Date().toISOString(),
+                  id
+                );
+            });
+          }
           // The selection reads the reserved snapshot, exactly as archive validation recomputes its
           // inputs, and freezes before the lore context and the input plan measure what is pinned.
-          if (loreSelectionPending(run.snapshot)) {
+          if (loreSelectionPending(executionSnapshot)) {
             assertCurrent();
-            const selection = await prepareLoreSelection(run.snapshot, hooks, {
+            const selection = await prepareLoreSelection(executionSnapshot, hooks, {
               reserveCalls: 1 + priorUsage.modelCalls,
             });
             priorUsage = mergeUsage(priorUsage, selection.usage);
@@ -732,6 +836,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           }
           if (
             (run.snapshot.behaviorExecution?.deferredAutomatic ||
+              executionSnapshot.nativeRisuExecution !== undefined ||
               hasPromptInputTransforms(executionSnapshot) ||
               executionSnapshot.loreSelection !== undefined) &&
             !executionSnapshot.contextPlan
@@ -884,7 +989,35 @@ export async function createApp(options: AppOptions): Promise<App> {
             publish(run.chatId);
             return;
           }
-          store.completeRun(id, result.text, priorUsage, run.snapshot.settings, controls);
+          const nativeOutput = await prepareNativeRisuOutput(executionSnapshot, result.text, {
+            signal: controller.signal,
+            host: createNativeRisuHost(
+              store,
+              id,
+              executionSnapshot,
+              priorUsage,
+              hooks,
+              'after-turn'
+            ),
+          });
+          store.transaction(() => {
+            assertCurrent();
+            if (nativeOutput.nativeRisuExecution)
+              store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
+                JSON.stringify({
+                  ...store.run(id).snapshot,
+                  nativeRisuExecution: nativeOutput.nativeRisuExecution,
+                }),
+                id
+              );
+            store.completeRunInTransaction(
+              id,
+              nativeOutput.nativeRisuExecution?.output?.text ?? result.text,
+              priorUsage,
+              run.snapshot.settings,
+              controls
+            );
+          });
           if (controls.crashAfterSourceCommit) process.exit(86);
           publish(run.chatId);
           pumpJobs();
@@ -951,6 +1084,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           }
         } finally {
           const status = store.run(id).status;
+          if (status !== 'completed') disposeNativeRisuSession(nativeRisuSessionKey(run.snapshot));
           response?.finish(
             status === 'queued' || status === 'running' || status === 'waiting_for_state'
               ? 'interrupted'
@@ -1134,7 +1268,10 @@ export async function createApp(options: AppOptions): Promise<App> {
     signal: stopping.signal,
     track,
     snapshot: (chatId, branchId) =>
-      helperWritingSnapshot(store, chatId, store.product.branch(chatId, branchId).id, 'context'),
+      prepareNativeRisuReadOnly(
+        helperWritingSnapshot(store, chatId, store.product.branch(chatId, branchId).id, 'context'),
+        'context'
+      ),
     execute: async (job, signal) => {
       const hooks: MainHooks = {
         signal: AbortSignal.any([signal, stopping.signal]),
@@ -1208,6 +1345,50 @@ export async function createApp(options: AppOptions): Promise<App> {
   nativeTransferRoutes(app, store);
   uploadRoutes(app, store.path);
   risuImportRoutes(app, store);
+  nativeInteractionRoutes(app, store);
+  app.post<{ Params: { id: string; sourceId: string } }>(
+    '/api/chats/:id/sources/:sourceId/risu-action',
+    async (request) => {
+      const controller = new AbortController();
+      const onStop = () => controller.abort();
+      stopping.signal.addEventListener('abort', onStop, { once: true });
+      let actionRunId: string | undefined;
+      try {
+        const result = await applyNativeRisuAction(
+          store,
+          request.params.id,
+          request.params.sourceId,
+          request.body,
+          {
+            signal: controller.signal,
+            createHost: (runId, snapshot, usage) => {
+              actionRunId = runId;
+              runs.set(runId, controller);
+              publish(request.params.id);
+              return createNativeRisuHost(
+                store,
+                runId,
+                snapshot,
+                usage,
+                {
+                  approvedOrigins,
+                  resolveCredential,
+                  executeCodex,
+                  vertexRequestTier: options.vertexRequestTier,
+                },
+                'user-action'
+              );
+            },
+          }
+        );
+        publish(request.params.id);
+        return result;
+      } finally {
+        if (actionRunId) runs.delete(actionRunId);
+        stopping.signal.removeEventListener('abort', onStop);
+      }
+    }
+  );
   risuPresetImportRoutes(app, store);
   diagnosticReportRoutes(app, store, { buildId: options.buildId, testMode: options.testMode });
   app.post<{ Params: { id: string } }>('/api/chats/:id/package-start', async (request) => {
@@ -1575,7 +1756,10 @@ export async function createApp(options: AppOptions): Promise<App> {
       for (const response of listeners.keys()) response.end();
     await Promise.allSettled([...work]);
   });
-  app.addHook('onClose', async () => store.close());
+  app.addHook('onClose', async () => {
+    disposeAllNativeRisuSessions();
+    store.close();
+  });
   // Authentication answers first; a maintenance gate never tells an anonymous caller the state.
   maintenanceRoutes(app, store, { forcedClosed, activeWork: () => work.size });
   // A maintenance boot proves migration and reads only: it neither recovers nor starts work.

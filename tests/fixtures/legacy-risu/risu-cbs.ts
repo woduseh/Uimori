@@ -1,9 +1,10 @@
+// Test-only builder for previously stored wrapper programs; not a product import path.
 import type {
   PromptControl,
   PromptExpression,
   PromptOperation,
   PromptTemplate,
-} from '../core/prompt-program.js';
+} from '../../../core/prompt-program.js';
 
 const op = (name: PromptOperation, ...args: PromptExpression[]): PromptExpression => ({
   op: name,

@@ -100,6 +100,11 @@ const payloads = new Set([
   // Exact advisor transmission receipt: these are origin-execution IDs, not live references
   // into the restored chat. Preserve its body and digest together, like the recorded wire request.
   'consultationContext',
+  // Native execution payloads mix literal variables with a few typed message references.
+  // Their dedicated adapter remaps only those references after the full snapshot is settled.
+  'nativeRisuExecution',
+  'nativeRisuAuthored',
+  'nativeRisuPresetProgram',
 ]);
 
 /** Primary keys are allocated once; public/library identities are deliberately preserved. */

@@ -19,6 +19,7 @@ export type Chat = {
   sortPosition?: number;
 };
 export type Resource = {
+  nativeRisuPosition?: import('./risu-native.js').NativeRisuLorePosition;
   loreContext?: import('./lore-context.js').LorePlacement;
   id: string;
   chatId: string;
@@ -65,6 +66,9 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
+  nativeRisuPresetProgram?: import('./risu-native-preset.js').NativeRisuPresetExecution;
+  nativeRisuExecution?: import('./risu-native-execution.js').NativeRisuExecution;
+  nativeRisuAuthored?: import('./risu-native-execution.js').NativeRisuAuthored;
   /** Frozen add-on admission failures; retained records are never substituted as current state. */
   packageBehaviorUnavailable?: {
     instanceId: string;
@@ -91,6 +95,7 @@ export type RunSnapshot = {
   packageStates?: import('./execution-context.js').PackageExecutionState[];
   sourceSegments?: import('./source-segments.js').SourceSegmentPolicy;
   logicalHistory?: import('./prompt-program.js').PromptHistoryMessage[];
+  nativeRisuHistoryRevision?: string;
   /** Optional, permission-bound conversation read set; never filled from today's branch on replay. */
   extensionConversation?: import('./extension-conversation.js').ExtensionConversationSnapshot;
   promptCompilation?: import('./prompt-program.js').PromptCompilation;

@@ -78,7 +78,7 @@ Reader는 패키지를 사용한 원고에만 `GET /api/chats/:id/sources/:sourc
 
 ## 공통 이미지
 
-`images`는 `{id, title, description, blobHash, mime, allowedUse}` 목록이고, `portraitImageId`는 그중 대표 이미지 하나를 가리켜요. PNG·JPEG·WebP를 파일당 2,000,000 bytes까지 올릴 수 있어요. 이름·설명·용도를 편집하고 50개 단위 목록에서 검색·선택해요. 같은 이름도 내부 ID로 구분하며 이미지 제거는 새 개정의 참조만 없애므로 과거 패키지·원문에 고정된 이미지는 유지돼요. 파일 내용은 SHA-256을 ID로 하는 불변 blob이고 패키지·Run snapshot에는 base64를 넣지 않아요.
+`images`는 `{id, title, description, blobHash, mime, allowedUse}` 목록이고, `portraitImageId`는 그중 대표 이미지 하나를 가리켜요. PNG·JPEG·WebP·AVIF·GIF를 파일당 2,000,000 bytes까지 올릴 수 있어요. 이름·설명·용도를 편집하고 50개 단위 목록에서 검색·선택해요. 같은 이름도 내부 ID로 구분하며 이미지 제거는 새 개정의 참조만 없애므로 과거 패키지·원문에 고정된 이미지는 유지돼요. 파일 내용은 SHA-256을 ID로 하는 불변 blob이고 패키지·Run snapshot에는 base64를 넣지 않아요.
 
 작성된 도입문과 Reader의 Markdown 이미지(`![설명]` 뒤에 `/api/package-image-blobs/<hash>` 경로를 적은 형태)는 해당 자료/원문 시점의 패키지에 등록된 inline/both 이미지일 때만 표시해요. 서버는 본문에 실제 참조된 허용 URL만 보내고, 화면도 정확한 로컬 blob 경로만 받아요. 외부 URL·미등록 이미지·코드 블록·일반 HTML은 이 기능으로 실행하지 않아요. 표시할 때 원문·hash·문단 anchor를 바꾸거나 모델을 호출하지 않아요.
 

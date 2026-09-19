@@ -227,6 +227,53 @@ test('a fork preserves verified ranges and mapped provenance with no copied exec
   expect(complete(independent, copiedAgain.id).snapshot.loreContext!.stats.retainedChars).toBe(50);
 });
 
+test('a batch read retains individual successful ranges across standalone fork and archive restore', () => {
+  const store = database(),
+    { chat, id } = createLoreChat(store, 'Synthetic batch lore'),
+    run = queued(store, chat.id);
+  store.startRun(run.id);
+  const otherId = run.snapshot.resources.find((entry) => entry.id.endsWith(':observatory'))!.id;
+  store.tool(
+    run.id,
+    executeTool(run.snapshot, {
+      name: 'knowledge.read',
+      callId: 'batch-read',
+      args: { ids: [id, 'missing', otherId], offset: 2, limit: 12 },
+    })
+  );
+  store.completeRun(
+    run.id,
+    'Source after batch read.',
+    {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    },
+    run.snapshot.settings
+  );
+  const reads = historicalRunLoreReads(store, store.run(run.id));
+  expect(reads.map((entry) => [entry.id, entry.start, entry.end, entry.origin.callId])).toEqual([
+    [id, 2, 14, 'batch-read'],
+    [otherId, 2, 14, 'batch-read'],
+  ]);
+  const next = complete(store, chat.id);
+  expect(next.snapshot.loreContext!.entries.map((entry) => entry.id)).toEqual([id, otherId]);
+  const copy = forkChat(store, chat.id, {
+    fromRevision: next.sourceRevision,
+    idempotencyKey: 'batch-fork',
+  });
+  const restored = database();
+  expect(restored.product.import(standalone(store, copy.id)).restored).toBe(true);
+  const continued = complete(restored, copy.id);
+  expect(
+    continued.snapshot.loreContext!.entries.map((entry) => [entry.id, entry.start, entry.end])
+  ).toEqual([
+    [id, 2, 14],
+    [otherId, 2, 14],
+  ]);
+});
+
 test('archive rejects snapshot-only read, range, source and recency forgeries and rolls back all imported rows', () => {
   const f = fixture();
   const changes: ((snapshot: RunSnapshot) => void)[] = [

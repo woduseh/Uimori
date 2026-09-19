@@ -179,7 +179,7 @@ export function PackagePortraitEditor({
             대표 이미지 해제
           </button>
         </div>
-        <small>PNG · JPEG · WebP, 2MB 이하</small>
+        <small>PNG · JPEG · WebP · AVIF · GIF, 2MB 이하</small>
         {busy && (
           <div className="package-portrait-actions">
             <span role="status">대표 이미지를 업로드하고 있어요…</span>

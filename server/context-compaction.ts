@@ -277,7 +277,10 @@ export async function prepareInputContext(
         throw error;
       }
     };
-    const logical = sourceLogicalHistoryForRequest(fixed, fixed.logicalHistory ?? []);
+    const logical = sourceLogicalHistoryForRequest(
+      fixed,
+      fixed.nativeRisuExecution?.history ?? fixed.logicalHistory ?? []
+    );
     const units = allRefs.map((ref, index) => ({
       ref,
       sourceSceneNumber: index + 1,

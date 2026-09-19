@@ -12,15 +12,13 @@ import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js
 import { fields, HttpError, record, text } from './request-validation.js';
 import { readRisuPresetFile } from './risu-preset-file.js';
 import { importRisuPresetProgram } from './risu-preset-program.js';
-import { importRisuPresetRegex } from './risu-preset-regex.js';
 import type { Store } from './store.js';
 
 function analyze(value: unknown) {
   const input = readRisuPresetFile(value);
   const converted = importRisuPresetProgram(input.preset);
   const regex = input.preset.regex ?? input.preset.presetRegex;
-  const importedRegex = importRisuPresetRegex(regex, converted.program.controls);
-  const findings = [...converted.findings, ...importedRegex.findings];
+  const findings = converted.findings;
   const preset: PromptPreset = {
     id: `risu-preset-${input.hash.slice(0, 24)}`,
     revision: 1,
@@ -28,11 +26,10 @@ function analyze(value: unknown) {
     role: 'main',
     program: {
       ...converted.program,
-      ...(importedRegex.transforms.length ? { transforms: importedRegex.transforms } : {}),
       provenance: {
         sourceHash: input.hash,
         variant: input.format,
-        conversionVersion: '3',
+        conversionVersion: 'native-1',
         notes: [...new Set(findings.map((finding) => finding.code))],
       },
     },

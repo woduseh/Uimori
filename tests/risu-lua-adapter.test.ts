@@ -4,7 +4,10 @@ import { defaultProfile, type ProfileSnapshot } from '../core/product.js';
 import { createExtensionVariableSession } from '../server/extension-variables.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { executeExtensionProgram, type ExtensionHostHandler } from '../server/extension-runtime.js';
-import { adaptRisuLuaTriggers, buildRisuLuaProgram } from '../server/risu-lua-adapter.js';
+import {
+  adaptRisuLuaTriggers,
+  buildRisuLuaProgram,
+} from './fixtures/legacy-risu/risu-lua-adapter.js';
 import {
   BEHAVIOR_EDIT_INPUT_SCHEMA,
   behaviorActionAllowed,

@@ -67,7 +67,12 @@ export function projectExtensionRequestEdit(snapshot: RunSnapshot): {
   applied: string[];
 } {
   const receipt = snapshot.extensionRequestEdit;
-  if (!receipt) return { text: snapshot.request, changed: false, applied: [] };
+  if (!receipt)
+    return {
+      text: snapshot.nativeRisuExecution?.request ?? snapshot.request,
+      changed: snapshot.nativeRisuExecution !== undefined,
+      applied: snapshot.nativeRisuExecution ? ['risu-native'] : [],
+    };
   validateExtensionRequestEditShape(receipt);
   if (receipt.inputHash !== hash(snapshot.request)) reject();
   return { text: receipt.text!, changed: true, applied: [...receipt.applied] };

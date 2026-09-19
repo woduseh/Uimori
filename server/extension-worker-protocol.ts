@@ -104,5 +104,5 @@ export type ExtensionWorkerMessage =
   | ExtensionWorkerPhaseReport;
 /** Host to worker. */
 export type ExtensionHostReply =
-  | { type: 'host-result'; id: number; ok: true; json: string }
+  | { type: 'host-result'; id: number; ok: true; json: string; resetBudget?: boolean }
   | { type: 'host-result'; id: number; ok: false; code: string };

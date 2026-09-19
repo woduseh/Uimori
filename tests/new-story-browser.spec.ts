@@ -300,3 +300,110 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
 });
 
 preservePromptWorkspace();
+
+test('NSUI02 native authoring preserves raw drafts and starts with the rendered default greeting', async ({
+  page,
+  request,
+}, info) => {
+  const title = `Native editor ${crypto.randomUUID()}`;
+  const card = {
+    name: title,
+    description: 'Native configuration',
+    first_mes: '<selector>',
+    alternate_greetings: ['Other greeting'],
+    unknown: { preserve: true },
+    extensions: {
+      risuai: {
+        customScripts: [
+          {
+            in: '<selector>',
+            out: '<button risu-trigger="choose">{{char}} route</button>',
+            type: 'editdisplay',
+            flag: 'g',
+            ableFlag: true,
+          },
+        ],
+      },
+    },
+  };
+  const response = await request.post('/api/content', {
+    data: {
+      kind: 'bot',
+      title,
+      description: '',
+      text: '',
+      loading: 'pinned',
+      relatedIds: [],
+      package: {
+        version: 1,
+        id: 'native-editor',
+        revision: 1,
+        title,
+        description: '',
+        body: '',
+        lore: [],
+        instructions: [],
+        controls: [],
+        transforms: [],
+        nativeRisu: { version: 1, card, assets: [], sourceHash: 'a'.repeat(64) },
+      },
+    },
+  });
+  expect(response.ok()).toBe(true);
+  const saved = (await response.json()) as Content;
+  await page.goto('/');
+  await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
+  await page
+    .getByRole('region', { name: '자료 상세', exact: true })
+    .getByRole('button', { name: '편집', exact: true })
+    .first()
+    .click();
+  const library = page.getByTestId('library-panel');
+  await expect(library.getByLabel('Risu 자료 이름')).toHaveValue(title);
+  await expect(library.getByTestId('package-fields')).toHaveCount(0);
+  await library.getByLabel('기본 시작문', { exact: true }).fill('<selector> Edited');
+  await library.getByText('시작문·로어·스크립트 원문 편집', { exact: true }).click();
+  await library.getByLabel('Risu 원문 JSON').fill('[{"unfinished":');
+  const save = library.getByRole('button', { name: '변경사항 저장', exact: true });
+  await expect(save).toBeDisabled();
+  await expect
+    .poll(async () => {
+      const drafts = await (
+        await request.get(`/api/edit-drafts?editorKey=content:${saved.id}`)
+      ).json();
+      return drafts[0]?.unappliedFields;
+    })
+    .toContain('package.native.source');
+  await library
+    .getByLabel('Risu 원문 JSON')
+    .fill('[{"name":"New lore","content":"Lore {{char}}","constant":true,"custom":42}]');
+  await library.getByRole('button', { name: 'JSON 적용', exact: true }).click();
+  await save.click();
+  await expect
+    .poll(async () => (await (await request.get(`/api/content/${saved.id}`)).json()).revision)
+    .toBe(2);
+  const updated = (await (await request.get(`/api/content/${saved.id}`)).json()) as Content;
+  expect(updated.package!.nativeRisu!.card.unknown).toEqual({ preserve: true });
+  expect(updated.package!.nativeRisu!.card.first_mes).toBe('<selector> Edited');
+  expect(updated.package!.starts![0].text).toBe('<selector> Edited');
+  expect(updated.package!.lore[0].text).toBe('Lore {{char}}');
+  await library.getByRole('button', { name: '채팅 시작', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  await expect(dialog.getByLabel('사용할 시작')).toHaveValue('start-0');
+  const frame = dialog.frameLocator('iframe[title="봇 메시지"]');
+  await expect(frame.getByRole('button', { name: `${title} route`, exact: true })).toBeVisible();
+  await expect(frame.locator('body')).toHaveAttribute('data-risu-disabled', 'true');
+  await expect(frame.getByRole('button', { name: `${title} route`, exact: true })).toHaveCSS(
+    'pointer-events',
+    'none'
+  );
+  await expect(frame.locator('body')).toContainText('Edited');
+  await page.screenshot({ path: info.outputPath('native-default-preview.png') });
+  await dialog.getByLabel('사용할 시작').selectOption('start-1');
+  await expect(dialog.getByLabel('사용할 시작')).toHaveValue('start-1');
+  await expect(dialog.frameLocator('iframe[title="봇 메시지"]').locator('body')).toContainText(
+    'Other greeting'
+  );
+  await dialog.getByLabel('사용할 시작').selectOption('');
+  await expect(dialog.getByLabel('사용할 시작')).toHaveValue('');
+});

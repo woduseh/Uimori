@@ -5,7 +5,7 @@ import { expect, test } from 'vitest';
 
 // The RisuAI snapshot is GPL-3.0 code kept behind a compat layer. These rules keep it that way:
 // snapshot code never reaches into Uimori, and Uimori reaches the snapshot only through
-// server/compat/risu. Tests may import the snapshot directly to pin its behavior.
+// server/compat/risu or the native CBS adapter. Tests may import the snapshot to pin its behavior.
 const root = fileURLToPath(new URL('../', import.meta.url));
 const SNAPSHOT_ROOT = 'third_party/risuai';
 const COMPAT_LAYER = 'server/compat/risu';
@@ -44,10 +44,11 @@ test('snapshot code imports nothing from Uimori', () => {
     }
 });
 
-test('only the compat layer and tests import the snapshot', () => {
+test('only the compat layer and explicit native CBS adapter import the snapshot', () => {
   for (const dir of ['core', 'server', 'web', 'scripts'])
     for (const file of walk(dir)) {
       if (file.startsWith(`${COMPAT_LAYER}/`)) continue;
+      if (file === 'server/risu-native-cbs.ts') continue;
       for (const spec of specifiers(file))
         expect(
           spec.startsWith('.') && resolveRelative(file, spec).startsWith(`${SNAPSHOT_ROOT}/`),

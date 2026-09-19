@@ -1,6 +1,12 @@
 import type { ProfileSnapshot, Asset } from './product.js';
 
-export const PACKAGE_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+export const PACKAGE_IMAGE_MIMES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/avif',
+  'image/gif',
+] as const;
 export type PackageImage = {
   id: string;
   title: string;

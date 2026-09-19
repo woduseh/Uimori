@@ -4,10 +4,12 @@ import { ActionMenu } from './ActionMenu.js';
 import { CopyIcon, SaveIcon } from './ui-icons.js';
 import { booleanPromptDraft } from './prompt-boolean-draft.js';
 import { useEffect, useRef, useState } from 'react';
+import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
 import type { ContentRef, Library, PromptPreset, PromptRole } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import {
   validatePromptProgram,
+  reconcilePromptValues,
   type ChatPromptControls,
   type PromptProgram,
 } from '../core/prompt-program.js';
@@ -103,6 +105,7 @@ export function PromptEditor({
     ).values(),
   ];
   const dirty =
+    pendingTemplate ||
     Object.values(composerDirty).some(Boolean) ||
     [...Object.values(drafts), ...Object.values(draftCache.current)].some((draft) => draft.dirty);
   useEffect(() => {
@@ -334,82 +337,105 @@ export function PromptEditor({
             />
           </label>
           <fieldset className="prompt-composer-frame" disabled={pendingSavedText}>
-            <PromptComposer
-              key={`${role}:${draft.source}`}
-              program={draft.program}
-              initialPreviewRequest={previewRequestCache.current[`${role}:${draft.source}`]}
-              onPreviewRequestChange={(value) => {
-                previewRequestCache.current[`${role}:${draft.source}`] = value;
-              }}
-              initialControlDraft={controlDraftCache.current[`${role}:${draft.source}`]}
-              onControlDraftChange={(state) => {
-                controlDraftCache.current[`${role}:${draft.source}`] = state;
-                edit({});
-              }}
-              onDirtyChange={(value) =>
-                setComposerDirty((current) =>
-                  current[`${role}:${draft.source}`] === value
-                    ? current
-                    : { ...current, [`${role}:${draft.source}`]: value }
-                )
-              }
-              onPendingDraftChange={setPendingTemplate}
-              title={draft.title}
-              onImport={(file) => {
-                const importedRole = file.role ?? role;
-                if (initialPreset && importedRole !== role)
-                  throw new Error('다른 역할의 프롬프트는 새 프롬프트에서 불러와 주세요.');
-                const previous = drafts[importedRole];
-                const target =
-                  importedRole === role
-                    ? previous
-                    : {
-                        ...draftFor(importedRole),
-                        source: 'new',
-                        title: '',
-                      };
-                if (importedRole !== role)
-                  draftCache.current[`${importedRole}:${previous.source}`] = previous;
-                controlDraftCache.current[`${importedRole}:${target.source}`] = {
-                  values: file.values,
-                  combinations: [],
-                };
-                setDrafts((current) => ({
-                  ...current,
-                  [importedRole]: {
-                    ...target,
-                    title: file.title ?? target.title,
-                    program: file.program,
-                    dirty: true,
-                  },
-                }));
-                setRole(importedRole);
-                setImportVersion((current) => current + 1);
-                setStatus('이름·역할·구성과 기본 옵션을 편집 초안으로 불러왔어요.');
-              }}
-              onChange={(program) => edit({ program })}
-              chatId={chatId}
-              branchId={branchId}
-              role={role}
-              controlState={
-                draft.base ? { values: draft.base.values ?? {}, combinations: [] } : undefined
-              }
-              collaborationEditor={
-                role === 'main' && (
-                  <AgentCollaborationEditor
-                    key={`collaboration:${role}:${importVersion}`}
-                    expanded={collaborationExpanded}
-                    onExpandedChange={setCollaborationExpanded}
-                    value={draft.program.collaboration}
-                    controls={draft.program.controls}
-                    models={library.models}
-                    onChange={(collaboration) =>
-                      edit({ program: { ...draft.program, collaboration } })
-                    }
-                  />
-                )
-              }
-            />
+            {draft.program.nativeRisuPreset ? (
+              <NativeRisuPresetEditor
+                key={`${role}:${draft.source}`}
+                program={draft.program}
+                values={model.values}
+                onValuesChange={(values) => {
+                  controlDraftCache.current[`${role}:${draft.source}`] = {
+                    values,
+                    combinations: [],
+                  };
+                  edit({});
+                }}
+                onChange={(program) => {
+                  controlDraftCache.current[`${role}:${draft.source}`] = {
+                    values: reconcilePromptValues(program, model.values).values,
+                    combinations: [],
+                  };
+                  edit({ program });
+                }}
+                onPendingDraftChange={setPendingTemplate}
+              />
+            ) : (
+              <PromptComposer
+                key={`${role}:${draft.source}`}
+                program={draft.program}
+                initialPreviewRequest={previewRequestCache.current[`${role}:${draft.source}`]}
+                onPreviewRequestChange={(value) => {
+                  previewRequestCache.current[`${role}:${draft.source}`] = value;
+                }}
+                initialControlDraft={controlDraftCache.current[`${role}:${draft.source}`]}
+                onControlDraftChange={(state) => {
+                  controlDraftCache.current[`${role}:${draft.source}`] = state;
+                  edit({});
+                }}
+                onDirtyChange={(value) =>
+                  setComposerDirty((current) =>
+                    current[`${role}:${draft.source}`] === value
+                      ? current
+                      : { ...current, [`${role}:${draft.source}`]: value }
+                  )
+                }
+                onPendingDraftChange={setPendingTemplate}
+                title={draft.title}
+                onImport={(file) => {
+                  const importedRole = file.role ?? role;
+                  if (initialPreset && importedRole !== role)
+                    throw new Error('다른 역할의 프롬프트는 새 프롬프트에서 불러와 주세요.');
+                  const previous = drafts[importedRole];
+                  const target =
+                    importedRole === role
+                      ? previous
+                      : {
+                          ...draftFor(importedRole),
+                          source: 'new',
+                          title: '',
+                        };
+                  if (importedRole !== role)
+                    draftCache.current[`${importedRole}:${previous.source}`] = previous;
+                  controlDraftCache.current[`${importedRole}:${target.source}`] = {
+                    values: file.values,
+                    combinations: [],
+                  };
+                  setDrafts((current) => ({
+                    ...current,
+                    [importedRole]: {
+                      ...target,
+                      title: file.title ?? target.title,
+                      program: file.program,
+                      dirty: true,
+                    },
+                  }));
+                  setRole(importedRole);
+                  setImportVersion((current) => current + 1);
+                  setStatus('이름·역할·구성과 기본 옵션을 편집 초안으로 불러왔어요.');
+                }}
+                onChange={(program) => edit({ program })}
+                chatId={chatId}
+                branchId={branchId}
+                role={role}
+                controlState={
+                  draft.base ? { values: draft.base.values ?? {}, combinations: [] } : undefined
+                }
+                collaborationEditor={
+                  role === 'main' && (
+                    <AgentCollaborationEditor
+                      key={`collaboration:${role}:${importVersion}`}
+                      expanded={collaborationExpanded}
+                      onExpandedChange={setCollaborationExpanded}
+                      value={draft.program.collaboration}
+                      controls={draft.program.controls}
+                      models={library.models}
+                      onChange={(collaboration) =>
+                        edit({ program: { ...draft.program, collaboration } })
+                      }
+                    />
+                  )
+                }
+              />
+            )}
           </fieldset>
           <div className="prompt-save-actions">
             <div className="prompt-save-buttons">

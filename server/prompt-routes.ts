@@ -18,6 +18,7 @@ import { builtinPromptTemplate, builtinPromptTemplates } from './builtin-prompts
 import { prepareRisuCompatReceipt } from './compat/risu/cbs.js';
 import { prepareLoreActivationReceipt } from './compat/risu/lore-activation.js';
 import { preparePromptInputTransforms } from './prompt-transforms.js';
+import { prepareNativeRisuRun } from './risu-native-run.js';
 
 /** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
 export function promptRoutes(app: FastifyInstance, store: Store) {
@@ -164,6 +165,24 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           sourceHash: source.hash,
         };
       } else {
+        if (program.nativeRisuPreset) {
+          const selected = snapshot.profile!.promptPresets!.main!;
+          snapshot.profile = {
+            ...snapshot.profile!,
+            promptControls: {
+              ...snapshot.profile!.promptControls,
+              [`${selected.id}@${selected.revision}`]: {
+                values:
+                  values ??
+                  snapshot.profile!.promptControls?.[`${selected.id}@${selected.revision}`]
+                    ?.values ??
+                  {},
+                combinations: [],
+              },
+            },
+          };
+        }
+        snapshot = await prepareNativeRisuRun(snapshot, { preview: true });
         // A preview has no run to seed from, so it draws its entropy from one fixed source; the
         // reader still sees evaluated text rather than the card's literal `{{...}}`.
         const risuCompat = prepareRisuCompatReceipt(snapshot, 'preview');
@@ -176,6 +195,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           ? compileSnapshotPrompt(snapshot, program, values).promptCompilation!
           : compilePromptProgram(program, { ...context, ...(values ? { values } : {}) });
         if (snapshot.story?.waiting) compilation.warnings.push(...context.transformWarnings);
+        compilation.warnings.push(...(snapshot.nativeRisuExecution?.issues ?? []));
       }
       const target = profile.models[role as 'main' | 'translation'];
       let provider = null;

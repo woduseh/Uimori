@@ -14,7 +14,7 @@ export async function uploadPackageImage(
     file.size > 2_000_000 ||
     file.size === 0
   )
-    throw new Error('2MB 이하 PNG, JPEG 또는 WebP가 필요해요.');
+    throw new Error('2MB 이하 PNG, JPEG, WebP, AVIF 또는 GIF가 필요해요.');
   signal.throwIfAborted();
   const bytes = new Uint8Array(await file.arrayBuffer());
   signal.throwIfAborted();
