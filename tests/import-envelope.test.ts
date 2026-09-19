@@ -1,12 +1,10 @@
 import { createHash } from 'node:crypto';
 import { expect, test } from 'vitest';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
-import { RISU_PLUGIN_MAX_BYTES } from '../core/risu-plugin.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { readImportEnvelope } from '../server/import-envelope.js';
 import { HttpError } from '../server/request-validation.js';
 import { readRisuPresetFile } from '../server/risu-preset-file.js';
-import { readRisuPlugin } from '../server/risu-plugin-import.js';
 
 const options = {
   maxBytes: 64,
@@ -124,14 +122,6 @@ test('each reader keeps its own too-large and invalid-file codes', () => {
   tooLarge(
     () => readRisuPresetFile({ name: 'preset.json', base64: oversized }),
     'RISU_IMPORT_TOO_LARGE'
-  );
-  tooLarge(
-    () =>
-      readRisuPlugin({
-        name: 'plugin.js',
-        base64: Buffer.alloc(RISU_PLUGIN_MAX_BYTES + 3, 0x61).toString('base64'),
-      }),
-    'RISU_PLUGIN_TOO_LARGE'
   );
 });
 

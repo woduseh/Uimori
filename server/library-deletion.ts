@@ -51,19 +51,12 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
         workspace.titleModel = null;
         changed = true;
       }
-      for (const role of ['main', 'translation', 'status', 'image'] as const) {
+      for (const role of ['main', 'translation', 'status'] as const) {
         const selected = workspace.modelRoutes[role];
         if (selected && store.product.isHidden('model', selected.id)) {
           workspace.modelRoutes[role] = null;
           changed = true;
         }
-      }
-      if (
-        workspace.translationPolicy.refusalModel &&
-        store.product.isHidden('model', workspace.translationPolicy.refusalModel.id)
-      ) {
-        workspace.translationPolicy.refusalModel = null;
-        changed = true;
       }
       const collaboration = workspace.main.program.collaboration;
       for (const agent of collaboration?.agents ?? []) {

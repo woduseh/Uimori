@@ -44,7 +44,7 @@ export const ILLUSTRATION_TABLES = [
   'illustration_images',
 ] as const;
 
-/** Additive, idempotent tables; schema 15 databases gain them on open and keep their version. */
+/** Create current tables during fresh database initialization. */
 export function initIllustrations(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS illustration_settings (id INTEGER PRIMARY KEY CHECK(id=1), body TEXT NOT NULL);
@@ -761,7 +761,7 @@ function deleteIllustrationAttempts(store: Store, jobs: Row[]) {
     const ids = parse(job.diagnostic)?.attempts ?? [];
     store.db
       .prepare(
-        "DELETE FROM attempts WHERE chat_id=? AND role='illustration' AND run_id IS NULL AND job_id IS NULL AND story_job_id IS NULL AND id IN (SELECT value FROM json_each(?))"
+        "DELETE FROM attempts WHERE chat_id=? AND role='illustration' AND run_id IS NULL AND job_id IS NULL AND id IN (SELECT value FROM json_each(?))"
       )
       .run(job.chat_id, json(ids));
   }

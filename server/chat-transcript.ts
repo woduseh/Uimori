@@ -5,7 +5,7 @@ import {
   validateChatTranscript,
   type ChatTranscript,
 } from '../core/chat-transcript.js';
-import type { PackageAttachment } from '../core/content-package.js';
+import type { ContentAttachment } from '../core/risu-content.js';
 import type { Content, ContentRef } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { CHAT_TITLE_MAX_CHARS } from '../core/content-limits.js';
@@ -49,7 +49,6 @@ export function exportChatTranscript(
     version: CHAT_TRANSCRIPT_VERSION,
     exportedAt: new Date().toISOString(),
     title: chat.title,
-    attachments: profile.attachments.map(({ id, revision }) => ({ id, revision })),
     packageAttachments: (profile.packageAttachments ?? []).map(({ id, revision, role }) => ({
       id,
       revision,
@@ -64,7 +63,7 @@ export type ChatTranscriptImport = {
   chat: Chat;
   created: boolean;
   /** References the transcript named that this library no longer has; the chat was created without them. */
-  skippedAttachments: (ContentRef | PackageAttachment)[];
+  skippedAttachments: (ContentRef | ContentAttachment)[];
 };
 
 /**
@@ -130,12 +129,6 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
         return null;
       }
     };
-    const attachments = transcript.attachments.flatMap((reference) => {
-      const content = current(reference);
-      if (content) return [{ id: content.id, revision: content.revision }];
-      skippedAttachments.push(reference);
-      return [];
-    });
     const packageAttachments = transcript.packageAttachments.flatMap((reference) => {
       const content = current(reference);
       if (content?.package)
@@ -151,7 +144,6 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
     const profile = store.product.profile(id);
     store.product.updateProfile(id, {
       expectedRevision: profile.revision,
-      attachments,
       packageAttachments,
       image: profile.image,
     });

@@ -7,7 +7,6 @@ import {
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { packageContext } from '../core/package-context.js';
-import { parseSourceSegments } from '../core/source-segments.js';
 import type { Connection, ModelSnapshot } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
@@ -99,36 +98,20 @@ const sleep = (ms: number, signal: AbortSignal) =>
     signal.addEventListener('abort', abort, { once: true });
   });
 
-/** Declared aside/annotation segments stay out of the picture: only main prose reaches a generator. */
-function publicSceneText(source: Source, snapshot: RunSnapshot): string {
-  if (!snapshot.sourceSegments) return source.text;
-  try {
-    const document = parseSourceSegments(
-      { sourceRevision: source.id, sourceHash: source.hash, text: source.text },
-      snapshot.sourceSegments
-    );
-    if (document.diagnostics.some((item) => item.severity === 'error'))
-      throw new IllustrationError('ILLUSTRATION_SOURCE_SEGMENTS_INVALID');
-    const main = document.segments
-      .filter((segment) => segment.kind === 'main')
-      .map((segment) => source.text.slice(segment.bodyRange.start, segment.bodyRange.end).trim())
-      .filter(Boolean)
-      .join('\n\n');
-    if (!main) throw new IllustrationError('ILLUSTRATION_SOURCE_EMPTY');
-    return main;
-  } catch (error) {
-    if (error instanceof IllustrationError) throw error;
-    throw new IllustrationError('ILLUSTRATION_SOURCE_SEGMENTS_INVALID');
-  }
-}
 function scene(
   source: Source,
   snapshot: RunSnapshot,
   input: IllustrationJobInput,
   allowSkip: boolean
 ): IllustrationScene {
-  const contents = snapshot.profile?.contents ?? [];
-  const body = (kind: string) => contents.find((item) => item.kind === kind)?.text ?? null;
+  const body = (role: string) => {
+    const ref = snapshot.profile?.packageAttachments?.find((item) => item.role === role);
+    return (
+      snapshot.profile?.packages?.find(
+        (item) => item.id === ref?.id && item.revision === ref?.revision
+      )?.body ?? null
+    );
+  };
   let instructions: string[] = [];
   try {
     instructions = packageContext(snapshot, 'image')?.instructions.map((item) => item.text) ?? [];
@@ -136,7 +119,7 @@ function scene(
     /* Package projection problems do not block an illustration of the saved text. */
   }
   return {
-    text: publicSceneText(source, snapshot),
+    text: source.text,
     allowSkip,
     styleGuidance: input.styleGuidance,
     negativeGuidance: input.comfyui?.negativeGuidance ?? '',

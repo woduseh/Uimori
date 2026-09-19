@@ -12,22 +12,11 @@ import {
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { isModelSelectable } from './model-selection.js';
 import type { ChatFolder } from './BotNavigation.js';
-import { PackageControlValues } from './PackageControlValues.js';
 import { resolvePackageStart, type PackageStartSnapshot } from '../core/package-start.js';
-import { packageIdentityFromContents } from '../core/package-identity.js';
-import {
-  reconcilePromptValues,
-  resolvePromptValues,
-  type PromptProgram,
-  type PromptValue,
-} from '../core/prompt-program.js';
-import { resolveTemplateVariableContext } from '../core/template-variables.js';
 import './package-authoring.css';
-import { useTestMode } from './useTestMode.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
-import { Prose } from './Prose.js';
-import type { PackageRole } from '../core/content-package.js';
+import type { ContentRole } from '../core/risu-content.js';
 import './new-story.css';
 
 type StorySelection = {
@@ -36,35 +25,10 @@ type StorySelection = {
   bot: Content | null;
   persona: Content | null;
   modules: Content[];
-  mainPromptProgram: PromptProgram | null;
   profile: NewStoryProfileIntent | null;
 };
 
 const selectedId = (key: string) => key.slice(0, key.lastIndexOf('@'));
-const startValuesKey = (packageKey: string, startId: string) =>
-  JSON.stringify([packageKey, startId]);
-const packageIdentityForSelection = (
-  bot: Content,
-  persona: Content | null | undefined,
-  modules: Content[],
-  mainPromptProgram: PromptProgram | null | undefined
-) => {
-  const contents: [PackageRole, Content | null | undefined][] = [
-    ['bot', bot],
-    ['persona', persona],
-    ...modules.map((item): [PackageRole, Content] => ['module', item]),
-  ];
-  const packages = contents.flatMap(([, item]) => (item?.package ? [item.package] : []));
-  const variableContext = resolveTemplateVariableContext({
-    packageAttachments: contents.flatMap(([role, item]) =>
-      item?.package ? [{ id: item.id, revision: item.revision, role }] : []
-    ),
-    packages,
-    ...(mainPromptProgram ? { promptPresets: { main: { program: mainPromptProgram } } } : {}),
-  });
-  return { ...packageIdentityFromContents(bot, persona), ...variableContext };
-};
-
 export function NewStory({
   library,
   initialBot,
@@ -86,7 +50,6 @@ export function NewStory({
   const mainModel = library.models.find((item) => item.id === workspace?.modelRoutes.main?.id);
   const mainAvailable =
     !!mainModel && isModelSelectable(mainModel, library.models, library.connections);
-  const testMode = useTestMode();
   const [bot, setBot] = useState(initialBot ? refValue(initialBot) : '');
   const [persona, setPersona] = useState(
     initialPersona
@@ -106,10 +69,6 @@ export function NewStory({
       : ''
   );
   const initializedStart = useRef<string | null>(null);
-  const [packageValues, setPackageValues] = useState<Record<string, Record<string, PromptValue>>>(
-    {}
-  );
-  const rememberedStartValues = useRef<Record<string, Record<string, PromptValue>>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const created = useRef<Chat | null>(null);
@@ -162,30 +121,6 @@ export function NewStory({
             const next = previous.map(currentKey);
             return next.some((key, index) => key !== previous[index]) ? next : previous;
           });
-          setPackageValues((previous) => {
-            const next = { ...previous };
-            for (const item of items) {
-              if (!item.package) continue;
-              for (const role of ['bot', 'persona', 'module']) {
-                const key = `${refValue(item)}:${role}`;
-                const prior =
-                  previous[key] ??
-                  Object.entries(previous)
-                    .filter(([key]) => key.startsWith(`${item.id}@`) && key.endsWith(`:${role}`))
-                    .sort(
-                      ([a], [b]) =>
-                        Number(b.split('@').at(-1)?.split(':')[0]) -
-                        Number(a.split('@').at(-1)?.split(':')[0])
-                    )[0]?.[1];
-                if (prior)
-                  next[key] = reconcilePromptValues(
-                    { version: 1, controls: item.package.controls, blocks: [] },
-                    prior
-                  ).values;
-              }
-            }
-            return next;
-          });
         }
       })
       .catch((caught) => {
@@ -224,46 +159,14 @@ export function NewStory({
       )
     )
       throw new Error('선택한 패키지 본문을 불러오지 못했어요. 자료를 다시 골라 주세요.');
-    const roleContents: [PackageRole, Content | null | undefined][] = [
+    const roleContents: [ContentRole, Content | null | undefined][] = [
       ['bot', selectedBot],
       ['persona', selectedPersona],
-      ...selectedModules.map((item): [PackageRole, Content] => ['module', item]),
+      ...selectedModules.map((item): [ContentRole, Content] => ['module', item]),
     ];
-    const values = Object.fromEntries(
-      roleContents.flatMap(([role, item]) =>
-        item?.package
-          ? [
-              [
-                `${refValue(item)}:${role}`,
-                resolvePromptValues(
-                  { version: 1, controls: item.package.controls, blocks: [] },
-                  packageValues[`${refValue(item)}:${role}`]
-                ),
-              ],
-            ]
-          : []
-      )
-    );
     const opening =
-      start && selectedBot.package
-        ? resolvePackageStart(
-            selectedBot.package,
-            start,
-            values[`${refValue(selectedBot)}:bot`],
-            packageIdentityForSelection(
-              selectedBot,
-              selectedPersona,
-              selectedModules,
-              workspace?.main.program
-            )
-          )
-        : null;
+      start && selectedBot.package ? resolvePackageStart(selectedBot.package, start) : null;
     if (start && !opening) throw new Error('선택한 시작을 다시 확인해 주세요.');
-    if (opening?.mode === 'generate' && !mainAvailable && !testMode)
-      throw new Error('첫 장면을 생성하려면 전역 모델 설정에서 본문 모델을 선택해 주세요.');
-    const selectedContents = [selectedBot, selectedPersona, ...selectedModules].filter(
-      (item): item is Content => !!item
-    );
     return structuredClone({
       title:
         title.trim() || (selectedBot ? `${selectedBot.title}의 채팅`.slice(0, 100) : '새로운 채팅'),
@@ -271,19 +174,14 @@ export function NewStory({
       bot: selectedBot ?? null,
       persona: selectedPersona ?? null,
       modules: selectedModules,
-      mainPromptProgram: workspace?.main.program ?? null,
       profile:
         selectedBot || selectedPersona
           ? {
-              attachments: selectedContents
-                .filter((item) => !item.package && !item.hasPackage)
-                .map(({ id, revision }) => ({ id, revision })),
               packageAttachments: roleContents.flatMap(([role, item]) =>
                 item && (item.package || item.hasPackage)
                   ? [{ id: item.id, revision: item.revision, role }]
                   : []
               ),
-              ...(Object.keys(values).length ? { packageValues: values } : {}),
               ...(opening
                 ? {
                     packageStart: {
@@ -384,55 +282,15 @@ export function NewStory({
       : null;
   const activeModules =
     frozen?.modules ?? modules.map((key) => loadedContents[key]).filter(Boolean);
-  const activeMainPromptProgram = frozen ? frozen.mainPromptProgram : workspace?.main.program;
   let opening: PackageStartSnapshot | null = null,
     openingError = '';
   if (start && activeBot?.package) {
     try {
-      opening = resolvePackageStart(
-        activeBot.package,
-        start,
-        packageValues[`${refValue(activeBot)}:bot`],
-        packageIdentityForSelection(
-          activeBot,
-          activePersona,
-          activeModules,
-          activeMainPromptProgram
-        )
-      );
+      opening = resolvePackageStart(activeBot.package, start);
     } catch (caught) {
       openingError = (caught as Error).message;
     }
   }
-  const rememberPackageValues = (
-    role: PackageRole,
-    item: Content,
-    values: Record<string, PromptValue>
-  ) => {
-    const packageKey = `${refValue(item)}:${role}`;
-    if (role === 'bot') rememberedStartValues.current[startValuesKey(packageKey, start)] = values;
-    setPackageValues((previous) => ({ ...previous, [packageKey]: values }));
-  };
-  const packageSettings = (
-    [
-      ['bot', activeBot, '봇'],
-      ['persona', activePersona, '페르소나'],
-      ...activeModules.map((item) => ['module', item, '모듈'] as const),
-    ] as const
-  ).map(([role, item, label]) =>
-    item?.package?.controls.length ? (
-      <fieldset key={`${refValue(item)}:${role}`}>
-        <legend>이번 채팅의 {label} 설정</legend>
-        <PackageControlValues
-          controls={item.package.controls}
-          values={packageValues[`${refValue(item)}:${role}`]}
-          labelPrefix={`시작 ${label} 옵션`}
-          disabled={locked || packageLoading}
-          onChange={(values) => rememberPackageValues(role, item, values)}
-        />
-      </fieldset>
-    ) : null
-  );
   const additionalSummary = [
     modules.length ? `모듈 ${modules.length}개` : '',
     title.trim() ? '이름 지정됨' : '',
@@ -524,44 +382,16 @@ export function NewStory({
                 const id = event.target.value;
                 if (id === start) return;
                 setStart(id);
-                const pkg = activeBot.package!;
-                const packageKey = `${refValue(activeBot)}:bot`;
-                const currentValues = resolvePromptValues(
-                  { version: 1, controls: pkg.controls, blocks: [] },
-                  packageValues[packageKey]
-                );
-                rememberedStartValues.current[startValuesKey(packageKey, start)] = currentValues;
-                const values =
-                  rememberedStartValues.current[startValuesKey(packageKey, id)] ??
-                  (id
-                    ? resolvePackageStart(
-                        pkg,
-                        id,
-                        {},
-                        packageIdentityForSelection(
-                          activeBot,
-                          activePersona,
-                          activeModules,
-                          activeMainPromptProgram
-                        )
-                      ).values
-                    : resolvePromptValues({ version: 1, controls: pkg.controls, blocks: [] }));
-                rememberedStartValues.current[startValuesKey(packageKey, id)] = values;
-                setPackageValues((previous) => ({
-                  ...previous,
-                  [packageKey]: values,
-                }));
               }}
             >
               <option value="">직접 첫 장면 요청하기</option>
               {activeBot.package.starts.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.title} · {item.mode === 'authored' ? '작성된 도입문' : '모델 생성'}
+                  {item.title} · 작성된 도입문
                 </option>
               ))}
             </select>
           </label>
-          {packageSettings[0]}
           {opening && (
             <>
               <p className="muted">
@@ -572,32 +402,15 @@ export function NewStory({
                 aria-label="시작 미리보기"
                 style={{ whiteSpace: 'pre-wrap', maxHeight: 260, overflow: 'auto' }}
               >
-                {activeBot.package.nativeRisu ? (
-                  <RisuStartPreview
-                    content={activeBot}
-                    startId={start}
-                    userName={activePersona?.package?.identity?.name ?? activePersona?.title}
-                  />
-                ) : (
-                  <Prose
-                    text={opening.text}
-                    allowedImageUrls={(activeBot.package.images ?? [])
-                      .filter((image) => image.allowedUse !== 'profile')
-                      .map((image) => `/api/package-image-blobs/${image.blobHash}`)}
-                  />
-                )}
+                <RisuStartPreview
+                  content={activeBot}
+                  startId={start}
+                  userName={activePersona?.package?.identity?.name ?? activePersona?.title}
+                />
               </div>
               <p className="muted">
-                {opening.mode === 'authored'
-                  ? '확정하면 이 도입문을 원문 그대로 저장해요. 모델을 호출하지 않아요.'
-                  : '확정하면 이 요청으로 선택한 본문 모델을 호출해요.'}
-                {opening.initialAction && ' 초기 행동은 확정할 때 한 번 실행해요.'}
+                확정하면 이 도입문을 저장하고 봇의 설정 화면을 열어요. 본문 모델은 호출하지 않아요.
               </p>
-              {opening.templateWarning && (
-                <p role="status">
-                  기본 변수의 전체 크기가 한도를 넘어 템플릿 치환 없이 원문을 사용해요.
-                </p>
-              )}
             </>
           )}
           {openingError && (
@@ -607,7 +420,6 @@ export function NewStory({
           )}
         </fieldset>
       )}
-      {!activeBot?.package?.starts?.length && packageSettings[0]}
       <details className="new-story-options">
         <summary>
           <span>추가 설정</span>
@@ -649,7 +461,6 @@ export function NewStory({
               disabled={locked}
             />
           </fieldset>
-          {packageSettings.slice(1)}
           <label>
             채팅 이름 <small>비워 두면 자동으로 정해요</small>
             <input
@@ -670,23 +481,14 @@ export function NewStory({
       )}
       <button
         className="primary"
-        disabled={
-          busy ||
-          uncertain.current ||
-          !bot ||
-          packageLoading ||
-          !!openingError ||
-          (opening?.mode === 'generate' && !mainAvailable && !testMode)
-        }
+        disabled={busy || uncertain.current || !bot || packageLoading || !!openingError}
       >
         {busy
           ? '채팅을 준비하는 중…'
           : created.current
             ? '설정 저장 다시 시도'
             : opening
-              ? opening.mode === 'authored'
-                ? '도입문 확정하고 채팅 만들기'
-                : '첫 장면 생성하고 채팅 만들기'
+              ? '도입문 확정하고 채팅 만들기'
               : '채팅 만들기'}
       </button>
     </form>

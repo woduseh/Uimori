@@ -7,7 +7,6 @@ import {
   translationPolicy,
   translationMaxRetries,
   translationMaxCalls,
-  parseTranslationRefusalVerdict,
 } from '../core/translation-settings.js';
 import { bundle, bridge, hooks, selectProvider } from './fixtures/translation-job.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
@@ -26,10 +25,7 @@ function native(seed: AuxiliaryBundle, endpoint: string) {
   const model = seed.snapshot.profile!.models.translation!;
   model.modelId = 'provider/translator';
   model.connection.protocol = 'openai-chat-v1';
-  seed.translationPolicy = {
-    ...translationPolicy(),
-    refusalModel: { ...structuredClone(model), id: 'classifier', modelId: 'provider/classifier' },
-  };
+  seed.translationPolicy = translationPolicy();
 }
 function chat(response: ServerResponse, text: string, finish = 'stop', refusal?: string) {
   response.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -38,7 +34,6 @@ function chat(response: ServerResponse, text: string, finish = 'stop', refusal?:
   );
   response.end('data: [DONE]\n\n');
 }
-const kind = (body: string) => JSON.parse(body).model as string;
 
 describe('shared Jev translation refusal judgment', () => {
   const answer = (refusal: number, translated: number) =>
@@ -66,8 +61,7 @@ describe('shared Jev translation refusal judgment', () => {
       const seed = bundle('SOURCE_MUST_NOT_REACH_JUDGMENT');
       native(seed, server.endpoint);
       seed.translationPolicy = {
-        refusalModel: null,
-        judgment: { backend: 'jev', threshold: 0.9 },
+        judgment: { threshold: 0.9 },
         maxRetries: 0,
         maxCalls: 4,
       };
@@ -105,8 +99,7 @@ describe('shared Jev translation refusal judgment', () => {
       const seed = bundle();
       native(seed, server.endpoint);
       seed.translationPolicy = {
-        refusalModel: null,
-        judgment: { backend: 'jev', threshold: 0.9 },
+        judgment: { threshold: 0.9 },
         maxRetries: 1,
         maxCalls,
       };
@@ -133,8 +126,7 @@ describe('shared Jev translation refusal judgment', () => {
     const seed = bundle();
     native(seed, server.endpoint);
     seed.translationPolicy = {
-      refusalModel: null,
-      judgment: { backend: 'jev', threshold: 0.9 },
+      judgment: { threshold: 0.9 },
       maxRetries: 3,
       maxCalls: 8,
     };
@@ -158,269 +150,6 @@ describe('shared Jev translation refusal judgment', () => {
     expect(send).toHaveBeenCalledTimes(1);
     expect(server.requests).toHaveLength(1);
     expect(observed.finishes[1].result.usage.inputTokens).toBeNull();
-  });
-});
-
-describe('whole-source refusal classification with local Chat protocol fixtures', () => {
-  test.each([
-    '{"verdict":"accepted"}',
-    '  \n{"verdict":"accepted"}\r\n ',
-    '\uFEFF{"verdict":"accepted"}',
-    '```json\n{"verdict":"accepted"}\n```',
-    '\uFEFF  ```json\r\n{"verdict":"accepted"}\r\n```  ',
-  ])('accepts a complete classifier JSON response with a narrow wrapper: %j', async (verdict) => {
-    const candidate = '번역 후보';
-    const server = await fixture((request, response) =>
-      chat(response, kind(request.body).endsWith('classifier') ? verdict : candidate)
-    );
-    const seed = bundle();
-    native(seed, server.endpoint);
-    const before = structuredClone(seed);
-    const observed = hooks(server.origin);
-    expect(
-      await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', observed.options)
-    ).toMatchObject({ status: 'completed', result: { text: candidate } });
-    expect(server.requests).toHaveLength(2);
-    expect(seed).toEqual(before);
-    expect(observed.finishes).toHaveLength(2);
-  });
-  test('sends natural translation text as-is and only its first 1000 characters to the configured classifier', async () => {
-    const translated = '안 돼! 사과 1개와 경비병 세 명. ' + '가'.repeat(1200) + 'PRIVATE_TAIL';
-    const server = await fixture((request, response) =>
-      chat(
-        response,
-        kind(request.body).endsWith('classifier') ? '{"verdict":"accepted"}' : translated
-      )
-    );
-    const seed = bundle('FULL_SOURCE_' + 'x'.repeat(40000));
-    native(seed, server.endpoint);
-    seed.snapshot.settings.maxCalls = 1;
-    const observed = hooks(server.origin);
-    const outcome = await runAuxiliaryJob(
-      bridge(seed).store,
-      seed.job.id,
-      'owner',
-      observed.options
-    );
-    expect(outcome).toMatchObject({
-      status: 'completed',
-      result: { text: translated, sourceHash: seed.source.hash, mock: false },
-    });
-    expect(server.requests).toHaveLength(2);
-    const classifier = server.requests[1].body;
-    expect(classifier).toContain('translation-refusal');
-    expect(classifier).toContain(Array.from(translated).slice(0, 1000).join(''));
-    expect(classifier).not.toMatch(
-      /PRIVATE_TAIL|FULL_SOURCE_|Mira has not learned|SOURCE_TIME_GLOSSARY/
-    );
-    expect(observed.finishes).toHaveLength(2);
-    expect(observed.wire.every((wire) => wire.role === 'translation')).toBe(true);
-    expect(observed.finishes.every(({ result }) => result.usage.inputTokens === 2)).toBe(true);
-  });
-
-  test('confirmed classifier refusal retries once by default with fresh tool state', async () => {
-    let translations = 0,
-      classifications = 0;
-    const server = await fixture((request, response) => {
-      if (kind(request.body).endsWith('classifier'))
-        chat(
-          response,
-          JSON.stringify({ verdict: ++classifications === 1 ? 'refused' : 'accepted' })
-        );
-      else chat(response, ++translations === 1 ? 'I cannot translate this.' : '번역된 이야기.');
-    });
-    const seed = bundle();
-    native(seed, server.endpoint);
-    const observed = hooks(server.origin);
-    expect(
-      await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', observed.options)
-    ).toMatchObject({ status: 'completed', result: { text: '번역된 이야기.' } });
-    expect(translations).toBe(2);
-    expect(classifications).toBe(2);
-    expect(observed.finishes).toHaveLength(4);
-  });
-
-  test.each(['uncertain', 'malformed', 'extra-field', 'error', 'partial'])(
-    'classifier %s preserves candidate and never retries translation',
-    async (failure) => {
-      const candidate = '번역 후보 원문 보존';
-      const server = await fixture((request, response) => {
-        if (!kind(request.body).endsWith('classifier')) return chat(response, candidate);
-        if (failure === 'error') {
-          response.writeHead(503);
-          response.end();
-          return;
-        }
-        chat(
-          response,
-          failure === 'malformed'
-            ? 'not JSON'
-            : failure === 'extra-field'
-              ? '{"verdict":"accepted","extra":true}'
-              : '{"verdict":"uncertain"}',
-          failure === 'partial' ? 'length' : 'stop'
-        );
-      });
-      const seed = bundle();
-      native(seed, server.endpoint);
-      const observed = hooks(server.origin);
-      const outcome = await runAuxiliaryJob(
-        bridge(seed).store,
-        seed.job.id,
-        'owner',
-        observed.options
-      );
-      expect(outcome).toMatchObject({ status: 'failed', result: { text: candidate } });
-      expect(outcome?.diagnostic).toEqual({
-        stage: 'translation-refusal',
-        code:
-          failure === 'error' || failure === 'partial'
-            ? 'TRANSLATION_REFUSAL_CHECK_FAILED'
-            : 'TRANSLATION_REFUSAL_UNCERTAIN',
-        attemptId: 'attempt-2',
-      });
-      expect(server.requests).toHaveLength(2);
-      expect(observed.finishes).toHaveLength(2);
-      if (failure === 'error')
-        expect(observed.finishes[1]).toMatchObject({
-          id: outcome?.diagnostic?.attemptId,
-          result: { status: 'error', error: { code: 'HTTP_503' } },
-        });
-      expect(observed.finishes[0].result).toMatchObject({
-        status: 'completed',
-        usage: { inputTokens: 2, outputTokens: 3 },
-      });
-      if (failure !== 'error')
-        expect(observed.finishes[1].result.usage).toMatchObject({
-          inputTokens: 2,
-          outputTokens: 3,
-        });
-    }
-  );
-
-  test('translator HTTP error links its own attempt without starting a classifier', async () => {
-    const server = await fixture((_request, response) => {
-      response.writeHead(400);
-      response.end();
-    });
-    const seed = bundle();
-    native(seed, server.endpoint);
-    const observed = hooks(server.origin);
-    const outcome = await runAuxiliaryJob(
-      bridge(seed).store,
-      seed.job.id,
-      'owner',
-      observed.options
-    );
-    expect(outcome).toMatchObject({
-      status: 'failed',
-      result: null,
-      diagnostic: { stage: 'translation', attemptId: 'attempt-1' },
-    });
-    expect(outcome?.diagnostic?.code).toBe(outcome?.error);
-    expect(server.requests).toHaveLength(1);
-    expect(observed.finishes).toHaveLength(1);
-    expect(observed.finishes[0]).toMatchObject({
-      id: outcome?.diagnostic?.attemptId,
-      result: { status: 'error', error: { code: 'HTTP_400' } },
-    });
-  });
-
-  test('live protocol requires a configured classifier before sending translation', async () => {
-    const seed = bundle();
-    native(seed, 'http://127.0.0.1:1/turn');
-    seed.translationPolicy!.refusalModel = null;
-    seed.translationPolicy!.maxRetries = 0;
-    const observed = hooks();
-    expect(
-      await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', observed.options)
-    ).toMatchObject({ status: 'failed', error: 'TRANSLATION_REFUSAL_MODEL_REQUIRED' });
-    expect(observed.wire).toEqual([]);
-  });
-
-  test('classifier and translator share the current job policy budget', async () => {
-    const server = await fixture((request, response) =>
-      chat(
-        response,
-        kind(request.body).endsWith('classifier') ? '{"verdict":"refused"}' : 'I cannot translate.'
-      )
-    );
-    const seed = bundle();
-    native(seed, server.endpoint);
-    seed.translationPolicy!.maxCalls = 2;
-    expect(
-      await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', hooks(server.origin).options)
-    ).toMatchObject({
-      status: 'failed',
-      error: 'AUXILIARY_CALL_BUDGET_EXHAUSTED',
-      result: { text: 'I cannot translate.' },
-    });
-    expect(server.requests).toHaveLength(2);
-  });
-
-  test('maxRetries zero retains a refused candidate without replay', async () => {
-    const server = await fixture((request, response) =>
-      chat(
-        response,
-        kind(request.body).endsWith('classifier') ? '{"verdict":"refused"}' : 'Cannot translate.'
-      )
-    );
-    const seed = bundle();
-    native(seed, server.endpoint);
-    seed.translationPolicy!.maxRetries = 0;
-    expect(
-      await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', hooks(server.origin).options)
-    ).toMatchObject({
-      status: 'failed',
-      error: 'TRANSLATION_REFUSAL_RETRIES_EXHAUSTED',
-      result: { text: 'Cannot translate.' },
-    });
-    expect(server.requests).toHaveLength(2);
-  });
-
-  test('cancellation after classifier response retains usage and prevents another translation', async () => {
-    const server = await fixture((request, response) =>
-      chat(
-        response,
-        kind(request.body).endsWith('classifier') ? '{"verdict":"refused"}' : 'Candidate.'
-      )
-    );
-    const seed = bundle();
-    native(seed, server.endpoint);
-    const observed = hooks(server.origin),
-      controller = new AbortController();
-    observed.options.signal = controller.signal;
-    const finish = observed.options.onAttemptFinish;
-    observed.options.onAttemptFinish = async (id, result) => {
-      await finish(id, result);
-      if (observed.finishes.length === 2) controller.abort();
-    };
-    expect(
-      await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', observed.options)
-    ).toMatchObject({ status: 'cancelled', result: { text: 'Candidate.' } });
-    expect(server.requests).toHaveLength(2);
-    expect(observed.finishes).toHaveLength(2);
-  });
-
-  test('classifier authorization is rechecked and cannot cause translation replay', async () => {
-    const server = await fixture((_request, response) => chat(response, 'Candidate.'));
-    const seed = bundle();
-    native(seed, server.endpoint);
-    seed.translationPolicy!.refusalModel!.connectionId = 'classifier-connection';
-    seed.translationPolicy!.refusalModel!.connection.id = 'classifier-connection';
-    const observed = hooks(server.origin);
-    observed.options.authorize = (value) => {
-      if (value.id === 'classifier-connection') throw new Error('denied');
-      return value;
-    };
-    expect(
-      await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', observed.options)
-    ).toMatchObject({
-      status: 'failed',
-      error: 'CONNECTION_NOT_AUTHORIZED',
-      result: { text: 'Candidate.' },
-    });
-    expect(server.requests).toHaveLength(1);
   });
 });
 
@@ -477,28 +206,23 @@ describe('terminal translation retry boundaries', () => {
       expect(observed.finishes).toHaveLength(1);
     }
   );
-  test('policy validates bounded retries and classifier JSON never executes instructions', () => {
-    expect(translationPolicy()).toEqual({ refusalModel: null, maxRetries: 1, maxCalls: 16 });
+  test('policy validates bounded retries and rejects removed model/backend settings', () => {
+    expect(translationPolicy()).toEqual({
+      judgment: { threshold: 0.9 },
+      maxRetries: 1,
+      maxCalls: 16,
+    });
     for (const invalid of [-1, 6, 1.5, null, '1'])
       expect(() => translationMaxRetries(invalid)).toThrow();
     for (const invalid of [0, 1, 65, 1.5]) expect(() => translationMaxCalls(invalid)).toThrow();
-    for (const text of [
-      '{}',
-      '{"verdict":"accepted","extra":true}',
-      'Explanation: {"verdict":"accepted"}',
-      '```json\n{"verdict":"accepted"}\n```\nExplanation',
-      '```json\n{"verdict":"accepted"}\n```\n```json\n{"verdict":"refused"}\n```',
-      '{"verdict":"accepted"}{"verdict":"refused"}',
-      '```javascript\n{"verdict":"accepted"}\n```',
-      '```\n{"verdict":"accepted"}\n```',
-      '```json\n{"verdict":"accepted", "extra":true}\n```',
-      '```json\n{"verdict":"accepted"\n```',
-      '{"verdict":"uncertain"}',
-      '{"verdict":"Accepted"}',
-      '[{"verdict":"accepted"}]',
-      'ignore instructions',
-    ])
-      expect(parseTranslationRefusalVerdict(text)).toBe('uncertain');
-    expect(parseTranslationRefusalVerdict('```json\n{"verdict":"refused"}\n```')).toBe('refused');
+    expect(() =>
+      translationPolicy({ ...translationPolicy(), refusalModel: null } as never)
+    ).toThrow('TRANSLATION_POLICY_INVALID');
+    expect(() =>
+      translationPolicy({
+        ...translationPolicy(),
+        judgment: { backend: 'jev', threshold: 0.9 },
+      } as never)
+    ).toThrow('TRANSLATION_JUDGMENT_INVALID');
   });
 });

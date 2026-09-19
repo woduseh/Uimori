@@ -7,11 +7,10 @@ import {
 } from '../core/context-budget.js';
 import type { ContextPlan } from '../core/context-plan.js';
 import { CONTEXT_SUMMARY_SEMANTICS, contextSummaryPolicy } from '../core/context-summary-policy.js';
-import { sourceLogicalHistoryForRequest } from '../core/source-context.js';
 import { sourceSceneScope } from '../core/source-history.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import type { Connection, ModelSnapshot } from '../core/product.js';
-import type { PromptHistoryMessage } from '../core/prompt-program.js';
+import type { PromptHistoryMessage } from '../core/risu-prompt.js';
 import {
   executeProvider,
   ProviderContractError,
@@ -29,7 +28,6 @@ import {
 } from './context-planning.js';
 import { encodeMainPreview } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
-import { preparePromptInputTransforms } from './prompt-transforms.js';
 
 export type ContextCompactionHooks = MainHooks & {
   onProgress: (plan: ContextPlan) => void | Promise<void>;
@@ -164,7 +162,7 @@ export async function prepareInputContext(
   previous?: ContextPlan
 ): Promise<{ snapshot: RunSnapshot; usage: Usage }> {
   if (!snapshot.contextPlan) throw new Error('CONTEXT_PLAN_REQUIRED');
-  const fixed = await preparePromptInputTransforms(structuredClone(snapshot)),
+  const fixed = structuredClone(snapshot),
     usage = emptyUsage();
   const measureInput = hooks.measureInput ?? measureMainContext;
   const plan: ContextPlan = {
@@ -277,8 +275,7 @@ export async function prepareInputContext(
         throw error;
       }
     };
-    const logical = sourceLogicalHistoryForRequest(
-      fixed,
+    const logical = structuredClone(
       fixed.nativeRisuExecution?.history ?? fixed.logicalHistory ?? []
     );
     const units = allRefs.map((ref, index) => ({

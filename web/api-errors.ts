@@ -155,7 +155,6 @@ const roles: Record<string, string> = {
   'translation-refusal': '번역 거절 판정',
   status: '장면 해설',
   image: '이미지 배치',
-  state: '상태',
   context: '문맥 압축',
   helper: '도우미',
   illustration: '삽화',
@@ -185,7 +184,7 @@ export function apiErrorDiagnostic(
     if (required && Object.hasOwn(roles, required))
       return {
         code,
-        message: `${required === 'state' ? '상태와 문맥 설정' : '전역 모델 설정'}에서 ${roles[required]} 모델을 선택해 주세요.`,
+        message: `전역 모델 설정에서 ${roles[required]} 모델을 선택해 주세요.`,
       };
     const unavailableRole = /^MODEL_UNAVAILABLE:([a-z-]+):/.exec(code)?.[1];
     if (unavailableRole && Object.hasOwn(roles, unavailableRole))

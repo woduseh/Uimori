@@ -102,8 +102,6 @@ for (const observed of [
     const originalProfile = app.store.product.profile(chat.id);
     const profile = updateTestProfile(app.store.product, chat.id, {
       expectedRevision: originalProfile.revision,
-      attachments: [],
-
       routes: { ...originalProfile.routes, main: { id: model.id } },
       image: false,
     });

@@ -13,15 +13,15 @@ export const newId = () =>
 export function localVerificationEnv(variables = {}) {
   return {
     ...variables,
-    NR_PORT: '0',
-    NR_HOST: '127.0.0.1',
-    NR_TEST_MODE: '1',
+    UIMORI_PORT: '0',
+    UIMORI_HOST: '127.0.0.1',
+    UIMORI_TEST_MODE: '1',
     // Undefined removes inherited configuration at spawn; an empty origin is invalid.
-    NR_PUBLIC_ORIGIN: undefined,
-    NR_ACCESS_TOKEN: '',
-    NR_PROVIDER_ORIGINS: variables.NR_PROVIDER_ORIGINS ?? '',
-    NR_CODEX_ENABLED: '0',
-    NR_CODEX_EXECUTABLE: undefined,
+    UIMORI_PUBLIC_ORIGIN: undefined,
+    UIMORI_ACCESS_TOKEN: '',
+    UIMORI_PROVIDER_ORIGINS: variables.UIMORI_PROVIDER_ORIGINS ?? '',
+    UIMORI_CODEX_ENABLED: '0',
+    UIMORI_CODEX_EXECUTABLE: undefined,
   };
 }
 export function createOwnership(directory, startedAt) {
@@ -142,7 +142,7 @@ export async function assertBuild() {
  * this list on purpose so the Playwright config resolves its browser without server tooling.
  */
 export function browserPath() {
-  if (process.env.NR_BROWSER_PATH) return process.env.NR_BROWSER_PATH;
+  if (process.env.UIMORI_BROWSER_PATH) return process.env.UIMORI_BROWSER_PATH;
   return [
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -296,9 +296,9 @@ export async function startServer(env, directory, children, cwd = root) {
   if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(ready.url))
     throw new Error(`Unexpected local ready URL: ${ready.url}`);
   await assertHealth(ready.url, {
-    buildId: env.NR_BUILD_ID,
-    instanceId: env.NR_INSTANCE,
-    dbPath: env.NR_DB,
+    buildId: env.UIMORI_BUILD_ID,
+    instanceId: env.UIMORI_INSTANCE,
+    dbPath: env.UIMORI_DB,
   });
   return { child, ready };
 }

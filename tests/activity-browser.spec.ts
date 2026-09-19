@@ -112,7 +112,7 @@ async function harness(
     body.runs = body.runs.filter((run) => !omittedRunIds.includes(run.id));
     body.reader.cursor = cursor;
     body.reader.activeJobs = items.filter((item) =>
-      ['queued', 'running', 'waiting_for_state'].includes(item.status)
+      ['queued', 'running'].includes(item.status)
     ).length;
     await route.fulfill({ response, json: body });
   });

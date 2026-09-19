@@ -5,7 +5,6 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
-import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 
 const owned: { store: Store; directory: string }[] = [];
 afterEach(() => {
@@ -60,16 +59,12 @@ function append(store: Store, chatId: string, text: string, branchId?: string) {
   );
 }
 
-test('history preserves exact original/latest edit, source-time policy, branch order and immutable run snapshots', () => {
+test('history preserves exact original/latest edit, branch order and immutable run snapshots', () => {
   const { store, chat } = fixture();
   const first = append(store, chat.id, '첫 문단 😀\r\n\r\n```txt\r\n원문\r\n\r\n```');
   const second = append(store, chat.id, 'Second scene');
   const branch = store.product.createBranch(chat.id, { title: 'Other', fromRevision: first.id });
   const other = append(store, chat.id, 'Other branch', branch.id);
-  const policy = createSourceSegmentFixture();
-  store.db
-    .prepare("UPDATE runs SET snapshot=json_set(snapshot,'$.sourceSegments',json(?)) WHERE id=?")
-    .run(JSON.stringify(policy), first.runId);
   const frozen = store.run(second.runId).snapshot;
   const edited = store.editSource(first.id, {
     expectedRevision: 0,
@@ -82,7 +77,6 @@ test('history preserves exact original/latest edit, source-time policy, branch o
     revision: first.id,
     text: latest.text,
     contentHash: latest.hash,
-    sourceSegments: policy,
   };
   expect(store.history(second.id)).toEqual([expected, { revision: second.id, text: second.text }]);
   expect(store.history(other.id)).toEqual([expected, { revision: other.id, text: other.text }]);
@@ -90,9 +84,7 @@ test('history preserves exact original/latest edit, source-time policy, branch o
   expect(store.sourceOriginal(first.id).text).toBe(first.text);
   expect(store.validateHistory(frozen.history, first.id)).toBe(true);
   store.editSource(first.id, { expectedRevision: 2, text: first.text });
-  expect(store.history(first.id)).toEqual([
-    { revision: first.id, text: first.text, sourceSegments: policy },
-  ]);
+  expect(store.history(first.id)).toEqual([{ revision: first.id, text: first.text }]);
   expect(store.history(null)).toEqual([]);
   expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 });

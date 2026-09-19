@@ -1,3 +1,4 @@
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -7,13 +8,12 @@ import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { createAgentCollaboration, createAgentDefinition } from '../core/agent-collaboration.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import type { ChatProfile, Connection, ModelPreset, PromptPreset } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { deleteLibraryItem, libraryDeletionImpact } from '../server/library-deletion.js';
 import { buildAgentProviderRequest } from '../server/agent-collaboration.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
-import { definePrompt } from '../core/prompt-authoring.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 
@@ -40,7 +40,7 @@ afterEach(() => {
 });
 const profileBody = (p: ChatProfile) => ({
   expectedRevision: p.revision,
-  attachments: p.attachments,
+  packageAttachments: p.packageAttachments,
   routes: p.routes,
   image: p.image,
 });
@@ -70,11 +70,9 @@ function fixture() {
   const main = product.model(body) as ModelPreset;
   const advisor = product.model({ ...body, title: 'Advisor model' }) as ModelPreset;
   const agent = { ...createAgentDefinition('character', 'actor'), model: { id: advisor.id } };
-  const program = createDefaultPromptProgram('MAIN_ONLY_PRIVATE_INSTRUCTION');
-  program.controls = [
-    { id: 'shared', label: 'Shared', type: 'text', default: 'default' },
-    { id: 'private', label: 'Private', type: 'text', default: 'PRIVATE_OPTION' },
-  ];
+  const program = createDefaultRisuPrompt('MAIN_ONLY_PRIVATE_INSTRUCTION');
+  program.nativeRisuPreset.preset.customPromptTemplateToggle =
+    'shared=Shared=text\nprivate=Private=text';
   program.collaboration = {
     ...createAgentCollaboration(),
     enabled: true,
@@ -172,7 +170,7 @@ test('reservation freezes each advisor and prompt; later current settings apply 
   ).toBe('Changed direction');
 });
 
-test('advisors share explicit instructions and selected options without copying the authored main prompt', () => {
+test('advisors share explicit instructions and selected options without copying the authored main prompt', async () => {
   const f = fixture(),
     // This request-builder unit uses empty history; compile it after the reservation boundary.
     // Queued runs intentionally leave compilation pending until the context planner runs.
@@ -196,7 +194,7 @@ test('advisors share explicit instructions and selected options without copying 
         tool.name !== 'story.submit'
     )
   ).toBe(true);
-  const main = buildMainProviderRequest(snapshot).request;
+  const main = buildMainProviderRequest(await prepareNativeRisuRun(snapshot)).request;
   expect(JSON.stringify(main.prompt)).toContain('MAIN_ONLY_PRIVATE_INSTRUCTION');
   expect(main.stable.tools.some((tool) => tool.name === 'agents.consult')).toBe(true);
 });
@@ -246,7 +244,7 @@ test('forged or missing advisor snapshot models roll archive restoration back', 
   }
 });
 
-test('disabled collaboration and switching the main prompt restore the ordinary execution path', () => {
+test('disabled collaboration and switching the main prompt restore the ordinary execution path', async () => {
   const f = fixture();
   const disabled = { ...f.program, collaboration: { ...f.program.collaboration!, enabled: false } };
   f.product.promptPreset(
@@ -272,7 +270,7 @@ test('disabled collaboration and switching the main prompt restore the ordinary 
   expect(run.snapshot.profile!.promptPresets!.main!.id).toBe('current-main');
   expect(run.snapshot.profile!.promptPresets!.main!.program).toEqual(plain.program);
   expect(
-    buildMainProviderRequest(run.snapshot).request.stable.tools.some(
+    buildMainProviderRequest(await prepareNativeRisuRun(run.snapshot)).request.stable.tools.some(
       (tool) => tool.name === 'agents.consult'
     )
   ).toBe(false);
@@ -296,10 +294,6 @@ test('model references, prompt role and CAS are checked before storing collabora
     )
   ).toThrow('Revision');
   expect(f.product.get<PromptPreset>('prompt-preset', f.preset.id)).toEqual(f.preset);
-  expect(
-    definePrompt({ controls: {}, compose: () => [], collaboration: createAgentCollaboration() })
-      .collaboration
-  ).toEqual(createAgentCollaboration());
 });
 
 test('advisor model deletion preserves its historical Run independently of current library references', () => {

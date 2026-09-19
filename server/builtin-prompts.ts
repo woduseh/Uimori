@@ -1,5 +1,8 @@
+import { promptControls } from '../core/risu-prompt.js';
+import phemeOptions from './builtin-prompts/pheme-options.json' with { type: 'json' };
+import hermeneiaOptions from './builtin-prompts/hermeneia-options.json' with { type: 'json' };
 import type { CurrentPrompt, PromptRole } from '../core/product.js';
-import { resolvePromptValues, validateEditablePromptProgram } from '../core/prompt-program.js';
+import { resolvePromptValues, validateEditableRisuPrompt } from '../core/risu-prompt.js';
 import { validateAgentCollaboration } from '../core/agent-collaboration.js';
 import pheme from './builtin-prompts/pheme.json' with { type: 'json' };
 import hermeneia from './builtin-prompts/hermeneia.json' with { type: 'json' };
@@ -49,7 +52,7 @@ export function builtinPromptTemplates() {
 export function builtinPromptTemplate(id: string) {
   const metadata = templates.find((template) => template.id === id);
   if (!metadata) return undefined;
-  const program = validateEditablePromptProgram(
+  const program = validateEditableRisuPrompt(
     structuredClone(id === 'hermeneia' ? hermeneia : pheme)
   );
   const advisors =
@@ -63,15 +66,19 @@ export function builtinPromptTemplate(id: string) {
   if (advisors) {
     program.collaboration = validateAgentCollaboration(
       advisors,
-      program.controls.map((control) => control.id)
+      promptControls(program).map((control) => control.id)
     );
-    if (id === 'pheme-ooc') {
-      program.controls.find((control) => control.id === 'pheme_session_mode')!.default = 2;
-      program.provenance!.notes.push('The OOC template starts with pheme_session_mode=2.');
-    }
-    validateEditablePromptProgram(program);
+
+    validateEditableRisuPrompt(program);
   }
-  return { ...metadata, program, values: resolvePromptValues(program) };
+  return {
+    ...metadata,
+    program,
+    values: resolvePromptValues(program, {
+      ...(id === 'hermeneia' ? hermeneiaOptions : phemeOptions),
+      ...(id === 'pheme-ooc' ? { pheme_session_mode: '2' } : {}),
+    }),
+  };
 }
 
 /** Used only when creating a fresh workspace, never to rewrite saved working copies. */

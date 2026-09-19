@@ -1,4 +1,4 @@
-import type { PromptProgram, PromptValue } from './prompt-program.js';
+import type { RisuPrompt, PromptValue } from './risu-prompt.js';
 import type { NativeTransferReceipt } from './native-transfer.js';
 import type { PromptPreset } from './product.js';
 import type { RisuImportSource } from './risu-import.js';
@@ -14,7 +14,7 @@ export type RisuPresetFinding = {
 export type RisuPresetProgramImport = {
   title: string;
   role: 'main';
-  program: PromptProgram;
+  program: RisuPrompt;
   values: Record<string, PromptValue>;
   findings: RisuPresetFinding[];
 };

@@ -19,7 +19,6 @@ export async function prepareNativeRisuReadOnly(
   delete input.nativeRisuExecution;
   delete input.nativeRisuPresetProgram;
   delete input.promptCompilation;
-  delete input.promptInputTransforms;
   const prepared = await prepareNativeRisuRun(input, { preview: true });
   prepared.nativeRisuExecution!.issues = prepared.nativeRisuExecution!.issues.map((issue) =>
     issue === 'RISU_NATIVE_PREVIEW_CALLBACKS_DEFERRED'

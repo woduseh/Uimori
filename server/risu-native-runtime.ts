@@ -7,7 +7,7 @@ export {
   disposeNativeRisuSession,
   disposeAllNativeRisuSessions,
 } from './risu-native-lua-session.js';
-import { nativeRisuTriggers, type NativeRisuContent } from '../core/risu-native.js';
+import { nativeRisuTriggers, type RisuContentSource } from '../core/risu-native.js';
 
 import { RISU_NATIVE_LUA_DISPATCH, RISU_NATIVE_LUA_PRELUDE } from './risu-native-lua.js';
 import { evaluateRisuNativeCbs } from './risu-native-cbs.js';
@@ -25,7 +25,7 @@ export interface NativeRisuRequestMessage {
 export interface NativeRisuExecutionInput {
   /** Host-resolved grants for each original card/module, before namespaces are merged. */
   effectiveTriggers?: Record<string, unknown>[];
-  native: NativeRisuContent;
+  native: RisuContentSource;
   variables: Record<string, string>;
   messages: NativeRisuMessage[];
   charName: string;

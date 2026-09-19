@@ -6,7 +6,7 @@ import {
   type LoreContextPolicy,
   type LoreContextSnapshot,
 } from '../core/lore-context.js';
-import type { PromptCompilation } from '../core/prompt-program.js';
+import type { PromptCompilation } from '../core/risu-prompt.js';
 import { api } from './api.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 import './lore-context.css';
@@ -22,7 +22,6 @@ type PolicyDraft = {
   maxRetainedChars: string;
   maxRetainedEntries: string;
   maxPinnedChars: string;
-  jev?: boolean;
   threshold?: string;
   maxSelectedTokens?: string;
   maxInputTokens?: string;
@@ -32,7 +31,6 @@ const draftOf = (policy: LoreContextPolicy): PolicyDraft => ({
   maxRetainedChars: String(policy.maxRetainedChars),
   maxRetainedEntries: String(policy.maxRetainedEntries),
   maxPinnedChars: String(policy.maxPinnedChars),
-  jev: !!policy.judgment,
   threshold: String(policy.judgment?.threshold ?? DEFAULT_JEV_JUDGMENT.threshold),
   maxSelectedTokens: String(
     policy.judgment?.maxSelectedTokens ?? DEFAULT_JEV_JUDGMENT.maxSelectedTokens
@@ -52,12 +50,9 @@ export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
         `${field.label}는 ${field.min.toLocaleString()}–${field.max.toLocaleString()} 사이 정수로 입력해 주세요.`
       );
   }
-  if (
-    draft.jev &&
-    (!draft.threshold?.trim() || !draft.maxSelectedTokens?.trim() || !draft.maxInputTokens?.trim())
-  )
+  if (!draft.threshold?.trim() || !draft.maxSelectedTokens?.trim() || !draft.maxInputTokens?.trim())
     throw new Error('Jev 관련성 기준과 토큰 한도를 입력해 주세요.');
-  if (draft.jev) {
+  {
     const threshold = Number(draft.threshold);
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1)
       throw new Error('Jev 관련성 기준은 0–1 사이로 입력해 주세요.');
@@ -77,16 +72,11 @@ export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
     maxRetainedChars: Number(draft.maxRetainedChars),
     maxRetainedEntries: Number(draft.maxRetainedEntries),
     maxPinnedChars: Number(draft.maxPinnedChars),
-    ...(draft.jev
-      ? {
-          judgment: {
-            backend: 'jev',
-            threshold: Number(draft.threshold),
-            maxSelectedTokens: Number(draft.maxSelectedTokens),
-            maxInputTokens: Number(draft.maxInputTokens),
-          },
-        }
-      : {}),
+    judgment: {
+      threshold: Number(draft.threshold),
+      maxSelectedTokens: Number(draft.maxSelectedTokens),
+      maxInputTokens: Number(draft.maxInputTokens),
+    },
   });
 }
 type Preview = {
@@ -231,70 +221,56 @@ export function LoreContextPolicyEditor({
           </label>
         ))}
       </div>
-      <label>
-        로어 관련성 판단
-        <select
-          aria-label="로어 관련성 판단"
-          value={draft.jev ? 'jev' : 'context'}
-          onChange={(event) => change({ ...draft, jev: event.target.value === 'jev' })}
-        >
-          <option value="context">문맥 정리 모델</option>
-          <option value="jev">Jev</option>
-        </select>
-      </label>
-      {draft.jev && (
-        <>
-          <div className="lore-context-policy-grid">
-            <label>
-              관련성 기준
-              <input
-                aria-label="Jev 관련성 기준"
-                type="number"
-                min="0"
-                max="1"
-                step="0.05"
-                value={draft.threshold}
-                onChange={(event) => change({ ...draft, threshold: event.target.value })}
-              />
-              <small>0–1, 높일수록 관련성이 높은 로어만 포함해요.</small>
-            </label>
-            <label>
-              선택 로어 토큰 한도
-              <input
-                aria-label="Jev 선택 로어 토큰 한도"
-                type="number"
-                min="0"
-                max="100000"
-                value={draft.maxSelectedTokens}
-                onChange={(event) => change({ ...draft, maxSelectedTokens: event.target.value })}
-              />
-            </label>
-            <label>
-              판단 입력 토큰 한도
-              <input
-                aria-label="Jev 판단 입력 토큰 한도"
-                type="number"
-                min="1000"
-                max="30000"
-                value={draft.maxInputTokens}
-                onChange={(event) => change({ ...draft, maxInputTokens: event.target.value })}
-              />
-            </label>
-          </div>
-          <p className="muted">
-            Jev는 선택 로어의 관련성을 한 번에 판단해요. 상시 로어와 카드의 명시적 조건은 유지해요.
-            토큰 수는 호스트 추정값이에요. 프로바이더·모델 등록의 JEV 판단에서 API 키를 연결하고
-            테스트할 수 있어요. 작문·문맥 요약 모델은 바뀌지 않아요.
-          </p>
-        </>
-      )}
+      <p>로어 관련성은 JEV가 판단해요.</p>
+      <div className="lore-context-policy-grid">
+        <label>
+          관련성 기준
+          <input
+            aria-label="Jev 관련성 기준"
+            type="number"
+            min="0"
+            max="1"
+            step="0.05"
+            value={draft.threshold}
+            onChange={(event) => change({ ...draft, threshold: event.target.value })}
+          />
+          <small>0–1, 높일수록 관련성이 높은 로어만 포함해요.</small>
+        </label>
+        <label>
+          선택 로어 토큰 한도
+          <input
+            aria-label="Jev 선택 로어 토큰 한도"
+            type="number"
+            min="0"
+            max="100000"
+            value={draft.maxSelectedTokens}
+            onChange={(event) => change({ ...draft, maxSelectedTokens: event.target.value })}
+          />
+        </label>
+        <label>
+          판단 입력 토큰 한도
+          <input
+            aria-label="Jev 판단 입력 토큰 한도"
+            type="number"
+            min="1000"
+            max="30000"
+            value={draft.maxInputTokens}
+            onChange={(event) => change({ ...draft, maxInputTokens: event.target.value })}
+          />
+        </label>
+      </div>
+      <p className="muted">
+        Jev는 선택 로어의 관련성을 한 번에 판단해요. 상시 로어와 카드의 명시적 조건은 유지해요. 토큰
+        수는 호스트 추정값이에요. 프로바이더·모델 등록의 JEV 판단에서 API 키를 연결하고 테스트할 수
+        있어요. 작문·문맥 요약 모델은 바뀌지 않아요.
+      </p>
       <p className="muted">
         문자 한도는 UTF-16 코드 단위예요. 예를 들어 이모지 하나가 2자로 계산될 수 있어요. 고정
         자료는 한도를 넘으면 요청을 중단해 알려요. 이 한도는 로어와 고정 자료에 적용하며 전체 모델
         입력 토큰 한도는 별도예요.
       </p>
       <p className="muted">
-        사용자가 만든 PromptProgram의 역할·순서·캐시 기준은 그대로 사용해요. 이 설정이 사용자
+        사용자가 만든 Risu 프롬프트의 역할·순서·캐시 기준은 그대로 사용해요. 이 설정이 사용자
         프롬프트를 다시 배치하지 않아요.
       </p>
       {validation && (

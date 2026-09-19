@@ -1,13 +1,10 @@
+import { promptControls } from '../core/risu-prompt.js';
 import { useEffect, useState } from 'react';
 import {
   createNativeRisuPresetProgram,
   nativeRisuPresetSource,
 } from '../core/risu-native-preset.js';
-import {
-  validatePromptProgram,
-  type PromptProgram,
-  type PromptValue,
-} from '../core/prompt-program.js';
+import { validateRisuPrompt, type RisuPrompt, type PromptValue } from '../core/risu-prompt.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 
@@ -19,8 +16,8 @@ export function NativeRisuPresetEditor({
   values = {},
   onValuesChange,
 }: {
-  program: PromptProgram;
-  onChange: (program: PromptProgram) => void;
+  program: RisuPrompt;
+  onChange: (program: RisuPrompt) => void;
   onPendingDraftChange?: (pending: boolean) => void;
   values?: Record<string, PromptValue>;
   onValuesChange?: (values: Record<string, PromptValue>) => void;
@@ -55,7 +52,7 @@ export function NativeRisuPresetEditor({
         regex: Object.hasOwn(patch, 'regex') ? patch.regex : JSON.parse(regexDraft),
         ...patch,
       });
-      const next = validatePromptProgram({ ...program, ...createNativeRisuPresetProgram(native) });
+      const next = validateRisuPrompt({ ...program, ...createNativeRisuPresetProgram(native) });
       onChange(next);
       setError('');
       setPending(false);
@@ -78,7 +75,7 @@ export function NativeRisuPresetEditor({
     <section aria-label="Risu 프롬프트 원본 편집" className="native-risu-preset-editor">
       <p>Risu의 프롬프트 구성과 CBS를 그대로 편집해요. 모델 선택은 모델 설정에서 관리해요.</p>
       {error && <p role="alert">{error} · 입력은 유지했어요. 저장하려면 형식을 확인해 주세요.</p>}
-      {!!program.controls.length && onValuesChange && (
+      {!!promptControls(program).length && onValuesChange && (
         <fieldset>
           <legend>프리셋 기본 옵션</legend>
           <PromptControlFields

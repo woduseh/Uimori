@@ -1,7 +1,7 @@
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { PromptPreset, SavedPromptCombination } from '../core/product.js';
-import type { PromptProgram } from '../core/prompt-program.js';
 
 export async function visibleNavigation(page: Page) {
   let nav = page.getByTestId('bot-navigation').filter({ visible: true });
@@ -99,41 +99,6 @@ export async function openPromptActions(editor: Locator) {
   if (!(await menu.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
     await menu.click();
 }
-export async function openPromptTools(editor: Locator) {
-  const menu = editor.getByLabel('프롬프트 구성 도구', { exact: true });
-  await expect(menu).toBeVisible();
-  if (!(await menu.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
-    await menu.click();
-}
-export async function openPromptBlocks(editor: Locator) {
-  await selectPromptSection(editor, '블록');
-}
-export async function selectPromptSection(editor: Locator, name: string) {
-  if (name === 'JSON 편집') {
-    await openPromptTools(editor);
-    await editor.getByRole('button', { name, exact: true }).click();
-    return;
-  }
-  const select = editor.getByRole('combobox', { name: '프롬프트 편집 섹션', exact: true });
-  // Role changes remount the composer. Wait for its responsive navigation before choosing
-  // the control, instead of treating a not-yet-mounted select as a desktop layout.
-  const control = select
-    .or(editor.getByRole('tab', { name, exact: true }))
-    .filter({ visible: true })
-    .first();
-  await expect(control).toBeVisible();
-  if (await control.evaluate((node) => node.tagName === 'SELECT'))
-    await control.selectOption({ label: name });
-  else await control.click();
-  await expect(editor.getByRole('tabpanel', { name, exact: true })).toBeVisible();
-}
-export async function selectPromptBlock(editor: Locator, title: string) {
-  await openPromptBlocks(editor);
-  const navigation = editor.getByRole('complementary', { name: '블록 목록', exact: true });
-  const back = editor.getByRole('button', { name: '블록 목록', exact: true });
-  if (await back.isVisible()) await back.click();
-  await navigation.getByRole('button', { name: `${title} 블록 선택`, exact: true }).click();
-}
 export async function startProviderConnection(page: Page) {
   const editor = page.getByTestId('connection-editor');
   await expect(editor).toBeVisible();
@@ -177,17 +142,7 @@ export async function createLibraryContent(page: Page) {
 }
 export async function revealLibraryEditor(page: Page) {
   const library = page.getByTestId('library-panel');
-  await expect(library.getByLabel('자료 이름', { exact: true })).toHaveCount(1);
-  if (await library.getByTestId('package-fields').count())
-    await selectPackageSection(page, '기본 정보');
-  await expect(library.getByLabel('자료 이름', { exact: true })).toBeVisible();
-  const sections = library.locator('summary').filter({
-    hasText: /^분류·읽기 설정$/,
-  });
-  for (const section of await sections.all()) {
-    if (!(await section.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
-      await section.click();
-  }
+  await expect(library.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
 }
 export async function selectContent(page: Page, label: string, title: string) {
   await page.getByRole('button', { name: label, exact: true }).click();
@@ -202,28 +157,13 @@ export async function selectContent(page: Page, label: string, title: string) {
     .click();
 }
 export async function createPromptChoice(request: APIRequestContext, title: string) {
-  const program: PromptProgram = {
-    version: 1,
-    controls: [
-      { id: 'detail', label: '합성 상세도', type: 'number', default: 1, min: 0, max: 3 },
-      { id: 'coNarration', label: '합성 공동 서술', type: 'boolean', default: false },
-    ],
-    blocks: [
-      {
-        id: 'instructions',
-        title: '합성 지침',
-        kind: 'message',
-        role: 'system',
-        template: [
-          { kind: 'text', text: 'Synthetic detail ' },
-          { kind: 'value', expression: { control: 'detail' } },
-          { kind: 'text', text: '; shared narration ' },
-          { kind: 'value', expression: { control: 'coNarration' } },
-        ],
-      },
-      { id: 'history', title: '대화', kind: 'history', from: 0, to: 'end' },
-    ],
-  };
+  const program = nativePrompt(
+    'Synthetic detail {{getglobalvar::toggle_detail}}; shared narration {{getglobalvar::toggle_coNarration}}',
+    {
+      customPromptTemplateToggle:
+        'detail=합성 상세도=text\ncoNarration=합성 공동 서술=select=Off,On',
+    }
+  );
   const saved = await request.post('/api/prompt-presets', {
     data: { title: `${title} prompt`, role: 'main', text: '', program },
   });
@@ -243,7 +183,7 @@ export async function createPromptChoice(request: APIRequestContext, title: stri
       role: 'main',
       owner: { kind: 'preset', id: prompt.id },
       expectedRevision: prompt.revision,
-      values: { detail: 3, coNarration: true },
+      values: { detail: '3', coNarration: '1' },
     },
   });
   expect(response.ok()).toBeTruthy();

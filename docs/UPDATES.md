@@ -8,7 +8,7 @@ Uimori has a persistent maintenance mode and an operator CLI for updating a Comp
 
 Closing maintenance blocks new writes and worker claims. In-progress work can finish and save its results; reads, login, diagnostics, cancellation, and skipping remain available. Rejected writes return `503 MAINTENANCE_CLOSED`, and the browser retains its drafts.
 
-`NR_MAINTENANCE=1` starts the app for migration and reads without recovery or workers. This boot mode cannot be reopened through the API. The implementation is in [maintenance.ts](../server/maintenance.ts) and [app.ts](../server/app.ts).
+`UIMORI_MAINTENANCE=1` starts the app for current-schema admission and reads without recovery or workers. This boot mode cannot be reopened through the API. The implementation is in [maintenance.ts](../server/maintenance.ts) and [app.ts](../server/app.ts).
 
 ## Operator CLI
 
@@ -23,7 +23,7 @@ Run the CLI on the Docker host with Node and Docker Compose available. Copy [upd
 | `appOrigin` | Exact HTTPS origin, or HTTP at `127.0.0.1`, without a trailing slash. |
 | `appService`, `drainTimeoutMs` | Optional; default to `app` and 30 minutes. |
 
-Set `NR_ACCESS_TOKEN` in the operator environment before `start`. Request keys contain 8–100 letters, digits, underscores, dots, or hyphens.
+Set `UIMORI_ACCESS_TOKEN` in the operator environment before `start`. Request keys contain 8–100 letters, digits, underscores, dots, or hyphens.
 
 ```sh
 npm run update -- start --config .local/update.json \
@@ -36,7 +36,9 @@ npm run update -- cancel --config .local/update.json --key update-2026-09-19
 
 ## Transition and recovery
 
-The controller prepares the image, closes maintenance, waits for `activeWork` to reach zero, and stops the app. It archives the entire data volume, restores it into a new volume, and starts the candidate with `NR_MAINTENANCE=1`. The candidate command checks for the app's ready event. It then changes `UIMORI_IMAGE` and `UIMORI_DATA_VOLUME` in the environment file, starts the Compose app service, checks `/api/session`, and reopens maintenance. Other environment settings, the previous volume, and the backup remain in place.
+Only empty or current schema-21 databases are supported. The controller does not upgrade old data: a copied older database fails candidate admission before writes. Preserve its volume and backups; beginning with the new native structure requires a separate empty volume, outside an in-place update. See [data formats](DATA-MIGRATIONS.md).
+
+The controller prepares the image, closes maintenance, waits for `activeWork` to reach zero, and stops the app. It archives the entire data volume, restores it into a new volume, and starts the candidate with `UIMORI_MAINTENANCE=1`. The candidate command checks for the app's ready event. It then changes `UIMORI_IMAGE` and `UIMORI_DATA_VOLUME` in the environment file, starts the Compose app service, checks `/api/session`, and reopens maintenance. Other environment settings, the previous volume, and the backup remain in place.
 
 Before the `switch` stage completes, a failure or cancellation attempts to restore the previous environment and service and reopen maintenance. After `switch` completes, automatic rollback and cancellation are disabled, including if reopening maintenance fails. Inspect the journal's stage, error, and rollback result when recovery is needed; the journal records the attempted operation rather than proving the live Docker state.
 

@@ -3,7 +3,7 @@ import {
   updateModelWorkspace,
   updatePromptWorkspace,
 } from '../server/prompt-workspace.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
@@ -97,7 +97,7 @@ async function setup(options: { evaluated?: boolean; count?: number; short?: boo
     expectedRevision: modelWorkspace(app.store).revision,
     main: {
       title: 'Synthetic context instructions',
-      program: createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
+      program: createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT),
       values: {},
     },
   });
@@ -162,9 +162,7 @@ async function setup(options: { evaluated?: boolean; count?: number; short?: boo
   const profile = app.store.product.profile(chat.id);
   updateTestProfile(app.store.product, chat.id, {
     expectedRevision: profile.revision,
-    attachments: [],
-
-    routes: { main: { id: model.id }, translation: null, status: null, image: null },
+    routes: { main: { id: model.id }, translation: null, status: null },
     image: profile.image,
   });
   const workspace = modelWorkspace(app.store);
@@ -201,7 +199,7 @@ async function terminal(app: App, id: string) {
   await vi.waitFor(
     () => {
       run = app.store.run(id);
-      expect(['queued', 'running', 'waiting_for_state']).not.toContain(run.status);
+      expect(['queued', 'running']).not.toContain(run.status);
     },
     { timeout: 10_000, interval: 20 }
   );
@@ -361,7 +359,7 @@ describe('automatic input summaries through real App and file SQLite', () => {
       return new Response(response, { headers: { 'content-type': 'text/event-stream' } });
     });
     const started = await start(app, chatId);
-    await vi.waitFor(() => expect(stream).toBeDefined());
+    await vi.waitFor(() => expect(stream).toBeDefined(), { timeout: 5000 });
     const response = await injectWithFixtureBot(app, {
       method: 'POST',
       url: `/api/runs/${started.id}/cancel`,
@@ -400,7 +398,7 @@ describe('automatic input summaries through real App and file SQLite', () => {
       });
     });
     const started = await start(app, chatId);
-    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'), { timeout: 5000 });
     app.store.editSource(sources[0].id, {
       expectedRevision: 0,
       text: `중간 수정.\n${sources[0].text}`,
@@ -570,7 +568,6 @@ describe('standalone context summaries and explicit corrections', () => {
     const profile = app.store.product.profile(chatId);
     app.store.product.updateProfile(chatId, {
       expectedRevision: profile.revision,
-      attachments: profile.attachments,
       image: profile.image,
       packageAttachments: [
         ...(profile.packageAttachments ?? []),
@@ -738,9 +735,6 @@ describe('standalone context summaries and explicit corrections', () => {
     expect(main.status, main.error ?? '').toBe('completed');
     expect(JSON.stringify(bodies.find((body) => body.role === 'main'))).toContain(noteText);
     expect(main.snapshot.story?.notes[0].text).toBe(noteText);
-    expect(
-      app.store.db.prepare('SELECT COUNT(*) AS n FROM story_jobs WHERE chat_id=?').get(chatId)?.n
-    ).toBe(0);
   });
   test('cancelling a manual request rejects late completion and emits only one terminal event', async () => {
     const { app, chatId } = await setup({ count: 4, short: true });

@@ -2,7 +2,7 @@ import {
   validateProviderPrompt,
   type PromptCompilation,
   type LogicalMessage,
-} from './prompt-program.js';
+} from './risu-prompt.js';
 import type { NativeRisuLorePosition } from './risu-native.js';
 
 type PositionedLore = {

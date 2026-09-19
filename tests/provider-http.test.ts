@@ -38,7 +38,7 @@ const connection = (variant: Variant): ProviderConnection => ({
   id: 'provider-local-test',
   protocol: variant.protocol,
   endpoint: variant.endpoint,
-  credentialEnv: 'NARRATIVE_PROVIDER_HTTP_TEST',
+  credentialEnv: 'UIMORI_PROVIDER_HTTP_TEST',
 });
 const request = (variant: Variant): ProviderRequest => ({
   role: 'main',

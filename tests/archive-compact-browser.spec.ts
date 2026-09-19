@@ -66,10 +66,10 @@ test('ACOM01 backup choices and native file selection stay compact across deskto
   }
   const jsonDownload = page.waitForEvent('download');
   await panel.getByRole('button', { name: 'JSON 내보내기', exact: true }).click();
-  expect((await jsonDownload).suggestedFilename()).toBe('narrative-archive.json');
+  expect((await jsonDownload).suggestedFilename()).toBe('uimori-archive.json');
   const sqliteDownload = page.waitForEvent('download');
   await panel.getByRole('button', { name: 'SQLite 백업 다운로드', exact: true }).click();
-  expect((await sqliteDownload).suggestedFilename()).toBe('narrative-backup.sqlite');
+  expect((await sqliteDownload).suggestedFilename()).toBe('uimori-backup.sqlite');
   expect(posts).toEqual([]);
 });
 

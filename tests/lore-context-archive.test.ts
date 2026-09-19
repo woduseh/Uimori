@@ -1,3 +1,7 @@
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import { freezeLoreContext } from '../server/lore-context.js';
+import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { writeNote } from './fixtures/notes.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
@@ -15,7 +19,6 @@ import {
 } from '../server/lore-context-archive.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { HttpError, Store } from '../server/store.js';
-import { runStoryJob } from '../server/story-runner.js';
 
 const owned: { store: Store; dir: string }[] = [];
 beforeEach(() => {
@@ -44,25 +47,22 @@ function database() {
 }
 function createLoreChat(store: Store, title: string) {
   const input = fixtureBotInput(title);
-  input.package.lore = syntheticResources('fixture')
-    .filter((resource) => resource.kind === 'lore')
-    .map((resource) => ({
-      id: resource.id.slice('fixture:'.length),
-      title: resource.title,
-      description: resource.description,
-      text: resource.text,
-      loading: 'discoverable' as const,
-    }));
+  input.package.nativeRisu.card.character_book = {
+    entries: syntheticResources('fixture')
+      .filter((resource) => resource.kind === 'lore')
+      .map((resource) => ({ name: resource.title, content: resource.text })),
+  };
+  input.package.loreActivation = { mode: 'discoverable' };
   const bot = store.product.content(input);
   const chat = createFixtureChat(store, title, 'calm', { botId: bot.id });
   const resources = store.product.resources(chat.id, store.product.snapshot(chat.id));
-  return { chat, id: resources.find((resource) => resource.id.endsWith(':harbor'))!.id };
+  return { chat, id: resources.find((resource) => resource.id.endsWith(':lore-0'))!.id };
 }
-function queued(store: Store, chatId: string, options: { loreContextReset?: boolean } = {}) {
+async function queued(store: Store, chatId: string, options: { loreContextReset?: boolean } = {}) {
   const chat = store.chat(chatId),
     profile = store.product.snapshot(chatId),
     request = 'Synthetic request ' + randomUUID();
-  return store.createRun(
+  const run = store.createRun(
     chatId,
     {
       request,
@@ -82,14 +82,19 @@ function queued(store: Store, chatId: string, options: { loreContextReset?: bool
       ...(profile ? { profile } : {}),
     })
   ).run;
+  const snapshot = compileSnapshotPrompt(
+    freezeLoreContext(store, await prepareNativeRisuRun(run.snapshot))
+  );
+  store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(snapshot), run.id);
+  return store.run(run.id);
 }
-function complete(
+async function complete(
   store: Store,
   chatId: string,
   reads: { id: string; offset: number; limit: number }[] = [],
   text = 'Synthetic exact source.'
 ) {
-  const run = queued(store, chatId);
+  const run = await queued(store, chatId);
   store.startRun(run.id);
   for (const [index, args] of reads.entries())
     store.tool(
@@ -104,21 +109,21 @@ function complete(
   );
   return store.run(source.runId);
 }
-function fixture(store = database()) {
+async function fixture(store = database()) {
   const { chat, id } = createLoreChat(store, 'Synthetic lore archive');
-  const first = complete(
+  const first = await complete(
     store,
     chat.id,
     [{ id, offset: 0, limit: 30 }],
     'The first synthetic source.'
   );
-  const second = complete(
+  const second = await complete(
     store,
     chat.id,
     [{ id, offset: 20, limit: 30 }],
     'The second synthetic source.'
   );
-  const third = complete(store, chat.id, [], 'The third synthetic source.');
+  const third = await complete(store, chat.id, [], 'The third synthetic source.');
   expect(third.snapshot.loreContext!.entries.map((entry) => [entry.start, entry.end])).toEqual([
     [0, 30],
     [30, 50],
@@ -137,13 +142,7 @@ function standalone(store: Store, chatId: string) {
       archive.tables.sources.filter((row) => row.chat_id === chatId).map((row) => row.id)
     );
   for (const [name, rows] of Object.entries(archive.tables)) {
-    if (
-      name === 'versions' ||
-      name === 'prompt_workspace' ||
-      name === 'package_behavior_entropy' ||
-      name.startsWith('library_')
-    )
-      continue;
+    if (name === 'versions' || name === 'prompt_workspace' || name.startsWith('library_')) continue;
     archive.tables[name] = rows.filter((row) =>
       Object.hasOwn(row, 'chat_id')
         ? row.chat_id === chatId
@@ -174,8 +173,8 @@ function tamperRun(
   );
 }
 
-test('a fork preserves verified ranges and mapped provenance with no copied execution log; its archive works without the original chat', () => {
-  const f = fixture(),
+test('a fork preserves verified ranges and mapped provenance with no copied execution log; its archive works without the original chat', async () => {
+  const f = await fixture(),
     original = structuredClone(f.third.snapshot);
   const copy = forkChat(f.store, f.chat.id, {
     fromRevision: f.third.sourceRevision,
@@ -212,7 +211,7 @@ test('a fork preserves verified ranges and mapped provenance with no copied exec
     chats: 1,
   });
   expect(restored.detail(copy.id).sources).toHaveLength(3);
-  const next = complete(restored, copy.id);
+  const next = await complete(restored, copy.id);
   expect(next.snapshot.loreContext!.entries).toEqual(copiedThird.snapshot.loreContext!.entries);
   expect(next.snapshot.loreContext!.stats.retainedChars).toBe(50);
   const copiedAgain = forkChat(restored, copy.id, {
@@ -224,15 +223,17 @@ test('a fork preserves verified ranges and mapped provenance with no copied exec
     restored: true,
     chats: 1,
   });
-  expect(complete(independent, copiedAgain.id).snapshot.loreContext!.stats.retainedChars).toBe(50);
+  expect(
+    (await complete(independent, copiedAgain.id)).snapshot.loreContext!.stats.retainedChars
+  ).toBe(50);
 });
 
-test('a batch read retains individual successful ranges across standalone fork and archive restore', () => {
+test('a batch read retains individual successful ranges across standalone fork and archive restore', async () => {
   const store = database(),
     { chat, id } = createLoreChat(store, 'Synthetic batch lore'),
-    run = queued(store, chat.id);
+    run = await queued(store, chat.id);
   store.startRun(run.id);
-  const otherId = run.snapshot.resources.find((entry) => entry.id.endsWith(':observatory'))!.id;
+  const otherId = run.snapshot.resources.find((entry) => entry.id.endsWith(':lore-1'))!.id;
   store.tool(
     run.id,
     executeTool(run.snapshot, {
@@ -257,7 +258,7 @@ test('a batch read retains individual successful ranges across standalone fork a
     [id, 2, 14, 'batch-read'],
     [otherId, 2, 14, 'batch-read'],
   ]);
-  const next = complete(store, chat.id);
+  const next = await complete(store, chat.id);
   expect(next.snapshot.loreContext!.entries.map((entry) => entry.id)).toEqual([id, otherId]);
   const copy = forkChat(store, chat.id, {
     fromRevision: next.sourceRevision,
@@ -265,7 +266,7 @@ test('a batch read retains individual successful ranges across standalone fork a
   });
   const restored = database();
   expect(restored.product.import(standalone(store, copy.id)).restored).toBe(true);
-  const continued = complete(restored, copy.id);
+  const continued = await complete(restored, copy.id);
   expect(
     continued.snapshot.loreContext!.entries.map((entry) => [entry.id, entry.start, entry.end])
   ).toEqual([
@@ -274,8 +275,8 @@ test('a batch read retains individual successful ranges across standalone fork a
   ]);
 });
 
-test('archive rejects snapshot-only read, range, source and recency forgeries and rolls back all imported rows', () => {
-  const f = fixture();
+test('archive rejects snapshot-only read, range, source and recency forgeries and rolls back all imported rows', async () => {
+  const f = await fixture();
   const changes: ((snapshot: RunSnapshot) => void)[] = [
     (snapshot) => {
       snapshot.loreContext!.entries[0].origin.callId = 'never-called';
@@ -295,7 +296,7 @@ test('archive rejects snapshot-only read, range, source and recency forgeries an
     },
     (snapshot) => {
       const entry = snapshot.loreContext!.entries[0],
-        resource = snapshot.resources.find((item) => item.id.endsWith(':observatory'))!;
+        resource = snapshot.resources.find((item) => item.id.endsWith(':lore-1'))!;
       Object.assign(entry, {
         id: resource.id,
         revision: resource.revision,
@@ -314,11 +315,11 @@ test('archive rejects snapshot-only read, range, source and recency forgeries an
   }
 });
 
-test('archive cannot resurrect an ancestor read after the immediate parent reset and performed no new read', () => {
+test('archive cannot resurrect an ancestor read after the immediate parent reset and performed no new read', async () => {
   const store = database();
   const { chat, id } = createLoreChat(store, 'Synthetic reset transition');
-  const first = complete(store, chat.id, [{ id, offset: 0, limit: 30 }]);
-  const reset = queued(store, chat.id, { loreContextReset: true });
+  const first = await complete(store, chat.id, [{ id, offset: 0, limit: 30 }]);
+  const reset = await queued(store, chat.id, { loreContextReset: true });
   store.startRun(reset.id);
   store.completeRun(
     reset.id,
@@ -326,7 +327,7 @@ test('archive cannot resurrect an ancestor read after the immediate parent reset
     { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
     reset.snapshot.settings
   );
-  const next = complete(store, chat.id);
+  const next = await complete(store, chat.id);
   expect(next.snapshot.loreContext!.entries).toEqual([]);
   const archive = store.product.export();
   tamperRun(archive, next.id, (snapshot) => {
@@ -345,14 +346,27 @@ test('archive cannot resurrect an ancestor read after the immediate parent reset
   expect(target.product.export().tables).toEqual(before);
 });
 
-test('archive cannot resurrect an evicted read when a later policy provides more capacity', () => {
+test('archive cannot resurrect an evicted read when a later policy provides more capacity', async () => {
   const store = database(),
     chat = createFixtureChat(store, 'Synthetic eviction transition');
   const a = store.product.content({
     kind: 'module',
     title: 'Synthetic first lore',
     description: '',
-    text: 'A synthetic first reference has several characters.',
+    text: '',
+    package: {
+      ...nativeContent(
+        {
+          name: 'Synthetic first lore',
+          character_book: {
+            entries: [{ content: 'A synthetic first reference has several characters.' }],
+          },
+        },
+        {},
+        'module'
+      ),
+      loreActivation: { mode: 'discoverable' },
+    },
     loading: 'discoverable',
     relatedIds: [],
   });
@@ -360,12 +374,26 @@ test('archive cannot resurrect an evicted read when a later policy provides more
     kind: 'module',
     title: 'Synthetic second lore',
     description: '',
-    text: 'A synthetic second reference has several characters.',
+    text: '',
+    package: {
+      ...nativeContent(
+        {
+          name: 'Synthetic second lore',
+          character_book: {
+            entries: [{ content: 'A synthetic second reference has several characters.' }],
+          },
+        },
+        {},
+        'module'
+      ),
+      loreActivation: { mode: 'discoverable' },
+    },
     loading: 'discoverable',
     relatedIds: [],
   });
   const { chatId: _chatId, revision, ...body } = store.product.profile(chat.id);
   const policy = {
+    ...DEFAULT_LORE_CONTEXT,
     enabled: true,
     maxRetainedChars: 1000,
     maxRetainedEntries: 1,
@@ -374,17 +402,24 @@ test('archive cannot resurrect an evicted read when a later policy provides more
   updateTestProfile(store.product, chat.id, {
     ...body,
     expectedRevision: revision,
-    attachments: [
-      { id: a.id, revision: a.revision },
-      { id: b.id, revision: b.revision },
+    packageAttachments: [
+      ...body.packageAttachments!,
+      { id: a.id, revision: a.revision, role: 'module' },
+      { id: b.id, revision: b.revision, role: 'module' },
     ],
     loreContext: policy,
   });
-  complete(store, chat.id, [{ id: a.id, offset: 0, limit: 20 }]);
-  const second = complete(store, chat.id, [{ id: b.id, offset: 0, limit: 20 }]),
+  await complete(store, chat.id, [
+    { id: `package:${a.id}:module:lore:lore-0`, offset: 0, limit: 20 },
+  ]);
+  const second = await complete(store, chat.id, [
+      { id: `package:${b.id}:module:lore:lore-0`, offset: 0, limit: 20 },
+    ]),
     firstEntry = structuredClone(second.snapshot.loreContext!.entries[0]);
-  const evicted = complete(store, chat.id);
-  expect(evicted.snapshot.loreContext!.entries.map((entry) => entry.id)).toEqual([b.id]);
+  const evicted = await complete(store, chat.id);
+  expect(evicted.snapshot.loreContext!.entries.map((entry) => entry.id)).toEqual([
+    `package:${b.id}:module:lore:lore-0`,
+  ]);
   expect(evicted.snapshot.loreContext!.stats.reasons).toContain('retention-budget');
   const {
     chatId: _sameChatId,
@@ -396,8 +431,10 @@ test('archive cannot resurrect an evicted read when a later policy provides more
     expectedRevision: currentRevision,
     loreContext: { ...policy, maxRetainedEntries: 2 },
   });
-  const next = complete(store, chat.id);
-  expect(next.snapshot.loreContext!.entries.map((entry) => entry.id)).toEqual([b.id]);
+  const next = await complete(store, chat.id);
+  expect(next.snapshot.loreContext!.entries.map((entry) => entry.id)).toEqual([
+    `package:${b.id}:module:lore:lore-0`,
+  ]);
   const archive = store.product.export();
   tamperRun(archive, next.id, (snapshot) => {
     snapshot.loreContext!.entries.unshift(firstEntry);
@@ -415,8 +452,8 @@ test('archive cannot resurrect an evicted read when a later policy provides more
   expect(target.product.export().tables).toEqual(before);
 });
 
-test('a later context budget may keep whole ordered entries but cannot reorder or falsify their last use', () => {
-  const f = fixture();
+test('a later context budget may keep whole ordered entries but cannot reorder or falsify their last use', async () => {
+  const f = await fixture();
   const trimmed = f.store.product.export();
   tamperRun(trimmed, f.third.id, (snapshot) => {
     snapshot.loreContext!.entries = snapshot.loreContext!.entries.slice(1);
@@ -429,7 +466,7 @@ test('a later context budget may keep whole ordered entries but cannot reorder o
   const target = database();
   expect(target.product.import(trimmed).restored).toBe(true);
   expect(
-    complete(target, f.chat.id).snapshot.loreContext!.entries.map((entry) => [
+    (await complete(target, f.chat.id)).snapshot.loreContext!.entries.map((entry) => [
       entry.start,
       entry.end,
     ])
@@ -452,8 +489,8 @@ test('a later context budget may keep whole ordered entries but cannot reorder o
   }
 });
 
-test('fork receipts reject invented ownership, range and use as an ordinary run receipt', () => {
-  const f = fixture(),
+test('fork receipts reject invented ownership, range and use as an ordinary run receipt', async () => {
+  const f = await fixture(),
     copy = forkChat(f.store, f.chat.id, {
       fromRevision: f.third.sourceRevision,
       idempotencyKey: 'forged-fork',
@@ -489,8 +526,8 @@ test('fork receipts reject invented ownership, range and use as an ordinary run 
   }
 });
 
-test('source edits preserve historical archive proof but invalidate inherited reads in a standalone fork continuation', () => {
-  const f = fixture(),
+test('source edits preserve historical archive proof but invalidate inherited reads in a standalone fork continuation', async () => {
+  const f = await fixture(),
     historical = structuredClone(f.third.snapshot);
   f.store.editSource(f.first.sourceRevision!, {
     expectedRevision: 0,
@@ -511,21 +548,21 @@ test('source edits preserve historical archive proof but invalidate inherited re
     restored: true,
     chats: 1,
   });
-  const next = complete(restored, copy.id);
+  const next = await complete(restored, copy.id);
   expect(next.snapshot.loreContext!.entries).toEqual([]);
   expect(next.snapshot.loreContext!.stats.reasons).toContain('source-or-canon-changed');
   expect(f.store.run(f.third.id).snapshot).toEqual(historical);
 });
 
-test('authored canon identities remap for a fresh fork, while a later retcon cannot revive past reads', () => {
+test('authored canon identities remap for a fresh fork, while a later retcon cannot revive past reads', async () => {
   const store = database();
   const { chat, id } = createLoreChat(store, 'Synthetic canon scope');
   const declaration = writeNote(store, chat.id, {
     text: 'The synthetic beacon is blue.',
     author: 'Synthetic author',
   });
-  complete(store, chat.id, [{ id, offset: 0, limit: 30 }]);
-  const second = complete(store, chat.id);
+  await complete(store, chat.id, [{ id, offset: 0, limit: 30 }]);
+  const second = await complete(store, chat.id);
   const copy = forkChat(store, chat.id, {
     fromRevision: second.sourceRevision,
     idempotencyKey: 'canon-fork',
@@ -536,7 +573,7 @@ test('authored canon identities remap for a fresh fork, while a later retcon can
   );
   const restored = database();
   restored.product.import(standalone(store, copy.id));
-  expect(complete(restored, copy.id).snapshot.loreContext!.stats.retainedChars).toBe(30);
+  expect((await complete(restored, copy.id)).snapshot.loreContext!.stats.retainedChars).toBe(30);
   writeNote(
     store,
     chat.id,
@@ -549,11 +586,11 @@ test('authored canon identities remap for a fresh fork, while a later retcon can
   });
   const retconTarget = database();
   retconTarget.product.import(standalone(store, afterRetcon.id));
-  expect(complete(retconTarget, afterRetcon.id).snapshot.loreContext!.entries).toEqual([]);
+  expect((await complete(retconTarget, afterRetcon.id)).snapshot.loreContext!.entries).toEqual([]);
 });
 
-test('a changed canon at the root keeps historical fork contexts invalid instead of stamping them with current canon', () => {
-  const f = fixture(),
+test('a changed canon at the root keeps historical fork contexts invalid instead of stamping them with current canon', async () => {
+  const f = await fixture(),
     oldCanon = f.third.snapshot.loreContext!.canonHash;
   const root = f.store.product.createBranch(f.chat.id, {
     title: 'Synthetic retcon root',
@@ -575,107 +612,5 @@ test('a changed canon at the root keeps historical fork contexts invalid instead
   );
   const restored = database();
   restored.product.import(standalone(f.store, copy.id));
-  expect(complete(restored, copy.id).snapshot.loreContext!.entries).toEqual([]);
-});
-
-test('an authoritative state wait resumes with the same retained read provenance before compiling the main prompt', async () => {
-  const store = database();
-  const { chat, id } = createLoreChat(store, 'Synthetic waiting lore');
-  store.story.saveConfig(chat.id, {
-    expectedRevision: 0,
-    module: {
-      id: 'synthetic-coins',
-      revision: 1,
-      name: 'Synthetic coins',
-      mode: 'authoritative',
-      fields: { coins: { type: 'number', initial: 10, min: 0, max: 100 } },
-      rules: {},
-    },
-    stateModel: null,
-  });
-  const first = complete(store, chat.id, [{ id, offset: 0, limit: 30 }]);
-  const waiting = queued(store, chat.id);
-  expect(waiting.status).toBe('waiting_for_state');
-  expect(waiting.snapshot.promptCompilation).toBeUndefined();
-  expect(waiting.snapshot.loreContext!.stats.retainedChars).toBe(30);
-  const job = store.story
-    .detail(chat.id)
-    .jobs.find((item) => item.sourceRevision === first.sourceRevision && item.kind === 'state')!;
-  const claim = store.story.claim(job.id, 'synthetic-lore-worker')!;
-  const result = await runStoryJob(store.story.bundle(job.id), {
-    signal: new AbortController().signal,
-    approvedOrigins: [],
-    authorize: (connection) => connection,
-    onAttemptStart: () => {
-      throw new Error('No real provider attempt allowed');
-    },
-    onAttemptFinish: () => {},
-    onInput: () => {},
-    onToolEvent: () => {},
-  });
-  expect(result.status).toBe('completed');
-  store.story.finish(job.id, claim.generation, 'synthetic-lore-worker', result);
-  expect(store.story.resumeWaiting()).toEqual([waiting.id]);
-  const resumed = store.run(waiting.id);
-  expect(resumed.snapshot.loreContext).toEqual(waiting.snapshot.loreContext);
-  expect(resumed.snapshot.promptCompilation).toBeDefined();
-  expect(JSON.stringify(resumed.snapshot.promptCompilation)).toContain(
-    'Previously read reference data'
-  );
-  const restored = database();
-  expect(restored.product.import(store.product.export()).restored).toBe(true);
-  expect(restored.run(waiting.id).status).toBe('interrupted');
-  store.startRun(resumed.id);
-  const second = store.completeRun(
-    resumed.id,
-    'Synthetic source after state wait.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    resumed.snapshot.settings
-  );
-  const secondJob = store.story
-      .detail(chat.id)
-      .jobs.find((item) => item.sourceRevision === second.id && item.kind === 'state')!,
-    secondClaim = store.story.claim(secondJob.id, 'synthetic-lore-worker')!;
-  const secondResult = await runStoryJob(store.story.bundle(secondJob.id), {
-    signal: new AbortController().signal,
-    approvedOrigins: [],
-    authorize: (connection) => connection,
-    onAttemptStart: () => {
-      throw new Error('No real provider attempt allowed');
-    },
-    onAttemptFinish: () => {},
-    onInput: () => {},
-    onToolEvent: () => {},
-  });
-  expect(secondResult.status).toBe('completed');
-  store.story.finish(secondJob.id, secondClaim.generation, 'synthetic-lore-worker', secondResult);
-  const copy = forkChat(store, chat.id, {
-      fromRevision: second.id,
-      idempotencyKey: 'copy-state-lore',
-    }),
-    copyMain = store.run(store.sourceOriginal(copy.headRevision!).runId);
-  const copyJob = store.story
-      .detail(copy.id)
-      .jobs.find((item) => item.sourceRevision === copy.headRevision && item.kind === 'state')!,
-    jobSnapshot = store.story.bundle(copyJob.id).snapshot;
-  for (const field of [
-    'loreContext',
-    'loreContextReset',
-    'forkedLoreReads',
-    'logicalHistory',
-    'promptCompilation',
-  ] as const)
-    expect(jobSnapshot[field]).toEqual(copyMain.snapshot[field]);
-  const metadata = JSON.stringify([
-    jobSnapshot.loreContext,
-    jobSnapshot.forkedLoreReads,
-    jobSnapshot.logicalHistory,
-    jobSnapshot.promptCompilation,
-  ]);
-  expect(metadata).not.toContain(chat.id);
-  expect(metadata).not.toContain(first.sourceRevision!);
-  expect(metadata).not.toContain(first.id);
-  expect(metadata).not.toContain(second.id);
-  const independent = database();
-  expect(independent.product.import(standalone(store, copy.id)).restored).toBe(true);
+  expect((await complete(restored, copy.id)).snapshot.loreContext!.entries).toEqual([]);
 });

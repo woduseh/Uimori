@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { ContentPackage } from '../core/content-package.js';
+import type { RisuContent } from '../core/risu-content.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { Dialog } from './Dialog.js';
@@ -12,8 +12,8 @@ export function PackagePortraitEditor({
   onDirtyChange,
   disabled = false,
 }: {
-  value: ContentPackage;
-  onChange: (value: ContentPackage) => void;
+  value: RisuContent;
+  onChange: (value: RisuContent) => void;
   onDirtyChange?: (dirty: boolean) => void;
   disabled?: boolean;
 }) {
@@ -45,7 +45,7 @@ export function PackagePortraitEditor({
     };
   }, [scope]);
 
-  const update = (next: ContentPackage) => {
+  const update = (next: RisuContent) => {
     latest.current.value = next;
     latest.current.onChange(next);
   };
@@ -239,6 +239,7 @@ export function PackagePortraitEditor({
                   revision: value.revision,
                   title: image.title,
                   kind: 'module',
+                  package: value,
                   description: '',
                   text: '',
                   loading: 'pinned',

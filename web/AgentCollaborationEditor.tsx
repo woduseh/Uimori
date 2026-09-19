@@ -9,7 +9,7 @@ import {
   type AgentDefinition,
 } from '../core/agent-collaboration.js';
 import type { ModelPreset } from '../core/product.js';
-import type { PromptControl } from '../core/prompt-program.js';
+import type { PromptControl } from '../core/risu-prompt.js';
 import { Dialog } from './Dialog.js';
 import './agent-collaboration.css';
 

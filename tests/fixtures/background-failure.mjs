@@ -16,21 +16,9 @@ try {
     kind: 'bot',
     title,
     description: 'Synthetic',
-    text: '',
+    text: 'Synthetic background fixture.',
     loading: 'pinned',
     relatedIds: [],
-    package: {
-      version: 1,
-      id: 'background-failure',
-      revision: 1,
-      title,
-      description: 'Synthetic',
-      body: '',
-      lore: [],
-      instructions: [],
-      controls: [],
-      transforms: [],
-    },
   });
   const chat = app.store.createChat(title, 'calm', { botId: owner.id });
   // Exercise the host's real task tracking when both work and terminal storage

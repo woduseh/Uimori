@@ -8,7 +8,7 @@ export type FailurePoint =
   | 'state'
   | 'illustration';
 
-/** Explicit deterministic controls. Never registered outside NR_TEST_MODE. */
+/** Explicit deterministic controls. Never registered outside UIMORI_TEST_MODE. */
 export class Controls {
   readonly held = new Set<Barrier>();
   readonly failures = new Set<FailurePoint>();

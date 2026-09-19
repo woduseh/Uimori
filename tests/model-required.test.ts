@@ -5,6 +5,7 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { prepareNativeFixtureRun } from './fixtures/native-run.js';
 
 let app: App | undefined;
 let directory: string | undefined;
@@ -77,6 +78,7 @@ test('normal translation and candidate requests with no model roll back without 
       profile: store.product.snapshot(current.id),
     })
   );
+  await prepareNativeFixtureRun(store, run);
   store.startRun(run.id);
   const source = store.completeRun(
     run.id,

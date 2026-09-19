@@ -1,11 +1,9 @@
 import { createHash } from 'node:crypto';
-import type { SourceSegmentPolicy } from './source-segments.js';
 
 export type SourceHistoryItem = {
   revision: string;
   text: string;
   contentHash?: string;
-  sourceSegments?: SourceSegmentPolicy;
 };
 /** Exact ordered original-source ancestry, supplied by the host. */
 export type SourceScope = { chatId: string; history: readonly SourceHistoryItem[] };

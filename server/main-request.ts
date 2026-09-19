@@ -7,7 +7,6 @@ import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { nativeRisuPresetPending } from './risu-native-preset.js';
 import { nativeRisuPending } from './risu-native-run.js';
 import { attachMainHostContext, requestInput } from './main-host-context.js';
-import { hasPromptInputTransforms, validatePromptInputTransforms } from './prompt-transforms.js';
 import { buildMainInput, CATALOG_READ_GUIDANCE, type MainInput } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
@@ -24,7 +23,6 @@ import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
 import { buildCodexDescriptor } from '../core/codex-protocol.js';
-import { admitBehaviorTools, listBehaviorTools } from '../core/package-behavior-tools.js';
 import {
   CONTEXT_TOOL_NAMES,
   CONTEXT_TOOLS,
@@ -113,7 +111,6 @@ export function buildMainProviderRequest(
   snapshot: RunSnapshot,
   options: {
     /** Per-request suppression after an add-on error; never changes the frozen Run. */
-    disabledBehaviorTools?: readonly string[];
     results?: readonly ToolEvent[];
     opaqueState?: Json;
     evaluation?: {
@@ -131,18 +128,7 @@ export function buildMainProviderRequest(
   if (nativeRisuPending(snapshot)) throw new ProviderContractError('RISU_NATIVE_EXECUTION_PENDING');
   if (nativeRisuPresetPending(snapshot))
     throw new ProviderContractError('RISU_NATIVE_PRESET_PENDING');
-  if (hasPromptInputTransforms(snapshot)) {
-    if (
-      !snapshot.promptInputTransforms ||
-      snapshot.promptCompilation?.warnings.includes('PROMPT_INPUT_TRANSFORMS_PENDING')
-    )
-      throw new ProviderContractError('PROMPT_INPUT_TRANSFORMS_PENDING');
-    validatePromptInputTransforms(snapshot);
-  }
-  snapshot = admitBehaviorTools(snapshot);
-  const behaviorTools = listBehaviorTools(snapshot).filter(
-    (binding) => !options.disabledBehaviorTools?.includes(binding.tool.name)
-  );
+
   const fixed = attachMainHostContext(
       snapshot.promptCompilation ? snapshot : compileSnapshotPrompt(snapshot)
     ),
@@ -152,8 +138,7 @@ export function buildMainProviderRequest(
       compilerVersion: fixed.promptCompilation?.compilerVersion,
     }),
     terminal = storySubmissionEnabled(fixed);
-  if (options.disabledBehaviorTools?.length)
-    input.tools = input.tools.filter((name) => !options.disabledBehaviorTools!.includes(name));
+
   const collaboration = fixed.profile?.promptPresets?.main?.program.collaboration;
   const agentTools: ProviderTool[] = collaboration?.enabled
     ? [
@@ -252,7 +237,6 @@ export function buildMainProviderRequest(
         ...MAIN_READ_TOOLS.filter((tool) => input.tools.includes(tool.name)).map((tool) =>
           structuredClone(tool)
         ),
-        ...behaviorTools.map((binding) => binding.tool),
         ...agentTools,
         ...(terminal ? [structuredClone(STORY_SUBMIT_TOOL)] : []),
         ...(options.evaluation?.definitions.map((tool) => structuredClone(tool)) ?? []),

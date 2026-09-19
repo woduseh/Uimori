@@ -7,6 +7,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { Store } from '../server/store.js';
 import { readHelperChatContext } from '../server/helper-context.js';
 import { helperWritingSnapshot } from '../server/helper-runtime.js';
+import { prepareNativeRisuReadOnly } from '../server/risu-native-readonly.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import {
   contextSourceRefs,
@@ -17,7 +18,7 @@ import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { store: Store; directory: string }[] = [];
 const largeChars = 32768;
-const benchmark = process.env.NR_CONTEXT_READ_BENCHMARK === '1';
+const benchmark = process.env.UIMORI_CONTEXT_READ_BENCHMARK === '1';
 afterEach(() => {
   vi.restoreAllMocks();
   for (const { store, directory } of owned.splice(0)) {
@@ -29,7 +30,7 @@ afterEach(() => {
   }
 });
 
-function fixture() {
+async function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-context-read-')),
     store = new Store(join(directory, 'synthetic.sqlite'));
   owned.push({ store, directory });
@@ -83,7 +84,10 @@ function fixture() {
       run.snapshot.settings
     );
   }
-  const snapshot = helperWritingSnapshot(store, chat.id, branch.id, 'context');
+  const snapshot = await prepareNativeRisuReadOnly(
+    helperWritingSnapshot(store, chat.id, branch.id, 'context'),
+    'context'
+  );
   const saved = store.context.edit(
     chat.id,
     {
@@ -100,8 +104,11 @@ function fixture() {
   const read = () => readHelperChatContext(store, chat.id, branch.id);
   // Populate complete validated candidates and cancelled jobs outside all measured regions.
   // They never activate, so the current model-visible state remains identical as history grows.
-  function addHistory(count: number, jobs: number) {
-    const current = helperWritingSnapshot(store, chat.id, branch.id, 'context');
+  async function addHistory(count: number, jobs: number) {
+    const current = await prepareNativeRisuReadOnly(
+      helperWritingSnapshot(store, chat.id, branch.id, 'context'),
+      'context'
+    );
     store.transaction(() => {
       while (historyCount < count) {
         const summary = `Historical candidate ${historyCount}. `.padEnd(largeChars, 'x');
@@ -177,7 +184,7 @@ function legacyRead<T>(store: Store, action: () => T): T {
   }
 }
 
-function measureReads(f: ReturnType<typeof fixture>, before: unknown, after: unknown) {
+function measureReads(f: Awaited<ReturnType<typeof fixture>>, before: unknown, after: unknown) {
   const warmupRounds = 3,
     sampleCount = 9,
     readsPerSample = 10;
@@ -260,8 +267,8 @@ function measureReads(f: ReturnType<typeof fixture>, before: unknown, after: unk
   console.log(`Context read measurements: ${join(directory, 'context-read.json')}`);
 }
 
-test('helper reads decode one active checkpoint as large history grows while UI detail retains history and jobs', () => {
-  const f = fixture(),
+test('helper reads decode one active checkpoint as large history grows while UI detail retains history and jobs', async () => {
+  const f = await fixture(),
     baseline = decodedRead(f.store, f.read);
   expect(baseline.result.usable).toBe(true);
   expect(baseline.decoded).toMatchObject({ checkpointPlans: 1, jobSnapshots: 0 });
@@ -269,7 +276,7 @@ test('helper reads decode one active checkpoint as large history grows while UI 
     [10, 5],
     [100, 50],
   ]) {
-    f.addHistory(candidates!, jobs!);
+    await f.addHistory(candidates!, jobs!);
     const current = decodedRead(f.store, f.read);
     expect(current).toEqual(baseline);
   }
@@ -284,8 +291,8 @@ test('helper reads decode one active checkpoint as large history grows while UI 
   if (benchmark) measureReads(f, old.decoded, baseline.decoded);
 });
 
-test('active-only reads recheck current notes and preserve active checkpoint hash validation', () => {
-  const f = fixture(),
+test('active-only reads recheck current notes and preserve active checkpoint hash validation', async () => {
+  const f = await fixture(),
     before = f.read();
   f.store.story.notes.write(f.chatId, {
     branchId: f.branchId,

@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { Content } from '../../core/product.js';
 import type { Settings } from '../../core/types.js';
 import type { Store } from '../../server/store.js';
-import type { ContentPackage } from '../../core/content-package.js';
+import { nativeContent } from './native-content.js';
 import type { FastifyInstance } from 'fastify';
 import type { InjectOptions } from 'light-my-request';
 import type { APIRequestContext } from '@playwright/test';
@@ -16,18 +16,10 @@ export function fixtureBotInput(title = 'Synthetic fixture owner', body = '') {
     text: body,
     loading: 'pinned' as const,
     relatedIds: [],
-    package: {
-      version: 1 as const,
-      id: 'fixture-owner',
-      revision: 1,
-      title,
-      description: 'Synthetic test data',
-      body,
-      lore: [],
-      instructions: [],
-      controls: [],
-      transforms: [],
-    } as ContentPackage,
+    package: nativeContent(
+      { name: title, creator_notes: 'Synthetic test data', description: body },
+      { id: 'fixture-owner' }
+    ),
   };
 }
 

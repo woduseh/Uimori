@@ -1,19 +1,21 @@
+import { prepareNativeFixtureRun } from './fixtures/native-run.js';
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { Store } from '../server/store.js';
-import { DATABASE_SCHEMA_VERSION } from '../server/schema-migrations.js';
+import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { ProductStore } from '../server/product-store.js';
 import { buildMainInput } from '../core/provider.js';
 import type { ChatProfile, Connection, Content, ModelPreset } from '../core/product.js';
 import type { Chat, ChatDetail, Job, Run, RunSnapshot, Usage } from '../core/types.js';
 import { runMain } from '../server/model-runner.js';
-import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import type { ProviderResult } from '../core/transport.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { createApp } from '../server/app.js';
@@ -21,6 +23,8 @@ import { translationFixtureSlot } from './fixtures/translation-job.js';
 
 const owned: { directory: string; store?: Store; close?: () => Promise<void> }[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   for (const item of owned.splice(0).reverse()) {
     await item.close?.();
     item.store?.close();
@@ -60,6 +64,17 @@ const contentBody = (
   text,
   loading,
   relatedIds: [],
+  package: nativeContent({
+    name: `${kind} fixture`,
+    description: loading === 'pinned' ? text : '',
+    ...(loading === 'discoverable'
+      ? {
+          character_book: {
+            entries: [{ uid: 1, name: 'Optional lore', content: text, constant: false }],
+          },
+        }
+      : {}),
+  }),
 });
 const noUsage: Usage = { modelCalls: 1, inputTokens: null, outputTokens: null, costUsd: null };
 function profile(
@@ -71,7 +86,15 @@ function profile(
   const prior = product.profile(chat.id);
   return updateTestProfile(product, chat.id, {
     expectedRevision: prior.revision,
-    attachments,
+    packageAttachments: [
+      ...(prior.packageAttachments ?? []).filter((ref) => ref.role === 'bot'),
+      ...attachments
+        .filter(
+          (ref) =>
+            !prior.packageAttachments?.some((owner) => owner.role === 'bot' && owner.id === ref.id)
+        )
+        .map((ref) => ({ ...ref, role: product.get<Content>('content', ref.id).kind })),
+    ],
 
     routes: prior.routes,
     image: prior.image,
@@ -153,9 +176,9 @@ describe('M1 product data with actual file SQLite', () => {
     ) as Content;
     const persona = product.content(contentBody('persona', 'SELECTED_READER_PERSONA')) as Content;
     const first = profile(product, chat, [canon, lore, persona].map(reference));
-    const applied = profile(product, chat, first.attachments);
+    const applied = profile(product, chat, first.packageAttachments!);
     expect(applied).not.toHaveProperty('personaReference');
-    expect(applied.attachments).toEqual(first.attachments);
+    expect(applied.packageAttachments!).toEqual(first.packageAttachments!);
     expect(applied.routes).toEqual(first.routes);
     const run = queuedRun(store, product, chat.id);
     const oldSnapshot = structuredClone(run.snapshot);
@@ -169,22 +192,29 @@ describe('M1 product data with actual file SQLite', () => {
     expect(edited.revision).toBe(2);
     profile(product, chat, [canon, edited, persona].map(reference));
     expect(store.run(run.id).snapshot).toEqual(oldSnapshot);
-    expect(store.run(run.id).snapshot.resources.find((item) => item.id === lore.id)?.text).toBe(
-      'UNREAD_LORE_V1'
-    );
-    expect(product.get<Content>('content', lore.id, 1).text).toBe('UNREAD_LORE_V1');
-    expect(product.snapshot(chat.id)?.contents.find((item) => item.id === lore.id)?.text).toBe(
-      'EDITED_LORE_V2'
-    );
+    expect(
+      store
+        .run(run.id)
+        .snapshot.resources.find((item) => item.id === `package:${lore.id}:module:lore:lore-0`)
+        ?.text
+    ).toBe('UNREAD_LORE_V1');
+    expect(product.get<Content>('content', lore.id, 1).package.lore[0].text).toBe('UNREAD_LORE_V1');
+    expect(
+      product.snapshot(chat.id)?.packages?.find((item) => item.id === lore.id)?.lore[0].text
+    ).toBe('EDITED_LORE_V2');
     const input = buildMainInput(oldSnapshot);
     expect(input.facts).toContain(canon.text);
-    expect(input.pinnedSources?.find((item) => item.id === canon.id)).toMatchObject({
-      id: canon.id,
+    expect(
+      input.pinnedSources?.find((item) => item.id === `package:${canon.id}:module:body`)
+    ).toMatchObject({
+      id: `package:${canon.id}:module:body`,
       revision: 1,
       hash: createHash('sha256').update(canon.text).digest('hex'),
     });
     expect(input.history).toEqual([]);
-    expect(input.catalog.find((item) => item.id === lore.id)).not.toHaveProperty('text');
+    expect(
+      input.catalog.find((item) => item.id === `package:${lore.id}:module:lore:lore-0`)
+    ).not.toHaveProperty('text');
     expect(JSON.stringify(input)).not.toContain('UNREAD_LORE_V1');
     expect(input).not.toHaveProperty('controls');
     expect(JSON.stringify(input)).toContain('SELECTED_READER_PERSONA');
@@ -196,59 +226,11 @@ describe('M1 product data with actual file SQLite', () => {
     expect(() =>
       updateTestProfile(product, chat.id, {
         expectedRevision: first.revision,
-        attachments: applied.attachments,
+        packageAttachments: applied.packageAttachments!,
         routes: applied.routes,
         image: applied.image,
       })
     ).toThrow('Profile revision conflict');
-  });
-
-  test('legacy persona OFF cannot suppress new requests, while historical snapshots and results stay frozen', async () => {
-    const { store, product } = await database();
-    const chat = createFixtureChat(store, 'legacy-persona');
-    const persona = product.content(contentBody('persona', 'LEGACY_SELECTED_PERSONA')) as Content;
-    const selected = profile(product, chat, [reference(persona)]);
-    const oldRun = queuedRun(store, product, chat.id);
-    const historical = structuredClone(oldRun.snapshot);
-    historical.profile!.personaReference = false;
-    historical.promptCompilation = compileSnapshotPrompt({
-      ...historical,
-      promptCompilation: undefined,
-    }).promptCompilation;
-    store.db
-      .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-      .run(JSON.stringify(historical), oldRun.id);
-    store.startRun(oldRun.id);
-    const source = store.completeRun(
-      oldRun.id,
-      'Existing conversation remains.',
-      noUsage,
-      historical.settings
-    );
-    const frozenRun = store.run(oldRun.id);
-    store.db
-      .prepare('UPDATE profiles SET body=? WHERE chat_id=?')
-      .run(JSON.stringify({ ...selected, personaReference: false }), chat.id);
-    expect(product.profile(chat.id)).not.toHaveProperty('personaReference');
-    const next = queuedRun(store, product, chat.id);
-    expect(next.snapshot.profile).not.toHaveProperty('personaReference');
-    expect(JSON.stringify(buildMainInput(next.snapshot))).toContain(persona.text);
-    store.startRun(next.id);
-    store.completeRun(next.id, 'New selected-persona result.', noUsage, next.snapshot.settings);
-    const cleared = profile(product, chat, []);
-    expect(product.profile(chat.id)).toEqual(cleared);
-    expect(cleared.attachments).toEqual([]);
-    const without = queuedRun(store, product, chat.id);
-    expect(without.snapshot.resources.some((item) => item.id === persona.id)).toBe(false);
-    expect(JSON.stringify(buildMainInput(without.snapshot))).not.toContain(persona.text);
-    expect(without.snapshot.history.some((item) => item.revision === source.id)).toBe(true);
-    expect(store.run(oldRun.id)).toEqual(frozenRun);
-    expect(JSON.stringify(buildMainInput(frozenRun.snapshot))).not.toContain(persona.text);
-    const restored = await database();
-    restored.product.import(product.export());
-    expect(restored.store.run(oldRun.id)).toEqual(frozenRun);
-    expect(restored.store.run(oldRun.id).snapshot.profile!.personaReference).toBe(false);
-    expect(restored.product.profile(chat.id)).not.toHaveProperty('personaReference');
   });
 
   test('P04 keeps manual model IDs and credential references separate from content and transport options', async () => {
@@ -258,7 +240,7 @@ describe('M1 product data with actual file SQLite', () => {
       title: 'Local fixture',
       protocol: 'fixture-sse-v1',
       endpoint: 'http://127.0.0.1:49999/turn',
-      credentialEnv: 'NARRATIVE_PROVIDER_SYNTHETIC',
+      credentialEnv: 'UIMORI_PROVIDER_SYNTHETIC',
       enabled: true,
     }) as Connection;
     const model = product.model({
@@ -269,11 +251,11 @@ describe('M1 product data with actual file SQLite', () => {
       temperature: null,
     }) as ModelPreset;
     profile(product, chat, [], {
-      routes: { main: { id: model.id }, translation: null, status: null, image: null },
+      routes: { main: { id: model.id }, translation: null, status: null },
     });
     const snapshot = product.snapshot(chat.id)!;
     expect(snapshot.models.main?.modelId).toBe('user-entered-unknown-model');
-    expect(snapshot.models.main?.connection.credentialEnv).toBe('NARRATIVE_PROVIDER_SYNTHETIC');
+    expect(snapshot.models.main?.connection.credentialEnv).toBe('UIMORI_PROVIDER_SYNTHETIC');
     expect(bound.catalog).toEqual([]);
     expect(() =>
       product.connection({
@@ -319,7 +301,10 @@ describe('M1 product data with actual file SQLite', () => {
     const canon = product.content(contentBody('module', 'Original canon revision.')) as Content;
     profile(product, chat, [reference(canon)]);
     const base = completedSource(store, product, chat.id, 'BASE_SCENE');
-    const original = queuedRun(store, product, chat.id, 'Same candidate request');
+    const original = await prepareNativeFixtureRun(
+      store,
+      queuedRun(store, product, chat.id, 'Same candidate request')
+    );
     store.startRun(original.id);
     const a = store.completeRun(original.id, 'CANDIDATE_A', noUsage, original.snapshot.settings);
     const changedCanon = product.content(
@@ -342,7 +327,9 @@ describe('M1 product data with actual file SQLite', () => {
     expect(candidateFrozen).toEqual(originalFrozen);
     expect(candidate.run.parentRevision).toBe(base.id);
     expect(candidateOf).toBe(original.id);
-    expect(candidate.run.snapshot.profile?.contents[0].text).toBe('Original canon revision.');
+    expect(
+      candidate.run.snapshot.profile?.packages?.find((item) => item.id === canon.id)?.body
+    ).toBe('Original canon revision.');
     expect(candidate.run.snapshot.settings.preset).toBe('calm');
     expect(store.candidate(original.id, key, 'Sibling B')).toMatchObject({
       created: false,
@@ -435,12 +422,12 @@ describe('M1 product data with actual file SQLite', () => {
       temperature: null,
     }) as ModelPreset;
     profile(product, chat, [], {
-      routes: { main: { id: model.id }, translation: null, status: null, image: null },
+      routes: { main: { id: model.id }, translation: null, status: null },
     });
     for (const expected of ['refused', 'partial'] as const) {
       const run = queuedRun(store, product, chat.id);
       store.startRun(run.id);
-      const result = await runMain(run.snapshot, {
+      const result = await runMain(await prepareNativeRisuRun(run.snapshot), {
         signal: new AbortController().signal,
         approvedOrigins: [server.origin],
         authorize: (value) => product.authorize(value),
@@ -515,7 +502,7 @@ describe('M1 product data with actual file SQLite', () => {
       title: 'Fixture',
       protocol: 'fixture-sse-v1',
       endpoint: 'http://127.0.0.1:49999/turn',
-      credentialEnv: 'NARRATIVE_PROVIDER_ARCHIVE_FIXTURE',
+      credentialEnv: 'UIMORI_PROVIDER_ARCHIVE_FIXTURE',
       enabled: true,
     }) as Connection;
     profile(product, chat, [reference(canon)]);
@@ -542,7 +529,7 @@ describe('M1 product data with actual file SQLite', () => {
     expect(target.store.history(second.id)).toEqual(store.history(second.id));
     expect(target.product.asset(asset.id).bytes).toEqual(Buffer.from(pixel, 'base64'));
     expect(target.product.asset(asset.id).asset.hash).toBe(asset.hash);
-    expect(target.product.snapshot(chat.id)?.contents).toEqual(product.snapshot(chat.id)?.contents);
+    expect(target.product.snapshot(chat.id)?.packages).toEqual(product.snapshot(chat.id)?.packages);
     expect(target.product.get<Connection>('connection', bound.id)).toMatchObject({
       enabled: false,
     });
@@ -621,9 +608,7 @@ describe('M1 product data with actual file SQLite', () => {
       old.exec(`PRAGMA user_version=${version};`);
       old.close();
       expect(() => new Store(path)).toThrow(`Unsupported database schema version ${version}`);
-      expect(() => new Store(path)).toThrow(
-        version > DATABASE_SCHEMA_VERSION ? 'downgrades are not applied' : 'npm run reset:dev'
-      );
+      expect(() => new Store(path)).toThrow('Use a new empty UIMORI_DB path');
       expect((await readdir(item.directory)).filter((name) => name.includes('.pre-'))).toEqual([]);
       const backup = new DatabaseSync(path, { readOnly: true });
       try {
@@ -770,6 +755,23 @@ describe('M1 real HTTP application boundaries', () => {
   });
 
   test('P07 P08 P12 explicit retry translates the whole scene with the current model and retains source-time references', async () => {
+    vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-jev-key');
+    const originalFetch = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).startsWith('https://api.typesafe.ai/'))
+        return new Response(
+          JSON.stringify({
+            model: 'jev-latest',
+            answers: {
+              explicitRefusal: { type: 'noul', noul: 0.01 },
+              startsTranslation: { type: 'noul', noul: 0.99 },
+            },
+            usage: { input_tokens: 10, output_tokens: 2 },
+          })
+        );
+      return originalFetch(input, init);
+    });
+
     const fixtureItem = await directory();
     let translationCalls = 0;
     let failTranslation = true;
@@ -797,9 +799,15 @@ describe('M1 real HTTP application boundaries', () => {
         text: translationFixtureSlot(body, 'source'),
         context: JSON.parse(translationFixtureSlot(body, 'context')),
       };
-      expect(source.context.references).toMatchObject([
-        { id: glossaryId, revision: 1, text: 'SOURCE_TIME_GLOSSARY_OLD' },
-      ]);
+      expect(source.context.packages.pinned).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: glossaryId,
+            revision: 1,
+            text: 'SOURCE_TIME_GLOSSARY_OLD',
+          }),
+        ])
+      );
       expect(JSON.stringify(body)).not.toContain('FUTURE_GLOSSARY_NEW');
       expect(source.text).toBe(originalText);
       translationCalls++;
@@ -851,7 +859,7 @@ describe('M1 real HTTP application boundaries', () => {
     const glossary = app.store.product.content(
       contentBody('module', 'SOURCE_TIME_GLOSSARY_OLD')
     ) as Content;
-    glossaryId = glossary.id;
+    glossaryId = `package:${glossary.id}:module:body`;
     const bound = app.store.product.connection({
       title: 'Role routes fixture',
       protocol: 'fixture-sse-v1',
@@ -877,7 +885,6 @@ describe('M1 real HTTP application boundaries', () => {
         main: { id: main.id },
         translation: { id: translation.id },
         status: null,
-        image: null,
       },
     });
     await api(url, '/api/test/control', { action: 'hold', barrier: 'translation' });
@@ -927,7 +934,7 @@ describe('M1 real HTTP application boundaries', () => {
     const retried = await api<Job>(url, `/api/jobs/${jobId}/retry`, {});
     expect(retried.id).not.toBe(jobId);
     const completed = await terminalJob(url, chat.id, retried.id);
-    expect(completed.status).toBe('completed');
+    expect(completed.status, completed.error ?? JSON.stringify(completed)).toBe('completed');
     expect(app.store.job(retried.id).input).toMatchObject({
       translationModelSelection: { id: translation.id },
       translationModelSnapshot: { ...updatedTranslation, connection: bound },
@@ -985,7 +992,7 @@ describe('M1 real HTTP application boundaries', () => {
       temperature: null,
     }) as ModelPreset;
     profile(product, chat, [], {
-      routes: { main: null, translation: { id: model.id }, status: null, image: null },
+      routes: { main: null, translation: { id: model.id }, status: null },
     });
     const source = completedSource(
       store,
@@ -1062,7 +1069,7 @@ describe('M1 real HTTP application boundaries', () => {
       temperature: null,
     }) as ModelPreset;
     const configured = profile(app.store.product, chat, [], {
-      routes: { main: { id: model.id }, translation: null, status: null, image: null },
+      routes: { main: { id: model.id }, translation: null, status: null },
     });
     async function create(request: string) {
       const current = app.store.chat(chat.id);
@@ -1139,7 +1146,7 @@ describe('M1 real HTTP application boundaries', () => {
       );
     });
     fixtureItem.close = provider.close;
-    const envName = 'NARRATIVE_PROVIDER_CATALOG_FIXTURE';
+    const envName = 'UIMORI_PROVIDER_CATALOG_FIXTURE';
     const priorEnv = process.env[envName];
     process.env[envName] = 'SYNTHETIC_CATALOG_CREDENTIAL';
     try {

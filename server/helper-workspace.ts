@@ -33,14 +33,6 @@ export const HELPER_TABLES = [
   'helper_artifacts',
   'helper_delegations',
 ] as const;
-/** Additive helper task claim time; a schema 15 database keeps its version and its rows. */
-export function initHelperTaskTiming(store: Store) {
-  const columns = (store.db.prepare('PRAGMA table_info(helper_tasks)').all() as Row[]).map((row) =>
-    String(row.name)
-  );
-  if (!columns.includes('started_at'))
-    store.db.exec('ALTER TABLE helper_tasks ADD COLUMN started_at TEXT');
-}
 export function initHelperWorkspace(store: Store) {
   store.db.exec(`
     CREATE TABLE helper_conversations(id TEXT PRIMARY KEY,scope_key TEXT NOT NULL,creation_key TEXT NOT NULL,creation_hash TEXT NOT NULL,chat_id TEXT REFERENCES chats(id) ON DELETE CASCADE,branch_id TEXT REFERENCES branches(id) ON DELETE CASCADE,scope TEXT NOT NULL,title TEXT NOT NULL,auto_title INTEGER NOT NULL,revision INTEGER NOT NULL,persona TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,limits TEXT NOT NULL DEFAULT '{"totalCalls":24,"helperCalls":12,"artifacts":1}',UNIQUE(scope_key,creation_key));

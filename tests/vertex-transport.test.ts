@@ -14,7 +14,7 @@ const connection: ProviderConnection = {
   id: 'vertex-test',
   protocol: 'vertex-gemini-v1',
   endpoint: `${origin}/v1/projects/synthetic-project/locations/global/publishers/google/models`,
-  credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST',
+  credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST',
 };
 const token = 'synthetic-vertex-secret-do-not-record';
 const request = (): ProviderRequest => ({

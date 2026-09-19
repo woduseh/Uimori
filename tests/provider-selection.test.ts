@@ -58,7 +58,7 @@ function assign(s: Store, chatId: string, routes: Record<string, ModelRef | null
   const p = s.product.profile(chatId);
   return updateTestProfile(s.product, chatId, {
     expectedRevision: p.revision,
-    attachments: p.attachments,
+    packageAttachments: p.packageAttachments,
 
     image: p.image,
     routes: { ...p.routes, ...routes },
@@ -117,7 +117,7 @@ test('ID-based selections follow current connections while protocol changes requ
   for (const change of [
     { title: 'Renamed' },
     { endpoint: 'http://127.0.0.1:9998/v1' },
-    { credentialEnv: 'NARRATIVE_PROVIDER_DIFFERENT' },
+    { credentialEnv: 'UIMORI_PROVIDER_DIFFERENT' },
     { protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:9999/v1' },
   ]) {
     const { s, chat, c, m } = setup();
@@ -170,30 +170,6 @@ test('ID-based selections follow current connections while protocol changes requ
   ) as ModelPreset;
   expect(() => assertModelSelection(s.product, ref(vm))).not.toThrow();
   expect(isModelSelectable(vm, [flex], [vertex])).toBe(true);
-});
-
-test('state retains its selected ID while rejecting a disabled model newly assigned in another chat', () => {
-  const { s, chat, c, m } = setup();
-  s.story.saveConfig(chat.id, {
-    expectedRevision: 0,
-    module: null,
-    stateModel: ref(m),
-  });
-  s.product.model(modelBody(c, { expectedRevision: m.revision, enabled: false }), m.id);
-  const saved = s.story.saveConfig(chat.id, {
-    expectedRevision: 1,
-    module: null,
-    stateModel: ref(m),
-  });
-  expect(saved.stateModel).toEqual(ref(m));
-  const other = createFixtureChat(s, 'Other');
-  expect(() =>
-    s.story.saveConfig(other.id, {
-      expectedRevision: 0,
-      module: null,
-      stateModel: ref(m),
-    })
-  ).toThrow('비활성');
 });
 
 test('model draft validation uses explicit matching unsaved connection without any DB writes', () => {

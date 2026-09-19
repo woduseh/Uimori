@@ -326,7 +326,7 @@ export function IllustrationSettingsEditor({
               <input
                 aria-label="ComfyUI 인증 환경변수"
                 type="text"
-                placeholder="NR_COMFYUI_AUTHORIZATION"
+                placeholder="UIMORI_COMFYUI_AUTHORIZATION"
                 value={draft.comfyui.authorizationEnv}
                 onChange={(event) =>
                   change({

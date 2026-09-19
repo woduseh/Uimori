@@ -24,7 +24,7 @@ export function VertexCredentialUpload({
     },
     []
   );
-  const stored = credentialEnv.startsWith('NARRATIVE_PROVIDER_VERTEX_FILE_');
+  const stored = credentialEnv.startsWith('UIMORI_PROVIDER_VERTEX_FILE_');
   return (
     <section className="vertex-credential-upload full" aria-label="Google 서비스 계정 JSON">
       <div className="provider-section-heading">

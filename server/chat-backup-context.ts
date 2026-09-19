@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { RunSnapshot } from '../core/types.js';
-import type { StoryConfig, StoryState } from '../core/story.js';
 import type { AuthorNote } from '../core/notes.js';
 import type { ContextCheckpointRef, ContextPlan } from '../core/context-plan.js';
 import type { BackupRemap, BackupRow } from './chat-backup-remap.js';
-import { lineageHash, storyDependencyKey } from './story-store.js';
+import { lineageHash } from './story-store.js';
 import { contextDependencyKey, contextSourceRefs } from './context-planning.js';
 import { checkpointHash } from './context-store.js';
 
@@ -12,33 +11,13 @@ const parse = (value: any): any => (typeof value === 'string' ? JSON.parse(value
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 /** Runs after the outer graph and helper domains have mapped their owned identities.
- * Rebuild identity-dependent receipts while preserving authored prose and state values. */
+ * Rebuild identity-dependent receipts while preserving authored prose and narrative notes. */
 export function remapBackupContext(ctx: BackupRemap): void {
   const { tables, id } = ctx;
   const rows = (table: string): BackupRow[] => tables[table] ?? [];
   const canonHashes = new Map<string, string>();
   const checkpointRefs = new Map<string, ContextCheckpointRef>();
   const checkpointPlans = new Map<string, ContextPlan>();
-  const stateId = (value: string | null) => {
-    const prefix = `initial:${ctx.oldChatId}:`;
-    return value?.startsWith(prefix)
-      ? `initial:${ctx.chatId}:${value.slice(prefix.length)}`
-      : id(value);
-  };
-  const config = (value: StoryConfig): StoryConfig => ({
-    ...value,
-    activatedAt: value.activatedAt
-      ? { ...value.activatedAt, revision: id(value.activatedAt.revision) }
-      : null,
-  });
-  const state = (value: StoryState | null): StoryState | null =>
-    value
-      ? {
-          ...value,
-          id: stateId(value.id)!,
-          sourceRevision: id(value.sourceRevision),
-        }
-      : null;
   const note = (value: AuthorNote): AuthorNote => ({
     ...value,
     id: id(value.id),
@@ -51,11 +30,6 @@ export function remapBackupContext(ctx: BackupRemap): void {
       ? { expectedHeadRevision: id(value.expectedHeadRevision) }
       : {}),
   });
-  for (const row of rows('story_configs')) row.body = JSON.stringify(config(parse(row.body)));
-  for (const row of rows('story_states')) {
-    row.parent_state_id = stateId(row.parent_state_id);
-    row.body = JSON.stringify(state(parse(row.body)));
-  }
   for (const row of rows('author_notes')) row.entry = JSON.stringify(note(parse(row.entry)));
   for (const row of rows('author_note_commands')) {
     row.command = JSON.stringify(command(parse(row.command)));
@@ -76,15 +50,6 @@ export function remapBackupContext(ctx: BackupRemap): void {
     if (snapshot.story) {
       const story = snapshot.story;
       const previous = story.canonHash;
-      story.config = config(story.config);
-      story.state = state(story.state);
-      if (story.preparation) {
-        story.preparation.fallback = state(story.preparation.fallback);
-        story.preparation.missing = story.preparation.missing.map((entry) => ({
-          ...entry,
-          revision: id(entry.revision),
-        }));
-      }
       story.notes = story.notes.map(note);
       story.lineageHash = lineageHash(snapshot.history);
       story.canonHash = hash([...story.notes].sort((a, b) => a.id.localeCompare(b.id)));
@@ -105,8 +70,7 @@ export function remapBackupContext(ctx: BackupRemap): void {
   // Each table keeps its own immutable snapshot, including failed and historical jobs.
   for (const list of Object.values(tables))
     for (const row of list) {
-      if (typeof row.snapshot !== 'string' || tables.package_extension_operations.includes(row))
-        continue;
+      if (typeof row.snapshot !== 'string') continue;
       const value = ctx.structured(parse(row.snapshot));
       prepareSnapshot(value);
       snapshots.push({ row, value });
@@ -137,19 +101,6 @@ export function remapBackupContext(ctx: BackupRemap): void {
     if (result.snapshot) prepareSnapshot(result.snapshot);
     for (const job of result.jobs ?? []) if (job.snapshot) prepareSnapshot(job.snapshot);
   }
-  for (const { row, value } of snapshots)
-    if (rows('story_jobs').includes(row)) {
-      row.dependency_key = storyDependencyKey(
-        row.kind,
-        { id: row.source_revision, hash: row.source_hash },
-        value as RunSnapshot
-      );
-      if (row.result !== null) {
-        const result = parse(row.result);
-        // Operation IDs, evidence quotes and proposed field values are model output.
-        row.result = JSON.stringify({ ...result, sourceRevision: id(result.sourceRevision) });
-      }
-    }
   const helperEvents = new Map(rows('helper_events').map((row) => [Number(row.seq), row]));
   for (const helper of [false, true]) {
     // Main context receipts in helper events must settle before helper checkpoint event hashes.

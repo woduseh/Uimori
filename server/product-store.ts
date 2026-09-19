@@ -1,15 +1,12 @@
 import { detectRisuImageHandoff, type RisuImageHandoff } from '../core/risu-image-handoff.js';
-import { validateNativeRisuContent } from '../core/risu-native.js';
+import { validateRisuContentSource } from '../core/risu-native.js';
 import { projectNativeRisuPackage } from './risu-native-projection.js';
 import { validateNativeScriptAttempt } from './risu-native-host.js';
 import { JEV_ENDPOINT, JEV_MODEL } from './jev-judgment.js';
+import { validateImageJudgmentWire } from './image-judgment.js';
 import { validateTranslationJudgmentWire } from './jev-attribution.js';
 import { loreSelectionAttemptInputHashes } from './lore-selection.js';
-import {
-  EXTENSION_OPERATION_TABLES,
-  normalizeExtensionOperationArchiveRow,
-  validateExtensionOperationArchive,
-} from './extension-operation-archive.js';
+import { validateMainJudgmentWire } from './main-judgment.js';
 import {
   HttpError,
   archiveId,
@@ -24,11 +21,6 @@ import {
   text,
 } from './request-validation.js';
 import { resolveModelPricing, validatePricingSnapshot } from '../core/model-pricing.js';
-import { validateExtensionModelAttribution } from '../core/extension-model.js';
-import {
-  EXTENSION_GRANT_CAPABILITIES,
-  type ExtensionGrantCapability,
-} from '../core/extension-program.js';
 import { HOST_LIST_PAGE_DEFAULT, HOST_LIST_PAGE_MAX, pageSlice } from '../core/paging.js';
 import { estimateCost } from '../core/pricing-estimate.js';
 import { translationPolicy } from '../core/translation-settings.js';
@@ -44,7 +36,7 @@ import {
 } from './prompt-workspace.js';
 import { combinationOwner } from '../core/prompt-combinations.js';
 import { generationFromModel } from '../core/model-capabilities.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { randomUUID, createHash } from 'node:crypto';
 import {
   isVertexFileReference,
@@ -102,16 +94,16 @@ import { OUTLINE_TABLES, validateOutlineArchive } from './outline-store.js';
 import { normalizeStoryArchiveRow, validateStoryArchive } from './story-archive.js';
 
 import {
-  validatePromptProgram,
+  promptControls,
+  validateRisuPrompt,
   validateChatPromptControls,
   resolvePromptValues,
+  resolveControlValues,
+  validateControlDefinitions,
   resolveEditablePromptValues,
-  validateEditablePromptProgram,
-  reconcilePromptValues,
-} from '../core/prompt-program.js';
+  validateEditableRisuPrompt,
+} from '../core/risu-prompt.js';
 import { validateRunSnapshot } from './snapshot-archive.js';
-import { validatePackageRequests } from './package-requests.js';
-import { freezeSourceSegments } from '../core/package-source-segments.js';
 import { assertModelSelection } from './provider-selection.js';
 import { validateChatVariableState } from '../core/chat-variables.js';
 import { chatVariableTables } from './chat-variables.js';
@@ -129,7 +121,6 @@ import {
   validateChatOverrideSnapshot,
 } from './chat-overrides.js';
 import { projectChatPackageCompilation } from '../core/chat-overrides.js';
-import { packageIdentityFromProfile } from '../core/package-identity.js';
 import {
   chatOptionTables,
   validateChatOptionArchive,
@@ -144,21 +135,11 @@ import {
 import { organizationTables } from './chat-organization.js';
 import { libraryOrganizationTables } from './library-organization.js';
 import {
-  validateContentPackage,
-  validatePackageAttachment,
-  type ContentPackage,
-  type PackageAttachment,
-  packageControlKey,
-} from '../core/content-package.js';
-import { packageInstanceId } from '../core/execution-context.js';
-import { compilePackageAttachment } from '../core/package-runtime.js';
-import { risuCompatRequestsVariableWrite } from '../core/risu-compat.js';
-import {
-  packageBehaviorTables,
-  validatePackageBehaviorArchive,
-  validatePackageBehaviorRunSnapshot,
-} from './package-behavior-archive.js';
-import { branchPackageStates } from './package-behavior-host.js';
+  validateRisuContent,
+  validateContentAttachment,
+  type ContentAttachment,
+} from '../core/risu-content.js';
+import { compileContentAttachment } from '../core/package-runtime.js';
 import {
   assertPackageReferences,
   resolvePackageModules,
@@ -178,7 +159,7 @@ import { validateNativeTransferArchive } from './native-transfer.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
-const ref = (v: unknown): ContentRef => {
+const _ref = (v: unknown): ContentRef => {
   const b = record(v);
   fields(b, ['id', 'revision']);
   return { id: text(b.id, 'reference', 100), revision: number(b.revision, 'revision') };
@@ -214,7 +195,7 @@ export class ProductStore {
         CREATE UNIQUE INDEX default_branch ON branches(chat_id) WHERE is_default=1;
         CREATE TABLE prompt_workspace (id INTEGER PRIMARY KEY CHECK(id=1),body TEXT NOT NULL);
         CREATE TABLE library_hidden (kind TEXT NOT NULL,id TEXT NOT NULL,PRIMARY KEY(kind,id));
-        CREATE TABLE attempts (id TEXT PRIMARY KEY,chat_id TEXT REFERENCES chats(id),run_id TEXT REFERENCES runs(id),job_id TEXT REFERENCES jobs(id),role TEXT NOT NULL,connection_id TEXT NOT NULL,model_id TEXT NOT NULL,status TEXT NOT NULL,request TEXT NOT NULL,response TEXT,input_tokens INTEGER,output_tokens INTEGER,cost_usd REAL,raw_usage TEXT,price_revision TEXT,error TEXT,story_job_id TEXT REFERENCES story_jobs(id));
+        CREATE TABLE attempts (id TEXT PRIMARY KEY,chat_id TEXT REFERENCES chats(id),run_id TEXT REFERENCES runs(id),job_id TEXT REFERENCES jobs(id),role TEXT NOT NULL,connection_id TEXT NOT NULL,model_id TEXT NOT NULL,status TEXT NOT NULL,request TEXT NOT NULL,response TEXT,input_tokens INTEGER,output_tokens INTEGER,cost_usd REAL,raw_usage TEXT,price_revision TEXT,error TEXT);
         CREATE TABLE assets (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),body TEXT NOT NULL,bytes BLOB NOT NULL);
         CREATE TABLE source_edits(source_id TEXT NOT NULL REFERENCES sources(id),revision INTEGER NOT NULL,text TEXT NOT NULL,hash TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(source_id,revision));
       `);
@@ -350,29 +331,13 @@ export class ProductStore {
     if (id) this.assertAvailable(kind, id);
     const prior = id ? this.get<Row & ContentRef>(kind, id) : null;
     if (prior && prior.revision !== expected) throw new HttpError(409, 'Revision conflict');
-    if (prior && (kind === 'content' || kind === 'prompt-preset')) {
-      const profiles = (this.db.prepare('SELECT body FROM profiles').all() as Row[]).map(
-        (row) => parse(row.body) as ChatProfile
-      );
-      if (
-        kind === 'content' &&
-        !!prior.package !== !!value.package &&
-        (profiles.some((p) =>
-          [...p.attachments, ...(p.packageAttachments ?? [])].some((r) => r.id === id)
-        ) ||
-          this.all('content').some((content: Content) =>
-            content.package?.modules?.some((r) => r.id === id)
-          ))
-      )
-        throw new HttpError(409, 'Referenced content must keep its package structure');
-    }
     const result: Row & ContentRef = {
       ...value,
       id: id ?? createId ?? randomUUID(),
       revision: (prior?.revision ?? 0) + 1,
     };
     if (kind === 'content' && result.package)
-      result.package = validateContentPackage({
+      result.package = validateRisuContent({
         ...result.package,
         id: result.id,
         revision: result.revision,
@@ -423,9 +388,35 @@ export class ProductStore {
       throw new HttpError(400, 'A chat owner must remain available as a bot or package');
     const kind = choice(b.kind, ['bot', 'persona', 'module'], 'content kind');
     let packageInput = b.package;
+    if (packageInput === undefined) {
+      const card = {
+        name: text(b.title, 'title', 200),
+        description: text(b.text, 'text', 1_000_000, true),
+        creator_notes: text(b.description, 'description', 4000, true),
+        first_mes: '',
+        character_book: { entries: [] },
+        extensions: { risuai: {} },
+      };
+      packageInput = {
+        version: 1,
+        id: createId ?? id ?? randomUUID(),
+        revision: 1,
+        title: card.name,
+        description: card.creator_notes,
+        body: card.description,
+        lore: [],
+        instructions: [],
+        nativeRisu: {
+          version: 1,
+          card,
+          assets: [],
+          sourceHash: createHash('sha256').update(JSON.stringify(card)).digest('hex'),
+        },
+      };
+    }
     if (packageInput && record(packageInput).nativeRisu) {
       const raw = record(packageInput),
-        native = validateNativeRisuContent(raw.nativeRisu);
+        native = validateRisuContentSource(raw.nativeRisu);
       const { imageHandoff: _old, ...rest } = raw;
       const handoff = detectRisuImageHandoff(
         native,
@@ -433,9 +424,9 @@ export class ProductStore {
       );
       packageInput = { ...rest, ...(handoff ? { imageHandoff: handoff } : {}) };
     }
-    let pkg = packageInput !== undefined ? validateContentPackage(packageInput) : undefined;
-    if (pkg?.nativeRisu) {
-      pkg = validateContentPackage(projectNativeRisuPackage(pkg, kind).pkg);
+    let pkg = validateRisuContent(packageInput);
+    {
+      pkg = validateRisuContent(projectNativeRisuPackage(pkg, kind).pkg);
       b.title = pkg.title;
       b.description = pkg.description;
       b.text = pkg.body ?? '';
@@ -498,7 +489,7 @@ export class ProductStore {
         role,
         values,
         owner,
-        controls: structuredClone(program.controls),
+        controls: promptControls(program),
       });
     });
   }
@@ -508,9 +499,9 @@ export class ProductStore {
     const role = choice(b.role, ['main', 'translation'], 'prompt role');
     const program =
       b.program !== undefined
-        ? validateEditablePromptProgram(b.program)
-        : validateEditablePromptProgram(
-            createDefaultPromptProgram(text(b.text, 'prompt text', 200000, true), role)
+        ? validateEditableRisuPrompt(b.program)
+        : validateEditableRisuPrompt(
+            createDefaultRisuPrompt(text(b.text, 'prompt text', 200000, true), role)
           );
     if (program.collaboration) {
       if (role !== 'main') throw new HttpError(400, '협업은 작문 프롬프트에만 설정할 수 있어요.');
@@ -698,21 +689,12 @@ export class ProductStore {
     const b = record(value);
     fields(b, [
       'expectedRevision',
-      'attachments',
       'image',
       'imageTranslation',
       'packageAttachments',
-      'packageValues',
-      'extensionGrants',
       'loreContext',
       'pinned',
     ]);
-    if (!Array.isArray(b.attachments) || b.attachments.length > 300)
-      throw new HttpError(400, 'Invalid attachments');
-    const attachments = b.attachments.map((r) => currentRef(this, 'content', ref(r)));
-    if (new Set(attachments.map((r) => r.id)).size !== attachments.length)
-      throw new HttpError(400, 'Duplicate attachment');
-    for (const r of attachments) this.get('content', r.id, r.revision);
     const image = boolean(b.image);
     let requestedLore: ReturnType<typeof validateLoreContextPolicy> | undefined;
     try {
@@ -744,53 +726,10 @@ export class ProductStore {
               ...r,
               ...currentRef(this, 'content', r),
             }));
-      validateAttachmentRoles(this, attachments, packageAttachments);
-      const resolvedPackages = resolvePackageModules(this, packageAttachments ?? [], {
+      const _resolvedPackages = resolvePackageModules(this, packageAttachments ?? [], {
         latest: true,
       });
-      const requestedExtensionGrants =
-        b.extensionGrants === undefined
-          ? prior.extensionGrants
-          : validateExtensionGrants(b.extensionGrants);
-      const attachedInstances = new Map(
-        resolvedPackages.attachments.map((attachment, index) => [
-          packageInstanceId(attachment),
-          { attachment, pkg: resolvedPackages.packages[index] },
-        ])
-      );
-      const extensionGrants = requestedExtensionGrants
-        ? Object.fromEntries(
-            Object.entries(requestedExtensionGrants).flatMap(([instanceId, grant]) => {
-              const attached = attachedInstances.get(instanceId);
-              if (!attached) return [];
-              const unchanged = isDeepStrictEqual(prior.extensionGrants?.[instanceId], grant);
-              if (!unchanged) {
-                if (
-                  grant.packageRevision !== attached.attachment.revision ||
-                  grant.capabilities.some(
-                    (capability) => !packageRequestsExtensionGrant(attached.pkg, capability)
-                  )
-                )
-                  throw new HttpError(400, 'Invalid extension grant');
-              }
-              return [[instanceId, grant]];
-            })
-          )
-        : undefined;
-      const allowedPackageKeys = new Set(resolvedPackages.attachments.map(packageControlKey));
-      const inheritedPackageValues =
-        prior.packageValues === undefined
-          ? undefined
-          : Object.fromEntries(
-              Object.entries(prior.packageValues).filter(([key]) => allowedPackageKeys.has(key))
-            );
-      const requestedPackageValues =
-        b.packageValues === undefined ? inheritedPackageValues : b.packageValues;
-      const packageValues =
-        requestedPackageValues === undefined
-          ? undefined
-          : currentPackageValues(this, resolvedPackages.attachments, requestedPackageValues).values;
-      this.store.organization.assertBotAttachments(chatId, attachments, packageAttachments);
+      this.store.organization.assertBotAttachments(chatId, packageAttachments);
       const result: ChatProfile = {
         ...((requestedLore ?? prior.loreContext)
           ? { loreContext: requestedLore ?? prior.loreContext }
@@ -798,7 +737,6 @@ export class ProductStore {
         chatId,
         revision: prior.revision + 1,
         ...(pinned && Object.keys(pinned).length ? { pinned } : {}),
-        attachments,
         routes: {
           ...promptWorkspace(this.store).modelRoutes,
           ...(pinned?.mainModel ? { main: structuredClone(pinned.mainModel) } : {}),
@@ -809,16 +747,7 @@ export class ProductStore {
             ? (prior.imageTranslation ?? true)
             : boolean(b.imageTranslation),
         ...(packageAttachments !== undefined ? { packageAttachments } : {}),
-        ...(packageValues !== undefined ? { packageValues } : {}),
-        ...(extensionGrants && Object.keys(extensionGrants).length ? { extensionGrants } : {}),
       };
-      freezeSourceSegments({
-        ...result,
-        contents: [],
-        models: {},
-        packageAttachments: resolvedPackages.attachments,
-        packages: resolvedPackages.packages,
-      });
       this.db
         .prepare(
           'INSERT INTO profiles VALUES(?,?) ON CONFLICT(chat_id) DO UPDATE SET body=excluded.body'
@@ -837,7 +766,6 @@ export class ProductStore {
     headRevision: string | null = this.store.chat(chatId).headRevision
   ): ProfileSnapshot {
     const { optionAdjustments: _notices, ...p } = this.profile(chatId);
-    const contents = p.attachments.map((r) => this.get<Content>('content', r.id, r.revision));
     // Auxiliary jobs keep their global prompt; an unavailable main pin must not prevent translation.
     const workspace =
       requiredRole === 'main' || requiredRole === 'inspect'
@@ -845,7 +773,7 @@ export class ProductStore {
         : chatPromptWorkspace(this.store, { mainModel: p.pinned?.mainModel });
     const models: ProfileSnapshot['models'] = {};
     const routes = { ...p.routes };
-    for (const role of ['main', 'translation', 'status', 'image'] as const) {
+    for (const role of ['main', 'translation', 'status'] as const) {
       const r = workspaceModelRef(workspace, role);
       if (!r) continue;
       try {
@@ -860,11 +788,11 @@ export class ProductStore {
     const contextModel = contextRef
       ? this.modelSnapshot(contextRef.id, undefined, false)
       : undefined;
-    const extensionRef = workspaceModelRef(workspace, 'extension');
-    let extensionModel: ModelSnapshot | undefined;
-    if (extensionRef) {
+    const scriptRef = workspaceModelRef(workspace, 'script');
+    let scriptModel: ModelSnapshot | undefined;
+    if (scriptRef) {
       try {
-        extensionModel = this.modelSnapshot(extensionRef.id, undefined, false);
+        scriptModel = this.modelSnapshot(scriptRef.id, undefined, false);
       } catch (error) {
         // An unavailable add-on model must not prevent reservation of the user's prose.
         if (!(error instanceof HttpError) || ![403, 404, 409].includes(error.statusCode))
@@ -884,12 +812,11 @@ export class ProductStore {
     const profile: ProfileSnapshot = {
       ...p,
       routes,
-      contents,
       models,
       ...resolvePackageProfile(this, p),
       ...frozen,
       ...(contextModel ? { contextModel } : {}),
-      ...(extensionModel ? { extensionModel } : {}),
+      ...(scriptModel ? { scriptModel } : {}),
       ...(collaboration?.enabled && (requiredRole === 'main' || requiredRole === 'inspect')
         ? { collaborationModels }
         : {}),
@@ -905,7 +832,7 @@ export class ProductStore {
   }
   resolveJobPrompt(snapshot: RunSnapshot, input: unknown): RunSnapshot {
     const resolved = structuredClone(snapshot);
-    for (const role of ['translation', 'status', 'image'] as const) {
+    for (const role of ['translation', 'status'] as const) {
       const key = `${role}ModelSelection`;
       if (
         input &&
@@ -917,7 +844,7 @@ export class ProductStore {
       if (!input || typeof input !== 'object' || Array.isArray(input) || !Object.hasOwn(input, key))
         continue;
       const selected = record(input)[key];
-      resolved.profile ??= { ...defaultProfile(resolved.chatId), contents: [], models: {} };
+      resolved.profile ??= { ...defaultProfile(resolved.chatId), models: {} };
       if (selected === null) {
         if (record(input)[`${role}ModelSnapshot`] != null)
           throw new HttpError(400, `${role} model snapshot requires selection`);
@@ -946,7 +873,7 @@ export class ProductStore {
         revision,
         role: 'translation' as const,
       };
-      resolved.profile ??= { ...defaultProfile(resolved.chatId), contents: [], models: {} };
+      resolved.profile ??= { ...defaultProfile(resolved.chatId), models: {} };
       resolved.profile.prompts = {
         ...resolved.profile.prompts,
         translation: { id: preset.id, revision },
@@ -958,7 +885,6 @@ export class ProductStore {
       };
       if (data.translationPolicy) {
         const policy = translationPolicy(data.translationPolicy);
-        if (policy.refusalModel) validateModelSnapshot(policy.refusalModel);
         resolved.settings.maxCalls = policy.maxCalls;
       }
     }
@@ -966,24 +892,14 @@ export class ProductStore {
   }
   resources(chatId: string, p: ProfileSnapshot): Resource[] {
     return [
-      ...p.contents
-        .filter((c) => c.kind === 'module')
-        .map((c) => ({
-          ...c,
-          chatId,
-          kind: 'lore' as const,
-          sourceKind: c.kind,
-        })),
       ...(p.packageAttachments ?? []).flatMap((ref) => {
         const pkg = p.packages!.find(
           (item) => item.id === ref.id && item.revision === ref.revision
         )!;
-        const compiled = compilePackageAttachment(pkg, ref, {
+        const compiled = compileContentAttachment(pkg, ref, {
           chatId,
           target: 'main',
           resourcesOnly: true,
-          identity: packageIdentityFromProfile(p),
-          values: p.packageValues?.[packageControlKey(ref)],
         });
         return projectChatPackageCompilation(p, ref, pkg, compiled).compiled.resources;
       }),
@@ -1086,7 +1002,6 @@ export class ProductStore {
     try {
       const id = randomUUID();
       this.db.prepare('INSERT INTO branches VALUES(?,?,?,?,1,0)').run(id, chatId, title, head);
-      branchPackageStates(this.store, chatId, id, head);
       restoreChatVariablesAtSource(this.store, chatId, id, head);
       this.store.event(chatId, 'branch.created', id);
       this.db.exec('RELEASE create_branch');
@@ -1187,7 +1102,6 @@ export class ProductStore {
       id: r.id,
       runId: r.run_id,
       jobId: r.job_id,
-      storyJobId: r.story_job_id ?? null,
       role: r.role,
       connectionId: r.connection_id,
       modelId: r.model_id,
@@ -1303,8 +1217,8 @@ export class ProductStore {
       ])
     );
     return {
-      format: 'narrative-archive',
-      version: 15,
+      format: 'uimori-archive',
+      version: 1,
       createdAt: new Date().toISOString(),
       tables,
     };
@@ -1327,12 +1241,9 @@ export class ProductStore {
         isDeepStrictEqual(current, defaults) &&
         !archiveTables.some(
           (table) =>
-            ![
-              'package_behavior_entropy',
-              'library_organization_state',
-              'prompt_workspace',
-              'illustration_settings',
-            ].includes(table) && this.db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get()
+            !['library_organization_state', 'prompt_workspace', 'illustration_settings'].includes(
+              table
+            ) && this.db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get()
         ),
     };
   }
@@ -1347,18 +1258,9 @@ export class ProductStore {
     }
     const a = record(copy);
     fields(a, ['format', 'version', 'createdAt', 'tables']);
-    if (a.format !== 'narrative-archive' || a.version !== 15)
+    if (a.format !== 'uimori-archive' || a.version !== 1)
       throw new HttpError(400, 'Unsupported archive');
     const tables = record(a.tables);
-    // Illustration and outline tables were added to schema 15 later; older archives restore normally.
-    for (const table of [
-      ...ILLUSTRATION_TABLES,
-      ...OUTLINE_TABLES,
-      ...EXTENSION_OPERATION_TABLES,
-      'native_transfer_receipts',
-      ...chatVariableTables,
-    ])
-      tables[table] ??= [];
     fields(tables, archiveTables);
     if (archiveTables.some((t) => !Array.isArray(tables[t]) || tables[t].length > 100000))
       throw new HttpError(400, 'Missing or oversized archive table');
@@ -1372,7 +1274,7 @@ export class ProductStore {
           throw new HttpError(409, 'Restore requires an empty database');
         this.db.exec('PRAGMA defer_foreign_keys=ON');
         this.db.exec(
-          'DELETE FROM package_behavior_entropy; DELETE FROM library_organization_state; DELETE FROM prompt_workspace; DELETE FROM illustration_settings'
+          'DELETE FROM library_organization_state; DELETE FROM prompt_workspace; DELETE FROM illustration_settings'
         );
         for (const table of archiveTables) {
           const columns = (this.db.prepare(`PRAGMA table_info(${table})`).all() as Row[]).map(
@@ -1471,8 +1373,8 @@ export class ProductStore {
                     delete connection.credentialEnv;
                     connection.enabled = false;
                   }
-              if (snapshot.profile?.extensionModel) {
-                const connection = record(snapshot.profile.extensionModel.connection);
+              if (snapshot.profile?.scriptModel) {
+                const connection = record(snapshot.profile.scriptModel.connection);
                 delete connection.credentialEnv;
                 connection.enabled = false;
               }
@@ -1496,11 +1398,7 @@ export class ProductStore {
                   delete connection.credentialEnv;
                   connection.enabled = false;
                 }
-                if (input.translationPolicy?.refusalModel) {
-                  const connection = record(input.translationPolicy.refusalModel.connection);
-                  delete connection.credentialEnv;
-                  connection.enabled = false;
-                }
+
                 row.input = json(input);
               }
             }
@@ -1522,7 +1420,6 @@ export class ProductStore {
               if (row.raw_usage !== null)
                 row.raw_usage = json(scrubArchiveSecrets(parse(row.raw_usage)));
             }
-            normalizeExtensionOperationArchiveRow(table, row);
             normalizeStoryArchiveRow(table, row);
             normalizeHelperArchiveRow(table, row);
             normalizeResponseStreamArchiveRow(table, row);
@@ -1556,8 +1453,6 @@ export class ProductStore {
         validateResponseStreamArchive(this.store);
         validateChatOverrideArchive(this.store);
         validateChatOptionArchive(this.store);
-        validatePackageRequests(this.store);
-        validatePackageBehaviorArchive(this.store);
         validateChatVariablesArchive(this.store);
         validateNativeTransferArchive(this.store);
         validateOutlineArchive(this.store);
@@ -1597,12 +1492,9 @@ const archiveTables = [
   ...HELPER_TABLES,
   'response_stream_tasks',
   'response_stream_chunks',
-  'package_requests',
   ...organizationTables,
   ...libraryOrganizationTables,
-  ...packageBehaviorTables,
   ...chatVariableTables,
-  ...EXTENSION_OPERATION_TABLES,
   ...ILLUSTRATION_TABLES,
   ...OUTLINE_TABLES,
   'native_transfer_receipts',
@@ -1612,42 +1504,9 @@ function currentRef(product: ProductStore, kind: string, reference: ContentRef):
   const current = product.get<ContentRef>(kind, reference.id);
   return { id: current.id, revision: current.revision };
 }
-function currentPackageValues(
-  product: ProductStore,
-  attachments: PackageAttachment[],
-  raw: unknown,
-  inherited = false
-) {
-  const values: NonNullable<ChatProfile['packageValues']> = {};
-  const notices: string[] = [];
-  for (const [key, saved] of Object.entries(record(raw)).sort(
-    ([a], [b]) => Number(a.split('@')[1]?.split(':')[0]) - Number(b.split('@')[1]?.split(':')[0])
-  )) {
-    const match = /^([^@]+)@([1-9][0-9]*):(bot|persona|module)$/u.exec(key);
-    if (!match) throw new HttpError(400, 'Invalid package control key');
-    const current = attachments.find((r) => r.id === match[1] && r.role === match[3]);
-    if (!current) {
-      if (inherited) continue;
-      throw new HttpError(400, 'Package controls outside attachment scope');
-    }
-    const original = { ...current, revision: Number(match[2]) };
-    packageControlValues(product, [original], { [key]: saved });
-    const pkg = product.get<Content>('content', current.id, current.revision).package!;
-    const adjusted = reconcilePromptValues(
-      { version: 1, controls: pkg.controls, blocks: [] },
-      record(saved)
-    );
-    values[packageControlKey(current)] = adjusted.values;
-    if (adjusted.resetKeys.length) notices.push(`${pkg.title}: ${adjusted.resetKeys.join(', ')}`);
-  }
-  return { values, notices };
-}
 /** Pure current-settings projection. Frozen Run/source profiles never pass through this path. */
 function currentProfile(product: ProductStore, saved: ChatProfile): ChatProfile {
-  // Ignore the retired setting without rewriting persisted profiles or historical snapshots.
-  const { personaReference: _historicalScope, ...current } = saved as ChatProfile & {
-    personaReference?: boolean;
-  };
+  const current = saved;
   const result = {
     ...current,
     imageTranslation: current.imageTranslation ?? true,
@@ -1655,29 +1514,18 @@ function currentProfile(product: ProductStore, saved: ChatProfile): ChatProfile 
       ...structuredClone(promptWorkspace(product.store).modelRoutes),
       ...(saved.pinned?.mainModel ? { main: structuredClone(saved.pinned.mainModel) } : {}),
     },
-    attachments: saved.attachments.map((r) => currentRef(product, 'content', r)),
   };
-  const notices: string[] = [];
   if (saved.packageAttachments)
     result.packageAttachments = saved.packageAttachments.map((r) => ({
       ...r,
       ...currentRef(product, 'content', r),
     }));
-  if (saved.packageValues) {
-    const resolved = resolvePackageModules(product, result.packageAttachments ?? [], {
-      latest: true,
-    });
-    const adjusted = currentPackageValues(product, resolved.attachments, saved.packageValues, true);
-    result.packageValues = adjusted.values;
-    notices.push(...adjusted.notices);
-  }
-  if (notices.length) result.optionAdjustments = notices;
   return result;
 }
-function packageRefs(product: ProductStore, value: unknown): PackageAttachment[] {
+function packageRefs(product: ProductStore, value: unknown): ContentAttachment[] {
   if (!Array.isArray(value) || value.length > 100)
     throw new HttpError(400, 'Invalid package attachments');
-  const refs = value.map(validatePackageAttachment);
+  const refs = value.map(validateContentAttachment);
   if (
     new Set(refs.map((r) => `${r.id}:${r.role}`)).size !== refs.length ||
     refs.filter((r) => r.role === 'bot').length > 1 ||
@@ -1689,87 +1537,6 @@ function packageRefs(product: ProductStore, value: unknown): PackageAttachment[]
       throw new HttpError(400, 'Content is not a package');
   return refs;
 }
-function validateExtensionGrants(value: unknown): NonNullable<ChatProfile['extensionGrants']> {
-  const grants = record(value);
-  if (Object.keys(grants).length > 100) throw new HttpError(400, 'Invalid extension grants');
-  return Object.fromEntries(
-    Object.entries(grants).map(([instanceId, value]) => {
-      text(instanceId, 'package instance ID', 200);
-      const grant = record(value);
-      fields(grant, ['packageRevision', 'capabilities']);
-      if (
-        !Array.isArray(grant.capabilities) ||
-        grant.capabilities.length === 0 ||
-        grant.capabilities.length > EXTENSION_GRANT_CAPABILITIES.length ||
-        new Set(grant.capabilities).size !== grant.capabilities.length
-      )
-        throw new HttpError(400, 'Invalid extension capabilities');
-      const capabilities = grant.capabilities.map((capability) =>
-        choice(capability, [...EXTENSION_GRANT_CAPABILITIES], 'extension capability')
-      );
-      return [
-        instanceId,
-        {
-          packageRevision: number(
-            grant.packageRevision,
-            'extension grant package revision',
-            1,
-            Number.MAX_SAFE_INTEGER
-          ),
-          capabilities,
-        },
-      ];
-    })
-  );
-}
-function packageRequestsExtensionGrant(
-  pkg: ContentPackage | undefined,
-  capability: ExtensionGrantCapability
-) {
-  return (
-    (capability === 'variables.write' && risuCompatRequestsVariableWrite(pkg)) ||
-    (pkg?.behavior?.actions.some((action) => action.program?.capabilities?.includes(capability)) ??
-      false)
-  );
-}
-function packageControlValues(
-  product: ProductStore,
-  attachments: PackageAttachment[],
-  value: unknown
-) {
-  const b = record(value);
-  const allowed = new Map(attachments.map((r) => [packageControlKey(r), r]));
-  return Object.fromEntries(
-    Object.entries(b).map(([key, values]) => {
-      const r = allowed.get(key);
-      if (!r) throw new HttpError(400, 'Package controls outside attachment scope');
-      const pkg = product.get<Content>('content', r.id, r.revision).package!;
-      return [
-        key,
-        resolvePromptValues({ version: 1, controls: pkg.controls, blocks: [] }, record(values)),
-      ];
-    })
-  );
-}
-function validateAttachmentRoles(
-  product: ProductStore,
-  attachments: ContentRef[],
-  packages: PackageAttachment[] | undefined
-) {
-  if (packages?.some((r) => attachments.some((a) => a.id === r.id)))
-    throw new HttpError(400, 'Package is also attached as legacy content');
-  if (attachments.some((r) => product.get<Content>('content', r.id, r.revision).package))
-    throw new HttpError(400, 'Package requires an explicit attachment role');
-  // Preserve historical multi-content profiles; new primary package roles cannot coexist
-  // with a second legacy primary role that would make the selected persona/bot ambiguous.
-  for (const role of ['bot', 'persona'] as const)
-    if (
-      packages?.some((r) => r.role === role) &&
-      attachments.some((r) => product.get<Content>('content', r.id, r.revision).kind === role)
-    )
-      throw new HttpError(400, 'Duplicate legacy and package primary role');
-}
-
 function scrubArchiveSecrets(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(scrubArchiveSecrets);
   if (value && typeof value === 'object')
@@ -1823,7 +1590,7 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
     choice(body.loading, ['pinned', 'discoverable'], 'loading');
     archiveList(body.relatedIds, 100).forEach(archiveId);
     if (body.package !== undefined) {
-      const pkg = validateContentPackage(body.package);
+      const pkg = validateRisuContent(body.package);
       if (
         pkg.id !== body.id ||
         pkg.revision !== body.revision ||
@@ -1836,7 +1603,7 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
   } else if (row.kind === 'prompt-preset') {
     fields(body, ['id', 'revision', 'title', 'role', 'program', 'values']);
     choice(body.role, ['main', 'translation'], 'prompt role');
-    const program = validatePromptProgram(body.program);
+    const program = validateRisuPrompt(body.program);
     resolvePromptValues(program, body.values === undefined ? {} : record(body.values));
     if (program.collaboration && body.role !== 'main')
       throw new HttpError(400, 'Collaboration requires the main prompt role');
@@ -1848,11 +1615,7 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
       const owner = validateCombinationOwner(body.owner);
       if (owner.kind === 'workspace' && owner.role !== body.role)
         throw new HttpError(400, 'Prompt role mismatch');
-      const program = validatePromptProgram({
-        ...createDefaultPromptProgram(''),
-        controls: body.controls,
-      });
-      resolvePromptValues(program, record(body.values));
+      resolveControlValues(validateControlDefinitions(body.controls), record(body.values));
     }
   } else throw new HttpError(400, 'Invalid archive version kind');
 }
@@ -1898,19 +1661,14 @@ function validateArchiveProfile(
   fields(p, [
     'chatId',
     'revision',
-    'attachments',
-    'personaReference',
     'routes',
     'image',
     'imageTranslation',
     'packageAttachments',
-    'packageValues',
-    'extensionGrants',
     'loreContext',
     'pinned',
     ...(frozen
       ? [
-          'contents',
           'models',
           'promptPresets',
           'prompts',
@@ -1919,7 +1677,7 @@ function validateArchiveProfile(
           'packages',
           'collaborationModels',
           'contextModel',
-          'extensionModel',
+          'scriptModel',
           'chatOverrides',
           'chatOptions',
           'promptOptionOwner',
@@ -1939,18 +1697,13 @@ function validateArchiveProfile(
   if (p.loreContext !== undefined) validateLoreContextPolicy(p.loreContext);
   if (p.chatId !== chatId) throw new HttpError(400, 'Profile chat mismatch');
   number(p.revision, 'profile revision');
-  if (p.personaReference !== undefined) boolean(p.personaReference);
   boolean(p.image);
   if (p.imageTranslation !== undefined) boolean(p.imageTranslation);
-  const attachments = archiveList(p.attachments).map(ref);
-  if (new Set(attachments.map((r) => r.id)).size !== attachments.length)
-    throw new HttpError(400, 'Duplicate attachment');
-  const contents = attachments.map((r) => product.get<Content>('content', r.id, r.revision));
   const routes = record(!frozen && !Object.hasOwn(p, 'routes') ? emptyModelRoutes() : p.routes);
-  fields(routes, ['main', 'translation', 'status', 'image']);
+  fields(routes, ['main', 'translation', 'status']);
   const models: ProfileSnapshot['models'] = {};
-  if (frozen) fields(record(p.models), ['main', 'translation', 'status', 'image']);
-  for (const role of ['main', 'translation', 'status', 'image'] as const) {
+  if (frozen) fields(record(p.models), ['main', 'translation', 'status']);
+  for (const role of ['main', 'translation', 'status'] as const) {
     if (routes[role] === null) {
       if (frozen && p.models[role] !== undefined)
         throw new HttpError(400, 'Unexpected frozen model');
@@ -1970,7 +1723,7 @@ function validateArchiveProfile(
     for (const role of ['main', 'translation'] as const) {
       const preset = promptPresets[role];
       if (!preset) continue;
-      const program = validatePromptProgram(preset.program);
+      const program = validateRisuPrompt(preset.program);
       if (preset.role !== role) throw new HttpError(400, 'Frozen prompt role mismatch');
       number(preset.revision, 'prompt revision');
       text(preset.id, 'prompt ID', 100);
@@ -1995,7 +1748,7 @@ function validateArchiveProfile(
   }
   if (frozen) {
     if (p.contextModel !== undefined) validateModelSnapshot(p.contextModel);
-    if (p.extensionModel !== undefined) validateModelSnapshot(p.extensionModel);
+    if (p.scriptModel !== undefined) validateModelSnapshot(p.scriptModel);
     const collaboration = promptPresets?.main?.program.collaboration;
     if (collaboration?.enabled) {
       const agentModels = record(p.collaborationModels);
@@ -2018,39 +1771,6 @@ function validateArchiveProfile(
     packageAttachments ?? [],
     frozen ? { frozen: packageAttachments ?? [] } : { latest: true }
   );
-  if (p.extensionGrants !== undefined) {
-    const grants = validateExtensionGrants(p.extensionGrants);
-    const attachedInstances = new Map(
-      resolvedPackages.attachments.map((attachment, index) => [
-        packageInstanceId(attachment),
-        { attachment, pkg: resolvedPackages.packages[index] },
-      ])
-    );
-    for (const [instanceId, grant] of Object.entries(grants)) {
-      const attached = attachedInstances.get(instanceId);
-      if (!attached) throw new HttpError(400, 'Extension grant package is not attached');
-      if (
-        grant.packageRevision === attached.attachment.revision &&
-        grant.capabilities.some(
-          (capability) => !packageRequestsExtensionGrant(attached.pkg, capability)
-        )
-      )
-        throw new HttpError(400, 'Extension grant capability is not requested');
-    }
-  }
-  if (p.packageValues !== undefined) {
-    if (frozen) packageControlValues(product, resolvedPackages.attachments, p.packageValues);
-    else {
-      // An unsaved live profile can still contain options for its previous dependency graph.
-      const previous = resolvePackageModules(product, packageAttachments ?? []);
-      currentPackageValues(
-        product,
-        [...resolvedPackages.attachments, ...previous.attachments],
-        p.packageValues
-      );
-    }
-  }
-  validateAttachmentRoles(product, attachments, packageAttachments);
   const packages = packageAttachments === undefined ? undefined : resolvedPackages.packages;
   if (
     frozen &&
@@ -2062,7 +1782,7 @@ function validateArchiveProfile(
     throw new HttpError(400, 'Frozen package revision mismatch');
   if (frozen && !isDeepStrictEqual(p.promptPresets, promptPresets))
     throw new HttpError(400, 'Frozen prompt revision mismatch');
-  if (frozen && (!isDeepStrictEqual(p.contents, contents) || !isDeepStrictEqual(p.models, models)))
+  if (frozen && !isDeepStrictEqual(p.models, models))
     throw new HttpError(400, 'Frozen profile revision mismatch');
   if (frozen) validateChatOverrideSnapshot(product.store, p as ProfileSnapshot);
   if (frozen) validateChatOptionSnapshot(p as ProfileSnapshot);
@@ -2086,7 +1806,6 @@ function validateArchiveGraph(product: ProductStore) {
     workspace.titleModel,
     workspace.helperModel,
     workspace.contextModel,
-    workspace.translationPolicy.refusalModel,
     ...(workspace.main.program.collaboration?.agents ?? []).map((agent) => agent.model),
   ])
     if (selected) product.get<ModelPreset>('model', selected.id);
@@ -2273,7 +1992,6 @@ function validateArchiveGraph(product: ProductStore) {
         product.store.context.assertSnapshot(snapshot as RunSnapshot);
       }
     }
-    validatePackageBehaviorRunSnapshot(product.store, snapshot as RunSnapshot);
     if (snapshot.profile) {
       const profile = validateArchiveProfile(
         product,
@@ -2293,7 +2011,7 @@ function validateArchiveGraph(product: ProductStore) {
     const source = product.store.sourceAtHash(job.source_revision, job.source_hash);
     const jobInput = parse(job.input);
     if (jobInput && typeof jobInput === 'object' && !Array.isArray(jobInput)) {
-      for (const role of ['translation', 'status', 'image'] as const) {
+      for (const role of ['translation', 'status'] as const) {
         if (
           (Object.hasOwn(jobInput, `${role}ModelSelection`) ||
             Object.hasOwn(jobInput, `${role}ModelSnapshot`)) &&
@@ -2309,11 +2027,7 @@ function validateArchiveGraph(product: ProductStore) {
       if (job.kind !== 'translation')
         throw new HttpError(400, 'Automatic image settings require translation job');
       validateImageCatalog(product.store, job.chat_id, jobInput.translationImageSelection);
-      if (
-        jobInput.translationImageSelection.imageSelectionError !== undefined &&
-        jobInput.translationImageSelection.imageSelectionError !== 'IMAGE_MODEL_UNAVAILABLE'
-      )
-        throw new HttpError(400, 'Invalid automatic image diagnostic');
+
       product.resolveJobPrompt(
         product.store.run(source.runId).snapshot,
         jobInput.translationImageSelection
@@ -2384,9 +2098,6 @@ function validateArchiveGraph(product: ProductStore) {
         entries: result.display,
       });
   }
-  const extensionOwners = validateExtensionOperationArchive(product.store, (profile, chatId) => {
-    validateArchiveProfile(product, profile, chatId, true);
-  });
   const illustrationOwners = validateIllustrationArchive(product.store);
   for (const attempt of rows('attempts')) {
     const request = record(parse(attempt.request));
@@ -2398,17 +2109,13 @@ function validateArchiveGraph(product: ProductStore) {
     const contextOwner = product.db
       .prepare('SELECT job_id FROM context_job_attempts WHERE attempt_id=?')
       .get(attempt.id);
-    const extensionOwner = extensionOwners.has(attempt.id);
     const illustrationOwner = illustrationOwners.get(attempt.id);
-    const primaryOwners = [attempt.run_id, attempt.job_id, attempt.story_job_id].filter(
-      (id) => id !== null
-    ).length;
+    const primaryOwners = [attempt.run_id, attempt.job_id].filter((id) => id !== null).length;
     if (
       primaryOwners +
         Number(!!helperOwner) +
         Number(!!contextOwner) +
-        Number(!!illustrationOwner) +
-        Number(!!extensionOwner) !==
+        Number(!!illustrationOwner) !==
       1
     )
       throw new HttpError(400, 'Attempt target mismatch');
@@ -2420,20 +2127,6 @@ function validateArchiveGraph(product: ProductStore) {
         attempt.model_id !== illustrationOwner.modelId)
     )
       throw new HttpError(400, 'Illustration attempt identity mismatch');
-    if (attempt.story_job_id !== null) {
-      const target = product.db
-        .prepare('SELECT chat_id,kind,inputs FROM story_jobs WHERE id=?')
-        .get(attempt.story_job_id) as Row | undefined;
-      const compaction =
-        attempt.role === 'context' &&
-        parse(target?.inputs ?? '[]')?.some((input: Row) => input.contextPlan);
-      if (
-        !target ||
-        target.chat_id !== attempt.chat_id ||
-        (target.kind !== attempt.role && !compaction)
-      )
-        throw new HttpError(400, 'Story attempt target mismatch');
-    }
     choice(
       attempt.role,
       [
@@ -2441,7 +2134,7 @@ function validateArchiveGraph(product: ProductStore) {
         'translation',
         'status',
         'image',
-        'state',
+        'script',
         'context',
         'helper',
         'title',
@@ -2450,18 +2143,13 @@ function validateArchiveGraph(product: ProductStore) {
       'attempt role'
     );
     if (
-      attempt.story_job_id === null &&
       !helperOwner &&
       !contextOwner &&
       !illustrationOwner &&
-      !extensionOwner &&
       (attempt.run_id !== null
         ? attempt.role !== 'main' &&
           attempt.role !== 'title' &&
-          !(
-            attempt.role === 'state' &&
-            (request.extensionAction !== undefined || request.nativeScript !== undefined)
-          ) &&
+          !(attempt.role === 'script' && request.nativeScript !== undefined) &&
           !(attempt.role === 'context' && request.judgment !== undefined) &&
           !(attempt.role === 'context' && parse(runs.get(attempt.run_id)!.snapshot).contextPlan)
         : jobs.get(attempt.job_id)?.kind !== attempt.role)
@@ -2475,7 +2163,27 @@ function validateArchiveGraph(product: ProductStore) {
       );
     }
     if (request.judgment !== undefined) {
-      if (request.judgment.kind === 'translation-refusal') {
+      if (request.judgment.kind === 'main-refusal') {
+        const snapshot =
+          attempt.run_id !== null
+            ? (parse(runs.get(attempt.run_id)?.snapshot ?? '{}') as RunSnapshot)
+            : undefined;
+        if (!snapshot?.mainJudgment || attempt.job_id !== null)
+          throw new HttpError(400, 'Judgment attempt owner mismatch');
+        validateMainJudgmentWire(
+          snapshot.mainJudgment,
+          request as import('../core/transport.js').WireRecord
+        );
+      } else if (request.judgment.kind === 'image-selection') {
+        const owner = attempt.job_id !== null ? jobs.get(attempt.job_id) : undefined;
+        if (!owner || owner.kind !== 'image')
+          throw new HttpError(400, 'Judgment attempt owner mismatch');
+        validateImageJudgmentWire(
+          imageTargetSource(product.store, product.store.job(owner.id)),
+          imageCatalog(parse(owner.input)),
+          request as import('../core/transport.js').WireRecord
+        );
+      } else if (request.judgment.kind === 'translation-refusal') {
         const owner = attempt.job_id !== null ? jobs.get(attempt.job_id) : undefined;
         if (!owner || owner.kind !== 'translation')
           throw new HttpError(400, 'Judgment attempt owner mismatch');
@@ -2490,7 +2198,7 @@ function validateArchiveGraph(product: ProductStore) {
             ? (parse(runs.get(attempt.run_id)?.snapshot ?? '{}') as RunSnapshot)
             : undefined;
         if (
-          snapshot?.profile?.loreContext?.judgment?.backend !== 'jev' ||
+          !snapshot ||
           request.judgment.kind !== 'lore-selection' ||
           request.protocol !== 'typesafe-systemone-v1' ||
           request.connectionId !== 'typesafe-judgment' ||
@@ -2498,7 +2206,6 @@ function validateArchiveGraph(product: ProductStore) {
           request.role !== 'context' ||
           request.url !== JEV_ENDPOINT ||
           request.method !== 'POST' ||
-          request.extensionAction ||
           request.agentId ||
           request.nativeScript ||
           !(
@@ -2508,23 +2215,6 @@ function validateArchiveGraph(product: ProductStore) {
           )
         )
           throw new HttpError(400, 'Judgment attempt attribution mismatch');
-      }
-    }
-    if (request.extensionAction !== undefined && !extensionOwner) {
-      if (
-        attempt.run_id === null ||
-        attempt.role !== 'state' ||
-        request.agentId !== undefined ||
-        attempt.status === 'mock'
-      )
-        throw new HttpError(400, 'Extension attempt attribution mismatch');
-      const snapshot = parse(runs.get(attempt.run_id)!.snapshot) as RunSnapshot;
-      try {
-        const { target } = validateExtensionModelAttribution(snapshot, request.extensionAction);
-        if (request.modelId !== target.modelId || request.connectionId !== target.connectionId)
-          throw new HttpError(400, 'Extension attempt model mismatch');
-      } catch {
-        throw new HttpError(400, 'Extension attempt attribution mismatch');
       }
     }
     if (request.pricingSnapshot !== undefined) {

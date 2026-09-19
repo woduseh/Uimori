@@ -17,7 +17,7 @@ RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 FROM base AS runtime
 ARG UIMORI_CODEX_VERSION=""
 RUN if [ -n "$UIMORI_CODEX_VERSION" ]; then npm install --global "@openai/codex@$UIMORI_CODEX_VERSION" --no-audit --no-fund && npm cache clean --force; fi
-ENV NODE_ENV=production NR_HOST=0.0.0.0 NR_PORT=4310 NR_DB=/data/narrative.sqlite
+ENV NODE_ENV=production UIMORI_HOST=0.0.0.0 UIMORI_PORT=4310 UIMORI_DB=/data/uimori.sqlite
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/LICENSE /app/THIRD_PARTY_NOTICES.md ./

@@ -13,7 +13,7 @@ import {
   updatePromptWorkspace,
 } from '../server/prompt-workspace.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import {
   MODEL_ROLES,
   workspaceModelRef,
@@ -26,9 +26,6 @@ import { managementImpact } from '../server/provider-management.js';
 import { illustrationReferenceCandidates } from '../server/illustrations.js';
 import { helperWritingSnapshot } from '../server/helper-runtime.js';
 import { contextSourceRefs } from '../server/context-planning.js';
-import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
-import { packageInstanceId } from '../core/execution-context.js';
-import type { Content } from '../core/product.js';
 
 const owned: { path: string; store: Store }[] = [];
 function database() {
@@ -69,8 +66,8 @@ function select(store: Store, id: string) {
   const current = modelWorkspace(store);
   return updateModelWorkspace(store, {
     expectedRevision: current.revision,
-    routes: { main: { id }, translation: { id }, status: { id }, image: { id } },
-    translationPolicy: { refusalModel: { id }, maxRetries: 1, maxCalls: 16 },
+    routes: { main: { id }, translation: { id }, status: { id } },
+    translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
   });
 }
 function complete(store: Store, chatId: string) {
@@ -105,22 +102,22 @@ function complete(store: Store, chatId: string) {
   return { run: store.run(run.id), source };
 }
 
-test('optional Jev translation policy survives workspace save, job freeze and backup without a refusal model', () => {
+test('Jev translation policy survives workspace save, job freeze and backup without a refusal model', () => {
   const store = database(),
     chat = createFixtureChat(store, 'Jev translation settings'),
     translator = model(store, 'Translator');
   select(store, translator.id);
   const current = modelWorkspace(store),
-    judgment = { backend: 'jev' as const, threshold: 0.92 };
+    judgment = { threshold: 0.92 };
   updateModelWorkspace(store, {
     expectedRevision: current.revision,
     routes: current.routes,
-    translationPolicy: { refusalModel: null, judgment, maxRetries: 1, maxCalls: 16 },
+    translationPolicy: { judgment, maxRetries: 1, maxCalls: 16 },
   });
   expect(modelWorkspace(store).translationPolicy.judgment).toEqual(judgment);
   const { source } = complete(store, chat.id),
     job = store.requestTranslation(source.id);
-  expect(job.input).toMatchObject({ translationPolicy: { judgment, refusalModel: null } });
+  expect(job.input).toMatchObject({ translationPolicy: { judgment } });
   const restored = database();
   expect(restored.product.import(store.product.export()).restored).toBe(true);
   expect(modelWorkspace(restored).translationPolicy.judgment).toEqual(judgment);
@@ -132,52 +129,7 @@ test('optional Jev translation policy survives workspace save, job freeze and ba
       routes: latest.routes,
       translationPolicy: { ...latest.translationPolicy, judgment: { ...judgment, threshold: 0.5 } },
     })
-  ).toThrow('Invalid translation judgment policy');
-});
-
-test('legacy chat selections never seed global defaults and reading current settings does not migrate stored data', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Legacy chat'),
-    old = model(store, 'Old');
-  const workspace = promptWorkspace(store);
-  const { modelRoutes: _routes, ...legacyWorkspace } = workspace;
-  store.db
-    .prepare('UPDATE prompt_workspace SET body=? WHERE id=1')
-    .run(JSON.stringify(legacyWorkspace));
-  const legacy = {
-    ...store.product.profile(chat.id),
-    routes: { ...emptyModelRoutes(), main: { id: old.id } },
-  };
-  store.db
-    .prepare('UPDATE profiles SET body=? WHERE chat_id=?')
-    .run(JSON.stringify(legacy), chat.id);
-  const before = store.db.prepare('SELECT body FROM profiles WHERE chat_id=?').get(chat.id);
-  expect(modelWorkspace(store).routes).toEqual(emptyModelRoutes());
-  expect(store.product.profile(chat.id).routes).toEqual(emptyModelRoutes());
-  expect(store.db.prepare('SELECT body FROM profiles WHERE chat_id=?').get(chat.id)).toEqual(
-    before
-  );
-  expect(store.db.prepare('SELECT body FROM prompt_workspace').get()?.body).toBe(
-    JSON.stringify(legacyWorkspace)
-  );
-  expect(() =>
-    store.product.updateProfile(chat.id, {
-      expectedRevision: legacy.revision,
-      attachments: legacy.attachments,
-      image: false,
-      routes: legacy.routes,
-    })
-  ).toThrow(/Unknown request field/);
-  const chosen = model(store, 'Chosen');
-  select(store, chosen.id);
-  const fresh = createFixtureChat(store, 'Another bot');
-  for (const item of [chat, fresh])
-    expect(store.product.snapshot(item.id).models.main?.id).toBe(chosen.id);
-  expect(
-    JSON.parse(
-      String(store.db.prepare('SELECT body FROM profiles WHERE chat_id=?').get(fresh.id)?.body)
-    )
-  ).not.toHaveProperty('routes');
+  ).toThrow('TRANSLATION_JUDGMENT_INVALID');
 });
 
 test('optional title model is independent of task routes, strict, CAS protected and preserved by omitted updates', () => {
@@ -210,17 +162,17 @@ test('the optional extension model stays outside task routes and freezes its cur
     chat = createFixtureChat(store, 'Extension model'),
     extension = model(store, 'Extension');
   const current = modelWorkspace(store);
-  expect(current.extensionModel).toBeNull();
+  expect(current.scriptModel).toBeNull();
   const selected = updateModelWorkspace(store, {
     expectedRevision: current.revision,
     routes: current.routes,
     translationPolicy: current.translationPolicy,
-    extensionModel: { id: extension.id },
+    scriptModel: { id: extension.id },
   });
-  expect(selected.extensionModel).toEqual({ id: extension.id });
+  expect(selected.scriptModel).toEqual({ id: extension.id });
   expect(selected.routes).toEqual(emptyModelRoutes());
   const frozen = store.product.snapshot(chat.id);
-  expect(frozen.extensionModel).toMatchObject({ id: extension.id, revision: extension.revision });
+  expect(frozen.scriptModel).toMatchObject({ id: extension.id, revision: extension.revision });
   store.product.model(
     {
       title: 'Extension revised',
@@ -232,250 +184,15 @@ test('the optional extension model stays outside task routes and freezes its cur
     },
     extension.id
   );
-  expect(store.product.snapshot(chat.id).extensionModel).toMatchObject({
+  expect(store.product.snapshot(chat.id).scriptModel).toMatchObject({
     id: extension.id,
     revision: extension.revision + 1,
     title: 'Extension revised',
   });
-  expect(frozen.extensionModel).toMatchObject({
+  expect(frozen.scriptModel).toMatchObject({
     id: extension.id,
     revision: extension.revision,
     title: 'Extension',
-  });
-});
-
-function extensionPackage(capability: boolean, variableWrite = false) {
-  return {
-    version: 1 as const,
-    id: 'placeholder',
-    revision: 1,
-    title: 'Extension package',
-    description: 'Synthetic extension grant fixture',
-    lore: [],
-    instructions: [],
-    controls: [],
-    transforms: [],
-    behavior: {
-      revision: 1,
-      schemaVersion: 1,
-      stateSchema: { type: 'record' as const, properties: {} },
-      initialState: {},
-      actions: [
-        {
-          id: 'ask',
-          triggers: ['model' as const],
-          inputSchema: { type: 'record' as const, properties: {} },
-          effects: [],
-          program: {
-            api: EXTENSION_PROGRAM_API,
-            source: 'return {state: api.state, result: {ok: true}};',
-            ...(capability || variableWrite
-              ? {
-                  capabilities: [
-                    ...(capability ? ['model.generate' as const] : []),
-                    ...(variableWrite ? ['variables.write' as const] : []),
-                  ],
-                }
-              : {}),
-          },
-        },
-      ],
-      outputParsers: [],
-    },
-  };
-}
-
-test('extension grants bind to one attached package revision, do not roll forward and clean removed attachments', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Extension grant'),
-    content = store.product.content({
-      kind: 'module',
-      title: 'Extension package',
-      description: 'Synthetic extension grant fixture',
-      text: '',
-      loading: 'pinned',
-      relatedIds: [],
-      package: extensionPackage(true),
-    }) as Content;
-  const attach = (profile: ChatProfile, packageAttachments: ChatProfile['packageAttachments']) =>
-    store.product.updateProfile(chat.id, {
-      expectedRevision: profile.revision,
-      attachments: profile.attachments,
-      image: profile.image,
-      packageAttachments,
-    });
-  const initial = store.product.profile(chat.id),
-    moduleAttachment = { id: content.id, revision: content.revision, role: 'module' as const },
-    attached = attach(initial, [...(initial.packageAttachments ?? []), moduleAttachment]),
-    instanceId = packageInstanceId(moduleAttachment);
-  const granted = store.product.updateProfile(chat.id, {
-    expectedRevision: attached.revision,
-    attachments: attached.attachments,
-    image: attached.image,
-    packageAttachments: attached.packageAttachments,
-    extensionGrants: {
-      [instanceId]: { packageRevision: content.revision, capabilities: ['model.generate'] },
-    },
-  });
-  expect(granted.extensionGrants?.[instanceId]).toEqual({
-    packageRevision: content.revision,
-    capabilities: ['model.generate'],
-  });
-  const cleared = store.product.updateProfile(chat.id, {
-    expectedRevision: granted.revision,
-    attachments: granted.attachments,
-    image: granted.image,
-    packageAttachments: granted.packageAttachments,
-    extensionGrants: {},
-  });
-  expect(cleared.extensionGrants).toBeUndefined();
-  const regranted = store.product.updateProfile(chat.id, {
-    expectedRevision: cleared.revision,
-    attachments: cleared.attachments,
-    image: cleared.image,
-    packageAttachments: cleared.packageAttachments,
-    extensionGrants: {
-      [instanceId]: { packageRevision: content.revision, capabilities: ['model.generate'] },
-    },
-  });
-  const revised = store.product.content(
-    {
-      kind: content.kind,
-      title: content.title,
-      description: content.description,
-      text: content.text,
-      loading: content.loading,
-      relatedIds: content.relatedIds,
-      package: extensionPackage(false),
-      expectedRevision: content.revision,
-    },
-    content.id
-  ) as Content;
-  const stale = store.product.updateProfile(chat.id, {
-    expectedRevision: regranted.revision,
-    attachments: regranted.attachments,
-    image: regranted.image,
-    packageAttachments: regranted.packageAttachments,
-  });
-  expect(stale.packageAttachments?.find((item) => item.id === content.id)?.revision).toBe(
-    revised.revision
-  );
-  expect(stale.extensionGrants?.[instanceId]?.packageRevision).toBe(content.revision);
-  expect(() =>
-    store.product.updateProfile(chat.id, {
-      expectedRevision: stale.revision,
-      attachments: stale.attachments,
-      image: stale.image,
-      packageAttachments: stale.packageAttachments,
-      extensionGrants: {
-        [instanceId]: { packageRevision: revised.revision, capabilities: ['model.generate'] },
-      },
-    })
-  ).toThrow('Invalid extension grant');
-  const removed = attach(
-    stale,
-    stale.packageAttachments?.filter((item) => item.id !== content.id)
-  );
-  expect(removed.extensionGrants).toBeUndefined();
-});
-
-test('extension grants accept unique requested capabilities and preserve unchanged stale authority', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Extension variable grant'),
-    content = store.product.content({
-      kind: 'module',
-      title: 'Variable extension package',
-      description: 'Synthetic extension grant fixture',
-      text: '',
-      loading: 'pinned',
-      relatedIds: [],
-      package: extensionPackage(true, true),
-    }) as Content;
-  const attachment = { id: content.id, revision: content.revision, role: 'module' as const };
-  const initial = store.product.profile(chat.id);
-  const attached = store.product.updateProfile(chat.id, {
-    expectedRevision: initial.revision,
-    attachments: initial.attachments,
-    image: initial.image,
-    packageAttachments: [...(initial.packageAttachments ?? []), attachment],
-  });
-  const instanceId = packageInstanceId(attachment);
-  const grant = (capabilities: unknown[]) => ({
-    [instanceId]: { packageRevision: content.revision, capabilities },
-  });
-  const granted = store.product.updateProfile(chat.id, {
-    expectedRevision: attached.revision,
-    attachments: attached.attachments,
-    image: attached.image,
-    packageAttachments: attached.packageAttachments,
-    extensionGrants: grant(['model.generate', 'variables.write']),
-  });
-  expect(granted.extensionGrants?.[instanceId]).toEqual({
-    packageRevision: content.revision,
-    capabilities: ['model.generate', 'variables.write'],
-  });
-  for (const capabilities of [[], ['variables.write', 'variables.write'], ['variables.read']])
-    expect(() =>
-      store.product.updateProfile(chat.id, {
-        expectedRevision: granted.revision,
-        attachments: granted.attachments,
-        image: granted.image,
-        packageAttachments: granted.packageAttachments,
-        extensionGrants: grant(capabilities),
-      })
-    ).toThrow('Invalid extension');
-
-  const revised = store.product.content(
-    {
-      kind: content.kind,
-      title: content.title,
-      description: content.description,
-      text: content.text,
-      loading: content.loading,
-      relatedIds: content.relatedIds,
-      package: extensionPackage(true),
-      expectedRevision: content.revision,
-    },
-    content.id
-  ) as Content;
-  const stale = store.product.updateProfile(chat.id, {
-    expectedRevision: granted.revision,
-    attachments: granted.attachments,
-    image: granted.image,
-    packageAttachments: granted.packageAttachments?.map((item) =>
-      item.id === content.id ? { ...item, revision: revised.revision } : item
-    ),
-  });
-  expect(stale.extensionGrants?.[instanceId]).toEqual(granted.extensionGrants?.[instanceId]);
-  expect(() =>
-    store.product.updateProfile(chat.id, {
-      expectedRevision: stale.revision,
-      attachments: stale.attachments,
-      image: stale.image,
-      packageAttachments: stale.packageAttachments,
-      extensionGrants: {
-        [instanceId]: {
-          packageRevision: revised.revision,
-          capabilities: ['variables.write'],
-        },
-      },
-    })
-  ).toThrow('Invalid extension grant');
-  const currentModelOnly = store.product.updateProfile(chat.id, {
-    expectedRevision: stale.revision,
-    attachments: stale.attachments,
-    image: stale.image,
-    packageAttachments: stale.packageAttachments,
-    extensionGrants: {
-      [instanceId]: {
-        packageRevision: revised.revision,
-        capabilities: ['model.generate'],
-      },
-    },
-  });
-  expect(currentModelOnly.extensionGrants?.[instanceId]).toEqual({
-    packageRevision: revised.revision,
-    capabilities: ['model.generate'],
   });
 });
 
@@ -552,12 +269,11 @@ test('disabled and deleted selections block new work without rewriting historica
   const connection = store.product.get<{ revision: number }>('connection', a.connectionId);
   deleteLibraryItem(store, 'connection', a.connectionId, { expectedRevision: connection.revision });
   expect(modelWorkspace(store).routes).toEqual(emptyModelRoutes());
-  expect(modelWorkspace(store).translationPolicy.refusalModel).toBeNull();
   expect(frozen.models.main?.id).toBe(a.id);
   expect(frozen.models.main?.connection.enabled).toBe(true);
 });
 
-test('archive preserves global routes and immutable execution settings; absent legacy global routes stay unselected', () => {
+test('archive preserves global routes and immutable execution settings', () => {
   const store = database(),
     chat = createFixtureChat(store, 'Archive'),
     a = model(store, 'A');
@@ -565,7 +281,7 @@ test('archive preserves global routes and immutable execution settings; absent l
   const first = complete(store, chat.id);
   updatePromptWorkspace(store, {
     expectedRevision: promptWorkspace(store).revision,
-    main: { title: 'Later', program: createDefaultPromptProgram('Later'), values: {} },
+    main: { title: 'Later', program: createDefaultRisuPrompt('Later'), values: {} },
   });
   const archive = store.product.export(),
     restored = database();
@@ -576,17 +292,9 @@ test('archive preserves global routes and immutable execution settings; absent l
   for (const target of Object.values(archivedSnapshot.profile!.models))
     target!.connection.enabled = false;
   expect(restored.run(first.run.id).snapshot).toEqual(archivedSnapshot);
-  const legacy = structuredClone(archive);
-  const body = JSON.parse(legacy.tables.prompt_workspace[0].body);
-  delete body.modelRoutes;
-  legacy.tables.prompt_workspace[0].body = JSON.stringify(body);
-  const old = database();
-  old.product.import(legacy);
-  expect(modelWorkspace(old).routes).toEqual(emptyModelRoutes());
-  expect(old.run(first.run.id).snapshot).toEqual(archivedSnapshot);
 });
 
-test('archive rejects explicit null route objects atomically while legacy absent fields remain valid', () => {
+test('archive rejects explicit null route objects atomically', () => {
   const store = database();
   createFixtureChat(store, 'Archive strict routes');
   const archive = store.product.export();
@@ -601,17 +309,6 @@ test('archive rejects explicit null route objects atomically while legacy absent
     expect(() => target.product.import(damaged)).toThrow('Expected an object');
     expect(target.product.export().tables).toEqual(before.tables);
   }
-  const restored = database();
-  const legacy = structuredClone(archive);
-  for (const table of ['prompt_workspace', 'profiles'] as const) {
-    const row = legacy.tables[table][0],
-      body = JSON.parse(row.body);
-    delete body[table === 'prompt_workspace' ? 'modelRoutes' : 'routes'];
-    row.body = JSON.stringify(body);
-  }
-  restored.product.import(legacy);
-  expect(modelWorkspace(restored).routes).toEqual(emptyModelRoutes());
-  expect(restored.chats()).toHaveLength(1);
 });
 
 test('reading an explicit null global routes object rejects corruption without modifying it', () => {
@@ -627,52 +324,39 @@ function pin(store: Store, chatId: string, pinned: unknown, expectedRevision?: n
   const prior = store.product.profile(chatId);
   return store.product.updateProfile(chatId, {
     expectedRevision: expectedRevision ?? prior.revision,
-    attachments: prior.attachments,
+    packageAttachments: prior.packageAttachments,
     image: prior.image,
     ...(pinned === undefined ? {} : { pinned }),
   });
 }
 function mainPreset(store: Store, title: string) {
-  const program = createDefaultPromptProgram(title);
-  program.controls = [{ id: 'detail', label: 'Detail', type: 'boolean', default: false }];
+  const program = createDefaultRisuPrompt(title);
+  program.nativeRisuPreset.preset.customPromptTemplateToggle = 'detail=Detail=select=Off,On';
   return store.product.save('prompt-preset', {
     title,
     role: 'main',
     program,
-    values: { detail: false },
+    values: { detail: '0' },
   }) as PromptPreset;
 }
 
-test('workspace role resolution keeps optional and refusal selections separate from execution roles', () => {
+test('workspace role resolution keeps optional generation selections separate from execution roles', () => {
   const workspace = promptWorkspace(database());
-  const roles = [
-    'main',
-    'translation',
-    'status',
-    'image',
-    'helper',
-    'context',
-    'extension',
-    'title',
-    'refusal',
-  ] as const;
+  const roles = ['main', 'translation', 'status', 'helper', 'context', 'script', 'title'] as const;
   expect(roles.map((role) => workspaceModelRef(workspace, role))).toEqual(roles.map(() => null));
   workspace.modelRoutes.main = { id: 'main' };
   workspace.helperModel = { id: 'helper' };
   workspace.contextModel = { id: 'context' };
-  workspace.extensionModel = { id: 'extension' };
+  workspace.scriptModel = { id: 'script' };
   workspace.titleModel = { id: 'title' };
-  workspace.translationPolicy.refusalModel = { id: 'refusal' };
   expect(roles.map((role) => workspaceModelRef(workspace, role)?.id ?? null)).toEqual([
     'main',
     null,
     null,
-    null,
     'helper',
     'context',
-    'extension',
+    'script',
     'title',
-    'refusal',
   ]);
   expect(new Set(MODEL_ROLES).size).toBe(9);
   expect(MODEL_ROLES).toContain('illustration');
@@ -707,7 +391,7 @@ test('chat pins follow the latest selected IDs while other chats and auxiliary m
     expectedRevision: current.revision,
     main: {
       title: 'Later global prompt',
-      program: createDefaultPromptProgram('Global B'),
+      program: createDefaultRisuPrompt('Global B'),
       values: {},
     },
   });
@@ -716,8 +400,18 @@ test('chat pins follow the latest selected IDs while other chats and auxiliary m
     {
       title: 'Pinned prompt revised',
       role: 'main',
-      program: { ...preset.program, blocks: createDefaultPromptProgram('Pinned latest').blocks },
-      values: { detail: true },
+      program: {
+        ...preset.program,
+        nativeRisuPreset: {
+          version: 1,
+          preset: {
+            ...preset.program.nativeRisuPreset.preset,
+            promptTemplate:
+              createDefaultRisuPrompt('Pinned latest').nativeRisuPreset.preset.promptTemplate,
+          },
+        },
+      },
+      values: { detail: '1' },
     },
     preset.id,
     preset.revision
@@ -742,7 +436,7 @@ test('chat pins follow the latest selected IDs while other chats and auxiliary m
     program: latest.program,
   });
   expect(next.promptControls?.[`${latest.id}@${latest.revision}`]?.values).toEqual({
-    detail: true,
+    detail: '1',
   });
   expect(store.product.snapshot(other.id).models.main?.id).toBe(globalB.id);
   expect(store.product.snapshot(other.id).promptPresets?.main?.program).toEqual(
@@ -766,7 +460,7 @@ test('pin writes reject stale revisions, invalid references and non-main prompts
   const translation = store.product.save('prompt-preset', {
     title: 'Translation',
     role: 'translation',
-    program: createDefaultPromptProgram('Translation', 'translation'),
+    program: createDefaultRisuPrompt('Translation', 'translation'),
   });
   const before = store.product.profile(chat.id);
   for (const invalid of [
@@ -855,7 +549,7 @@ test('changing a pin invalidates pending options and preserves the pending draft
       branchId: state.branchId,
       expectedRevision: state.revision,
       binding: state.binding,
-      values: { detail: true },
+      values: { detail: '1' },
       operationId: randomUUID(),
       expectedHeadRevision: state.headRevision,
     },
@@ -869,7 +563,7 @@ test('changing a pin invalidates pending options and preserves the pending draft
   expect(store.db.prepare('SELECT count(*) AS count FROM runs').get()?.count).toBe(0);
   pin(store, chat.id, { mainPromptPresetId: presetA.id });
   const completed = complete(store, chat.id);
-  expect(completed.run.snapshot.profile?.chatOptions?.values).toEqual({ detail: true });
+  expect(completed.run.snapshot.profile?.chatOptions?.values).toEqual({ detail: '1' });
   expect(options.get(chat.id).pending).toHaveLength(0);
 });
 
@@ -886,7 +580,7 @@ test('fork and archive preserve chat pins and frozen prompt contents after a lat
   const first = complete(store, chat.id);
   store.product.save(
     'prompt-preset',
-    { ...preset, program: createDefaultPromptProgram('Later'), values: {} },
+    { ...preset, program: createDefaultRisuPrompt('Later'), values: {} },
     preset.id,
     preset.revision
   );

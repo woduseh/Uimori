@@ -1,5 +1,5 @@
 /** Risu documents remain the authored source; package fields are UI/runtime projections. */
-export type NativeRisuContent = {
+export type RisuContentSource = {
   version: 1;
   card: Record<string, unknown>;
   module?: Record<string, unknown>;
@@ -28,10 +28,10 @@ const records = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value)
     ? value.filter((item) => item && typeof item === 'object' && !Array.isArray(item))
     : [];
-export const nativeRisuExtension = (native: NativeRisuContent) =>
+export const nativeRisuExtension = (native: RisuContentSource) =>
   object(object(native.card.extensions).risuai);
 /** Embedded modules replace inline scripts, including when their list is empty. */
-export function nativeRisuRegex(native: NativeRisuContent): NativeRisuRegex[] {
+export function nativeRisuRegex(native: RisuContentSource): NativeRisuRegex[] {
   return records(
     native.module ? native.module.regex : nativeRisuExtension(native).customScripts
   ).filter(
@@ -39,7 +39,7 @@ export function nativeRisuRegex(native: NativeRisuContent): NativeRisuRegex[] {
       typeof item.in === 'string' && typeof item.out === 'string' && typeof item.type === 'string'
   ) as NativeRisuRegex[];
 }
-export function nativeRisuTriggers(native: NativeRisuContent): Record<string, unknown>[] {
+export function nativeRisuTriggers(native: RisuContentSource): Record<string, unknown>[] {
   // Embedded modules become character scripts in Risu; standalone modules own their permission.
   const lowLevelAccess =
     (Object.keys(native.card).length ? nativeRisuExtension(native) : native.module)
@@ -48,17 +48,17 @@ export function nativeRisuTriggers(native: NativeRisuContent): Record<string, un
     native.module ? native.module.trigger : nativeRisuExtension(native).triggerscript
   ).map((trigger) => ({ ...trigger, lowLevelAccess }));
 }
-export function nativeRisuLore(native: NativeRisuContent): Record<string, unknown>[] {
+export function nativeRisuLore(native: RisuContentSource): Record<string, unknown>[] {
   return records(native.module?.lorebook ?? object(native.card.character_book).entries);
 }
-export function nativeRisuBackground(native: NativeRisuContent): string {
+export function nativeRisuBackground(native: RisuContentSource): string {
   const value = nativeRisuExtension(native).backgroundHTML;
   return typeof value === 'string' ? value : '';
 }
 /** Risu card names may omit the separately serialized extension (e.g. Hinano_* + webp). */
 export function nativeRisuAssetNames(
-  native: NativeRisuContent,
-  asset: NativeRisuContent['assets'][number]
+  native: RisuContentSource,
+  asset: RisuContentSource['assets'][number]
 ): string[] {
   const original = records(native.card.assets).find(
     (entry) => entry.uri === asset.uri && entry.name === asset.name
@@ -78,7 +78,7 @@ export function nativeRisuAssetNames(
   ];
 }
 /** Validate bounded JSON data without interpreting authored CBS, regex or Lua. */
-export function validateNativeRisuContent(value: unknown): NativeRisuContent {
+export function validateRisuContentSource(value: unknown): RisuContentSource {
   const source = object(value);
   if (
     source.version !== 1 ||
@@ -122,5 +122,5 @@ export function validateNativeRisuContent(value: unknown): NativeRisuContent {
   }
   if (new TextEncoder().encode(JSON.stringify(source)).byteLength > 8 * 1024 * 1024)
     throw new Error('PACKAGE_NATIVE_RISU_LIMIT');
-  return structuredClone(source) as NativeRisuContent;
+  return structuredClone(source) as RisuContentSource;
 }

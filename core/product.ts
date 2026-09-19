@@ -49,7 +49,7 @@ export type Content = ContentRef & {
   text: string;
   loading: 'pinned' | 'discoverable';
   relatedIds: string[];
-  package?: import('./content-package.js').ContentPackage;
+  package: import('./risu-content.js').RisuContent;
   hasPackage?: boolean;
 };
 export type PromptCombinationOwner =
@@ -57,70 +57,67 @@ export type PromptCombinationOwner =
   | { kind: 'workspace'; role: PromptRole };
 export type SavedPromptCombination = ContentRef & {
   owner?: PromptCombinationOwner;
-  controls?: import('./prompt-program.js').PromptProgram['controls'];
+  controls?: import('./risu-prompt.js').PromptControl[];
   title: string;
   role: PromptRole;
-  values: Record<string, import('./prompt-program.js').PromptValue>;
+  values: Record<string, import('./risu-prompt.js').PromptValue>;
 };
 export type PromptRole = 'main' | 'translation';
 export type PromptPreset = ContentRef & {
   title: string;
   role: PromptRole;
-  program: import('./prompt-program.js').PromptProgram;
-  values?: Record<string, import('./prompt-program.js').PromptValue>;
+  program: import('./risu-prompt.js').RisuPrompt;
+  values?: Record<string, import('./risu-prompt.js').PromptValue>;
 };
 /** Editable, application-wide working copies. Applying a preset copies its content. */
 export type CurrentPrompt = {
   presetId?: string;
   title: string;
-  program: import('./prompt-program.js').PromptProgram;
-  values: Record<string, import('./prompt-program.js').PromptValue>;
+  program: import('./risu-prompt.js').RisuPrompt;
+  values: Record<string, import('./risu-prompt.js').PromptValue>;
   /** Defaults copied when the preset was applied, independent of later library edits. */
-  defaultValues?: Record<string, import('./prompt-program.js').PromptValue>;
+  defaultValues?: Record<string, import('./risu-prompt.js').PromptValue>;
 };
 export type ModelWorkspace = {
   titleModel?: ModelRef | null;
   helperModel?: ModelRef | null;
   contextModel?: ModelRef | null;
-  extensionModel?: ModelRef | null;
+  scriptModel?: ModelRef | null;
   revision: number;
-  routes: Record<TaskRole, ModelRef | null>;
+  routes: Record<TaskModelRole, ModelRef | null>;
   translationPolicy: PromptWorkspace['translationPolicy'];
 };
 export type PromptWorkspace = {
   titleModel?: ModelRef | null;
   helperModel?: ModelRef | null;
   contextModel?: ModelRef | null;
-  extensionModel?: ModelRef | null;
-  modelRoutes: Record<TaskRole, ModelRef | null>;
+  scriptModel?: ModelRef | null;
+  modelRoutes: Record<TaskModelRole, ModelRef | null>;
   revision: number;
   main: CurrentPrompt;
   translation: CurrentPrompt;
   translationPolicy: {
-    refusalModel: ModelRef | null;
-    judgment?: import('./translation-settings.js').TranslationJudgmentPolicy;
+    judgment: import('./translation-settings.js').TranslationJudgmentPolicy;
     maxRetries: number;
     maxCalls: number;
   };
 };
 export type TaskRole = 'main' | 'translation' | 'status' | 'image';
+export type TaskModelRole = Exclude<TaskRole, 'image'>;
 export const MODEL_ROLES = [
   'main',
   'translation',
   'status',
   'image',
-  'state',
+  'script',
   'context',
   'helper',
   'title',
   'illustration',
 ] as const;
 export type ModelRole = (typeof MODEL_ROLES)[number];
-// Refusal checks execute within a translation job; state and illustration own separate settings.
-export type WorkspaceModelRole =
-  | Exclude<ModelRole, 'state' | 'illustration'>
-  | 'extension'
-  | 'refusal';
+// Native scripts and illustrations have separate model routing.
+export type WorkspaceModelRole = Exclude<ModelRole, 'illustration' | 'image'>;
 export function workspaceModelRef(
   workspace: PromptWorkspace,
   role: WorkspaceModelRole
@@ -130,12 +127,10 @@ export function workspaceModelRef(
       return workspace.helperModel ?? null;
     case 'context':
       return workspace.contextModel ?? null;
-    case 'extension':
-      return workspace.extensionModel ?? null;
+    case 'script':
+      return workspace.scriptModel ?? null;
     case 'title':
       return workspace.titleModel ?? null;
-    case 'refusal':
-      return workspace.translationPolicy.refusalModel;
     default:
       return workspace.modelRoutes[role];
   }
@@ -218,22 +213,12 @@ export type ChatProfile = {
   loreContext?: import('./lore-context.js').LoreContextPolicy;
   chatId: string;
   revision: number;
-  attachments: ContentRef[];
   /** Read-only effective selection, including a pinned main model; frozen by each execution. */
-  routes: Record<TaskRole, ModelRef | null>;
+  routes: Record<TaskModelRole, ModelRef | null>;
   image: boolean;
   /** Automatically place images after a model translation completes. Defaults to true. */
   imageTranslation?: boolean;
-  packageAttachments?: import('./content-package.js').PackageAttachment[];
-  packageValues?: Record<string, Record<string, import('./prompt-program.js').PromptValue>>;
-  /** User grants keyed by the chat-local package instance ID. A grant binds one exact revision. */
-  extensionGrants?: Record<
-    string,
-    {
-      packageRevision: number;
-      capabilities: import('./extension-program.js').ExtensionGrantCapability[];
-    }
-  >;
+  packageAttachments?: import('./risu-content.js').ContentAttachment[];
 };
 export type ProfileSnapshot = ChatProfile & {
   /** Branch overrides frozen at reservation; absent in historical snapshots. */
@@ -242,19 +227,16 @@ export type ProfileSnapshot = ChatProfile & {
   /** Text-only per-link projection; the original packages below remain revision-exact. */
   chatOverrides?: import('./chat-overrides.js').ChatOverrideSnapshot;
   contextModel?: ModelSnapshot;
-  /** Global extension model resolved and frozen at reservation time. */
-  extensionModel?: ModelSnapshot;
-  /** Historical execution scope only. Current settings and new snapshots omit this field. */
-  personaReference?: boolean;
+  /** Global Lua script model resolved and frozen at reservation time. */
+  scriptModel?: ModelSnapshot;
   /** Self-contained execution evidence; never a live library dependency. */
   prompts?: Partial<Record<PromptRole, ContentRef | null>>;
-  promptControls?: Record<string, import('./prompt-program.js').ChatPromptControls>;
+  promptControls?: Record<string, import('./risu-prompt.js').ChatPromptControls>;
   promptWorkspaceRevision?: number;
   promptOptionOwner?: string;
   /** Models resolved at reservation, keyed by the main prompt's advisor IDs. */
   collaborationModels?: Record<string, ModelSnapshot>;
-  contents: Content[];
-  packages?: import('./content-package.js').ContentPackage[];
+  packages?: import('./risu-content.js').RisuContent[];
   models: Partial<Record<TaskRole, ModelSnapshot>>;
   promptPresets?: Partial<Record<PromptRole, PromptPreset>>;
 };
@@ -270,7 +252,7 @@ export type Asset = {
   packageOwner?: {
     id: string;
     revision: number;
-    role: import('./content-package.js').PackageRole;
+    role: import('./risu-content.js').ContentRole;
     title: string;
     imageId: string;
   };
@@ -324,8 +306,8 @@ export type Library = {
 export const defaultProfile = (chatId: string): ChatProfile => ({
   chatId,
   revision: 1,
-  attachments: [],
-  routes: { main: null, translation: null, status: null, image: null },
+  packageAttachments: [],
+  routes: { main: null, translation: null, status: null },
   image: false,
   imageTranslation: true,
 });

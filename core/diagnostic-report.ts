@@ -7,7 +7,6 @@ export type DiagnosticScope =
   | { scope: 'chat'; chatId: string; runId?: string };
 
 const statuses = [
-  'waiting_for_state',
   'queued',
   'running',
   'completed',
@@ -29,13 +28,14 @@ const roles = [
   'translation-refusal',
   'status',
   'image',
-  'state',
+  'script',
   'context',
   'helper',
   'title',
   'illustration',
 ] as const;
 const protocols = [
+  'typesafe-systemone-v1',
   'fixture-sse-v1',
   'vertex-gemini-v1',
   'openai-responses-v1',
@@ -46,6 +46,14 @@ const protocols = [
   'codex-app-server-v1',
 ] as const;
 const errors = new Set([
+  'MAIN_RESPONSE_REFUSED',
+  'MAIN_REFUSAL_UNCERTAIN',
+  'MAIN_JUDGMENT_CALL_BUDGET',
+  'JEV_CREDENTIAL_REQUIRED',
+  'JEV_EXECUTION_FAILED',
+  'JEV_TIMEOUT',
+  'JEV_RESPONSE_INVALID',
+  'JEV_INPUT_BUDGET',
   'CANCELLED',
   'TIMEOUT',
   'CONNECTION_NOT_AUTHORIZED',
@@ -63,10 +71,6 @@ const errors = new Set([
   'CODEX_REQUEST_FAILED',
   'CODEX_TIMEOUT',
   'CODEX_CANCELLED',
-  'BEHAVIOR_STATE_STALE',
-  'BEHAVIOR_INVALID_SCHEMA',
-  'BEHAVIOR_LIMIT_EXCEEDED',
-  'STATE_PREPARATION_FAILED',
 ]);
 function member<T extends string>(value: unknown, values: readonly T[]): T | 'unknown' {
   return typeof value === 'string' && values.includes(value as T) ? (value as T) : 'unknown';
@@ -191,7 +195,6 @@ export type DiagnosticReport = {
     deniedToolCount: number | null;
     sourceCommitted: boolean;
     hasPartialOutput: boolean;
-    preparationStatus: ReturnType<typeof diagnosticStatus> | null;
     modelCalls: number | null;
     inputTokens: number | null;
     outputTokens: number | null;

@@ -56,10 +56,6 @@
     gap: 5px;
   }
 }
-.jev-provider-test {
-  border-block: 1px solid var(--border);
-  padding: 20px 0;
-}
 .jev-provider-test > button {
   justify-self: start;
 }

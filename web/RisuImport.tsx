@@ -1,5 +1,5 @@
 import { RisuImageHandoffFields } from './RisuImageHandoffFields.js';
-import { readImportSource, readLargeImportSource as readSource } from './import-source.js';
+import { readLargeImportSource as readSource } from './import-source.js';
 import { useRef, useState } from 'react';
 import { RISU_IMPORT_MAX_BYTES, RISU_IMPORT_MAX_UPLOAD_BYTES } from '../core/risu-import.js';
 import type {
@@ -10,9 +10,7 @@ import type {
   RisuImportSource,
   RisuImportStagedSource,
 } from '../core/risu-import.js';
-import { RISU_PLUGIN_MAX_BYTES } from '../core/risu-plugin.js';
 import { ApiError, api } from './api.js';
-import { RisuPluginReport } from './RisuPluginReport.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
@@ -26,12 +24,9 @@ function memorySelectionIssue(entry: RisuImportPreview['lore'][number]): string 
   return '';
 }
 
-/** Names how the entry reaches the model: pinned entries always, keyword rules on their own keys. */
+/** Always-on lore stays pinned; optional lore is selected by JEV. */
 function loreLoadingLabel(entry: RisuImportPreview['lore'][number]): string {
-  if (entry.loading === 'pinned') return '항상 포함';
-  const keys = entry.keys?.trim() ?? '';
-  if (!keys) return '필요할 때 조회';
-  return `키워드 활성화 · 키: ${keys.length > 120 ? `${keys.slice(0, 120)}…` : keys}`;
+  return entry.loading === 'pinned' ? '항상 포함' : 'JEV 관련성 판단 · 필요할 때 추가 조회';
 }
 
 const importedModule = (result: RisuImportResult) =>
@@ -81,16 +76,9 @@ export function RisuImport({
     setError('');
     setNotice('');
     try {
-      if (!/\.(charx|risum|json|zip|js)$/i.test(file.name))
-        throw new Error(
-          '.charx, .risum, 카드·모듈 JSON, 모듈 프로젝트 ZIP 또는 플러그인 .js를 선택해 주세요.'
-        );
+      if (!/\.(charx|risum|json|zip)$/i.test(file.name))
+        throw new Error('.charx, .risum, 카드·모듈 JSON, 모듈 프로젝트 ZIP을 선택해 주세요.');
       if (file.size === 0) throw new Error('빈 파일은 가져올 수 없어요.');
-      const isPlugin = /\.js$/iu.test(file.name);
-      if (isPlugin && file.size > RISU_PLUGIN_MAX_BYTES)
-        throw new Error(
-          `플러그인 .js 파일은 ${Math.round(RISU_PLUGIN_MAX_BYTES / 1024 / 1024)} MiB 이하여야 해요.`
-        );
       if (file.size > RISU_IMPORT_MAX_UPLOAD_BYTES)
         throw new Error(
           `파일은 ${Math.round(RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024)} MiB 이하여야 해요.`
@@ -99,12 +87,10 @@ export function RisuImport({
         setNotice(
           `${Math.round(RISU_IMPORT_MAX_BYTES / 1024 / 1024)} MiB가 넘는 파일이라 먼저 올린 뒤 확인해요. 원본 사본은 앱에 보관하지 않아요.`
         );
-      // A plugin stays under the size the request body carries, so it never uses the staged path.
-      const nextSource = isPlugin ? await readImportSource(file) : await readSource(file);
-      // A plugin reads through the same preview as every other file; it always becomes a module.
+      const nextSource = await readSource(file);
       const nextPreview = await api<RisuImportPreview>('/risu-imports/prepare', {
         source: nextSource,
-        ...(kind && !isPlugin ? { kind } : {}),
+        ...(kind ? { kind } : {}),
       });
       setSource(nextSource);
       setPreview(nextPreview);
@@ -261,7 +247,7 @@ export function RisuImport({
             가져올 자료 종류
             <select
               value={kind}
-              disabled={locked || !!preview?.plugin}
+              disabled={locked}
               onChange={(event) => void changeKind(event.target.value as RisuImportKind | '')}
             >
               <option value="">자동</option>
@@ -271,16 +257,14 @@ export function RisuImport({
           </label>
           <p className="muted">
             자동은 카드 파일을 봇으로, 모듈 JSON·프로젝트 ZIP을 모듈로 가져와요. CharX를 모듈로
-            쓰려면 모듈을 선택해 주세요. 플러그인 .js는 항상 모듈이에요. 모듈은 새 채팅을 만들지
-            않아요.
+            쓰려면 모듈을 선택해 주세요. 모듈은 새 채팅을 만들지 않아요.
           </p>
           <label className="risu-import-file">
-            .charx · 카드·모듈 JSON · 모듈 프로젝트 ZIP · 최대 256 MiB · 플러그인 .js는{' '}
-            {Math.round(RISU_PLUGIN_MAX_BYTES / 1024 / 1024)} MiB
+            .charx · 카드·모듈 JSON · 모듈 프로젝트 ZIP · 최대 256 MiB
             <input
               type="file"
               aria-label="Risu 파일 선택"
-              accept=".charx,.risum,.json,.zip,.js,application/json,application/zip,text/javascript"
+              accept=".charx,.risum,.json,.zip,application/json,application/zip"
               disabled={busy || uncertain}
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -292,21 +276,17 @@ export function RisuImport({
           <p className="muted">.risum 파일 직접 가져오기는 지원하지 않아요.</p>
           {preview && (
             <>
-              {preview.plugin ? (
-                <RisuPluginReport preview={preview.plugin} />
-              ) : (
-                <div className="risu-import-summary">
-                  <h3>{preview.title}</h3>
-                  <small className="muted">
-                    {preview.kind === 'module' ? '모듈' : '봇'} · {source?.name}
-                  </small>
-                  {preview.description && <p>{preview.description}</p>}
-                  <p>
-                    로어 {preview.summary.lore}개 · 시작문 {preview.summary.starts}개 · 이미지{' '}
-                    {preview.summary.images}개
-                  </p>
-                </div>
-              )}
+              <div className="risu-import-summary">
+                <h3>{preview.title}</h3>
+                <small className="muted">
+                  {preview.kind === 'module' ? '모듈' : '봇'} · {source?.name}
+                </small>
+                {preview.description && <p>{preview.description}</p>}
+                <p>
+                  로어 {preview.summary.lore}개 · 시작문 {preview.summary.starts}개 · 이미지{' '}
+                  {preview.summary.images}개
+                </p>
+              </div>
               {preview.findings.length > 0 ? (
                 <section className="risu-import-findings" aria-label="가져오기 지원 범위">
                   <h3>가져오기 안내</h3>
@@ -329,12 +309,10 @@ export function RisuImport({
               ) : (
                 <p className="muted">현재 파일에서 보고된 미지원 항목은 없어요.</p>
               )}
-              {!preview.plugin && (
-                <p className="muted">
-                  로어북의 사용 중인 항목은 별도로 선택하지 않아도{' '}
-                  {preview.kind === 'module' ? '모듈' : '봇'}의 설정으로 가져와요.
-                </p>
-              )}
+              <p className="muted">
+                로어북의 사용 중인 항목은 별도로 선택하지 않아도{' '}
+                {preview.kind === 'module' ? '모듈' : '봇'}의 설정으로 가져와요.
+              </p>
               {preview.imageHandoff && (
                 <RisuImageHandoffFields
                   policy={preview.imageHandoff}
@@ -455,11 +433,9 @@ export function RisuImport({
                 <button type="button" disabled={busy || !ready} onClick={() => void apply()}>
                   {uncertain
                     ? '같은 요청으로 다시 확인'
-                    : preview.plugin
-                      ? '모듈로 가져오기'
-                      : preview.kind === 'module'
-                        ? '모듈 가져오기'
-                        : '가져오고 새 채팅 열기'}
+                    : preview.kind === 'module'
+                      ? '모듈 가져오기'
+                      : '가져오고 새 채팅 열기'}
                 </button>
               )}
             </>

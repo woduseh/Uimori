@@ -1,3 +1,4 @@
+import { nativeContent } from './native-content.js';
 import { createHash } from 'node:crypto';
 import { defaultProfile } from '../../core/product.js';
 import type { AuxiliaryInput } from '../../core/auxiliary.js';
@@ -38,9 +39,7 @@ export function translationFixtureSlot(request: ProviderRequest, slot: 'source' 
   if (slot === 'source' && typeof fallback.text === 'string') return fallback.text;
   if (slot === 'context' && fallback.context) return JSON.stringify(fallback.context);
   return translationFixtureRenderedSlot(
-    request.prompt?.messages
-      .filter((item) => item.provenance.blockId === slot || item.provenance.blockId === 'pheme-7')
-      .map((item) => item.content.map((part) => part.text).join('')) ?? [],
+    request.prompt?.messages.map((item) => item.content.map((part) => part.text).join('')) ?? [],
     slot
   );
 }
@@ -99,37 +98,27 @@ export function bundle(text = 'Mira waited quietly beside the pier.'): Auxiliary
       profile: {
         ...defaultProfile('chat-a'),
         revision: 4,
-        contents: [
-          {
-            id: 'bot',
-            kind: 'bot',
-            revision: 2,
-            title: 'Mira',
-            description: 'Before reveal',
-            text: 'Mira has not learned the keeper identity.',
-            loading: 'pinned',
-            relatedIds: [],
-          },
-          {
-            id: 'names',
-            kind: 'module',
-            revision: 3,
-            title: 'Name glossary',
-            description: 'Translation names',
-            text: 'Mira = 미라',
-            loading: 'pinned',
-            relatedIds: [],
-          },
-          {
-            id: 'canon',
-            kind: 'module',
-            revision: 4,
-            title: 'Author canon',
-            description: 'Known facts',
-            text: 'The identity remains unknown.',
-            loading: 'pinned',
-            relatedIds: [],
-          },
+        packageAttachments: [
+          { id: 'bot', revision: 2, role: 'bot' },
+          { id: 'names', revision: 3, role: 'module' },
+          { id: 'canon', revision: 4, role: 'module' },
+        ],
+        packages: [
+          nativeContent(
+            { name: 'Mira', description: 'Mira has not learned the keeper identity.' },
+            { id: 'bot', revision: 2 },
+            'bot'
+          ),
+          nativeContent(
+            { name: 'Name glossary', description: 'Mira = 미라' },
+            { id: 'names', revision: 3 },
+            'module'
+          ),
+          nativeContent(
+            { name: 'Author canon', description: 'The identity remains unknown.' },
+            { id: 'canon', revision: 4 },
+            'module'
+          ),
         ],
         models: {},
       },
@@ -158,6 +147,20 @@ export function hooks(origin = 'http://127.0.0.1:1') {
   const wire: WireRecord[] = [];
   const finishes: { id: string; result: ProviderResult }[] = [];
   const options: AuxiliaryJobHooks = {
+    jev: {
+      credential: () => 'fixture-jev-key',
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            model: 'jev-latest',
+            answers: {
+              explicitRefusal: { type: 'noul', noul: 0.01 },
+              startsTranslation: { type: 'noul', noul: 0.99 },
+            },
+            usage: { input_tokens: 10, output_tokens: 2 },
+          })
+        ),
+    },
     signal: new AbortController().signal,
     approvedOrigins: [origin],
     authorize: (value) => value,

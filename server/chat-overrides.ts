@@ -14,7 +14,7 @@ import {
   type ChatOverrideSnapshot,
 } from '../core/chat-overrides.js';
 import type { Content, ProfileSnapshot } from '../core/product.js';
-import { validatePackageAttachment, type PackageAttachment } from '../core/content-package.js';
+import { validateContentAttachment, type ContentAttachment } from '../core/risu-content.js';
 import type { SourceHistoryItem } from '../core/source-history.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { resolvePackageProfile } from './package-features.js';
@@ -95,7 +95,7 @@ export class ChatOverridesStore {
   }
   freeze(
     profile: ProfileSnapshot,
-    roots: PackageAttachment[],
+    roots: ContentAttachment[],
     headRevision: string | null
   ): ChatOverrideSnapshot {
     const scoped = this.scoped(profile.chatId, headRevision);
@@ -292,7 +292,7 @@ export class ChatOverridesStore {
 export function freezeChatOverrides(
   store: Store,
   profile: ProfileSnapshot,
-  roots: PackageAttachment[],
+  roots: ContentAttachment[],
   headRevision: string | null
 ): ChatOverrideSnapshot | undefined {
   const service = new ChatOverridesStore(store);
@@ -462,8 +462,8 @@ export function validateChatOverrideSnapshot(
   const revision = number(snapshot.revision, 'override snapshot revision', 0);
   if (revision > new ChatOverridesStore(store).revision(profile.chatId))
     throw new HttpError(400, 'Override snapshot beyond current revision');
-  const roots: PackageAttachment[] = snapshot.roots.map((value: unknown) =>
-    validatePackageAttachment(value)
+  const roots: ContentAttachment[] = snapshot.roots.map((value: unknown) =>
+    validateContentAttachment(value)
   );
   if (
     new Set(roots.map((root) => `${root.id}:${root.role}`)).size !== roots.length ||

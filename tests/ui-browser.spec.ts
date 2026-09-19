@@ -15,19 +15,20 @@ import {
   selectChatSettingsSection,
   openSourceActions,
   openChatMenu,
-  selectPromptBlock,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Content } from '../core/product.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 
 async function promptBody(editor: Locator) {
-  await selectPromptBlock(editor, '지침');
-  const block = editor.locator('#prompt-block-instructions');
-  const body = block.getByLabel('지침 본문', { exact: true });
+  const body = editor.getByLabel('1번 프롬프트 본문', { exact: true });
+  await body.evaluate((node) => {
+    const details = node.closest('details');
+    if (details) details.open = true;
+  });
   return body;
 }
 
@@ -312,7 +313,7 @@ test('UI03 bot-first retry saves one story and complete profile before any gener
   expect(addedChats).toHaveLength(1);
   const detail = await data(request, addedChats[0].id);
   expect(detail.chat.title).toBe(`${title}의 채팅`);
-  expect(detail.profile!.attachments).toEqual([{ id: bot.id, revision: 1 }]);
+  expect(detail.profile!.packageAttachments).toEqual([{ id: bot.id, revision: 1, role: 'bot' }]);
   expect(await (await request.get('/api/prompt-workspace')).json()).toMatchObject({
     main: { values: choice.combination.values },
   });
@@ -322,7 +323,7 @@ test('UI03 bot-first retry saves one story and complete profile before any gener
   await page.getByRole('button', { name: '원문 생성', exact: true }).click();
   await expect.poll(async () => (await data(request, addedChats[0].id)).runs.length).toBe(1);
   const run = (await data(request, addedChats[0].id)).runs[0];
-  expect(run.snapshot.profile!.attachments).toEqual(detail.profile!.attachments);
+  expect(run.snapshot.profile!.packageAttachments).toEqual(detail.profile!.packageAttachments);
   expect(run.snapshot.profile!.promptPresets?.main?.values).toEqual(choice.combination.values);
   const runIndex = writes.findIndex((item) => /\/runs$/.test(item.url));
   expect(runIndex).toBeGreaterThan(writes.findLastIndex((item) => /\/profile$/.test(item.url)));
@@ -714,7 +715,7 @@ test('UI12 late failed SSE refresh from another story never publishes its error 
     const update = await request.put(`/api/chats/${chatA.id}/profile`, {
       data: {
         expectedRevision: profile.revision,
-        attachments: profile.attachments,
+        packageAttachments: profile.packageAttachments,
 
         image: profile.image,
       },
@@ -864,7 +865,7 @@ test('UI03 UI12 new story retry retains selections, uses current content and loc
     await dialog.getByRole('button', { name: '설정 저장 다시 시도', exact: true }).click();
     await expect(dialog).not.toBeVisible();
     const detail = await data(request, chat.id);
-    expect(detail.profile!.attachments).toEqual([{ id: bot.id, revision: 2 }]);
+    expect(detail.profile!.packageAttachments).toEqual([{ id: bot.id, revision: 2 }]);
     expect(await (await request.get('/api/prompt-workspace')).json()).toMatchObject({
       main: { values: choice.combination.values },
     });
@@ -964,8 +965,7 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   const update = await request.put(`/api/chats/${chat.id}/profile`, {
     data: {
       expectedRevision: original.revision,
-      attachments: original.attachments,
-      ...(original.packageAttachments ? { packageAttachments: original.packageAttachments } : {}),
+      packageAttachments: original.packageAttachments,
       image: true,
     },
   });
@@ -978,7 +978,7 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
     0
   );
   const restored = await data(request, chat.id);
-  expect(restored.profile!.attachments).toEqual([{ id: bot.id, revision: 1 }]);
+  expect(restored.profile!.packageAttachments).toEqual([{ id: bot.id, revision: 1, role: 'bot' }]);
   expect(await (await request.get('/api/prompt-workspace')).json()).toMatchObject({
     main: { values: choice.combination.values },
   });
@@ -1268,7 +1268,7 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   const configured = await request.put(`/api/chats/${chat.id}/profile`, {
     data: {
       expectedRevision: initialProfile.revision,
-      attachments: initialProfile.attachments,
+      packageAttachments: initialProfile.packageAttachments,
 
       image: initialProfile.image,
     },
@@ -1335,14 +1335,14 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
       .poll(async () => (await (await request.get('/api/prompt-workspace')).json())[role].title)
       .toBe(title);
     expect((await (await request.get('/api/prompt-workspace')).json())[role].program).toEqual(
-      createDefaultPromptProgram(text, role)
+      createDefaultRisuPrompt(text, role)
     );
   }
   const after = await data(request, chat.id);
   expect(after.runs).toEqual(before.runs);
   expect(after.attempts).toEqual(before.attempts);
   expect(after.sources).toEqual(before.sources);
-  expect(after.profile!.attachments).toEqual(before.profile!.attachments);
+  expect(after.profile!.packageAttachments).toEqual(before.profile!.packageAttachments);
   expect(after.profile!.routes).toEqual(before.profile!.routes);
   expect(writes.some((url) => /\/(?:runs|candidate|retranslate|retry)(?:\?|$)/u.test(url))).toBe(
     false
@@ -1363,7 +1363,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
     data: {
       title: `UI17 archived ${Date.now()}`,
       role: 'main',
-      program: createDefaultPromptProgram(originalText, 'main'),
+      program: createDefaultRisuPrompt(originalText, 'main'),
     },
   });
   expect(saved.ok()).toBeTruthy();
@@ -1386,7 +1386,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
       expectedRevision: 1,
       title: first.title,
       role: 'main',
-      program: createDefaultPromptProgram('Latest library writing prompt.', 'main'),
+      program: createDefaultRisuPrompt('Latest library writing prompt.', 'main'),
     },
   });
   expect(latest.ok()).toBeTruthy();
@@ -1395,12 +1395,12 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   const editor = dialog.getByRole('region', { name: '현재 프롬프트 설정' });
   expect((await (await request.get('/api/prompt-workspace')).json()).main.program).toEqual(
-    createDefaultPromptProgram(originalText, 'main')
+    createDefaultRisuPrompt(originalText, 'main')
   );
   await editor.getByRole('button', { name: '최신 버전 적용', exact: true }).click();
   await expect
     .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
-    .toEqual(createDefaultPromptProgram('Latest library writing prompt.', 'main'));
+    .toEqual(createDefaultRisuPrompt('Latest library writing prompt.', 'main'));
   // The API can finish before the editor's refresh clears its busy/dirty projection.
   await expect(editor.getByRole('button', { name: '최신 버전 적용', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
@@ -1416,7 +1416,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
       expectedRevision: current.revision,
       main: {
         ...current.main,
-        program: createDefaultPromptProgram('Concurrent current prompt.', 'main'),
+        program: createDefaultRisuPrompt('Concurrent current prompt.', 'main'),
       },
     },
   });
@@ -1432,9 +1432,9 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
     )
     .toBe(3);
   const stored = await (await request.get(`/api/prompt-presets/${first.id}`)).json();
-  expect(stored.program).toEqual(createDefaultPromptProgram(edited, 'main'));
+  expect(stored.program).toEqual(createDefaultRisuPrompt(edited, 'main'));
   expect((await (await request.get('/api/prompt-workspace')).json()).main.program).toEqual(
-    createDefaultPromptProgram('Concurrent current prompt.', 'main')
+    createDefaultRisuPrompt('Concurrent current prompt.', 'main')
   );
   const after = await data(request, chat.id);
   expect(after.profile).toEqual(profile);

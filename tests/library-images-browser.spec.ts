@@ -1,9 +1,10 @@
+import { nativeContent } from './fixtures/native-content.js';
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { navigationAction } from './ui-navigation.js';
 import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import type { ContentPackage } from '../core/content-package.js';
+import type { RisuContent } from '../core/risu-content.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
 import type { Content } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
@@ -28,21 +29,17 @@ async function seed(
   request: APIRequestContext,
   kind: Content['kind'],
   title: string,
-  part: Partial<ContentPackage> = {}
+  part: Partial<RisuContent> = {}
 ): Promise<Content> {
-  const pkg: ContentPackage = {
-    version: 1,
-    id: 'synthetic-library-portrait',
-    revision: 1,
-    title,
-    description: '합성 자료 · 이미지와 선택 동작 검사',
-    body: 'Synthetic content only.',
-    lore: [],
-    instructions: [],
-    controls: [],
-    transforms: [],
-    ...part,
-  };
+  const pkg = nativeContent(
+    {
+      name: title,
+      creator_notes: '합성 자료 · 이미지와 선택 동작 검사',
+      description: 'Synthetic content only.',
+    },
+    { id: 'synthetic-library-portrait', ...part },
+    kind
+  );
   const response = await request.post('/api/content', {
     data: {
       kind,
@@ -86,7 +83,7 @@ async function save(page: Page, library: Locator, content: Content): Promise<Con
   await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
   return pending;
 }
-const portraitPart = (hash: string, id = 'portrait'): Partial<ContentPackage> => ({
+const portraitPart = (hash: string, id = 'portrait'): Partial<RisuContent> => ({
   images: [
     {
       id,
@@ -403,7 +400,6 @@ test('LIMG05 quick persona selection shows one current selection after its image
   const attached = await request.put(`/api/chats/${chat.id}/profile`, {
     data: {
       expectedRevision: originalProfile.revision,
-      attachments: originalProfile.attachments,
       packageAttachments: [
         ...(originalProfile.packageAttachments ?? []),
         { id: persona.id, revision: persona.revision, role: 'persona' },

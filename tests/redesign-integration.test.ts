@@ -1,3 +1,6 @@
+import { nativeContent } from './fixtures/native-content.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
+import { prepareNativeFixtureRun } from './fixtures/native-run.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -8,7 +11,7 @@ import { join, relative, resolve, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import type { Content, PromptPreset } from '../core/product.js';
-import type { ContentPackage } from '../core/content-package.js';
+import type { RisuContent } from '../core/risu-content.js';
 import { packageContext } from '../core/package-context.js';
 const owned: { store: Store; dir: string }[] = [];
 afterEach(() => {
@@ -31,34 +34,20 @@ function db() {
   return store;
 }
 const reference = ({ id, revision }: { id: string; revision: number }) => ({ id, revision });
-function packageBody(): ContentPackage {
-  return {
-    version: 1,
-    id: 'imported',
-    revision: 17,
-    title: 'Imported title',
-    description: 'Imported description',
-    body: 'Imported body',
-    lore: [
-      {
-        id: 'knowledge',
-        title: 'Lore',
-        description: 'Unchanged metadata',
-        text: 'Exact original lore',
-        loading: 'discoverable',
+function packageBody(): RisuContent {
+  return nativeContent(
+    {
+      name: 'Imported title',
+      creator_notes: 'Imported description',
+      description: 'Imported body',
+      system_prompt: 'Exact original instruction',
+      character_book: {
+        entries: [{ uid: 1, name: 'Lore', content: 'Exact original lore', constant: false }],
       },
-    ],
-    instructions: [
-      {
-        id: 'guide',
-        target: 'main',
-        text: 'Exact original instruction',
-        when: { control: 'enabled' },
-      },
-    ],
-    controls: [{ id: 'enabled', label: 'Enabled', type: 'boolean', default: true }],
-    transforms: [],
-  };
+    },
+    { id: 'imported', revision: 17 },
+    'module'
+  );
 }
 function save(store: Store, pkg = packageBody(), prior?: Content) {
   return store.product.content(
@@ -79,14 +68,14 @@ function update(store: Store, chatId: string, changes: Record<string, unknown>) 
   const p = store.product.profile(chatId);
   return updateTestProfile(store.product, chatId, {
     expectedRevision: p.revision,
-    attachments: p.attachments,
+    packageAttachments: p.packageAttachments,
 
     routes: p.routes,
     image: p.image,
     ...changes,
   });
 }
-function capture(store: Store, chatId: string) {
+async function capture(store: Store, chatId: string) {
   const chat = store.chat(chatId);
   const profile = store.product.snapshot(chatId);
   const run = store.createRun(
@@ -108,6 +97,7 @@ function capture(store: Store, chatId: string) {
       profile,
     })
   ).run;
+  await prepareNativeFixtureRun(store, run);
   store.startRun(run.id);
   store.completeRun(
     run.id,
@@ -117,25 +107,24 @@ function capture(store: Store, chatId: string) {
   );
   return store.run(run.id);
 }
-test('package persistence normalizes envelope fields, keeps internal data and old run source-time package after editing', () => {
+test('native source normalizes projections and freezes old run content after editing', async () => {
   const store = db(),
     input = packageBody(),
     saved = save(store, input);
-  expect(saved.package).toEqual({
-    ...input,
-    id: saved.id,
-    revision: 1,
-    title: saved.title,
-    description: saved.description,
-    body: '',
-  });
+  expect(saved.package).toEqual({ ...input, id: saved.id, revision: 1 });
   expect(input.id).toBe('imported');
   const chat = createFixtureChat(store, 'Story', 'calm', { botId: saved.id });
-  const run = capture(store, chat.id),
+  const run = await capture(store, chat.id),
     before = JSON.stringify(run.snapshot);
   const edited = save(
     store,
-    { ...saved.package!, instructions: [{ id: 'guide', target: 'main', text: 'NEW' }] },
+    {
+      ...saved.package,
+      nativeRisu: {
+        ...saved.package.nativeRisu,
+        card: { ...saved.package.nativeRisu.card, system_prompt: 'NEW' },
+      },
+    },
     saved
   );
   expect(edited.revision).toBe(2);
@@ -162,25 +151,7 @@ test('cross-role attachment of one package namespaces resources while invalid re
   expect(new Set(resources.map((r) => r.id)).size).toBe(resources.length);
   expect(resources.some((r) => r.id.includes(':bot:'))).toBe(true);
   expect(resources.some((r) => r.id.includes(':persona:'))).toBe(true);
-  const legacy = (kind: 'bot' | 'persona') =>
-    store.product.content({
-      kind,
-      title: kind,
-      description: '',
-      text: 'Original',
-      loading: 'pinned',
-      relatedIds: [],
-    });
-  for (const kind of ['bot', 'persona'] as const) {
-    const content = legacy(kind);
-    expect(() => update(store, chat.id, { attachments: [reference(content)] })).toThrow(
-      'Duplicate legacy and package primary role'
-    );
-  }
   const before = store.product.profile(chat.id);
-  expect(() => update(store, chat.id, { attachments: [reference(pkg)] })).toThrow(
-    'Package is also attached'
-  );
   expect(() =>
     update(store, chat.id, { packageAttachments: [{ id: pkg.id, revision: 999, role: 'bot' }] })
   ).toThrow('revision not found');
@@ -188,46 +159,15 @@ test('cross-role attachment of one package namespaces resources while invalid re
     'Duplicate package'
   );
   expect(store.product.profile(chat.id)).toEqual(before);
-  expect(() =>
-    update(store, chat.id, { attachments: [reference(pkg)], packageAttachments: [] })
-  ).toThrow('explicit attachment role');
-});
-test('changing attachments drops only inherited obsolete package control keys and rejects explicit stale values', () => {
-  const store = db(),
-    pkg = save(store),
-    chat = createFixtureChat(store, 'Story');
-  const key = `${pkg.id}@1:module`;
-  const owner = store.product.profile(chat.id).packageAttachments!;
-  update(store, chat.id, {
-    packageAttachments: [...owner, { ...reference(pkg), role: 'module' }],
-    packageValues: { [key]: { enabled: false } },
-  });
-  expect(() =>
-    update(store, chat.id, {
-      packageAttachments: owner,
-      packageValues: { [key]: { enabled: false } },
-    })
-  ).toThrow('outside attachment scope');
-  const detached = update(store, chat.id, { packageAttachments: owner });
-  expect(detached.packageValues).toEqual({});
-  const reattached = update(store, chat.id, {
-    packageAttachments: [...owner, { ...reference(pkg), role: 'module' }],
-  });
-  expect(reattached.packageValues).toEqual({});
-  expect(
-    packageContext({ ...capture(store, chat.id).snapshot }, 'main')!.instructions
-  ).toHaveLength(1);
 });
 function prompt(store: Store, id = 'choice'): PromptPreset {
   const preset = store.product.promptPreset({
     title: 'Composed',
     role: 'main',
     text: '',
-    program: {
-      version: 1,
-      controls: [{ id, label: id, type: 'boolean', default: true }],
-      blocks: [{ id: 'turn', title: 'Turn', kind: 'current' }],
-    },
+    program: nativePrompt('Synthetic native instructions', {
+      customPromptTemplateToggle: `${id}=${id}=select=Off,On`,
+    }),
   }) as PromptPreset;
   updatePromptWorkspace(store, {
     expectedRevision: promptWorkspace(store).revision,
@@ -252,7 +192,7 @@ test('prompt combinations reject nonprimitive values and controls from a differe
       workspaceRevision: promptWorkspace(store).revision,
       title: 'Bad',
       role: 'main',
-      values: { choice: true },
+      values: { choice: '1' },
     })
   ).toThrow('PROMPT_UNKNOWN_CONTROL');
   updatePromptWorkspace(store, {
@@ -264,14 +204,15 @@ test('prompt combinations reject nonprimitive values and controls from a differe
       workspaceRevision: promptWorkspace(store).revision,
       title: 'Saved',
       role: 'main',
-      values: { choice: false },
+      values: { choice: '0' },
     }).values
-  ).toEqual({ choice: false });
+  ).toEqual({ choice: '0' });
 });
-test('current archive roundtrips package refs, large internal lore, empty body, option combinations and bot folder ownership', () => {
+test('current archive roundtrips native lore, option combinations and bot folder ownership', async () => {
   const store = db(),
     body = packageBody();
-  body.lore[0].text = 'L'.repeat(100001);
+  (body.nativeRisu.card.character_book as { entries: { content: string }[] }).entries[0].content =
+    'L'.repeat(100001);
   const pkg = save(store, body);
   const folder = store.organization.createFolder(pkg.id, {
     title: 'Folder',
@@ -283,12 +224,11 @@ test('current archive roundtrips package refs, large internal lore, empty body, 
     workspaceRevision: promptWorkspace(store).revision,
     title: 'Saved',
     role: 'main',
-    values: { choice: false },
+    values: { choice: '0' },
   });
-  update(store, chat.id, { packageValues: { [`${pkg.id}@1:persona`]: { enabled: false } } });
-  const run = capture(store, chat.id);
+  const run = await capture(store, chat.id);
   const archive = store.product.export();
-  expect(archive.version).toBe(15);
+  expect(archive.version).toBe(1);
   const before = JSON.stringify(archive);
   const restored = db();
   expect(restored.product.import(archive)).toEqual({ restored: true, chats: 1 });
@@ -328,25 +268,17 @@ test('malformed package import and forged archive package body roll back all wri
   expect(() => restored.product.import(archive)).toThrow('Package identity mismatch');
   expect(restored.product.all('content')).toEqual([]);
 });
-test('package body and description limits survive archive while legacy limits stay unchanged', () => {
-  const store = db(),
-    body = packageBody(),
-    value = {
-      kind: 'module',
-      title: 'Large',
-      description: 'd'.repeat(3000),
-      text: 'b'.repeat(100001),
-      loading: 'pinned',
-      relatedIds: [],
-      package: body,
-    };
-  const saved = store.product.content(value) as Content;
-  expect(saved.package!.body).toBe(value.text);
-  expect(saved.package!.description).toBe(value.description);
+test('native body and creator notes survive archive at supported sizes', () => {
+  const store = db();
+  const body = nativeContent(
+    { name: 'Large', description: 'b'.repeat(100001), creator_notes: 'd'.repeat(3000) },
+    { id: 'large' },
+    'module'
+  );
+  const saved = save(store, body);
+  expect(saved.package.body).toBe(body.body);
+  expect(saved.package.description).toBe(body.description);
   const restored = db();
   restored.product.import(store.product.export());
   expect(restored.product.get('content', saved.id)).toEqual(saved);
-  const { package: _package, ...legacy } = value;
-  expect(() => store.product.content(legacy)).toThrow('Invalid description');
-  expect(() => store.product.content({ ...legacy, description: '' })).toThrow('Invalid text');
 });

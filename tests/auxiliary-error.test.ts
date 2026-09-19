@@ -28,7 +28,6 @@ describe('safe auxiliary error diagnostics', () => {
       ['main', '본문'],
       ['translation', '번역'],
       ['status', '장면 해설'],
-      ['image', '이미지'],
     ]) {
       const diagnostic = auxiliaryErrorDiagnostic(`MODEL_REQUIRED:${role}`);
       expect(diagnostic.code).toBe(`MODEL_REQUIRED:${role}`);
@@ -58,9 +57,7 @@ describe('safe auxiliary error diagnostics', () => {
   });
 
   it('distinguishes missing classifier, failed classification, uncertainty and retry limits without replay promises', () => {
-    expect(auxiliaryErrorDiagnostic('TRANSLATION_REFUSAL_MODEL_REQUIRED').message).toContain(
-      '지정되지'
-    );
+    expect(auxiliaryErrorDiagnostic('JEV_CREDENTIAL_REQUIRED').message).toContain('연결');
     const failed = auxiliaryErrorDiagnostic('TRANSLATION_REFUSAL_CHECK_FAILED');
     const uncertain = auxiliaryErrorDiagnostic('TRANSLATION_REFUSAL_UNCERTAIN');
     expect(failed.message).not.toBe(uncertain.message);

@@ -11,7 +11,6 @@ import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { forkChat } from '../server/chat-fork.js';
 import { putImageBlob, requestImages } from '../server/package-images.js';
 import { imageCatalog, imageJobInput } from '../server/package-images.js';
-import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 
@@ -205,9 +204,36 @@ test('the synthetic image worker preserves original provenance with a translatio
       signal: new AbortController().signal,
       approvedOrigins: [],
       authorize: (connection) => connection,
-      onAttemptStart: () => {
-        throw new Error('Live calls forbidden');
+      jev: {
+        credential: () => 'synthetic-jev-key',
+        fetch: async (_url, init) => {
+          const body = JSON.parse(String(init?.body));
+          return new Response(
+            JSON.stringify({
+              model: 'jev-latest',
+              answers: Object.fromEntries(
+                Object.entries(body.questions).map(([key, q]) => [
+                  key,
+                  {
+                    type: 'choice',
+                    choice: 'none',
+                    confidence: 1,
+                    probabilities: Object.fromEntries(
+                      Object.keys((q as any).criteria).map((option) => [
+                        option,
+                        option === 'none' ? 1 : 0,
+                      ])
+                    ),
+                  },
+                ])
+              ),
+              usage: { input_tokens: 7, output_tokens: 3 },
+            })
+          );
+        },
       },
+      onAttemptStart: (wire) =>
+        store.product.startAttempt(store.job(job.id).chatId, null, job.id, wire),
       onAttemptFinish: () => {},
     }
   );
@@ -329,46 +355,30 @@ test('archive restores both views and fork remaps translation dependencies to co
   expect((await bridge.load(copiedLocalized.id)).imageSource?.text).toBe(translated);
 });
 
-test('an unavailable image model records an image failure without rolling back translated text', () => {
+test('an unavailable JEV connection records an image failure without rolling back translated text', async () => {
   const { store, source } = fixture();
-  const connection = store.product.connection({
-    title: 'Synthetic image connection',
-    protocol: 'fixture-sse-v1',
-    endpoint: 'http://127.0.0.1:9',
-    enabled: true,
-  });
-  const model = store.product.model({
-    title: 'Synthetic image model',
-    connectionId: connection.id,
-    modelId: 'synthetic-fixture',
-    maxOutputTokens: 10000,
-    temperature: 1,
-  });
-  const current = modelWorkspace(store);
-  updateModelWorkspace(store, {
-    expectedRevision: current.revision,
-    routes: { ...current.routes, image: { id: model.id } },
-    translationPolicy: current.translationPolicy,
-  });
-  store.product.model(
-    {
-      title: model.title,
-      connectionId: model.connectionId,
-      modelId: model.modelId,
-      maxOutputTokens: 10000,
-      temperature: 1,
-      enabled: false,
-      expectedRevision: model.revision,
-    },
-    model.id
-  );
   const translation = translate(store, source);
-  expect(translation).toMatchObject({ status: 'completed', result: { text: translated } });
-  expect(images(store, source)).toHaveLength(1);
-  expect(images(store, source)[0]).toMatchObject({
-    status: 'failed',
-    error: 'IMAGE_MODEL_UNAVAILABLE',
+  const job = images(store, source)[0];
+  await runAuxiliaryJob(
+    auxiliaryBridge(store, new Controls(), new AbortController().signal),
+    job.id,
+    'synthetic-worker',
+    {
+      signal: new AbortController().signal,
+      approvedOrigins: [],
+      authorize: (value) => value,
+      jev: { credential: () => undefined },
+      onAttemptStart: () => {
+        throw new Error('Unexpected provider call');
+      },
+      onAttemptFinish: () => {},
+    }
+  );
+  expect(store.job(translation.id)).toMatchObject({
+    status: 'completed',
+    result: { text: translated },
   });
+  expect(store.job(job.id)).toMatchObject({ status: 'failed', error: 'JEV_CREDENTIAL_REQUIRED' });
 });
 
 test('pending and failed retranslations retain images until a successful replacement invalidates them', async () => {

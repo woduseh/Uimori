@@ -105,7 +105,7 @@ function agentId(value: unknown): string {
   return value;
 }
 
-/** Shared controls use the existing PromptProgram ID syntax, not the narrower agent syntax. */
+/** Shared controls use the existing RisuPrompt ID syntax, not the narrower agent syntax. */
 function controlId(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-zA-Z0-9_.:-]{1,160}$/u.test(value) || unsafeIds.has(value))
     fail('INVALID_CONTROL_ID');

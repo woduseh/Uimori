@@ -1,6 +1,6 @@
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
-import { PROMPT_COMPILER_VERSION } from '../core/prompt-program.js';
+import { PROMPT_COMPILER_VERSION } from '../core/risu-prompt.js';
 import {
   executeProvider,
   transportConnection,
@@ -20,7 +20,7 @@ type Hooks = Pick<
 >;
 export function nativeScriptModel(snapshot: RunSnapshot, method: string) {
   return method === 'axLLM'
-    ? (snapshot.profile?.extensionModel ?? snapshot.profile?.models.main)
+    ? (snapshot.profile?.scriptModel ?? snapshot.profile?.models.main)
     : snapshot.profile?.models.main;
 }
 export function validateNativeScriptAttempt(snapshot: RunSnapshot, wire: WireRecord): void {
@@ -31,9 +31,8 @@ export function validateNativeScriptAttempt(snapshot: RunSnapshot, wire: WireRec
     typeof attribution.event !== 'string' ||
     attribution.event.length > 100 ||
     !snapshot.profile?.packages?.some((pkg) => pkg.nativeRisu) ||
-    wire.role !== 'state' ||
+    wire.role !== 'script' ||
     wire.agentId ||
-    wire.extensionAction ||
     wire.judgment
   )
     throw new HttpError(400, 'RISU_NATIVE_ATTEMPT_IDENTITY');
@@ -55,14 +54,14 @@ export function createNativeRisuHost(
   usage: Usage,
   hooks: Hooks,
   event: string,
-  reserveMain = false
+  reserveCalls = 0
 ): NonNullable<NativeRisuExecutionOptions['host']> {
   return async (method, raw, signal) => {
     if (['alertInput', 'alertSelect', 'alertConfirm'].includes(method))
       return requestNativeInteraction(store, runId, method, raw, signal);
     if (!['LLM', 'axLLM', 'simpleLLM'].includes(method))
       throw new Error(`RISU_NATIVE_API_UNSUPPORTED:${method}`);
-    if (usage.modelCalls >= snapshot.settings.maxCalls - Number(reserveMain))
+    if (usage.modelCalls >= snapshot.settings.maxCalls - reserveCalls)
       throw new Error('RISU_NATIVE_MODEL_BUDGET');
     const target = nativeScriptModel(snapshot, method);
     if (!target) throw new Error('RISU_NATIVE_MODEL_REQUIRED');
@@ -97,7 +96,7 @@ export function createNativeRisuHost(
     };
     const connection = authorize();
     const request: ProviderRequest = {
-      role: 'state',
+      role: 'script',
       modelId: target.modelId,
       pricingSnapshot: target.pricingSnapshot,
       ...(target.providerOptions ? { providerOptions: target.providerOptions } : {}),

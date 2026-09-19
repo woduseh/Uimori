@@ -1,12 +1,9 @@
-import type { ChatProfile, ContentRef } from '../core/product.js';
+import type { ChatProfile } from '../core/product.js';
 import { api } from './api.js';
-import { validatePackageAttachment } from '../core/content-package.js';
+import { validateContentAttachment } from '../core/risu-content.js';
 import { validatePackageStartRef, type PackageStartRef } from '../core/package-start.js';
-import { validateChatPromptControls } from '../core/prompt-program.js';
 export type NewStoryProfileIntent = {
-  attachments: ContentRef[];
   packageAttachments?: ChatProfile['packageAttachments'];
-  packageValues?: ChatProfile['packageValues'];
   packageStart?: PackageStartRef & {
     idempotencyKey: string;
     expectedSettingsRevision?: number;
@@ -28,18 +25,10 @@ function readIntent(raw: string): NewStoryProfileIntent {
     throw new Error('보관한 시작 설정을 읽을 수 없어요.');
   const pending = value as Record<string, unknown>;
   const versioned = pending.version === 2 && pending.kind === 'new-story-profile';
-  const attachments = pending.attachments;
   if (
     !versioned ||
-    !Array.isArray(attachments) ||
-    !attachments.every(
-      (item) =>
-        item &&
-        typeof item === 'object' &&
-        typeof item.id === 'string' &&
-        item.id.length > 0 &&
-        Number.isSafeInteger(item.revision) &&
-        item.revision > 0
+    Object.keys(pending).some(
+      (key) => !['version', 'kind', 'packageAttachments', 'packageStart'].includes(key)
     )
   ) {
     throw new Error('보관한 시작 설정을 읽을 수 없어요.');
@@ -48,24 +37,9 @@ function readIntent(raw: string): NewStoryProfileIntent {
     pending.packageAttachments === undefined
       ? undefined
       : Array.isArray(pending.packageAttachments)
-        ? pending.packageAttachments.map(validatePackageAttachment)
+        ? pending.packageAttachments.map(validateContentAttachment)
         : null;
   if (packageAttachments === null) throw new Error('보관한 시작 패키지를 읽을 수 없어요.');
-  let packageValues: ChatProfile['packageValues'];
-  if (pending.packageValues !== undefined) {
-    if (
-      !pending.packageValues ||
-      typeof pending.packageValues !== 'object' ||
-      Array.isArray(pending.packageValues)
-    )
-      throw new Error('보관한 시작 선택값을 읽을 수 없어요.');
-    packageValues = Object.fromEntries(
-      Object.entries(pending.packageValues).map(([key, values]) => [
-        key,
-        validateChatPromptControls({ values, combinations: [] }).values,
-      ])
-    );
-  }
   let packageStart: NewStoryProfileIntent['packageStart'];
   if (pending.packageStart !== undefined) {
     const opening = pending.packageStart as Record<string, unknown>;
@@ -97,9 +71,7 @@ function readIntent(raw: string): NewStoryProfileIntent {
     };
   }
   return {
-    attachments: attachments as ContentRef[],
     ...(packageAttachments ? { packageAttachments } : {}),
-    ...(packageValues ? { packageValues } : {}),
     ...(packageStart ? { packageStart } : {}),
   };
 }
@@ -128,10 +100,8 @@ async function applyPendingStoryProfile(chatId: string) {
   const saved = await api<ChatProfile>(
     `/chats/${chatId}/profile`,
     {
-      attachments: intent.attachments,
       image: current.image,
       ...(intent.packageAttachments ? { packageAttachments: intent.packageAttachments } : {}),
-      ...(intent.packageValues ? { packageValues: intent.packageValues } : {}),
       expectedRevision: current.revision,
     },
     'PUT'

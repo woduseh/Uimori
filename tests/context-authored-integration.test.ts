@@ -1,9 +1,11 @@
+import { nativeContent } from './fixtures/native-content.js';
+import { prepareNativeFixtureRun } from './fixtures/native-run.js';
 import {
   modelWorkspace,
   updateModelWorkspace,
   updatePromptWorkspace,
 } from '../server/prompt-workspace.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -62,18 +64,21 @@ function currentSnapshot(
     profile,
   };
 }
-function nextRun(store: Store, chatId: string, request?: string) {
+async function nextRun(store: Store, chatId: string, request?: string) {
   const snapshot = currentSnapshot(store, chatId, request);
-  return store.createRun(
-    chatId,
-    {
-      request: snapshot.request,
-      expectedRevision: snapshot.parentRevision,
-      expectedSettingsRevision: snapshot.settingsRevision,
-      idempotencyKey: randomUUID(),
-    },
-    () => snapshot
-  ).run;
+  return prepareNativeFixtureRun(
+    store,
+    store.createRun(
+      chatId,
+      {
+        request: snapshot.request,
+        expectedRevision: snapshot.parentRevision,
+        expectedSettingsRevision: snapshot.settingsRevision,
+        idempotencyKey: randomUUID(),
+      },
+      () => snapshot
+    ).run
+  );
 }
 function currentHistory(store: Store, chatId: string, base: RunSnapshot) {
   const chat = store.chat(chatId);
@@ -119,30 +124,21 @@ test('real authored start and ordinary turns retain host provenance through comp
     expectedRevision: modelWorkspace(store).revision,
     main: {
       title: 'Synthetic context instructions',
-      program: createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
+      program: createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT),
       values: {},
     },
   });
   const content = store.product.content({
-    kind: 'module',
+    kind: 'bot',
     title: 'Synthetic authored world',
     description: '',
     text: 'Synthetic only',
     loading: 'pinned',
     relatedIds: [],
-    package: {
-      version: 1,
-      id: 'authored-world',
-      revision: 1,
-      title: 'Synthetic authored world',
-      description: '',
-      body: 'Synthetic only',
-      lore: [],
-      instructions: [],
-      transforms: [],
-      controls: [],
-      starts: [{ id: 'arrival', title: '도착', mode: 'authored', text: opening }],
-    },
+    package: nativeContent(
+      { name: 'Synthetic authored world', description: 'Synthetic only', first_mes: opening },
+      { id: 'authored-world' }
+    ),
   }) as Content;
   let chat = createFixtureChat(store, 'Synthetic authored context', 'calm', {
     botId: content.id,
@@ -183,13 +179,13 @@ test('real authored start and ordinary turns retain host provenance through comp
   const authored = createPackageStart(store, chat.id, {
     packageId: content.id,
     packageRevision: content.revision,
-    startId: 'arrival',
+    startId: 'start-0',
     expectedSettingsRevision: chat.settingsRevision,
     expectedProfileRevision: saved.revision,
     idempotencyKey: 'authored-opening',
   }).run;
   const authoredSource = store.source(authored.sourceRevision!);
-  const ordinary = nextRun(
+  const ordinary = await nextRun(
     store,
     chat.id,
     'ORDINARY_USER_REQUEST: 항구의 다음 장면을 이어 주세요.'
@@ -201,7 +197,7 @@ test('real authored start and ordinary turns retain host provenance through comp
     { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: null },
     ordinary.snapshot.settings
   );
-  const continuation = nextRun(store, chat.id),
+  const continuation = await nextRun(store, chat.id),
     history = continuation.snapshot.logicalHistory!;
   expect(history).toEqual(captureLogicalHistory(store, continuation.snapshot));
   expect(history.filter((item) => item.sourceRevision === authoredSource.id)).toEqual([
@@ -222,7 +218,7 @@ test('real authored start and ordinary turns retain host provenance through comp
     ['assistant', undefined],
   ]);
   store.startRun(continuation.id);
-  const prepared = await prepareInputContext(continuation.snapshot, {
+  const prepared = await prepareInputContext(store.context.prepareRun(continuation.snapshot), {
     signal: new AbortController().signal,
     approvedOrigins: [server.origin],
     authorize: (value) => store.product.authorize(value),
@@ -319,6 +315,6 @@ test('real authored start and ordinary turns retain host provenance through comp
   row.snapshot = JSON.stringify(forgedSnapshot);
   const target = database(),
     before = target.product.export().tables;
-  expect(() => target.product.import(forged)).toThrow('logical history mismatch');
+  expect(() => target.product.import(forged)).toThrow('Archive data or references invalid');
   expect(target.product.export().tables).toEqual(before);
 });

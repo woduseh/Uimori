@@ -20,7 +20,6 @@ for (const [role, label] of [
   ['main', '본문'],
   ['translation', '번역'],
   ['status', '장면 해설'],
-  ['image', '이미지'],
 ]) {
   define(
     [`MODEL_REQUIRED:${role}`],
@@ -32,9 +31,20 @@ for (const [role, label] of [
 }
 
 define(
-  ['IMAGE_MODEL_UNAVAILABLE'],
-  '번역은 완료됐지만 이미지 배치 모델을 사용할 수 없어요.',
-  '전역 모델 설정에서 이미지 배치 모델을 확인한 뒤 장면 메뉴의 이미지 자동 배치를 눌러 주세요.'
+  ['JEV_CREDENTIAL_REQUIRED', 'JEV_HTTP_401', 'JEV_HTTP_403'],
+  'JEV 판단 연결을 사용할 수 없어요.',
+  '프로바이더·모델의 JEV 판단에서 API 키를 저장하고 연결 테스트를 한 뒤 새 작업을 요청해 주세요.'
+);
+define(
+  [
+    'JEV_EXECUTION_FAILED',
+    'JEV_TIMEOUT',
+    'JEV_RESPONSE_INVALID',
+    'JEV_INPUT_BUDGET',
+    'JEV_HTTP_429',
+  ],
+  'JEV 판단을 완료하지 못했어요.',
+  '작업 상세와 JEV 연결을 확인해 주세요. 다른 모델로 대체하거나 자동 재호출하지 않았어요.'
 );
 
 define(
@@ -97,19 +107,14 @@ define(
   '연결 상태와 출력 토큰 한도를 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.'
 );
 define(
-  ['TRANSLATION_REFUSAL_MODEL_REQUIRED', 'MODEL_REQUIRED:translation-refusal'],
-  '번역 거절 판정 모델이 지정되지 않았어요.',
-  '전역 모델 설정에서 경량 판정 모델을 선택한 뒤 재번역해 주세요.'
-);
-define(
   ['TRANSLATION_REFUSAL_CHECK_FAILED'],
   '번역 거절 여부를 판정하는 모델 호출을 완료하지 못했어요.',
-  '생성된 응답은 보존했고 번역을 자동으로 다시 호출하지 않았어요. 판정 모델의 연결과 설정을 확인해 주세요.'
+  '생성된 응답은 보존했고 번역을 자동으로 다시 호출하지 않았어요. JEV 연결과 설정을 확인해 주세요.'
 );
 define(
   ['TRANSLATION_REFUSAL_UNCERTAIN'],
   '판정 모델이 번역 응답의 거절 여부를 확정하지 못했어요.',
-  '생성된 응답은 보존했고 번역을 자동으로 다시 호출하지 않았어요. 응답과 판정 모델 설정을 확인해 주세요.'
+  '생성된 응답은 보존했고 번역을 자동으로 다시 호출하지 않았어요. 응답과 JEV 판정 기준을 확인해 주세요.'
 );
 define(
   ['TRANSLATION_REFUSAL_RETRIES_EXHAUSTED'],

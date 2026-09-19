@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest';
-import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import { DATABASE_SCHEMA_VERSION } from '../server/schema-migrations.js';
+import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { HttpError } from '../server/request-validation.js';
 import {
   cancelIllustration,
@@ -298,7 +297,7 @@ describe('integrated illustration audit regressions', () => {
 });
 
 describe('illustration storage on the current schema', () => {
-  test('fresh databases create the tables and legacy schema 15 gains them during upgrade', () => {
+  test('fresh databases create illustration tables and current databases reopen them', () => {
     const store = databases.create();
     const tables = () =>
       (
@@ -320,11 +319,6 @@ describe('illustration storage on the current schema', () => {
     expect(illustrationSettings(store)).toMatchObject({ revision: 1, generator: 'none' });
     const path = store.path;
     store.close();
-    const raw = new DatabaseSync(path);
-    raw.exec(
-      'DROP TABLE illustration_images; DROP TABLE illustration_jobs; DROP TABLE illustration_references; DROP TABLE illustration_settings; DROP TABLE maintenance; DROP TABLE chat_variable_outputs; DROP TABLE chat_variable_journal; DROP TABLE chat_variable_states; DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
-    );
-    raw.close();
     const reopened = new Store(path);
     try {
       expect(reopened.db.prepare('PRAGMA user_version').get()).toEqual({
@@ -762,17 +756,5 @@ describe('illustration storage on the current schema', () => {
     const restoredFrozen = illustrationJob(restored, frozen.id);
     expect(restoredFrozen.input.codex?.model.connection.enabled).toBe(false);
     expect(restoredFrozen.input.codex?.model.connection).not.toHaveProperty('credentialEnv');
-    const legacy = structuredClone(archive) as { tables: Record<string, unknown> };
-    for (const table of [
-      'illustration_settings',
-      'illustration_jobs',
-      'illustration_images',
-      'illustration_references',
-    ])
-      delete legacy.tables[table];
-    const older = databases.create();
-    older.product.import(legacy);
-    expect(illustrationSettings(older).generator).toBe('none');
-    expect(illustrationsForChat(older, forked.id)).toEqual([]);
   });
 });

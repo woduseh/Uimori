@@ -29,7 +29,7 @@ Tests that import source directly need no build. A check that executes `dist` ne
 
 Reuse relevant results while their source, environment, and test assumptions remain applicable. After a small follow-up edit, run affected checks and distinguish that result from an earlier full run. Report what actually ran, including failures and blocked checks; synthetic checks support different claims from provider, device, or production observations. An environment failure such as Windows `spawn EPERM` is a blocked observation, not an application result. See [DEVELOPMENT](DEVELOPMENT.md) for recovery.
 
-Browser defaults are defined in [`fixtures/browser-viewports.json`](../fixtures/browser-viewports.json). Shared runners accept `--grep` for focused cases and `--visual` (or `NR_VISUAL_REVIEW=1`) for extra visual checks and screenshots. Failure screenshots and traces are retained. Inspect the rendered output when making a visual claim.
+Browser defaults are defined in [`fixtures/browser-viewports.json`](../fixtures/browser-viewports.json). Shared runners accept `--grep` for focused cases and `--visual` (or `UIMORI_VISUAL_REVIEW=1`) for extra visual checks and screenshots. Failure screenshots and traces are retained. Inspect the rendered output when making a visual claim.
 
 ## Release checks
 

@@ -18,7 +18,7 @@ import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { Store } from '../server/store.js';
 import { ProductStore } from '../server/product-store.js';
-import { DATABASE_SCHEMA_VERSION } from '../server/schema-migrations.js';
+import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 
 const owned: { root: string; store?: Store; locks?: DatabaseSync[] }[] = [];
 afterEach(() => {
@@ -47,7 +47,7 @@ function fixture(local = true) {
   copyFileSync(new URL('../scripts/reset-dev-data.mjs', import.meta.url), script);
   const owner: { root: string; store?: Store; locks?: DatabaseSync[] } = { root };
   owned.push(owner);
-  return { root, repo, directory, script, owner, path: join(directory, 'narrative.sqlite') };
+  return { root, repo, directory, script, owner, path: join(directory, 'uimori.sqlite') };
 }
 function reset(
   f: ReturnType<typeof fixture>,
@@ -78,9 +78,6 @@ test('BASE01 a fresh database creates the current schema and a current database 
     store.db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='resources'").get()
   ).toBeUndefined();
   expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  expect(store.db.prepare('SELECT count(*) AS n FROM package_behavior_entropy').get()).toEqual({
-    n: 1,
-  });
   const chat = createFixtureChat(store, 'Current baseline');
   store.close();
   f.owner.store = undefined;
@@ -112,7 +109,7 @@ test('BASE03 fresh initialization rolls back as one transaction and releases its
     mock = vi.spyOn(ProductStore.prototype, 'initFresh').mockImplementationOnce(() => {
       throw new Error('synthetic initialization failure');
     });
-  expect(() => new Store(f.path)).toThrow('DATABASE_MIGRATION_FAILED');
+  expect(() => new Store(f.path)).toThrow('DATABASE_INITIALIZATION_FAILED');
   mock.mockRestore();
   const db = new DatabaseSync(f.path, { readOnly: true });
   try {
@@ -131,7 +128,7 @@ test('BASE03 fresh initialization rolls back as one transaction and releases its
   });
 });
 
-test('BASE04 archive format 15 remains independent from the current database schema', () => {
+test('BASE04 the current archive format remains independent from the database schema', () => {
   const source = fixture(),
     target = fixture();
   source.owner.store = new Store(source.path);
@@ -140,8 +137,7 @@ test('BASE04 archive format 15 remains independent from the current database sch
   const archive = source.owner.store.product.export();
   const before = structuredClone(archive),
     empty = target.owner.store.product.export().tables;
-  expect(archive.version).toBe(15);
-  for (const version of [2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16]) {
+  for (const version of [0, archive.version + 1]) {
     expect(() => target.owner.store!.product.import({ ...archive, version })).toThrow(
       'Unsupported archive'
     );
@@ -153,29 +149,25 @@ test('BASE04 archive format 15 remains independent from the current database sch
   expect(archive).toEqual(before);
 });
 
-test('RESET01 the CLI removes only the fixed development DB family and known pre-upgrade copies', () => {
+test('RESET01 the CLI removes only the default development DB and its SQLite sidecars', () => {
   const f = fixture(),
     outside = join(f.root, 'other.sqlite');
   writeFileSync(outside, 'outside');
   const remove = [
-    'narrative.sqlite',
-    'narrative.sqlite-wal',
-    'narrative.sqlite-shm',
-    'narrative.sqlite-journal',
-    ...['m1', 'v3', 'm2', 'native', 'organization', 'behavior'].map(
-      (prefix) => `narrative.sqlite.pre-${prefix}-1234567890123-abcdef12.sqlite`
-    ),
-    'narrative.sqlite.pre-m1-1234567890123-abcdef12.sqlite-wal',
+    'uimori.sqlite',
+    'uimori.sqlite-wal',
+    'uimori.sqlite-shm',
+    'uimori.sqlite-journal',
   ];
   const keep = [
     'other.sqlite',
-    'narrative.sqlite.backup-explicit.sqlite',
-    'narrative.sqlite.pre-unknown-1234567890123-abcdef12.sqlite',
-    'narrative.sqlite.pre-m1-invalid.sqlite',
+    'uimori.sqlite.backup-explicit.sqlite',
+    'uimori.sqlite.pre-copy.sqlite',
+    'uimori.sqlite.pre-copy.sqlite-wal',
     'notes.txt',
   ];
   for (const name of [...remove, ...keep]) writeFileSync(join(f.directory, name), name);
-  const result = reset(f, [], { NR_DB: outside });
+  const result = reset(f, [], { UIMORI_DB: outside });
   expect(result.status, result.stderr).toBe(0);
   expect(result.body.status).toBe('reset');
   expect(result.body.removed.sort()).toEqual(remove.sort());
@@ -188,7 +180,7 @@ test('RESET01 the CLI removes only the fixed development DB family and known pre
 test('RESET02 a running owner blocks reset before any development file is deleted', () => {
   const f = fixture();
   f.owner.store = new Store(f.path);
-  const backup = 'narrative.sqlite.pre-behavior-1234567890123-abcdef12.sqlite';
+  const backup = 'uimori.sqlite.backup.sqlite';
   writeFileSync(join(f.directory, backup), 'copy');
   const result = reset(f);
   expect(result.status).toBe(1);
@@ -198,30 +190,16 @@ test('RESET02 a running owner blocks reset before any development file is delete
   expect(readFileSync(join(f.directory, backup), 'utf8')).toBe('copy');
 });
 
-test('RESET03 an active owner of an old pre-upgrade copy also blocks the entire reset', () => {
-  const f = fixture(),
-    backup = 'narrative.sqlite.pre-m1-1234567890123-abcdef12.sqlite';
-  writeFileSync(f.path, 'current');
-  writeFileSync(join(f.directory, backup), 'copy');
-  const lock = new DatabaseSync(join(f.directory, backup + '.owner.sqlite'));
-  lock.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE;');
-  f.owner.locks = [lock];
-  const result = reset(f);
-  expect(result.status).toBe(1);
-  expect(result.body.removed).toEqual([]);
-  expect(readFileSync(f.path, 'utf8')).toBe('current');
-});
-
 test('RESET04 redirected .local directories are rejected before following their files', () => {
   const f = fixture(false),
     outside = join(f.root, 'outside');
   mkdirSync(outside);
-  writeFileSync(join(outside, 'narrative.sqlite'), 'outside');
+  writeFileSync(join(outside, 'uimori.sqlite'), 'outside');
   symlinkSync(outside, f.directory, 'junction');
   const result = reset(f);
   expect(result.status).toBe(1);
   expect(result.body.error).toBe('DEV_RESET_UNSAFE_DIRECTORY');
-  expect(readFileSync(join(outside, 'narrative.sqlite'), 'utf8')).toBe('outside');
+  expect(readFileSync(join(outside, 'uimori.sqlite'), 'utf8')).toBe('outside');
 });
 
 test('RESET05 hard-linked database targets and path override arguments are refused', () => {

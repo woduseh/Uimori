@@ -1,56 +1,16 @@
-import {
-  behaviorActionTriggers,
-  validateBehaviorValue,
-  type PackageBehavior,
-} from './package-behavior.js';
-import {
-  evaluatePromptExpression,
-  renderPromptTemplate,
-  resolvePromptValues,
-  validatePromptExpression,
-  type PromptControl,
-  type PromptExpression,
-  type PromptTemplate,
-  type PromptValue,
-  type RuntimeValue,
-} from './prompt-program.js';
-import {
-  validatePackageIdentityTemplate,
-  type PackageIdentityContext,
-} from './package-identity.js';
-import { PromptBudget } from './prompt-values.js';
-import { templateReadsVariables } from './template-variables.js';
-
-export const GENERATED_PACKAGE_START_MAX_CHARS = 4000;
-
-/** One explicitly selected opening; optional authored templates preserve their source text. */
+/** Risu first_mes and alternate_greetings, without another authoring language. */
 export type PackageStart = {
   id: string;
   title: string;
   description?: string;
-  mode: 'authored' | 'generate';
+  mode: 'authored';
   text: string;
-  template?: PromptTemplate;
-  values?: Record<string, PromptValue>;
-  initialAction?: { actionId: string; input: PromptExpression };
 };
 export type PackageStartRef = { packageId: string; packageRevision: number; startId: string };
 export type PackageStartSnapshot = PackageStartRef & {
-  templateWarning?: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT';
-  mode: PackageStart['mode'];
+  mode: 'authored';
   title: string;
   text: string;
-  values: Record<string, PromptValue>;
-  initialAction?: { actionId: string; input: RuntimeValue };
-};
-type StartPackage = {
-  id: string;
-  revision: number;
-  title?: string;
-  identity?: { name: string };
-  controls: PromptControl[];
-  behavior?: PackageBehavior;
-  starts?: PackageStart[];
 };
 export class PackageStartError extends Error {
   readonly statusCode = 400;
@@ -59,19 +19,15 @@ export class PackageStartError extends Error {
     this.name = 'PackageStartError';
   }
 }
-function fail(message: string): never {
+const fail = (message: string): never => {
   throw new PackageStartError(message);
-}
-function record(value: unknown, allowed?: string[]): Record<string, unknown> {
+};
+function record(value: unknown, allowed: string[]): Record<string, unknown> {
   if (
     !value ||
     typeof value !== 'object' ||
     Array.isArray(value) ||
-    Object.keys(value).some(
-      (key) =>
-        ['__proto__', 'constructor', 'prototype'].includes(key) ||
-        (allowed && !allowed.includes(key))
-    )
+    Object.keys(value).some((key) => !allowed.includes(key))
   )
     fail('PACKAGE_START_INVALID_FIELDS');
   return value as Record<string, unknown>;
@@ -84,31 +40,6 @@ function identifier(value: unknown): asserts value is string {
   )
     fail('PACKAGE_START_INVALID_ID');
 }
-function text(value: unknown, max: number, empty = false): asserts value is string {
-  if (typeof value !== 'string' || value.length > max || (!empty && !value.trim()))
-    fail('PACKAGE_START_INVALID_TEXT');
-}
-function controlsOnly(expression: PromptExpression): void {
-  const pending: unknown[] = [expression];
-  while (pending.length) {
-    const value = pending.pop();
-    if (!value || typeof value !== 'object') continue;
-    if (!Array.isArray(value) && Object.hasOwn(value, 'context'))
-      fail('PACKAGE_START_INPUT_CONTEXT');
-    // Literal data is data, including objects with a field named context.
-    if (!Array.isArray(value) && Object.hasOwn(value, 'literal')) continue;
-    pending.push(...Object.values(value));
-  }
-}
-
-function identityTemplate(value: unknown, controls: PromptControl[]): void {
-  validatePackageIdentityTemplate(
-    value,
-    controls.map((item) => item.id),
-    (reason) => fail(`PACKAGE_START_TEMPLATE_${reason}`)
-  );
-}
-
 export function validatePackageStartRef(value: unknown): PackageStartRef {
   const ref = record(value, ['packageId', 'packageRevision', 'startId']);
   identifier(ref.packageId);
@@ -117,110 +48,40 @@ export function validatePackageStartRef(value: unknown): PackageStartRef {
     fail('PACKAGE_START_INVALID_REVISION');
   return structuredClone(ref) as PackageStartRef;
 }
-
-export function validatePackageStarts(
-  value: unknown,
-  context: { controls: PromptControl[]; behavior?: PackageBehavior }
-): PackageStart[] {
-  if (!Array.isArray(value) || value.length > 20) fail('PACKAGE_START_LIST_LIMIT');
+export function validatePackageStarts(value: unknown): PackageStart[] {
+  if (!Array.isArray(value) || value.length > 100) fail('PACKAGE_START_LIST_LIMIT');
   const ids = new Set<string>();
-  for (const raw of value) {
-    const start = record(raw, [
-      'id',
-      'title',
-      'description',
-      'mode',
-      'text',
-      'template',
-      'values',
-      'initialAction',
-    ]);
-    identifier(start.id);
-    if (ids.has(start.id)) fail('PACKAGE_START_DUPLICATE_ID');
-    ids.add(start.id);
-    text(start.title, 200);
-    text(start.text, start.mode === 'generate' ? GENERATED_PACKAGE_START_MAX_CHARS : 100_000);
-    if (start.description !== undefined) text(start.description, 2000, true);
-    if (start.mode !== 'authored' && start.mode !== 'generate') fail('PACKAGE_START_INVALID_MODE');
-    if (start.template !== undefined) {
-      identityTemplate(start.template, context.controls);
-    }
-    const values = resolvePromptValues(
-      { version: 1, controls: context.controls, blocks: [] },
-      start.values === undefined ? {} : (record(start.values) as Record<string, PromptValue>)
-    );
-    if (start.initialAction !== undefined) {
-      const initial = record(start.initialAction, ['actionId', 'input']);
-      identifier(initial.actionId);
-      const action = context.behavior?.actions.find((item) => item.id === initial.actionId);
-      if (!action || !behaviorActionTriggers(action).includes('user'))
-        fail('PACKAGE_START_INITIAL_ACTION');
-      if (action.program) fail('PACKAGE_START_PROGRAM_ACTION_UNSUPPORTED');
-      const input = validatePromptExpression(
-        initial.input,
-        context.controls.map((control) => control.id)
-      );
-      controlsOnly(input);
-      validateBehaviorValue(action.inputSchema, evaluatePromptExpression(input, values));
-    }
+  for (const raw of value as unknown[]) {
+    const item = record(raw, ['id', 'title', 'description', 'mode', 'text']);
+    identifier(item.id);
+    if (ids.has(item.id)) fail('PACKAGE_START_DUPLICATE_ID');
+    ids.add(item.id);
+    if (
+      item.mode !== 'authored' ||
+      typeof item.title !== 'string' ||
+      item.title.length > 200 ||
+      typeof item.text !== 'string' ||
+      item.text.length > 100_000 ||
+      (item.description !== undefined &&
+        (typeof item.description !== 'string' || item.description.length > 2000))
+    )
+      fail('PACKAGE_START_INVALID_TEXT');
   }
   if (JSON.stringify(value).length > 2_000_000) fail('PACKAGE_START_SIZE_LIMIT');
   return structuredClone(value) as PackageStart[];
 }
-
-/** Pure preview: no state writes, random draws, provider work or prompt-side mutation. */
 export function resolvePackageStart(
-  pkg: StartPackage,
-  startId: string,
-  overrides: Record<string, PromptValue> = {},
-  identity: PackageIdentityContext = {
-    bot: { name: pkg.identity?.name ?? pkg.title ?? 'Character' },
-    user: { name: 'User' },
-  }
+  pkg: { id: string; revision: number; starts?: PackageStart[] },
+  startId: string
 ): PackageStartSnapshot {
-  const start = validatePackageStarts(pkg.starts ?? [], pkg).find((item) => item.id === startId);
-  if (!start) fail('PACKAGE_START_NOT_FOUND');
-  const values = resolvePromptValues(
-    { version: 1, controls: pkg.controls, blocks: [] },
-    { ...start.values, ...overrides }
-  );
-  let initialAction: PackageStartSnapshot['initialAction'];
-  if (start.initialAction) {
-    const action = pkg.behavior!.actions.find((item) => item.id === start.initialAction!.actionId)!;
-    initialAction = {
-      actionId: action.id,
-      input: validateBehaviorValue(
-        action.inputSchema,
-        evaluatePromptExpression(start.initialAction.input, values)
-      ),
-    };
-  }
-  const templateWarning =
-    identity.variableDefaultsError && templateReadsVariables(start.template)
-      ? identity.variableDefaultsError
-      : undefined;
-  const rendered =
-    start.template && !templateWarning
-      ? renderPromptTemplate(
-          start.template,
-          values,
-          {},
-          {
-            runtime: identity,
-            budget: new PromptBudget({ maxOutputChars: 100_000 }, 'deterministic'),
-          }
-        )
-      : start.text;
-  text(rendered, start.mode === 'generate' ? GENERATED_PACKAGE_START_MAX_CHARS : 100_000);
+  const start = validatePackageStarts(pkg.starts ?? []).find((item) => item.id === startId);
+  if (!start) return fail('PACKAGE_START_NOT_FOUND');
   return {
     packageId: pkg.id,
     packageRevision: pkg.revision,
     startId,
-    mode: start.mode,
+    mode: 'authored',
     title: start.title,
-    text: rendered,
-    values,
-    ...(templateWarning ? { templateWarning } : {}),
-    ...(initialAction ? { initialAction } : {}),
+    text: start.text,
   };
 }

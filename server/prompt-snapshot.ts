@@ -1,17 +1,15 @@
 import { loreHistory } from '../core/lore-context.js';
 import { placeNativeRisuLore } from '../core/risu-native-lore.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { attachMainHostContext } from './main-host-context.js';
 import { buildMainInput, pinnedSlotSources } from '../core/provider.js';
 import {
-  compilePromptProgram,
+  compileRisuPrompt,
   type PromptCompilerVersion,
   type PromptHistoryMessage,
-  type PromptProgram,
+  type RisuPrompt,
   type PromptValue,
-  type PromptTemplate,
-} from '../core/prompt-program.js';
-import { sourceLogicalHistoryForRequest } from '../core/source-context.js';
+} from '../core/risu-prompt.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
@@ -19,11 +17,6 @@ import { compiledPackages, type ResolvedPackage } from '../core/package-context.
 import { executionContext } from '../core/execution-context.js';
 import { projectedLogicalHistory } from '../core/context-projection.js';
 import { nativeRisuPresetPending, projectNativeRisuPresetProgram } from './risu-native-preset.js';
-import { projectPromptInputTransforms } from './prompt-transforms.js';
-import {
-  projectExtensionMessageEdits,
-  projectExtensionRequestEdit,
-} from './extension-request-edit.js';
 
 /** Pair each exact source version with its actual user request; never infer roles from prose. */
 export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): PromptHistoryMessage[] {
@@ -102,34 +95,26 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
     return accumulated;
   }, []);
 }
-export function promptContext(
-  snapshot: RunSnapshot,
-  program?: PromptProgram,
-  values?: Record<string, PromptValue>
-) {
-  return contextFromPackages(snapshot, compiledPackages(snapshot, 'main'), program, values);
+export function promptContext(snapshot: RunSnapshot) {
+  return contextFromPackages(snapshot, compiledPackages(snapshot, 'main'));
 }
 function contextFromPackages(
   snapshot: RunSnapshot,
   packages: readonly ResolvedPackage[],
-  program?: PromptProgram,
-  values?: Record<string, PromptValue>,
   compilerVersion?: PromptCompilerVersion
 ) {
   const input = buildMainInput(snapshot, [], { compilerVersion });
-  const contents = snapshot.profile?.contents ?? [];
   const body = (slot: string) =>
     pinnedSlotSources(input, slot)
       .map((item) => item.text)
       .join('\n\n');
   const slots: Record<string, string> = {
-    char: contents.find((c) => c.kind === 'bot')?.title ?? 'Character',
+    char: packages.find((entry) => entry.attachment.role === 'bot')?.package.title ?? 'Character',
     bot: body('bot'),
     description: body('description'),
     persona: body('persona'),
     lore: body('lore'),
     notes: input.notes ? JSON.stringify(input.notes) : '',
-    state: input.state ? JSON.stringify(input.state) : '',
     outline: input.outline ? JSON.stringify(input.outline) : '',
     globalNote: '',
     authorNote: '',
@@ -175,20 +160,19 @@ function contextFromPackages(
     (message) =>
       snapshot.contextPlan || !message.sourceRevision || inputHistoryIds.has(message.sourceRevision)
   );
-  const edited = projectExtensionMessageEdits(snapshot, [
-    ...sourceLogicalHistoryForRequest(snapshot, logical),
+  const historyInput = [
+    ...structuredClone(logical),
     {
       id: 'current-input',
       role: 'user' as const,
-      text: projectExtensionRequestEdit(snapshot).text,
+      text: snapshot.nativeRisuExecution?.request ?? snapshot.request,
       current: true,
     },
-  ]);
-  const transformed = projectPromptInputTransforms(snapshot, edited.history, program, values);
-  const current = transformed.history.at(-1)!;
+  ];
+  const current = historyInput.at(-1)!;
   const history = [
     ...loreHistory(
-      projectedLogicalHistory(snapshot, transformed.history.slice(0, -1)),
+      projectedLogicalHistory(snapshot, historyInput.slice(0, -1)),
       snapshot.loreContext
     ),
     current,
@@ -197,7 +181,6 @@ function contextFromPackages(
   return {
     slots,
     history,
-    transformWarnings: [...edited.warnings, ...transformed.warnings],
     runtime: executionContext(snapshot),
     values: preset
       ? snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values
@@ -207,78 +190,27 @@ function contextFromPackages(
 /** Pass `compilerVersion` only to reproduce a stored compilation; a fresh one takes the current stamp. */
 export function compileSnapshotPrompt(
   snapshot: RunSnapshot,
-  program?: PromptProgram,
+  program?: RisuPrompt,
   values?: Record<string, PromptValue>,
   options: { compilerVersion?: PromptCompilerVersion } = {}
 ): RunSnapshot {
-  if (snapshot.story?.waiting || snapshot.contextPlan?.status === 'pending') return snapshot;
+  if (snapshot.contextPlan?.status === 'pending') return snapshot;
   const authored =
     program ??
     snapshot.profile?.promptPresets?.main?.program ??
-    createDefaultPromptProgram(DEFAULT_MAIN_PROMPT);
+    createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT);
   const selected = projectNativeRisuPresetProgram(snapshot, authored);
   const packages = compiledPackages(snapshot, 'main');
-  const positioned = packages.flatMap((p) => p.instructions).filter((n) => n.position);
-  if (positioned.length) {
-    const declared = new Set<string>();
-    const walk = (nodes: PromptTemplate) => {
-      for (const node of nodes) {
-        if (node.kind === 'slot') declared.add(node.name);
-        else if (node.kind === 'if') {
-          walk(node.then);
-          walk(node.else ?? []);
-        } else if (node.kind === 'each') {
-          walk(node.body);
-          walk(node.else ?? []);
-        } else if (node.kind === 'let') walk(node.body);
-      }
-    };
-    for (const block of selected?.blocks ?? []) {
-      if (block.kind === 'slot') declared.add(block.slot);
-      if ((block.kind === 'slot' || block.kind === 'message') && block.template)
-        walk(block.template);
-    }
-    for (const pkg of packages) {
-      pkg.instructions = pkg.instructions.filter((instruction) => {
-        if (!instruction.position || declared.has(instruction.position)) return true;
-        (pkg.unavailableInstructions ??= []).push({
-          id: instruction.id.slice(
-            `package:${pkg.attachment.id}:${pkg.attachment.role}:instruction:`.length
-          ),
-          code: 'PACKAGE_INSERTION_SLOT_MISSING',
-        });
-        return false;
-      });
-    }
-  }
-  const context = contextFromPackages(
-    snapshot,
-    packages,
-    selected,
-    values,
-    options.compilerVersion
-  );
-  const promptCompilation = compilePromptProgram(selected, {
+  const context = contextFromPackages(snapshot, packages, options.compilerVersion);
+  const promptCompilation = compileRisuPrompt(selected, {
     ...context,
     ...(values ? { values } : {}),
     ...(options.compilerVersion ? { compilerVersion: options.compilerVersion } : {}),
   });
-  promptCompilation.warnings.push(...context.transformWarnings);
   if (nativeRisuPresetPending(snapshot))
     promptCompilation.warnings.push('RISU_NATIVE_PRESET_PENDING');
   if (context.runtime.variableDefaultsError === 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT')
     promptCompilation.warnings.push('TEMPLATE_VARIABLE_DEFAULTS_LIMIT');
-  for (const pkg of packages)
-    for (const item of pkg.unavailableInstructions ?? [])
-      promptCompilation.warnings.push(
-        `PACKAGE_INSTRUCTION_UNAVAILABLE:${JSON.stringify({ instanceId: `${pkg.attachment.id}:${pkg.attachment.role}`, instructionId: item.id, code: item.code })}`
-      );
-  for (const pkg of packages)
-    for (const item of pkg.unavailableTextTemplates ?? [])
-      promptCompilation.warnings.push(
-        `PACKAGE_TEXT_TEMPLATE_FALLBACK:${JSON.stringify({ instanceId: `${pkg.attachment.id}:${pkg.attachment.role}`, resourceId: item.id, code: item.code })}`
-      );
-
   const hosted = attachMainHostContext({ ...snapshot, promptCompilation });
   return {
     ...hosted,

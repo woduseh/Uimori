@@ -211,9 +211,9 @@ try {
   };
   await json(path.join(directory, 'summary.json'), summary);
   const env = localVerificationEnv({
-    NR_DB: dbPath,
-    NR_INSTANCE: runId,
-    NR_BUILD_ID: summary.build.buildId,
+    UIMORI_DB: dbPath,
+    UIMORI_INSTANCE: runId,
+    UIMORI_BUILD_ID: summary.build.buildId,
     TEMP: runtime,
     TMP: runtime,
   });

@@ -1,3 +1,4 @@
+import { JEV_PROVIDER_DEFINITION } from './jev-provider.js';
 import type { ProviderProtocol } from './product.js';
 
 /** Local adapter metadata, not a provider catalog or a grant of connection authority. */
@@ -63,7 +64,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
       '서버의 공식 Codex 실행기에 직접 로그인해 사용해요. API 키를 저장하지 않아요.',
       '도구 실행은 Uimori가 관리해요. maxOutputTokens는 출력 목표이며 Codex 내부 hard budget을 보장하지 않아요.',
       '작업 횟수와 내부 모델 호출 수는 달라요. 실제 비용과 내부 호출 수는 미확인이에요.',
-      'PromptProgram은 역할과 순서를 가진 JSON으로 전달해요. Codex 자체 지침이 추가되므로 native 메시지 역할과 동일한 실행은 보장하지 않아요. prefill과 필수 cache는 지원하지 않아요.',
+      'RisuPrompt은 역할과 순서를 가진 JSON으로 전달해요. Codex 자체 지침이 추가되므로 native 메시지 역할과 동일한 실행은 보장하지 않아요. prefill과 필수 cache는 지원하지 않아요.',
     ],
   }),
   definition({
@@ -205,3 +206,9 @@ export function providerDefinition(protocol: ProviderProtocol): ProviderDefiniti
   if (!found) throw new Error('UNSUPPORTED_PROTOCOL');
   return found;
 }
+
+/** One provider chooser; judgment entries never become generative model presets. */
+export const PROVIDER_CHOICES = Object.freeze([
+  ...PROVIDER_DEFINITIONS.map((provider) => ({ ...provider, kind: 'generation' as const })),
+  JEV_PROVIDER_DEFINITION,
+]);

@@ -5,7 +5,6 @@ import { executeStoryRead, STORY_READ_NAMES } from '../core/story-context.js';
 import { executeTool } from '../core/provider.js';
 import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
 import { sourceHash } from '../core/source-history.js';
-import { defaultStoryConfig } from '../core/story.js';
 import type { RunSnapshot } from '../core/types.js';
 import { MAIN_READ_TOOLS } from '../server/main-request.js';
 
@@ -38,12 +37,8 @@ function fixture() {
     resources: [],
     history,
     story: {
-      config: defaultStoryConfig(),
-      state: null,
-      waiting: false,
       lineageHash: 'synthetic',
       canonHash: sourceHash('[]'),
-      models: {},
       notes: [note],
     },
   };

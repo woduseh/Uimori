@@ -6,28 +6,13 @@ import {
   type ArchiveRow as Row,
 } from './request-validation.js';
 import { randomUUID } from 'node:crypto';
-import { isDeepStrictEqual } from 'node:util';
 import type { Store } from './store.js';
-import { lineageHash, storyDependencyKey } from './story-store.js';
-import {
-  activationRebuildState,
-  defaultStoryConfig,
-  type StoryConfig,
-  type StorySnapshot,
-  type StoryState,
-} from '../core/story.js';
-import {
-  initialState,
-  reduceStateProposal,
-  validateStateModule,
-  validateStateValues,
-} from '../core/state.js';
+import { lineageHash } from './story-store.js';
+import type { StorySnapshot } from '../core/story.js';
 import { sourceHash, type SourceScope } from '../core/source-history.js';
 import { validateAuthorNote, type AuthorNote } from '../core/notes.js';
-import { validateModelSnapshot } from './provider-archive.js';
 import type { RunSnapshot } from '../core/types.js';
 import { disableArchivedConnection } from '../core/product.js';
-
 const parse = (value: unknown): any => (typeof value === 'string' ? JSON.parse(value) : value);
 const reject: ArchiveReject = archiveRejector('Story archive');
 function object(value: unknown): Row {
@@ -78,90 +63,19 @@ function entryScope(store: Store, chatId: string, entry: AuthorNote): SourceScop
       revision: source.id,
       text: source.text,
       contentHash: source.hash,
-      ...(item.sourceSegments ? { sourceSegments: item.sourceSegments } : {}),
     };
   });
   return { chatId, history };
 }
-function configValue(
-  store: Store,
-  value: unknown,
-  chatId: string,
-  currentSelection = true
-): StoryConfig {
-  const config = shape(value, ['revision', 'module', 'stateModel', 'activatedAt']);
-  integer(config.revision);
-  if (config.module !== null) validateStateModule(config.module);
-  for (const value of [config.stateModel])
-    if (value !== null) {
-      const ref = shape(value, ['id']);
-      id(ref.id);
-      if (currentSelection) store.product.get('model', ref.id);
-    }
-  if (config.activatedAt !== null) {
-    const ref = shape(config.activatedAt, ['revision', 'hash']);
-    sourceRef(store, chatId, ref.revision, ref.hash);
-  }
-  if (config.revision === 0) same(config, defaultStoryConfig(), 'invalid default configuration');
-  if (config.module && config.module.revision > config.revision) reject('future module revision');
-  return config as StoryConfig;
-}
-function initial(config: StoryConfig, chatId: string): StoryState | null {
-  const module = config.module;
-  return module
-    ? {
-        id: `initial:${chatId}:${module.revision}`,
-        sourceRevision: config.activatedAt?.revision ?? null,
-        sourceHash: config.activatedAt?.hash ?? null,
-        moduleRevision: module.revision,
-        values: initialState(module),
-        canonical: module.mode !== 'annotation',
-      }
-    : null;
-}
-
 export type StorySnapshotArchiveValidator = (snapshot: RunSnapshot) => void;
-
-/** Validate after base archive graph checks, inside the importing transaction. The returned
- * validator shares the same source/state/note and configuration revision ledger for other owners. */
+/** Validate source ancestry, immutable note evidence and scene ownership inside restore's transaction. */
 export function validateStoryArchive(store: Store): StorySnapshotArchiveValidator {
   try {
-    const configs = new Map<string, StoryConfig>();
-    const modules = new Map<string, unknown>();
-    const currentRevisions = new Map<string, number>();
-    // Settings have one current row. Historical configurations are owned by their
-    // Run/job snapshots, which must still agree whenever they share a revision.
-    const rememberConfig = (chatId: string, config: StoryConfig) => {
-      const currentRevision = currentRevisions.get(chatId);
-      if (currentRevision !== undefined && config.revision > currentRevision)
-        reject('snapshot configuration is newer than current settings');
-      const key = `${chatId}:${config.revision}`;
-      if (configs.has(key)) same(configs.get(key), config, 'snapshot configuration mismatch');
-      configs.set(key, config);
-      if (config.module) {
-        const moduleKey = `${chatId}:${config.module.revision}`;
-        if (modules.has(moduleKey))
-          same(modules.get(moduleKey), config.module, 'module revision was mutated');
-        modules.set(moduleKey, config.module);
-      }
-    };
-    for (const row of rows(store, 'story_configs')) {
-      store.chat(row.chat_id);
-      integer(row.revision, 1);
-      const config = configValue(store, parse(row.body), row.chat_id);
-      if (config.revision !== row.revision) reject('configuration revision mismatch');
-      currentRevisions.set(row.chat_id, row.revision);
-      rememberConfig(row.chat_id, config);
-    }
-    const jobs = new Map(rows(store, 'story_jobs').map((row) => [row.id, row]));
-    const states = new Map(rows(store, 'story_states').map((row) => [row.id, row]));
     const notes = new Map(rows(store, 'author_notes').map((row) => [row.id, row]));
-    const snapshots = new Map<string, RunSnapshot>();
     const snapshotValue = (
       value: unknown,
       chatId: string,
-      parentRevision: string | null,
-      stateSource?: { id: string; hash: string }
+      parentRevision: string | null
     ): RunSnapshot => {
       const snapshot = object(value) as RunSnapshot;
       if (
@@ -173,158 +87,12 @@ export function validateStoryArchive(store: Store): StorySnapshotArchiveValidato
       for (const item of snapshot.history)
         if (store.sourceOriginal(item.revision).chatId !== chatId)
           reject('snapshot ancestry outside chat');
-      if (!snapshot.story) reject('story snapshot missing');
       const story = shape(
         snapshot.story,
-        ['config', 'state', 'waiting', 'lineageHash', 'canonHash', 'notes', 'models'],
-        ['sceneCommandId', 'preparation']
+        ['lineageHash', 'canonHash', 'notes'],
+        ['sceneCommandId']
       ) as StorySnapshot;
-      const config = configValue(store, story.config, chatId, false);
-      rememberConfig(chatId, config);
-      if (typeof story.waiting !== 'boolean' || story.lineageHash !== lineageHash(snapshot.history))
-        reject('snapshot lineage mismatch');
-      if (story.preparation) {
-        const preparation = shape(
-          story.preparation,
-          ['version', 'status', 'fallback', 'missing'],
-          ['reason', 'skipKey']
-        );
-        if (
-          !config.module ||
-          preparation.version !== 1 ||
-          !['ready', 'pending', 'failed', 'skipped'].includes(preparation.status)
-        )
-          reject('invalid state preparation');
-        if (!Array.isArray(preparation.missing)) reject('invalid state preparation coverage');
-        if (
-          preparation.reason !== undefined &&
-          ![
-            'STATE_UNAVAILABLE',
-            'STATE_STALE',
-            'STATE_FAILED',
-            'STATE_CANCELLED',
-            'STATE_INTERRUPTED',
-            'STATE_COMPLETED',
-            'STATE_MODEL_UNAVAILABLE',
-            'USER_SKIPPED_STATE',
-          ].includes(preparation.reason)
-        )
-          reject('invalid state preparation reason');
-        if (
-          preparation.skipKey !== undefined &&
-          (typeof preparation.skipKey !== 'string' ||
-            !preparation.skipKey.trim() ||
-            preparation.skipKey.length > 120)
-        )
-          reject('invalid state skip receipt');
-        if (preparation.skipKey !== undefined && !['ready', 'skipped'].includes(preparation.status))
-          reject('state skip receipt outside completion');
-        if (['ready', 'pending'].includes(preparation.status) && preparation.reason !== undefined)
-          reject('unexpected state preparation reason');
-        if (
-          preparation.status === 'failed' &&
-          (!preparation.reason || preparation.reason === 'USER_SKIPPED_STATE')
-        )
-          reject('state preparation failure reason missing');
-        if (
-          preparation.status === 'skipped' &&
-          (!preparation.skipKey || preparation.reason !== 'USER_SKIPPED_STATE')
-        )
-          reject('state skip receipt missing');
-        if (
-          preparation.status === 'ready' &&
-          (!story.state || preparation.fallback !== null || preparation.missing.length)
-        )
-          reject('ready state preparation mismatch');
-        if (
-          story.state !== null &&
-          preparation.status !== 'ready' &&
-          preparation.reason !== 'STATE_MODEL_UNAVAILABLE'
-        )
-          reject('state preparation parent mismatch');
-        if (
-          story.waiting !==
-          (!stateSource &&
-            config.module?.mode === 'authoritative' &&
-            preparation.status === 'pending')
-        )
-          reject('state preparation barrier mismatch');
-        const covered = preparation.fallback?.sourceRevision
-          ? snapshot.history.findIndex(
-              (entry) => entry.revision === preparation.fallback!.sourceRevision
-            )
-          : -1;
-        same(
-          preparation.missing,
-          preparation.status === 'ready' || story.state
-            ? []
-            : snapshot.history
-                .slice(covered + 1)
-                .map((entry) => ({ revision: entry.revision, hash: sourceHash(entry.text) })),
-          'state preparation coverage mismatch'
-        );
-      } else if (
-        story.waiting !== (config.module?.mode === 'authoritative' && story.state === null)
-      )
-        reject('state barrier mismatch');
-      const modelMap = shape(story.models, [], ['state', 'context']);
-      for (const [kind, ref] of [['state', config.stateModel]] as const) {
-        if (!ref) {
-          if (modelMap[kind] !== undefined) reject('unselected model snapshot');
-          continue;
-        }
-        if (modelMap[kind] === undefined && story.preparation?.reason === 'STATE_MODEL_UNAVAILABLE')
-          continue;
-        const selected = validateModelSnapshot(modelMap[kind]);
-        if (selected.id !== ref.id) reject('model snapshot selection mismatch');
-      }
-      if (modelMap.context !== undefined) validateModelSnapshot(modelMap.context);
-      for (const rawState of [story.state, story.preparation?.fallback ?? null]) {
-        if (rawState === null) continue;
-        const state = shape(rawState, [
-          'id',
-          'sourceRevision',
-          'sourceHash',
-          'moduleRevision',
-          'values',
-          'canonical',
-        ]) as StoryState;
-        if (!config.module || state.moduleRevision !== config.module.revision)
-          reject('state module mismatch');
-        validateStateValues(config.module, state.values);
-        if (state.id.startsWith('initial:')) {
-          // An explicit activation rebuild may start immediately before its own
-          // source. Only a source-bound job can carry this baseline; ordinary
-          // original Run snapshots must retain their original initial state.
-          const rebuild = stateSource
-            ? activationRebuildState(chatId, config, stateSource, snapshot.history)
-            : null;
-          if (
-            !isDeepStrictEqual(state, initial(config, chatId)) &&
-            !isDeepStrictEqual(state, rebuild)
-          )
-            reject('initial state mismatch');
-        } else {
-          const row = states.get(state.id);
-          if (!row || row.chat_id !== chatId) reject('parent state missing');
-          same(state, parse(row.body), 'parent state snapshot mismatch');
-          if (
-            !snapshot.history.some(
-              (item) =>
-                item.revision === state.sourceRevision && sourceHash(item.text) === state.sourceHash
-            )
-          )
-            reject('parent state not in ancestry');
-        }
-        if (
-          state.sourceRevision !== null &&
-          !snapshot.history.some(
-            (item) =>
-              item.revision === state.sourceRevision && sourceHash(item.text) === state.sourceHash
-          )
-        )
-          reject('state anchor not in ancestry');
-      }
+      if (story.lineageHash !== lineageHash(snapshot.history)) reject('snapshot lineage mismatch');
       if (!Array.isArray(story.notes)) reject('invalid snapshot notes');
       const seenNotes = new Set<string>();
       for (const raw of story.notes) {
@@ -344,81 +112,6 @@ export function validateStoryArchive(store: Store): StorySnapshotArchiveValidato
       }
       return snapshot;
     };
-    for (const row of jobs.values()) {
-      id(row.id);
-      integer(row.generation);
-      integer(row.config_revision, 1);
-      if (
-        row.kind !== 'state' ||
-        !['completed', 'failed', 'stale', 'cancelled', 'interrupted'].includes(row.status) ||
-        ![0, 1].includes(row.mock) ||
-        row.owner !== null
-      )
-        reject('invalid restored job status');
-      const source = sourceRef(store, row.chat_id, row.source_revision, row.source_hash);
-      const snapshot = snapshotValue(
-        parse(row.snapshot),
-        row.chat_id,
-        source.parentRevision,
-        row.kind === 'state' ? source : undefined
-      );
-      snapshots.set(row.id, snapshot);
-      const originalSnapshot = store.run(source.runId).snapshot;
-      same(snapshot.resources, originalSnapshot.resources, 'job resource snapshot mismatch');
-      same(snapshot.profile, originalSnapshot.profile, 'job profile snapshot mismatch');
-      if (!Array.isArray(parse(row.inputs)) || !Array.isArray(parse(row.tool_events)))
-        reject('invalid job diagnostics');
-      if (row.dependency_key !== storyDependencyKey(row.kind, source, snapshot))
-        reject('job dependency key mismatch');
-      if (snapshot.story!.config.revision !== row.config_revision)
-        reject('job configuration mismatch');
-      if (!snapshot.story!.config.module) reject('job role disabled');
-      if (row.status === 'completed' && row.result === null) reject('completed job lacks result');
-      const stateRows = [...states.values()].filter((state) => state.job_id === row.id);
-      if (
-        (row.kind === 'state' && row.status === 'completed' && stateRows.length !== 1) ||
-        (row.kind !== 'state' && stateRows.length)
-      )
-        reject('state completion mismatch');
-    }
-    for (const row of states.values()) {
-      const job = jobs.get(row.job_id);
-      const snapshot = snapshots.get(row.job_id);
-      if (
-        !job ||
-        !snapshot ||
-        job.kind !== 'state' ||
-        !['completed', 'stale'].includes(job.status) ||
-        row.chat_id !== job.chat_id ||
-        row.source_revision !== job.source_revision ||
-        row.source_hash !== job.source_hash
-      )
-        reject('orphan or mismatched state');
-      const module = snapshot.story!.config.module!;
-      if (
-        row.module_revision !== module.revision ||
-        row.parent_state_id !== (snapshot.story!.state?.id ?? null)
-      )
-        reject('state dependency mismatch');
-      const source = sourceRef(store, row.chat_id, row.source_revision, row.source_hash);
-      const reduced = reduceStateProposal(
-        module,
-        snapshot.story!.state?.values ?? initialState(module),
-        parse(job.result),
-        { revision: source.id, hash: source.hash, text: source.text }
-      );
-      same(
-        parse(row.body),
-        {
-          id: row.id,
-          sourceRevision: source.id,
-          sourceHash: source.hash,
-          moduleRevision: module.revision,
-          ...reduced,
-        },
-        'state reducer result mismatch'
-      );
-    }
     for (const row of notes.values()) {
       id(row.id);
       store.chat(row.chat_id);
@@ -508,7 +201,6 @@ export function validateStoryArchive(store: Store): StorySnapshotArchiveValidato
     reject('invalid graph or source evidence');
   }
 }
-
 const opaqueKeys = [
   'opaqueState',
   'previous_response_id',
@@ -522,7 +214,7 @@ function stripEnvelope(value: Row) {
 function normalizeSnapshot(value: unknown): Row {
   const snapshot = object(value);
   stripEnvelope(snapshot);
-  for (const section of [snapshot.profile, snapshot.story])
+  for (const section of [snapshot.profile])
     if (section && typeof section === 'object') {
       stripEnvelope(section);
       for (const raw of [
@@ -538,56 +230,15 @@ function normalizeSnapshot(value: unknown): Row {
     }
   return snapshot;
 }
-function normalizeToolEvent(value: unknown) {
-  const event = object(value);
-  stripEnvelope(event);
-  if (event.result && typeof event.result === 'object' && !Array.isArray(event.result)) {
-    // Local read pagination is useful diagnostic data, not provider continuation.
-    for (const key of opaqueKeys.filter((key) => key !== 'continuation')) delete event.result[key];
-  }
-}
-/** Called on a detached archive row before insertion. No prose or typed state fields are rewritten. */
+/** Remove provider continuation and disable connections without touching authored text. */
 export function normalizeStoryArchiveRow(table: string, row: Row): void {
-  if (['runs', 'story_jobs', 'context_checkpoints', 'context_jobs'].includes(table))
+  if (['runs', 'context_checkpoints', 'context_jobs'].includes(table))
     row.snapshot = JSON.stringify(normalizeSnapshot(parse(row.snapshot)));
-  if (table === 'runs' && row.status === 'waiting_for_state') {
-    row.status = 'interrupted';
-    row.error = 'Restored state-dependent run; explicit retry required';
-  }
   if (table === 'context_jobs' && ['queued', 'running'].includes(row.status)) {
     row.status = 'interrupted';
     row.error = 'Restored uncertain context job; explicit retry required';
   }
-  if (table === 'story_jobs') {
-    if (['queued', 'running'].includes(row.status)) {
-      row.status = 'interrupted';
-      row.error = 'Restored uncertain story job; explicit retry required';
-    }
-    row.owner = null;
-    if (row.result !== null) {
-      const result = object(parse(row.result));
-      stripEnvelope(result);
-      row.result = JSON.stringify(result);
-    }
-    if (row.inputs !== undefined) {
-      const inputs = parse(row.inputs);
-      if (!Array.isArray(inputs)) reject('invalid input diagnostics');
-      for (const raw of inputs) {
-        const input = object(raw);
-        stripEnvelope(input);
-        if (Array.isArray(input.results)) input.results.forEach(normalizeToolEvent);
-      }
-      row.inputs = JSON.stringify(inputs);
-    }
-    if (row.tool_events !== undefined) {
-      const events = parse(row.tool_events);
-      if (!Array.isArray(events)) reject('invalid tool diagnostics');
-      events.forEach(normalizeToolEvent);
-      row.tool_events = JSON.stringify(events);
-    }
-  }
 }
-
 /** Copy selected stored artifacts within forkChat's existing transaction; never queue work or copy attempts. */
 export function copyStoryFork(
   store: Store,
@@ -619,31 +270,7 @@ export function copyStoryFork(
       )
       .run(...columns.map((column) => row[column]));
   };
-  const mapConfig = (config: StoryConfig): StoryConfig => ({
-    ...structuredClone(config),
-    activatedAt: config.activatedAt
-      ? { ...config.activatedAt, revision: sourceId(config.activatedAt.revision)! }
-      : null,
-  });
-  for (const row of rows(store, 'story_configs').filter((row) => row.chat_id === originalChatId)) {
-    const config = parse(row.body) as StoryConfig;
-    if (!selected(config.activatedAt?.revision ?? null)) {
-      exclude('config', 'activation outside selected ancestry');
-      continue;
-    }
-    const mapped = mapConfig(config);
-    insert('story_configs', { ...row, chat_id: newChatId, body: JSON.stringify(mapped) });
-  }
-  const allJobs = rows(store, 'story_jobs').filter((row) => row.chat_id === originalChatId);
-  const allStates = rows(store, 'story_states').filter((row) => row.chat_id === originalChatId);
   const allNotes = rows(store, 'author_notes').filter((row) => row.chat_id === originalChatId);
-  const candidates = allJobs.filter(
-    (row) => row.status === 'completed' && selected(row.source_revision)
-  );
-  const jobs = new Map(candidates.map((row) => [row.id, randomUUID()]));
-  const states = new Map(
-    allStates.filter((row) => jobs.has(row.job_id)).map((row) => [row.id, randomUUID()])
-  );
   const notes = new Map(
     allNotes
       .filter((row) => selected(parse(row.entry).atRevision))
@@ -657,15 +284,6 @@ export function copyStoryFork(
       runIds.has(row.run_id)
   );
   const commands = new Map(commandRows.map((row) => [row.id, randomUUID()]));
-  const initialId = (old: string) =>
-    old.startsWith(`initial:${originalChatId}:`)
-      ? `initial:${newChatId}:${old.slice(`initial:${originalChatId}:`.length)}`
-      : null;
-  const stateId = (old: string) => {
-    const mapped = initialId(old) ?? states.get(old);
-    if (!mapped) throw new Error('unavailable parent state dependency');
-    return mapped;
-  };
   const mapEntry = (entry: AuthorNote): AuthorNote => {
     const mapped = notes.get(entry.id);
     if (!mapped) throw new Error('unavailable note dependency');
@@ -676,35 +294,15 @@ export function copyStoryFork(
       atRevision: sourceId(entry.atRevision),
     };
   };
-  const mapState = (state: StoryState | null): StoryState | null =>
-    state
-      ? {
-          ...structuredClone(state),
-          id: stateId(state.id),
-          sourceRevision: sourceId(state.sourceRevision),
-        }
-      : null;
   const mapStory = (story: StorySnapshot, history: RunSnapshot['history']): StorySnapshot => {
-    const config = mapConfig(story.config);
     const mappedHistory = history.map((item) => ({ ...item, revision: sourceId(item.revision)! }));
     const mappedNotes = story.notes.map(mapEntry);
     const result: StorySnapshot = {
       ...structuredClone(story),
-      config: structuredClone(config),
-      state: mapState(story.state),
       notes: mappedNotes,
       lineageHash: lineageHash(mappedHistory),
       canonHash: canonHash(mappedNotes),
     };
-    if (story.preparation)
-      result.preparation = {
-        ...story.preparation,
-        fallback: mapState(story.preparation.fallback),
-        missing: story.preparation.missing.map((entry) => ({
-          ...entry,
-          revision: sourceId(entry.revision)!,
-        })),
-      };
     if (story.sceneCommandId !== undefined) {
       const mapped = commands.get(story.sceneCommandId);
       if (mapped) result.sceneCommandId = mapped;
@@ -712,26 +310,6 @@ export function copyStoryFork(
     }
     return result;
   };
-  // Remove the transitive closure of unresolved dependencies before copying any artifact.
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const row of candidates.filter((row) => jobs.has(row.id))) {
-      try {
-        const snapshot = parse(row.snapshot) as RunSnapshot;
-        mapStory(snapshot.story!, snapshot.history);
-      } catch {
-        jobs.delete(row.id);
-        for (const state of allStates.filter((state) => state.job_id === row.id))
-          states.delete(state.id);
-        exclude(row.kind, 'unavailable immutable dependency');
-        changed = true;
-      }
-    }
-  }
-  for (const row of allJobs)
-    if (selected(row.source_revision) && row.status !== 'completed')
-      exclude(row.kind, 'only completed stored jobs are copied');
   for (const row of allNotes)
     if (notes.has(row.id)) {
       const entry = mapEntry(parse(row.entry));
@@ -748,59 +326,6 @@ export function copyStoryFork(
       });
     }
   if (notes.size) insert('author_note_heads', { chat_id: newChatId, revision: notes.size });
-  for (const row of candidates.filter((row) => jobs.has(row.id))) {
-    const snapshot = parse(row.snapshot) as RunSnapshot;
-    const originalSource = store.sourceOriginal(row.source_revision);
-    const copiedRunId = runIds.get(originalSource.runId);
-    if (!copiedRunId) throw new Error('Fork source run mapping missing');
-    const copiedRun = store.run(copiedRunId);
-    const mapped: RunSnapshot = {
-      ...structuredClone(snapshot),
-      chatId: newChatId,
-      parentRevision: sourceId(snapshot.parentRevision),
-      branchId: `main:${newChatId}`,
-      history: snapshot.history.map((item) => ({ ...item, revision: sourceId(item.revision)! })),
-      story: mapStory(snapshot.story!, snapshot.history),
-      resources: structuredClone(copiedRun.snapshot.resources),
-      ...(snapshot.profile
-        ? { profile: { ...structuredClone(snapshot.profile), chatId: newChatId } }
-        : {}),
-    };
-    delete mapped.candidateOf;
-    const result = {
-      ...parse(row.result),
-      sourceRevision: sourceId(parse(row.result).sourceRevision),
-    };
-    const copied = {
-      ...row,
-      id: jobs.get(row.id),
-      chat_id: newChatId,
-      source_revision: sourceId(row.source_revision),
-      owner: null,
-      snapshot: JSON.stringify(mapped),
-      result: JSON.stringify(result),
-      inputs: '[]',
-      tool_events: '[]',
-      dependency_key: storyDependencyKey(
-        row.kind,
-        { id: sourceId(row.source_revision)!, hash: row.source_hash },
-        mapped
-      ),
-    };
-    insert('story_jobs', copied);
-  }
-  for (const row of allStates.filter((row) => states.has(row.id))) {
-    const body = mapState(parse(row.body))!;
-    insert('story_states', {
-      ...row,
-      id: body.id,
-      job_id: jobs.get(row.job_id),
-      chat_id: newChatId,
-      source_revision: sourceId(row.source_revision),
-      parent_state_id: row.parent_state_id === null ? null : stateId(row.parent_state_id),
-      body: JSON.stringify(body),
-    });
-  }
   for (const row of commandRows)
     insert('scene_commands', {
       ...row,

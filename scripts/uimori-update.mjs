@@ -58,8 +58,8 @@ if (parsed.command === 'status') {
 } else if (parsed.command === 'cancel') {
   console.log(JSON.stringify(requestCancel(config, parsed.key ?? ''), null, 2));
 } else {
-  const token = process.env.NR_ACCESS_TOKEN;
-  if (!token) throw new Error('Set NR_ACCESS_TOKEN in the environment for the update session');
+  const token = process.env.UIMORI_ACCESS_TOKEN;
+  if (!token) throw new Error('Set UIMORI_ACCESS_TOKEN in the environment for the update session');
   const summary = await runUpdate({
     config,
     requestKey: parsed.key ?? '',

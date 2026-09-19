@@ -18,12 +18,11 @@ import type { LibraryItemKey, LibraryOrganization } from '../core/library-organi
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
 import { api } from './api.js';
 import { refValue } from './content-ref.js';
-import { PackageFields, packageFromContent } from './PackageFields.js';
-import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
+import { nativeContentDraft } from './native-content-draft.js';
+import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
 import { ContentAvatar } from './ContentAvatar.js';
-import { PackagePortraitEditor } from './PackagePortraitEditor.js';
 import {
   AddIcon,
   BackIcon,
@@ -61,7 +60,7 @@ const freshContent = (kind: ContentKind): Omit<Content, 'id' | 'revision'> => ({
   text: '',
   loading: 'pinned',
   relatedIds: [],
-  package: packageFromContent({ title: '', description: '', text: '' }),
+  package: nativeContentDraft(kind),
 });
 type EditorProps = {
   library: Library;
@@ -949,7 +948,6 @@ export function LibraryPanel({
   );
 }
 function ContentEditor({
-  library,
   reload,
   onError,
   initial,
@@ -977,8 +975,8 @@ function ContentEditor({
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
   const [baseline, setBaseline] = useState(() => JSON.stringify(initial ?? freshContent(kind)));
-  const [importedPackage, setImportedPackage] = useState<ContentPackage | null>(null);
-  const [behaviorDraftDirty, setBehaviorDraftDirty] = useState(false);
+  const [importedPackage, setImportedPackage] = useState<RisuContent | null>(null);
+  const [nativeDraftDirty, setNativeDraftDirty] = useState(false);
   const [portraitBusy, setPortraitBusy] = useState(false);
   const hasShownEditor = useRef(false);
   const editableModel: ContentDraftModel = {
@@ -988,7 +986,7 @@ function ContentEditor({
     text: value.text,
     loading: value.loading,
     relatedIds: value.relatedIds,
-    ...(value.package ? { package: value.package } : {}),
+    package: value.package,
   };
   const shared = useServerEditDraft({
     editorKey: selected ? `content:${selected.id}` : `new:content:${kind}`,
@@ -1010,7 +1008,7 @@ function ContentEditor({
       );
       try {
         setImportedPackage(
-          JSON.parse(draft.rawFields['package.import'] ?? 'null') as ContentPackage | null
+          JSON.parse(draft.rawFields['package.import'] ?? 'null') as RisuContent | null
         );
       } catch {
         setImportedPackage(null);
@@ -1019,17 +1017,17 @@ function ContentEditor({
   });
   if (shared.state.ready) hasShownEditor.current = true;
   const editorUnavailable = busy || !shared.state.ready;
-  const updateImportedPackage = (pkg: ContentPackage | null) => {
+  const updateImportedPackage = (pkg: RisuContent | null) => {
     setImportedPackage(pkg);
     shared.session.setField('package.import', JSON.stringify(pkg));
     shared.session.pendingField('package.import', !!pkg);
   };
   const dirty = JSON.stringify(value) !== baseline;
   useEffect(() => {
-    onDirtyChange(dirty || !!importedPackage || behaviorDraftDirty || portraitBusy);
-  }, [dirty, importedPackage, behaviorDraftDirty, portraitBusy, onDirtyChange]);
+    onDirtyChange(dirty || !!importedPackage || nativeDraftDirty || portraitBusy);
+  }, [dirty, importedPackage, nativeDraftDirty, portraitBusy, onDirtyChange]);
   const packageSnapshot = () =>
-    validateContentPackage({
+    validateRisuContent({
       ...value.package,
       title: value.title,
       description: value.description,
@@ -1037,7 +1035,7 @@ function ContentEditor({
     });
   async function saveContent(copyKind?: 'bot' | 'persona' | 'module') {
     if (editorUnavailable || portraitBusy) return;
-    if (behaviorDraftDirty) {
+    if (nativeDraftDirty) {
       setError('패키지의 초안을 먼저 검증하고 적용해 주세요.');
       return;
     }
@@ -1047,11 +1045,7 @@ function ContentEditor({
     setError('');
     try {
       const copying = !!copyKind;
-      const pkg = value.package
-        ? packageSnapshot()
-        : copying
-          ? packageFromContent(value)
-          : undefined;
+      const pkg = packageSnapshot();
       if (copying && pkg?.nativeRisu) {
         pkg.nativeRisu = structuredClone(pkg.nativeRisu);
         if (!Object.keys(pkg.nativeRisu.card).length && pkg.nativeRisu.module)
@@ -1065,7 +1059,7 @@ function ContentEditor({
         text: value.text,
         loading: value.loading,
         relatedIds: [],
-        ...(pkg ? { package: pkg } : {}),
+        package: pkg,
       };
       let item: Content;
       if (copying) {
@@ -1085,111 +1079,6 @@ function ContentEditor({
       setBusy(false);
     }
   }
-  const basicEditor = (
-    <div className="library-basic-fields full">
-      {value.package && (
-        <div className="library-basic-portrait">
-          <PackagePortraitEditor
-            value={value.package}
-            onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
-            onDirtyChange={setPortraitBusy}
-            disabled={editorUnavailable}
-          />
-        </div>
-      )}
-      <label className="full">
-        이름
-        <input
-          aria-label="자료 이름"
-          value={value.title}
-          maxLength={160}
-          required
-          onChange={(event) => setValue({ ...value, title: event.target.value })}
-        />
-      </label>
-      <label className="full">
-        짧은 소개 · 선택
-        <input
-          aria-label="자료 설명"
-          value={value.description}
-          maxLength={1000}
-          placeholder="서재 목록에 보여줄 한 줄 소개"
-          onChange={(event) => setValue({ ...value, description: event.target.value })}
-        />
-      </label>
-      <label className="full">
-        {value.kind === 'bot'
-          ? '봇 설정'
-          : value.kind === 'persona'
-            ? '내 인물의 설정'
-            : '더할 설정과 지침'}
-        <textarea
-          aria-label="자료 본문"
-          rows={12}
-          value={value.text}
-          maxLength={100000}
-          required={!value.package}
-          onChange={(event) => {
-            const pkg = value.package && { ...value.package };
-            if (pkg) delete pkg.bodyTemplate;
-            setValue({ ...value, ...(pkg ? { package: pkg } : {}), text: event.target.value });
-          }}
-        />
-      </label>
-      {value.package?.bodyTemplate && (
-        <p className="muted full" role="status">
-          이 본문은 선택한 봇·페르소나 이름과 옵션을 템플릿으로 적용해요. 본문을 직접 수정하면
-          템플릿이 해제되고 입력한 글을 그대로 사용해요.
-        </p>
-      )}
-      <details className="library-editor-extra full">
-        <summary>분류·읽기 설정</summary>
-        <div className="library-editor-extra-body">
-          <label>
-            서재 분류
-            <select
-              aria-label="자료 종류"
-              value={selected ? libraryCategory(library, selected) : value.kind}
-              disabled={!!selected}
-              onChange={(event) => {
-                const next = event.target.value as ContentKind;
-                setValue({
-                  ...value,
-                  kind: next,
-                  loading: freshContent(next).loading,
-                  ...(!value.package && ['bot', 'persona', 'module'].includes(next)
-                    ? { package: packageFromContent(value) }
-                    : {}),
-                });
-              }}
-            >
-              {Object.entries(contentLabels).map(([key, title]) => (
-                <option key={key} value={key}>
-                  {title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            이 자료를 읽는 방법
-            <select
-              aria-label="기본 로딩"
-              value={value.loading}
-              onChange={(event) =>
-                setValue({ ...value, loading: event.target.value as Content['loading'] })
-              }
-            >
-              <option value="pinned">항상 포함</option>
-              <option value="discoverable">모델이 필요할 때 읽기</option>
-            </select>
-          </label>
-        </div>
-      </details>
-      <p className="library-editor-guide">
-        {contentGuidance[value.kind].description} {contentGuidance[value.kind].example}
-      </p>
-    </div>
-  );
   if (!hasShownEditor.current) return <EditorDraftStatus value={shared} />;
   return (
     <EditorDraftProvider value={shared}>
@@ -1216,9 +1105,7 @@ function ContentEditor({
               type="submit"
               form={formId}
               className="primary"
-              disabled={
-                editorUnavailable || !!importedPackage || behaviorDraftDirty || portraitBusy
-              }
+              disabled={editorUnavailable || !!importedPackage || nativeDraftDirty || portraitBusy}
             >
               {busy ? '저장 중…' : selected ? '변경사항 저장' : '자료 등록'}
             </button>
@@ -1250,34 +1137,14 @@ function ContentEditor({
           }}
         >
           <fieldset className="editor-fields full" disabled={editorUnavailable}>
-            {value.package?.nativeRisu ? (
-              <RisuNativeFields
-                value={value.package}
-                onChange={(pkg) =>
-                  setValue((current) => ({ ...current, title: pkg.title, package: pkg }))
-                }
-                onDraftChange={setBehaviorDraftDirty}
-                onPortraitBusy={setPortraitBusy}
-              />
-            ) : value.package ? (
-              <PackageFields
-                value={value.package}
-                onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
-                onBehaviorDraftChange={setBehaviorDraftDirty}
-                basicEditor={basicEditor}
-              />
-            ) : (
-              <>
-                {basicEditor}
-                <button
-                  type="button"
-                  className="secondary full library-package-expand"
-                  onClick={() => setValue({ ...value, package: packageFromContent(value) })}
-                >
-                  공통 패키지로 확장
-                </button>
-              </>
-            )}
+            <RisuNativeFields
+              value={value.package}
+              onChange={(pkg) =>
+                setValue((current) => ({ ...current, title: pkg.title, package: pkg }))
+              }
+              onDraftChange={setNativeDraftDirty}
+              onPortraitBusy={setPortraitBusy}
+            />
             <details className="library-package-tools full">
               <summary>패키지 가져오기·내보내기와 역할 사본</summary>
               <div className="library-package-tools-body">
@@ -1288,7 +1155,7 @@ function ContentEditor({
                     setError('');
                   }}
                   onError={setError}
-                  disabled={behaviorDraftDirty || (!!value.package?.nativeRisu && dirty)}
+                  disabled={nativeDraftDirty || (!!value.package?.nativeRisu && dirty)}
                 />
                 {importedPackage && (
                   <div className="library-import-preview">
@@ -1352,7 +1219,7 @@ function ContentEditor({
               {error} 입력한 내용은 유지했어요.
             </p>
           )}
-          {behaviorDraftDirty && (
+          {nativeDraftDirty && (
             <p className="full muted">
               패키지에 미적용 초안이 있어요. 검증 후 적용하면 자료를 저장할 수 있어요.
             </p>
@@ -1365,7 +1232,7 @@ function ContentEditor({
                   editorUnavailable ||
                   dirty ||
                   !!importedPackage ||
-                  behaviorDraftDirty ||
+                  nativeDraftDirty ||
                   portraitBusy
                 }
                 onClick={() => onStartStory(selected)}

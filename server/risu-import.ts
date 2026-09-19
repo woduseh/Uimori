@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import type { ContentPackage } from '../core/content-package.js';
 import {
   RISU_IMPORT_MAX_BYTES,
   type RisuImportPreview,
@@ -10,97 +9,16 @@ import { readCharacterCard } from './character-card-file.js';
 import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js';
 import { deleteUpload, readUpload } from './uploads.js';
 import { fields, HttpError, record, text } from './request-validation.js';
-import { createRisuImportFindings } from './risu-import-findings.js';
 import { analyzeNativeRisuImport } from './risu-native-import.js';
-import { buildRisuTransfer } from './risu-import-transfer.js';
-import { adaptRisuPlugin } from './risu-plugin-adapter.js';
-import { readRisuPluginFile } from './risu-plugin-import.js';
 import type { Store } from './store.js';
 import { createPackageStart } from './package-start.js';
 import type { Content } from '../core/product.js';
-
-/**
- * A plugin file becomes one module package whose behavior actions wrap the preserved plugin source
- * in the `risuai` shim. Nothing runs here: the adapter only builds sources, options and findings.
- */
-function analyzePlugin(value: unknown, requestedKind?: RisuImportKind) {
-  if (requestedKind === 'bot') throw new HttpError(400, 'RISU_IMPORT_KIND');
-  const { preview: plugin, code, file: envelope, aliases } = readRisuPluginFile(value);
-  const adapted = adaptRisuPlugin(plugin, code, aliases);
-  const findings = createRisuImportFindings();
-  findings.append(plugin.findings);
-  const links = plugin.links.map((link) => link.url).join(' ');
-  const description = [
-    `Risu 플러그인 ${plugin.displayName}에서 가져온 자료예요.`,
-    plugin.pluginVersion ? `플러그인 버전 ${plugin.pluginVersion}.` : '',
-    `API ${plugin.apiVersion}.`,
-    links ? `링크: ${links}` : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .slice(0, 4000);
-  const pkg: ContentPackage = {
-    version: 1,
-    id: `plugin-${plugin.sha256.slice(0, 32)}`,
-    revision: 1,
-    title: plugin.displayName || plugin.name,
-    description,
-    // The native transfer binds the content text to the package body, so the module keeps an
-    // empty one: a plugin declares no prose of its own.
-    body: '',
-    lore: [],
-    instructions: [],
-    controls: adapted.controls,
-    transforms: [],
-    starts: [],
-    images: [],
-  };
-  if (adapted.actions.length && adapted.actions.length <= 100) {
-    pkg.behavior = {
-      revision: 1,
-      schemaVersion: 1,
-      stateSchema: { type: 'record', properties: {} },
-      initialState: {},
-      actions: adapted.actions,
-      outputParsers: [],
-    };
-    findings.add(
-      'plugin-actions',
-      'warning',
-      '플러그인이 등록하는 입력·요청·출력·표시 편집과 응답 이벤트를 격리된 자료 행동으로 가져와요. 가져오기 중에는 코드를 실행하지 않아요. 공유 변수 변경·대화 읽기·추가 모델 호출은 채팅에서 각각 허용해야 해요.'
-    );
-  } else if (adapted.actions.length > 100)
-    findings.add(
-      'plugin-actions-limit',
-      'unsupported',
-      '플러그인 행동이 자료의 한도를 넘어 자동 연결하지 않아요. 원본 코드는 파일에 보존해요.'
-    );
-  for (const issue of adapted.findings) findings.add(issue.code, issue.level, issue.message);
-  const { file, preview } = buildRisuTransfer({
-    input: {
-      hash: plugin.sha256,
-      source: envelope.source,
-      kind: 'module',
-      format: 'risu-plugin-js',
-    },
-    card: { creator_notes: description },
-    pkg,
-    title: pkg.title,
-    images: [],
-    lore: [],
-    findings,
-    plugin,
-  });
-  return { file, preview, hash: plugin.sha256 };
-}
 
 function analyze(
   value: unknown,
   requestedKind?: RisuImportKind,
   readStaged?: (uploadId: string) => Buffer
 ) {
-  // A plugin declares its format in its name, and its reader owns the 4 MiB limit and `.js` rule.
-  if (/\.js$/iu.test(String(record(value).name))) return analyzePlugin(value, requestedKind);
   return analyzeNativeRisuImport(readCharacterCard(value, requestedKind, readStaged));
 }
 

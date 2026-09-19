@@ -1,3 +1,4 @@
+import { prepareNativeFixtureRun } from './fixtures/native-run.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -5,13 +6,10 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import type { Content } from '../core/product.js';
-import type { PromptTemplate } from '../core/prompt-program.js';
 import { executionContext } from '../core/execution-context.js';
-import { compiledPackages } from '../core/package-context.js';
 import { Store } from '../server/store.js';
 import { chatVariableRoutes } from '../server/chat-variable-routes.js';
 import { readChatVariables } from '../server/chat-variables.js';
-import { behaviorDetail } from '../server/package-behavior-host.js';
 import { freezeReservationSnapshot } from '../server/reservation-snapshot.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 
@@ -36,48 +34,43 @@ function fixture() {
   const app = Fastify();
   chatVariableRoutes(app, store, () => {});
   owned.push({ store, app, directory });
-  const template: PromptTemplate = [
-    { kind: 'value', expression: { op: 'get', args: [{ context: ['variables'] }, 'mood'] } },
-  ];
   const input = fixtureBotInput('Synthetic shared state', 'Preserved original body');
-  input.package.variableDefaults = { values: { mood: 'calm' } };
-  input.package.bodyTemplate = template;
-  input.package.instructions = [
-    { id: 'mood', target: 'main', text: 'Preserved original instruction', template },
-  ];
-  input.package.panels = [{ id: 'mood', title: 'Current mood', template }];
+  input.package.nativeRisu.card.extensions = { risuai: { defaultVariables: 'mood=calm' } };
   const bot = store.product.content(input) as Content;
   const chat = createFixtureChat(store, 'Synthetic variable flow', 'calm', { botId: bot.id });
   const branch = store.product.branch(chat.id);
   const url = `/api/chats/${chat.id}/variables`;
-  const reserve = () =>
-    store.createRun(
-      chat.id,
-      {
-        request: 'Synthetic request',
-        expectedRevision: store.product.branch(chat.id).headRevision,
-        expectedSettingsRevision: store.chat(chat.id).settingsRevision,
-        idempotencyKey: randomUUID(),
-      },
-      (current) => {
-        const profile = store.product.snapshot(chat.id);
-        return {
-          chatId: chat.id,
-          parentRevision: current.headRevision,
-          settingsRevision: current.settingsRevision,
-          settings: current.settings,
+  const reserve = async () =>
+    prepareNativeFixtureRun(
+      store,
+      store.createRun(
+        chat.id,
+        {
           request: 'Synthetic request',
-          history: store.history(current.headRevision),
-          resources: store.product.resources(chat.id, profile),
-          profile,
-        };
-      }
-    ).run;
+          expectedRevision: store.product.branch(chat.id).headRevision,
+          expectedSettingsRevision: store.chat(chat.id).settingsRevision,
+          idempotencyKey: randomUUID(),
+        },
+        (current) => {
+          const profile = store.product.snapshot(chat.id);
+          return {
+            chatId: chat.id,
+            parentRevision: current.headRevision,
+            settingsRevision: current.settingsRevision,
+            settings: current.settings,
+            request: 'Synthetic request',
+            history: store.history(current.headRevision),
+            resources: store.product.resources(chat.id, profile),
+            profile,
+          };
+        }
+      ).run
+    );
   return { store, app, chat, branch, bot, url, reserve };
 }
 const noUsage = { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null };
 
-test('HTTP edits feed live panels and frozen instructions; pending writes, historical forks and candidates retain ownership', async () => {
+test('HTTP edits freeze native card variables; pending writes, historical forks and candidates retain ownership', async () => {
   const f = fixture();
   const initial = (await f.app.inject(f.url)).json();
   expect(initial).toMatchObject({
@@ -97,11 +90,8 @@ test('HTTP edits feed live panels and frozen instructions; pending writes, histo
   const saved = await f.app.inject({ method: 'PUT', url: f.url, payload: command });
   expect(saved.statusCode).toBe(200);
   expect(saved.json()).toMatchObject({ revision: 1, resolved: { mood: 'bright', empty: '' } });
-  expect(JSON.stringify(behaviorDetail(f.store, f.chat.id))).toContain('bright');
-  const run = f.reserve();
+  const run = await f.reserve();
   expect(run.snapshot.profile?.variableState).toEqual({ revision: 1, values: command.values });
-  expect(compiledPackages(run.snapshot, 'main')[0].instructions[0].text).toBe('bright');
-  expect(run.snapshot.resources.some((r) => r.text === 'bright')).toBe(true);
   const rejected = await f.app.inject({
     method: 'PUT',
     url: f.url,
@@ -123,7 +113,7 @@ test('HTTP edits feed live panels and frozen instructions; pending writes, histo
     url: f.url,
     payload: {
       ...command,
-      expectedRevision: 1,
+      expectedRevision: readChatVariables(f.store, f.chat.id, f.branch.id).revision,
       expectedSourceHash: source.hash,
       idempotencyKey: randomUUID(),
       values: { mood: 'newer' },
@@ -152,7 +142,7 @@ test('HTTP edits feed live panels and frozen instructions; pending writes, histo
 
 test('historical snapshots omit overrides and their candidates do not borrow later values', async () => {
   const f = fixture();
-  const old = f.reserve();
+  const old = await f.reserve();
   expect(old.snapshot.profile).not.toHaveProperty('variableState');
   f.store.startRun(old.id);
   const source = f.store.completeRun(old.id, 'Historical source', noUsage, old.snapshot.settings);

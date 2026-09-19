@@ -130,7 +130,10 @@ function attach(store: Store, chatId: string, attachments: { id: string; revisio
   const p = store.product.profile(chatId);
   return updateTestProfile(store.product, chatId, {
     expectedRevision: p.revision,
-    attachments,
+    packageAttachments: attachments.map((ref) => ({
+      ...ref,
+      role: store.product.get<Content>('content', ref.id, ref.revision).kind,
+    })),
 
     routes: p.routes,
     image: p.image,
@@ -143,15 +146,24 @@ test('bot ownership and folder defaults apply only at creation; moves/deletion p
   const folder = org.createFolder(bot.id, { title: 'First', defaultPersona: ref(persona) });
   const chat = store.createChat('Owned', 'calm', { botId: bot.id, folderId: folder.id });
   expect(chat).toMatchObject({ botId: bot.id, folderId: folder.id, organizationRevision: 1 });
-  expect(store.product.profile(chat.id).attachments).toEqual([ref(bot), ref(persona)]);
+  expect(store.product.profile(chat.id).packageAttachments).toEqual([
+    { ...ref(bot), role: 'bot' },
+    { ...ref(persona), role: 'persona' },
+  ]);
   org.updateFolder(bot.id, folder.id, {
     expectedRevision: 1,
     defaultPersona: ref(nextPersona),
     title: 'Renamed',
   });
-  expect(store.product.profile(chat.id).attachments).toEqual([ref(bot), ref(persona)]);
+  expect(store.product.profile(chat.id).packageAttachments).toEqual([
+    { ...ref(bot), role: 'bot' },
+    { ...ref(persona), role: 'persona' },
+  ]);
   const next = store.createChat('Next', 'calm', { botId: bot.id, folderId: folder.id });
-  expect(store.product.profile(next.id).attachments).toEqual([ref(bot), ref(nextPersona)]);
+  expect(store.product.profile(next.id).packageAttachments).toEqual([
+    { ...ref(bot), role: 'bot' },
+    { ...ref(nextPersona), role: 'persona' },
+  ]);
   const profile = store.product.profile(chat.id);
   org.move(chat.id, { expectedRevision: 1, folderId: null });
   expect(store.product.profile(chat.id)).toEqual(profile);
@@ -184,9 +196,12 @@ test('cross-bot moves, stale edits and invalid defaults fail without losing orga
   expect(() => org.deleteFolder(bot.id, a.id, { expectedRevision: 9 })).toThrow(
     'revision conflict'
   );
-  expect(() => org.createFolder(bot.id, { title: 'Bad', defaultPersona: ref(other) })).toThrow(
-    'persona'
-  );
+  expect(() =>
+    org.createFolder(bot.id, {
+      title: 'Bad',
+      defaultPersona: { id: 'missing-persona', revision: 1 },
+    })
+  ).toThrow('not found');
   expect(() => store.createChat('Bad', 'calm', { botId: bot.id, folderId: b.id })).toThrow(
     'Folder not found'
   );
@@ -238,7 +253,10 @@ test('fork inherits original owner/folder/profile without reapplying changed def
   });
   const fork = forkChat(store, chat.id, { fromRevision: source.id, idempotencyKey: 'fork' });
   expect(fork).toMatchObject({ botId: bot.id, folderId: folder.id, organizationRevision: 1 });
-  expect(store.product.profile(fork.id).attachments).toEqual([ref(bot), ref(persona)]);
+  expect(store.product.profile(fork.id).packageAttachments).toEqual([
+    { ...ref(bot), role: 'bot' },
+    { ...ref(persona), role: 'persona' },
+  ]);
   expect(forkChat(store, chat.id, { fromRevision: source.id, idempotencyKey: 'fork' }).id).toBe(
     fork.id
   );
@@ -357,20 +375,9 @@ test('one package can own a chat and serve as a persona through explicit attachm
     kind: 'module',
     title: 'Shared package',
     description: 'Synthetic',
-    text: '',
+    text: 'Shared native card body',
     loading: 'pinned',
     relatedIds: [],
-    package: {
-      version: 1,
-      id: 'temporary',
-      revision: 1,
-      title: 'Shared package',
-      description: 'Synthetic',
-      lore: [],
-      instructions: [],
-      controls: [],
-      transforms: [],
-    },
   }) as Content;
   const folder = store.organization.createFolder(content.id, {
     title: 'Package folder',
@@ -381,15 +388,14 @@ test('one package can own a chat and serve as a persona through explicit attachm
     folderId: folder.id,
   });
   const profile = store.product.profile(chat.id);
-  expect(profile.attachments).toEqual([]);
   expect(profile.packageAttachments).toEqual([
     { ...ref(content), role: 'bot' },
     { ...ref(content), role: 'persona' },
   ]);
   expect(() =>
-    store.organization.assertBotAttachments(chat.id, [], profile.packageAttachments)
+    store.organization.assertBotAttachments(chat.id, profile.packageAttachments)
   ).not.toThrow();
   expect(() =>
-    store.organization.assertBotAttachments(chat.id, [], [{ ...ref(content), role: 'persona' }])
+    store.organization.assertBotAttachments(chat.id, [{ ...ref(content), role: 'persona' }])
   ).toThrow('owning bot');
 });

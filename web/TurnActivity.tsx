@@ -1,21 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Job, ReaderActivity, ReaderRun, Source } from '../core/types.js';
-import type { StoryJob } from '../core/story.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
-import { LazyDiagnostics } from './LazyDiagnostics.js';
-import { StoryJobList } from './StoryPanel.js';
-import { api, labels } from './api.js';
+import { labels } from './api.js';
 import { elapsedLabel } from './ActivityStatus.js';
 import { TurnStatus } from './TurnStatus.js';
 
-const active = (status: string) => ['queued', 'running', 'waiting_for_state'].includes(status);
+const active = (status: string) => ['queued', 'running'].includes(status);
 const attention = (status: string) =>
   ['failed', 'interrupted', 'partial', 'stale', 'refused'].includes(status);
 const names: Record<string, string> = {
   translation: '번역',
   image: '이미지',
   status: '장면 해설',
-  state: '상태 정리',
   context: '문맥 압축',
   illustration: '삽화',
 };
@@ -83,12 +79,6 @@ function TurnActivityContent({
   const related = activities.filter((item) =>
     item.kind === 'main' ? item.id === run.id : !!source && item.sourceRevision === source.id
   );
-  const storyHistory = related.filter(
-    (item) =>
-      item.kind === 'state' &&
-      (!item.branchId || item.branchId === (branchId ?? run.snapshot.branchId))
-  );
-  const story = [...new Map(storyHistory.map((item) => [item.kind, item])).values()];
   const context = related
     .filter(
       (item) =>
@@ -96,9 +86,6 @@ function TurnActivityContent({
         (!item.branchId || item.branchId === (branchId ?? run.snapshot.branchId))
     )
     .at(-1);
-  const previousStory = storyHistory.filter(
-    (item) => !story.some((current) => current.id === item.id)
-  );
   // Illustrations attach to the response text; the reader strip owns their actions.
   const illustrations = related.filter((item) => item.kind === 'illustration');
   const entries = [
@@ -111,7 +98,6 @@ function TurnActivityContent({
           ? `${job.imageTarget?.mode === 'translation' ? '번역' : '원문'} 이미지 배치`
           : names[job.kind],
     })),
-    ...story,
     ...(context ? [context] : []),
     ...illustrations,
   ];
@@ -128,13 +114,10 @@ function TurnActivityContent({
       ? '작성된 도입문'
       : run.status === 'running'
         ? '장면을 쓰는 중'
-        : run.status === 'waiting_for_state'
-          ? '상태 정리 대기'
-          : `본문 ${labels[run.status] ?? run.status}`;
+        : `본문 ${labels[run.status] ?? run.status}`;
   const important = entries.filter((item) => item.status !== 'completed');
   const summary = [
     mainLabel,
-    ...(run.hasPackageIssues ? ['자료 처리 일부 미적용'] : []),
     ...important.map(
       (item) =>
         `${'label' in item ? item.label : names[item.kind]} ${labels[item.status] ?? item.status}`
@@ -147,10 +130,7 @@ function TurnActivityContent({
     );
   const elapsed = connected && running && timing ? elapsedLabel(timing.startedAt, now) : '';
   const uncertain = !connected && running;
-  const hasIssue =
-    !!run.hasPackageIssues ||
-    attention(run.status) ||
-    entries.some((item) => attention(item.status));
+  const hasIssue = attention(run.status) || entries.some((item) => attention(item.status));
   const tone = uncertain ? 'uncertain' : hasIssue ? 'issue' : running ? 'running' : 'done';
   // A finished response shows only the check; its text stays for assistive technology.
   const quiet = tone === 'done' && !!source;
@@ -190,44 +170,10 @@ function TurnActivityContent({
         >
           {children}
         </RunTaskDetails>
-        {source && story.length > 0 && (
-          <section aria-label="이 응답의 상태 작업">
-            {story.map((item) => (
-              <LazyDiagnostics<StoryJob>
-                key={item.id}
-                path={`/story-jobs/${item.id}`}
-                revision={visibleRevision.current}
-                title={`${names[item.kind]} · ${labels[item.status] ?? item.status} · 작업 관리`}
-              >
-                {(job) => <StoryTask job={job} refresh={refresh} onError={onError} />}
-              </LazyDiagnostics>
-            ))}
-            {previousStory.length > 0 && (
-              <details>
-                <summary>이전 상태 작업 · {previousStory.length}개</summary>
-                {previousStory.map((item) => (
-                  <LazyDiagnostics<StoryJob>
-                    key={item.id}
-                    path={`/story-jobs/${item.id}`}
-                    revision={visibleRevision.current}
-                    title={`${names[item.kind]} · ${labels[item.status] ?? item.status}`}
-                  >
-                    {(job) => (
-                      <>
-                        <p>{job.error}</p>
-                        <small>이전 실행 기록이에요. 새 작업은 현재 항목에서 관리해요.</small>
-                      </>
-                    )}
-                  </LazyDiagnostics>
-                ))}
-              </details>
-            )}
-          </section>
-        )}
         {context && (
           <section aria-label="이 응답의 문맥 작업">
             <p>문맥 압축 · {labels[context.status] ?? context.status}</p>
-            <small>요약과 작업 관리는 채팅 설정의 상태와 문맥에서 확인해요.</small>
+            <small>요약과 작업 관리는 채팅 설정의 기억과 메모에서 확인해요.</small>
           </section>
         )}
         {illustrations.length > 0 && (
@@ -240,51 +186,5 @@ function TurnActivityContent({
         )}
       </>
     </TurnStatus>
-  );
-}
-
-function StoryTask({
-  job,
-  refresh,
-  onError,
-}: {
-  job: StoryJob;
-  refresh: () => Promise<void>;
-  onError: (message: string) => void;
-}) {
-  const locked = useRef(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  async function act(path: string, body = {}) {
-    if (locked.current) return;
-    locked.current = true;
-    setBusy(true);
-    setError('');
-    try {
-      await api(path, body);
-      await refresh();
-    } catch (cause) {
-      const message = (cause as Error).message;
-      setError(message);
-      onError(message);
-    } finally {
-      locked.current = false;
-      setBusy(false);
-    }
-  }
-  return (
-    <>
-      <StoryJobList
-        jobs={[job]}
-        busy={busy}
-        act={(path) => void act(path)}
-        rebuild={(sourceId, kind) => void act(`/sources/${sourceId}/story/rebuild`, { kind })}
-      />
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-    </>
   );
 }

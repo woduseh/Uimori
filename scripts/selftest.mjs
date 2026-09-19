@@ -133,7 +133,7 @@ async function childCase(name, directory) {
       );
     } else if (name === 'browser-missing') {
       const result = await command(['scripts/doctor.mjs'], {
-        env: { NR_BROWSER_PATH: path.join(directory, 'nonexistent-browser.exe') },
+        env: { UIMORI_BROWSER_PATH: path.join(directory, 'nonexistent-browser.exe') },
         timeout: 20000,
         log: path.join(directory, 'doctor.log'),
       });

@@ -1,187 +1,78 @@
 import { describe, expect, it } from 'vitest';
-import type { ContentPackage, PackageTransform } from '../core/content-package.js';
-import { compilePackageAttachment, renderPackageStateView } from '../core/package-runtime.js';
-import { applyPackageTransforms } from '../server/package-transforms.js';
-
-const pkg = (): ContentPackage => ({
-  version: 1,
-  id: 'shared',
-  revision: 2,
-  title: 'Shared',
-  description: 'Original description',
-  body: 'Original body',
-  roleBindings: { bot: 'Portray this person.', persona: 'This is the reader reference.' },
-  lore: [
-    {
-      id: 'home',
-      title: 'Home',
-      description: 'Original metadata',
-      text: 'Original lore',
-      loading: 'discoverable',
-      relatedIds: ['home'],
+import { compileContentAttachment } from '../core/package-runtime.js';
+import { nativeContent } from './fixtures/native-content.js';
+const fixture = () =>
+  nativeContent({
+    name: 'Ari',
+    description: 'Authored {{char}} body',
+    system_prompt: 'System {{user}}',
+    character_book: {
+      entries: [
+        { keys: [], comment: 'Always', content: 'Pinned lore', constant: true, enabled: true },
+        {
+          keys: ['city'],
+          comment: 'Optional',
+          content: 'Optional lore',
+          constant: false,
+          enabled: true,
+        },
+      ],
     },
-  ],
-  instructions: [
-    { id: 'style', target: 'main', text: 'Original instruction', when: { control: 'on' } },
-    { id: 'translate', target: 'translation', text: 'Preserve names.' },
-  ],
-  controls: [{ id: 'on', label: 'On', type: 'boolean', default: true }],
-  transforms: [],
-});
-const rule = (pattern: string, replacement: string, flags = 'g'): PackageTransform => ({
-  id: 'display',
-  target: 'source',
-  pattern,
-  replacement,
-  flags,
-});
-describe('package role projection', () => {
-  it('renders body/lore names and controls consistently in resourcesOnly and keeps substituted text literal', () => {
-    const value = pkg();
-    value.bodyTemplate = [{ kind: 'value', expression: { context: ['bot', 'name'] } }];
-    value.lore[0].template = [
-      { kind: 'value', expression: { context: ['user', 'name'] } },
-      { kind: 'text', text: ':' },
-      { kind: 'value', expression: { control: 'on' } },
-    ];
-    const original = structuredClone(value);
-    const ref = { id: value.id, revision: value.revision, role: 'module' as const };
-    const context = {
-      chatId: 'chat',
-      target: 'main' as const,
-      values: { on: false },
-      identity: { bot: { name: 'Aster' }, user: { name: '{{char}}' } },
-    };
-    const compiled = compilePackageAttachment(value, ref, context);
-    expect(compiled.resources.map((item) => item.text)).toEqual(['Aster', '{{char}}:0']);
-    expect(
-      compilePackageAttachment(value, ref, { ...context, resourcesOnly: true }).resources
-    ).toEqual(compiled.resources);
-    expect(value).toEqual(original);
   });
-  it('falls back to the preserved body/lore text on template errors and reports the failed fields', () => {
-    const value = pkg();
-    value.bodyTemplate = [{ kind: 'value', expression: { op: 'divide', args: [1, 0] } }];
-    value.lore[0].template = value.bodyTemplate;
-    const result = compilePackageAttachment(
-      value,
-      { id: value.id, revision: value.revision, role: 'bot' },
+describe('native content resource projection', () => {
+  it('namespaces roles and retains original text until the Risu runtime evaluates it', () => {
+    const pkg = fixture();
+    const bot = compileContentAttachment(
+      pkg,
+      { id: pkg.id, revision: 1, role: 'bot' },
       { chatId: 'chat', target: 'main' }
     );
-    expect(result.resources.map((item) => item.text)).toEqual(['Original body', 'Original lore']);
-    expect(result.unavailableTextTemplates?.map((item) => item.id).sort()).toEqual([
-      'body',
-      'lore:home',
-    ]);
-    expect(
-      result.instructions.find((item) => item.id.endsWith(':text-template-diagnostics'))?.text
-    ).toContain('preserved source text');
-  });
-  it('isolates role namespaces, keeps discoverable bodies out of pinned, and selects role instructions', () => {
-    const value = pkg(),
-      before = structuredClone(value);
-    const bot = compilePackageAttachment(
-      value,
-      { id: value.id, revision: 2, role: 'bot' },
+    const persona = compileContentAttachment(
+      pkg,
+      { id: pkg.id, revision: 1, role: 'persona' },
       { chatId: 'chat', target: 'main' }
     );
-    const persona = compilePackageAttachment(
-      value,
-      { id: value.id, revision: 2, role: 'persona' },
-      { chatId: 'chat', target: 'translation' }
+    expect(bot.resources.find((r) => r.id.endsWith(':body'))?.text).toBe('Authored {{char}} body');
+    expect(bot.resources.every((r) => r.id.startsWith(`package:${pkg.id}:bot:`))).toBe(true);
+    expect(persona.resources.every((r) => r.id.startsWith(`package:${pkg.id}:persona:`))).toBe(
+      true
     );
-    expect(bot.pinned.map((r) => r.text)).toEqual(['Original body']);
-    expect(bot.instructions.map((i) => i.text)).toEqual([
-      'Portray this person.',
-      'Original instruction',
-    ]);
-    expect(persona.instructions.map((i) => i.text)).toEqual([
-      'This is the reader reference.',
-      'Preserve names.',
-    ]);
-    expect(bot.resources[1].id).not.toBe(persona.resources[1].id);
-    expect(bot.resources[1].relatedIds).toEqual([bot.resources[1].id]);
-    expect(value).toEqual(before);
+    expect(bot.instructions.map((r) => r.text)).toEqual(['System {{user}}']);
+    expect(bot.pinned.some((r) => r.text === 'Optional lore')).toBe(false);
   });
-  it('rejects stale attachment and evaluates typed controls without rewriting instruction text', () => {
+  it('adds selected optional lore while leaving source and discoverable resources intact', () => {
+    const pkg = fixture(),
+      before = structuredClone(pkg);
+    const result = compileContentAttachment(
+      pkg,
+      { id: pkg.id, revision: 1, role: 'bot' },
+      { chatId: 'chat', target: 'main', loreSelection: new Set(['lore-1']) }
+    );
+    expect(result.pinned.some((r) => r.text === 'Optional lore')).toBe(true);
+    expect(pkg).toEqual(before);
+    expect(
+      compileContentAttachment(
+        pkg,
+        { id: pkg.id, revision: 1, role: 'bot' },
+        { chatId: 'chat', target: 'main', resourcesOnly: true }
+      ).instructions
+    ).toEqual([]);
+  });
+  it('rejects stale revisions and absent ownership before serving resources', () => {
+    const pkg = fixture();
     expect(() =>
-      compilePackageAttachment(
-        pkg(),
-        { id: 'shared', revision: 1, role: 'module' },
-        { chatId: 'x', target: 'main' }
+      compileContentAttachment(
+        pkg,
+        { id: pkg.id, revision: 2, role: 'bot' },
+        { chatId: 'chat', target: 'main' }
       )
     ).toThrow('PACKAGE_REVISION_MISMATCH');
-    const result = compilePackageAttachment(
-      pkg(),
-      { id: 'shared', revision: 2, role: 'module' },
-      { chatId: 'x', target: 'main', values: { on: false } }
-    );
-    expect(result.instructions).toEqual([]);
-    expect(result.resources[0].text).toBe('Original body');
-  });
-  it('renders typed state as plain descriptors and distinguishes missing values from zero/false', () => {
-    const view = {
-      title: 'Status',
-      fields: [
-        { key: 'hp', label: 'HP', format: 'number' as const },
-        { key: 'hidden', label: 'Hidden', format: 'boolean' as const },
-        { key: 'missing', label: 'Missing' },
-      ],
-    };
-    expect(
-      renderPackageStateView(view, { hp: 0, hidden: false }).fields.map((f) => [f.text, f.missing])
-    ).toEqual([
-      ['0', false],
-      ['false', false],
-      ['—', true],
-    ]);
-    expect(() => renderPackageStateView(view, { hp: '3' })).toThrow('PACKAGE_STATE_TYPE');
-  });
-});
-describe('isolated presentation transforms', () => {
-  it('supports multiline captures without changing the supplied raw text and respects target', async () => {
-    const text = 'Before\n<status>HP: 3\nMood: calm</status>\nAfter';
-    const result = await applyPackageTransforms(
-      text,
-      [rule('<status>([\\s\\S]*?)</status>', '[State]\n$1')],
-      'source'
-    );
-    expect(result.text).toBe('Before\n[State]\nHP: 3\nMood: calm\nAfter');
-    expect(text).toContain('<status>');
-    expect(result.changed).toBe(true);
-    expect(await applyPackageTransforms(text, [rule('.', 'X')], 'translation')).toEqual({
-      text,
-      applied: [],
-      changed: false,
-    });
-  });
-  it('matches ECMAScript replacement semantics including empty unicode matches', async () => {
-    for (const [text, pattern, replacement, flags] of [
-      ['ab', '(a)', "$$:$&:$1:$12:$`:$'", 'g'],
-      ['😀x', '(?:)', '-', 'gu'],
-      ['ab', '(?<first>a)', '$<first>', 'g'],
-    ]) {
-      expect(
-        (await applyPackageTransforms(text, [rule(pattern, replacement, flags)], 'source')).text
-      ).toBe(text.replace(new RegExp(pattern, flags), replacement));
-    }
-  });
-  it('reports invalid regex and output expansion instead of swallowing them', async () => {
-    await expect(applyPackageTransforms('abc', [rule('(', '')], 'source')).rejects.toThrow(
-      'PACKAGE_REGEX_INVALID'
-    );
-    await expect(
-      applyPackageTransforms('x'.repeat(1000), [rule('x', 'y'.repeat(4096))], 'source')
-    ).rejects.toThrow('PACKAGE_TRANSFORM_OUTPUT_LIMIT');
-  });
-  it('terminates catastrophic backtracking and allows the next independent transform', async () => {
-    await expect(
-      applyPackageTransforms('a'.repeat(50_000) + '!', [rule('(a+)+$', '')], 'source', {
-        timeoutMs: 200,
-      })
-    ).rejects.toThrow('PACKAGE_TRANSFORM_TIMEOUT');
-    expect(
-      (await applyPackageTransforms('healthy', [rule('healthy', 'ready')], 'source')).text
-    ).toBe('ready');
+    expect(() =>
+      compileContentAttachment(
+        pkg,
+        { id: pkg.id, revision: 1, role: 'bot' },
+        { chatId: '', target: 'main' }
+      )
+    ).toThrow('PACKAGE_CHAT_REQUIRED');
   });
 });

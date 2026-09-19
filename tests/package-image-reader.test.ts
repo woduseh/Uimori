@@ -2,10 +2,8 @@ import { createHash } from 'node:crypto';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { SourceSegmentBody, SourceReader } from '../web/SourceReader.js';
+import { SourceReader } from '../web/SourceReader.js';
 import { resolveInlineImage } from '../web/image-placement.js';
-import { parseSourceSegments } from '../core/source-segments.js';
-import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 import { splitSource } from '../core/auxiliary.js';
 import type { Asset } from '../core/product.js';
 import type { Job, Source } from '../core/types.js';
@@ -41,49 +39,6 @@ test('Reader resolves only the exact approved inline revision and bytes in this 
     resolveInlineImage([asset], 'chat', { ...annotation, presentationIntent: 'profile' })
   ).toBeUndefined();
   expect(resolveInlineImage([asset, asset], 'chat', annotation)).toBeUndefined();
-});
-
-test('an image on a block spanning main and hidden text never leaks onto the main segment', () => {
-  const text =
-    'Visible introduction.\n\n@hsTitle: Secret\n⟦Library @ Morning @ Companion⟧\n\nSecret scene.\n@hs\n\nVisible ending.';
-  const source: Source = {
-    id: 'source',
-    chatId: 'chat',
-    runId: 'run',
-    parentRevision: null,
-    text,
-    hash: createHash('sha256').update(text).digest('hex'),
-  };
-  const parsed = parseSourceSegments(
-    { sourceRevision: source.id, sourceHash: source.hash, text },
-    createSourceSegmentFixture()
-  );
-  const hidden = parsed.segments.find((segment) => segment.kind === 'aside');
-  expect(hidden).toBeDefined();
-  const blocks = [
-    { anchor: 'cross-boundary', start: 0, end: text.length },
-    { anchor: 'hidden-only', start: hidden!.bodyRange.start, end: hidden!.bodyRange.end },
-  ];
-  const markup = renderToStaticMarkup(
-    createElement(SourceSegmentBody, {
-      source,
-      config: createSourceSegmentFixture(),
-      blocks,
-      inline: (anchor) => [
-        createElement('img', {
-          key: anchor,
-          src: `/synthetic/${anchor}`,
-          alt: anchor,
-          loading: 'lazy',
-        }),
-      ],
-    })
-  );
-  expect(markup).not.toContain('/synthetic/cross-boundary');
-  expect(markup).toContain('/synthetic/hidden-only');
-  const hiddenStart = markup.indexOf('class="source-aside-segment"');
-  expect(markup.indexOf('/synthetic/hidden-only')).toBeGreaterThan(hiddenStart);
-  expect(splitSource(source).length).toBeGreaterThan(1);
 });
 
 const projection = vi.hoisted(() => ({ data: undefined as unknown }));

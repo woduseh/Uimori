@@ -1,6 +1,7 @@
+import { nativeContent } from './fixtures/native-content.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { injectWithFixtureBot, createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -63,7 +64,7 @@ async function database() {
 const ref = ({ id, revision }: { id: string; revision: number }) => ({ id, revision });
 const profileBody = (prior: ChatProfile, changes: Record<string, unknown> = {}) => ({
   expectedRevision: prior.revision,
-  attachments: prior.attachments,
+  packageAttachments: prior.packageAttachments,
 
   routes: prior.routes,
   image: prior.image,
@@ -205,7 +206,10 @@ async function rich(app: App) {
     store.product,
     chat.id,
     profileBody(store.product.profile(chat.id), {
-      attachments: [ref(lore)],
+      packageAttachments: [
+        ...store.product.profile(chat.id).packageAttachments!,
+        { ...ref(lore), role: 'module' },
+      ],
       image: true,
     })
   );
@@ -325,15 +329,21 @@ describe('independent stored-story fork without generation', () => {
   test('forked runs keep source-time package resource revisions after the current owning package changes', async () => {
     const store = await database();
     const input = fixtureBotInput('Synthetic versioned owner', 'OWNER_V1');
-    input.package.lore = [
-      {
-        id: 'record',
-        title: 'Versioned record',
-        description: '',
-        text: 'LORE_V1',
-        loading: 'discoverable',
+    input.package = nativeContent({
+      name: input.title,
+      description: 'OWNER_V1',
+      character_book: {
+        entries: [
+          {
+            keys: ['record'],
+            comment: 'Versioned record',
+            content: 'LORE_V1',
+            enabled: true,
+            constant: false,
+          },
+        ],
       },
-    ];
+    });
     const bot = store.product.content(input) as Content;
     const chat = createFixtureChat(store, 'Source-time resources', 'calm', { botId: bot.id });
     const first = source(store, chat.id, 'SOURCE_V1');
@@ -342,7 +352,21 @@ describe('independent stored-story fork without generation', () => {
       {
         ...fixtureBotInput(input.title, 'OWNER_V2'),
         expectedRevision: bot.revision,
-        package: { ...bot.package!, lore: [{ ...bot.package!.lore[0], text: 'LORE_V2' }] },
+        package: nativeContent({
+          name: input.title,
+          description: 'OWNER_V2',
+          character_book: {
+            entries: [
+              {
+                keys: ['record'],
+                comment: 'Versioned record',
+                content: 'LORE_V2',
+                enabled: true,
+                constant: false,
+              },
+            ],
+          },
+        }),
       },
       bot.id
     ) as Content;
@@ -378,11 +402,13 @@ describe('independent stored-story fork without generation', () => {
       copied
         .find((run) => run.snapshot.forkedFrom!.sourceRevision === first.id)!
         .snapshot.resources.map((resource) => resource.text)
+        .filter(Boolean)
     ).toEqual(['OWNER_V1', 'LORE_V1']);
     expect(
       store.product
         .resources(copy.id, store.product.snapshot(copy.id))
         .map((resource) => resource.text)
+        .filter(Boolean)
     ).toEqual(['OWNER_V2', 'LORE_V2']);
     const restored = await database();
     restored.product.import(store.product.export());
@@ -444,7 +470,7 @@ describe('independent stored-story fork without generation', () => {
         store.product.resources(copy.id, run.snapshot.profile!)
       );
       expect(run.snapshot.profile?.promptPresets?.main?.program).toEqual(
-        createDefaultPromptProgram('  MAIN exact\r\n')
+        createDefaultRisuPrompt('  MAIN exact\r\n')
       );
     }
     expect(detail.attempts).toEqual([]);

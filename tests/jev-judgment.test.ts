@@ -42,7 +42,6 @@ const snapshot = (): RunSnapshot => ({
   resources: [],
   profile: {
     ...defaultProfile('test'),
-    contents: [],
     models: {},
     loreContext: { ...DEFAULT_LORE_CONTEXT, judgment: { ...DEFAULT_JEV_JUDGMENT } },
     packageAttachments: [{ id: 'bot', revision: 1, role: 'bot' }],
@@ -79,8 +78,7 @@ const snapshot = (): RunSnapshot => ({
           },
         ],
         instructions: [],
-        controls: [],
-        transforms: [],
+        nativeRisu: { version: 1, card: {}, assets: [], sourceHash: 'a'.repeat(64) },
       },
     ],
   },
@@ -179,7 +177,7 @@ describe('Jev typed judgment transport', () => {
     );
   });
 });
-describe('optional lore judgment and batch supplemental reads', () => {
+describe('JEV-only lore judgment and batch supplemental reads', () => {
   it('shares one judgment across packages with colliding lore ids and one global selection budget', async () => {
     const value = snapshot();
     value.profile!.packages!.push({
@@ -247,7 +245,6 @@ describe('optional lore judgment and batch supplemental reads', () => {
       selected: ['harbor'],
       omitted: [{ id: 'mountain', reason: 'irrelevant' }],
       judgment: {
-        backend: 'jev',
         scores: [
           { id: 'harbor', probability: 0.9 },
           { id: 'mountain', probability: 0.1 },

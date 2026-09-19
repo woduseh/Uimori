@@ -105,7 +105,7 @@ test.each([false, true])(
     updateModelWorkspace(app.store, {
       expectedRevision: workspace.revision,
       routes: { ...workspace.routes, main: { id: main.id } },
-      extensionModel: { id: aux.id },
+      scriptModel: { id: aux.id },
       translationPolicy: workspace.translationPolicy,
     });
     const source = {
@@ -190,8 +190,6 @@ function onOutput(id) setChatVar(id,'completed','yes') end
           title: 'Module',
           description: '',
           instructions: [],
-          controls: [],
-          transforms: [],
           loreActivation: { mode: 'model' },
           lore: [
             {
@@ -207,7 +205,6 @@ function onOutput(id) setChatVar(id,'completed','yes') end
       const profile = app.store.product.profile(chat.id);
       app.store.product.updateProfile(chat.id, {
         expectedRevision: profile.revision,
-        attachments: profile.attachments,
         image: false,
         packageAttachments: [
           ...profile.packageAttachments!,
@@ -255,7 +252,7 @@ function onOutput(id) setChatVar(id,'completed','yes') end
     const id = response.json().id;
     await expect
       .poll(() => app.store.run(id).status, { timeout: 15000, interval: 30 })
-      .not.toMatch(/queued|running|waiting_for_state/);
+      .not.toMatch(/queued|running/);
     const run = app.store.run(id);
     expect(run.status, run.error ?? '').toBe('completed');
     expect(run.usage.modelCalls).toBe(withJev ? 3 : 2);

@@ -14,7 +14,7 @@ export function networkPolicy(options: {
   try {
     url = new URL(options.publicOrigin);
   } catch {
-    throw new Error('NR_PUBLIC_ORIGIN must be one HTTPS origin.');
+    throw new Error('UIMORI_PUBLIC_ORIGIN must be one HTTPS origin.');
   }
   if (
     !/^https:\/\/[^/?#\\\s]+\/?$/iu.test(options.publicOrigin) ||
@@ -28,16 +28,16 @@ export function networkPolicy(options: {
     url.port === '0'
   ) {
     throw new Error(
-      'NR_PUBLIC_ORIGIN must be one HTTPS origin without credentials, path, query or fragment.'
+      'UIMORI_PUBLIC_ORIGIN must be one HTTPS origin without credentials, path, query or fragment.'
     );
   }
   const token = options.accessToken;
   if (!token || token.length < 32 || token.length > 1000 || /\s/u.test(token)) {
     throw new Error(
-      'Self-host mode requires NR_ACCESS_TOKEN with 32–1000 non-whitespace characters.'
+      'Self-host mode requires UIMORI_ACCESS_TOKEN with 32–1000 non-whitespace characters.'
     );
   }
-  if (options.testMode) throw new Error('NR_TEST_MODE is unavailable in self-host mode.');
+  if (options.testMode) throw new Error('UIMORI_TEST_MODE is unavailable in self-host mode.');
   return { publicOrigin: url.origin, publicHost: url.host };
 }
 
@@ -45,18 +45,18 @@ export function listenAddress(
   env: NodeJS.ProcessEnv,
   policy: NetworkPolicy
 ): { host: string; port: number } {
-  const host = env.NR_HOST ?? '127.0.0.1';
+  const host = env.UIMORI_HOST ?? '127.0.0.1';
   if (host !== 'localhost' && !isIP(host))
-    throw new Error('NR_HOST must be an IP address or localhost.');
+    throw new Error('UIMORI_HOST must be an IP address or localhost.');
   if (!policy.publicOrigin && !['127.0.0.1', '::1', 'localhost'].includes(host)) {
     throw new Error(
-      'A non-loopback NR_HOST requires self-host mode with NR_PUBLIC_ORIGIN and NR_ACCESS_TOKEN.'
+      'A non-loopback UIMORI_HOST requires self-host mode with UIMORI_PUBLIC_ORIGIN and UIMORI_ACCESS_TOKEN.'
     );
   }
-  const raw = env.NR_PORT ?? '4310';
+  const raw = env.UIMORI_PORT ?? '4310';
   const port = Number(raw);
   if (!/^\d+$/u.test(raw) || !Number.isInteger(port) || port < 0 || port > 65535)
-    throw new Error('Invalid NR_PORT');
+    throw new Error('Invalid UIMORI_PORT');
   return { host, port };
 }
 

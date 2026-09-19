@@ -3,7 +3,7 @@ import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
 import type { PromptWorkspace } from '../core/product.js';
 
 test('PWS01 current options apply globally without changing chat profiles', async ({
@@ -16,12 +16,8 @@ test('PWS01 current options apply globally without changing chat profiles', asyn
       expectedRevision: before.revision,
       main: {
         title: '합성 현재 작문',
-        program: {
-          version: 1,
-          controls: [{ id: 'tone', label: '합성 문체', type: 'text', default: '담백하게' }],
-          blocks: [{ id: 'history', kind: 'history', title: 'History', from: 0, to: 'end' }],
-        },
-        values: {},
+        program: nativePrompt('', { customPromptTemplateToggle: 'tone=합성 문체=text' }),
+        values: { tone: '담백하게' },
       },
     },
   });
@@ -78,10 +74,11 @@ test('PWS02 translation policy and prompt options save in the independent worksp
   const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
   const workspace = await (await request.get('/api/prompt-workspace')).json();
   expect(workspace.translationPolicy).toMatchObject({ maxRetries: 2, maxCalls: 12 });
-  const program = {
-    ...createDefaultPromptProgram('Synthetic translation', 'translation'),
-    controls: [{ id: 'tone', label: 'PWS 번역 문체', type: 'text', default: '기본 문체' }],
-  };
+  const program = nativePrompt(
+    'Synthetic translation',
+    { customPromptTemplateToggle: 'tone=PWS 번역 문체=text' },
+    'translation'
+  );
   const created = await request.post('/api/prompt-presets', {
     data: {
       title: `PWS preset ${crypto.randomUUID()}`,
@@ -178,13 +175,9 @@ test('PWS03 failed autosaves preserve consecutive local changes and protect exte
       expectedRevision: current.revision,
       main: {
         ...current.main,
-        program: {
-          ...createDefaultPromptProgram('Synthetic autosave'),
-          controls: [
-            { id: 'tone', label: 'PWS 자동 문체', type: 'text', default: '기본' },
-            { id: 'detail', label: 'PWS 자동 상세', type: 'text', default: '기본' },
-          ],
-        },
+        program: nativePrompt('Synthetic autosave', {
+          customPromptTemplateToggle: 'tone=PWS 자동 문체=text\ndetail=PWS 자동 상세=text',
+        }),
         values: {},
       },
     },

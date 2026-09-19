@@ -9,11 +9,7 @@ export type ProviderProgress = { text: string; offset: number };
 export function publicProgressAllowed(request: ProviderRequest, protocol: ProviderProtocol) {
   return (
     protocol !== 'codex-app-server-v1' &&
-    !(
-      request.role === 'translation' &&
-      request.input.controls.purpose !== 'translation-refusal' &&
-      request.generation?.structuredOutput === true
-    ) &&
+    !(request.role === 'translation' && request.generation?.structuredOutput === true) &&
     !request.stable.tools.some((tool) =>
       ['story.submit', 'eval_submit_artifact'].includes(tool.name)
     )

@@ -1,3 +1,4 @@
+import { nativeContent } from './fixtures/native-content.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { resolveInlineImage } from '../web/image-placement.js';
@@ -23,7 +24,7 @@ import {
   validateImageBlob,
 } from '../server/package-images.js';
 import { packageImages, type PackageImage } from '../core/package-images.js';
-import type { ContentPackage, PackageRole } from '../core/content-package.js';
+import type { ContentRole } from '../core/risu-content.js';
 import type { Content } from '../core/product.js';
 import { splitSource } from '../core/auxiliary.js';
 import { readerDetail } from '../server/reader.js';
@@ -71,19 +72,11 @@ function image(store: Store): PackageImage {
   };
 }
 function save(store: Store, images: PackageImage[], previous?: Content): Content {
-  const pkg: ContentPackage = {
-    version: 1,
-    id: previous?.id ?? 'draft',
-    revision: previous?.revision ?? 1,
-    title: 'Synthetic sword',
-    description: '',
-    body: 'An ego sword.',
-    lore: [],
-    instructions: [],
-    controls: [],
-    transforms: [],
-    images,
-  };
+  const pkg = nativeContent(
+    { name: 'Synthetic sword', description: 'An ego sword.' },
+    { id: previous?.id ?? 'draft', revision: previous?.revision ?? 1, images },
+    'persona'
+  );
   return store.product.content(
     {
       kind: 'persona',
@@ -102,7 +95,7 @@ function attach(
   store: Store,
   chatId: string,
   content: Content,
-  roles: PackageRole[] = ['bot', 'persona', 'module']
+  roles: ContentRole[] = ['bot', 'persona', 'module']
 ) {
   const { chatId: _id, revision, ...profile } = store.product.profile(chatId);
   return updateTestProfile(store.product, chatId, {

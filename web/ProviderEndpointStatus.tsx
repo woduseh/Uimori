@@ -48,8 +48,8 @@ export function ProviderEndpointStatus({
             사용자 지정 주소는 서버에서 한 번 허용해야 해요. 프로바이더 초안은 저장할 수 있어요.
           </p>
           <p>
-            <code>NR_PROVIDER_ORIGINS</code>에 <code>{value.origin}</code>을 추가하고 서버를 다시
-            시작해 주세요. 기존 주소가 있다면 쉼표로 구분해 추가해요.
+            <code>UIMORI_PROVIDER_ORIGINS</code>에 <code>{value.origin}</code>을 추가하고 서버를
+            다시 시작해 주세요. 기존 주소가 있다면 쉼표로 구분해 추가해요.
           </p>
           <small>
             Windows 사용자 환경변수나 서버 실행 설정에 저장하면 매번 입력하지 않아도 돼요.

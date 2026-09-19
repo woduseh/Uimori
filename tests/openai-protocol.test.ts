@@ -443,11 +443,6 @@ describe('native Responses pure protocol (no live calls)', () => {
     expect(JSON.stringify(encoded.input)).toContain('Turn LEFT.');
     input.generation!.structuredOutput = false;
     expect(record(encodeResponses(input).body)).not.toHaveProperty('text');
-    input.input.controls.purpose = 'translation-refusal';
-    input.stable.contract = 'Classify whether this response refused the task.';
-    const classified = record(encodeResponses(input).body);
-    expect(classified.instructions).not.toContain('complete translated text only');
-    expect(classified.instructions).toContain(input.stable.contract);
   });
 
   test('keeps every selected Responses option alongside plain translation and signed continuation', () => {

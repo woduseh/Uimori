@@ -98,9 +98,7 @@ test('prepare is read only and create/update enforce the same CAS contract', () 
 test('catalog/error retention uses credential authority and old connection execution is revoked', () => {
   const s = database();
   const p = s.product;
-  const c = p.connection(
-    connectionBody({ credentialEnv: 'NARRATIVE_PROVIDER_TEST_A' })
-  ) as Connection;
+  const c = p.connection(connectionBody({ credentialEnv: 'UIMORI_PROVIDER_TEST_A' })) as Connection;
   const cached = p.save(
     'connection',
     {
@@ -121,7 +119,7 @@ test('catalog/error retention uses credential authority and old connection execu
     catalogError: 'CATALOG_FAILED',
   });
   const changed = p.connection(
-    editConnection(rename, { credentialEnv: 'NARRATIVE_PROVIDER_TEST_B' }),
+    editConnection(rename, { credentialEnv: 'UIMORI_PROVIDER_TEST_B' }),
     c.id
   ) as Connection;
   expect(changed).toMatchObject({ catalog: [], catalogUpdatedAt: null, catalogError: null });
@@ -130,7 +128,7 @@ test('catalog/error retention uses credential authority and old connection execu
   expect(() => p.get('connection', cached.id, cached.revision)).toThrow('Setting not found');
   expect(cached).toMatchObject({
     catalog: rename.catalog,
-    credentialEnv: 'NARRATIVE_PROVIDER_TEST_A',
+    credentialEnv: 'UIMORI_PROVIDER_TEST_A',
   });
   const disabled = p.connection(editConnection(changed, { enabled: false }), c.id) as Connection;
   expect(() => p.authorize(changed)).toThrow('disabled');
@@ -219,9 +217,7 @@ test('model metadata is server sourced and disabling blocks new selection while 
 test('archive roundtrip retains management metadata, strips authority, and rejects forged metadata atomically', () => {
   const s = database();
   const p = s.product;
-  const c = p.connection(
-    connectionBody({ credentialEnv: 'NARRATIVE_PROVIDER_TEST_A' })
-  ) as Connection;
+  const c = p.connection(connectionBody({ credentialEnv: 'UIMORI_PROVIDER_TEST_A' })) as Connection;
   const m = p.model(
     modelBody(c, {
       enabled: false,
@@ -237,7 +233,7 @@ test('archive roundtrip retains management metadata, strips authority, and rejec
     catalogUpdatedAt: null,
   });
   expect(restored.product.get('connection', c.id)).not.toHaveProperty('credentialEnv');
-  expect(p.get<Connection>('connection', c.id).credentialEnv).toBe('NARRATIVE_PROVIDER_TEST_A');
+  expect(p.get<Connection>('connection', c.id).credentialEnv).toBe('UIMORI_PROVIDER_TEST_A');
   for (const mutate of [
     (body: any) => {
       body.source.connectionRevision = 999;
@@ -332,24 +328,12 @@ test('impact counts current profile model IDs after settings edits and exposes m
     expectedRevision: profile.revision,
     routes: { ...profile.routes, main: ref(m), translation: ref(m) },
   });
-  s.story.saveConfig(chat.id, {
-    expectedRevision: 0,
-    module: null,
-    stateModel: ref(m),
-  });
-  s.story.saveConfig(chat.id, {
-    expectedRevision: 1,
-    module: null,
-    stateModel: ref(m),
-  });
   p.model(modelBody(c, { expectedRevision: m.revision, enabled: false }), m.id);
   const impact = managementImpact(p, 'connection', c.id);
   expect(impact).toMatchObject({
     profileCount: 1,
-    storyProfileCount: 1,
     modelCount: 1,
     profiles: [{ chatId: chat.id, title: chat.title, roles: ['main', 'translation'] }],
-    storyProfiles: [{ chatId: chat.id, title: chat.title, roles: ['state'] }],
   });
   expect(managementImpact(p, 'model', m.id)).not.toHaveProperty('archivedRevisionCount');
   expect(Object.keys(impact.profiles[0]).sort()).toEqual(['chatId', 'roles', 'title']);

@@ -51,7 +51,7 @@ const connection = (variant: Variant): ProviderConnection => ({
   id: 'context-budget-test',
   protocol: variant.protocol,
   endpoint: variant.endpoint,
-  credentialEnv: 'NARRATIVE_PROVIDER_CONTEXT_TEST',
+  credentialEnv: 'UIMORI_PROVIDER_CONTEXT_TEST',
 });
 const request = (variant = variants[0] as Variant): ProviderRequest => ({
   role: 'main',
@@ -362,7 +362,7 @@ describe('final wire body budget before credentials and transmission', () => {
       const input = request(variant);
       input.input.history = [{ text: large }];
       input.prompt = {
-        compilerVersion: 'uimori-prompt-1',
+        compilerVersion: 'risu-native-prompt-1',
         values: {},
         cachePlan: [],
         messages: [

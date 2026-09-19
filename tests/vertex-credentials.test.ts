@@ -73,7 +73,7 @@ test('upload persists normalized file outside SQLite and survives app restart wi
   expect(uploaded.statusCode).toBe(200);
   const reference = uploaded.json();
   expect(reference).toEqual({
-    credentialEnv: expect.stringMatching(/^NARRATIVE_PROVIDER_VERTEX_FILE_[A-F0-9]{32}$/),
+    credentialEnv: expect.stringMatching(/^UIMORI_PROVIDER_VERTEX_FILE_[A-F0-9]{32}$/),
     projectId: account.project_id,
     clientEmail: account.client_email,
   });

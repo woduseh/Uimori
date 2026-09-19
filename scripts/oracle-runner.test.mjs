@@ -22,7 +22,7 @@ test('candidate Compose validation resolves service env_file from production wit
   python(`
 with tempfile.TemporaryDirectory() as temp:
     base=pathlib.Path(temp).resolve(); app=base/'app'; app.mkdir(); candidate=base/'candidate'; candidate.mkdir()
-    original='NR_ACCESS_TOKEN=private-value\\n'
+    original='UIMORI_ACCESS_TOKEN=private-value\\n'
     (app/'.env.self-host').write_text(original)
     (candidate/'compose.tailscale.yaml').write_text('services:\\n  app:\\n    env_file: .env.self-host\\n')
     calls=[]
@@ -63,12 +63,12 @@ else: raise AssertionError('unsafe source ref accepted')
 
 test('environment update preserves unrelated lines and full rollback restores original bytes', () =>
   python(`
-text='# operator comment\\nNR_ACCESS_TOKEN="secret keep"\\nNR_PUBLIC_ORIGIN=https://example.test\\nUIMORI_IMAGE_TAG=old\\nUIMORI_DATA_VOLUME=old-volume\\n'
+text='# operator comment\\nUIMORI_ACCESS_TOKEN="secret keep"\\nUIMORI_PUBLIC_ORIGIN=https://example.test\\nUIMORI_IMAGE_TAG=old\\nUIMORI_DATA_VOLUME=old-volume\\n'
 changed=m.update_environment(text,'sha256:'+'a'*64,'new-volume')
 assert m.protected_environment(text)==m.protected_environment(changed)
-assert 'NR_ACCESS_TOKEN="secret keep"' in changed
+assert 'UIMORI_ACCESS_TOKEN="secret keep"' in changed
 assert 'UIMORI_IMAGE_TAG=' not in changed
-assert m.environment_values(text)['NR_ACCESS_TOKEN']=='secret keep'
+assert m.environment_values(text)['UIMORI_ACCESS_TOKEN']=='secret keep'
 `));
 
 test('rollback stops candidate before restoring backup and uses immutable previous image override', () =>
@@ -111,7 +111,7 @@ test('check-only builds once and probes fresh plus coherent copy without switchi
   python(`
 from types import SimpleNamespace
 events=[]
-config={'services':{'app':{'image':'configured-old','environment':{'NR_PUBLIC_ORIGIN':'https://example.test'},'build':{'args':{'UIMORI_CODEX_VERSION':'1.0'}}}},'volumes':{'data':{'name':'old'}}}
+config={'services':{'app':{'image':'configured-old','environment':{'UIMORI_PUBLIC_ORIGIN':'https://example.test'},'build':{'args':{'UIMORI_CODEX_VERSION':'1.0'}}}},'volumes':{'data':{'name':'old'}}}
 class Fake(m.Runner):
     def run(self,*args,cwd=None,**kwargs):
         events.append(args[:2])
@@ -119,7 +119,7 @@ class Fake(m.Runner):
         if args[:2]==('git','rev-parse'): return 'a'*40 if cwd or args[-1] in ('origin/main','FETCH_HEAD') else 'b'*40
         if args[:2]==('git','ls-remote'): return 'a'*40+' refs/heads/main'
         return ''
-    def inspect(self): return {'HostConfig':{'PortBindings':{'4310/tcp':[{'HostIp':'127.0.0.1','HostPort':'4310'}]}},'State':{'Health':{'Status':'healthy'}},'Image':'sha256:old','Mounts':[{'Destination':'/data','Type':'volume','Name':'old'}],'Config':{'Env':['NR_PUBLIC_ORIGIN=https://example.test']}}
+    def inspect(self): return {'HostConfig':{'PortBindings':{'4310/tcp':[{'HostIp':'127.0.0.1','HostPort':'4310'}]}},'State':{'Health':{'Status':'healthy'}},'Image':'sha256:old','Mounts':[{'Destination':'/data','Type':'volume','Name':'old'}],'Config':{'Env':['UIMORI_PUBLIC_ORIGIN=https://example.test']}}
     def routing(self): return {}
     def compose(self,*args,**kwargs):
         events.append(('compose',args[0])); assert args[0]=='config'
@@ -132,7 +132,7 @@ class Fake(m.Runner):
         return m.json.dumps([{'Id':'sha256:old' if args[-1]=='configured-old' else 'sha256:new'}]) if args[:2]==('image','inspect') else ''
 with tempfile.TemporaryDirectory() as temp:
     base=pathlib.Path(temp).resolve(); app=base/'app'; app.mkdir(); release=base/'release'; release.mkdir()
-    (app/'.env.self-host').write_text('NR_PUBLIC_ORIGIN=https://example.test\\n')
+    (app/'.env.self-host').write_text('UIMORI_PUBLIC_ORIGIN=https://example.test\\n')
     args=SimpleNamespace(app_dir=str(app),release_dir=str(release),commit='a'*40,build_id='c'*64,dist_hash='d'*64,fresh=False,check_only=True,image=None,expected_origin='https://example.test',source_ref='main')
     r=Fake(args); r.execute()
     assert r.summary['status']=='PASS'

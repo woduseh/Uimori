@@ -1,3 +1,5 @@
+import { nativePrompt } from './fixtures/native-prompt.js';
+import { promptControls } from '../core/risu-prompt.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -26,7 +28,6 @@ import type { HelperTask } from '../core/helper.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
 import { EditDraftService } from '../server/edit-drafts.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 
 const owned: { store: Store; path: string }[] = [];
@@ -53,24 +54,10 @@ function fixture() {
     expectedRevision: prior.revision,
     main: {
       ...prior.main,
-      values: { tone: 'calm', detail: 1 },
-      program: {
-        ...createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
-        controls: [
-          {
-            id: 'tone',
-            label: 'Tone',
-            type: 'select',
-            default: 'calm',
-            options: [
-              { label: 'Calm', value: 'calm' },
-              { label: 'Bold', value: 'bold' },
-              { label: 'Warm', value: 'warm' },
-            ],
-          },
-          { id: 'detail', label: 'Detail', type: 'number', default: 1, min: 0, max: 9 },
-        ],
-      },
+      values: { tone: 'calm', detail: '1' },
+      program: nativePrompt(DEFAULT_MAIN_PROMPT, {
+        customPromptTemplateToggle: 'tone=Tone=text\ndetail=Detail=text',
+      }),
     },
   });
   const chat = createFixtureChat(store, 'Options', 'calm'),
@@ -155,29 +142,29 @@ test('global, chat fixed, delegated unfixed and explicit oneoff resolve once in 
   const f = fixture();
   f.service.fixed(f.chat.id, input(f, { tone: 'bold' }), authority);
   const grant = delegate(f);
-  stage(f, { detail: 4 }, grant.id);
-  stage(f, { tone: 'warm', detail: 7 });
+  stage(f, { detail: '4' }, grant.id);
+  stage(f, { tone: 'warm', detail: '7' });
   const cmd = command(f),
     first = run(f, cmd);
   const resolution = first.run.snapshot.profile!.chatOptions!;
   expect(resolution).toMatchObject({
-    globalValues: { tone: 'calm', detail: 1 },
+    globalValues: { tone: 'calm', detail: '1' },
     fixedValues: { tone: 'bold' },
-    delegatedValues: { detail: 4 },
-    oneoffValues: { tone: 'warm', detail: 7 },
-    values: { tone: 'warm', detail: 7 },
+    delegatedValues: { detail: '4' },
+    oneoffValues: { tone: 'warm', detail: '7' },
+    values: { tone: 'warm', detail: '7' },
   });
   expect(resolution.pendingIds).toHaveLength(2);
   expect(f.service.get(f.chat.id).pending).toEqual([]);
   expect(run(f, cmd)).toEqual({ run: first.run, created: false });
-  expect(promptWorkspace(f.store).main.values).toEqual({ tone: 'calm', detail: 1 });
+  expect(promptWorkspace(f.store).main.values).toEqual({ tone: 'calm', detail: '1' });
   complete(f, first.run.id);
   const next = run(f);
-  expect(next.run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'bold', detail: 1 });
+  expect(next.run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'bold', detail: '1' });
 });
 test('failed reservation rolls back oneoff consumption and changed global values remain independent of the definition binding', () => {
   const f = fixture();
-  stage(f, { detail: 5 });
+  stage(f, { detail: '5' });
   expect(() =>
     f.store.transaction(() => {
       run(f);
@@ -189,11 +176,11 @@ test('failed reservation rolls back oneoff consumption and changed global values
     current = promptWorkspace(f.store);
   updatePromptWorkspace(f.store, {
     expectedRevision: current.revision,
-    main: { ...current.main, values: { tone: 'warm', detail: 3 } },
+    main: { ...current.main, values: { tone: 'warm', detail: '3' } },
   });
   expect(f.service.get(f.chat.id).binding).toEqual(oldBinding);
   const value = run(f).run;
-  expect(value.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'warm', detail: 5 });
+  expect(value.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'warm', detail: '5' });
   expect(f.service.get(f.chat.id).pending).toEqual([]);
 });
 test('explicit UI capabilities, definition owner, CAS, fixed fields and revocation bound delegated choices', () => {
@@ -224,7 +211,7 @@ test('explicit UI capabilities, definition owner, CAS, fixed fields and revocati
   ).toThrow(/소속/);
   const grant = delegate(f, ['tone', 'detail']);
   expect(() => stage(f, { tone: 'warm' }, grant.id)).toThrow(/고정/);
-  stage(f, { detail: 4 }, grant.id);
+  stage(f, { detail: '4' }, grant.id);
   const state = f.service.get(f.chat.id);
   f.service.revoke(
     f.chat.id,
@@ -238,7 +225,7 @@ test('explicit UI capabilities, definition owner, CAS, fixed fields and revocati
     revokedAt: expect.any(String),
   });
   expect(f.service.get(f.chat.id).pending).toEqual([]);
-  expect(() => stage(f, { detail: 4 }, grant.id)).toThrow(/위임/);
+  expect(() => stage(f, { detail: '4' }, grant.id)).toThrow(/위임/);
   expect(() =>
     f.service.fixed(f.chat.id, input(f, { modelId: 'foreign-model' }), authority)
   ).toThrow();
@@ -259,18 +246,15 @@ test('explicit UI capabilities, definition owner, CAS, fixed fields and revocati
 test('definition changes block pending choices and never silently apply old fixed or delegated fields', () => {
   const f = fixture();
   f.service.fixed(f.chat.id, input(f, { tone: 'bold' }), authority);
-  stage(f, { detail: 4 });
+  stage(f, { detail: '4' });
   const current = promptWorkspace(f.store);
   updatePromptWorkspace(f.store, {
     expectedRevision: current.revision,
     main: {
       ...current.main,
-      program: {
-        ...current.main.program,
-        controls: current.main.program.controls.map((item) =>
-          item.id === 'detail' ? { ...item, max: 8 } : item
-        ),
-      },
+      program: nativePrompt(DEFAULT_MAIN_PROMPT, {
+        customPromptTemplateToggle: 'tone=Tone=text\ndetail=Changed detail=text',
+      }),
     },
   });
   expect(f.service.get(f.chat.id).fixedValues).toEqual({});
@@ -283,7 +267,7 @@ test('definition changes block pending choices and never silently apply old fixe
     { expectedRevision: state.revision, branchId: state.branchId, operationId: randomUUID() },
     authority
   );
-  expect(run(f).run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'calm', detail: 1 });
+  expect(run(f).run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'calm', detail: '1' });
 });
 test('helper option tools require the running host task and its direct or persistent grant, never model-supplied permission', () => {
   const f = fixture(),
@@ -314,7 +298,7 @@ test('helper option tools require the running host task and its direct or persis
   });
   const state = f.service.get(f.chat.id),
     args = {
-      ...input(f, { detail: 5 }),
+      ...input(f, { detail: '5' }),
       expectedHeadRevision: state.headRevision,
       delegationId: grant.id,
     };
@@ -326,7 +310,7 @@ test('helper option tools require the running host task and its direct or persis
   const modelRead = invokeHelperOptions(f.store, current, 'options.read', {});
   expect(modelRead).not.toHaveProperty('program');
   expect(modelRead).toMatchObject({
-    definitions: state.program.controls,
+    definitions: promptControls(state.program),
     revision: state.revision,
     binding: state.binding,
     headRevision: state.headRevision,
@@ -358,13 +342,17 @@ test('helper option tools require the running host task and its direct or persis
   ).toThrow(/scope/);
   const choiceReceipt = invokeHelperOptions(f.store, current, 'options.choose', toolArgs);
   expect(choiceReceipt).toMatchObject({
-    pending: [expect.objectContaining({ values: { detail: 5 } })],
+    pending: [expect.objectContaining({ values: { detail: '5' } })],
   });
   expect(choiceReceipt).not.toHaveProperty('program');
   expect(choiceReceipt).not.toHaveProperty('pending.0.delegation');
   expect(choiceReceipt).toMatchObject({
     pending: [
-      { delegationId: grant.id, binding: state.binding, definitions: state.program.controls },
+      {
+        delegationId: grant.id,
+        binding: state.binding,
+        definitions: promptControls(state.program),
+      },
     ],
     delegations: [expect.objectContaining({ id: grant.id, revokedAt: null })],
   });
@@ -450,7 +438,7 @@ test('same-branch option delegations belong only to their selected helper sessio
     invokeHelperOptions(f.store, running, 'options.choose', {
       expectedRevision: current.revision,
       binding: current.binding,
-      values: { detail: 4 },
+      values: { detail: '4' },
       expectedHeadRevision: current.headRevision,
       delegationId: grant.id,
       operationId: 'cross-session',
@@ -483,11 +471,11 @@ test('deleting a helper session revokes pending choices while preserving consume
   const f = fixture(),
     grant = delegate(f),
     helper = new HelperWorkspace(f.store);
-  stage(f, { detail: 6 }, grant.id);
+  stage(f, { detail: '6' }, grant.id);
   const written = run(f).run;
   complete(f, written.id);
   const frozen = structuredClone(f.store.run(written.id));
-  stage(f, { detail: 8 }, grant.id);
+  stage(f, { detail: '8' }, grant.id);
   const runtime = new HelperRuntime(f.store, {
     approvedOrigins: [],
     owner: 'delete-test',
@@ -571,7 +559,7 @@ test('session deletion cancels its direct oneoff reservation while keeping anoth
     expectedRevision: state.revision,
     expectedHeadRevision: state.headRevision,
     binding: state.binding,
-    values: { detail: 6 },
+    values: { detail: '6' },
     operationId: 'direct-choice',
   });
   const drafts = new EditDraftService(f.store);
@@ -599,7 +587,7 @@ test('session deletion cancels its direct oneoff reservation while keeping anoth
     },
     authority
   ).delegations[0];
-  stage(f, { detail: 3 }, delegation.id);
+  stage(f, { detail: '3' }, delegation.id);
   const runtime = new HelperRuntime(f.store, {
     approvedOrigins: [],
     owner: 'owner',
@@ -615,7 +603,7 @@ test('session deletion cancels its direct oneoff reservation while keeping anoth
   expect(after.pending[0]).toMatchObject({
     kind: 'delegated',
     delegationId: delegation.id,
-    values: { detail: 3 },
+    values: { detail: '3' },
   });
   expect(chatOptionGrants(f.store, b.id, 'next')).toHaveLength(1);
   expect(drafts.get(draft.id)).toEqual(draft);
@@ -625,7 +613,7 @@ test('session deletion cancels its direct oneoff reservation while keeping anoth
 test('archive retains delegation start and revoke history, consumed option ownership and copied Run evidence without copying permission', () => {
   const f = fixture(),
     grant = delegate(f);
-  stage(f, { detail: 6 }, grant.id);
+  stage(f, { detail: '6' }, grant.id);
   stage(f, { tone: 'warm' });
   const value = run(f).run,
     source = complete(f, value.id);

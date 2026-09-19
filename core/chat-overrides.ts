@@ -1,25 +1,20 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
-  ContentPackageError,
-  validateContentPackage,
-  validatePackageAttachment,
-  type ContentPackage,
-  type PackageAttachment,
-  type PackageLore,
-  type PackageRole,
-} from './content-package.js';
-import {
-  compilePackageAttachment,
-  packageTextTemplateDiagnostics,
-  type CompiledPackageAttachment,
-} from './package-runtime.js';
+  RisuContentError,
+  validateRisuContent,
+  validateContentAttachment,
+  type RisuContent,
+  type ContentAttachment,
+  type RisuLoreProjection,
+  type ContentRole,
+} from './risu-content.js';
+import { compileContentAttachment, type CompiledContentAttachment } from './package-runtime.js';
 import type { ProfileSnapshot } from './product.js';
-import { packageIdentityFromProfile, type PackageIdentityContext } from './package-identity.js';
 
 export const CHAT_LORE_FIELDS = ['title', 'description', 'text'] as const;
 export type ChatLoreField = (typeof CHAT_LORE_FIELDS)[number];
-export type ChatAttachmentScope = { id: string; role: PackageRole; modulePath: string[] };
+export type ChatAttachmentScope = { id: string; role: ContentRole; modulePath: string[] };
 export type ChatLoreSelector = ChatAttachmentScope & { loreId: string; field: ChatLoreField };
 export type ChatLoreOverride = {
   id: string;
@@ -27,7 +22,7 @@ export type ChatLoreOverride = {
   revision: number;
   selector: ChatLoreSelector;
   basePackageRevision: number;
-  baseEntry: PackageLore;
+  baseEntry: RisuLoreProjection;
   baseValue: string;
   baseHash: string;
   value: string;
@@ -45,8 +40,8 @@ export type ChatLoreConflict = {
 };
 export type ChatPackagePath = {
   scope: ChatAttachmentScope;
-  attachment: PackageAttachment;
-  package: ContentPackage;
+  attachment: ContentAttachment;
+  package: RisuContent;
 };
 export type ChatPackageProjection = ChatPackagePath & {
   overrideIds: string[];
@@ -55,7 +50,7 @@ export type ChatPackageProjection = ChatPackagePath & {
 export type ChatOverrideSnapshot = {
   version: 1;
   revision: number;
-  roots: PackageAttachment[];
+  roots: ContentAttachment[];
   entries: ChatLoreOverride[];
   headRevision: string | null;
   headHash: string | null;
@@ -72,10 +67,10 @@ export const chatLoreKey = (selector: ChatLoreSelector) =>
     selector.loreId,
     selector.field,
   ]);
-const leafKey = (ref: PackageAttachment) => `${ref.id}:${ref.role}`;
+const leafKey = (ref: ContentAttachment) => `${ref.id}:${ref.role}`;
 export const chatOverrideHash = (value: string) => createHash('sha256').update(value).digest('hex');
 const invalid = (message: string): never => {
-  throw new ContentPackageError(`CHAT_OVERRIDE_${message}`);
+  throw new RisuContentError(`CHAT_OVERRIDE_${message}`);
 };
 const id = (value: unknown) => {
   if (typeof value !== 'string' || !/^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/.test(value))
@@ -98,7 +93,7 @@ export function validateChatLoreSelector(value: unknown): ChatLoreSelector {
     return invalid('MODULE_PATH');
   return {
     id: id(input.id),
-    role: input.role as PackageRole,
+    role: input.role as ContentRole,
     modulePath: input.modulePath.map(id),
     loreId: id(input.loreId),
     field: input.field as ChatLoreField,
@@ -108,12 +103,12 @@ export function validateChatLoreSelector(value: unknown): ChatLoreSelector {
 /** Enumerate link paths separately from the canonical module closure, whose behavior still executes once. */
 export function chatPackagePaths(
   profile: Pick<ProfileSnapshot, 'packageAttachments' | 'packages'>,
-  roots: PackageAttachment[]
+  roots: ContentAttachment[]
 ): ChatPackagePath[] {
   const result: ChatPackagePath[] = [];
   const walk = (
-    root: PackageAttachment,
-    raw: PackageAttachment,
+    root: ContentAttachment,
+    raw: ContentAttachment,
     modulePath: string[],
     ancestors: Set<string>
   ) => {
@@ -137,14 +132,14 @@ export function chatPackagePaths(
     for (const module of pkg.modules ?? [])
       walk(root, { ...module, role: 'module' }, [...modulePath, module.id], seen);
   };
-  for (const root of roots) walk(validatePackageAttachment(root), root, [], new Set());
+  for (const root of roots) walk(validateContentAttachment(root), root, [], new Set());
   return result;
 }
 
 /** A separate immutable text projection. No original package or executable definition is changed. */
 export function buildChatOverrideSnapshot(
   profile: Pick<ProfileSnapshot, 'packageAttachments' | 'packages'>,
-  roots: PackageAttachment[],
+  roots: ContentAttachment[],
   revision: number,
   entries: ChatLoreOverride[],
   head: { headRevision: string | null; headHash: string | null } = {
@@ -185,7 +180,6 @@ export function buildChatOverrideSnapshot(
           pkg.lore.push(lore);
         }
         lore[entry.selector.field] = entry.value;
-        if (entry.selector.field === 'text') delete lore.template;
       }
       // A deleted entry can reference a folder or neighbor removed by the original author. The old text is
       // preserved, while unavailable presentation links are dropped from this execution projection only.
@@ -199,7 +193,7 @@ export function buildChatOverrideSnapshot(
       }
       return {
         ...path,
-        package: validateContentPackage(pkg),
+        package: validateRisuContent(pkg),
         overrideIds: local.map((entry) => entry.id),
         conflicts: issues,
       };
@@ -218,16 +212,12 @@ export function buildChatOverrideSnapshot(
 /** Only lore is split when two link paths need different text. State, actions and instructions stay canonical. */
 export function projectChatPackageCompilation(
   profile: ProfileSnapshot,
-  attachment: PackageAttachment,
-  pkg: ContentPackage,
-  compiled: CompiledPackageAttachment,
-  includeRoot: (role: PackageRole) => boolean = () => true,
-  identity: PackageIdentityContext = packageIdentityFromProfile(profile),
-  /** The run's frozen keyword decision, so an override projection gates its lore the same way. */
-  loreActivation?: ReadonlySet<string>,
-  /** The run's frozen model selection, applied to the override projection for the same reason. */
+  attachment: ContentAttachment,
+  pkg: RisuContent,
+  compiled: CompiledContentAttachment,
+  includeRoot: (role: ContentRole) => boolean = () => true,
   loreSelection?: ReadonlySet<string>
-): { package: ContentPackage; compiled: CompiledPackageAttachment } {
+): { package: RisuContent; compiled: CompiledContentAttachment } {
   const projections =
     profile.chatOverrides?.projections.filter(
       (item) =>
@@ -241,30 +231,18 @@ export function projectChatPackageCompilation(
   );
   const selected = distinct ? projections : [projections[0]];
   const prefix = `package:${pkg.id}:${attachment.role}`;
-  const unavailableTextTemplates = (compiled.unavailableTextTemplates ?? []).filter(
-    (item) => item.id === 'body'
-  );
   const resources = [
     ...compiled.resources.filter((resource) => resource.sourceKind !== 'lore'),
     ...selected.flatMap((projection) => {
       const scopePrefix = distinct
         ? `${prefix}:scope:${chatOverrideHash(chatAttachmentKey(projection.scope)).slice(0, 24)}`
         : prefix;
-      const projected = compilePackageAttachment(projection.package, attachment, {
+      const projected = compileContentAttachment(projection.package, attachment, {
         chatId: profile.chatId,
         target: 'main',
-        values: compiled.values,
         resourcesOnly: true,
-        identity,
-        ...(loreActivation ? { loreActivation } : {}),
         ...(loreSelection ? { loreSelection } : {}),
       });
-      for (const failure of projected.unavailableTextTemplates ?? [])
-        if (failure.id !== 'body')
-          unavailableTextTemplates.push({
-            ...failure,
-            id: failure.id.replace(/^lore:/u, `${scopePrefix}:lore:`),
-          });
       return projected.resources
         .filter((resource) => resource.sourceKind === 'lore')
         .map((resource) => ({
@@ -289,15 +267,6 @@ export function projectChatPackageCompilation(
     package: distinct ? pkg : selected[0].package,
     compiled: {
       ...compiled,
-      unavailableTextTemplates: unavailableTextTemplates.length
-        ? unavailableTextTemplates
-        : undefined,
-      instructions: [
-        ...compiled.instructions.filter(
-          (item) => item.id !== `${prefix}:text-template-diagnostics`
-        ),
-        ...packageTextTemplateDiagnostics(prefix, unavailableTextTemplates),
-      ],
       resources,
       pinned: resources.filter((resource) => resource.loading === 'pinned'),
     },

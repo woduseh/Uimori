@@ -1,6 +1,8 @@
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { packageContext } from '../core/package-context.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
@@ -59,7 +61,7 @@ const request = (role: ProviderRequest['role'] = 'main'): ProviderRequest => ({
 });
 
 function routedSnapshot(endpoint: string): RunSnapshot {
-  const contents: Content[] = [
+  const contents: Omit<Content, 'package'>[] = [
     {
       id: 'bot-1',
       revision: 2,
@@ -136,8 +138,17 @@ function routedSnapshot(endpoint: string): RunSnapshot {
     })),
     profile: {
       ...defaultProfile('routed-chat'),
-      contents,
-      attachments: contents.map(({ id, revision }) => ({ id, revision })),
+      packages: contents
+        .filter((item) => item.loading === 'pinned')
+        .map((item) =>
+          nativeContent(
+            { name: item.title, description: item.text },
+            { id: item.id, revision: item.revision }
+          )
+        ),
+      packageAttachments: contents
+        .filter((item) => item.loading === 'pinned')
+        .map(({ id, revision, kind }) => ({ id, revision, role: kind })),
       models: {
         main: {
           id: 'main-preset',
@@ -211,7 +222,10 @@ describe('server main runner through the actual loopback adapter', () => {
         progress.push(item);
       },
     });
-    const result = await runMain(routedSnapshot(server.endpoint), observed.hooks);
+    const result = await runMain(
+      await prepareNativeRisuRun(routedSnapshot(server.endpoint)),
+      observed.hooks
+    );
     expect(result.status).toBe('completed');
     expect(result.text).toBe('등대의 불이 켜졌다.');
     expect(progress).toEqual([
@@ -276,7 +290,7 @@ describe('server main runner through the actual loopback adapter', () => {
     });
     const observed = runnerHooks(server.origin);
     const snapshot = routedSnapshot(server.endpoint);
-    const outcome = await runMain(snapshot, observed.hooks);
+    const outcome = await runMain(await prepareNativeRisuRun(snapshot), observed.hooks);
     expect(outcome).toMatchObject({
       status: 'completed',
       text: 'Ada walked toward the copper observatory.',
@@ -287,16 +301,13 @@ describe('server main runner through the actual loopback adapter', () => {
     const first = JSON.parse(server.requests[0].body);
     expect(first.input.controls).toEqual({});
     expect(JSON.stringify(first)).not.toMatch(/minWords|maxWords|customWords|"preset"/);
-    const pinned = first.prompt.messages
-      .find((m: any) => m.id === 'backgroundLore')
-      .content[0].text.split('\n')
-      .slice(1)
-      .map((line: string) => JSON.parse(line)) as Content[];
-    expect(pinned.find((item) => item.id === 'canon-1')).toMatchObject({
-      id: 'canon-1',
-      revision: 3,
-      text: 'The lighthouse has never used electricity.',
-    });
+    expect(
+      first.prompt.messages.some((message: any) =>
+        message.content.some((part: any) =>
+          part.text.includes('The lighthouse has never used electricity.')
+        )
+      )
+    ).toBe(true);
     expect(
       JSON.stringify(first).split('The lighthouse has never used electricity.').length - 1
     ).toBe(1);
@@ -358,7 +369,10 @@ describe('server main runner through the actual loopback adapter', () => {
         ]);
     });
     const observed = runnerHooks(server.origin);
-    const outcome = await runMain(routedSnapshot(server.endpoint), observed.hooks);
+    const outcome = await runMain(
+      await prepareNativeRisuRun(routedSnapshot(server.endpoint)),
+      observed.hooks
+    );
     expect(outcome).toMatchObject({
       status: 'error',
       error: 'DUPLICATE_TOOL_ID',
@@ -389,7 +403,7 @@ describe('server main runner through the actual loopback adapter', () => {
       const snapshot = routedSnapshot(server.endpoint);
       snapshot.profile!.models.main!.timeoutMs = presetTimeout;
       snapshot.profile!.models.main!.thinkingLevel = 'LOW';
-      const outcome = await runMain(snapshot, observed.hooks);
+      const outcome = await runMain(await prepareNativeRisuRun(snapshot), observed.hooks);
       expect(outcome).toMatchObject({
         status: 'partial',
         text: 'Observed main prefix.',
@@ -428,7 +442,10 @@ describe('server main runner through the actual loopback adapter', () => {
     const observed = runnerHooks(server.origin, {
       authorize: (value) => ({ ...value, enabled: ++checks === 1 }),
     });
-    const result = await runMain(routedSnapshot(server.endpoint), observed.hooks);
+    const result = await runMain(
+      await prepareNativeRisuRun(routedSnapshot(server.endpoint)),
+      observed.hooks
+    );
     expect(result).toMatchObject({
       status: 'error',
       error: 'CONNECTION_NOT_AUTHORIZED',
@@ -439,7 +456,7 @@ describe('server main runner through the actual loopback adapter', () => {
     expect(checks).toBe(2);
   });
 
-  test('P01 P04 hides disabled persona in pinned context and read scope; denied model tools cannot escalate', async () => {
+  test('P01 P04 excludes unapproved resources and denies model tool escalation', async () => {
     const server = await fixture(async (_captured, response) => {
       await writeSse(response, [
         {
@@ -453,29 +470,10 @@ describe('server main runner through the actual loopback adapter', () => {
       ]);
     });
     const snapshot = routedSnapshot(server.endpoint);
-    const persona: Content = {
-      id: 'persona-1',
-      revision: 1,
-      kind: 'persona',
-      title: 'Reader',
-      description: 'Disabled persona',
-      text: 'EXCLUDED_PERSONA_CANARY',
-      loading: 'pinned',
-      relatedIds: [],
-    };
-    snapshot.profile!.contents.push(persona);
-    snapshot.profile!.personaReference = false;
-    snapshot.resources.push({
-      ...persona,
-      chatId: snapshot.chatId,
-      kind: 'lore',
-      sourceKind: 'persona',
-    });
     snapshot.resources[0].relatedIds = ['lore-1', 'persona-1', 'unknown-private-id'];
-    expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('EXCLUDED_PERSONA_CANARY');
     expect(buildMainInput(snapshot).catalog[0].relatedIds).toEqual(['lore-1']);
     const observed = runnerHooks(server.origin);
-    const result = await runMain(snapshot, observed.hooks);
+    const result = await runMain(await prepareNativeRisuRun(snapshot), observed.hooks);
     expect(result.error).toBe('READ_TOOL_DENIED');
     expect(observed.tools).toMatchObject([{ denied: true, name: 'unapproved', args: {} }]);
     expect(JSON.stringify(observed.tools)).not.toContain('PRIVATE_ARGUMENT');
@@ -484,9 +482,6 @@ describe('server main runner through the actual loopback adapter', () => {
 
   test('P01 P03 separates package translation instructions from main and keeps empty profiles free of synthetic facts', () => {
     const snapshot = routedSnapshot('http://127.0.0.1:49999/turn');
-    snapshot.profile!.contents = snapshot.profile!.contents.filter(
-      (item) => item.id !== 'glossary-1'
-    );
     snapshot.resources = snapshot.resources.filter((item) => item.id !== 'glossary-1');
     snapshot.profile!.packageAttachments = [
       { id: 'translation-guidance', revision: 1, role: 'module' },
@@ -499,8 +494,7 @@ describe('server main runner through the actual loopback adapter', () => {
         title: 'Translation guidance',
         description: '',
         lore: [],
-        controls: [],
-        transforms: [],
+        nativeRisu: nativeContent({ name: 'Translation guidance' }).nativeRisu,
         instructions: [
           { id: 'terms', target: 'translation', text: 'AUXILIARY_ONLY_TRANSLATION_PROCEDURE' },
         ],
@@ -514,7 +508,7 @@ describe('server main runner through the actual loopback adapter', () => {
     expect(
       compileSnapshotPrompt(snapshot).promptCompilation!.messages[0].content[0].text
     ).toContain('An (OOC: ...) request is an author direction inside the fiction');
-    snapshot.profile!.contents = [];
+    snapshot.profile!.packages = [];
     snapshot.profile!.packageAttachments = [];
     snapshot.resources = [];
     expect(buildMainInput(snapshot).facts).toEqual([]);
@@ -674,7 +668,7 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     expect(refreshed.models[0].capabilities.structuredOutput).toBeNull();
     const failed = refreshCatalog(refreshed.models, {
       models: [],
-      credentialEnv: 'NARRATIVE_PROVIDER_OTHER',
+      credentialEnv: 'UIMORI_PROVIDER_OTHER',
       preset: 'override',
     });
     expect(failed.error).toBe('UNSUPPORTED_OPTIONS');
@@ -706,7 +700,7 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     });
     const secret = 'SYNTHETIC_TEST_CREDENTIAL_DO_NOT_LOG';
     const records: WireRecord[] = [];
-    const bound = { ...connection(server.endpoint), credentialEnv: 'NARRATIVE_PROVIDER_FIXTURE' };
+    const bound = { ...connection(server.endpoint), credentialEnv: 'UIMORI_PROVIDER_FIXTURE' };
     const input = request();
     input.input.source = { secret, text: `accidental ${secret} inside content` };
     const outcome = await executeProvider(
@@ -714,7 +708,7 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
       input,
       options(server.origin, {
         resolveCredential: (name) => {
-          expect(name).toBe('NARRATIVE_PROVIDER_FIXTURE');
+          expect(name).toBe('UIMORI_PROVIDER_FIXTURE');
           return secret;
         },
         onWire: (record) => {
@@ -767,7 +761,7 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
       title: 'Fixture connection',
       protocol: 'fixture-sse-v1',
       endpoint: 'http://127.0.0.1:9/turn',
-      credentialEnv: 'NARRATIVE_PROVIDER_FIXTURE',
+      credentialEnv: 'UIMORI_PROVIDER_FIXTURE',
       enabled: true,
       catalog: [],
       catalogError: null,
@@ -973,7 +967,7 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
   });
 });
 
-test('custom main prompt remains literal across tools after the caller changes its profile', async () => {
+test('native CBS prompt stays frozen across tools after the caller changes its profile', async () => {
   const custom = '  CUSTOM MAIN\r\n{{char}} `verbatim`  ';
   const server = await fixture(async (captured, response) => {
     const body = JSON.parse(captured.body);
@@ -1002,15 +996,15 @@ test('custom main prompt remains literal across tools after the caller changes i
       revision: 4,
       role: 'main',
       title: 'Custom writing',
-      program: createDefaultPromptProgram(custom),
+      program: createDefaultRisuPrompt(custom),
     },
   };
   const observed = runnerHooks(server.origin, {
     onInput: () => {
-      seed.profile!.promptPresets!.main!.program = createDefaultPromptProgram('FUTURE PROMPT');
+      seed.profile!.promptPresets!.main!.program = createDefaultRisuPrompt('FUTURE PROMPT');
     },
   });
-  expect(await runMain(seed, observed.hooks)).toMatchObject({
+  expect(await runMain(await prepareNativeRisuRun(seed), observed.hooks)).toMatchObject({
     status: 'completed',
     text: 'Custom scene received.',
   });
@@ -1019,7 +1013,7 @@ test('custom main prompt remains literal across tools after the caller changes i
     const wire = JSON.parse(captured.body);
     // The authored prompt stays literal; the host contract carries only its catalog read guidance.
     expect(wire.stable.contract).toBe('\n' + CATALOG_READ_GUIDANCE);
-    expect(wire.prompt.messages[0].content[0].text).toBe(custom);
+    expect(wire.prompt.messages[0].content[0].text).toBe(custom.replace('{{char}}', 'Ada'));
     expect(wire.stable.tools.map((tool: { name: string }) => tool.name)).toEqual([
       'knowledge.search',
       'knowledge.read',

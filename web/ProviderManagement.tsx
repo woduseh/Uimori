@@ -1,3 +1,8 @@
+import {
+  JEV_PROVIDER_DEFINITION,
+  jevRegistered,
+  type JevProviderStatus,
+} from '../core/jev-provider.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Dialog } from './Dialog.js';
 import { Switch } from './BooleanControls.js';
@@ -27,7 +32,11 @@ import type {
   ProviderProtocol,
   VertexRequestTier,
 } from '../core/product.js';
-import { PROVIDER_DEFINITIONS, providerDefinition } from '../core/provider-definitions.js';
+import {
+  PROVIDER_DEFINITIONS,
+  PROVIDER_CHOICES,
+  providerDefinition,
+} from '../core/provider-definitions.js';
 import { CREDENTIAL_ENV_PATTERN } from '../core/credential-reference.js';
 import { api, ApiError } from './api.js';
 import {
@@ -176,6 +185,30 @@ export function ConnectionEditor({
     else proceed();
   }
   const [uploadingCredential, setUploadingCredential] = useState(false);
+  const [jevStatus, setJevStatus] = useState<JevProviderStatus | null>(null);
+  const [jevListError, setJevListError] = useState(false);
+  const [jevReturn, setJevReturn] = useState<'models' | 'connections'>('connections');
+  const [jevListRefresh, setJevListRefresh] = useState(0);
+  useEffect(() => {
+    void jevListRefresh;
+    const controller = new AbortController();
+    void api<JevProviderStatus>('/provider-management/jev', undefined, 'GET', controller.signal)
+      .then((status) => {
+        if (!controller.signal.aborted) {
+          setJevStatus(status);
+          setJevListError(false);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setJevListError(true);
+      });
+    return () => controller.abort();
+  }, [jevListRefresh]);
+  const hasJev = jevRegistered(jevStatus);
+  function openJev(from: 'models' | 'connections' = 'connections') {
+    setJevReturn(from);
+    navigate('jev');
+  }
   const [jevDirty, setJevDirty] = useState(false);
   const [jevBusy, setJevBusy] = useState(false);
   const [operationBusy, setOperationBusy] = useState(false),
@@ -216,6 +249,15 @@ export function ConnectionEditor({
         ? '로컬 endpoint'
         : 'API 기본 주소';
   const filter = query.trim().toLocaleLowerCase();
+  const jevMatches =
+    hasJev &&
+    matches(
+      query.toLocaleLowerCase(),
+      JEV_PROVIDER_DEFINITION.label,
+      JEV_PROVIDER_DEFINITION.modelLabel,
+      JEV_PROVIDER_DEFINITION.modelId,
+      '판단'
+    );
   const connections = library.connections.filter((item) =>
     matches(filter, item.title, item.endpoint, providerDefinition(item.protocol).label)
   );
@@ -557,10 +599,16 @@ export function ConnectionEditor({
           <button
             type="button"
             className={
-              ['connections', 'connection', 'providers'].includes(screen) ? 'selected' : 'secondary'
+              ['connections', 'connection', 'providers'].includes(screen) ||
+              (screen === 'jev' && jevReturn === 'connections')
+                ? 'selected'
+                : 'secondary'
             }
             aria-label="프로바이더 관리"
-            aria-pressed={['connections', 'connection', 'providers'].includes(screen)}
+            aria-pressed={
+              ['connections', 'connection', 'providers'].includes(screen) ||
+              (screen === 'jev' && jevReturn === 'connections')
+            }
             disabled={busy}
             onClick={() => {
               setSetup(false);
@@ -572,9 +620,19 @@ export function ConnectionEditor({
           </button>
           <button
             type="button"
-            className={screen === 'models' || screen === 'model' ? 'selected' : 'secondary'}
+            className={
+              screen === 'models' ||
+              screen === 'model' ||
+              (screen === 'jev' && jevReturn === 'models')
+                ? 'selected'
+                : 'secondary'
+            }
             aria-label="모델 프리셋"
-            aria-pressed={screen === 'models' || screen === 'model'}
+            aria-pressed={
+              screen === 'models' ||
+              screen === 'model' ||
+              (screen === 'jev' && jevReturn === 'models')
+            }
             disabled={busy}
             onClick={() => {
               setSetup(false);
@@ -583,20 +641,6 @@ export function ConnectionEditor({
           >
             <ModelIcon size={18} aria-hidden="true" />
             모델 프리셋
-          </button>
-          <button
-            type="button"
-            className={screen === 'jev' ? 'selected' : 'secondary'}
-            aria-label="JEV 판단 연결"
-            aria-pressed={screen === 'jev'}
-            disabled={busy}
-            onClick={() => {
-              setSetup(false);
-              navigate('jev');
-            }}
-          >
-            <ConnectionIcon size={18} aria-hidden="true" />
-            JEV 판단
           </button>
           <IconButton
             label="목록 새로고침"
@@ -607,20 +651,22 @@ export function ConnectionEditor({
             onClick={() => {
               void perform(async () => {
                 await reload();
+                setJevListRefresh((value) => value + 1);
                 setMessage('목록을 새로 읽었어요. 편집 초안은 유지돼요.');
               });
             }}
           />
         </div>
       </div>
-      <JevProviderSettings
-        active={screen === 'jev'}
-        onDirtyChange={setJevDirty}
-        onBusyChange={setJevBusy}
-      />
+      {jevListError && (
+        <p className="error" role="alert">
+          TypeSafe AI 등록 상태를 확인하지 못했어요. 목록을 새로고침해 주세요.
+        </p>
+      )}
       {(screen === 'models' || screen === 'connections') && (
         <>
-          {(screen === 'models' ? library.models.length : library.connections.length) > 0 && (
+          {((screen === 'models' ? library.models.length : library.connections.length) > 0 ||
+            hasJev) && (
             <div className="provider-toolbar">
               <label className="provider-search">
                 <SearchIcon size={18} aria-hidden="true" />
@@ -650,6 +696,16 @@ export function ConnectionEditor({
               </div>
             </div>
           )}
+          {jevDirty && (
+            <button
+              type="button"
+              className="provider-resume secondary"
+              disabled={busy}
+              onClick={() => openJev(screen === 'models' ? 'models' : 'connections')}
+            >
+              TypeSafe AI 편집 이어서
+            </button>
+          )}
           {screen === 'connections' && connectionStarted && (
             <button
               type="button"
@@ -670,7 +726,7 @@ export function ConnectionEditor({
               모델 편집 이어서 · {model.title || '이름 없는 초안'}
             </button>
           )}
-          {!library.connections.length && (
+          {!library.connections.length && !hasJev && (
             <div className="provider-welcome">
               <ConnectionIcon size={28} aria-hidden="true" />
               <h4>첫 프로바이더를 준비해요</h4>
@@ -680,19 +736,25 @@ export function ConnectionEditor({
               </button>
             </div>
           )}
-          {library.connections.length > 0 && !library.models.length && screen === 'models' && (
-            <div className="provider-welcome">
-              <ModelIcon size={28} aria-hidden="true" />
-              <h4>사용할 모델을 등록해요</h4>
-              <p>준비된 프로바이더를 선택하고 모델과 생성 설정을 저장해요.</p>
-              <button type="button" disabled={busy} onClick={() => newModel()}>
-                <AddIcon size={18} aria-hidden="true" /> 새 모델 입력
-              </button>
-            </div>
-          )}
+          {library.connections.length > 0 &&
+            !library.models.length &&
+            !hasJev &&
+            screen === 'models' && (
+              <div className="provider-welcome">
+                <ModelIcon size={28} aria-hidden="true" />
+                <h4>사용할 모델을 등록해요</h4>
+                <p>준비된 프로바이더를 선택하고 모델과 생성 설정을 저장해요.</p>
+                <button type="button" disabled={busy} onClick={() => newModel()}>
+                  <AddIcon size={18} aria-hidden="true" /> 새 모델 입력
+                </button>
+              </div>
+            )}
         </>
       )}
-      {(screen === 'connection' || screen === 'model' || screen === 'providers') && (
+      {(screen === 'connection' ||
+        screen === 'model' ||
+        screen === 'providers' ||
+        screen === 'jev') && (
         <div className="provider-editor-heading">
           <button
             type="button"
@@ -700,7 +762,9 @@ export function ConnectionEditor({
             disabled={busy}
             onClick={() => {
               setSetup(false);
-              navigate(screen === 'model' ? 'models' : 'connections');
+              navigate(
+                screen === 'jev' ? jevReturn : screen === 'model' ? 'models' : 'connections'
+              );
             }}
           >
             <BackIcon size={16} />
@@ -709,7 +773,9 @@ export function ConnectionEditor({
           {setup && (
             <ol className="provider-steps" aria-label="빠른 프로바이더 진행">
               <li aria-current={screen === 'providers' ? 'step' : undefined}>1. 프로바이더 종류</li>
-              <li aria-current={screen === 'connection' ? 'step' : undefined}>2. 접속 정보</li>
+              <li aria-current={screen === 'connection' || screen === 'jev' ? 'step' : undefined}>
+                2. 접속 정보
+              </li>
               <li aria-current={screen === 'model' ? 'step' : undefined}>3. 모델</li>
             </ol>
           )}
@@ -722,26 +788,28 @@ export function ConnectionEditor({
             현재 지원하는 프로바이더 방식이에요. 선택하면 주소와 인증 참조의 기본값을 채워요.
           </p>
           <div className="provider-template-grid">
-            {PROVIDER_DEFINITIONS.filter((item) => item.id !== 'fixture-sse-v1').map((item) => (
+            {PROVIDER_CHOICES.filter((item) => item.id !== 'fixture-sse-v1').map((item) => (
               <button
                 type="button"
                 className="secondary provider-template"
                 key={item.id}
                 disabled={busy}
-                onClick={() => startProvider(item.id)}
+                onClick={() => (item.kind === 'judgment' ? openJev() : startProvider(item.id))}
               >
                 <span className="provider-template-icon">
                   <ConnectionIcon size={20} />
                 </span>
                 <strong>{item.label}</strong>
                 <small>
-                  {item.id === 'codex-app-server-v1'
-                    ? '개인 ChatGPT 구독 · 서버 실행'
-                    : item.id === 'vertex-gemini-v1'
-                      ? 'Gemini 프로바이더 · global'
-                      : item.id === 'openai-chat-v1'
-                        ? '호환 API 또는 로컬 서버'
-                        : '서버 API 키 인증'}
+                  {item.kind === 'judgment'
+                    ? 'JEV · 판단 전용 모델'
+                    : item.id === 'codex-app-server-v1'
+                      ? '개인 ChatGPT 구독 · 서버 실행'
+                      : item.id === 'vertex-gemini-v1'
+                        ? 'Gemini 프로바이더 · global'
+                        : item.id === 'openai-chat-v1'
+                          ? '호환 API 또는 로컬 서버'
+                          : '서버 API 키 인증'}
                 </small>
                 <ForwardIcon size={16} />
               </button>
@@ -759,8 +827,42 @@ export function ConnectionEditor({
           </details>
         </section>
       )}
+      <JevProviderSettings
+        active={screen === 'jev'}
+        onDirtyChange={setJevDirty}
+        onBusyChange={setJevBusy}
+        onStatusChange={setJevStatus}
+      />
       <section hidden={screen !== 'connections'} aria-label="저장한 프로바이더">
         <div className="connection-list provider-saved-list">
+          {jevMatches && (
+            <article className="provider-saved-item" aria-label="TypeSafe AI 프로바이더">
+              <div className="provider-item-heading">
+                <button
+                  type="button"
+                  className="provider-item-open secondary"
+                  disabled={busy}
+                  aria-label="TypeSafe AI 프로바이더 수정"
+                  data-provider-id={JEV_PROVIDER_DEFINITION.id}
+                  onClick={() => openJev('connections')}
+                >
+                  <strong>TypeSafe AI</strong>
+                  <span className="provider-item-subtitle">
+                    JEV · 판단 전용 ·{' '}
+                    {jevStatus?.credentialSource === 'saved' ? '저장한 API 키' : '서버 환경변수'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => openJev('connections')}
+                >
+                  연결 테스트
+                </button>
+              </div>
+            </article>
+          )}
           {connections.map((item) => (
             <article
               className="provider-saved-item"
@@ -844,14 +946,16 @@ export function ConnectionEditor({
               )}
             </article>
           ))}
-          {connections.length === 0 && library.connections.length > 0 && (
-            <div className="provider-empty" role="status">
-              <p>검색 조건에 맞는 프로바이더가 없어요.</p>
-              <button type="button" className="secondary" onClick={() => setQuery('')}>
-                검색 지우기
-              </button>
-            </div>
-          )}
+          {connections.length === 0 &&
+            !jevMatches &&
+            (library.connections.length > 0 || hasJev) && (
+              <div className="provider-empty" role="status">
+                <p>검색 조건에 맞는 프로바이더가 없어요.</p>
+                <button type="button" className="secondary" onClick={() => setQuery('')}>
+                  검색 지우기
+                </button>
+              </div>
+            )}
         </div>
       </section>
       <section
@@ -860,6 +964,40 @@ export function ConnectionEditor({
         aria-label="저장한 모델 프리셋"
       >
         <div className="provider-saved-list">
+          {jevMatches && (
+            <article className="provider-saved-item" aria-label="JEV 모델">
+              <div className="provider-item-heading">
+                <button
+                  type="button"
+                  className="provider-item-open secondary"
+                  disabled={busy}
+                  aria-label="JEV 모델 설정"
+                  data-provider-id={JEV_PROVIDER_DEFINITION.id}
+                  onClick={() => {
+                    setSetup(false);
+                    openJev('models');
+                  }}
+                >
+                  <strong>JEV</strong>
+                  <span className="provider-item-subtitle">
+                    TypeSafe AI · {JEV_PROVIDER_DEFINITION.modelId} · 판단 전용
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    setSetup(false);
+                    openJev('models');
+                  }}
+                >
+                  연결 테스트
+                </button>
+              </div>
+              <p className="provider-item-notice">{JEV_PROVIDER_DEFINITION.description}</p>
+            </article>
+          )}
           {models.map((item) => (
             <article
               className="provider-saved-item"
@@ -930,7 +1068,7 @@ export function ConnectionEditor({
               />
             </article>
           ))}
-          {models.length === 0 && library.models.length > 0 && (
+          {models.length === 0 && !jevMatches && (library.models.length > 0 || hasJev) && (
             <div className="provider-empty" role="status">
               <p>검색 조건에 맞는 모델이 없어요.</p>
               <button type="button" className="secondary" onClick={() => setQuery('')}>
@@ -1151,7 +1289,7 @@ export function ConnectionEditor({
             className="full"
             hidden={
               codex ||
-              (vertex && connection.credentialEnv.startsWith('NARRATIVE_PROVIDER_VERTEX_FILE_'))
+              (vertex && connection.credentialEnv.startsWith('UIMORI_PROVIDER_VERTEX_FILE_'))
             }
           >
             서버 환경변수 이름
@@ -1197,7 +1335,7 @@ export function ConnectionEditor({
           <small className="full">
             {codex
               ? '설정 → 에이전트에서 Uimori 전용 Codex 로그인을 준비해 주세요. 서버의 공식 Codex로 실행하며 API 키 방식으로 자동 전환하지 않아요.'
-              : vertex && connection.credentialEnv.startsWith('NARRATIVE_PROVIDER_VERTEX_FILE_')
+              : vertex && connection.credentialEnv.startsWith('UIMORI_PROVIDER_VERTEX_FILE_')
                 ? '등록한 JSON으로 인증해요. 프로젝트 ID는 키 파일의 프로젝트와 같아야 해요.'
                 : vertex
                   ? '환경변수 이름을 비우면 서버의 GOOGLE_APPLICATION_CREDENTIALS 파일로 인증해요. global에서 Gemini 모델에 연결해요.'
@@ -1205,7 +1343,7 @@ export function ConnectionEditor({
                     ? '기본 주소 뒤에 /chat/completions를 붙여요. 인증 없는 로컬 서버는 환경변수 이름을 비워 두세요.'
                     : '인증 키 값은 입력하지 마세요. 서버 환경변수에 인증 키를 설정하면 사용할 수 있어요. 주소 허용 상태는 위에서 확인해요.'}
           </small>
-          {vertex && connection.credentialEnv.startsWith('NARRATIVE_PROVIDER_VERTEX_FILE_') && (
+          {vertex && connection.credentialEnv.startsWith('UIMORI_PROVIDER_VERTEX_FILE_') && (
             <details className="provider-auth-settings full">
               <summary>고급 인증 설정</summary>
               <div className="provider-auth-settings-body">

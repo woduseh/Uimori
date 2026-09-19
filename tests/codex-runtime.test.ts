@@ -75,12 +75,12 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     const env = codexEnvironment(resolve(dir, 'home'), dir, {
       PATH: 'synthetic',
       OPENAI_API_KEY: 'secret',
-      NARRATIVE_PROVIDER_CUSTOM: 'secret',
+      UIMORI_PROVIDER_CUSTOM: 'secret',
       CODEX_HOME: 'personal-home',
       NODE_OPTIONS: '--require secret.js',
     });
     expect(env).not.toHaveProperty('OPENAI_API_KEY');
-    expect(env).not.toHaveProperty('NARRATIVE_PROVIDER_CUSTOM');
+    expect(env).not.toHaveProperty('UIMORI_PROVIDER_CUSTOM');
     expect(env).not.toHaveProperty('NODE_OPTIONS');
     expect(env.CODEX_HOME).toBe(resolve(dir, 'home'));
     expect(env.HOME).toBe(resolve(dir, 'home'));

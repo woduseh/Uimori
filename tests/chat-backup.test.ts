@@ -137,7 +137,7 @@ test('shared variable backups keep current overrides, historical checkpoints and
   expect(readChatVariables(archive, chat.id, branchId)).toEqual(latest);
 });
 
-test('shared variable archive rejects broken ownership, receipts and values atomically; old collections remain optional', async () => {
+test('shared variable archive rejects broken ownership, receipts and values atomically; every current collection is required', async () => {
   const store = await database();
   const chat = createFixtureChat(store, '변수 무결성');
   const other = createFixtureChat(store, '다른 채팅');
@@ -175,19 +175,13 @@ test('shared variable archive rejects broken ownership, receipts and values atom
   const oldArchive = structuredClone(archive);
   for (const name of ['chat_variable_states', 'chat_variable_journal', 'chat_variable_outputs'])
     delete oldArchive.tables[name];
-  target.product.import(oldArchive);
-  expect(readChatVariables(target, chat.id, `main:${chat.id}`)).toEqual({
-    revision: 0,
-    values: {},
-  });
+  expect(() => target.product.import(oldArchive)).toThrow();
   const oldBackup = exportChatBackup(store, chat.id);
   for (const name of ['variableStates', 'variableJournal', 'variableOutputs'])
     delete oldBackup.records[name];
-  const copy = importChatBackup(store, { backup: oldBackup, idempotencyKey: 'legacy-variables' });
-  expect(readChatVariables(store, copy.chat.id, `main:${copy.chat.id}`)).toEqual({
-    revision: 0,
-    values: {},
-  });
+  expect(() =>
+    importChatBackup(store, { backup: oldBackup, idempotencyKey: 'missing-variables' })
+  ).toThrow();
 });
 
 test('a portable backup keeps every branch, exact text/edits/translation/notes and repeatedly restores new chats', async () => {

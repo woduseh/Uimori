@@ -11,12 +11,12 @@ function asErrorMessage(error) {
 }
 
 function canonicalOrigin(value) {
-  if (typeof value !== 'string') throw new Error('NR_PUBLIC_ORIGIN must be an HTTPS origin');
+  if (typeof value !== 'string') throw new Error('UIMORI_PUBLIC_ORIGIN must be an HTTPS origin');
   let url;
   try {
     url = new URL(value);
   } catch {
-    throw new Error('NR_PUBLIC_ORIGIN must be an HTTPS origin');
+    throw new Error('UIMORI_PUBLIC_ORIGIN must be an HTTPS origin');
   }
   if (
     url.protocol !== 'https:' ||
@@ -29,7 +29,7 @@ function canonicalOrigin(value) {
     url.port === '0' ||
     (value !== url.origin && value !== `${url.origin}/`)
   )
-    throw new Error('NR_PUBLIC_ORIGIN must be one exact HTTPS origin');
+    throw new Error('UIMORI_PUBLIC_ORIGIN must be one exact HTTPS origin');
   return url.origin;
 }
 
@@ -41,7 +41,7 @@ function requiredBuildId(value) {
 
 function requiredToken(value) {
   if (typeof value !== 'string' || value.length < 32 || value.length > 1000 || /\s/u.test(value))
-    throw new Error('NR_ACCESS_TOKEN must contain 32-1000 non-whitespace characters');
+    throw new Error('UIMORI_ACCESS_TOKEN must contain 32-1000 non-whitespace characters');
   return value;
 }
 
@@ -161,11 +161,11 @@ export async function readAccessEnv(envFile) {
     if (values.has(key)) throw new Error(`Duplicate environment key: ${key}`);
     values.set(key, parseEnvValue(raw, index + 1));
   }
-  for (const key of ['NR_PUBLIC_ORIGIN', 'NR_ACCESS_TOKEN'])
+  for (const key of ['UIMORI_PUBLIC_ORIGIN', 'UIMORI_ACCESS_TOKEN'])
     if (!values.has(key) || !values.get(key)) throw new Error(`Missing environment key: ${key}`);
   return {
-    origin: canonicalOrigin(values.get('NR_PUBLIC_ORIGIN')),
-    token: requiredToken(values.get('NR_ACCESS_TOKEN')),
+    origin: canonicalOrigin(values.get('UIMORI_PUBLIC_ORIGIN')),
+    token: requiredToken(values.get('UIMORI_ACCESS_TOKEN')),
   };
 }
 
@@ -193,7 +193,7 @@ function sessionCookie(response) {
     .map((part) => part.trim())
     .filter(Boolean);
   const [pair, ...attributes] = parts;
-  const match = /^nr_session=([a-f0-9]{64})$/u.exec(pair ?? '');
+  const match = /^uimori_session=([a-f0-9]{64})$/u.exec(pair ?? '');
   if (!match) throw new Error('session cookie is missing or malformed');
   const normalized = new Set(attributes.map((attribute) => attribute.toLowerCase()));
   for (const attribute of ['secure', 'httponly', 'samesite=strict', 'path=/'])

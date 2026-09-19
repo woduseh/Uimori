@@ -92,7 +92,7 @@ test('only selected model presets persist evaluation tools and captured runs ret
       prior = store.product.profile(chat.id);
     updateTestProfile(store.product, chat.id, {
       expectedRevision: prior.revision,
-      attachments: prior.attachments,
+      packageAttachments: prior.packageAttachments,
 
       routes: { ...prior.routes, main: { id: selected.id } },
       image: false,

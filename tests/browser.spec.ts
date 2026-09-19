@@ -108,7 +108,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
   const other = await browser.newContext({ viewport: { width: MOBILE_WIDTH, height: 844 } });
   const bPage = await other.newPage();
   bPage.on('pageerror', (e) => errors.push(e.message));
-  const base = process.env.NR_BASE_URL!;
+  const base = process.env.UIMORI_BASE_URL!;
   // A new independent context needs the same explicit server URL, no shared browser storage.
   await bPage.goto(base);
   try {
@@ -253,7 +253,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     if (visualReview)
       await returned.screenshot({ path: testInfo.outputPath('mobile-source.png'), fullPage: true });
     // Independent file connection, not a mocked API, verifies storage and logical uniqueness.
-    const db = new DatabaseSync(process.env.NR_DB!, { readOnly: true });
+    const db = new DatabaseSync(process.env.UIMORI_DB!, { readOnly: true });
     try {
       expect(db.prepare('SELECT count(*) AS n FROM runs WHERE chat_id=?').get(a.id)?.n).toBe(1);
       expect(db.prepare('SELECT text,hash FROM sources WHERE id=?').get(aSource.id)).toEqual({
@@ -270,10 +270,10 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     } finally {
       db.close();
     }
-    if (process.env.NR_ARTIFACT_DIR) {
-      await mkdir(join(process.env.NR_ARTIFACT_DIR, 'evidence'), { recursive: true });
+    if (process.env.UIMORI_ARTIFACT_DIR) {
+      await mkdir(join(process.env.UIMORI_ARTIFACT_DIR, 'evidence'), { recursive: true });
       await writeFile(
-        join(process.env.NR_ARTIFACT_DIR, 'evidence', 'browser-observations.json'),
+        join(process.env.UIMORI_ARTIFACT_DIR, 'evidence', 'browser-observations.json'),
         JSON.stringify(
           {
             a: await detail(request, a.id),
@@ -359,7 +359,7 @@ test('F05 failed auxiliary result retries independently while a later source is 
   const later = after.sources.find((s) => s.id !== source.id)!;
   expect(later.parentRevision).toBe(source.id);
   expect(after.jobs.find((j) => j.id === retriedJob.id)?.sourceRevision).toBe(source.id);
-  const db = new DatabaseSync(process.env.NR_DB!, { readOnly: true });
+  const db = new DatabaseSync(process.env.UIMORI_DB!, { readOnly: true });
   try {
     expect(db.prepare('SELECT status FROM jobs WHERE id=?').get(failedJob.id)?.status).toBe(
       'failed'

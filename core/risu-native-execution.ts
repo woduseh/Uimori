@@ -1,6 +1,6 @@
-import type { ContentPackage, PackageAttachment } from './content-package.js';
-import type { PromptHistoryMessage } from './prompt-program.js';
-import type { ProviderPrompt } from './prompt-program.js';
+import type { RisuContent, ContentAttachment } from './risu-content.js';
+import type { PromptHistoryMessage } from './risu-prompt.js';
+import type { ProviderPrompt } from './risu-prompt.js';
 
 export type NativeRisuMessage = { id?: string; role: 'user' | 'char'; data: string };
 
@@ -35,14 +35,14 @@ export type NativeRisuAuthored = {
   greeting?: boolean;
 };
 
-export const nativeRisuFieldKey = (attachment: PackageAttachment) =>
+export const nativeRisuFieldKey = (attachment: ContentAttachment) =>
   `${attachment.id}@${attachment.revision}:${attachment.role}`;
 
 export function projectNativeRisuFields(
-  pkg: ContentPackage,
-  attachment: PackageAttachment,
+  pkg: RisuContent,
+  attachment: ContentAttachment,
   execution?: NativeRisuExecution
-): ContentPackage {
+): RisuContent {
   const fields = execution?.fields[nativeRisuFieldKey(attachment)];
   if (!pkg.nativeRisu || !fields) return pkg;
   return {

@@ -322,8 +322,10 @@ describe('M1 source-bound auxiliary roles', () => {
     const input = presentationInput(raw, context(), snapshot());
     expect(input.assets).toEqual([]);
     expect(input.scenes).toEqual([]);
-    const result = await executeAuxiliary(input, snapshot(), scriptedAuxiliary);
-    expect(validatePresentation(raw, result.output).entries).toEqual([]);
+    expect(
+      validatePresentation(raw, { sourceRevision: raw.id, sourceHash: raw.hash, entries: [] })
+        .entries
+    ).toEqual([]);
     const asset = BUILTIN_ASSETS[1];
     const entries = [
       {
@@ -358,7 +360,7 @@ describe('M1 source-bound auxiliary roles', () => {
     const scenes = sourceScenes(blocks);
     const input = presentationInput(raw, ctx, snapshot(), BUILTIN_ASSETS, scenes);
     expect(input.role).toBe('presentation');
-    expect(input.tools).toEqual(['assets.search', 'assets.inspect']);
+    expect(input.tools).toEqual([]);
     expect(input.assets).toHaveLength(3);
     expect(input.blocks).toHaveLength(2);
     expect(scenes.map((scene) => scene.location)).toEqual(['pier', 'observatory']);
@@ -371,22 +373,26 @@ describe('M1 source-bound auxiliary roles', () => {
     }
     expect(builtinAssetSvg('../private.svg')).toBeNull();
     expect(builtinAssetSvg('__proto__')).toBeNull();
-    const result = await executeAuxiliary(input, snapshot(), async (packet) => {
-      if (packet.results.length === 0)
-        return {
-          kind: 'tool',
-          action: { callId: 'search', name: 'assets.search', args: { query: 'observatory' } },
-        };
-      if (packet.results.length === 1)
-        return {
-          kind: 'tool',
-          action: { callId: 'inspect', name: 'assets.inspect', args: { ref: 'observatory-dome' } },
-        };
-      return scriptedAuxiliary(packet);
-    });
-    expect(result.modelCalls).toBe(3);
-    expect(result.toolEvents[1].result).toMatchObject({ bytesProvided: false });
-    const annotation = validatePresentation(raw, result.output, BUILTIN_ASSETS);
+    const annotation = validatePresentation(
+      raw,
+      {
+        sourceRevision: raw.id,
+        sourceHash: raw.hash,
+        entries: blocks.map((block, index) => {
+          const asset = BUILTIN_ASSETS.find(
+            (item) => item.ref === (index === 0 ? 'harbor-evening' : 'observatory-dome')
+          )!;
+          return {
+            blockAnchor: block.anchor,
+            assetRef: asset.ref,
+            assetRevision: asset.revision,
+            assetHash: asset.hash,
+            presentationIntent: 'inline',
+          };
+        }),
+      },
+      BUILTIN_ASSETS
+    );
     expect(annotation.entries).toContainEqual({
       blockAnchor: blocks[0].anchor,
       assetRef: 'harbor-evening',
@@ -502,107 +508,6 @@ describe('M1 source-bound auxiliary roles', () => {
   });
 });
 
-test('image catalog pages find names beyond the first page without exposing URLs', async () => {
-  const assets = Array.from({ length: 114 }, (_, i) => ({
-    ...BUILTIN_ASSETS[0],
-    ref: `asset-${i}`,
-    alt: `이름 ${i}`,
-    caption: '선택적 설명',
-    actorId: null,
-    clothing: null,
-    location: null,
-  }));
-  const input = presentationInput(source('고요한 창가.'), context(), snapshot(), assets);
-  expect(input.assets).toHaveLength(20);
-  expect(input.assetPage).toEqual({ total: 114, nextOffset: 20 });
-  expect(JSON.stringify(input.assets)).not.toContain('/api/');
-  const result = await executeAuxiliary(
-    input,
-    snapshot(),
-    async (packet) => {
-      if (!packet.results.length)
-        return {
-          kind: 'tool',
-          action: { callId: 'page', name: 'assets.search', args: { offset: 100, limit: 20 } },
-        };
-      if (packet.results.length === 1)
-        return {
-          kind: 'tool',
-          action: { callId: 'inspect', name: 'assets.inspect', args: { ref: 'asset-113' } },
-        };
-      return { sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, entries: [] };
-    },
-    { assetCatalog: assets }
-  );
-  expect(result.toolEvents[0].result).toMatchObject({
-    total: 114,
-    nextOffset: null,
-    items: expect.arrayContaining([expect.objectContaining({ ref: 'asset-113' })]),
-  });
-  expect(result.toolEvents[1].result).toMatchObject({
-    asset: { ref: 'asset-113' },
-    bytesProvided: false,
-  });
-  expect(JSON.stringify(result.toolEvents)).not.toContain('/api/');
-  const corrected = await executeAuxiliary(
-    input,
-    snapshot(),
-    async (packet) =>
-      packet.results.length
-        ? { sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, entries: [] }
-        : {
-            kind: 'tool',
-            action: { callId: 'bad', name: 'assets.search', args: { limit: 51 } },
-          },
-    { assetCatalog: assets }
-  );
-  expect(corrected.toolEvents[0]).toMatchObject({
-    denied: true,
-    errorKind: 'recoverable',
-    result: { code: 'INVALID_ARGUMENTS' },
-  });
-  expect(corrected.modelCalls).toBe(2);
-});
-
-test('image lookups return correctable argument and unavailable errors without inventing an asset', async () => {
-  const raw = source('A source.'),
-    input = presentationInput(raw, context(), snapshot(), BUILTIN_ASSETS);
-  const actions = [
-    { name: 'assets.search', args: { unexpected: true } },
-    { name: 'assets.inspect', args: { ref: 42 } },
-    { name: 'assets.inspect', args: { ref: 'missing' } },
-    { name: 'assets.inspect', args: { ref: BUILTIN_ASSETS[0].ref } },
-  ];
-  const result = await executeAuxiliary(input, snapshot(), async (packet) => {
-    const action = actions[packet.results.length];
-    return action
-      ? { kind: 'tool', action: { callId: `asset-${packet.results.length}`, ...action } }
-      : { sourceRevision: raw.id, sourceHash: raw.hash, entries: [] };
-  });
-  expect(result.toolEvents.slice(0, 3)).toEqual([
-    expect.objectContaining({
-      denied: true,
-      errorKind: 'recoverable',
-      result: { code: 'INVALID_ARGUMENTS' },
-    }),
-    expect.objectContaining({
-      denied: true,
-      errorKind: 'recoverable',
-      result: { code: 'INVALID_ARGUMENTS' },
-    }),
-    expect.objectContaining({
-      denied: true,
-      errorKind: 'recoverable',
-      result: { code: 'ASSET_UNAVAILABLE' },
-    }),
-  ]);
-  expect(result.toolEvents[3]).toMatchObject({
-    denied: false,
-    result: { asset: { ref: BUILTIN_ASSETS[0].ref }, bytesProvided: false },
-  });
-  expect(validatePresentation(raw, result.output, BUILTIN_ASSETS).entries).toEqual([]);
-});
-
 test('annotation JSON may have one outer fence but malformed fields and oversized results are never truncated or partly accepted', () => {
   const raw = source('A source.'),
     input = displayInput(raw, context(), snapshot()),
@@ -677,4 +582,17 @@ test('image selection uses IDs for duplicate names and rejects a different conte
   expect(() => validatePresentation(raw, selected, [...assets, assets[0]])).toThrow(
     'ASSET_REFERENCE_INVALID'
   );
+});
+
+test('presentation input cannot invoke a generative selector or asset tool loop', async () => {
+  const input = presentationInput(source('A source.'), context(), snapshot(), BUILTIN_ASSETS);
+  expect(input.tools).toEqual([]);
+  let calls = 0;
+  await expect(
+    executeAuxiliary(input, snapshot(), async () => {
+      calls++;
+      return '';
+    })
+  ).rejects.toThrow('JEV_JUDGMENT_REQUIRED');
+  expect(calls).toBe(0);
 });

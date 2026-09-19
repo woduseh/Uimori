@@ -277,22 +277,22 @@ try {
   providerFixture = await startMainProviderFixture();
   proxy = await startProxy();
   const env = {
-    NR_DB: path.join(runtime, 'self-host.sqlite'),
-    NR_PORT: '0',
-    NR_HOST: '127.0.0.1',
-    NR_INSTANCE: runId,
-    NR_BUILD_ID: identity.buildId,
-    NR_TEST_MODE: '',
-    NR_PUBLIC_ORIGIN: proxy.origin,
-    NR_ACCESS_TOKEN: randomBytes(32).toString('hex'),
-    NR_PROVIDER_ORIGINS: providerFixture.origin,
-    NR_PROVIDER_FIXTURE_URL: providerFixture.url,
-    NR_ARTIFACT_DIR: directory,
-    NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
-    NR_SECRET_CANARY: canary,
-    NR_BROWSER_PATH: browser,
-    NR_SELF_HOST_BROWSER: '1',
-    NR_BASE_URL: proxy.origin,
+    UIMORI_DB: path.join(runtime, 'self-host.sqlite'),
+    UIMORI_PORT: '0',
+    UIMORI_HOST: '127.0.0.1',
+    UIMORI_INSTANCE: runId,
+    UIMORI_BUILD_ID: identity.buildId,
+    UIMORI_TEST_MODE: '',
+    UIMORI_PUBLIC_ORIGIN: proxy.origin,
+    UIMORI_ACCESS_TOKEN: randomBytes(32).toString('hex'),
+    UIMORI_PROVIDER_ORIGINS: providerFixture.origin,
+    UIMORI_PROVIDER_FIXTURE_URL: providerFixture.url,
+    UIMORI_ARTIFACT_DIR: directory,
+    UIMORI_BROWSER_OUTPUT: path.join(directory, 'browser'),
+    UIMORI_SECRET_CANARY: canary,
+    UIMORI_BROWSER_PATH: browser,
+    UIMORI_SELF_HOST_BROWSER: '1',
+    UIMORI_BASE_URL: proxy.origin,
     TEMP: temp,
     TMP: temp,
   };
@@ -300,12 +300,12 @@ try {
   proxy.setTarget(server.ready.url);
   summary.server = server.ready;
   summary.publicOrigin = proxy.origin;
-  ownership.children.push({ pid: server.child.pid, dbPath: env.NR_DB, url: server.ready.url });
+  ownership.children.push({ pid: server.child.pid, dbPath: env.UIMORI_DB, url: server.ready.url });
   await json(path.join(directory, 'ownership.json'), ownership);
   const login = await secureRequest(proxy.origin, '/api/session', {
     method: 'POST',
     headers: { Origin: proxy.origin },
-    body: { token: env.NR_ACCESS_TOKEN },
+    body: { token: env.UIMORI_ACCESS_TOKEN },
   });
   const cookie = login.headers['set-cookie']?.[0]?.split(';')[0];
   if (login.status !== 200 || !cookie) throw new Error('HTTPS preflight session creation failed');
@@ -313,9 +313,9 @@ try {
   if (health.status !== 200) throw new Error(`HTTPS health HTTP ${health.status}`);
   const actual = JSON.parse(health.body);
   for (const [key, expected] of Object.entries({
-    buildId: env.NR_BUILD_ID,
-    instanceId: env.NR_INSTANCE,
-    dbPath: env.NR_DB,
+    buildId: env.UIMORI_BUILD_ID,
+    instanceId: env.UIMORI_INSTANCE,
+    dbPath: env.UIMORI_DB,
   }))
     if (actual[key] !== expected) throw new Error(`HTTPS health identity mismatch: ${key}`);
   const logout = await secureRequest(proxy.origin, '/api/session', {

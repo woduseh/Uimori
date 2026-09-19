@@ -1,14 +1,10 @@
 import { createHash } from 'node:crypto';
-import { nativeRisuPresetFields, nativeRisuPresetProjection } from '../core/risu-native-preset.js';
-import {
-  resolvePromptValues,
-  validatePromptProgram,
-  type PromptProgram,
-} from '../core/prompt-program.js';
+import { nativeRisuPresetFields, evaluatedNativeRisuPreset } from '../core/risu-native-preset.js';
+import { resolvePromptValues, validateRisuPrompt, type RisuPrompt } from '../core/risu-prompt.js';
 import type { RunSnapshot } from '../core/types.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 import { resolveTemplateVariableContext } from '../core/template-variables.js';
-import type { NativeRisuContent } from '../core/risu-native.js';
+import type { RisuContentSource } from '../core/risu-native.js';
 import { nativeRisuContext } from './risu-native-context.js';
 import { evaluateNativeRisuFields } from './risu-native-cbs.js';
 const string = (value: unknown) => (typeof value === 'string' ? value : '');
@@ -37,7 +33,7 @@ export async function prepareNativeRisuPreset(snapshot: RunSnapshot): Promise<Ru
   }
   const identity = packageIdentityFromProfile(snapshot.profile!);
   const base = nativeRisuContext(snapshot);
-  const native: NativeRisuContent = base?.native ?? {
+  const native: RisuContentSource = base?.native ?? {
     version: 1,
     sourceHash: hash(source),
     assets: [],
@@ -59,7 +55,7 @@ export async function prepareNativeRisuPreset(snapshot: RunSnapshot): Promise<Ru
     fields: nativeRisuPresetFields(source),
     context: {
       variables: {
-        ...resolveTemplateVariableContext(snapshot.profile, 'main').variables,
+        ...resolveTemplateVariableContext(snapshot.profile).variables,
         ...base?.variables,
       },
       globalVariables,
@@ -91,8 +87,8 @@ export async function prepareNativeRisuPreset(snapshot: RunSnapshot): Promise<Ru
 /** Replay only projects frozen output; neither CBS nor provider work is repeated. */
 export function projectNativeRisuPresetProgram(
   snapshot: RunSnapshot,
-  program: PromptProgram
-): PromptProgram {
+  program: RisuPrompt
+): RisuPrompt {
   const source = program.nativeRisuPreset,
     receipt = snapshot.nativeRisuPresetProgram;
   if (!source || !receipt) return program;
@@ -108,6 +104,32 @@ export function projectNativeRisuPresetProgram(
   const expected = Object.keys(nativeRisuPresetFields(source)).sort();
   if (JSON.stringify(expected) !== JSON.stringify(Object.keys(receipt.fields).sort()))
     throw new Error('RISU_NATIVE_PRESET_RECEIPT_MISMATCH');
-  const { nativeRisuPreset: _source, ...other } = program;
-  return validatePromptProgram({ ...other, ...nativeRisuPresetProjection(source, receipt.fields) });
+  return validateRisuPrompt({
+    ...program,
+    nativeRisuPreset: evaluatedNativeRisuPreset(source, receipt.fields),
+  });
+}
+
+/** Translation evaluates its own source and controls without changing card state or the stored preset. */
+export async function prepareNativeRisuTranslationPrompt(
+  snapshot: RunSnapshot
+): Promise<RunSnapshot> {
+  const preset = snapshot.profile?.promptPresets?.translation;
+  if (!preset) return snapshot;
+  const prepared = await prepareNativeRisuPreset({
+    ...snapshot,
+    nativeRisuPresetProgram: undefined,
+    profile: {
+      ...snapshot.profile!,
+      promptPresets: { ...snapshot.profile!.promptPresets, main: preset },
+    },
+  });
+  const program = projectNativeRisuPresetProgram(prepared, preset.program);
+  return {
+    ...snapshot,
+    profile: {
+      ...snapshot.profile!,
+      promptPresets: { ...snapshot.profile!.promptPresets, translation: { ...preset, program } },
+    },
+  };
 }

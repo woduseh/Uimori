@@ -5,7 +5,7 @@ import type { ContextDetail as Detail, ContextJob } from '../core/context-plan.j
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { StoryDetail } from '../core/story.js';
 import type { ModelWorkspace, PromptWorkspace } from '../core/product.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
@@ -26,7 +26,7 @@ async function create(page: Page, title: string) {
       expectedRevision: prompts.revision,
       main: {
         title: 'Synthetic context instructions',
-        program: createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
+        program: createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT),
         values: {},
       },
     },
@@ -69,7 +69,7 @@ async function create(page: Page, title: string) {
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '상태와 문맥');
+  await selectChatSettingsSection(page, '기억과 메모');
   const panel = page.getByTestId('context-panel');
   await expect(panel.getByRole('button', { name: '요약 작성', exact: true })).toBeEnabled();
   return { chat, panel };
@@ -136,7 +136,7 @@ test('CTXUI01 summary authoring without a Run, edit and restore are durable at b
   }
   await page.reload();
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '상태와 문맥');
+  await selectChatSettingsSection(page, '기억과 메모');
   await expect(panel.getByTestId('context-summary-text')).toHaveText(
     '첫 요약: 항구의 종이 울렸다.'
   );
@@ -181,7 +181,7 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
   // A mobile section-back changes visibility only, preserving text and its conflict state.
   await page.getByRole('button', { name: '채팅 설정 목록으로', exact: true }).click();
   await selectChatSettingsSection(page, '이 채팅의 모델');
-  await selectChatSettingsSection(page, '상태와 문맥');
+  await selectChatSettingsSection(page, '기억과 메모');
   await expect(notes.getByLabel('메모·정정 내용')).toHaveValue('내 메모 초안');
   await notes
     .getByRole('button', { name: '최신 내용을 확인했어요 · 내 초안 유지', exact: true })

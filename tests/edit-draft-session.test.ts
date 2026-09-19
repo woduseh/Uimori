@@ -9,6 +9,7 @@ import { EditorDraftSession } from '../web/editor-workspace-context.js';
 import type { ContentDraftModel, WorkspaceDraftModel } from '../core/edit-drafts.js';
 import type { Content } from '../core/product.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { nativeDraftTitle } from './fixtures/native-content.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { HttpError } from '../server/request-validation.js';
 
@@ -114,19 +115,19 @@ const session = () =>
     initialModel: fixtureBotInput('Original', 'Body'),
   });
 const title = (editor: EditorDraftSession, value: string) =>
-  editor.setModel({ ...editor.snapshot().local.model, title: value });
+  editor.setModel(nativeDraftTitle(editor.snapshot().local.model, value));
 
 test('a second editor restores exact incomplete text from the common server draft', async () => {
   const first = session();
   await first.open();
-  first.setField('package.behavior', '{"actions":[');
-  first.pendingField('package.behavior', true);
+  first.setField('package.nativeRisu.card', '{"actions":[');
+  first.pendingField('package.nativeRisu.card', true);
   await first.flush();
   const second = session();
   await second.open();
   expect(second.snapshot().draft?.id).toBe(first.snapshot().draft?.id);
-  expect(second.snapshot().local.rawFields).toEqual({ 'package.behavior': '{"actions":[' });
-  expect(second.snapshot().local.unappliedFields).toEqual(['package.behavior']);
+  expect(second.snapshot().local.rawFields).toEqual({ 'package.nativeRisu.card': '{"actions":[' });
+  expect(second.snapshot().local.unappliedFields).toEqual(['package.nativeRisu.card']);
   expect(store.product.all('content')).toHaveLength(0);
 });
 
@@ -162,7 +163,7 @@ test('a helper race preserves local typing and an intervening second edit still 
     {
       expectedRevision: original.revision,
       operationId: randomUUID(),
-      model: { ...original.model, title: 'Helper proposal' },
+      model: nativeDraftTitle(original.model, 'Helper proposal'),
       rawFields: {},
       unappliedFields: [],
     },
@@ -175,7 +176,7 @@ test('a helper race preserves local typing and an intervening second edit still 
     {
       expectedRevision: remote.revision,
       operationId: randomUUID(),
-      model: { ...remote.model, title: 'Another user' },
+      model: nativeDraftTitle(remote.model, 'Another user'),
       rawFields: {},
       unappliedFields: [],
     },
@@ -282,20 +283,26 @@ test('a saved-target update preserves cached typing and synced incomplete raw fi
   const content = store.product.content(fixtureBotInput('Saved', 'Original body')) as Content;
   const editor = contentEditor(content);
   await editor.open();
-  editor.setField('package.behavior', '{"actions":[');
+  editor.setField('package.nativeRisu.card', '{"actions":[');
   const newer = updateContent(content);
   const restored = contentEditor(newer);
   await restored.open();
-  expect(restored.snapshot().local.rawFields).toEqual({ 'package.behavior': '{"actions":[' });
+  expect(restored.snapshot().local.rawFields).toEqual({
+    'package.nativeRisu.card': '{"actions":[',
+  });
   expect(restored.snapshot().draft?.baseRevision).toBe(content.revision);
   await restored.flush();
   expect(restored.snapshot().dirty).toBe(false);
   await restored.refresh();
-  expect(restored.snapshot().local.rawFields).toEqual({ 'package.behavior': '{"actions":[' });
+  expect(restored.snapshot().local.rawFields).toEqual({
+    'package.nativeRisu.card': '{"actions":[',
+  });
   expect(restored.snapshot().draft?.baseRevision).toBe(content.revision);
   const nextDevice = contentEditor(newer);
   await nextDevice.open();
-  expect(nextDevice.snapshot().local.rawFields).toEqual({ 'package.behavior': '{"actions":[' });
+  expect(nextDevice.snapshot().local.rawFields).toEqual({
+    'package.nativeRisu.card': '{"actions":[',
+  });
   expect(nextDevice.snapshot().draft?.baseRevision).toBe(content.revision);
   expect(store.product.get<Content>('content', content.id)).toEqual(newer);
 });
@@ -309,7 +316,7 @@ test('a late draft refresh does not replace typing entered while its response wa
     {
       expectedRevision: initial.revision,
       operationId: randomUUID(),
-      model: { ...initial.model, title: 'Remote synced draft' },
+      model: nativeDraftTitle(initial.model, 'Remote synced draft'),
       rawFields: {},
       unappliedFields: [],
     },
@@ -384,11 +391,11 @@ test('typing during automatic saved-target rebase requires comparison with the n
   };
   const refreshing = editor.refresh();
   await entered.promise;
-  editor.setField('package.behavior', '{"local":');
+  editor.setField('package.nativeRisu.card', '{"local":');
   title(editor, 'Typed against original source');
   release.resolve();
   await refreshing;
-  expect(editor.snapshot().local.rawFields).toEqual({ 'package.behavior': '{"local":' });
+  expect(editor.snapshot().local.rawFields).toEqual({ 'package.nativeRisu.card': '{"local":' });
   expect((editor.snapshot().local.model as ContentDraftModel).title).toBe(
     'Typed against original source'
   );

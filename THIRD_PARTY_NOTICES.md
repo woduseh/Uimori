@@ -6,7 +6,7 @@ Uimori 프로젝트 소스의 라이선스는 **GNU Affero General Public Licens
 
 - 출처: [RisuAI](https://github.com/kwaroran/RisuAI), 기준 revision `cad8595aa39620df4246f56918f0962c2aa0263a`. 원저작권은 Kwaroran과 RisuAI 기여자에게 있어요.
 - 적용 조건: RisuAI 본체는 **GPL-3.0-only**예요. 가져온 파일은 GPL-3.0으로 남고 Uimori의 AGPL-3.0-only 소스와는 AGPL-3.0 13조에 따라 결합해요. 전문은 [third_party/risuai/cad8595a/LICENSE](third_party/risuai/cad8595a/LICENSE)에 있고, 다른 조건이 붙은 파일(아래 RPack)은 자기 고지를 따로 둬요.
-- 포함 부분과 변경: 파일별 원본 경로·원본 SHA-256·변경 요약은 [SNAPSHOT.json](third_party/risuai/cad8595a/SNAPSHOT.json)이, 경계와 갱신 절차는 [스냅샷 README](third_party/risuai/cad8595a/README.md)가 소유해요. Uimori 코드는 `server/compat/risu/`를 통해서만 이 디렉터리를 import하고 자동 갱신은 하지 않아요.
+- 포함 부분과 변경: 파일별 원본 경로·원본 SHA-256·변경 요약은 [SNAPSHOT.json](third_party/risuai/cad8595a/SNAPSHOT.json)이, 경계와 갱신 절차는 [스냅샷 README](third_party/risuai/cad8595a/README.md)가 소유해요. 파일 해독·로어 어댑터는 `server/compat/risu/`, 원본 CBS 실행 연결은 `server/risu-native-cbs.ts`에서 사용하며 자동 갱신은 하지 않아요.
 
 ## RPack
 

@@ -1,3 +1,4 @@
+import { nativeContent } from './fixtures/native-content.js';
 import { describe, expect, test } from 'vitest';
 import { createHash } from 'node:crypto';
 import { compileTranslationPrompt, executeAuxiliary, translationInput } from '../core/auxiliary.js';
@@ -34,37 +35,33 @@ function bundle(count = 5): AuxiliaryBundle {
       profile: {
         ...defaultProfile(source.chatId),
         revision: 3,
-        contents: [
-          {
-            id: 'mira',
-            revision: 2,
-            kind: 'bot',
-            title: 'Mira',
-            description: 'Known relationship',
-            text: 'Mira speaks informally with the traveler, an old friend.',
-            loading: 'pinned',
-            relatedIds: [],
-          },
-          {
-            id: 'traveler',
-            revision: 4,
-            kind: 'persona',
-            title: 'Traveler',
-            description: 'Known relationship',
-            text: 'The traveler is an old friend of Mira and chooses their own replies.',
-            loading: 'pinned',
-            relatedIds: [],
-          },
-          {
-            id: 'names',
-            revision: 5,
-            kind: 'module',
-            title: 'Author names',
-            description: 'Preferred form',
-            text: 'Captain Arlen = 앨런 선장',
-            loading: 'pinned',
-            relatedIds: [],
-          },
+        packageAttachments: [
+          { id: 'mira', revision: 2, role: 'bot' },
+          { id: 'traveler', revision: 4, role: 'persona' },
+          { id: 'names', revision: 5, role: 'module' },
+        ],
+        packages: [
+          nativeContent(
+            {
+              name: 'Mira',
+              description: 'Mira speaks informally with the traveler, an old friend.',
+            },
+            { id: 'mira', revision: 2 },
+            'bot'
+          ),
+          nativeContent(
+            {
+              name: 'Traveler',
+              description: 'The traveler is an old friend of Mira and chooses their own replies.',
+            },
+            { id: 'traveler', revision: 4 },
+            'persona'
+          ),
+          nativeContent(
+            { name: 'Author names', description: 'Captain Arlen = 앨런 선장' },
+            { id: 'names', revision: 5 },
+            'module'
+          ),
         ],
         models: {},
       },
@@ -80,12 +77,12 @@ describe('whole-source translation continuity', () => {
       sourceTimeContext(seed.snapshot, 'translation'),
       seed.snapshot
     );
-    seed.snapshot.profile!.contents[0].text = 'LATER_RELATIONSHIP';
+    seed.snapshot.profile!.packages![0].body = 'LATER_RELATIONSHIP';
     seed.snapshot.history[0].text = 'LATER_SOURCE';
     expect(input.sourceText).toBe(seed.source.text);
-    expect(input.context.bot!.text).toContain('old friend');
-    expect(input.context.persona!.text).toContain('old friend');
-    expect(input.context.references[0].text).toContain('앨런 선장');
+    const references = input.context.packages!.pinned.map((entry) => entry.text);
+    expect(references.filter((text) => text.includes('old friend'))).toHaveLength(2);
+    expect(references.some((text) => text.includes('앨런 선장'))).toBe(true);
     expect(input.context.previousSources[0].text).toBe('An earlier source.');
     expect(JSON.stringify(input)).not.toMatch(
       /LATER_RELATIONSHIP|LATER_SOURCE|previousTranslation|chunkId/
@@ -100,10 +97,9 @@ describe('whole-source translation continuity', () => {
     );
     const compiled = compileTranslationPrompt(input, seed.snapshot, 'Translate the full source.')!;
     expect(
-      compiled.messages
-        .flatMap((message) => message.content)
-        .filter((part) => part.text.includes(seed.source.text))
+      compiled.messages.filter((message) => message.provenance.origin === 'current')
     ).toHaveLength(1);
+    expect(input.sourceText).toBe(seed.source.text);
     expect(input.tools).toEqual(
       expect.arrayContaining([
         'story.search',

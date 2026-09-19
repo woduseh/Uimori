@@ -49,7 +49,7 @@ export async function runBrowserVerification({
     requiredTitles = [];
     requiredScreenshots = [];
   }
-  const visualReview = options.visual || process.env.NR_VISUAL_REVIEW === '1';
+  const visualReview = options.visual || process.env.UIMORI_VISUAL_REVIEW === '1';
   const runId = `${prefix}-${newId()}`,
     directory = path.join(artifactRoot, runId),
     runtime = path.join(directory, 'runtime');
@@ -123,24 +123,28 @@ export async function runBrowserVerification({
     assertNotCancelled();
     if (providerFixture) fixture = await startProviderFixture();
     const env = localVerificationEnv({
-      NR_DB: path.join(runtime, 'app.sqlite'),
-      NR_INSTANCE: runId,
-      NR_BUILD_ID: identity.buildId,
-      NR_PROVIDER_ORIGINS: fixture ? new URL(fixture.url).origin : '',
-      ...(fixture ? { NR_PROVIDER_FIXTURE_URL: fixture.url } : {}),
-      NR_ARTIFACT_DIR: directory,
-      NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
-      NR_SECRET_CANARY: canary,
-      NR_BROWSER_PATH: browser,
-      NR_VISUAL_REVIEW: visualReview ? '1' : '0',
+      UIMORI_DB: path.join(runtime, 'app.sqlite'),
+      UIMORI_INSTANCE: runId,
+      UIMORI_BUILD_ID: identity.buildId,
+      UIMORI_PROVIDER_ORIGINS: fixture ? new URL(fixture.url).origin : '',
+      ...(fixture ? { UIMORI_PROVIDER_FIXTURE_URL: fixture.url } : {}),
+      UIMORI_ARTIFACT_DIR: directory,
+      UIMORI_BROWSER_OUTPUT: path.join(directory, 'browser'),
+      UIMORI_SECRET_CANARY: canary,
+      UIMORI_BROWSER_PATH: browser,
+      UIMORI_VISUAL_REVIEW: visualReview ? '1' : '0',
       TEMP: temp,
       TMP: temp,
     });
     assertNotCancelled();
     const server = await startServer(env, directory, children);
-    env.NR_BASE_URL = server.ready.url;
+    env.UIMORI_BASE_URL = server.ready.url;
     summary.server = server.ready;
-    ownership.children.push({ pid: server.child.pid, dbPath: env.NR_DB, url: server.ready.url });
+    ownership.children.push({
+      pid: server.child.pid,
+      dbPath: env.UIMORI_DB,
+      url: server.ready.url,
+    });
     await json(path.join(directory, 'ownership.json'), ownership);
     assertNotCancelled();
     const reporter = path.join(directory, 'playwright.json'),
@@ -178,7 +182,7 @@ export async function runBrowserVerification({
       if (!summary.report.tests.some((test) => test.title.trimEnd().endsWith(` ${title}`)))
         throw new Error(`Missing required browser assertion: ${title}`);
     if (visualReview && requiredScreenshots.length) {
-      const screenshots = (await filesBelow(env.NR_BROWSER_OUTPUT)).filter((file) =>
+      const screenshots = (await filesBelow(env.UIMORI_BROWSER_OUTPUT)).filter((file) =>
         file.endsWith('.png')
       );
       summary.screenshots = screenshots.map((file) => path.relative(directory, file));

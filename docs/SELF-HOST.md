@@ -22,15 +22,15 @@ chmod 600 .env.self-host
 openssl rand -hex 32
 ```
 
-마지막 명령의 결과를 `.env.self-host`의 `NR_ACCESS_TOKEN`에 넣고 아래 값을 실제 서버에 맞춰 편집해요. 빈 토큰으로는 시작하지 않아요. 이 파일은 Git과 Docker 빌드 문맥에서 제외돼요.
+마지막 명령의 결과를 `.env.self-host`의 `UIMORI_ACCESS_TOKEN`에 넣고 아래 값을 실제 서버에 맞춰 편집해요. 빈 토큰으로는 시작하지 않아요. 이 파일은 Git과 Docker 빌드 문맥에서 제외돼요.
 
 | 변수 | 값과 의미 |
 | --- | --- |
-| `NR_PUBLIC_ORIGIN` | `https://story.example.com`처럼 브라우저가 사용할 HTTPS origin 하나. 경로·후행 `/`·query·fragment는 넣지 않아요. |
-| `NR_ACCESS_TOKEN` | 공백 없는 무작위 접속 토큰 32–1000자. 위 명령은 64자리 hex를 생성해요. |
+| `UIMORI_PUBLIC_ORIGIN` | `https://story.example.com`처럼 브라우저가 사용할 HTTPS origin 하나. 경로·후행 `/`·query·fragment는 넣지 않아요. |
+| `UIMORI_ACCESS_TOKEN` | 공백 없는 무작위 접속 토큰 32–1000자. 위 명령은 64자리 hex를 생성해요. |
 | `UIMORI_TLS_DIR` | 두 TLS 파일이 있는 서버의 절대 디렉터리. |
 | `UIMORI_HTTPS_PORT` | 기본 `443`. `8443`이면 public origin에도 `:8443`을 넣어요. |
-| `NR_PROVIDER_ORIGINS` | 공식 공급자 주소는 기본 허용해요. 사용자 지정 API의 추가 허용 origin을 쉼표로 나열해요. public origin과 별도이며 공식 프로바이더만 쓰면 비워둬요. |
+| `UIMORI_PROVIDER_ORIGINS` | 공식 공급자 주소는 기본 허용해요. 사용자 지정 API의 추가 허용 origin을 쉼표로 나열해요. public origin과 별도이며 공식 프로바이더만 쓰면 비워둬요. |
 
 4. 설정을 확인하고 시작해요. 아래 명령은 저장소 루트에서 실행해요. `config --quiet`는 비밀 값을 출력하지 않고 Compose 설정을 검사해요. 보간에 필요한 값이 없으면 시작 전에 오류를 반환해요. [Compose 환경 파일](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/), [필수 값 보간](https://docs.docker.com/reference/compose-file/interpolation/)
 
@@ -47,12 +47,12 @@ PC·휴대폰에서 설정한 HTTPS 주소로 접속하고 토큰을 입력해�
 
 ## 모델 API 키
 
-JEV는 앱의 **프로바이더·모델 → JEV 판단** 화면에서 키를 저장하고 바로 테스트할 수 있어요. 저장 키는 DB 옆의 `.jev-credentials` 디렉터리에 보관하며 JSON/SQLite 내보내기에 포함되지 않아요. 기존 `TYPESAFE_API_KEY` 환경변수도 저장 키가 없을 때 계속 사용할 수 있어요. 자세한 연결·보관 방식은 [JEV 안내](PROVIDERS.md#typesafe--jev-연결과-테스트)를 확인하세요.
+JEV는 앱의 **프로바이더·모델 → 프로바이더 추가 → TypeSafe AI** 화면에서 키를 저장하고 바로 테스트할 수 있어요. 저장 키는 DB 옆의 `.jev-credentials` 디렉터리에 보관하며 JSON/SQLite 내보내기에 포함되지 않아요. 기존 `TYPESAFE_API_KEY` 환경변수도 저장 키가 없을 때 계속 사용할 수 있어요. 자세한 연결·보관 방식은 [JEV 안내](PROVIDERS.md#typesafe--jev-연결과-테스트)를 확인하세요.
 
 `.env.self-host`는 앱 컨테이너의 서버 환경변수로도 전달돼요. 사용할 공급자의 키를 추가한 뒤 컨테이너를 갱신하세요. 키에 `$`나 `#`가 있으면 값을 작은따옴표로 감싸서 Compose 보간·주석 처리를 피하세요.
 
 ```dotenv
-NR_PROVIDER_ORIGINS=https://api.openai.com
+UIMORI_PROVIDER_ORIGINS=https://api.openai.com
 OPENAI_API_KEY='실제-서버-키'
 ```
 
@@ -74,7 +74,7 @@ docker compose --env-file .env.self-host -f compose.yaml -f deploy/compose.verte
 
 ## 저장과 운영
 
-DB는 Compose의 `data` named volume 안의 `/data/narrative.sqlite`에 저장돼요. 큰 자료를 가져오는 동안에는 같은 볼륨의 `/data/uploads`에 임시 파일을 두고 등록이 끝나면 지워요. 실제 볼륨 이름은 `.env.self-host`의 `UIMORI_DATA_VOLUME`이며 기본값은 기존 `uimori_data`예요. 초기 volume은 이미지에서 준비한 UID 1000 소유 디렉터리를 사용해요. 프로그램 이미지를 다시 빌드하거나 컨테이너를 교체해도 volume은 유지돼요. 같은 DB를 여러 앱 프로세스에 연결하거나 `app`을 복제하지 마세요. [Docker volume의 수명과 초기 복사](https://docs.docker.com/engine/storage/volumes/)
+DB는 Compose의 `data` named volume 안의 `/data/uimori.sqlite`에 저장돼요. 큰 자료를 가져오는 동안에는 같은 볼륨의 `/data/uploads`에 임시 파일을 두고 등록이 끝나면 지워요. 실제 볼륨 이름은 `.env.self-host`의 `UIMORI_DATA_VOLUME`이며 기본값은 기존 `uimori_data`예요. 초기 volume은 이미지에서 준비한 UID 1000 소유 디렉터리를 사용해요. 프로그램 이미지를 다시 빌드하거나 컨테이너를 교체해도 volume은 유지돼요. 같은 DB를 여러 앱 프로세스에 연결하거나 `app`을 복제하지 마세요. [Docker volume의 수명과 초기 복사](https://docs.docker.com/engine/storage/volumes/)
 
 ```sh
 # 중지: DB volume 유지
@@ -90,13 +90,13 @@ docker compose --env-file .env.self-host exec proxy nginx -t
 docker compose --env-file .env.self-host restart proxy
 ```
 
-데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 데이터 전환과 복구에서는 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 지원하는 이전 DB를 현재 schema로 올리는 migration을 제공하며, 현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. 올린 DB를 구버전 앱으로 직접 낮춰 열지 않으며, 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 운영자용 update controller는 아래 [한 번의 업데이트](#한-번의-업데이트)에 있어요. 앱 안의 Update 버튼과 일반 사용자를 위한 자동 복구 흐름은 아직 베타 준비 중이에요.
+데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 데이터 전환과 복구에서는 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 빈 DB와 현재 schema 21 DB만 열어요. 구형 DB를 올리는 migration이나 구형 archive 복원은 제공하지 않아요. 기존 volume은 보관하고, 이 구조로 새로 시작할 때는 별도의 빈 volume을 지정해요. 현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 운영자용 update controller는 아래 [한 번의 업데이트](#한-번의-업데이트)에 있어요. 앱 안의 Update 버튼과 일반 사용자를 위한 자동 복구 흐름은 아직 베타 준비 중이에요.
 
 프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
 
 ### 한 번의 업데이트
 
-새 이미지로 옮길 때는 `npm run update -- start --config <설정> --image <참조> --key <요청 키>`를 사용해요. 유지보수 게이트를 닫고, 진행 중인 작업이 끝나기를 기다리고, 앱을 정지해 data volume을 백업한 뒤, 그 백업으로 만든 **새 volume**에서 후보 이미지의 migration·읽기만 확인하고, 확인이 끝나야 이미지와 volume을 함께 바꾸고 쓰기를 다시 열어요. 이미지·volume 전환 단계가 끝나기 전의 실패·취소는 이전 구성을 복구하려고 시도해요. 전환이 끝난 뒤에는 쓰기 재개가 실패해도 자동으로 되돌리지 않아요. 절차와 설정 예시는 [업데이트](UPDATES.md#operator-cli)를 봐요. 실제 Docker 호스트에서의 검증은 아직 남아 있어요.
+새 이미지로 옮길 때는 `npm run update -- start --config <설정> --image <참조> --key <요청 키>`를 사용해요. 유지보수 게이트를 닫고, 진행 중인 작업이 끝나기를 기다리고, 앱을 정지해 data volume을 백업한 뒤, 그 백업으로 만든 **새 volume**에서 후보 이미지의 현재 DB 기준선·읽기만 확인하고, 확인이 끝나야 이미지와 volume을 함께 바꾸고 쓰기를 다시 열어요. 이미지·volume 전환 단계가 끝나기 전의 실패·취소는 이전 구성을 복구하려고 시도해요. 전환이 끝난 뒤에는 쓰기 재개가 실패해도 자동으로 되돌리지 않아요. 절차와 설정 예시는 [업데이트](UPDATES.md#operator-cli)를 봐요. 기존 DB가 구형이면 후보 검증에서 거절되며 이 CLI가 데이터를 변환하지 않아요. 실제 Docker 호스트에서의 검증은 아직 남아 있어요.
 
 ### 유지보수 모드
 
@@ -110,21 +110,21 @@ curl -sS -X POST https://story.example.com/api/maintenance \
 
 닫힌 상태에서는 읽기와 진행 중인 작업의 **취소·건너뛰기**만 받고, 새 요청은 `503 MAINTENANCE_CLOSED`로 거절해 브라우저 화면에 유지보수 안내를 표시해요. 이미 승인된 실행은 계속 끝나고 결과를 저장하며, 그 결과가 만든 후속 작업은 큐에 남고 새 외부 호출로 시작하지 않아요. 닫힌 상태는 DB에 남으므로 재시작해도 유지돼요. `activeWork`로 아직 정리 중인 작업 수를 확인한 뒤 앱을 정지해요.
 
-`NR_MAINTENANCE=1`로 시작하면 **후보 검증 부팅**이에요. migration과 읽기만 수행하고 작업 복구·worker를 시작하지 않으며, 이 모드는 API로 열 수 없어요(`409 MAINTENANCE_BOOT`). 복사한 data로 새 이미지의 migration·읽기 경로를 확인할 때 사용해요.
+`UIMORI_MAINTENANCE=1`로 시작하면 **후보 검증 부팅**이에요. 현재 DB 기준선 검사와 읽기만 수행하고 작업 복구·worker를 시작하지 않으며, 이 모드는 API로 열 수 없어요(`409 MAINTENANCE_BOOT`). 복사한 data로 새 이미지의 현재 DB 읽기 경로를 확인할 때 사용해요.
 
-앱의 **내보내기와 복원 → SQLite 백업 다운로드**로 일관된 백업을 받아 별도로 보관할 수 있어요. 현재 지원 migration과 모든 과거 개발 버전의 이관은 구분하며, 백업·컨테이너 전환은 [업데이트 CLI](UPDATES.md)를 봐요. 실행 중 DB 파일 하나만 복사하면 WAL의 변경분을 놓칠 수 있어요.
+앱의 **내보내기와 복원 → SQLite 백업 다운로드**로 일관된 백업을 받아 별도로 보관할 수 있어요. 현재 형식만 복원할 수 있어요. 구형 데이터를 자동 변환하거나 삭제하지 않아요. 백업·컨테이너 전환은 [업데이트 CLI](UPDATES.md)를 봐요. 실행 중 DB 파일 하나만 복사하면 WAL의 변경분을 놓칠 수 있어요.
 
 ## 프록시와 접속 조건
 
-기본 [Compose](../compose.yaml)는 프록시의 HTTPS 포트만 호스트에 공개해요. 앱의 `4310`은 Docker 네트워크 안에 두고, `NR_HOST=0.0.0.0`은 컨테이너 내부 수신에만 사용해요. 앱 포트를 호스트에 추가 공개하지 마세요. 원격 모드의 HTTPS는 이 TLS 종료·네트워크 구성으로 보장하며 앱은 전달된 `X-Forwarded-*`를 HTTPS나 인증의 증거로 신뢰하지 않아요.
+기본 [Compose](../compose.yaml)는 프록시의 HTTPS 포트만 호스트에 공개해요. 앱의 `4310`은 Docker 네트워크 안에 두고, `UIMORI_HOST=0.0.0.0`은 컨테이너 내부 수신에만 사용해요. 앱 포트를 호스트에 추가 공개하지 마세요. 원격 모드의 HTTPS는 이 TLS 종료·네트워크 구성으로 보장하며 앱은 전달된 `X-Forwarded-*`를 HTTPS나 인증의 증거로 신뢰하지 않아요.
 
-개인 서버 모드는 `NR_TEST_MODE`와 함께 시작할 수 없어요. 저장·로그인·로그아웃 같은 변경 요청은 정확한 `Origin` 헤더가 필요하며 브라우저는 이를 자동으로 보내요. 별도 HTTP 클라이언트를 사용할 때에도 `Origin: https://설정한-주소`를 전달해야 해요. `NR_PROVIDER_ORIGINS`는 모델 호출 허용 목록이라 브라우저 주소 허용 설정으로 사용하지 않아요.
+개인 서버 모드는 `UIMORI_TEST_MODE`와 함께 시작할 수 없어요. 저장·로그인·로그아웃 같은 변경 요청은 정확한 `Origin` 헤더가 필요하며 브라우저는 이를 자동으로 보내요. 별도 HTTP 클라이언트를 사용할 때에도 `Origin: https://설정한-주소`를 전달해야 해요. `UIMORI_PROVIDER_ORIGINS`는 모델 호출 허용 목록이라 브라우저 주소 허용 설정으로 사용하지 않아요.
 
-[Nginx 설정](../deploy/nginx.conf)은 요청의 원래 `Host`와 `Origin`을 그대로 전달해 앱이 `NR_PUBLIC_ORIGIN`과 비교하게 해요. 임의 Host를 허용된 Host로 덮어쓰면 이 검사가 약해져요. SSE용 응답 버퍼링·캐시는 끄고 응답 읽기 간격 제한을 3600초로 설정했어요. Docker DNS를 다시 조회하므로 앱 컨테이너 교체 후 새 주소를 사용해요. [Nginx Host 전달·버퍼링·timeout](https://nginx.org/en/docs/http/ngx_http_proxy_module.html), [DNS resolver](https://nginx.org/en/docs/http/ngx_http_core_module.html#resolver)
+[Nginx 설정](../deploy/nginx.conf)은 요청의 원래 `Host`와 `Origin`을 그대로 전달해 앱이 `UIMORI_PUBLIC_ORIGIN`과 비교하게 해요. 임의 Host를 허용된 Host로 덮어쓰면 이 검사가 약해져요. SSE용 응답 버퍼링·캐시는 끄고 응답 읽기 간격 제한을 3600초로 설정했어요. Docker DNS를 다시 조회하므로 앱 컨테이너 교체 후 새 주소를 사용해요. [Nginx Host 전달·버퍼링·timeout](https://nginx.org/en/docs/http/ngx_http_proxy_module.html), [DNS resolver](https://nginx.org/en/docs/http/ngx_http_core_module.html#resolver)
 
 프록시 요청 본문 한도는 native transfer·archive import의 256 MiB 파일에 요청 wrapper 여유를 더한 257 MiB예요. 서버는 RISU 본문 검사 24 MiB, 원문·번역 직접 저장 8 MiB 등 더 작은 route별 한도를 계속 적용해요. 원본 CHARX staged 업로드와 채팅 백업도 각각 256 MiB까지 받아요. [Nginx 본문 크기 제한](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
 
-다른 리버스 프록시를 사용한다면 동일한 조건을 유지해요. 호스트에서 앱을 직접 실행할 때는 Node `>=24.14.0 <25`, 빌드 산출물, 영구 `NR_DB` 경로를 준비하고 `NR_HOST=127.0.0.1`로 프록시만 접근하게 할 수 있어요. `/uimori` 같은 하위 경로 배포는 지원하지 않아요.
+다른 리버스 프록시를 사용한다면 동일한 조건을 유지해요. 호스트에서 앱을 직접 실행할 때는 Node `>=24.14.0 <25`, 빌드 산출물, 영구 `UIMORI_DB` 경로를 준비하고 `UIMORI_HOST=127.0.0.1`로 프록시만 접근하게 할 수 있어요. `/uimori` 같은 하위 경로 배포는 지원하지 않아요.
 
 ## 첫 접속 확인
 

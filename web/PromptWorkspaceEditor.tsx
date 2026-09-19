@@ -1,10 +1,11 @@
+import { promptControls } from '../core/risu-prompt.js';
 import { ExpandIcon, ExternalLinkIcon, ResetIcon, SaveIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
 import type { WorkspaceDraftModel } from '../core/edit-drafts.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
-import { resolvePromptValues } from '../core/prompt-program.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
+import { resolvePromptValues } from '../core/risu-prompt.js';
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { PromptControlFields } from './PromptControlFields.js';
@@ -56,8 +57,8 @@ export function PromptWorkspaceEditor({
   const [comboError, setComboError] = useState('');
   const [selectedCombo, setSelectedCombo] = useState('');
   const [emptyModel] = useState<WorkspaceDraftModel>(() => ({
-    main: { title: '', program: createDefaultPromptProgram('', 'main'), values: {} },
-    translation: { title: '', program: createDefaultPromptProgram('', 'translation'), values: {} },
+    main: { title: '', program: createDefaultRisuPrompt('', 'main'), values: {} },
+    translation: { title: '', program: createDefaultRisuPrompt('', 'translation'), values: {} },
   }));
   const shared = useServerEditDraft({
     editorKey: 'prompt-workspace:current',
@@ -288,7 +289,7 @@ export function PromptWorkspaceEditor({
                     : selected?.title}
               </small>
             </summary>
-            {current.program.controls.length || combinations.length ? (
+            {promptControls(current.program).length || combinations.length ? (
               <div className="prompt-current-options">
                 <div className="prompt-combination-toolbar">
                   <label>

@@ -1,3 +1,4 @@
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -5,11 +6,8 @@ import { isAbsolute, join, relative } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import { defaultProfile } from '../core/product.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
-import * as segments from '../core/package-source-segments.js';
 import * as overrides from '../server/chat-overrides.js';
 import * as outline from '../server/outline-store.js';
-import * as states from '../server/package-behavior-host.js';
-import * as behavior from '../server/package-behavior-run.js';
 import * as lore from '../server/lore-context.js';
 import * as prompt from '../server/prompt-snapshot.js';
 import * as reservation from '../server/reservation-snapshot.js';
@@ -19,7 +17,6 @@ import { helperWritingSnapshot } from '../server/helper-runtime.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 
 const owned: { store: Store; directory: string }[] = [];
@@ -60,7 +57,6 @@ function phases() {
     resources: [resource('manual'), resource('package:old')],
     profile: {
       ...defaultProfile('chat'),
-      contents: [],
       models: {},
       packageAttachments: [{ id: 'package', revision: 1, role: 'bot' }],
     },
@@ -117,10 +113,6 @@ function phases() {
       return undefined;
     }
   );
-  vi.spyOn(segments, 'freezeSourceSegments').mockImplementation(() => {
-    calls.push('segments');
-    return undefined;
-  });
   vi.spyOn(outline, 'freezeOutline').mockImplementation((_store, commandId, snapshot) => {
     expect(commandId).toBe('scene');
     calls.push('outline');
@@ -129,16 +121,6 @@ function phases() {
   vi.spyOn(prompt, 'captureLogicalHistory').mockImplementation(() => {
     calls.push('logical-history');
     return [];
-  });
-  vi.spyOn(states, 'freezePackageStates').mockImplementation((_store, snapshot, initialize) => {
-    expect(snapshot.executionClock).toEqual(clock);
-    calls.push(initialize ? 'initialize-states' : 'read-states');
-    return snapshot;
-  });
-  vi.spyOn(behavior, 'prepareRunBehavior').mockImplementation((_store, runId, snapshot) => {
-    expect(runId).toBe('run');
-    calls.push('before-turn');
-    return snapshot;
   });
   vi.spyOn(lore, 'freezeLoreContext').mockImplementation((_store, snapshot) => {
     calls.push('lore');
@@ -162,12 +144,9 @@ test.each<{
       'overrides',
       'variables',
       'resources',
-      'segments',
       'story',
       'outline',
       'logical-history',
-      'initialize-states',
-      'before-turn',
       'lore',
       'context',
       'compile',
@@ -180,47 +159,27 @@ test.each<{
       'overrides',
       'variables',
       'resources',
-      'segments',
       'outline',
       'logical-history',
-      'initialize-states',
       'lore',
       'compile',
     ],
   },
   {
     options: { purpose: 'helper-artifact' },
-    expected: [
-      'variables',
-      'segments',
-      'story',
-      'logical-history',
-      'read-states',
-      'lore',
-      'context',
-      'previous-summary',
-    ],
+    expected: ['variables', 'story', 'logical-history', 'lore', 'context', 'previous-summary'],
   },
   {
     options: { purpose: 'helper-context' },
-    expected: [
-      'variables',
-      'segments',
-      'story',
-      'logical-history',
-      'read-states',
-      'lore',
-      'context',
-      'previous-summary',
-    ],
+    expected: ['variables', 'story', 'logical-history', 'lore', 'context', 'previous-summary'],
   },
   {
     options: { purpose: 'preview-main', executionClock: () => clock },
-    expected: ['variables', 'segments', 'story', 'logical-history', 'clock', 'read-states', 'lore'],
+    expected: ['variables', 'story', 'logical-history', 'clock', 'lore'],
   },
   {
     options: { purpose: 'preview-translation', executionClock: () => clock },
-    expected: ['story', 'logical-history', 'clock', 'read-states'],
+    expected: ['story', 'logical-history', 'clock'],
   },
   { options: { purpose: 'resume-state' }, expected: ['lore', 'compile'] },
 ])(
@@ -288,22 +247,7 @@ test('helper callers apply fixed options before resources and preserve pending o
     main: {
       ...prior.main,
       values: { tone: 'calm' },
-      program: {
-        ...createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
-        controls: [
-          {
-            id: 'tone',
-            label: 'Tone',
-            type: 'select',
-            default: 'calm',
-            options: [
-              { label: 'Calm', value: 'calm' },
-              { label: 'Bold', value: 'bold' },
-              { label: 'Warm', value: 'warm' },
-            ],
-          },
-        ],
-      },
+      program: nativePrompt(DEFAULT_MAIN_PROMPT, { customPromptTemplateToggle: 'tone=Tone=text' }),
     },
   });
   const chat = createFixtureChat(store, 'Read-only helper reservation'),

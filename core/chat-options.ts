@@ -1,4 +1,4 @@
-import type { PromptControl, PromptProgram, PromptValue } from './prompt-program.js';
+import type { PromptControl, RisuPrompt, PromptValue } from './risu-prompt.js';
 import type { HelperScope } from './helper.js';
 
 export type OptionValues = Record<string, PromptValue>;
@@ -40,7 +40,7 @@ export type ChatOptionState = {
   revision: number;
   binding: OptionBinding;
   workspaceRevision: number;
-  program: PromptProgram;
+  program: RisuPrompt;
   globalValues: OptionValues;
   fixedValues: OptionValues;
   pending: PendingChatOptions[];

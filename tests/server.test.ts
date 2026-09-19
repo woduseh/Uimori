@@ -79,18 +79,18 @@ async function setup(testMode = true) {
   owned.push({ app, directory });
   const url = await app.listen({ port: 0, host: '127.0.0.1' });
   const bot = fixtureBotInput('Synthetic M0 owner');
-  bot.package.lore = [
-    {
-      id: 'harbor',
-      title: 'Synthetic harbor',
-      description: 'Local scoped lore fixture',
-      text: 'A blue bell hangs beside the synthetic harbor.',
-      loading: 'discoverable',
-    },
-  ];
-  bot.package.instructions = [
-    { id: 'scene-craft', target: 'main', text: 'Leave the reader choice open.' },
-  ];
+  bot.package.nativeRisu.card.character_book = {
+    entries: [
+      {
+        keys: ['harbor'],
+        comment: 'Synthetic harbor',
+        content: 'A blue bell hangs beside the synthetic harbor.',
+        enabled: true,
+      },
+    ],
+  };
+  bot.package.loreActivation = { mode: 'discoverable' };
+  bot.package.nativeRisu.card.system_prompt = 'Leave the reader choice open.';
   const owner = await api<{ id: string }>(url, '/api/content', bot);
   const chat = await api<Chat>(url, '/api/chats', { title: '합성 항구', botId: owner.id });
   return { app, url, chat, directory };
@@ -402,7 +402,7 @@ describe('file SQLite HTTP runtime', () => {
     expect((await api<Run>(url, `/api/runs/${active.id}`)).status).toBe('running');
     expect(app.store.chat(chat.id).headRevision).toBeNull();
     await api(url, '/api/test/control', undefined, 'GET', 404);
-    const canary = process.env.NR_SECRET_CANARY ?? 'synthetic-canary-not-secret';
+    const canary = process.env.UIMORI_SECRET_CANARY ?? 'synthetic-canary-not-secret';
     const denied = await fetch(`${url}/api/chats`, {
       method: 'POST',
       headers: {
@@ -440,7 +440,7 @@ describe('file SQLite HTTP runtime', () => {
       'PATCH'
     );
     const resourceRows = app.store.product.resources(chat.id, app.store.product.snapshot(chat.id));
-    expect(resourceRows).toHaveLength(2);
+    expect(resourceRows).toHaveLength(3);
     const run = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(configured));
     const result = await completed(url, run.id);
     expect(result.inputs).toHaveLength(3);
@@ -468,10 +468,10 @@ async function startChild(directory: string) {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      NR_DB: join(directory, 'story.sqlite'),
-      NR_PORT: '0',
-      NR_INSTANCE: randomUUID(),
-      NR_TEST_MODE: '1',
+      UIMORI_DB: join(directory, 'story.sqlite'),
+      UIMORI_PORT: '0',
+      UIMORI_INSTANCE: randomUUID(),
+      UIMORI_TEST_MODE: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
@@ -586,8 +586,8 @@ describe('built server process boundary', () => {
     );
     third.child.kill();
     await stopped;
-    if (process.env.NR_ARTIFACT_DIR) {
-      const evidenceDirectory = resolve(process.env.NR_ARTIFACT_DIR, 'evidence');
+    if (process.env.UIMORI_ARTIFACT_DIR) {
+      const evidenceDirectory = resolve(process.env.UIMORI_ARTIFACT_DIR, 'evidence');
       await mkdir(evidenceDirectory, { recursive: true });
       const persisted = new DatabaseSync(join(directory, 'story.sqlite'), { readOnly: true });
       try {

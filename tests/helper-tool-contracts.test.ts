@@ -58,15 +58,17 @@ async function fixture(kind: 'chat' | 'library' = 'chat') {
     helperModel: { id: model.id },
   });
   const input = fixtureBotInput('Synthetic lore owner', 'Unchanged shared body');
-  input.package.lore = [
-    {
-      id: 'harbor',
-      title: '항구',
-      description: '원래 장소 설명',
-      text: 'Original shared lore: Q7x-α9.',
-      loading: 'pinned',
-    },
-  ];
+  input.package.nativeRisu.card.character_book = {
+    entries: [
+      {
+        comment: '항구',
+        keys: ['원래 장소 설명'],
+        content: 'Original shared lore: Q7x-α9.',
+        constant: true,
+        enabled: true,
+      },
+    ],
+  };
   const bot = store.product.content(input) as Content;
   const chat = createFixtureChat(store, 'Synthetic chat', 'calm', { botId: bot.id });
   const scope =

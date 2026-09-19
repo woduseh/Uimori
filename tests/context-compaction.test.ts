@@ -1,26 +1,25 @@
+import { refreshNativeSnapshot } from './fixtures/native-snapshot.js';
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { defaultProfile, type ModelSnapshot } from '../core/product.js';
-import { defaultStoryConfig } from '../core/story.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { ContextPlan } from '../core/context-plan.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import {
-  compilePromptProgram,
+  compileRisuPrompt,
   validateProviderPrompt,
   type PromptHistoryMessage,
-} from '../core/prompt-program.js';
+} from '../core/risu-prompt.js';
 import { estimateContextTokens } from '../core/context-budget.js';
 import { CONTEXT_SUMMARY_SEMANTICS } from '../core/context-summary-policy.js';
-import { createSourceSegmentFixture } from './fixtures/source-segments.js';
-import { sourceLogicalHistoryForRequest } from '../core/source-context.js';
 import {
   ContextCompactionError,
   prepareInputContext,
   type ContextCompactionHooks,
 } from '../server/context-compaction.js';
 import {
-  contextSourceRefs,
   measureMainContext,
   seedContextPlan,
   validateContextPlan,
@@ -55,68 +54,60 @@ const model = (id = 'main-model'): ModelSnapshot => ({
     catalogError: null,
   },
 });
-function snapshot(texts: string[] = []): RunSnapshot {
+async function snapshot(texts: string[] = []): Promise<RunSnapshot> {
   const target = model();
   const history = texts.map((text, index) => ({
     revision: `source-${index}`,
     text,
     contentHash: hash(text),
   }));
-  return seedContextPlan({
-    chatId: 'synthetic-compaction-chat',
-    parentRevision: history.at(-1)?.revision ?? null,
-    settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 16 },
-    request: currentRequest,
-    history,
-    resources: [],
-    logicalHistory: history.flatMap((source) => [
-      {
-        id: `user:${source.revision}`,
-        role: 'user' as const,
-        text: `USER_WISH_${source.revision}: 미라의 선택을 존중해 주세요.`,
-        sourceRevision: source.revision,
-        sourceHash: source.contentHash,
-      },
-      {
-        id: `assistant:${source.revision}`,
-        role: 'assistant' as const,
-        text: source.text,
-        sourceRevision: source.revision,
-        sourceHash: source.contentHash,
-      },
-    ]),
-    profile: {
-      ...defaultProfile('synthetic-compaction-chat'),
-      contents: [],
-      models: { main: target },
-      contextModel: target,
-      routes: { main: { id: target.id }, translation: null, status: null, image: null },
-      promptPresets: {
-        main: {
-          id: 'synthetic-fixed-prompt',
-          revision: 1,
-          title: 'Synthetic fixed prompt',
-          role: 'main',
-          program: {
-            version: 1,
-            controls: [],
-            blocks: [
-              {
-                id: 'fixed',
-                title: 'Fixed',
-                kind: 'message',
-                role: 'system',
-                template: [{ kind: 'text', text: fixedPrompt }],
-              },
-              { id: 'history', title: 'History', kind: 'history', from: 0, to: -1 },
-              { id: 'current', title: 'Current', kind: 'current' },
-            ],
+  return seedContextPlan(
+    await prepareNativeRisuRun({
+      chatId: 'synthetic-compaction-chat',
+      parentRevision: history.at(-1)?.revision ?? null,
+      settingsRevision: 1,
+      settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 16 },
+      request: currentRequest,
+      history,
+      resources: [],
+      logicalHistory: history.flatMap((source) => [
+        {
+          id: `user:${source.revision}`,
+          role: 'user' as const,
+          text: `USER_WISH_${source.revision}: 미라의 선택을 존중해 주세요.`,
+          sourceRevision: source.revision,
+          sourceHash: source.contentHash,
+        },
+        {
+          id: `assistant:${source.revision}`,
+          role: 'assistant' as const,
+          text: source.text,
+          sourceRevision: source.revision,
+          sourceHash: source.contentHash,
+        },
+      ]),
+      profile: {
+        ...defaultProfile('synthetic-compaction-chat'),
+        models: { main: target },
+        contextModel: target,
+        routes: { main: { id: target.id }, translation: null, status: null },
+        promptPresets: {
+          main: {
+            id: 'synthetic-fixed-prompt',
+            revision: 1,
+            title: 'Synthetic fixed prompt',
+            role: 'main',
+            program: nativePrompt(fixedPrompt, {
+              promptTemplate: [
+                { type: 'plain', role: 'system', text: fixedPrompt },
+                { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+              ],
+            }),
           },
         },
       },
-    },
-  });
+    })
+  );
 }
 const sse = (...events: unknown[]) =>
   new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
@@ -242,7 +233,7 @@ describe('input context projection and durable summary calls', () => {
   ])(
     'a $consumerLimit-token consumer and $summaryLimit-token summarizer send one consistent goal and thinking policy',
     async ({ consumerLimit, summaryLimit, output, thinking, goal, budget }) => {
-      const source = snapshot([
+      const source = await snapshot([
         'OLD_ACTOR → RECIPIENT: PROMISE',
         'CURRENT_UNRESOLVED_REQUEST',
         'RECENT_1',
@@ -278,7 +269,7 @@ describe('input context projection and durable summary calls', () => {
   ])(
     'manual compaction gives a $consumerLimit-token consumer a $target-token summary goal below its $hardCap hard output cap',
     async ({ consumerLimit, outputLimit, target, hardCap }) => {
-      const source = snapshot([
+      const source = await snapshot([
         '첫 약속.',
         '아직 풀리지 않은 의문.',
         '최근 첫 장면.',
@@ -311,7 +302,7 @@ describe('input context projection and durable summary calls', () => {
   test.each([0, -128])(
     'no summary is requested with %i estimated tokens free below the fixed-input trigger',
     async (freeTokens) => {
-      const source = snapshot(['원문 하나.', '원문 둘.', '원문 셋.']),
+      const source = await snapshot(['원문 하나.', '원문 둘.', '원문 셋.']),
         original = structuredClone(source),
         log = observed({
           measureInput: (projected) => ({
@@ -340,7 +331,7 @@ describe('input context projection and durable summary calls', () => {
   ])(
     '$freeTokens tokens of summary headroom still require the actual $summaryTokens-token summary to pass final input admission',
     async ({ freeTokens, summaryTokens, fits }) => {
-      const source = snapshot(['원문 하나.', '원문 둘.', '원문 셋.']),
+      const source = await snapshot(['원문 하나.', '원문 둘.', '원문 셋.']),
         original = structuredClone(source),
         log = observed({
           measureInput: (projected) => ({
@@ -373,7 +364,7 @@ describe('input context projection and durable summary calls', () => {
   );
 
   test('under-threshold input needs no provider call and preserves source text, roles, prompt, and current input', async () => {
-    const source = snapshot(['미라는 부두에 도착했어요.']),
+    const source = await snapshot(['미라는 부두에 도착했어요.']),
       original = structuredClone(source),
       log = observed();
     const result = await prepareInputContext(source, log.hooks);
@@ -397,7 +388,7 @@ describe('input context projection and durable summary calls', () => {
   });
 
   test('oversized Korean exchanges are summarized with user wishes intact before main generation, retaining the latest two exchanges', async () => {
-    const source = snapshot(oldScenes()),
+    const source = await snapshot(oldScenes()),
       original = structuredClone(source),
       log = observed(),
       payloads = respondWithMergedSummary(log);
@@ -453,17 +444,17 @@ describe('input context projection and durable summary calls', () => {
   });
 
   test('a completed ancestor summary is reused without charging its earlier calls and is merged whole when new exchanges require more space', async () => {
-    const first = snapshot(oldScenes()),
+    const first = await snapshot(oldScenes()),
       initial = observed();
     respondWithMergedSummary(initial);
     const previous = (await prepareInputContext(first, initial.hooks)).snapshot.contextPlan!;
     vi.mocked(fetch).mockClear();
     const reuse = observed();
-    const reused = await prepareInputContext(snapshot(oldScenes()), reuse.hooks, previous);
+    const reused = await prepareInputContext(await snapshot(oldScenes()), reuse.hooks, previous);
     expect(reused.usage.modelCalls).toBe(0);
     expect(fetch).not.toHaveBeenCalled();
     expect(reused.snapshot.contextPlan!.summary).toBe(previous.summary);
-    const expanded = snapshot([...oldScenes(), ...oldScenes().slice(0, 4)]),
+    const expanded = await snapshot([...oldScenes(), ...oldScenes().slice(0, 4)]),
       log = observed(),
       payloads = respondWithMergedSummary(log);
     const merged = await prepareInputContext(expanded, log.hooks, previous);
@@ -490,13 +481,10 @@ describe('input context projection and durable summary calls', () => {
         (_, index) =>
           `장면 ${index}: Darcy가 Elizabeth에게 한 발언이에요. 증언자는 Mira예요. CODE_${index}_Q7x-α9.`
       ),
-      first = snapshot(sourceTexts.slice(0, 6)),
+      first = await snapshot(sourceTexts.slice(0, 6)),
       correction =
         'USER_CORRECTION: 발언자는 Darcy, 대상은 Elizabeth예요. Mira의 코드는 Q7x-α9예요.';
     first.story = {
-      config: defaultStoryConfig(),
-      state: null,
-      waiting: false,
       lineageHash: 'lineage',
       canonHash: 'canon-with-correction',
       notes: [
@@ -510,9 +498,8 @@ describe('input context projection and durable summary calls', () => {
           declaration: { author: 'user', text: correction },
         },
       ],
-      models: {},
     };
-    const expanded = snapshot(sourceTexts);
+    const expanded = await snapshot(sourceTexts);
     expanded.story = structuredClone(first.story);
     const originals = [structuredClone(first), structuredClone(expanded)],
       log = observed({ reason: 'manual' }),
@@ -577,7 +564,7 @@ describe('input context projection and durable summary calls', () => {
 
   test('one large source is split on UTF-16 boundaries and becomes compacted only after all user and assistant fragments succeed', async () => {
     const text = `LARGE_SOURCE_START\n${'🌙 미라가 천천히 항구의 진실을 살펴봐요.\n'.repeat(1500)}LARGE_SOURCE_END`;
-    const source = snapshot([text]),
+    const source = await snapshot([text]),
       log = observed(),
       payloads = respondWithMergedSummary(log);
     const result = await prepareInputContext(source, log.hooks),
@@ -608,13 +595,14 @@ describe('input context projection and durable summary calls', () => {
 
   test('an explicitly authored start can be compacted as one assistant message without inventing a user turn or leaking its host discriminator', async () => {
     const text = `AUTHORED_START\n${paragraph.repeat(450)}`,
-      source = snapshot([text]);
+      source = await snapshot([text]);
     const authored: PromptHistoryMessage = {
       ...source.logicalHistory![1],
       runId: 'authored-start-run',
       sourceKind: 'authored-start',
     };
     source.logicalHistory = [authored];
+    await refreshNativeSnapshot(source);
     const original = structuredClone(source),
       log = observed(),
       payloads = respondWithMergedSummary(log);
@@ -625,7 +613,7 @@ describe('input context projection and durable summary calls', () => {
     )!;
     expect(message.role).toBe('assistant');
     expect(message.provenance).toEqual({
-      blockId: 'history',
+      blockId: 'risu-block-2',
       origin: 'history',
       sourceRevision: 'source-0',
       sourceHash: hash(text),
@@ -665,82 +653,20 @@ describe('input context projection and durable summary calls', () => {
       { ...valid, sourceKind: 'generated' },
     ]) {
       expect(() =>
-        compilePromptProgram(
-          {
-            version: 1,
-            controls: [],
-            blocks: [{ id: 'history', title: 'History', kind: 'history', from: 0, to: 'end' }],
-          },
+        compileRisuPrompt(
+          nativePrompt('', { promptTemplate: [{ type: 'chat', rangeStart: 0, rangeEnd: 'end' }] }),
           { slots: {}, history: [changed as PromptHistoryMessage] }
         )
       ).toThrow('PROMPT_INVALID_HISTORY_SOURCE');
     }
-    const paired = snapshot(oldScenes());
+    const paired = await snapshot(oldScenes());
     paired.logicalHistory![1].sourceKind = 'authored-start';
+    await refreshNativeSnapshot(paired);
     expect(await failure(prepareInputContext(paired, observed().hooks))).toMatchObject({
       code: 'CONTEXT_LOGICAL_PAIR_MISSING',
       usage: { modelCalls: 0 },
     });
     expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('configured source exclusions are applied before summarization while compacted references hash the full original source', async () => {
-    const source = snapshot(
-      oldScenes().map(
-        (text) => `${text}\n@hsTitle: Private\nHIDDEN_SOURCE_CANARY\n@hs\nVisible ending.`
-      )
-    );
-    source.sourceSegments = createSourceSegmentFixture({ excludeAsides: true });
-    const seeded = seedContextPlan(source),
-      log = observed(),
-      payloads = respondWithMergedSummary(log);
-    const result = await prepareInputContext(seeded, log.hooks),
-      encoded = JSON.stringify(payloads);
-    expect(encoded).not.toContain('HIDDEN_SOURCE_CANARY');
-    expect(JSON.stringify(seeded.history)).toContain('HIDDEN_SOURCE_CANARY');
-    const allowed = sourceLogicalHistoryForRequest(seeded, seeded.logicalHistory!);
-    for (const ref of result.snapshot.contextPlan!.compacted) {
-      expect(ref.hash).toBe(
-        hash(seeded.history.find((item) => item.revision === ref.revision)!.text)
-      );
-      for (const message of allowed.filter((message) => message.sourceRevision === ref.revision))
-        expect(
-          payloads
-            .flatMap((payload) => payload.fragments)
-            .filter((part) => part.messageId === message.id)
-            .map((part) => part.text)
-            .join('')
-        ).toBe(message.text);
-    }
-  });
-
-  test('a checkpoint containing a formerly allowed report cannot be reused after its configured retention window expires', async () => {
-    const text = `${paragraph.repeat(400)}<EvaluationReport><RevisionReport>[82]<DevelopmentReport>REPORT_EXPIRY_CANARY</EvaluationReport>`;
-    const source = snapshot([text]);
-    source.sourceSegments = createSourceSegmentFixture({
-      excludeAnnotations: false,
-      keepLastMessages: 5,
-    });
-    const earlier = seedContextPlan(source),
-      log = observed(),
-      payloads = respondWithMergedSummary(log);
-    const previous = (await prepareInputContext(earlier, log.hooks)).snapshot.contextPlan!;
-    expect(previous.compacted).toHaveLength(1);
-    expect(JSON.stringify(payloads)).toContain('REPORT_EXPIRY_CANARY');
-    const next = snapshot([text, '새 장면 1.', '새 장면 2.', '새 장면 3.']);
-    next.sourceSegments = structuredClone(source.sourceSegments);
-    const later = seedContextPlan(next),
-      laterRefs = contextSourceRefs(later);
-    expect(laterRefs[0].hash).toBe(previous.compacted[0].hash);
-    expect(laterRefs[0].viewHash).not.toBe(previous.compacted[0].viewHash);
-    vi.mocked(fetch).mockClear();
-    const error = await failure(prepareInputContext(later, observed().hooks, previous));
-    expect(error.code).toBe('CONTEXT_CHECKPOINT_INVALID');
-    expect(error.usage.modelCalls).toBe(0);
-    expect(fetch).not.toHaveBeenCalled();
-    expect(
-      JSON.stringify(sourceLogicalHistoryForRequest(later, later.logicalHistory!))
-    ).not.toContain('REPORT_EXPIRY_CANARY');
   });
 
   test.each([
@@ -773,7 +699,7 @@ describe('input context projection and durable summary calls', () => {
   ] as const)(
     '%s is terminal, retains uncertainty and cannot start main or silently drop source text',
     async (_label, response, code) => {
-      const source = snapshot(oldScenes()),
+      const source = await snapshot(oldScenes()),
         log = observed();
       vi.mocked(fetch).mockResolvedValueOnce(response());
       const error = await failure(prepareInputContext(source, log.hooks));
@@ -801,7 +727,7 @@ describe('input context projection and durable summary calls', () => {
   );
 
   test('partial failure after a successful large-source fragment never marks the source or the staged summary reusable', async () => {
-    const source = snapshot([paragraph.repeat(1200)]),
+    const source = await snapshot([paragraph.repeat(1200)]),
       log = observed();
     vi.mocked(fetch)
       .mockResolvedValueOnce(completed('PARTIAL_SOURCE_SUMMARY'))
@@ -824,7 +750,9 @@ describe('input context projection and durable summary calls', () => {
     const controller = new AbortController();
     controller.abort('SENSITIVE_ABORT_REASON');
     const before = observed({ signal: controller.signal });
-    expect(await failure(prepareInputContext(snapshot(oldScenes()), before.hooks))).toMatchObject({
+    expect(
+      await failure(prepareInputContext(await snapshot(oldScenes()), before.hooks))
+    ).toMatchObject({
       code: 'CANCELLED',
       usage: { modelCalls: 0 },
     });
@@ -837,7 +765,7 @@ describe('input context projection and durable summary calls', () => {
       during.abort('SENSITIVE_ABORT_REASON');
       return id;
     };
-    const error = await failure(prepareInputContext(snapshot(oldScenes()), log.hooks));
+    const error = await failure(prepareInputContext(await snapshot(oldScenes()), log.hooks));
     expect(error.code).toBe('CANCELLED');
     expect(error.usage.modelCalls).toBe(1);
     expect(fetch).not.toHaveBeenCalled();
@@ -853,20 +781,21 @@ describe('input context projection and durable summary calls', () => {
         },
       });
     expect(
-      await failure(prepareInputContext(snapshot(['짧은 장면.']), checkpoint.hooks))
+      await failure(prepareInputContext(await snapshot(['짧은 장면.']), checkpoint.hooks))
     ).toMatchObject({ code: 'CANCELLED', usage: { modelCalls: 0 } });
   });
 
   test('one main call remains reserved and a fixed input that cannot fit fails before any summary provider request', async () => {
-    const source = snapshot(oldScenes());
+    const source = await snapshot(oldScenes());
     source.settings.maxCalls = 1;
     const budget = observed();
     expect(await failure(prepareInputContext(source, budget.hooks))).toMatchObject({
       code: 'CONTEXT_COMPACTION_CALL_LIMIT',
       usage: { modelCalls: 0 },
     });
-    const fixed = snapshot([]);
+    const fixed = await snapshot([]);
     fixed.request = paragraph.repeat(1500);
+    await refreshNativeSnapshot(fixed);
     const log = observed();
     const error = await failure(prepareInputContext(fixed, log.hooks));
     expect(error.code).toBe('CONTEXT_FIXED_INPUT_TOO_LARGE');
@@ -878,7 +807,9 @@ describe('input context projection and durable summary calls', () => {
     const unmeasurable = observed({
       measureInput: (value) => ({ snapshot: value, estimatedInputTokens: Infinity }),
     });
-    expect(await failure(prepareInputContext(snapshot([]), unmeasurable.hooks))).toMatchObject({
+    expect(
+      await failure(prepareInputContext(await snapshot([]), unmeasurable.hooks))
+    ).toMatchObject({
       code: 'CONTEXT_FIXED_INPUT_TOO_LARGE',
       plan: { estimatedInputTokens: null },
     });
@@ -887,23 +818,19 @@ describe('input context projection and durable summary calls', () => {
         throw new Error('PROMPT_UNSUPPORTED_MODEL');
       },
     });
-    expect(await failure(prepareInputContext(snapshot([]), invalid.hooks))).toMatchObject({
+    expect(await failure(prepareInputContext(await snapshot([]), invalid.hooks))).toMatchObject({
       code: 'PROMPT_UNSUPPORTED_MODEL',
       usage: { modelCalls: 0 },
     });
   });
 
   test('the frozen memory model is preferred and known accounting is accumulated without modifying either model', async () => {
-    const source = snapshot(oldScenes()),
+    const source = await snapshot(oldScenes()),
       memory = model('memory-model');
     source.story = {
-      config: defaultStoryConfig(),
-      state: null,
-      waiting: false,
       lineageHash: 'lineage',
       canonHash: 'canon',
       notes: [],
-      models: { context: memory },
     };
     source.profile!.contextModel = memory;
     const original = structuredClone(source),
@@ -925,7 +852,7 @@ describe('input context projection and durable summary calls', () => {
   });
 
   test('an auxiliary caller can measure its own source envelope and choose a summary model without a main model', async () => {
-    const source = snapshot(oldScenes()),
+    const source = await snapshot(oldScenes()),
       auxiliary = model('auxiliary-summary');
     delete source.profile!.models.main;
     const original = structuredClone(source),
@@ -964,14 +891,15 @@ describe('input context projection and durable summary calls', () => {
   });
 
   test('hash corruption, missing logical roles, revoked authority, and failed attempt persistence stop before transmission', async () => {
-    const poisoned = snapshot(oldScenes());
+    const poisoned = await snapshot(oldScenes());
     poisoned.history[0].contentHash = 'b'.repeat(64);
     expect(await failure(prepareInputContext(poisoned, observed().hooks))).toMatchObject({
       code: 'CONTEXT_SOURCE_HASH_MISMATCH',
       usage: { modelCalls: 0 },
     });
-    const missing = snapshot(oldScenes());
+    const missing = await snapshot(oldScenes());
     missing.logicalHistory = missing.logicalHistory!.filter((message) => message.role !== 'user');
+    await refreshNativeSnapshot(missing);
     expect(await failure(prepareInputContext(missing, observed().hooks))).toMatchObject({
       code: 'CONTEXT_LOGICAL_PAIR_MISSING',
       usage: { modelCalls: 0 },
@@ -979,7 +907,7 @@ describe('input context projection and durable summary calls', () => {
     expect(
       await failure(
         prepareInputContext(
-          snapshot(oldScenes()),
+          await snapshot(oldScenes()),
           observed({ authorize: (connection) => ({ ...connection, enabled: false }) }).hooks
         )
       )
@@ -989,7 +917,9 @@ describe('input context projection and durable summary calls', () => {
         throw new Error('SENSITIVE_STORAGE_ERROR');
       },
     });
-    expect(await failure(prepareInputContext(snapshot(oldScenes()), unsaved.hooks))).toMatchObject({
+    expect(
+      await failure(prepareInputContext(await snapshot(oldScenes()), unsaved.hooks))
+    ).toMatchObject({
       code: 'CONTEXT_ATTEMPT_START_FAILED',
       usage: { modelCalls: 0 },
     });

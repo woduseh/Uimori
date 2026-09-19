@@ -1,4 +1,4 @@
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { AUTHOR_NOTE_GUIDANCE } from '../core/notes.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import { runAuxiliaryJob, sourceTimeContext } from '../server/product-auxiliary.js';
@@ -71,7 +71,7 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
     const observed = hooks(server.origin);
     const original = JSON.stringify(seed.source);
     observed.options.onInput = () => {
-      seed.snapshot.profile!.contents[0].text = 'FUTURE_MUTATION';
+      seed.snapshot.profile!.packages![0].body = 'FUTURE_MUTATION';
     };
     const outcome = await runAuxiliaryJob(state.store, seed.job.id, 'server-a', observed.options);
     expect(outcome?.status).toBe('completed');
@@ -90,11 +90,13 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
     const context = JSON.parse(translationFixtureSlot(first, 'context'));
     expect(context).toMatchObject({
       revision: 'chat-a@4',
-      bot: { id: 'bot', revision: 2, text: 'Mira has not learned the keeper identity.' },
-      references: [
-        { id: 'names', revision: 3 },
-        { id: 'canon', revision: 4 },
-      ],
+      packages: {
+        pinned: expect.arrayContaining([
+          expect.objectContaining({ text: 'Mira has not learned the keeper identity.' }),
+          expect.objectContaining({ text: 'Mira = 미라' }),
+          expect.objectContaining({ text: 'The identity remains unknown.' }),
+        ]),
+      },
     });
     expect(context.modelPresetRevision).toBe('model-translation@5');
     expect(JSON.stringify(first)).not.toContain('SOURCE_TIME_GLOSSARY');
@@ -138,10 +140,7 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
       observed.options
     );
     expect(annotation?.result?.display?.[0].summary).toContain('정사에 반영하지 않음');
-    expect(sourceTimeContext(seed.snapshot, 'image').references).toMatchObject([
-      { id: 'names', revision: 3 },
-      { id: 'canon', revision: 4 },
-    ]);
+    expect(sourceTimeContext(seed.snapshot, 'image').references).toEqual([]);
     const controller = new AbortController();
     controller.abort('PRIVATE_ABORT_REASON');
     observed.options.signal = controller.signal;
@@ -166,7 +165,7 @@ test('custom translation prompt survives tool continuation and refusal retry wit
       revision: 8,
       role: 'translation',
       title: 'Custom translation',
-      program: createDefaultPromptProgram(custom, 'translation'),
+      program: createDefaultRisuPrompt(custom, 'translation'),
     },
   };
   let requests = 0;
@@ -203,7 +202,7 @@ test('custom translation prompt survives tool continuation and refusal retry wit
   const state = bridge(seed);
   const observed = hooks(server.origin);
   observed.options.onInput = () => {
-    seed.snapshot.profile!.promptPresets!.translation!.program = createDefaultPromptProgram(
+    seed.snapshot.profile!.promptPresets!.translation!.program = createDefaultRisuPrompt(
       'FUTURE TRANSLATION PROMPT',
       'translation'
     );
@@ -216,7 +215,7 @@ test('custom translation prompt survives tool continuation and refusal retry wit
     expect(wire.stable.contract).toContain(AUTHOR_NOTE_GUIDANCE);
     expect(wire.stable.contract).toContain('translation.search/read retrieves prior wording');
     expect(wire.input.source).not.toHaveProperty('referencePolicy');
-    expect(wire.prompt.messages[0].content[0].text).toBe(custom);
+    expect(wire.prompt.messages[0].content[0].text).toBe(custom.replace('{{char}}', 'Mira'));
     expect(wire.input.task).not.toContain('Korean');
     expect(wire.input.controls).toMatchObject({
       instructionRevision: 'prompt:translation-custom@8',

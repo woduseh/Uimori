@@ -1,5 +1,5 @@
 import type { RunSnapshot } from './types.js';
-import type { PromptHistoryMessage } from './prompt-program.js';
+import type { PromptHistoryMessage } from './risu-prompt.js';
 
 export function projectedLogicalHistory(
   snapshot: RunSnapshot,

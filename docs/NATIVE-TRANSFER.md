@@ -37,10 +37,10 @@
 
 ## 원본과 보관
 
-schema 17의 `native_transfer_receipts`가 요청 키의 전체 UNIQUE 제약과 원본 연결 정보를 보관해요. 15→16 migration은 그대로 유지하고 16→17에서 이 표만 추가해요. 영수증에 본문·AST·이미지 bytes를 다시 복사하지 않아요. 가져온 불변 revision 1과 원래 ID/개정, module/related/model 참조, 옵션 값의 존재 여부, 새 ID 매핑을 사용해 `GET /api/native-transfers/:id/original`에서 원래 파일 데이터를 재구성해요. JSON 필드 순서나 공백은 원본 보존 대상이 아니며 작성된 문자열과 데이터는 보존해요.
+현재 schema 21의 `native_transfer_receipts`가 요청 키의 UNIQUE 제약과 원본 연결 정보를 보관해요. 구형 DB를 변환하지 않아요. 영수증에 원본 JSON·이미지 bytes를 다시 복사하지 않아요. 가져온 불변 revision 1과 원래 ID/개정, module/related/model 참조, 옵션 값의 존재 여부, 새 ID 매핑을 사용해 `GET /api/native-transfers/:id/original`에서 원래 파일 데이터를 재구성해요. JSON 필드 순서나 공백은 원본 보존 대상이 아니며 작성된 문자열과 데이터는 보존해요.
 
-나중에 수정하거나 서재에서 삭제해도 원래 개정은 유지되므로 원본을 재구성할 수 있어요. 재내보내기 `origin`에는 이전 가져오기 digest·entry key·원래 ID/개정을 담고 현재 자료와 출처를 구분해요. archive 15는 이 영수증 collection을 선택적으로 포함하며 이전 archive의 누락은 빈 목록으로 처리해요. 복원 시 출처 재구성, 실제 새 자료/프리셋/조합의 ID·참조·모델 매핑, digest, 영수증 간 신규 ID의 중복 소유를 검증하고 실패하면 전체 복원을 롤백해요. 채팅 백업 v1은 채팅에 필요한 library version을 보존하지만 별도 자료 가져오기 영수증은 운반하지 않아요. SQLite 백업은 전체 영수증을 보존해요.
+나중에 수정하거나 서재에서 삭제해도 원래 개정은 유지되므로 원본을 재구성할 수 있어요. 재내보내기 `origin`에는 이전 가져오기 digest·entry key·원래 ID/개정을 담고 현재 자료와 출처를 구분해요. 현재 `uimori-archive` v1은 이 영수증 collection을 필수로 포함해요. 복원 시 출처 재구성, 실제 새 자료/프리셋/조합의 ID·참조·모델 매핑, digest, 영수증 간 신규 ID의 중복 소유를 검증하고 실패하면 전체 복원을 롤백해요. 채팅 백업 v1은 채팅에 필요한 library version을 보존하지만 별도 자료 가져오기 영수증은 운반하지 않아요. SQLite 백업은 전체 영수증을 보존해요.
 
 ## 구현과 검증
 
-타입: `core/native-transfer.ts`. 순수 검증: `core/native-transfer-validation.ts`, `core/package-graph.ts`. 저장·라우트: `server/native-transfer.ts`. 집중 검사는 `tests/native-transfer.test.ts`, migration은 `tests/schema-migrations.test.ts`예요. 모든 fixture는 합성이고 외부 모델 호출·Risu 스크립트 실행·실제 작품 내용은 포함하지 않아요. 합성 계약 검사와 실제 대형 자료·브라우저·의미 품질 검증을 구분해요.
+타입: `core/native-transfer.ts`. 순수 검증: `core/native-transfer-validation.ts`, `core/package-graph.ts`. 저장·라우트: `server/native-transfer.ts`. 집중 검사는 `tests/native-transfer.test.ts`, 현재 DB 구조 검사는 `tests/database-schema.test.ts`예요. 합성 계약 검사와 실제 대형 자료·브라우저·의미 품질 검증을 구분해요.

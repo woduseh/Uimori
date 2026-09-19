@@ -44,16 +44,16 @@ describe('self-host network policy', () => {
     expect(networkPolicy({})).toEqual({});
     expect(listenAddress({}, {})).toEqual({ host: '127.0.0.1', port: 4310 });
     for (const host of ['0.0.0.0', '::', '192.168.1.2'])
-      expect(() => listenAddress({ NR_HOST: host }, {})).toThrow('requires self-host mode');
-    expect(listenAddress({ NR_HOST: '0.0.0.0', NR_PORT: '0' }, policy)).toEqual({
+      expect(() => listenAddress({ UIMORI_HOST: host }, {})).toThrow('requires self-host mode');
+    expect(listenAddress({ UIMORI_HOST: '0.0.0.0', UIMORI_PORT: '0' }, policy)).toEqual({
       host: '0.0.0.0',
       port: 0,
     });
-    expect(listenAddress({ NR_HOST: '::1' }, {})).toEqual({ host: '::1', port: 4310 });
+    expect(listenAddress({ UIMORI_HOST: '::1' }, {})).toEqual({ host: '::1', port: 4310 });
     for (const port of ['', '-1', '65536', '1e3', '43.10', ' 4310'])
-      expect(() => listenAddress({ NR_PORT: port }, {})).toThrow('Invalid NR_PORT');
+      expect(() => listenAddress({ UIMORI_PORT: port }, {})).toThrow('Invalid UIMORI_PORT');
     for (const host of ['', 'story.example.test', '0.0.0.0:4310'])
-      expect(() => listenAddress({ NR_HOST: host }, policy)).toThrow('NR_HOST');
+      expect(() => listenAddress({ UIMORI_HOST: host }, policy)).toThrow('UIMORI_HOST');
   });
   it.each([
     '',
@@ -68,19 +68,23 @@ describe('self-host network policy', () => {
     ' https://story.example.test',
     'https://story.example.test\\',
   ])('rejects malformed public origin %s', (value) => {
-    expect(() => networkPolicy({ publicOrigin: value, accessToken })).toThrow('NR_PUBLIC_ORIGIN');
+    expect(() => networkPolicy({ publicOrigin: value, accessToken })).toThrow(
+      'UIMORI_PUBLIC_ORIGIN'
+    );
   });
   it('requires a usable token and denies test routes before creating a database', async () => {
     for (const token of [undefined, '', 'short', ' '.repeat(40), 'a'.repeat(1001)])
-      expect(() => networkPolicy({ publicOrigin, accessToken: token })).toThrow('NR_ACCESS_TOKEN');
+      expect(() => networkPolicy({ publicOrigin, accessToken: token })).toThrow(
+        'UIMORI_ACCESS_TOKEN'
+      );
     expect(() => networkPolicy({ publicOrigin, accessToken, testMode: true })).toThrow(
-      'NR_TEST_MODE'
+      'UIMORI_TEST_MODE'
     );
     const item = { directory: await mkdtemp(join(tmpdir(), 'uimori-network-')) };
     owned.push(item);
     const dbPath = join(item.directory, 'must-not-exist.sqlite');
     await expect(createApp({ dbPath, buildId: 'rejected', publicOrigin })).rejects.toThrow(
-      'NR_ACCESS_TOKEN'
+      'UIMORI_ACCESS_TOKEN'
     );
     expect(existsSync(dbPath)).toBe(false);
   });

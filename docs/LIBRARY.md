@@ -1,6 +1,6 @@
 # 서재와 프롬프트 관리
 
-서재는 봇·페르소나·모듈을 정리하는 공간이고, 프롬프트 프리셋은 별도 관리 대상이에요. 봇·페르소나·모듈은 같은 `ContentPackage` 형식을 사용해요. 서재 분류, 자료의 내용 개정, 채팅에서 사용하는 역할을 각각 구분해요. 화면별 선택 후보 정책은 이 저장·실행 계약과 별도로 적용해요.
+서재는 봇·페르소나·모듈을 정리하는 공간이고, 프롬프트 프리셋은 별도 관리 대상이에요. 봇·페르소나·모듈은 같은 `RisuContent` 형식을 사용해요. 서재 분류, 자료의 내용 개정, 채팅에서 사용하는 역할을 각각 구분해요. 화면별 선택 후보 정책은 이 저장·실행 계약과 별도로 적용해요.
 
 공유 타입과 조회 helper는 [library-organization.ts](../core/library-organization.ts), 저장·검증·API는 [server/library-organization.ts](../server/library-organization.ts)에 있어요. 패키지 내부 기능은 [PACKAGES.md](PACKAGES.md)를 봐요.
 
@@ -35,7 +35,7 @@
 
 `content`는 봇·페르소나·모듈 분류 사이에서 이동할 수 있어요. `prompt-preset`은 `prompts` 분류에만 속하며 콘텐츠 분류로 이동할 수 없어요. 프롬프트의 `main`·`translation` 실행 역할은 프롬프트 자체의 계약으로 유지해요.
 
-분류·폴더 이동은 정리 정보만 바꿔요. 저장된 `Content.kind`, `ContentRef {id, revision}`, `ContentPackage`, 채팅 프로필과 과거 Run snapshot은 다시 쓰지 않아요. 현재 서재 분류를 표시할 때는 `libraryCategory(library, content)`를 사용하고, 폴더 조회는 `libraryFolderOf(library, item)`를 사용해요. `Content.kind`는 새 항목의 최초 분류와 정리 정보가 없는 클라이언트 객체의 기본값으로 사용해요.
+분류·폴더 이동은 정리 정보만 바꿔요. 저장된 `Content.kind`, `ContentRef {id, revision}`, `RisuContent`, 채팅 프로필과 과거 Run snapshot은 다시 쓰지 않아요. 현재 서재 분류를 표시할 때는 `libraryCategory(library, content)`를 사용하고, 폴더 조회는 `libraryFolderOf(library, item)`를 사용해요. `Content.kind`는 새 항목의 최초 분류와 정리 정보가 없는 클라이언트 객체의 기본값으로 사용해요.
 
 패키지 연결은 ID와 역할을 유지하며 저장한 최신 내용을 다음 실행에서 사용해요. 내부 `{id, revision, role}`는 현재 편집 충돌과 실행 출처를 확인하는 값이고 사용자가 개정 번호를 선택하지 않아요. 현재 서재 분류를 바꿔도 이미 연결된 역할은 바뀌지 않아요. 이미 예약한 실행과 과거 Run은 당시 자료·프롬프트·공유 모듈·옵션 snapshot을 보존해요. 이전 설정을 계속 사용하려면 별도 이름으로 복제해요.
 

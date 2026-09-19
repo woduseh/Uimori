@@ -3,8 +3,9 @@ import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import type { EditDraft } from '../core/edit-drafts.js';
+import { nativeDraftTitle } from './fixtures/native-content.js';
 import { fixtureBotInput } from './fixtures/chat.js';
-import { editLibraryContent, selectPackageSection } from './ui-navigation.js';
+import { editLibraryContent } from './ui-navigation.js';
 function latch() {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {
@@ -13,12 +14,11 @@ function latch() {
   return { promise, resolve };
 }
 
-async function behavior(page: Page) {
-  await selectPackageSection(page, '상태와 행동');
-  const summary = page.getByText('제작자용 동작 JSON 편집', { exact: true });
+async function nativeJson(page: Page) {
+  const summary = page.getByText('시작문·로어·스크립트 원문 편집', { exact: true });
   if (!(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
     await summary.click();
-  return page.getByLabel('동작 정의 JSON', { exact: true });
+  return page.getByLabel('Risu 원문 JSON', { exact: true });
 }
 
 for (const [index, width] of DEFAULT_WIDTHS.entries()) {
@@ -37,8 +37,8 @@ for (const [index, width] of DEFAULT_WIDTHS.entries()) {
     await page.setViewportSize({ width, height: 950 });
     await page.goto('/');
     await editLibraryContent(page, title);
-    const json = await behavior(page);
-    await json.fill('{"actions":[');
+    const json = await nativeJson(page);
+    await json.fill('[{"content":');
     const current = async () =>
       (
         (await (
@@ -46,8 +46,12 @@ for (const [index, width] of DEFAULT_WIDTHS.entries()) {
         ).json()) as EditDraft[]
       )[0];
     await expect
-      .poll(async () => (await current())?.rawFields['package.behavior'])
-      .toBe('{"actions":[');
+      .poll(
+        async () =>
+          ((await current())?.rawFields['package.native.source'] as { text?: string } | undefined)
+            ?.text
+      )
+      .toBe('[{"content":');
     await expect(page.getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled();
 
     const secondContext = await browser.newContext({ baseURL, viewport: { width, height: 950 } });
@@ -55,7 +59,7 @@ for (const [index, width] of DEFAULT_WIDTHS.entries()) {
       const second = await secondContext.newPage();
       await second.goto('/');
       await editLibraryContent(second, title);
-      await expect(await behavior(second)).toHaveValue('{"actions":[');
+      await expect(await nativeJson(second)).toHaveValue('[{"content":');
       await expect(
         second.getByRole('button', { name: '변경사항 저장', exact: true })
       ).toBeDisabled();
@@ -75,14 +79,13 @@ for (const [index, width] of DEFAULT_WIDTHS.entries()) {
       await release.promise;
       await route.continue();
     });
-    await selectPackageSection(page, '기본 정보');
-    await page.getByLabel('자료 이름', { exact: true }).fill(`${title} local`);
+    await page.getByLabel('Risu 자료 이름', { exact: true }).fill(`${title} local`);
     await arrived.promise;
     const helper = await request.patch(`/api/edit-drafts/${before.id}`, {
       data: {
         expectedRevision: before.revision,
         operationId: randomUUID(),
-        model: { ...before.model, title: `${title} helper` },
+        model: nativeDraftTitle(before.model, `${title} helper`),
         rawFields: before.rawFields,
         unappliedFields: before.unappliedFields,
       },
@@ -90,14 +93,14 @@ for (const [index, width] of DEFAULT_WIDTHS.entries()) {
     expect(helper.ok()).toBe(true);
     release.resolve();
     await expect(page.getByRole('button', { name: '두 초안 비교', exact: true })).toBeVisible();
-    await expect(page.getByLabel('자료 이름', { exact: true })).toHaveValue(`${title} local`);
+    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(`${title} local`);
     await page.unroute(`**/api/edit-drafts/${before.id}`);
     await page.getByRole('button', { name: '두 초안 비교', exact: true }).click();
     await page
       .getByRole('button', { name: '확인한 서버 초안에 내 입력 적용', exact: true })
       .click();
     await expect(page.getByRole('button', { name: '두 초안 비교', exact: true })).toBeHidden();
-    await (await behavior(page)).fill('');
+    await page.getByRole('button', { name: 'JSON 수정 취소', exact: true }).click();
     await expect(page.getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
     await expect
@@ -112,8 +115,7 @@ for (const [index, width] of DEFAULT_WIDTHS.entries()) {
       .click();
     await expect(review).toContainText(`${title} local`);
     await review.getByRole('button', { name: '확인한 저장 되돌리기', exact: true }).click();
-    await selectPackageSection(page, '기본 정보');
-    await expect(page.getByLabel('자료 이름', { exact: true })).toHaveValue(title);
+    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(title);
     await expect
       .poll(async () => (await (await request.get(`/api/content/${content.id}`)).json()).revision)
       .toBe(content.revision + 2);

@@ -1,12 +1,10 @@
-/** Optional typed judgment policy. It never selects a writing model or receives card credentials. */
+/** Typed judgment policy. It never selects a writing model or receives card credentials. */
 export type JevJudgmentPolicy = {
-  backend: 'jev';
   threshold: number;
   maxSelectedTokens: number;
   maxInputTokens: number;
 };
 export const DEFAULT_JEV_JUDGMENT: JevJudgmentPolicy = Object.freeze({
-  backend: 'jev',
   threshold: 0.65,
   maxSelectedTokens: 8_000,
   maxInputTokens: 28_000,
@@ -17,7 +15,6 @@ export function validateJevJudgmentPolicy(value: unknown): JevJudgmentPolicy {
   const policy = value as JevJudgmentPolicy;
   if (
     Object.keys(policy).some((key) => !Object.hasOwn(DEFAULT_JEV_JUDGMENT, key)) ||
-    policy.backend !== 'jev' ||
     !Number.isFinite(policy.threshold) ||
     policy.threshold < 0 ||
     policy.threshold > 1 ||
@@ -33,7 +30,6 @@ export function validateJevJudgmentPolicy(value: unknown): JevJudgmentPolicy {
 }
 
 export type JevJudgmentReceipt = {
-  backend: 'jev';
   threshold: number;
   maxSelectedTokens: number;
   selectedTokens: number;

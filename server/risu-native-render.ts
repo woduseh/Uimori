@@ -3,13 +3,13 @@ import {
   nativeRisuAssetNames,
   nativeRisuBackground,
   nativeRisuRegex,
-  type NativeRisuContent,
+  type RisuContentSource,
 } from '../core/risu-native.js';
 import { createNativeRisuCbs, type NativeRisuCbsContext } from './risu-native-cbs.js';
 import { runNativeRisuWorker } from './risu-native-worker.js';
 
 export type NativeRisuRenderInput = {
-  native: NativeRisuContent;
+  native: RisuContentSource;
   text: string;
   context: Omit<NativeRisuCbsContext, 'native' | 'random'>;
   timeoutMs?: number;

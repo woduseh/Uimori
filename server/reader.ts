@@ -9,11 +9,7 @@ import { providerRejection } from '../core/provider-rejection.js';
 import { readerRequestOrder } from '../core/reader-conversation.js';
 
 /** The failing attempt's stored provider diagnostic, read only for 4xx failures being displayed. */
-export function attemptRejection(
-  store: Store,
-  column: 'run_id' | 'job_id' | 'story_job_id',
-  id: string
-) {
+export function attemptRejection(store: Store, column: 'run_id' | 'job_id', id: string) {
   const row = store.db
     .prepare(
       `SELECT json_extract(response,'$.error.diagnostic') AS diagnostic FROM attempts WHERE ${column}=? AND json_extract(response,'$.error.diagnostic') IS NOT NULL ORDER BY rowid DESC LIMIT 1`
@@ -38,7 +34,7 @@ function readerActivity(
     ? `SELECT * FROM activity ${page.before ? 'WHERE (updatedAt,id) < (?,?)' : ''} ORDER BY updatedAt DESC,id DESC LIMIT ?`
     : sourceIds
       ? 'SELECT * FROM activity WHERE sourceRevision IN (SELECT value FROM json_each(?)) ORDER BY createdAt,id'
-      : "SELECT * FROM activity WHERE status IN ('queued','running','waiting_for_state') UNION ALL SELECT * FROM recent ORDER BY createdAt,id";
+      : "SELECT * FROM activity WHERE status IN ('queued','running') UNION ALL SELECT * FROM recent ORDER BY createdAt,id";
   const rows = store.db
     .prepare(`WITH activity AS (
     SELECT id,'main' AS kind,status,created_at AS createdAt,updated_at AS updatedAt,branch_id AS branchId,source_revision AS sourceRevision,0 AS generation,NULL AS sourceHash,CASE WHEN source_revision IS NULL THEN EXISTS(SELECT 1 FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id) ELSE 0 END AS superseded,(status='interrupted' OR COALESCE(error,'') LIKE '%PROVIDER_UNCERTAIN%') AS executionUncertain FROM runs WHERE chat_id=?
@@ -46,18 +42,12 @@ function readerActivity(
     SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,r.branch_id,j.source_revision,j.generation,j.source_hash,CASE WHEN j.kind='translation' AND j.status IN ('failed','partial','stale') AND COALESCE(j.error,'') NOT LIKE '%PROVIDER_UNCERTAIN%' THEN EXISTS(SELECT 1 FROM jobs newer WHERE newer.chat_id=j.chat_id AND newer.source_revision=j.source_revision AND newer.source_hash=j.source_hash AND newer.kind='translation' AND newer.status='completed' AND (newer.revision,newer.created_at,newer.id) > (j.revision,j.created_at,j.id)) ELSE 0 END,(j.status='interrupted' OR COALESCE(j.error,'') LIKE '%PROVIDER_UNCERTAIN%') FROM jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
       WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
     UNION ALL
-    SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,COALESCE(json_extract(j.snapshot,'$.branchId'),r.branch_id),j.source_revision,j.generation,j.source_hash,0,(j.status='interrupted' OR COALESCE(j.error,'') LIKE '%PROVIDER_UNCERTAIN%') FROM story_jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
-      WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
-    UNION ALL
     SELECT j.id,'illustration',j.status,j.created_at,j.updated_at,r.branch_id,j.source_revision,j.generation,j.source_hash,0,(j.status='interrupted') FROM illustration_jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
       WHERE j.chat_id=?
-    UNION ALL
-    SELECT id,'extension',status,created_at,updated_at,branch_id,NULL,generation,NULL,0,(status='interrupted') FROM package_extension_operations WHERE chat_id=?
-  ), recent AS (SELECT * FROM activity WHERE status NOT IN ('queued','running','waiting_for_state') ORDER BY updatedAt DESC,id DESC LIMIT 30)
+
+  ), recent AS (SELECT * FROM activity WHERE status NOT IN ('queued','running') ORDER BY updatedAt DESC,id DESC LIMIT 30)
   ${selection}`)
     .all(
-      chatId,
-      chatId,
       chatId,
       chatId,
       chatId,
@@ -86,15 +76,13 @@ function readerActivity(
         ? 'run'
         : row.kind === 'state'
           ? 'story.job'
-          : row.kind === 'extension'
-            ? 'extension-operation'
-            : row.kind === 'illustration'
-              ? 'illustration'
-              : 'job';
+          : row.kind === 'illustration'
+            ? 'illustration'
+            : 'job';
     const time = (status: string) => eventTimes.get(`${row.id}:${prefix}.${status}`);
     // A retry can reuse a job ID; queue time identifies that new user-visible execution.
     const startedAt = row.kind === 'main' ? row.createdAt : (time('queued') ?? row.createdAt);
-    const finishedAt = ['queued', 'running', 'waiting_for_state'].includes(row.status)
+    const finishedAt = ['queued', 'running'].includes(row.status)
       ? null
       : (time(row.status) ?? row.updatedAt);
     return {
@@ -150,24 +138,6 @@ export function readerActivities(
 
 /** Display summaries for an explicit task panel, or the reader's selected Run IDs. */
 export function readerRuns(store: Store, id: string, scope?: string[]) {
-  // Read once for the selected chat/page, rather than fetching full tool histories per response.
-  const behaviorFailures = new Set(
-    (
-      store.db
-        .prepare(`SELECT DISTINCT t.run_id AS id FROM tool_events t JOIN runs r ON r.id=t.run_id
-          WHERE r.chat_id=? ${scope ? 'AND r.id IN (SELECT value FROM json_each(?))' : ''}
-            AND json_extract(t.event,'$.denied')=1
-            AND json_extract(t.event,'$.errorKind')='recoverable'
-            AND json_extract(t.event,'$.name') GLOB 'behavior_*'`)
-        .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as { id: string }[]
-    ).map((row) => row.id)
-  );
-  for (const row of store.db
-    .prepare(`SELECT DISTINCT entity_id AS id FROM events
-      WHERE chat_id=? AND kind='run.package-after-response.unavailable'
-      ${scope ? 'AND entity_id IN (SELECT value FROM json_each(?))' : ''}`)
-    .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as { id: string }[])
-    behaviorFailures.add(row.id);
   store.chat(id);
   // JSON projection happens in SQLite: do not parse quadratic history or diagnostic bodies.
   const runCosts = new Map(
@@ -176,7 +146,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
         .prepare(`SELECT run_id AS runId,COUNT(*) AS attemptCount,
     SUM(CASE WHEN json_extract(response,'$.estimatedCost.status')='estimated' AND json_type(response,'$.estimatedCost.usd') IN ('integer','real') THEN 0 ELSE 1 END) AS unknownCount,
     SUM(COALESCE(json_extract(response,'$.estimatedCost.usd'),json_extract(response,'$.estimatedCost.subtotalUsd'),0)) AS subtotalUsd
-    FROM attempts WHERE chat_id=? AND run_id IS NOT NULL AND job_id IS NULL AND story_job_id IS NULL AND role!='title' ${scope ? 'AND run_id IN (SELECT value FROM json_each(?))' : ''} GROUP BY run_id`)
+    FROM attempts WHERE chat_id=? AND run_id IS NOT NULL AND job_id IS NULL AND role!='title' ${scope ? 'AND run_id IN (SELECT value FROM json_each(?))' : ''} GROUP BY run_id`)
         .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as {
         runId: string;
         attemptCount: number;
@@ -191,18 +161,14 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
   const runs = (
     store.db
       .prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,
-    CASE WHEN status IN ('queued','running','waiting_for_state') THEN '' ELSE partial_text END AS partialText,
+    CASE WHEN status IN ('queued','running') THEN '' ELSE partial_text END AS partialText,
     json_extract(command,'$.retryOf') AS retryOf,
     CASE WHEN source_revision IS NULL THEN (SELECT newer.id FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id ORDER BY newer.created_at DESC,newer.id DESC LIMIT 1) END AS supersededBy,
-    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE json_extract(snapshot,'$.profile.models.main.title') END AS modelTitle,json_extract(snapshot,'$.sourceSegments') AS sourceSegments,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0 OR COALESCE(json_array_length(snapshot,'$.profile.promptPresets.main.program.transforms'),0)>0) AS hasPackages,
+    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE json_extract(snapshot,'$.profile.models.main.title') END AS modelTitle,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
-    CASE WHEN json_type(snapshot,'$.story.preparation')='object' THEN json_object('status',json_extract(snapshot,'$.story.preparation.status'),'reason',json_extract(snapshot,'$.story.preparation.reason'),'missingSources',json_array_length(snapshot,'$.story.preparation.missing'),'lastSourceRevision',json_extract(snapshot,'$.story.preparation.fallback.sourceRevision'),'hasState',json_type(snapshot,'$.story.state')='object' OR json_type(snapshot,'$.story.preparation.fallback')='object') END AS statePreparation,
-    CASE WHEN json_type(behavior_progress.body,'$.preparation')='object' THEN json_object('status',json_extract(behavior_progress.body,'$.preparation.status'),'completed',json_extract(behavior_progress.body,'$.preparation.completed'),'total',json_extract(behavior_progress.body,'$.preparation.total'),'code',json_extract(behavior_progress.body,'$.preparation.code')) END AS packagePreparation,
-    CASE WHEN json_type(behavior_progress.body,'$.afterResponse')='object' THEN json_object('status',json_extract(behavior_progress.body,'$.afterResponse.status'),'completed',json_extract(behavior_progress.body,'$.afterResponse.completed'),'total',json_extract(behavior_progress.body,'$.afterResponse.total'),'failed',(SELECT COUNT(*) FROM json_each(behavior_progress.body,'$.afterResponse.packages') WHERE json_extract(value,'$.status')='failed')) END AS packageAfterResponse,
-    (COALESCE(json_array_length(snapshot,'$.packageBehaviorUnavailable'),0)>0 OR EXISTS(SELECT 1 FROM json_each(snapshot,'$.promptCompilation.warnings') WHERE value GLOB 'PACKAGE_INSTRUCTION_UNAVAILABLE:*')) AS hasPackageIssues,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
     json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
-    FROM runs LEFT JOIN package_behavior_runs behavior_progress ON behavior_progress.run_id=runs.id
+    FROM runs
     WHERE runs.chat_id=? ${scope ? 'AND runs.id IN (SELECT value FROM json_each(?))' : ''} ORDER BY runs.created_at,runs.id`)
       .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as (Record<string, any> & {
       id: string;
@@ -213,35 +179,13 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     })[]
   ).map((row) => ({
     ...row,
-    hasPackageIssues: !!row.hasPackageIssues || behaviorFailures.has(row.id),
     estimatedCost: runCosts.get(row.id),
     snapshot: {
       ...JSON.parse(row.snapshot),
       loreContextReset: !!JSON.parse(row.snapshot).loreContextReset,
     },
     contextSummary: row.contextSummary ? JSON.parse(row.contextSummary) : undefined,
-    statePreparation: row.statePreparation
-      ? {
-          ...JSON.parse(row.statePreparation),
-          hasState: !!JSON.parse(row.statePreparation).hasState,
-        }
-      : undefined,
-    packagePreparation: row.packagePreparation
-      ? (() => {
-          const preparation = JSON.parse(row.packagePreparation);
-          return {
-            status: preparation.status,
-            completed: preparation.completed,
-            total: preparation.total,
-            ...(typeof preparation.code === 'string' ? { code: preparation.code } : {}),
-          };
-        })()
-      : undefined,
     packageStart: row.packageStart ? JSON.parse(row.packageStart) : undefined,
-    packageAfterResponse: row.packageAfterResponse
-      ? JSON.parse(row.packageAfterResponse)
-      : undefined,
-    sourceSegments: row.sourceSegments ? JSON.parse(row.sourceSegments) : undefined,
     usage: row.usage
       ? JSON.parse(row.usage)
       : {
@@ -440,7 +384,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         (run) =>
           run.sourceRevision === null ||
           pageIds.has(run.sourceRevision) ||
-          ['queued', 'running', 'waiting_for_state'].includes(run.status)
+          ['queued', 'running'].includes(run.status)
       )
       .map((run) => run.id)
   );
@@ -459,9 +403,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
       )
         return false;
       return (
-        ['queued', 'running', 'waiting_for_state'].includes(
-          requestRows.get(run.id)?.status ?? ''
-        ) ||
+        ['queued', 'running'].includes(requestRows.get(run.id)?.status ?? '') ||
         (requestOrder(run.id) > previousOrder && requestOrder(run.id) <= finalOrder)
       );
     })

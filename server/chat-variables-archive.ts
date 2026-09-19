@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { validateChatVariableState, type ChatVariableState } from '../core/chat-variables.js';
-import { behaviorPayloadHash } from './package-behavior-store.js';
+import { jsonPayloadHash } from './json-hash.js';
 import { validateChatVariableCommand } from './chat-variables.js';
 import {
   archiveRejector,
@@ -111,10 +111,7 @@ export function validateChatVariablesArchive(store: Store) {
         .get(row.chat_id, payload.expectedSourceHash, payload.expectedSourceHash)
     )
       invalid('journal source ownership');
-    if (
-      payload.idempotencyKey !== row.request_key ||
-      behaviorPayloadHash(payload) !== row.payload_hash
-    )
+    if (payload.idempotencyKey !== row.request_key || jsonPayloadHash(payload) !== row.payload_hash)
       invalid('journal payload');
     const result = validateChatVariableState(JSON.parse(row.result));
     if (

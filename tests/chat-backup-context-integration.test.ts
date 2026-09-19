@@ -1,3 +1,5 @@
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import { prepareNativeRisuReadOnly } from '../server/risu-native-readonly.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -21,7 +23,6 @@ import {
   withContextProjection,
 } from '../server/context-planning.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
-import { runStoryJob } from '../server/story-runner.js';
 import { validateStoryArchive } from '../server/story-archive.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
@@ -45,25 +46,6 @@ function database() {
   const store = new Store(join(path, 'synthetic.sqlite'));
   owned.push({ store, path });
   return store;
-}
-async function finishState(store: Store) {
-  for (const id of store.story.queued()) {
-    const job = store.story.claim(id, 'synthetic-worker');
-    if (!job) continue;
-    const result = await runStoryJob(store.story.bundle(id), {
-      signal: new AbortController().signal,
-      approvedOrigins: [],
-      authorize: (value) => value,
-      onInput: () => {},
-      onToolEvent: () => {},
-      onAttemptStart: () => {
-        throw new Error('No provider calls');
-      },
-      onAttemptFinish: () => {},
-    });
-    expect(result.status).toBe('completed');
-    store.story.finish(id, job.generation, 'synthetic-worker', result);
-  }
 }
 async function turn(store: Store, chatId: string, branchId?: string) {
   const chat = store.chat(chatId),
@@ -91,15 +73,14 @@ async function turn(store: Store, chatId: string, branchId?: string) {
   store.startRun(run.id);
   const source = store.completeRun(
     run.id,
-    '[[event:spend]] 미라는 약속을 기억했어요.',
+    '미라는 약속을 기억했어요.',
     usage,
     run.snapshot.settings
   );
-  await finishState(store);
   return source;
 }
 
-test('full portable roundtrip keeps state and main/helper summaries usable through copies and resumed work', async () => {
+test('full portable roundtrip keeps narrative notes and main/helper summaries usable through copies and resumed work', async () => {
   const store = database();
   const connection = store.product.connection({
     title: 'Synthetic',
@@ -128,17 +109,6 @@ test('full portable roundtrip keeps state and main/helper summaries usable throu
     translation: false,
     status: false,
   });
-  store.story.saveConfig(chat.id, {
-    expectedRevision: 0,
-    stateModel: null,
-    module: {
-      id: 'coins',
-      name: 'Synthetic',
-      mode: 'authoritative',
-      fields: { coins: { type: 'number', initial: 10, min: 0, max: 100 } },
-      rules: { spend: { field: 'coins', delta: -1 } },
-    },
-  });
   const first = await turn(store, chat.id);
   const branch = store.product.createBranch(chat.id, { title: '대안', fromRevision: first.id });
   await turn(store, chat.id, branch.id);
@@ -150,7 +120,12 @@ test('full portable roundtrip keeps state and main/helper summaries usable throu
     expectedHeadRevision: store.chat(chat.id).headRevision,
     idempotencyKey: 'note',
   });
-  const current = helperWritingSnapshot(store, chat.id, `main:${chat.id}`, 'context');
+  const current = await prepareNativeRisuRun(
+    await prepareNativeRisuReadOnly(
+      helperWritingSnapshot(store, chat.id, `main:${chat.id}`, 'context'),
+      'context'
+    )
+  );
   const candidate = withContextProjection(
     current,
     contextSourceRefs(current).slice(0, 1),
@@ -167,7 +142,10 @@ test('full portable roundtrip keeps state and main/helper summaries usable throu
       expectedHeadRevision: store.chat(chat.id).headRevision,
       idempotencyKey: 'context-cancel',
     },
-    helperWritingSnapshot(store, chat.id, `main:${chat.id}`, 'context')
+    await prepareNativeRisuReadOnly(
+      helperWritingSnapshot(store, chat.id, `main:${chat.id}`, 'context'),
+      'context'
+    )
   );
   store.context.cancel(chat.id, contextJob.id);
   const edited = store.context.edit(
@@ -178,7 +156,10 @@ test('full portable roundtrip keeps state and main/helper summaries usable throu
       idempotencyKey: 'context-edit',
       summary: '미라는 약속을 기억해요. 아직 이행하지 않았어요.',
     },
-    helperWritingSnapshot(store, chat.id, `main:${chat.id}`, 'context')
+    await prepareNativeRisuReadOnly(
+      helperWritingSnapshot(store, chat.id, `main:${chat.id}`, 'context'),
+      'context'
+    )
   );
   const helper = new HelperWorkspace(store),
     conversation = helper.open({ kind: 'chat', chatId: chat.id, branchId: `main:${chat.id}` });
@@ -231,7 +212,6 @@ test('full portable roundtrip keeps state and main/helper summaries usable throu
   helper.cancel(next.id);
   const original = exportChatBackup(store, chat.id);
   expect(original.records.contextCheckpoints).toHaveLength(3);
-  expect(original.records.storyStates).toHaveLength(3);
   let backup = original;
   const ids = new Set([chat.id]);
   for (let index = 0; index < 3; index++) {
@@ -256,8 +236,8 @@ test('full portable roundtrip keeps state and main/helper summaries usable throu
     const contextReceipt = restored.records.contextOperations[0].result as any;
     const embedded = contextReceipt.jobs[0].snapshot;
     expect(embedded.chatId).toBe(imported.chat.id);
-    expect(embedded.story.state.id).not.toBe(
-      (original.records.contextOperations[0].result as any).jobs[0].snapshot.story.state.id
+    expect(embedded.story.notes[0].id).not.toBe(
+      (original.records.contextOperations[0].result as any).jobs[0].snapshot.story.notes[0].id
     );
     expect(embedded.contextPlan.dependencyKey).toBe(contextDependencyKey(embedded));
     expect(() => store.context.checkpoint(embedded.contextBase.checkpoint)).not.toThrow();
@@ -282,10 +262,11 @@ test('full portable roundtrip keeps state and main/helper summaries usable throu
     backup = restored;
     if (index === 2) {
       const before = helperWritingSnapshot(store, imported.chat.id, `main:${imported.chat.id}`);
-      expect(before.story!.state!.values.coins).toBe(8);
+      expect(before.story!.notes[0].text).toContain('미라는 아직 약속');
       await turn(store, imported.chat.id);
       const after = helperWritingSnapshot(store, imported.chat.id, `main:${imported.chat.id}`);
-      expect(after.story!.state!.values.coins).toBe(7);
+      expect(after.story!.notes).toEqual(before.story!.notes);
+      expect(after.history.length).toBe(before.history.length + 1);
       expect(() => validateStoryArchive(store)).not.toThrow();
     }
   }

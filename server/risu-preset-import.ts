@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { promptControls } from '../core/risu-prompt.js';
 import type { FastifyInstance } from 'fastify';
 import {
   NATIVE_TRANSFER_FORMAT,
@@ -24,15 +25,7 @@ function analyze(value: unknown) {
     revision: 1,
     title: converted.title,
     role: 'main',
-    program: {
-      ...converted.program,
-      provenance: {
-        sourceHash: input.hash,
-        variant: input.format,
-        conversionVersion: 'native-1',
-        notes: [...new Set(findings.map((finding) => finding.code))],
-      },
-    },
+    program: converted.program,
     values: converted.values,
   };
   const file: NativeTransferFile = {
@@ -65,8 +58,8 @@ function analyze(value: unknown) {
     title: converted.title,
     format: input.format,
     summary: {
-      blocks: converted.program.blocks.length,
-      controls: converted.program.controls.length,
+      blocks: (converted.program.nativeRisuPreset.preset.promptTemplate as unknown[]).length,
+      controls: promptControls(converted.program).length,
       regex: Array.isArray(regex) ? regex.length : 0,
     },
     findings,

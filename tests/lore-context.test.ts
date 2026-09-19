@@ -1,3 +1,6 @@
+import { nativeContent } from './fixtures/native-content.js';
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { writeNote } from './fixtures/notes.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
@@ -13,7 +16,6 @@ import { DEFAULT_LORE_CONTEXT, loreHistory } from '../core/lore-context.js';
 import { freezeLoreContext, verifiedRunLoreReads } from '../server/lore-context.js';
 import type { Run, RunSnapshot } from '../core/types.js';
 import type { ChatProfile, Content } from '../core/product.js';
-import type { ContentPackage } from '../core/content-package.js';
 
 const owned: { store?: Store; dir: string; close?: () => Promise<unknown> }[] = [];
 afterEach(async () => {
@@ -36,7 +38,20 @@ function fixture() {
     kind: 'module',
     title: 'Synthetic reference',
     description: '',
-    text: '0123456789ABCDEFGHIJklmnopqrstUNREAD_TAIL',
+    text: '',
+    package: {
+      ...nativeContent(
+        {
+          name: 'Synthetic reference',
+          character_book: {
+            entries: [{ content: '0123456789ABCDEFGHIJklmnopqrstUNREAD_TAIL', name: 'Reference' }],
+          },
+        },
+        {},
+        'module'
+      ),
+      loreActivation: { mode: 'discoverable' },
+    },
     loading: 'discoverable',
     relatedIds: [],
   }) as Content;
@@ -44,9 +59,18 @@ function fixture() {
   updateTestProfile(store.product, chat.id, {
     ...profile,
     expectedRevision: revision,
-    attachments: [{ id: lore.id, revision: lore.revision }],
+    packageAttachments: [
+      ...profile.packageAttachments!,
+      { id: lore.id, revision: lore.revision, role: 'module' },
+    ],
   });
-  return { store, chat, lore };
+  return {
+    store,
+    chat,
+    lore,
+    loreId: `package:${lore.id}:module:lore:lore-0`,
+    loreText: '0123456789ABCDEFGHIJklmnopqrstUNREAD_TAIL',
+  };
 }
 function update(f: ReturnType<typeof fixture>, changes: Partial<ChatProfile>) {
   const { chatId: _id, revision, ...body } = f.store.product.profile(f.chat.id);
@@ -56,7 +80,7 @@ function update(f: ReturnType<typeof fixture>, changes: Partial<ChatProfile>) {
     expectedRevision: revision,
   });
 }
-function queue(
+async function queue(
   f: ReturnType<typeof fixture>,
   options: { loreContextReset?: boolean; branchId?: string; idempotencyKey?: string } = {}
 ) {
@@ -82,7 +106,13 @@ function queue(
     resources: store.product.resources(c.id, profile),
     profile,
   }));
-  return { ...result, command };
+  const snapshot = compileSnapshotPrompt(
+    freezeLoreContext(store, await prepareNativeRisuRun(result.run.snapshot))
+  );
+  store.db
+    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+    .run(JSON.stringify(snapshot), result.run.id);
+  return { ...result, run: store.run(result.run.id), command };
 }
 function read(
   f: ReturnType<typeof fixture>,
@@ -94,7 +124,7 @@ function read(
   const event = executeTool(run.snapshot, {
     callId: randomUUID(),
     name,
-    args: { id: f.lore.id, offset, limit },
+    args: { id: f.loreId, offset, limit },
   });
   f.store.tool(run.id, event);
   return event;
@@ -108,9 +138,9 @@ function complete(f: ReturnType<typeof fixture>, run: Run, text = 'Synthetic sou
     run.snapshot.settings
   );
 }
-test('only successful main reads retain the exact observed range; search, denied, forged and unread text do not', () => {
+test('only successful main reads retain the exact observed range; search, denied, forged and unread text do not', async () => {
   const f = fixture(),
-    first = queue(f).run;
+    first = (await queue(f)).run;
   read(f, first, 2, 5);
   read(f, first, 0, 1, 'skills.load');
   f.store.tool(
@@ -120,12 +150,12 @@ test('only successful main reads retain the exact observed range; search, denied
   const forged = executeTool(first.snapshot, {
     callId: 'forged',
     name: 'knowledge.read',
-    args: { id: f.lore.id, offset: 20, limit: 3 },
+    args: { id: f.loreId, offset: 20, limit: 3 },
   });
   (forged.result as { text: string }).text = 'FAKE';
   f.store.tool(first.id, forged);
   const source = complete(f, first);
-  const second = queue(f).run,
+  const second = (await queue(f)).run,
     entries = second.snapshot.loreContext!.entries;
   expect(entries).toHaveLength(1);
   expect(entries[0]).toMatchObject({
@@ -138,16 +168,16 @@ test('only successful main reads retain the exact observed range; search, denied
   expect(second.toolEvents).toEqual([]);
   expect(second.inputs).toEqual([]);
 });
-test('overlapping reads append uncovered pieces, repeated use leaves the rendered old reference unchanged', () => {
+test('overlapping reads append uncovered pieces, repeated use leaves the rendered old reference unchanged', async () => {
   const f = fixture(),
-    a = queue(f).run;
+    a = (await queue(f)).run;
   read(f, a, 2, 6);
   const sa = complete(f, a);
-  const b = queue(f).run,
+  const b = (await queue(f)).run,
     oldMessage = loreHistory([], b.snapshot.loreContext)[0];
   read(f, b, 5, 9);
   complete(f, b);
-  const c = queue(f).run,
+  const c = (await queue(f)).run,
     entries = c.snapshot.loreContext!.entries;
   expect(entries.map((e) => [e.start, e.end, e.text])).toEqual([
     [2, 8, '234567'],
@@ -156,22 +186,22 @@ test('overlapping reads append uncovered pieces, repeated use leaves the rendere
   expect(entries[0].origin.sourceRevision).toBe(sa.id);
   expect(loreHistory([], c.snapshot.loreContext)[0]).toEqual(oldMessage);
 });
-test('character and entry budgets evict the least recently used whole slices and do not rescan evicted reads', () => {
+test('character and entry budgets evict the least recently used whole slices and do not rescan evicted reads', async () => {
   const f = fixture();
   update(f, {
     loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedChars: 8, maxRetainedEntries: 2 },
   });
-  const a = queue(f).run;
+  const a = (await queue(f)).run;
   read(f, a, 0, 4);
   complete(f, a);
-  const b = queue(f).run;
+  const b = (await queue(f)).run;
   read(f, b, 10, 4);
   complete(f, b);
-  const c = queue(f).run;
+  const c = (await queue(f)).run;
   read(f, c, 0, 4);
   read(f, c, 20, 4);
   complete(f, c);
-  const d = queue(f).run;
+  const d = (await queue(f)).run;
   expect(d.snapshot.loreContext!.entries.map((e) => e.start)).toEqual([0, 20]);
   expect(d.snapshot.loreContext!.stats).toMatchObject({
     retainedChars: 8,
@@ -179,14 +209,14 @@ test('character and entry budgets evict the least recently used whole slices and
     reasons: ['retention-budget'],
   });
   complete(f, d);
-  expect(queue(f).run.snapshot.loreContext!.entries.map((e) => e.start)).toEqual([0, 20]);
+  expect((await queue(f)).run.snapshot.loreContext!.entries.map((e) => e.start)).toEqual([0, 20]);
 });
-test('new-scene reset is part of idempotency, clears inherited lore once, and permits new scene reads', () => {
+test('new-scene reset is part of idempotency, clears inherited lore once, and permits new scene reads', async () => {
   const f = fixture(),
-    a = queue(f).run;
+    a = (await queue(f)).run;
   read(f, a, 0, 4);
   complete(f, a);
-  const b = queue(f, { loreContextReset: true }),
+  const b = await queue(f, { loreContextReset: true }),
     before = structuredClone(b.run.snapshot);
   expect(b.run.snapshot.loreContext!.entries).toEqual([]);
   expect(b.run.snapshot.loreContext!.stats.reasons).toContain('new-scene');
@@ -200,17 +230,17 @@ test('new-scene reset is part of idempotency, clears inherited lore once, and pe
   ).toThrow('Idempotency key');
   read(f, b.run, 10, 4);
   complete(f, b.run);
-  expect(queue(f).run.snapshot.loreContext!.entries.map((e) => e.start)).toEqual([10]);
+  expect((await queue(f)).run.snapshot.loreContext!.entries.map((e) => e.start)).toEqual([10]);
   expect(f.store.run(b.run.id).snapshot).toEqual(before);
 });
 test.each(['source', 'ancestor'] as const)(
   '%s edits invalidate inherited context and original read receipts',
-  (kind) => {
+  async (kind) => {
     const f = fixture(),
-      a = queue(f).run;
+      a = (await queue(f)).run;
     read(f, a, 0, 4);
     const sa = complete(f, a);
-    const b = queue(f).run;
+    const b = (await queue(f)).run;
     read(f, b, 10, 4);
     const sb = complete(f, b);
     const frozen = structuredClone(f.store.run(b.id).snapshot);
@@ -219,16 +249,16 @@ test.each(['source', 'ancestor'] as const)(
       expectedRevision: 0,
     });
     expect(verifiedRunLoreReads(f.store, f.store.run(b.id))).toEqual([]);
-    expect(queue(f).run.snapshot.loreContext!.entries).toEqual([]);
+    expect((await queue(f)).run.snapshot.loreContext!.entries).toEqual([]);
     expect(f.store.run(b.id).snapshot).toEqual(frozen);
   }
 );
-test('retcon invalidates lore while preserving past snapshots; failed and alternate branch reads stay excluded', () => {
+test('retcon invalidates lore while preserving past snapshots; failed and alternate branch reads stay excluded', async () => {
   const f = fixture(),
-    failed = queue(f).run;
+    failed = (await queue(f)).run;
   read(f, failed, 0, 4);
   f.store.finishRun(failed.id, 'failed', 'synthetic failure');
-  const a = queue(f).run;
+  const a = (await queue(f)).run;
   expect(a.snapshot.loreContext!.entries).toEqual([]);
   read(f, a, 10, 4);
   const sa = complete(f, a);
@@ -236,19 +266,19 @@ test('retcon invalidates lore while preserving past snapshots; failed and altern
     title: 'Other branch',
     fromRevision: null,
   });
-  const other = queue(f, { branchId: branch.id }).run;
+  const other = (await queue(f, { branchId: branch.id })).run;
   expect(other.snapshot.loreContext!.entries).toEqual([]);
   read(f, other, 20, 4);
   complete(f, other);
   writeNote(f.store, f.chat.id, { text: 'Synthetic canon changed.', author: 'Fixture' });
-  const b = queue(f).run;
+  const b = (await queue(f)).run;
   expect(b.snapshot.loreContext!.entries).toEqual([]);
   expect(b.snapshot.loreContext!.stats.reasons).toContain('source-or-canon-changed');
   expect(b.parentRevision).toBe(sa.id);
 });
-test('resource revision and attachment removal remove retained text', () => {
+test('resource revision and attachment removal remove retained text', async () => {
   const f = fixture(),
-    a = queue(f).run;
+    a = (await queue(f)).run;
   read(f, a, 0, 4);
   complete(f, a);
   const revision = f.store.product.content(
@@ -256,43 +286,54 @@ test('resource revision and attachment removal remove retained text', () => {
       kind: 'module',
       title: f.lore.title,
       description: '',
-      text: 'Different revision',
+      text: '',
+      package: {
+        ...nativeContent(
+          { name: f.lore.title, character_book: { entries: [{ content: 'Different revision' }] } },
+          {},
+          'module'
+        ),
+        loreActivation: { mode: 'discoverable' },
+      },
       loading: 'discoverable',
       relatedIds: [],
       expectedRevision: 1,
     },
     f.lore.id
   ) as Content;
-  update(f, { attachments: [{ id: revision.id, revision: revision.revision }] });
-  const b = queue(f).run;
+  update(f, {
+    packageAttachments: [
+      ...f.store.product
+        .profile(f.chat.id)
+        .packageAttachments!.filter((ref) => ref.role !== 'module'),
+      { id: revision.id, revision: revision.revision, role: 'module' },
+    ],
+  });
+  const b = (await queue(f)).run;
   expect(b.snapshot.loreContext!.entries).toEqual([]);
   complete(f, b);
-  const c = queue(f).run;
+  const c = (await queue(f)).run;
   read(f, c, 0, 4);
   complete(f, c);
-  update(f, { attachments: [] });
-  expect(queue(f).run.snapshot.loreContext!.entries).toEqual([]);
+  update(f, {
+    packageAttachments: f.store.product
+      .profile(f.chat.id)
+      .packageAttachments!.filter((ref) => ref.role !== 'module'),
+  });
+  expect((await queue(f)).run.snapshot.loreContext!.entries).toEqual([]);
 });
-test('package revision and persona detachment invalidate only currently excluded reads', () => {
+test('package revision and persona detachment invalidate only currently excluded reads', async () => {
   const f = fixture();
-  const pkg: ContentPackage = {
-    version: 1,
-    id: 'draft',
-    revision: 1,
-    title: 'Persona lore',
-    description: '',
-    lore: [
+  const pkg = {
+    ...nativeContent(
       {
-        id: 'secret',
-        title: 'Known detail',
-        description: '',
-        text: 'PERSONA_REFERENCE_RANGE',
-        loading: 'discoverable',
+        name: 'Persona lore',
+        character_book: { entries: [{ name: 'Known detail', content: 'PERSONA_REFERENCE_RANGE' }] },
       },
-    ],
-    controls: [],
-    instructions: [],
-    transforms: [],
+      {},
+      'persona'
+    ),
+    loreActivation: { mode: 'discoverable' as const },
   };
   const content = f.store.product.content({
     kind: 'persona',
@@ -305,15 +346,8 @@ test('package revision and persona detachment invalidate only currently excluded
   }) as Content;
   const owner = f.store.product.profile(f.chat.id).packageAttachments!;
   update(f, { packageAttachments: [...owner, { id: content.id, revision: 1, role: 'persona' }] });
-  f.store.db
-    .prepare('UPDATE profiles SET body=? WHERE chat_id=?')
-    .run(
-      JSON.stringify({ ...f.store.product.profile(f.chat.id), personaReference: false }),
-      f.chat.id
-    );
-  const a = queue(f).run,
-    id = `package:${content.id}:persona:lore:secret`;
-  expect(a.snapshot.profile).not.toHaveProperty('personaReference');
+  const a = (await queue(f)).run,
+    id = `package:${content.id}:persona:lore:lore-0`;
   f.store.tool(
     a.id,
     executeTool(a.snapshot, {
@@ -324,16 +358,16 @@ test('package revision and persona detachment invalidate only currently excluded
   );
   read(f, a, 0, 4);
   complete(f, a);
-  const b = queue(f).run;
+  const b = (await queue(f)).run;
   expect(b.snapshot.loreContext!.entries).toHaveLength(2);
   complete(f, b);
   update(f, { packageAttachments: owner });
-  const c = queue(f).run;
-  expect(c.snapshot.loreContext!.entries.map((e) => e.id)).toEqual([f.lore.id]);
+  const c = (await queue(f)).run;
+  expect(c.snapshot.loreContext!.entries.map((e) => e.id)).toEqual([f.loreId]);
   complete(f, c);
   update(f, { packageAttachments: [...owner, { id: content.id, revision: 1, role: 'persona' }] });
-  const d = queue(f).run;
-  expect(d.snapshot.loreContext!.entries.map((e) => e.id)).toEqual([f.lore.id]);
+  const d = (await queue(f)).run;
+  expect(d.snapshot.loreContext!.entries.map((e) => e.id)).toEqual([f.loreId]);
   f.store.tool(
     d.id,
     executeTool(d.snapshot, {
@@ -359,11 +393,11 @@ test('package revision and persona detachment invalidate only currently excluded
   update(f, {
     packageAttachments: [...owner, { id: content.id, revision: updated.revision, role: 'persona' }],
   });
-  expect(queue(f).run.snapshot.loreContext!.entries.map((e) => e.id)).toEqual([f.lore.id]);
+  expect((await queue(f)).run.snapshot.loreContext!.entries.map((e) => e.id)).toEqual([f.loreId]);
 });
-test('switching an attached reference to pinned supplies it once and removes the retained copy', () => {
+test('switching an attached reference to pinned supplies it once and removes the retained copy', async () => {
   const f = fixture(),
-    a = queue(f).run;
+    a = (await queue(f)).run;
   read(f, a, 0, 4);
   complete(f, a);
   const updated = f.store.product.content(
@@ -371,25 +405,40 @@ test('switching an attached reference to pinned supplies it once and removes the
       kind: 'module',
       title: f.lore.title,
       description: '',
-      text: f.lore.text,
+      text: '',
+      package: nativeContent(
+        {
+          name: f.lore.title,
+          character_book: { entries: [{ content: f.loreText, constant: true }] },
+        },
+        {},
+        'module'
+      ),
       loading: 'pinned',
       relatedIds: [],
       expectedRevision: 1,
     },
     f.lore.id
   ) as Content;
-  update(f, { attachments: [{ id: updated.id, revision: updated.revision }] });
-  const b = queue(f).run;
+  update(f, {
+    packageAttachments: [
+      ...f.store.product
+        .profile(f.chat.id)
+        .packageAttachments!.filter((ref) => ref.role !== 'module'),
+      { id: updated.id, revision: updated.revision, role: 'module' },
+    ],
+  });
+  const b = (await queue(f)).run;
   expect(b.snapshot.loreContext!.entries).toEqual([]);
   expect(b.snapshot.loreContext!.stats.reasons).toContain('provided-as-pinned');
   const wireText = b.snapshot
     .promptCompilation!.messages.map((m) => m.content.map((c) => c.text).join(''))
     .join('\n');
-  expect(wireText.split(f.lore.text).length - 1).toBe(1);
+  expect(wireText.split(f.loreText).length - 1).toBe(1);
 });
-test('disabled retention, zero budgets and invalid policy are explicit; selection is read only', () => {
+test('disabled retention, zero budgets and invalid policy are explicit; selection is read only', async () => {
   const f = fixture(),
-    a = queue(f).run;
+    a = (await queue(f)).run;
   read(f, a, 0, 4);
   const source = complete(f, a);
   update(f, { loreContext: { ...DEFAULT_LORE_CONTEXT, enabled: false } });
@@ -408,7 +457,7 @@ test('disabled retention, zero budgets and invalid policy are explicit; selectio
     update(f, { loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedChars: -1 } })
   ).toThrow('Invalid lore context policy');
   update(f, { loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedChars: 0 } });
-  expect(queue(f).run.snapshot.loreContext!.entries).toEqual([]);
+  expect((await queue(f)).run.snapshot.loreContext!.entries).toEqual([]);
 });
 test('no-call preview accepts the selected default prompt and unsaved policy without writes', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'uimori-lore-')),
@@ -436,15 +485,15 @@ test('no-call preview accepts the selected default prompt and unsaved policy wit
   });
   expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
 });
-test('whole-context projection carries compacted-source lore after the summary and keeps recent source anchors', () => {
+test('whole-context projection carries compacted-source lore after the summary and keeps recent source anchors', async () => {
   const f = fixture(),
-    a = queue(f).run;
+    a = (await queue(f)).run;
   read(f, a, 0, 4);
   complete(f, a);
-  const b = queue(f).run;
+  const b = (await queue(f)).run;
   read(f, b, 10, 4);
   const source = complete(f, b),
-    c = queue(f).run;
+    c = (await queue(f)).run;
   const projection = [
       { id: 'context-summary', role: 'user' as const, text: 'SYNTHETIC_SOURCE_SUMMARY_ONLY' },
       {

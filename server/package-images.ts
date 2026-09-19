@@ -9,8 +9,7 @@ import { splitSource, type AssetEntry } from '../core/auxiliary.js';
 import type { ProductStore } from './product-store.js';
 import type { Store, Job, Source } from './store.js';
 import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
-import { promptWorkspace } from './prompt-workspace.js';
-import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
+import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 
 export type PackageImageBlob = {
   id: string;
@@ -103,7 +102,7 @@ export function putValidatedImageBlob(
     .run(blob.hash, JSON.stringify(blob));
   return blob;
 }
-export function assertPackageImages(product: ProductStore, pkg: ContentPackage) {
+export function assertPackageImages(product: ProductStore, pkg: RisuContent) {
   for (const image of pkg.images ?? []) {
     const blob = product.get<PackageImageBlob>('package-image', image.blobHash, 1);
     if (blob.hash !== image.blobHash || blob.mime !== image.mime)
@@ -174,7 +173,7 @@ export function validateImageCatalog(store: Store, chatId: string, input: unknow
     let expected: AssetEntry | undefined;
     const match = /^package:([^:]+):(bot|persona|module):([^:]+)$/u.exec(entry.ref);
     if (match) {
-      const pkg = store.product.get<{ package: ContentPackage }>(
+      const pkg = store.product.get<{ package: RisuContent }>(
         'content',
         match[1],
         entry.revision
@@ -252,8 +251,6 @@ export function forkImageInput(
 ): {
   imageCatalog: ImageCatalog;
   imageTarget?: ImageTarget;
-  imageModelSelection?: unknown;
-  imageModelSnapshot?: unknown;
 } {
   const entries = imageCatalog(input).map((entry) => {
     const id = assetIds.get(entry.ref);
@@ -262,12 +259,6 @@ export function forkImageInput(
   const frozen = record(input);
   return {
     ...(frozen.imageTarget ? { imageTarget: frozen.imageTarget as ImageTarget } : {}),
-    ...(Object.hasOwn(frozen, 'imageModelSelection')
-      ? {
-          imageModelSelection: frozen.imageModelSelection,
-          ...(frozen.imageModelSnapshot ? { imageModelSnapshot: frozen.imageModelSnapshot } : {}),
-        }
-      : {}),
     imageCatalog: {
       version: 1,
       hash: createHash('sha256').update(JSON.stringify(entries)).digest('hex'),
@@ -330,25 +321,11 @@ export function imageTargetSource(
   return { ...projected, blocks: splitSource(projected) };
 }
 export function frozenImageSelection(store: Store, snapshot: RunSnapshot) {
-  const selected = promptWorkspace(store).modelRoutes.image;
-  return {
-    ...imageJobInput(store, snapshot),
-    imageModelSelection: selected,
-    ...(selected ? { imageModelSnapshot: store.product.modelSnapshot(selected.id, 'image') } : {}),
-  };
+  return imageJobInput(store, snapshot);
 }
 export function automaticImageSelection(store: Store, snapshot: RunSnapshot) {
   const catalog = imageJobInput(store, snapshot);
-  if (!catalog.imageCatalog.entries.length) return undefined;
-  try {
-    return frozenImageSelection(store, snapshot);
-  } catch {
-    return {
-      ...catalog,
-      imageModelSelection: null,
-      imageSelectionError: 'IMAGE_MODEL_UNAVAILABLE' as const,
-    };
-  }
+  return catalog.imageCatalog.entries.length ? catalog : undefined;
 }
 export function latestImageJob(
   store: Store,
@@ -516,7 +493,7 @@ export function packageImageRoutes(
   app.post('/api/package-bundles/export', { bodyLimit: 8 * 1024 * 1024 }, async (request) => {
     const b = record(request.body);
     fields(b, ['package']);
-    const pkg = validateContentPackage(b.package);
+    const pkg = validateRisuContent(b.package);
     assertPackageImages(store.product, pkg);
     return {
       format: 'uimori-package-bundle',
@@ -537,7 +514,7 @@ export function packageImageRoutes(
       b.images.length > 2000
     )
       throw new HttpError(400, 'Invalid package bundle');
-    const pkg = validateContentPackage(b.package),
+    const pkg = validateRisuContent(b.package),
       blobs = b.images.map(validateImageBlob);
     const hashes = new Set((pkg.images ?? []).map((image) => image.blobHash));
     if (

@@ -58,17 +58,17 @@ beforeEach(() => {
   lib.assertBuild.mockResolvedValue(identity);
   lib.fingerprint.mockResolvedValue({ hash: identity.sourceHash });
   lib.buildFingerprint.mockResolvedValue({ hash: identity.sourceHash });
-  vi.stubEnv('NR_VISUAL_REVIEW', '0');
+  vi.stubEnv('UIMORI_VISUAL_REVIEW', '0');
   lib.browserPath.mockReturnValue(process.execPath);
   lib.killOwned.mockResolvedValue({ exited: true });
   lib.artifactScan.mockImplementation(realLib.artifactScan);
   lib.json.mockImplementation(realLib.json);
   lib.startServer.mockImplementation(
     async (env: Record<string, string>, _directory: string, children: Set<unknown>) => {
-      await writeFile(env.NR_DB!, 'synthetic DB evidence');
+      await writeFile(env.UIMORI_DB!, 'synthetic DB evidence');
       const child = { pid: 12345, exitCode: 0, signalCode: null };
       children.add(child);
-      return { child, ready: { url: 'http://127.0.0.1:1', dbPath: env.NR_DB } };
+      return { child, ready: { url: 'http://127.0.0.1:1', dbPath: env.UIMORI_DB } };
     }
   );
   lib.command.mockImplementation(
@@ -149,31 +149,31 @@ test('browser harness preserves selected commands, verified identity and DB evid
 test.each([false, true])(
   'local verification isolates inherited self-host and Codex settings at the real spawn boundary (provider fixture: %s)',
   async (providerFixture) => {
-    vi.stubEnv('NR_PUBLIC_ORIGIN', 'https://synthetic-self-host.example');
-    vi.stubEnv('NR_HOST', '0.0.0.0');
-    vi.stubEnv('NR_PORT', '4310');
-    vi.stubEnv('NR_ACCESS_TOKEN', 'synthetic-parent-token-for-harness-only');
-    vi.stubEnv('NR_PROVIDER_ORIGINS', 'https://synthetic-provider.example');
-    vi.stubEnv('NR_CODEX_ENABLED', '1');
-    vi.stubEnv('NR_CODEX_EXECUTABLE', 'synthetic-parent-codex.exe');
+    vi.stubEnv('UIMORI_PUBLIC_ORIGIN', 'https://synthetic-self-host.example');
+    vi.stubEnv('UIMORI_HOST', '0.0.0.0');
+    vi.stubEnv('UIMORI_PORT', '4310');
+    vi.stubEnv('UIMORI_ACCESS_TOKEN', 'synthetic-parent-token-for-harness-only');
+    vi.stubEnv('UIMORI_PROVIDER_ORIGINS', 'https://synthetic-provider.example');
+    vi.stubEnv('UIMORI_CODEX_ENABLED', '1');
+    vi.stubEnv('UIMORI_CODEX_EXECUTABLE', 'synthetic-parent-codex.exe');
     await run({ providerFixture });
     const env: NodeJS.ProcessEnv = lib.startServer.mock.calls[0][0];
-    const providerOrigins = providerFixture ? new URL(env.NR_PROVIDER_FIXTURE_URL!).origin : '';
+    const providerOrigins = providerFixture ? new URL(env.UIMORI_PROVIDER_FIXTURE_URL!).origin : '';
     if (providerFixture) expect(new URL(providerOrigins).hostname).toBe('127.0.0.1');
     const probe = await realLib.command(
       [
         '-e',
         `process.stdout.write(JSON.stringify({
-        publicOriginPresent: Object.hasOwn(process.env, 'NR_PUBLIC_ORIGIN'),
-        codexExecutablePresent: Object.hasOwn(process.env, 'NR_CODEX_EXECUTABLE'),
+        publicOriginPresent: Object.hasOwn(process.env, 'UIMORI_PUBLIC_ORIGIN'),
+        codexExecutablePresent: Object.hasOwn(process.env, 'UIMORI_CODEX_EXECUTABLE'),
         env: {
-          NR_PUBLIC_ORIGIN: process.env.NR_PUBLIC_ORIGIN,
-          NR_HOST: process.env.NR_HOST,
-          NR_PORT: process.env.NR_PORT,
-          NR_TEST_MODE: process.env.NR_TEST_MODE,
-          NR_ACCESS_TOKEN: process.env.NR_ACCESS_TOKEN,
-          NR_PROVIDER_ORIGINS: process.env.NR_PROVIDER_ORIGINS,
-          NR_CODEX_ENABLED: process.env.NR_CODEX_ENABLED,
+          UIMORI_PUBLIC_ORIGIN: process.env.UIMORI_PUBLIC_ORIGIN,
+          UIMORI_HOST: process.env.UIMORI_HOST,
+          UIMORI_PORT: process.env.UIMORI_PORT,
+          UIMORI_TEST_MODE: process.env.UIMORI_TEST_MODE,
+          UIMORI_ACCESS_TOKEN: process.env.UIMORI_ACCESS_TOKEN,
+          UIMORI_PROVIDER_ORIGINS: process.env.UIMORI_PROVIDER_ORIGINS,
+          UIMORI_CODEX_ENABLED: process.env.UIMORI_CODEX_ENABLED,
         },
       }));`,
       ],
@@ -184,23 +184,23 @@ test.each([false, true])(
     expect(child.publicOriginPresent).toBe(false);
     expect(child.codexExecutablePresent).toBe(false);
     expect(child.env).toEqual({
-      NR_HOST: '127.0.0.1',
-      NR_PORT: '0',
-      NR_TEST_MODE: '1',
-      NR_ACCESS_TOKEN: '',
-      NR_PROVIDER_ORIGINS: providerOrigins,
-      NR_CODEX_ENABLED: '0',
+      UIMORI_HOST: '127.0.0.1',
+      UIMORI_PORT: '0',
+      UIMORI_TEST_MODE: '1',
+      UIMORI_ACCESS_TOKEN: '',
+      UIMORI_PROVIDER_ORIGINS: providerOrigins,
+      UIMORI_CODEX_ENABLED: '0',
     });
     const policy = networkPolicy({
-      publicOrigin: child.env.NR_PUBLIC_ORIGIN,
-      accessToken: child.env.NR_ACCESS_TOKEN,
-      testMode: child.env.NR_TEST_MODE === '1',
+      publicOrigin: child.env.UIMORI_PUBLIC_ORIGIN,
+      accessToken: child.env.UIMORI_ACCESS_TOKEN,
+      testMode: child.env.UIMORI_TEST_MODE === '1',
     });
     expect(policy).toEqual({});
     expect(listenAddress(child.env, policy)).toEqual({ host: '127.0.0.1', port: 0 });
-    expect(process.env.NR_PUBLIC_ORIGIN).toBe('https://synthetic-self-host.example');
-    expect(process.env.NR_CODEX_ENABLED).toBe('1');
-    expect(process.env.NR_CODEX_EXECUTABLE).toBe('synthetic-parent-codex.exe');
+    expect(process.env.UIMORI_PUBLIC_ORIGIN).toBe('https://synthetic-self-host.example');
+    expect(process.env.UIMORI_CODEX_ENABLED).toBe('1');
+    expect(process.env.UIMORI_CODEX_EXECUTABLE).toBe('synthetic-parent-codex.exe');
   }
 );
 
@@ -287,7 +287,7 @@ test('focused visual checks narrow the existing selection and record their actua
   expect(summary.visualReview).toBe(true);
   expect(lib.command).toHaveBeenCalledWith(
     expect.arrayContaining(['--grep', summary.selection.grep]),
-    expect.objectContaining({ env: expect.objectContaining({ NR_VISUAL_REVIEW: '1' }) })
+    expect.objectContaining({ env: expect.objectContaining({ UIMORI_VISUAL_REVIEW: '1' }) })
   );
 });
 
@@ -335,13 +335,13 @@ test('missing browser records BLOCKED before any server or test launch', async (
 test.each(['missing', 'invalid-signature', 'truncated', 'valid'])(
   'required PNG evidence is checked on disk: %s',
   async (scenario) => {
-    vi.stubEnv('NR_VISUAL_REVIEW', '1');
+    vi.stubEnv('UIMORI_VISUAL_REVIEW', '1');
     const originalCommand = lib.command.getMockImplementation();
     const relativeScreenshot = path.join('browser', 'nested-output', 'required.png');
     lib.command.mockImplementation(
       async (args: string[], options: { env: Record<string, string> }) => {
         if (scenario !== 'missing') {
-          const directory = path.join(options.env.NR_BROWSER_OUTPUT!, 'nested-output');
+          const directory = path.join(options.env.UIMORI_BROWSER_OUTPUT!, 'nested-output');
           await mkdir(directory, { recursive: true });
           const valid = Buffer.from(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9n8AAAAASUVORK5CYII=',
@@ -375,7 +375,7 @@ test('passing browser assertions cannot hide errors from the actual loopback pro
   const originalCommand = lib.command.getMockImplementation();
   lib.command.mockImplementation(
     async (args: string[], options: { env: Record<string, string> }) => {
-      const response = await fetch(options.env.NR_PROVIDER_FIXTURE_URL!, {
+      const response = await fetch(options.env.UIMORI_PROVIDER_FIXTURE_URL!, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ protocol: 'unexpected-fixture-request', input: {} }),

@@ -13,7 +13,7 @@ import {
 import { resolve, join, relative, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const database = 'narrative.sqlite';
+const database = 'uimori.sqlite';
 const credentials = [`${database}.vertex-credentials`, `${database}.codex/auth.json`];
 const quote = (name) => `"${name.replaceAll('"', '""')}"`;
 
@@ -37,7 +37,7 @@ export function inspectData(directory, { integrity = false, idle = true, columns
       if (!info.some((column) => column.name === 'status')) continue;
       const { count } = db
         .prepare(
-          `SELECT count(*) AS count FROM ${quote(name)} WHERE status IN ('queued','running','waiting_for_state')`
+          `SELECT count(*) AS count FROM ${quote(name)} WHERE status IN ('queued','running')`
         )
         .get();
       if (count) active[name] = count;

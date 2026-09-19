@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { BACKUP_COLLECTIONS, type BackupTables } from './chat-backup-codec.js';
 
 export type BackupRow = Record<string, any>;
@@ -22,7 +22,6 @@ const SHARED = new Set([
   'library_organization_state',
   'library_folders',
   'library_placements',
-  'package_behavior_entropy',
   'illustration_settings',
 ]);
 const identityFields = new Set([
@@ -120,13 +119,7 @@ export function createBackupRemap(
     if (SHARED.has(table)) continue;
     for (const row of tables[table]) {
       const value = row.id ?? (table.endsWith('_operations') ? row.operation_id : undefined);
-      if (typeof value === 'string' && !ids.has(value))
-        ids.set(
-          value,
-          table === 'package_behavior_opportunities'
-            ? randomBytes(32).toString('hex')
-            : randomUUID()
-        );
+      if (typeof value === 'string' && !ids.has(value)) ids.set(value, randomUUID());
     }
   }
   // Deleted outline nodes survive only in immutable creation/operation receipts. They still

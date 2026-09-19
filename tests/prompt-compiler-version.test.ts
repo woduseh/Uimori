@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { buildMainInput, CATALOG_SUMMARY_CHARS } from '../core/provider.js';
-import { PROMPT_COMPILER_VERSION } from '../core/prompt-program.js';
+import { PROMPT_COMPILER_VERSION } from '../core/risu-prompt.js';
 import { NATIVE_HOST_CONTEXT_ID, nativeHostContextText } from '../core/provider-messages.js';
 import { attachMainHostContext, requestInput } from '../server/main-host-context.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
@@ -41,7 +41,6 @@ function snapshot(resources: Resource[]): RunSnapshot {
     resources,
     profile: {
       ...defaultProfile('version-chat'),
-      contents: [],
       models: {
         main: {
           id: 'main-preset',
@@ -61,61 +60,20 @@ const hostText = (compiled: RunSnapshot) =>
   compiled.promptCompilation!.messages.find((message) => message.id === NATIVE_HOST_CONTEXT_ID)!
     .content[0].text;
 
-test('a fresh compilation lists the compact catalog while uimori-prompt-1 reproduces the full one', () => {
+test('the native compilation uses one compiler and a compact reference catalog', () => {
   const many = Array.from({ length: 120 }, (_, index) => lore(index));
   const current = compileSnapshotPrompt(snapshot(many));
   expect(current.promptCompilation!.compilerVersion).toBe(PROMPT_COMPILER_VERSION);
-  expect(PROMPT_COMPILER_VERSION).toBe('uimori-prompt-2');
+  expect(PROMPT_COMPILER_VERSION).toBe('risu-native-prompt-1');
   const compact = buildMainInput(snapshot(many));
   expect(hostText(current)).toBe(nativeHostContextText({ input: requestInput(current, compact) }));
   expect(compact.catalog[0].description).toHaveLength(CATALOG_SUMMARY_CHARS);
   expect(compact.catalog[0]).not.toHaveProperty('loreContext');
-
-  const legacy = compileSnapshotPrompt(snapshot(many), undefined, undefined, {
-    compilerVersion: 'uimori-prompt-1',
-  });
-  expect(legacy.promptCompilation!.compilerVersion).toBe('uimori-prompt-1');
-  const full = buildMainInput(snapshot(many), [], { compilerVersion: 'uimori-prompt-1' });
-  expect(hostText(legacy)).toBe(nativeHostContextText({ input: requestInput(legacy, full) }));
-  expect(hostText(legacy)).not.toBe(hostText(current));
-  expect(full.catalog).toHaveLength(100);
-  expect(full.catalogPage).toEqual({
-    total: many.length,
-    listed: 100,
-    remaining:
-      'Use knowledge.search or skills.list with pagination to discover the full approved scope.',
-  });
-  expect(full.catalog[0]).toMatchObject({
-    id: 'lore-0',
-    description: many[0].description,
-    loreContext: many[0].loreContext,
-    loading: 'discoverable',
-  });
-  expect(full.catalog[0]).not.toHaveProperty('text');
-  expect(full.catalog[0]).not.toHaveProperty('chatId');
-  const few = buildMainInput(snapshot(many.slice(0, 3)), [], {
-    compilerVersion: 'uimori-prompt-1',
-  });
-  expect(few.catalogPage).toBeUndefined();
-  expect(few.catalog).toHaveLength(3);
-});
-
-test('a stored uimori-prompt-1 compilation attaches and builds a request without a collision', () => {
-  const many = Array.from({ length: 120 }, (_, index) => lore(index));
-  const legacy = compileSnapshotPrompt(snapshot(many), undefined, undefined, {
-    compilerVersion: 'uimori-prompt-1',
-  });
-  expect(attachMainHostContext(legacy)).toEqual(legacy);
-  const built = buildMainProviderRequest(legacy);
-  expect(built.request.prompt!.compilerVersion).toBe('uimori-prompt-1');
-  expect(built.request.input.catalog).toHaveLength(100);
-  expect(JSON.stringify(built.request.input.catalog)).toContain(many[0].description);
-  expect(built.input.catalog[0]).toHaveProperty('loreContext');
-
-  const restamped = structuredClone(legacy);
-  restamped.promptCompilation!.compilerVersion = 'uimori-prompt-2';
-  expect(() => attachMainHostContext(restamped)).toThrow('NATIVE_HOST_CONTEXT_COLLISION');
-  const tampered = structuredClone(legacy);
+  expect(attachMainHostContext(current)).toEqual(current);
+  expect(buildMainProviderRequest(current).request.prompt!.compilerVersion).toBe(
+    PROMPT_COMPILER_VERSION
+  );
+  const tampered = structuredClone(current);
   tampered.promptCompilation!.messages.find(
     (message) => message.id === NATIVE_HOST_CONTEXT_ID
   )!.content[0].text += ' ';

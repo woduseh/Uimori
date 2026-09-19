@@ -2,14 +2,14 @@ import { Dialog } from './Dialog.js';
 import { CloseIcon, DeleteIcon } from './ui-icons.js';
 import { Switch } from './BooleanControls.js';
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { ContentPackage } from '../core/content-package.js';
+import type { RisuContent } from '../core/risu-content.js';
 import { PACKAGE_IMAGE_MIMES, type PackageImage } from '../core/package-images.js';
 import { maxPackageImages, uploadPackageImage } from './package-image-upload.js';
 import './package-images.css';
 
 type Props = {
-  value: ContentPackage;
-  onChange: (value: ContentPackage) => void;
+  value: RisuContent;
+  onChange: (value: RisuContent) => void;
   onDirtyChange?: (dirty: boolean) => void;
 };
 const pageSize = 50;

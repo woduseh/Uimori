@@ -3,8 +3,8 @@ import { isolatePromptDrafts } from './fixtures/prompt-workspace.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Content } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
-import { navigationAction, selectPromptBlock, selectPromptSection } from './ui-navigation.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
+import { navigationAction } from './ui-navigation.js';
 
 isolatePromptDrafts();
 
@@ -50,14 +50,16 @@ test('PLR02 every package category is editable from card and list controls', asy
         await menu.click();
         await menu.locator('..').getByRole('button', { name: '편집', exact: true }).click();
       }
-      await expect(library.getByLabel('자료 이름', { exact: true })).toHaveValue(item.title);
-      await expect(library.getByLabel('자료 본문', { exact: true })).toHaveValue('Synthetic only.');
+      await expect(library.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(item.title);
+      await expect(library.getByLabel('캐릭터 설정', { exact: true })).toHaveValue(
+        'Synthetic only.'
+      );
       await library.getByRole('button', { name: '서재 목록', exact: true }).click();
     }
   }
 });
 
-test('PLR03 creation displays and saves role defaults and preview uses block names', async ({
+test('PLR03 native prompt creation saves role defaults and preserves invalid regex drafts', async ({
   page,
   request,
 }, info) => {
@@ -70,18 +72,17 @@ test('PLR03 creation displays and saves role defaults and preview uses block nam
     .first()
     .click();
   const editor = page.getByTestId('prompt-editor');
-  const composer = editor.getByTestId('prompt-composer');
+  const native = editor.getByRole('region', { name: 'Risu 프롬프트 원본 편집' });
   const selection = editor.getByLabel('불러올 프롬프트', { exact: true });
   await expect(selection.locator('option[value="builtin"], option[value="new"]')).toHaveCount(0);
-  await expect(composer.getByRole('button', { name: '간단 편집', exact: true })).toHaveCount(0);
+  await expect(editor.getByTestId('prompt-composer')).toHaveCount(0);
   for (const [role, text] of [
     ['main', DEFAULT_MAIN_PROMPT],
     ['translation', DEFAULT_TRANSLATION_PROMPT],
   ] as const) {
     await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption(role);
-    const instructions = editor.locator('#prompt-block-instructions');
-    await selectPromptBlock(editor, '지침');
-    await expect(instructions.getByLabel('지침 본문', { exact: true })).toHaveValue(text);
+    await native.locator('details').first().locator('summary').click();
+    await expect(native.getByLabel('1번 프롬프트 본문', { exact: true })).toHaveValue(text);
     const title = `PLR 기본 ${role} ${crypto.randomUUID()}`;
     await editor.getByLabel('프롬프트 이름', { exact: true }).fill(title);
     const savedResponse = page.waitForResponse(
@@ -97,18 +98,15 @@ test('PLR03 creation displays and saves role defaults and preview uses block nam
       `/api/revisions/prompt-preset/${saved.id}/${saved.revision}`
     );
     expect(persisted.ok()).toBe(true);
-    expect((await persisted.json()).program).toEqual(createDefaultPromptProgram(text, role));
+    expect((await persisted.json()).program).toEqual(createDefaultRisuPrompt(text, role));
   }
-  const input = composer.getByLabel('미리보기 원문', { exact: true });
-  await expect(input).not.toBeVisible();
-  await selectPromptSection(composer, '미리보기');
-  await input.fill('합성 미리보기 접기 입력 보존');
-  await composer.getByRole('button', { name: '미리보기 갱신', exact: true }).click();
-  await expect(composer.locator('.pc-preview-result')).toBeVisible();
-  await composer.locator('summary').filter({ hasText: '블록별 조건과 포함 결과' }).click();
-  const trace = composer.locator('.pc-preview-result table');
-  await expect(trace).toContainText('지침');
-  await expect(trace).not.toContainText('instructions');
+  await native.getByText('정규식 스크립트', { exact: true }).click();
+  const regex = native.getByLabel('Risu 정규식 원본 JSON');
+  await regex.fill('[{"unfinished":');
+  await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
+  await expect(regex).toHaveValue('[{"unfinished":');
+  await regex.fill('[]');
+  await expect(native.getByRole('alert')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );

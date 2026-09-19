@@ -1,8 +1,8 @@
-import { validateContentPackage } from '../../core/content-package.js';
+import { validateRisuContent } from '../../core/risu-content.js';
 
 /** Entirely synthetic common panel with a dependent selector, nested ledger and dynamic instructions. */
 export function createPanelPackage() {
-  return validateContentPackage({
+  return validateRisuContent({
     version: 1,
     id: 'panel-example',
     revision: 1,

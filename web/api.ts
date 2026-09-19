@@ -120,7 +120,6 @@ export async function apiBinary<T>(path: string, body: Blob): Promise<T> {
 }
 
 export const labels: Record<string, string> = {
-  waiting_for_state: '상태 확인 대기',
   queued: '대기',
   running: '진행 중',
   completed: '완료',

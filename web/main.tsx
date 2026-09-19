@@ -1,3 +1,4 @@
+import { promptControls } from '../core/risu-prompt.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { ReadabilitySettings } from './ReadabilitySettings.js';
 import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
@@ -44,13 +45,13 @@ import {
   X,
 } from 'lucide-react';
 import type { Content } from '../core/product.js';
-import { reconcilePromptValues } from '../core/prompt-program.js';
+import { reconcilePromptValues } from '../core/risu-prompt.js';
 import { api, saveDownload } from './api.js';
 import { refValue } from './content-ref.js';
 import { deferredPanel } from './deferredPanel.js';
 import { ContentPicker } from './ContentPicker.js';
 import { ContentAvatar } from './ContentAvatar.js';
-import type { PackageRole } from '../core/content-package.js';
+import type { ContentRole } from '../core/risu-content.js';
 import { SourceReader } from './SourceReader.js';
 import { TurnActivity } from './TurnActivity.js';
 import { SessionGate } from './SessionGate.js';
@@ -148,7 +149,7 @@ const SIDEBAR_WIDTH = 248;
 const RAIL_WIDTH = 56;
 /* Below this the centre column stops being comfortable to read or edit in. */
 const MIN_CENTER_WIDTH = 768;
-const runActive = (status: string) => ['queued', 'running', 'waiting_for_state'].includes(status);
+const runActive = (status: string) => ['queued', 'running'].includes(status);
 const runFailed = (status: string) =>
   ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(status);
 function App() {
@@ -344,7 +345,7 @@ function App() {
   const currentPrompt = s.currentPrompt;
   const pinned = s.detail?.profile?.pinned;
   const promptAvailable = !pinned?.mainPromptPresetId || !!currentPrompt;
-  const hasCreativeOptions = !!currentPrompt?.program.controls.length;
+  const hasCreativeOptions = !!currentPrompt && promptControls(currentPrompt.program).length > 0;
   const creativePresets =
     s.library?.promptCombinations?.filter(
       (item) =>
@@ -375,7 +376,7 @@ function App() {
     if (!currentPrompt || !currentProgram || c.role !== 'main') return false;
     const currentValues = reconcilePromptValues(currentProgram, currentPrompt.values).values;
     const savedValues = reconcilePromptValues(currentProgram, c.values).values;
-    return currentProgram.controls.every(
+    return promptControls(currentProgram).every(
       (control) => currentValues[control.id] === savedValues[control.id]
     );
   });
@@ -524,7 +525,7 @@ function App() {
       setPendingNavigation(() => go);
     } else go();
   }
-  function useContent(content: Content, role: PackageRole) {
+  function useContent(content: Content, role: ContentRole) {
     if (role === 'bot') newStory(content);
     else if (role === 'persona') newStory(undefined, undefined, content);
     else setModuleToUse(content);
@@ -999,10 +1000,6 @@ function App() {
                                 !!s.detail!.runs.find((run) => run.id === source.runId)?.hasPackages
                               }
                               presentationRefreshKey={s.detail!.reader.cursor}
-                              sourceSegments={
-                                s.detail!.runs.find((run) => run.id === source.runId)
-                                  ?.sourceSegments
-                              }
                               key={source.id}
                               source={source}
                               index={index + (s.detail?.reader?.start ?? 0)}
@@ -1636,10 +1633,6 @@ function App() {
           onGlobalSettings={(section) => {
             setSettingsTab(section);
             setPanel('settings');
-          }}
-          onRunRequest={(text, id) => {
-            s.editDraft(text, id);
-            requestAnimationFrame(() => s.input.current?.focus());
           }}
         />
       )}

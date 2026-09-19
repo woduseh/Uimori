@@ -20,14 +20,14 @@ afterEach(async () => {
     if (
       isAbsolute(within) ||
       within.startsWith('..') ||
-      !basename(target).startsWith('narrative-m1-archive-')
+      !basename(target).startsWith('uimori-archive-')
     )
       throw new Error('Unsafe test cleanup');
     await rm(target, { recursive: true, force: true });
   }
 });
 async function database() {
-  const directory = await mkdtemp(join(tmpdir(), 'narrative-m1-archive-'));
+  const directory = await mkdtemp(join(tmpdir(), 'uimori-archive-'));
   const store = new Store(join(directory, 'story.sqlite'));
   owned.push({ directory, store });
   return store;
@@ -80,7 +80,10 @@ async function prepared() {
   const profile = store.product.profile(a.id);
   updateTestProfile(store.product, a.id, {
     expectedRevision: profile.revision,
-    attachments: [{ id: lore.id, revision: lore.revision }],
+    packageAttachments: [
+      ...profile.packageAttachments!,
+      { id: lore.id, revision: lore.revision, role: 'module' },
+    ],
 
     routes: profile.routes,
     image: false,
@@ -122,24 +125,6 @@ async function prepared() {
 }
 
 describe('M1 archive trust boundaries in a fresh file SQLite database', () => {
-  test('v14 archives preserve the retired issue column without exposing a run control', async () => {
-    const original = await prepared();
-    const runId = original.archive.tables.runs[0].id;
-    original.store.db
-      .prepare('UPDATE runs SET issue=? WHERE id=?')
-      .run('historical-issue-marker', runId);
-    const archive = original.store.product.export();
-    expect(archive.tables.runs.find((row) => row.id === runId)?.issue).toBe(
-      'historical-issue-marker'
-    );
-    const target = await database();
-    expect(target.product.import(archive)).toEqual({ restored: true, chats: 2 });
-    expect(target.product.export().tables.runs.find((row) => row.id === runId)?.issue).toBe(
-      'historical-issue-marker'
-    );
-    expect(target.run(runId)).not.toHaveProperty('issue');
-  });
-
   test('P11 restores complete plain translation text and normalizes asset URLs without mutating input', async () => {
     const original = await prepared();
     const archive = structuredClone(original.archive);

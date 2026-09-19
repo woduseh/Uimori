@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { defaultProfile } from '../core/product.js';
-import type { ContentPackage } from '../core/content-package.js';
+import type { RisuContent } from '../core/risu-content.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { ProviderRequest } from '../core/transport.js';
 import { importRisuPresetProgram } from '../server/risu-preset-program.js';
@@ -20,7 +20,7 @@ async function prepared(code?: string) {
     ],
     promptSettings: { assistantPrefill: 'Continue: ' },
   }).program;
-  const pkg: ContentPackage = {
+  const pkg: RisuContent = {
     version: 1,
     id: 'bot',
     revision: 1,
@@ -29,8 +29,6 @@ async function prepared(code?: string) {
     body: 'Bot',
     lore: [],
     instructions: [],
-    controls: [],
-    transforms: [],
     nativeRisu: {
       version: 1,
       sourceHash: 'a'.repeat(64),

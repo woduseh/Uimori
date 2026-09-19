@@ -1,140 +1,32 @@
-# 제한된 실행 context와 계산
+# Risu 네이티브 프롬프트 실행
 
-프롬프트 제작 코드는 한 번 데이터 AST를 만들고, 요청마다 host가 넘긴 JSON context를 읽어 AST를 평가해요. `PromptProgram.version: 1`과 기존 scalar `PromptValue`/control 의미는 유지해요. 새 실행 값 `RuntimeValue`는 scalar, 배열, 문자열 key를 가진 객체를 지원해요. 외부 IO, 코드 실행, 상태 저장, 난수 생성은 이 평가기의 기능이 아니에요.
+프롬프트는 필수 `nativeRisuPreset` 안에 Risu의 `promptTemplate`, CBS 본문, 토글 선언, 기본 변수, 프리셋 정규식을 보관해요. 별도의 Uimori 블록 AST·표현식·템플릿·정규식 변환 문법은 없어요. 저장·가져오기·복원은 같은 네이티브 계약을 검사하며 이전 독자 형식으로 우회하지 않아요.
 
-작문 프롬프트의 선택적 `collaboration` 설정은 host가 제공하는 읽기 전용 에이전트를 구성해요. AST 평가 중 모델을 호출하지 않으며, [에이전트 협업](AGENT-COLLABORATION.md)의 별도 실행기가 Run의 호출 한도·snapshot·취소 계약으로 실행해요.
+## 저장과 편집
 
-프롬프트의 선택적 `transforms`는 [텍스트 변환](PROMPT-TRANSFORMS.md)을 사용해요. AST 컴파일러가 정규식을 실행하지 않고, Host가 별도 준비한 결과를 적용해요.
+RISUP 가져오기는 프롬프트 관련 필드만 선택해요. API 키·연결 주소·모델 선택·샘플링 설정은 활성 프롬프트에 넣지 않으며 Uimori 모델 설정이 관리해요. `web/NativeRisuPresetEditor.tsx`에서 원본 블록, 역할, 순서, CBS, 토글, 기본 변수, 정규식을 편집해요. 검증하지 않은 JSON 초안은 저장을 막고 편집기에 유지해요.
 
-## 공개 API
+`promptControls()`는 `customPromptTemplateToggle`에서 입력 UI를 계산해요. 선택 토글 값은 Risu의 문자열 인덱스, 텍스트 값은 문자열, 미설정은 null이에요. UI 옵션 정의는 별도 작성 원본이 아니에요. 현재 선택값과 저장 조합은 workspace revision CAS로 저장하며, 정의가 다른 조합은 적용하지 않아요.
 
-프롬프트 편집·옵션 조합의 새 저장은 `validateEditablePromptProgram`과 `resolveEditablePromptValues`로 boolean 기본값/명시 값을 `true | false`로 제한해요. UI는 기존 boolean `null`을 꺼짐으로 보여주고 사용자가 저장할 때 `false`로 확정해요. 텍스트·숫자·선택 옵션의 `null`은 유지해요. 과거 Run·보관 파일을 읽고 평가하는 기존 검증/해석기는 변경하지 않으며 운영 DB를 자동 이관하지 않아요.
+기본 제공 Phēmē·Hermēneía도 동일한 원본 형식이에요. [기본 제공 프롬프트](BUILTIN-PROMPTS.md)를 참고해요.
 
-### Gemini 중간 system 임시 호환 처리
+## 실행과 보존
 
-2026-09-08: `core/provider-messages.ts`는 모델 ID가 `gemini-*`(게이트웨이의 `google/gemini-*` 등 마지막 경로 요소 포함)일 때 첫 non-system 메시지 이후의 모든 system 메시지를 전송 시 user로 바꿔요. 선두의 연속 system, 본문, 순서, 저장된 AST·Run snapshot은 보존하며 `GEMINI_MID_SYSTEM_TO_USER` 진단에 원래 block/index를 남겨요. Vertex는 기존 방식대로 연속 user의 parts를 합쳐요. 다른 모델의 role·지원 검사는 유지해요.
+1. 서버가 해당 Run의 대화·요청·변수·시각을 고정해요.
+2. 네이티브 CBS worker가 프롬프트 필드를 평가하고 `nativeRisuPresetProgram`에 원본 해시, 평가문, 변수, 진단을 기록해요.
+3. `compileRisuPrompt()`은 이 평가문이 적용된 Risu 블록에 호스트의 인물·로어·대화 슬롯을 넣어 모델 메시지를 구성해요. `{{slot}}`은 이 단계의 원문 삽입 표시예요.
+4. 공급자 인코더가 논리 메시지의 역할·캐시·prefill을 해당 프로토콜에 맞춰 직렬화해요.
 
-영구적인 Gemini 제약으로 간주하지 않아요. 신모델이 중간 system을 지원하면 모델·프로토콜별 지원을 확인하고 해당 모델의 변환을 해제하도록 개선해요. 현재 검증은 로컬 직렬화 회귀이며 실제 Gemini 응답·품질 검증은 아니에요.
+컴파일러 표시는 `risu-native-prompt-1`이에요. 과거 독자 컴파일러 버전은 실행하지 않아요. 히스토리 식별자와 원문 해시를 유지하고 같은 히스토리를 중복 삽입하는 구성은 거절해요. Risu의 `memory` 블록은 별도 기억을 주입하지 않으며 Uimori가 준비한 기억·문맥을 사용해요. 모델 요청 전 준비가 필요한 네이티브 프롬프트는 CBS 평가가 끝나기 전 전송하지 않아요.
 
-```ts
-validatePromptExpression(value, controlIds = [], localNames = []): PromptExpression
-validatePromptTemplate(value, controlIds = [], localNames = []): PromptTemplate
-evaluatePromptExpression(expression, values = {}, { runtime, locals, limits } = {}): RuntimeValue
-renderPromptTemplate(template, values = {}, slots = {}, { runtime, locals, limits } = {}): string
-compilePromptProgram(program, { values, slots, history, runtime, limits }): PromptCompilation
-```
+재컴파일은 고정 CBS 결과를 투영하며 평가를 반복하지 않아요. 해시나 필드 목록이 원본과 다르면 영수증을 거절해요. 번역은 원문 생성 시점에 고정된 번역 프롬프트를 별도로 평가하되 카드 상태나 저장된 프리셋을 바꾸지 않아요. 호스트는 번역할 원문과 그 시점의 참고 자료·사용자 메모를 현재 user 메시지에 담고, 네이티브 `chat` 블록이 이를 배치해요. 원문은 CBS로 평가하지 않으며 프리셋이 현재 메시지를 제외한 경우에만 모델 입력의 고정 자료로 별도 전달해요.
 
-`runtime`와 `locals`는 `Record<string, RuntimeValue>`예요. 평가 입력은 검증 후 복사하며 반환하는 구조화 값도 분리된 복사본이에요. `context` 경로에는 **host가 명시적으로 제공한 필드만** 존재해요. 이름이 있다고 DB·환경 변수·파일을 조회하지 않아요. `slots`는 기존 원문 문자열 삽입 계약으로 유지하며 context와 혼용하지 않아요.
+선택적 `collaboration`은 호스트의 읽기 전용 보조 에이전트를 구성하고, `execution.storySubmission`은 본문 제출 계약을 지정해요. 둘 다 콘텐츠 문법을 추가하지 않아요. [협업](AGENT-COLLABORATION.md)의 호출 한도·취소·고정 입력 계약을 따라요.
 
-## 템플릿 기본 변수
+## 카드 변수와 기억
 
-`PromptProgram.variableDefaults?: Record<string,string>`와 `ContentPackage.variableDefaults?: {values: Record<string,string>, attachmentRoles?: PackageRole[]}`는 쓰기 권한이 없는 읽기 기본값이에요. `core/template-variables.ts`의 `resolveTemplateVariableContext`는 고정 profile의 공유 변수 override를 먼저 읽고, 허용 역할의 attachment 선언 순서와 main 프롬프트 기본값으로 없는 키를 보충해요. `resolveTemplateVariables`는 같은 결과의 값만 돌려주는 facade예요. 본문·로어·시작문·지침·패널·실행 문맥·모델의 자료 읽기·프리셋 정규식은 이 계산을 공유해요.
+카드·모듈·프리셋은 Risu CBS와 Lua로 변수를 읽고 써요. 사용자 변수 편집기는 현재 분기의 문자열 override를 revision과 원문 해시로 보호해요. 기본 변수는 원본 Risu 선언에서 읽고 빈 문자열과 미설정을 구분해요. 이야기에서 일어난 일의 요약·장기 기억은 Uimori 문맥 기능이 맡으며 카드의 변수 규칙을 별도 AI 상태 체계로 복제하지 않아요.
 
-네이티브 RISUP는 `PromptProgram.nativeRisuPreset`의 Risu 프롬프트 원본이 기준이에요. `blocks`·`controls`·`variableDefaults`는 원본에서 파생하며 저장 검증 시 불일치를 거절해요. 생성 전에 native CBS worker가 필드들을 순서대로 평가하고 `RunSnapshot.nativeRisuPresetProgram`에 결과·변수를 고정해요. 재컴파일은 이 결과와 현재 고정 문맥의 슬롯·히스토리를 결합하며, 준비되지 않은 네이티브 프롬프트는 모델 요청으로 보내지 않아요. Risu 채팅 블록의 역할 변경과 authornote 기본값도 파생 프로그램에 반영하고, 모델 설정은 원본 프롬프트와 분리해요.
+## 검증
 
-Host가 `context.variables`를 제공하면 `{op:'get',args:[{context:['variables']},'key']}`로 읽어요. 없는 값은 native null이며 빈 문자열은 그대로 유지해요. JSON 데이터는 재해석하지 않아요. 기본값 선언은 자료/프롬프트 개정과 Run profile에 보존하고 저장 상태의 초기값으로 복사하지 않아요. 이후 자료를 수정해도 과거 예약·시작문·복원의 해석은 바뀌지 않아요. 선언과 공유 변수 snapshot이 없는 과거 profile에는 빈 변수 필드를 추가하지 않아요.
-
-선언은 최대 2,000개 키·값당 200,000자·JSON 합계 1,000,000자이며 기존 unsafe key/JSON 검사를 공유해요. 여러 자료의 합산이 한도를 넘으면 일부 키만 채택하지 않고 변수층 전체를 미적용해요. 본문·로어와 변수 참조 시작문은 보존 원문, 지침은 기존 사용 불가 경고, main 프롬프트는 `TEMPLATE_VARIABLE_DEFAULTS_LIMIT` 경고와 없는 변수 조회로 계속해요. 시작문 경고는 미리보기에서 표시하고 snapshot에도 보존해요. 기존 상태를 초기화하거나 본문 채팅을 금지하지 않아요.
-
-평가기에서 `variables`와 해당 오류 metadata는 나머지 runtime과 독립된 기존 크기 한도로 검사해요. 이미 허용된 대화 문맥이 새 선언 때문에 한도를 넘는 일을 피하며 총 namespace 크기는 유한해요. 일반 AST 연산 결과·출력·단계 한도는 그대로 유지해요. 선언 없는 기존 runtime은 이전 전체 객체 검사를 유지해요. Risu 어댑터의 `getvar`·기본값 해석과 아직 연결하지 않은 가져온 코드의 쓰기는 [Risu 가져오기](RISU-IMPORT.md#기본-변수와-읽기-cbs)를 봐요.
-
-## 분기 공유 변수
-
-사용자는 채팅의 공유 변수 편집기에서 문자열 override를 명시적으로 저장해요. 봇·모듈·main 프리셋은 같은 분기 override를 읽으며 패키지 인스턴스별 `PackageBehavior.state`와는 별개예요. 키를 제거하면 읽기 기본값이 다시 적용되고, 빈 문자열을 저장하면 그 값이 기본값보다 우선해요. 저장은 변수 revision과 현재 원문 hash를 확인하고 동일 요청 키의 재전송을 한 번만 채택해요. 예약·실행 중인 본문 Run이나 사용자 확장 작업이 있는 분기에서는 직접 편집을 채택하지 않아요.
-
-`core/chat-variables.ts`가 기본값과 override의 공통 검증·크기 한도를 소유해요. 저장 형식은 `{revision, values: Record<string,string>}`이며 revision 0은 빈 초기 상태예요. 새 Run은 `ProfileSnapshot.variableState`에 override를 고정하고 같은 resolver가 템플릿·지침·패널·실행 문맥을 해석해요. 과거 source 조회·복원은 현재 분기 값을 덧붙이지 않아요. 재접속은 저장된 현재 분기 값을 읽고, source 완료 transaction은 그때 채택된 상태를 checkpoint로 보존해요.
-
-일반 분기와 채팅 포크는 선택한 source의 checkpoint를 복원하므로 이후 직접 편집한 값이 섞이지 않아요. candidate는 원래 Run의 예약 snapshot을 복원해요. checkpoint나 snapshot이 없는 과거 자료는 빈 override로 시작하며 현재값으로 보충하지 않아요. 전체 archive와 채팅 백업은 현재 상태·쓰기 영수증·source checkpoint를 보존하고 값 문자열 안의 ID는 바꾸지 않아요. 형식과 이관은 [DB migration](DATA-MIGRATIONS.md)을 봐요.
-
-가져온 카드가 보존한 Risu CBS도 [같은 허용](RISU-IMPORT.md#기본-변수와-읽기-cbs)을 쓰는 또 하나의 쓰기 주체이며, 예약 시점 평가가 기록한 값을 그 Run의 원문 저장 때 채택해요.
-
-제작자 JavaScript 행동도 [공유 변수 Host API](EXTENSION-PROGRAMS.md#host-api로-분기-공유-변수-읽기와-쓰기)를 사용할 수 있어요. `variables.read/write` 선언과 쓰기의 자료 개정별 사용자 grant를 확인하고 계산 중에는 임시 변경만 적용해요. 사용자 행동은 상태·공유 변수·후속 요청을 함께 채택하며, 생성 전/모델 행동은 전역 실행 순서대로 source에 채택해요. 응답 후에는 성공한 패키지의 값만 뒤 패키지가 이어받고 실패한 임시 변경은 폐기해요.
-
-이후 행동·생성 전 지침·자료 읽기는 파생 profile의 공유 상태를 읽지만 원래 Run snapshot과 이미 주 모델에 전송한 프롬프트는 다시 작성하지 않아요. Host의 변수 영수증은 읽기 의존성과 변경분을 기록하며 과거 무변수 영수증은 그대로 보존해요. 새 Risu 자료는 [네이티브 트리거·Lua 런타임](RISU-IMPORT.md)을 사용하고, 과거 저장 wrapper는 기존 Host 실행을 유지해요. API 연결만으로 특정 봇의 전체 실행이 검증됐다고 해석하지 않아요.
-
-## 데이터 AST
-
-```json
-{"context":["state","hp"]}
-{"local":"npc","path":["name"]}
-{"literal":{"labels":["calm","bright"],"enabled":false}}
-{"op":"map","args":[{"context":["npcs"]},{"local":"npc","path":["name"]}],"as":"npc"}
-```
-
-`context`/`local.path`는 own property만 읽어요. 배열 index는 경로의 숫자 문자열로 지정해요. 없는 필드나 index는 null이며, null 아래로 경로를 더 읽어도 null을 반환해요. 문자열·숫자·불리언에서 하위 필드를 읽는 잘못된 접근은 오류예요. `__proto__`, `constructor`, `prototype` 경로 및 객체 key는 허용하지 않아요. Date·함수·accessor·순환 참조 등 JSON이 아닌 데이터는 거절해요.
-
-`map`/`filter`는 `args: [source, body]`, 필수 `as`, 선택 `index` 이름을 사용해요. `filter`의 body는 boolean 또는 null이어야 해요. 반복 source는 실제 배열이어야 하며 JSON 문자열을 다시 파싱하지 않아요.
-
-템플릿에는 다음 두 노드가 추가돼요.
-
-```ts
-{ kind: 'each', source, as: 'npc', index: 'i', body: [...], else: [...] }
-{ kind: 'let', name: 'total', value: expression, body: [...] }
-```
-
-각 binding은 body 안에서만 유효해요. `each.else`는 배열이 비었을 때 바깥 scope에서 평가해요. 같은 이름을 안쪽에서 선언하면 바깥 이름을 가리고, 블록을 벗어나면 바깥 binding이 유지돼요. local 참조는 검증 단계에서도 확인하므로 미선택 분기 안의 잘못된 이름이나 문법이 허용되지는 않아요.
-
-## 연산 의미
-
-| 범주 | 함수 | 계약 |
-|---|---|---|
-| 기존 scalar | `all any not equal notEqual greater greaterEqual length replace` | 기존 표시 문자열·truthiness 유지. boolean 출력은 `1`/`0`. `length`는 표시 문자열 길이, `replace`는 기존 JS 문자열 치환의 `$&`, `$$`, prefix/suffix 치환 의미까지 유지 |
-| 엄격 산술 | `add subtract multiply divide mod pow clamp round floor ceil abs` | 실제 유한 number만 허용. 문자열·boolean·null을 숫자로 변환하지 않음. 0 나누기/비유한 결과는 오류. `round(x,digits?)` 자릿수는 0–12 |
-| 엄격 비교 | `gt gte lt lte typedEqual` | 대소 비교는 number 전용. typedEqual은 JSON 구조 비교로 `true`와 `1`을 구별하고 객체 key 순서는 무시 |
-| 집계 | `min max sum average` | number 배열 하나 또는 여러 number 인자. 빈 배열 sum은 0, 나머지는 null |
-| 문자열 | `contains startsWith endsWith trim lower upper split join` | 문자열 전용. join은 문자열 배열, split은 문자열 배열 반환 |
-| 자료 | `get size slice range unique array object` | get은 객체 key/배열 index, size는 문자열·배열·객체 크기, slice는 문자열/배열. range는 `(end)`, `(start,end)`, `(start,end,step)`이며 끝 제외·step 0 금지. unique는 JSON 구조 동등성 기준. object는 key/value 쌍이며 중복 key 금지 |
-| 선택 | `exists coalesce typedIf` | exists는 null만 부재로 취급. coalesce는 첫 non-null 값. `0`, `false`, 빈 문자열을 유지. typedIf는 boolean/null 조건으로 선택한 인자만 평가 |
-| 반복 | `map filter` | source 배열을 제한된 횟수만 순회하며 lexical local/index 사용 |
-| UTC 날짜 | `datePart dateAddDays dateFormat` | 입력 ISO UTC 문자열만 사용. 현재 시각을 스스로 읽지 않음 |
-
-`all`/`any`, `coalesce`, `typedIf`, 조건부 템플릿은 필요한 분기만 평가해요. 기존 v1 scalar 연산의 출력 의미는 유지해요. 새 산술은 IEEE-754 number 계산이며 금액의 정밀 소수 연산을 제공하는 API가 아니에요.
-
-날짜는 `YYYY-MM-DDTHH:mm:ss[.SSS]Z` 형식과 실제 날짜 유효성을 엄격히 확인해요. `datePart`는 `year/month/day/weekday/hour/minute`이고 weekday는 일요일 0이에요. `dateAddDays`는 정수 ±365,000일 이내, 결과 연도 0000–9999 범위예요. `dateFormat`은 `date` → `YYYY-MM-DD`, `time` → `HH:mm:ss`, `iso` → millisecond 포함 정규화 문자열이에요. 시간대 암묵 변환은 없어요.
-
-## 제작과 선택형 문법
-
-```ts
-system('npcs', letValue('total', expr.sum(expr.context<number[]>('scores')), total =>
-  text`합계 ${total}\n${each(expr.context<{name:string}[]>('npcs'), 'npc', npc =>
-    text`${expr.get<string>(npc, 'name')}\n`
-  )}`
-))
-```
-
-`expr.context<T>()`의 T는 작성자의 타입 선언이고, 실제 입력과 연산 타입은 런타임에서 다시 검증해요. `expr.map/filter`와 `each`에 전달한 제작 callback도 작성 시점에 한 번 호출하여 AST를 만들어요. 실행 중 일반 JS 함수를 호출하지 않아요. 중첩 scope에서 바깥 값도 함께 참조하려면 서로 다른 binding 이름을 지정해요.
-
-```text
-{% let total = sum(context.scores) %}
-합계 {{ local.total }}
-{% each npc, i in context.npcs %}
-{{ local.i }}. {{ local.npc.name }}
-{% else %}등록된 인물이 없어요.{% endeach %}
-{% endlet %}
-{{ dateFormat(context.time.iso, "date") }}
-```
-
-상수 배열/객체는 `[1,2]`, `{"name":"Mira"}` 또는 명시적 `literal(...)`로 작성해요. 함수형 반복은 `map(source, "npc", body)`와 `filter(source, "npc", predicate)`, index를 함께 쓰면 `mapIndexed(source, "npc", "i", body)`/`filterIndexed(...)`예요. 산술 기호 `+ - * / % **`도 AST 연산으로 변환해요. 기존 비교 기호는 기존 scalar 비교 의미를 유지하므로 엄격 비교가 필요하면 `gt`/`typedEqual` 등을 사용해요.
-
-출력기는 AST를 보존하며 문법을 정규화해요. 드문 명시적 빈 `local.path: []`는 `localPath("name", [])`로 왕복해요. 치환 값이나 chat history에 문법 구분자가 있어도 다시 파싱하지 않아요.
-
-## 실행 한도
-
-패키지의 이름·옵션 본문/로어와 작성된 도입문처럼 저장 후 같은 내용으로 재구성해야 하는 텍스트만 호스트 전용 결정적 예산을 사용해요. 이 경우 단계·AST/값 크기·반복·출력 한도로 작업량을 제한하고 경과 시간으로 내용이나 fallback을 바꾸지 않아요. 자료 AST나 `limits` 입력으로 이 모드를 선택할 수 없으며 일반 프롬프트·지침은 아래 시간 제한을 유지해요.
-
-한 요청 컴파일의 모든 블록과 반복은 하나의 평가 budget을 공유해요. 기본 상한은 100,000 steps, 1,000 ms, 출력 1,500,000 UTF-16 코드 단위예요. 구조화 값은 JSON 크기 1,000,000 코드 단위, 30,000 nodes, 배열/객체당 2,000 entries, 깊이 32까지예요. caller의 `limits`는 상한을 낮출 수 있지만 높일 수는 없어요. `evaluatePromptExpressions(expressions, values, options)`는 여러 식에 evaluator와 step/time budget 하나를 적용하고, 전체 반환값의 합계 크기/nodes도 제한해요. 개별 `evaluatePromptExpression` 호출은 각각 budget을 가지므로 한 action의 여러 효과는 batch API로 평가해요.
-
-목록 편집은 원본을 바꾸지 않는 `append(array, value)`, `concatArrays(...arrays)`, `setAt(array, index, value)`로 처리해요. `setAt`은 0 이상이고 현재 길이보다 작은 정수 index만 허용하며, 끝에 추가할 때는 `append`를 써요. `merge(record, record)`는 오른쪽 필드가 우선하는 얕은 병합이에요. 배열/record 타입과 결과 크기를 검사하고 잘못된 index를 자동 보정하지 않아요. 이 네 함수는 같은 이름의 `expr` TypeScript helper와 선택 문법 함수로도 제공해요. 문자열 `concat`의 기존 의미에는 영향을 주지 않아요.
-
-큰 range·split·반복 결과, 문자열 치환·대소문자 확장, JSON escape 확장과 직렬화 크기를 확인한 뒤 생성해요. 시간 초과는 협력적 검사이며 OS 차원의 임의 코드 격리가 아니에요. 사용자 정규식·임의 JS를 받아 실행하지 않고, 상한이 있는 고정 연산만 사용해요. 기존 program 전체 1,000,000 JSON 코드 단위, control/블록/표현식 깊이 및 최종 provider prompt 한도도 유지해요.
-
-state write·action idempotency·job dispatch·random draw 저장·reroll·source hash 귀속은 host가 책임져요. 이 계산기가 상태를 직접 저장하거나 원문을 바꾸지는 않아요.
-
-
-## 채팅에서 창작 옵션 변경
-
-입력창의 `창작 옵션` 버튼은 현재 main 프롬프트의 옵션 패널을 열어요. 넓은 화면에서는 대화 옆에, 1100px 이하에서는 별도 시트로 표시해요. 프롬프트의 `group`과 `description`을 표시하고 `visiblePromptControls`로 조건을 평가해요. 숨긴 옵션의 값은 지우지 않아요. 프롬프트 편집기와 채팅 패널은 `web/PromptControlFields.tsx`의 입력을 공유해요.
-
-선택값은 현재 전역 프롬프트 작업본에 명시 저장하며 workspace revision CAS로 동시 편집을 보호해요. 채팅별 프롬프트 선택·옵션 연결은 제거했어요. 프리셋은 프로그램과 선택값을 복사하고 현재 작업본에 `presetId` 출처를 남기며 후속 수정이나 삭제는 현재 작업본에 영향을 주지 않아요. 저장 조합은 그 프리셋 또는 출처 없는 기본 작업본의 역할에 속해요. 같은 소속과 같은 옵션 정의인 조합만 선택값으로 적용하며, 다른 프리셋의 같은 control ID나 바뀐 정의에 이전 조합을 적용하지 않아요. 진행 중인 실행과 과거 Run snapshot은 유지해요. 충돌 시 초안을 보존하고 최신 설정을 다시 불러올 수 있어요. [현재 작업본·번역·재요청 계약](RUNTIME-SIMPLIFICATION.md)을 봐요.
-
-검증: `node scripts/verify-chat-prompt-options.mjs`는 새 DB/port에서 옵션 입력·명시 저장·채팅 간 현재 옵션 공유·CAS 복구·390px 화면과 기존 P01 프롬프트 선택/Run snapshot 회귀를 확인해요. 실제 공급자나 개인 자료는 사용하지 않아요.
+`tests/risu-native-prompt-composition.test.ts`와 `tests/risu-native-preset.test.ts`는 실제 vendor CBS, 토글, 슬롯, 역할, 대화 범위, 캐시, prefill과 영수증 일치를 확인해요. `tests/risu-preset-import.test.ts`는 프롬프트만 가져오는 경계와 저장을 확인해요. 이 검사는 실제 공급자의 창작·번역 품질을 판정하지 않아요.

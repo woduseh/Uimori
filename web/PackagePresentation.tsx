@@ -15,18 +15,10 @@ export type PackagePresentation = {
   inlineImageUrls?: string[];
   original: { text: string; changed: boolean; applied: string[]; html?: string; css?: string };
   request?: { text: string; changed: boolean; applied: string[] };
-  inputTransform?: { text: string; changed: boolean; applied: string[] };
   translation?: { text: string; changed: boolean; applied: string[]; html?: string; css?: string };
   translationId: string | null;
   translationRevision: number | null;
   issues: string[];
-  stateViews: {
-    packageId: string;
-    revision: number;
-    role: string;
-    title: string;
-    fields: { key: string; label: string; text: string; missing: boolean }[];
-  }[];
 };
 export function usePackagePresentation(
   source: Source,
@@ -100,7 +92,7 @@ export function usePackagePresentation(
     ? { ...result, pending: result.key !== key }
     : undefined;
 }
-export function PackageStateCards({ data }: { data?: PackagePresentation }) {
+export function PackagePresentationIssues({ data }: { data?: PackagePresentation }) {
   if (!data) return null;
   return (
     <>
@@ -108,24 +100,6 @@ export function PackageStateCards({ data }: { data?: PackagePresentation }) {
         <p key={i} role="status" className="muted">
           {issue}
         </p>
-      ))}
-      {data.stateViews.map((view) => (
-        <aside
-          className="scene-status"
-          data-testid="package-state-view"
-          key={`${view.packageId}@${view.revision}:${view.role}`}
-          aria-label={view.title || '패키지 상태'}
-        >
-          <h4>{view.title || '패키지 상태'}</h4>
-          <dl>
-            {view.fields.map((field) => (
-              <div key={field.key}>
-                <dt>{field.label}</dt>
-                <dd>{field.missing ? '아직 상태가 없어요' : field.text}</dd>
-              </div>
-            ))}
-          </dl>
-        </aside>
       ))}
     </>
   );

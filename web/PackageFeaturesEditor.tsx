@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
+import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 import type { Content, Library } from '../core/product.js';
 import type { PackageModuleRef } from '../core/package-features.js';
-import { SourceSegmentsEditor } from './SourceSegmentsEditor.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import { api } from './api.js';
@@ -17,15 +16,14 @@ export function PackageFeaturesEditor({
   onChange,
   onDirtyChange,
 }: {
-  value: ContentPackage;
-  onChange: (value: ContentPackage) => void;
+  value: RisuContent;
+  onChange: (value: RisuContent) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [library, setLibrary] = useState<Library | null>(null),
     [statuses, setStatuses] = useState<Record<string, ReferenceStatus>>({});
   const [selected, setSelected] = useState('');
-  const [segmentsDirty, setSegmentsDirty] = useState(false),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
@@ -47,12 +45,11 @@ export function PackageFeaturesEditor({
   useEffect(() => {
     actionVersion.current++;
     setBusy(false);
-    setSegmentsDirty(false);
     setSelected('');
   }, [scope]);
   useEffect(() => {
-    onDirtyChange?.(segmentsDirty || busy);
-  }, [segmentsDirty, busy, onDirtyChange]);
+    onDirtyChange?.(busy || !!selected);
+  }, [selected, busy, onDirtyChange]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit reload retries the available module lists for this package.
   useEffect(() => {
     let active = true;
@@ -115,9 +112,9 @@ export function PackageFeaturesEditor({
       if (currentAction(request, id)) setBusy(false);
     }
   }
-  function update(part: Partial<ContentPackage>): boolean {
+  function update(part: Partial<RisuContent>): boolean {
     try {
-      latest.current.onChange(validateContentPackage({ ...latest.current.value, ...part }));
+      latest.current.onChange(validateRisuContent({ ...latest.current.value, ...part }));
       setError('');
       setNotice('자료 초안에 반영했어요. 저장하면 다음 실행부터 사용해요.');
       return true;
@@ -150,7 +147,7 @@ export function PackageFeaturesEditor({
         <h3>함께 사용하는 모듈</h3>
         <p className="muted">
           이 자료를 장착하면 아래 모듈을 함께 사용해요. 여러 자료가 같은 모듈을 요구해도 한 번만
-          포함하며 채팅별 선택값을 사용해요.
+          포함해요.
         </p>
         {(value.modules ?? []).map((ref) => {
           const status = statuses[referenceKey(ref)];
@@ -198,7 +195,6 @@ export function PackageFeaturesEditor({
         </button>
         <small>서재에서 모듈을 수정하면 다음 실행부터 최신 내용을 사용해요.</small>
       </section>
-      <SourceSegmentsEditor value={value} onChange={onChange} onDirtyChange={setSegmentsDirty} />
       {loading && <p role="status">자료와 기능 목록을 확인하는 중이에요…</p>}
       {busy && <p role="status">선택한 자료를 확인하는 중이에요…</p>}
       <button

@@ -331,26 +331,15 @@ describe('Anthropic Messages request and opaque continuation', () => {
     block(decoder, 0, { type: 'text', text: prose });
     expect(end(decoder)).toMatchObject({ status: 'completed', text: prose });
   });
-  test('refusal classification does not receive translation output instructions', () => {
-    const { input } = translationRequest();
-    input.input.controls.purpose = 'translation-refusal';
-    input.stable.contract = 'Classify whether this response refused the task.';
+
+  test.each(['main', 'status'] as const)('does not send translation formatting for %s', (role) => {
+    const input = request();
+    input.role = role;
+    input.generation!.structuredOutput = true;
     const wire = native(encodeAnthropic(input).body);
-    expect(JSON.stringify(wire.system)).not.toContain('complete translated text only');
-    expect(JSON.stringify(wire.system)).toContain(input.stable.contract);
     expect(wire).not.toHaveProperty('output_config');
+    expect(wire.system).toHaveLength(2);
   });
-  test.each(['main', 'status', 'image'] as const)(
-    'does not send translation formatting for %s',
-    (role) => {
-      const input = request();
-      input.role = role;
-      input.generation!.structuredOutput = true;
-      const wire = native(encodeAnthropic(input).body);
-      expect(wire).not.toHaveProperty('output_config');
-      expect(wire.system).toHaveLength(2);
-    }
-  );
   test('preserves signed, redacted and opaque content in order across parallel and sequential tool rounds', () => {
     const input = request();
     const { decoder } = start(input);

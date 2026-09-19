@@ -5,7 +5,7 @@ import {
   createNativeRisuPresetProgram,
   nativeRisuPresetSource,
 } from '../../core/risu-native-preset.js';
-import type { PromptValue } from '../../core/prompt-program.js';
+import type { PromptValue } from '../../core/risu-prompt.js';
 
 export function mount() {
   function Harness() {

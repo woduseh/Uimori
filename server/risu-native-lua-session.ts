@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
-import type { ExtensionWorkerLimits, ExtensionWorkerMessage } from './extension-worker-protocol.js';
+import type { NativeLuaWorkerLimits, NativeLuaWorkerMessage } from './risu-lua-protocol.js';
 
-export const NATIVE_LUA_LIMITS: ExtensionWorkerLimits = {
+export const NATIVE_LUA_LIMITS: NativeLuaWorkerLimits = {
   cpuMs: 1_000,
   guestJsonBytes: 2 * 1024 * 1024,
   sourceBytes: 1024 * 1024,
@@ -14,8 +14,6 @@ export const NATIVE_LUA_LIMITS: ExtensionWorkerLimits = {
   valueDepth: 32,
   valueNodes: 100_000,
   valueEntries: 10_000,
-  quickjsMemoryBytes: 8 * 1024 * 1024,
-  quickjsStackBytes: 256 * 1024,
   luaMemoryBytes: 8 * 1024 * 1024,
 };
 type Host = (method: string, args: unknown, signal: AbortSignal) => Promise<unknown>;
@@ -95,7 +93,7 @@ class Session {
     }
     current.resolve(result);
   }
-  message(value: ExtensionWorkerMessage) {
+  message(value: NativeLuaWorkerMessage) {
     if (this.closed) return;
     if (!value || typeof value !== 'object')
       return this.dispose(failure('RISU_NATIVE_WORKER_PROTOCOL'));
@@ -173,10 +171,10 @@ class Session {
       this.watch(5_000);
       try {
         if (!this.worker) {
-          const compiled = new URL('./extension-lua-worker.js', import.meta.url);
+          const compiled = new URL('./risu-lua-worker.js', import.meta.url);
           const file = existsSync(compiled)
             ? compiled
-            : new URL('./extension-lua-worker.ts', import.meta.url);
+            : new URL('./risu-lua-worker.ts', import.meta.url);
           this.worker = new Worker(file, {
             execArgv: file.pathname.endsWith('.ts') ? ['--experimental-strip-types'] : undefined,
             env: {},
@@ -192,7 +190,7 @@ class Session {
               stackSizeMb: 2,
             },
           });
-          this.worker.on('message', (value: ExtensionWorkerMessage) => this.message(value));
+          this.worker.on('message', (value: NativeLuaWorkerMessage) => this.message(value));
           this.worker.once('error', () => this.dispose(failure('RISU_NATIVE_WORKER_FAILED')));
           this.worker.once('exit', () => this.dispose(failure('RISU_NATIVE_WORKER_EXIT')));
         } else {

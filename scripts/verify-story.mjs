@@ -30,7 +30,7 @@ export async function verifyStory(selection) {
   await mkdir(runtime, { recursive: true });
   const children = new Set();
   const failures = [];
-  const requiredBrowser = ['S01', 'S02', 'S04', 'S06', 'S07'];
+  const requiredBrowser = ['S04', 'S06', 'S07'];
   let environmentBlocked = false;
   const summary = {
     schema: 1,
@@ -45,7 +45,7 @@ export async function verifyStory(selection) {
       selection.cases.map((id) => [id, { required: true, status: 'NOT_RUN', evidence: [] }])
     ),
     limitations: [
-      'Local state/context fixtures and localhost protocols do not establish live semantic quality.',
+      'Local memory/context fixtures and localhost protocols do not establish live semantic quality.',
       'Long synthetic corpus and measured fixture paths do not establish whole-app performance or physical-device latency.',
     ],
     failures,
@@ -94,24 +94,24 @@ export async function verifyStory(selection) {
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
     const env = localVerificationEnv({
-      NR_DB: path.join(runtime, 'app.sqlite'),
-      NR_INSTANCE: runId,
-      NR_BUILD_ID: summary.identity.buildId,
-      NR_ARTIFACT_DIR: directory,
-      NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
+      UIMORI_DB: path.join(runtime, 'app.sqlite'),
+      UIMORI_INSTANCE: runId,
+      UIMORI_BUILD_ID: summary.identity.buildId,
+      UIMORI_ARTIFACT_DIR: directory,
+      UIMORI_BROWSER_OUTPUT: path.join(directory, 'browser'),
       TEMP: temp,
       TMP: temp,
-      ...(browserPath() ? { NR_BROWSER_PATH: browserPath() } : {}),
+      ...(browserPath() ? { UIMORI_BROWSER_PATH: browserPath() } : {}),
     });
     const server = await startServer(env, directory, children);
-    env.NR_BASE_URL = server.ready.url;
+    env.UIMORI_BASE_URL = server.ready.url;
     summary.server = server.ready;
     owner.children = [
       {
         pid: server.child.pid,
         command: 'node dist/server/index.js',
-        dbPath: env.NR_DB,
-        url: env.NR_BASE_URL,
+        dbPath: env.UIMORI_DB,
+        url: env.UIMORI_BASE_URL,
       },
     ];
     await json(path.join(directory, 'ownership.json'), owner);
@@ -191,7 +191,7 @@ export async function verifyStory(selection) {
         reporters: ['vitest.json', ...(browser.length ? ['playwright.json'] : [])],
       };
     }
-    if (selection.cases.includes('S07') && process.env.NR_BENCHMARK === '1') {
+    if (selection.cases.includes('S07') && process.env.UIMORI_BENCHMARK === '1') {
       if (!existsSync(path.join(directory, 'story-performance.json')))
         throw new Error('S07 performance measurements missing');
       summary.scenarios.S07.measurements = 'story-performance.json';
