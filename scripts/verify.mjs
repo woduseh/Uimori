@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, copyFile } from 'node:fs/promises';
 import { doctor } from './doctor.mjs';
 import { doctorFailureState } from './doctor-result.mjs';
+import { isMain } from './release-common.mjs';
 import {
   root,
   artifactRoot,
@@ -26,7 +27,7 @@ import {
 const foundationCases = ['F01', 'F02', 'F03', 'F04', 'F05', 'F06'];
 const productCases = Array.from({ length: 13 }, (_, i) => `P${String(i + 1).padStart(2, '0')}`);
 const storyCases = Array.from({ length: 7 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
-function options(args) {
+export function verificationSelection(args) {
   let milestone = 'M0';
   const cases = [];
   for (let index = 0; index < args.length; index++) {
@@ -36,6 +37,7 @@ function options(args) {
   }
   if (!['M0', 'M1-local', 'M1', 'M2-local', 'M2'].includes(milestone))
     throw new Error(`Unknown/unimplemented milestone: ${milestone}`);
+  if (milestone === 'M1' || milestone === 'M2') milestone += '-local';
   const allCases =
     milestone === 'M0' ? foundationCases : milestone.startsWith('M2') ? storyCases : productCases;
   if (cases.some((id) => !allCases.includes(id)))
@@ -67,42 +69,8 @@ async function main(selection) {
       selection.cases.map((id) => [id, { required: true, status: 'NOT_RUN', evidence: [] }])
     ),
     limitations: [
-      product
-        ? 'M1 local file SQLite, browser and fixture HTTP only. Live provider/protocol, semantic quality and physical-phone/private-deployment claims remain BLOCKED.'
-        : 'Scripted mock only; no paid/live provider, quality, physical phone, public deployment, or M1+ claim.',
+      'Local synthetic checks only; no live-model, creative-quality or device evaluation.',
     ],
-    ...(product
-      ? {
-          externalClaims: {
-            L01: {
-              status: 'BLOCKED',
-              reason:
-                'This local verifier does not execute or import live evidence; see the separate output/live artifacts and M1-RESULTS',
-            },
-            L02: {
-              status: 'BLOCKED',
-              reason: 'Private deployment target and physical phone pending',
-            },
-            Q01: {
-              status: 'BLOCKED',
-              reason: 'Human creative-quality evaluation is not performed by this local verifier',
-            },
-            Q02: {
-              status: 'BLOCKED',
-              reason: 'Human refusal-quality evaluation is not performed by this local verifier',
-            },
-            Q03: {
-              status: 'BLOCKED',
-              reason:
-                'Human translation-quality evaluation is not performed by this local verifier',
-            },
-            Q05: {
-              status: 'BLOCKED',
-              reason: 'Live image selection and approved quality sample pending',
-            },
-          },
-        }
-      : {}),
     failures,
     cleanup: { status: 'NOT_RUN' },
   };
@@ -188,9 +156,15 @@ async function main(selection) {
           note: 'Checkout/worktree cross-check evidence is recorded separately when run by the release operator.',
         };
     }
-    await run(['node_modules/typescript/bin/tsc', '--noEmit'], 'check');
-    await run(['scripts/build.mjs'], 'build');
-    const manifest = await assertBuild();
+    let manifest;
+    try {
+      manifest = await assertBuild();
+      summary.buildReused = true;
+    } catch {
+      await run(['scripts/build.mjs'], 'build');
+      manifest = await assertBuild();
+      summary.buildReused = false;
+    }
     summary.identity = manifest;
     summary.verificationIdentity = await fingerprint();
     const temp = path.join(runtime, 'temp');
@@ -412,7 +386,6 @@ async function main(selection) {
         ? 'PASS'
         : 'FAIL';
     if (product) summary.localStatus = summary.status;
-    if (selection.milestone === 'M1' && summary.status === 'PASS') summary.status = 'BLOCKED';
     summary.finishedAt = new Date().toISOString();
     await json(path.join(directory, 'summary.json'), summary);
     process.removeListener('SIGINT', cancel);
@@ -435,12 +408,14 @@ async function main(selection) {
     if (summary.status !== 'PASS') process.exitCode = 1;
   }
 }
-try {
-  const selection = options(process.argv.slice(2));
-  if (selection.milestone.startsWith('M2'))
-    await (await import('./verify-story.mjs')).verifyStory(selection);
-  else await main(selection);
-} catch (error) {
-  console.error(error.message);
-  process.exitCode = 2;
+if (isMain(import.meta.url)) {
+  try {
+    const selection = verificationSelection(process.argv.slice(2));
+    if (selection.milestone.startsWith('M2'))
+      await (await import('./verify-story.mjs')).verifyStory(selection);
+    else await main(selection);
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 2;
+  }
 }

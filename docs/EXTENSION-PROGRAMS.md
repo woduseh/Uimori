@@ -236,7 +236,7 @@ DB v18에서 추가한 작업·attempt 연결 표와 전체 archive·채팅 백�
 
 JavaScript는 `quickjs-emscripten-core`와 `@jitl/quickjs-wasmfile-release-sync` **0.32.0**, Lua는 `wasmoon` **1.16.0**의 새 WASM 인스턴스를 작업별 Worker에서 실행해요. Lua는 포함된 WASM의 예상 메모리 선언을 검사해 최대치를 고정하며 선언이 달라지면 실행을 거부해요. Lua allocator는 8 MiB로 제한하고 JS 객체 interop를 게스트에 제공하지 않아요. 게스트 코드를 Node의 `eval`·`vm`이나 웹 패널에서 실행하지 않아요. JSON 입력과 크기를 제한한 JSON 결과만 교환해요.
 
-엔진 내부 allocator 한도와 별개로 **16 MiB 고정 WASM 선형 메모리**를 제공해요. 게스트 계산은 CPU 100ms와 active wall 1초, Worker 동시 2슬롯의 기존 제한을 유지해요. 과거 후보 실험에서 실패했던 `setMemoryLimit`만을 격리 근거로 사용하지 않아요. 엔진 계산 중단, 부모의 실행 종료, 입력/출력 상한도 적용해요. 실제 Host 대기에서만 별도의 `hostWaitMs` 예산을 사용하며 최대 1,800,000ms예요. `hostWaitMs`가 생략되거나 0이면 자료 읽기 Host await를 즉시 timeout으로 만들지 않고 기존 전체 wall 1초를 유지해요. 자동 준비의 슬롯 대기는 호스트만 선택하는 제한된 대기열이며 취소하면 제거해요. Worker의 V8 heap 제한은 WASM 메모리와 별도예요. 이 구성은 OS의 전체 RSS 제한이나 모든 엔진 취약점에 대한 보증이 아니에요. Linux/Docker 실제 실행·전체 컨테이너 자원 제한은 5~6단계 검증에 남아 있어요.
+엔진 내부 allocator 한도와 별개로 **16 MiB 고정 WASM 선형 메모리**를 제공해요. 게스트 계산은 CPU 100ms와 active wall 1초, Worker 동시 2슬롯의 기존 제한을 유지해요. 과거 후보 실험에서 실패했던 `setMemoryLimit`만을 격리 근거로 사용하지 않아요. 엔진 계산 중단, 부모의 실행 종료, 입력/출력 상한도 적용해요. 실제 Host 대기에서만 별도의 `hostWaitMs` 예산을 사용하며 최대 1,800,000ms예요. `hostWaitMs`가 생략되거나 0이면 자료 읽기 Host await를 즉시 timeout으로 만들지 않고 기존 전체 wall 1초를 유지해요. 자동 준비의 슬롯 대기는 호스트만 선택하는 제한된 대기열이며 취소하면 제거해요. Worker의 V8 heap 제한은 WASM 메모리와 별도예요. 이 구성은 OS의 전체 RSS 제한이나 모든 엔진 취약점에 대한 보증이 아니에요. 실제 Linux/Docker 실행과 전체 컨테이너 자원 제한은 확인하지 않았어요.
 
 소스는 최대 512 KiB(UTF-8 바이트), 결과 `result`는 JSON 8,000자예요. 전체 상태/결과 계약은 JSON 131,072자 이내이며 실행기의 입력/출력 프레임은 **128 KiB UTF-8** 이하라 비ASCII 문자열에는 더 작은 한도가 적용돼요. 제한은 자료가 변경할 수 없어요. 정확한 실행 한도와 오류 코드는 [서버 실행기](../server/extension-runtime.ts)가 소유해요.
 

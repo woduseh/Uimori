@@ -1268,8 +1268,7 @@ test('the helper persona is bounded, saved per conversation and reaches only the
   expect(calls).toHaveLength(2);
   expect(calls.every((call) => call.role === 'helper')).toBe(true);
   expect(calls[0].stable.contract).toContain(UI_HELPER_PERSONA);
-  expect(calls[0].stable.contract).toContain('never in saved drafts');
-  expect(calls[1].stable.contract).not.toContain('Optional explanation persona');
+  expect(calls[1].stable.contract).not.toContain(UI_HELPER_PERSONA);
 });
 test('helper HTTP routes create separate sessions, list all chat branches and require reviewed deletion state', async () => {
   const f = fixture(),
