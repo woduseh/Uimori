@@ -36,4 +36,5 @@
 **/output/
 **/.local/
 **/*.vertex-credentials/
+**/*.jev-credentials/
 **/*.codex/

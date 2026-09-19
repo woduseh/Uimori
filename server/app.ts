@@ -80,6 +80,8 @@ import { createPackageStart } from './package-start.js';
 import { runStoryJob } from './story-runner.js';
 import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
 import { VertexCredentialStore } from './vertex-credentials.js';
+import { JevCredentialStore } from './jev-credentials.js';
+import { jevProviderRoutes } from './jev-provider.js';
 import {
   CodexRuntime,
   type CodexRuntimeOptions,
@@ -156,6 +158,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     }
   };
   const credentials = new VertexCredentialStore(options.dbPath);
+  const jevCredentials = new JevCredentialStore(options.dbPath);
   const codex = options.codexRuntime ?? new CodexRuntime(options.dbPath, options.codex);
   const executeCodex: NonNullable<ProviderExecutionOptions['executeCodex']> = (
     connection,
@@ -466,6 +469,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 .run(JSON.stringify({ ...input, [kind]: [...prior, value] }), id);
             };
             await runAuxiliaryJob(auxiliaryBridge(store, controls, signal), id, instanceId, {
+              jev: { credential: jevCredentials.resolve },
               signal,
               approvedOrigins,
               resolveCredential,
@@ -812,6 +816,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           if (loreSelectionPending(executionSnapshot)) {
             assertCurrent();
             const selection = await prepareLoreSelection(executionSnapshot, hooks, {
+              jev: { credential: jevCredentials.resolve },
               reserveCalls: 1 + priorUsage.modelCalls,
             });
             priorUsage = mergeUsage(priorUsage, selection.usage);
@@ -1320,6 +1325,11 @@ export async function createApp(options: AppOptions): Promise<App> {
     authenticated: session.authenticated,
   });
   agentRuntimeRoutes(app, codex);
+  jevProviderRoutes(app, store, jevCredentials, {
+    signal: stopping.signal,
+    track,
+    authenticated: session.authenticated,
+  });
   storyRoutes(app, store, {
     publish,
     pump: pumpStory,

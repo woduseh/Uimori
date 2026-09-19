@@ -42,6 +42,7 @@ import { ProviderEndpointStatus } from './ProviderEndpointStatus.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ProviderReadiness } from './ProviderReadiness.js';
 import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js';
+import { JevProviderSettings } from './JevProviderSettings.js';
 import './ProviderManagement.css';
 import './settings-actions.css';
 
@@ -121,7 +122,7 @@ export function ConnectionEditor({
   }, []);
   const [query, setQuery] = useState('');
   const [screen, setScreen] = useState<
-    'models' | 'connections' | 'providers' | 'connection' | 'model'
+    'models' | 'connections' | 'providers' | 'connection' | 'model' | 'jev'
   >('models');
   const [setup, setSetup] = useState(false),
     [connectionStarted, setConnectionStarted] = useState(false),
@@ -175,12 +176,15 @@ export function ConnectionEditor({
     else proceed();
   }
   const [uploadingCredential, setUploadingCredential] = useState(false);
+  const [jevDirty, setJevDirty] = useState(false);
+  const [jevBusy, setJevBusy] = useState(false);
   const [operationBusy, setOperationBusy] = useState(false),
     [message, setMessage] = useState(''),
     [error, setError] = useState('');
-  const busy = operationBusy || uploadingCredential;
+  const busy = operationBusy || uploadingCredential || jevBusy;
   const dirty =
     busy ||
+    jevDirty ||
     (connectionStarted && JSON.stringify(connection) !== connectionBaseline) ||
     (modelStarted && JSON.stringify(model) !== modelBaseline);
   useEffect(() => {
@@ -580,10 +584,25 @@ export function ConnectionEditor({
             <ModelIcon size={18} aria-hidden="true" />
             모델 프리셋
           </button>
+          <button
+            type="button"
+            className={screen === 'jev' ? 'selected' : 'secondary'}
+            aria-label="JEV 판단 연결"
+            aria-pressed={screen === 'jev'}
+            disabled={busy}
+            onClick={() => {
+              setSetup(false);
+              navigate('jev');
+            }}
+          >
+            <ConnectionIcon size={18} aria-hidden="true" />
+            JEV 판단
+          </button>
           <IconButton
             label="목록 새로고침"
             icon={RefreshIcon}
             className="provider-refresh"
+            hidden={screen === 'jev'}
             disabled={busy}
             onClick={() => {
               void perform(async () => {
@@ -594,6 +613,11 @@ export function ConnectionEditor({
           />
         </div>
       </div>
+      <JevProviderSettings
+        active={screen === 'jev'}
+        onDirtyChange={setJevDirty}
+        onBusyChange={setJevBusy}
+      />
       {(screen === 'models' || screen === 'connections') && (
         <>
           {(screen === 'models' ? library.models.length : library.connections.length) > 0 && (
