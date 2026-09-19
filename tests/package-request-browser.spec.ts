@@ -3,6 +3,7 @@ import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { createActionPackage } from './fixtures/action-package.js';
 import type { ChatDetail } from '../core/types.js';
+import { openPackageBehaviorSettings } from './ui-navigation.js';
 
 async function seed(request: APIRequestContext) {
   const pkg = createActionPackage(),
@@ -40,8 +41,7 @@ test(`PREQUESTUI01 generic controls reserve a proposal, survive reload, consume 
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
-  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
-  await expect(panel).toBeVisible();
+  const panel = await openPackageBehaviorSettings(page);
   await panel.getByLabel('새 활력', { exact: true }).fill('150');
   await panel.getByRole('button', { name: '활력 설정', exact: true }).click();
   await expect
@@ -59,6 +59,7 @@ test(`PREQUESTUI01 generic controls reserve a proposal, survive reload, consume 
   expect(staged.sources).toEqual(before.sources);
   expect(staged.attempts).toEqual(before.attempts);
   await page.reload();
+  await openPackageBehaviorSettings(page);
   await expect(pending).toContainText(text);
   expect((await (await request.get(endpoint)).json()).pendingRequest.id).toBe(firstId);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
@@ -86,6 +87,7 @@ test(`PREQUESTUI01 generic controls reserve a proposal, survive reload, consume 
     )
     .toBe('completed');
   expect((await (await request.get(endpoint)).json()).pendingRequest).toBeNull();
+  await openPackageBehaviorSettings(page);
   await expect(pending).toHaveCount(0);
   const after = await detail(request, chat.id);
   expect(after.runs).toHaveLength(before.runs.length + 1);
@@ -107,7 +109,7 @@ test('PREQUESTUI02 editing a staged proposal clears its receipt and cannot consu
   const chat = await seed(request),
     endpoint = `/api/chats/${chat.id}/package-behaviors`;
   await page.goto(`/?chat=${chat.id}`);
-  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
+  const panel = await openPackageBehaviorSettings(page);
   await panel.getByLabel('장면 제안', { exact: true }).fill('The original action proposal.');
   await panel.getByRole('button', { name: '다음 탐험 예약', exact: true }).click();
   const pending = panel.getByRole('complementary', { name: '예약된 다음 요청', exact: true });
