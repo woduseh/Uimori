@@ -21,18 +21,12 @@ import { createBackupRemap, type BackupRow } from './chat-backup-remap.js';
 import { remapBackupRecords, finishBackupSnapshots } from './chat-backup-records.js';
 import { remapBackupContext } from './chat-backup-context.js';
 import { remapChatBackupHelper } from './chat-backup-helper.js';
-import { remapBackupBehavior } from './chat-backup-behavior.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import { CONNECTION_CREDENTIAL_FIELDS } from '../core/product.js';
 import { Store } from './store.js';
 
 const receiptKind = 'chat.backup-imported';
-const GLOBAL = new Set([
-  'prompt_workspace',
-  'illustration_settings',
-  'package_behavior_entropy',
-  'library_organization_state',
-]);
+const GLOBAL = new Set(['prompt_workspace', 'illustration_settings', 'library_organization_state']);
 const SHARED = new Set([
   'versions',
   'provider_settings',
@@ -41,10 +35,11 @@ const SHARED = new Set([
   'library_placements',
 ]);
 const archive = (tables: BackupTables) => ({
-  format: 'narrative-archive',
-  version: 15,
+  format: 'uimori-archive',
+  version: 1,
   createdAt: new Date().toISOString(),
-  tables,
+  // Library import receipts are workspace records, not part of a portable chat.
+  tables: { native_transfer_receipts: [], ...tables },
 });
 
 /** Passive evidence of original choices, never applied to destination execution settings. */
@@ -170,7 +165,6 @@ export function importChatBackup(store: Store, value: unknown): ChatBackupImport
     const ctx = createBackupRemap(normalized, offsets);
     remapChatBackupHelper(ctx);
     remapBackupRecords(ctx);
-    remapBackupBehavior(ctx);
     remapBackupContext(ctx);
     finishBackupSnapshots(ctx);
     copy.product.import(archive(ctx.tables));

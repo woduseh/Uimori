@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Job, ReaderRun, Run } from '../core/types.js';
 import { api, labels } from './api.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
@@ -7,6 +7,7 @@ import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { JobCard } from './SourceReader.js';
 import { DiagnosticReport } from './DiagnosticReport.js';
+import { mainJudgmentError } from './main-judgment-error.js';
 
 /**
  * One line per attached package the 모델 선별 step decided for. The receipt records ids, so the chars
@@ -57,15 +58,8 @@ export function RunTaskDetails({
   initiallyInspect?: boolean;
 }) {
   const [cancelling, setCancelling] = useState(false);
-  const [skipping, setSkipping] = useState(false);
   const [copiedOutput, setCopiedOutput] = useState(false);
-  const stateSkipKey = useRef<string | null>(null);
-  const packageSkipKey = useRef<string | null>(null);
-  const afterResponseSkipKey = useRef<string | null>(null);
-  const canCancel = ['queued', 'running', 'waiting_for_state'].includes(run.status);
-  const packagePreparing =
-    !!run.packagePreparation && ['pending', 'running'].includes(run.packagePreparation.status);
-  const packagePreparationInterrupted = packagePreparing && !canCancel;
+  const canCancel = ['queued', 'running'].includes(run.status);
   return (
     <div className="run-task-details">
       <div className="task-heading">
@@ -77,72 +71,9 @@ export function RunTaskDetails({
         </small>
       </div>
       <ContextSummaryStatus summary={run.contextSummary} />
-      {run.hasPackageIssues && (
-        <p role="status" className="muted">
-          일부 자료의 자동 처리나 지침을 적용하지 못했어요. 원본 자료와 기록을 보존하고 채팅을
-          계속해요. 자세한 내용은 진단에서 확인할 수 있어요.
-        </p>
-      )}
-      {packagePreparing && !packagePreparationInterrupted && (
-        <p role="status" className="muted">
-          자료의 자동 행동을 준비하고 있어요. {run.packagePreparation!.completed}/
-          {run.packagePreparation!.total} 완료했어요. 준비가 끝나면 원문 생성을 시작해요.
-        </p>
-      )}
-      {packagePreparationInterrupted && (
-        <p role="status" className="muted">
-          자료의 자동 행동 준비가 끝나기 전에 원문 작업이 중단됐어요. 준비 중인 결과는 채택하지
-          않았어요.
-        </p>
-      )}
-      {run.packagePreparation?.status === 'failed' && (
-        <p role="status" className="muted">
-          자료의 자동 행동을 준비하지 못해 해당 결과를 적용하지 않았어요. 원문 생성은 계속할 수
-          있어요.
-        </p>
-      )}
-      {run.packagePreparation?.status === 'skipped' && (
-        <p role="status" className="muted">
-          자료의 자동 행동 준비를 건너뛰었어요. 준비 중이던 결과는 적용하지 않고 원문 생성을
-          계속해요.
-        </p>
-      )}
-      {run.packageAfterResponse?.status === 'running' && (
-        <p role="status" className="muted">
-          {canCancel
-            ? `응답을 읽고 자료 상태를 갱신하고 있어요. ${run.packageAfterResponse.completed}/${run.packageAfterResponse.total} 완료했어요.`
-            : '자료의 응답 후 처리가 끝나기 전에 작업이 중단됐어요. 미완료 결과는 적용하지 않았어요.'}
-        </p>
-      )}
-      {!!run.packageAfterResponse?.failed && (
-        <p role="status" className="muted">
-          일부 자료의 응답 후 처리를 적용하지 못했어요. 해당 후처리 전의 유효한 상태를 유지하며
-          원문은 그대로 보존해요.
-        </p>
-      )}
-      {run.packageAfterResponse?.status === 'skipped' && (
-        <p role="status" className="muted">
-          응답 후 처리를 건너뛰어 해당 상태 결과를 적용하지 않았어요.
-          {canCancel && ' 진행 중인 호출을 정리한 뒤 원문을 저장해요.'}
-        </p>
-      )}
-      {run.statePreparation && ['failed', 'skipped'].includes(run.statePreparation.status) && (
-        <p role="status" className="muted">
-          {run.statePreparation.status === 'skipped'
-            ? '상태 준비를 건너뛰고'
-            : '상태를 갱신하지 못해'}{' '}
-          채팅을 계속해요.{' '}
-          {run.statePreparation.hasState
-            ? '마지막 확인 상태를 참고해요.'
-            : '사용할 수 있는 확인 상태가 없어요.'}
-          {run.statePreparation.missingSources > 0 && (
-            <> 원문 {run.statePreparation.missingSources}개의 상태 변화는 반영되지 않았어요.</>
-          )}
-        </p>
-      )}
       {run.error &&
         !(run.contextSummary?.status === 'failed' && run.contextSummary.error === run.error) && (
-          <p className="error">{run.error}</p>
+          <p className="error">{mainJudgmentError(run.error) ?? run.error}</p>
         )}
       {run.rejection && <ProviderRejectionNotice rejection={run.rejection} />}
       {run.status === 'refused' && (
@@ -173,94 +104,10 @@ export function RunTaskDetails({
       )}
       {canCancel && (
         <div className="form-actions">
-          {run.packageAfterResponse?.status === 'running' && run.snapshot.branchId && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={skipping || cancelling}
-              onClick={async () => {
-                if (skipping || cancelling) return;
-                setSkipping(true);
-                afterResponseSkipKey.current ??= crypto.randomUUID();
-                onError('');
-                try {
-                  await api(`/runs/${run.id}/skip-package-after-response`, {
-                    chatId: run.chatId,
-                    branchId: run.snapshot.branchId,
-                    expectedRevision: run.parentRevision,
-                    idempotencyKey: afterResponseSkipKey.current,
-                  });
-                  await refresh();
-                } catch (error) {
-                  onError((error as Error).message);
-                } finally {
-                  setSkipping(false);
-                }
-              }}
-            >
-              응답 후 처리 건너뛰기
-            </button>
-          )}
-          {packagePreparing && run.snapshot.branchId && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={skipping || cancelling}
-              onClick={async () => {
-                if (skipping || cancelling) return;
-                setSkipping(true);
-                packageSkipKey.current ??= crypto.randomUUID();
-                onError('');
-                try {
-                  await api(`/runs/${run.id}/skip-package-preparation`, {
-                    chatId: run.chatId,
-                    branchId: run.snapshot.branchId,
-                    expectedRevision: run.parentRevision,
-                    idempotencyKey: packageSkipKey.current,
-                  });
-                  await refresh();
-                } catch (error) {
-                  onError((error as Error).message);
-                } finally {
-                  setSkipping(false);
-                }
-              }}
-            >
-              자료 자동 준비 건너뛰기
-            </button>
-          )}
-          {run.status === 'waiting_for_state' && run.snapshot.branchId && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={skipping || cancelling}
-              onClick={async () => {
-                if (skipping || cancelling) return;
-                setSkipping(true);
-                stateSkipKey.current ??= crypto.randomUUID();
-                onError('');
-                try {
-                  await api(`/runs/${run.id}/skip-state-wait`, {
-                    chatId: run.chatId,
-                    branchId: run.snapshot.branchId,
-                    expectedRevision: run.parentRevision,
-                    idempotencyKey: stateSkipKey.current,
-                  });
-                  await refresh();
-                } catch (error) {
-                  onError((error as Error).message);
-                } finally {
-                  setSkipping(false);
-                }
-              }}
-            >
-              상태 준비 건너뛰기
-            </button>
-          )}
           <button
             type="button"
             className="secondary"
-            disabled={cancelling || skipping}
+            disabled={cancelling}
             onClick={async () => {
               if (cancelling) return;
               setCancelling(true);

@@ -231,7 +231,7 @@ test('selected advice, reads and draft cross a context window with frozen outlin
   const started = await api<Run>(state.app, `/api/scene-commands/${command.id}/run`, reservation);
   const run = await settled(state, started.id);
   expect(run.status).toBe('completed');
-  expect(run.usage.modelCalls).toBe(10);
+  expect(run.usage.modelCalls).toBe(11);
   expect(advisorPackets).toHaveLength(2);
   for (const data of advisorPackets) expect(data.source.outline).toEqual(run.snapshot.outline);
   expect(run.snapshot.outline?.path.at(-1)?.id).toBe(episode.id);
@@ -369,7 +369,7 @@ test('identical explicit context caches failures; a changed reference or draft s
   );
   const run = await settled(state, (await state.start()).id);
   expect(run.status).toBe('completed');
-  expect(run.usage.modelCalls).toBe(7);
+  expect(run.usage.modelCalls).toBe(8);
   expect(new Set(contextHashes).size).toBe(3);
   const events = Object.fromEntries(consults(run).map((event) => [event.callId, event.result]));
   expect(events['failed-context']).toMatchObject({

@@ -26,7 +26,7 @@ import {
 
 const foundationCases = ['F01', 'F02', 'F03', 'F04', 'F05', 'F06'];
 const productCases = Array.from({ length: 13 }, (_, i) => `P${String(i + 1).padStart(2, '0')}`);
-const storyCases = Array.from({ length: 7 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
+const storyCases = ['S01', 'S03', 'S04', 'S05', 'S06', 'S07'];
 export function verificationSelection(args) {
   let milestone = 'M0';
   const cases = [];
@@ -170,25 +170,25 @@ async function main(selection) {
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
     const env = localVerificationEnv({
-      NR_DB: path.join(runtime, 'app.sqlite'),
-      NR_INSTANCE: runId,
-      NR_BUILD_ID: manifest.buildId,
-      NR_ARTIFACT_DIR: directory,
-      NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
-      NR_SECRET_CANARY: canary,
+      UIMORI_DB: path.join(runtime, 'app.sqlite'),
+      UIMORI_INSTANCE: runId,
+      UIMORI_BUILD_ID: manifest.buildId,
+      UIMORI_ARTIFACT_DIR: directory,
+      UIMORI_BROWSER_OUTPUT: path.join(directory, 'browser'),
+      UIMORI_SECRET_CANARY: canary,
       TEMP: temp,
       TMP: temp,
-      ...(browserPath() ? { NR_BROWSER_PATH: browserPath() } : {}),
+      ...(browserPath() ? { UIMORI_BROWSER_PATH: browserPath() } : {}),
     });
     server = await startServer(env, directory, children);
-    env.NR_BASE_URL = server.ready.url;
+    env.UIMORI_BASE_URL = server.ready.url;
     summary.server = server.ready;
     owner.children = [
       {
         pid: server.child.pid,
         command: 'node dist/server/index.js',
-        dbPath: env.NR_DB,
-        url: env.NR_BASE_URL,
+        dbPath: env.UIMORI_DB,
+        url: env.UIMORI_BASE_URL,
       },
     ];
     await json(path.join(directory, 'ownership.json'), owner);

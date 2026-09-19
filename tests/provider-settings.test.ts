@@ -446,7 +446,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       initial = app.store.product.profile(chat.id);
     const profile = updateTestProfile(app.store.product, chat.id, {
       expectedRevision: initial.revision,
-      attachments: initial.attachments,
+      packageAttachments: initial.packageAttachments,
 
       image: false,
       routes: { ...initial.routes, main: ref(model) },
@@ -879,13 +879,12 @@ describe('provider settings, catalogs and archive contracts', () => {
     const initial = product.profile(chat.id);
     const profile = updateTestProfile(product, chat.id, {
       expectedRevision: initial.revision,
-      attachments: [],
+      packageAttachments: initial.packageAttachments,
 
       routes: {
         main: ref(models[0]),
         translation: ref(models[1]),
         status: ref(models[2]),
-        image: ref(models[3]),
       },
       image: false,
     });
@@ -993,7 +992,6 @@ describe('provider settings, catalogs and archive contracts', () => {
         expect(target.store.product.library()).toMatchObject({
           connections: [],
           models: [],
-          contents: [],
         });
         expect(target.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
       }

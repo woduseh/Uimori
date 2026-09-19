@@ -45,7 +45,6 @@ function ancestry(sources: Source[], head: string | null) {
 type RunPayload = {
   retryOf?: string;
   editedRequest?: boolean;
-  packageRequestId?: string;
   loreContextReset?: boolean;
   request: string;
   expectedRevision: string | null;
@@ -461,20 +460,14 @@ export function useStory() {
       alive = false;
     };
   }, [selected, activeBranchId, readSource, refresh]);
-  const attachmentKey = [
-    ...(detail?.profile?.attachments ?? []),
-    ...(detail?.profile?.packageAttachments ?? []),
-  ]
-    .map(refValue)
-    .join(',');
+  const attachmentKey = [...(detail?.profile?.packageAttachments ?? [])].map(refValue).join(',');
   // biome-ignore lint/correctness/useExhaustiveDependencies: Current content reads follow IDs/revisions, library changes and chat switches, not SSE object identity.
   useEffect(() => {
     let alive = true;
     if (!detail?.profile || !library) return;
-    const missing = [
-      ...detail.profile.attachments,
-      ...(detail.profile.packageAttachments ?? []),
-    ].filter((ref) => !library.contents.some((item) => refValue(item) === refValue(ref)));
+    const missing = [...(detail.profile.packageAttachments ?? [])].filter(
+      (ref) => !library.contents.some((item) => refValue(item) === refValue(ref))
+    );
     void Promise.all(missing.map((ref) => api<Content>(`/content/${ref.id}`)))
       .then((items) => {
         if (alive) setArchivedContents(items);
@@ -541,12 +534,9 @@ export function useStory() {
         JSON.stringify({ start: node.selectionStart, end: node.selectionEnd })
       );
   }, [draftKey]);
-  function editDraft(value: string, packageRequestId?: string) {
+  function editDraft(value: string) {
     setDraft(value);
     sessionStorage.setItem(draftKey, value);
-    if (packageRequestId)
-      sessionStorage.setItem(`package-request-draft:${draftKey}`, packageRequestId);
-    else sessionStorage.removeItem(`package-request-draft:${draftKey}`);
   }
   function editLoreContextReset(value: boolean) {
     if (readCommand(`command:${selected}${storageBranch ? `:${storageBranch}` : ''}`)) return;
@@ -734,9 +724,7 @@ export function useStory() {
     );
   }
   function activeRun() {
-    return visibleRuns.find((run) =>
-      ['queued', 'running', 'waiting_for_state'].includes(run.status)
-    );
+    return visibleRuns.find((run) => ['queued', 'running'].includes(run.status));
   }
   const reuseBlocked =
     !!activeRun() ||
@@ -771,9 +759,6 @@ export function useStory() {
       ...(retryRun ? { retryOf: retryRun.id } : {}),
       ...((retryRun ? retryRun.snapshot.loreContextReset : loreResetDraft)
         ? { loreContextReset: true }
-        : {}),
-      ...(!retryRun && sessionStorage.getItem(`package-request-draft:${draftKey}`)
-        ? { packageRequestId: sessionStorage.getItem(`package-request-draft:${draftKey}`)! }
         : {}),
       expectedRevision: branch ? branch.headRevision : chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
@@ -822,7 +807,6 @@ export function useStory() {
       }
       if (!preserveDraft && sessionStorage.getItem(sentKey) === sentDraft) {
         sessionStorage.removeItem(sentKey);
-        sessionStorage.removeItem(`package-request-draft:${sentKey}`);
         if (currentDraftKey.current === sentKey) setDraft('');
       }
       if (currentView.current === sentView)
@@ -1008,76 +992,36 @@ export function useStory() {
           `/chats/${chatId}/profile`,
           {
             expectedRevision: profile.revision,
-            attachments: profile.attachments,
             image: profile.image,
             packageAttachments: [
               ...existing,
               { id: module.id, revision: module.revision, role: 'module' },
             ],
-            packageValues: profile.packageValues,
           },
           'PUT'
         );
       } else {
         let contents = [...library.contents, ...archivedContents];
-        if (kind === 'persona') {
-          const missing = profile.attachments.filter(
-            (ref) => !contents.some((item) => refValue(item) === refValue(ref))
-          );
-          // Resolve current content before classifying and replacing a persona.
-          contents = [
-            ...contents,
-            ...(await Promise.all(missing.map((ref) => api<Content>(`/content/${ref.id}`)))),
-          ];
-        }
         const persona = contents.find(
           (item) =>
             (item.kind === 'persona' || item.package || item.hasPackage) && refValue(item) === value
         );
         if (kind === 'persona' && value && !persona)
           throw new Error('선택한 페르소나를 찾지 못했어요.');
-        const packaged = !!persona && (!!persona.package || !!persona.hasPackage);
-        const attachments =
-          kind === 'persona'
-            ? [
-                ...profile.attachments.filter(
-                  (ref) =>
-                    !contents.some(
-                      (item) => item.kind === 'persona' && refValue(item) === refValue(ref)
-                    )
-                ),
-                ...(persona && !packaged ? [{ id: persona.id, revision: persona.revision }] : []),
-              ]
-            : profile.attachments;
         const packageAttachments =
           kind === 'persona'
             ? [...(profile.packageAttachments ?? [])]
                 .filter((r) => r.role !== 'persona')
                 .concat(
-                  persona && packaged
-                    ? [{ id: persona.id, revision: persona.revision, role: 'persona' }]
-                    : []
+                  persona ? [{ id: persona.id, revision: persona.revision, role: 'persona' }] : []
                 )
             : profile.packageAttachments;
-        const packageKeys = new Set(
-          packageAttachments?.map((r) => `${r.id}@${r.revision}:${r.role}`)
-        );
         await api(
           `/chats/${chatId}/profile`,
           {
             expectedRevision: profile.revision,
-            attachments,
             image: profile.image,
-            ...(packageAttachments
-              ? {
-                  packageAttachments,
-                  packageValues: Object.fromEntries(
-                    Object.entries(profile.packageValues ?? {}).filter(([key]) =>
-                      packageKeys.has(key)
-                    )
-                  ),
-                }
-              : {}),
+            packageAttachments,
           },
           'PUT'
         );
@@ -1095,14 +1039,11 @@ export function useStory() {
       setQuickBusy(false);
     }
   }
-  const active = visibleRuns.find(
-    (run) =>
-      run.status === 'queued' || run.status === 'running' || run.status === 'waiting_for_state'
-  );
+  const active = visibleRuns.find((run) => run.status === 'queued' || run.status === 'running');
   const allContents = [...(library?.contents ?? []), ...archivedContents];
   const attachmentsReady =
     !!detail?.profile &&
-    detail.profile.attachments.every((ref) =>
+    (detail.profile.packageAttachments ?? []).every((ref) =>
       allContents.some((item) => refValue(item) === refValue(ref))
     );
   const pendingCommand = selected
@@ -1115,22 +1056,18 @@ export function useStory() {
   const loreContextReset = pendingCommand
     ? pendingCommand.payload.loreContextReset === true
     : loreResetDraft;
-  const attached = allContents.filter((item) =>
-    detail?.profile?.attachments.some((ref) => refValue(ref) === refValue(item))
-  );
   const packageContent = (role: string) => {
     const r = detail?.profile?.packageAttachments?.find((r) => r.role === role);
     return r ? allContents.find((c) => refValue(c) === refValue(r)) : undefined;
   };
-  const bot = packageContent('bot') ?? attached.find((item) => item.kind === 'bot');
-  const persona = packageContent('persona') ?? attached.find((item) => item.kind === 'persona');
+  const bot = packageContent('bot');
+  const persona = packageContent('persona');
   const profileAsset = detail?.assets?.find((asset) => asset.allowedUse !== 'inline');
   const tasks = detail
-    ? (detail.reader.activity?.filter((item) =>
-        ['running', 'queued', 'waiting_for_state'].includes(item.status)
-      ).length ??
-      detail.runs.filter((run) => ['running', 'queued', 'waiting_for_state'].includes(run.status))
-        .length + detail.reader.activeJobs)
+    ? (detail.reader.activity?.filter((item) => ['running', 'queued'].includes(item.status))
+        .length ??
+      detail.runs.filter((run) => ['running', 'queued'].includes(run.status)).length +
+        detail.reader.activeJobs)
     : 0;
   const pendingProfile = !!selected && !!sessionStorage.getItem(`pending-profile:${selected}`);
   const trackedRequest = requestActivities[viewKey];
@@ -1139,9 +1076,7 @@ export function useStory() {
     trackedRequest?.status === 'accepted' &&
     (!detail ||
       (!detail.runs.some(
-        (run) =>
-          run.id === trackedRequest.runId &&
-          ['queued', 'running', 'waiting_for_state'].includes(run.status)
+        (run) => run.id === trackedRequest.runId && ['queued', 'running'].includes(run.status)
       ) &&
         !detail.reader.activity?.some((item) => item.id === trackedRequest.runId)));
   const requestActivity =

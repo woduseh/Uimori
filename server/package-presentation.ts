@@ -1,11 +1,6 @@
 import { createHash } from 'node:crypto';
-import { ContentPackageError } from '../core/content-package.js';
-import { compiledPackages } from '../core/package-context.js';
-import { renderPackageStateView } from '../core/package-runtime.js';
+import { RisuContentError } from '../core/risu-content.js';
 import type { RunSnapshot } from '../core/types.js';
-import { applyPackageTransforms } from './package-transforms.js';
-import { packageImages } from '../core/package-images.js';
-import { applyPromptDisplayTransforms, currentPromptInputTransform } from './prompt-transforms.js';
 import { nativeRisuContext } from './risu-native-context.js';
 import { executeRisuNative } from './risu-native-runtime.js';
 import { renderNativeRisuMessage } from './risu-native-render.js';
@@ -42,15 +37,15 @@ export async function buildPackagePresentation(
     source.chatId !== snapshot.chatId ||
     createHash('sha256').update(source.text).digest('hex') !== source.hash
   )
-    throw new ContentPackageError('PACKAGE_PRESENTATION_SOURCE_MISMATCH');
+    throw new RisuContentError('PACKAGE_PRESENTATION_SOURCE_MISMATCH');
   if (
     source.translation &&
     (source.translation.sourceRevision !== source.id ||
       source.translation.sourceHash !== source.hash)
   )
-    throw new ContentPackageError('PACKAGE_PRESENTATION_TRANSLATION_MISMATCH');
+    throw new RisuContentError('PACKAGE_PRESENTATION_TRANSLATION_MISMATCH');
   if (state && (state.sourceRevision !== source.id || state.sourceHash !== source.hash))
-    throw new ContentPackageError('PACKAGE_PRESENTATION_STATE_MISMATCH');
+    throw new RisuContentError('PACKAGE_PRESENTATION_STATE_MISMATCH');
   const native = nativeRisuContext(snapshot);
   if (native) {
     const index =
@@ -130,68 +125,18 @@ export async function buildPackagePresentation(
       request: { text: snapshot.request, changed: false, applied: [] as string[] },
     };
   }
-  // Presentation uses all attachments even when persona reference is disabled for main writing.
-  const packages = compiledPackages(snapshot, 'status');
-  const rules = packages.flatMap((p) => p.transforms);
-  const issues: string[] = [];
-  const display = async (text: string, role: 'user' | 'assistant') => {
-    try {
-      return await applyPromptDisplayTransforms(snapshot, text, role);
-    } catch {
-      issues.push('프롬프트의 표시 변환을 적용하지 못해 원래 내용을 표시해요.');
-      return { text, changed: false, applied: [] as string[] };
-    }
-  };
-  // Risu applies the imported output/display callbacks before its display regex; keep that order.
-  const edited = options.skipSourceTransforms ? undefined : options.displayEdit;
-  const presetDisplay = options.skipSourceTransforms
-    ? { text: source.text, changed: false, applied: [] as string[] }
-    : await display(edited?.text ?? source.text, 'assistant');
-  const packageDisplay = await applyPackageTransforms(presetDisplay.text, rules, 'source');
-  const original = {
-    text: packageDisplay.text,
-    changed: packageDisplay.text !== source.text,
-    applied: [...(edited?.applied ?? []), ...presetDisplay.applied, ...packageDisplay.applied],
-  };
-  const request = await display(snapshot.request, 'user');
-  const inputTransform = currentPromptInputTransform(snapshot);
-  if (snapshot.promptInputTransforms?.error)
-    issues.push('전송 전 텍스트 변환에 실패해 원래 입력으로 진행했어요.');
-  if (snapshot.extensionMessageEdit?.skipped)
-    issues.push(
-      '가져온 자료의 전송문 편집은 대화 읽기 허용이 없거나 대화가 실행 한도를 넘어 건너뛰었어요. 원문 대화를 그대로 보냈어요.'
-    );
-  const translation = source.translation
-    ? await applyPackageTransforms(source.translation.text, rules, 'translation')
-    : undefined;
-  const shownText = `${original.text}\n${translation?.text ?? ''}`;
-  const inlineImageUrls = snapshot.profile
-    ? [
-        ...new Set(
-          packageImages(snapshot.profile)
-            .filter((asset) => asset.allowedUse !== 'profile' && shownText.includes(asset.url))
-            .map((asset) => asset.url)
-        ),
-      ]
-    : [];
-  const views = packages
-    .filter((p) => p.stateView)
-    .map((p) => ({
-      packageId: p.package.id,
-      revision: p.package.revision,
-      role: p.attachment.role,
-      ...renderPackageStateView(p.stateView!, state?.values ?? {}),
-    }));
   return {
     sourceRevision: source.id,
     sourceHash: source.hash,
     format: 'plain-text' as const,
-    ...(inlineImageUrls.length ? { inlineImageUrls } : {}),
-    original,
-    request,
-    ...(inputTransform ? { inputTransform } : {}),
-    issues,
-    ...(translation ? { translation } : {}),
-    stateViews: views,
+    original: { text: source.text, changed: false, applied: [] as string[] },
+    ...(source.translation
+      ? { translation: { text: source.translation.text, changed: false, applied: [] as string[] } }
+      : {}),
+    request: { text: snapshot.request, changed: false, applied: [] as string[] },
+    issues: [] as string[],
+    stateViews: [],
+    inlineImageUrls: undefined,
+    inputTransform: undefined,
   };
 }

@@ -38,9 +38,9 @@ async function create(page: Page, title: string): Promise<Chat> {
 async function panel(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   if (!(await dialog.isVisible())) await openChatSettings(page);
-  await selectChatSettingsSection(page, '상태와 문맥');
-  const section = dialog.getByRole('region', { name: '이야기 상태와 문맥', exact: true });
-  await expect(section.getByRole('button', { name: '상태 설정 저장', exact: true })).toBeVisible();
+  await selectChatSettingsSection(page, '기억과 메모');
+  const section = dialog.getByRole('region', { name: '이야기 기억과 문맥', exact: true });
+  await expect(section).toBeVisible();
   return section;
 }
 async function open(section: Locator, title: RegExp) {
@@ -80,8 +80,11 @@ async function original(page: Page, source: Source) {
   return article;
 }
 function storedSource(source: Source) {
-  expect(process.env.NR_DB, 'Browser suite requires a fresh verifier-owned SQLite DB').toBeTruthy();
-  const db = new DatabaseSync(process.env.NR_DB!, { readOnly: true });
+  expect(
+    process.env.UIMORI_DB,
+    'Browser suite requires a fresh verifier-owned SQLite DB'
+  ).toBeTruthy();
+  const db = new DatabaseSync(process.env.UIMORI_DB!, { readOnly: true });
   try {
     expect(db.prepare('SELECT text,hash FROM sources WHERE id=?').get(source.id)).toEqual({
       text: source.text,
@@ -93,147 +96,7 @@ function storedSource(source: Source) {
 }
 
 test.afterEach(async ({ request }) => {
-  for (const barrier of ['run', 'state']) await control(request, 'release', { barrier });
-});
-
-test('S02 BPREPUI01 the existing task details skip pending state without cancelling its job or repeating prose', async ({
-  page,
-  request,
-}) => {
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
-  const chat = await create(page, '상태 준비 건너뛰기 합성');
-  const saved = await request.put(`/api/chats/${chat.id}/story/config`, {
-    data: {
-      expectedRevision: 0,
-      module: {
-        id: 'skip-wallet',
-        revision: 1,
-        name: 'Skip wallet',
-        mode: 'authoritative',
-        fields: { coins: { type: 'number', initial: 10, min: 0, max: 100 } },
-        rules: { purchase: { field: 'coins', delta: -3 } },
-      },
-      stateModel: null,
-    },
-  });
-  expect(saved.ok()).toBeTruthy();
-  await control(request, 'hold', { barrier: 'state' });
-  const first = await send(page, 'SYNTHETIC_FIRST [[event:purchase]]');
-  const source = await complete(request, chat.id, first.id);
-  const next = await send(page, 'SYNTHETIC_SKIP Continue this exact request.');
-  expect(next.status).toBe('waiting_for_state');
-  const activity = page.getByTestId('pending-run').getByTestId('turn-activity');
-  await expect(activity.locator(':scope > summary')).toContainText('상태 정리 대기');
-  await open(page.getByTestId('pending-run'), /상태 정리 대기/);
-  await activity.getByRole('button', { name: '상태 준비 건너뛰기', exact: true }).click();
-  const continued = await complete(request, chat.id, next.id);
-  const frozen = (await detail(request, chat.id)).runs.find((run) => run.id === next.id)!.snapshot;
-  expect(frozen.story?.preparation).toMatchObject({
-    status: 'skipped',
-    fallback: { values: { coins: 10 } },
-  });
-  const article = await original(page, continued);
-  await open(article, /본문 완료|장면 해설|상태 정리/);
-  await expect(article.getByText(/상태 준비를 건너뛰고/)).toBeVisible();
-  expect((await story(request, chat.id)).jobs.some((job) => job.status === 'running')).toBe(true);
-  expect((await detail(request, chat.id)).sources).toHaveLength(2);
-  storedSource(source);
-  await control(request, 'release', { barrier: 'state' });
-  await expect
-    .poll(async () =>
-      (await story(request, chat.id)).jobs.every((job) => job.status === 'completed')
-    )
-    .toBe(true);
-  expect((await detail(request, chat.id)).runs.find((run) => run.id === next.id)!.snapshot).toEqual(
-    frozen
-  );
-});
-
-test('S01 S02 state settings use synthetic rules, preserve readable original while waiting, then compile persisted state', async ({
-  page,
-  request,
-}, testInfo) => {
-  test.setTimeout(45_000);
-  const chat = await create(page, 'S01 S02 합성 항구 상태');
-  const section = await panel(page);
-  expect((await story(request, chat.id)).config.module).toBeNull();
-  await open(section, /^합성 예제 살펴보기$/);
-  await section.getByRole('button', { name: '합성 항구 예제를 초안에 넣기' }).click();
-  await expect(section.getByRole('heading', { name: '저장 전 미리보기' })).toBeVisible();
-  expect((await story(request, chat.id)).config.module).toBeNull(); // Preview is not activation.
-  await expect(section.getByLabel('상태 확인 모델')).toHaveValue('');
-  await expect(section.getByLabel('기억 정리 모델')).toHaveCount(0);
-  await section.getByRole('button', { name: '상태 설정 저장', exact: true }).click();
-  await expect
-    .poll(async () => (await story(request, chat.id)).config.module?.name)
-    .toBe('합성 항구 예제');
-  await expect(section.getByRole('status')).toContainText('반영했어요.');
-  await control(request, 'hold', { barrier: 'state' });
-  try {
-    const first = await send(page, 'SYNTHETIC_FIRST [[event:buy-ticket]]');
-    const source = await complete(request, chat.id, first.id);
-    const article = await original(page, source);
-    await expect(article.getByTestId('source-text')).toContainText('[[event:buy-ticket]]');
-    await expect
-      .poll(async () =>
-        (await story(request, chat.id)).jobs.some(
-          (job) => job.kind === 'state' && job.status === 'running'
-        )
-      )
-      .toBe(true);
-    const second = await send(page, 'SYNTHETIC_SECOND The traveler waits beside the harbor.');
-    expect(second.status).toBe('waiting_for_state');
-    await expect(
-      page.getByTestId('pending-run').getByTestId('turn-activity').locator(':scope > summary')
-    ).toContainText('상태 정리 대기');
-    await expect(article.getByTestId('source-text')).toContainText('SYNTHETIC_FIRST');
-    await page.getByTestId('pending-run').scrollIntoViewIfNeeded();
-    if (visualReview)
-      await page.screenshot({
-        path: testInfo.outputPath('S02-mobile-waiting-original.png'),
-        fullPage: true,
-      });
-    await control(request, 'release', { barrier: 'state' });
-    await complete(request, chat.id, second.id);
-    const accepted = (await detail(request, chat.id)).runs.find((run) => run.id === second.id)!;
-    expect(accepted.snapshot.story?.state?.values.coins).toBe(7);
-    expect(accepted.inputs[0]).toMatchObject({
-      state: { values: { coins: 7 }, sourceRevision: source.id },
-    });
-    await expect.poll(async () => (await story(request, chat.id)).state?.values.coins).toBe(7);
-    await close(page);
-    const firstArticle = await original(page, source);
-    const values = await open(firstArticle, /^이 원고의 상태/);
-    await expect(values.locator('dt', { hasText: /^coins$/ })).toBeVisible();
-    await expect(values.locator('dd', { hasText: /^7$/ })).toBeVisible();
-    storedSource(source);
-    const db = new DatabaseSync(process.env.NR_DB!, { readOnly: true });
-    try {
-      const row = db
-        .prepare(
-          'SELECT body FROM story_states WHERE source_revision=? ORDER BY rowid DESC LIMIT 1'
-        )
-        .get(source.id);
-      expect(JSON.parse(String(row?.body))).toMatchObject({
-        sourceHash: source.hash,
-        values: { coins: 7 },
-      });
-    } finally {
-      db.close();
-    }
-    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
-    await panel(page);
-    if (visualReview)
-      await page.screenshot({
-        path: testInfo.outputPath('S01-desktop-state-settings.png'),
-        fullPage: true,
-      });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true
-    );
-  } finally {
-    await control(request, 'release', { barrier: 'state' });
-  }
+  await control(request, 'release', { barrier: 'run' });
 });
 
 test('S04 explicit user note and correction remain separate from prose after reload', async ({
@@ -328,7 +191,7 @@ test('S06 scene commands distinguish successful original, failed original and ca
     });
 });
 
-test('S06 S07 presentation API preserves literal text and source; asset catalog does not preload bytes', async ({
+test('S06 S07 reading preserves source text while the asset catalog does not preload bytes', async ({
   page,
   request,
 }, testInfo) => {
@@ -405,18 +268,7 @@ test('S06 S07 presentation API preserves literal text and source; asset catalog 
   const source = await complete(request, chat.id, run.id);
   const article = await original(page, source);
   await expect(article.getByText('표시 문구 바꾸기', { exact: true })).toHaveCount(0);
-  const malicious =
-    '<img src=x onerror="window.XSS=1"><script>window.XSS=2</script><iframe srcdoc="<script>parent.XSS=3</script>"></iframe>';
-  // This retained API check covers literal replacement, not a product preview or DOM rendering.
   expect(source.text).toContain('Mira');
-  const presentation = await request.post(`/api/sources/${source.id}/presentation`, {
-    data: { rules: [{ pattern: 'Mira', flags: 'g', replacement: malicious }] },
-  });
-  expect(presentation.ok()).toBe(true);
-  expect(await presentation.json()).toMatchObject({
-    ok: true,
-    text: source.text.replaceAll('Mira', malicious),
-  });
   expect(
     (await detail(request, chat.id)).sources.find((item) => item.id === source.id)
   ).toMatchObject({ text: source.text, hash: source.hash });
@@ -446,38 +298,20 @@ test('S06 S07 presentation API preserves literal text and source; asset catalog 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('STUI01 state settings align on mobile and desktop while imported definitions remain drafts', async ({
+test('STUI01 story memory and scene reservations fit mobile and desktop', async ({
   page,
-  request,
 }, info) => {
-  const chat = await create(page, '상태 설정 배치 합성');
+  await create(page, '기억과 메모 배치 합성');
   const section = await panel(page);
-  const fields = section.getByRole('group', { name: '다음 원고에 적용할 설정', exact: true });
   for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 1000 });
-    await fields.scrollIntoViewIfNeeded();
-    await expect(fields.getByText('상태 정의', { exact: true })).toBeVisible();
-    await expect(fields.getByLabel('상태 정의 JSON 파일')).toHaveCount(1);
+    await section.scrollIntoViewIfNeeded();
+    await expect(section.locator('summary').filter({ hasText: /^사용자 메모·정정/ })).toBeVisible();
+    await expect(section.locator('summary').filter({ hasText: /^장면 예약/ })).toBeVisible();
+    await expect(section.getByLabel('상태 정의 JSON 파일')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath(`story-settings-${width}.png`) });
+    if (visualReview) await page.screenshot({ path: info.outputPath(`story-memory-${width}.png`) });
   }
-  await open(section, /합성 예제/);
-  await section.getByRole('button', { name: '합성 항구 예제를 초안에 넣기' }).click();
-  const module = JSON.parse(await section.locator('.story-module-preview pre').innerText());
-  module.name = '파일로 불러온 상태';
-  await fields.getByLabel('상태 정의 JSON 파일').setInputFiles({
-    name: 'state.json',
-    mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(module)),
-  });
-  await expect(section.locator('.story-module-preview')).toContainText(module.name);
-  expect((await story(request, chat.id)).config.module).toBeNull();
-  await expect(fields.getByRole('switch', { name: '기억 자동 정리 사용' })).toHaveCount(0);
-  await fields.getByRole('button', { name: '상태 설정 저장', exact: true }).click();
-  await expect
-    .poll(async () => (await story(request, chat.id)).config.module?.name)
-    .toBe(module.name);
 });

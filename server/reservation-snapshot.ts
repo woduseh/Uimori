@@ -1,20 +1,13 @@
 import type { RunSnapshot } from '../core/types.js';
 import { isSourceOnlyTranscript, validateSourceOnlyTranscript } from '../core/authored-history.js';
-import { freezeSourceSegments } from '../core/package-source-segments.js';
 import type { Store } from './store.js';
 import { ChatOptionsStore } from './chat-options.js';
 import { freezeChatOverrides } from './chat-overrides.js';
 import { freezeOutline } from './outline-store.js';
-import { freezePackageStates } from './package-behavior-host.js';
-import { prepareRunBehavior } from './package-behavior-run.js';
 import { freezeLoreContext } from './lore-context.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
-import { prepareRisuCompatReceipt } from './compat/risu/cbs.js';
-import { prepareLoreActivationReceipt } from './compat/risu/lore-activation.js';
 import { loreSelectionPending } from './lore-selection.js';
-import { hasPromptInputTransforms } from './prompt-transforms.js';
 import { chatVariableProfile } from './chat-variable-context.js';
-import { captureRunConversation } from './package-conversation.js';
 import { nativeRisuPending } from './risu-native-run.js';
 import { nativeRisuPresetPending } from './risu-native-preset.js';
 
@@ -44,11 +37,7 @@ export function freezeReservationSnapshot(
   options: ReservationPurpose
 ): RunSnapshot {
   if (options.purpose === 'resume-state')
-    return nativeRisuPending(base) ||
-      nativeRisuPresetPending(base) ||
-      base.behaviorExecution?.deferredAutomatic ||
-      hasPromptInputTransforms(base) ||
-      loreSelectionPending(base)
+    return nativeRisuPending(base) || nativeRisuPresetPending(base) || loreSelectionPending(base)
       ? base
       : compileSnapshotPrompt(freezeLoreContext(store, base));
 
@@ -71,8 +60,7 @@ export function freezeReservationSnapshot(
 
   if (authored && isSourceOnlyTranscript(base)) {
     validateSourceOnlyTranscript(base);
-    const sourceSegments = freezeSourceSegments(base.profile);
-    return { ...base, ...(sourceSegments ? { sourceSegments } : {}) };
+    return base;
   }
 
   if (reserved && base.profile) {
@@ -98,13 +86,6 @@ export function freezeReservationSnapshot(
   }
 
   let frozen = base;
-  if (!translationPreview) {
-    const sourceSegments = freezeSourceSegments(base.profile);
-    // Preserve the persisted Run shape and the explicit optional field on read-only snapshots.
-    frozen = reserved
-      ? { ...base, ...(sourceSegments ? { sourceSegments } : {}) }
-      : { ...base, sourceSegments };
-  }
   if (!authored) frozen = store.story.prepareRunInTransaction(frozen);
   if (reserved && options.sceneCommandId)
     frozen = freezeOutline(store, options.sceneCommandId, frozen);
@@ -118,33 +99,11 @@ export function freezeReservationSnapshot(
   }
   if (options.purpose === 'preview-main' || options.purpose === 'preview-translation')
     frozen = { ...frozen, executionClock: options.executionClock() };
-  frozen = freezePackageStates(store, frozen, reserved);
-  if (options.purpose === 'run')
-    frozen = captureRunConversation(store, frozen, options.runId, options.supersedesRunId);
-  if (options.purpose === 'run') frozen = prepareRunBehavior(store, options.runId, frozen);
-  // The compat evaluation is an input, so it freezes here: the clock, profile and history it reads
-  // are final, and every later compilation - reservation's own, a deferred one, a candidate's clone
-  // or an archive replay - projects this receipt instead of evaluating the card again. An authored
-  // opening freezes the same receipt: the exact text its source commits is the evaluated one.
-  if (options.purpose === 'run' || options.purpose === 'authored') {
-    const risuCompat = prepareRisuCompatReceipt(frozen, options.runId);
-    if (risuCompat) frozen = { ...frozen, risuCompat };
-  }
-  if (options.purpose === 'run') {
-    // The keyword scan reads the same frozen history and request, so it freezes here for the same
-    // reason: which lore a run sent must not change when the run is compiled again.
-    const loreActivation = prepareLoreActivationReceipt(frozen, options.runId);
-    if (loreActivation) frozen = { ...frozen, loreActivation };
-  }
   // The model selection needs a provider call, which a reservation transaction must not make, so a
   // snapshot that still owes one reserves uncompiled and the worker compiles after the answer lands.
   if (
     options.purpose === 'run' &&
-    (nativeRisuPending(frozen) ||
-      nativeRisuPresetPending(frozen) ||
-      frozen.behaviorExecution?.deferredAutomatic ||
-      hasPromptInputTransforms(frozen) ||
-      loreSelectionPending(frozen))
+    (nativeRisuPending(frozen) || nativeRisuPresetPending(frozen) || loreSelectionPending(frozen))
   ) {
     const { contextBase } = store.context.prepareRun(frozen);
     return { ...frozen, contextBase };

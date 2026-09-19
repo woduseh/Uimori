@@ -11,7 +11,7 @@ import {
   validateConfig,
 } from './update-controller.mjs';
 
-const ENV = 'NR_PUBLIC_ORIGIN=https://story.example.test\nNR_ACCESS_TOKEN=secret-token\n';
+const ENV = 'UIMORI_PUBLIC_ORIGIN=https://story.example.test\nUIMORI_ACCESS_TOKEN=secret-token\n';
 function fixture() {
   const base = mkdtempSync(path.join(realpathSync(tmpdir()), 'uimori-update-'));
   const project = path.join(base, 'app');
@@ -46,7 +46,7 @@ function io({ work = [0], probe = '{"event":"ready"}', fail } = {}) {
         calls.push(args.join(' '));
         if (fail?.docker && args.join(' ').includes(fail.docker))
           throw new Error(`docker refused ${fail.docker}`);
-        if (args[0] === 'run' && args.includes('NR_MAINTENANCE=1')) return probe;
+        if (args[0] === 'run' && args.includes('UIMORI_MAINTENANCE=1')) return probe;
         return 'sha256:' + 'a'.repeat(64);
       },
       http: async (url, init) => {
@@ -87,7 +87,7 @@ test('a full transition closes the gate, verifies a candidate and reopens once',
     );
     const environment = readFileSync(config.envFile, 'utf8');
     // Only the two controller-owned keys change; the operator's own lines stay byte for byte.
-    assert.match(environment, /NR_ACCESS_TOKEN=secret-token/u);
+    assert.match(environment, /UIMORI_ACCESS_TOKEN=secret-token/u);
     assert.match(environment, /UIMORI_IMAGE=ghcr\.io\/team\/uimori:2026\.9\.14/u);
     assert.match(environment, /UIMORI_DATA_VOLUME=uimori_data-update-0001-/u);
     const gate = runner.calls.filter((call) =>
@@ -108,7 +108,7 @@ test('a full transition closes the gate, verifies a candidate and reopens once',
 test('a candidate that fails its migration probe restores the previous image and reopens', async () => {
   const { config, cleanup } = fixture();
   try {
-    const runner = io({ probe: 'Error: DATABASE_MIGRATION_FAILED' });
+    const runner = io({ probe: 'Error: DATABASE_INITIALIZATION_FAILED' });
     const summary = await runUpdate({ config, requestKey: 'update-0002', io: runner.io });
     assert.equal(summary.status, 'failed');
     assert.equal(summary.failedStage, 'candidate');

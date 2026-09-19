@@ -18,7 +18,7 @@ function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'uimori-oracle-'));
   const source = join(root, 'source');
   mkdirSync(source);
-  const db = new DatabaseSync(join(source, 'narrative.sqlite'));
+  const db = new DatabaseSync(join(source, 'uimori.sqlite'));
   db.exec(
     "PRAGMA user_version=15; PRAGMA journal_mode=WAL; CREATE TABLE future_jobs(id TEXT PRIMARY KEY,status TEXT,body TEXT); INSERT INTO future_jobs VALUES ('job','completed','original');"
   );
@@ -37,7 +37,7 @@ test('active work is discovered in future status tables; completed history and p
   const { source, db } = fixture(t);
   db.exec("INSERT INTO future_jobs VALUES ('plan','pending','plan')");
   assert.deepEqual(inspectData(source).active, {});
-  for (const state of ['queued', 'running', 'waiting_for_state']) {
+  for (const state of ['queued', 'running']) {
     db.prepare('UPDATE future_jobs SET status=? WHERE id=?').run(state, 'job');
     assert.throws(() => inspectData(source), /Active work/);
   }
@@ -49,7 +49,7 @@ test('online SQLite snapshot includes WAL writes and remains independent', async
   const target = join(root, 'snapshot');
   await snapshotDatabase(source, target);
   db.exec("UPDATE future_jobs SET body='changed'");
-  const copied = new DatabaseSync(join(target, 'narrative.sqlite'));
+  const copied = new DatabaseSync(join(target, 'uimori.sqlite'));
   try {
     assert.equal(copied.prepare('SELECT body FROM future_jobs').get().body, 'original');
   } finally {
@@ -63,7 +63,7 @@ test('stopped backup restores DB and companion assets, removing candidate-only f
   writeFileSync(join(source, 'image.png'), 'original-image');
   const target = join(root, 'backup');
   copyStoppedData(source, target);
-  const changed = new DatabaseSync(join(source, 'narrative.sqlite'));
+  const changed = new DatabaseSync(join(source, 'uimori.sqlite'));
   changed.exec("UPDATE future_jobs SET body='candidate'");
   changed.close();
   writeFileSync(join(source, 'candidate-only'), 'new');
@@ -72,7 +72,7 @@ test('stopped backup restores DB and companion assets, removing candidate-only f
   assert.equal(readFileSync(join(source, 'image.png'), 'utf8'), 'original-image');
   assert.equal(existsSync(join(source, 'candidate-only')), false);
   assert.equal(inspectData(source, { integrity: true }).integrity, 'ok');
-  const restored = new DatabaseSync(join(source, 'narrative.sqlite'));
+  const restored = new DatabaseSync(join(source, 'uimori.sqlite'));
   try {
     assert.equal(restored.prepare('SELECT body FROM future_jobs').get().body, 'original');
   } finally {
@@ -83,25 +83,25 @@ test('stopped backup restores DB and companion assets, removing candidate-only f
 
 test('fresh copies only credential directory and Codex login, never app settings/session databases', (t) => {
   const { root, source } = fixture(t);
-  mkdirSync(join(source, 'narrative.sqlite.vertex-credentials'));
+  mkdirSync(join(source, 'uimori.sqlite.vertex-credentials'));
   writeFileSync(
-    join(source, 'narrative.sqlite.vertex-credentials', 'account.json'),
+    join(source, 'uimori.sqlite.vertex-credentials', 'account.json'),
     'private-account'
   );
-  mkdirSync(join(source, 'narrative.sqlite.codex'));
-  writeFileSync(join(source, 'narrative.sqlite.codex', 'auth.json'), 'private-login');
-  writeFileSync(join(source, 'narrative.sqlite.codex', 'state.sqlite'), 'private-conversation');
-  writeFileSync(join(source, 'narrative.sqlite.codex', 'config.toml'), 'old-config');
+  mkdirSync(join(source, 'uimori.sqlite.codex'));
+  writeFileSync(join(source, 'uimori.sqlite.codex', 'auth.json'), 'private-login');
+  writeFileSync(join(source, 'uimori.sqlite.codex', 'state.sqlite'), 'private-conversation');
+  writeFileSync(join(source, 'uimori.sqlite.codex', 'config.toml'), 'old-config');
   const target = join(root, 'fresh');
   assert.equal(copyCredentials(source, target).settingsRetained, false);
   assert.equal(
-    readFileSync(join(target, 'narrative.sqlite.codex', 'auth.json'), 'utf8'),
+    readFileSync(join(target, 'uimori.sqlite.codex', 'auth.json'), 'utf8'),
     'private-login'
   );
   for (const name of [
-    'narrative.sqlite',
-    'narrative.sqlite.codex/state.sqlite',
-    'narrative.sqlite.codex/config.toml',
+    'uimori.sqlite',
+    'uimori.sqlite.codex/state.sqlite',
+    'uimori.sqlite.codex/config.toml',
   ])
     assert.equal(existsSync(join(target, name)), false);
   assert.throws(() => copyCredentials(source, target), /empty/);

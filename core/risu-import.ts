@@ -1,5 +1,4 @@
 import type { NativeTransferReceipt } from './native-transfer.js';
-import type { RisuPluginPreview } from './risu-plugin.js';
 import type { Chat } from './types.js';
 
 export const RISU_IMPORT_MAX_BYTES = 24 * 1024 * 1024;
@@ -36,11 +35,8 @@ export type RisuImportPreview = {
     | 'character-card-json'
     | 'risu-module-json'
     | 'risu-module-project-zip'
-    | 'risu-module-binary'
-    | 'risu-plugin-js';
+    | 'risu-module-binary';
   summary: { lore: number; starts: number; images: number };
-  /** The plugin file's own declarations, so one screen can report both views of a `.js` import. */
-  plugin?: RisuPluginPreview;
   lore: {
     id: string;
     title: string;

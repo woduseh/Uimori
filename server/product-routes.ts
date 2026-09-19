@@ -19,10 +19,8 @@ import { PROVIDER_DEFINITIONS } from '../core/provider-definitions.js';
 import { chatOrganizationRoutes } from './chat-organization.js';
 import { libraryOrganizationRoutes } from './library-organization.js';
 import { packagePresentationRoutes } from './package-presentation-routes.js';
-import { packageBehaviorRoutes } from './package-behavior-routes.js';
 import type { VertexCredentialStore } from './vertex-credentials.js';
 import type { CodexRuntimeService } from './codex-runtime.js';
-import type { ExtensionOperationController } from './extension-operation-runner.js';
 import {
   PROVIDER_PROTOCOLS,
   validateProviderEndpoint,
@@ -44,7 +42,6 @@ export function productRoutes(
     publish: (chatId: string) => void;
     onAuthChanged?: () => void;
     onChatDeleted?: (chatId: string) => void;
-    extensionOperations?: ExtensionOperationController;
     /** The maintenance gate travels with the session read, so no surface polls for it. */
     maintenance?: () => MaintenanceStatus;
   }
@@ -57,7 +54,6 @@ export function productRoutes(
   chatOrganizationRoutes(app, store, options.publish);
   libraryOrganizationRoutes(app, store);
   packagePresentationRoutes(app, store);
-  packageBehaviorRoutes(app, store, options.publish, options.extensionOperations);
   app.post<{ Params: { id: string } }>('/api/chats/:id/fork', async (request) => {
     const chat = forkChat(store, request.params.id, request.body);
     options.publish(chat.id);
@@ -478,12 +474,12 @@ export function productRoutes(
   });
   app.get('/api/export', async (_request, reply) =>
     reply
-      .header('Content-Disposition', 'attachment; filename="narrative-archive.json"')
+      .header('Content-Disposition', 'attachment; filename="uimori-archive.json"')
       .send(product.export())
   );
   app.get('/api/backup', async (_request, reply) =>
     reply
-      .header('Content-Disposition', 'attachment; filename="narrative-backup.sqlite"')
+      .header('Content-Disposition', 'attachment; filename="uimori-backup.sqlite"')
       .type('application/vnd.sqlite3')
       .send(product.backup())
   );

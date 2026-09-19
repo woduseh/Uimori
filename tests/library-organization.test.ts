@@ -197,7 +197,7 @@ test('archives round trip folders and reject poisoned scope or missing placement
   const archive = store.product.export(),
     before = structuredClone(archive),
     restored = fixture();
-  expect(archive.version).toBe(15);
+  expect(archive.version).toBe(1);
   restored.product.import(archive);
   expect(restored.libraryOrganization.snapshot()).toEqual(store.libraryOrganization.snapshot());
   expect(archive).toEqual(before);

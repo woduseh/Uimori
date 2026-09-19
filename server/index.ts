@@ -8,30 +8,33 @@ import { listenAddress, networkPolicy } from './network-policy.js';
 const build = JSON.parse(readFileSync(resolve('dist/build-identity.json'), 'utf8')) as {
   buildId: string;
 };
-const dbPath = resolve(process.env.NR_DB ?? '.local/narrative.sqlite');
-const instanceId = process.env.NR_INSTANCE ?? randomUUID();
-const buildId = process.env.NR_BUILD_ID ?? build.buildId;
+const dbPath = resolve(process.env.UIMORI_DB ?? '.local/uimori.sqlite');
+const instanceId = process.env.UIMORI_INSTANCE ?? randomUUID();
+const buildId = process.env.UIMORI_BUILD_ID ?? build.buildId;
 const access = {
-  publicOrigin: process.env.NR_PUBLIC_ORIGIN,
-  accessToken: process.env.NR_ACCESS_TOKEN,
-  testMode: process.env.NR_TEST_MODE === '1',
+  publicOrigin: process.env.UIMORI_PUBLIC_ORIGIN,
+  accessToken: process.env.UIMORI_ACCESS_TOKEN,
+  testMode: process.env.UIMORI_TEST_MODE === '1',
 };
 const network = networkPolicy(access);
 const address = listenAddress(process.env, network);
-const approvedOrigins = (process.env.NR_PROVIDER_ORIGINS ?? '')
+const approvedOrigins = (process.env.UIMORI_PROVIDER_ORIGINS ?? '')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
 if (
-  process.env.NR_CODEX_ENABLED !== undefined &&
-  !['0', '1'].includes(process.env.NR_CODEX_ENABLED)
+  process.env.UIMORI_CODEX_ENABLED !== undefined &&
+  !['0', '1'].includes(process.env.UIMORI_CODEX_ENABLED)
 )
-  throw new Error('NR_CODEX_ENABLED must be 0 or 1');
-if (process.env.NR_MAINTENANCE !== undefined && !['0', '1'].includes(process.env.NR_MAINTENANCE))
-  throw new Error('NR_MAINTENANCE must be 0 or 1');
+  throw new Error('UIMORI_CODEX_ENABLED must be 0 or 1');
+if (
+  process.env.UIMORI_MAINTENANCE !== undefined &&
+  !['0', '1'].includes(process.env.UIMORI_MAINTENANCE)
+)
+  throw new Error('UIMORI_MAINTENANCE must be 0 or 1');
 const codex = {
-  enabled: process.env.NR_CODEX_ENABLED === '1',
-  executable: process.env.NR_CODEX_EXECUTABLE,
+  enabled: process.env.UIMORI_CODEX_ENABLED === '1',
+  executable: process.env.UIMORI_CODEX_EXECUTABLE,
 };
 const app = await createApp({
   dbPath,
@@ -40,9 +43,9 @@ const app = await createApp({
   ...access,
   webRoot: resolve('dist/web'),
   approvedOrigins,
-  vertexRequestTier: parseVertexRequestTier(process.env.NR_VERTEX_REQUEST_TIER),
+  vertexRequestTier: parseVertexRequestTier(process.env.UIMORI_VERTEX_REQUEST_TIER),
   codex,
-  maintenance: process.env.NR_MAINTENANCE === '1',
+  maintenance: process.env.UIMORI_MAINTENANCE === '1',
 });
 let closing = false;
 const close = async () => {

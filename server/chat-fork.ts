@@ -13,7 +13,6 @@ import { copyStoryFork } from './story-archive.js';
 import { copyOutlineFork } from './outline-store.js';
 import { copyChatOverridesInTransaction } from './chat-overrides.js';
 import { copyChatOptionsInTransaction } from './chat-options.js';
-import { copyPackageFork } from './package-behavior-host.js';
 import { copyChatVariableFork } from './chat-variables-archive.js';
 import { historicalRunLoreReads } from './lore-context-archive.js';
 import type { RetainedLore } from '../core/lore-context.js';
@@ -101,25 +100,6 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         throw new HttpError(400, 'Invalid completed fork source');
       if (run.snapshot.nativeRisuExecution || run.snapshot.nativeRisuAuthored)
         validateRunSnapshot(store, run.snapshot, run.id);
-    }
-    // Conversation reads also depend on visible failed requests with no adopted source.
-    // Follow only the frozen references; never collect unrelated chat or branch activity.
-    for (const run of originalRuns.values()) {
-      if (!run.snapshot.extensionConversation) continue;
-      validateRunSnapshot(store, run.snapshot, run.id);
-      for (const ref of run.snapshot.extensionConversation.messages) {
-        if (originalRuns.has(ref.runId)) continue;
-        const dependency = store.run(ref.runId);
-        if (
-          dependency.chatId !== chatId ||
-          dependency.sourceRevision !== null ||
-          (dependency.parentRevision !== null && !sourceIds.has(dependency.parentRevision)) ||
-          dependency.snapshot.history.some((item) => !sourceIds.has(item.revision))
-        )
-          throw new HttpError(400, 'Invalid fork conversation dependency');
-        originalRuns.set(dependency.id, dependency);
-        runIds.set(dependency.id, randomUUID());
-      }
     }
     const admissionOrder = new Map(
       (
@@ -272,7 +252,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           parentRevision,
           original
             ? 'completed'
-            : ['queued', 'running', 'waiting_for_state'].includes(run.status)
+            : ['queued', 'running'].includes(run.status)
               ? 'interrupted'
               : run.status,
           run.request,
@@ -429,7 +409,6 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       branchId,
       storyFork.commands
     );
-    copyPackageFork(store, id, branchId, sourceIds, head, runIds);
     copyChatVariableFork(store, id, branchId, sourceIds, head);
     const canonHashes = new Map<string, string>();
     for (const original of originalRuns.values()) {
@@ -520,31 +499,6 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       runIds,
       store.context.scope(chatId, originalRuns.get(selected.runId)!.snapshot.branchId).scopeKey
     );
-    // These are inherited main-context fields, not state tool authority or execution logs.
-    // Reuse the remapped main metadata so cached lore references cannot retain original identities.
-    for (const row of store.db
-      .prepare('SELECT id,source_revision,snapshot FROM story_jobs WHERE chat_id=?')
-      .all(id) as Row[]) {
-      const snapshot = parse(row.snapshot) as RunSnapshot,
-        main = store.run(store.sourceOriginal(row.source_revision).runId).snapshot;
-      for (const field of [
-        'loreContext',
-        'loreContextReset',
-        'forkedLoreReads',
-        'logicalHistory',
-        'promptCompilation',
-        'contextPlan',
-        'contextBase',
-        'nativeRisuExecution',
-        'nativeRisuAuthored',
-        'nativeRisuPresetProgram',
-      ] as const) {
-        delete snapshot[field];
-        if (main[field] !== undefined)
-          Object.assign(snapshot, { [field]: structuredClone(main[field]) });
-      }
-      store.db.prepare('UPDATE story_jobs SET snapshot=? WHERE id=?').run(json(snapshot), row.id);
-    }
     store.event(id, 'chat.forked', command);
     return store.chat(id);
   });

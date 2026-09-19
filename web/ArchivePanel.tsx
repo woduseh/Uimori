@@ -190,7 +190,7 @@ export function ArchivePanel({
               onClick={() => {
                 void perform('json', async () => {
                   const result = await api('/export');
-                  saveDownload('narrative-archive.json', result);
+                  saveDownload('uimori-archive.json', result);
                   setBackupMessage('JSON 내보내기를 준비했어요.');
                 });
               }}
@@ -214,7 +214,7 @@ export function ArchivePanel({
                   const url = URL.createObjectURL(await response.blob());
                   const anchor = document.createElement('a');
                   anchor.href = url;
-                  anchor.download = 'narrative-backup.sqlite';
+                  anchor.download = 'uimori-backup.sqlite';
                   anchor.click();
                   setTimeout(() => URL.revokeObjectURL(url), 1000);
                   setBackupMessage('일관된 SQLite 백업을 준비했어요.');
@@ -339,7 +339,7 @@ export function ArchivePanel({
           <summary>서버 관리자를 위한 복원 안내</summary>
           <p className="muted">
             JSON 파일은 새 빈 데이터베이스에서 위 가져오기를 사용해요. SQLite 백업은 서버를 종료하고
-            새 NR_DB 경로에 보관해 다시 열 수 있어요. 이미 자료가 있는 DB로의 가져오기는 서버가
+            새 UIMORI_DB 경로에 보관해 다시 열 수 있어요. 이미 자료가 있는 DB로의 가져오기는 서버가
             거절해요.
           </p>
         </details>

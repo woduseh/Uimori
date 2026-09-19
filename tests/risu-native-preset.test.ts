@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { compilePromptProgram, validatePromptProgram } from '../core/prompt-program.js';
+import { compileRisuPrompt, validateRisuPrompt } from '../core/risu-prompt.js';
 import { defaultProfile } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { importRisuPresetProgram } from '../server/risu-preset-program.js';
@@ -32,7 +32,6 @@ function snapshot(source: unknown, values: Record<string, string | null> = {}): 
     logicalHistory: [{ id: 'current', role: 'user', text: 'CURRENT', current: true }],
     profile: {
       ...defaultProfile('test'),
-      contents: [],
       models: {},
       promptPresets: {
         main: {
@@ -53,7 +52,7 @@ async function render(source: unknown, values: Record<string, string | null> = {
     prepared,
     prepared.profile!.promptPresets!.main!.program
   );
-  const compiled = compilePromptProgram(program, {
+  const compiled = compileRisuPrompt(program, {
     values,
     slots: {
       slot: '',
@@ -115,11 +114,14 @@ test('native fields share variable mutations and replay uses their frozen result
     projectNativeRisuPresetProgram(tampered, tampered.profile!.promptPresets!.main!.program)
   ).toThrow('RECEIPT_MISMATCH');
 });
-test('source edits cannot silently diverge from derived blocks', () => {
+test('native source is authoritative and rejects a second authored representation', () => {
   const imported = importRisuPresetProgram(preset('authoritative'));
-  imported.program.blocks[0]!.title = 'changed derived projection';
-  expect(() => validatePromptProgram(imported.program)).toThrow('PROJECTION_MISMATCH');
+  expect(() => validateRisuPrompt({ ...imported.program, blocks: [] })).toThrow();
+  expect(validateRisuPrompt(imported.program).nativeRisuPreset.preset.promptTemplate).toEqual(
+    preset('authoritative').promptTemplate
+  );
 });
+
 test('preset CBS sees messages after pre-turn scripts and the current input', async () => {
   const input = snapshot(preset('{{lastmessage}}'));
   input.nativeRisuExecution = {
@@ -163,7 +165,7 @@ test('native regex keeps captures and evaluates CBS after substitution in every 
     out: '{{? $1+1}}',
   }));
   const imported = importRisuPresetProgram(preset('prompt', { regex }));
-  expect(imported.program.transforms).toBeUndefined();
+  expect(imported.program).not.toHaveProperty('transforms');
   for (const mode of ['editinput', 'editoutput', 'editprocess', 'editdisplay'] as const) {
     const result = await processNativeRisuText({
       native: {
@@ -180,14 +182,12 @@ test('native regex keeps captures and evaluates CBS after substitution in every 
     expect(result.text).toBe('4');
   }
 });
-test('existing nonnative programs stay valid and need no native preparation', async () => {
-  const program = validatePromptProgram({
-    version: 1,
-    controls: [],
-    blocks: [{ id: 'history', title: 'history', kind: 'history', from: 0, to: 'end' }],
-  });
-  const old = snapshot(preset('x'));
-  old.profile!.promptPresets!.main!.program = program;
-  expect(await prepareNativeRisuPreset(old)).toBe(old);
-  expect(nativeRisuPresetPending(old)).toBe(false);
+test('nonnative authored programs are rejected', () => {
+  expect(() =>
+    validateRisuPrompt({
+      version: 1,
+      controls: [],
+      blocks: [{ id: 'history', title: 'history', kind: 'history', from: 0, to: 'end' }],
+    })
+  ).toThrow();
 });

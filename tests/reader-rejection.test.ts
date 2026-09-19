@@ -1,4 +1,4 @@
-import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
+import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -8,7 +8,6 @@ import { createApp, type App } from '../server/app.js';
 import { readerDetail } from '../server/reader.js';
 import type { Store } from '../server/store.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
-import type { StoryJob } from '../core/story.js';
 
 const owned: { app: App; directory: string }[] = [];
 afterEach(async () => {
@@ -120,49 +119,4 @@ test('a 4xx main run carries the rejected options read from its stored attempt; 
   expect(
     JSON.stringify(store.db.prepare('SELECT * FROM runs WHERE id=?').get(rejected.id))
   ).not.toContain('unsupported_parameter');
-});
-
-test('a 4xx state job carries the rejected options of the attempt linked to it', async () => {
-  const app = await setup(),
-    store = app.store;
-  const chat = createFixtureChat(store, 'Story rejection projection');
-  const run = newRun(store, chat.id);
-  const source = store.completeRun(
-    run.id,
-    'Synthetic paragraph.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
-  const jobId = randomUUID(),
-    now = new Date().toISOString();
-  store.db
-    .prepare(
-      "INSERT INTO story_jobs(id,chat_id,source_revision,source_hash,kind,config_revision,generation,owner,status,snapshot,result,error,mock,created_at,updated_at,dependency_key) VALUES(?,?,?,?,'state',1,1,NULL,'failed',?,NULL,'HTTP_400',0,?,?,?)"
-    )
-    .run(
-      jobId,
-      chat.id,
-      source.id,
-      source.hash,
-      JSON.stringify({}),
-      now,
-      now,
-      'dependency-' + jobId
-    );
-  const attempt = store.product.startAttempt(chat.id, null, null, { ...wire(), role: 'state' });
-  store.db.prepare('UPDATE attempts SET story_job_id=? WHERE id=?').run(jobId, attempt);
-  store.product.finishAttempt(attempt, failure('HTTP_400', ['output_config.effort']));
-  const response = await injectWithFixtureBot(app, {
-    method: 'GET',
-    url: `/api/story-jobs/${jobId}`,
-    headers: { host: '127.0.0.1' },
-  });
-  expect(response.statusCode, response.body).toBe(200);
-  const job = response.json() as StoryJob;
-  expect(job.error).toBe('HTTP_400');
-  expect(job.rejection).toEqual({
-    httpStatus: 400,
-    providerCode: 'unsupported_parameter',
-    options: ['thinking'],
-  });
 });

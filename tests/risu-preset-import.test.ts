@@ -110,7 +110,7 @@ test('native variable writes and output regex import without conversion or loss'
     idempotencyKey: 'partial',
   };
   const result = applyRisuPresetImport(store, command);
-  expect(result.preset.program.blocks[0].enabled).not.toBe(false);
+  expect(result.preset.program).not.toHaveProperty('blocks');
   expect(result.preset.program.nativeRisuPreset?.preset.regex).toEqual([
     { type: 'editoutput', in: 'x', out: 'y' },
   ]);
@@ -140,7 +140,7 @@ test('supported preset text stages import without partial consent and preserve o
     allowPartial: false,
     idempotencyKey: 'supported-regex',
   });
-  expect(imported.preset.program.transforms).toBeUndefined();
+  expect(imported.preset.program).not.toHaveProperty('transforms');
   expect(imported.preset.program.nativeRisuPreset?.preset.regex).toEqual(
     JSON.parse(Buffer.from(source.base64, 'base64').toString()).regex
   );

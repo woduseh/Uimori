@@ -18,7 +18,7 @@ export type ActivityNoticeItem = {
 };
 
 export const activityActive = (status: string) =>
-  ['sending', 'accepted', 'queued', 'running', 'waiting_for_state'].includes(status);
+  ['sending', 'accepted', 'queued', 'running'].includes(status);
 export const activitySuccess = (status: string) => ['completed', 'cancelled'].includes(status);
 export const canAcknowledge = (item: ActivityNoticeItem) =>
   !activityActive(item.status) && item.status !== 'uncertain' && !item.executionUncertain;

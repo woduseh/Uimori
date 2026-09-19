@@ -47,67 +47,6 @@ test('new chats leave automatic status off until explicitly enabled', async () =
   ).toEqual({ count: 0 });
 });
 
-test.each(['state', 'instruction', 'tool'] as const)(
-  'package %s failure appears as scoped reader metadata without private diagnostic payloads',
-  async (kind) => {
-    const app = await setup();
-    const chat = createFixtureChat(app.store, 'Synthetic package warning');
-    const affected = source(app.store, chat.id);
-    const unaffected = source(app.store, chat.id);
-    const other = createFixtureChat(app.store, 'Unrelated package warning');
-    const foreign = source(app.store, other.id);
-    const marker = 'SYNTHETIC_PRIVATE_DIAGNOSTIC_VALUE';
-    const run = app.store.run(affected.runId);
-    // Seed projection inputs only; full execution/backup validation has separate behavior tests.
-    if (kind === 'state') {
-      const snapshot = {
-        ...run.snapshot,
-        packageBehaviorUnavailable: [{ retainedState: { state: marker } }],
-      };
-      app.store.db
-        .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-        .run(JSON.stringify(snapshot), run.id);
-    } else if (kind === 'instruction') {
-      const snapshot = {
-        ...run.snapshot,
-        promptCompilation: {
-          ...run.snapshot.promptCompilation,
-          warnings: [`PACKAGE_INSTRUCTION_UNAVAILABLE:${marker}`],
-        },
-      };
-      app.store.db
-        .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-        .run(JSON.stringify(snapshot), run.id);
-    } else {
-      app.store.db.prepare('INSERT INTO tool_events(run_id,event) VALUES(?,?)').run(
-        run.id,
-        JSON.stringify({
-          name: 'behavior_synthetic',
-          denied: true,
-          errorKind: 'recoverable',
-          args: {},
-          result: { detail: marker },
-        })
-      );
-    }
-    app.store.db.prepare('INSERT INTO tool_events(run_id,event) VALUES(?,?)').run(
-      foreign.runId,
-      JSON.stringify({
-        name: 'behavior_other_chat',
-        denied: true,
-        errorKind: 'recoverable',
-        args: {},
-        result: { detail: marker },
-      })
-    );
-    const summaries = readerRuns(app.store, chat.id, [affected.runId, unaffected.runId]);
-    expect(summaries.find((item) => item.id === affected.runId)?.hasPackageIssues).toBe(true);
-    expect(summaries.find((item) => item.id === unaffected.runId)?.hasPackageIssues).toBe(false);
-    expect(summaries).toHaveLength(2);
-    expect(JSON.stringify(summaries)).not.toContain(marker);
-    expect(app.store.source(affected.id).text).toBe('Synthetic paragraph.');
-  }
-);
 function source(store: Store, chatId: string, text = 'Synthetic paragraph.', branchId?: string) {
   const chat = store.chat(chatId),
     branch = store.product.branch(chatId, branchId);
@@ -524,9 +463,7 @@ test('activity remains page independent and retains active work beyond the termi
   const items = Array.from({ length: 35 }, () => source(store, chat.id));
   const first = readerDetail(store, chat.id, {});
   const activities = first.reader.activity;
-  expect(
-    activities.filter((a) => !['queued', 'running', 'waiting_for_state'].includes(a.status))
-  ).toHaveLength(30);
+  expect(activities.filter((a) => !['queued', 'running'].includes(a.status))).toHaveLength(30);
   const active = activities.filter((a) => ['queued', 'running'].includes(a.status));
   expect(active.length).toBeGreaterThan(30);
   expect(active.some((a) => a.sourceRevision === items[34].id)).toBe(true);
@@ -587,29 +524,27 @@ test('response activity retains older page work without expanding global activit
   store.db
     .prepare("UPDATE jobs SET status='completed',updated_at='2000-01-01' WHERE chat_id=?")
     .run(chat.id);
-  store.db
-    .prepare("INSERT INTO story_configs(chat_id,revision,body) VALUES(?,1,'{}')")
-    .run(chat.id);
-  const storyJob = (index: number, kind: 'state', hash = items[index].hash): string => {
+  let revision = 100;
+  const translationJob = (index: number, hash = items[index].hash): string => {
     const id = randomUUID();
     store.db
-      .prepare(`INSERT INTO story_jobs(id,chat_id,source_revision,source_hash,kind,config_revision,status,snapshot,mock,created_at,updated_at,dependency_key)
-      VALUES(?,?,?,?,?,1,'completed','{}',1,'2000-01-01','2000-01-01',?)`)
-      .run(id, chat.id, items[index].id, hash, kind, id);
+      .prepare(`INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,created_at,updated_at)
+      VALUES(?,?,?,?,'translation','completed',?,'2000-01-01','2000-01-01')`)
+      .run(id, chat.id, items[index].id, hash, revision++);
     return id;
   };
-  const state = storyJob(0, 'state'),
-    secondState = storyJob(0, 'state'),
-    offPage = storyJob(5, 'state'),
-    stale = storyJob(0, 'state', 'stale-hash');
+  const translation = translationJob(0),
+    secondTranslation = translationJob(0),
+    offPage = translationJob(5),
+    stale = translationJob(0, 'stale-hash');
   const page = readerDetail(store, chat.id, {});
   expect(page.reader.activity).toHaveLength(30);
-  expect(page.reader.activity.some((a) => [state, secondState, offPage].includes(a.id))).toBe(
-    false
-  );
+  expect(
+    page.reader.activity.some((a) => [translation, secondTranslation, offPage].includes(a.id))
+  ).toBe(false);
   const activity = page.reader.responseActivity;
-  expect(activity.some((a) => a.id === state)).toBe(true);
-  expect(activity.some((a) => a.id === secondState)).toBe(true);
+  expect(activity.some((a) => a.id === translation)).toBe(true);
+  expect(activity.some((a) => a.id === secondTranslation)).toBe(true);
   expect(activity.some((a) => [offPage, stale].includes(a.id))).toBe(false);
   expect(activity.every((a) => page.reader.order.includes(a.sourceRevision!))).toBe(true);
   expect(new Set(activity.map((a) => a.id)).size).toBe(activity.length);
@@ -621,7 +556,9 @@ test('response activity retains older page work without expanding global activit
   expect(delta.reader.responseActivity).toEqual(activity);
   const next = readerDetail(store, chat.id, { source: items[5].id });
   expect(next.reader.responseActivity.some((a) => a.id === offPage)).toBe(true);
-  expect(next.reader.responseActivity.some((a) => [state, secondState].includes(a.id))).toBe(false);
+  expect(
+    next.reader.responseActivity.some((a) => [translation, secondTranslation].includes(a.id))
+  ).toBe(false);
   expect(next.reader.activity).toEqual(page.reader.activity);
 
   const oldJobs = store.db
@@ -629,12 +566,14 @@ test('response activity retains older page work without expanding global activit
     .all(items[0].id) as { id: string }[];
   expect(oldJobs.length).toBeGreaterThan(0);
   const edited = store.editSource(items[0].id, { text: 'Edited response', expectedRevision: 0 });
-  const currentState = storyJob(0, 'state', edited.hash);
+  const currentTranslation = translationJob(0, edited.hash);
   const editedActivity = readerDetail(store, chat.id, {}).reader.responseActivity;
   expect(
-    editedActivity.some((a) => [state, secondState, ...oldJobs.map((j) => j.id)].includes(a.id))
+    editedActivity.some((a) =>
+      [translation, secondTranslation, ...oldJobs.map((j) => j.id)].includes(a.id)
+    )
   ).toBe(false);
-  expect(editedActivity.some((a) => a.id === currentState)).toBe(true);
+  expect(editedActivity.some((a) => a.id === currentTranslation)).toBe(true);
   expect(editedActivity.some((a) => a.id === items[0].runId)).toBe(true);
 });
 

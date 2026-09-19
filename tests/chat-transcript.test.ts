@@ -87,8 +87,10 @@ function authoredChat(store: Store) {
   const profile = store.product.profile(chat.id);
   store.product.updateProfile(chat.id, {
     expectedRevision: profile.revision,
-    attachments: [{ id: glossary.id, revision: glossary.revision }],
-    packageAttachments: profile.packageAttachments,
+    packageAttachments: [
+      ...profile.packageAttachments!,
+      { id: glossary.id, revision: glossary.revision, role: 'module' },
+    ],
     image: profile.image,
   });
   const first = turn(store, chat.id, 'Open the story', 'Scene one.');
@@ -180,7 +182,7 @@ describe('chat transcript export and import', () => {
 
   test('a transcript carries authored history only and imports as a new chat with the same reading', async () => {
     const store = await database();
-    const { chat, glossary, first } = authoredChat(store);
+    const { chat, first } = authoredChat(store);
     const transcript = exportChatTranscript(store, chat.id);
     expect(transcript.format).toBe(CHAT_TRANSCRIPT_FORMAT);
     expect(transcript.title).toBe('Original story');
@@ -191,8 +193,7 @@ describe('chat transcript export and import', () => {
     expect(transcript.notes).toEqual([
       { text: 'Keep the narrator formal.', author: 'user', atIndex: 0 },
     ]);
-    expect(transcript.attachments).toEqual([{ id: glossary.id, revision: glossary.revision }]);
-    expect(transcript.packageAttachments.map((item) => item.role)).toEqual(['bot']);
+    expect(transcript.packageAttachments.map((item) => item.role)).toEqual(['bot', 'module']);
     expect(JSON.stringify(transcript)).not.toMatch(/snapshot|usage|attempt|runId/);
     expect(validateChatTranscript(JSON.parse(JSON.stringify(transcript)))).toEqual(transcript);
 
@@ -224,8 +225,7 @@ describe('chat transcript export and import', () => {
       ['Keep the narrator formal.', history[0].revision],
     ]);
     const profile = store.product.profile(id);
-    expect(profile.attachments).toEqual([{ id: glossary.id, revision: glossary.revision }]);
-    expect(profile.packageAttachments?.map((item) => item.role)).toEqual(['bot']);
+    expect(profile.packageAttachments?.map((item) => item.role)).toEqual(['bot', 'module']);
     expect(
       store.db
         .prepare("SELECT COUNT(*) AS n FROM jobs WHERE chat_id=? AND kind<>'translation'")
@@ -259,7 +259,10 @@ describe('chat transcript export and import', () => {
 
     const withUnknown = {
       ...transcript,
-      attachments: [{ id: 'missing-module', revision: 3 }],
+      packageAttachments: [
+        ...transcript.packageAttachments.filter((item) => item.role === 'bot'),
+        { id: 'missing-module', revision: 3, role: 'module' },
+      ],
     };
     const partial = importChatTranscript(store, {
       transcript: withUnknown,
@@ -267,8 +270,12 @@ describe('chat transcript export and import', () => {
       idempotencyKey: 'partial',
     });
     expect(partial.chat.title).toBe('Restored');
-    expect(partial.skippedAttachments).toEqual([{ id: 'missing-module', revision: 3 }]);
-    expect(store.product.profile(partial.chat.id).attachments).toEqual([]);
+    expect(partial.skippedAttachments).toEqual([
+      { id: 'missing-module', revision: 3, role: 'module' },
+    ]);
+    expect(
+      store.product.profile(partial.chat.id).packageAttachments!.map((item) => item.role)
+    ).toEqual(['bot']);
     expect(
       importChatTranscript(store, {
         transcript: withUnknown,
@@ -399,7 +406,7 @@ describe('chat transcript export and import', () => {
     const transcript = exportChatTranscript(store, chat.id);
     const before = store.chats().length;
     const cases: [unknown, string][] = [
-      [{ ...transcript, format: 'narrative-archive' }, 'CHAT_TRANSCRIPT_INVALID_FORMAT'],
+      [{ ...transcript, format: 'uimori-archive' }, 'CHAT_TRANSCRIPT_INVALID_FORMAT'],
       [{ ...transcript, version: 2 }, 'CHAT_TRANSCRIPT_UNSUPPORTED_VERSION'],
       [{ ...transcript, runs: [] }, 'CHAT_TRANSCRIPT_UNKNOWN_FIELD'],
       [

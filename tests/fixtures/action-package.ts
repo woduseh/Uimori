@@ -1,8 +1,8 @@
-import { validateContentPackage, type ContentPackage } from '../../core/content-package.js';
+import { validateRisuContent, type RisuContent } from '../../core/risu-content.js';
 
 /** Authored synthetic data exercising common package features; no source-specific runtime or importer. */
-export function createActionPackage(imageHash?: string): ContentPackage {
-  return validateContentPackage({
+export function createActionPackage(imageHash?: string): RisuContent {
+  return validateRisuContent({
     version: 1,
     id: 'expedition-fixture',
     revision: 1,

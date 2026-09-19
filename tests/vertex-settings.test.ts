@@ -97,9 +97,9 @@ describe('Vertex connection and model settings with file SQLite', () => {
     const bearer = await request<Connection>(
       app,
       '/connections',
-      vertexConnection({ credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST' })
+      vertexConnection({ credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST' })
     );
-    expect(bearer.credentialEnv).toBe('NARRATIVE_PROVIDER_VERTEX_TEST');
+    expect(bearer.credentialEnv).toBe('UIMORI_PROVIDER_VERTEX_TEST');
     for (const invalid of [
       endpoint.replace('https:', 'http:'),
       endpoint.replace('aiplatform.googleapis.com', 'example.invalid'),
@@ -202,11 +202,11 @@ describe('Vertex connection and model settings with file SQLite', () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
       throw new Error('No network expected for local support manifest');
     });
-    vi.stubEnv('NARRATIVE_PROVIDER_VERTEX_TEST', '');
+    vi.stubEnv('UIMORI_PROVIDER_VERTEX_TEST', '');
     const connection = await request<Connection>(
       app,
       '/connections',
-      vertexConnection({ enabled: false, credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST' })
+      vertexConnection({ enabled: false, credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST' })
     );
     const catalog = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
     expect(catalog).toMatchObject({
@@ -253,7 +253,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
 
   test('lists Gemini models through a Developer API key when a catalog credential is set, and keeps the list when the key is missing', async () => {
     const app = await application();
-    vi.stubEnv('NARRATIVE_PROVIDER_GEMINI_LIST_TEST', 'SYNTHETIC_LIST_KEY');
+    vi.stubEnv('UIMORI_PROVIDER_GEMINI_LIST_TEST', 'SYNTHETIC_LIST_KEY');
     const calls: { url: string; init?: RequestInit }[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
       calls.push({ url: String(url), init });
@@ -293,11 +293,11 @@ describe('Vertex connection and model settings with file SQLite', () => {
       '/connections',
       vertexConnection({
         enabled: false,
-        credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST',
-        catalogCredentialEnv: 'NARRATIVE_PROVIDER_GEMINI_LIST_TEST',
+        credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST',
+        catalogCredentialEnv: 'UIMORI_PROVIDER_GEMINI_LIST_TEST',
       })
     );
-    expect(connection.catalogCredentialEnv).toBe('NARRATIVE_PROVIDER_GEMINI_LIST_TEST');
+    expect(connection.catalogCredentialEnv).toBe('UIMORI_PROVIDER_GEMINI_LIST_TEST');
     const listed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
     expect(listed.catalogError).toBeNull();
     expect(listed.catalog).toEqual([
@@ -327,7 +327,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
     }
     expect(new URL(calls[1].url).searchParams.get('pageToken')).toBe('next');
     expect(JSON.stringify(listed)).not.toContain('SYNTHETIC_LIST_KEY');
-    vi.stubEnv('NARRATIVE_PROVIDER_GEMINI_LIST_TEST', '');
+    vi.stubEnv('UIMORI_PROVIDER_GEMINI_LIST_TEST', '');
     const failed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
     expect(failed.catalogError).toBe('CATALOG_UNAVAILABLE');
     expect(failed.catalog).toEqual(listed.catalog);
@@ -341,7 +341,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
         protocol: 'openai-responses-v1',
         endpoint: 'https://api.openai.com/v1',
         enabled: false,
-        catalogCredentialEnv: 'NARRATIVE_PROVIDER_GEMINI_LIST_TEST',
+        catalogCredentialEnv: 'UIMORI_PROVIDER_GEMINI_LIST_TEST',
       },
       400
     );
@@ -350,7 +350,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
       '/connections',
       vertexConnection({
         enabled: false,
-        catalogCredentialEnv: 'NARRATIVE_PROVIDER_VERTEX_FILE_' + 'A'.repeat(32),
+        catalogCredentialEnv: 'UIMORI_PROVIDER_VERTEX_FILE_' + 'A'.repeat(32),
       }),
       400
     );
@@ -359,7 +359,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
     expect(target.store.product.import(archive)).toMatchObject({ restored: true });
     expect(
       target.store.product.get<Connection>('connection', connection.id).catalogCredentialEnv
-    ).toBe('NARRATIVE_PROVIDER_GEMINI_LIST_TEST');
+    ).toBe('UIMORI_PROVIDER_GEMINI_LIST_TEST');
   });
 
   test('exports and restores optional settings and immutable snapshots, with every connection disabled and credential reference removed', async () => {
@@ -368,7 +368,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
     const connection = await request<Connection>(
       source,
       '/connections',
-      vertexConnection({ credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST' })
+      vertexConnection({ credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST' })
     );
     const model = await request<ModelPreset>(
       source,
@@ -379,7 +379,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
       title: 'Legacy fixture',
       protocol: 'fixture-sse-v1',
       endpoint: 'http://127.0.0.1:9/turn',
-      credentialEnv: 'NARRATIVE_PROVIDER_FIXTURE_TEST',
+      credentialEnv: 'UIMORI_PROVIDER_FIXTURE_TEST',
       enabled: true,
     });
     const oldModel = await request<ModelPreset>(
@@ -391,9 +391,9 @@ describe('Vertex connection and model settings with file SQLite', () => {
     const initial = product.profile(chat.id);
     const profile = updateTestProfile(product, chat.id, {
       expectedRevision: initial.revision,
-      attachments: [],
+      packageAttachments: initial.packageAttachments,
 
-      routes: { main: ref(model), translation: ref(model), status: ref(oldModel), image: null },
+      routes: { main: ref(model), translation: ref(model), status: ref(oldModel) },
       image: false,
     });
     const captured = product.snapshot(chat.id)!;

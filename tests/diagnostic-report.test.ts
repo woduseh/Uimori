@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { createApp } from '../server/app.js';
 import { createDiagnosticReport, parseDiagnosticScope } from '../server/diagnostic-report.js';
 import { DIAGNOSTIC_LIMITS, diagnosticError, diagnosticNumber } from '../core/diagnostic-report.js';
-import { DATABASE_SCHEMA_VERSION } from '../server/schema-migrations.js';
+import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import type { Store } from '../server/store.js';
 
@@ -126,7 +126,6 @@ test('report uses explicit projections and local aliases, preserves phase eviden
       deniedToolCount: 1,
       sourceCommitted: false,
       hasPartialOutput: true,
-      preparationStatus: null,
       modelCalls: 2,
       inputTokens: null,
       outputTokens: 7,

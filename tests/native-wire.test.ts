@@ -4,7 +4,7 @@ import { encodeChat, ChatDecoder } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic, AnthropicDecoder } from '../core/anthropic-protocol.js';
 import { encodeVertex, VertexDecoder } from '../core/vertex-protocol.js';
 import { VERTEX_GEMINI_MODEL_ID } from '../core/product.js';
-import type { LogicalMessage, ProviderPrompt } from '../core/prompt-program.js';
+import type { LogicalMessage, ProviderPrompt } from '../core/risu-prompt.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
 import { planNativeMessages } from '../core/provider-messages.js';
 const wire = (value: Json) => value as Record<string, any>;
@@ -19,7 +19,7 @@ const message = (id: string, role: LogicalMessage['role'], text: string): Logica
   },
 });
 const prompt = (): ProviderPrompt => ({
-  compilerVersion: 'uimori-prompt-1',
+  compilerVersion: 'risu-native-prompt-1',
   values: { length: 'standard' },
   messages: [
     message('system', 'system', 'NATIVE_SYSTEM'),
@@ -521,8 +521,8 @@ describe('native provider wire (synthetic, no live calls)', () => {
     vr.prompt!.messages[0].content[0].text = 'changed';
     expect(() => encodeVertex(vr)).toThrow('VERTEX_CONTINUATION_MISMATCH');
   });
-  test('Anthropic accepts state, context and helper roles without enabling a model call', () => {
-    for (const role of ['state', 'context', 'helper'] as const)
+  test('Anthropic accepts script, context and helper roles without enabling a model call', () => {
+    for (const role of ['script', 'context', 'helper'] as const)
       expect(
         wire(encodeAnthropic({ ...request('claude-opus-5'), role }).body).messages
       ).toHaveLength(3);

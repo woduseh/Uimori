@@ -13,7 +13,7 @@ npm run dev
 
 For an offline install with a populated npm cache, add `--offline`. `dev` builds and starts the server; `npm start` uses the existing build. See [README](../README.md) for app configuration.
 
-Run `npm run doctor` when diagnosing the environment. It checks Node, child processes, SQLite, loopback HTTP, and Chromium. `--no-browser` checks only the API environment. Set `NR_BROWSER_PATH` to use a browser outside the discovered locations.
+Run `npm run doctor` when diagnosing the environment. It checks Node, child processes, SQLite, loopback HTTP, and Chromium. `--no-browser` checks only the API environment. Set `UIMORI_BROWSER_PATH` to use a browser outside the discovered locations.
 
 ## Verification runners
 
@@ -72,6 +72,6 @@ Local fixtures, browser emulation, live providers, and physical devices establis
 
 `npm run cleanup -- --run <run-id>` cleans up resources owned by that run. Reports and evidence are separate from live process cleanup.
 
-`npm run reset:dev` deletes this checkout's default `.local/narrative.sqlite`, its SQLite sidecars, and recognized legacy backups. Stop the server first. The command rejects an in-use database or unsafe paths and does not reset an arbitrary `NR_DB`.
+`npm run reset:dev` deletes only this checkout's default `.local/uimori.sqlite` and its SQLite sidecars. Existing backups and older database files remain untouched. Stop the server first. The command rejects an in-use database or unsafe paths and does not reset an arbitrary `UIMORI_DB`.
 
-Current data formats and supported upgrades are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).
+Only empty and current schema-21 databases are admitted. Older databases are rejected before schema writes; use a separate empty path for new development. Current data formats and this boundary are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).

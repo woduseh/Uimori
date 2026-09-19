@@ -1,11 +1,12 @@
+import { promptControls, type PromptControl } from '../core/risu-prompt.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatOptionState } from '../core/chat-options.js';
 import {
   reconcilePromptValues,
   visiblePromptControls,
-  type PromptProgram,
+  type RisuPrompt,
   type PromptValue,
-} from '../core/prompt-program.js';
+} from '../core/risu-prompt.js';
 import { api, ApiError } from './api.js';
 import type { HelperConversation } from '../core/helper.js';
 import { selectedHelperSession } from './useHelperSessions.js';
@@ -35,10 +36,10 @@ const sameValues = (left: Values, right: Values) => {
     keys.every((key) => Object.hasOwn(right, key) && left[key] === right[key])
   );
 };
-function reviewedValues(program: PromptProgram, values: Values): Values {
+function reviewedValues(program: RisuPrompt, values: Values): Values {
   const reconciled = reconcilePromptValues(program, values);
   return Object.fromEntries(
-    program.controls
+    promptControls(program)
       .filter(
         (control) => Object.hasOwn(values, control.id) && !reconciled.resetKeys.includes(control.id)
       )
@@ -114,7 +115,7 @@ export function ChatOptionSettings(props: Props) {
             setOneoff(nextOneoff);
             setFields(
               draft.fields.filter((id) =>
-                state.program.controls.some((control) => control.id === id)
+                promptControls(state.program).some((control) => control.id === id)
               )
             );
             setMessage(
@@ -259,7 +260,7 @@ export function ChatOptionSettings(props: Props) {
   const activeDelegations = displayState.delegations.filter((item) => !item.revokedAt);
   const revokedDelegations = displayState.delegations.filter((item) => item.revokedAt);
   const fieldLabel = (id: string) =>
-    base.program.controls.find((control) => control.id === id)?.label ?? id;
+    promptControls(base.program).find((control) => control.id === id)?.label ?? id;
   return (
     <>
       <div className="chat-options-body chat-specific-options">
@@ -381,7 +382,7 @@ export function ChatOptionSettings(props: Props) {
                 ))}
               </select>
             </label>
-            {base.program.controls.map((control) => (
+            {promptControls(base.program).map((control) => (
               <label key={control.id} className="chat-option-selection">
                 <SelectionCheckbox
                   checked={fields.includes(control.id)}
@@ -403,7 +404,7 @@ export function ChatOptionSettings(props: Props) {
                 submit('delegation', 'delegations', {
                   ...(delegatedSession ? { conversationId: delegatedSession } : {}),
                   binding: base.binding,
-                  fields: base.program.controls
+                  fields: promptControls(base.program)
                     .filter((control) => fields.includes(control.id))
                     .map((control) => control.id),
                 })
@@ -494,7 +495,7 @@ const SCOPE_WORDS = {
   },
 } as const;
 
-function optionText(control: PromptProgram['controls'][number], value: PromptValue | undefined) {
+function optionText(control: PromptControl, value: PromptValue | undefined) {
   if (value === null || value === undefined) return '미설정';
   if (typeof value === 'boolean') return value ? '켬' : '끔';
   const choice = control.options?.find((option) => option.value === value);
@@ -509,32 +510,32 @@ function SelectiveValues({
   onChange,
   mode,
 }: {
-  program: PromptProgram;
+  program: RisuPrompt;
   inherited: Values;
   values: Values;
   onChange: (values: Values) => void;
   mode: 'fixed' | 'oneoff';
 }) {
   const effective = { ...inherited, ...values };
-  let controls: PromptProgram['controls'];
+  let controls: PromptControl[];
   let visibilityValues: Values;
   try {
     visibilityValues = reconcilePromptValues(program, effective).values;
-    controls = visiblePromptControls(program.controls, visibilityValues);
+    controls = visiblePromptControls(promptControls(program), visibilityValues);
   } catch {
     return <p role="alert">옵션 표시 조건을 확인하지 못했어요. 프롬프트 정의를 확인해 주세요.</p>;
   }
-  if (program.controls.length === 0)
+  if (promptControls(program).length === 0)
     return <p className="muted">현재 프롬프트에 조정할 옵션이 없어요.</p>;
   const words = SCOPE_WORDS[mode];
   /* Same grouping rule as the prompt editor, so one option means the same thing in
      both places. Long option sets stay navigable instead of becoming one long list. */
-  const groups = new Map<string, PromptProgram['controls']>();
+  const groups = new Map<string, PromptControl[]>();
   for (const control of controls) {
     const group = control.group?.trim() || '기본 설정';
     groups.set(group, [...(groups.get(group) ?? []), control]);
   }
-  const row = (control: PromptProgram['controls'][number]) => {
+  const row = (control: PromptControl) => {
     const selected = Object.hasOwn(values, control.id);
     const current = Object.hasOwn(effective, control.id) ? effective[control.id]! : control.default;
     /* A switch already says what it will do, so flipping it is the act of setting a
@@ -546,7 +547,8 @@ function SelectiveValues({
         {live ? (
           <div className="chat-option-value">
             <PromptControlFields
-              program={{ ...program, controls: [{ ...control, visibleWhen: undefined }] }}
+              program={program}
+              controlIds={[control.id]}
               values={{ [control.id]: current }}
               visibilityValues={{ [control.id]: visibilityValues[control.id]! }}
               onChange={(id, value) => onChange({ ...values, [id]: value })}

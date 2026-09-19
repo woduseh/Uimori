@@ -4,12 +4,11 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:pat
 import { fileURLToPath } from 'node:url';
 
 // The CLI intentionally has no path or environment override. It resets only this
-// checkout's default disposable development database, never an arbitrary NR_DB.
+// checkout's default disposable development database, never an arbitrary UIMORI_DB.
 const repository = realpathSync(fileURLToPath(new URL('../', import.meta.url)));
 const directory = join(repository, '.local');
-const database = join(directory, 'narrative.sqlite');
-const baseNames =
-  /^narrative\.sqlite(?:\.pre-(?:m1|v3|m2|native|organization|behavior)-[0-9]+-[a-f0-9]{8}\.sqlite)?$/u;
+const database = join(directory, 'uimori.sqlite');
+const baseNames = /^uimori\.sqlite$/u;
 const candidateBase = (name) => name.replace(/-(?:wal|shm|journal)$/u, '');
 const owned = [],
   removed = [];
@@ -83,10 +82,8 @@ try {
       .filter((name) => baseNames.test(candidateBase(name)))
       .sort();
     const targets = names.map((name) => checkedFile(join(directory, name)));
-    // Acquire every affected DB's existing ownership protocol before deleting
-    // anything, including an old pre-upgrade copy opened by another process.
-    const bases = new Set(['narrative.sqlite', ...names.map(candidateBase)]);
-    for (const base of bases) acquire(base);
+    // Acquire the default DB's ownership protocol before deleting any file.
+    acquire('uimori.sqlite');
     for (const path of targets) {
       unlinkSync(checkedFile(path));
       removed.push(basename(path));

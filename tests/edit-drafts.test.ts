@@ -13,6 +13,7 @@ import {
 import type { ContentDraftModel, EditDraft } from '../core/edit-drafts.js';
 import type { Content } from '../core/product.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { nativeDraftTitle } from './fixtures/native-content.js';
 import { promptWorkspace } from '../server/prompt-workspace.js';
 
 const owned: { dir: string; store: Store }[] = [];
@@ -56,7 +57,7 @@ function patch(service: EditDraftService, draft: EditDraft, title: string) {
     {
       expectedRevision: draft.revision,
       operationId: randomUUID(),
-      model: { ...draft.model, title },
+      model: nativeDraftTitle(draft.model, title),
       rawFields: {},
       unappliedFields: [],
     },
@@ -72,23 +73,22 @@ test('shared drafts restore exact incomplete buffers, keep a late proposal and n
     {
       expectedRevision: original.revision,
       operationId: randomUUID(),
-      model: { ...original.model, title: 'Typed in another device' },
-      rawFields: { 'package.behavior': '{"actions":[' },
-      unappliedFields: ['package.behavior'],
+      model: nativeDraftTitle(original.model, 'Typed in another device'),
+      rawFields: { 'package.nativeRisu.card': '{"actions":[' },
+      unappliedFields: ['package.nativeRisu.card'],
     },
     authority
   );
   expect(incomplete.status).toBe('applied');
   const restored = new EditDraftService(service.store).list('new:content:bot')[0];
-  expect(restored.rawFields['package.behavior']).toBe('{"actions":[');
+  expect(restored.rawFields['package.nativeRisu.card']).toBe('{"actions":[');
   expect(service.validate(restored.id).valid).toBe(false);
   const late = patch(service, original, 'Late helper edit');
   expect(late.status).toBe('conflict');
   expect(service.get(original.id).model).toEqual(restored.model);
-  expect(service.proposals(original.id)[0].model).toEqual({
-    ...original.model,
-    title: 'Late helper edit',
-  });
+  expect(service.proposals(original.id)[0].model).toEqual(
+    nativeDraftTitle(original.model, 'Late helper edit')
+  );
 });
 
 test('validation does not save; a repeated new-item save returns the receipt and creates exactly one content', () => {
@@ -281,7 +281,7 @@ test('rebase uses the reviewed source revision and retains incomplete buffers un
     {
       expectedRevision: initial.revision,
       operationId: randomUUID(),
-      model: { ...initial.model, title: 'Local title' },
+      model: nativeDraftTitle(initial.model, 'Local title'),
       rawFields: { json: '{' },
       unappliedFields: ['json'],
     },
@@ -403,7 +403,10 @@ test('pristine rebases preserve synced edits and require current draft and saved
       {
         expectedRevision: initial.revision,
         operationId: randomUUID(),
-        model: { ...initial.model, ...('title' in change ? { title: change.title } : {}) },
+        model:
+          typeof change.title === 'string'
+            ? nativeDraftTitle(initial.model, change.title)
+            : initial.model,
         rawFields: change.rawFields,
         unappliedFields: change.unappliedFields,
       },

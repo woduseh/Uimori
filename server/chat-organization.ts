@@ -172,10 +172,6 @@ export class ChatOrganizationStore {
             folder.defaultPersona.revision
           )
         : null;
-      profile.attachments = [
-        ...(bot && !bot.package ? [{ id: bot.id, revision: bot.revision }] : []),
-        ...(persona && !persona.package ? [{ id: persona.id, revision: persona.revision }] : []),
-      ];
       const packageAttachments = [
         ...(bot?.package ? [{ id: bot.id, revision: bot.revision, role: 'bot' as const }] : []),
         ...(persona?.package
@@ -233,16 +229,11 @@ export class ChatOrganizationStore {
   }
   assertBotAttachments(
     chatId: string,
-    attachments: ContentRef[],
     packageAttachments?: Array<ContentRef & { role: 'bot' | 'persona' | 'module' }>
   ) {
     const owner = this.metadata(chatId);
     if (!owner) throw new HttpError(409, 'Chat organization is missing');
     const bots = new Set([
-      ...attachments
-        .map((ref) => this.store.product.get<Content>('content', ref.id, ref.revision))
-        .filter((content) => content.kind === 'bot')
-        .map((content) => content.id),
       ...(packageAttachments ?? []).filter((ref) => ref.role === 'bot').map((ref) => ref.id),
     ]);
     if (bots.size !== 1 || !bots.has(owner.botId))
@@ -270,7 +261,7 @@ export class ChatOrganizationStore {
         throw new HttpError(400, 'Invalid chat sort position');
       if (row.folder_id !== null) this.folder(row.bot_id, row.folder_id);
       const profile = this.store.product.profile(row.chat_id);
-      this.assertBotAttachments(row.chat_id, profile.attachments, profile.packageAttachments);
+      this.assertBotAttachments(row.chat_id, profile.packageAttachments);
     }
   }
 }

@@ -1,9 +1,9 @@
 import { HttpError, fields, record, text } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import { defaultProfile } from '../core/product.js';
-import { compilePromptProgram, validatePromptProgram } from '../core/prompt-program.js';
+import { compileRisuPrompt, validateRisuPrompt } from '../core/risu-prompt.js';
 import { planNativeMessages } from '../core/provider-messages.js';
-import { compileSnapshotPrompt, promptContext } from './prompt-snapshot.js';
+import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
 import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
@@ -12,13 +12,11 @@ import { createHash } from 'node:crypto';
 import { compileTranslationPrompt, translationInput } from '../core/auxiliary.js';
 import { sourceTimeContext } from './product-auxiliary.js';
 import { validateLoreContextPolicy } from '../core/lore-context.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { builtinPromptTemplate, builtinPromptTemplates } from './builtin-prompts.js';
-import { prepareRisuCompatReceipt } from './compat/risu/cbs.js';
-import { prepareLoreActivationReceipt } from './compat/risu/lore-activation.js';
-import { preparePromptInputTransforms } from './prompt-transforms.js';
 import { prepareNativeRisuRun } from './risu-native-run.js';
+import { prepareNativeRisuTranslationPrompt } from './risu-native-preset.js';
 
 /** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
 export function promptRoutes(app: FastifyInstance, store: Store) {
@@ -59,14 +57,13 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         branch.headRevision
       ) ?? {
         ...defaultProfile(chat.id),
-        contents: [],
         models: {},
       };
       const program =
         b.program === undefined
           ? (profile.promptPresets?.[role as 'main' | 'translation']?.program ??
-            createDefaultPromptProgram(DEFAULT_MAIN_PROMPT))
-          : validatePromptProgram(b.program);
+            createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT))
+          : validateRisuPrompt(b.program);
       if (b.loreContext !== undefined)
         try {
           profile.loreContext = validateLoreContextPolicy(b.loreContext);
@@ -113,7 +110,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
             sourceHash: string;
           }
         | undefined;
-      let compilation: ReturnType<typeof compilePromptProgram>;
+      let compilation: ReturnType<typeof compileRisuPrompt>;
       if (role === 'translation') {
         // Existing originals use their frozen source-time context, exactly as a job does.
         // An empty conversation has only explicit preview data; nothing is persisted.
@@ -139,7 +136,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         const fixed = {
           ...frozen,
           profile: {
-            ...(frozen.profile ?? { ...defaultProfile(chat.id), contents: [], models: {} }),
+            ...(frozen.profile ?? { ...defaultProfile(chat.id), models: {} }),
             promptPresets: { ...frozen.profile?.promptPresets, translation: preset },
             promptControls: {
               ...frozen.profile?.promptControls,
@@ -153,10 +150,15 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
             },
           },
         };
-        const input = translationInput(source, sourceTimeContext(fixed, 'translation'), fixed);
+        const evaluated = await prepareNativeRisuTranslationPrompt(fixed);
+        const input = translationInput(
+          source,
+          sourceTimeContext(evaluated, 'translation'),
+          evaluated
+        );
         compilation = compileTranslationPrompt(
           input,
-          fixed,
+          evaluated,
           'Translate the complete source according to the selected prompt. Return the translated text only.'
         )!;
         previewSource = {
@@ -183,18 +185,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           };
         }
         snapshot = await prepareNativeRisuRun(snapshot, { preview: true });
-        // A preview has no run to seed from, so it draws its entropy from one fixed source; the
-        // reader still sees evaluated text rather than the card's literal `{{...}}`.
-        const risuCompat = prepareRisuCompatReceipt(snapshot, 'preview');
-        if (risuCompat) snapshot = { ...snapshot, risuCompat };
-        const loreActivation = prepareLoreActivationReceipt(snapshot, 'preview');
-        if (loreActivation) snapshot = { ...snapshot, loreActivation };
-        snapshot = await preparePromptInputTransforms(snapshot, program, values);
-        const context = promptContext(snapshot, program, values);
-        compilation = !snapshot.story?.waiting
-          ? compileSnapshotPrompt(snapshot, program, values).promptCompilation!
-          : compilePromptProgram(program, { ...context, ...(values ? { values } : {}) });
-        if (snapshot.story?.waiting) compilation.warnings.push(...context.transformWarnings);
+        compilation = compileSnapshotPrompt(snapshot, program, values).promptCompilation!;
         compilation.warnings.push(...(snapshot.nativeRisuExecution?.issues ?? []));
       }
       const target = profile.models[role as 'main' | 'translation'];
@@ -202,7 +193,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
       let error: string | undefined;
       if (target)
         try {
-          if (role === 'main' && !snapshot.story?.waiting) {
+          if (role === 'main') {
             const built = buildMainProviderRequest({ ...snapshot, promptCompilation: compilation });
             compilation = built.snapshot.promptCompilation!;
             provider = encodeMainPreview(built.request, target);
@@ -238,7 +229,6 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         ...(snapshot.loreContext ? { loreContext: snapshot.loreContext } : {}),
         ...(previewSource ? { previewSource } : {}),
         ...(error ? { error } : {}),
-        ...(snapshot.story?.waiting ? { waitingForState: true } : {}),
         scope: 'preview-only-no-provider-call',
       };
     }

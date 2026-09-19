@@ -1,3 +1,4 @@
+import { prepareNativeRisuReadOnly } from '../server/risu-native-readonly.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -10,8 +11,6 @@ import { forkChat } from '../server/chat-fork.js';
 import { directHelperGrants } from '../server/helper-workspace.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { OUTLINE_LEVEL_LABELS } from '../core/outline.js';
-import { initOutline } from '../server/outline-store.js';
-import { DATABASE_SCHEMA_VERSION } from '../server/schema-migrations.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 
@@ -63,8 +62,7 @@ function chatWithMainModel(store: Store, title: string) {
   const profile = store.product.profile(chat.id);
   updateTestProfile(store.product, chat.id, {
     expectedRevision: profile.revision,
-    attachments: [],
-    routes: { main: { id: model.id }, translation: null, status: null, image: null },
+    routes: { main: { id: model.id }, translation: null, status: null },
     image: profile.image,
   });
   return chat;
@@ -562,7 +560,9 @@ describe('hierarchical composition', () => {
       expect(failure(() => reserve(store, chat.id, old.id)).statusCode).toBe(409);
       const { run } = write(store, chat.id, fresh.id, '새 계획으로 집필한 원문');
       expect(JSON.stringify(run.snapshot.outline)).toContain('예약 뒤 확정한 새로운 계획');
-      const input = JSON.stringify(buildMainProviderRequest(run.snapshot).request);
+      const input = JSON.stringify(
+        buildMainProviderRequest(await prepareNativeRisuReadOnly(run.snapshot, 'context')).request
+      );
       expect(input).toContain('예약 뒤 확정한 새로운 계획');
       expect(input).not.toContain(target.intent);
       expect(store.story.command(old.id).request).toBe(old.request);
@@ -729,45 +729,6 @@ describe('hierarchical composition', () => {
     expect(run.snapshot.outline?.path.at(-1)?.revision).toBe(current.revision);
   });
 
-  test('legacy v15 databases and archives without outline tables preserve the story', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '이전 v15 보존 검사');
-    const command = store.story.createCommand(chat.id, {
-      idempotencyKey: randomUUID(),
-      label: '기존 장면',
-      request: '기존 장면을 집필해요.',
-    });
-    const { source } = write(store, chat.id, command.id, '구성 기능이 없던 때의 원문이에요.');
-    const before = store.product.export();
-    const tables = before.tables as Record<string, unknown>;
-    for (const table of Object.keys(tables).filter((name) => name.startsWith('outline_')))
-      delete tables[table];
-    const restored = await database();
-    restored.product.import(before);
-    expect(restored.chat(chat.id)).toEqual(store.chat(chat.id));
-    expect(restored.outline.detail(chat.id).nodes).toEqual([]);
-    restored.db.exec('DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes');
-    initOutline(restored.db);
-    initOutline(restored.db);
-    expect(restored.chat(chat.id)).toEqual(store.chat(chat.id));
-    expect(restored.db.prepare('PRAGMA user_version').get()).toMatchObject({
-      user_version: DATABASE_SCHEMA_VERSION,
-    });
-    expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    restored.db.exec(
-      'DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes; DROP TABLE maintenance; DROP TABLE chat_variable_outputs; DROP TABLE chat_variable_journal; DROP TABLE chat_variable_states; DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
-    );
-    restored.close();
-    const reopened = new Store(restored.path);
-    owned.find((item) => item.store === restored)!.store = reopened;
-    expect(reopened.source(source.id)).toEqual(store.source(source.id));
-    expect(reopened.chat(chat.id)).toEqual(store.chat(chat.id));
-    expect(reopened.outline.detail(chat.id).nodes).toEqual([]);
-    expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({
-      user_version: DATABASE_SCHEMA_VERSION,
-    });
-  });
-
   test('receipts survive restore after deletion and reject forged references to another chat', async () => {
     const store = await database();
     const chat = createFixtureChat(store, '삭제된 구성 영수증');
@@ -881,7 +842,9 @@ describe('hierarchical composition', () => {
     // Only this unit is named; sibling episodes stay out of the frozen composition.
     expect(JSON.stringify(outline)).not.toContain('2화 장부의 첫 장');
 
-    const { request } = buildMainProviderRequest(run.snapshot);
+    const { request } = buildMainProviderRequest(
+      await prepareNativeRisuReadOnly(run.snapshot, 'context')
+    );
     const sent = JSON.stringify(request);
     expect(sent).toContain('사서가 도서관 지하에서 자기 이름이 적힌 장부를 찾아요.');
     expect(sent).toContain('열쇠 없는 자물쇠');
@@ -908,7 +871,9 @@ describe('hierarchical composition', () => {
     const { run } = write(store, chat.id, command.id, '문은 잠겨 있었다.');
     expect(run.snapshot.outline?.written).toEqual([]);
     // The arc names the ending; it arrives as author intent under the disclosure contract only.
-    const { input } = buildMainProviderRequest(run.snapshot);
+    const { input } = buildMainProviderRequest(
+      await prepareNativeRisuReadOnly(run.snapshot, 'context')
+    );
     expect(input.contract).toContain('stay unrevealed until their own unit is written');
     expect(store.story.detail(chat.id).notes).toEqual([]);
     expect(store.context.detail(chat.id).checkpoint).toBeNull();

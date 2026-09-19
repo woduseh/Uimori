@@ -1,5 +1,5 @@
+import { nativeRisuPresetVariableDefaults, type NativeRisuPreset } from './risu-native-preset.js';
 import type { ProfileSnapshot } from './product.js';
-import { historicalPersonaExcluded } from './persona-scope.js';
 import { PromptEvaluationError } from './prompt-values.js';
 import {
   CHAT_VARIABLE_LIMITS,
@@ -10,12 +10,12 @@ import {
 /** Minimal frozen declaration view, also usable before a new chat exists. */
 export type TemplateVariableProfile = Pick<
   ProfileSnapshot,
-  'packageAttachments' | 'packages' | 'personaReference' | 'variableState'
+  'packageAttachments' | 'packages' | 'variableState'
 > & {
-  promptPresets?: { main?: { program: { variableDefaults?: Record<string, string> } } };
+  promptPresets?: { main?: { program: { nativeRisuPreset: NativeRisuPreset } } };
 };
 
-/** Declaration limits fit the existing prompt AST and runtime value budgets. */
+/** Native variable declarations share the branch variable storage limits. */
 export const TEMPLATE_VARIABLE_LIMITS = CHAT_VARIABLE_LIMITS;
 
 /** Keys are authored data: preserve Unicode, whitespace and empty names exactly. */
@@ -29,8 +29,7 @@ export type TemplateVariableContext = {
 };
 
 export function resolveTemplateVariableContext(
-  profile: TemplateVariableProfile | undefined,
-  target = 'main'
+  profile: TemplateVariableProfile | undefined
 ): TemplateVariableContext {
   const state =
     profile?.variableState === undefined
@@ -55,42 +54,18 @@ export function resolveTemplateVariableContext(
   };
   if (state) append(state.values);
   for (const ref of profile?.packageAttachments ?? []) {
-    if (historicalPersonaExcluded(profile, ref.role, target)) continue;
     const declaration = profile?.packages?.find(
       (pkg) => pkg.id === ref.id && pkg.revision === ref.revision
     )?.variableDefaults;
     if (declaration?.attachmentRoles && !declaration.attachmentRoles.includes(ref.role)) continue;
     append(declaration?.values);
   }
-  append(profile?.promptPresets?.main?.program.variableDefaults);
-  // Do not add an empty runtime field to historical profiles without declarations.
+  const preset = profile?.promptPresets?.main?.program.nativeRisuPreset;
+  if (preset) append(nativeRisuPresetVariableDefaults(preset));
+  // Omit an empty value map when no source declares variables.
   return overflow
     ? { ...revision, variableDefaultsError: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT' }
     : result === undefined
       ? {}
       : { ...revision, variables: result };
-}
-
-/** Values-only facade for consumers that do not render a template or report diagnostics. */
-export function resolveTemplateVariables(
-  profile: TemplateVariableProfile | undefined,
-  target = 'main'
-): Record<string, string> | undefined {
-  return resolveTemplateVariableContext(profile, target).variables;
-}
-
-/** Literal objects are authored data, not expressions that read host variables. */
-export function templateReadsVariables(value: unknown): boolean {
-  const pending = [value];
-  while (pending.length) {
-    const node = pending.pop();
-    if (!node || typeof node !== 'object') continue;
-    if (!Array.isArray(node)) {
-      if (Object.hasOwn(node, 'literal')) continue;
-      const path = (node as Record<string, unknown>).context;
-      if (Array.isArray(path) && path[0] === 'variables') return true;
-    }
-    pending.push(...Object.values(node));
-  }
-  return false;
 }

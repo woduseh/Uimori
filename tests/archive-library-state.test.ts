@@ -8,7 +8,7 @@ import {
   promptWorkspace,
   updatePromptWorkspace,
 } from '../server/prompt-workspace.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import type { SavedPromptCombination } from '../core/product.js';
@@ -41,7 +41,7 @@ test('only default working content counts as empty; explicit reset preserves imp
     expectedRevision: original.revision,
     main: {
       title: 'My unsaved writer',
-      program: createDefaultPromptProgram('Keep this authored instruction'),
+      program: createDefaultRisuPrompt('Keep this authored instruction'),
       values: {},
     },
   });
@@ -89,8 +89,8 @@ test('archive requires one working slot and validates hidden kind and retained t
 });
 test('independent option copies and removed library entries round-trip without a live preset dependency', () => {
   const source = database();
-  const program = createDefaultPromptProgram('Working prompt');
-  program.controls = [{ id: 'tone', label: 'Tone', type: 'text', default: 'quiet' }];
+  const program = createDefaultRisuPrompt('Working prompt');
+  program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Tone=text';
   updatePromptWorkspace(source, {
     expectedRevision: 1,
     main: { title: 'Working', program, values: { tone: 'quiet' } },

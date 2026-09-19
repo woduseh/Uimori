@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { initHelperWorkspace } from './helper-workspace.js';
-import { databaseSchemaVersion, initializeDatabaseSchema } from './schema-migrations.js';
+import { databaseSchemaVersion, initializeDatabaseSchema } from './database-schema.js';
 import { initEditDrafts } from './edit-drafts.js';
 import { initChatOverrides } from './chat-overrides.js';
 import { initChatOptions } from './chat-options.js';
@@ -22,19 +22,9 @@ import { HttpError, text } from './request-validation.js';
 export { HttpError } from './request-validation.js';
 import { StoryStore } from './story-store.js';
 import { OutlineStore } from './outline-store.js';
-import { consumePackageRequestInTransaction } from './package-requests.js';
 import { ChatOrganizationStore } from './chat-organization.js';
 import { LibraryOrganizationStore } from './library-organization.js';
-import { PackageBehaviorStore } from './package-behavior-store.js';
-import {
-  initBehaviorHost,
-  freezePackageStates,
-  completePackageOutputs,
-  branchPackageStates,
-} from './package-behavior-host.js';
-import { initRunBehavior, copyCandidateBehavior } from './package-behavior-run.js';
 import { initMaintenance } from './maintenance.js';
-import { completeAuthoredPackageStartStatesInTransaction } from './package-start.js';
 import { ContextStore } from './context-store.js';
 import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import {
@@ -42,7 +32,6 @@ import {
   writeChatVariablesInTransaction,
 } from './chat-variables.js';
 import { restoreCandidateChatVariables } from './chat-variables-archive.js';
-import { commitRunCompatVariables } from './risu-compat-variables.js';
 import { resetNativeRisuCandidate } from './risu-native-archive.js';
 import { nativeRisuPending } from './risu-native-run.js';
 import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
@@ -55,7 +44,6 @@ import {
   latestImageJob,
 } from './package-images.js';
 import { recoverIllustrations, scheduleAutomaticIllustration } from './illustrations.js';
-import { recoverExtensionOperations } from './extension-operations.js';
 import type {
   Settings,
   Chat as BaseChat,
@@ -90,7 +78,6 @@ export class Store {
   readonly context: ContextStore;
   readonly organization: ChatOrganizationStore;
   readonly libraryOrganization: LibraryOrganizationStore;
-  readonly behavior: PackageBehaviorStore;
   private readonly ownership: DatabaseSync;
   constructor(readonly path: string) {
     mkdirSync(dirname(path), { recursive: true });
@@ -121,16 +108,11 @@ export class Store {
       this.context = new ContextStore(this);
       this.organization = new ChatOrganizationStore(this);
       this.libraryOrganization = new LibraryOrganizationStore(this);
-      this.behavior = new PackageBehaviorStore(this.db, (chatId, branchId) => {
-        const branch = this.product.branch(chatId, branchId);
-        return branch.headRevision ? this.source(branch.headRevision).hash : null;
-      });
-      // Keep the retired runs.issue storage column as an unused diagnostic field.
       initializeDatabaseSchema(this.db, () => {
         this.db.exec(`
       CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, head_revision TEXT, settings_revision INTEGER NOT NULL, settings TEXT NOT NULL, created_at TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), parent_revision TEXT, status TEXT NOT NULL, request TEXT NOT NULL, snapshot TEXT NOT NULL, request_key TEXT NOT NULL, command TEXT NOT NULL, source_revision TEXT, error TEXT, usage TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, branch_id TEXT REFERENCES branches(id), partial_text TEXT, issue TEXT, UNIQUE(chat_id,request_key));
-      CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_branch ON runs(branch_id) WHERE status IN ('queued','running','waiting_for_state');
+      CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), parent_revision TEXT, status TEXT NOT NULL, request TEXT NOT NULL, snapshot TEXT NOT NULL, request_key TEXT NOT NULL, command TEXT NOT NULL, source_revision TEXT, error TEXT, usage TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, branch_id TEXT REFERENCES branches(id), partial_text TEXT, UNIQUE(chat_id,request_key));
+      CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_branch ON runs(branch_id) WHERE status IN ('queued','running');
       CREATE INDEX runs_chat_activity ON runs(chat_id,created_at DESC);
       CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), run_id TEXT NOT NULL UNIQUE REFERENCES runs(id), parent_revision TEXT REFERENCES sources(id), text TEXT NOT NULL, hash TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), source_revision TEXT NOT NULL REFERENCES sources(id), source_hash TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('translation','status','image')), status TEXT NOT NULL, generation INTEGER NOT NULL DEFAULT 0, owner TEXT, input TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, UNIQUE(source_revision,kind,revision));
@@ -147,9 +129,6 @@ export class Store {
         this.context.initFresh();
         this.organization.init();
         this.libraryOrganization.init();
-        this.behavior.init();
-        initBehaviorHost(this);
-        initRunBehavior(this);
         initHelperWorkspace(this);
         initEditDrafts(this);
         initChatOverrides(this);
@@ -283,8 +262,7 @@ export class Store {
     // Keep source integrity checks while projecting the latest edit in one read per ancestor.
     const read =
       this.db.prepare(`SELECT s.id,s.chat_id AS chatId,s.parent_revision AS parentRevision,
-      s.text,s.hash,e.text AS editedText,e.hash AS editedHash,
-      json_extract(r.snapshot,'$.sourceSegments') AS policy
+      s.text,s.hash,e.text AS editedText,e.hash AS editedHash
       FROM sources s JOIN runs r ON r.id=s.run_id
       LEFT JOIN source_edits e ON e.source_id=s.id
         AND e.revision=(SELECT MAX(revision) FROM source_edits WHERE source_id=s.id)
@@ -308,14 +286,12 @@ export class Store {
       validateSourceIdentity(source);
       if (source.editedText !== null)
         validateSourceIdentity({ ...source, text: source.editedText, hash: source.editedHash! });
-      const sourceSegments = source.policy ? parse(source.policy) : undefined;
       history.push({
         revision: source.id,
         text: source.editedText ?? source.text,
         ...(source.editedHash !== null && source.editedHash !== source.hash
           ? { contentHash: source.editedHash }
           : {}),
-        ...(sourceSegments ? { sourceSegments } : {}),
       });
       head = source.parentRevision;
     }
@@ -344,7 +320,6 @@ export class Store {
       branchId?: string;
       expectedProfileRevision?: number;
       sceneCommandId?: string;
-      packageRequestId?: string;
       loreContextReset?: boolean;
       packageStart?: import('../core/package-start.js').PackageStartRef;
       retryOf?: string;
@@ -375,7 +350,6 @@ export class Store {
       branchId: resolvedBranchId,
       expectedProfileRevision: command.expectedProfileRevision,
       ...(command.sceneCommandId ? { sceneCommandId: command.sceneCommandId } : {}),
-      ...(command.packageRequestId ? { packageRequestId: command.packageRequestId } : {}),
       ...(command.packageStart ? { packageStart: command.packageStart } : {}),
       ...(command.loreContextReset ? { loreContextReset: true } : {}),
       ...(command.retryOf ? { retryOf: command.retryOf } : {}),
@@ -399,9 +373,7 @@ export class Store {
       throw new HttpError(409, 'Profile revision conflict');
     if (
       this.db
-        .prepare(
-          "SELECT id FROM runs WHERE branch_id=? AND status IN ('queued','running','waiting_for_state')"
-        )
+        .prepare("SELECT id FROM runs WHERE branch_id=? AND status IN ('queued','running')")
         .get(branch.id)
     )
       throw new HttpError(409, 'A run already owns this head');
@@ -424,7 +396,7 @@ export class Store {
       sceneCommandId: command.sceneCommandId,
       supersedesRunId: command.retryOf,
     });
-    const status = frozen.story?.waiting ? 'waiting_for_state' : 'queued';
+    const status = 'queued';
     this.db
       .prepare(
         'INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)'
@@ -443,15 +415,6 @@ export class Store {
         branch.id
       );
     if (command.sceneCommandId) this.story.bindCommandInTransaction(command.sceneCommandId, id);
-    if (command.packageRequestId)
-      consumePackageRequestInTransaction(
-        this,
-        chatId,
-        branch.id,
-        command.packageRequestId,
-        command.request,
-        id
-      );
     this.event(chatId, `run.${status}`, id);
     return { run: this.run(id), created: true };
   }
@@ -479,7 +442,7 @@ export class Store {
           throw new HttpError(409, 'Idempotency key reused with different command');
         return { run: this.run(prior.id), created: false };
       }
-      if (['queued', 'running', 'waiting_for_state'].includes(original.status))
+      if (['queued', 'running'].includes(original.status))
         throw new HttpError(409, 'Original run is still active');
       if (
         original.snapshot.packageStart?.mode === 'authored' ||
@@ -548,7 +511,7 @@ export class Store {
         original.snapshot.nativeRisuAuthored
       )
         throw new HttpError(409, 'Authored opening cannot be regenerated as a model candidate');
-      if (['queued', 'running', 'waiting_for_state'].includes(original.status))
+      if (['queued', 'running'].includes(original.status))
         throw new HttpError(409, 'Original run is still active');
       const canonical = json({ candidateOf: runId, title });
       const prior = this.db
@@ -583,21 +546,19 @@ export class Store {
         candidateOf: original.id,
       };
       resetNativeRisuCandidate(snapshot);
+      delete snapshot.mainJudgment;
       if (snapshot.contextPlan?.status === 'ready' && snapshot.promptCompilation) {
         snapshot.contextPlan.summaryCalls = 0;
         snapshot.contextPlan.usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
       }
-      branchPackageStates(this, original.chatId, branch.id, original.parentRevision, snapshot);
       restoreCandidateChatVariables(
         this,
         original.chatId,
         branch.id,
         snapshot.profile?.variableState
       );
-      freezePackageStates(this, snapshot, false);
       const id = randomUUID();
       const time = now();
-      copyCandidateBehavior(this, original, id, snapshot);
       this.db
         .prepare(
           "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,'queued',?,?,?,?,?,?,?)"
@@ -627,7 +588,7 @@ export class Store {
       ? undefined
       : (this.db
           .prepare(
-            "SELECT count(*) AS count FROM attempts WHERE run_id=? AND job_id IS NULL AND story_job_id IS NULL AND role!='title'"
+            "SELECT count(*) AS count FROM attempts WHERE run_id=? AND job_id IS NULL AND role!='title'"
           )
           .get(id) as Row | undefined);
     return {
@@ -704,7 +665,7 @@ export class Store {
   ) {
     return this.transaction(() => {
       const run = this.run(id);
-      if (!['queued', 'running', 'waiting_for_state'].includes(run.status)) return run;
+      if (!['queued', 'running'].includes(run.status)) return run;
       this.db
         .prepare(
           'UPDATE runs SET status=?,error=?,partial_text=COALESCE(?,partial_text),usage=COALESCE(?,usage),updated_at=? WHERE id=?'
@@ -832,20 +793,15 @@ export class Store {
         );
       this.event(source.chatId, 'job.queued', jobId);
     }
-    if (run.snapshot.packageStart?.mode === 'authored')
-      completeAuthoredPackageStartStatesInTransaction(this, run, source);
-    else if (!run.snapshot.transcriptImport && !run.snapshot.nativeRisuAuthored) {
+    if (
+      !run.snapshot.packageStart &&
+      !run.snapshot.transcriptImport &&
+      !run.snapshot.nativeRisuAuthored
+    ) {
       this.story.reserveSourceInTransaction(source, run);
-      completePackageOutputs(this, run, source);
       // Illustrations never block the source commit; reservation problems become visible jobs.
       if (!run.snapshot.candidateOf) scheduleAutomaticIllustration(this, source);
     }
-    // A card's preserved Risu CBS wrote through its own frozen evaluation, so its writes are adopted
-    // here rather than in the behavior path: an authored opening has no behavior outputs to complete,
-    // and a Run without behavior definitions never reaches completePackageOutputs' commit at all.
-    // Adopting after that commit keeps the behavior path's own staleness check reading the branch the
-    // reservation froze; the checkpoint below then carries both writers' result onto this source.
-    commitRunCompatVariables(this, run, source);
     checkpointChatVariablesInTransaction(this, source.id, source.chatId, branch.id);
     this.event(source.chatId, 'source.ready', source.id);
     this.event(source.chatId, 'run.completed', id);
@@ -901,9 +857,7 @@ export class Store {
       if (
         !item ||
         item.revision !== ids[index] ||
-        Object.keys(item).some(
-          (k) => !['revision', 'text', 'contentHash', 'sourceSegments'].includes(k)
-        )
+        Object.keys(item).some((k) => !['revision', 'text', 'contentHash'].includes(k))
       )
         return false;
       const source =
@@ -1179,9 +1133,8 @@ export class Store {
   }
   recover() {
     this.transaction(() => {
-      recoverExtensionOperations(this);
       for (const row of this.db
-        .prepare("SELECT id FROM runs WHERE status IN ('queued','running','waiting_for_state')")
+        .prepare("SELECT id FROM runs WHERE status IN ('queued','running')")
         .all() as Row[]) {
         const run = this.run(row.id);
         this.db

@@ -1,8 +1,8 @@
 import type { AuxiliaryInput } from './auxiliary.js';
 import type { RunSnapshot } from './types.js';
-import { createDefaultPromptProgram } from './prompt-defaults.js';
+import { createDefaultRisuPrompt } from './prompt-defaults.js';
 import { DEFAULT_TRANSLATION_PROMPT } from './prompts.js';
-import { compilePromptProgram, type PromptCompilation } from './prompt-program.js';
+import { compileRisuPrompt, type PromptCompilation } from './risu-prompt.js';
 import { executionContext } from './execution-context.js';
 import { packageSlots } from './package-context.js';
 
@@ -20,24 +20,17 @@ export function compileTranslationPrompt(
       input.context.instructionRevision !== `prompt:${preset.id}@${preset.revision}`)
   )
     throw new Error('SOURCE_PROMPT_REVISION_MISMATCH');
-  const contents = snapshot.profile?.contents ?? [];
   const description = input.context.bot?.text ?? '';
-  const lore = [
-    ...contents
-      .filter((item) => item.kind === 'module' && item.loading === 'pinned')
-      .map((item) => item.text),
-  ].join('\n\n');
   const slots: Record<string, string> = {
-    char: contents.find((item) => item.kind === 'bot')?.title ?? 'Character',
+    char: 'Character',
     bot: description,
     description,
     persona: input.context.persona?.text ?? '',
-    lore,
-    lorebook: lore,
+    lore: '',
+    lorebook: '',
     // No separate glossary category exists. Source-time modules remain in lore/context.references.
     glossary: '',
     notes: snapshot.story?.notes ? JSON.stringify(snapshot.story.notes) : '',
-    state: snapshot.story?.state ? JSON.stringify(snapshot.story.state) : '',
     source: input.sourceText ?? JSON.stringify(input.blocks),
     context: JSON.stringify(input.context),
     outputSchema: JSON.stringify(input.outputSchema),
@@ -55,8 +48,9 @@ export function compileTranslationPrompt(
     if (packageSlot[key]) slots[key] = [slots[key], packageSlot[key]].filter(Boolean).join('\n\n');
   slots.description = slots.bot;
   slots.lorebook = slots.lore;
-  return compilePromptProgram(
-    preset?.program ?? createDefaultPromptProgram(DEFAULT_TRANSLATION_PROMPT, 'translation'),
+  const currentText = `${task}\n\n<Sample_Text>\n${input.sourceText ?? ''}\n</Sample_Text>\n\n<Additional_Information>\n\ncontext:\n${JSON.stringify(input.context)}\nnotes:\n${JSON.stringify(snapshot.story?.notes ?? [])}\n</Additional_Information>`;
+  const compilation = compileRisuPrompt(
+    preset?.program ?? createDefaultRisuPrompt(DEFAULT_TRANSLATION_PROMPT, 'translation'),
     {
       runtime: {
         ...executionContext(snapshot, 'translation'),
@@ -64,7 +58,7 @@ export function compileTranslationPrompt(
           id: input.sourceRevision,
           hash: input.sourceHash,
           text: input.sourceText ?? '',
-          blocks: input.blocks as unknown as import('./prompt-program.js').RuntimeValue,
+          blocks: input.blocks as unknown as import('./risu-prompt.js').RuntimeValue,
         },
       },
       values: preset
@@ -75,7 +69,7 @@ export function compileTranslationPrompt(
         {
           id: `translation-current:${input.sourceRevision}`,
           role: 'user',
-          text: task,
+          text: currentText,
           sourceRevision: input.sourceRevision,
           sourceHash: input.sourceHash,
           current: true,
@@ -83,4 +77,16 @@ export function compileTranslationPrompt(
       ],
     }
   );
+  // Native chat blocks place the host's source message; the source is never interpreted as CBS.
+  if (
+    compilation.messages.some(
+      (message) =>
+        message.provenance.origin === 'current' &&
+        message.content.some((part) => part.text === currentText)
+    )
+  )
+    compilation.usedSlots = [
+      ...new Set([...(compilation.usedSlots ?? []), 'source', 'context', 'notes']),
+    ];
+  return compilation;
 }

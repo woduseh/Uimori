@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  validateContentPackage,
-  type ContentPackage,
-  type PackageAttachment,
-  type PackageLore,
-} from '../core/content-package.js';
+  validateRisuContent,
+  type RisuContent,
+  type ContentAttachment,
+  type RisuLoreProjection,
+} from '../core/risu-content.js';
 import {
   LORE_SELECTION_LIMITS,
   loreSelectionKey,
@@ -18,14 +18,17 @@ import {
 // what a reader - compilation, an archive replay, a restored backup - may conclude from the record
 // alone.
 
-const ATTACHMENT: PackageAttachment = { id: 'card', revision: 1, role: 'bot' };
+const ATTACHMENT: ContentAttachment = { id: 'card', revision: 1, role: 'bot' };
 const KEY = loreSelectionKey(ATTACHMENT);
 
-function lore(id: string, loading: PackageLore['loading'] = 'discoverable'): PackageLore {
+function lore(
+  id: string,
+  loading: RisuLoreProjection['loading'] = 'discoverable'
+): RisuLoreProjection {
   return { id, title: id, description: '', text: `${id} body`, loading };
 }
 
-function pkg(partial: Partial<ContentPackage> = {}): ContentPackage {
+function pkg(partial: Partial<RisuContent> = {}): RisuContent {
   return {
     version: 1,
     id: 'card',
@@ -34,8 +37,7 @@ function pkg(partial: Partial<ContentPackage> = {}): ContentPackage {
     description: '',
     lore: [],
     instructions: [],
-    controls: [],
-    transforms: [],
+    nativeRisu: { version: 1, card: {}, assets: [], sourceHash: 'a'.repeat(64) },
     ...partial,
   };
 }
@@ -49,7 +51,7 @@ const receipt = (): LoreSelectionReceipt => ({
       budget: 48_000,
       selected: ['harbor'],
       omitted: [{ id: 'dragon', reason: 'budget' }],
-      model: 'fixture-context-model',
+      model: 'jev-latest',
     },
   ],
 });
@@ -67,7 +69,7 @@ describe('receipt contract', () => {
 
   it('refuses one lore decided twice, whether as two decisions or the same one', () => {
     const overlap = receipt();
-    overlap.entries[0].omitted.push({ id: 'harbor', reason: 'unknown' });
+    overlap.entries[0].omitted.push({ id: 'harbor', reason: 'irrelevant' });
     expect(() => validateLoreSelectionReceipt(overlap)).toThrow('LORE_SELECTION_DUPLICATE_LORE');
     const repeated = receipt();
     repeated.entries[0].selected.push('harbor');
@@ -128,16 +130,16 @@ describe('candidate lore', () => {
       )
     ).toEqual(['harbor', 'dragon']);
     expect(loreSelectionLore(pkg({ lore: entries }))).toEqual([]);
-    expect(loreSelectionLore(pkg({ lore: entries, loreActivation: { mode: 'keyword' } }))).toEqual(
-      []
-    );
+    expect(
+      loreSelectionLore(pkg({ lore: entries, loreActivation: { mode: 'discoverable' } }))
+    ).toEqual([]);
   });
 
   it('accepts the new mode on a package and still refuses an unknown one', () => {
     const value = pkg({ lore: entries, loreActivation: { mode: 'model' } });
-    expect(validateContentPackage(value)).toEqual(value);
-    expect(() =>
-      validateContentPackage(pkg({ loreActivation: { mode: 'always' } as never }))
-    ).toThrow('PACKAGE_LORE_ACTIVATION_MODE');
+    expect(validateRisuContent(value)).toEqual(value);
+    expect(() => validateRisuContent(pkg({ loreActivation: { mode: 'always' } as never }))).toThrow(
+      'PACKAGE_LORE_ACTIVATION_MODE'
+    );
   });
 });

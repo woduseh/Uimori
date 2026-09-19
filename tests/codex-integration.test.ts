@@ -1,3 +1,4 @@
+import { installJevFixture } from './fixtures/jev.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -12,6 +13,8 @@ import { translationFixtureSlot } from './fixtures/translation-job.js';
 const owned: { directory: string; app?: App }[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   for (const item of owned.splice(0).reverse()) {
     await item.app?.close();
     const target = resolve(item.directory),
@@ -193,19 +196,8 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
       const source = request.input.source as any;
       let output: unknown;
       if (request.role === 'main') output = 'The keeper opened the gate.';
-      else if (request.role === 'state')
-        output = {
-          sourceRevision: source.revision,
-          sourceHash: source.hash,
-          moduleRevision: source.module.revision,
-          operations: [],
-        };
       else if (request.role === 'context') output = 'The keeper remains at the gate.';
-      else if (request.role === 'translation')
-        output =
-          request.input.controls.purpose === 'translation-refusal'
-            ? { verdict: 'accepted' }
-            : translationFixtureSlot(request, 'source');
+      else if (request.role === 'translation') output = translationFixtureSlot(request, 'source');
       else
         output = {
           sourceRevision: source.sourceRevision,
@@ -262,10 +254,11 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     '/api/prompt-workspace',
     {
       expectedRevision: workspace.revision,
-      translationPolicy: { refusalModel: ref(model), maxRetries: 1, maxCalls: 16 },
+      translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
     },
     'PUT'
   );
+  const judgments = installJevFixture();
   const initial = await api(app, '/api/chats', { title: 'Synthetic Codex story' });
   const chat = await api(
     app,
@@ -279,9 +272,8 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     `/api/chats/${chat.id}/profile`,
     {
       expectedRevision: profile.revision,
-      attachments: [],
 
-      routes: { main: ref(model), translation: ref(model), status: ref(model), image: ref(model) },
+      routes: { main: ref(model), translation: ref(model), status: ref(model) },
       image: true,
       imageTranslation: false,
     },
@@ -297,23 +289,6 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     location: '',
     allowedUse: 'inline',
   });
-  await api(
-    app,
-    `/api/chats/${chat.id}/story/config`,
-    {
-      expectedRevision: 0,
-      module: {
-        id: 'wallet',
-        revision: 1,
-        name: 'Wallet',
-        mode: 'authoritative',
-        fields: { coins: { type: 'number', initial: 10, min: 0, max: 100 } },
-        rules: {},
-      },
-      stateModel: ref(model),
-    },
-    'PUT'
-  );
   const run = await api(app, `/api/chats/${chat.id}/runs`, {
     request: 'Open the gate.',
     expectedRevision: null,
@@ -333,7 +308,7 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
   await api(app, `/api/sources/${source.id}/translation`, {});
   await expect
     .poll(() => [...new Set(calls.map((call) => call.role))].sort())
-    .toEqual(['image', 'main', 'state', 'status', 'translation']);
+    .toEqual(['main', 'status', 'translation']);
   await expect
     .poll(
       () =>
@@ -341,13 +316,21 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     )
     .toBe(0);
   expect(app.store.product.attempts(chat.id)).toHaveLength(6);
-  const classifierCalls = calls.filter(
-    (call) => call.input.controls.purpose === 'translation-refusal'
+  expect(judgments).toHaveLength(3);
+  expect(judgments.find((item) => item.questions.explicitRefusal)?.state.prefix).toBe(
+    'The keeper opened the gate.'
   );
-  expect(classifierCalls).toHaveLength(1);
-  expect(classifierCalls[0].stable.tools).toEqual([]);
-  expect(classifierCalls[0].input.source).toEqual({ prefix: 'The keeper opened the gate.' });
-  for (const attempt of app.store.product.attempts(chat.id)) {
+  const attempts = app.store.product.attempts(chat.id);
+  expect(
+    attempts.filter(
+      (attempt) =>
+        (attempt.request as { protocol?: string } | null)?.protocol === 'typesafe-systemone-v1'
+    )
+  ).toHaveLength(3);
+  for (const attempt of attempts.filter(
+    (attempt) =>
+      (attempt.request as { protocol?: string } | null)?.protocol === 'codex-app-server-v1'
+  )) {
     expect(attempt.request).toMatchObject({
       method: 'RPC',
       url: 'codex://local',
@@ -372,8 +355,4 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
   await api(restored, '/api/import', { archive });
   expect(JSON.stringify(archive)).toContain('codex://local');
   expect(restored.store.product.attempts(chat.id)).toEqual(app.store.product.attempts(chat.id));
-  for (const role of ['state'])
-    expect(
-      app.store.product.attempts(chat.id).find((attempt) => attempt.role === role)?.storyJobId
-    ).toEqual(expect.any(String));
 });

@@ -20,9 +20,9 @@ import {
   nativeRisuLore,
   nativeRisuRegex,
   nativeRisuTriggers,
-  validateNativeRisuContent,
+  validateRisuContentSource,
 } from '../core/risu-native.js';
-import { validateContentPackage } from '../core/content-package.js';
+import { validateRisuContent } from '../core/risu-content.js';
 import type { Content } from '../core/product.js';
 import { EditDraftService, initEditDrafts } from '../server/edit-drafts.js';
 import { nativeRisuPreview } from '../server/risu-native-preview.js';
@@ -122,7 +122,7 @@ test('native edits reproject canonical source, preserve unknown fields and retai
   body.title = 'stale title';
   body.text = 'stale body';
   body.package!.starts = [{ id: 'forged', title: 'Wrong', mode: 'authored', text: 'stale start' }];
-  body.package!.loreActivation = { mode: 'keyword' };
+  body.package!.loreActivation = { mode: 'discoverable' };
   const request = { ...body, expectedRevision: revision };
   const untouched = structuredClone(request);
   const updated = store.product.content(request, id) as Content;
@@ -132,7 +132,7 @@ test('native edits reproject canonical source, preserve unknown fields and retai
   expect(updated.text).toBe('Changed {{char}}');
   expect(updated.package!.starts![0].text).toBe('<section>New opening</section>');
   expect(updated.package!.lore[0].text).toBe('NEW RAW {{char}}');
-  expect(updated.package!.loreActivation!.mode).toBe('keyword');
+  expect(updated.package!.loreActivation!.mode).toBe('discoverable');
   expect(updated.package!.nativeRisu!.card.unknown).toEqual(synthetic().unknown);
   expect(store.product.get<Content>('content', id, revision)).toEqual(saved);
   expect(() => store.product.content(request, id)).toThrow(/Revision conflict/);
@@ -258,10 +258,6 @@ test('native card remains the exact authored document through import, original e
     createHash('sha256').update(Buffer.from(source.base64, 'base64')).digest('hex')
   );
   expect(pkg.body).toBe(card.description);
-  expect(pkg.bodyTemplate).toBeUndefined();
-  expect(pkg.compat).toBeUndefined();
-  expect(pkg.behavior).toBeUndefined();
-  expect(pkg.transforms).toEqual([]);
   expect(pkg.starts!.map((start) => start.text)).toEqual([
     card.first_mes,
     ...card.alternate_greetings,
@@ -372,13 +368,13 @@ test('native envelope validation rejects invalid source, non-JSON values and unr
   const { file } = analyzeNativeRisuImport(readCharacterCard(sourceOf(synthetic())));
   const pkg = file.contents[0].source.package!;
   expect(() =>
-    validateContentPackage({ ...pkg, nativeRisu: { ...pkg.nativeRisu, sourceHash: 'invalid' } })
+    validateRisuContent({ ...pkg, nativeRisu: { ...pkg.nativeRisu, sourceHash: 'invalid' } })
   ).toThrow('PACKAGE_NATIVE_RISU_INVALID');
-  expect(() => validateNativeRisuContent({ ...pkg.nativeRisu, card: { fn: () => 1 } })).toThrow(
+  expect(() => validateRisuContentSource({ ...pkg.nativeRisu, card: { fn: () => 1 } })).toThrow(
     'PACKAGE_NATIVE_RISU_JSON'
   );
   expect(() =>
-    validateContentPackage({
+    validateRisuContent({
       ...pkg,
       nativeRisu: {
         ...pkg.nativeRisu,
@@ -424,8 +420,6 @@ test.runIf(Boolean(process.env.UIMORI_RISU_LOCAL_CARDS))(
       const pkg = file.contents[0].source.package!;
       expect(pkg.nativeRisu!.card).toEqual(input.nativeCard);
       expect(pkg.nativeRisu!.module).toEqual(input.nativeModule);
-      expect(pkg.transforms).toEqual([]);
-      expect(pkg.behavior).toBeUndefined();
       expect(pkg.starts!.length).toBeGreaterThan(0);
       expect(pkg.nativeRisu!.assets.length).toBe(pkg.images!.length);
       if (bytes.length > 64 * 1024 * 1024) {

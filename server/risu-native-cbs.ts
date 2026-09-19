@@ -4,12 +4,12 @@ import type { character, RisuModule } from '../third_party/risuai/cad8595a/types
 import {
   nativeRisuExtension,
   nativeRisuLore,
-  type NativeRisuContent,
+  type RisuContentSource,
 } from '../core/risu-native.js';
 import { runNativeRisuWorker } from './risu-native-worker.js';
 
 export type NativeRisuCbsContext = {
-  native: NativeRisuContent;
+  native: RisuContentSource;
   variables: Record<string, string>;
   globalVariables?: Record<string, string>;
   messages?: { role: 'user' | 'char'; data: string }[];
@@ -161,7 +161,7 @@ export function evaluateNativeRisuCbsInWorker(input: {
 }
 
 export function evaluateNativeRisuFieldsInWorker(input: {
-  native: NativeRisuContent;
+  native: RisuContentSource;
   fields: Record<string, string>;
   context: Omit<NativeRisuCbsContext, 'native'>;
 }) {
@@ -179,7 +179,7 @@ export function evaluateNativeRisuFieldsInWorker(input: {
 }
 
 export function evaluateNativeRisuFields(input: {
-  native: NativeRisuContent;
+  native: RisuContentSource;
   fields: Record<string, string>;
   context: Omit<NativeRisuCbsContext, 'native'>;
   timeoutMs?: number;

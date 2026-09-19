@@ -7,14 +7,14 @@ import {
   risuImageGuidance,
   validateRisuImageHandoff,
 } from '../core/risu-image-handoff.js';
-import { nativeRisuAssetNames, type NativeRisuContent } from '../core/risu-native.js';
+import { nativeRisuAssetNames, type RisuContentSource } from '../core/risu-native.js';
 import { nativeImageTag } from '../server/risu-native-image-tags.js';
 import { renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
-import type { ContentPackage } from '../core/content-package.js';
+import type { RisuContent } from '../core/risu-content.js';
 
-const source = (): NativeRisuContent => ({
+const source = (): RisuContentSource => ({
   version: 1,
   sourceHash: 'a'.repeat(64),
   assets: [{ name: 'Hinano_School_happy', uri: 'embeded://happy.webp', imageId: 'happy' }],
@@ -45,7 +45,7 @@ const source = (): NativeRisuContent => ({
     },
   },
 });
-const pkg = (native = source()): ContentPackage => ({
+const pkg = (native = source()): RisuContent => ({
   version: 1,
   id: 'native',
   revision: 1,
@@ -65,8 +65,6 @@ const pkg = (native = source()): ContentPackage => ({
       loading: 'pinned',
     },
   ],
-  controls: [],
-  transforms: [],
   imageHandoff: detectRisuImageHandoff(native),
 });
 

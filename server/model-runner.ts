@@ -7,7 +7,7 @@ import {
   contextWindowStatus,
   type ContextWindowStatus,
 } from '../core/context-tools.js';
-import { executeMain, executeTool, type ToolAction } from '../core/provider.js';
+import { executeMain, executeTool } from '../core/provider.js';
 import type { Connection } from '../core/product.js';
 import {
   executeProvider,
@@ -34,18 +34,8 @@ import {
   type ContextPersistence,
   type ContextToolState,
 } from './context-tools.js';
-import {
-  admitBehaviorTools,
-  listBehaviorTools,
-  type BehaviorToolBinding,
-} from '../core/package-behavior-tools.js';
 import { createAgentCollaboration } from './agent-collaboration.js';
-import { createExtensionModelService } from './extension-model.js';
-import type { ExtensionModelBinding } from '../core/extension-model.js';
-import type { RuntimeValue } from '../core/prompt-values.js';
 import { compactableRead, compactToolReads } from './context-tool-compaction.js';
-import { BehaviorError } from '../core/package-behavior.js';
-import { PromptEvaluationError } from '../core/prompt-values.js';
 
 export type MainResult = {
   status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled';
@@ -56,22 +46,13 @@ export type MainResult = {
 export type MainHooks = {
   prepareRequest?: (request: ProviderRequest, usage: Usage) => Promise<ProviderRequest>;
   initialUsage?: Usage;
+  /** Calls owned by the host after the writer completes (for example response judgment). */
+  reserveCalls?: number;
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   signal: AbortSignal;
   onInput: (input: ModelInput) => void | Promise<void>;
   onToolEvent: (event: ToolEvent) => void | Promise<void>;
-  onBehaviorTool?: (
-    binding: Pick<BehaviorToolBinding, 'instanceId' | 'actionId'>,
-    action: ToolAction,
-    host?: {
-      modelGenerate: (args: RuntimeValue, signal: AbortSignal) => Promise<RuntimeValue>;
-      assertModelAccess: () => void | Promise<void>;
-      hostWaitMs: number;
-    }
-  ) => ToolEvent | Promise<ToolEvent>;
-  /** User-owned live grant/connection checks, separate from the frozen authored capability. */
-  authorizeExtensionModel?: (binding: ExtensionModelBinding) => void | Promise<void>;
   /** Durable owner of model-written context checkpoints; absent owners deny context.write/new. */
   persistContext?: ContextPersistence;
   approvedOrigins: readonly string[];
@@ -103,33 +84,11 @@ function addUsage(total: Usage, result: ProviderResult) {
   }
 }
 
-/** Denials describe an unexecuted operation, never echo the rejected input or host diagnostics. */
-function compactBehaviorDenial(event: ToolEvent, action: ToolAction): ToolEvent {
-  const raw = (event.result as { code?: unknown } | null)?.code;
-  const code =
-    typeof raw === 'string' && /^(BEHAVIOR|PROMPT)_[A-Z0-9_]{1,100}$/u.test(raw)
-      ? raw
-      : 'BEHAVIOR_ACTION_DENIED';
-  const recoverable = event.errorKind === 'recoverable' || code === 'BEHAVIOR_TOOL_NOT_ALLOWED';
-  return {
-    callId: action.callId,
-    name: action.name,
-    args: {},
-    denied: true,
-    ...(recoverable ? { errorKind: 'recoverable' as const } : {}),
-    result: { code, ...(recoverable ? { unavailable: true, continueWithoutAction: true } : {}) },
-  };
-}
-
 /** One server-owned main run. A transport error/partial/refusal is terminal, never an implicit retry. */
 export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<MainResult> {
-  snapshot = admitBehaviorTools(snapshot);
-  const behaviorTools = listBehaviorTools(snapshot);
-  const disabledBehaviorTools = new Set<string>(
-    hooks.onBehaviorTool ? [] : behaviorTools.map((binding) => binding.tool.name)
-  );
   // Reassigned only at a model-requested window boundary; every segment is one frozen projection.
   let fixed = attachMainHostContext(structuredClone(snapshot));
+  if (hooks.reserveCalls) fixed.settings.maxCalls -= hooks.reserveCalls;
   const target = fixed.profile?.models.main;
   if (!target) {
     const result = await executeMain(fixed, hooks);
@@ -154,7 +113,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   const usage: Usage = structuredClone(
     hooks.initialUsage ?? { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }
   );
-  const extensionModels = createExtensionModelService(snapshot, hooks, usage);
   let opaqueState: Json | undefined;
   const fail = (
     error: string,
@@ -197,12 +155,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       const fresh = freshHistory !== undefined;
       const history = freshHistory ?? completedToolHistory;
       return buildMainProviderRequest(fixed, {
-        disabledBehaviorTools: [
-          ...disabledBehaviorTools,
-          ...(usage.modelCalls + 1 >= maxCalls || mainCalls + 1 >= mainCallLimit
-            ? behaviorTools.map((binding) => binding.tool.name)
-            : []),
-        ],
         results: (fresh ? [] : results).map((event) => {
           const contextWindow = resultWindows.get(event.callId);
           return contextWindow
@@ -296,6 +248,9 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         throw new ModelRunError(error, structuredClone(usage));
       }
     }
+    // Native request hooks may themselves call a model. Recheck the reserved host budget
+    // after those calls, before sending a writer request that could not be judged.
+    if (usage.modelCalls >= maxCalls) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
     if (evaluation && request.generation) {
       const configured = request.generation;
       request.generation = evaluation.generation(configured, results.length);
@@ -332,12 +287,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       // The attempt is saved before tool authorization. Preserve actual arguments only in a
       // successful ToolEvent; a rejected operation must not leak them through this earlier copy.
       const diagnostic = evaluation ? evaluation.diagnosticResult(result) : structuredClone(result);
-      diagnostic.toolCalls = diagnostic.toolCalls.map((call) => {
-        const registered = behaviorTools.some((binding) => binding.tool.name === call.name);
-        return registered || call.name.startsWith('behavior_')
-          ? { ...call, name: registered ? call.name : 'unapproved', arguments: {} }
-          : call;
-      });
       await hooks.onAttemptFinish(attemptId, diagnostic);
     }
     addUsage(usage, result);
@@ -450,7 +399,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     for (const call of result.toolCalls) {
       if (hooks.signal.aborted) return fail('CANCELLED');
       // Transport only decodes. Exact frozen bindings separate state actions from read permissions.
-      const binding = behaviorTools.find((item) => item.tool.name === call.name);
       const action = { callId: call.id, name: call.name, args: call.arguments };
       let event: ToolEvent;
       if (call.name === 'agents.consult' && collaboration) {
@@ -465,60 +413,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         });
         event = outcome.event;
         if (outcome.switched) boundary = { snapshot: outcome.switched, event };
-      } else if (binding) {
-        try {
-          event = !hooks.onBehaviorTool
-            ? {
-                callId: call.id,
-                name: call.name,
-                args: {},
-                denied: true,
-                errorKind: 'recoverable',
-                result: { code: 'BEHAVIOR_EXECUTOR_UNAVAILABLE' },
-              }
-            : disabledBehaviorTools.has(call.name)
-              ? {
-                  callId: call.id,
-                  name: call.name,
-                  args: {},
-                  denied: true,
-                  errorKind: 'recoverable',
-                  result: {
-                    code: 'BEHAVIOR_DISABLED_FOR_RUN',
-                    unavailable: true,
-                    continueWithoutAction: true,
-                  },
-                }
-              : await hooks.onBehaviorTool(
-                  { instanceId: binding.instanceId, actionId: binding.actionId },
-                  action,
-                  {
-                    modelGenerate: (args, signal) =>
-                      extensionModels.generate(binding, args, signal),
-                    assertModelAccess: () => hooks.authorizeExtensionModel?.(binding),
-                    hostWaitMs: extensionModels.hostWaitMs,
-                  }
-                );
-        } catch (error) {
-          // Fatal host/ownership/cancellation errors still terminate this run. Returning the
-          // accumulated usage lets the caller settle a cancelled run without losing accounting.
-          if (error instanceof BehaviorError || error instanceof PromptEvaluationError)
-            return fail(error.message);
-          throw new ModelRunError(error, structuredClone(usage));
-        }
-        if (event.denied) event = compactBehaviorDenial(event, action);
-        if (event.denied && event.errorKind === 'recoverable') disabledBehaviorTools.add(call.name);
-      } else if (call.name.startsWith('behavior_')) {
-        event = compactBehaviorDenial(
-          {
-            ...action,
-            args: {},
-            denied: true,
-            errorKind: 'recoverable',
-            result: { code: 'BEHAVIOR_TOOL_NOT_ALLOWED' },
-          },
-          { ...action, name: 'unapproved', args: {} }
-        );
       } else
         event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
           ? evaluation.execute(call)
@@ -529,10 +423,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       // Persist each real result immediately, before the next action or any request preview.
       await hooks.onToolEvent(structuredClone(event));
       const outcome = correction(event, call.arguments);
-      if (outcome === 'denied')
-        return fail(
-          binding || call.name.startsWith('behavior_') ? 'ACTION_TOOL_DENIED' : 'READ_TOOL_DENIED'
-        );
+      if (outcome === 'denied') return fail('READ_TOOL_DENIED');
     }
     if (contextTools && !boundary) {
       const batch = results

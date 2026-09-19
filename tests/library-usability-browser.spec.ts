@@ -1,3 +1,4 @@
+import { nativeContent } from './fixtures/native-content.js';
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { isEditDraftSaveRequest, waitForContentDraftSave } from './fixtures/edit-draft-save.js';
@@ -12,7 +13,10 @@ async function seedBot(request: APIRequestContext, title: string) {
       kind: 'bot',
       title,
       description: '낯선 도시를 함께 탐험할 합성 안내자예요.',
-      text: 'Synthetic guide for local browser verification.',
+      package: nativeContent({
+        name: title,
+        description: 'Synthetic guide for local browser verification.',
+      }),
       loading: 'pinned',
       relatedIds: [],
     },
@@ -68,20 +72,20 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     await panel.getByRole('button', { name: '완료', exact: true }).click();
     await expect(panel.getByLabel('서재 검색', { exact: true })).toHaveValue(title);
     await createLibraryContent(page);
-    await expect(panel.getByLabel('자료 이름', { exact: true })).toBeInViewport();
-    await panel.getByLabel('자료 본문', { exact: true }).scrollIntoViewIfNeeded();
-    await expect(panel.getByLabel('자료 본문', { exact: true })).toBeInViewport();
+    await expect(panel.getByLabel('Risu 자료 이름', { exact: true })).toBeInViewport();
+    await panel.getByLabel('캐릭터 설정', { exact: true }).scrollIntoViewIfNeeded();
+    await expect(panel.getByLabel('캐릭터 설정', { exact: true })).toBeInViewport();
     await expect(
       panel.getByRole('region', { name: '대표 이미지 설정', exact: true })
     ).toBeVisible();
-    await expect(panel.getByTestId('package-fields')).toBeVisible();
+    await expect(panel.getByText('시작문·로어·스크립트 원문 편집', { exact: true })).toBeVisible();
     await noHorizontalOverflow(page);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-create-${width}.png`) });
     const createdTitle = `${title} 새 친구`,
       body = '친절한 안내자예요. 내가 고른 길을 존중하며 짧게 대답해요.';
-    await panel.getByLabel('자료 이름', { exact: true }).fill(createdTitle);
-    await panel.getByLabel('자료 본문', { exact: true }).fill(body);
+    await panel.getByLabel('Risu 자료 이름', { exact: true }).fill(createdTitle);
+    await panel.getByLabel('캐릭터 설정', { exact: true }).fill(body);
     const savedResponse = waitForContentDraftSave(page);
     await panel.getByRole('button', { name: '자료 등록', exact: true }).click();
     const saved = await savedResponse;
@@ -162,8 +166,7 @@ test('LUSE03 empty persona and module folders explain their roles and offer the 
     await panel.getByRole('button', { name: `${name} 만들기`, exact: true }).click();
     await expect(panel.getByRole('heading', { name: `새 ${name}`, exact: true })).toBeVisible();
     await expect(panel.locator('.library-editor-guide')).toContainText(meaning);
-    await panel.getByText('분류·읽기 설정', { exact: true }).click();
-    await expect(panel.getByLabel('자료 종류', { exact: true })).toHaveValue(category);
+    await expect(panel.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
     await noHorizontalOverflow(page);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-role-${category}-360.png`) });

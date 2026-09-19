@@ -148,7 +148,7 @@ async function main() {
     if (!executable || !existsSync(executable)) {
       environmentBlocked = true;
       throw new Error(
-        'Browser executable missing; configure NR_BROWSER_PATH for the local test browser'
+        'Browser executable missing; configure UIMORI_BROWSER_PATH for the local test browser'
       );
     }
     summary.environment.browser = executable;
@@ -169,26 +169,26 @@ async function main() {
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
     const env = localVerificationEnv({
-      NR_DB: path.join(runtime, 'app.sqlite'),
-      NR_INSTANCE: runId,
-      NR_BUILD_ID: summary.identity.buildId,
-      NR_ARTIFACT_DIR: directory,
-      NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
-      NR_SECRET_CANARY: canary,
-      NR_BROWSER_PATH: executable,
+      UIMORI_DB: path.join(runtime, 'app.sqlite'),
+      UIMORI_INSTANCE: runId,
+      UIMORI_BUILD_ID: summary.identity.buildId,
+      UIMORI_ARTIFACT_DIR: directory,
+      UIMORI_BROWSER_OUTPUT: path.join(directory, 'browser'),
+      UIMORI_SECRET_CANARY: canary,
+      UIMORI_BROWSER_PATH: executable,
       TEMP: temp,
       TMP: temp,
     });
     if (cancelled) throw new Error('Verification cancelled before server start');
     const server = await startServer(env, directory, children);
-    env.NR_BASE_URL = server.ready.url;
+    env.UIMORI_BASE_URL = server.ready.url;
     summary.server = server.ready;
     owner.children = [
       {
         pid: server.child.pid,
         command: 'node dist/server/index.js',
-        dbPath: env.NR_DB,
-        url: env.NR_BASE_URL,
+        dbPath: env.UIMORI_DB,
+        url: env.UIMORI_BASE_URL,
       },
     ];
     await json(path.join(directory, 'ownership.json'), owner);

@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { forkChat } from '../server/chat-fork.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { Controls } from '../server/controls.js';
@@ -69,7 +69,7 @@ function promptSetting(store: Store, title: string, maxRetries = 1) {
   const workspace = promptWorkspace(store);
   return updatePromptWorkspace(store, {
     expectedRevision: workspace.revision,
-    translation: { title, program: createDefaultPromptProgram(title, 'translation'), values: {} },
+    translation: { title, program: createDefaultRisuPrompt(title, 'translation'), values: {} },
     translationPolicy: { ...workspace.translationPolicy, maxRetries },
   });
 }
@@ -347,7 +347,7 @@ test('versioned source restore and fork preserve edit history, manual translatio
     expectedSourceHash: edited.hash,
   });
   const archive = store.product.export();
-  expect(archive.version).toBe(15);
+  expect(archive.version).toBe(1);
   const restored = database();
   restored.product.import(archive);
   expect(restored.source(s.id).text).toBe('Edited');

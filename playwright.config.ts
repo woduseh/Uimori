@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 import { existsSync } from 'node:fs';
 // Kept in step with `browserPath()` in scripts/lib.mjs; see the note there.
 const executablePath =
-  process.env.NR_BROWSER_PATH ||
+  process.env.UIMORI_BROWSER_PATH ||
   [
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -22,9 +22,9 @@ export default defineConfig({
   retries: 0,
   timeout: 30000,
   expect: { timeout: 10000 },
-  outputDir: process.env.NR_BROWSER_OUTPUT || 'output/playwright/manual',
+  outputDir: process.env.UIMORI_BROWSER_OUTPUT || 'output/playwright/manual',
   use: {
-    baseURL: process.env.NR_BASE_URL,
+    baseURL: process.env.UIMORI_BASE_URL,
     headless: true,
     // Every verified server is a loopback address; a system PAC proxy must not intercept it.
     launchOptions: { executablePath, args: ['--no-proxy-server'] },

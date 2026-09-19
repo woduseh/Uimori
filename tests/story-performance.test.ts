@@ -1,5 +1,6 @@
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -44,7 +45,7 @@ afterEach(async () => {
     await rm(path, { recursive: true, force: true });
   }
 });
-const benchmark = process.env.NR_BENCHMARK === '1';
+const benchmark = process.env.UIMORI_BENCHMARK === '1';
 const SAMPLE_COUNT = benchmark ? 5 : 1;
 const WARMUP_COUNT = benchmark ? 1 : 0;
 const baseline = { archivedSources: 10, loreCount: 50, manuscriptChars: 10000, assetCount: 10 };
@@ -147,6 +148,8 @@ function addArchived(store: Store, chatId: string, start: number, end: number) {
 }
 function addLore(store: Store, chatId: string, start: number, end: number) {
   const owner = store.product.get<Content>('content', store.chat(chatId).botId);
+  const card = owner.package.nativeRisu.card;
+  const book = (card.character_book ?? {}) as { entries?: Record<string, unknown>[] };
   const saved = store.product.content(
     {
       kind: owner.kind,
@@ -156,22 +159,27 @@ function addLore(store: Store, chatId: string, start: number, end: number) {
       loading: owner.loading,
       relatedIds: owner.relatedIds,
       expectedRevision: owner.revision,
-      package: {
-        ...owner.package!,
-        lore: [
-          ...owner.package!.lore,
-          ...Array.from({ length: end - start }, (_, offset) => {
-            const index = start + offset;
-            return {
-              id: `lore-${String(index).padStart(4, '0')}`,
-              title: `Synthetic lore ${index}`,
-              description: 'Discoverable local lore description.',
-              loading: 'discoverable' as const,
-              text: `needle-lore-${index} ${'Local fictional context. '.repeat(20)}`,
-            };
-          }),
-        ],
-      },
+      package: nativeContent(
+        {
+          ...card,
+          character_book: {
+            ...book,
+            entries: [
+              ...(book.entries ?? []),
+              ...Array.from({ length: end - start }, (_, offset) => {
+                const index = start + offset;
+                return {
+                  comment: `Synthetic lore ${index}`,
+                  keys: [`needle-lore-${index}`],
+                  enabled: true,
+                  content: `needle-lore-${index} ${'Local fictional context. '.repeat(20)}`,
+                };
+              }),
+            ],
+          },
+        },
+        owner.package
+      ),
     },
     owner.id
   );
@@ -208,11 +216,6 @@ async function fixture() {
   const first = source(store, chat.id, manuscript(baseline.manuscriptChars));
   for (let index = 1; index < 6; index++)
     source(store, chat.id, `Active source ${index}: ${'Recent concrete scene. '.repeat(12)}`);
-  store.story.saveConfig(chat.id, {
-    expectedRevision: 0,
-    module: null,
-    stateModel: null,
-  });
   addArchived(store, chat.id, 0, baseline.archivedSources);
   addLore(store, chat.id, 0, baseline.loreCount);
   addAssets(store, chat.id, 0, baseline.assetCount);
@@ -287,8 +290,8 @@ function measuredPath(f: Awaited<ReturnType<typeof fixture>>, counts: Counts) {
     callId: 'lore-read',
     name: 'knowledge.read',
     args: {
-      id: snapshot.resources.find((resource) =>
-        resource.id.endsWith(`:lore-${String(counts.loreCount - 1).padStart(4, '0')}`)
+      id: snapshot.resources.find(
+        (resource) => resource.title === `Synthetic lore ${counts.loreCount - 1}`
       )!.id,
       limit: 8192,
     },
@@ -361,24 +364,22 @@ function validateOutput(
     result.snapshot.resources.filter((resource) => resource.sourceKind === 'lore')
   ).toHaveLength(counts.loreCount);
   expect(result.input.catalog).toHaveLength(
-    result.input.catalogPage?.listed ?? counts.loreCount + 1
+    result.input.catalogPage?.listed ?? result.snapshot.resources.length
   );
   expect(result.input.catalog.every((item) => !Object.hasOwn(item, 'text'))).toBe(true);
   if (counts.loreCount > 100) {
-    expect(result.input.catalogPage).toMatchObject({ total: counts.loreCount + 1 });
+    expect(result.input.catalogPage).toMatchObject({ total: result.snapshot.resources.length });
     expect(result.input.catalogPage!.listed).toBeGreaterThan(0);
-    expect(result.input.catalogPage!.listed).toBeLessThan(counts.loreCount + 1);
+    expect(result.input.catalogPage!.listed).toBeLessThan(result.snapshot.resources.length);
     expect(JSON.stringify(result.input.catalog).length).toBeLessThanOrEqual(CATALOG_CHARS);
     expect(
-      result.input.catalog.some((item) =>
-        item.id.endsWith(`:lore-${String(counts.loreCount - 1).padStart(4, '0')}`)
-      )
+      result.input.catalog.some((item) => item.title === `Synthetic lore ${counts.loreCount - 1}`)
     ).toBe(false);
   }
   expect(result.loreSearch.denied).toBe(false);
   expect(result.loreRead.denied).toBe(false);
   expect(JSON.stringify(result.loreSearch.result)).toContain(
-    `lore-${String(counts.loreCount - 1).padStart(4, '0')}`
+    `Synthetic lore ${counts.loreCount - 1}`
   );
   expect((result.loreRead.result as { text: string }).text).toContain(
     `needle-lore-${counts.loreCount - 1}`
@@ -527,8 +528,8 @@ test('S07 archive/lore/asset growth preserves active context and S05 200k source
     },
     conditions: evidence,
   };
-  const destination = process.env.NR_ARTIFACT_DIR
-    ? resolve(process.env.NR_ARTIFACT_DIR)
+  const destination = process.env.UIMORI_ARTIFACT_DIR
+    ? resolve(process.env.UIMORI_ARTIFACT_DIR)
     : owned[0].directory;
   await mkdir(destination, { recursive: true });
   await writeFile(join(destination, 'story-performance.json'), JSON.stringify(artifact, null, 2));

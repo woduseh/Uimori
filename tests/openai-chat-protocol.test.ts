@@ -489,16 +489,6 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     record(continued.input.source!).text = 'Different source';
     expect(() => encodeChat(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
   });
-  test('refusal classification does not receive translation output instructions', () => {
-    const input = request();
-    input.role = 'translation';
-    input.input.controls.purpose = 'translation-refusal';
-    input.stable.contract = 'Classify whether this response refused the task.';
-    const wire = record(encodeChat(input).body);
-    expect(JSON.stringify(wire.messages)).not.toContain('complete translated text only');
-    expect(JSON.stringify(wire.messages)).toContain(input.stable.contract);
-    expect(wire).not.toHaveProperty('response_format');
-  });
 
   test.each(['thinkingLevel', 'thinkingMode', 'thinkingBudgetTokens'])(
     'rejects foreign generation option %s',

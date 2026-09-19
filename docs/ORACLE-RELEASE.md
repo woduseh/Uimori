@@ -25,7 +25,7 @@ SSH 키, `known_hosts`, 운영 접속 설정은 Git에 넣지 않고 `.local/ora
 
 `releaseRoot`는 실행기가 사용하는 전용 staging 경로 `/opt/uimori/releases`로 고정돼요. 다른 경로로 바꾸는 설정이 아니며 `appDirectory`와 겹칠 수 없어요.
 
-`accessEnvFile`에는 기존 `NR_PUBLIC_ORIGIN`과 `NR_ACCESS_TOKEN`이 있어야 해요. 예를 들어 HTTPS 443을 사용하면 `NR_PUBLIC_ORIGIN=https://uimori.taila7874d.ts.net`처럼 설정하고 후행 `/`를 붙이지 않아요. 서버 `.env.self-host`와 로컬 `accessEnvFile`이 같은 origin을 사용해야 해요. 토큰과 키 내용은 명령 인자, 로그, 저장소에 남기지 않아요. 배포는 이 공개 주소와 접근 토큰을 바꾸지 않아요. 이름·포트 변경은 [Tailscale 접속 주소 변경](TAILSCALE-DEPLOY.md#접속-이름이나-포트-변경)을 별도로 따라요.
+`accessEnvFile`에는 기존 `UIMORI_PUBLIC_ORIGIN`과 `UIMORI_ACCESS_TOKEN`이 있어야 해요. 예를 들어 HTTPS 443을 사용하면 `UIMORI_PUBLIC_ORIGIN=https://uimori.taila7874d.ts.net`처럼 설정하고 후행 `/`를 붙이지 않아요. 서버 `.env.self-host`와 로컬 `accessEnvFile`이 같은 origin을 사용해야 해요. 토큰과 키 내용은 명령 인자, 로그, 저장소에 남기지 않아요. 배포는 이 공개 주소와 접근 토큰을 바꾸지 않아요. 이름·포트 변경은 [Tailscale 접속 주소 변경](TAILSCALE-DEPLOY.md#접속-이름이나-포트-변경)을 별도로 따라요.
 
 로컬 Docker는 필요하지 않아요. 기본 경로는 서버에서 이미 받은 정확한 SHA를 한 번 빌드하고 immutable image ID로 이후 검사와 전환을 이어 가요. 이미 관리 중인 registry image가 있다면 `--image registry.example/uimori@sha256:...`처럼 전체 image reference를 줄 수 있어요. 이 입력 기능만 있으며 현재 절차는 Docker를 설치하거나 새 image repository·registry를 만들지 않아요.
 

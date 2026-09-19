@@ -193,7 +193,6 @@ export function validateHelperArchive(
         attempt.chat_id !== conversation!.chat_id ||
         attempt.run_id !== null ||
         attempt.job_id !== null ||
-        attempt.story_job_id !== null ||
         !['helper', 'context', 'writing'].includes(attempt.purpose)
       )
         reject('attempt owner');

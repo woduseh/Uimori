@@ -1,14 +1,13 @@
-import { validateContentPackage, type ContentPackage } from './content-package.js';
+import { validateRisuContent, type RisuContent } from './risu-content.js';
 import { IDENTITY_PATTERN } from './identity.js';
 import { resolvePackageGraph } from './package-graph.js';
 import { PACKAGE_IMAGE_MIMES } from './package-images.js';
-import { createDefaultPromptProgram } from './prompt-defaults.js';
 import {
   resolveEditablePromptValues,
-  resolvePromptValues,
-  validateEditablePromptProgram,
-  validatePromptProgram,
-} from './prompt-program.js';
+  resolveControlValues,
+  validateEditableRisuPrompt,
+  validateControlDefinitions,
+} from './risu-prompt.js';
 import { matchesPromptCombination } from './prompt-combinations.js';
 import {
   NATIVE_TRANSFER_FORMAT,
@@ -73,7 +72,7 @@ function origin(value: unknown) {
 export type ValidatedNativeTransfer = {
   file: NativeTransferFile;
   /** Effective graph only. Authored source refs in file remain unchanged. */
-  packages: Map<string, ContentPackage>;
+  packages: Map<string, RisuContent>;
   persistOrder: string[];
   entries: NativeTransferPrepare['entries'];
   modelRequirements: NativeTransferPrepare['modelRequirements'];
@@ -122,16 +121,16 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
     )
       fail('CONTENT');
     text(source.title, 200);
-    text(source.description, source.package ? 4000 : 2000, true);
-    text(source.text, source.package ? 1_000_000 : 100_000, !!source.package);
+    text(source.description, 4000, true);
+    text(source.text, 1_000_000, true);
     const related = list(source.relatedIds, 100);
     related.forEach(identity);
     unique(related);
     const modules = list(entry.modules, 100);
     modules.forEach(identity);
     unique(modules);
-    if (source.package !== undefined) {
-      const pkg = validateContentPackage(source.package);
+    {
+      const pkg = validateRisuContent(source.package);
       if (
         pkg.id !== source.id ||
         pkg.revision !== source.revision ||
@@ -141,7 +140,7 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
       )
         fail('CONTENT_IDENTITY');
       if ((pkg.modules?.length ?? 0) !== modules.length) fail('MODULE_BINDINGS');
-    } else if (modules.length) fail('MODULE_BINDINGS');
+    }
   }
   const warnings: NativeTransferPrepare['warnings'] = [];
   let combinationCount = 0;
@@ -154,7 +153,7 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
     revision(source.revision);
     text(source.title, 200);
     if (!['main', 'translation'].includes(source.role)) fail('PROMPT_ROLE');
-    const program = validateEditablePromptProgram(source.program);
+    const program = validateEditableRisuPrompt(source.program);
     if (source.role !== 'main' && program.collaboration) fail('PROMPT_ROLE');
     resolveEditablePromptValues(program, source.values ?? {});
     for (const combination of list(entry.combinations, 1000)) {
@@ -166,11 +165,7 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
       const owner = object(combination.owner, ['kind', 'id']);
       if (owner.kind !== 'preset' || owner.id !== source.id || combination.role !== source.role)
         fail('COMBINATION_OWNER');
-      const schema = validatePromptProgram({
-        ...createDefaultPromptProgram(''),
-        controls: combination.controls,
-      });
-      resolvePromptValues(schema, combination.values);
+      resolveControlValues(validateControlDefinitions(combination.controls), combination.values);
       if (
         !matchesPromptCombination(
           combination,
@@ -214,7 +209,7 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
   unique(prompts.flatMap((entry) => entry.combinations.map((item: any) => item.id)));
   const contentByKey = new Map(contents.map((entry) => [entry.key as string, entry]));
   const contentById = new Map(contents.map((entry) => [entry.source.id as string, entry]));
-  const packages = new Map<string, ContentPackage>();
+  const packages = new Map<string, RisuContent>();
   for (const entry of contents) {
     for (const [index, key] of entry.modules.entries()) {
       const dependency = contentByKey.get(key);
@@ -224,21 +219,20 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
       )
         fail('MODULE_BINDINGS');
     }
-    if (entry.source.package)
-      packages.set(
-        entry.key,
-        validateContentPackage({
-          ...entry.source.package,
-          ...(entry.source.package.modules !== undefined
-            ? {
-                modules: entry.modules.map((key: string) => {
-                  const source = contentByKey.get(key)!.source;
-                  return { id: source.id, revision: source.revision };
-                }),
-              }
-            : {}),
-        })
-      );
+    packages.set(
+      entry.key,
+      validateRisuContent({
+        ...entry.source.package,
+        ...(entry.source.package.modules !== undefined
+          ? {
+              modules: entry.modules.map((key: string) => {
+                const source = contentByKey.get(key)!.source;
+                return { id: source.id, revision: source.revision };
+              }),
+            }
+          : {}),
+      })
+    );
     if (entry.source.relatedIds.some((id: string) => !contentById.has(id)))
       warnings.push({
         code: 'EXTERNAL_RELATED_IDS',
@@ -261,11 +255,6 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
     } else if (root.kind === 'content') {
       const entry = contentByKey.get(root.key);
       if (!entry) fail('ROOTS');
-      if (!entry.source.package) {
-        reached.add(root.key);
-        persistOrder.push(root.key);
-        continue;
-      }
       const graph = resolvePackageGraph(
         {
           read: (ref) => {

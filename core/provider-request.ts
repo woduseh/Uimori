@@ -12,7 +12,7 @@ import {
   type ProviderProtocol,
   type ModelGeneration,
 } from './product.js';
-import { validateProviderPrompt } from './prompt-program.js';
+import { validateProviderPrompt } from './risu-prompt.js';
 import { ProviderContractError } from './provider-errors.js';
 import {
   isVertexFileReference,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
+import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 import { api } from './api.js';
 
 export function PackageTransfer({
@@ -8,8 +8,8 @@ export function PackageTransfer({
   onError,
   disabled = false,
 }: {
-  getPackage: () => ContentPackage;
-  onPrepared: (pkg: ContentPackage) => void;
+  getPackage: () => RisuContent;
+  onPrepared: (pkg: RisuContent) => void;
   onError: (message: string) => void;
   disabled?: boolean;
 }) {
@@ -54,8 +54,8 @@ export function PackageTransfer({
       if (current !== generation.current) return;
       const pkg =
         parsed.format === 'uimori-package-bundle'
-          ? (await api<{ package: ContentPackage }>('/package-bundles/prepare', parsed)).package
-          : validateContentPackage(parsed.package ?? parsed);
+          ? (await api<{ package: RisuContent }>('/package-bundles/prepare', parsed)).package
+          : validateRisuContent(parsed.package ?? parsed);
       if (current === generation.current) onPrepared(pkg);
     } catch (error) {
       if (current === generation.current) onError((error as Error).message);

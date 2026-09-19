@@ -1,7 +1,9 @@
+import { prepareNativeFixtureRun } from './fixtures/native-run.js';
+import { promptControls } from '../core/risu-prompt.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { injectWithFixtureBot, createFixtureChat } from './fixtures/chat.js';
 import { DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -20,90 +22,10 @@ import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 
 const owned: { directory: string; app?: App }[] = [];
-test('explicit prompt writes reject unset boolean defaults and values while reads retain legacy nulls', async () => {
-  const app = await application();
-  const program = createDefaultPromptProgram('Switch');
-  program.controls = [{ id: 'enabled', label: 'Enabled', type: 'boolean', default: false }];
-  const invalid = structuredClone(program);
-  invalid.controls[0].default = null;
-  await request(
-    app,
-    '/prompt-presets',
-    { title: 'Unset default', role: 'main', program: invalid },
-    400
-  );
-  await request(
-    app,
-    '/prompt-presets',
-    { title: 'Unset value', role: 'main', program, values: { enabled: null } },
-    400
-  );
-  let current = await workspace(app);
-  await request(
-    app,
-    '/prompt-workspace',
-    {
-      expectedRevision: current.revision,
-      main: { title: 'Unset default', program: invalid, values: {} },
-    },
-    400,
-    'PUT'
-  );
-  current = await request(
-    app,
-    '/prompt-workspace',
-    {
-      expectedRevision: current.revision,
-      main: { title: 'Switch', program, values: { enabled: false } },
-    },
-    200,
-    'PUT'
-  );
-  await request(
-    app,
-    '/prompt-workspace',
-    {
-      expectedRevision: current.revision,
-      main: { title: 'Unset value', program, values: { enabled: null } },
-    },
-    400,
-    'PUT'
-  );
-  await request(
-    app,
-    '/prompt-combinations',
-    {
-      title: 'Unset switch',
-      role: 'main',
-      workspaceRevision: current.revision,
-      values: { enabled: null },
-    },
-    400
-  );
-  const legacy = {
-    ...current,
-    main: { title: 'Legacy', program: invalid, values: { enabled: null } },
-  };
-  app.store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(JSON.stringify(legacy));
-  expect((await workspace(app)).main).toEqual(legacy.main);
-  const unchanged = await request(
-    app,
-    '/prompt-workspace',
-    { expectedRevision: legacy.revision, translationPolicy: legacy.translationPolicy },
-    200,
-    'PUT'
-  );
-  expect(unchanged.main).toEqual(legacy.main);
-  expect(
-    JSON.parse(
-      String(app.store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get()?.body)
-    ).main
-  ).toEqual(legacy.main);
-});
 test('option combinations bind to a prompt owner and exact control meanings while preserving working source identity', async () => {
   const app = await application();
-  const program = createDefaultPromptProgram('Options');
-  program.controls = [{ id: 'tone', label: 'Narration tone', type: 'text', default: 'quiet' }];
+  const program = createDefaultRisuPrompt('Options');
+  program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Narration tone=text';
   const first = await request<PromptPreset>(app, '/prompt-presets', {
     title: 'First',
     role: 'main',
@@ -123,7 +45,7 @@ test('option combinations bind to a prompt owner and exact control meanings whil
   });
   expect(options).toMatchObject({
     owner: { kind: 'preset', id: first.id },
-    controls: program.controls,
+    controls: promptControls(program),
   });
   await request(
     app,
@@ -172,7 +94,8 @@ test('option combinations bind to a prompt owner and exact control meanings whil
     'PUT'
   );
   const changedProgram = structuredClone(program);
-  changedProgram.controls[0].label = 'An unrelated meaning with the same ID';
+  changedProgram.nativeRisuPreset.preset.customPromptTemplateToggle =
+    'tone=An unrelated meaning with the same ID=text';
   current = await request(
     app,
     '/prompt-workspace',
@@ -206,7 +129,7 @@ test('option combinations bind to a prompt owner and exact control meanings whil
   });
   expect(working).toMatchObject({
     owner: { kind: 'preset', id: first.id },
-    controls: changedProgram.controls,
+    controls: promptControls(changedProgram),
   });
   expect(
     matchesPromptCombination(
@@ -344,7 +267,7 @@ const prompt = (role: 'main' | 'translation', text: string, title = 'Synthetic p
 });
 const profileBody = (prior: ChatProfile, changes: Record<string, unknown> = {}) => ({
   expectedRevision: prior.revision,
-  attachments: prior.attachments,
+  packageAttachments: prior.packageAttachments,
 
   routes: prior.routes,
   image: prior.image,
@@ -400,8 +323,8 @@ async function apply(app: App, preset: PromptPreset) {
 
 test('applied prompt defaults stay pinned across library edits and option autosaves', async () => {
   const app = await application();
-  const program = createDefaultPromptProgram('Pinned options');
-  program.controls = [{ id: 'tone', label: 'Tone', type: 'text', default: 'program default' }];
+  const program = createDefaultRisuPrompt('Pinned options');
+  program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Tone=text';
   const preset = await request<PromptPreset>(app, '/prompt-presets', {
     title: 'Pinned defaults',
     role: 'main',
@@ -492,17 +415,17 @@ describe('global working prompts and independent library copies', () => {
     const app = await application();
     const literal = `\r\n  {{char}} \${literal}\n<instructions>Keep my exact wording.</instructions>\t\n`;
     const first = await request<PromptPreset>(app, '/prompt-presets', prompt('main', literal));
-    expect(first.program).toEqual(createDefaultPromptProgram(literal));
+    expect(first.program).toEqual(createDefaultRisuPrompt(literal));
     expect(first).not.toHaveProperty('text');
     expect(first).toMatchObject({ role: 'main', revision: 1 });
     const empty = await request<PromptPreset>(app, '/prompt-presets', prompt('translation', ''));
-    expect(empty.program).toEqual(createDefaultPromptProgram('', 'translation'));
+    expect(empty.program).toEqual(createDefaultRisuPrompt('', 'translation'));
     const blank = await request<PromptPreset>(
       app,
       '/prompt-presets',
       prompt('translation', ' \r\n\t')
     );
-    expect(blank.program).toEqual(createDefaultPromptProgram(' \r\n\t', 'translation'));
+    expect(blank.program).toEqual(createDefaultRisuPrompt(' \r\n\t', 'translation'));
     const next = await request<PromptPreset>(
       app,
       '/prompt-presets/' + first.id,
@@ -513,7 +436,7 @@ describe('global working prompts and independent library copies', () => {
     expect(next).toMatchObject({
       id: first.id,
       revision: 2,
-      program: createDefaultPromptProgram('Replacement\n'),
+      program: createDefaultRisuPrompt('Replacement\n'),
     });
     await request(
       app,
@@ -545,8 +468,8 @@ describe('global working prompts and independent library copies', () => {
     expect(
       (await request<PromptPreset>(app, '/prompt-presets', prompt('main', 'x'.repeat(200000))))
         .program
-    ).toEqual(createDefaultPromptProgram('x'.repeat(200000)));
-    const ast = createDefaultPromptProgram('AST wins');
+    ).toEqual(createDefaultRisuPrompt('x'.repeat(200000)));
+    const ast = createDefaultRisuPrompt('AST wins');
     const explicit = await request<PromptPreset>(app, '/prompt-presets', {
       title: 'AST',
       role: 'main',
@@ -572,7 +495,7 @@ describe('global working prompts and independent library copies', () => {
         expectedRevision: initial.revision,
         main: {
           title: 'Exact current',
-          program: createDefaultPromptProgram('  Current prose\n'),
+          program: createDefaultRisuPrompt('  Current prose\n'),
           values: {},
         },
       },
@@ -616,7 +539,7 @@ describe('global working prompts and independent library copies', () => {
     const app = await application();
     const preset = await request<PromptPreset>(app, '/prompt-presets', prompt('translation', ''));
     const current = await apply(app, preset);
-    expect(current.translation.program).toEqual(createDefaultPromptProgram('', 'translation'));
+    expect(current.translation.program).toEqual(createDefaultRisuPrompt('', 'translation'));
     const edited = await request<PromptPreset>(
       app,
       `/prompt-presets/${preset.id}`,
@@ -647,19 +570,8 @@ describe('global working prompts and independent library copies', () => {
   test('option presets copy only values into the current role and never retarget a saved prompt', async () => {
     const app = await application();
     const initial = await workspace(app);
-    const program = createDefaultPromptProgram('Current options');
-    program.controls = [
-      {
-        id: 'tone',
-        label: 'Tone',
-        type: 'select',
-        default: 'quiet',
-        options: [
-          { label: 'Quiet', value: 'quiet' },
-          { label: 'Bold', value: 'bold' },
-        ],
-      },
-    ];
+    const program = createDefaultRisuPrompt('Current options');
+    program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Tone=text';
     const updated = await request(
       app,
       '/prompt-workspace',
@@ -702,7 +614,7 @@ describe('global working prompts and independent library copies', () => {
       prompt('main', 'First current')
     );
     await apply(app, first);
-    const run = capture(app, chat.id),
+    const run = await prepareNativeFixtureRun(app.store, capture(app, chat.id)),
       frozen = structuredClone(run.snapshot);
     complete(app, run);
     const nextPreset = await request<PromptPreset>(
@@ -836,7 +748,7 @@ describe('translation prompt preview uses the job compiler without writes', () =
       chat = createFixtureChat(app.store, 'Translation preview');
     const source = stored ? complete(app, capture(app, chat.id)) : undefined;
     const before = app.store.db.prepare('SELECT total_changes() AS n').get();
-    const program = createDefaultPromptProgram(DEFAULT_TRANSLATION_PROMPT, 'translation');
+    const program = createDefaultRisuPrompt(DEFAULT_TRANSLATION_PROMPT, 'translation');
     const preview = await request(app, `/chats/${chat.id}/prompt-preview`, {
       role: 'translation',
       program,
@@ -846,10 +758,10 @@ describe('translation prompt preview uses the job compiler without writes', () =
     expect(preview.error).toBeUndefined();
     expect(preview.previewSource.kind).toBe(stored ? 'stored' : 'synthetic');
     expect(preview.compilation.messages[0].content[0].text).toBe(DEFAULT_TRANSLATION_PROMPT);
-    expect(preview.compilation.messages.some((m: any) => m.id === 'context')).toBe(true);
     expect(preview.compilation.messages.some((m: any) => m.id === 'outputSchema')).toBe(false);
-    const sourceText = preview.compilation.messages.find((m: any) => m.id === 'source').content[0]
-      .text;
+    const sourceText = preview.compilation.messages.find(
+      (m: any) => m.provenance.origin === 'current'
+    ).content[0].text;
     expect(sourceText).toContain(
       stored ? 'Mira waits by the quiet harbor.' : 'Synthetic preview source.'
     );
@@ -865,9 +777,9 @@ describe('translation prompt preview uses the job compiler without writes', () =
     expect(
       preview.compilation.messages.filter((m: any) => m.provenance.origin === 'history')
     ).toHaveLength(0);
-    program.controls = [{ id: 'tone', label: 'Tone', type: 'text', default: 'default' }];
-    if (program.blocks[0].kind === 'message')
-      program.blocks[0].template.push({ kind: 'value', expression: { control: 'tone' } });
+    program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Tone=text';
+    (program.nativeRisuPreset.preset.promptTemplate as Record<string, unknown>[])[0].text +=
+      '{{getglobalvar::toggle_tone}}';
     const changed = await request(app, `/chats/${chat.id}/prompt-preview`, {
       role: 'translation',
       program,

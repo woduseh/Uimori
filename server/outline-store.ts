@@ -23,7 +23,7 @@ import {
 
 type Row = Record<string, any>;
 const now = () => new Date().toISOString();
-const ACTIVE_RUN = ['queued', 'running', 'waiting_for_state'];
+const ACTIVE_RUN = ['queued', 'running'];
 /** One request's frozen input keeps a bounded amount of already-written history. */
 const WRITTEN_LIMIT = 40;
 const BATCH_LIMIT = 200;
@@ -60,7 +60,7 @@ function plannedContent(selection: OutlineSelection) {
 
 export const OUTLINE_TABLES = ['outline_nodes', 'outline_batches'] as const;
 
-/** Additive, idempotent table; a schema 15 database gains it on open and keeps its version. */
+/** Create current tables during fresh database initialization. */
 export function initOutline(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS outline_nodes (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), branch_id TEXT NOT NULL REFERENCES branches(id), parent_id TEXT REFERENCES outline_nodes(id), level TEXT NOT NULL, position INTEGER NOT NULL, title TEXT NOT NULL, intent TEXT NOT NULL, fixed INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL, command_id TEXT REFERENCES scene_commands(id), request_key TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(chat_id,request_key));

@@ -420,7 +420,6 @@ export class EditDraftService {
       const roles = (profile.packageAttachments ?? [])
         .filter((ref) => affected.has(ref.id))
         .map((ref) => ref.role);
-      if (profile.attachments.some((ref) => affected.has(ref.id))) roles.push('module');
       if (draft.kind === 'prompt-workspace' || roles.length)
         chats.push({ id: chat.id, title: chat.title, roles: [...new Set(roles)] });
     }

@@ -1,13 +1,13 @@
 import { useId, useRef, useState, type KeyboardEvent } from 'react';
 import { CheckIcon, DropdownIcon, SearchIcon } from './ui-icons.js';
-import type { PackageRole } from '../core/content-package.js';
+import type { ContentRole } from '../core/risu-content.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
 import type { Content, Library } from '../core/product.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { Dialog } from './Dialog.js';
 import './content-picker.css';
 
-const roleTitles: Record<PackageRole, string> = { bot: '봇', persona: '페르소나', module: '모듈' };
+const roleTitles: Record<ContentRole, string> = { bot: '봇', persona: '페르소나', module: '모듈' };
 const reference = (content: Content) => `${content.id}@${content.revision}`;
 
 export function ContentPicker({
@@ -25,7 +25,7 @@ export function ContentPicker({
   library: Library;
   value: string;
   onChange: (reference: string) => void;
-  role: PackageRole;
+  role: ContentRole;
   label: string;
   disabled?: boolean;
   allowNone?: boolean;
@@ -225,7 +225,7 @@ export function ContentPicker({
               <option value="none">미분류</option>
               {folders.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {all ? `${roleTitles[item.category as PackageRole]} / ` : ''}
+                  {all ? `${roleTitles[item.category as ContentRole]} / ` : ''}
                   {item.title}
                 </option>
               ))}

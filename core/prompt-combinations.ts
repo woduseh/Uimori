@@ -1,10 +1,11 @@
+import { promptControls } from './risu-prompt.js';
 import type {
   CurrentPrompt,
   PromptCombinationOwner,
   PromptRole,
   SavedPromptCombination,
 } from './product.js';
-import type { PromptProgram } from './prompt-program.js';
+import type { RisuPrompt } from './risu-prompt.js';
 
 export function combinationOwner(current: CurrentPrompt, role: PromptRole): PromptCombinationOwner {
   return current.presetId ? { kind: 'preset', id: current.presetId } : { kind: 'workspace', role };
@@ -22,13 +23,13 @@ export function matchesPromptCombination(
   item: SavedPromptCombination,
   owner: PromptCombinationOwner,
   role: PromptRole,
-  program: PromptProgram
+  program: RisuPrompt
 ): boolean {
   return (
     item.role === role &&
     item.owner !== undefined &&
     item.controls !== undefined &&
     canonical(item.owner) === canonical(owner) &&
-    canonical(item.controls) === canonical(program.controls)
+    canonical(item.controls) === canonical(promptControls(program))
   );
 }

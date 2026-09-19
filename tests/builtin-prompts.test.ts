@@ -1,3 +1,7 @@
+import {
+  prepareNativeRisuPreset,
+  prepareNativeRisuTranslationPrompt,
+} from '../server/risu-native-preset.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,8 +14,8 @@ import {
   freezeCurrentPrompts,
   promptWorkspace,
 } from '../server/prompt-workspace.js';
-import { validateEditablePromptProgram } from '../core/prompt-program.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { promptControls, validateEditableRisuPrompt } from '../core/risu-prompt.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { defaultProfile } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
@@ -52,17 +56,21 @@ async function application(directory?: string) {
   return entry;
 }
 
-test('bundled programs are editable independent copies and compile in all authored modes', () => {
+test('bundled native presets are editable independent copies and compile in all authored modes', async () => {
   const base = builtinPromptTemplate('pheme')!;
-  expect(base.program.controls).toHaveLength(45);
-  expect(base.program.blocks).toHaveLength(44);
+  expect(promptControls(base.program)).toHaveLength(45);
+  expect(base.program.nativeRisuPreset.preset.promptTemplate).toHaveLength(44);
   expect(base.program.collaboration).toBeUndefined();
-  expect(builtinPromptTemplate('hermeneia')!.program.blocks).toHaveLength(7);
+  expect(
+    builtinPromptTemplate('hermeneia')!.program.nativeRisuPreset.preset.promptTemplate
+  ).toHaveLength(6);
   for (const metadata of builtinPromptTemplates()) {
     const template = builtinPromptTemplate(metadata.id)!;
-    expect(validateEditablePromptProgram(template.program)).toEqual(template.program);
+    expect(validateEditableRisuPrompt(template.program)).toEqual(template.program);
     if (template.role === 'translation') continue;
-    expect(template.program.blocks).toEqual(base.program.blocks);
+    expect(template.program.nativeRisuPreset.preset.promptTemplate).toEqual(
+      base.program.nativeRisuPreset.preset.promptTemplate
+    );
     const count = (
       { 'pheme-collaboration': 3, 'pheme-simulation': 4, 'pheme-ooc': 1 } as Record<string, number>
     )[metadata.id];
@@ -72,8 +80,8 @@ test('bundled programs are editable independent copies and compile in all author
       for (const advisor of template.program.collaboration!.agents)
         expect(advisor).toMatchObject({ trigger: 'on-demand', model: null });
     }
-    expect(template.values.pheme_session_mode).toBe(metadata.id === 'pheme-ooc' ? 2 : 0);
-    for (const mode of [0, 1, 2]) {
+    expect(template.values.pheme_session_mode).toBe(metadata.id === 'pheme-ooc' ? '2' : '0');
+    for (const mode of ['0', '1', '2']) {
       const workspace = defaultPromptWorkspace();
       workspace.main = {
         title: template.title,
@@ -96,12 +104,12 @@ test('bundled programs are editable independent copies and compile in all author
         resources: [],
         profile: {
           ...defaultProfile('synthetic'),
-          contents: [],
           models: {},
           ...freezeCurrentPrompts(workspace),
         },
       };
-      const compiled = compileSnapshotPrompt(snapshot).promptCompilation!;
+      const compiled = compileSnapshotPrompt(await prepareNativeRisuPreset(snapshot))
+        .promptCompilation!;
       expect(compiled.values.pheme_session_mode).toBe(mode);
       expect(
         compiled.messages
@@ -115,14 +123,23 @@ test('bundled programs are editable independent copies and compile in all author
         hash: createHash('sha256').update('SOURCE_TEXT_MARKER').digest('hex'),
       };
       const input = translationInput(source, sourceTimeContext(snapshot, 'translation'), snapshot);
-      const translated = compileTranslationPrompt(input, snapshot, 'Translate.')!;
+      const translated = compileTranslationPrompt(
+        input,
+        await prepareNativeRisuTranslationPrompt(snapshot),
+        'Translate.'
+      )!;
       const messages = translated.messages.flatMap((message) => message.content);
       expect(messages.filter((part) => part.text.includes(source.text))).toHaveLength(1);
       expect(messages.some((part) => part.text.includes('Hermēneía'))).toBe(true);
       expect(messages.some((part) => part.text.includes(snapshot.request))).toBe(false);
     }
-    template.program.blocks.length = 0;
-    expect(builtinPromptTemplate(metadata.id)!.program.blocks.length).toBeGreaterThan(0);
+    template.program.nativeRisuPreset.preset.promptTemplate = [];
+    expect(
+      (
+        builtinPromptTemplate(metadata.id)!.program.nativeRisuPreset.preset
+          .promptTemplate as unknown[]
+      ).length
+    ).toBeGreaterThan(0);
   }
 });
 
@@ -176,12 +193,12 @@ test('reopening an existing database preserves saved working programs, options a
   const prior = promptWorkspace(entry.app!.store);
   prior.main = {
     title: 'My saved writing prompt',
-    program: createDefaultPromptProgram('MY SAVED INSTRUCTIONS'),
+    program: createDefaultRisuPrompt('MY SAVED INSTRUCTIONS'),
     values: {},
   };
   prior.translation = {
     title: 'My saved translation',
-    program: createDefaultPromptProgram('MY TRANSLATION', 'translation'),
+    program: createDefaultRisuPrompt('MY TRANSLATION', 'translation'),
     values: {},
   };
   prior.revision = 17;
@@ -191,7 +208,7 @@ test('reopening an existing database preserves saved working programs, options a
   const preset = entry.app!.store.product.promptPreset({
     title: 'Phēmē',
     role: 'main',
-    program: createDefaultPromptProgram('USER MODIFIED COPY'),
+    program: createDefaultRisuPrompt('USER MODIFIED COPY'),
   });
   await entry.app!.close();
   entry.app = undefined;

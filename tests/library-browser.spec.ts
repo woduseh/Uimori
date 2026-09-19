@@ -3,7 +3,7 @@ import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page, type Locator } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
 import type { LibraryOrganization, LibraryFolder } from '../core/library-organization.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { navigationAction, selectContent } from './ui-navigation.js';
 
 async function createContent(
@@ -19,18 +19,6 @@ async function createContent(
       text: 'Synthetic common body',
       loading: 'pinned',
       relatedIds: [],
-      package: {
-        version: 1,
-        id: 'library-fixture',
-        revision: 1,
-        title,
-        description: 'Synthetic',
-        body: 'Synthetic common body',
-        lore: [],
-        instructions: [],
-        controls: [],
-        transforms: [],
-      },
     },
   });
   expect(response.ok()).toBe(true);
@@ -257,7 +245,7 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
       data: {
         title: prefix,
         role: 'main',
-        program: createDefaultPromptProgram('Synthetic instructions', 'main'),
+        program: createDefaultRisuPrompt('Synthetic instructions', 'main'),
       },
     })
   ).json();

@@ -9,8 +9,8 @@
 ## 경계
 
 - 이 디렉터리의 코드는 Uimori의 `core/`·`server/`·`web/`를 import하지 않아요. Risu가 전역 상태(`DBState`, `getDatabase()`)에 접근하던 자리는 인터페이스로 바꾸고, 그 구현은 Uimori 쪽 어댑터가 넘겨요.
-- Uimori 코드는 `server/compat/risu/` 어댑터 층을 통해서만 이 디렉터리를 import해요. 검사(`tests/`)는 예외예요. 이 규칙은 `tests/risu-snapshot-boundary.test.ts`가 확인해요.
-- Uimori의 데이터 모델·저장 형식·Host API·핵심 런타임은 이 스냅샷에 의존하지 않아요. 스냅샷은 가져오기 정규화와 선택적 호환 평가에만 쓰여요.
+- 파일 해독·로어 어댑터는 `server/compat/risu/`, 원본 CBS 실행 연결은 `server/risu-native-cbs.ts`에서 이 코드를 사용해요. 검사(`tests/`)에서도 직접 사용하며 경계는 `tests/risu-snapshot-boundary.test.ts`가 확인해요.
+- Risu 원본 콘텐츠 실행에 이 스냅샷을 사용해요. 서버 저장·분기·이야기 기억·모델 연결은 Uimori가 소유해요.
 
 ## 갱신
 

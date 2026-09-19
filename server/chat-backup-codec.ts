@@ -20,13 +20,10 @@ export type BackupCollection = { name: string; table: string; fields: Field[] };
 // Required JSON columns (for example a create operation's beforeBody) store the literal "null".
 const nullableJson = new Set([
   'runs.usage',
-  'package_extension_operations.result',
-  'package_extension_operations.usage',
   'jobs.input',
   'attempts.response',
   'attempts.raw_usage',
   'attempts.price_revision',
-  'story_jobs.result',
   'context_jobs.checkpoint',
   'chat_folders.default_persona',
   'illustration_jobs.diagnostic',
@@ -63,7 +60,7 @@ export const BACKUP_COLLECTIONS = [
   collection(
     'turns',
     'runs',
-    'id chat_id parent_revision status request @snapshot request_key @command source_revision error @usage created_at updated_at branch_id partial_text issue'
+    'id chat_id parent_revision status request @snapshot request_key @command source_revision error @usage created_at updated_at branch_id partial_text'
   ),
   collection('sources', 'sources', 'id chat_id run_id parent_revision text hash created_at'),
   collection('sourceEdits', 'source_edits', 'source_id revision text hash created_at'),
@@ -81,20 +78,9 @@ export const BACKUP_COLLECTIONS = [
   collection(
     'attempts',
     'attempts',
-    'id chat_id run_id job_id role connection_id model_id status @request @response input_tokens output_tokens cost_usd @raw_usage @price_revision error story_job_id'
+    'id chat_id run_id job_id role connection_id model_id status @request @response input_tokens output_tokens cost_usd @raw_usage @price_revision error'
   ),
   collection('assets', 'assets', 'id chat_id @body ~bytes'),
-  collection('storyConfigurations', 'story_configs', 'chat_id revision @body'),
-  collection(
-    'storyJobs',
-    'story_jobs',
-    'id chat_id source_revision source_hash kind config_revision generation owner status @snapshot @result error mock created_at updated_at dependency_key @inputs @tool_events'
-  ),
-  collection(
-    'storyStates',
-    'story_states',
-    'id job_id chat_id source_revision source_hash module_revision parent_state_id @body'
-  ),
   collection('notes', 'author_notes', 'id chat_id @entry retired_at replaces_id'),
   collection('noteHeads', 'author_note_heads', 'chat_id revision'),
   collection('noteOperations', 'author_note_commands', 'chat_id request_key @command @result'),
@@ -189,11 +175,6 @@ export const BACKUP_COLLECTIONS = [
     'response_stream_chunks',
     'seq task_kind task_id attempt_id segment offset text'
   ),
-  collection(
-    'packageRequests',
-    'package_requests',
-    'id chat_id branch_id instance_id action_key @body @dependencies status consumed_run_id'
-  ),
   collection('chatFolders', 'chat_folders', 'id bot_id title @default_persona revision'),
   collection(
     'chatOrganization',
@@ -203,22 +184,6 @@ export const BACKUP_COLLECTIONS = [
   collection('libraryOrganization', 'library_organization_state', 'id revision'),
   collection('libraryFolders', 'library_folders', 'id category title sort_position'),
   collection('libraryPlacements', 'library_placements', 'kind id category folder_id'),
-  collection(
-    'behaviorStates',
-    'package_behavior_states',
-    'chat_id branch_id instance_id @scope definition_hash state_revision @state'
-  ),
-  collection(
-    'behaviorJournal',
-    'package_behavior_journal',
-    'chat_id branch_id instance_id idempotency_key payload_hash @payload @result created_at'
-  ),
-  collection(
-    'behaviorHeads',
-    'package_behavior_heads',
-    'chat_id branch_id instance_id @dependencies status error @draws'
-  ),
-  collection('behaviorOutputs', 'package_behavior_outputs', 'source_id instance_id @body'),
   collection('variableStates', 'chat_variable_states', 'chat_id branch_id revision @values_json'),
   collection(
     'variableJournal',
@@ -226,23 +191,6 @@ export const BACKUP_COLLECTIONS = [
     'chat_id branch_id request_key payload_hash @payload @result created_at'
   ),
   collection('variableOutputs', 'chat_variable_outputs', 'source_id @body'),
-  collection('behaviorEntropy', 'package_behavior_entropy', 'id seed'),
-  collection(
-    'behaviorOpportunities',
-    'package_behavior_opportunities',
-    'id chat_id branch_id @body'
-  ),
-  collection(
-    'extensionOperations',
-    'package_extension_operations',
-    'id chat_id branch_id attachment_instance_id request_key request_hash @command @snapshot status generation owner @result @usage error created_at started_at updated_at'
-  ),
-  collection(
-    'extensionOperationAttempts',
-    'package_extension_operation_attempts',
-    'operation_id attempt_id call_index'
-  ),
-  collection('behaviorRuns', 'package_behavior_runs', 'run_id @body'),
   collection('illustrationEnvironment', 'illustration_settings', 'id @body'),
   collection('illustrationReferences', 'illustration_references', 'chat_id revision @body'),
   collection(
@@ -313,17 +261,7 @@ export function decodeChatBackup(value: unknown): { backup: ChatBackup; tables: 
   );
   const tables: BackupTables = {};
   for (const { name, table, fields: columns } of BACKUP_COLLECTIONS) {
-    const values =
-      records[name] === undefined &&
-      [
-        'extensionOperations',
-        'extensionOperationAttempts',
-        'variableStates',
-        'variableJournal',
-        'variableOutputs',
-      ].includes(name)
-        ? []
-        : records[name];
+    const values = records[name];
     if (!Array.isArray(values) || values.length > 100_000)
       throw new HttpError(400, 'CHAT_BACKUP_INVALID_COLLECTION');
     tables[table] = values.map((raw) => {

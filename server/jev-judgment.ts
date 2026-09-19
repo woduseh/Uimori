@@ -4,15 +4,21 @@ import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
 
 export const JEV_ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 export const JEV_MODEL = 'jev-latest';
-export type JevQuestion = { type: 'noul'; instructions: string };
+export type JevQuestion =
+  | { type: 'noul'; instructions: string }
+  | { type: 'choice'; instructions: string; criteria: Record<string, string | null> };
 export type JevRequest = { state: Json; questions: Record<string, JevQuestion> };
 export type JevResult = {
   scores: Record<string, number>;
+  choices: Record<
+    string,
+    { choice: string; probabilities: Record<string, number>; confidence: number }
+  >;
   usage: ProviderResult['usage'];
   attemptId: string;
 };
 export type JevHooks = {
-  kind?: 'lore-selection' | 'translation-refusal';
+  kind?: 'lore-selection' | 'translation-refusal' | 'image-selection' | 'main-refusal';
   signal: AbortSignal;
   onAttemptStart: (wire: WireRecord) => string | Promise<string>;
   onAttemptFinish: (id: string, result: ProviderResult) => void | Promise<void>;
@@ -37,6 +43,8 @@ const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+const probability = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
 const emptyUsage = (): ProviderResult['usage'] => ({
   inputTokens: null,
   outputTokens: null,
@@ -70,7 +78,14 @@ export async function executeJevJudgment(
   const wire: WireRecord = {
     connectionId: 'typesafe-judgment',
     protocol: 'typesafe-systemone-v1',
-    role: hooks.kind === 'translation-refusal' ? 'translation' : 'context',
+    role:
+      hooks.kind === 'main-refusal'
+        ? 'main'
+        : hooks.kind === 'translation-refusal'
+          ? 'translation'
+          : hooks.kind === 'image-selection'
+            ? 'image'
+            : 'context',
     modelId: JEV_MODEL,
     method: 'POST',
     url: JEV_ENDPOINT,
@@ -96,6 +111,7 @@ export async function executeJevJudgment(
     opaqueState: null,
   };
   let scores: Record<string, number> | undefined;
+  const choices: JevResult['choices'] = Object.create(null);
   try {
     if (hooks.signal.aborted) throw new JevError('JEV_CANCELLED');
     const response = await (hooks.fetch ?? fetch)(JEV_ENDPOINT, {
@@ -148,15 +164,34 @@ export async function executeJevJudgment(
     scores = Object.create(null) as Record<string, number>;
     for (const name of Object.keys(request.questions)) {
       const answer = object(answers[name]);
-      if (
-        answer.type !== 'noul' ||
-        typeof answer.noul !== 'number' ||
-        !Number.isFinite(answer.noul) ||
-        answer.noul < 0 ||
-        answer.noul > 1
-      )
-        throw new JevError('JEV_RESPONSE_INVALID');
-      scores[name] = answer.noul;
+      const question = request.questions[name];
+      if (question.type === 'noul') {
+        if (answer.type !== 'noul' || !probability(answer.noul))
+          throw new JevError('JEV_RESPONSE_INVALID');
+        scores[name] = answer.noul;
+      } else {
+        const probabilities = object(answer.probabilities);
+        const keys = Object.keys(question.criteria);
+        if (
+          answer.type !== 'choice' ||
+          typeof answer.choice !== 'string' ||
+          !keys.includes(answer.choice) ||
+          !probability(answer.confidence) ||
+          Object.keys(probabilities).length !== keys.length ||
+          keys.some((key) => !probability(probabilities[key])) ||
+          Math.abs(keys.reduce((sum, key) => sum + Number(probabilities[key]), 0) - 1) > 0.01 ||
+          keys.some(
+            (key) =>
+              Number(probabilities[key]) > Number(probabilities[answer.choice as string]) + 0.000001
+          )
+        )
+          throw new JevError('JEV_RESPONSE_INVALID');
+        choices[name] = {
+          choice: answer.choice,
+          confidence: answer.confidence,
+          probabilities: probabilities as Record<string, number>,
+        };
+      }
     }
     if (controller.signal.aborted) throw new JevError('JEV_CANCELLED');
     result = { ...result, status: 'completed', text: responseText, error: null };
@@ -186,5 +221,5 @@ export async function executeJevJudgment(
   }
   if (result.status !== 'completed' || !scores)
     throw new JevError(result.error?.code ?? 'JEV_EXECUTION_FAILED', result.usage, true);
-  return { scores, usage: result.usage, attemptId };
+  return { scores, choices, usage: result.usage, attemptId };
 }

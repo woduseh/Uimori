@@ -11,25 +11,37 @@ describe('lore context UI boundaries', () => {
     maxRetainedChars: '48000',
     maxRetainedEntries: '64',
     maxPinnedChars: '200000',
+    threshold: '0.65',
+    maxSelectedTokens: '8000',
+    maxInputTokens: '28000',
   };
   it('accepts explicit zero retention and both inclusive policy limits', () => {
     expect(parseLorePolicyDraft(valid)).toEqual(DEFAULT_LORE_CONTEXT);
     expect(
       parseLorePolicyDraft({
+        ...valid,
         enabled: false,
         maxRetainedChars: '0',
         maxRetainedEntries: '0',
         maxPinnedChars: '1',
       })
-    ).toEqual({ enabled: false, maxRetainedChars: 0, maxRetainedEntries: 0, maxPinnedChars: 1 });
+    ).toEqual({
+      judgment: DEFAULT_LORE_CONTEXT.judgment,
+      enabled: false,
+      maxRetainedChars: 0,
+      maxRetainedEntries: 0,
+      maxPinnedChars: 1,
+    });
     expect(
       parseLorePolicyDraft({
+        ...valid,
         enabled: true,
         maxRetainedChars: '200000',
         maxRetainedEntries: '256',
         maxPinnedChars: '2000000',
       })
     ).toEqual({
+      judgment: DEFAULT_LORE_CONTEXT.judgment,
       enabled: true,
       maxRetainedChars: 200000,
       maxRetainedEntries: 256,
@@ -99,21 +111,18 @@ describe('lore context UI boundaries', () => {
     expect(html).not.toContain('<img');
     expect(snapshot).toEqual(before);
   });
-  it('keeps Jev optional and validates its threshold and token budgets before saving', () => {
+  it('uses JEV only and validates its threshold and token budgets before saving', () => {
     const draft = {
       ...valid,
-      jev: true,
       threshold: '0.7',
       maxSelectedTokens: '5000',
       maxInputTokens: '28000',
     };
     expect(parseLorePolicyDraft(draft).judgment).toEqual({
-      backend: 'jev',
       threshold: 0.7,
       maxSelectedTokens: 5000,
       maxInputTokens: 28000,
     });
-    expect(parseLorePolicyDraft({ ...draft, jev: false })).toEqual(DEFAULT_LORE_CONTEXT);
     expect(() => parseLorePolicyDraft({ ...draft, threshold: '1.1' })).toThrow('0–1');
     expect(() => parseLorePolicyDraft({ ...draft, maxInputTokens: '30001' })).toThrow('30,000');
     expect(() => parseLorePolicyDraft({ ...draft, maxSelectedTokens: '' })).toThrow('입력');

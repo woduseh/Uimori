@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import type { Content, Library, PromptPreset } from '../core/product.js';
 import type { NativeTransferFile, NativeTransferReceipt } from '../core/native-transfer.js';
 import type { RisuImportApply, RisuImportResult } from '../core/risu-import.js';
@@ -56,20 +56,20 @@ test('NATIVEUI01 exports a shared graph and prompt options, then reviews and imp
   const module = await content(request, 'module', `${title} 모듈`);
   const bot = await content(request, 'bot', `${title} 봇`, module);
   const persona = await content(request, 'persona', `${title} 페르소나`, module);
-  const program = createDefaultPromptProgram('Synthetic instructions', 'main');
-  program.controls = [{ id: 'detailed', label: '자세히', type: 'boolean', default: false }];
+  const program = createDefaultRisuPrompt('Synthetic instructions', 'main');
+  program.nativeRisuPreset.preset.customPromptTemplateToggle = 'detailed=자세히=select=Off,On';
   const preset = await post<PromptPreset>(request, '/api/prompt-presets', {
     title: `${title} 프롬프트`,
     role: 'main',
     program,
-    values: { detailed: true },
+    values: { detailed: '1' },
   });
   await post(request, '/api/prompt-combinations', {
     title: '합성 옵션',
     role: 'main',
     owner: { kind: 'preset', id: preset.id },
     expectedRevision: preset.revision,
-    values: { detailed: false },
+    values: { detailed: '0' },
   });
   const workspace = await (await request.get('/api/prompt-workspace')).json();
   await page.goto('/');
@@ -144,7 +144,7 @@ test('NATIVEUI01 exports a shared graph and prompt options, then reviews and imp
       listing.promptCombinations?.find(
         (item) => item.owner?.kind === 'preset' && item.owner.id === importedPrompt.id
       )?.values
-    ).toEqual({ detailed: false });
+    ).toEqual({ detailed: '0' });
     expect(await (await request.get('/api/prompt-workspace')).json()).toEqual(workspace);
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
@@ -169,7 +169,7 @@ test('NATIVEUI02 explicit model binding and uncertain apply preserve the reviewe
     maxOutputTokens: 512,
     temperature: null,
   });
-  const program = createDefaultPromptProgram('Synthetic portable model binding', 'main');
+  const program = createDefaultRisuPrompt('Synthetic portable model binding', 'main');
   program.collaboration = {
     enabled: false,
     sharedInstructions: '',

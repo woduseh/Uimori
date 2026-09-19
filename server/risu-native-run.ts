@@ -13,7 +13,7 @@ import { processNativeRisuText } from './risu-native-render.js';
 import { prepareNativeRisuPreset, nativeRisuPresetPending } from './risu-native-preset.js';
 import type { NativeRisuMessage } from '../core/risu-native-execution.js';
 import { projectRisuImageHandoff } from '../core/risu-image-handoff.js';
-import { validateProviderPrompt } from '../core/prompt-program.js';
+import { validateProviderPrompt } from '../core/risu-prompt.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 
 export function nativeHistoryRevision(

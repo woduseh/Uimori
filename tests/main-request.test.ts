@@ -1,3 +1,7 @@
+import { refreshNativeSnapshot } from './fixtures/native-snapshot.js';
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import { nativeContent } from './fixtures/native-content.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import Fastify from 'fastify';
@@ -12,9 +16,8 @@ import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { promptRoutes } from '../server/prompt-routes.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
-import { defaultStoryConfig } from '../core/story.js';
 import { sourceHash as memoryHash } from '../core/source-history.js';
-import type { PromptProgram } from '../core/prompt-program.js';
+import type { RisuPrompt } from '../core/risu-prompt.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
 import type { Store } from '../server/store.js';
@@ -27,60 +30,27 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   for (const close of closes.splice(0).reverse()) await close();
 });
-function program(terminal = false): PromptProgram {
+function program(terminal = false, mode = 'fiction'): RisuPrompt {
   return {
-    version: 1,
-    controls: [
-      {
-        id: 'writing_mode',
-        label: 'Mode',
-        type: 'select',
-        default: 'fiction',
-        options: [
-          { label: 'Fiction', value: 'fiction' },
-          { label: 'Planning', value: 'planning' },
-        ],
-      },
-    ],
-    blocks: [
-      {
-        id: 'static',
-        title: 'Static',
-        kind: 'message',
-        role: 'system',
-        template: [{ kind: 'text', text: 'SYNTHETIC_STATIC_PROMPT' }],
-      },
-      {
-        id: 'static-cache',
-        title: 'Static cache',
-        kind: 'cache',
-        depth: 1,
-        role: 'all',
-        policy: 'prefer',
-      },
-      { id: 'memory', title: 'Memory', kind: 'slot', role: 'user', slot: 'notes' },
-      { id: 'conversation', title: 'Conversation', kind: 'history', from: 0, to: 'end' },
-    ],
-    ...(terminal
-      ? {
-          execution: {
-            storySubmission: {
-              when: { op: 'equal' as const, args: [{ control: 'writing_mode' }, 'fiction'] },
-            },
-          },
-        }
-      : {}),
+    ...nativePrompt('SYNTHETIC_STATIC_PROMPT', {
+      customPromptTemplateToggle: 'writing_mode=Mode=text',
+      promptTemplate: [
+        { type: 'plain', role: 'system', text: 'SYNTHETIC_STATIC_PROMPT' },
+        { type: 'cache', role: 'all', depth: 1 },
+        { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+      ],
+    }),
+    ...(terminal ? { execution: { storySubmission: mode === 'fiction' } } : {}),
   };
 }
-function snapshot(
+async function snapshot(
   endpoint = 'http://127.0.0.1:19099/v1/responses',
   terminal = false,
   mode = 'fiction'
-): RunSnapshot {
-  const p = program(terminal),
+): Promise<RunSnapshot> {
+  const p = program(terminal, mode),
     profile = {
       ...defaultProfile('synthetic-chat'),
-      contents: [],
       models: {
         main: {
           id: 'model',
@@ -115,7 +85,7 @@ function snapshot(
       },
       promptControls: { 'prompt@1': { values: { writing_mode: mode }, combinations: [] } },
     };
-  return {
+  return prepareNativeRisuRun({
     chatId: profile.chatId,
     parentRevision: null,
     settingsRevision: 1,
@@ -125,7 +95,7 @@ function snapshot(
     resources: [],
     logicalHistory: [],
     profile,
-  };
+  });
 }
 function hooks(origin: string) {
   const events: ToolEvent[] = [],
@@ -180,8 +150,8 @@ const toolTurn = (output: Json[]): Json => ({
 });
 
 describe('Exact native main preview and terminal submission (synthetic loopback only)', () => {
-  test('mock style settings never enter a custom prompt request or its host context', () => {
-    const work = snapshot();
+  test('mock style settings never enter a custom prompt request or its host context', async () => {
+    const work = await snapshot();
     const before = buildMainProviderRequest(work).request;
     work.settings.preset = 'vivid';
     const after = buildMainProviderRequest(work).request;
@@ -192,23 +162,14 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     );
   });
 
-  test('submission uses the compiled explicit decision; source provenance and familiar option names grant no tool', () => {
-    const unrelated = snapshot();
+  test('submission uses the compiled explicit decision; source provenance and familiar option names grant no tool', async () => {
+    const unrelated = await snapshot();
     const selected = unrelated.profile!.promptPresets!.main!.program;
-    selected.provenance = {
-      sourceHash: 'a'.repeat(64),
-      variant: 'tool-call',
-      conversionVersion: 'synthetic',
-      notes: [],
-    };
-    selected.controls.push({
-      id: 'pheme_session_mode',
-      label: 'Unrelated imported value',
-      type: 'text',
-      default: '1',
-    });
+    selected.nativeRisuPreset.preset.customPromptTemplateToggle +=
+      '\npheme_session_mode=Unrelated imported value=text';
+    await refreshNativeSnapshot(unrelated);
     expect(storySubmissionEnabled(compileSnapshotPrompt(unrelated))).toBe(false);
-    const enabled = compileSnapshotPrompt(snapshot(undefined, true));
+    const enabled = compileSnapshotPrompt(await snapshot(undefined, true));
     expect(enabled.promptCompilation?.execution).toEqual({ storySubmission: true });
     delete enabled.profile!.promptPresets!.main!.program.execution;
     enabled.profile!.promptControls!['prompt@1'].values.writing_mode = 'planning';
@@ -220,14 +181,14 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     ).toBe(true);
     expect(
       storySubmissionEnabled(
-        compileSnapshotPrompt(snapshot(undefined, false), program(true), {
+        compileSnapshotPrompt(await snapshot(undefined, false), program(true), {
           writing_mode: 'fiction',
         })
       )
     ).toBe(true);
     expect(
       storySubmissionEnabled(
-        compileSnapshotPrompt(snapshot(undefined, true), program(true), {
+        compileSnapshotPrompt(await snapshot(undefined, true), program(true, 'planning'), {
           writing_mode: 'planning',
         })
       )
@@ -238,7 +199,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       writeSse(response, [complete('Synthetic final prose.'), '[DONE]'])
     );
     closes.push(server.close);
-    const work = snapshot(`${server.origin}/v1/responses`),
+    const work = await snapshot(`${server.origin}/v1/responses`),
       frozen = compileSnapshotPrompt(work),
       built = buildMainProviderRequest(frozen),
       expected = encodeMainPreview(built.request, work.profile!.models.main!);
@@ -297,8 +258,8 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     ).toBe(true);
   });
 
-  test('NMR02 memory remains at its chosen user slot and dynamic host data is after the static cache prefix', () => {
-    const work = snapshot(),
+  test('NMR02 story notes are host context after the static native cache prefix', async () => {
+    const work = await snapshot(),
       entry = {
         id: 'author',
         chatId: work.chatId,
@@ -309,13 +270,9 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
         declaration: { author: 'Synthetic author', text: 'SYNTHETIC_MEMORY_SENTINEL' },
       };
     work.story = {
-      config: { ...defaultStoryConfig(), revision: 1 },
-      state: null,
-      waiting: false,
       lineageHash: 'synthetic',
       canonHash: 'synthetic',
       notes: [entry],
-      models: {},
     };
     work.profile!.models.main!.connection.protocol = 'openai-responses-v1';
     const built = buildMainProviderRequest(compileSnapshotPrompt(work)),
@@ -324,20 +281,17 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
         any
       >;
     const compiled = built.request.prompt!;
-    const memory = compiled.messages.find((m) => m.id === 'memory')!,
-      host = compiled.messages.find((m) => m.id === 'native.host-context')!;
-    expect(memory.role).toBe('user');
-    expect(memory.content[0].text).toContain(entry.text);
-    expect(host.content[0].text).not.toContain(entry.text);
+    const host = compiled.messages.find((m) => m.id === 'native.host-context')!;
+    expect(host.content[0].text).toContain(entry.text);
     expect((built.request.input.source as Record<string, Json>).memory).toBeUndefined();
     expect(body.instructions).not.toContain('parentRevision');
     expect(body.instructions).not.toContain(entry.text);
-    expect(compiled.messages[0].id).toBe('static');
-    expect(compiled.cachePlan[0].afterMessageId).toBe('static');
+    expect(compiled.messages[0].id).toBe('risu-block-1');
+    expect(compiled.cachePlan[0].afterMessageId).toBe('risu-block-1');
     expect(body.input[0].content[0].prompt_cache_breakpoint).toEqual({ mode: 'explicit' });
-    expect(compiled.messages.indexOf(host)).toBeGreaterThan(compiled.messages.indexOf(memory));
+    expect(compiled.messages.indexOf(host)).toBeGreaterThan(0);
     expect(attachMainHostContext(built.snapshot)).toEqual(built.snapshot);
-    expect(work).not.toHaveProperty('promptCompilation');
+    expect(work.promptCompilation).toBeUndefined();
   });
 
   test('NMR03 explicitly enabled terminal body completes once with host provenance and no tool-result round', async () => {
@@ -347,7 +301,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       await writeSse(response, [toolTurn([toolOutput(body, 'story.submit', prose)]), '[DONE]']);
     });
     closes.push(server.close);
-    const work = compileSnapshotPrompt(snapshot(`${server.origin}/v1/responses`, true)),
+    const work = compileSnapshotPrompt(await snapshot(`${server.origin}/v1/responses`, true)),
       before = structuredClone(work),
       log = hooks(server.origin),
       result = await runMain(work, log.value);
@@ -391,7 +345,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       closes.push(server.close);
       const log = hooks(server.origin),
         result = await runMain(
-          compileSnapshotPrompt(snapshot(`${server.origin}/v1/responses`, true)),
+          compileSnapshotPrompt(await snapshot(`${server.origin}/v1/responses`, true)),
           log.value
         );
       expect(result.status).toBe('error');
@@ -406,7 +360,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       [false, 'fiction'],
       [true, 'planning'],
     ] as const) {
-      const work = compileSnapshotPrompt(snapshot(undefined, terminal, mode));
+      const work = compileSnapshotPrompt(await snapshot(undefined, terminal, mode));
       expect(storySubmissionEnabled(work)).toBe(false);
       expect(
         buildMainProviderRequest(work).request.stable.tools.some((t) => t.name === 'story.submit')
@@ -416,11 +370,11 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       writeSse(response, [complete('Normal text fallback.'), '[DONE]'])
     );
     closes.push(server.close);
-    const work = compileSnapshotPrompt(snapshot(`${server.origin}/v1/responses`, true)),
+    const work = compileSnapshotPrompt(await snapshot(`${server.origin}/v1/responses`, true)),
       log = hooks(server.origin);
     expect((await runMain(work, log.value)).text).toBe('Normal text fallback.');
     expect(log.events).toHaveLength(0);
-    const evaluated = compileSnapshotPrompt(snapshot('https://api.openai.com/v1', true));
+    const evaluated = compileSnapshotPrompt(await snapshot('https://api.openai.com/v1', true));
     evaluated.profile!.models.main!.evaluationTools = {
       contextMode: 'model-selected',
       approvalReasoningMode: 'configured',
@@ -455,7 +409,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       );
     });
     closes.push(server.close);
-    const work = compileSnapshotPrompt(snapshot(`${server.origin}/v1`, true)),
+    const work = compileSnapshotPrompt(await snapshot(`${server.origin}/v1`, true)),
       before = structuredClone(work.promptCompilation),
       log = hooks(server.origin),
       result = await runMain(work, log.value);
@@ -473,8 +427,8 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     expect(work.promptCompilation).toEqual(before);
   });
 
-  test('NMR08 unreviewed model aliases do not inherit explicit cache or mid-system capabilities', () => {
-    const work = compileSnapshotPrompt(snapshot()),
+  test('NMR08 unreviewed model aliases do not inherit explicit cache or mid-system capabilities', async () => {
+    const work = compileSnapshotPrompt(await snapshot()),
       target = work.profile!.models.main!;
     target.connection.protocol = 'openai-responses-v1';
     target.modelId = 'gpt-5.9';
@@ -489,82 +443,45 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     ).toBe(true);
   });
 
-  test('NMR09 explicit state and pinned context slots have no duplicate host-envelope bodies', () => {
-    const work = snapshot();
-    work.profile!.contents = [
-      {
-        id: 'bot',
-        revision: 1,
-        kind: 'bot',
-        title: 'Bot',
-        description: '',
-        text: 'SYNTHETIC_PINNED_BOT',
-        loading: 'pinned',
-        relatedIds: [],
-      },
-      {
-        id: 'canon',
-        revision: 1,
-        kind: 'module',
-        title: 'Canon',
-        description: '',
-        text: 'SYNTHETIC_CANON_ALWAYS_PINNED',
-        loading: 'pinned',
-        relatedIds: [],
-      },
-    ];
-    work.profile!.promptPresets!.main!.program!.blocks.splice(
-      1,
-      0,
-      {
-        id: 'description',
-        title: 'Description',
-        kind: 'slot',
-        role: 'system',
-        slot: 'description',
-      },
-      { id: 'lore', title: 'Lore', kind: 'slot', role: 'system', slot: 'lore' },
-      { id: 'state', title: 'State', kind: 'slot', role: 'user', slot: 'state' }
-    );
-    work.story = {
-      config: {
-        ...defaultStoryConfig(),
-        revision: 1,
-        module: {
-          id: 'coins',
-          revision: 1,
-          name: 'Coins',
-          mode: 'authoritative',
-          fields: {
-            coins: { type: 'number', initial: 0, min: 0, max: 100, description: 'Synthetic coins' },
+  test('NMR09 native pinned context slots have no duplicate host-envelope bodies', async () => {
+    const work = await snapshot();
+    work.profile!.packages = [
+      nativeContent({ name: 'Bot', description: 'SYNTHETIC_PINNED_BOT' }, { id: 'bot' }),
+      nativeContent(
+        {
+          name: 'Canon',
+          character_book: {
+            entries: [
+              {
+                id: 'canon',
+                content: 'SYNTHETIC_CANON_ALWAYS_PINNED',
+                constant: true,
+                enabled: true,
+              },
+            ],
           },
-          rules: {},
         },
-      },
-      state: {
-        id: 'state',
-        sourceRevision: null,
-        sourceHash: null,
-        moduleRevision: 1,
-        values: { coins: 7 },
-        canonical: true,
-      },
-      waiting: false,
-      lineageHash: 'synthetic',
-      canonHash: 'synthetic',
-      notes: [],
-      models: {},
-    };
+        { id: 'canon' },
+        'module'
+      ),
+    ];
+    work.profile!.packageAttachments = [
+      { id: 'bot', revision: 1, role: 'bot' },
+      { id: 'canon', revision: 1, role: 'module' },
+    ];
+    (
+      work.profile!.promptPresets!.main!.program!.nativeRisuPreset.preset.promptTemplate as Record<
+        string,
+        unknown
+      >[]
+    ).splice(1, 0, { type: 'description' }, { type: 'lorebook' });
+    await refreshNativeSnapshot(work);
     const built = buildMainProviderRequest(compileSnapshotPrompt(work)),
       source = built.request.input.source as Record<string, Json>;
     expect(source.pinnedSources).toEqual([]);
     expect(source.facts).toEqual([]);
-    expect(source.state).toBeUndefined();
-    const messages = built.request.prompt!.messages;
-    expect(messages.find((m) => m.id === 'state')?.content[0].text).toContain('"coins":7');
-    expect(messages.find((m) => m.id === 'native.host-context')?.content[0].text).not.toContain(
-      '"coins":7'
-    );
+
+    const _messages = built.request.prompt!.messages;
     const wire = JSON.stringify(encodeMainPreview(built.request, work.profile!.models.main!).body);
     for (const marker of ['SYNTHETIC_PINNED_BOT', 'SYNTHETIC_CANON_ALWAYS_PINNED'])
       expect(wire.split(marker).length - 1).toBe(1);
@@ -598,10 +515,10 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
         ])
       );
       closes.push(server.close);
-      const work = snapshot('https://api.anthropic.com/v1'),
+      const work = await snapshot('https://api.anthropic.com/v1'),
         target = work.profile!.models.main!;
       target.connection.protocol = 'anthropic-messages-v1';
-      target.connection.credentialEnv = 'NARRATIVE_PROVIDER_NATIVE_TEST';
+      target.connection.credentialEnv = 'UIMORI_PROVIDER_NATIVE_TEST';
       target.modelId = 'claude-opus-5';
       target.stopSequences = ['END_SCENE'];
       const nativeFetch = globalThis.fetch;
@@ -653,7 +570,7 @@ describe('Recoverable read failures in the real main runner', () => {
         ]);
       });
       closes.push(server.close);
-      const work = snapshot(`${server.origin}/v1/responses`);
+      const work = await snapshot(`${server.origin}/v1/responses`);
       const log = hooks(server.origin);
       expect(await runMain(work, log.value)).toMatchObject({
         status: 'completed',
@@ -679,7 +596,7 @@ describe('Recoverable read failures in the real main runner', () => {
       ]);
     });
     closes.push(server.close);
-    const work = snapshot(`${server.origin}/v1/responses`);
+    const work = await snapshot(`${server.origin}/v1/responses`);
     work.settings.maxCalls = 8;
     expect(await runMain(work, hooks(server.origin).value)).toMatchObject({
       status: 'error',

@@ -45,9 +45,9 @@ export class AccessSessions {
     const values = cookie
       ?.split(';')
       .map((value) => value.trim())
-      .filter((value) => value.startsWith('nr_session='));
+      .filter((value) => value.startsWith('uimori_session='));
     if (values?.length !== 1) return undefined;
-    const token = values[0].slice('nr_session='.length);
+    const token = values[0].slice('uimori_session='.length);
     return isSha256Hex(token) ? digest(token).toString('hex') : undefined;
   }
 
@@ -76,7 +76,7 @@ export class AccessSessions {
   }
 
   private cookie(value: string, maxAge: number): string {
-    return `nr_session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${this.secure ? '; Secure' : ''}`;
+    return `uimori_session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${this.secure ? '; Secure' : ''}`;
   }
 
   login(value: string): { cookie: string; revoked: boolean } {

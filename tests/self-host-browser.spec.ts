@@ -6,11 +6,12 @@ import type { Content, ModelWorkspace } from '../core/product.js';
 
 // This suite needs the authenticated HTTPS fixture and must contribute neither
 // skipped tests nor false evidence to ordinary loopback browser regressions.
-if (process.env.NR_SELF_HOST_BROWSER === '1') test.use({ ignoreHTTPSErrors: true, trace: 'off' });
-if (process.env.NR_SELF_HOST_BROWSER === '1')
+if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
+  test.use({ ignoreHTTPSErrors: true, trace: 'off' });
+if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
   test.describe('personal self-host HTTPS', () => {
-    const origin = process.env.NR_BASE_URL!;
-    const token = process.env.NR_ACCESS_TOKEN!;
+    const origin = process.env.UIMORI_BASE_URL!;
+    const token = process.env.UIMORI_ACCESS_TOKEN!;
     const mutationHeaders = { Origin: origin };
     async function login(page: Page, target = '/') {
       await page.goto(new URL(target, origin).href);
@@ -32,7 +33,7 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
           secureContext: window.isSecureContext,
           uuidAvailable:
             typeof crypto.randomUUID === 'function' && /^[a-f0-9-]{36}$/u.test(crypto.randomUUID()),
-          readableSession: document.cookie.includes('nr_session='),
+          readableSession: document.cookie.includes('uimori_session='),
           tokenStored:
             Object.values(localStorage).some((value) => String(value).includes(accessToken)) ||
             Object.values(sessionStorage).some((value) => String(value).includes(accessToken)),
@@ -46,7 +47,7 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
         tokenStored: false,
       });
       const cookies = await page.context().cookies(origin);
-      const session = cookies.find((cookie) => cookie.name === 'nr_session');
+      const session = cookies.find((cookie) => cookie.name === 'uimori_session');
       expect(session).toMatchObject({
         secure: true,
         httpOnly: true,
@@ -88,7 +89,7 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
       );
     }
     async function selectSyntheticMainModel(page: Page) {
-      const endpoint = process.env.NR_PROVIDER_FIXTURE_URL;
+      const endpoint = process.env.UIMORI_PROVIDER_FIXTURE_URL;
       if (!endpoint) throw new Error('Owned self-host provider fixture is required');
       const connectionResponse = await page.request.post('/api/connections', {
         headers: mutationHeaders,
@@ -258,10 +259,10 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
         await assertBrowserSecurity(phone);
         await assertLiveStream(phone, chat.id);
         const pcSession = (await desktop.cookies(origin)).find(
-          (cookie) => cookie.name === 'nr_session'
+          (cookie) => cookie.name === 'uimori_session'
         )!;
         const phoneSession = (await mobile.cookies(origin)).find(
-          (cookie) => cookie.name === 'nr_session'
+          (cookie) => cookie.name === 'uimori_session'
         )!;
         expect(pcSession.value).not.toBe(phoneSession.value);
 

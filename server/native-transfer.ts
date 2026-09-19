@@ -1,3 +1,4 @@
+import { projectNativeRisuPackage } from './risu-native-projection.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
@@ -13,7 +14,7 @@ import {
   type NativeTransferReceipt,
 } from '../core/native-transfer.js';
 import { validateNativeTransfer } from '../core/native-transfer-validation.js';
-import { resolveEditablePromptValues } from '../core/prompt-program.js';
+import { resolveEditablePromptValues } from '../core/risu-prompt.js';
 import type { Content, PromptPreset, SavedPromptCombination } from '../core/product.js';
 import { resolvePackageGraph } from '../core/package-graph.js';
 import {
@@ -76,7 +77,7 @@ function originalIndex(
         id: entry.source.id,
         revision: entry.source.revision,
         relatedIds: entry.source.relatedIds,
-        ...(entry.source.package ? { packageModules: entry.source.package.modules ?? null } : {}),
+        packageModules: entry.source.package.modules ?? null,
       },
       ...(entry.origin ? { origin: entry.origin } : {}),
     })),
@@ -119,18 +120,16 @@ function reconstructOriginal(store: Store, index: OriginalIndex): NativeTransfer
     roots: index.roots,
     contents: index.contents.map((entry) => {
       const source = sourceContent(store.product.get<Content>('content', entry.id, 1));
-      const modules = (source.package?.modules ?? []).map((ref) => keysByNewId.get(ref.id)!);
+      const modules = (source.package.modules ?? []).map((ref) => keysByNewId.get(ref.id)!);
       Object.assign(source, {
         id: entry.source.id,
         revision: entry.source.revision,
         relatedIds: entry.source.relatedIds,
       });
-      if (source.package) {
-        source.package.id = source.id;
-        source.package.revision = source.revision;
-        if (entry.source.packageModules === null) delete source.package.modules;
-        else source.package.modules = entry.source.packageModules;
-      }
+      source.package.id = source.id;
+      source.package.revision = source.revision;
+      if (entry.source.packageModules === null) delete source.package.modules;
+      else source.package.modules = entry.source.packageModules;
       return { key: entry.key, source, modules, ...(entry.origin ? { origin: entry.origin } : {}) };
     }),
     prompts: index.prompts.map((entry) => {
@@ -169,6 +168,11 @@ function checkedFile(value: unknown) {
   if (Buffer.byteLength(JSON.stringify(value) ?? '') > NATIVE_TRANSFER_MAX_BYTES)
     throw new HttpError(413, 'NATIVE_TRANSFER_TOO_LARGE');
   const checked = validateNativeTransfer(value);
+  for (const entry of checked.file.contents) {
+    const projected = projectNativeRisuPackage(entry.source.package, entry.source.kind).pkg;
+    if (!isDeepStrictEqual(projected, entry.source.package))
+      throw new HttpError(400, 'NATIVE_TRANSFER_CONTENT_PROJECTION');
+  }
   for (const image of checked.file.images) validateImageBlob(image);
   for (const source of checked.file.sourceFiles ?? []) {
     const bytes = Buffer.from(source.base64, 'base64');
@@ -387,7 +391,7 @@ export function exportNativeTransfer(store: Store, value: unknown): NativeTransf
           source = entry.source,
           key = entry.key;
         append(file.roots, { kind: 'content', key });
-        if (source.package) {
+        {
           resolvePackageGraph(
             {
               latestRevision: (id) =>
@@ -400,7 +404,6 @@ export function exportNativeTransfer(store: Store, value: unknown): NativeTransf
                 ),
               read: (ref) => {
                 const pkg = captureContent(ref.id, ref.revision).source.package;
-                if (!pkg) throw new HttpError(400, 'Required module is not a package');
                 return pkg;
               },
             },
@@ -411,7 +414,7 @@ export function exportNativeTransfer(store: Store, value: unknown): NativeTransf
       }
     }
     for (const entry of file.contents) {
-      entry.modules = (entry.source.package?.modules ?? []).map((ref) => {
+      entry.modules = (entry.source.package.modules ?? []).map((ref) => {
         const key = contentKeys.get(ref.id);
         if (!key) throw new HttpError(400, 'NATIVE_TRANSFER_MISSING_MODULE');
         return key;
@@ -422,7 +425,7 @@ export function exportNativeTransfer(store: Store, value: unknown): NativeTransf
     }
     const hashes = new Set(
       file.contents.flatMap(
-        (entry) => entry.source.package?.images?.map((image) => image.blobHash) ?? []
+        (entry) => entry.source.package.images?.map((image) => image.blobHash) ?? []
       )
     );
     for (const hash of hashes)

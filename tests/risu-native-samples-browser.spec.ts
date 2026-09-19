@@ -12,8 +12,8 @@ import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { navigationAction } from './ui-navigation.js';
 
 // Explicit local opt-in. Original cards stay outside the repository and are never modified.
-const sampleRoot = process.env.NR_RISU_SAMPLE_ROOT;
-const diagnostic = process.env.NR_RISU_SAMPLE_DIAGNOSTIC === '1';
+const sampleRoot = process.env.UIMORI_RISU_SAMPLE_ROOT;
+const diagnostic = process.env.UIMORI_RISU_SAMPLE_DIAGNOSTIC === '1';
 const cases = [
   {
     id: 'RISUSAMPLE01',
@@ -43,7 +43,10 @@ const cases = [
 ] as const;
 
 test.describe('actual local native Risu cards', () => {
-  test.skip(!sampleRoot, 'Set NR_RISU_SAMPLE_ROOT to opt into private local sample acceptance.');
+  test.skip(
+    !sampleRoot,
+    'Set UIMORI_RISU_SAMPLE_ROOT to opt into private local sample acceptance.'
+  );
   test.setTimeout(240_000);
   test.use({ viewport: { width: 1440, height: 1000 } });
   let app: App;
@@ -70,7 +73,7 @@ test.describe('actual local native Risu cards', () => {
     directory = mkdtempSync(join(tmpdir(), 'uimori-native-samples-'));
     app = await createApp({
       dbPath: join(directory, 'test.sqlite'),
-      buildId: process.env.NR_BUILD_ID ?? 'native-samples-local',
+      buildId: process.env.UIMORI_BUILD_ID ?? 'native-samples-local',
       instanceId: 'native-samples-browser',
       testMode: true,
       webRoot: resolve('dist/web'),
@@ -97,7 +100,7 @@ test.describe('actual local native Risu cards', () => {
     updateModelWorkspace(app.store, {
       expectedRevision: workspace.revision,
       routes: { ...workspace.routes, main: { id: models[0].id } },
-      extensionModel: { id: models[1].id },
+      scriptModel: { id: models[1].id },
       translationPolicy: workspace.translationPolicy,
     });
     origin = await app.listen({ port: 0, host: '127.0.0.1' });
@@ -388,7 +391,7 @@ test.describe('actual local native Risu cards', () => {
       const runId = ((await started.json()) as { id: string }).id;
       await expect
         .poll(() => app.store.run(runId).status, { timeout: 60_000 })
-        .not.toMatch(/queued|running|waiting_for_state/);
+        .not.toMatch(/queued|running/);
       const run = app.store.run(runId);
       expect(run.status, run.error ?? 'Local writing result').toBe('completed');
       expect(run.snapshot.nativeRisuExecution?.variables).toMatchObject(sample.expected);

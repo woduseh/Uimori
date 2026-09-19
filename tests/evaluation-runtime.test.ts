@@ -1,3 +1,5 @@
+import { installJevFixture } from './fixtures/jev.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -42,6 +44,7 @@ afterEach(async () => {
     await rm(path, { recursive: true, force: true });
   }
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 const ref = ({ id, revision }: { id: string; revision: number }) => ({ id, revision });
 const sourceContent = ({ translationRevision: _slotRevision, ...source }: Source) => source;
@@ -75,6 +78,7 @@ async function fixture(
   settings: { timeoutMs?: number; maximumToolRounds?: number; maxCalls?: number } = {}
 ) {
   vi.stubEnv(credentialEnv, bearer);
+  installJevFixture();
   const owner: Owner = { directory: await mkdtemp(join(tmpdir(), 'uimori-evaluation-runtime-')) };
   owners.push(owner);
   let app: App;
@@ -85,16 +89,16 @@ async function fixture(
       expect(captured.url).toBe('/v1/responses');
       expect(captured.headers.authorization).toBe(`Bearer ${bearer}`);
       // The externally observed request must already have a durable running attempt.
-      const attempts = app.store.product.attempts(chat.id);
+      const attempts = app.store.product
+        .attempts(chat.id)
+        .filter(
+          (attempt) =>
+            (attempt.request as { protocol?: string } | null)?.protocol !== 'typesafe-systemone-v1'
+        );
       expect(attempts).toHaveLength(provider.requests.length);
       expect(attempts.filter((attempt) => attempt.status === 'running')).toHaveLength(1);
       const body = JSON.parse(captured.body) as Body;
-      if (packet(body).controls?.purpose === 'translation-refusal') {
-        expect(body.model).toBe('synthetic-refusal-classifier');
-        expect(body.tools ?? []).toEqual([]);
-        expect(packet(body).source.prefix.length).toBeLessThanOrEqual(1000);
-        await send(response, [message('{"verdict":"accepted"}')], true);
-      } else await handler(body, response, provider.requests.length);
+      await handler(body, response, provider.requests.length);
     } catch (error) {
       failures.push(error);
       throw error;
@@ -127,7 +131,26 @@ async function fixture(
     kind: 'module',
     title: 'Copper observatory',
     description: 'Local synthetic reference',
-    text: 'The copper observatory stands north of the harbor.',
+    text: '',
+    package: {
+      ...nativeContent(
+        {
+          name: 'Copper observatory',
+          creator_notes: 'Local synthetic reference',
+          character_book: {
+            entries: [
+              {
+                name: 'Observatory',
+                content: 'The copper observatory stands north of the harbor.',
+              },
+            ],
+          },
+        },
+        {},
+        'module'
+      ),
+      loreActivation: { mode: 'discoverable' },
+    },
     loading: 'discoverable',
     relatedIds: [],
   });
@@ -150,20 +173,13 @@ async function fixture(
       maximumToolRounds: settings.maximumToolRounds ?? 8,
     },
   });
-  const classifier = await api<ModelPreset>(app, '/api/model-presets', {
-    title: 'Synthetic refusal classifier',
-    connectionId: connection.id,
-    modelId: 'synthetic-refusal-classifier',
-    maxOutputTokens: 256,
-    temperature: null,
-  });
   const workspace = await api<PromptWorkspace>(app, '/api/prompt-workspace');
   await api(
     app,
     '/api/prompt-workspace',
     {
       expectedRevision: workspace.revision,
-      translationPolicy: { refusalModel: { id: classifier.id }, maxRetries: 1, maxCalls: 16 },
+      translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
     },
     'PUT'
   );
@@ -173,9 +189,9 @@ async function fixture(
     `/api/chats/${chat.id}/profile`,
     {
       expectedRevision: prior.revision,
-      attachments: [ref(lore)],
+      packageAttachments: [...prior.packageAttachments!, { ...ref(lore), role: 'module' }],
 
-      routes: { main: { id: model.id }, translation: { id: model.id }, status: null, image: null },
+      routes: { main: { id: model.id }, translation: { id: model.id }, status: null },
       image: false,
     },
     'PUT'
@@ -191,7 +207,11 @@ async function fixture(
     owner,
     app,
     chat,
-    lore,
+    lore: {
+      ...lore,
+      id: `package:${lore.id}:module:lore:lore-0`,
+      text: 'The copper observatory stands north of the harbor.',
+    },
     connection,
     provider,
     failures,
@@ -317,7 +337,7 @@ test('preset evaluation mixes permitted reads and local tools; buffered Response
   const run = await settled(state, first.id);
   expect(run).toMatchObject({
     status: 'completed',
-    usage: { modelCalls: 2, inputTokens: 14, outputTokens: 6, costUsd: null },
+    usage: { modelCalls: 3, inputTokens: 21, outputTokens: 9, costUsd: null },
   });
   const before = await state.detail();
   expect(before.jobs).toEqual([]);
@@ -334,7 +354,7 @@ test('preset evaluation mixes permitted reads and local tools; buffered Response
     .toBe('completed');
   const after = await state.detail();
   expect(state.failures).toEqual([]);
-  expect(state.provider.requests).toHaveLength(5);
+  expect(state.provider.requests).toHaveLength(4);
   expect(after.sources.map(sourceContent)).toEqual(before.sources.map(sourceContent));
   expect(after.runs).toEqual(before.runs);
   expect(after.jobs[0]).toMatchObject({
@@ -342,7 +362,7 @@ test('preset evaluation mixes permitted reads and local tools; buffered Response
     sourceHash: source.hash,
     result: { sourceRevision: source.id, sourceHash: source.hash, mock: false },
   });
-  expect(after.attempts).toHaveLength(5);
+  expect(after.attempts).toHaveLength(6);
   expect(
     after.attempts!.every(
       (attempt) =>
@@ -355,7 +375,7 @@ test('preset evaluation mixes permitted reads and local tools; buffered Response
   expect(state.app.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   expect((await state.start()).id).toBe(run.id);
   await api(state.app, `/api/sources/${source.id}/translation`, {});
-  expect(state.provider.requests).toHaveLength(5);
+  expect(state.provider.requests).toHaveLength(4);
 });
 
 test('current connection enabled flag and credential availability are rechecked between evaluation rounds', async () => {
@@ -444,7 +464,7 @@ test('evaluation timeout ends a stalled real HTTP response with no implicit retr
 
 test('both host maxCalls and evaluation maximumToolRounds bound actual HTTP requests', async () => {
   for (const settings of [
-    { maxCalls: 1, maximumToolRounds: 8 },
+    { maxCalls: 2, maximumToolRounds: 8 },
     { maxCalls: 8, maximumToolRounds: 0 },
   ]) {
     const state = await fixture(

@@ -1,3 +1,4 @@
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -20,13 +21,12 @@ import type {
   PromptPreset,
   SavedPromptCombination,
 } from '../core/product.js';
-import type { ContentPackage } from '../core/content-package.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import type { RisuContent } from '../core/risu-content.js';
 import { createAgentCollaboration, createAgentDefinition } from '../core/agent-collaboration.js';
 import { promptWorkspace } from '../server/prompt-workspace.js';
 import { resolvePackageModules } from '../server/package-features.js';
 import { putImageBlob } from '../server/package-images.js';
-import { createActionPackage } from './fixtures/action-package.js';
+import { nativeContent } from './fixtures/native-content.js';
 
 const owned: { directory: string; store: Store; app: FastifyInstance }[] = [];
 beforeEach(() => {
@@ -62,17 +62,19 @@ function save(
   store: Store,
   kind: Content['kind'],
   title: string,
-  part: Partial<ContentPackage> = {},
+  part: Partial<RisuContent> = {},
   previous?: Content
 ): Content {
-  const pkg = {
-    ...createActionPackage(),
-    title,
-    description: '',
-    body: `SYNTHETIC_BODY_${kind}: opaque original IDs stay unchanged`,
-    modules: [],
-    ...part,
-  };
+  const pkg = nativeContent(
+    {
+      ...part.nativeRisu?.card,
+      name: title,
+      creator_notes: '',
+      description: part.body ?? `SYNTHETIC_BODY_${kind}: opaque original IDs stay unchanged`,
+    },
+    { images: part.images, portraitImageId: part.portraitImageId, modules: part.modules ?? [] },
+    kind
+  );
   return store.product.content(
     {
       kind,
@@ -141,8 +143,7 @@ function sourceFixture() {
     shared
   );
   const program = {
-    ...createDefaultPromptProgram('SYNTHETIC_PROMPT_BODY', 'main'),
-    controls: [{ id: 'tone', label: 'Tone', type: 'text' as const, default: 'calm' }],
+    ...nativePrompt('SYNTHETIC_PROMPT_BODY', { customPromptTemplateToggle: 'tone=Tone=text' }),
     collaboration: {
       ...createAgentCollaboration(),
       enabled: true,
@@ -165,9 +166,9 @@ function sourceFixture() {
   store.product.save('prompt-combination', {
     title: 'Previous options',
     role: 'main',
-    values: { old: true },
+    values: { old: 'old' },
     owner: { kind: 'preset', id: prompt.id },
-    controls: [{ id: 'old', label: 'Old', type: 'boolean', default: false }],
+    controls: [{ id: 'old', label: 'Old', type: 'text', default: null }],
   });
   const file = exportNativeTransfer(store, {
     items: [
@@ -320,9 +321,6 @@ test('NATIVE02 prepare writes nothing; apply creates one identity graph without 
   expect(receipt.items.every((item: any) => item.revision === 1)).toBe(true);
   expect(promptWorkspace(target.store)).toEqual(workspace);
   expect(target.store.chats()).toEqual([]);
-  expect(target.store.db.prepare('SELECT count(*) n FROM package_behavior_states').get()).toEqual({
-    n: 0,
-  });
   expect(target.store.db.prepare('SELECT count(*) n FROM attempts').get()).toEqual({ n: 0 });
   const importedBot = receipt.items.find((item: any) => item.category === 'bot');
   const importedPersona = receipt.items.find((item: any) => item.category === 'persona');
@@ -497,6 +495,7 @@ test('NATIVE07 external related IDs are reported and preserved as origin while b
   root.source.relatedIds = [f.persona.id, 'external-reference'];
   root.source.text += ` ${f.persona.id} external-reference`;
   root.source.package!.body = root.source.text;
+  root.source.package!.nativeRisu.card.description = root.source.text;
   const prepared = prepareNativeTransfer({ file });
   expect(prepared.warnings).toContainEqual(
     expect.objectContaining({ code: 'EXTERNAL_RELATED_IDS', key: root.key })
@@ -631,19 +630,14 @@ test('NATIVE12 the native file uses the existing module depth limit before persi
           text: 'Synthetic depth',
           loading: 'pinned',
           relatedIds: [],
-          package: {
-            version: 1,
-            id: key,
-            revision: 1,
-            title: key,
-            description: '',
-            body: 'Synthetic depth',
-            modules: modules.map((id) => ({ id, revision: 1 })),
-            lore: [],
-            controls: [],
-            instructions: [],
-            transforms: [],
-          },
+          package: nativeContent(
+            { name: key, description: 'Synthetic depth' },
+            {
+              id: key,
+              modules: modules.map((id) => ({ id, revision: 1 })),
+            },
+            'module'
+          ),
         },
       };
     }),

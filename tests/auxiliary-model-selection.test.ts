@@ -28,7 +28,7 @@ function database() {
   return store;
 }
 
-test('new auxiliary reservations project current Vertex models without retired stamps while preserving stored settings and prior Runs', async () => {
+test('new auxiliary reservations use current generation models while JEV judgments stay separate and prior Runs remain frozen', async () => {
   const store = database();
   const chat = createFixtureChat(store, 'Auxiliary model projection');
   const profile = store.product.snapshot(chat.id);
@@ -68,7 +68,7 @@ test('new auxiliary reservations project current Vertex models without retired s
     enabled: true,
   });
   const models = Object.fromEntries(
-    ['translation', 'refusal', 'status', 'image'].map((role) => {
+    ['translation', 'status'].map((role) => {
       const model = store.product.model({
         title: role,
         connectionId: connection.id,
@@ -76,11 +76,6 @@ test('new auxiliary reservations project current Vertex models without retired s
         maxOutputTokens: 2048,
         temperature: null,
       });
-      store.db
-        .prepare(
-          "UPDATE provider_settings SET body=json_set(body,'$.capabilityRevision',?) WHERE kind='model' AND id=?"
-        )
-        .run('retired-contract', model.id);
       return [role, model];
     })
   );
@@ -92,9 +87,8 @@ test('new auxiliary reservations project current Vertex models without retired s
       main: null,
       translation: { id: models.translation.id },
       status: { id: models.status.id },
-      image: { id: models.image.id },
     },
-    translationPolicy: { refusalModel: { id: models.refusal.id }, maxRetries: 1, maxCalls: 16 },
+    translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
   });
   const translation = store.requestTranslation(source.id);
   const status = store.requestStatus(source.id, source.hash, null);
@@ -105,19 +99,15 @@ test('new auxiliary reservations project current Vertex models without retired s
   const statusBundle = await bridge.load(status.id);
   const targets = {
     translation: translationBundle.snapshot.profile?.models.translation,
-    refusal: translationBundle.translationPolicy?.refusalModel,
     status: statusBundle.snapshot.profile?.models.status,
-    image: imageSnapshot.profile?.models.image,
   };
   for (const [role, target] of Object.entries(targets)) {
     expect(target).toEqual({ ...models[role], connection });
     expect(target).not.toHaveProperty('capabilityRevision');
     expect(validateModelSnapshot(target)).toEqual(target);
-    // Projection is only for new reservations; archive/snapshot validation stays strict.
-    expect(() =>
-      validateModelSnapshot({ ...target, capabilityRevision: 'retired-contract' })
-    ).toThrow('Unknown request field');
   }
+  expect(translationBundle.translationPolicy?.judgment).toEqual({ threshold: 0.9 });
+  expect(Object.keys(imageSnapshot.profile?.models ?? {})).not.toContain('image');
   expect(translationBundle.snapshot.profile?.models.main).toBeUndefined();
   expect(statusBundle.snapshot.profile?.models.main).toBeUndefined();
   expect(imageSnapshot.profile?.models.main).toBeUndefined();

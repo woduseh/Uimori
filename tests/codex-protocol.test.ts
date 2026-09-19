@@ -33,7 +33,7 @@ test('all provider roles use injected Codex execution without HTTP authority or 
     'translation',
     'status',
     'image',
-    'state',
+    'script',
     'context',
     'helper',
   ] as const) {
@@ -72,7 +72,7 @@ test('all provider roles use injected Codex execution without HTTP authority or 
 test('preserves ordered logical roles and explicit empty instructions while rejecting unsupported semantics', () => {
   const r = request();
   r.prompt = {
-    compilerVersion: 'uimori-prompt-1',
+    compilerVersion: 'risu-native-prompt-1',
     cachePlan: [],
     values: {},
     messages: ['system', 'user', 'assistant'].map((role, index) => ({

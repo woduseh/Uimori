@@ -158,45 +158,15 @@ test('CAS uses latest source edit hash and validates source chat ownership', () 
   ).toThrow('CHAT_VARIABLE_SOURCE_OWNER');
 });
 
-test.each(['queued', 'running', 'waiting_for_state'])(
-  'new user writes reject an active %s Run',
-  (status) => {
-    const { store, chat, branch } = fixture();
-    const run = reserve(store, chat.id, branch.id);
-    store.db.prepare('UPDATE runs SET status=? WHERE id=?').run(status, run.id);
-    expect(() => writeChatVariables(store, chat.id, branch.id, command())).toThrow(
-      'CHAT_VARIABLE_BRANCH_BUSY'
-    );
-    expect(store.db.prepare('SELECT * FROM chat_variable_states').all()).toEqual([]);
-  }
-);
-
-test.each(['queued', 'running'])(
-  'new user writes reject an active %s extension operation',
-  (status) => {
-    const { store, chat, branch } = fixture();
-    store.db
-      .prepare(
-        'INSERT INTO package_extension_operations(id,chat_id,branch_id,attachment_instance_id,request_key,request_hash,command,snapshot,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)'
-      )
-      .run(
-        'operation',
-        chat.id,
-        branch.id,
-        'instance',
-        'request',
-        'hash',
-        '{}',
-        '{}',
-        status,
-        'now',
-        'now'
-      );
-    expect(() => writeChatVariables(store, chat.id, branch.id, command())).toThrow(
-      'CHAT_VARIABLE_BRANCH_BUSY'
-    );
-  }
-);
+test.each(['queued', 'running'])('new user writes reject an active %s Run', (status) => {
+  const { store, chat, branch } = fixture();
+  const run = reserve(store, chat.id, branch.id);
+  store.db.prepare('UPDATE runs SET status=? WHERE id=?').run(status, run.id);
+  expect(() => writeChatVariables(store, chat.id, branch.id, command())).toThrow(
+    'CHAT_VARIABLE_BRANCH_BUSY'
+  );
+  expect(store.db.prepare('SELECT * FROM chat_variable_states').all()).toEqual([]);
+});
 
 test('host adoption requires a transaction and rolls state, receipt and event back together', () => {
   const { store, chat, branch } = fixture();

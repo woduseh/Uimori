@@ -1,5 +1,9 @@
-import type { PromptHistoryMessage } from './prompt-program.js';
-import { validateJevJudgmentPolicy, type JevJudgmentPolicy } from './judgment.js';
+import type { PromptHistoryMessage } from './risu-prompt.js';
+import {
+  validateJevJudgmentPolicy,
+  DEFAULT_JEV_JUDGMENT,
+  type JevJudgmentPolicy,
+} from './judgment.js';
 
 export type LorePlacement = { placement: 'background' | 'scene'; group?: string; order?: number };
 export type LoreContextPolicy = {
@@ -7,10 +11,11 @@ export type LoreContextPolicy = {
   maxRetainedChars: number;
   maxRetainedEntries: number;
   maxPinnedChars: number;
-  judgment?: JevJudgmentPolicy;
+  judgment: JevJudgmentPolicy;
 };
 export const DEFAULT_LORE_CONTEXT: LoreContextPolicy = Object.freeze({
   enabled: true,
+  judgment: DEFAULT_JEV_JUDGMENT,
   maxRetainedChars: 48_000,
   maxRetainedEntries: 64,
   maxPinnedChars: 200_000,
@@ -36,7 +41,7 @@ export function validateLoreContextPolicy(value: unknown): LoreContextPolicy {
     throw new Error('LORE_CONTEXT_POLICY_INVALID');
   return {
     ...p,
-    ...(p.judgment === undefined ? {} : { judgment: validateJevJudgmentPolicy(p.judgment) }),
+    judgment: validateJevJudgmentPolicy(p.judgment),
   };
 }
 export type LoreDependency = { sourceRevision: string; sourceHash: string };

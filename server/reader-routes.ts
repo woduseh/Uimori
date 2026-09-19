@@ -7,7 +7,7 @@ export function readerRoutes(app: FastifyInstance, store: Store) {
     store.chat(request.params.id);
     const rows = store.db
       .prepare(
-        `SELECT id,run_id AS runId,job_id AS jobId,story_job_id AS storyJobId,role,connection_id AS connectionId,model_id AS modelId,status,input_tokens AS inputTokens,output_tokens AS outputTokens,cost_usd AS costUsd,price_revision AS priceRevision,error,json_extract(response,'$.estimatedCost') AS estimateJson FROM attempts WHERE chat_id=? ORDER BY rowid`
+        `SELECT id,run_id AS runId,job_id AS jobId,role,connection_id AS connectionId,model_id AS modelId,status,input_tokens AS inputTokens,output_tokens AS outputTokens,cost_usd AS costUsd,price_revision AS priceRevision,error,json_extract(response,'$.estimatedCost') AS estimateJson FROM attempts WHERE chat_id=? ORDER BY rowid`
       )
       .all(request.params.id);
     return rows.map(({ estimateJson, ...row }) => ({
@@ -18,7 +18,7 @@ export function readerRoutes(app: FastifyInstance, store: Store) {
   app.get<{ Params: { id: string } }>('/api/attempts/:id', async (request) => {
     const row = store.db
       .prepare(
-        `SELECT id,run_id AS runId,job_id AS jobId,story_job_id AS storyJobId,role,connection_id AS connectionId,model_id AS modelId,status,input_tokens AS inputTokens,output_tokens AS outputTokens,cost_usd AS costUsd,price_revision AS priceRevision,error,request,response,raw_usage AS rawUsage FROM attempts WHERE id=?`
+        `SELECT id,run_id AS runId,job_id AS jobId,role,connection_id AS connectionId,model_id AS modelId,status,input_tokens AS inputTokens,output_tokens AS outputTokens,cost_usd AS costUsd,price_revision AS priceRevision,error,request,response,raw_usage AS rawUsage FROM attempts WHERE id=?`
       )
       .get(request.params.id) as Record<string, unknown> | undefined;
     if (!row) throw new HttpError(404, 'Attempt not found');

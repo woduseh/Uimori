@@ -108,9 +108,9 @@ async function main(args) {
       const temp = path.join(runtime, 'temp');
       await mkdir(temp, { recursive: true });
       const env = localVerificationEnv({
-        NR_DB: path.join(runtime, 'app.sqlite'),
-        NR_BUILD_ID: manifest.buildId,
-        NR_INSTANCE: `${id}-${index}`,
+        UIMORI_DB: path.join(runtime, 'app.sqlite'),
+        UIMORI_BUILD_ID: manifest.buildId,
+        UIMORI_INSTANCE: `${id}-${index}`,
         TEMP: temp,
         TMP: temp,
       });
@@ -147,7 +147,7 @@ async function main(args) {
     );
     if (
       entries[0].ready.url === entries[1].ready.url ||
-      entries[0].env.NR_DB === entries[1].env.NR_DB ||
+      entries[0].env.UIMORI_DB === entries[1].env.UIMORI_DB ||
       entries[0].profile === entries[1].profile ||
       entries[0].temp === entries[1].temp
     )

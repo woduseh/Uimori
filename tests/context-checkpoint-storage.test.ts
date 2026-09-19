@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { defaultProfile, type ModelSnapshot } from '../core/product.js';
-import type { SourceSegmentPolicy } from '../core/source-segments.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
   contextSourceRefs,
@@ -14,7 +13,7 @@ import {
 } from '../server/context-planning.js';
 import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
-import { createSourceSegmentFixture } from './fixtures/source-segments.js';
+import { nativeContent } from './fixtures/native-content.js';
 
 const owned: { store: Store; directory: string }[] = [];
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -49,7 +48,7 @@ afterEach(() => {
   }
 });
 
-function fixture(sourceSegments?: SourceSegmentPolicy) {
+function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-checkpoints-'));
   const store = new Store(join(directory, 'synthetic.sqlite'));
   owned.push({ store, directory });
@@ -64,8 +63,7 @@ function fixture(sourceSegments?: SourceSegmentPolicy) {
       request: '다음 장면을 이어 주세요.',
       history: structuredClone(history),
       resources: [],
-      profile: { ...defaultProfile(chat.id), contents: [], models: { main: model } },
-      ...(sourceSegments ? { sourceSegments } : {}),
+      profile: { ...defaultProfile(chat.id), models: { main: model } },
     });
   const snapshots: RunSnapshot[] = [];
   // The rows have complete source ancestry and cumulative frozen input snapshots.
@@ -202,28 +200,15 @@ describe('stored context checkpoint selection', () => {
     edited.history[0].contentHash = hash(edited.history[0].text);
     expect(previousContextPlan(f.store, edited)).toBeUndefined();
     const changed = structuredClone(current);
-    changed.profile!.contents.push({
-      id: 'new-canon',
-      revision: 1,
-      kind: 'module',
-      title: '새 정사 자료',
-      description: '',
-      text: '약속의 의미가 달라졌어요.',
-      loading: 'pinned',
-      relatedIds: [],
-    });
+    changed.profile!.packages = [
+      nativeContent(
+        { name: '새 정사 자료', description: '약속의 의미가 달라졌어요.' },
+        { id: 'new-canon' },
+        'module'
+      ),
+    ];
+    changed.profile!.packageAttachments = [{ id: 'new-canon', revision: 1, role: 'module' }];
     expect(previousContextPlan(f.store, seedContextPlan(changed))).toBeUndefined();
-  });
-
-  test('rejects expired source-segment views even when original text and hashes are unchanged', () => {
-    const f = fixture(
-      createSourceSegmentFixture({ excludeAnnotations: false, keepLastMessages: 5 })
-    );
-    const old = f.checkpoint(1, '보존창 안에서 읽은 기록 요약');
-    const current = contextSourceRefs(f.current)[0];
-    expect(current.hash).toBe(old.contextPlan!.compacted[0].hash);
-    expect(current.viewHash).not.toBe(old.contextPlan!.compacted[0].viewHash);
-    expect(previousContextPlan(f.store, f.capture())).toBeUndefined();
   });
 
   test.each(['id', 'revision', 'hash', 'scope'] as const)(

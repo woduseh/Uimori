@@ -1,6 +1,7 @@
 import { ActionMenu } from './ActionMenu.js';
 import { HistoryIcon, IssueIcon } from './ui-icons.js';
 import './retry-failure.css';
+import { mainJudgmentError } from './main-judgment-error.js';
 
 export function RetryFailure({
   status,
@@ -19,7 +20,9 @@ export function RetryFailure({
   onDetails: () => void;
   onHistory: () => void;
 }) {
-  const settings = /PROMPT_|UNSUPPORTED_OPTIONS|HTTP_40[0134]/u.test(error ?? '');
+  const settings = /PROMPT_|UNSUPPORTED_OPTIONS|HTTP_40[0134]|JEV_|MAIN_JUDGMENT_CALL_BUDGET/u.test(
+    error ?? ''
+  );
   const message =
     status === 'cancelled'
       ? '응답 생성을 취소했어요.'
@@ -38,7 +41,7 @@ export function RetryFailure({
                   : '응답을 만들지 못했어요.';
   return (
     <div className="turn-failure chat-retry-failure" role="group" aria-label="실패한 요청">
-      <p>{message}</p>
+      <p>{mainJudgmentError(error) ?? message}</p>
       <div className="turn-failure-actions">
         {onRetry && (
           <button

@@ -1,4 +1,4 @@
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -157,7 +157,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     '봇·페르소나·모듈',
     '프롬프트·창작 프리셋',
     '이 채팅의 모델',
-    '상태와 문맥',
+    '기억과 메모',
     '이미지',
     '자동 후속 작업',
   ]);
@@ -241,7 +241,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   await library.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
   await page.getByLabel('프로바이더 이름', { exact: true }).fill(`격리 연결 ${unique}`);
   await page.getByLabel('로컬 endpoint').fill('http://127.0.0.1:9/turn');
-  await page.getByLabel('서버 환경변수 이름').fill('NARRATIVE_PROVIDER_SYNTHETIC');
+  await page.getByLabel('서버 환경변수 이름').fill('UIMORI_PROVIDER_SYNTHETIC');
   const connectionResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/connections') && response.request().method() === 'POST'
@@ -277,7 +277,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   expect(after).toMatchObject({
     endpoint: connection.endpoint,
     enabled: false,
-    credentialEnv: 'NARRATIVE_PROVIDER_SYNTHETIC',
+    credentialEnv: 'UIMORI_PROVIDER_SYNTHETIC',
   });
   expect((await request.get(`/api/revisions/connection/${connection.id}/1`)).ok()).toBe(false);
   await openDetails(page, 'profile-editor');
@@ -337,7 +337,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     await page.evaluate(() =>
       Object.values(localStorage)
         .concat(Object.values(sessionStorage))
-        .some((value) => String(value).includes('NARRATIVE_PROVIDER_SYNTHETIC'))
+        .some((value) => String(value).includes('UIMORI_PROVIDER_SYNTHETIC'))
     )
   ).toBe(false);
 });
@@ -385,7 +385,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   const uploaded = (await (await upload).json()) as Asset;
   await expect(imagePanel.getByRole('status')).toContainText('이미지를 등록했어요');
   expect(uploaded.hash).toBe(createHash('sha256').update(png).digest('hex'));
-  const endpoint = process.env.NR_PROVIDER_FIXTURE_URL;
+  const endpoint = process.env.UIMORI_PROVIDER_FIXTURE_URL;
   if (!endpoint) throw new Error('Dedicated image-selection loopback fixture is required');
   const connectionReply = await request.post('/api/connections', {
     data: {
@@ -590,7 +590,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
       data: {
         title: 'Synthetic fork-only prompt',
         role: 'main',
-        program: createDefaultPromptProgram('Synthetic vivid narration for this fork.', 'main'),
+        program: createDefaultRisuPrompt('Synthetic vivid narration for this fork.', 'main'),
       },
     });
     expect(forkPrompt.ok()).toBeTruthy();
@@ -694,7 +694,7 @@ test('P06 P11 export/backup downloads preserve source and reject restore into an
   expect(filename).not.toBeNull();
   const bytes = await readFile(filename!);
   const archive = JSON.parse(bytes.toString('utf8'));
-  expect(archive.format).toBe('narrative-archive');
+  expect(archive.format).toBe('uimori-archive');
   expect(
     archive.tables.sources.some(
       (item: { id: string; hash: string }) => item.id === source.id && item.hash === source.hash

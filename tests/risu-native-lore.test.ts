@@ -6,7 +6,7 @@ import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
 import { readCharacterCard } from '../server/character-card-file.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import { basename } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -53,7 +53,6 @@ async function fixture(
     ],
     profile: {
       ...defaultProfile('native-lore'),
-      contents: [],
       models: {},
       packages: [pkg],
       packageAttachments: [{ id: pkg.id, revision: pkg.revision, role: 'bot' }],
@@ -125,15 +124,8 @@ test('conditional native positions use the frozen lore selection and keep pinned
       },
     ],
   };
-  const program = createDefaultPromptProgram('SYSTEM');
-  program.blocks.push({
-    id: 'prefill',
-    title: 'Prefill',
-    kind: 'message',
-    role: 'assistant',
-    completion: 'prefill',
-    template: [{ kind: 'text', text: 'PREFIX' }],
-  });
+  const program = createDefaultRisuPrompt('SYSTEM');
+  program.nativeRisuPreset.preset.promptSettings = { assistantPrefill: 'PREFIX' };
   const after = compileSnapshotPrompt(snapshot, program).promptCompilation!;
   expect(after.messages.some((message) => message.content[0].text === 'CONDITIONAL')).toBe(true);
   expect(after.messages.at(-1)).toMatchObject({

@@ -1,6 +1,6 @@
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { compileTranslationPrompt } from '../core/auxiliary.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { translationInput } from '../core/auxiliary.js';
@@ -25,7 +25,7 @@ const preset = (role: PromptPreset['role'], text = literal): PromptPreset => ({
   revision: 3,
   title: 'Custom ' + role,
   role,
-  program: createDefaultPromptProgram(text, role),
+  program: createDefaultRisuPrompt(text, role),
 });
 function snapshot(): RunSnapshot {
   return {
@@ -36,7 +36,7 @@ function snapshot(): RunSnapshot {
     request: 'Continue the scene.',
     history: [],
     resources: [],
-    profile: { ...defaultProfile('prompt-chat'), contents: [], models: {} },
+    profile: { ...defaultProfile('prompt-chat'), models: {} },
   };
 }
 const cleanups: (() => Promise<void>)[] = [];
@@ -70,10 +70,8 @@ describe('full editable prompt boundaries', () => {
         translation: preset('translation', text),
       };
       const frozen = structuredClone(selected);
-      selected.profile!.promptPresets.main!.program = createDefaultPromptProgram('FUTURE REVISION');
-      expect(frozen.profile!.promptPresets!.main!.program).toEqual(
-        createDefaultPromptProgram(text)
-      );
+      selected.profile!.promptPresets.main!.program = createDefaultRisuPrompt('FUTURE REVISION');
+      expect(frozen.profile!.promptPresets!.main!.program).toEqual(createDefaultRisuPrompt(text));
       expect(buildMainInput(frozen).contract).toBe('');
       const selectedContext = sourceTimeContext(frozen, 'translation');
       const input = translationInput(source, selectedContext, frozen);
@@ -247,7 +245,7 @@ describe('custom prompt native request/response through actual loopback HTTP, no
       ] as const) {
         const value = request(role, contract, variant.protocol);
         const result = await executeProvider(
-          { id: 'custom-native', ...variant, credentialEnv: 'NARRATIVE_PROVIDER_CUSTOM_TEST' },
+          { id: 'custom-native', ...variant, credentialEnv: 'UIMORI_PROVIDER_CUSTOM_TEST' },
           value,
           {
             signal: new AbortController().signal,

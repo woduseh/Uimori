@@ -8,7 +8,7 @@ import { StoryPanel } from './StoryPanel.js';
 import { AssetEditor } from './AssetEditor.js';
 import { IllustrationReferencesEditor } from './IllustrationReferences.js';
 import { SettingsEditor } from './RuntimeSettings.js';
-import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
+import { ChatVariables } from './ChatVariables.js';
 import { api } from './api.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { useSettingsHistory } from './useSettingsHistory.js';
@@ -51,9 +51,9 @@ const categories = [
   },
   {
     id: 'story',
-    title: '상태와 문맥',
+    title: '기억과 메모',
     icon: LoreIcon,
-    description: '장면 상태와 문맥 관리',
+    description: '장면 기억과 메모 관리',
     group: '고급',
   },
   {
@@ -74,7 +74,7 @@ const categories = [
     id: 'packages',
     title: '자료 기능',
     icon: BehaviorIcon,
-    description: '공유 변수와 자료 상태·행동',
+    description: '이 채팅의 카드 변수',
     group: '고급',
   },
 ] as const;
@@ -86,14 +86,12 @@ export function ChatSettingsPanel({
   onClose,
   initialSection,
   onGlobalSettings,
-  onRunRequest,
 }: {
   state: StoryState;
   onClose: () => void;
   /** Open directly on this section (compact widths open its detail); the list is the default. */
   initialSection?: Section;
   onGlobalSettings: (section: 'models' | 'prompts') => void;
-  onRunRequest: (text: string, requestId: string) => void;
 }) {
   const [active, setActive] = useState<Section>(initialSection ?? 'characters');
   const [profileTab, setProfileTab] = useState<ProfileSection>(
@@ -250,29 +248,15 @@ export function ChatSettingsPanel({
     }
     void Promise.allSettled([
       api<{
-        pendingRequest?: unknown;
-        instances: unknown[];
-        operations?: unknown[];
-        standalonePanels?: { panels: unknown[] }[];
-      }>(`/chats/${encodeURIComponent(state.selected)}/package-behaviors${query}`),
-      api<{
         values: Record<string, string>;
         defaults: Record<string, string>;
         variableDefaultsError?: string;
       }>(`/chats/${encodeURIComponent(state.selected)}/variables${query}`),
-    ]).then(([behaviorResult, variableResult]) => {
+    ]).then(([variableResult]) => {
       if (!current) return;
-      const behavior = behaviorResult.status === 'fulfilled' ? behaviorResult.value : null;
       const variables = variableResult.status === 'fulfilled' ? variableResult.value : null;
       setPackageFeatures(
         hasDraft ||
-          Boolean(
-            behavior &&
-              (behavior.instances.length > 0 ||
-                behavior.pendingRequest ||
-                behavior.operations?.length ||
-                behavior.standalonePanels?.some((item) => item.panels.length > 0))
-          ) ||
           Boolean(
             variables &&
               (Object.keys(variables.values).length > 0 ||
@@ -374,8 +358,6 @@ export function ChatSettingsPanel({
                         headRevision={state.branch?.headRevision ?? detail.chat.headRevision}
                         settingsRevision={detail.chat.settingsRevision}
                         profileRevision={detail.profile?.revision}
-                        models={library.models}
-                        connections={library.connections}
                         active={active === section && showingDetail}
                         hideHeading
                         onDirtyChange={setStoryDirty}
@@ -413,13 +395,10 @@ export function ChatSettingsPanel({
                       />
                     )}
                     {section === 'packages' && packageFeatures && (
-                      <PackageBehaviorPanel
+                      <ChatVariables
                         chatId={state.selected}
                         branchId={branchId}
                         refreshKey={state.detail?.reader.cursor ?? 0}
-                        onRunRequest={(text, requestId) =>
-                          requestClose(() => onRunRequest(text, requestId))
-                        }
                         onChange={() => {
                           void state.refresh(state.selected);
                         }}

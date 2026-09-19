@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import type { NativeRisuContent } from '../core/risu-native.js';
+import type { RisuContentSource } from '../core/risu-native.js';
 import {
   executeRisuNative,
   disposeAllNativeRisuSessions,
@@ -10,9 +10,9 @@ import { readNativeRisuSample } from './fixtures/native-risu.js';
 
 // Runtime permission fixtures exercise already-resolved scripts; canonical card/module grants are
 // tested separately before the host combines attachments.
-const effectiveFixtures = new WeakMap<NativeRisuContent, Record<string, unknown>[]>();
-const native = (trigger: Record<string, unknown>[]): NativeRisuContent => {
-  const content: NativeRisuContent = {
+const effectiveFixtures = new WeakMap<RisuContentSource, Record<string, unknown>[]>();
+const native = (trigger: Record<string, unknown>[]): RisuContentSource => {
+  const content: RisuContentSource = {
     version: 1,
     card: { name: 'Test', first_mes: 'Opening' },
     module: { trigger },
@@ -25,14 +25,14 @@ const native = (trigger: Record<string, unknown>[]): NativeRisuContent => {
 afterEach(() => disposeAllNativeRisuSessions());
 
 // Opt-in local evidence: originals are read only and never copied into the repository.
-describe.skipIf(!process.env.NR_RISU_SAMPLE_ROOT)('local native CHARX button evidence', () => {
+describe.skipIf(!process.env.UIMORI_RISU_SAMPLE_ROOT)('local native CHARX button evidence', () => {
   for (const [relative, buttonNames] of [
     ['Reference/Cheongwon High School.charx', ['setLangToEnglish', 'setFirst1']],
     ['Reference/Harper.charx', ['lang1', 'greeting1']],
     ['Fujimiya Hinano/Fujimiya Hinano_v2.4.3-test.charx', ['onLangEn', 'initAff70']],
   ] as const) {
     it(relative, async () => {
-      const path = join(process.env.NR_RISU_SAMPLE_ROOT!, relative);
+      const path = join(process.env.UIMORI_RISU_SAMPLE_ROOT!, relative);
       const sample = readNativeRisuSample(path);
       let state: NativeRisuExecutionInput = {
         ...input(sample.native),
@@ -56,7 +56,7 @@ const lua = (code: string, lowLevelAccess = false) => ({
   effect: [{ type: 'triggerlua', code }],
 });
 const input = (
-  content: NativeRisuContent,
+  content: RisuContentSource,
   event: NativeRisuExecutionInput['event'] = 'manual'
 ): NativeRisuExecutionInput => ({
   native: content,

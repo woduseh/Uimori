@@ -5,6 +5,7 @@ import { basename, join, resolve, relative, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createApp } from '../server/app.js';
 import type { Content, Library } from '../core/product.js';
+import { nativeContent } from './fixtures/native-content.js';
 
 test('library summary omits bodies and unrelated assets; exact revision editing and historical reads remain intact', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'uimori-library-loading-'));
@@ -70,12 +71,28 @@ test('library summary omits bodies and unrelated assets; exact revision editing 
     expect(summary.contents).toHaveLength(4);
     expect(summary.assets).toHaveLength(0);
     expect(full.assets).toHaveLength(3);
-    expect(summary.contents).toEqual(full.contents.map((item) => ({ ...item, text: '' })));
+    expect(summary.contents).toEqual(
+      full.contents.map(({ package: _source, ...metadata }) => ({
+        ...metadata,
+        text: '',
+        hasPackage: true,
+      }))
+    );
     expect(bytes.summary).toBeLessThan(bytes.full / 100);
     const original = items[0];
     const { id, revision, ...body } = original;
     const changed = product.content(
-      { ...body, text: 'Changed exact revision', expectedRevision: revision },
+      {
+        ...body,
+        package: nativeContent(
+          {
+            ...body.package.nativeRisu.card,
+            description: 'Changed exact revision',
+          },
+          body.package
+        ),
+        expectedRevision: revision,
+      },
       id
     );
     const oldResponse = await injectWithFixtureBot(app, {
@@ -83,6 +100,7 @@ test('library summary omits bodies and unrelated assets; exact revision editing 
       url: `/api/revisions/content/${id}/${revision}`,
     });
     expect(oldResponse.json()).toEqual(original);
+    expect(changed.text).toBe('Changed exact revision');
     expect(product.library(true).contents.find((item) => item.id === id)?.revision).toBe(
       changed.revision
     );

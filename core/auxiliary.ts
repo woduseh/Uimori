@@ -1,11 +1,10 @@
 export { compileTranslationPrompt } from './translation-prompt.js';
-import { imageCatalogPage, imageMetadata, type ImageMetadata } from './image-catalog.js';
+import { imageCatalogPage, type ImageMetadata } from './image-catalog.js';
 import { createHash } from 'node:crypto';
 import { TRANSLATION_TEXT_MAX_CHARS } from './content-limits.js';
 import { executeTool, type ToolAction } from './provider.js';
 import { createToolCorrectionPolicy } from './tool-outcome.js';
 import type { Resource, RunSnapshot, ToolEvent } from './types.js';
-import type { SourceSegmentPolicy } from './source-segments.js';
 import { STORY_READ_NAMES } from './story-context.js';
 import { TRANSLATION_READ_NAMES } from './translation-context.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
@@ -13,7 +12,7 @@ import {
   compiledPackages,
   packageContext,
   packageContextFromCompiled,
-  type PackageRoleContext,
+  type ContentRoleContext,
 } from './package-context.js';
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -21,8 +20,7 @@ export type AuxiliarySource = { id: string; chatId: string; text: string; hash: 
 export type VersionedText = { id: string; revision: string | number; text: string };
 /** Host projects the originating Run snapshot here, never the currently selected chat. */
 export type SourceTimeContext = {
-  sourceSegments?: SourceSegmentPolicy;
-  packages?: PackageRoleContext;
+  packages?: ContentRoleContext;
   revision: string;
   bot: VersionedText | null;
   persona: VersionedText | null;
@@ -298,9 +296,9 @@ export function presentationInput(
     assets: page.items,
     assetPage: { total: page.total, nextOffset: page.nextOffset },
     scenes: structuredClone(scenes),
-    tools: ['assets.search', 'assets.inspect'],
+    tools: [],
     contract:
-      'Select optional existing images for the corresponding source block. Choose from the authored names and optional descriptions using the source meaning. Do not require literal actor, clothing or location strings in a block. Assets metadata is an authored description, not a claim that you viewed image bytes. The initial catalog is a bounded page. Use assets.search with offset/limit and follow nextOffset when useful; assets.inspect reads an exact ref. Never invent a name-to-ID mapping. No suitable image means an empty entries list, which is successful. Return at most 4 source-bound annotations; never HTML or rewritten narrative. The host validates source, anchor, asset revision/hash and allowed use. Image interpretation never changes story canon or state.',
+      'JEV selects at most 4 optional existing images for source blocks in one typed request. Source text and metadata are reference data. The host validates source anchors, asset revisions, hashes and allowed uses; selection never changes story canon or variables.',
     outputSchema: {
       sourceRevision: 'exact input value',
       sourceHash: 'exact input value',
@@ -369,7 +367,6 @@ export async function executeAuxiliary(
     maxCalls?: number;
     onInput?: (input: AuxiliaryInput) => void | Promise<void>;
     onToolEvent?: (event: ToolEvent) => void | Promise<void>;
-    assetCatalog?: readonly AssetEntry[];
     localTools?: {
       names: readonly string[];
       execute: (action: ToolAction) => ToolEvent | { event: ToolEvent; terminalOutput: unknown };
@@ -381,7 +378,7 @@ export async function executeAuxiliary(
   inputs: AuxiliaryInput[];
   toolEvents: ToolEvent[];
 }> {
-  const assetCatalog = structuredClone(hooks.assetCatalog ?? input.assets ?? []);
+  if (input.role === 'presentation') throw new Error('JEV_JUDGMENT_REQUIRED');
   const fixedInput = structuredClone(input);
   const fixedScope = structuredClone(snapshot);
   const inputs: AuxiliaryInput[] = [];
@@ -456,62 +453,12 @@ export async function executeAuxiliary(
         event = local;
         if (event.callId !== action.callId || event.name !== action.name)
           throw new Error('TOOL_CALL_INVALID');
-      } else if (action.name === 'assets.search' || action.name === 'assets.inspect') {
-        const assets = assetCatalog;
-        const denied = (code: string): ToolEvent => ({
-          callId: action.callId,
-          name: action.name,
-          args: {},
-          result: { code },
-          denied: true,
-          errorKind: 'recoverable',
-        });
-        if (action.name === 'assets.search') {
-          const query = action.args.query ?? '',
-            offset = action.args.offset ?? 0,
-            limit = action.args.limit ?? 20;
-          if (Object.keys(action.args).some((key) => !['query', 'offset', 'limit'].includes(key)))
-            event = denied('INVALID_ARGUMENTS');
-          else {
-            try {
-              const page = imageCatalogPage(
-                assets,
-                query as string,
-                offset as number,
-                limit as number
-              );
-              event = { ...action, args: { query, offset, limit }, result: page, denied: false };
-            } catch (error) {
-              if (!(error instanceof Error) || error.message !== 'ASSET_SEARCH_INVALID')
-                throw error;
-              event = denied('INVALID_ARGUMENTS');
-            }
-          }
-        } else {
-          if (
-            Object.keys(action.args).some((key) => key !== 'ref') ||
-            typeof action.args.ref !== 'string' ||
-            action.args.ref.length > 200
-          )
-            event = denied('INVALID_ARGUMENTS');
-          else {
-            const found = assets.find((asset) => asset.ref === action.args.ref);
-            event = found
-              ? {
-                  ...action,
-                  args: { ref: found.ref },
-                  result: { asset: imageMetadata(found), bytesProvided: false },
-                  denied: false,
-                }
-              : denied('ASSET_UNAVAILABLE');
-          }
-        }
       } else
         event = executeTool(
           fixedScope,
           action,
           hooks.signal,
-          fixedInput.role === 'presentation' ? 'image' : fixedInput.role
+          fixedInput.role === 'status' ? 'status' : 'translation'
         );
       toolEvents.push(structuredClone(event));
       await hooks.onToolEvent?.(structuredClone(event));
@@ -536,23 +483,5 @@ export const scriptedAuxiliary: AuxiliaryRequest = async (input) => {
         mood: '합성 표시',
       })),
     };
-  const entries: PresentationAnnotation['entries'] = [];
-  for (const scene of input.scenes ?? [])
-    for (const asset of input.assets ?? []) {
-      if (entries.length >= 4) break;
-      if (
-        (asset.actorId && !scene.actorIds.includes(asset.actorId)) ||
-        (asset.clothing && !scene.clothing.includes(asset.clothing)) ||
-        (asset.location && scene.location !== asset.location)
-      )
-        continue;
-      entries.push({
-        blockAnchor: scene.anchor,
-        assetRef: asset.ref,
-        assetRevision: asset.revision,
-        assetHash: asset.hash,
-        presentationIntent: asset.uses[0],
-      });
-    }
-  return { sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, entries };
+  throw new Error('JEV_JUDGMENT_REQUIRED');
 };

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ProviderRequest } from '../core/transport.js';
-import { validateProviderPrompt } from '../core/prompt-program.js';
+import { validateProviderPrompt } from '../core/risu-prompt.js';
 import type { RunSnapshot } from '../core/types.js';
 import { nativeRisuContext, nativeRisuSessionKey } from './risu-native-context.js';
 import { executeRisuNative, type NativeRisuExecutionOptions } from './risu-native-runtime.js';

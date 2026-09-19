@@ -7,7 +7,7 @@ import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { isModelSelectable } from './model-selection.js';
 import { modelLabel } from './storyLabels.js';
-import { PackageAttachments } from './PackageAttachments.js';
+import { ContentAttachments } from './ContentAttachments.js';
 import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
 import './library.css';
 import './settings-actions.css';
@@ -109,12 +109,9 @@ export function ProfileEditor({
   const profileBody = (next: ChatProfile) => ({
     expectedRevision: next.revision,
     pinned: next.pinned ?? {},
-    attachments: next.attachments,
     image: next.image,
     imageTranslation: next.imageTranslation !== false,
     ...(next.packageAttachments ? { packageAttachments: next.packageAttachments } : {}),
-    ...(next.packageValues ? { packageValues: next.packageValues } : {}),
-    extensionGrants: next.extensionGrants ?? {},
     ...(next.loreContext ? { loreContext: next.loreContext } : {}),
   });
   const promptId = value.pinned?.mainPromptPresetId;
@@ -188,11 +185,10 @@ export function ProfileEditor({
         >
           <fieldset className="profile-fields" disabled={saving}>
             <div hidden={tab !== 'characters'}>
-              <PackageAttachments
+              <ContentAttachments
                 ownerBotId={ownerBotId}
                 profile={value}
                 library={library}
-                extensionModelConfigured={!!workspace?.extensionModel}
                 onChange={change}
                 onError={onError}
                 onPendingChange={setAttachmentPending}
@@ -332,15 +328,19 @@ export function ProfileEditor({
               <div className="settings-inherited">
                 <h4>이 채팅이 따르는 전역 설정</h4>
                 <dl>
-                  {(['translation', 'status', 'image'] as const).map((role, index) => (
+                  {(['translation', 'status'] as const).map((role, index) => (
                     <div key={role}>
-                      <dt>{['번역', '장면 해설', '이미지 배치'][index]}</dt>
+                      <dt>{['번역', '장면 해설'][index]}</dt>
                       <dd>
                         {library.models.find((item) => item.id === workspace?.modelRoutes[role]?.id)
                           ?.title ?? '미지정 또는 확인 필요'}
                       </dd>
                     </div>
                   ))}
+                  <div>
+                    <dt>로어·번역 거절·이미지 배치 판단</dt>
+                    <dd>JEV</dd>
+                  </div>
                 </dl>
                 <button
                   type="button"

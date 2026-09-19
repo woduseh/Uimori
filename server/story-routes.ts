@@ -1,73 +1,21 @@
-import { HttpError, fields, number, record, text } from './request-validation.js';
+import { fields, number, record, text } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
-import { presentText } from './presentation.js';
 import { searchAssets, resolveAsset } from '../core/asset-manifest.js';
 import type { RunSnapshot } from '../core/types.js';
-import { attemptRejection } from './reader.js';
 
 export function storyRoutes(
   app: FastifyInstance,
   store: Store,
   hooks: {
     publish: (chatId: string) => void;
-    pump: () => void;
     execute: (runId: string) => void;
-    abort: (jobId: string) => void;
   }
 ) {
   app.get<{ Params: { id: string }; Querystring: { branchId?: string } }>(
     '/api/chats/:id/story',
     async (request) => store.story.detail(request.params.id, request.query.branchId)
   );
-  app.put<{ Params: { id: string } }>('/api/chats/:id/story/config', async (request) => {
-    const config = store.story.saveConfig(request.params.id, request.body);
-    hooks.publish(request.params.id);
-    hooks.pump();
-    return config;
-  });
-  app.get<{ Params: { id: string } }>('/api/sources/:id/story', async (request) =>
-    store.story.sourceDetail(request.params.id)
-  );
-  app.get<{ Params: { id: string } }>('/api/story-jobs/:id', async (request) => {
-    const job = store.story.job(request.params.id);
-    const rejection = /^HTTP_4\d\d$/u.test(job.error ?? '')
-      ? attemptRejection(store, 'story_job_id', job.id)
-      : undefined;
-    return rejection ? { ...job, rejection } : job;
-  });
-  app.post<{ Params: { id: string } }>('/api/story-jobs/:id/retry', async (request) => {
-    fields(record(request.body ?? {}), []);
-    const job = store.story.retry(request.params.id);
-    hooks.publish(job.chatId);
-    hooks.pump();
-    return job;
-  });
-  app.post<{ Params: { id: string } }>('/api/story-jobs/:id/cancel', async (request) => {
-    fields(record(request.body ?? {}), []);
-    const job = store.story.cancel(request.params.id);
-    hooks.abort(job.id);
-    hooks.publish(job.chatId);
-    hooks.pump();
-    return job;
-  });
-  app.post<{ Params: { id: string } }>('/api/runs/:id/skip-state-wait', async (request) => {
-    const result = store.story.skipStateWait(request.params.id, request.body);
-    if (result.resumed) {
-      hooks.publish(result.run.chatId);
-      hooks.execute(result.run.id);
-    }
-    return result.run;
-  });
-  app.post<{ Params: { id: string } }>('/api/sources/:id/story/rebuild', async (request) => {
-    const body = record(request.body);
-    fields(body, ['kind']);
-    if (body.kind !== 'state') throw new HttpError(400, 'Invalid story job kind');
-    const job = store.story.rebuildSource(request.params.id, body.kind);
-    hooks.publish(job.chatId);
-    hooks.pump();
-    return job;
-  });
   app.post<{ Params: { id: string } }>('/api/chats/:id/scene-commands', async (request) => {
     const command = store.story.createCommand(request.params.id, request.body);
     hooks.publish(command.chatId);
@@ -116,14 +64,8 @@ export function storyRoutes(
     if (result.created) {
       hooks.publish(scene.chatId);
       if (result.run.status === 'queued') hooks.execute(result.run.id);
-      else if (result.run.status === 'waiting_for_state') hooks.pump();
     }
     return result.run;
-  });
-  app.post<{ Params: { id: string } }>('/api/sources/:id/presentation', async (request) => {
-    const body = record(request.body);
-    fields(body, ['rules']);
-    return presentText(store.source(request.params.id).text, body.rules);
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>(
     '/api/chats/:id/asset-manifest',

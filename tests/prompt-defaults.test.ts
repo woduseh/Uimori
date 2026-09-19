@@ -1,6 +1,8 @@
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { describe, expect, test } from 'vitest';
 import { createHash } from 'node:crypto';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { compileTranslationPrompt, translationInput } from '../core/auxiliary.js';
@@ -58,17 +60,13 @@ function snapshot(protocol: ProviderProtocol): RunSnapshot {
     resources: [],
     profile: {
       ...defaultProfile('default-prompt'),
-      contents: [
-        {
-          id: 'module',
-          revision: 3,
-          kind: 'module',
-          title: 'Scope',
-          description: '',
-          text: 'Pinned module evidence.',
-          loading: 'pinned',
-          relatedIds: [],
-        },
+      packageAttachments: [{ id: 'module', revision: 3, role: 'module' }],
+      packages: [
+        nativeContent(
+          { name: 'Scope', description: 'Pinned module evidence.' },
+          { id: 'module', revision: 3 },
+          'module'
+        ),
       ],
       models: { main: target, translation: target },
     },
@@ -77,7 +75,7 @@ function snapshot(protocol: ProviderProtocol): RunSnapshot {
 describe('single prompt program defaults at real native encoder boundaries', () => {
   test.each(protocols)(
     '%s keeps default main references and compiles explicit instructions through the same path',
-    (protocol) => {
+    async (protocol) => {
       const seed = snapshot(protocol);
       for (const custom of [false, true]) {
         if (custom)
@@ -87,20 +85,19 @@ describe('single prompt program defaults at real native encoder boundaries', () 
               revision: 1,
               title: 'Simple',
               role: 'main',
-              program: createDefaultPromptProgram('Literal {{char}}'),
+              program: createDefaultRisuPrompt('Literal {{char}}'),
             },
           };
-        const built = buildMainProviderRequest(seed);
+        const built = buildMainProviderRequest(await prepareNativeRisuRun(seed));
         const before = structuredClone(built.request.prompt);
         const preview = encodeMainPreview(built.request, seed.profile!.models.main!);
         expect(built.request.stable.contract).toBe('');
         expect(built.request.prompt!.messages[0].content[0].text).toBe(
-          custom ? 'Literal {{char}}' : DEFAULT_MAIN_PROMPT
+          custom ? 'Literal Character' : DEFAULT_MAIN_PROMPT
         );
         expect(JSON.stringify(preview.body)).toContain('Pinned module evidence.');
-        expect(JSON.stringify(preview.body)).toContain(
-          createHash('sha256').update('Pinned module evidence.').digest('hex')
-        );
+        expect(JSON.stringify(preview.body).split('Pinned module evidence.')).toHaveLength(2);
+        expect(JSON.stringify(preview.body)).toContain('package:module:module:body');
         expect(built.request.prompt).toEqual(before);
       }
     }
@@ -135,7 +132,6 @@ describe('single prompt program defaults at real native encoder boundaries', () 
           source: {
             sourceRevision: source.id,
             sourceHash: source.hash,
-            text: input.sourceText!,
             outputSchema: JSON.parse(JSON.stringify(input.outputSchema)),
           },
           results: [],
@@ -157,9 +153,6 @@ describe('single prompt program defaults at real native encoder boundaries', () 
       if (protocol === 'vertex-gemini-v1') {
         const mapped = planNativeMessages(request, protocol)!;
         expect(mapped.messages).toHaveLength(1);
-        expect(mapped.diagnostics.some((d) => d.code === 'CONSECUTIVE_ROLE_PARTS_COMBINED')).toBe(
-          true
-        );
         expect((mapped.messages[0] as { parts: unknown[] }).parts).toHaveLength(
           compilation.messages.filter((m) => m.role === 'user').length
         );

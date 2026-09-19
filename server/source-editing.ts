@@ -73,7 +73,6 @@ export function editSource(store: Store, id: string, value: unknown): Source {
         )
         .run(new Date().toISOString(), job.id);
     }
-    store.story.onSourceEditedInTransaction(id);
     store.event(source.chatId, 'source.edited', id);
     return store.source(id);
   });
@@ -103,9 +102,6 @@ export function requestTranslation(
     }
     const workspace = promptWorkspace(store);
     const selected = workspaceModelRef(workspace, 'translation');
-    const refusal = workspace.translationPolicy.judgment
-      ? null
-      : workspaceModelRef(workspace, 'refusal');
     const profile = store.product.snapshot(source.chatId, 'translation');
     const automatic = profile?.imageTranslation !== false;
     const selection = automatic
@@ -122,12 +118,7 @@ export function requestTranslation(
       ...(selected
         ? { translationModelSnapshot: store.product.modelSnapshot(selected.id, 'translation') }
         : {}),
-      translationPolicy: translationPolicy({
-        ...workspace.translationPolicy,
-        refusalModel: refusal
-          ? store.product.modelSnapshot(refusal.id, 'translation-refusal')
-          : null,
-      }),
+      translationPolicy: translationPolicy(workspace.translationPolicy),
     };
     store.product.resolveJobPrompt(store.run(source.runId).snapshot, input);
     const jobId = randomUUID();

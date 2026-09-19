@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { setTimeout as delay } from 'node:timers/promises';
 import type { HelperEditor, HelperTask, HelperSelection } from '../core/helper.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import { workspaceModelRef, type ModelSnapshot } from '../core/product.js';
@@ -1425,44 +1424,8 @@ export class HelperRuntime {
     };
     this.workspace.event(task.conversationId, task.id, 'artifact.started', {
       id: childId,
-      waitingForState: !!snapshot.story?.waiting,
     });
     try {
-      if (snapshot.story?.waiting) {
-        for (;;) {
-          signal.throwIfAborted();
-          for (const source of snapshot.history)
-            if (
-              this.store.source(source.revision).hash !==
-              (source.contentHash ?? sourceHash(source.text))
-            )
-              throw new Error('ARTIFACT_SOURCE_CHANGED');
-          const state = this.store.story.stateAt(
-            snapshot.chatId,
-            snapshot.parentRevision,
-            snapshot.story.config
-          );
-          if (state) {
-            snapshot.story = {
-              ...snapshot.story,
-              state,
-              waiting: false,
-              ...(snapshot.story.preparation
-                ? { preparation: { version: 1, status: 'ready', fallback: null, missing: [] } }
-                : {}),
-            };
-            break;
-          }
-          const jobs = this.store.db
-            .prepare(
-              "SELECT id,status FROM story_jobs WHERE chat_id=? AND source_revision=? AND kind='state' ORDER BY created_at DESC"
-            )
-            .all(snapshot.chatId, snapshot.parentRevision) as { id: string; status: string }[];
-          if (!jobs.length || jobs.every((job) => !['queued', 'running'].includes(job.status)))
-            throw new Error('ARTIFACT_AUTHORITATIVE_STATE_UNAVAILABLE');
-          await delay(100, undefined, { signal });
-        }
-      }
       const remaining =
         task.snapshot.limits.totalCalls - this.workspace.task(task.id).usage.modelCalls - 1;
       if (remaining < 1) throw new Error('MODEL_CALL_BUDGET_EXHAUSTED');

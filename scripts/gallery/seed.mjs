@@ -108,8 +108,7 @@ export async function seedGallery(baseUrl, { log = () => {} } = {}) {
     for (let attempt = 0; attempt < 100; attempt++) {
       const detail = await detailOf(chatId);
       const run = detail.runs.find((entry) => entry.id === runId);
-      if (run && !['queued', 'running', 'waiting_for_state'].includes(run.status))
-        return { detail, run };
+      if (run && !['queued', 'running'].includes(run.status)) return { detail, run };
       await sleep(100);
     }
     throw new Error(`Run ${runId} did not settle within 10s`);

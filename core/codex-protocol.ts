@@ -1,6 +1,6 @@
 import type { Json, ProviderRequest, ProviderResult } from './transport.js';
 import { ProviderContractError } from './provider-errors.js';
-import { validateProviderPrompt } from './prompt-program.js';
+import { validateProviderPrompt } from './risu-prompt.js';
 
 export const CODEX_ENDPOINT = 'codex://local';
 /** Native tools that do not require access to the Uimori host filesystem or credentials. */

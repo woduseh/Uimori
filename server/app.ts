@@ -1,5 +1,4 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
-import { BehaviorError } from '../core/package-behavior.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
@@ -23,8 +22,6 @@ import { chatActivities } from './chat-activity.js';
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
 import { runMain, ModelRunError, type MainHooks } from './model-runner.js';
-import { validateExtensionModelAttribution } from '../core/extension-model.js';
-import { ExtensionProgramError } from '../core/extension-program.js';
 import { prepareInputContext, ContextCompactionError } from './context-compaction.js';
 import {
   previousContextPlan,
@@ -33,13 +30,6 @@ import {
   candidateCompilationSnapshot,
   persistedContextSnapshot,
 } from './context-planning.js';
-import {
-  executeRunBehaviorTool,
-  prepareAutomaticRunBehavior,
-  preparedBehaviorSnapshot,
-  runBehaviorProgress,
-} from './package-behavior-run.js';
-import { authorizeExtensionModelAccess, createExtensionModelService } from './extension-model.js';
 import { prepareNativeRisuRun, prepareNativeRisuOutput } from './risu-native-run.js';
 import { prepareNativeRisuReadOnly } from './risu-native-readonly.js';
 import { createNativeRisuHost } from './risu-native-host.js';
@@ -47,24 +37,24 @@ import { nativeInteractionRoutes } from './risu-native-interactions.js';
 import { disposeAllNativeRisuSessions, disposeNativeRisuSession } from './risu-native-runtime.js';
 import { nativeRisuSessionKey } from './risu-native-context.js';
 import { prepareNativeRisuRequest } from './risu-native-request.js';
-import { createExtensionOperationRunner } from './extension-operation-runner.js';
-import { prepareAfterResponse } from './package-after-response.js';
 import { freezeLoreContext } from './lore-context.js';
+import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import {
   loreSelectionPending,
   prepareLoreSelection,
   loreSelectionAttemptInputHashes,
 } from './lore-selection.js';
-import { JEV_ENDPOINT, JEV_MODEL } from './jev-judgment.js';
+import { JEV_ENDPOINT, JEV_MODEL, JevError } from './jev-judgment.js';
+import { judgeMainRefusal, mainJudgmentInput, validateMainJudgmentWire } from './main-judgment.js';
+import { validateImageJudgmentWire } from './image-judgment.js';
 import { validateTranslationJudgmentWire } from './jev-attribution.js';
-import { hasPromptInputTransforms, preparePromptInputTransforms } from './prompt-transforms.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
 import { providerConnectionTestRoutes } from './provider-connection-test.js';
 import { storyRoutes } from './story-routes.js';
 import { outlineRoutes } from './outline-routes.js';
-import { packageImageRoutes } from './package-images.js';
+import { packageImageRoutes, imageCatalog, imageTargetSource } from './package-images.js';
 import { nativeTransferRoutes } from './native-transfer.js';
 import { risuImportRoutes } from './risu-import.js';
 import { applyNativeRisuAction } from './risu-native-actions.js';
@@ -77,7 +67,6 @@ import { packageFeatureRoutes } from './package-features.js';
 import { reconcileIllustrationJob, runIllustrationJob } from './illustration-runner.js';
 import { illustrationJob, illustrationRoutes, queuedIllustrations } from './illustrations.js';
 import { createPackageStart } from './package-start.js';
-import { runStoryJob } from './story-runner.js';
 import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
 import { VertexCredentialStore } from './vertex-credentials.js';
 import { JevCredentialStore } from './jev-credentials.js';
@@ -150,12 +139,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     const job = store.job(id);
     const source = store.sourceAtHash(job.sourceRevision, job.sourceHash);
     const snapshot = store.product.resolveJobPrompt(store.run(source.runId).snapshot, job.input);
-    requireModel(snapshot.profile?.models[job.kind], job.kind);
-    if (job.kind === 'translation' && !options.testMode) {
-      const input = record(job.input);
-      const policy = record(input.translationPolicy);
-      if (!policy.judgment) requireModel(policy.refusalModel, 'translation-refusal');
-    }
+    if (job.kind !== 'image') requireModel(snapshot.profile?.models[job.kind], job.kind);
   };
   const credentials = new VertexCredentialStore(options.dbPath);
   const jevCredentials = new JevCredentialStore(options.dbPath);
@@ -262,7 +246,6 @@ export async function createApp(options: AppOptions): Promise<App> {
   const runs = new Map<string, AbortController>();
   const jobs = new Set<string>();
   const jobControllers = new Map<string, AbortController>();
-  const storyControllers = new Map<string, AbortController>();
   const illustrations = new Set<string>();
   const illustrationControllers = new Map<string, AbortController>();
   const approvedOrigins = options.approvedOrigins ?? [];
@@ -458,7 +441,8 @@ export async function createApp(options: AppOptions): Promise<App> {
               store.run(source.runId).snapshot,
               queued.input
             );
-            requireModel(snapshot.profile?.models[queued.kind], queued.kind);
+            if (queued.kind !== 'image')
+              requireModel(snapshot.profile?.models[queued.kind], queued.kind);
             const log = (kind: 'inputs' | 'toolEvents', value: unknown) => {
               const current = store.job(id);
               if (current.status !== 'running') return;
@@ -479,24 +463,28 @@ export async function createApp(options: AppOptions): Promise<App> {
               onAttemptStart: (wire) => {
                 if (wire.judgment) {
                   const current = store.job(id);
-                  if (
-                    current.status !== 'running' ||
-                    signal.aborted ||
-                    current.kind !== 'translation'
-                  )
+                  if (current.status !== 'running' || signal.aborted)
                     throw new Error('Judgment job is inactive');
-                  validateTranslationJudgmentWire(
-                    current.sourceHash,
-                    record(record(current.input).translationPolicy).judgment,
-                    wire
-                  );
+                  if (current.kind === 'image')
+                    validateImageJudgmentWire(
+                      imageTargetSource(store, current),
+                      imageCatalog(current.input),
+                      wire
+                    );
+                  else if (current.kind === 'translation')
+                    validateTranslationJudgmentWire(
+                      current.sourceHash,
+                      record(record(current.input).translationPolicy).judgment,
+                      wire
+                    );
+                  else throw new Error('Invalid judgment job kind');
                 }
                 return store.product.startAttempt(chatId, null, id, wire);
               },
               onAttemptFinish: (attempt, result) => store.product.finishAttempt(attempt, result),
               onInput: (_id, input) => {
                 log('inputs', input);
-                if (!snapshot.profile?.models[queued.kind])
+                if (queued.kind !== 'image' && !snapshot.profile?.models[queued.kind])
                   store.product.mockAttempt(chatId, null, id, queued.kind, input);
               },
               onToolEvent: (_id, event) => log('toolEvents', event),
@@ -603,6 +591,9 @@ export async function createApp(options: AppOptions): Promise<App> {
     track(
       (async () => {
         const run = store.run(id);
+        const judgeResponse =
+          !!run.snapshot.profile?.models.main &&
+          run.snapshot.profile.models.main.connection.protocol !== 'fixture-sse-v1';
         let response: ReturnType<ResponseStreamStore['createWriter']> | undefined;
         // This Run's own calls only. Reusing a candidate's prepared state does not recharge it.
         let priorUsage: Usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
@@ -616,14 +607,27 @@ export async function createApp(options: AppOptions): Promise<App> {
             isActive: () => store.run(id).status === 'running',
           });
           requireModel(run.snapshot.profile?.models.main, 'main');
+          if (judgeResponse && !(await jevCredentials.resolve()))
+            throw new JevError('JEV_CREDENTIAL_REQUIRED');
+          if (judgeResponse && run.snapshot.settings.maxCalls < 2)
+            throw new JevError('MAIN_JUDGMENT_CALL_BUDGET');
           publish(run.chatId);
           await controls.wait('run', controller.signal);
           const hooks: MainHooks = {
+            reserveCalls: Number(judgeResponse),
             prepareRequest: async (request, usage) => {
               const current = store.run(id).snapshot;
               const prepared = await prepareNativeRisuRequest(current, request, {
                 signal: controller.signal,
-                host: createNativeRisuHost(store, id, current, usage, hooks, 'editRequest', true),
+                host: createNativeRisuHost(
+                  store,
+                  id,
+                  current,
+                  usage,
+                  hooks,
+                  'editRequest',
+                  1 + Number(judgeResponse)
+                ),
               });
               if (prepared.snapshot !== current) {
                 store.transaction(() => {
@@ -644,13 +648,6 @@ export async function createApp(options: AppOptions): Promise<App> {
                 store.product.mockAttempt(run.chatId, id, null, 'main', input);
             },
             onToolEvent: (event) => store.tool(id, event),
-            onBehaviorTool: (binding, action, host) =>
-              executeRunBehaviorTool(store, id, binding, action, controller.signal, host),
-            authorizeExtensionModel: (binding) => {
-              assertCurrent();
-              assertExtensionPhase(binding.trigger);
-              authorizeExtensionModelAccess(store, run.snapshot, binding);
-            },
             persistContext: (prepared, own) =>
               store.transaction(() => {
                 if (controller.signal.aborted || store.run(id).status !== 'running')
@@ -675,8 +672,12 @@ export async function createApp(options: AppOptions): Promise<App> {
                 throw new Error('Run cancelled');
               if (wire.judgment) {
                 const current = store.run(id).snapshot;
+                if (wire.judgment.kind === 'main-refusal') {
+                  if (!current.mainJudgment) throw new Error('Missing main judgment input');
+                  validateMainJudgmentWire(current.mainJudgment, wire);
+                  return store.product.startAttempt(run.chatId, id, null, wire);
+                }
                 if (
-                  current.profile?.loreContext?.judgment?.backend !== 'jev' ||
                   wire.judgment.kind !== 'lore-selection' ||
                   wire.protocol !== 'typesafe-systemone-v1' ||
                   wire.connectionId !== 'typesafe-judgment' ||
@@ -684,7 +685,6 @@ export async function createApp(options: AppOptions): Promise<App> {
                   wire.role !== 'context' ||
                   wire.url !== JEV_ENDPOINT ||
                   wire.method !== 'POST' ||
-                  wire.extensionAction ||
                   wire.agentId ||
                   !loreSelectionAttemptInputHashes(current).includes(wire.judgment.inputHash)
                 )
@@ -692,25 +692,11 @@ export async function createApp(options: AppOptions): Promise<App> {
                 return store.product.startAttempt(run.chatId, id, null, wire);
               }
               let target =
-                wire.extensionAction !== undefined
-                  ? run.snapshot.profile?.extensionModel
-                  : wire.agentId !== undefined
-                    ? run.snapshot.profile?.collaborationModels?.[wire.agentId]
-                    : wire.role === 'context'
-                      ? run.snapshot.profile?.contextModel
-                      : run.snapshot.profile?.models.main;
-              if (wire.extensionAction !== undefined) {
-                assertCurrent();
-                assertExtensionPhase(wire.extensionAction.trigger);
-                if (wire.agentId !== undefined || wire.role !== 'state')
-                  throw new Error('Invalid extension attempt');
-                target = validateExtensionModelAttribution(
-                  run.snapshot,
-                  wire.extensionAction
-                ).target;
-                if (target.modelId !== wire.modelId || target.connectionId !== wire.connectionId)
-                  throw new Error('Invalid extension attempt');
-              }
+                wire.agentId !== undefined
+                  ? run.snapshot.profile?.collaborationModels?.[wire.agentId]
+                  : wire.role === 'context'
+                    ? run.snapshot.profile?.contextModel
+                    : run.snapshot.profile?.models.main;
               if (
                 wire.agentId !== undefined &&
                 (!target ||
@@ -744,38 +730,10 @@ export async function createApp(options: AppOptions): Promise<App> {
             )
               throw new Error('CONTEXT_DEPENDENCIES_CHANGED');
           };
-          const assertExtensionPhase = (
-            trigger?: 'model' | 'before-turn' | 'after-turn' | 'user'
-          ) => {
-            if (trigger === 'user') throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
-            const progress = runBehaviorProgress(store, id);
-            if (
-              (trigger === 'before-turn' && progress?.preparation?.status !== 'running') ||
-              (trigger === 'after-turn' && progress?.afterResponse?.status !== 'running')
-            )
-              throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
-          };
-          const preparationModels = createExtensionModelService(run.snapshot, hooks, priorUsage);
-          try {
-            await prepareAutomaticRunBehavior(
-              store,
-              id,
-              controller.signal,
-              () => publish(run.chatId),
-              (binding) => ({
-                modelGenerate: (args, signal) => preparationModels.generate(binding, args, signal),
-                assertModelAccess: () => hooks.authorizeExtensionModel?.(binding),
-                hostWaitMs: preparationModels.hostWaitMs,
-              })
-            );
-          } catch (error) {
-            // Model-capable preparation settles its host attempts before reaching this boundary.
-            throw new ModelRunError(error, structuredClone(priorUsage));
-          }
           hooks.initialUsage = structuredClone(priorUsage);
           const reservedCompilationSnapshot = candidateCompilationSnapshot(store, run.snapshot, id);
-          let executionSnapshot = preparedBehaviorSnapshot(store, id, run.snapshot),
-            compilationSnapshot = preparedBehaviorSnapshot(store, id, reservedCompilationSnapshot);
+          let executionSnapshot = run.snapshot,
+            compilationSnapshot = reservedCompilationSnapshot;
           executionSnapshot = await prepareNativeRisuRun(executionSnapshot, {
             signal: controller.signal,
             host: createNativeRisuHost(
@@ -785,7 +743,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               priorUsage,
               hooks,
               'before-turn',
-              true
+              1 + Number(judgeResponse)
             ),
           });
           hooks.initialUsage = structuredClone(priorUsage);
@@ -817,7 +775,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             assertCurrent();
             const selection = await prepareLoreSelection(executionSnapshot, hooks, {
               jev: { credential: jevCredentials.resolve },
-              reserveCalls: 1 + priorUsage.modelCalls,
+              reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
             });
             priorUsage = mergeUsage(priorUsage, selection.usage);
             hooks.initialUsage = structuredClone(priorUsage);
@@ -840,9 +798,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             publish(run.chatId);
           }
           if (
-            (run.snapshot.behaviorExecution?.deferredAutomatic ||
-              executionSnapshot.nativeRisuExecution !== undefined ||
-              hasPromptInputTransforms(executionSnapshot) ||
+            (executionSnapshot.nativeRisuExecution !== undefined ||
               executionSnapshot.loreSelection !== undefined) &&
             !executionSnapshot.contextPlan
           ) {
@@ -861,28 +817,6 @@ export async function createApp(options: AppOptions): Promise<App> {
             executionSnapshot.contextBase = contextBase;
             compilationSnapshot.contextBase = contextBase;
           }
-          if (hasPromptInputTransforms(compilationSnapshot)) {
-            compilationSnapshot = await preparePromptInputTransforms(compilationSnapshot);
-            assertCurrent();
-            executionSnapshot = {
-              ...executionSnapshot,
-              promptInputTransforms: compilationSnapshot.promptInputTransforms,
-            };
-            // Keep failure receipts as well, so a cancelled run or candidate never retries
-            // an uncertain transform outcome while reconstructing the same model input.
-            store.transaction(() => {
-              assertCurrent();
-              store.db
-                .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
-                .run(
-                  JSON.stringify(
-                    persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
-                  ),
-                  new Date().toISOString(),
-                  id
-                );
-            });
-          }
           if (executionSnapshot.contextPlan) {
             assertCurrent();
             const reuse =
@@ -894,7 +828,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 compilationSnapshot,
                 {
                   ...hooks,
-                  reserveCalls: 1 + priorUsage.modelCalls,
+                  reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
                   authorize: (connection) => {
                     assertCurrent();
                     return store.product.authorize(connection);
@@ -947,6 +881,25 @@ export async function createApp(options: AppOptions): Promise<App> {
               executionSnapshot = prepared.snapshot;
             }
           }
+          // Native preparation invalidates the old compilation even when a fixture has no
+          // model/context plan. Persist the exact prepared prompt before any writer input.
+          if (!executionSnapshot.promptCompilation) {
+            executionSnapshot = {
+              ...executionSnapshot,
+              promptCompilation: compileSnapshotPrompt(compilationSnapshot).promptCompilation,
+            };
+            store.transaction(() => {
+              assertCurrent();
+              store.db
+                .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+                .run(
+                  JSON.stringify(
+                    persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                  ),
+                  id
+                );
+            });
+          }
           const result = await runMain(executionSnapshot, hooks);
           response.flush();
           if (controller.signal.aborted) {
@@ -970,29 +923,45 @@ export async function createApp(options: AppOptions): Promise<App> {
           // are adopted with the unchanged main text. Keep provider accounting on fatal host errors.
           priorUsage = structuredClone(result.usage);
           store.stageRunOutput(id, result.text);
-          const responseModels = createExtensionModelService(run.snapshot, hooks, priorUsage, {
-            phase: 'after-response',
-          });
-          try {
-            await prepareAfterResponse(
-              store,
-              id,
-              result.text,
-              controller.signal,
-              () => publish(run.chatId),
-              (binding) => ({
-                modelGenerate: (args, signal) => responseModels.generate(binding, args, signal),
-                assertModelAccess: () => hooks.authorizeExtensionModel?.(binding),
-                hostWaitMs: responseModels.hostWaitMs,
-              })
-            );
-          } catch (error) {
-            throw new ModelRunError(error, structuredClone(priorUsage));
-          }
-          if (controller.signal.aborted) {
-            store.settleCancelledUsage(id, priorUsage);
-            publish(run.chatId);
-            return;
+          if (judgeResponse) {
+            if (priorUsage.modelCalls >= run.snapshot.settings.maxCalls)
+              throw new JevError('MAIN_JUDGMENT_CALL_BUDGET');
+            const input = mainJudgmentInput(result.text);
+            store.transaction(() => {
+              assertCurrent();
+              store.db
+                .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+                .run(JSON.stringify({ ...store.run(id).snapshot, mainJudgment: input }), id);
+            });
+            const judgment = await judgeMainRefusal(input, {
+              signal: controller.signal,
+              credential: jevCredentials.resolve,
+              onAttemptStart: async (wire) => {
+                const attempt = await hooks.onAttemptStart(wire);
+                priorUsage.modelCalls++;
+                return attempt;
+              },
+              onAttemptFinish: async (attempt, outcome) => {
+                priorUsage = mergeUsage(priorUsage, {
+                  modelCalls: 0,
+                  inputTokens: outcome.usage.inputTokens,
+                  outputTokens: outcome.usage.outputTokens,
+                  costUsd: outcome.usage.costUsd,
+                });
+                await hooks.onAttemptFinish(attempt, outcome);
+              },
+            });
+            if (judgment.verdict !== 'accepted') {
+              store.finishRun(
+                id,
+                judgment.verdict === 'refused' ? 'refused' : 'failed',
+                judgment.verdict === 'refused' ? 'MAIN_RESPONSE_REFUSED' : 'MAIN_REFUSAL_UNCERTAIN',
+                result.text,
+                priorUsage
+              );
+              publish(run.chatId);
+              return;
+            }
           }
           const nativeOutput = await prepareNativeRisuOutput(executionSnapshot, result.text, {
             signal: controller.signal,
@@ -1027,7 +996,6 @@ export async function createApp(options: AppOptions): Promise<App> {
           publish(run.chatId);
           pumpJobs();
           pumpIllustrations();
-          pumpStory();
           if (admitted()) {
             titles.afterSource(id);
             branchTitles.afterSource(id);
@@ -1069,6 +1037,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             const message = error instanceof Error ? error.message : '';
             const safeError =
               message === 'Model call budget exhausted' ||
+              error instanceof JevError ||
               message.startsWith('Injected failure:') ||
               message.startsWith('MODEL_REQUIRED:') ||
               message.startsWith('CONTEXT_')
@@ -1090,112 +1059,13 @@ export async function createApp(options: AppOptions): Promise<App> {
         } finally {
           const status = store.run(id).status;
           if (status !== 'completed') disposeNativeRisuSession(nativeRisuSessionKey(run.snapshot));
-          response?.finish(
-            status === 'queued' || status === 'running' || status === 'waiting_for_state'
-              ? 'interrupted'
-              : status
-          );
+          response?.finish(status === 'queued' || status === 'running' ? 'interrupted' : status);
           runs.delete(id);
           stopping.signal.removeEventListener('abort', onStop);
         }
       })()
     );
   };
-  const pumpStory = () => {
-    if (stopping.signal.aborted) return;
-    for (const [id, controller] of storyControllers)
-      if (!['queued', 'running'].includes(store.story.job(id).status)) controller.abort();
-    for (const runId of store.story.resumeWaiting()) execute(runId);
-    if (!admitted()) return;
-    for (const id of store.story.queued()) {
-      if (storyControllers.size >= 2) break;
-      if (storyControllers.has(id)) continue;
-      const job = store.story.claim(id, instanceId);
-      if (!job) continue;
-      const controller = new AbortController();
-      storyControllers.set(id, controller);
-      const signal = AbortSignal.any([controller.signal, stopping.signal]);
-      track(
-        (async () => {
-          try {
-            publish(job.chatId);
-            await controls.wait(job.kind, signal);
-            controls.fail(job.kind);
-            requireModel(store.story.bundle(id).snapshot.story?.models[job.kind], job.kind);
-            const result = await runStoryJob(store.story.bundle(id), {
-              signal,
-              approvedOrigins,
-              resolveCredential,
-              executeCodex,
-              authorize: (connection) => store.product.authorize(connection),
-              vertexRequestTier: options.vertexRequestTier,
-              onAttemptStart: (wire) =>
-                store.transaction(() => {
-                  const current = store.story.job(id);
-                  if (
-                    current.status !== 'running' ||
-                    current.generation !== job.generation ||
-                    current.owner !== instanceId
-                  )
-                    throw new Error('STORY_JOB_STALE');
-                  const models = store.story.bundle(id).snapshot.story!.models;
-                  const target = wire.role === 'context' ? models.context : models[job.kind];
-                  if (target) store.product.authorize(target.connection);
-                  const attempt = store.product.startAttempt(job.chatId, null, null, wire);
-                  store.db
-                    .prepare('UPDATE attempts SET story_job_id=? WHERE id=?')
-                    .run(id, attempt);
-                  return attempt;
-                }),
-              onAttemptFinish: (attempt, result) => store.product.finishAttempt(attempt, result),
-              onInput: (input) => {
-                store.story.diagnostic(id, job.generation, instanceId, 'inputs', input);
-                if (job.mock) {
-                  const attempt = store.product.mockAttempt(
-                    job.chatId,
-                    null,
-                    null,
-                    job.kind,
-                    input
-                  );
-                  store.db
-                    .prepare('UPDATE attempts SET story_job_id=? WHERE id=?')
-                    .run(id, attempt);
-                }
-              },
-              onToolEvent: (event) =>
-                store.story.diagnostic(id, job.generation, instanceId, 'tool_events', event),
-            });
-            store.story.finish(id, job.generation, instanceId, result);
-          } catch (error) {
-            if (job) {
-              const safe =
-                error instanceof Error &&
-                (error.message.startsWith('Injected failure:') ||
-                  error.message.startsWith('MODEL_REQUIRED:'))
-                  ? error.message
-                  : signal.aborted
-                    ? '보조 작업이 중단됐어요.'
-                    : '상태 결과를 검증하지 못했어요.';
-              store.story.finish(id, job.generation, instanceId, {
-                status: signal.aborted ? 'interrupted' : 'failed',
-                result: null,
-                error: safe,
-                mock: job.mock,
-              });
-            }
-          } finally {
-            storyControllers.delete(id);
-            if (!stopping.signal.aborted) {
-              publish(store.story.job(id).chatId);
-              queueMicrotask(pumpStory);
-            }
-          }
-        })()
-      );
-    }
-  };
-
   app.addHook('onRequest', async (request) => {
     const denied = deniedBrowserRequest(network, {
       method: request.method,
@@ -1211,8 +1081,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     if (denied) throw new HttpError(403, denied);
   });
   app.setErrorHandler((error, _request, reply) => {
-    const behaviorCode =
-      error instanceof BehaviorError && /^BEHAVIOR_[A-Z0-9_]{1,100}$/.test(error.message);
     const transferCode =
       error instanceof NativeTransferError && /^NATIVE_TRANSFER_[A-Z0-9_]{1,100}$/.test(error.code);
     const statusCode =
@@ -1225,27 +1093,15 @@ export async function createApp(options: AppOptions): Promise<App> {
           : 500;
     void reply.code(code).send({
       error:
-        error instanceof HttpError || behaviorCode || transferCode
+        error instanceof HttpError || transferCode
           ? error.message
           : code === 400
             ? 'Invalid request'
             : 'Request failed',
     });
   });
-  const extensionOperations = createExtensionOperationRunner(store, {
-    admitted,
-    signal: stopping.signal,
-    owner: instanceId,
-    approvedOrigins,
-    resolveCredential,
-    executeCodex,
-    vertexRequestTier: options.vertexRequestTier,
-    publish,
-    track,
-  });
   const session = productRoutes(app, store, {
     maintenance: () => maintenanceStatus(store, forcedClosed),
-    extensionOperations,
     credentials,
     codex,
     approvedOrigins,
@@ -1332,9 +1188,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   storyRoutes(app, store, {
     publish,
-    pump: pumpStory,
     execute,
-    abort: (id) => storyControllers.get(id)?.abort(),
   });
   outlineRoutes(app, store, { publish });
   packageImageRoutes(app, store, { publish, pump: pumpJobs });
@@ -1402,13 +1256,10 @@ export async function createApp(options: AppOptions): Promise<App> {
   risuPresetImportRoutes(app, store);
   diagnosticReportRoutes(app, store, { buildId: options.buildId, testMode: options.testMode });
   app.post<{ Params: { id: string } }>('/api/chats/:id/package-start', async (request) => {
-    const result = createPackageStart(store, request.params.id, request.body, (snapshot) =>
-      requireModel(snapshot.profile?.models.main, 'main')
-    );
+    const result = createPackageStart(store, request.params.id, request.body);
     if (result.created) {
       publish(result.run.chatId);
       if (result.run.status === 'queued') execute(result.run.id);
-      else if (result.run.status === 'waiting_for_state') pumpStory();
     }
     return result;
   });
@@ -1505,7 +1356,6 @@ export async function createApp(options: AppOptions): Promise<App> {
       'idempotencyKey',
       'branchId',
       'expectedProfileRevision',
-      'packageRequestId',
       'loreContextReset',
     ]);
     if (body.loreContextReset !== undefined && typeof body.loreContextReset !== 'boolean')
@@ -1513,9 +1363,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     const command = {
       ...(body.loreContextReset !== undefined
         ? { loreContextReset: body.loreContextReset as boolean }
-        : {}),
-      ...(body.packageRequestId !== undefined
-        ? { packageRequestId: text(body.packageRequestId, 'package request', 120) }
         : {}),
       request: text(body.request, 'request'),
       expectedRevision:
@@ -1657,9 +1504,6 @@ export async function createApp(options: AppOptions): Promise<App> {
         if (job.sourceRevision === source.id && job.sourceHash !== source.hash)
           controller.abort(new Error('Source edited'));
       }
-      for (const [jobId, controller] of storyControllers)
-        if (store.story.job(jobId).status === 'stale') controller.abort();
-      pumpStory();
       publish(source.chatId);
       return source;
     }
@@ -1776,14 +1620,12 @@ export async function createApp(options: AppOptions): Promise<App> {
   pruneUploads(store.path);
   if (!forcedClosed) {
     store.recover();
-    store.story.recover();
     helper.workspace.interrupt();
     streams.recover();
   }
   app.addHook('onListen', async () => {
     pumpJobs();
     pumpIllustrations();
-    pumpStory();
   });
   return app;
 }

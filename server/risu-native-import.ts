@@ -1,5 +1,5 @@
-import type { ContentPackage } from '../core/content-package.js';
-import type { NativeRisuContent } from '../core/risu-native.js';
+import type { RisuContent } from '../core/risu-content.js';
+import type { RisuContentSource } from '../core/risu-native.js';
 import { nativeRisuTriggers } from '../core/risu-native.js';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import { importRisuAssets } from './risu-import-assets.js';
@@ -31,7 +31,7 @@ export function analyzeNativeRisuImport(input: RisuCardInput) {
     findings,
     native: true,
   });
-  const native: NativeRisuContent = {
+  const native: RisuContentSource = {
     version: 1,
     card: structuredClone(input.nativeCard),
     ...(input.nativeModule ? { module: structuredClone(input.nativeModule) } : {}),
@@ -57,11 +57,9 @@ export function analyzeNativeRisuImport(input: RisuCardInput) {
       nativeRisu: native,
       lore: [],
       instructions: [],
-      controls: [],
-      transforms: [],
       images: assets.packageImages,
       ...(assets.portraitImageId ? { portraitImageId: assets.portraitImageId } : {}),
-    } satisfies ContentPackage,
+    } satisfies RisuContent,
     input.kind,
     findings
   );
@@ -69,7 +67,7 @@ export function analyzeNativeRisuImport(input: RisuCardInput) {
     findings.add(
       'native-lore-model',
       'info',
-      '로어 원문과 활성 규칙을 보존하고 기본 선택은 Uimori의 모델 선택을 사용해요. 키워드 선택으로 바꿀 수도 있어요.'
+      '로어 원문과 규칙은 보존하며 선택적 로어의 관련성은 JEV가 판단해요. 선택되지 않은 로어도 작문 모델이 조회할 수 있어요.'
     );
   if (input.source.base64 === undefined)
     findings.add(

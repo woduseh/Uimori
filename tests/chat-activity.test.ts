@@ -58,7 +58,7 @@ test('sidebar activity groups all chats, excludes settled and stale work, and ex
   };
   const firstRun = makeRun(first.id);
   const secondRun = makeRun(second.id);
-  store.db.prepare("UPDATE runs SET status='waiting_for_state' WHERE id=?").run(secondRun.id);
+  store.startRun(secondRun.id);
   const initial = await app.inject('/api/chat-activities');
   expect(initial.statusCode).toBe(200);
   expect(initial.json()).toEqual(
@@ -72,24 +72,22 @@ test('sidebar activity groups all chats, excludes settled and stale work, and ex
     firstRun.snapshot.settings
   );
   store.db.prepare("UPDATE jobs SET status='completed' WHERE chat_id=?").run(first.id);
-  store.db
-    .prepare("INSERT INTO story_configs(chat_id,revision,body) VALUES(?,1,'{}')")
-    .run(first.id);
-  const add = (kind: 'state', hash: string, status: string) => {
+  let revision = 1;
+  const add = (hash: string, status: string) => {
     const id = randomUUID();
     store.db
-      .prepare(`INSERT INTO story_jobs(id,chat_id,source_revision,source_hash,kind,config_revision,status,snapshot,mock,created_at,updated_at,dependency_key)
-        VALUES(?,?,?,?,?,1,?,'{}',1,'2026-09-08','2026-09-08',?)`)
-      .run(id, first.id, source.id, hash, kind, status, id);
+      .prepare(`INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,created_at,updated_at)
+        VALUES(?,?,?,?,'translation',?,?,'2026-09-08','2026-09-08')`)
+      .run(id, first.id, source.id, hash, status, revision++);
   };
-  add('state', source.hash, 'queued');
-  add('state', source.hash, 'running');
-  add('state', source.hash, 'failed');
-  add('state', 'old-source-hash', 'running');
+  add(source.hash, 'queued');
+  add(source.hash, 'running');
+  add(source.hash, 'failed');
+  add('old-source-hash', 'running');
   const active = (await app.inject('/api/chat-activities')).json();
   expect(active).toEqual(
     [
-      { chatId: first.id, kind: 'state', count: 2 },
+      { chatId: first.id, kind: 'translation', count: 2 },
       { chatId: second.id, kind: 'main', count: 1 },
     ].sort((a, b) => a.chatId.localeCompare(b.chatId))
   );

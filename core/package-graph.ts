@@ -1,13 +1,13 @@
 import {
-  validateContentPackage,
-  validatePackageAttachment,
-  type ContentPackage,
-  type PackageAttachment,
-} from './content-package.js';
+  validateRisuContent,
+  validateContentAttachment,
+  type RisuContent,
+  type ContentAttachment,
+} from './risu-content.js';
 import type { ContentRef } from './product.js';
 
 export type PackageGraphReader = {
-  read(ref: ContentRef): ContentPackage;
+  read(ref: ContentRef): RisuContent;
   latestRevision?(id: string): number;
 };
 export class PackageGraphError extends Error {
@@ -17,17 +17,17 @@ export class PackageGraphError extends Error {
 /** Preserve declaration-order execution; persistence alone uses dependency-first order. */
 export function resolvePackageGraph(
   reader: PackageGraphReader,
-  roots: PackageAttachment[],
-  options: { latest?: boolean; frozen?: PackageAttachment[] } = {}
-): { attachments: PackageAttachment[]; packages: ContentPackage[]; persistOrder: ContentRef[] } {
-  const attachments: PackageAttachment[] = [],
-    packages: ContentPackage[] = [],
+  roots: ContentAttachment[],
+  options: { latest?: boolean; frozen?: ContentAttachment[] } = {}
+): { attachments: ContentAttachment[]; packages: RisuContent[]; persistOrder: ContentRef[] } {
+  const attachments: ContentAttachment[] = [],
+    packages: RisuContent[] = [],
     persistOrder: ContentRef[] = [],
     persisted = new Set<string>(),
     seen = new Map<string, number>(),
     active = new Set<string>();
-  const visit = (raw: PackageAttachment, depth: number) => {
-    const validated = validatePackageAttachment(raw);
+  const visit = (raw: ContentAttachment, depth: number) => {
+    const validated = validateContentAttachment(raw);
     const captured = options.frozen?.find((r) => r.id === raw.id && r.role === raw.role);
     if (options.frozen && !captured)
       throw new PackageGraphError('Frozen module dependency missing');
@@ -44,7 +44,7 @@ export function resolvePackageGraph(
     }
     if (depth > 20 || attachments.length >= 100)
       throw new PackageGraphError('Package module dependency limit');
-    const pkg = validateContentPackage(reader.read(ref));
+    const pkg = validateRisuContent(reader.read(ref));
     if (pkg.id !== ref.id || pkg.revision !== ref.revision)
       throw new PackageGraphError('Package module revision conflict');
     seen.set(key, ref.revision);

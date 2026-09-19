@@ -4,7 +4,7 @@
  */
 import { buildMainInput, pinnedSlotSources, type MainInput } from '../core/provider.js';
 import type { RunSnapshot } from '../core/types.js';
-import { validateProviderPrompt } from '../core/prompt-program.js';
+import { validateProviderPrompt } from '../core/risu-prompt.js';
 import { nativeHostContextText, NATIVE_HOST_CONTEXT_ID } from '../core/provider-messages.js';
 import { ProviderContractError, type ProviderRequest, type Json } from '../core/transport.js';
 import { contextWindowReference } from '../core/context-tools.js';
@@ -12,11 +12,10 @@ import { agentSharedOptions } from './agent-shared-options.js';
 
 const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderRequest['input'] {
-  // Writing options belong to the selected PromptProgram. Mock settings never cross this boundary.
+  // Writing options belong to the selected RisuPrompt. Mock settings never cross this boundary.
   const controls: ProviderRequest['input']['controls'] = {};
   const structured = !!snapshot.promptCompilation;
   const used = new Set(snapshot.promptCompilation?.usedSlots ?? []);
-  const stateSlot = used.has('state');
   const collaboration = snapshot.profile?.promptPresets?.main?.program.collaboration;
   return {
     task: input.task,
@@ -46,14 +45,9 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
             },
           }
         : {}),
-      ...(input.state && !stateSlot ? { state: input.state } : {}),
-      ...(input.statePreparation ? { statePreparation: input.statePreparation } : {}),
       ...(input.notes && !used.has('notes') ? { notes: input.notes } : {}),
       ...(input.outline && !used.has('outline') ? { outline: input.outline } : {}),
       ...(input.catalogPage ? { catalogPage: input.catalogPage } : {}),
-      ...(snapshot.behaviorExecution?.automaticResults.length
-        ? { automaticResults: snapshot.behaviorExecution.automaticResults }
-        : {}),
       ...(contextWindowReference(snapshot) !== undefined
         ? { contextWindow: contextWindowReference(snapshot) }
         : {}),

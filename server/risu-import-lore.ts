@@ -1,4 +1,4 @@
-import type { ContentPackage, PackageLoreActivation } from '../core/content-package.js';
+import type { RisuContent } from '../core/risu-content.js';
 import { RISU_IMPORT_MAX_LORE_ENTRIES, type RisuImportPreview } from '../core/risu-import.js';
 import { HttpError, record } from './request-validation.js';
 import {
@@ -10,15 +10,9 @@ import {
 import { object, string, type RisuCard, type RisuCardLoreEntry } from './risu-import-card.js';
 import type { RisuImportFindings } from './risu-import-findings.js';
 
-/**
- * What is left to say about a decorator now that the keyword engine reads the whole block. `null` is a
- * decorator the engine itself applies, so it carries no finding at all; the four notices below are the
- * ones it cannot apply or cannot apply fully.
- */
-type DecoratorNotice = 'position' | 'memory' | 'greeting' | 'inert';
+/** Source rules stay in the Risu document; only pinned/disabled and placement are host policy. */
+type DecoratorNotice = 'position' | 'activation';
 const DECORATOR_NOTICES = {
-  // The engine decides WHICH entries are active; where and in what shape they reach the model is a
-  // separate decision Uimori has not taken.
   end: 'position',
   depth: 'position',
   reverse_depth: 'position',
@@ -28,63 +22,44 @@ const DECORATOR_NOTICES = {
   inject_at: 'position',
   inject_replace: 'position',
   inject_prepend: 'position',
-  // The engine performs the lookup, but the writes it would leave behind are not persisted.
-  keep_activate_after_match: 'memory',
-  dont_activate_after_match: 'memory',
-  is_greeting: 'greeting',
-  instruct_depth: 'inert',
-  is_user_icon: 'inert',
-  disable_ui_prompt: 'inert',
-  // Applied by the engine at reservation.
   activate: null,
   dont_activate: null,
-  activate_only_after: null,
-  activate_only_every: null,
-  scan_depth: null,
-  additional_keys: null,
-  exclude_keys: null,
-  exclude_keys_all: null,
-  match_full_word: null,
-  match_partial_word: null,
-  probability: null,
-  priority: null,
-  ignore_on_max_context: null,
-  recursive: null,
-  unrecursive: null,
-  no_recursive_search: null,
+  keep_activate_after_match: 'activation',
+  dont_activate_after_match: 'activation',
+  is_greeting: 'activation',
+  instruct_depth: 'activation',
+  is_user_icon: 'activation',
+  disable_ui_prompt: 'activation',
+  activate_only_after: 'activation',
+  activate_only_every: 'activation',
+  scan_depth: 'activation',
+  additional_keys: 'activation',
+  exclude_keys: 'activation',
+  exclude_keys_all: 'activation',
+  match_full_word: 'activation',
+  match_partial_word: 'activation',
+  probability: 'activation',
+  priority: 'activation',
+  ignore_on_max_context: 'activation',
+  recursive: 'activation',
+  unrecursive: 'activation',
+  no_recursive_search: 'activation',
 } satisfies Record<keyof LoreDecorators, DecoratorNotice | null>;
-const NOTICES: Record<
-  DecoratorNotice,
-  { level: 'info' | 'unsupported'; message: (decorator: string) => string }
-> = {
+const NOTICES = {
   position: {
-    level: 'unsupported',
-    message: (decorator) =>
-      `로어의 \`@@${decorator}\` 지시문은 로어가 모델에 들어가는 위치·형태를 바꿔요. 아직 적용하지 않아요.`,
+    level: 'unsupported' as const,
+    message: (decorator: string) =>
+      `로어의 \`@@${decorator}\` 위치·삽입 지시문은 원본에 보존하지만 현재 문맥 배치에는 적용하지 않아요.`,
   },
-  memory: {
-    level: 'unsupported',
-    message: (decorator) =>
-      `로어의 \`@@${decorator}\` 지시문이 남기는 활성 상태 기억은 저장하지 않아요. 이번 생성 안에서만 반영돼요.`,
-  },
-  greeting: {
-    level: 'info',
-    message: (decorator) =>
-      `로어의 \`@@${decorator}\` 지시문은 선택한 시작문 순번을 알 수 없어 0번으로 봐요.`,
-  },
-  inert: {
-    level: 'info',
-    message: (decorator) =>
-      `로어의 \`@@${decorator}\` 지시문은 모델에 보내는 내용을 바꾸지 않아요. 적용하지 않아요.`,
+  activation: {
+    level: 'info' as const,
+    message: (decorator: string) =>
+      `로어의 \`@@${decorator}\` 규칙은 원본에 보존해요. 선택적 로어는 JEV 관련성 판단과 작문 모델의 조회로 제공해요.`,
   },
 };
 /** Unknown names come from the file, so the notice lists a bounded number of bounded names. */
 const MAX_UNKNOWN_DECORATORS = 20;
 const MAX_UNKNOWN_DECORATOR_LENGTH = 40;
-/** The stored activation rule stays inside the package validator's limits. */
-const MAX_ACTIVATION_KEY_CHARS = 4000;
-const MAX_RULE_CHARS = 4000;
-const MAX_RULE_LINES = 64;
 /** The preview shows the keys so the import screen can name what turns an entry on. */
 const MAX_PREVIEW_KEY_CHARS = 200;
 
@@ -92,7 +67,7 @@ const MAX_PREVIEW_KEY_CHARS = 200;
 const carries = (value: LoreDecorators[keyof LoreDecorators]) =>
   Array.isArray(value) ? value.length > 0 : value !== null && value !== false;
 
-/** The decorators one entry carries that the keyword engine does not settle by itself. */
+/** Source decorators that are not implemented by the host placement projection. */
 function reportedDecorators(decorators: LoreDecorators) {
   const found: { decorator: string; notice: DecoratorNotice }[] = [];
   for (const decorator of Object.keys(DECORATOR_NOTICES) as (keyof LoreDecorators)[]) {
@@ -109,8 +84,7 @@ function reportedDecorators(decorators: LoreDecorators) {
 /**
  * The card's lorebook as Risu normalizes it on import: the entry `extensions` another frontend wrote
  * (position/depth/role, selectiveLogic with secondary keys, probability, delay, match_whole_words)
- * become the `@@` lines Risu reads, and the book's own scan settings become `loresettings`. Both the
- * converted records and those settings are what the keyword engine is later run over.
+ * become the `@@` lines Risu reads. The host derives enabled state and placement from those lines.
  *
  * The entries handed over are copies, because the conversion writes back onto the entry and deletes
  * the keys it migrates from its `extensions`, and the card has to stay as the file wrote it.
@@ -148,51 +122,26 @@ function convertedLorebook(book: Record<string, unknown>, entries: RisuCardLoreE
 }
 
 /**
- * The leading `@@` block of the converted content, exactly the lines the decorator parser consumed:
- * the input trimmed, each line trimmed, up to the first line that is not a decorator. Storing them
- * verbatim is what lets the engine read the same block back at reservation.
- */
-function leadingRules(content: string): string[] {
-  const lines = content.trim().split('\n');
-  const block: string[] = [];
-  for (const line of lines) {
-    if (!line.trim().startsWith('@@')) break;
-    block.push(line.trim());
-  }
-  return block;
-}
-
-/** Keeps whole keys only: a key cut in half would match text the original rule never matched. */
-function limitKeys(keys: string, max: number): string {
-  if (keys.length <= max) return keys;
-  const cut = keys.slice(0, max);
-  const boundary = cut.lastIndexOf(',');
-  return boundary < 0 ? '' : cut.slice(0, boundary);
-}
-
-/**
  * Reads the card's lorebook. Every entry appears in the preview so the import screen can offer it
  * as a memory, while only the entries the package actually uses reach its lore.
  */
 export function importRisuLore({
   card,
   findings,
-  native = false,
 }: {
   card: RisuCard;
   findings: RisuImportFindings;
-  native?: boolean;
 }): {
   preview: RisuImportPreview['lore'];
-  lore: ContentPackage['lore'];
-  loreActivation?: ContentPackage['loreActivation'];
+  lore: RisuContent['lore'];
+  loreActivation?: RisuContent['loreActivation'];
 } {
   const book = object(card.character_book);
   const entries = book.entries === undefined ? [] : book.entries;
   if (!Array.isArray(entries) || entries.length > RISU_IMPORT_MAX_LORE_ENTRIES)
     throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   const preview: RisuImportPreview['lore'] = [];
-  const lore: ContentPackage['lore'] = [];
+  const lore: RisuContent['lore'] = [];
   const read = entries.map((raw) => record(raw) as RisuCardLoreEntry);
   const converted = convertedLorebook(book, read);
   const unknown = new Set<string>();
@@ -205,7 +154,6 @@ export function importRisuLore({
     const decorators = parsed.decorators;
     const nativeDepth = decorators.depth ?? decorators.reverse_depth ?? 0;
     const nativePosition =
-      native &&
       !decorators.position &&
       !decorators.inject_lore &&
       !decorators.inject_at &&
@@ -240,7 +188,7 @@ export function importRisuLore({
       entry.constant === true || parsed.decorators.activate
         ? ('pinned' as const)
         : ('discoverable' as const);
-    const keys = limitKeys(source.key, MAX_ACTIVATION_KEY_CHARS);
+    const keys = source.key;
     preview.push({
       id,
       title: name.slice(0, 200),
@@ -273,28 +221,6 @@ export function importRisuLore({
         '본문 중간의 `@@` 지시문은 해석하지 않고 그대로 남겨요. 원래 규칙과 다르게 동작할 수 있어요.'
       );
     if (!enabled || !content.trim()) continue;
-    let rules = leadingRules(source.content);
-    if (rules.length > MAX_RULE_LINES || rules.join('\n').length > MAX_RULE_CHARS) {
-      rules = rules.slice(0, MAX_RULE_LINES);
-      while (rules.length && rules.join('\n').length > MAX_RULE_CHARS) rules.pop();
-      findings.add(
-        'lore-rules-truncated',
-        'warning',
-        '지시문이 너무 많은 로어는 앞부분만 남기고 잘라요. 잘린 지시문은 활성 판단에 쓰이지 않아요.'
-      );
-    }
-    // Stored even for an entry with no key and no rule: Risu never activates such an entry, and
-    // recording that is what keeps it out of the model instead of turning it into a lookup.
-    const activation: PackageLoreActivation = {
-      keys,
-      ...(source.secondkey
-        ? { secondaryKeys: limitKeys(source.secondkey, MAX_ACTIVATION_KEY_CHARS) }
-        : {}),
-      ...(source.selective ? { selective: true } : {}),
-      ...(source.useRegex ? { regex: true } : {}),
-      ...(source.mode === 'child' ? { child: true } : {}),
-      ...(rules.length ? { rules: rules.join('\n') } : {}),
-    };
     activated = true;
     const loreText = string(content),
       order = entry.insertion_order;
@@ -312,7 +238,6 @@ export function importRisuLore({
       ...(typeof order === 'number' && Number.isSafeInteger(order) && Math.abs(order) <= 1_000_000
         ? { loreContext: { placement: 'background' as const, order } }
         : {}),
-      activation,
       ...(nativePosition ? { nativeRisuPosition: nativePosition } : {}),
     });
   }
@@ -328,31 +253,5 @@ export function importRisuLore({
   if (preview.some((item) => !item.enabled))
     findings.add('disabled-lore', 'info', '비활성 로어는 적용하지 않고 원본 파일에 보존해요.');
   if (!activated) return { preview, lore };
-  findings.add(
-    'lore-keyword',
-    'info',
-    '키워드 활성화 규칙을 그대로 가져와요. 활성 예산은 채팅 설정의 조회 로어 문자 한도를 따르고, 위치·삽입 지시문은 적용하지 않아요.'
-  );
-  const settings = converted.loresettings;
-  return {
-    preview,
-    lore,
-    loreActivation: {
-      mode: 'keyword',
-      // Risu's own book settings, and only when the file supplied them; the card's token budget is
-      // replaced by the chat's 조회 로어 문자 한도, so it is dropped here.
-      ...(settings &&
-      Number.isSafeInteger(settings.scanDepth) &&
-      settings.scanDepth >= 0 &&
-      settings.scanDepth <= 1000
-        ? { scanDepth: settings.scanDepth }
-        : {}),
-      ...(typeof settings?.recursiveScanning === 'boolean'
-        ? { recursiveScanning: settings.recursiveScanning }
-        : {}),
-      ...(typeof settings?.fullWordMatching === 'boolean'
-        ? { fullWordMatching: settings.fullWordMatching }
-        : {}),
-    },
-  };
+  return { preview, lore, loreActivation: { mode: 'model' } };
 }

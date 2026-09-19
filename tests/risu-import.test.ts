@@ -1,3 +1,4 @@
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { afterEach, expect, test } from 'vitest';
 import Fastify from 'fastify';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -11,7 +12,7 @@ import type { Content } from '../core/product.js';
 import { nativeRisuRegex } from '../core/risu-native.js';
 import { resolvePackageStart } from '../core/package-start.js';
 import { createPackageStart } from '../server/package-start.js';
-import { compilePackageAttachment } from '../core/package-runtime.js';
+import { compileContentAttachment } from '../core/package-runtime.js';
 import { modelWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
@@ -119,7 +120,6 @@ test('imported bot and preset defaults share one read context with module lore a
     values: { shared: 'BOT', flag: 'true' },
     attachmentRoles: ['bot'],
   });
-  expect(bot.package!.behavior).toBeUndefined();
   const moduleSource = sourceOf({
     ...original,
     data: {
@@ -154,7 +154,6 @@ test('imported bot and preset defaults share one read context with module lore a
     profile = store.product.profile(chat.id);
   store.product.updateProfile(chat.id, {
     expectedRevision: profile.revision,
-    attachments: [],
     image: false,
     packageAttachments: [
       ...profile.packageAttachments!,
@@ -226,20 +225,7 @@ test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
       expectedRevision: workspace.revision,
       main: {
         title: 'Selected prompt',
-        program: {
-          version: 1,
-          controls: [],
-          blocks: [
-            {
-              id: 'main',
-              title: 'Main',
-              kind: 'message',
-              role: 'system',
-              template: [{ kind: 'text', text: 'KEEP_SELECTED_MAIN' }],
-            },
-            { id: 'current', title: 'Input', kind: 'current' },
-          ],
-        },
+        program: nativePrompt('KEEP_SELECTED_MAIN'),
         values: {},
       },
     });
@@ -359,19 +345,17 @@ test('module JSON registers a reusable module without a bot, chat or memory', as
   expect(pkg.body).toBe('');
   expect(pkg.portraitImageId).toBeUndefined();
   expect(pkg.lore[0].loreContext?.order).toBe(200);
-  const compiled = compilePackageAttachment(
+  const compiled = compileContentAttachment(
     pkg,
     { id: pkg.id, revision: pkg.revision, role: 'module' },
     {
       chatId: 'synthetic',
       target: 'main',
-      identity: { bot: { name: 'Pilot' }, user: { name: 'Mira' } },
     }
   );
   expect(compiled.resources.find((item) => item.id.endsWith(':lore:lore-0'))?.text).toBe(
     '{{user}} visits a green moon.'
   );
-  expect(pkg.transforms).toEqual([]);
   expect(nativeRisuRegex(pkg.nativeRisu!)).toEqual([
     expect.objectContaining({ in: '<status>(.*?)</status>', out: '**$1**' }),
   ]);
@@ -384,7 +368,7 @@ test('module JSON registers a reusable module without a bot, chat or memory', as
   });
 });
 
-test('module lorebook keys, secondary keys and mode reach the preserved activation rule', () => {
+test('module lorebook keys, secondary keys and mode remain in authoritative Risu source', () => {
   const store = database();
   // Module lore is already in Risu's database shape, so these fields are the entry's own, not
   // extensions another frontend wrote.
@@ -429,10 +413,11 @@ test('module lorebook keys, secondary keys and mode reach the preserved activati
   });
   const pkg = store.product.get<Content>('content', result.receipt.items[0].id).package!;
   expect(pkg.loreActivation).toEqual({ mode: 'model' });
-  expect(pkg.lore.map((item) => item.activation)).toEqual([
-    { keys: '/harbor/i', regex: true },
-    { keys: 'storm', secondaryKeys: 'rain', selective: true, child: true },
+  expect(pkg.nativeRisu.module!.lorebook).toMatchObject([
+    { key: '/harbor/i', useRegex: true },
+    { key: 'storm', secondkey: 'rain', selective: true, mode: 'child' },
   ]);
+  expect(pkg.lore.every((item) => !Object.hasOwn(item, 'activation'))).toBe(true);
 });
 
 test('module scripts remain native source and module import cannot create memory', () => {
@@ -504,7 +489,6 @@ test('card display regex stays native without creating a second transform progra
     idempotencyKey: 'display-regex',
   });
   const content = store.product.get<Content>('content', saved.receipt.items[0].id);
-  expect(content.package!.transforms).toEqual([]);
   expect(nativeRisuRegex(content.package!.nativeRisu!)).toEqual([
     {
       type: 'editdisplay',
@@ -534,14 +518,7 @@ test('imported opening identity tokens stay native until the opening runtime eva
   });
   const content = store.product.get<Content>('content', saved.receipt.items[0].id);
   expect(content.package!.starts![0].text).toBe(value.data.first_mes);
-  expect(
-    resolvePackageStart(
-      content.package!,
-      'start-0',
-      {},
-      { bot: { name: 'Pilot' }, user: { name: '{{user}}' } }
-    ).text
-  ).toBe('{{char}} welcomes {{user}}.');
+  expect(resolvePackageStart(content.package!, 'start-0').text).toBe('{{char}} welcomes {{user}}.');
   expect(saved.chat!.headRevision).not.toBeNull();
   expect(store.sourceOriginal(saved.chat!.headRevision!).text).toBe(value.data.first_mes);
   expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
@@ -1095,7 +1072,6 @@ test('a comment in card text stays in native source without a converted template
     idempotencyKey: 'comment',
   });
   const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
-  expect(bot.package!.bodyTemplate).toBeUndefined();
   expect(bot.package!.body).toBe('{{// hidden}}{{char}} reads {{getvar::flag}}.');
   expect(bot.package!.nativeRisu!.card.description).toBe(bot.package!.body);
 });
@@ -1193,8 +1169,8 @@ test('lore directives decide activation and never reach the model as prose', () 
   // Native depth/role placement and supported activation decorators no longer carry loss findings.
   expect(levels).not.toHaveProperty('lore-decorator:depth');
   expect(levels).not.toHaveProperty('lore-decorator:role');
-  expect(levels).not.toHaveProperty('lore-decorator:exclude_keys_all');
-  expect(levels).not.toHaveProperty('lore-decorator:recursive');
+  expect(levels['lore-decorator:exclude_keys_all']).toBe('info');
+  expect(levels['lore-decorator:recursive']).toBe('info');
   expect(levels).not.toHaveProperty('lore-decorator:activate');
   expect(levels).not.toHaveProperty('lore-decorator:dont_activate');
   const unknown = preview.findings.find((finding) => finding.code === 'lore-decorator-unknown');

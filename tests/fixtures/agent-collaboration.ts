@@ -14,10 +14,13 @@ import type {
 } from '../../core/product.js';
 import type { Chat, ChatDetail, Run, ToolEvent } from '../../core/types.js';
 import type { Json, WireRecord } from '../../core/transport.js';
-import { createDefaultPromptProgram } from '../../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../../core/prompt-defaults.js';
 import { createApp, type App } from '../../server/app.js';
 import { injectWithFixtureBot } from './chat.js';
 import { loopbackProvider, writeSse } from './loopback-provider.js';
+import { installJevFixture } from './jev.js';
+import { nativeContent } from './native-content.js';
+import { compileContentAttachment } from '../../core/package-runtime.js';
 
 export const MAIN_ONLY = 'MAIN_AUTHOR_INSTRUCTIONS_DO_NOT_COPY_TO_ADVISORS';
 export const SHARED = 'SHARED_CREATIVE_CONTRACT_SYNTHETIC';
@@ -55,6 +58,7 @@ afterEach(async () => {
       await rm(path, { recursive: true, force: true });
     }
   } finally {
+    vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   }
 });
@@ -138,7 +142,9 @@ export async function fixture(
       expect(captured.url).toBe('/v1/responses');
       expect(captured.headers.authorization).toBe(`Bearer ${bearer}`);
       // This runs in the actual HTTP server, after bytes arrive, not in a mocked transport hook.
-      const attempts = app.store.product.attempts(chat.id);
+      const attempts = app.store.product
+        .attempts(chat.id)
+        .filter((attempt) => (attempt.request as WireRecord).protocol !== 'typesafe-systemone-v1');
       expect(attempts).toHaveLength(provider.requests.length);
       const running = attempts.filter((attempt) => attempt.status === 'running');
       expect(running).toHaveLength(1);
@@ -155,6 +161,7 @@ export async function fixture(
     }
   });
   owner.close = provider.close;
+  installJevFixture();
   app = await createApp({
     dbPath: join(owner.directory, 'story.sqlite'),
     buildId: 'agent-collaboration-synthetic',
@@ -177,11 +184,26 @@ export async function fixture(
     },
     'PATCH'
   );
+  const loreText = options.loreText ?? 'The copper observatory stands north of the harbor.';
+  const source = (name: string, content: string) => ({
+    ...nativeContent(
+      {
+        name,
+        character_book: {
+          entries: [{ comment: name, content, constant: false, enabled: true, keys: [] }],
+        },
+      },
+      {},
+      'module'
+    ),
+    loreActivation: { mode: 'discoverable' as const },
+  });
   const lore = await api<Content>(app, '/api/content', {
     kind: 'module',
     title: 'Copper observatory',
     description: 'Synthetic scoped reference',
-    text: options.loreText ?? 'The copper observatory stands north of the harbor.',
+    text: '',
+    package: source('Copper observatory', loreText),
     loading: 'discoverable',
     relatedIds: [],
   });
@@ -189,7 +211,8 @@ export async function fixture(
     kind: 'module',
     title: 'Unattached reference',
     description: 'Outside this chat scope',
-    text: 'UNATTACHED_REFERENCE_MUST_NOT_LEAK',
+    text: '',
+    package: source('Unattached reference', 'UNATTACHED_REFERENCE_MUST_NOT_LEAK'),
     loading: 'discoverable',
     relatedIds: [],
   });
@@ -224,11 +247,9 @@ export async function fixture(
     temperature: null,
     timeoutMs: options.timeoutMs ?? 4000,
   });
-  const program = createDefaultPromptProgram(MAIN_ONLY);
-  program.controls = [
-    { id: 'tone', label: 'Shared tone', type: 'text', default: 'default tone' },
-    { id: 'private', label: 'Main only', type: 'text', default: 'default private' },
-  ];
+  const program = createDefaultRisuPrompt(MAIN_ONLY);
+  program.nativeRisuPreset.preset.customPromptTemplateToggle =
+    'tone=Shared tone=text\nprivate=Main only=text';
   if (options.collaboration !== null) {
     program.collaboration = structuredClone(options.collaboration ?? collaboration());
     for (const definition of program.collaboration.agents)
@@ -246,9 +267,8 @@ export async function fixture(
     `/api/chats/${chat.id}/profile`,
     {
       expectedRevision: prior.revision,
-      attachments: [ref(lore)],
-
-      routes: { main: { id: mainModel.id }, translation: null, status: null, image: null },
+      packageAttachments: [...prior.packageAttachments!, { ...ref(lore), role: 'module' }],
+      routes: { main: { id: mainModel.id }, translation: null, status: null },
       image: false,
     },
     'PUT'
@@ -274,12 +294,22 @@ export async function fixture(
     expectedProfileRevision: profile.revision,
     idempotencyKey: randomUUID(),
   };
+  const loreResource = app.store.product
+    .resources(chat.id, app.store.product.snapshot(chat.id))
+    .find((resource) => resource.sourceKind === 'lore' && resource.text === loreText)!;
+  const foreignResource = compileContentAttachment(
+    foreign.package,
+    { ...ref(foreign), role: 'module' },
+    { chatId: chat.id, target: 'main', resourcesOnly: true }
+  ).resources.find((resource) => resource.sourceKind === 'lore')!;
+  expect(loreResource).toBeDefined();
+  expect(foreignResource).toBeDefined();
   return {
     owner,
     app,
     chat,
-    lore,
-    foreign,
+    lore: loreResource,
+    foreign: foreignResource,
     connection,
     advisorConnection,
     mainModel,
@@ -298,7 +328,7 @@ export type Fixture = Awaited<ReturnType<typeof fixture>>;
 export async function settled(state: Fixture, id: string): Promise<Run> {
   await expect
     .poll(async () => (await api<Run>(state.app, `/api/runs/${id}`)).status, { timeout: 6000 })
-    .not.toMatch(/^(queued|running|waiting_for_state)$/);
+    .not.toMatch(/^(queued|running)$/);
   expect(state.failures).toEqual([]);
   return api<Run>(state.app, `/api/runs/${id}`);
 }

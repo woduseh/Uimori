@@ -1,18 +1,19 @@
 import { detectRisuImageHandoff } from '../core/risu-image-handoff.js';
 import { RisuImageHandoffFields } from './RisuImageHandoffFields.js';
 import { useEffect, useState } from 'react';
-import type { ContentPackage } from '../core/content-package.js';
+import type { RisuContent } from '../core/risu-content.js';
 import {
   nativeRisuBackground,
   nativeRisuExtension,
   nativeRisuLore,
   nativeRisuRegex,
   nativeRisuTriggers,
-  validateNativeRisuContent,
-  type NativeRisuContent,
+  validateRisuContentSource,
+  type RisuContentSource,
 } from '../core/risu-native.js';
 import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import { PackagePortraitEditor } from './PackagePortraitEditor.js';
+import { PackageFeaturesEditor } from './PackageFeaturesEditor.js';
 
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -28,12 +29,12 @@ export function RisuNativeFields({
   onDraftChange,
   onPortraitBusy,
 }: {
-  value: ContentPackage;
-  onChange: (value: ContentPackage) => void;
+  value: RisuContent;
+  onChange: (value: RisuContent) => void;
   onDraftChange: (dirty: boolean) => void;
   onPortraitBusy: (busy: boolean) => void;
 }) {
-  const native = value.nativeRisu!;
+  const native = value.nativeRisu;
   const standalone = !Object.keys(native.card).length && !!native.module;
   const [part, setPart] = useState<SourcePart>('lore');
   const [draft, setDraft] = useBufferedEditorState<{ part: SourcePart; text: string } | null>(
@@ -41,12 +42,13 @@ export function RisuNativeFields({
     null
   );
   const [error, setError] = useState('');
+  const [modulesDirty, setModulesDirty] = useState(false);
   useUnappliedEditorField('package.native.source', !!draft);
   useEffect(() => {
-    onDraftChange(!!draft);
-  }, [draft, onDraftChange]);
+    onDraftChange(!!draft || modulesDirty);
+  }, [draft, modulesDirty, onDraftChange]);
   useEffect(() => () => onDraftChange(false), [onDraftChange]);
-  const update = (next: NativeRisuContent) => {
+  const update = (next: RisuContentSource) => {
     const name = string(standalone ? next.module?.name : next.card.name);
     onChange({
       ...value,
@@ -121,7 +123,7 @@ export function RisuNativeFields({
             };
         }
       }
-      update(validateNativeRisuContent(next));
+      update(validateRisuContentSource(next));
       setDraft(null);
       setError('');
     } catch (caught) {
@@ -212,6 +214,7 @@ export function RisuNativeFields({
           </details>
         </>
       )}
+      <PackageFeaturesEditor value={value} onChange={onChange} onDirtyChange={setModulesDirty} />
       <label className="full">
         로어 선택 방식
         <select
@@ -221,13 +224,12 @@ export function RisuNativeFields({
               ...value,
               loreActivation: {
                 ...value.loreActivation,
-                mode: event.target.value as 'model' | 'keyword' | 'discoverable',
+                mode: event.target.value as 'model' | 'discoverable',
               },
             })
           }
         >
-          <option value="model">Uimori 모델 선택</option>
-          <option value="keyword">Risu 키워드 규칙</option>
+          <option value="model">JEV 관련성 판단</option>
           <option value="discoverable">필요할 때 모델이 읽기</option>
         </select>
       </label>

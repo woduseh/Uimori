@@ -1,11 +1,11 @@
 import { useId } from 'react';
 import { ToggleRow } from './ToggleRow.js';
 import {
-  visiblePromptControls,
+  promptControls,
   type PromptControl,
-  type PromptProgram,
+  type RisuPrompt,
   type PromptValue,
-} from '../core/prompt-program.js';
+} from '../core/risu-prompt.js';
 
 function ValueInput({
   control,
@@ -89,21 +89,24 @@ function ValueInput({
   );
 }
 
-/** Uses the runtime's bounded evaluator; hiding an input never clears its value. */
+/** Display native Risu toggle declarations; saved values do not change their structure. */
 export function PromptControlFields({
   program,
   values,
-  visibilityValues = values,
+  controlIds,
   onChange,
 }: {
-  program: PromptProgram;
+  program: RisuPrompt;
   values: Record<string, PromptValue>;
   visibilityValues?: Record<string, PromptValue>;
+  controlIds?: string[];
   onChange: (id: string, value: PromptValue) => void;
 }) {
   let controls: PromptControl[];
   try {
-    controls = visiblePromptControls(program.controls, visibilityValues);
+    controls = promptControls(program).filter(
+      (control) => !controlIds || controlIds.includes(control.id)
+    );
   } catch {
     return (
       <p role="alert" className="error">

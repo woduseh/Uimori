@@ -637,7 +637,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     'https://aiplatform.googleapis.com/v1/projects/synthetic-original/locations/global/publishers/google/models';
   await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
   await form.getByLabel('Google Agent Platform endpoint').fill(originalEndpoint);
-  await form.getByLabel('서버 환경변수 이름').fill('NARRATIVE_PROVIDER_SYNTHETIC_ORIGINAL');
+  await form.getByLabel('서버 환경변수 이름').fill('UIMORI_PROVIDER_SYNTHETIC_ORIGINAL');
   const projectId = 'synthetic-project',
     clientEmail = 'test@synthetic-project.iam.gserviceaccount.com';
   let uploads = 0;
@@ -662,7 +662,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title);
     await expect(form.getByLabel('Google Agent Platform endpoint')).toHaveValue(originalEndpoint);
     await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(
-      'NARRATIVE_PROVIDER_SYNTHETIC_ORIGINAL'
+      'UIMORI_PROVIDER_SYNTHETIC_ORIGINAL'
     );
     expect(uploads).toBe(0);
   }
@@ -694,7 +694,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   const uploadResponse = await uploaded;
   expect(uploadResponse.ok()).toBeTruthy();
   const { credentialEnv } = (await uploadResponse.json()) as { credentialEnv: string };
-  expect(credentialEnv).toMatch(/^NARRATIVE_PROVIDER_VERTEX_FILE_[A-F0-9]{32}$/);
+  expect(credentialEnv).toMatch(/^UIMORI_PROVIDER_VERTEX_FILE_[A-F0-9]{32}$/);
   expect(uploads).toBe(1);
   expect(uploadBody).toEqual({ serviceAccount });
   await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(credentialEnv);
@@ -760,7 +760,7 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
       title,
       protocol: 'anthropic-messages-v1',
       endpoint: 'https://api.anthropic.com/v1',
-      credentialEnv: 'NARRATIVE_PROVIDER_ANTHROPIC',
+      credentialEnv: 'UIMORI_PROVIDER_ANTHROPIC',
       enabled: true,
     });
   await settings(page);

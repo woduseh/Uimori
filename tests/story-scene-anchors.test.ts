@@ -3,7 +3,6 @@ import { sourceHash } from '../core/source-history.js';
 import { executeStoryRead, STORY_RESULT_MAX_BYTES } from '../core/story-context.js';
 import type { RunSnapshot } from '../core/types.js';
 import { MAIN_READ_TOOLS } from '../server/main-request.js';
-import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 
 function snapshot(
   texts = ['Authored opening.', 'Mira promises the lantern.', 'The captain waits.']
@@ -171,24 +170,5 @@ describe('scene locators in frozen source ancestry', () => {
       offset = numbered.nextOffset;
     }
     expect(recovered).toBe(text);
-  });
-
-  test('direct scene selection preserves hidden ranges and cannot search across an excluded span', () => {
-    const hidden =
-      'Visible introduction.\r\n\r\n@hsTitle: Quiet Bell\r\n⟦Harbor @ Dusk @ Keeper⟧\r\nSecret witness.\r\n@hs\r\n\r\nThe reader hears waves.';
-    const fixed = snapshot(['Authored opening.', hidden, 'Later exchange.']);
-    fixed.sourceSegments = createSourceSegmentFixture({ excludeAsides: true });
-    const numbered = read(fixed, 'story.read', { sceneNumber: 2, limit: 16000 });
-    expect(numbered).toEqual(read(fixed, 'story.read', { id: 'source-1', limit: 16000 }));
-    expect(numbered.text).not.toContain('Secret witness');
-    expect(numbered.source.hash).toBe(sourceHash(hidden));
-    expect(
-      numbered.keptRanges
-        .map((range: { start: number; end: number }) => hidden.slice(range.start, range.end))
-        .join('')
-    ).toBe(numbered.text);
-    expect(read(fixed, 'story.search', { query: 'Secret witness' }).total).toBe(0);
-    expect(read(fixed, 'story.search', { query: 'introduction waves' }).total).toBe(0);
-    expect(read(fixed, 'story.search', { query: 'waves' }).results[0].sceneNumber).toBe(2);
   });
 });

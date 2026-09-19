@@ -7,8 +7,7 @@ import type {
 import { api, ApiError } from './api.js';
 import { PlainProse } from './Prose.js';
 
-const active = (status?: string) =>
-  status === undefined || ['queued', 'running', 'waiting_for_state'].includes(status);
+const active = (status?: string) => status === undefined || ['queued', 'running'].includes(status);
 
 /** Durable cursor batches avoid an extra permanent HTTP/1 connection per visible task. */
 export function StreamingResponse({

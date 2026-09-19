@@ -25,7 +25,7 @@ import {
 } from './fixtures/agent-collaboration.js';
 import { sse } from './fixtures/loopback-provider.js';
 
-test('absent and disabled collaboration preserve the one-call main path and its existing read permissions', async () => {
+test('absent and disabled collaboration preserve one writing call plus JEV judgment and existing read permissions', async () => {
   const permissions: string[][] = [];
   for (const config of [
     null,
@@ -51,14 +51,14 @@ test('absent and disabled collaboration preserve the one-call main path and its 
     const run = await settled(state, (await state.start()).id);
     expect(run).toMatchObject({
       status: 'completed',
-      usage: { modelCalls: 1, inputTokens: 7, outputTokens: 3, costUsd: null },
+      usage: { modelCalls: 2, inputTokens: 14, outputTokens: 6, costUsd: null },
     });
     expect(run.snapshot.profile?.collaborationModels).toBeUndefined();
     expect(run.toolEvents).toEqual([]);
     const detail = await state.detail();
     expect(detail.sources).toHaveLength(1);
     expect(detail.sources[0].text).toBe('Only the main writes this source.');
-    expect(detail.attempts).toHaveLength(1);
+    expect(detail.attempts).toHaveLength(2);
     expect(detail.jobs).toEqual([]);
   }
   expect(permissions[0]).toEqual(permissions[1]);
@@ -80,7 +80,7 @@ test('completed advisor attempts restore with their frozen models and reject for
     expect(restored.product.import(archive)).toMatchObject({ restored: true });
     expect(restored.run(run.id).usage).toEqual(run.usage);
     expect(restored.run(run.id).toolEvents).toEqual(run.toolEvents);
-    expect(restored.product.attempts(state.chat.id)).toHaveLength(2);
+    expect(restored.product.attempts(state.chat.id)).toHaveLength(3);
     expect(restored.detail(state.chat.id).sources.map((source) => source.text)).toEqual([
       'Final scene.',
     ]);
@@ -183,7 +183,7 @@ test('before advisors run in order with scoped reads, selected models and explic
     'second',
     'main',
   ]);
-  expect(run.usage).toEqual({ modelCalls: 4, inputTokens: 28, outputTokens: 12, costUsd: null });
+  expect(run.usage).toEqual({ modelCalls: 5, inputTokens: 35, outputTokens: 15, costUsd: null });
   expect(run.toolEvents.map((event) => event.name)).toEqual([
     'agents.read',
     'agents.consult',
@@ -203,7 +203,7 @@ test('before advisors run in order with scoped reads, selected models and explic
     hash: createHash('sha256').update(finalText).digest('hex'),
   });
   expect(detail.jobs).toEqual([]);
-  expect(detail.attempts).toHaveLength(4);
+  expect(detail.attempts).toHaveLength(5);
   expect(state.app.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   expect(result.evidence).toEqual([
     {
@@ -284,7 +284,7 @@ test('on-demand main -> advisor read loop -> main persists attempts before HTTP 
     'main',
     'main',
   ]);
-  expect(run.usage).toEqual({ modelCalls: 5, inputTokens: 35, outputTokens: 15, costUsd: null });
+  expect(run.usage).toEqual({ modelCalls: 6, inputTokens: 42, outputTokens: 18, costUsd: null });
   expect(run.toolEvents.filter((event) => event.name === 'agents.read')).toHaveLength(2);
   expect(consults(run)).toHaveLength(2);
   expect(consults(run)[1].result.cached).toBe(true);
@@ -292,7 +292,7 @@ test('on-demand main -> advisor read loop -> main persists attempts before HTTP 
   expect(detail.sources.map((source) => source.text)).toEqual([
     'Final main scene, with one grounded detail.',
   ]);
-  expect(detail.attempts).toHaveLength(5);
+  expect(detail.attempts).toHaveLength(6);
   expect(
     detail.attempts!.every(
       (attempt) =>
@@ -371,7 +371,7 @@ test('different follow-up questions receive prior advice and share the per-advis
     'advisor',
     'main',
   ]);
-  expect(run.usage.modelCalls).toBe(5);
+  expect(run.usage.modelCalls).toBe(6);
   expect((await state.detail()).sources.map((source) => source.text)).toEqual([
     'The keeper turned away.',
   ]);
@@ -436,7 +436,7 @@ test('host, collaboration and per-advisor budgets bound real requests while rese
         }
       },
       {
-        maxCalls: scenario.host,
+        maxCalls: scenario.host + 1, // Reserve the mandatory final JEV judgment as well.
         collaboration: collaboration({
           maxCalls: scenario.shared,
           agents: [
@@ -449,7 +449,7 @@ test('host, collaboration and per-advisor budgets bound real requests while rese
     const run = await settled(state, (await state.start()).id);
     expect(run.status, scenario.label).toBe('completed');
     expect(state.provider.requests, scenario.label).toHaveLength(scenario.calls);
-    expect(run.usage.modelCalls).toBe(scenario.calls);
+    expect(run.usage.modelCalls).toBe(scenario.calls + 1);
     expect(state.observed.at(-1)?.agentId).toBeUndefined();
     for (const event of consults(run))
       if (event.result.status === 'unavailable')
@@ -563,7 +563,7 @@ test('HTTP failure, partial output and uncertain disconnect become cached unavai
     expect(run.status, failure).toBe('completed');
     expect(advisorRequests).toBe(1);
     expect(state.provider.requests).toHaveLength(4);
-    expect(run.usage.modelCalls).toBe(4);
+    expect(run.usage.modelCalls).toBe(5);
     expect(consults(run)[0].result.usage.modelCalls).toBe(1);
     expect(consults(run)[1].result).toMatchObject({
       cached: true,
@@ -571,12 +571,12 @@ test('HTTP failure, partial output and uncertain disconnect become cached unavai
     });
     expect(run.usage.costUsd).toBeNull();
     if (failure === 'partial')
-      expect(run.usage).toMatchObject({ inputTokens: 28, outputTokens: 12 });
+      expect(run.usage).toMatchObject({ inputTokens: 35, outputTokens: 15 });
     const detail = await state.detail();
     expect(detail.sources.map((source) => source.text)).toEqual([
       'Main continues after one failed advisory attempt.',
     ]);
-    expect(detail.attempts).toHaveLength(4);
+    expect(detail.attempts).toHaveLength(5);
     expect(
       detail.attempts!.filter(
         (attempt) => (attempt.request as { agentId?: string }).agentId === 'advisor'
@@ -758,7 +758,7 @@ test('current advisor connection authorization is checked again between read rou
   gate.release();
   const run = await settled(state, started.id);
   expect(run.status).toBe('completed');
-  expect(run.usage).toEqual({ modelCalls: 2, inputTokens: 14, outputTokens: 6, costUsd: null });
+  expect(run.usage).toEqual({ modelCalls: 3, inputTokens: 21, outputTokens: 9, costUsd: null });
   expect(state.observed.map((wire) => wire.agentId ?? 'main')).toEqual(['advisor', 'main']);
   expect((await state.detail()).sources.map((source) => source.text)).toEqual([
     'Main completes with its separately enabled connection.',

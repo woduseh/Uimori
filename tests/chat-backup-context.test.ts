@@ -7,7 +7,7 @@ import { remapBackupContext } from '../server/chat-backup-context.js';
 import { createBackupRemap } from '../server/chat-backup-remap.js';
 import { contextDependencyKey, contextSourceRefs } from '../server/context-planning.js';
 import { checkpointHash } from '../server/context-store.js';
-import { lineageHash, storyDependencyKey } from '../server/story-store.js';
+import { lineageHash } from '../server/story-store.js';
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const parse = (value: string) => JSON.parse(value);
@@ -41,12 +41,6 @@ function mainFixture() {
     kind: 'author-note' as const,
     declaration: { author: 'chat-a', text: 'source-a' },
   };
-  const config = {
-    revision: 1,
-    module: null,
-    stateModel: null,
-    activatedAt: { revision: 'source-a', hash: 'source-hash' },
-  };
   const snapshot: RunSnapshot = {
     chatId: 'chat-a',
     branchId: 'main:chat-a',
@@ -60,20 +54,9 @@ function mainFixture() {
       { revision: 'source-b', text: 'chat-a', contentHash: 'second-hash' },
     ],
     story: {
-      config,
-      state: {
-        id: 'initial:chat-a:1:rebuild:source-hash',
-        sourceRevision: 'source-a',
-        sourceHash: 'source-hash',
-        moduleRevision: 1,
-        values: { tag: 'source-a' },
-        canonical: true,
-      },
-      waiting: false,
       lineageHash: '',
       canonHash: hash([note]),
       notes: [note],
-      models: {},
     },
   };
   snapshot.story!.lineageHash = lineageHash(snapshot.history);
@@ -104,30 +87,11 @@ function mainFixture() {
   snapshot.contextBase = { scopeKey, activeRevision: 1, notesRevision: 1, checkpoint: ref };
   snapshot.contextPlan.checkpoint = ref;
   tables.runs.push({ id: 'run-a', chat_id: 'chat-a', snapshot: JSON.stringify(snapshot) });
-  tables.story_configs.push({ chat_id: 'chat-a', body: JSON.stringify(config) });
-  tables.story_states.push({
-    id: 'state-a',
-    chat_id: 'chat-a',
-    parent_state_id: 'initial:chat-a:1:rebuild:source-hash',
-    body: JSON.stringify({ ...snapshot.story!.state, id: 'state-a' }),
-  });
   tables.author_notes.push({ id: note.id, chat_id: 'chat-a', entry: JSON.stringify(note) });
   tables.author_note_commands.push({
     chat_id: 'chat-a',
     command: JSON.stringify({ expectedHeadRevision: 'source-a', declaration: note.declaration }),
     result: JSON.stringify({ note, revision: 1 }),
-  });
-  tables.story_jobs.push({
-    id: 'story-job-a',
-    kind: 'state',
-    source_revision: 'source-b',
-    source_hash: 'second-hash',
-    snapshot: JSON.stringify(snapshot),
-    dependency_key: storyDependencyKey('state', { id: 'source-b', hash: 'second-hash' }, snapshot),
-    result: JSON.stringify({
-      sourceRevision: 'source-b',
-      operations: [{ id: 'source-a', field: 'tag', value: 'chat-a', evidence: 'source-b' }],
-    }),
   });
   tables.context_jobs.push({
     id: 'context-job-a',
@@ -146,8 +110,8 @@ function mainFixture() {
   return { tables, snapshot };
 }
 
-describe('chat backup state and context identity remapping', () => {
-  test('rebuilds every context receipt and state dependency while preserving authored values on repeated imports', () => {
+describe('chat backup narrative notes and context identity remapping', () => {
+  test('rebuilds every context receipt and narrative note dependency while preserving authored values on repeated imports', () => {
     const { tables, snapshot: original } = mainFixture();
     const before = JSON.stringify(tables);
     const copies = [createBackupRemap(tables), createBackupRemap(tables)];
@@ -167,9 +131,6 @@ describe('chat backup state and context identity remapping', () => {
       expect(snapshot.story!.lineageHash).toBe(lineageHash(snapshot.history));
       expect(snapshot.story!.canonHash).toBe(hash(snapshot.story!.notes));
       expect(snapshot.story!.canonHash).not.toBe(original.story!.canonHash);
-      expect(snapshot.story!.state!.id).toBe(`initial:${ctx.chatId}:1:rebuild:source-hash`);
-      expect(snapshot.story!.state!.values).toEqual({ tag: 'source-a' });
-      expect(snapshot.story!.config.activatedAt!.revision).toBe(ctx.id('source-a'));
       expect(snapshot.story!.notes[0].declaration).toEqual(original.story!.notes[0].declaration);
       expect(snapshot.request).toBe('chat-a');
       expect(snapshot.history.map((entry) => entry.text)).toEqual(['source-b', 'chat-a']);
@@ -193,21 +154,6 @@ describe('chat backup state and context identity remapping', () => {
       expect(parse(ctx.tables.author_note_commands[0].result).note).toEqual(
         snapshot.story!.notes[0]
       );
-      const state = ctx.tables.story_states[0];
-      expect(state.parent_state_id).toBe(snapshot.story!.state!.id);
-      expect(parse(state.body).id).toBe(state.id);
-      const job = ctx.tables.story_jobs[0];
-      expect(job.dependency_key).toBe(
-        storyDependencyKey(
-          'state',
-          { id: ctx.id('source-b'), hash: 'second-hash' },
-          parse(job.snapshot)
-        )
-      );
-      expect(parse(job.result)).toEqual({
-        sourceRevision: ctx.id('source-b'),
-        operations: [{ id: 'source-a', field: 'tag', value: 'chat-a', evidence: 'source-b' }],
-      });
     }
     expect(copies[0].chatId).not.toBe(copies[1].chatId);
     expect(copies[0].tables.context_checkpoints[0].hash).not.toBe(

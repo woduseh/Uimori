@@ -10,7 +10,7 @@ const roleLabels: Record<Attempt['role'], string> = {
   translation: '번역',
   status: '장면 해설',
   image: '이미지 배치',
-  state: '서사 상태',
+  script: '카드 스크립트',
   context: '문맥 압축',
   helper: '도우미',
   title: '채팅 제목',

@@ -94,11 +94,11 @@ async function main() {
     await mkdir(temp, { recursive: true });
     assertNotCancelled();
     const env = localVerificationEnv({
-      NR_DB: path.join(runtime, 'app.sqlite'),
-      NR_INSTANCE: runId,
-      NR_BUILD_ID: identity.buildId,
-      NR_ARTIFACT_DIR: directory,
-      NR_SECRET_CANARY: canary,
+      UIMORI_DB: path.join(runtime, 'app.sqlite'),
+      UIMORI_INSTANCE: runId,
+      UIMORI_BUILD_ID: identity.buildId,
+      UIMORI_ARTIFACT_DIR: directory,
+      UIMORI_SECRET_CANARY: canary,
       TEMP: temp,
       TMP: temp,
     });
@@ -117,7 +117,11 @@ async function main() {
         stderrTail,
       };
     });
-    ownership.children.push({ pid: server.child.pid, dbPath: env.NR_DB, url: server.ready.url });
+    ownership.children.push({
+      pid: server.child.pid,
+      dbPath: env.UIMORI_DB,
+      url: server.ready.url,
+    });
     await json(path.join(directory, 'ownership.json'), ownership);
     assertNotCancelled();
     const log = (line) => console.error(`[gallery] ${line}`);

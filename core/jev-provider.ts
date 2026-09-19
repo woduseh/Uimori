@@ -10,3 +10,16 @@ export type JevProviderStatus = {
   endpoint: string;
   latestTest: ProviderConnectionTest | null;
 };
+
+/** Judgment models use their own transport, while sharing provider registration and model lists. */
+export const JEV_PROVIDER_DEFINITION = Object.freeze({
+  id: 'typesafe-judgment' as const,
+  kind: 'judgment' as const,
+  label: 'TypeSafe AI',
+  modelId: 'jev-latest',
+  modelLabel: 'JEV',
+  description: '로어 선별 · 생성 거절 판정 · 이미지 배치',
+});
+export function jevRegistered(status: JevProviderStatus | null): boolean {
+  return status?.configured === true;
+}

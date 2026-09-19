@@ -14,7 +14,7 @@ import {
 } from '../core/diagnostic-report.js';
 import { HttpError, fields, isSha256Hex, record, text } from './request-validation.js';
 import type { Store } from './store.js';
-import { DATABASE_SCHEMA_VERSION } from './schema-migrations.js';
+import { DATABASE_SCHEMA_VERSION } from './database-schema.js';
 import { maintenanceState } from './maintenance.js';
 
 type Environment = { buildId: string; testMode?: boolean };
@@ -59,7 +59,6 @@ export function createDiagnosticReport(
       (SELECT count(*) FROM tool_events WHERE run_id=r.id) AS toolCount,
       (SELECT count(*) FROM tool_events WHERE run_id=r.id AND CASE WHEN json_valid(event) THEN json_extract(event,'$.denied')=1 ELSE 0 END) AS deniedToolCount,
       source_revision IS NOT NULL AS sourceCommitted,COALESCE(length(partial_text),0)>0 AS hasPartialOutput,
-      CASE WHEN json_valid(snapshot) THEN substr(json_extract(snapshot,'$.story.preparation.status'),1,40) END AS preparationStatus,
       CASE WHEN json_valid(usage) THEN CASE WHEN json_type(usage,'$.modelCalls') IN ('integer','real') THEN json_extract(usage,'$.modelCalls') END END AS modelCalls,
       CASE WHEN json_valid(usage) THEN CASE WHEN json_type(usage,'$.inputTokens') IN ('integer','real') THEN json_extract(usage,'$.inputTokens') END END AS inputTokens,
       CASE WHEN json_valid(usage) THEN CASE WHEN json_type(usage,'$.outputTokens') IN ('integer','real') THEN json_extract(usage,'$.outputTokens') END END AS outputTokens,
@@ -138,8 +137,6 @@ export function createDiagnosticReport(
       deniedToolCount: diagnosticNumber(row.deniedToolCount),
       sourceCommitted: row.sourceCommitted === 1,
       hasPartialOutput: row.hasPartialOutput === 1,
-      preparationStatus:
-        row.preparationStatus == null ? null : diagnosticStatus(row.preparationStatus),
       modelCalls: diagnosticNumber(row.modelCalls),
       inputTokens: diagnosticNumber(row.inputTokens),
       outputTokens: diagnosticNumber(row.outputTokens),

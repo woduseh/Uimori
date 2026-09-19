@@ -65,7 +65,6 @@ export function buildAgentProviderRequest(
         parentRevision: snapshot.parentRevision,
         pinnedSources: input.pinnedSources ?? [],
         contextSummary: input.contextSummary,
-        state: input.state,
         notes: input.notes,
         ...(input.outline ? { outline: input.outline } : {}),
         ...(consultationContext ? { consultationContext: asJson(consultationContext) } : {}),

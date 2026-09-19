@@ -1,6 +1,6 @@
 import { modelCapability } from './model-capabilities.js';
 import type { ProviderProtocol } from './product.js';
-import { validateProviderPrompt, type LogicalMessage } from './prompt-program.js';
+import { validateProviderPrompt, type LogicalMessage } from './risu-prompt.js';
 import type { Json, ProviderRequest } from './transport.js';
 import { ProviderContractError } from './provider-errors.js';
 import { planProviderCache } from './provider-cache.js';

@@ -1,3 +1,4 @@
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { randomUUID } from 'node:crypto';
@@ -7,16 +8,15 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { Store } from '../server/store.js';
 import { mapForkSnapshot, validateRunSnapshot } from '../server/snapshot-archive.js';
-import type { Content, PromptPreset } from '../core/product.js';
-import type { Resource, RunSnapshot } from '../core/types.js';
+import type { PromptPreset } from '../core/product.js';
+import type { RunSnapshot } from '../core/types.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { NATIVE_HOST_CONTEXT_ID } from '../core/provider-messages.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { forkChat } from '../server/chat-fork.js';
 import { chatDeletionImpact, deleteChat } from '../server/chat-deletion.js';
 import { createApp } from '../server/app.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
-import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { directory: string; store: Store; close?: () => Promise<void> }[] = [];
@@ -41,7 +41,7 @@ async function database() {
   owned.push({ directory, store });
   return store;
 }
-async function fixture(withSegments = false) {
+async function fixture() {
   const store = await database();
   const chat = createFixtureChat(store, 'Synthetic snapshot archive');
   store.settings(chat.id, chat.settingsRevision, {
@@ -49,38 +49,7 @@ async function fixture(withSegments = false) {
     status: false,
     translation: false,
   });
-  if (withSegments) {
-    const module = store.product.content({
-      kind: 'module',
-      title: 'Synthetic segment package',
-      description: '',
-      text: '',
-      loading: 'pinned',
-      relatedIds: [],
-      package: {
-        version: 1,
-        id: 'draft',
-        revision: 1,
-        title: 'Synthetic segment package',
-        description: '',
-        lore: [],
-        instructions: [],
-        controls: [],
-        transforms: [],
-        sourceSegments: createSourceSegmentFixture({ excludeAsides: true }),
-      },
-    }) as Content;
-    const { chatId: _chatId, revision, ...profile } = store.product.profile(chat.id);
-    updateTestProfile(store.product, chat.id, {
-      ...profile,
-      expectedRevision: revision,
-      packageAttachments: [
-        ...(profile.packageAttachments ?? []),
-        { id: module.id, revision: module.revision, role: 'module' },
-      ],
-    });
-  }
-  function complete(request: string, text: string) {
+  async function complete(request: string, text: string) {
     const current = store.chat(chat.id);
     const profile = store.product.snapshot(chat.id);
     const { run } = store.createRun(
@@ -102,6 +71,8 @@ async function fixture(withSegments = false) {
         ...(profile ? { profile } : {}),
       })
     );
+    const prepared = compileSnapshotPrompt(await prepareNativeRisuRun(run.snapshot));
+    store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(prepared), run.id);
     store.startRun(run.id);
     const source = store.completeRun(
       run.id,
@@ -111,13 +82,8 @@ async function fixture(withSegments = false) {
     );
     return { source, run: store.run(run.id) };
   }
-  const first = complete(
-    'First user request.',
-    withSegments
-      ? 'First main.\n@hsTitle: Private aside\nImmutable aside.\n@hs\nLast main.'
-      : 'First immutable source.'
-  );
-  const second = complete('Second user request.', 'Second immutable source.');
+  const first = await complete('First user request.', 'First immutable source.');
+  const second = await complete('Second user request.', 'Second immutable source.');
   return { store, chat, first, second, complete };
 }
 
@@ -127,7 +93,7 @@ test('ordinary Runs retain archived logical-history and compiled-prompt validati
   expect(() => validateRunSnapshot(store, snapshot)).not.toThrow();
   const changedHistory = structuredClone(snapshot);
   changedHistory.logicalHistory![0].text = 'Forged user request.';
-  expect(() => validateRunSnapshot(store, changedHistory)).toThrow('logical history mismatch');
+  expect(() => validateRunSnapshot(store, changedHistory)).toThrow('RISU_NATIVE_RECEIPT_MISMATCH');
   const changedPrompt = structuredClone(snapshot);
   changedPrompt.promptCompilation!.messages[0].content[0].text = 'Forged compiled message.';
   expect(() => validateRunSnapshot(store, changedPrompt)).toThrow('compiled prompt mismatch');
@@ -136,37 +102,12 @@ test('ordinary Runs retain archived logical-history and compiled-prompt validati
   expect(() => validateRunSnapshot(store, missingPrompt)).toThrow('compiled prompt missing');
 });
 
-test('a Run compiled as uimori-prompt-1 validates through its stored version and still rejects forgery', async () => {
-  const { store, chat, second } = await fixture();
-  const resources: Resource[] = Array.from({ length: 120 }, (_, index) => ({
-    id: `legacy-lore-${index}`,
-    chatId: chat.id,
-    kind: 'lore',
-    revision: 1,
-    title: `Synthetic reference ${index}`,
-    description: `Synthetic catalog description ${index}. `.repeat(20),
-    text: `Local fictional body ${index}.`,
-    sourceKind: 'module',
-    loading: 'discoverable',
-  }));
-  const base: RunSnapshot = { ...second.run.snapshot, resources, promptCompilation: undefined };
-  const legacy = compileSnapshotPrompt(base, undefined, undefined, {
-    compilerVersion: 'uimori-prompt-1',
-  });
-  const current = compileSnapshotPrompt(base);
-  const host = (candidate: RunSnapshot) =>
-    candidate.promptCompilation!.messages.find((m) => m.id === NATIVE_HOST_CONTEXT_ID)!.content[0]
-      .text;
-  expect(legacy.promptCompilation!.compilerVersion).toBe('uimori-prompt-1');
-  expect(current.promptCompilation!.compilerVersion).toBe('uimori-prompt-2');
-  expect(host(legacy)).toContain('"listed":100');
-  expect(host(legacy)).not.toBe(host(current));
-  expect(() => validateRunSnapshot(store, legacy)).not.toThrow();
+test('native prompt archive compilation rejects forged catalog output', async () => {
+  const { store, second } = await fixture();
+  const current = compileSnapshotPrompt({ ...second.run.snapshot, promptCompilation: undefined });
+  expect(current.promptCompilation!.compilerVersion).toBe('risu-native-prompt-1');
   expect(() => validateRunSnapshot(store, current)).not.toThrow();
-  const restamped = structuredClone(legacy);
-  restamped.promptCompilation!.compilerVersion = 'uimori-prompt-2';
-  expect(() => validateRunSnapshot(store, restamped)).toThrow('compiled prompt mismatch');
-  const forged = structuredClone(legacy);
+  const forged = structuredClone(current);
   forged.promptCompilation!.messages.find(
     (m) => m.id === NATIVE_HOST_CONTEXT_ID
   )!.content[0].text += ' ';
@@ -233,62 +174,10 @@ test('ordinary fork remapping preserves text and hashes while rebinding history,
   );
 });
 
-test('source policies stay frozen after detaching a package and archive validation rejects deleted or forged policies', async () => {
-  const { store, chat, first, second, complete } = await fixture(true);
-  const firstPolicy = structuredClone(first.run.snapshot.sourceSegments);
-  expect(firstPolicy?.rules.some((rule) => rule.kind === 'aside' && rule.exclude)).toBe(true);
-  expect(second.run.snapshot.history[0].sourceSegments).toEqual(firstPolicy);
-  const { chatId: _chatId, revision, ...profile } = store.product.profile(chat.id);
-  updateTestProfile(store.product, chat.id, {
-    ...profile,
-    expectedRevision: revision,
-    packageAttachments: profile.packageAttachments?.filter((ref) => ref.role !== 'module') ?? [],
-  });
-  const third = complete('Continue after detaching the module.', 'Third immutable source.');
-  expect(third.run.snapshot.sourceSegments).toBeUndefined();
-  expect(third.run.snapshot.history[0].sourceSegments).toEqual(firstPolicy);
-  expect(store.run(first.run.id).snapshot.sourceSegments).toEqual(firstPolicy);
-  expect(() => validateRunSnapshot(store, third.run.snapshot)).not.toThrow();
-  const removedCurrent = structuredClone(second.run.snapshot);
-  delete removedCurrent.sourceSegments;
-  expect(() => validateRunSnapshot(store, removedCurrent)).toThrow(
-    'source segment policy mismatch'
-  );
-  const removedHistory = structuredClone(third.run.snapshot);
-  delete removedHistory.history[0].sourceSegments;
-  expect(() => validateRunSnapshot(store, removedHistory)).toThrow(
-    'history source segment policy mismatch'
-  );
-  const forgedHistory = structuredClone(third.run.snapshot);
-  forgedHistory.history[0].sourceSegments!.rules[0].exclude = false;
-  expect(() => validateRunSnapshot(store, forgedHistory)).toThrow(
-    'history source segment policy mismatch'
-  );
-  const archive = store.product.export();
-  const restored = await database();
-  expect(restored.product.import(archive)).toEqual({ restored: true, chats: 1 });
-  expect(restored.run(third.run.id).snapshot.history[0].sourceSegments).toEqual(firstPolicy);
-  const forged = structuredClone(archive),
-    row = forged.tables.runs.find((item) => item.id === third.run.id)!;
-  const snapshot = JSON.parse(row.snapshot as string);
-  delete snapshot.history[0].sourceSegments;
-  row.snapshot = JSON.stringify(snapshot);
-  const rejected = await database();
-  expect(() => rejected.product.import(forged)).toThrow();
-  expect(rejected.chats()).toEqual([]);
-});
-
 async function candidateFixture() {
   const state = await fixture();
-  const program = createDefaultPromptProgram('Synthetic branch-sensitive submission.');
-  program.execution = {
-    storySubmission: {
-      when: {
-        op: 'equal',
-        args: [{ context: ['chat', 'branchId'] }, state.store.product.branch(state.chat.id).id],
-      },
-    },
-  };
+  const program = createDefaultRisuPrompt('Synthetic source-time submission.');
+  program.execution = { storySubmission: true };
   const prompt = state.store.product.promptPreset({
     title: 'Frozen execution fixture',
     role: 'main',
@@ -303,9 +192,9 @@ async function candidateFixture() {
     expectedRevision: promptWorkspace(state.store).revision,
     main: { title: prompt.title, program: prompt.program, values: prompt.values ?? {} },
   });
-  const original = state.complete(
-    'Request with a branch-sensitive execution condition.',
-    'Original branch-sensitive source.'
+  const original = await state.complete(
+    'Request with a source-time execution condition.',
+    'Original source-time source.'
   );
   const before = structuredClone(original.run.snapshot);
   const queued = state.store.candidate(original.run.id, randomUUID(), 'Frozen input candidate').run;
@@ -319,7 +208,7 @@ async function candidateFixture() {
   return { ...state, original, before, candidate: state.store.run(queued.id), source };
 }
 
-test('candidate archive keeps the original branch-dependent compilation and a fork remains independently restorable', async () => {
+test('candidate archive keeps the original source-time compilation and a fork remains independently restorable', async () => {
   const { store, chat, original, before, candidate, source } = await candidateFixture();
   expect(candidate.snapshot.branchId).not.toBe(original.run.snapshot.branchId);
   expect(candidate.snapshot.promptCompilation).toEqual(before.promptCompilation);
@@ -401,7 +290,7 @@ test('candidate archive rejects forged execution, substituted origins and altere
 });
 
 test.each(['ready', 'pending'] as const)(
-  'HTTP candidate preserves source-time branch execution from a %s context and roundtrips',
+  'HTTP candidate preserves source-time execution from a %s context and roundtrips',
   async (state) => {
     const { store, chat } = await fixture();
     const requests: Record<string, any>[] = [];
@@ -433,15 +322,8 @@ test.each(['ready', 'pending'] as const)(
       inputTokenLimit: 16384,
       temperature: null,
     }) as { id: string };
-    const program = createDefaultPromptProgram('Submit the synthetic scene.');
-    program.execution = {
-      storySubmission: {
-        when: {
-          op: 'equal',
-          args: [{ context: ['chat', 'branchId'] }, store.product.branch(chat.id).id],
-        },
-      },
-    };
+    const program = createDefaultRisuPrompt('Submit the synthetic scene.');
+    program.execution = { storySubmission: true };
     const prompt = store.product.promptPreset({
       title: 'Candidate HTTP fixture',
       role: 'main',
@@ -496,6 +378,17 @@ test.each(['ready', 'pending'] as const)(
     } else await expect.poll(() => app.store.run(queued.id).status).toBe('completed');
     const original = app.store.run(queued.id);
     const before = structuredClone(original.snapshot);
+    if (state === 'pending') {
+      const response = await fetch(url + `/api/runs/${queued.id}/candidate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ idempotencyKey: randomUUID(), title: 'Unprepared input' }),
+      });
+      expect(response.status).toBe(409);
+      expect(app.store.run(queued.id).snapshot).toEqual(before);
+      expect(requests).toEqual([]);
+      return;
+    }
     const candidate = await post(`/api/runs/${queued.id}/candidate`, {
       idempotencyKey: randomUUID(),
       title: 'Same source-time scope',

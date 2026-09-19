@@ -222,13 +222,13 @@ class Runner:
             configured_image = self.old_config["services"]["app"]["image"]
             if json.loads(self.docker("image", "inspect", configured_image))[0]["Id"] != self.old_image:
                 raise RuntimeError("Configured image differs from running image")
-            origin = self.old_config["services"]["app"]["environment"]["NR_PUBLIC_ORIGIN"]
+            origin = self.old_config["services"]["app"]["environment"]["UIMORI_PUBLIC_ORIGIN"]
             if self.args.expected_origin and origin != self.args.expected_origin:
                 raise RuntimeError("Production origin differs from --expected-origin")
             if self.old_config["volumes"]["data"]["name"] != self.old_volume:
                 raise RuntimeError("Configured data volume differs from running volume")
             live_env = dict(entry.split("=", 1) for entry in live["Config"]["Env"] if "=" in entry)
-            if live_env.get("NR_PUBLIC_ORIGIN") != origin:
+            if live_env.get("UIMORI_PUBLIC_ORIGIN") != origin:
                 raise RuntimeError("Configured origin differs from running application")
             self.summary["publicOrigin"] = origin
             self.old_routing = self.routing()

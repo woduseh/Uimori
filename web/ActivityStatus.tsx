@@ -30,8 +30,7 @@ const names: Record<string, string> = {
   main: '장면을 쓰는 중',
   translation: '번역하는 중',
   image: '이미지 만드는 중',
-  status: '상태 정리 중',
-  state: '상태 정리 중',
+  status: '장면 해설 중',
   context: '문맥 압축 중',
   illustration: '삽화 만드는 중',
   extension: '자료 코드 실행 중',
@@ -40,8 +39,7 @@ const doneNames: Record<string, string> = {
   main: '본문',
   translation: '번역',
   image: '이미지',
-  status: '상태 정리',
-  state: '상태 정리',
+  status: '장면 해설',
   context: '문맥 압축',
   illustration: '삽화',
   extension: '자료 코드 작업',
@@ -63,25 +61,23 @@ function message(item: Item) {
         ? '요청 수락 · 상태 확인 중'
         : item.status === 'uncertain'
           ? '요청 수락 여부 확인 필요'
-          : item.status === 'waiting_for_state'
-            ? '상태 정리를 기다리는 중'
-            : item.status === 'queued'
-              ? `${name} 대기 중`
-              : item.status === 'running'
-                ? (names[item.kind] ?? '작업 중')
-                : item.status === 'completed'
-                  ? `${name} 완료`
-                  : item.status === 'cancelled'
-                    ? `${name} 중단됨`
-                    : item.status === 'refused'
-                      ? `${name} 생성 거절`
-                      : item.status === 'interrupted'
-                        ? `${name} 중단 · 확인 필요`
-                        : item.status === 'partial'
-                          ? `${name} 부분 결과 · 확인 필요`
-                          : item.status === 'stale'
-                            ? `${name} 자료 변경 · 확인 필요`
-                            : `${name} 실패`;
+          : item.status === 'queued'
+            ? `${name} 대기 중`
+            : item.status === 'running'
+              ? (names[item.kind] ?? '작업 중')
+              : item.status === 'completed'
+                ? `${name} 완료`
+                : item.status === 'cancelled'
+                  ? `${name} 중단됨`
+                  : item.status === 'refused'
+                    ? `${name} 생성 거절`
+                    : item.status === 'interrupted'
+                      ? `${name} 중단 · 확인 필요`
+                      : item.status === 'partial'
+                        ? `${name} 부분 결과 · 확인 필요`
+                        : item.status === 'stale'
+                          ? `${name} 자료 변경 · 확인 필요`
+                          : `${name} 실패`;
   return prefix + status;
 }
 

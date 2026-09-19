@@ -1,8 +1,8 @@
 import { runBrowserVerification } from './browser-verification.mjs';
 
-if (!process.env.NR_RISU_SAMPLE_ROOT)
-  throw new Error('NR_RISU_SAMPLE_ROOT is required for explicit private-card verification.');
-if (process.env.NR_RISU_SAMPLE_DIAGNOSTIC === '1')
+if (!process.env.UIMORI_RISU_SAMPLE_ROOT)
+  throw new Error('UIMORI_RISU_SAMPLE_ROOT is required for explicit private-card verification.');
+if (process.env.UIMORI_RISU_SAMPLE_DIAGNOSTIC === '1')
   throw new Error('Diagnostic partial imports cannot produce an acceptance receipt.');
 
 await runBrowserVerification({

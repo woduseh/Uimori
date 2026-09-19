@@ -48,13 +48,6 @@ export function remapBackupRecords(ctx: BackupRemap): void {
     for (const row of ctx.tables[table])
       for (const field of fields)
         if (row[field] !== null) row[field] = JSON.stringify(ctx.structured(parse(row[field])));
-  for (const row of ctx.tables.profiles) {
-    const profile = parse(row.body);
-    // Portable chats restore content and past receipts, not authority to spend through the
-    // destination workspace's model connection. Historical Run grants remain intact.
-    delete profile.extensionGrants;
-    row.body = JSON.stringify(profile);
-  }
   for (const row of ctx.tables.runs) {
     const snapshot = parse(row.snapshot);
     if (snapshot.logicalHistory)

@@ -1,3 +1,4 @@
+import { installJevFixture } from './fixtures/jev.js';
 import { injectWithFixtureBot, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -22,7 +23,7 @@ const origin = 'https://aiplatform.googleapis.com';
 const endpoint = `${origin}/v1/projects/synthetic-project/locations/global/publishers/google/models`;
 const providerUrl = `${endpoint}/gemini-3.8-flash:streamGenerateContent?alt=sse`;
 const fakeBearer = 'synthetic-vertex-app-bearer';
-const credentialEnv = 'NARRATIVE_PROVIDER_VERTEX_APP_TEST';
+const credentialEnv = 'UIMORI_PROVIDER_VERTEX_APP_TEST';
 const usage = {
   promptTokenCount: 10,
   candidatesTokenCount: 5,
@@ -56,6 +57,11 @@ const ref = ({ id, revision }: { id: string; revision: number }) => ({ id, revis
 const frozenInputs = ({
   contextPlan: _contextPlan,
   promptCompilation: _promptCompilation,
+  nativeRisuExecution: _nativeRisuExecution,
+  nativeRisuPresetProgram: _nativeRisuPresetProgram,
+  loreContext: _loreContext,
+  loreSelection: _loreSelection,
+  mainJudgment: _mainJudgment,
   ...snapshot
 }: RunSnapshot) => snapshot;
 async function api<T>(
@@ -94,7 +100,15 @@ async function fixture(handler: Parameters<typeof loopbackProvider>[0]) {
     directory: await mkdtemp(join(tmpdir(), 'uimori vertex app fixture ')),
   } as (typeof owned)[number];
   owned.push(item);
-  const provider = await loopbackProvider(handler);
+  const handlerErrors: unknown[] = [];
+  const provider = await loopbackProvider(async (...args) => {
+    try {
+      await handler(...args);
+    } catch (error) {
+      handlerErrors.push(error);
+      throw error;
+    }
+  });
   item.close = provider.close;
   const nativeFetch = globalThis.fetch;
   const urls: string[] = [];
@@ -117,7 +131,8 @@ async function fixture(handler: Parameters<typeof loopbackProvider>[0]) {
       return nativeFetch(provider.endpoint, init);
     })
   );
-  return { item, provider, urls, app: await launch(item) };
+  const judgments = installJevFixture();
+  return { item, provider, urls, judgments, handlerErrors, app: await launch(item) };
 }
 type NativePart = {
   text?: string;
@@ -268,7 +283,7 @@ async function setup(app: App, translation = true) {
     '/api/prompt-workspace',
     {
       expectedRevision: workspace.revision,
-      translationPolicy: { refusalModel: { id: auxiliary.id }, maxRetries: 1, maxCalls: 16 },
+      translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
     },
     'PUT'
   );
@@ -278,13 +293,12 @@ async function setup(app: App, translation = true) {
     `/api/chats/${chat.id}/profile`,
     {
       expectedRevision: prior.revision,
-      attachments: contents.filter((item) => item.kind !== 'bot').map(ref),
+      packageAttachments: contents.map((item) => ({ ...ref(item), role: item.kind })),
 
       routes: {
         main: { id: main.id },
         translation: translation ? { id: auxiliary.id } : null,
         status: null,
-        image: null,
       },
       image: false,
     },
@@ -356,7 +370,7 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
           response,
           read(
             'main-read-lore',
-            selected.contents.find((item) => item.title === 'Synthetic lore')!.id
+            `package:${selected.contents.find((item) => item.title === 'Synthetic lore')!.id}:module:body`
           )
         );
       } else {
@@ -378,17 +392,21 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
         thinkingConfig: { thinkingLevel: 'LOW' },
       });
       expect(
-        packet.source.context!.packages?.pinned.find((entry) => entry.sourceKind === 'bot')?.text
-      ).toContain('ORIGINAL_BOT');
+        packet.source.context!.packages?.pinned.some(
+          (entry) => entry.sourceKind === 'bot' && entry.text.includes('ORIGINAL_BOT')
+        )
+      ).toBe(true);
       expect(
-        packet.source.context!.references.find((item) => item.text.includes('ORIGINAL_GLOSSARY'))
+        packet.source.context!.packages!.pinned.find((item) =>
+          item.text.includes('ORIGINAL_GLOSSARY')
+        )
       ).toBeDefined();
       if (!last.parts.some((part) => part.functionResponse))
         await writeSse(
           response,
           read(
             `aux-${packet.source.sourceRevision}`,
-            selected.contents.find((item) => item.title === 'Synthetic glossary')!.id
+            `package:${selected.contents.find((item) => item.title === 'Synthetic glossary')!.id}:module:body`
           )
         );
       else {
@@ -430,7 +448,18 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
           relatedIds: content.relatedIds,
           text: 'FUTURE_MUTATION_' + content.kind,
           ...(content.package
-            ? { package: { ...content.package, body: 'FUTURE_MUTATION_' + content.kind } }
+            ? {
+                package: {
+                  ...content.package,
+                  nativeRisu: {
+                    ...content.package.nativeRisu,
+                    card: {
+                      ...content.package.nativeRisu.card,
+                      description: 'FUTURE_MUTATION_' + content.kind,
+                    },
+                  },
+                },
+              }
             : {}),
           expectedRevision: content.revision,
         },
@@ -442,10 +471,7 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
     `/api/chats/${selected.chat.id}/profile`,
     {
       expectedRevision: selected.profile.revision,
-      attachments: edited.filter((item) => item.kind !== 'bot').map(ref),
-      packageAttachments: edited
-        .filter((item) => item.kind === 'bot')
-        .map((item) => ({ ...ref(item), role: 'bot' })),
+      packageAttachments: edited.map((item) => ({ ...ref(item), role: item.kind })),
       routes: selected.profile.routes,
       image: false,
     },
@@ -453,8 +479,11 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
   );
   release();
   const first = await runDone(app, originalRun.id);
-  expect(first.snapshot).toEqual(originalSnapshot);
-  expect(first.usage).toEqual({ modelCalls: 2, inputTokens: 20, outputTokens: 14, costUsd: null });
+  expect(frozenInputs(first.snapshot)).toEqual(frozenInputs(originalSnapshot));
+  expect(first.snapshot.nativeRisuExecution?.fields).toEqual(
+    originalSnapshot.nativeRisuExecution?.fields
+  );
+  expect(first.usage).toEqual({ modelCalls: 3, inputTokens: 27, outputTokens: 17, costUsd: null });
   expect((await api<Run>(app, `/api/chats/${selected.chat.id}/runs`, input)).id).toBe(first.id);
   expect(state.provider.requests).toHaveLength(2);
   const candidateInput = { idempotencyKey: randomUUID(), title: 'Sibling Beta' };
@@ -466,7 +495,7 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
   expect(state.provider.requests).toHaveLength(4);
   const { branchId: _firstBranch, candidateOf: _firstCandidate, ...firstFrozen } = first.snapshot;
   const { branchId: secondBranch, candidateOf, ...secondFrozen } = second.snapshot;
-  expect(secondFrozen).toEqual(firstFrozen);
+  expect(frozenInputs(secondFrozen)).toEqual(frozenInputs(firstFrozen));
   expect(candidateOf).toBe(first.id);
   expect(second.parentRevision).toBe(first.parentRevision);
   expect((await api<ChatDetail>(app, `/api/chats/${selected.chat.id}`)).jobs).toEqual([]);
@@ -475,10 +504,12 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
   await api(app, '/api/test/control', { action: 'release', barrier: 'translation' });
   await expect
     .poll(
-      async () =>
-        (await api<ChatDetail>(app, `/api/chats/${selected.chat.id}`)).jobs.map(
+      async () => {
+        if (state.handlerErrors.length) throw state.handlerErrors[0];
+        return (await api<ChatDetail>(app, `/api/chats/${selected.chat.id}`)).jobs.map(
           (job) => job.status
-        ),
+        );
+      },
       { timeout: 5000 }
     )
     .toEqual(['completed', 'completed']);
@@ -514,10 +545,11 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
     expect(packets.every((packet) => packet.source.sourceHash === source.hash)).toBe(true);
     expect(packets.every((packet) => packet.source.text === source.text)).toBe(true);
   }
-  expect(state.provider.requests).toHaveLength(10);
-  expect(state.urls).toEqual(Array(10).fill(providerUrl));
+  expect(state.provider.requests).toHaveLength(8);
+  expect(state.urls).toEqual(Array(8).fill(providerUrl));
   expect(JSON.stringify(state.provider.requests)).not.toContain('FUTURE_MUTATION');
-  expect(detail.attempts).toHaveLength(10);
+  expect(detail.attempts).toHaveLength(12);
+  expect(state.judgments).toHaveLength(4);
   expect(JSON.stringify(detail.attempts)).not.toMatch(
     /PRIVATE_VERTEX_APP_THOUGHT|PRIVATE_VERTEX_APP_SIGNATURE|synthetic-vertex-app-bearer/u
   );
@@ -531,14 +563,14 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
   expect(restored.runs).toEqual(detail.runs);
   expect(restored.attempts).toEqual(detail.attempts);
   expect(reopened.store.queuedJobs()).toEqual([]);
-  expect(state.provider.requests).toHaveLength(10);
+  expect(state.provider.requests).toHaveLength(8);
   expect((await api<Run>(reopened, `/api/chats/${selected.chat.id}/runs`, input)).id).toBe(
     first.id
   );
   expect((await api<Run>(reopened, `/api/runs/${first.id}/candidate`, candidateInput)).id).toBe(
     second.id
   );
-  expect(state.provider.requests).toHaveLength(10);
+  expect(state.provider.requests).toHaveLength(8);
 });
 
 test.each(['main', 'translation'] as const)(

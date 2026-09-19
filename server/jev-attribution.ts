@@ -21,7 +21,6 @@ export function validateTranslationJudgmentWire(
     wire.modelId !== JEV_MODEL ||
     wire.url !== JEV_ENDPOINT ||
     wire.method !== 'POST' ||
-    wire.extensionAction ||
     wire.agentId ||
     wire.nativeScript ||
     wire.judgment.inputHash !== translationJudgmentInputHash(sourceHash, prefix, judgment)

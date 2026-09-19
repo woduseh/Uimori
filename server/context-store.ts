@@ -10,7 +10,6 @@ import {
   validateContextPlan,
   withContextProjection,
 } from './context-planning.js';
-import { freezeSourceSegments } from '../core/package-source-segments.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -249,7 +248,6 @@ export class ContextStore {
           history: this.store.history(branch.headRevision),
           resources: this.store.product.resources(chatId, profile),
           profile,
-          sourceSegments: freezeSourceSegments(profile),
         };
         current = this.store.story.prepareRunInTransaction(current);
         usable =

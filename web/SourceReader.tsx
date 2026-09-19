@@ -1,19 +1,6 @@
 import { displayTranslationJob } from './translation-display.js';
-import {
-  containedImageAnchors,
-  resolveInlineImage,
-  IMAGE_POSITION_UNAVAILABLE,
-} from './image-placement.js';
-import { StorySourceState } from './StoryPanel.js';
-import {
-  Fragment,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { resolveInlineImage, IMAGE_POSITION_UNAVAILABLE } from './image-placement.js';
+import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Asset } from '../core/product.js';
 import type { Illustration } from '../core/illustration.js';
 import type { ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
@@ -33,10 +20,8 @@ import { IconButton } from './IconButton.js';
 import { CopyIcon, EditIcon, IllustrationIcon, ImagesIcon, RefreshIcon } from './ui-icons.js';
 import { GitFork, Info, MessageCircleQuestion, ReceiptText, Save, X } from 'lucide-react';
 import { Dialog } from './Dialog.js';
-import { SourceSegmentsReader } from './SourceSegmentsReader.js';
-import { hasSourceSegmentBoundaries, type SourceSegmentPolicy } from '../core/source-segments.js';
 
-import { PackageStateCards, usePackagePresentation } from './PackagePresentation.js';
+import { PackagePresentationIssues, usePackagePresentation } from './PackagePresentation.js';
 import './source-edit.css';
 import { RequestMessage } from './RequestMessage.js';
 
@@ -67,10 +52,9 @@ type ReaderProps = {
   onAskHelper?: (sourceId: string, text: string) => void;
   contextSummary?: ReaderRun['contextSummary'];
   estimatedCost?: ReaderRun['estimatedCost'];
-  packageStart?: { mode: 'authored' | 'generate'; title: string };
+  packageStart?: { mode: 'authored'; title: string };
   /** Wraps the scene header in the per-response activity panel; falsy keeps a plain header. */
   activity?: (slots: SceneHeaderSlots) => ReactNode;
-  sourceSegments?: SourceSegmentPolicy;
   hasPackages?: boolean;
   presentationRefreshKey?: string | number;
 };
@@ -157,7 +141,6 @@ function SourceReaderContent({
   estimatedCost,
   packageStart,
   activity,
-  sourceSegments,
   hasPackages,
   presentationRefreshKey,
   branchId,
@@ -194,17 +177,6 @@ function SourceReaderContent({
     hasPackages === true,
     `${presentationRefreshKey ?? ''}:${jobs.map((job) => `${job.id}:${job.status}`).join(',')}`,
     branchId
-  );
-  // Only a source that really carries declared boundaries is read through the segment reader; the
-  // server drops source transforms for exactly those, and translation display keeps its own.
-  const segmented = useMemo(
-    () =>
-      !!sourceSegments &&
-      hasSourceSegmentBoundaries(
-        { sourceRevision: source.id, sourceHash: source.hash, text: source.text },
-        sourceSegments
-      ),
-    [sourceSegments, source.id, source.hash, source.text]
   );
   const projected = presentation?.data;
   const nativeAction = async (kind: 'trigger' | 'button', name: string) => {
@@ -490,7 +462,6 @@ function SourceReaderContent({
           runId={source.runId}
           request={request}
           displayText={presentation?.data?.request?.text}
-          inputTransform={presentation?.data?.inputTransform}
           compactActions={latest ? 'always' : 'tap'}
           onSubmit={onEditRequest}
           onConfirm={onCheckRequest}
@@ -543,15 +514,7 @@ function SourceReaderContent({
             revisionKey={`${source.id}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
           />
         </div>
-      ) : segmented && sourceSegments && mode === 'original' ? (
-        <SourceSegmentBody
-          source={source}
-          config={sourceSegments}
-          blocks={blocks}
-          inline={inline}
-          allowedImageUrls={projected?.inlineImageUrls}
-        />
-      ) : mode === 'original' && !segmented && projected?.original.changed ? (
+      ) : mode === 'original' && projected?.original.changed ? (
         <div className="prose" data-testid="source-text">
           <div
             className="source-block"
@@ -653,7 +616,7 @@ function SourceReaderContent({
           {presentation.error}
         </p>
       )}
-      <PackageStateCards data={presentation?.data} />
+      <PackagePresentationIssues data={presentation?.data} />
       {sceneStatus && (
         <aside className="scene-status" aria-label="현재 장면의 해설">
           <small>장면 해설</small>
@@ -832,10 +795,6 @@ function SourceReaderContent({
             </button>
           )}
         </ActionMenu>
-        <StorySourceState
-          sourceId={source.id}
-          refreshKey={`${source.hash}:${jobs.map((job) => job.status).join(',')}`}
-        />
         <Dialog
           open={detailsOpen}
           onClose={() => setDetailsOpen(false)}
@@ -912,48 +871,6 @@ function SourceReaderContent({
         </p>
       )}
     </article>
-  );
-}
-
-export function SourceSegmentBody({
-  source,
-  config,
-  blocks,
-  inline,
-  allowedImageUrls,
-}: {
-  source: Source;
-  config: SourceSegmentPolicy;
-  blocks: { anchor: string; start: number; end: number }[];
-  inline: (anchor: string) => ReactNode[];
-  allowedImageUrls?: readonly string[];
-}) {
-  const original = { sourceRevision: source.id, sourceHash: source.hash, text: source.text };
-  const emitted = new Set<string>();
-  return (
-    <div className="prose" data-testid="source-text">
-      <SourceSegmentsReader
-        source={original}
-        policy={config}
-        renderText={(text, segment) => {
-          const anchors = blocks
-            .filter((block) => block.start < segment.range.end && segment.range.start < block.end)
-            .map((block) => block.anchor);
-          const images = containedImageAnchors(blocks, segment.bodyRange).filter(
-            (anchor) => !emitted.has(anchor)
-          );
-          images.forEach((anchor) => {
-            emitted.add(anchor);
-          });
-          return (
-            <div className="source-block" data-block-anchor={anchors.join(' ')}>
-              <Prose text={text} allowedImageUrls={allowedImageUrls} />
-              {images.flatMap(inline)}
-            </div>
-          );
-        }}
-      />
-    </div>
   );
 }
 

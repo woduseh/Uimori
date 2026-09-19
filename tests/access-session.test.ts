@@ -52,11 +52,11 @@ test('local access stays optional and configured local tokens use the existing H
   expect(local.authenticated()).toBe(false);
   const { cookie } = local.login('local-token');
   expect(cookie).toMatch(
-    /^nr_session=[a-f0-9]{64}; Path=\/; HttpOnly; SameSite=Strict; Max-Age=43200$/u
+    /^uimori_session=[a-f0-9]{64}; Path=\/; HttpOnly; SameSite=Strict; Max-Age=43200$/u
   );
   expect(local.authenticated(cookieHeader(cookie))).toBe(true);
   expect(local.logout(cookieHeader(cookie))).toBe(
-    'nr_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'
+    'uimori_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'
   );
   expect(local.authenticated(cookieHeader(cookie))).toBe(false);
 });
@@ -79,13 +79,13 @@ test('remote login uses fresh independent secure sessions and logout revokes onl
   const first = sessions.login(accessToken),
     second = sessions.login(accessToken);
   expect(first.cookie).toMatch(
-    /^nr_session=[a-f0-9]{64}; Path=\/; HttpOnly; SameSite=Strict; Max-Age=43200; Secure$/u
+    /^uimori_session=[a-f0-9]{64}; Path=\/; HttpOnly; SameSite=Strict; Max-Age=43200; Secure$/u
   );
   expect(first.cookie).not.toContain(accessToken);
   expect(first.cookie).not.toBe(second.cookie);
   expect(sessions.authenticated(cookieHeader(first.cookie))).toBe(true);
   expect(sessions.logout(cookieHeader(first.cookie))).toBe(
-    'nr_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure'
+    'uimori_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure'
   );
   expect(sessions.authenticated(cookieHeader(first.cookie))).toBe(false);
   expect(sessions.authenticated(cookieHeader(second.cookie))).toBe(true);
@@ -134,10 +134,10 @@ test('unknown, malformed, ambiguous and non-session cookies never authenticate',
   for (const cookie of [
     undefined,
     '',
-    'nr_session=invalid',
+    'uimori_session=invalid',
     `other_${valid}`,
     `${valid}; ${valid}`,
-    `nr_session=${'0'.repeat(64)}`,
+    `uimori_session=${'0'.repeat(64)}`,
     `${valid}extra`,
   ])
     expect(sessions.authenticated(cookie)).toBe(false);
@@ -226,7 +226,7 @@ test('remote session routes protect API resources, revoke logout and emit matchi
   });
   expect(logout.json()).toMatchObject({ required: true, authenticated: false });
   expect(logout.headers['set-cookie']).toBe(
-    'nr_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure'
+    'uimori_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure'
   );
   expect(onAuthChanged).toHaveBeenCalledOnce();
   expect(session.authenticated(cookie)).toBe(false);

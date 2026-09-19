@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import type { RisuPresetImportApply } from '../core/risu-preset.js';
 import { navigationAction } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -16,7 +16,7 @@ test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission th
     data: {
       title,
       role: 'main',
-      program: createDefaultPromptProgram('Synthetic preset', 'main'),
+      program: createDefaultRisuPrompt('Synthetic preset', 'main'),
       values: {},
     },
   });
@@ -142,7 +142,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await expect(composer.getByLabel('1번 프롬프트 본문')).toHaveValue(
     source.promptTemplate[0]!.text!
   );
-  if (process.env.NR_VISUAL_REVIEW === '1') {
+  if (process.env.UIMORI_VISUAL_REVIEW === '1') {
     await page.screenshot({
       path: info.outputPath('risup-native-editor-mobile.png'),
       fullPage: true,

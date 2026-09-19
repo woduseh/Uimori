@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import Fastify from 'fastify';
 import { createAgentCollaboration, createAgentDefinition } from '../core/agent-collaboration.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { productRoutes } from '../server/product-routes.js';
 import { Store } from '../server/store.js';
@@ -218,7 +218,6 @@ test('active captured work survives library deletion with unchanged snapshots an
   const p = s.product.profile(chat.id);
   updateTestProfile(s.product, chat.id, {
     expectedRevision: p.revision,
-    attachments: [],
 
     routes: { ...p.routes, main: { id: m.id } },
     image: false,
@@ -246,7 +245,6 @@ test('active captured work survives library deletion with unchanged snapshots an
   const current = s.product.profile(chat.id);
   updateTestProfile(s.product, chat.id, {
     expectedRevision: current.revision,
-    attachments: [],
 
     routes: p.routes,
     image: false,
@@ -293,7 +291,7 @@ test('deleting a bot preserves existing chat ownership and attachments but publi
 });
 
 test.each(['model', 'connection'] as const)(
-  'deleting %s clears refusal selection and disables dedicated advice without substituting the main model',
+  'deleting %s disables dedicated advice while main generation and JEV judgment remain independent',
   (kind) => {
     const store = database(),
       chat = createFixtureChat(store, 'Keep main independent');
@@ -319,11 +317,10 @@ test.each(['model', 'connection'] as const)(
     const profile = store.product.profile(chat.id);
     updateTestProfile(store.product, chat.id, {
       expectedRevision: profile.revision,
-      attachments: profile.attachments,
       routes: { ...profile.routes, main: { id: main.id } },
       image: false,
     });
-    const program = createDefaultPromptProgram('Main instructions');
+    const program = createDefaultRisuPrompt('Main instructions');
     program.collaboration = {
       ...createAgentCollaboration(),
       enabled: true,
@@ -332,7 +329,7 @@ test.each(['model', 'connection'] as const)(
     const before = updatePromptWorkspace(store, {
       expectedRevision: promptWorkspace(store).revision,
       main: { title: 'Current', program, values: {} },
-      translationPolicy: { refusalModel: { id: advisor.id }, maxRetries: 1, maxCalls: 16 },
+      translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
     });
     const frozen = store.product.snapshot(chat.id);
     const run = store.createRun(
@@ -358,7 +355,7 @@ test.each(['model', 'connection'] as const)(
     deleteLibraryItem(store, kind, target.id, { expectedRevision: target.revision });
     const after = promptWorkspace(store);
     expect(after.revision).toBe(before.revision + 1);
-    expect(after.translationPolicy.refusalModel).toBeNull();
+    expect(after.translationPolicy.judgment).toEqual({ threshold: 0.9 });
     expect(after.main.program.collaboration).toMatchObject({
       enabled: false,
       agents: [{ id: 'advisor', model: null }],

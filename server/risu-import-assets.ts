@@ -1,4 +1,4 @@
-import type { ContentPackage } from '../core/content-package.js';
+import type { RisuContent } from '../core/risu-content.js';
 import type { NativeTransferFile } from '../core/native-transfer.js';
 import { RISU_IMPORT_MAX_ASSETS, type RisuImportKind } from '../core/risu-import.js';
 import { decodeImage } from './package-images.js';
@@ -25,12 +25,12 @@ export function importRisuAssets({
   native?: boolean;
 }): {
   images: NativeTransferFile['images'];
-  packageImages: NonNullable<ContentPackage['images']>;
+  packageImages: NonNullable<RisuContent['images']>;
   assetUrls: Map<string, string>;
   portraitImageId?: string;
 } {
   const images: NativeTransferFile['images'] = [];
-  const packageImages: NonNullable<ContentPackage['images']> = [];
+  const packageImages: NonNullable<RisuContent['images']> = [];
   const assetUrls = new Map<string, string>();
   let portraitImageId: string | undefined;
   // A package image carries no role field, so a typed asset keeps only its bytes and its name.

@@ -1,3 +1,6 @@
+import { refreshNativeSnapshot } from './fixtures/native-snapshot.js';
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { estimateContextTokens } from '../core/context-budget.js';
@@ -28,7 +31,6 @@ import { buildMainProviderRequest, encodeMainPreview } from '../server/main-requ
 import { runMain, type MainHooks } from '../server/model-runner.js';
 import { compactToolReads } from '../server/context-tool-compaction.js';
 import { executeTool } from '../core/provider.js';
-import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const origin = 'http://127.0.0.1:44998';
@@ -60,73 +62,65 @@ const model = (contextTools = true): ModelSnapshot => ({
   },
 });
 /** A frozen main run input whose context plan is already prepared, as app.ts hands it to runMain. */
-function snapshot(contextTools = true): RunSnapshot {
+async function snapshot(contextTools = true): Promise<RunSnapshot> {
   const target = model(contextTools);
   const history = chapters.map((text, index) => ({
     revision: `chapter-${index}`,
     text,
     contentHash: hash(text),
   }));
-  const seeded = seedContextPlan({
-    chatId: 'synthetic-context-tools-chat',
-    parentRevision: history.at(-1)!.revision,
-    settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 8 },
-    request: 'CURRENT_REQUEST_CANARY: 등불 약속을 이어서 써 주세요.',
-    history,
-    resources: [],
-    logicalHistory: history.flatMap((source) => [
-      {
-        id: `request:${source.revision}`,
-        role: 'user' as const,
-        text: `USER_${source.revision}: 계속해 주세요.`,
-        sourceRevision: source.revision,
-        sourceHash: source.contentHash,
+  const seeded = seedContextPlan(
+    await prepareNativeRisuRun({
+      chatId: 'synthetic-context-tools-chat',
+      parentRevision: history.at(-1)!.revision,
+      settingsRevision: 1,
+      settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 8 },
+      request: 'CURRENT_REQUEST_CANARY: 등불 약속을 이어서 써 주세요.',
+      history,
+      resources: [],
+      logicalHistory: history.flatMap((source) => [
+        {
+          id: `request:${source.revision}`,
+          role: 'user' as const,
+          text: `USER_${source.revision}: 계속해 주세요.`,
+          sourceRevision: source.revision,
+          sourceHash: source.contentHash,
+        },
+        {
+          id: `source:${source.revision}`,
+          role: 'assistant' as const,
+          text: source.text,
+          sourceRevision: source.revision,
+          sourceHash: source.contentHash,
+        },
+      ]),
+      contextBase: {
+        scopeKey: 'chat:synthetic-context-tools-chat:main',
+        activeRevision: 0,
+        notesRevision: 0,
+        checkpoint: null,
       },
-      {
-        id: `source:${source.revision}`,
-        role: 'assistant' as const,
-        text: source.text,
-        sourceRevision: source.revision,
-        sourceHash: source.contentHash,
-      },
-    ]),
-    contextBase: {
-      scopeKey: 'chat:synthetic-context-tools-chat:main',
-      activeRevision: 0,
-      notesRevision: 0,
-      checkpoint: null,
-    },
-    profile: {
-      ...defaultProfile('synthetic-context-tools-chat'),
-      contents: [],
-      models: { main: target },
-      routes: { main: { id: target.id }, translation: null, status: null, image: null },
-      promptPresets: {
-        main: {
-          id: 'synthetic-prompt',
-          revision: 1,
-          title: 'Synthetic prompt',
-          role: 'main',
-          program: {
-            version: 1,
-            controls: [],
-            blocks: [
-              {
-                id: 'fixed',
-                title: 'Fixed',
-                kind: 'message',
-                role: 'system',
-                template: [{ kind: 'text', text: 'FIXED_INSTRUCTIONS_CANARY' }],
-              },
-              { id: 'history', title: 'History', kind: 'history', from: 0, to: -1 },
-              { id: 'current', title: 'Current', kind: 'current' },
-            ],
+      profile: {
+        ...defaultProfile('synthetic-context-tools-chat'),
+        models: { main: target },
+        routes: { main: { id: target.id }, translation: null, status: null },
+        promptPresets: {
+          main: {
+            id: 'synthetic-prompt',
+            revision: 1,
+            title: 'Synthetic prompt',
+            role: 'main',
+            program: nativePrompt('FIXED_INSTRUCTIONS_CANARY', {
+              promptTemplate: [
+                { type: 'plain', role: 'system', text: 'FIXED_INSTRUCTIONS_CANARY' },
+                { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+              ],
+            }),
           },
         },
       },
-    },
-  });
+    })
+  );
   const ready = withContextProjection(seeded, [], null);
   const measured = measureMainContext(ready);
   return {
@@ -134,8 +128,8 @@ function snapshot(contextTools = true): RunSnapshot {
     contextPlan: { ...ready.contextPlan!, estimatedInputTokens: measured.estimatedInputTokens },
   };
 }
-function oversizedSnapshot(): RunSnapshot {
-  const fixed = snapshot();
+async function oversizedSnapshot(): Promise<RunSnapshot> {
+  const fixed = await snapshot();
   fixed.profile!.models.main!.inputTokenLimit = 8192;
   fixed.profile!.contextModel = {
     ...model(false),
@@ -160,18 +154,17 @@ function oversizedSnapshot(): RunSnapshot {
   );
 }
 /** Leave a measured 14% margin around fixed instructions, independent of tokenizer fixture drift. */
-function fixedHeavySnapshot(vertex = false): RunSnapshot {
-  const fixed = oversizedSnapshot(),
+async function fixedHeavySnapshot(vertex = false): Promise<RunSnapshot> {
+  const fixed = await oversizedSnapshot(),
     target = fixed.profile!.models.main!,
-    block = fixed.profile!.promptPresets!.main!.program.blocks[0];
-  if (block.kind !== 'message') throw new Error('Expected a fixed instruction block');
-  block.template = [
-    {
-      kind: 'text',
-      text:
-        'FIXED_INSTRUCTIONS_CANARY\n' + 'Keep every separate promise and condition. '.repeat(1800),
-    },
-  ];
+    block = (
+      fixed.profile!.promptPresets!.main!.program.nativeRisuPreset.preset.promptTemplate as Record<
+        string,
+        unknown
+      >[]
+    )[0];
+  block.text =
+    'FIXED_INSTRUCTIONS_CANARY\n' + 'Keep every separate promise and condition. '.repeat(1800);
   target.inputTokenLimit = 65536;
   fixed.profile!.contextModel!.inputTokenLimit = 65536;
   if (vertex) {
@@ -181,9 +174,10 @@ function fixedHeavySnapshot(vertex = false): RunSnapshot {
       protocol: 'vertex-gemini-v1',
       endpoint:
         'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
-      credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST',
+      credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST',
     };
   }
+  await refreshNativeSnapshot(fixed);
   const project = () =>
     withContextProjection(
       seedContextPlan(fixed),
@@ -323,7 +317,7 @@ describe('model-driven working summary and window switch inside one main run', (
   ])(
     'read compaction sends the $goal-token consumer goal with an independently sized $summaryLimit-token summarizer',
     async ({ consumerLimit, summaryLimit, output, thinking, goal, budget }) => {
-      const fixed = snapshot();
+      const fixed = await snapshot();
       fixed.contextPlan!.budget.inputTokenLimit = consumerLimit;
       fixed.profile!.models.main!.inputTokenLimit = consumerLimit;
       fixed.profile!.contextModel = {
@@ -385,112 +379,8 @@ describe('model-driven working summary and window switch inside one main run', (
     }
   );
 
-  test('read summaries retain returned revisions, filtered ranges and search excerpts without inventing full-source verification', async () => {
-    const fixed = snapshot();
-    fixed.profile!.contextModel = { ...model(false), inputTokenLimit: 32768 };
-    fixed.sourceSegments = createSourceSegmentFixture({ excludeAnnotations: true });
-    const source = fixed.history[0];
-    source.text = 'VISIBLE_START <EvaluationReport>SECRET_NOTE</EvaluationReport> VISIBLE_END';
-    source.contentHash = hash(source.text);
-    for (const message of fixed.logicalHistory!.filter(
-      (item) => item.sourceRevision === source.revision
-    )) {
-      message.sourceHash = source.contentHash;
-      if (message.role === 'assistant') message.text = source.text;
-    }
-    fixed.resources = [
-      {
-        id: 'same-resource',
-        chatId: fixed.chatId,
-        kind: 'lore',
-        revision: 1,
-        title: 'Versioned source',
-        description: 'A synthetic local source',
-        text: 'OLD_RESOURCE_BODY',
-      },
-    ];
-    delete fixed.promptCompilation;
-    const revised = structuredClone(fixed);
-    revised.resources[0] = { ...revised.resources[0], revision: 2, text: 'NEW_RESOURCE_BODY' };
-    const originals = [structuredClone(fixed), structuredClone(revised)];
-    const read = executeTool(fixed, {
-      callId: 'filtered-read',
-      name: 'story.read',
-      args: { sceneNumber: 1, offset: 0, limit: 100 },
-    });
-    const search = executeTool(fixed, {
-      callId: 'partial-search',
-      name: 'story.search',
-      args: { query: 'VISIBLE', offset: 0, limit: 20 },
-    });
-    const action = { name: 'knowledge.read', args: { id: 'same-resource', offset: 2, limit: 4 } };
-    const firstVersion = executeTool(fixed, { ...action, callId: 'version-one' });
-    const secondVersion = executeTool(revised, { ...action, callId: 'version-two' });
-    const events = [read, search, firstVersion];
-    expect(events.every((event) => !event.denied)).toBe(true);
-    expect(secondVersion.denied).toBe(false);
-    expect((read.result as { text: string }).text).not.toContain('SECRET_NOTE');
-    const log = hooks();
-    const bodies = script([() => completed(), () => completed()]);
-    const usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
-    const first = await compactToolReads(fixed, events, log.value, usage, projectedTokens(fixed));
-    const second = await compactToolReads(
-      revised,
-      [...first, secondVersion],
-      log.value,
-      usage,
-      projectedTokens(revised)
-    );
-    const result = second[0].result as {
-      references: { name: string; args: Json; returned?: Record<string, Json> }[];
-      guidance: string;
-    };
-    expect(result.references).toHaveLength(4);
-    const metadata = result.references.find((item) => item.name === 'story.read')!.returned!;
-    const originalRead = read.result as Record<string, Json>;
-    expect(metadata).toMatchObject({
-      source: originalRead.source,
-      sceneScope: originalRead.sceneScope,
-      keptRanges: originalRead.keptRanges,
-      excludedRanges: originalRead.excludedRanges,
-      rangeSemantics: originalRead.rangeSemantics,
-    });
-    expect(metadata).not.toHaveProperty('text');
-    const searchMetadata = result.references.find((item) => item.name === 'story.search')!
-      .returned!;
-    const searchResults = (search.result as { results: Record<string, Json>[] }).results;
-    expect(searchResults.length).toBeGreaterThan(0);
-    expect(searchMetadata.results).toEqual(
-      searchResults.map((item) => ({
-        sceneNumber: item.sceneNumber,
-        source: item.source,
-        truncated: item.truncated,
-        nextOffset: item.nextOffset,
-      }))
-    );
-    const versions = result.references.filter((item) => item.name === 'knowledge.read');
-    expect(versions.map((item) => item.args)).toEqual([firstVersion.args, secondVersion.args]);
-    expect(versions.map((item) => item.returned!.source)).toEqual([
-      (firstVersion.result as { source: Json }).source,
-      (secondVersion.result as { source: Json }).source,
-    ]);
-    expect(
-      versions.every(
-        (item) =>
-          JSON.stringify(item.returned!.range) ===
-          JSON.stringify({ start: 2, end: 6, unit: 'utf16-code-unit' })
-      )
-    ).toBe(true);
-    expect(result.guidance).toContain(CONTEXT_RETRIEVAL_GUIDANCE);
-    expect(JSON.stringify(result)).not.toContain('SECRET_NOTE');
-    expect(JSON.stringify(result)).not.toContain('OLD_RESOURCE_BODY');
-    expect(JSON.stringify(result)).not.toContain('NEW_RESOURCE_BODY');
-    expect(bodies[1].input.source.part).toContain('host-compacted-reads');
-    expect([fixed, revised]).toEqual(originals);
-  });
-
   test('summary headroom includes retained source metadata and exact receipts in the actual fresh body', async () => {
-    const fixed = fixedHeavySnapshot(),
+    const fixed = await fixedHeavySnapshot(),
       log = hooks(persistence().persist),
       limit = measureMainContext(fixed).estimatedInputTokens + 2800;
     fixed.profile!.models.main!.inputTokenLimit = limit;
@@ -566,7 +456,7 @@ describe('model-driven working summary and window switch inside one main run', (
   });
 
   test('a useful read summary proceeds above the soft trigger with less than ten percent total reduction', async () => {
-    const fixed = fixedHeavySnapshot(),
+    const fixed = await fixedHeavySnapshot(),
       original = structuredClone(fixed),
       log = hooks(),
       limit = fixed.contextPlan!.budget.inputTokenLimit;
@@ -611,7 +501,7 @@ describe('model-driven working summary and window switch inside one main run', (
   });
 
   test('an unhelpful summary keeps Vertex signed history; only a new successful read permits another summary', async () => {
-    const fixed = fixedHeavySnapshot(true),
+    const fixed = await fixedHeavySnapshot(true),
       target = fixed.profile!.models.main!,
       original = structuredClone(fixed),
       saved = persistence(),
@@ -729,7 +619,7 @@ describe('model-driven working summary and window switch inside one main run', (
   });
 
   test('when original reads and their summary both exceed the hard limit no further main request is sent', async () => {
-    const fixed = fixedHeavySnapshot(),
+    const fixed = await fixedHeavySnapshot(),
       log = hooks(),
       original = structuredClone(fixed),
       limit = fixed.contextPlan!.budget.inputTokenLimit;
@@ -775,7 +665,7 @@ describe('model-driven working summary and window switch inside one main run', (
   test.each(['completed', 'eof', 'call-limit', 'authorization-revoked'] as const)(
     'accumulated reads are admitted before the next send; compaction %s preserves saved effects and originals',
     async (outcome) => {
-      const fixed = oversizedSnapshot();
+      const fixed = await oversizedSnapshot();
       fixed.settings.maxCalls = outcome === 'call-limit' ? 3 : 8;
       const original = structuredClone(fixed);
       const saved = persistence(),
@@ -865,7 +755,7 @@ describe('model-driven working summary and window switch inside one main run', (
   test.each(['single', 'batch', 'mixed'] as const)(
     'Vertex signed %s continuation becomes a fresh text reference after compaction, then resumes native reads',
     async (mode) => {
-      const fixed = oversizedSnapshot(),
+      const fixed = await oversizedSnapshot(),
         target = fixed.profile!.models.main!,
         saved = persistence(),
         log = hooks(saved.persist);
@@ -875,7 +765,7 @@ describe('model-driven working summary and window switch inside one main run', (
         protocol: 'vertex-gemini-v1',
         endpoint:
           'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
-        credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST',
+        credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST',
       };
       const original = structuredClone(fixed);
       log.value.resolveCredential = () => 'SYNTHETIC_VERTEX_TOKEN';
@@ -1010,7 +900,7 @@ describe('model-driven working summary and window switch inside one main run', (
   );
 
   test('repeated compaction retains more than eight exact receipts and prior read arguments as one reference envelope', async () => {
-    const fixed = oversizedSnapshot(),
+    const fixed = await oversizedSnapshot(),
       saved = persistence(),
       log = hooks(saved.persist);
     // This case isolates repeated receipt/continuation preservation from summary chunking.
@@ -1140,7 +1030,7 @@ describe('model-driven working summary and window switch inside one main run', (
         toolTurn([{ id: 'c4', name: 'story.read', args: { sceneNumber: 1, limit: 40 } }], n),
       () => completed(),
     ]);
-    const result = await runMain(snapshot(), log.value);
+    const result = await runMain(await snapshot(), log.value);
     expect(result).toMatchObject({ status: 'completed', text: finalText });
     expect(result.usage.modelCalls).toBe(5);
     expect(bodies).toHaveLength(5);
@@ -1197,7 +1087,7 @@ describe('model-driven working summary and window switch inside one main run', (
         { sceneNumber: 5, revision: 'chapter-4', hash: hash(chapters[4]) },
       ],
       sceneScope: {
-        chatId: snapshot().chatId,
+        chatId: (await snapshot()).chatId,
         headRevision: 'chapter-4',
         headHash: hash(chapters[4]),
       },
@@ -1256,7 +1146,7 @@ describe('model-driven working summary and window switch inside one main run', (
         ),
       () => completed(),
     ]);
-    const result = await runMain(snapshot(), log.value);
+    const result = await runMain(await snapshot(), log.value);
     expect(result.status).toBe('completed');
     expect(log.events.map((event) => [event.name, event.denied])).toEqual([
       ['context.new', true],
@@ -1284,7 +1174,7 @@ describe('model-driven working summary and window switch inside one main run', (
       (_body, n) => toolTurn([{ id: 'c2', name: 'context.read', args: {} }], n),
       () => completed(),
     ]);
-    const result = await runMain(snapshot(), log.value);
+    const result = await runMain(await snapshot(), log.value);
     expect(result.status).toBe('completed');
     expect(log.events[0]).toMatchObject({
       denied: true,
@@ -1305,7 +1195,7 @@ describe('model-driven working summary and window switch inside one main run', (
   });
 
   test('presets without the flag, evaluation presets and artifacts never register the tools', async () => {
-    const off = snapshot(false);
+    const off = await snapshot(false);
     expect(contextToolsEnabled(off)).toBe(false);
     const built = buildMainProviderRequest(off).request;
     expect(built.stable.tools.some((tool) => CONTEXT_TOOL_NAMES.includes(tool.name as never))).toBe(
@@ -1313,7 +1203,7 @@ describe('model-driven working summary and window switch inside one main run', (
     );
     expect(built.stable.contract).not.toContain('Context window tools');
     expect(built.input.source).not.toHaveProperty('contextWindow');
-    const evaluated = snapshot();
+    const evaluated = await snapshot();
     evaluated.profile!.models.main!.evaluationTools = {
       contextMode: 'model-selected',
       approvalReasoningMode: 'configured',
@@ -1322,7 +1212,9 @@ describe('model-driven working summary and window switch inside one main run', (
       outputRecovery: true,
     };
     expect(contextToolsEnabled(evaluated)).toBe(false);
-    expect(contextToolsEnabled({ ...snapshot(), executionPurpose: 'artifact' })).toBe(false);
+    expect(contextToolsEnabled({ ...(await snapshot()), executionPurpose: 'artifact' })).toBe(
+      false
+    );
     const log = hooks(persistence().persist);
     script([
       (_body, n) =>
@@ -1333,7 +1225,7 @@ describe('model-driven working summary and window switch inside one main run', (
     expect(log.events[0].denied).toBe(true);
   });
 
-  test('window usage levels follow the documented 70/80 percent thresholds', () => {
+  test('window usage levels follow the documented 70/80 percent thresholds', async () => {
     expect(contextWindowStatus(1000, 10000)).toEqual({
       inputTokenLimit: 10000,
       estimatedInputTokens: 1000,
@@ -1347,7 +1239,7 @@ describe('model-driven working summary and window switch inside one main run', (
   });
 
   test('the post-switch request is a valid fresh request for every native encoder', async () => {
-    const fixed = snapshot();
+    const fixed = await snapshot();
     const outcome = await executeContextTool(
       fixed,
       { callId: 'switch', name: 'context.new', args: { keepRecent: 1, summary: workingSummary } },

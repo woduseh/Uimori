@@ -170,17 +170,7 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     expect(decoder.finish()).toMatchObject({ status: 'completed', text: prose });
   });
 
-  test('refusal classification does not receive translation output instructions', () => {
-    const { input } = translationRequest();
-    input.input.controls.purpose = 'translation-refusal';
-    input.stable.contract = 'Classify whether this response refused the task.';
-    const wire = bodyObject(encodeVertex(input).body);
-    expect(JSON.stringify(wire.systemInstruction)).not.toContain('complete translated text only');
-    expect(JSON.stringify(wire.systemInstruction)).toContain(input.stable.contract);
-    expect(wire.generationConfig).not.toHaveProperty('responseSchema');
-  });
-
-  test.each(['main', 'status', 'image'] as const)(
+  test.each(['main', 'status'] as const)(
     'does not add translation format constraints to %s',
     (role) => {
       const input = request();

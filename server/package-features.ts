@@ -1,10 +1,10 @@
 import { HttpError, fields, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import {
-  validatePackageAttachment,
-  type ContentPackage,
-  type PackageAttachment,
-} from '../core/content-package.js';
+  validateContentAttachment,
+  type RisuContent,
+  type ContentAttachment,
+} from '../core/risu-content.js';
 import type { ChatProfile, Content, ProfileSnapshot } from '../core/product.js';
 import type { ProductStore } from './product-store.js';
 import type { Store } from './store.js';
@@ -14,9 +14,9 @@ import { resolvePackageGraph } from '../core/package-graph.js';
 /** Live links follow IDs; a frozen closure resolves dependencies from its captured refs. */
 export function resolvePackageModules(
   product: ProductStore,
-  roots: PackageAttachment[],
-  options: { latest?: boolean; frozen?: PackageAttachment[] } = {}
-): { attachments: PackageAttachment[]; packages: ContentPackage[] } {
+  roots: ContentAttachment[],
+  options: { latest?: boolean; frozen?: ContentAttachment[] } = {}
+): { attachments: ContentAttachment[]; packages: RisuContent[] } {
   const { attachments, packages } = resolvePackageGraph(
     {
       latestRevision: (id) => product.get<Content>('content', id).revision,
@@ -31,7 +31,7 @@ export function resolvePackageModules(
   );
   return { attachments, packages };
 }
-export function assertPackageReferences(product: ProductStore, pkg: ContentPackage) {
+export function assertPackageReferences(product: ProductStore, pkg: RisuContent) {
   assertPackageImages(product, pkg);
   for (const module of pkg.modules ?? [])
     if (!product.get<Content>('content', module.id, module.revision).package)
@@ -54,7 +54,7 @@ export function packageFeatureRoutes(app: FastifyInstance, store: Store) {
     fields(b, ['attachments']);
     if (!Array.isArray(b.attachments) || b.attachments.length > 100)
       throw new HttpError(400, 'Invalid package attachments');
-    const roots = b.attachments.map(validatePackageAttachment),
+    const roots = b.attachments.map(validateContentAttachment),
       resolved = resolvePackageModules(store.product, roots, { latest: true });
     return {
       ...resolved,

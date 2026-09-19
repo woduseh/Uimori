@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { NativeRisuContent } from '../core/risu-native.js';
+import type { RisuContentSource } from '../core/risu-native.js';
 import { evaluateNativeRisuFields, evaluateRisuNativeCbs } from '../server/risu-native-cbs.js';
 import { renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { cardZip } from '../server/character-card-file.js';
 import { readEmbeddedRisuModule } from '../server/risu-module-file.js';
 
-const native = (extra: Partial<NativeRisuContent> = {}): NativeRisuContent => ({
+const native = (extra: Partial<RisuContentSource> = {}): RisuContentSource => ({
   version: 1,
   card: { name: 'Guide', first_mes: 'Choose', extensions: { risuai: {} } },
   assets: [],

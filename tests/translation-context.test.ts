@@ -1,3 +1,4 @@
+import { nativeContent } from './fixtures/native-content.js';
 import { writeNote } from './fixtures/notes.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
@@ -96,7 +97,6 @@ function configure(store: Store, chatId: string, endpoint: string) {
   const prior = store.product.profile(chatId);
   updateTestProfile(store.product, chatId, {
     expectedRevision: prior.revision,
-    attachments: prior.attachments,
 
     routes: { ...prior.routes, translation: { id: model.id } },
     image: false,
@@ -430,6 +430,18 @@ test('translation searches and reads frozen bot/persona/modules even when absent
                   : `${kind}: Mira addresses Captain Arlen informally.`,
               loading: 'pinned',
               relatedIds: [],
+              package: nativeContent(
+                {
+                  name: kind,
+                  creator_notes: 'Synthetic relationship',
+                  description:
+                    kind === 'glossary'
+                      ? 'Arlen = 앨런 선장'
+                      : `${kind}: Mira addresses Captain Arlen informally.`,
+                },
+                {},
+                kind === 'persona' ? 'persona' : 'module'
+              ),
             }
       ) as { id: string; revision: number }
   );
@@ -437,26 +449,33 @@ test('translation searches and reads frozen bot/persona/modules even when absent
   const prior = store.product.profile(chat.id);
   updateTestProfile(store.product, chat.id, {
     expectedRevision: prior.revision,
-    attachments: contents.slice(1).map(({ id, revision }) => ({ id, revision })),
+    packageAttachments: [
+      ...prior.packageAttachments!,
+      ...contents.slice(1).map(({ id, revision }, index) => ({
+        id,
+        revision,
+        role: index === 0 ? 'persona' : 'module',
+      })),
+    ],
 
     routes: prior.routes,
     image: false,
   });
   const target = source(store, chat.id);
   const fixed = store.run(target.runId).snapshot;
-  const botResource = fixed.resources.find((entry) => entry.sourceKind === 'bot')!;
   for (let i = 0; i < contents.length; i++) {
     const entry = contents[i];
+    const resourceId = `package:${entry.id}:${['bot', 'persona', 'module', 'module'][i]}:body`;
     const event = executeTool(
       fixed,
-      call('knowledge.read', { id: i === 0 ? botResource.id : entry.id }),
+      call('knowledge.read', { id: resourceId }),
       undefined,
       'translation'
     );
     expect(event.denied).toBe(false);
     expect(event.result).toMatchObject({
       source: {
-        id: i === 0 ? botResource.id : entry.id,
+        id: resourceId,
         revision: 1,
         sourceKind: ['bot', 'persona', 'module', 'module'][i],
       },
@@ -466,6 +485,11 @@ test('translation searches and reads frozen bot/persona/modules even when absent
     executeTool(fixed, call('knowledge.search', { query: 'Mira' }), undefined, 'translation').result
   ).toMatchObject({ total: 3 });
   expect(
-    executeTool(fixed, call('knowledge.read', { id: contents[1].id }), undefined, 'main').denied
-  ).toBe(true);
+    executeTool(
+      fixed,
+      call('knowledge.read', { id: `package:${contents[1].id}:persona:body` }),
+      undefined,
+      'main'
+    ).denied
+  ).toBe(false);
 });

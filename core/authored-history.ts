@@ -23,7 +23,6 @@ export function validateSourceOnlyTranscript(snapshot: RunSnapshot): void {
           'history',
           'resources',
           'profile',
-          'sourceSegments',
           'branchId',
           'executionClock',
           'transcriptImport',

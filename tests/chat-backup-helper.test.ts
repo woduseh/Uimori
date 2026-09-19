@@ -1,3 +1,4 @@
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -19,7 +20,6 @@ import type { PendingChatOptions } from '../core/chat-options.js';
 import type { WorkspaceDraftModel } from '../core/edit-drafts.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 
 const owned: { store: Store; path: string }[] = [];
@@ -52,11 +52,10 @@ test('multiple same-branch sessions and detached revoked option receipts survive
     expectedRevision: prior.revision,
     main: {
       ...prior.main,
-      values: { detail: 1 },
-      program: {
-        ...createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
-        controls: [{ id: 'detail', label: 'Detail', type: 'number', default: 1, min: 0, max: 10 }],
-      },
+      values: { detail: '1' },
+      program: nativePrompt(DEFAULT_MAIN_PROMPT, {
+        customPromptTemplateToggle: 'detail=Detail=text',
+      }),
     },
   });
   const connection = source.product.connection({
@@ -109,7 +108,7 @@ test('multiple same-branch sessions and detached revoked option receipts survive
       branchId,
       expectedRevision: delegated.revision,
       binding: state.binding,
-      values: { detail: 4 },
+      values: { detail: '4' },
       expectedHeadRevision: state.headRevision,
       delegationId: delegated.delegations[0].id,
       operationId: 'choose',
@@ -151,7 +150,7 @@ test('multiple same-branch sessions and detached revoked option receipts survive
       branchId,
       expectedRevision: nextOptions.revision,
       binding: nextOptions.binding,
-      values: { detail: 8 },
+      values: { detail: '8' },
       expectedHeadRevision: nextOptions.headRevision,
       delegationId: delegated.delegations[0].id,
       operationId: 'unconsumed-choice',
@@ -195,7 +194,7 @@ test('multiple same-branch sessions and detached revoked option receipts survive
     const importedSource = destination.source(imported.chat.headRevision!);
     expect(importedSource.text).toBe('보존할 본편 원문');
     expect(destination.run(importedSource.runId).snapshot.profile?.chatOptions?.values).toEqual({
-      detail: 4,
+      detail: '4',
     });
     const roundtrip = exportChatBackup(destination, imported.chat.id);
     expect(roundtrip.records.helperDelegations).toHaveLength(1);
@@ -271,10 +270,9 @@ test('helper backup remaps durable draft and option ownership while preserving a
     main: {
       ...current.main,
       values: { custom: chat.id },
-      program: {
-        ...createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
-        controls: [{ id: 'custom', label: 'Custom', type: 'text', default: chat.id }],
-      },
+      program: nativePrompt(DEFAULT_MAIN_PROMPT, {
+        customPromptTemplateToggle: 'custom=Custom=text',
+      }),
     },
   });
   const options = new ChatOptionsStore(store),
@@ -353,9 +351,9 @@ test('helper backup remaps durable draft and option ownership while preserving a
 test('lore backup retains shared selectors and text while remapping its local mutation receipt', () => {
   const store = database(),
     input = fixtureBotInput('Lore owner');
-  input.package.lore = [
-    { id: 'fact', title: 'Fact', description: '', text: 'Original lore', loading: 'pinned' },
-  ];
+  input.package.nativeRisu.card.character_book = {
+    entries: [{ name: 'Fact', content: 'Original lore', constant: true }],
+  };
   const bot = store.product.content(input) as Content;
   const chat = createFixtureChat(store, 'Lore backup', 'calm', { botId: bot.id });
   const lore = new ChatOverridesStore(store),
@@ -363,7 +361,7 @@ test('lore backup retains shared selectors and text while remapping its local mu
   const saved = lore.patch(
     chat.id,
     {
-      selector: { id: bot.id, role: 'bot', modulePath: [], loreId: 'fact', field: 'text' },
+      selector: { id: bot.id, role: 'bot', modulePath: [], loreId: 'lore-0', field: 'text' },
       value: chat.id,
       branchId: state.branchId,
       expectedRevision: state.revision,

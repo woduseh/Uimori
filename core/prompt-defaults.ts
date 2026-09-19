@@ -1,60 +1,28 @@
-import type { PromptProgram } from './prompt-program.js';
+import type { RisuPrompt } from './risu-prompt.js';
 import type { PromptRole } from './product.js';
-
-/** Plain instruction authoring produces the same AST as detailed editing.
- * All default system blocks precede user data and history for provider portability.
- * Authored programs keep their own roles and order unchanged.
- */
-export function createDefaultPromptProgram(text: string, role: PromptRole = 'main'): PromptProgram {
-  const dataSlots =
-    role === 'main'
-      ? ['backgroundLore', 'globalNote', 'authorNote', 'postEverything']
-      : role === 'translation'
-        ? ['context', 'catalog', 'source']
-        : ['source', 'context', 'outputSchema', 'catalog'];
+/** New prompts are native Risu sources. Host data, tools and model routing stay outside authored source. */
+export function createDefaultRisuPrompt(text: string, role: PromptRole = 'main'): RisuPrompt {
   return {
     version: 1,
-    controls: [],
-    blocks: [
-      {
-        id: 'instructions',
-        title: '지침',
-        kind: 'message',
-        role: 'system',
-        template: [{ kind: 'text', text }],
-      },
-      ...dataSlots.map((slot) => ({
-        id: slot,
-        title: slot,
-        kind: 'slot' as const,
-        role: 'user' as const,
-        slot,
-        template: [
-          { kind: 'text' as const, text: `${slot}:\n` },
-          { kind: 'slot' as const, name: slot },
+    nativeRisuPreset: {
+      version: 1,
+      preset: {
+        name: role === 'main' ? '작문 프롬프트' : '번역 프롬프트',
+        promptTemplate: [
+          { type: 'plain', role: 'system', text },
+          ...(role === 'main'
+            ? [
+                { type: 'persona' },
+                { type: 'description' },
+                { type: 'lorebook' },
+                { type: 'plain', role: 'system', type2: 'globalNote', text: '{{slot}}' },
+                { type: 'authornote' },
+                { type: 'postEverything' },
+              ]
+            : []),
+          { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
         ],
-      })),
-      ...(role === 'main'
-        ? [
-            { id: 'history', title: 'History', kind: 'history' as const, from: 0, to: -1 },
-            ...['notes', 'sceneLore'].map((slot) => ({
-              id: slot,
-              title: slot,
-              kind: 'slot' as const,
-              role: 'user' as const,
-              slot,
-            })),
-            { id: 'current', title: 'Current input', kind: 'current' as const },
-          ]
-        : [
-            {
-              id: 'history',
-              title: 'Request',
-              kind: 'history' as const,
-              from: 0,
-              to: 'end' as const,
-            },
-          ]),
-    ],
+      },
+    },
   };
 }

@@ -1,9 +1,13 @@
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
+import { nativeContent } from './fixtures/native-content.js';
+import { prepareNativeRisuReadOnly } from '../server/risu-native-readonly.js';
 import {
   modelWorkspace,
   updateModelWorkspace,
   updatePromptWorkspace,
 } from '../server/prompt-workspace.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
@@ -105,13 +109,18 @@ function snapshot(
     profile,
   };
 }
-function seed(store: Store, chatId: string, text: string, reads: Content[] = []): Source {
+async function seed(
+  store: Store,
+  chatId: string,
+  text: string,
+  reads: { id: string; text: string }[] = []
+): Promise<Source> {
   const captured = snapshot(
     store,
     chatId,
     `사용자 ${store.history(store.chat(chatId).headRevision).length}: 미라의 선택을 대신 정하지 마세요.`
   );
-  const run = store.createRun(
+  let run = store.createRun(
     chatId,
     {
       request: captured.request,
@@ -121,6 +130,11 @@ function seed(store: Store, chatId: string, text: string, reads: Content[] = [])
     },
     () => captured
   ).run;
+  const prepared = compileSnapshotPrompt(
+    freezeLoreContext(store, await prepareNativeRisuRun(run.snapshot))
+  );
+  store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(prepared), run.id);
+  run = store.run(run.id);
   store.startRun(run.id);
   for (const lore of reads) {
     const event = executeTool(run.snapshot, {
@@ -152,7 +166,7 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     expectedRevision: modelWorkspace(app.store).revision,
     main: {
       title: 'Synthetic context instructions',
-      program: createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
+      program: createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT),
       values: {},
     },
   });
@@ -163,7 +177,7 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     status: false,
     maxCalls: 16,
   });
-  const lore = (kind === 'lore-pressure' ? ['A', 'B', 'C'] : ['A']).map(
+  const modules = (kind === 'lore-pressure' ? ['A', 'B', 'C'] : ['A']).map(
     (label) =>
       app.store.product.content({
         kind: 'module',
@@ -172,25 +186,51 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
         text: `LORE_${label}_RAW_BODY_ONLY\n${paragraph.repeat(kind === 'lore-pressure' ? 100 : 2)}`,
         loading: 'discoverable',
         relatedIds: [],
+        package: {
+          ...nativeContent(
+            {
+              name: `Reference ${label}`,
+              character_book: {
+                entries: [
+                  {
+                    comment: `Reference ${label}`,
+                    keys: [label],
+                    content: `LORE_${label}_RAW_BODY_ONLY\n${paragraph.repeat(kind === 'lore-pressure' ? 100 : 2)}`,
+                    enabled: true,
+                  },
+                ],
+              },
+            },
+            {},
+            'module'
+          ),
+          loreActivation: { mode: 'discoverable' },
+        },
       }) as Content
   );
   const { chatId: _id, revision, ...profile } = app.store.product.profile(chat.id);
   updateTestProfile(app.store.product, chat.id, {
     ...profile,
     expectedRevision: revision,
-    attachments: lore.map(({ id, revision }) => ({ id, revision })),
+    packageAttachments: [
+      ...profile.packageAttachments!,
+      ...modules.map(({ id, revision }) => ({ id, revision, role: 'module' })),
+    ],
     loreContext: { ...DEFAULT_LORE_CONTEXT },
   });
+  const lore = app.store.product
+    .resources(chat.id, app.store.product.snapshot(chat.id)!)
+    .filter((item) => item.sourceKind === 'lore');
   const sources: Source[] = [];
   if (kind === 'lore-pressure') {
-    sources.push(seed(app.store, chat.id, '첫 번째 짧은 장면.', [lore[0]]));
-    sources.push(seed(app.store, chat.id, '두 번째 짧은 장면.', [lore[1]]));
-    sources.push(seed(app.store, chat.id, '세 번째 짧은 장면.', [lore[2]]));
-    sources.push(seed(app.store, chat.id, '네 번째 짧은 장면.', [lore[0]]));
+    sources.push(await seed(app.store, chat.id, '첫 번째 짧은 장면.', [lore[0]]));
+    sources.push(await seed(app.store, chat.id, '두 번째 짧은 장면.', [lore[1]]));
+    sources.push(await seed(app.store, chat.id, '세 번째 짧은 장면.', [lore[2]]));
+    sources.push(await seed(app.store, chat.id, '네 번째 짧은 장면.', [lore[0]]));
   } else {
     for (let index = 0; index < 5; index++)
       sources.push(
-        seed(
+        await seed(
           app.store,
           chat.id,
           `이전 장면 ${index}.\n${scene.repeat(65)}`,
@@ -266,7 +306,7 @@ async function terminal(app: App, id: string) {
   await vi.waitFor(
     () => {
       run = app.store.run(id);
-      expect(['queued', 'running', 'waiting_for_state']).not.toContain(run.status);
+      expect(['queued', 'running']).not.toContain(run.status);
     },
     { timeout: 10_000, interval: 20 }
   );
@@ -287,8 +327,12 @@ function orderedSubset(actual: RetainedLore[], candidates: RetainedLore[]) {
 describe('automatic summary and retained lore at the same input boundary', () => {
   test('evicts whole least-recently-used references for overall input pressure, preserves ordering, and never resurrects them on the next run or restore', async () => {
     const f = await fixture('lore-pressure'),
-      started = await start(f.app, f.chatId),
-      candidates = structuredClone(started.snapshot.loreContext!.entries);
+      expected = freezeLoreContext(
+        f.app.store,
+        await prepareNativeRisuReadOnly(snapshot(f.app.store, f.chatId), 'context')
+      ),
+      candidates = structuredClone(expected.loreContext!.entries),
+      started = await start(f.app, f.chatId);
     expect(candidates.map((entry) => entry.id)).toEqual(f.lore.map((lore) => lore.id));
     expect(candidates[0].lastUsed).toBe(f.sources[3].id);
     const run = await terminal(f.app, started.id),
@@ -359,14 +403,18 @@ describe('automatic summary and retained lore at the same input boundary', () =>
 
   test('summarizes only logical conversation pairs and carries old-source raw references after the summary before recent history', async () => {
     const f = await fixture('history-pressure'),
-      started = await start(f.app, f.chatId),
-      originals = structuredClone(started.snapshot.logicalHistory);
+      expected = freezeLoreContext(
+        f.app.store,
+        await prepareNativeRisuReadOnly(snapshot(f.app.store, f.chatId), 'context')
+      ),
+      originals = captureLogicalHistory(f.app.store, expected),
+      started = await start(f.app, f.chatId);
     const run = await terminal(f.app, started.id),
       plan = run.snapshot.contextPlan!,
       summaries = f.bodies.filter((body) => body.role === 'context');
     expect(summaries.length).toBeGreaterThan(0);
     expect(plan.compacted.some((ref) => ref.revision === f.sources[0].id)).toBe(true);
-    expect(run.snapshot.loreContext!.entries).toEqual(started.snapshot.loreContext!.entries);
+    expect(run.snapshot.loreContext!.entries).toEqual(expected.loreContext!.entries);
     expect(run.snapshot.loreContext!.entries).toHaveLength(1);
     expect(run.snapshot.logicalHistory).toEqual(originals);
     expect(run.snapshot.history.map((source) => source.text)).toEqual(
@@ -406,7 +454,12 @@ describe('automatic summary and retained lore at the same input boundary', () =>
 
   test('fixed-input lore fitting and hypothetical history measurement leave the supplied snapshot and database unchanged', async () => {
     const f = await fixture('lore-pressure');
-    let prepared = seedContextPlan(freezeLoreContext(f.app.store, snapshot(f.app.store, f.chatId)));
+    let prepared = seedContextPlan(
+      freezeLoreContext(
+        f.app.store,
+        await prepareNativeRisuReadOnly(snapshot(f.app.store, f.chatId), 'context')
+      )
+    );
     prepared = { ...prepared, logicalHistory: captureLogicalHistory(f.app.store, prepared) };
     const original = structuredClone(prepared),
       before = f.app.store.db.prepare('SELECT total_changes() AS n').get();

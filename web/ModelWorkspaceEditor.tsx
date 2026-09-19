@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Library, ModelRef, ModelWorkspace, TaskRole } from '../core/product.js';
+import type { Library, ModelRef, ModelWorkspace } from '../core/product.js';
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useModelSelection } from './model-selection.js';
 import { RefreshIcon, SettingsIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
-import { DEFAULT_TRANSLATION_JUDGMENT } from '../core/translation-settings.js';
 import './settings-actions.css';
 
 export function ModelWorkspaceEditor({
@@ -33,7 +32,7 @@ export function ModelWorkspaceEditor({
         titleModel: workspace.titleModel ?? null,
         helperModel: workspace.helperModel ?? null,
         contextModel: workspace.contextModel ?? null,
-        extensionModel: workspace.extensionModel ?? null,
+        scriptModel: workspace.scriptModel ?? null,
         routes: workspace.modelRoutes,
         translationPolicy: workspace.translationPolicy,
       });
@@ -129,8 +128,8 @@ export function ModelWorkspaceEditor({
           </small>
         </div>
         <div>
-          {selector('확장 호출 모델', draft.extensionModel ?? null, (ref) =>
-            change({ ...draft, extensionModel: ref })
+          {selector('확장 호출 모델', draft.scriptModel ?? null, (ref) =>
+            change({ ...draft, scriptModel: ref })
           )}
           <small>
             사용자가 허용한 패키지 코드의 추가 생성 요청에 사용해요. 미지정하면 추가 호출을 시작하지
@@ -139,18 +138,14 @@ export function ModelWorkspaceEditor({
         </div>
         <details className="full model-secondary-settings">
           <summary>
-            기타 자동 작업 모델 <small>장면 해설 · 이미지 배치 · 채팅 제목</small>
+            기타 자동 작업 모델 <small>장면 해설 · 채팅 제목</small>
           </summary>
           <div className="control-grid">
-            {(['status', 'image'] as TaskRole[]).map((role, index) => (
-              <div key={role}>
-                {selector(
-                  ['장면 해설 모델', '이미지 배치 모델'][index],
-                  draft.routes[role],
-                  (ref) => change({ ...draft, routes: { ...draft.routes, [role]: ref } })
-                )}
-              </div>
-            ))}
+            <div>
+              {selector('장면 해설 모델', draft.routes.status, (ref) =>
+                change({ ...draft, routes: { ...draft.routes, status: ref } })
+              )}
+            </div>
             <div>
               {selector('채팅 제목 모델', draft.titleModel ?? null, (ref) =>
                 change({ ...draft, titleModel: ref })
@@ -163,65 +158,38 @@ export function ModelWorkspaceEditor({
             번역 오류 감지와 재시도 <small>세부 설정</small>
           </summary>
           <div className="control-grid">
+            <p>
+              번역 거절 판정과 기존 이미지 선택은 JEV를 사용해요. 프로바이더·모델의 JEV 판단에서
+              연결해 주세요.
+            </p>
             <label>
-              번역 거절 판정 방식
-              <select
-                aria-label="번역 거절 판정 방식"
-                value={draft.translationPolicy.judgment ? 'jev' : 'model'}
+              판정 확신 기준
+              <input
+                aria-label="번역 Jev 판정 확신 기준"
+                type="number"
+                min="0.51"
+                max="1"
+                step="0.01"
+                value={
+                  Number.isFinite(draft.translationPolicy.judgment.threshold)
+                    ? draft.translationPolicy.judgment.threshold
+                    : ''
+                }
                 onChange={(event) =>
                   change({
                     ...draft,
                     translationPolicy: {
                       ...draft.translationPolicy,
-                      judgment:
-                        event.target.value === 'jev'
-                          ? { ...DEFAULT_TRANSLATION_JUDGMENT }
-                          : undefined,
+                      judgment: { threshold: event.target.valueAsNumber },
                     },
                   })
                 }
-              >
-                <option value="model">지정 모델</option>
-                <option value="jev">Jev</option>
-              </select>
+              />
+              <small>
+                0.5 초과–1. 모호하거나 상충하는 판정은 후보를 보존하고 중단해요. 프로바이더·모델
+                등록의 JEV 판단에서 API 키를 연결하고 테스트할 수 있어요.
+              </small>
             </label>
-            {draft.translationPolicy.judgment ? (
-              <label>
-                판정 확신 기준
-                <input
-                  aria-label="번역 Jev 판정 확신 기준"
-                  type="number"
-                  min="0.51"
-                  max="1"
-                  step="0.01"
-                  value={
-                    Number.isFinite(draft.translationPolicy.judgment.threshold)
-                      ? draft.translationPolicy.judgment.threshold
-                      : ''
-                  }
-                  onChange={(event) =>
-                    change({
-                      ...draft,
-                      translationPolicy: {
-                        ...draft.translationPolicy,
-                        judgment: { backend: 'jev', threshold: event.target.valueAsNumber },
-                      },
-                    })
-                  }
-                />
-                <small>
-                  0.5 초과–1. 모호하거나 상충하는 판정은 후보를 보존하고 중단해요. 프로바이더·모델
-                  등록의 JEV 판단에서 API 키를 연결하고 테스트할 수 있어요.
-                </small>
-              </label>
-            ) : (
-              selector('번역 거절 판정 모델', draft.translationPolicy.refusalModel, (ref) =>
-                change({
-                  ...draft,
-                  translationPolicy: { ...draft.translationPolicy, refusalModel: ref },
-                })
-              )
-            )}
             <label>
               자동 재요청 횟수
               <input
@@ -300,10 +268,9 @@ export function ModelWorkspaceEditor({
               !Number.isInteger(draft.translationPolicy.maxCalls) ||
               draft.translationPolicy.maxCalls < 2 ||
               draft.translationPolicy.maxCalls > 64 ||
-              (!!draft.translationPolicy.judgment &&
-                (!Number.isFinite(draft.translationPolicy.judgment.threshold) ||
-                  draft.translationPolicy.judgment.threshold <= 0.5 ||
-                  draft.translationPolicy.judgment.threshold > 1))
+              !Number.isFinite(draft.translationPolicy.judgment.threshold) ||
+              draft.translationPolicy.judgment.threshold <= 0.5 ||
+              draft.translationPolicy.judgment.threshold > 1
             }
             onClick={() => {
               if (lock.current) return;
@@ -319,7 +286,7 @@ export function ModelWorkspaceEditor({
                   titleModel: draft.titleModel ?? null,
                   helperModel: draft.helperModel ?? null,
                   contextModel: draft.contextModel ?? null,
-                  extensionModel: draft.extensionModel ?? null,
+                  scriptModel: draft.scriptModel ?? null,
                   translationPolicy: draft.translationPolicy,
                 },
                 'PUT'

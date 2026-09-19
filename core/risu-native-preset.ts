@@ -1,10 +1,4 @@
-import type {
-  PromptBlock,
-  PromptControl,
-  PromptProgram,
-  PromptRoleName,
-  PromptTemplate,
-} from './prompt-program.js';
+import type { PromptControl, RisuPrompt } from './risu-prompt.js';
 
 export type NativeRisuPreset = { version: 1; preset: Record<string, unknown> };
 export type NativeRisuPresetExecution = {
@@ -41,8 +35,6 @@ const object = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 const string = (value: unknown) => (typeof value === 'string' ? value : '');
-const role = (value: unknown): PromptRoleName =>
-  value === 'user' ? 'user' : value === 'bot' || value === 'assistant' ? 'assistant' : 'system';
 
 /** Keep only authored prompt data. Connections, credentials and generation settings never enter the active preset. */
 export function nativeRisuPresetSource(value: unknown): NativeRisuPreset {
@@ -123,131 +115,31 @@ export function nativeRisuPresetControls(source: NativeRisuPreset): PromptContro
   }
   return controls;
 }
-/** Slot insertion is mechanical; CBS remains native text and is evaluated by the bounded server worker. */
-function template(text: string, slot = 'slot'): PromptTemplate {
-  const at = text.indexOf('{{slot}}');
-  return at < 0
-    ? [{ kind: 'text', text }]
-    : [
-        { kind: 'text', text: text.slice(0, at) },
-        { kind: 'slot', name: slot },
-        { kind: 'text', text: text.slice(at + 8) },
-      ];
+export function nativeRisuPresetVariableDefaults(source: NativeRisuPreset): Record<string, string> {
+  const result: Record<string, string> = Object.create(null);
+  for (const line of string(source.preset.templateDefaultVariables).split('\n')) {
+    const [key, value] = line.split('=');
+    if (key && value && !Object.hasOwn(result, key)) result[key] = value;
+  }
+  return result;
 }
-export function nativeRisuPresetProjection(
+export function createNativeRisuPresetProgram(source: NativeRisuPreset): RisuPrompt {
+  return { version: 1, nativeRisuPreset: source };
+}
+/** Apply only a frozen CBS receipt to a detached native source for host composition. */
+export function evaluatedNativeRisuPreset(
   source: NativeRisuPreset,
-  fields?: Record<string, string>
-): Pick<PromptProgram, 'blocks' | 'controls' | 'variableDefaults'> {
-  const preset = source.preset,
-    settings = object(preset.promptSettings);
-  const blocks: PromptBlock[] = [];
-  const value = (key: string, fallback: unknown) => fields?.[key] ?? string(fallback);
-  for (const [index, raw] of (preset.promptTemplate as Record<string, unknown>[]).entries()) {
-    const type = string(raw.type),
-      common = {
-        id: `risu-block-${index + 1}`,
-        title: string(raw.name) || `${index + 1}. ${type}`,
-      };
-    if (['plain', 'jailbreak', 'cot'].includes(type)) {
-      const enabled =
-        type === 'jailbreak'
-          ? preset.jailbreakToggle !== false
-          : type === 'cot'
-            ? preset.chainOfThought !== false
-            : true;
-      blocks.push({
-        ...common,
-        kind: 'message',
-        role: role(raw.role),
-        enabled,
-        template: template(
-          value(`block:${index}:text`, raw.text),
-          raw.type2 === 'globalNote' ? 'globalNote' : 'slot'
-        ),
-      });
-    } else if (type === 'chat') {
-      const from =
-        raw.rangeStart === -1000
-          ? 0
-          : Number.isSafeInteger(raw.rangeStart)
-            ? Number(raw.rangeStart)
-            : 0;
-      const to =
-        raw.rangeStart === -1000 || raw.rangeEnd === 'end' || raw.rangeEnd === undefined
-          ? 'end'
-          : Number(raw.rangeEnd);
-      blocks.push({
-        ...common,
-        kind: 'history',
-        from,
-        to,
-        ...(settings.sendChatAsSystem && !raw.chatAsOriginalOnSystem
-          ? { role: 'system' as const }
-          : {}),
-      });
-    } else if (type === 'cache') {
-      if (raw.role === 'system') continue;
-      blocks.push({
-        ...common,
-        kind: 'cache',
-        depth: Math.max(1, Math.min(4, Number(raw.depth) || 1)),
-        role: raw.role === 'user' ? 'user' : raw.role === 'assistant' ? 'assistant' : 'all',
-        policy: 'prefer',
-      });
-    } else if (type === 'memory') {
-      // Uimori provides its own summary in logical history. Preserve the source without duplicating it.
-      blocks.push({ ...common, kind: 'message', role: 'system', enabled: false, template: [] });
-    } else if (
-      ['persona', 'description', 'lorebook', 'authornote', 'postEverything'].includes(type)
-    ) {
-      const slot = type === 'authornote' ? 'authorNote' : type;
-      const format = value(`block:${index}:innerFormat`, raw.innerFormat);
-      blocks.push({
-        ...common,
-        kind: 'slot',
-        slot,
-        role: role(raw.role2),
-        ...(format ? { template: template(format) } : {}),
-        ...(type === 'authornote' && raw.defaultText
-          ? { fallback: value(`block:${index}:defaultText`, raw.defaultText) }
-          : {}),
-      });
-    } else throw new Error(`RISU_NATIVE_PRESET_BLOCK:${type}`);
-  }
-  if (settings.postEndInnerFormat)
-    blocks.push({
-      id: 'risu-post-end',
-      title: '마지막 지시',
-      kind: 'message',
-      role: 'system',
-      template: template(
-        value('settings:postEndInnerFormat', settings.postEndInnerFormat),
-        'postEverything'
-      ),
-    });
-  if (settings.assistantPrefill)
-    blocks.push({
-      id: 'risu-assistant-prefill',
-      title: 'Assistant prefill',
-      kind: 'message',
-      role: 'assistant',
-      completion: 'prefill',
-      template: template(value('settings:assistantPrefill', settings.assistantPrefill)),
-    });
-  const variableDefaults: Record<string, string> = Object.create(null);
-  for (const line of string(preset.templateDefaultVariables).split('\n')) {
-    // Matches Risu parseKeyValue: first pair, first duplicate, and original whitespace.
-    const [key, text] = line.split('=');
-    if (key && text && !Object.hasOwn(variableDefaults, key)) variableDefaults[key] = text;
-  }
-  return {
-    blocks,
-    controls: nativeRisuPresetControls(source),
-    ...(Object.keys(variableDefaults).length ? { variableDefaults } : {}),
-  };
-}
-export function createNativeRisuPresetProgram(source: NativeRisuPreset): PromptProgram {
-  return { version: 1, ...nativeRisuPresetProjection(source), nativeRisuPreset: source };
+  fields: Record<string, string>
+): NativeRisuPreset {
+  const result = structuredClone(source);
+  for (const [index, raw] of (result.preset.promptTemplate as Record<string, unknown>[]).entries())
+    for (const key of ['text', 'innerFormat', 'defaultText'])
+      if (Object.hasOwn(fields, `block:${index}:${key}`))
+        raw[key] = fields[`block:${index}:${key}`];
+  const settings = object(result.preset.promptSettings);
+  for (const key of ['postEndInnerFormat', 'assistantPrefill'])
+    if (Object.hasOwn(fields, `settings:${key}`)) settings[key] = fields[`settings:${key}`];
+  return result;
 }
 export function nativeRisuPresetFields(source: NativeRisuPreset): Record<string, string> {
   const result: Record<string, string> = {};

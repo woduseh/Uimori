@@ -7,11 +7,11 @@ import {
   nativeRisuBackground,
   nativeRisuAssetNames,
 } from '../core/risu-native.js';
-import type { NativeRisuContent } from '../core/risu-native.js';
+import type { RisuContentSource } from '../core/risu-native.js';
 import { resolveTemplateVariableContext } from '../core/template-variables.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 import { createHash } from 'node:crypto';
-import { resolvePromptValues } from '../core/prompt-program.js';
+import { resolvePromptValues } from '../core/risu-prompt.js';
 
 export function nativeRisuSessionKey(snapshot: RunSnapshot): string {
   const revisions = nativeRisuPackages(snapshot).map(({ attachment, native }) => [
@@ -58,7 +58,7 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
     assets: [],
     sourceHash: createHash('sha256').update(JSON.stringify(presetSource)).digest('hex'),
   };
-  const native: NativeRisuContent = {
+  const native: RisuContentSource = {
     ...structuredClone(base),
     module: {
       ...base.module,
@@ -109,7 +109,7 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
     globalNote: typeof presetSource?.globalNote === 'string' ? presetSource.globalNote : '',
     now: snapshot.executionClock ? Date.parse(snapshot.executionClock.iso) : 0,
     variables: {
-      ...resolveTemplateVariableContext(snapshot.profile, 'main').variables,
+      ...resolveTemplateVariableContext(snapshot.profile).variables,
       ...snapshot.nativeRisuExecution?.variables,
     },
     messages: nativeRisuMessages(snapshot),

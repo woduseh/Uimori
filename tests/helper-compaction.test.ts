@@ -89,7 +89,7 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
     endpoint: options.vertex
       ? `${vertexOrigin}/v1/projects/synthetic-project/locations/global/publishers/google/models`
       : origin,
-    ...(options.vertex ? { credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST' } : {}),
+    ...(options.vertex ? { credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST' } : {}),
     enabled: true,
   });
   const contextConnection = store.product.connection({

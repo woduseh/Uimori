@@ -44,7 +44,6 @@ export type ModelInput = {
     revision: string;
     text: string;
     contentHash?: string;
-    sourceSegments?: import('./source-segments.js').SourceSegmentPolicy;
   }[];
   catalog: Omit<Resource, 'text' | 'chatId'>[];
   prefetch: string[];
@@ -66,20 +65,11 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
+  /** Bounded input receipt for the host judgment of the unmodified model response. */
+  mainJudgment?: { candidateHash: string; prefix: string; suffix: string };
   nativeRisuPresetProgram?: import('./risu-native-preset.js').NativeRisuPresetExecution;
   nativeRisuExecution?: import('./risu-native-execution.js').NativeRisuExecution;
   nativeRisuAuthored?: import('./risu-native-execution.js').NativeRisuAuthored;
-  /** Frozen add-on admission failures; retained records are never substituted as current state. */
-  packageBehaviorUnavailable?: {
-    instanceId: string;
-    packageId: string;
-    packageRevision: number;
-    role: 'bot' | 'persona' | 'module';
-    stage: 'state' | 'preparation' | 'tools';
-    code: string;
-    /** Recovery evidence under its own historical definition; never active model input. */
-    retainedState?: import('./execution-context.js').PackageExecutionState;
-  }[];
   /** Independent writing artifact: read-only tools and no host source/state commit. */
   executionPurpose?: 'artifact';
   /** Frozen author-side composition for the unit this run writes; planning, never story fact. */
@@ -90,26 +80,17 @@ export type RunSnapshot = {
   loreContextReset?: boolean;
   forkedLoreReads?: import('./lore-context.js').ForkedLoreReads;
   packageStart?: import('./package-start.js').PackageStartSnapshot;
-  behaviorExecution?: import('./behavior-execution.js').BehaviorRunSnapshot;
   executionClock?: { iso: string; unix: number };
-  packageStates?: import('./execution-context.js').PackageExecutionState[];
-  sourceSegments?: import('./source-segments.js').SourceSegmentPolicy;
-  logicalHistory?: import('./prompt-program.js').PromptHistoryMessage[];
+  logicalHistory?: import('./risu-prompt.js').PromptHistoryMessage[];
   nativeRisuHistoryRevision?: string;
   /** Optional, permission-bound conversation read set; never filled from today's branch on replay. */
-  extensionConversation?: import('./extension-conversation.js').ExtensionConversationSnapshot;
-  promptCompilation?: import('./prompt-program.js').PromptCompilation;
-  promptInputTransforms?: import('./prompt-input-transforms.js').PromptInputTransformReceipt;
+  promptCompilation?: import('./risu-prompt.js').PromptCompilation;
   /** Frozen evaluation of the declared Risu CBS fields; a replay projects it, never recomputes it. */
-  risuCompat?: import('./risu-compat.js').RisuCompatReceipt;
   /** Frozen keyword scan of the packages in keyword mode; a replay projects it, never rescans. */
-  loreActivation?: import('./lore-activation.js').LoreActivationReceipt;
   /** Frozen model choice for the packages in model mode; a replay projects it, never reselects. */
   loreSelection?: import('./lore-selection.js').LoreSelectionReceipt;
   /** Derived projection of host-owned input hooks; the reserved request stays unchanged. */
-  extensionRequestEdit?: import('./extension-request-edit.js').ExtensionRequestEditReceipt;
   /** Derived projection of host-owned request hooks over the transmitted conversation copy. */
-  extensionMessageEdit?: import('./extension-request-edit.js').ExtensionMessageEditReceipt;
   chatId: string;
   parentRevision: string | null;
   settingsRevision: number;
@@ -119,7 +100,6 @@ export type RunSnapshot = {
     revision: string;
     text: string;
     contentHash?: string;
-    sourceSegments?: import('./source-segments.js').SourceSegmentPolicy;
   }[];
   resources: Resource[];
   branchId?: string;
@@ -145,7 +125,6 @@ export type Run = {
   status:
     | 'queued'
     | 'running'
-    | 'waiting_for_state'
     | 'completed'
     | 'failed'
     | 'cancelled'
@@ -244,29 +223,6 @@ export type ChatDetail = {
 
 /** Reader summaries never stand in for frozen execution inputs. */
 export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
-  /** Metadata only; excluded package state and instruction bodies stay in explicit diagnostics. */
-  hasPackageIssues?: boolean;
-  /** Bounded progress projection; extension code, state and inputs remain in explicit diagnostics. */
-  packagePreparation?: {
-    status: 'pending' | 'running' | 'ready' | 'failed' | 'skipped';
-    completed: number;
-    total: number;
-    code?: string;
-  };
-  /** Response hook progress only; no text, state or guest error messages. */
-  packageAfterResponse?: {
-    status: 'running' | 'completed' | 'skipped';
-    completed: number;
-    total: number;
-    failed: number;
-  };
-  statePreparation?: {
-    status: import('./story.js').StoryPreparation['status'];
-    reason?: string;
-    missingSources: number;
-    lastSourceRevision: string | null;
-    hasState: boolean;
-  };
   /** Stable admission order of the first request in this retry chain. */
   requestOrder?: number;
   retryOf?: string | null;
@@ -291,7 +247,6 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
   rejection?: import('./provider-rejection.js').ProviderRejection;
   packageStart?: Pick<import('./package-start.js').PackageStartSnapshot, 'mode' | 'title'>;
   hasPackages?: boolean;
-  sourceSegments?: import('./source-segments.js').SourceSegmentPolicy;
 };
 export type ReaderActivity = {
   sourceHash?: string | null;

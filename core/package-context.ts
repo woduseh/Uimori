@@ -1,30 +1,22 @@
-import { historicalPersonaExcluded } from './persona-scope.js';
 import {
-  ContentPackageError,
-  validateContentPackage,
-  type ContentPackage,
-  type PackageAttachment,
-  type PackageTarget,
-} from './content-package.js';
-import { compilePackageAttachment, type CompiledPackageAttachment } from './package-runtime.js';
+  RisuContentError,
+  type RisuContent,
+  type ContentAttachment,
+  type ContentTarget,
+} from './risu-content.js';
+import { compileContentAttachment, type CompiledContentAttachment } from './package-runtime.js';
 import type { Resource, RunSnapshot } from './types.js';
-import { executionContext, packageInstanceId } from './execution-context.js';
 import { projectChatPackageCompilation } from './chat-overrides.js';
-import { packageIdentityFromProfile } from './package-identity.js';
-import { projectRisuCompatReceipt } from './risu-compat.js';
-import { projectLoreActivationReceipt } from './lore-activation.js';
 import { loreSelectionKey, projectLoreSelectionReceipt } from './lore-selection.js';
 import { projectNativeRisuFields } from './risu-native-execution.js';
 import { projectRisuImageHandoff } from './risu-image-handoff.js';
 
-export type ResolvedPackage = CompiledPackageAttachment & {
-  attachment: PackageAttachment;
-  package: ContentPackage;
+export type ResolvedPackage = CompiledContentAttachment & {
+  attachment: ContentAttachment;
+  package: RisuContent;
 };
-export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): ResolvedPackage[] {
+export function compiledPackages(snapshot: RunSnapshot, target: ContentTarget): ResolvedPackage[] {
   const profile = snapshot.profile;
-  const receipt = snapshot.risuCompat;
-  const activation = snapshot.loreActivation;
   const selection = snapshot.loreSelection;
   return (profile?.packageAttachments ?? []).flatMap((attachment) => {
     const stored = profile?.packages?.find(
@@ -34,30 +26,13 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       stored && projectRisuImageHandoff(stored, target === 'main' && profile?.image === true);
     const pkg =
       authored && projectNativeRisuFields(authored, attachment, snapshot.nativeRisuExecution);
-    if (!pkg) throw new ContentPackageError('PACKAGE_SNAPSHOT_REVISION_MISSING', attachment.id);
-    if (historicalPersonaExcluded(profile, attachment.role, target)) {
-      validateContentPackage(pkg);
-      return [];
-    }
-    // An abandoned scan projects as undefined, which is the same as no receipt at all: the
-    // attachment's lore keeps its own `loading`.
-    const decided = activation ? projectLoreActivationReceipt(activation, attachment) : undefined;
-    // An abandoned selection projects the same way: the attachment's lore keeps its own `loading`.
+    if (!pkg) throw new RisuContentError('PACKAGE_SNAPSHOT_REVISION_MISSING', attachment.id);
     const chosen = selection
       ? projectLoreSelectionReceipt(selection, loreSelectionKey(attachment))
       : undefined;
-    const compiled = compilePackageAttachment(pkg, attachment, {
+    const compiled = compileContentAttachment(pkg, attachment, {
       chatId: snapshot.chatId,
       target,
-      runtime: executionContext(snapshot, target, attachment),
-      identity: packageIdentityFromProfile(profile!, target),
-      behaviorUnavailable: snapshot.packageBehaviorUnavailable?.find(
-        (item) => item.instanceId === packageInstanceId(attachment)
-      )?.code,
-      values:
-        profile?.packageValues?.[`${attachment.id}@${attachment.revision}:${attachment.role}`],
-      ...(receipt ? { compat: projectRisuCompatReceipt(receipt, attachment) } : {}),
-      ...(decided ? { loreActivation: decided } : {}),
       ...(chosen ? { loreSelection: chosen } : {}),
     });
     const projected = projectChatPackageCompilation(
@@ -65,9 +40,7 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       attachment,
       pkg,
       compiled,
-      (role) => !historicalPersonaExcluded(profile, role, target),
-      packageIdentityFromProfile(profile!, target),
-      decided,
+      () => true,
       chosen
     );
     // Historical exclusions still validate the frozen package above.
@@ -80,20 +53,20 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
     ];
   });
 }
-export type PackageRoleContext = {
+export type ContentRoleContext = {
   pinned: Resource[];
   instructions: { id: string; revision: number; text: string }[];
 };
 export function packageContext(
   snapshot: RunSnapshot,
-  target: PackageTarget
-): PackageRoleContext | undefined {
+  target: ContentTarget
+): ContentRoleContext | undefined {
   return packageContextFromCompiled(compiledPackages(snapshot, target));
 }
 /** Project one request's already validated packages without compiling their templates again. */
 export function packageContextFromCompiled(
   packages: readonly ResolvedPackage[]
-): PackageRoleContext | undefined {
+): ContentRoleContext | undefined {
   if (!packages.length) return undefined;
   return {
     pinned: packages.flatMap((p) => p.pinned),
@@ -104,7 +77,7 @@ export function packageContextFromCompiled(
 }
 export function packageSlots(
   snapshot: RunSnapshot,
-  target: PackageTarget
+  target: ContentTarget
 ): { bot: string; persona: string; lore: string; char?: string } {
   const packages = compiledPackages(snapshot, target);
   const body = (role: 'bot' | 'persona') =>

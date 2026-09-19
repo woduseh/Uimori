@@ -9,7 +9,7 @@ import { join, resolve, relative, isAbsolute, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 
 const owned: { path: string; store: Store }[] = [];
@@ -75,7 +75,7 @@ test('successful request repeats with current settings in a new branch and idemp
   const saved = structuredClone(selected.run),
     oldChat = store.chat(chat.id);
   store.settings(chat.id, oldChat.settingsRevision, { ...oldChat.settings, maxCalls: 12 });
-  const program = createDefaultPromptProgram('Current main instructions');
+  const program = createDefaultRisuPrompt('Current main instructions');
   updatePromptWorkspace(store, {
     expectedRevision: promptWorkspace(store).revision,
     main: { title: 'Current', program, values: {} },
@@ -96,7 +96,7 @@ test('successful request repeats with current settings in a new branch and idemp
   const profile = store.product.profile(chat.id);
   updateTestProfile(store.product, chat.id, {
     expectedRevision: profile.revision,
-    attachments: profile.attachments,
+    packageAttachments: profile.packageAttachments,
     routes: { ...profile.routes, main: { id: model.id } },
     image: false,
   });
@@ -124,7 +124,7 @@ test('successful request repeats with current settings in a new branch and idemp
     expectedRevision: promptWorkspace(store).revision,
     main: {
       title: 'Later edit',
-      program: createDefaultPromptProgram('Do not replace retried snapshot'),
+      program: createDefaultRisuPrompt('Do not replace retried snapshot'),
       values: {},
     },
   });

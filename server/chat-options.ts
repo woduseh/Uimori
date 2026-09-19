@@ -1,3 +1,4 @@
+import { promptControls } from '../core/risu-prompt.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
@@ -14,10 +15,12 @@ import type { RunSnapshot } from '../core/types.js';
 import type { CurrentPrompt, ProfileSnapshot } from '../core/product.js';
 import {
   resolvePromptValues,
-  validatePromptProgram,
+  resolveControlValues,
+  validateControlDefinitions,
+  validateRisuPrompt,
   type PromptControl,
-  type PromptProgram,
-} from '../core/prompt-program.js';
+  type RisuPrompt,
+} from '../core/risu-prompt.js';
 import type { ProviderTool, Json } from '../core/transport.js';
 import { HelperWorkspace } from './helper-workspace.js';
 import { chatPromptWorkspace } from './prompt-workspace.js';
@@ -51,14 +54,14 @@ export type ChatOptionAuthority = { requestId: string; assert: (intent: ChatOpti
 export function optionBinding(prompt: Pick<CurrentPrompt, 'presetId' | 'program'>): OptionBinding {
   return {
     owner: promptOptionOwner(prompt),
-    definitionHash: hash(prompt.program.controls),
+    definitionHash: hash(promptControls(prompt.program)),
   };
 }
 /** The binding a frozen profile implies; its owner was recorded from the workspace at freeze time. */
 function frozenOptionBinding(profile: ProfileSnapshot): OptionBinding | undefined {
   const preset = profile.promptPresets?.main;
   if (!preset || profile.promptOptionOwner === undefined) return undefined;
-  return { owner: profile.promptOptionOwner, definitionHash: hash(preset.program.controls) };
+  return { owner: profile.promptOptionOwner, definitionHash: hash(promptControls(preset.program)) };
 }
 const readBinding = (value: unknown): OptionBinding => {
   const b = record(value);
@@ -71,9 +74,12 @@ const readBinding = (value: unknown): OptionBinding => {
     throw new HttpError(400, 'Invalid option definition hash');
   return result;
 };
-function valuesFor(program: PromptProgram, value: unknown): OptionValues {
+function valuesFor(program: RisuPrompt | PromptControl[], value: unknown): OptionValues {
   const input = record(value) as OptionValues;
-  const resolved = resolvePromptValues(program, input);
+  const resolved = resolveControlValues(
+    Array.isArray(program) ? program : promptControls(program),
+    input
+  );
   return Object.fromEntries(Object.keys(input).map((id) => [id, resolved[id]]));
 }
 function headHash(store: Store, revision: string | null): string | null {
@@ -257,7 +263,7 @@ export class ChatOptionsStore {
       this.bump(chatId, {
         binding: state.binding,
         values: valuesFor(state.program, b.values),
-        definitions: state.program.controls,
+        definitions: promptControls(state.program),
       });
     });
   }
@@ -306,7 +312,7 @@ export class ChatOptionsStore {
           branchId: state.branchId,
           kind,
           binding: state.binding,
-          definitions: state.program.controls,
+          definitions: promptControls(state.program),
           values,
           ...(delegationId ? { delegationId, delegation } : {}),
           headRevision: state.headRevision,
@@ -359,7 +365,9 @@ export class ChatOptionsStore {
         if (!Array.isArray(b.fields) || !b.fields.length)
           throw new HttpError(400, '위임할 옵션을 선택해 주세요.');
         const selected = [...new Set(b.fields.map((v) => text(v, 'option field', 100)))];
-        if (selected.some((id) => !state.program.controls.some((control) => control.id === id)))
+        if (
+          selected.some((id) => !promptControls(state.program).some((control) => control.id === id))
+        )
           throw new HttpError(400, '실제 프롬프트 옵션만 위임할 수 있어요.');
         const workspace = new HelperWorkspace(this.store);
         const conversation =
@@ -378,7 +386,7 @@ export class ChatOptionsStore {
           conversationId: conversation.id,
           scope: { kind: 'chat', chatId, branchId: state.branchId },
           binding: state.binding,
-          definitions: state.program.controls,
+          definitions: promptControls(state.program),
           fields: selected,
           startedAt: now(),
           revokedAt: null,
@@ -580,7 +588,7 @@ export function helperOptionState(
   return {
     ...state,
     delegations,
-    definitions: program.controls,
+    definitions: promptControls(program),
     // The current delegation list already carries the scope, definitions and revocation state.
     // Keep the choice's own frozen binding/definitions so old choices remain inspectable.
     pending: pending
@@ -810,18 +818,14 @@ export function validateChatOptionSnapshot(profile: ProfileSnapshot): void {
       throw new HttpError(400, 'Invalid option snapshot provenance');
 }
 
-function definitionProgram(binding: OptionBinding, definitions: unknown): PromptProgram {
+function definitionControls(binding: OptionBinding, definitions: unknown): PromptControl[] {
   const checked = readBinding(binding);
   if (
     !/^(?:workspace:main|preset:.+)$/u.test(checked.owner) ||
     hash(definitions) !== checked.definitionHash
   )
     throw new HttpError(400, 'Invalid option definition ownership');
-  return validatePromptProgram({
-    version: 1,
-    controls: definitions,
-    blocks: [{ id: 'request', title: 'Request', kind: 'current' }],
-  });
+  return validateControlDefinitions(definitions);
 }
 function validateDelegation(value: unknown): OptionDelegation {
   const b = record(value);
@@ -837,7 +841,7 @@ function validateDelegation(value: unknown): OptionDelegation {
     'definitions',
   ]);
   const item = b as OptionDelegation,
-    program = definitionProgram(item.binding, item.definitions);
+    program = definitionControls(item.binding, item.definitions);
   for (const key of ['id', 'conversationId', 'startedAt'] as const)
     text(item[key], `delegation ${key}`, 200);
   if (
@@ -858,7 +862,11 @@ function validateDelegation(value: unknown): OptionDelegation {
     !item.fields.length ||
     new Set(item.fields).size !== item.fields.length ||
     item.fields.some(
-      (id) => typeof id !== 'string' || !program.controls.some((control) => control.id === id)
+      (id) =>
+        typeof id !== 'string' ||
+        !(Array.isArray(program) ? program : promptControls(program)).some(
+          (control) => control.id === id
+        )
     )
   )
     throw new HttpError(400, 'Invalid delegation field whitelist');
@@ -908,7 +916,7 @@ export function validateChatOptionArchive(store: Store): void {
         b.definitions.length
       )
         throw new HttpError(400, 'Invalid unbound chat options');
-    } else valuesFor(definitionProgram(b.binding, b.definitions), b.values);
+    } else valuesFor(definitionControls(b.binding, b.definitions), b.values);
   }
   const pendingById = new Map<string, PendingChatOptions>();
   for (const row of store.db.prepare('SELECT * FROM chat_option_pending').all() as Row[]) {
@@ -942,7 +950,8 @@ export function validateChatOptionArchive(store: Store): void {
       throw new HttpError(400, 'Invalid pending option identity');
     store.product.branch(item.chatId, item.branchId);
     if (
-      !Object.keys(valuesFor(definitionProgram(item.binding, item.definitions), item.values)).length
+      !Object.keys(valuesFor(definitionControls(item.binding, item.definitions), item.values))
+        .length
     )
       throw new HttpError(400, 'Invalid empty pending options');
     if (
@@ -1090,8 +1099,8 @@ export function validateChatOptionArchive(store: Store): void {
       result.revision !== Number(body.expectedRevision) + 1
     )
       throw new HttpError(400, 'Invalid option receipt command');
-    const program = validatePromptProgram(result.program);
-    definitionProgram(result.binding, program.controls);
+    const program = validateRisuPrompt(result.program);
+    definitionControls(result.binding, promptControls(program));
     valuesFor(program, result.globalValues);
     valuesFor(program, result.fixedValues);
     if (

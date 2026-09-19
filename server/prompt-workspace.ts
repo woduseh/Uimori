@@ -13,14 +13,17 @@ import type {
   PromptCombinationOwner,
 } from '../core/product.js';
 import { workspaceModelRef } from '../core/product.js';
-import { validateTranslationJudgmentPolicy } from '../core/translation-settings.js';
+import {
+  validateTranslationJudgmentPolicy,
+  DEFAULT_TRANSLATION_JUDGMENT,
+} from '../core/translation-settings.js';
 import { builtinCurrentPrompt } from './builtin-prompts.js';
 import {
   resolvePromptValues,
-  validatePromptProgram,
-  validateEditablePromptProgram,
+  validateRisuPrompt,
+  validateEditableRisuPrompt,
   resolveEditablePromptValues,
-} from '../core/prompt-program.js';
+} from '../core/risu-prompt.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { assertModelSelection } from './provider-selection.js';
@@ -35,7 +38,7 @@ const roleValue = (value: unknown): PromptRole => {
 export function validateCurrentPrompt(value: unknown, role: PromptRole): CurrentPrompt {
   const b = record(value);
   fields(b, ['title', 'program', 'values', 'presetId', 'defaultValues']);
-  const program = validatePromptProgram(b.program);
+  const program = validateRisuPrompt(b.program);
   if (role !== 'main' && program.collaboration)
     throw new HttpError(400, 'Collaboration requires the main prompt');
   return {
@@ -71,38 +74,24 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'titleModel',
     'helperModel',
     'contextModel',
-    'extensionModel',
+    'scriptModel',
   ]);
   const policy = record(b.translationPolicy);
-  fields(policy, ['refusalModel', 'maxRetries', 'maxCalls', 'judgment']);
-  let judgment: ReturnType<typeof validateTranslationJudgmentPolicy> | undefined;
-  if (policy.judgment !== undefined) {
-    try {
-      judgment = validateTranslationJudgmentPolicy(policy.judgment);
-    } catch {
-      throw new HttpError(400, 'Invalid translation judgment policy');
-    }
-  }
-  let refusalModel = null;
-  if (policy.refusalModel !== null) {
-    const model = record(policy.refusalModel);
-    fields(model, ['id']);
-    refusalModel = { id: text(model.id, 'refusal model', 100) };
-  }
+  fields(policy, ['maxRetries', 'maxCalls', 'judgment']);
+  const judgment = validateTranslationJudgmentPolicy(policy.judgment);
   return {
     revision: number(b.revision, 'prompt workspace revision'),
     titleModel: validateTitleModel(b.titleModel ?? null),
     helperModel: validateTitleModel(b.helperModel ?? null),
     contextModel: validateTitleModel(b.contextModel ?? null),
-    extensionModel: validateTitleModel(b.extensionModel ?? null),
+    scriptModel: validateTitleModel(b.scriptModel ?? null),
     modelRoutes: validateModelRoutes(
       Object.hasOwn(b, 'modelRoutes') ? b.modelRoutes : emptyModelRoutes()
     ),
     main: validateCurrentPrompt(b.main, 'main'),
     translation: validateCurrentPrompt(b.translation, 'translation'),
     translationPolicy: {
-      refusalModel,
-      ...(judgment ? { judgment } : {}),
+      judgment,
       maxRetries: number(policy.maxRetries, 'translation automatic retries', 0, 5),
       maxCalls: number(policy.maxCalls, 'translation call limit', 2, 64),
     },
@@ -115,11 +104,15 @@ export function defaultPromptWorkspace(): PromptWorkspace {
     titleModel: null,
     helperModel: null,
     contextModel: null,
-    extensionModel: null,
+    scriptModel: null,
     modelRoutes: emptyModelRoutes(),
     main: builtinCurrentPrompt('main'),
     translation: builtinCurrentPrompt('translation'),
-    translationPolicy: { refusalModel: null, maxRetries: 1, maxCalls: 16 },
+    translationPolicy: {
+      judgment: { ...DEFAULT_TRANSLATION_JUDGMENT },
+      maxRetries: 1,
+      maxCalls: 16,
+    },
   };
 }
 
@@ -133,7 +126,7 @@ export function promptWorkspace(store: Store): PromptWorkspace {
     titleModel: validateTitleModel(saved.titleModel ?? null),
     helperModel: validateTitleModel(saved.helperModel ?? null),
     contextModel: validateTitleModel(saved.contextModel ?? null),
-    extensionModel: validateTitleModel(saved.extensionModel ?? null),
+    scriptModel: validateTitleModel(saved.scriptModel ?? null),
     modelRoutes: Object.hasOwn(saved, 'modelRoutes')
       ? validateModelRoutes(saved.modelRoutes)
       : emptyModelRoutes(),
@@ -177,7 +170,7 @@ export function chatPromptWorkspace(
 }
 
 export function emptyModelRoutes(): ModelWorkspace['routes'] {
-  return { main: null, translation: null, status: null, image: null };
+  return { main: null, translation: null, status: null };
 }
 function validateTitleModel(value: unknown): ModelWorkspace['titleModel'] {
   if (value === null) return null;
@@ -187,7 +180,7 @@ function validateTitleModel(value: unknown): ModelWorkspace['titleModel'] {
 }
 function validateModelRoutes(value: unknown): ModelWorkspace['routes'] {
   const input = record(value);
-  fields(input, ['main', 'translation', 'status', 'image']);
+  fields(input, ['main', 'translation', 'status']);
   return Object.fromEntries(
     Object.keys(emptyModelRoutes()).map((role) => {
       if (input[role] === null) return [role, null];
@@ -204,7 +197,7 @@ export function modelWorkspace(store: Store): ModelWorkspace {
     titleModel: workspaceModelRef(current, 'title'),
     helperModel: workspaceModelRef(current, 'helper'),
     contextModel: workspaceModelRef(current, 'context'),
-    extensionModel: workspaceModelRef(current, 'extension'),
+    scriptModel: workspaceModelRef(current, 'script'),
     routes: current.modelRoutes,
     translationPolicy: current.translationPolicy,
   };
@@ -218,7 +211,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     'titleModel',
     'helperModel',
     'contextModel',
-    'extensionModel',
+    'scriptModel',
   ]);
   return store.transaction(() => {
     const prior = promptWorkspace(store);
@@ -235,9 +228,9 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
       contextModel: Object.hasOwn(input, 'contextModel')
         ? validateTitleModel(input.contextModel)
         : (prior.contextModel ?? null),
-      extensionModel: Object.hasOwn(input, 'extensionModel')
-        ? validateTitleModel(input.extensionModel)
-        : (prior.extensionModel ?? null),
+      scriptModel: Object.hasOwn(input, 'scriptModel')
+        ? validateTitleModel(input.scriptModel)
+        : (prior.scriptModel ?? null),
       modelRoutes: validateModelRoutes(input.routes),
       translationPolicy: input.translationPolicy,
       revision: prior.revision + 1,
@@ -247,12 +240,8 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     assertModelSelection(store.product, next.titleModel ?? null, prior.titleModel ?? null);
     assertModelSelection(store.product, next.helperModel ?? null, prior.helperModel ?? null);
     assertModelSelection(store.product, next.contextModel ?? null, prior.contextModel ?? null);
-    assertModelSelection(store.product, next.extensionModel ?? null, prior.extensionModel ?? null);
-    assertModelSelection(
-      store.product,
-      next.translationPolicy.refusalModel,
-      prior.translationPolicy.refusalModel
-    );
+    assertModelSelection(store.product, next.scriptModel ?? null, prior.scriptModel ?? null);
+
     store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(JSON.stringify(next));
     for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
     return modelWorkspace(store);
@@ -277,7 +266,7 @@ export function updatePromptWorkspace(
         .filter((role) => b[role] !== undefined)
         .map((role) => {
           const incoming = validateCurrentPrompt(b[role], role);
-          incoming.program = validateEditablePromptProgram(incoming.program);
+          incoming.program = validateEditableRisuPrompt(incoming.program);
           incoming.values = resolveEditablePromptValues(incoming.program, incoming.values);
           if (incoming.presetId !== undefined && incoming.presetId !== prior[role].presetId)
             throw new HttpError(400, 'Prompt preset source can only change when applying a preset');
@@ -291,11 +280,6 @@ export function updatePromptWorkspace(
       ...(b.translationPolicy !== undefined ? { translationPolicy: b.translationPolicy } : {}),
       revision: prior.revision + 1,
     });
-    // Selectors are current configuration. Frozen executions carry their own copies.
-    if (result.translationPolicy.refusalModel) {
-      store.product.assertAvailable('model', result.translationPolicy.refusalModel.id);
-      store.product.get('model', result.translationPolicy.refusalModel.id);
-    }
     for (const agent of result.main.program.collaboration?.agents ?? [])
       if (agent.model) {
         store.product.assertAvailable('model', agent.model.id);

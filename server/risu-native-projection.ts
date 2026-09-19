@@ -1,5 +1,5 @@
 import { detectRisuImageHandoff } from '../core/risu-image-handoff.js';
-import type { ContentPackage } from '../core/content-package.js';
+import type { RisuContent } from '../core/risu-content.js';
 import type { ContentKind } from '../core/product.js';
 import { object, string, type RisuCard } from './risu-import-card.js';
 import { createRisuImportFindings, type RisuImportFindings } from './risu-import-findings.js';
@@ -10,7 +10,7 @@ import { text } from './request-validation.js';
 
 /** The raw card/module is authoritative. This projection is shared by import and editing. */
 export function projectNativeRisuPackage(
-  base: ContentPackage,
+  base: RisuContent,
   kind: ContentKind,
   findings: RisuImportFindings = createRisuImportFindings()
 ) {
@@ -42,10 +42,9 @@ export function projectNativeRisuPackage(
   const lore = importRisuLore({
     card,
     findings: loreFindings,
-    native: true,
   });
-  findings.append(loreFindings.list.filter((finding) => finding.code !== 'lore-keyword'));
-  const pkg: ContentPackage = {
+  findings.append(loreFindings.list);
+  const pkg: RisuContent = {
     version: 1,
     id: base.id,
     revision: base.revision,
@@ -93,8 +92,6 @@ export function projectNativeRisuPackage(
     images: base.images ?? [],
     ...(base.portraitImageId ? { portraitImageId: base.portraitImageId } : {}),
     ...(base.modules ? { modules: base.modules } : {}),
-    controls: [],
-    transforms: [],
   };
   try {
     const values = importRisuVariableDefaults(

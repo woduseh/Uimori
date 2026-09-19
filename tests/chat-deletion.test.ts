@@ -1,3 +1,4 @@
+import { prepareNativeFixtureRun } from './fixtures/native-run.js';
 import { writeNote } from './fixtures/notes.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -36,14 +37,14 @@ async function fixture() {
   owned.push({ directory, store });
   return store;
 }
-function run(store: Store, chatId: string, branchId = `main:${chatId}`, finish = true) {
+async function run(store: Store, chatId: string, branchId = `main:${chatId}`, finish = true) {
   const branch = store.product.branch(chatId, branchId),
     chat = store.chat(chatId),
     profile = {
       ...store.product.snapshot(chatId),
       variableState: readChatVariables(store, chatId, branch.id),
     };
-  const { run } = store.createRun(
+  const created = store.createRun(
     chatId,
     {
       request: 'Synthetic',
@@ -63,6 +64,7 @@ function run(store: Store, chatId: string, branchId = `main:${chatId}`, finish =
       profile,
     })
   );
+  const run = await prepareNativeFixtureRun(store, created.run);
   if (!finish) return { run, source: null };
   store.startRun(run.id);
   const source = store.completeRun(
@@ -91,8 +93,8 @@ test('chat deletion removes owned graph atomically and preserves independent for
     idempotencyKey: 'delete-variables',
     values: { phase: 'saved' },
   });
-  const first = run(store, chat.id).source!;
-  run(store, chat.id);
+  const first = (await run(store, chat.id)).source!;
+  await run(store, chat.id);
   const fork = forkChat(store, chat.id, { fromRevision: first.id, idempotencyKey: 'fork' });
   const before = store.history(fork.headRevision);
   store.db
@@ -149,7 +151,7 @@ test('chat confirmation rejects stale branches, settings, profile and organizati
 test('active run or outstanding provider attempt blocks deletion until completion', async () => {
   const store = await fixture(),
     chat = createFixtureChat(store, 'Busy');
-  const pending = run(store, chat.id, undefined, false).run;
+  const pending = (await run(store, chat.id, undefined, false)).run;
   expect(() => deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request)).toThrow(
     '진행 중'
   );
@@ -170,18 +172,19 @@ test('active run or outstanding provider attempt blocks deletion until completio
 test('exclusive branch history is deleted while shared ancestor and default snapshots are preserved', async () => {
   const store = await fixture(),
     chat = createFixtureChat(store, 'Branches');
-  const ancestor = run(store, chat.id).source!;
+  const ancestor = (await run(store, chat.id)).source!;
   const branch = store.product.createBranch(chat.id, {
     title: 'Alternative',
     fromRevision: ancestor.id,
   });
+  const defaultVariables = readChatVariables(store, chat.id, `main:${chat.id}`);
   writeChatVariables(store, chat.id, branch.id, {
-    expectedRevision: 0,
+    expectedRevision: readChatVariables(store, chat.id, branch.id).revision,
     expectedSourceHash: ancestor.hash,
     idempotencyKey: 'branch-variables',
     values: { phase: 'alternate' },
   });
-  const alternative = run(store, chat.id, branch.id).source!;
+  const alternative = (await run(store, chat.id, branch.id)).source!;
   const defaultBefore = store.run(ancestor.runId);
   const current = store.product.branch(chat.id, branch.id);
   expect(() =>
@@ -203,7 +206,7 @@ test('exclusive branch history is deleted while shared ancestor and default snap
   expect(
     store.db.prepare('SELECT 1 FROM chat_variable_outputs WHERE source_id=?').get(alternative.id)
   ).toBeUndefined();
-  expect(readChatVariables(store, chat.id, `main:${chat.id}`)).toEqual({ revision: 0, values: {} });
+  expect(readChatVariables(store, chat.id, `main:${chat.id}`)).toEqual(defaultVariables);
   expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   const restored = await fixture();
   restored.product.import(store.product.export());
@@ -230,64 +233,12 @@ test('unused author canon and scene commands can be deleted; referenced and retc
   expect(deleteSceneCommand(store, command.id, {}).deleted).toBe(true);
   expect(store.story.commands(chat.id, `main:${chat.id}`)).toEqual([]);
   const canon = writeNote(store, chat.id, { text: 'Used canon', author: 'Author' });
-  run(store, chat.id);
+  await run(store, chat.id);
   writeNote(store, chat.id, { text: '', author: 'Author', retired: true }, canon.id);
   expect(store.story.detail(chat.id).notes).not.toContainEqual(canon);
   const restored = await fixture();
   restored.product.import(store.product.export());
   expect(restored.story.detail(chat.id).notes).toEqual(store.story.detail(chat.id).notes);
-});
-
-test('deleting a branch preserves shared configuration and removes its package receipts', async () => {
-  const store = await fixture(),
-    chat = createFixtureChat(store, 'Package cleanup'),
-    main = `main:${chat.id}`;
-  const before = store.story.configForBranch(chat.id, main),
-    branch = store.product.createBranch(chat.id, { title: 'Branch', fromRevision: null });
-  run(store, chat.id, branch.id);
-  deleteBranch(store, chat.id, branch.id, {
-    expectedRevision: store.product.branch(chat.id, branch.id).revision,
-  });
-  expect(store.story.configForBranch(chat.id, main)).toEqual(before);
-  expect(
-    store.db
-      .prepare('SELECT COUNT(*) AS n FROM package_requests WHERE chat_id=? AND branch_id=?')
-      .get(chat.id, branch.id)
-  ).toMatchObject({ n: 0 });
-  expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  const restored = await fixture();
-  restored.product.import(store.product.export());
-  expect(restored.story.configForBranch(chat.id, main)).toEqual(before);
-});
-
-test('branch with an active global story configuration anchor is retained', async () => {
-  const store = await fixture(),
-    chat = createFixtureChat(store, 'Global config'),
-    branch = store.product.createBranch(chat.id, { title: 'Config origin', fromRevision: null });
-  run(store, chat.id, branch.id);
-  store.story.saveConfig(chat.id, {
-    branchId: branch.id,
-    expectedRevision: 0,
-    module: {
-      id: 'count',
-      revision: 1,
-      name: 'Count',
-      mode: 'continuity',
-      fields: { count: { type: 'number', initial: 0, min: 0, max: 10 } },
-      rules: {},
-    },
-    stateModel: null,
-  });
-  expect(() =>
-    deleteBranch(store, chat.id, branch.id, {
-      expectedRevision: store.product.branch(chat.id, branch.id).revision,
-    })
-  ).toThrow('다른 분기');
-  const restored = await fixture();
-  restored.product.import(store.product.export());
-  expect(restored.product.branch(chat.id, branch.id)).toEqual(
-    store.product.branch(chat.id, branch.id)
-  );
 });
 
 test('HTTP deletion impact and delete routes return errors before mutation and success after commit', async () => {
@@ -401,9 +352,9 @@ test('dependent branch prevents parent deletion and deleting child first makes i
   const store = await fixture(),
     chat = createFixtureChat(store, 'Dependencies');
   const branch = store.product.createBranch(chat.id, { title: 'Parent', fromRevision: null });
-  const source = run(store, chat.id, branch.id).source!;
+  const source = (await run(store, chat.id, branch.id)).source!;
   const child = store.product.createBranch(chat.id, { title: 'Child', fromRevision: source.id });
-  run(store, chat.id, child.id);
+  await run(store, chat.id, child.id);
   const request = { expectedRevision: store.product.branch(chat.id, branch.id).revision };
   expect(() => deleteBranch(store, chat.id, branch.id, request)).toThrow('다른 분기');
   deleteBranch(store, chat.id, child.id, {

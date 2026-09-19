@@ -65,8 +65,8 @@ for (const width of DEFAULT_WIDTHS) {
         await request.put('/api/model-workspace', {
           data: {
             expectedRevision: before.revision,
-            routes: { main: null, translation: null, status: null, image: null },
-            translationPolicy: { refusalModel: null, maxRetries: 1, maxCalls: 16 },
+            routes: { main: null, translation: null, status: null },
+            translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
           },
         })
       ).ok()
@@ -79,14 +79,7 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(editor.getByLabel('원문 모델', { exact: true })).toHaveValue('');
     await editor.locator('summary').filter({ hasText: '기타 자동 작업 모델' }).click();
     await editor.locator('summary').filter({ hasText: '번역 오류 감지와 재시도' }).click();
-    for (const label of [
-      '원문 모델',
-      '번역 모델',
-      '번역 거절 판정 모델',
-      '장면 해설 모델',
-      '이미지 배치 모델',
-      '채팅 제목 모델',
-    ])
+    for (const label of ['원문 모델', '번역 모델', '장면 해설 모델', '채팅 제목 모델'])
       await editor.getByLabel(label, { exact: true }).selectOption(ids[0]);
     await editor.getByLabel('번역 자동 재요청 횟수').fill('2');
     await editor.getByLabel('번역 전체 호출 한도').fill('12');
@@ -95,7 +88,7 @@ for (const width of DEFAULT_WIDTHS) {
     const selected = await models(request);
     expect(selected.titleModel).toEqual({ id: ids[0] });
     expect(selected.translationPolicy).toEqual({
-      refusalModel: { id: ids[0] },
+      judgment: { threshold: 0.9 },
       maxRetries: 2,
       maxCalls: 12,
     });
@@ -302,7 +295,7 @@ for (const width of DEFAULT_WIDTHS) {
         await request.put(`/api/chats/${chat.id}/profile`, {
           data: {
             expectedRevision: concurrent.revision,
-            attachments: concurrent.attachments,
+            packageAttachments: concurrent.packageAttachments,
             image: !concurrent.image,
           },
         })

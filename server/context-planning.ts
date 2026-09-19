@@ -10,7 +10,6 @@ import {
 } from '../core/context-budget.js';
 import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
 import type { Store } from './store.js';
-import { sourceRequestView } from '../core/source-context.js';
 import type { ModelSnapshot } from '../core/product.js';
 
 /** Candidate output belongs to its new branch; prompt expressions still use the original input scope. */
@@ -26,9 +25,9 @@ export function candidateCompilationSnapshot(
     branchId: _branch,
     candidateOf: _candidate,
     promptCompilation: _compiled,
-    promptInputTransforms: _transforms,
     contextPlan: _plan,
     loreContext: _lore,
+    mainJudgment: _judgment,
     ...input
   }: RunSnapshot) => {
     if (!input.nativeRisuExecution) return input;
@@ -68,7 +67,7 @@ export function candidateCompilationSnapshot(
       source.chatId !== original.chatId ||
       source.parentRevision !== original.parentRevision ||
       source.request !== original.request ||
-      ['queued', 'running', 'waiting_for_state'].includes(source.status)
+      ['queued', 'running'].includes(source.status)
     )
       reject('origin scope');
     const prior = source!.snapshot;
@@ -96,14 +95,7 @@ export function persistedContextSnapshot(
   prepared: RunSnapshot
 ): RunSnapshot {
   const persisted = { ...prepared };
-  for (const key of [
-    'profile',
-    'packageStates',
-    'behaviorExecution',
-    'packageBehaviorUnavailable',
-    'extensionRequestEdit',
-    'extensionMessageEdit',
-  ] as const) {
+  for (const key of ['profile'] as const) {
     if (key in reserved) persisted[key] = structuredClone(reserved[key]) as never;
     else delete persisted[key];
   }
@@ -115,18 +107,13 @@ export const contextSourceRefs = (snapshot: RunSnapshot) =>
   snapshot.history.map((source) => ({
     revision: source.revision,
     hash: source.contentHash ?? createHash('sha256').update(source.text).digest('hex'),
-    ...(snapshot.sourceSegments
-      ? { viewHash: hash(sourceRequestView(snapshot, source.revision).keptRanges) }
-      : {}),
   }));
 /** Stable semantic dependencies. Per-run random draws and evolving derived state are not canon. */
 export function contextDependencyKey(snapshot: RunSnapshot): string {
   return hash({
-    contents: snapshot.profile?.contents ?? [],
     packages: snapshot.profile?.packages ?? [],
     prompt: snapshot.profile?.promptPresets?.main ?? null,
     promptControls: snapshot.profile?.promptControls ?? null,
-    sourceSegments: snapshot.sourceSegments ?? null,
     canon: snapshot.story?.canonHash ?? null,
     resources: snapshot.resources,
     ...((snapshot.nativeRisuExecution?.inputHistoryRevision ?? snapshot.nativeRisuHistoryRevision)

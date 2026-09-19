@@ -2,7 +2,6 @@ import { describe, expect, test } from 'vitest';
 import { executeStoryRead, STORY_RESULT_MAX_BYTES } from '../core/story-context.js';
 import { sourceHash } from '../core/source-history.js';
 import { validateAuthorNote, type AuthorNote } from '../core/notes.js';
-import { defaultStoryConfig } from '../core/story.js';
 import type { RunSnapshot } from '../core/types.js';
 
 const sourceText = 'Exact source evidence. '.repeat(1000);
@@ -24,12 +23,8 @@ const snapshot = (notes: AuthorNote[] = [], text = sourceText): RunSnapshot => (
   resources: [],
   history: [{ revision: 'source', text, contentHash: sourceHash(text) }],
   story: {
-    config: defaultStoryConfig(),
-    state: null,
-    waiting: false,
     lineageHash: 'synthetic',
     canonHash: sourceHash('[]'),
-    models: {},
     notes,
   },
 });

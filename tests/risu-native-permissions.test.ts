@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { defaultProfile } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
-import type { NativeRisuContent } from '../core/risu-native.js';
+import type { RisuContentSource } from '../core/risu-native.js';
 import { nativeRisuContext } from '../server/risu-native-context.js';
 import { executeRisuNative } from '../server/risu-native-runtime.js';
 
@@ -16,7 +16,7 @@ test('host-resolved bot and external module grants remain distinct after composi
       },
     ],
   });
-  const bot: NativeRisuContent = {
+  const bot: RisuContentSource = {
     version: 1,
     card: {
       name: 'Bot',
@@ -26,7 +26,7 @@ test('host-resolved bot and external module grants remain distinct after composi
     assets: [],
     sourceHash: 'a'.repeat(64),
   };
-  const module: NativeRisuContent = {
+  const module: RisuContentSource = {
     version: 1,
     card: {},
     module: { lowLevelAccess: true, trigger: [trigger('allowed', false)] },
@@ -42,8 +42,6 @@ test('host-resolved bot and external module grants remain distinct after composi
     body: '',
     lore: [],
     instructions: [],
-    controls: [],
-    transforms: [],
     nativeRisu,
   }));
   const snapshot: RunSnapshot = {
@@ -56,7 +54,6 @@ test('host-resolved bot and external module grants remain distinct after composi
     resources: [],
     profile: {
       ...defaultProfile('permissions'),
-      contents: [],
       models: {},
       packages,
       packageAttachments: [

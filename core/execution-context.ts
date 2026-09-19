@@ -1,32 +1,15 @@
-import { historicalPersonaExcluded } from './persona-scope.js';
-import { sourceLogicalHistoryForRequest } from './source-context.js';
-import type { PackageAttachment, PackageTarget } from './content-package.js';
-import { resolvePromptValues, type RuntimeValue } from './prompt-program.js';
+import type { ContentAttachment, ContentTarget } from './risu-content.js';
+import { type RuntimeValue } from './risu-prompt.js';
 import type { RunSnapshot } from './types.js';
-import { storyInputState } from './story.js';
 import { resolveTemplateVariableContext } from './template-variables.js';
 
-export type PackageExecutionState = {
-  instanceId: string;
-  packageId: string;
-  packageRevision: number;
-  role: string;
-  behaviorRevision: number;
-  schemaVersion: number;
-  stateRevision: number;
-  state: RuntimeValue;
-  draws: Record<string, RuntimeValue>;
-};
-export const packageInstanceId = (attachment: PackageAttachment) =>
-  `${attachment.id}:${attachment.role}`;
 /** Reads only an immutable run projection. No clock, library lookup, provider call, or writes. */
 export function executionContext(
   snapshot: RunSnapshot,
-  target: PackageTarget = 'main',
-  attachment?: PackageAttachment
+  target: ContentTarget = 'main'
 ): Record<string, RuntimeValue> {
   const profile = snapshot.profile;
-  const messages = sourceLogicalHistoryForRequest(snapshot, snapshot.logicalHistory ?? []);
+  const messages = structuredClone(snapshot.logicalHistory ?? []);
   let remaining = 60_000;
   const recent = messages
     .slice(-100)
@@ -47,64 +30,22 @@ export function executionContext(
       ];
     })
     .reverse();
-  const refs = (profile?.packageAttachments ?? []).filter(
-    (ref) => !historicalPersonaExcluded(profile, ref.role, target)
-  );
-  const packages = refs.map((ref) => {
-    const pkg = profile?.packages?.find((p) => p.id === ref.id && p.revision === ref.revision);
-    const frozen = snapshot.packageStates?.find((s) => s.instanceId === packageInstanceId(ref));
-    const unavailable = snapshot.packageBehaviorUnavailable?.find(
-      (s) => s.instanceId === packageInstanceId(ref)
-    );
-    return {
-      id: ref.id,
-      revision: ref.revision,
-      role: ref.role,
-      instanceId: packageInstanceId(ref),
-      title: pkg?.title ?? '',
-      state: unavailable ? null : (frozen?.state ?? pkg?.behavior?.initialState ?? {}),
-      ...(unavailable ? { stateStatus: 'unavailable', stateError: unavailable.code } : {}),
-      stateRevision: frozen?.stateRevision ?? 0,
-      draws: frozen?.draws ?? {},
-      options: pkg
-        ? resolvePromptValues(
-            { version: 1, controls: pkg.controls, blocks: [] },
-            profile?.packageValues?.[`${ref.id}@${ref.revision}:${ref.role}`]
-          )
-        : {},
-    };
-  });
-  const selected = attachment
-    ? packages.find((p) => p.instanceId === packageInstanceId(attachment))
-    : undefined;
+  const refs = profile?.packageAttachments ?? [];
   const model =
-    target === 'state'
-      ? snapshot.story?.models[target]
-      : profile?.models[
-          target === 'translation'
-            ? 'translation'
-            : target === 'image'
-              ? 'image'
-              : target === 'status'
-                ? 'status'
-                : 'main'
-        ];
+    profile?.models[
+      target === 'translation' ? 'translation' : target === 'status' ? 'status' : 'main'
+    ];
   const mainModel = model && 'connection' in model ? model : undefined;
   const capabilities =
     mainModel?.connection.catalog.find((c) => c.id === mainModel.modelId)?.capabilities ?? {};
   const bot = refs.find((r) => r.role === 'bot'),
     persona = refs.find((r) => r.role === 'persona');
-  const identity = (ref: PackageAttachment | undefined, kind: string) => {
-    if (historicalPersonaExcluded(profile, kind, target))
-      return { name: 'User', description: '', descriptionTruncated: false };
+  const identity = (ref: ContentAttachment | undefined, kind: string) => {
     const pkg =
       ref && profile?.packages?.find((p) => p.id === ref.id && p.revision === ref.revision);
-    const legacy = profile?.contents.find((c) => c.kind === kind);
-    const description = pkg ? (pkg.identity?.description ?? pkg.body ?? '') : (legacy?.text ?? '');
+    const description = pkg?.identity?.description ?? pkg?.body ?? '';
     return {
-      name: pkg
-        ? (pkg.identity?.name ?? pkg.title)
-        : (legacy?.title ?? (kind === 'bot' ? 'Character' : 'User')),
+      name: pkg ? (pkg.identity?.name ?? pkg.title) : kind === 'bot' ? 'Character' : 'User',
       description: description.slice(0, 16_000),
       descriptionTruncated: description.length > 16_000,
     };
@@ -115,7 +56,7 @@ export function executionContext(
       refs.some((ref) => r.id.startsWith(`package:${ref.id}:${ref.role}:`))
   );
   return {
-    ...resolveTemplateVariableContext(profile, target),
+    ...resolveTemplateVariableContext(profile),
     ...(snapshot.nativeRisuExecution
       ? {
           variables:
@@ -139,17 +80,6 @@ export function executionContext(
       lastUser: [...recent].reverse().find((m) => m.role === 'user')?.text ?? null,
       lastAssistant: [...recent].reverse().find((m) => m.role === 'assistant')?.text ?? null,
     },
-    state:
-      selected?.stateStatus === 'unavailable'
-        ? null
-        : (selected?.state ?? storyInputState(snapshot.story)?.values ?? {}),
-    ...(selected?.stateStatus === 'unavailable'
-      ? { stateStatus: 'unavailable', stateError: selected.stateError! }
-      : {}),
-    draws: selected?.draws ?? {},
-    options: selected?.options ?? {},
-    package: selected ?? null,
-    packages,
     model: {
       id: mainModel?.modelId ?? null,
       protocol: mainModel?.connection.protocol ?? null,

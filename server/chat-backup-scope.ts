@@ -1,14 +1,8 @@
 import { BACKUP_COLLECTIONS, type BackupTables } from './chat-backup-codec.js';
-import { exportOpportunityEntropy } from './package-behavior-run.js';
 import type { Store } from './store.js';
 
 type Row = Record<string, any>;
-const GLOBAL = new Set([
-  'prompt_workspace',
-  'illustration_settings',
-  'package_behavior_entropy',
-  'library_organization_state',
-]);
+const GLOBAL = new Set(['prompt_workspace', 'illustration_settings', 'library_organization_state']);
 
 /** Select the complete chat graph and referenced shared definitions, never another chat's history. */
 export function chatBackupTables(store: Store, chatId: string): BackupTables {
@@ -20,11 +14,7 @@ export function chatBackupTables(store: Store, chatId: string): BackupTables {
     job_results: 'job_id IN (SELECT id FROM jobs WHERE chat_id=?)',
     model_inputs: 'run_id IN (SELECT id FROM runs WHERE chat_id=?)',
     tool_events: 'run_id IN (SELECT id FROM runs WHERE chat_id=?)',
-    package_behavior_outputs: 'source_id IN (SELECT id FROM sources WHERE chat_id=?)',
     chat_variable_outputs: 'source_id IN (SELECT id FROM sources WHERE chat_id=?)',
-    package_behavior_runs: 'run_id IN (SELECT id FROM runs WHERE chat_id=?)',
-    package_extension_operation_attempts:
-      'operation_id IN (SELECT id FROM package_extension_operations WHERE chat_id=?)',
     context_job_attempts: 'job_id IN (SELECT id FROM context_jobs WHERE chat_id=?)',
     helper_tasks: 'conversation_id IN (SELECT id FROM helper_conversations WHERE chat_id=?)',
     helper_messages: 'conversation_id IN (SELECT id FROM helper_conversations WHERE chat_id=?)',
@@ -176,10 +166,5 @@ export function chatBackupTables(store: Store, chatId: string): BackupTables {
   tables.library_folders = (db.prepare('SELECT * FROM library_folders').all() as Row[]).filter(
     (row) => folders.has(row.id)
   );
-  for (const row of tables.package_behavior_opportunities) {
-    const value = JSON.parse(row.body);
-    value.originEntropy = exportOpportunityEntropy(store, row.id);
-    row.body = JSON.stringify(value);
-  }
   return tables;
 }

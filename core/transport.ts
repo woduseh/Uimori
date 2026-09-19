@@ -3,7 +3,7 @@ import { validateModelOptions } from './model-capabilities.js';
 import type { ProviderProtocol, VertexRequestTier, ModelGeneration, ModelRole } from './product.js';
 import { executeVertexProvider } from './vertex.js';
 import { executeNativeProvider } from './provider-http.js';
-import type { ProviderPrompt } from './prompt-program.js';
+import type { ProviderPrompt } from './risu-prompt.js';
 import { ProviderContractError } from './provider-errors.js';
 import {
   keys,
@@ -116,12 +116,14 @@ export type ProviderResult = {
 export type WireRecord = {
   nativeScript?: { method: 'LLM' | 'axLLM' | 'simpleLLM'; event: string };
   /** Host-only typed judgment attribution; this is not a generative provider protocol. */
-  judgment?: { kind: 'lore-selection' | 'translation-refusal'; inputHash: string };
+  judgment?: {
+    kind: 'lore-selection' | 'translation-refusal' | 'image-selection' | 'main-refusal';
+    inputHash: string;
+  };
   pricingSnapshot?: PricingSnapshot;
   pricingStartedAt?: string;
   /** Host-only attribution. Never supplied by model output or serialized to the provider. */
   agentId?: string;
-  extensionAction?: import('./extension-model.js').ExtensionModelAttribution;
   connectionId: string;
   protocol: ProviderConnection['protocol'] | 'typesafe-systemone-v1';
   role: ProviderRole;

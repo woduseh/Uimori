@@ -36,8 +36,16 @@ async function openJev(page: Page) {
   await page.goto('/');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '프로바이더·모델');
-  await page.getByRole('button', { name: 'JEV 판단 연결', exact: true }).click();
-  const section = page.getByRole('region', { name: 'JEV 판단 연결', exact: true });
+  await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await page
+    .getByRole('button', { name: '새 프로바이더 입력', exact: true })
+    .or(page.getByRole('button', { name: '프로바이더 추가', exact: true }))
+    .click();
+  await page
+    .getByRole('region', { name: '제공자 선택' })
+    .getByRole('button', { name: 'TypeSafe AI JEV · 판단 전용 모델' })
+    .click();
+  const section = page.getByRole('region', { name: 'TypeSafe AI 프로바이더 설정', exact: true });
   await expect(section.getByLabel('JEV API 키', { exact: true })).toBeEnabled();
   return section;
 }
@@ -96,6 +104,16 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
   await expect(section.getByRole('button', { name: 'JEV 연결 테스트', exact: true })).toBeEnabled();
   const saved = await connection(request);
   expect(saved).toMatchObject({ configured: true, hasSavedKey: true, credentialSource: 'saved' });
+  await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
+  await expect(page.getByRole('article', { name: 'JEV 모델', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'JEV 모델 설정', exact: true }).click();
+  await expect(section).toBeVisible();
+  await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await expect(
+    page.getByRole('article', { name: 'TypeSafe AI 프로바이더', exact: true })
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'TypeSafe AI 프로바이더 수정', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'JEV 판단 연결', exact: true })).toHaveCount(0);
   expect(saved).not.toHaveProperty('apiKey');
   expect(JSON.stringify(saved)).not.toContain(syntheticKey);
   const afterLibrary = await (await request.get('/api/library')).json();
@@ -112,7 +130,7 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
   await expect(section.getByText('Uimori에 저장한 키', { exact: true })).toBeVisible();
   await containedControls(section, MOBILE_WIDTH);
   if (visualReview) {
-    await section.getByRole('heading', { name: 'TypeSafe JEV' }).scrollIntoViewIfNeeded();
+    await section.getByRole('heading', { name: 'TypeSafe AI' }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath('jev-connection-mobile.png') });
     await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
     await containedControls(section, DESKTOP_WIDTH);
@@ -148,7 +166,7 @@ test('JEVUI02 stale key edits preserve the draft until explicit refresh and save
   await expect(save).toBeEnabled();
   await expect(key).toHaveValue(draft);
   await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
-  await page.getByRole('button', { name: 'JEV 판단 연결', exact: true }).click();
+  await page.getByRole('button', { name: 'TypeSafe AI 편집 이어서', exact: true }).click();
   await expect(key).toHaveValue(draft);
   await expect(save).toBeEnabled();
   const expectedRevision = (await connection(request)).revision;

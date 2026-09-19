@@ -140,7 +140,7 @@ export async function runReleaseChecks(
         timeoutMs: name === 'verify:redesign' ? 2_100_000 : 1_200_000,
         log: path.join(directory, `${name.replaceAll(':', '-')}-${newId()}.log`),
         signal,
-        env: { NR_VISUAL_REVIEW: undefined, NR_BENCHMARK: undefined },
+        env: { UIMORI_VISUAL_REVIEW: undefined, UIMORI_BENCHMARK: undefined },
       });
       const { output, ...record } = result;
       const unchanged = identityKey(await sourceIdentity()) === identityKey(identity);

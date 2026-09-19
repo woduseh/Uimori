@@ -16,12 +16,12 @@ services:
     env_file: .env.self-host
     environment:
       NODE_ENV: production
-      NR_HOST: 0.0.0.0
-      NR_PORT: "4310"
-      NR_DB: /data/narrative.sqlite
-      NR_PUBLIC_ORIGIN: ${NR_PUBLIC_ORIGIN:?Set the exact HTTPS origin in .env.self-host}
-      NR_ACCESS_TOKEN: ${NR_ACCESS_TOKEN:?Set a random access token of at least 32 characters}
-      NR_PROVIDER_ORIGINS: ${NR_PROVIDER_ORIGINS:-}
+      UIMORI_HOST: 0.0.0.0
+      UIMORI_PORT: "4310"
+      UIMORI_DB: /data/uimori.sqlite
+      UIMORI_PUBLIC_ORIGIN: ${UIMORI_PUBLIC_ORIGIN:?Set the exact HTTPS origin in .env.self-host}
+      UIMORI_ACCESS_TOKEN: ${UIMORI_ACCESS_TOKEN:?Set a random access token of at least 32 characters}
+      UIMORI_PROVIDER_ORIGINS: ${UIMORI_PROVIDER_ORIGINS:-}
     read_only: true
     tmpfs:
       - /tmp
@@ -42,7 +42,7 @@ services:
           const {get} = await import('node:http');
           setTimeout(() => process.exit(1), 3000);
           get('http://127.0.0.1:4310/api/session',
-          {headers: {Host: new URL(process.env.NR_PUBLIC_ORIGIN).host}}, response => {
+          {headers: {Host: new URL(process.env.UIMORI_PUBLIC_ORIGIN).host}}, response => {
           let body = ''; response.setEncoding('utf8');
           response.on('data', chunk => body += chunk);
           response.on('end', () => { try {

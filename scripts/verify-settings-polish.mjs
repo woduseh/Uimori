@@ -10,7 +10,6 @@ await runBrowserVerification({
     'tests/settings-compact-browser.spec.ts',
     'tests/chat-settings-browser.spec.ts',
     'tests/library-browser.spec.ts',
-    'tests/chat-prompt-options-browser.spec.ts',
     'tests/product-browser.spec.ts',
   ],
   grep: 'ILUI|PMUI10|PMUI11|SCUI|CSUI02|LIBUI03|chat creative options|P01 packages|P09 P10',

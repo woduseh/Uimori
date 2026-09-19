@@ -15,7 +15,7 @@ function fixtureRequest(options = {}) {
   const request = async ({ url, method, headers, body }) => {
     const pathname = `${url.pathname}${url.search}`;
     calls.push({ pathname, method, headers: { ...headers }, body });
-    if (options.throwAt === pathname && headers.Cookie === `nr_session=${session}`)
+    if (options.throwAt === pathname && headers.Cookie === `uimori_session=${session}`)
       throw new Error(`transport ${token} ${session}`);
     if (options.redirectAt === pathname)
       return { status: 302, headers: { location: `${origin}/redirected` }, body: '' };
@@ -31,14 +31,14 @@ function fixtureRequest(options = {}) {
         headers: { 'content-type': 'text/javascript; charset=utf-8' },
         body: `console.log('fixture');${'x'.repeat(100)}`,
       };
-    const authenticated = headers.Cookie === `nr_session=${session}`;
+    const authenticated = headers.Cookie === `uimori_session=${session}`;
     if (pathname === '/api/session' && method === 'POST') {
       assert.equal(headers.Origin, origin);
       assert.equal(JSON.parse(body).token, token);
       return {
         status: 200,
         headers: {
-          'set-cookie': `nr_session=${session}; ${options.cookieAttributes ?? 'Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=43200'}`,
+          'set-cookie': `uimori_session=${session}; ${options.cookieAttributes ?? 'Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=43200'}`,
           'content-type': 'application/json',
         },
         body: JSON.stringify({ required: true, authenticated: true }),
@@ -209,20 +209,23 @@ test('env reader accepts required values and rejects missing or duplicate keys',
     const valid = path.join(directory, 'valid.env');
     await writeFile(
       valid,
-      `# private deployment values\nNR_PUBLIC_ORIGIN=${origin}\nNR_ACCESS_TOKEN='${token}'\nOTHER=value\n`
+      `# private deployment values\nUIMORI_PUBLIC_ORIGIN=${origin}\nUIMORI_ACCESS_TOKEN='${token}'\nOTHER=value\n`
     );
     assert.deepEqual(await readAccessEnv(valid), { origin, token });
 
     const duplicate = path.join(directory, 'duplicate.env');
     await writeFile(
       duplicate,
-      `NR_PUBLIC_ORIGIN=${origin}\nNR_ACCESS_TOKEN=${token}\nNR_ACCESS_TOKEN=second\n`
+      `UIMORI_PUBLIC_ORIGIN=${origin}\nUIMORI_ACCESS_TOKEN=${token}\nUIMORI_ACCESS_TOKEN=second\n`
     );
-    await assert.rejects(readAccessEnv(duplicate), /Duplicate environment key: NR_ACCESS_TOKEN/u);
+    await assert.rejects(
+      readAccessEnv(duplicate),
+      /Duplicate environment key: UIMORI_ACCESS_TOKEN/u
+    );
 
     const missing = path.join(directory, 'missing.env');
-    await writeFile(missing, `NR_PUBLIC_ORIGIN=${origin}\n`);
-    await assert.rejects(readAccessEnv(missing), /Missing environment key: NR_ACCESS_TOKEN/u);
+    await writeFile(missing, `UIMORI_PUBLIC_ORIGIN=${origin}\n`);
+    await assert.rejects(readAccessEnv(missing), /Missing environment key: UIMORI_ACCESS_TOKEN/u);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

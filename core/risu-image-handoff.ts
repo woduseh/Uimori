@@ -1,5 +1,5 @@
-import type { ContentPackage } from './content-package.js';
-import { nativeRisuLore, nativeRisuRegex, type NativeRisuContent } from './risu-native.js';
+import type { RisuContent } from './risu-content.js';
+import { nativeRisuLore, nativeRisuRegex, type RisuContentSource } from './risu-native.js';
 
 export type RisuImageHandoff = {
   version: 1;
@@ -23,7 +23,7 @@ const cardFields = [
   'system_prompt',
   'post_history_instructions',
 ] as const;
-export function imageHandoffSource(native: NativeRisuContent, field: string): string {
+export function imageHandoffSource(native: RisuContentSource, field: string): string {
   if (
     field.startsWith('card:') &&
     cardFields.includes(field.slice(5) as (typeof cardFields)[number])
@@ -35,7 +35,7 @@ export function imageHandoffSource(native: NativeRisuContent, field: string): st
 
 /** Recognize explicit image instruction headings, never narrative mentions of an image. */
 export function detectRisuImageHandoff(
-  native: NativeRisuContent,
+  native: RisuContentSource,
   previous?: RisuImageHandoff
 ): RisuImageHandoff | undefined {
   const patterns = nativeRisuRegex(native)
@@ -107,7 +107,7 @@ export function detectRisuImageHandoff(
 
 export function validateRisuImageHandoff(
   value: unknown,
-  native: NativeRisuContent
+  native: RisuContentSource
 ): RisuImageHandoff {
   const policy = value as RisuImageHandoff;
   if (
@@ -162,7 +162,7 @@ export function validateRisuImageHandoff(
 }
 
 /** Host-owned projection only; original native documents and saved package remain untouched. */
-export function projectRisuImageHandoff(pkg: ContentPackage, enabled: boolean): ContentPackage {
+export function projectRisuImageHandoff(pkg: RisuContent, enabled: boolean): RisuContent {
   if (!enabled || !pkg.nativeRisu || !pkg.imageHandoff) return pkg;
   const native = pkg.nativeRisu;
   const ranges = pkg.imageHandoff.ranges.filter(
@@ -202,7 +202,7 @@ export function projectRisuImageHandoff(pkg: ContentPackage, enabled: boolean): 
   };
 }
 
-export function risuImageGuidance(pkg: ContentPackage): string {
+export function risuImageGuidance(pkg: RisuContent): string {
   if (!pkg.nativeRisu || !pkg.imageHandoff) return '';
   return pkg.imageHandoff.ranges
     .filter(

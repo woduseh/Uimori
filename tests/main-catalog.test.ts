@@ -42,7 +42,6 @@ function snapshot(resources: Resource[]): RunSnapshot {
     resources,
     profile: {
       ...defaultProfile('catalog-chat'),
-      contents: [],
       models: {
         main: {
           id: 'main-preset',

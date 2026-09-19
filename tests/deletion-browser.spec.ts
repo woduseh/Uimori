@@ -13,7 +13,7 @@ import {
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 
 async function content(request: APIRequestContext, kind = 'bot') {
   const response = await request.post('/api/content', {
@@ -151,7 +151,7 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
     data: {
       title: `삭제 프롬프트 ${crypto.randomUUID()}`,
       role: 'main',
-      program: createDefaultPromptProgram('Synthetic', 'main'),
+      program: createDefaultRisuPrompt('Synthetic', 'main'),
     },
   });
   expect(response.ok()).toBe(true);

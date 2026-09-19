@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CloseIcon, RefreshIcon } from './ui-icons.js';
 import type { Library, PromptWorkspace } from '../core/product.js';
-import { resolvePromptValues, reconcilePromptValues } from '../core/prompt-program.js';
+import { resolvePromptValues, reconcilePromptValues } from '../core/risu-prompt.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
-import { booleanPromptDraft } from './prompt-boolean-draft.js';
 import { api } from './api.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { ChatOptionSettings } from './ChatOptionSettings.js';
@@ -286,7 +285,7 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
         '/prompt-workspace',
         {
           expectedRevision: base.revision,
-          main: { ...base.main, ...booleanPromptDraft(base.main.program, values) },
+          main: { ...base.main, program: base.main.program, values },
         },
         'PUT'
       );

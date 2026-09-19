@@ -5,7 +5,7 @@ import { join, resolve, relative, isAbsolute } from 'node:path';
 import { CodexRuntime } from '../server/codex-runtime.js';
 
 // Explicit, non-model preflight for the operator's installed official CLI.
-test.skipIf(process.env.NR_CODEX_PREFLIGHT !== '1')(
+test.skipIf(process.env.UIMORI_CODEX_PREFLIGHT !== '1')(
   'installed Codex initializes with isolated empty authentication',
   async () => {
     const root = await mkdtemp(join(tmpdir(), 'uimori-codex-installed-'));
@@ -18,7 +18,7 @@ test.skipIf(process.env.NR_CODEX_PREFLIGHT !== '1')(
       throw new Error('Unsafe cleanup');
     const runtime = new CodexRuntime(join(root, 'probe.sqlite'), {
       enabled: true,
-      executable: process.env.NR_CODEX_EXECUTABLE,
+      executable: process.env.UIMORI_CODEX_EXECUTABLE,
     });
     try {
       const status = await runtime.status();

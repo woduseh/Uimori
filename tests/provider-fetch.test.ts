@@ -26,13 +26,13 @@ const variants: ProviderConnection[] = [
     protocol: 'vertex-gemini-v1',
     endpoint:
       'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
-    credentialEnv: 'NARRATIVE_PROVIDER_TIMEOUT_TEST',
+    credentialEnv: 'UIMORI_PROVIDER_TIMEOUT_TEST',
   },
   {
     id: 'chat-timeout',
     protocol: 'openai-chat-v1',
     endpoint: 'https://compatible.synthetic.invalid/v1',
-    credentialEnv: 'NARRATIVE_PROVIDER_TIMEOUT_TEST',
+    credentialEnv: 'UIMORI_PROVIDER_TIMEOUT_TEST',
   },
 ];
 const request = (connection: ProviderConnection): ProviderRequest => ({

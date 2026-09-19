@@ -27,13 +27,13 @@
 
 ## 저장과 표시 계약
 
-- 표는 `illustration_settings`, `illustration_references`, `illustration_jobs`, `illustration_images`예요. 알려진 v15 DB에서 빠진 표는 [v16 migration](DATA-MIGRATIONS.md)이 기존 행·설정을 보존하며 원자적으로 보충해요. 정상 v16 재개방에서 installer를 반복하지 않아요.
+- 표는 `illustration_settings`, `illustration_references`, `illustration_jobs`, `illustration_images`예요. 새 DB에서만 표를 만들고, 현재 DB는 [저장 구조 검증](DATA-MIGRATIONS.md) 뒤 그대로 열어요. 구형 DB를 보충하거나 변환하지 않아요.
 - 작업은 `source_revision`과 예약 당시 `source_hash`에 귀속돼요. 원문을 나중에 고쳐도 완료된 삽화는 요청 당시 장면의 것으로 그 응답 아래 남고 **수정 전 원문의 삽화**로 표시해요. 새 본문에 자동으로 다시 붙이지 않아요. 실행 시에는 예약 hash의 원문을 다시 읽어요(`sourceAtHash`).
-- 원문 구간 정책(`sourceSegments`)이 있는 원고는 `main` 구간의 본문만 생성기에 보내요. 별도 구간(aside/annotation)의 내용은 삽화 입력에서 제외해 공개 카드로 새지 않게 해요.
+- 현재 장면 원문과 카드의 이미지 자료를 삽화 입력으로 사용해요. 원본 텍스트와 hash는 보존해요.
 - 상태는 `queued → running → completed | failed | cancelled | interrupted`예요. 취소는 `generation`을 올려 늦게 도착한 결과를 버리고, 서버 재시작은 `running`을 `interrupted`로 바꾸며 자동 재생하지 않아요(`queued`는 다시 실행해요).
 - 이미지 bytes는 SQLite `illustration_images`에 PNG·JPEG·WebP 16MB 이하로 저장하고 `/api/illustration-images/:id`로 읽어요. 캡션·프롬프트·Codex의 revised prompt는 함께 저장해요. 자동 생략은 이미지 없는 `completed`이며 `diagnostic.skipped`에 이유를 남겨요.
 - Reader(`GET /api/chats/:id/reader`)는 페이지 안 장면의 `illustrations`를 돌려 주고, SSE 이벤트 `illustration.*`는 해당 장면만 갱신해요. 작업 현황(`reader.activity`)에는 `kind: 'illustration'`으로 나타나며 `activeJobs` 계산에는 넣지 않아 본문 진행 표시를 막지 않아요.
-- 포크는 복사한 원문의 **완료된** 삽화만 함께 복사하고, 채팅·분기 삭제는 삽화 표도 함께 지워요. JSON archive(v15)는 네 표를 포함하며 표가 없는 예전 archive도 복원돼요. 복원 시 고정된 모델 프로바이더는 다른 snapshot처럼 비활성화·비밀키 참조 제거 처리를 해요.
+- 포크는 복사한 원문의 **완료된** 삽화만 함께 복사하고, 채팅·분기 삭제는 삽화 표도 함께 지워요. 현재 JSON archive는 네 표를 포함하며 누락된 표를 자동으로 보충하지 않아요. 복원 시 고정된 모델 프로바이더는 다른 snapshot처럼 비활성화·비밀키 참조 제거 처리를 해요.
 - 참조 이미지는 예약 시 `{ref, role, title, mime, hash, url}`로 고정하고 실행 시 hash가 같은 bytes만 보내요. 사이에 삭제된 이미지는 빠지고 작업은 계속돼요.
 - JSON 복원은 전역 자동 생성을 끄고 생성기를 미지정으로 바꾸며 ComfyUI 인증 환경변수 참조도 제거해요. 과거 ComfyUI 입력은 비활성화되어 재전송·결과 회수를 하지 않아요. 원격 연결을 다시 설정한 뒤 새 요청으로 사용해요. 완료 이미지와 실제 attempt의 사용량·비용은 보존하고, 포크는 실행 attempt 소유권을 복제하지 않아요.
 - 이미지 저장과 archive 복원은 PNG·JPEG·WebP의 MIME과 실제 파일 서명, 16MB 한도, hash와 채팅 귀속을 확인해요. 완전한 이미지 디코더로 손상 여부까지 검사하는 계약은 아니에요.
@@ -71,7 +71,7 @@
 | `POST /api/illustrations/:id/reconcile` | 기록된 ComfyUI `prompt_id`의 결과만 읽어 저장. 새 생성 없음. 대상이 아니면 409 `ILLUSTRATION_NOT_RECONCILABLE`. |
 | `GET /api/illustration-images/:id` | 이미지 bytes. |
 
-테스트 모드(`NR_TEST_MODE=1`)에서는 `/api/test/control`의 barrier·failure point `illustration`과 모의 생성기 `fixture`가 추가돼요.
+테스트 모드(`UIMORI_TEST_MODE=1`)에서는 `/api/test/control`의 barrier·failure point `illustration`과 모의 생성기 `fixture`가 추가돼요.
 
 ## 검증
 
@@ -86,7 +86,7 @@ npx vitest run tests/illustration-core.test.ts tests/comfyui-client.test.ts test
 | `illustration-core` | 워크플로 파싱·치환, 프롬프트 JSON 해석, 캡션 envelope, 이미지 형식 감지, 재요청 분류 |
 | `comfyui-client` | 합성 HTTP 서버로 인증·접수/조회/이미지 body 정체·응답 유실·5xx·대상별 취소와 구버전 대기 삭제·shutdown 미접촉·결과 회수 검사 |
 | `codex-image` | 합성 app-server로 `features.image_generation`, data URL 첨부, base64/저장 파일 결과, 사용량 한도, 이미지 없음, 텍스트 턴의 이미지 차단 |
-| `illustration-store` | v15 DB 표 추가, 설정 CAS·검증, 예약 한도·동시 1개, 자동 예약과 설정 오류 표시, 재요청·취소·복구, 참조 고정, 포크·삭제·archive |
+| `illustration-store` | 현재 DB 초기화·재개방, 설정 CAS·검증, 예약 한도·동시 1개, 자동 예약과 설정 오류 표시, 재요청·취소·복구, 참조 고정, 포크·삭제·archive |
 | `illustration-runner` | 모의 생성기의 자동 재요청·한도·취소, Codex 턴 입력·attempt·캡션, 프롬프트 모델+ComfyUI 전체 경로와 실패 분류, 자동 예약의 생략(skip)과 직접 요청의 생략 금지, 시간 초과 후 결과 확인(reconcile) |
 | `illustration-api` | 테스트 모드 App에서 수동·자동 생성, 한도, 자동 재요청, 다시 요청, 취소, 주입 실패, 참조·설정 API, Reader·이벤트 반영 |
 | `npm run verify:illustration` | 빌드 후 합성 브라우저(2560·412px): 장면 메뉴의 삽화 생성, 완료 이미지 표시와 새로고침 유지, 실패 카드의 다시 요청, 삭제 확인, 설정 저장과 CAS 충돌 시 초안 유지 |

@@ -10,6 +10,8 @@ import { helperWritingSnapshot } from '../server/helper-runtime.js';
 import { readHelperChatContext } from '../server/helper-context.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
+import { nativeDraftTitle } from './fixtures/native-content.js';
+import { prepareNativeRisuReadOnly } from '../server/risu-native-readonly.js';
 import type { Content } from '../core/product.js';
 import type {
   ContentDraftModel,
@@ -91,9 +93,9 @@ async function fixture() {
     payload: {
       expectedRevision: initial.revision,
       operationId: randomUUID(),
-      model: { ...initial.model, title: '사람이 입력한 미저장 제목' },
-      rawFields: { 'package.instructions': '[\n  ' },
-      unappliedFields: ['package.instructions'],
+      model: nativeDraftTitle(initial.model, '사람이 입력한 미저장 제목'),
+      rawFields: { 'package.nativeRisu.card': '[\n  ' },
+      unappliedFields: ['package.nativeRisu.card'],
     },
   });
   expect(changed.statusCode).toBe(200);
@@ -250,7 +252,10 @@ test('real helper context reads keep one active summary and scoped notes without
   });
   const activeSummary = 'ACTIVE_SUMMARY: preserve the unresolved promise and its source.';
   for (let index = 0; index < 8; index++) {
-    const snapshot = helperWritingSnapshot(f.store, chat.id, branch.id, 'context');
+    const snapshot = await prepareNativeRisuReadOnly(
+      helperWritingSnapshot(f.store, chat.id, branch.id, 'context'),
+      'context'
+    );
     f.store.context.edit(
       chat.id,
       {
@@ -263,7 +268,10 @@ test('real helper context reads keep one active summary and scoped notes without
       snapshot
     );
   }
-  const snapshot = helperWritingSnapshot(f.store, chat.id, branch.id, 'context');
+  const snapshot = await prepareNativeRisuReadOnly(
+    helperWritingSnapshot(f.store, chat.id, branch.id, 'context'),
+    'context'
+  );
   const job = f.store.context.schedule(
     chat.id,
     {
@@ -355,7 +363,10 @@ test('helper context reads preserve missing summaries and stale checkpoint usabi
     invalidReason: null,
     notes: [],
   });
-  const snapshot = helperWritingSnapshot(f.store, chat.id, branch.id, 'context');
+  const snapshot = await prepareNativeRisuReadOnly(
+    helperWritingSnapshot(f.store, chat.id, branch.id, 'context'),
+    'context'
+  );
   const saved = f.store.context.edit(
     chat.id,
     {
@@ -393,7 +404,7 @@ test('the real draft bridge keeps saved writes visible after EOF and refuses a f
       return calls(
         tool('patch', 'draft.patch', {
           expectedRevision: f.draft.revision,
-          model: { ...f.draft.model, title: '설명 실패 전에 저장한 제목' },
+          model: nativeDraftTitle(f.draft.model, '설명 실패 전에 저장한 제목'),
           rawFields: {},
           unappliedFields: [],
           operationId: 'patch-before-eof',
@@ -437,18 +448,15 @@ test.each([
     if (round === 1) {
       const read = result<EditDraft>(request, 'read');
       expect(read.model).toMatchObject({ title: '사람이 입력한 미저장 제목' });
-      expect(read.rawFields).toEqual({ 'package.instructions': '[\n  ' });
-      expect(read.unappliedFields).toEqual(['package.instructions']);
+      expect(read.rawFields).toEqual({ 'package.nativeRisu.card': '[\n  ' });
+      expect(read.unappliedFields).toEqual(['package.nativeRisu.card']);
       const model = read.model as ContentDraftModel;
+      const edited = nativeDraftTitle(model, '도우미가 완성한 제목');
       return calls(
         tool('patch', 'draft.patch', {
           expectedRevision: read.revision,
-          model: {
-            ...model,
-            title: '도우미가 완성한 제목',
-            package: { ...model.package, instructions: [] },
-          },
-          rawFields: { 'package.instructions': '[]' },
+          model: edited,
+          rawFields: { 'package.nativeRisu.card': JSON.stringify(edited.package.nativeRisu.card) },
           unappliedFields: [],
           operationId: 'complete-requested-draft',
         })
@@ -510,7 +518,7 @@ test.each([
       return calls(
         tool('unauthorized-patch', 'draft.patch', {
           expectedRevision: read.revision,
-          model: { ...read.model, title: '권한 없는 변경' },
+          model: nativeDraftTitle(read.model, '권한 없는 변경'),
           rawFields: {},
           unappliedFields: [],
           operationId: 'unauthorized-patch',
@@ -553,9 +561,9 @@ test.each(['completed', 'failed'] as const)(
           payload: {
             expectedRevision: observed.revision,
             operationId: randomUUID(),
-            model: { ...observed.model, title: '사람이 나중에 고친 제목' },
-            rawFields: { 'package.instructions': '[\n  {"id":' },
-            unappliedFields: ['package.instructions'],
+            model: nativeDraftTitle(observed.model, '사람이 나중에 고친 제목'),
+            rawFields: { 'package.nativeRisu.card': '[\n  {"id":' },
+            unappliedFields: ['package.nativeRisu.card'],
           },
         });
         expect(response.statusCode).toBe(200);
@@ -563,7 +571,7 @@ test.each(['completed', 'failed'] as const)(
         return calls(
           tool('stale-patch', 'draft.patch', {
             expectedRevision: observed.revision,
-            model: { ...observed.model, title: '읽은 시점의 도우미 제안' },
+            model: nativeDraftTitle(observed.model, '읽은 시점의 도우미 제안'),
             rawFields: observed.rawFields,
             unappliedFields: observed.unappliedFields,
             operationId: 'stale-proposal',

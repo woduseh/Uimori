@@ -4,10 +4,10 @@ import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
-import type { Connection, Content, Library, ModelPreset } from '../core/product.js';
+import type { Connection, Content, ModelPreset } from '../core/product.js';
 import { navigationAction } from './ui-navigation.js';
 
-test('NSUI01 global model reaches an empty chat on mobile and optional choices survive collapsing', async ({
+test('NSUI01 mobile creation retains title and persona, then opens a native authored greeting without generation', async ({
   page,
   request,
 }, info) => {
@@ -22,13 +22,12 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
   });
   expect(imageResponse.ok()).toBe(true);
   const image = await imageResponse.json();
-  const imageText = `\n\n![등록된 시작 이미지](${image.url})`;
   const savedBot = await request.post('/api/content', {
     data: {
       kind: 'bot',
       title,
       description: 'Synthetic quick-start fixture.',
-      text: 'A synthetic harbor guide.',
+      text: '',
       loading: 'pinned',
       relatedIds: [],
       package: {
@@ -37,34 +36,9 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
         revision: 1,
         title,
         description: '',
-        body: 'A synthetic harbor guide.',
-        identity: { name: 'Harbor', description: '' },
+        body: '',
         lore: [],
         instructions: [],
-        controls: [
-          {
-            id: 'route',
-            label: '출발 경로',
-            type: 'select',
-            default: 'harbor',
-            options: [
-              { label: '항구', value: 'harbor' },
-              { label: '야간 도로', value: 'night' },
-            ],
-          },
-          {
-            id: 'district',
-            label: '야간 구역',
-            type: 'select',
-            default: 'north',
-            options: [
-              { label: '북쪽', value: 'north' },
-              { label: '동쪽', value: 'east' },
-            ],
-            visibleWhen: { op: 'equal', args: [{ control: 'route' }, 'night'] },
-          },
-        ],
-        transforms: [],
         images: [
           {
             id: 'opening-image',
@@ -75,191 +49,94 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
             allowedUse: 'inline',
           },
         ],
-        starts: [
-          {
-            id: 'generated-route',
-            title: '경로에 맞춰 생성',
-            mode: 'generate',
-            text: 'Preserved request source.',
-            template: [
-              { kind: 'text', text: 'Write an opening for ' },
-              { kind: 'value', expression: { context: ['user', 'name'] } },
-              { kind: 'text', text: ' via ' },
-              { kind: 'value', expression: { control: 'route' } },
-              { kind: 'text', text: '/' },
-              { kind: 'value', expression: { control: 'district' } },
-              { kind: 'text', text: '.' },
-            ],
+        nativeRisu: {
+          version: 1,
+          assets: [{ name: 'opening', uri: 'opening', imageId: 'opening-image' }],
+          sourceHash: 'a'.repeat(64),
+          card: {
+            name: title,
+            description: 'A synthetic harbor guide.',
+            first_mes: 'Harbor greets {{user}}.\n\n{{img::opening}}',
+            alternate_greetings: ['Night watch begins.'],
+            extensions: { risuai: {} },
           },
-          {
-            id: 'greeting',
-            title: '인사',
-            mode: 'authored',
-            text: `{{char}} greets {{user}}.${imageText}`,
-            template: [
-              { kind: 'value', expression: { context: ['bot', 'name'] } },
-              { kind: 'text', text: ' greets ' },
-              { kind: 'value', expression: { context: ['user', 'name'] } },
-              { kind: 'text', text: `.${imageText}` },
-            ],
-            values: { route: 'harbor', district: 'north' },
-          },
-          {
-            id: 'night-watch',
-            title: '야간 순찰',
-            mode: 'authored',
-            text: 'Night watch begins.',
-            values: { route: 'night', district: 'north' },
-          },
-          {
-            id: '__direct__',
-            title: '예약어처럼 보이는 시작',
-            mode: 'authored',
-            text: 'A distinct authored opening.',
-            values: { route: 'harbor', district: 'north' },
-          },
-        ],
+        },
       },
     },
   });
   expect(savedBot.ok()).toBe(true);
   const bot = (await savedBot.json()) as Content;
   const personaTitle = `Mira ${info.workerIndex}`;
-  const persona = await request.post('/api/content', {
-    data: {
-      kind: 'persona',
-      title: personaTitle,
-      description: '',
-      text: 'Synthetic traveler.',
-      loading: 'pinned',
-      relatedIds: [],
-    },
-  });
-  expect(persona.ok()).toBe(true);
-  const savedConnection = await request.post('/api/connections', {
-    data: {
-      title: `${title} connection`,
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:9/no-provider',
-      enabled: true,
-    },
-  });
-  expect(savedConnection.ok()).toBe(true);
-  const connection = (await savedConnection.json()) as Connection;
-  const savedModel = await request.post('/api/model-presets', {
-    data: {
-      title: '합성 본문 모델',
-      connectionId: connection.id,
-      modelId: 'synthetic-quick-start',
-      maxOutputTokens: 1000,
-      temperature: null,
-    },
-  });
-  expect(savedModel.ok()).toBe(true);
-  const model = (await savedModel.json()) as ModelPreset;
-  await setCurrentModels(request, { main: { id: model.id }, translation: null });
-  // Other suites may already have saved models; this page deliberately sees one usable choice.
-  await page.route(/\/api\/library(?:\?|$)/, async (route) => {
-    const response = await route.fetch();
-    const current = (await response.json()) as Library;
-    await route.fulfill({
-      response,
-      json: {
-        ...current,
-        models: current.models.filter((item) => item.id === model.id),
-        connections: current.connections.filter((item) => item.id === connection.id),
+  expect(
+    (
+      await request.post('/api/content', {
+        data: {
+          kind: 'persona',
+          title: personaTitle,
+          description: '',
+          text: 'Synthetic traveler.',
+          loading: 'pinned',
+          relatedIds: [],
+        },
+      })
+    ).ok()
+  ).toBe(true);
+  const connection = (await (
+    await request.post('/api/connections', {
+      data: {
+        title: `${title} connection`,
+        protocol: 'fixture-sse-v1',
+        endpoint: 'http://127.0.0.1:9/no-provider',
+        enabled: true,
       },
-    });
-  });
+    })
+  ).json()) as Connection;
+  const model = (await (
+    await request.post('/api/model-presets', {
+      data: {
+        title: '합성 본문 모델',
+        connectionId: connection.id,
+        modelId: 'synthetic-quick-start',
+        maxOutputTokens: 1000,
+        temperature: null,
+      },
+    })
+  ).json()) as ModelPreset;
+  await setCurrentModels(request, { main: { id: model.id }, translation: null });
   const executionRequests: string[] = [];
   page.on('request', (item) => {
-    if (
-      item.method() === 'POST' &&
-      /\/(?:runs|candidate|translation|package-start)$/.test(item.url())
-    )
+    if (item.method() === 'POST' && /\/(?:runs|candidate|translation)$/.test(item.url()))
       executionRequests.push(item.url());
   });
   await page.goto('/');
   await navigationAction(page, '새 채팅', bot.title);
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
-  const options = dialog.locator('.new-story-options');
-  await expect(dialog.getByLabel('시작 본문 모델', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('사용할 시작')).toHaveValue('start-0');
+  await dialog.getByLabel('사용할 시작').selectOption('');
   await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
-  await expect(options).not.toHaveAttribute('open');
-  await expect(dialog.getByLabel('시작 번역 모델', { exact: true })).not.toBeVisible();
-  await expect(dialog.getByLabel('새 채팅 이름', { exact: true })).not.toBeVisible();
-  await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toBeVisible();
-  const create = dialog.getByRole('button', { name: '채팅 만들기', exact: true });
-  await expect(create).toBeEnabled();
-  const bounds = await create.boundingBox();
-  expect(bounds).not.toBeNull();
-  expect(bounds!.y).toBeGreaterThanOrEqual(0);
-  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true
-  );
-  if (visualReview) await page.screenshot({ path: info.outputPath('new-story-simple-mobile.png') });
-  const created = page.waitForResponse(
-    (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
-  );
-  await create.click();
-  const chat = (await (await created).json()) as Chat;
-  await expect(dialog).not.toBeVisible();
-  await expect(page.getByLabel('다음 장면 요청', { exact: true })).toBeVisible();
-  const detailResponse = await request.get(`/api/chats/${chat.id}`);
-  expect(detailResponse.ok()).toBe(true);
-  const detail = (await detailResponse.json()) as ChatDetail;
-  expect(detail.chat.title).toBe(`${bot.title}의 채팅`);
-  expect(detail.profile!.routes.main).toEqual({ id: model.id });
-  expect(detail.profile!.routes.translation).toBeNull();
-  expect(detail.runs).toHaveLength(0);
-  expect(detail.attempts).toHaveLength(0);
-
-  await navigationAction(page, '새 채팅', bot.title);
   await expect(dialog.getByLabel('시작 본문 모델', { exact: true })).toHaveCount(0);
-  await expect(dialog.getByText('최근 새 채팅에서 선택한 모델이에요.')).toHaveCount(0);
+  const options = dialog.locator('.new-story-options');
+  await expect(options).not.toHaveAttribute('open');
   await options.locator('summary').click();
   const customTitle = '추가 설정에 남긴 합성 제목';
   await dialog.getByLabel('새 채팅 이름', { exact: true }).fill(customTitle);
   await options.locator('summary').click();
   await expect(dialog.getByLabel('새 채팅 이름', { exact: true })).not.toBeVisible();
-  await expect(dialog.getByLabel('시작 본문 모델', { exact: true })).toHaveCount(0);
   await options.locator('summary').click();
   await expect(dialog.getByLabel('새 채팅 이름', { exact: true })).toHaveValue(customTitle);
-  await expect(dialog.getByLabel('시작 번역 모델', { exact: true })).toHaveCount(0);
-  expect(executionRequests).toEqual([]);
-  const route = dialog.getByLabel('시작 봇 옵션 출발 경로', { exact: true });
-  const district = dialog.getByLabel('시작 봇 옵션 야간 구역', { exact: true });
-  await route.selectOption('1');
-  await district.selectOption('1');
-  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('greeting');
-  await expect(route).toHaveValue('0');
-  await expect(district).toHaveCount(0);
-  await route.selectOption('1');
-  await expect(district).toHaveValue('0');
-  await district.selectOption('1');
-  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('night-watch');
-  await expect(route).toHaveValue('1');
-  await expect(district).toHaveValue('0');
-  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('__direct__');
-  await expect(route).toHaveValue('0');
-  await expect(district).toHaveCount(0);
-  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('');
-  await expect(route).toHaveValue('1');
-  await expect(district).toHaveValue('1');
-  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('greeting');
-  await expect(route).toHaveValue('1');
-  await expect(district).toHaveValue('1');
-  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('greeting');
-  await expect(district).toHaveValue('1');
-  await expect(dialog.getByLabel('시작 미리보기', { exact: true })).toHaveText(
-    'Harbor greets User.'
+  await options.locator('summary').click();
+  const created = page.waitForResponse(
+    (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
   );
-  const previewImage = dialog.getByRole('img', { name: '등록된 시작 이미지', exact: true });
-  await expect(previewImage).toBeVisible();
-  await expect
-    .poll(() => previewImage.evaluate((element) => (element as HTMLImageElement).naturalWidth))
-    .toBeGreaterThan(0);
+  await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click();
+  const chat = (await (await created).json()) as Chat;
+  await expect(dialog).toBeHidden();
+  const detail = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  expect(detail.chat.title).toBe(customTitle);
+  expect(detail.profile!.routes.main).toEqual({ id: model.id });
+  expect(detail.runs).toHaveLength(0);
+  expect(detail.attempts).toHaveLength(0);
+  await navigationAction(page, '새 채팅', bot.title);
   await dialog.getByRole('button', { name: '시작 페르소나', exact: true }).click();
   const picker = page.getByRole('dialog', { name: '시작 페르소나', exact: true });
   await picker.getByRole('searchbox').fill(personaTitle);
@@ -267,36 +144,27 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
     .getByRole('button')
     .filter({ has: page.getByText(personaTitle, { exact: true }) })
     .click();
-  await expect(dialog.getByLabel('시작 미리보기', { exact: true })).toHaveText(
-    `Harbor greets ${personaTitle}.`
+  const frame = dialog.frameLocator('iframe[title="봇 메시지"]');
+  await expect(frame.locator('body')).toContainText(`Harbor greets ${personaTitle}.`);
+  await expect(frame.locator('img')).toBeVisible();
+  await dialog.getByLabel('사용할 시작').selectOption('start-1');
+  await expect(frame.locator('body')).toContainText('Night watch begins.');
+  await dialog.getByLabel('사용할 시작').selectOption('start-0');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+    true
   );
-  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('generated-route');
-  await expect(dialog.getByLabel('시작 미리보기', { exact: true })).toHaveText(
-    `Write an opening for ${personaTitle} via harbor/north.`
-  );
-  await route.selectOption('1');
-  await district.selectOption('1');
-  await expect(dialog.getByLabel('시작 미리보기', { exact: true })).toHaveText(
-    `Write an opening for ${personaTitle} via night/east.`
-  );
-  expect(executionRequests).toEqual([]);
-  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('greeting');
+  if (visualReview) await page.screenshot({ path: info.outputPath('new-story-native-mobile.png') });
   const confirmed = page.waitForResponse(
     (response) => /\/package-start$/.test(response.url()) && response.request().method() === 'POST'
   );
   await dialog.getByRole('button', { name: '도입문 확정하고 채팅 만들기', exact: true }).click();
   const opening = await (await confirmed).json();
-  expect(opening.run.snapshot.packageStart.text).toBe(`Harbor greets ${personaTitle}.${imageText}`);
-  expect(opening.run.snapshot.packageStart.values).toEqual({ route: 'night', district: 'east' });
   expect(opening.run.usage.modelCalls).toBe(0);
   await expect(dialog).toBeHidden();
-  const readerImage = page
-    .getByTestId('source-text')
-    .getByRole('img', { name: '등록된 시작 이미지', exact: true });
-  await expect(readerImage).toBeVisible();
-  await expect
-    .poll(() => readerImage.evaluate((element) => (element as HTMLImageElement).naturalWidth))
-    .toBeGreaterThan(0);
+  const reader = page.getByTestId('source-text').frameLocator('iframe[title="봇 메시지"]');
+  await expect(reader.locator('body')).toContainText(`Harbor greets ${personaTitle}.`);
+  await expect(reader.locator('img')).toBeVisible();
+  expect(executionRequests).toEqual([]);
 });
 
 preservePromptWorkspace();
@@ -343,8 +211,6 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
         body: '',
         lore: [],
         instructions: [],
-        controls: [],
-        transforms: [],
         nativeRisu: { version: 1, card, assets: [], sourceHash: 'a'.repeat(64) },
       },
     },

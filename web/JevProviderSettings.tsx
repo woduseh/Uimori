@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { JevProviderStatus } from '../core/jev-provider.js';
+import { JEV_PROVIDER_DEFINITION, type JevProviderStatus } from '../core/jev-provider.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import { api, ApiError } from './api.js';
 import { SaveButton } from './SaveButton.js';
@@ -37,10 +37,12 @@ export function JevProviderSettings({
   active,
   onDirtyChange,
   onBusyChange,
+  onStatusChange,
 }: {
   active: boolean;
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange: (busy: boolean) => void;
+  onStatusChange: (status: JevProviderStatus) => void;
 }) {
   const [status, setStatus] = useState<JevProviderStatus | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -72,6 +74,9 @@ export function JevProviderSettings({
     [apiKey, busy, unresolved, onDirtyChange]
   );
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
+  useEffect(() => {
+    if (status) onStatusChange(status);
+  }, [status, onStatusChange]);
 
   const acceptTest = useCallback((result: ProviderConnectionTest) => {
     setTest(result);
@@ -155,7 +160,7 @@ export function JevProviderSettings({
       setMessage(
         remove
           ? '저장한 키를 삭제했어요.'
-          : 'JEV API 키를 저장했어요. 연결 테스트를 실행할 수 있어요.'
+          : 'TypeSafe AI와 JEV를 등록했어요. 연결 테스트를 실행할 수 있어요.'
       );
     } catch (caught) {
       if (!alive.current) return;
@@ -220,9 +225,13 @@ export function JevProviderSettings({
   }
 
   return (
-    <section hidden={!active} className="jev-provider-settings" aria-label="JEV 판단 연결">
+    <section
+      hidden={!active}
+      className="jev-provider-settings provider-management-form"
+      aria-label="TypeSafe AI 프로바이더 설정"
+    >
       <div className="provider-section-heading">
-        <h3>TypeSafe JEV</h3>
+        <h3>{JEV_PROVIDER_DEFINITION.label}</h3>
         <button
           type="button"
           className="secondary"
@@ -233,8 +242,8 @@ export function JevProviderSettings({
         </button>
       </div>
       <p>
-        로어 관련성과 번역 거절 여부를 판단하는 모델이에요. 연결한 뒤 필요한 기능에서 JEV를 선택해
-        주세요.
+        JEV가 로어 관련성, 생성 거절 여부와 이미지 배치를 판단해요. 키를 저장하면 모델 목록에 JEV가
+        등록돼요.
       </p>
       <div className="jev-provider-links">
         <a href="https://console.typesafe.ai" target="_blank" rel="noreferrer">
@@ -264,7 +273,7 @@ export function JevProviderSettings({
             </div>
             <div>
               <dt>모델</dt>
-              <dd>{status.modelId}</dd>
+              <dd>JEV · {status.modelId} · 판단 전용</dd>
             </div>
           </dl>
           <form
@@ -324,7 +333,7 @@ export function JevProviderSettings({
               사용해요.
             </small>
           </form>
-          <section className="jev-provider-test" aria-label="JEV 연결 테스트">
+          <section className="jev-provider-test provider-draft-note" aria-label="JEV 연결 테스트">
             <h4>판단 응답 테스트</h4>
             <p>짧은 예제의 관련성을 한 번 판단해요. 실제 JEV 요청이며 요금이 발생할 수 있어요.</p>
             <button
@@ -393,10 +402,13 @@ export function JevProviderSettings({
             )}
           </section>
           <aside className="provider-draft-note">
-            <strong>연결한 JEV 사용하기</strong>
-            <p>로어 선별: 채팅 설정 → 로어 문맥 → 로어 관련성 판단에서 JEV를 선택해요.</p>
-            <p>번역 거절 판정: 역할별 모델 → 번역 오류 감지와 재시도에서 JEV를 선택해요.</p>
-            <small>API 키를 저장해도 이 설정은 자동으로 바뀌지 않아요.</small>
+            <strong>JEV가 맡는 판단</strong>
+            <p>로어 선별: 채팅 설정 → 로어 문맥에서 관련성 기준과 예산을 조절해요.</p>
+            <p>번역 거절 판정: 역할별 모델 → 번역 오류 감지와 재시도에서 확신 기준을 조절해요.</p>
+            <p>
+              본문 거절 판정과 이미지 배치도 JEV를 사용해요. 본문과 번역 생성 모델은 역할별 모델에서
+              따로 선택해요.
+            </p>
           </aside>
         </>
       )}

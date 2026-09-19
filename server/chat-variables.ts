@@ -3,7 +3,7 @@ import {
   validateChatVariableValues,
   type ChatVariableState,
 } from '../core/chat-variables.js';
-import { behaviorPayloadHash } from './package-behavior-store.js';
+import { jsonPayloadHash } from './json-hash.js';
 import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -62,18 +62,11 @@ export function readChatVariables(
 }
 
 export function chatVariablesPending(store: Store, chatId: string, branchId: string): boolean {
-  return !!(
-    store.db
-      .prepare(
-        "SELECT 1 FROM runs WHERE chat_id=? AND branch_id=? AND status IN ('queued','running','waiting_for_state') LIMIT 1"
-      )
-      .get(chatId, branchId) ||
-    store.db
-      .prepare(
-        "SELECT 1 FROM package_extension_operations WHERE chat_id=? AND branch_id=? AND status IN ('queued','running') LIMIT 1"
-      )
-      .get(chatId, branchId)
-  );
+  return !!store.db
+    .prepare(
+      "SELECT 1 FROM runs WHERE chat_id=? AND branch_id=? AND status IN ('queued','running') LIMIT 1"
+    )
+    .get(chatId, branchId);
 }
 
 function applyChatVariablesInTransaction(
@@ -86,7 +79,7 @@ function applyChatVariablesInTransaction(
   if (!store.db.isTransaction) throw new Error('CHAT_VARIABLE_TRANSACTION_REQUIRED');
   const command = validateChatVariableCommand(value);
   const branch = store.product.branch(chatId, branchId);
-  const payloadHash = behaviorPayloadHash(command);
+  const payloadHash = jsonPayloadHash(command);
   const receipt = store.db
     .prepare(
       'SELECT payload_hash,result FROM chat_variable_journal WHERE chat_id=? AND branch_id=? AND request_key=?'

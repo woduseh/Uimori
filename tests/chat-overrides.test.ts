@@ -1,4 +1,5 @@
-import { afterEach, expect, test, vi } from 'vitest';
+import { nativeContent } from './fixtures/native-content.js';
+import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -12,14 +13,11 @@ import {
 } from '../server/chat-overrides.js';
 import { chatOverrideHash, type ChatLoreSelector } from '../core/chat-overrides.js';
 import type { Content } from '../core/product.js';
-import type { ContentPackage, PackageAttachment } from '../core/content-package.js';
+import type { RisuContent, ContentAttachment } from '../core/risu-content.js';
 import { compiledPackages } from '../core/package-context.js';
 import { roleResources } from '../core/provider.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { forkChat } from '../server/chat-fork.js';
-import { PromptBudget } from '../core/prompt-values.js';
-import { resolvePackageStart } from '../core/package-start.js';
-import type { PromptTemplate } from '../core/prompt-program.js';
 
 const owned: { store: Store; dir: string }[] = [];
 afterEach(() => {
@@ -46,35 +44,43 @@ const authority: ChatOverrideAuthority = { requestId: 'explicit-chat-lore-edit',
 function save(
   store: Store,
   title: string,
-  part: Partial<ContentPackage> = {},
+  part: Partial<RisuContent> = {},
   prior?: Content
 ): Content {
+  const lore = part.lore?.[0];
   const model = fixtureBotInput(title, 'Unchanged package body');
-  model.package.lore = [
+  model.package = nativeContent(
     {
-      id: 'fact',
-      title: 'Fact',
-      description: 'Original description',
-      text: 'Original lore',
-      loading: 'pinned',
+      name: title,
+      description: 'Unchanged package body',
+      character_book: {
+        entries: [
+          {
+            keys: [lore?.description ?? 'Original description'],
+            comment: lore?.title ?? 'Fact',
+            content: lore?.text ?? 'Original lore',
+            constant: true,
+            enabled: true,
+          },
+        ],
+      },
     },
-  ];
-  Object.assign(model.package, part);
+    { modules: part.modules }
+  );
   return store.product.content(
     { ...model, ...(prior ? { expectedRevision: prior.revision } : {}) },
     prior?.id
   ) as Content;
 }
-const ref = (content: Content, role: PackageAttachment['role']): PackageAttachment => ({
+const ref = (content: Content, role: ContentAttachment['role']): ContentAttachment => ({
   id: content.id,
   revision: content.revision,
   role,
 });
-function profile(store: Store, chatId: string, roots: PackageAttachment[]) {
+function profile(store: Store, chatId: string, roots: ContentAttachment[]) {
   const prior = store.product.profile(chatId);
   return store.product.updateProfile(chatId, {
     expectedRevision: prior.revision,
-    attachments: [],
     image: false,
     packageAttachments: roots,
   });
@@ -145,9 +151,9 @@ function complete(store: Store, value: ReturnType<typeof run>) {
 }
 const selector = (
   content: Content,
-  role: PackageAttachment['role'] = 'bot',
+  role: ContentAttachment['role'] = 'bot',
   modulePath: string[] = []
-): ChatLoreSelector => ({ id: content.id, role, modulePath, loreId: 'fact', field: 'text' });
+): ChatLoreSelector => ({ id: content.id, role, modulePath, loreId: 'lore-0', field: 'text' });
 
 test('the same package in bot and persona roles receives an override only on the requested attachment', () => {
   const store = database(),
@@ -205,174 +211,6 @@ test('the same package in bot and persona roles receives an override only on the
       .text
   ).toBe('Bot-only local lore');
   expect(store.run(value.id).snapshot).toEqual(original);
-});
-
-test('name templates freeze resources across persona edits and archive while a direct lore override clears only its AST', () => {
-  const store = database();
-  const bot = save(store, 'Templated bot', {
-    identity: { name: 'Aster', description: '' },
-    bodyTemplate: [{ kind: 'value', expression: { context: ['bot', 'name'] } }],
-    lore: [
-      {
-        id: 'fact',
-        title: 'Person',
-        description: '',
-        text: 'Original {{user}}',
-        loading: 'pinned',
-        template: [{ kind: 'value', expression: { context: ['user', 'name'] } }],
-      },
-    ],
-  });
-  const persona = save(store, 'Selected persona', { identity: { name: 'Mira', description: '' } });
-  const chat = store.createChat('Names', 'calm', { botId: bot.id });
-  profile(store, chat.id, [ref(bot, 'bot'), ref(persona, 'persona')]);
-  const original = run(store, chat.id);
-  const loreId = `package:${bot.id}:bot:lore:fact`;
-  expect(original.snapshot.resources.find((item) => item.id === loreId)?.text).toBe('Mira');
-  expect(original.snapshot.resources).toEqual(
-    store.product.resources(chat.id, original.snapshot.profile!)
-  );
-  const source = complete(store, original);
-  save(
-    store,
-    'Selected persona changed',
-    { ...persona.package!, identity: { name: 'Nova', description: '' } },
-    persona
-  );
-  expect(roleResources(original.snapshot).find((item) => item.id === loreId)?.text).toBe('Mira');
-  expect(
-    store.product
-      .resources(chat.id, store.product.snapshot(chat.id))
-      .find((item) => item.id === loreId)?.text
-  ).toBe('Nova');
-  patch(store, chat.id, selector(bot), 'Manual {{user}} remains literal');
-  const edited = run(store, chat.id);
-  expect(roleResources(edited.snapshot).find((item) => item.id === loreId)?.text).toBe(
-    'Manual {{user}} remains literal'
-  );
-  expect(
-    edited.snapshot.profile!.chatOverrides!.projections[0].package.lore[0].template
-  ).toBeUndefined();
-  expect(
-    edited.snapshot.profile!.packages!.find((item) => item.id === bot.id)!.lore[0].template
-  ).toEqual(bot.package!.lore[0].template);
-  complete(store, edited);
-  const fork = forkChat(store, chat.id, {
-    fromRevision: source.id,
-    idempotencyKey: 'name-template-fork',
-  });
-  const forked = store.detail(fork.id).runs[0];
-  expect(roleResources(forked.snapshot).find((item) => item.id === loreId)?.text).toBe('Mira');
-  const restored = database();
-  restored.product.import(store.product.export());
-  expect(restored.run(original.id).snapshot.resources).toEqual(original.snapshot.resources);
-  expect(
-    roleResources(restored.run(edited.id).snapshot).find((item) => item.id === loreId)?.text
-  ).toBe('Manual {{user}} remains literal');
-});
-
-test('stored name templates remain identical across clock delays and archive reevaluation while work limits stay active', () => {
-  const store = database();
-  const template: PromptTemplate = Array.from({ length: 100 }, () => ({
-    kind: 'value',
-    expression: { context: ['bot', 'name'] },
-  }));
-  const bot = save(store, 'Clock independent bot', {
-    bodyTemplate: template,
-    starts: [
-      { id: 'opening', title: 'Opening', mode: 'authored', text: 'Preserved opening', template },
-    ],
-    lore: [
-      {
-        id: 'fact',
-        title: 'Fallback',
-        description: '',
-        text: 'Preserved fallback',
-        loading: 'pinned',
-        template: [{ kind: 'value', expression: { op: 'divide', args: [1, 0] } }],
-      },
-    ],
-  });
-  const chat = store.createChat('Reproducible resources', 'calm', { botId: bot.id });
-  const original = run(store, chat.id);
-  complete(store, original);
-  const expected = original.snapshot.resources;
-  const opening = resolvePackageStart(bot.package!, 'opening');
-  let tick = 0;
-  const clock = vi.spyOn(performance, 'now').mockImplementation(() => (tick += 2000));
-  try {
-    expect(store.product.resources(chat.id, original.snapshot.profile!)).toEqual(expected);
-    expect(compiledPackages(original.snapshot, 'main')[0].resources).toEqual(expected);
-    expect(resolvePackageStart(bot.package!, 'opening')).toEqual(opening);
-    expect(() => new PromptBudget().step()).toThrow('PROMPT_TIME_LIMIT');
-    const bounded = new PromptBudget({ maxSteps: 1 }, 'deterministic');
-    bounded.step();
-    expect(() => bounded.step()).toThrow('PROMPT_STEP_LIMIT');
-  } finally {
-    clock.mockRestore();
-  }
-  const restored = database();
-  restored.product.import(store.product.export());
-  expect(restored.run(original.id).snapshot.resources).toEqual(expected);
-});
-
-test('a shared nested module keeps its other path unchanged and executes canonical behavior and instructions once', () => {
-  const store = database();
-  const module = save(store, 'Shared module', {
-    instructions: [{ id: 'one-guide', target: 'main', text: 'Execute guide once' }],
-    behavior: {
-      revision: 1,
-      schemaVersion: 1,
-      mode: 'authoritative',
-      stateSchema: {
-        type: 'record',
-        properties: { count: { type: 'number', min: 0, max: 100, integer: true } },
-      },
-      initialState: { count: 0 },
-      actions: [
-        {
-          id: 'once',
-          inputSchema: { type: 'record', properties: {} },
-          triggers: ['before-turn'],
-          automaticInput: {},
-          effects: [
-            { path: ['count'], value: { op: 'add', args: [{ context: ['state', 'count'] }, 1] } },
-          ],
-        },
-      ],
-      outputParsers: [],
-    },
-  });
-  const middle = save(store, 'Middle module', {
-    lore: [],
-    modules: [{ id: module.id, revision: module.revision }],
-  });
-  const bot = save(store, 'Bot root', {
-    lore: [],
-    modules: [{ id: middle.id, revision: middle.revision }],
-  });
-  const persona = save(store, 'Persona root', {
-    lore: [],
-    modules: [{ id: module.id, revision: module.revision }],
-  });
-  const chat = store.createChat('Nested scope', 'calm', { botId: bot.id });
-  profile(store, chat.id, [ref(bot, 'bot'), ref(persona, 'persona')]);
-  patch(store, chat.id, selector(bot, 'bot', [middle.id, module.id]), 'Only bot nested path');
-  const value = run(store, chat.id),
-    resources = roleResources(value.snapshot);
-  expect(resources.filter((item) => item.text === 'Only bot nested path')).toHaveLength(1);
-  expect(resources.filter((item) => item.text === 'Original lore')).toHaveLength(1);
-  expect(new Set(resources.map((item) => item.id)).size).toBe(resources.length);
-  expect(
-    compiledPackages(value.snapshot, 'main')
-      .flatMap((item) => item.instructions)
-      .filter((item) => item.text === 'Execute guide once')
-  ).toHaveLength(1);
-  expect(value.snapshot.packageStates).toHaveLength(1);
-  expect(value.snapshot.packageStates![0].state).toEqual({ count: 1 });
-  expect(value.snapshot.profile!.packages!.find((pkg) => pkg.id === module.id)!.lore[0].text).toBe(
-    'Original lore'
-  );
 });
 
 test('authority, source scope, root/package revisions and text-only selectors reject forged or stale changes atomically', () => {
@@ -497,40 +335,4 @@ test('override versions, operation receipts and frozen original/projection snaps
   const target = database();
   expect(() => target.product.import(malformed)).toThrow();
   expect(target.chats()).toHaveLength(0);
-});
-
-test('a chat lore override keeps the run keyword decision instead of restoring every entry', () => {
-  const store = database(),
-    bot = save(store, 'Keyed bot', {
-      loreActivation: { mode: 'keyword' },
-      lore: [
-        {
-          id: 'fact',
-          title: 'Fact',
-          description: '',
-          text: 'Original lore',
-          loading: 'discoverable',
-          // The fixture request is 'Continue synthetic story', so this key matches and the next does not.
-          activation: { keys: 'synthetic' },
-        },
-        {
-          id: 'quiet',
-          title: 'Quiet',
-          description: '',
-          text: 'Never mentioned',
-          loading: 'discoverable',
-          activation: { keys: 'dragon' },
-        },
-      ],
-    }),
-    chat = store.createChat('Keyword override', 'calm', { botId: bot.id });
-  profile(store, chat.id, [ref(bot, 'bot')]);
-  patch(store, chat.id, selector(bot), 'Manual harbor text');
-  const generated = run(store, chat.id);
-  const resources = roleResources(generated.snapshot);
-  expect(resources.find((item) => item.id === `package:${bot.id}:bot:lore:fact`)).toMatchObject({
-    text: 'Manual harbor text',
-    loading: 'pinned',
-  });
-  expect(resources.some((item) => item.id === `package:${bot.id}:bot:lore:quiet`)).toBe(false);
 });

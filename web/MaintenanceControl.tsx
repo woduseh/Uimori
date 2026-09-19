@@ -50,7 +50,7 @@ export function MaintenanceControl() {
       </p>
       {state.forcedClosed ? (
         <p className="muted">
-          후보 검증 부팅(<code>NR_MAINTENANCE=1</code>)이라 이 화면에서 열 수 없어요.
+          후보 검증 부팅(<code>UIMORI_MAINTENANCE=1</code>)이라 이 화면에서 열 수 없어요.
         </p>
       ) : closed ? (
         <button type="button" disabled={busy} onClick={() => void change('open')}>

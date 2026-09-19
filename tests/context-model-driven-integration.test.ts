@@ -1,3 +1,4 @@
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import {
   modelWorkspace,
   updateModelWorkspace,
@@ -168,8 +169,7 @@ async function setup(options: { count?: number; contextTools?: boolean } = {}) {
   const profile = app.store.product.profile(chat.id);
   updateTestProfile(app.store.product, chat.id, {
     expectedRevision: profile.revision,
-    attachments: [],
-    routes: { main: { id: model.id }, translation: null, status: null, image: null },
+    routes: { main: { id: model.id }, translation: null, status: null },
     image: profile.image,
   });
   // No summary model on purpose: the model-driven path must not depend on one.
@@ -203,7 +203,7 @@ async function terminal(app: App, id: string) {
   await vi.waitFor(
     () => {
       run = app.store.run(id);
-      expect(['queued', 'running', 'waiting_for_state']).not.toContain(run.status);
+      expect(['queued', 'running']).not.toContain(run.status);
     },
     { timeout: 10_000, interval: 20 }
   );
@@ -261,7 +261,7 @@ async function restored(archive: unknown) {
 
 describe('model-written summary and window switch through the real App and file SQLite', () => {
   test.each([false, true])(
-    'outline slot=%s survives a real window switch with frozen plan, notes and request',
+    'native prompt with archive=%s survives a real window switch with frozen plan, notes and request',
     async (useSlot) => {
       const { app, chatId, model } = await setup();
       const workspace = promptWorkspace(app.store);
@@ -270,24 +270,7 @@ describe('model-written summary and window switch through the real App and file 
         main: {
           ...workspace.main,
           values: {},
-          program: {
-            version: 1,
-            controls: [],
-            blocks: [
-              {
-                id: 'instructions',
-                title: '지침',
-                kind: 'message',
-                role: 'system',
-                template: [{ kind: 'text', text: 'CUSTOM_STYLE_CANARY: 담백한 문체를 유지해요.' }],
-              },
-              ...(useSlot
-                ? [{ id: 'outline', title: '구성', kind: 'slot', role: 'user', slot: 'outline' }]
-                : []),
-              { id: 'history', title: '이력', kind: 'history', from: 0, to: -1 },
-              { id: 'current', title: '요청', kind: 'current' },
-            ],
-          },
+          program: createDefaultRisuPrompt('CUSTOM_STYLE_CANARY: 담백한 문체를 유지해요.'),
         },
       });
       const context = await contextApi(app, chatId, 'GET', '/context');
@@ -414,7 +397,7 @@ describe('model-written summary and window switch through the real App and file 
       expect(run.snapshot.outline).toEqual(admitted.snapshot.outline);
       expect(app.store.outline.node(arc.id).intent).toBe('LATER_PLAN_EDIT_CANARY');
       for (const body of bodies) {
-        expect(body.input.source.outline).toEqual(useSlot ? undefined : admitted.snapshot.outline);
+        expect(body.input.source.outline).toEqual(admitted.snapshot.outline);
         expect(body.input.source.notes).toMatchObject([
           { text: expect.stringContaining('USER_PLAN_CORRECTION_CANARY') },
         ]);

@@ -1,15 +1,12 @@
 import {
-  matchSourceSpan,
   readStorySource,
   searchStorySources,
-  searchTerms,
   sourceHash,
   sourceSceneScope,
 } from './source-history.js';
 import { visibleAuthorNotes } from './notes.js';
 import type { RunSnapshot, ToolEvent } from './types.js';
 import type { ToolAction } from './provider.js';
-import { sourceReadRange, sourceRequestView } from './source-context.js';
 export const STORY_READ_NAMES = [
   'notes.list',
   'notes.read',
@@ -68,51 +65,19 @@ function listStorySources(snapshot: RunSnapshot, offset: number, limit: number) 
   const compacted = new Set(snapshot.contextPlan?.compacted.map((ref) => ref.revision) ?? []);
   const items = snapshot.history.slice(offset, offset + limit).map((item, pageIndex) => {
     const index = offset + pageIndex;
-    const view = snapshot.sourceSegments ? sourceRequestView(snapshot, item.revision) : undefined;
-    const text = view?.text ?? item.text;
+    const text = item.text;
     const preview = text.replace(/\s+/gu, ' ').trim().slice(0, LIST_PREVIEW_CHARS);
     return {
       sceneNumber: index + 1,
       revision: item.revision,
       index,
-      hash: view?.sourceHash ?? item.contentHash ?? sourceHash(item.text),
+      hash: item.contentHash ?? sourceHash(item.text),
       chars: text.length,
       preview,
       compacted: compacted.has(item.revision),
     };
   });
   return { total: snapshot.history.length, results: items };
-}
-
-/** Search only inside a kept source span: a query cannot cross an omitted hidden region. */
-function searchHiddenSources(snapshot: RunSnapshot, query: string, offset: number, limit: number) {
-  const terms = searchTerms(query);
-  if (!terms.length) throw new Error('QUERY_REQUIRED');
-  const matches = snapshot.history.flatMap((item) => {
-    const view = sourceRequestView(snapshot, item.revision);
-    for (const range of view.keptRanges) {
-      const match = matchSourceSpan(item.text.slice(range.start, range.end), terms);
-      if (match < 0) continue;
-      const start = Math.max(range.start, range.start + match - 60),
-        end = Math.min(range.end, start + 240),
-        quote = item.text.slice(start, end);
-      return [
-        {
-          revision: item.revision,
-          text: quote,
-          source: { revision: item.revision, hash: view.sourceHash, start, end, quote },
-          truncated: start > 0 || end < item.text.length,
-          nextOffset: end < item.text.length ? end : null,
-        },
-      ];
-    }
-    return [];
-  });
-  return {
-    results: matches.slice(offset, offset + limit),
-    total: matches.length,
-    nextOffset: offset + limit < matches.length ? offset + limit : null,
-  };
 }
 
 export function executeStoryRead(
@@ -161,9 +126,7 @@ export function executeStoryRead(
       if (action.name === 'story.search') {
         if (!query.trim()) return denied('INVALID_ARGUMENTS');
         const numbers = new Map(scope.history.map((source, index) => [source.revision, index + 1]));
-        const found = snapshot.sourceSegments
-          ? searchHiddenSources(snapshot, query, offset, limit)
-          : searchStorySources(scope, { query, offset, limit });
+        const found = searchStorySources(scope, { query, offset, limit });
         result = boundedSearch(
           found.total,
           offset,
@@ -216,21 +179,11 @@ export function executeStoryRead(
           { quote: _quote, ...source } = page.source;
         const sceneScope = sourceSceneScope(scope);
         result = boundedRead(offset, page.source.end, (end) => {
-          const filtered = snapshot.sourceSegments
-            ? sourceReadRange(snapshot, sourceId, offset, end)
-            : undefined;
           return {
             sceneNumber,
             sceneScope,
-            text: filtered?.text ?? page.text.slice(0, end - offset),
+            text: page.text.slice(0, end - offset),
             source: { ...source, end },
-            ...(filtered
-              ? {
-                  keptRanges: filtered.ranges,
-                  excludedRanges: filtered.excluded.map((item) => item.range),
-                  rangeSemantics: 'source coordinates; text concatenates keptRanges',
-                }
-              : {}),
             totalChars: page.totalChars,
             truncated: end < page.totalChars,
             nextOffset: end < page.totalChars ? end : null,

@@ -1,5 +1,4 @@
-import type { ContentRef } from './product.js';
-import { PACKAGE_ROLES, type PackageAttachment } from './content-package.js';
+import { CONTENT_ROLES, type ContentAttachment } from './risu-content.js';
 import {
   CHAT_TITLE_MAX_CHARS,
   SOURCE_TEXT_MAX_CHARS,
@@ -45,8 +44,7 @@ export type ChatTranscript = {
   version: typeof CHAT_TRANSCRIPT_VERSION;
   exportedAt: string;
   title: string;
-  attachments: ContentRef[];
-  packageAttachments: PackageAttachment[];
+  packageAttachments: ContentAttachment[];
   notes: ChatTranscriptNote[];
   entries: ChatTranscriptEntry[];
 };
@@ -83,7 +81,6 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
     'version',
     'exportedAt',
     'title',
-    'attachments',
     'packageAttachments',
     'notes',
     'entries',
@@ -93,37 +90,22 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
   const exportedAt = string(body.exportedAt, 40, 'CHAT_TRANSCRIPT_INVALID_TIME');
   if (!Number.isFinite(Date.parse(exportedAt))) fail('CHAT_TRANSCRIPT_INVALID_TIME');
   const title = string(body.title, CHAT_TRANSCRIPT_LIMITS.title, 'CHAT_TRANSCRIPT_INVALID_TITLE');
-  const attachments = list(
-    body.attachments,
-    CHAT_TRANSCRIPT_LIMITS.attachments,
-    'CHAT_TRANSCRIPT_INVALID_REFERENCE'
-  ).map((raw): ContentRef => {
-    const item = object(raw);
-    keys(item, ['id', 'revision']);
-    return {
-      id: string(item.id, 100, 'CHAT_TRANSCRIPT_INVALID_REFERENCE'),
-      revision: revision(item.revision),
-    };
-  });
   const packageAttachments = list(
     body.packageAttachments,
     CHAT_TRANSCRIPT_LIMITS.attachments,
     'CHAT_TRANSCRIPT_INVALID_REFERENCE'
-  ).map((raw): PackageAttachment => {
+  ).map((raw): ContentAttachment => {
     const item = object(raw);
     keys(item, ['id', 'revision', 'role']);
-    if (!PACKAGE_ROLES.includes(item.role as PackageAttachment['role']))
+    if (!CONTENT_ROLES.includes(item.role as ContentAttachment['role']))
       fail('CHAT_TRANSCRIPT_INVALID_REFERENCE');
     return {
       id: string(item.id, 100, 'CHAT_TRANSCRIPT_INVALID_REFERENCE'),
       revision: revision(item.revision),
-      role: item.role as PackageAttachment['role'],
+      role: item.role as ContentAttachment['role'],
     };
   });
-  if (
-    new Set(attachments.map((item) => item.id)).size !== attachments.length ||
-    new Set(packageAttachments.map((item) => item.id)).size !== packageAttachments.length
-  )
+  if (new Set(packageAttachments.map((item) => item.id)).size !== packageAttachments.length)
     fail('CHAT_TRANSCRIPT_DUPLICATE_REFERENCE');
   const entries = list(
     body.entries,
@@ -172,7 +154,6 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
     version: CHAT_TRANSCRIPT_VERSION,
     exportedAt,
     title,
-    attachments,
     packageAttachments,
     notes,
     entries,
