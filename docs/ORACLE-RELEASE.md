@@ -52,7 +52,7 @@ npm run release:oracle -- --config .local/oracle-release.json --source-ref codex
 
 `--area`는 변경 영역에 맞는 기존 `verify:*` npm script를 선택해요. 기본값은 `verify:browser-smoke`예요. 공통 UI, 공통 실행·저장 경계처럼 여러 기능에 걸친 변경이나 안정화 릴리스에는 두 명령 모두 `--full`을 붙여 전체 `verify:redesign`까지 실행해요. 작은 수정의 배포마다 `--full`을 요구하지 않아요. 선택 기준은 [코드 품질 검사](QUALITY.md)와 [검사 운영 정리](TESTING-AUDIT.md)에 있어요.
 
-배포 도구 변경의 작은 커밋은 [검사 시점](QUALITY.md#실행-시점)에 따라 영향받는 도구·복구 경계를 즉시 확인해요. 해당 사용 흐름 완료·통합과 실제 배포 전에는 `quality:full`, `verify:smoke`, 관련 `verify:selfhost`를 검사해요. 상위 브라우저 연결 계약도 바뀌었다면 `verify:browser-smoke`를 관련 영역으로 사용해요. 실제로 실행하지 않은 검사는 PASS로 기록하지 않아요.
+Development checks follow [QUALITY](QUALITY.md#verification). For a release involving deployment tooling, select `verify:selfhost`; changes to the broader browser connection flow may also need `verify:browser-smoke`. The release runner applies the receipt checks described above.
 
 ## 실행 모드
 

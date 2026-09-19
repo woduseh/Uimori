@@ -1,94 +1,44 @@
-# 코드 품질 검사
+# Quality and verification
 
-Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict` TypeScript 검사를 유지하며, Biome **2.5.12** 하나가 서식·lint·import 경계를 검사해요. 도구 버전은 package-lock.json과 함께 고정해요.
+Use the Node version in [`.nvmrc`](../.nvmrc) and [`package.json`](../package.json). Setup, command details, and recovery are in [DEVELOPMENT](DEVELOPMENT.md); the [testing audit](TESTING-AUDIT.md) maps existing coverage.
 
-## 실행 시점
+<a id="실행-시점"></a>
 
-2026-09-13 사용자 요청으로 **작은 구현·커밋, 사용 흐름 완료·통합, 릴리스**의 검사 시점을 나눠요. 이 절이 현재 검사 시점의 기준이며 이전 결정·결과 문서의 ‘매 변경 전체 검사’는 당시 기록이에요. 명령·assertion·릴리스 영수증의 판정 기준은 유지해요.
+## Verification
 
-| 시점 | 명령 | 범위 |
-| --- | --- | --- |
-| 구현 중·작은 코드 커밋 | `npm run quality` + 영향받는 집중 검사 | 서식·lint·타입·import 경계와 바꾼 동작을 확인해요. 예: `npm test -- tests/관련.test.ts`. 작은 커밋마다 전체 검사·빌드를 요구하지 않아요. |
-| 문서만 변경 | 내용·참조 경로·명령·일관성 확인 + `git diff --check` | 앱 동작·설정·실행 코드를 바꾸지 않은 문서는 앱 빌드·전체 테스트·smoke·브라우저 검사를 요구하지 않아요. |
-| 검증 스크립트 변경 | `npm run test:tooling` | Node 기본 실행기의 하네스 회귀. 0개·skip·todo·취소·실패를 거부하고 보고서를 남겨요. |
-| 사용 흐름 완료·통합 | `npm run quality:full` + `npm run verify:smoke` + 변경 영역의 `verify:*` 하나 | 여러 커밋으로 구현한 사용자 결과가 연결됐을 때 전체 품질·하네스·빌드·Vitest, 최소 앱, 해당 영역을 함께 확인해요. 영역 대응은 [TESTING-AUDIT.md](TESTING-AUDIT.md)를 따라요. |
-| 저장·마이그레이션·권한·공통 실행 경계 변경 | 영향받는 경계의 회귀를 즉시 실행 | 원문 보존·충돌·취소·복구·권한 등을 다음 통합까지 미루지 않아요. 영향이 여러 흐름에 걸치거나 범위를 확정하기 어려우면 전체 검사까지 확대해요. |
-| UI 동작 변경 | 일치하는 빌드에서 관련 `verify:*` | 새 DB/port를 사용하는 기존 합성 브라우저 검사예요. 수정한 동작을 확인할 수 있는 가장 좁은 기존 묶음을 선택해요. |
-| 기본 UI 연결 확인 | `npm run verify:browser-smoke` | 채팅 진입·생성 및 전역 프롬프트 설정의 작은 브라우저 묶음. 전체 기능 검사를 대신하지 않아요. |
-| 릴리스 후보 | `npm run release:check -- --area <verify:*>` | `quality:full`, `verify:smoke`, 선택 영역 검사를 묶고 내용 지문 영수증을 남겨요. 기본 영역은 `verify:browser-smoke`예요. |
-| 넓은 변경·안정화 릴리스 | 위 명령에 `--full` | 전체 `verify:redesign`을 추가해 대표 모바일/데스크톱 기능 흐름을 확인해요. 공통 UI나 공통 실행·저장 경계를 넓게 바꾼 경우에 사용해요. |
-| 배치·반응형 시각 검토 | `npm run verify:visual` | 전체 기능 + 추가 화면 폭·정밀 배치·성공 PNG. 사람이 화면도 확인해야 해요. |
-| 화면 갤러리 | `npm run verify:gallery` | 주요 화면·모달을 412/2560px × light/dark로 한 번에 캡처하고 원칙 수치를 `metrics.json`에 기록한 뒤, 첫 채팅 여정을 두 폭에서 단계별로 캡처하며 상호작용 수를 `journey.json`에 세요. 단정이 없어 몇 분 안에 끝나요. 계약은 [화면 갤러리](UI-GALLERY.md)에 있어요. |
-| 반복 성능 측정 | `npm run benchmark:story` | 긴 본문 동작 검사에 warmup/반복 표본과 측정 산출물을 추가해요. |
-| 서식 수정 | `npm run format` | Biome가 지원하는 프로젝트 소스·설정의 서식만 수정해요. |
-| lint 수정 | `npm run lint:fix` | 도구가 안전하다고 분류한 수정만 적용해요. 해결되지 않은 진단은 실패로 남아요. |
-| 개별 검사 | `npm run lint`, `npm run format:check`, `npm run check`, `npm run lint:architecture` | 실패한 단계만 조사할 때 사용해요. |
+Choose checks that can expose failures caused by the change. Completing a feature or making a commit does not, by itself, require a full suite. This section owns the current selection policy; older plans and audit records describe earlier schedules.
 
-`quality`는 서식·lint·타입·import 경계를 검사하며 서버·브라우저·모델·네트워크·의존성 설치를 실행하지 않아요. 매 저장·커밋의 전체 검사를 강제하는 Git hook은 두지 않아요. 베타 작업은 [BETA-PLAN](../project-plan/BETA-PLAN.md)의 사용자 결과를 완료 기준으로 삼고 진행이 바뀌면 갱신해요.
+| Change or question | Useful checks |
+| --- | --- |
+| Code behavior | `npm run quality` and focused tests, such as `npm test -- tests/<file>.test.ts` |
+| UI behavior | The relevant `verify:*` command against a matching build; `verify:browser-smoke` covers basic chat and global prompt settings |
+| Verification tooling | `npm run test:tooling` and regressions for the runner or contract that changed |
+| Broad changes, shared behavior, dependencies, or uncertain impact | `npm run quality:full`; add `verify:smoke` or wider browser coverage when the affected behavior warrants it |
+| Documentation only | Check accuracy, links, commands, consistency, and `git diff --check` |
+| Release candidate | `npm run release:check -- --area <verify:*>`; see below |
 
-기존 검사로 확인할 수 없는 동작·실패 조건에만 새 테스트를 추가해요. 구현을 그대로 옮긴 assertion 대신 실제 결함을 드러내는 입력과 기대 동작을 확인해요.
+Use the smallest existing tests that exercise the affected behavior and plausible failures. Add tests for gaps that matter, rather than mirroring implementation. Once the relevant checks pass, finish. Rerun or expand only for a subsequent change, failure, or unresolved risk.
 
-필요한 의존성이 준비되면 영향받는 검사를 실행하고, 통합 뒤에는 위 표의 완료 검사를 적용해요. 검사 중 입력 소스·빌드를 바꾸지 않고 DB·포트·출력 경로를 격리해요. 소스·환경·검사 계약이 같은 유효한 결과는 담당자가 바뀌어도 재사용해요. 릴리스 영수증은 아래의 별도 재사용 기준을 따라요.
+`quality` runs Biome and TypeScript without starting the app or a browser; `check` runs TypeScript alone. `quality:full` runs `quality`, `test:tooling`, a fresh build, then the complete Vitest suite. The build precedes Vitest because some tests restart the compiled server. `verify:smoke` runs the M0 F02/F03/F06 application checks; it is distinct from the smaller browser smoke.
 
-베타 자료 이동의 화면 검사는 `npm run verify:native-transfer`, 공유용 진단은 `npm run verify:diagnostics`예요. 각각 실제 합성 파일의 내보내기/검토/복원·불확실 재시도와 개인정보 제외/다운로드/취소를 확인해요. Risu 원본 실행, 실제 모델, Linux 자동 업데이트의 증거는 아니에요.
+Use `verify:redesign` for broad browser regression, `verify:visual` for additional viewports and layout review, and `benchmark:story` for repeated performance measurements when those questions matter. [UI-GALLERY](UI-GALLERY.md) describes screenshot capture.
 
-`quality:full`은 새 빌드를 만든 뒤 Vitest를 실행해요. 전체 검사에는 `dist/server/index.js`를 실행하는 서버 재시작 테스트가 있어 이 순서가 필요해요. 집중 검사가 소스 모듈만 읽으면 빌드 없이 실행해요. 선택한 검사나 브라우저가 `dist`를 사용하고 빌드가 없거나 입력 지문이 달라졌을 때만 먼저 `npm run build`를 실행해요. 테스트·문서만 수정했다는 이유로 일치하는 앱 빌드를 다시 만들지 않아요.
+## Builds and evidence
 
-사용 흐름은 예를 들어 ‘가져온 자료를 저장하고 선택값을 바꿔 실제 채팅에 적용하기’처럼 사용자가 얻는 결과예요. 공통 API 하나나 작은 UI 수정마다 별도 전체 검사 묶음을 만들지 않아요. 전체 브라우저 회귀 `verify:redesign`은 공통 UI·공통 실행/저장 경계를 넓게 바꾼 릴리스나 안정화 릴리스에서만 추가해요. 검사별 유지·통합·선택 실행 이유는 [TESTING-AUDIT.md](TESTING-AUDIT.md)에 있어요.
+Tests that import source directly need no build. A check that executes `dist` needs a build matching its inputs. Rebuild only when those inputs changed or the artifact is missing; documentation and test-only edits do not automatically require it. The shared app and browser runners check source/build identity and provide isolated databases, ports, and output paths.
 
-완료 검사 뒤 작은 후속 수정이 생기면 영향받는 검사와 필요한 빌드만 갱신해요. 직전 전체 검사의 소스 범위, 이후 변경, 집중 재검사 결과를 구분해 기록하고 이를 수정 후 소스의 새 전체 검사 PASS로 표시하지 않아요. 실행/저장 경계·의존성·검사 설정 등이 넓게 바뀌거나 영향 범위가 불확실하면 전체 검사를 다시 해요. 실행 중 변경한 검사의 결과, 실패·BLOCKED·미실행을 재사용하거나 PASS로 바꾸지 않아요. 확인한 실패는 원인을 해결하고 해당 범위를 다시 검사하며, 필요한 검사 통과 뒤 근거 없이 반복·확대하지 않아요.
+Reuse relevant results while their source, environment, and test assumptions remain applicable. After a small follow-up edit, run affected checks and distinguish that result from an earlier full run. Report what actually ran, including failures and blocked checks; synthetic checks support different claims from provider, device, or production observations. An environment failure such as Windows `spawn EPERM` is a blocked observation, not an application result. See [DEVELOPMENT](DEVELOPMENT.md) for recovery.
 
-릴리스 후보는 `npm run release:check -- --area <verify:*>`로 같은 묶음을 실행해요. 성공 영수증은 HEAD 문자열이 아니라 source·실행 환경·검사 계약 지문이 모두 같을 때 검사별로 재사용해요. build만 없거나 stale이면 build만 복구하고 source와 artifact 일치를 다시 확인해요. source나 실행 환경·검사 계약이 달라지면 stale로 판정해 다시 실행해요. 같은 source에 실패 기록이 있으면 영역을 줄여 우회하지 않아요. 검증 뒤 commit만 만들어 내용이 같다면 clean HEAD와 `origin/main` 일치 확인 후 영수증을 재사용할 수 있어요. Oracle 실행 계약은 [Oracle 릴리스](ORACLE-RELEASE.md)를 봐요.
+Browser defaults are defined in [`fixtures/browser-viewports.json`](../fixtures/browser-viewports.json). Shared runners preserve failure screenshots and traces; `NR_VISUAL_REVIEW=1` enables extra visual checks and successful screenshots for a selected domain. Inspect the rendered output when making a visual claim.
 
-배포할 사용 흐름의 완료·통합 검사도 가능하면 `release:check`로 실행해 영수증을 남겨요. 위의 개발 중 집중 재검사 기록은 릴리스 영수증을 대신하지 않아요. 세 명령을 따로 실행해 터미널 출력만 남긴 과거 결과는 자동 수집하지 않으므로, 영수증 없이 배포 명령을 실행하면 필요한 검사를 새로 수행해요.
+## Release checks
 
-릴리스·self-host 도구 변경의 관련 영역은 `verify:selfhost`예요. 상위 브라우저 연결도 바뀌면 `verify:browser-smoke`도 실행해요. 이 도구 변경만으로 `verify:redesign`을 요구하지 않으며, 제품 UI나 공통 실행·저장 경계까지 넓게 바뀐 경우에만 `--full`을 선택해요.
+The current [`release-check` runner](../scripts/release-check.mjs) requires `quality:full`, `verify:smoke`, and the selected local feature `verify:*` command. The default area is `verify:browser-smoke`; `--full` adds `verify:redesign`. Choose wider coverage when the release changes shared behavior broadly or is intended to establish a stabilization baseline. Release/self-host tooling normally uses `--area verify:selfhost`.
 
-빌드 지문은 앱 소스와 실제 빌드 설정·실행기·의존성 파일을 포함해요. 테스트/검증 스크립트만 바꾸면 기존 앱 빌드를 재사용할 수 있어요. 브라우저와 milestone 결과에는 이와 별개로 테스트·검증 설정까지 포함한 전체 지문을 기록하고 실행 전후 동일성을 확인해요. 테스트를 실행 중에 고친 결과는 PASS로 남기지 않아요.
+The runner writes a receipt to `output/release/checks/`. It reuses each successful check only when source, verification inputs, Node version, platform, and the saved log hash match. A missing or stale build can be rebuilt without repeating still-valid checks. Recorded failed or incomplete checks must be resolved; narrowing the requested area does not clear them. Plain terminal output from separately run commands is not an importable receipt. Deployment behavior and additional source/remote requirements are in [ORACLE-RELEASE](ORACLE-RELEASE.md).
 
-2026-09-12부터 기본 화면 검증 폭은 **모바일 412·데스크톱 2560 CSS px**예요. 사용자의 Galaxy S25 Ultra 브라우저와 4K 모니터 150% 배율의 작업 화면에 맞춘 기준이며, 실제 기기 검사 결과를 뜻하지 않아요. `fixtures/browser-viewports.json` 한 벌을 Playwright 설정·테스트·갤러리·진단·별도 브라우저 실행기가 공유하고, 테스트의 상수 export는 `tests/fixtures/browser-viewports.ts`예요. 높이는 각 시나리오의 기존 값을 유지해요. 시각 검토에서는 기존 추가 폭과 두 기본 폭을 함께 검사하며, 과거 실행의 수치·PNG 이름·증거는 변경하지 않아요.
+## Static checks and CI
 
-기본 브라우저 검사는 기능·키보드·취소·초안·오류·터치 영역을 유지해요. 성공 화면 캡처·추가 폭 전수 반복·정밀 정렬은 `NR_VISUAL_REVIEW=1`에서 실행하며 실패 screenshot/trace는 항상 보존해요. 특정 도메인의 시각 검사만 필요하면 PowerShell에서 `$env:NR_VISUAL_REVIEW='1'`을 설정해 기존 `verify:*`를 실행한 뒤 환경변수를 제거해요. 기본 성능 단위검사는 큰 본문과 이력 격리 기능을 한 번씩 검사하며, 반복 측정·성능 파일은 `NR_BENCHMARK=1`에서만 만들어요.
+[`biome.json`](../biome.json) owns formatting, lint rules, exceptions, and direct import restrictions; TypeScript uses strict checking. Biome blocks application-layer imports into `core`, browser imports into `server`, server/Node imports into `web`, and test/tool imports into product code. [`tests/module-cycles.test.ts`](../tests/module-cycles.test.ts) separately checks static value-import cycles in `core` and `server`. These checks do not establish transitive dependency or browser runtime safety. Prefer a narrow, explained suppression when a rule cannot express valid code.
 
-`build`는 별도 `.build-*` 폴더에서 서버·웹을 모두 컴파일하고 소스 지문을 확인한 뒤 `dist`를 교체해요. 컴파일 실패·환경 차단·소스 변경이면 이전 빌드를 보존하며 `output/build/<run-id>/summary.json`과 단계별 로그를 남겨요. 보존된 빌드는 현재 소스의 검증 근거가 아니므로 브라우저 검증의 지문 검사는 그대로 적용해요. 같은 checkout의 동시 빌드는 `output/build/active.json`으로 거부해요. 강제 종료 후 잠금이 남았다면 기록된 PID와 해당 실행의 staging/이전 빌드 경로를 확인한 후에만 잠금을 정리해요.
-
-`test:tooling`은 `tests/*.node.test.mjs`와 `scripts/*.test.mjs`를 자동으로 찾아 자식 프로세스 없이 파일 보존·진단·HTTP fixture·SQLite 증거 판정을 검사해요. 각 디렉터리에서 검사 파일이 발견돼야 하며 실행 파일마다 실제 선언한 검사가 있어야 해요. 결과는 `output/tooling/<run-id>/`에 남으며 전체 Vitest·앱 자식 실행·브라우저를 대체하지 않아요.
-
-합성 브라우저·milestone·worktree 검증과 로딩 측정은 `scripts/lib.mjs`의 `localVerificationEnv`로 무작위 loopback 포트·test mode·빈 인증·Codex 비활성화를 고정해요. 부모 프로세스의 self-host origin과 Codex 실행 경로는 자식 환경에서 제거하고, 등록 검사의 loopback fixture origin과 실행별 DB·temp·브라우저 경로는 유지해요. 실제 공급자와 self-host 검증은 각자의 실행 설정을 사용해요.
-
-VS Code에서는 권장 `biomejs.biome` 확장을 설치하면 지원 코드 파일을 저장할 때 서식을 맞출 수 있어요. 확장 설치는 선택 사항이며 CLI와 CI가 동일한 설정을 사용해요. `.editorconfig`와 기존 `.gitattributes`는 UTF-8·LF·공백 2칸 기준을 맞춰요.
-
-## 검사 범위와 예외
-
-- `core/`, `server/`, `web/`, `tests/`, `scripts/`, `fixtures/`, 루트 TS/MJS/JSON 설정과 `.vscode` 설정을 검사해요. 기존 `tsc` 범위에 없던 검증용 `.mjs`도 lint해요.
-- `node_modules`, `dist`, `output`, `.local`, 비밀 설정과 사용자 DB는 검사·자동 수정 대상이 아니에요. `package-lock.json`은 npm이 관리해요. 과거 UI 시안과 Markdown 문서는 코드 lint 대상이 아니에요.
-- Biome의 recommended preset에서 코드 정확성·의심스러운 구문 검사를 사용하고 warning도 실패로 처리해요. Hooks 의존성도 검사하되, effect의 의도된 갱신 조건은 검토 후 해당 위치의 이유 있는 주석으로 보존해요. deps 자동 추가로 요청 재실행이나 반복을 만들지 않아요.
-- 스타일·복잡도·접근성 규칙 묶음은 이번 필수 lint에 포함하지 않아요. 서식은 formatter가 담당하고, 접근성·UI 동작은 실제 화면 검증으로 다뤄요. 이 설정이 접근성 검증을 대신하지는 않아요.
-- `noExplicitAny`, `noAssignInExpressions`, `noThenProperty`, `noArrayIndexKey`는 비활성화해요. 기존 DB/fixture 타입 경계, 파서 루프, PromptProgram의 `then` 필드, 순서가 고정된 표현 목록을 일괄 재설계하지 않기 위한 선택이에요. TypeScript `strict`는 유지해요.
-- 그 외 예외는 해당 구문에 `biome-ignore lint/<group>/<rule>: <이유>`로 좁게 남겨요. 새 파일 전체 제외나 이유 없는 규칙 완화로 검사를 통과시키지 않아요. 자동 수정 후에도 의미 변화가 있는지 diff를 확인해요.
-
-## 모듈 경계
-
-Biome `noRestrictedImports`를 디렉토리별로 적용해 다음 import/re-export를 금지해요. 정적인 모듈 문자열을 검사하며, `.js` specifier와 동적 `import()`의 고정 문자열도 대상이에요.
-
-1. `core → server/web` (타입 포함).
-2. `server → web` (타입 포함).
-3. 제품 코드 `core/server/web → tests/scripts` (타입 포함).
-4. `web → server` (타입 포함). 공용 `ChatFolder`는 `core/product.ts`에 있어요.
-5. `web → Node 내장 모듈/서버 SDK` (타입 포함).
-
-`core`에는 공용 데이터뿐 아니라 Node transport도 있으므로 Node 사용을 전면 금지하지 않아요. 이 검사는 직접 import 문자열에 적용되며 별칭 해석·전이 의존성·순환 검사는 하지 않아요. 새 경로 별칭이나 서버 SDK를 도입하면 규칙과 경계 테스트도 함께 갱신해요. 전체 브라우저 번들 안전성은 빌드와 실제 실행에서도 확인해야 해요.
-
-`core/`·`server/` 사이의 값 import 순환은 `tests/module-cycles.test.ts`가 정적 `import`/`export … from` 문만 보고 강결합 성분을 계산해 알려진 목록과 비교해요(`import type`와 인라인 `type` 지정자는 간선이 아니에요). 2026-09-10 결정 6으로 `product-store` ↔ `story-archive`·`helper-archive`·`package-start`(모델 snapshot 검증은 `server/provider-archive.ts`, 패키지 값 키는 `core/content-package.ts`), `main-request` ↔ `prompt-snapshot`(호스트 문맥은 `server/main-host-context.ts`), `transport` ↔ `vertex`·`provider-http`·`vertex-auth`(연결·요청·카탈로그 검증은 `core/provider-request.ts`)의 순환을 없앴어요. 남은 순환은 `server/package-images.ts` ↔ `server/source-editing.ts` 하나이며 목록에 적어 두었어요. 새 순환은 이 검사가 막고, 목록에 추가하는 것은 결정이 필요한 변경이에요.
-
-## CI
-
-`.github/workflows/quality.yml`은 PR과 main push에서 Windows / Node 24.14.0으로 `npm ci` 후 **같은 `npm run quality:full`**을 실행해요. 공통 `quality` job 한도는 15분이에요. npm 다운로드 캐시를 재사용하고 같은 브랜치의 오래된 실행은 취소해요. 수동 실행의 `browser` 옵션을 켜면 `quality` 성공 뒤 별도 `browser` job이 의존성 설치와 새 빌드를 거쳐 전체 회귀를 실행하며, 이 job만 45분 한도를 써요. 로컬 검증과 GitHub에서 실제 실행된 결과는 구분해요.
-
-`verify:redesign`은 모든 브라우저 spec을 한 번의 Playwright 명령으로 돌리므로 공용 기본값 600초로는 끝나지 않아요. 2026-09-10에 한 기계에서 잰 완주 시간은 9.2분과 11.8분이고, 그 이전 기록의 반복된 timeout FAIL도 같은 원인이에요. 그래서 이 검사만 30분 한도를 직접 지정하고 CI의 별도 `browser` job 한도를 45분으로 두었어요. 두 값은 멈춤을 잡기 위한 상한이지 목표 실행 시간이 아니에요. 검사마다 자기 묶음에 맞는 한도를 지정하는 기존 방식을 따랐어요. `runBrowserVerification`에 한도를 직접 넘기는 검사는 이 검사를 포함해 열여섯 개이고, 나머지 열다섯 개는 모두 120~360초로 기본값보다 좁혀요. 기본값보다 늘리는 것은 이 검사뿐이에요. `verify:selfhost`와 `verify:worktrees`도 `timeout`을 쓰지만 공용 실행기를 거치지 않는 개별 명령·조작의 한도예요. Windows CI에서의 실제 완주 시간은 아직 측정하지 않았어요. 2026-09-10 로컬 Windows 전체 재측정은 10.3분에 223 PASS / 5 FAIL로 종료됐고 timeout 없이 cleanup을 완료했어요. 남은 실패와 집중 재검증을 구분한 [회귀 브리프](../project-plan/BRIEF-FULL-RUN-REGRESSION-2026-09-10.md)를 참고해요. macOS와 같은 조건의 A/B가 아니므로 운영체제별 인과 비교로 해석하지 않아요.
-
-## 채택 이유와 후속 범위
-
-도입 당시 TypeScript는 7.0.2이며, typescript-eslint 8.69.0의 공식 npm peer 범위는 `>=4.8.4 <6.1.0`이었어요. dependency-cruiser 18.2.0 역시 TypeScript 7에서 TS 파일 분석이 누락될 수 있음을 확인해 채택하지 않았어요. TypeScript를 내리거나 별도 파서 환경을 관리하는 대신, Biome와 기존 `tsc`를 조합했어요. typescript-eslint의 타입 기반 Promise 검사 전체와 동등한 범위를 주장하지 않아요. [typescript-eslint 지원 범위](https://typescript-eslint.io/users/dependency-versions/) · [Biome lint](https://biomejs.dev/linter/) · [Biome import 규칙](https://biomejs.dev/linter/rules/no-restricted-imports/).
-
-Knip, mutation/property-based testing, 전체 coverage 목표, 추가 의존성 서비스는 이번 기본 도입에 포함하지 않아요. 기존 계약 테스트를 재사용하고, 초기 품질 검사의 실행 시간과 진단 효용을 확인한 뒤 필요할 때 추가해요. 현재 성능·실행 결과는 `project-plan/QUALITY-RESULTS.md`를 봐요.
+[CI](../.github/workflows/quality.yml) runs `npm ci` and `quality:full` on Windows for pull requests and pushes to `main`. Its manual `browser` option adds a fresh build and `verify:redesign` after quality passes. Local results and CI results are separate evidence.
