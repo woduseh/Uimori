@@ -13,8 +13,6 @@ Results are under `output/playwright/gallery-<timestamp>-<id>/`: screenshots, th
 - [Steps](../scripts/gallery/steps.mjs) define locator and action syntax; [seed data](../scripts/gallery/seed.mjs) supplies route placeholders.
 - [Panel deep links](../web/usePanelDeepLink.ts) open otherwise inaccessible screens on test-mode servers.
 
-The `principles` P/F tags are historical grouping labels in capture metadata, not additional acceptance requirements.
-
 ## Metrics
 
 [`tests/fixtures/ui-metrics.ts`](../tests/fixtures/ui-metrics.ts) owns the calculations and targets shared by browser tests and the gallery. These are diagnostic measurements of selected elements, not universal UI design requirements. Update that implementation when intentionally changing a measurement; keep this reference consistent.

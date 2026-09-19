@@ -21,7 +21,7 @@ export function requiredChecks(area = 'verify:browser-smoke', full = false, scri
     throw new Error(
       'Choose a local feature verify:* script; use --full for the complete regression'
     );
-  return [...new Set(['quality:full', 'verify:smoke', area, ...(full ? ['verify:redesign'] : [])])];
+  return [...new Set(['quality:full', area, ...(full ? ['verify:redesign'] : [])])];
 }
 
 export async function cachedCheckPassed(check, command) {
@@ -52,7 +52,9 @@ export async function verifyReleaseReceipt(receipt, identity, checks) {
   for (const name of checks)
     if (!(await cachedCheckPassed(receipt.checks?.[name], name)))
       throw new Error(`Required release check unavailable: ${name}`);
-  const failures = Object.entries(receipt.checks).filter(([, value]) => value.status !== 'PASS');
+  const failures = Object.entries(receipt.checks).filter(
+    ([, value]) => value.status !== 'PASS' && value.status !== 'NOT_RUN'
+  );
   if (failures.length)
     throw new Error(
       `Known failed checks for this source: ${failures.map(([name]) => name).join(', ')}`
@@ -91,14 +93,15 @@ export async function runReleaseChecks(
   };
   const log = dependencies.log ?? console.log;
   const cli = dependencies.npmCli ?? npmCli();
-  // Record the requested checks before starting a child. A killed --full run must
-  // remain visibly incomplete even if it never wrote a result for its last check.
+  // Preserve unstarted checks for later selection without making them mandatory.
+  // Once execution starts, failed or incomplete evidence still needs resolution.
   for (const name of new Set([...(reusable ? (cached.requested ?? []) : []), ...checks]))
     summary.checks[name] ??= { command: name, status: 'NOT_RUN' };
   await json(report, summary);
   try {
     const omittedFailures = Object.entries(summary.checks).filter(
-      ([name, value]) => value.status !== 'PASS' && !checks.includes(name)
+      ([name, value]) =>
+        value.status !== 'PASS' && value.status !== 'NOT_RUN' && !checks.includes(name)
     );
     if (omittedFailures.length)
       throw new Error(

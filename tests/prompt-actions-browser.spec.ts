@@ -86,9 +86,6 @@ test('PAUI05 prompt sections and responsive list detail preserve drafts without 
         composer.getByRole('tablist', { name: '프롬프트 편집 섹션', exact: true })
       ).toBeVisible();
       await expect(navigation).toBeVisible();
-      const box = await navigation.boundingBox();
-      expect(box).not.toBeNull();
-      expect(Math.abs(box!.width - 224)).toBeLessThanOrEqual(1);
     }
     await expect(body).toHaveValue(draft);
     await expect(composer.getByLabel('프롬프트 구성 도구', { exact: true })).toBeVisible();

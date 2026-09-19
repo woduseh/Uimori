@@ -264,6 +264,51 @@ test('missing required IDs cannot be satisfied by a longer ID with the same pref
   expect(summary.failures).toContain('Missing CASE01 evidence');
 });
 
+test('focused visual checks narrow the existing selection and record their actual scope', async () => {
+  process.argv.push('--grep', 'CASE01', '--visual');
+  const { summary } = await run({
+    files: ['tests/fixture-browser.spec.ts'],
+    grep: 'CASE01|CASE02',
+    requiredCases: ['CASE01', 'CASE02'],
+    requiredTitles: ['an unselected assertion'],
+    requiredScreenshots: ['an-unselected-screen.png'],
+  });
+  expect(summary.status).toBe('PASS');
+  expect(summary.selection).toMatchObject({
+    focused: true,
+    files: ['tests/fixture-browser.spec.ts'],
+  });
+  const filter = new RegExp(summary.selection.grep);
+  expect(filter.test('fixture CASE01 selected scenario')).toBe(true);
+  expect(filter.test('fixture CASE02 unselected scenario')).toBe(false);
+  expect(filter.test('fixture OTHER unselected scenario')).toBe(false);
+  expect(summary.requiredCases).toEqual([]);
+  expect(summary.requiredScreenshots).toEqual([]);
+  expect(summary.visualReview).toBe(true);
+  expect(lib.command).toHaveBeenCalledWith(
+    expect.arrayContaining(['--grep', summary.selection.grep]),
+    expect.objectContaining({ env: expect.objectContaining({ NR_VISUAL_REVIEW: '1' }) })
+  );
+});
+
+test('a focused selection with no executed tests fails', async () => {
+  process.argv.push('--grep', 'no such case');
+  report = { suites: [] };
+  const { summary } = await run();
+  expect(summary.status).toBe('FAIL');
+  expect(summary.selection.focused).toBe(true);
+});
+
+test.each([['--grep', '['], ['--unknown'], ['--grep'], ['--visual', '--visual']])(
+  'invalid browser options fail before launching a server: %j',
+  async (...args) => {
+    process.argv.push(...args);
+    await expect(run()).rejects.toThrow();
+    expect(lib.startServer).not.toHaveBeenCalled();
+    expect(lib.command).not.toHaveBeenCalled();
+  }
+);
+
 test('primary and cleanup failures both survive in the saved summary and ownership', async () => {
   commandFailure.code = 1;
   lib.killOwned.mockRejectedValue(new Error('injected process cleanup failure'));

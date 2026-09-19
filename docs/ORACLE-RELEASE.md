@@ -33,7 +33,7 @@ SSH 키, `known_hosts`, 운영 접속 설정은 Git에 넣지 않고 `.local/ora
 
 ## 검증과 배포
 
-기본 릴리스 검사는 전체 단위·통합·빌드, 최소 앱 smoke, 선택한 기능 영역을 실행해 내용 지문이 포함된 영수증을 남겨요.
+기본 릴리스 검사는 `quality:full`과 선택한 기능 영역을 실행해 내용 지문이 포함된 영수증을 남겨요. 기본 영역은 `verify:browser-smoke`예요.
 
 ```powershell
 npm run release:check -- --area verify:browser-smoke

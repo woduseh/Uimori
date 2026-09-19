@@ -26,10 +26,19 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | Feature-specific `verify:*` scripts | Suites such as `verify:packages`, `verify:providers`, `verify:library`, and `verify:navigation`; see [package scripts](../package.json). |
 | `npm run verify:redesign` | Full local synthetic browser regression. |
 | `npm run verify:selfhost` | Local synthetic HTTPS proxy, session, and reconnection checks using Chromium. |
-| `npm run verify:visual` | Extra viewport and layout checks with screenshots for visual inspection. |
+| `npm run verify:visual` | Full browser suite with extra viewport and layout checks; use `--grep` to focus it. |
 | `npm run verify:gallery` | Screen and journey captures; see [UI-GALLERY](UI-GALLERY.md). |
 | `npm run benchmark:story` | Repeated long-story performance measurements. |
 | `npm run verify:selftest` | Runner failure-detection tests. |
+
+Feature runners using the [shared browser harness](../scripts/browser-verification.mjs) accept `--grep <pattern>` to narrow their existing selection and `--visual` to enable extra visual checks:
+
+```powershell
+npm run verify:providers -- --grep PMUI03
+npm run verify:providers -- --grep PMUI03 --visual
+```
+
+A focused report records the selected files and filter. It requires at least one executed test, but does not claim the full suite's coverage or require screenshots from unselected cases.
 
 For a specific milestone or case:
 

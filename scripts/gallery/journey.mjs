@@ -22,7 +22,6 @@ export const journeys = [
   {
     id: 'first-chat',
     title: '서재의 봇에서 첫 채팅, 이어가기, 포크까지',
-    principles: ['P1', 'P7', 'P11', 'F4', 'F6'],
     url: { destination: 'library', tab: 'bot' },
     ready: { testid: 'library-panel' },
     steps: [

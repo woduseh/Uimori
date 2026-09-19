@@ -49,7 +49,7 @@ function journeySheet({ journey, runs, metrics }) {
     })
     .join('\n');
   return `<h2>${html(`여정 · ${journey.title}`)}</h2>
-<p><code>${html(journey.id)}</code> · ${html((journey.principles ?? []).join(' · '))} · 각 단계는 그 단계에 든 상호작용 수와 누적 수를 함께 적어요.</p>
+<p><code>${html(journey.id)}</code> · 각 단계는 그 단계에 든 상호작용 수와 누적 수를 함께 적어요.</p>
 <table><thead><tr><th>단계</th>${head}</tr></thead><tbody>
 ${rows}
 </tbody></table>`;
@@ -79,7 +79,7 @@ function contactSheet({
           return `<td><a href="${html(shot.file)}"><img loading="lazy" src="${html(shot.file)}" alt="${html(`${screen.title} ${vp} ${theme}`)}"></a><div class="badges">${badgeList(scored)}</div></td>`;
         })
         .join('');
-      return `<tr><th scope="row"><div>${html(screen.title)}</div><code>${html(screen.id)}</code><small>${html((screen.principles ?? []).join(' · '))}</small></th>${cells}</tr>`;
+      return `<tr><th scope="row"><div>${html(screen.title)}</div><code>${html(screen.id)}</code></th>${cells}</tr>`;
     })
     .join('\n');
   const head = columns
@@ -196,7 +196,6 @@ export async function captureGallery({
                 viewport: vp,
                 width: viewport.width,
                 theme,
-                principles: screen.principles ?? [],
                 ...result,
                 source: metricSource,
               });
@@ -231,7 +230,6 @@ export async function captureGallery({
           viewport: 'desktop',
           width: DESKTOP_WIDTH,
           theme: 'light',
-          principles: ['P5', 'F8'],
           ...result,
           source: metricSource,
         });

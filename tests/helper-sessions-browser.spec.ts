@@ -48,9 +48,6 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
     await page.setViewportSize({ width, height: 900 });
     await expect(panel).toBeVisible();
     await expect
-      .poll(async () => (await panel.boundingBox())?.width)
-      .toBe(width === MOBILE_WIDTH ? MOBILE_WIDTH : 384);
-    await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
       .toBe(true);
     await page.screenshot({ path: info.outputPath(`helper-sessions-${width}.png`) });

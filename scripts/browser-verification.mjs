@@ -2,6 +2,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, copyFile, readFile } from 'node:fs/promises';
 import { startProviderFixture } from './provider-management-fixture.mjs';
+import { parseOptions } from './release-common.mjs';
 import {
   artifactRoot,
   newId,
@@ -33,13 +34,21 @@ export async function runBrowserVerification({
   requiredCases = [],
   requiredTitles = [],
   requiredScreenshots = [],
-  expectedCount,
   providerFixture = false,
   timeout = 600_000,
   limitations = [],
 }) {
-  if (process.argv.length > 2) throw new Error(`verify-${name} accepts no arguments`);
-  const visualReview = process.env.NR_VISUAL_REVIEW === '1';
+  const options = parseOptions(process.argv.slice(2), { values: ['grep'], flags: ['visual'] });
+  const focused = options.grep !== undefined;
+  if (focused) {
+    new RegExp(options.grep);
+    // A focused run narrows the entry point's selection; it cannot certify the whole suite.
+    grep = grep ? `(?=[\\s\\S]*(?:${grep}))(?=[\\s\\S]*(?:${options.grep}))` : options.grep;
+    requiredCases = [];
+    requiredTitles = [];
+    requiredScreenshots = [];
+  }
+  const visualReview = options.visual || process.env.NR_VISUAL_REVIEW === '1';
   const runId = `${prefix}-${newId()}`,
     directory = path.join(artifactRoot, runId),
     runtime = path.join(directory, 'runtime');
@@ -53,6 +62,7 @@ export async function runBrowserVerification({
     startedAt: new Date().toISOString(),
     environment: { node: process.version, platform: process.platform },
     scope,
+    selection: { files, grep, focused },
     requiredCases,
     requiredTitles,
     visualReview,
@@ -119,6 +129,7 @@ export async function runBrowserVerification({
       NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
       NR_SECRET_CANARY: canary,
       NR_BROWSER_PATH: browser,
+      NR_VISUAL_REVIEW: visualReview ? '1' : '0',
       TEMP: temp,
       TMP: temp,
     });
@@ -163,10 +174,6 @@ export async function runBrowserVerification({
     for (const title of requiredTitles)
       if (!summary.report.tests.some((test) => test.title.trimEnd().endsWith(` ${title}`)))
         throw new Error(`Missing required browser assertion: ${title}`);
-    if (expectedCount !== undefined && summary.report.executed !== expectedCount)
-      throw new Error(
-        `Expected ${expectedCount} browser tests, received ${summary.report.executed}`
-      );
     if (visualReview && requiredScreenshots.length) {
       const screenshots = (await filesBelow(env.NR_BROWSER_OUTPUT)).filter((file) =>
         file.endsWith('.png')

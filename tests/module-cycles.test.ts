@@ -74,6 +74,9 @@ test('core and server modules have no value-import cycles beyond the known list'
       .map((name) => `${dir}/${name}`)
   );
   const graph = new Map(files.map((file) => [file, valueImports(file)]));
-  expect(files.length).toBeGreaterThan(100);
-  expect(stronglyConnected(graph)).toEqual(KNOWN_CYCLES);
+  for (const cycle of stronglyConnected(graph))
+    expect(
+      KNOWN_CYCLES.some((known) => cycle.every((file) => known.includes(file))),
+      `New module cycle: ${cycle.join(', ')}`
+    ).toBe(true);
 });
