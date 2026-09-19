@@ -90,8 +90,8 @@
 
 ## 저장 형식과 검증 범위
 
-현재 DB schema와 전체 `narrative-archive` 버전은 15예요. `library_organization_state`, `library_folders`, `library_placements`를 전체 보관에 포함하며 SQLite backup에도 저장해요. 복원은 폴더 순서, 분류 일치, 모든 항목의 배치, 존재하는 자료 참조와 전역 revision을 검증하고 오류 시 전체 transaction을 되돌려요.
+현재 DB·archive 버전과 지원 이관은 [DB migration](DATA-MIGRATIONS.md#현재-버전)을 봐요. `library_organization_state`, `library_folders`, `library_placements`를 전체 보관에 포함하며 SQLite backup에도 저장해요. 복원은 폴더 순서, 분류 일치, 모든 항목의 배치, 존재하는 자료 참조와 전역 revision을 검증하고 오류 시 전체 transaction을 되돌려요.
 
-구형 DB·archive는 이관하지 않아요. 개발 DB 초기화가 필요하면 서버를 멈추고 고정된 기본 개발 DB만 대상으로 하는 `npm run reset:dev`를 사용해요. 단일 패키지 JSON에는 전역 서재 폴더를 넣지 않으며 새로 저장한 자료는 미분류에서 시작해요.
+개발 DB 초기화가 필요하면 서버를 멈추고 고정된 기본 개발 DB만 대상으로 하는 `npm run reset:dev`를 사용해요. 단일 패키지 JSON에는 전역 서재 폴더를 넣지 않으며 새로 저장한 자료는 미분류에서 시작해요.
 
-[library-organization.test.ts](../tests/library-organization.test.ts)는 실제 임시 SQLite DB로 CAS·다중 이동 원자성·역할/개정 보존·폴더 삭제·자료 삭제 보호·archive 위조 거부·대표 이미지의 최신/과거 개정 분리를 검사해요. 이 검사는 브라우저의 전체 선택 정책이나 실제 공급자 의미 품질을 증명하지 않아요. 전체 UI·통합 실행의 완료 증거는 [현재 상태](../project-plan/CURRENT.md)를 기준으로 확인해요.
+[library-organization.test.ts](../tests/library-organization.test.ts)는 실제 임시 SQLite DB로 CAS·다중 이동 원자성·역할/개정 보존·폴더 삭제·자료 삭제 보호·archive 위조 거부·대표 이미지의 최신/과거 개정 분리를 검사해요. 이 검사는 브라우저의 전체 선택 정책이나 실제 공급자 의미 품질을 증명하지 않아요.

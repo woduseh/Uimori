@@ -1,19 +1,19 @@
 # Quality and verification
 
-Use the Node version in [`.nvmrc`](../.nvmrc) and [`package.json`](../package.json). Setup, command details, and recovery are in [DEVELOPMENT](DEVELOPMENT.md); the [testing audit](TESTING-AUDIT.md) maps existing coverage.
+Use the Node version in [`.nvmrc`](../.nvmrc) and [`package.json`](../package.json). Setup, command details, and recovery are in [DEVELOPMENT](DEVELOPMENT.md).
 
 <a id="실행-시점"></a>
 
 ## Verification
 
-Choose checks that can expose failures caused by the change. Completing a feature or making a commit does not, by itself, require a full suite. This section owns the current selection policy; older plans and audit records describe earlier schedules.
+Choose checks that can expose failures caused by the change. Completing a feature or making a commit does not, by itself, require a full suite.
 
 | Change or question | Useful checks |
 | --- | --- |
-| Code behavior | `npm run quality` and focused tests, such as `npm test -- tests/<file>.test.ts` |
+| Code behavior | Focused tests, such as `npm test -- tests/<file>.test.ts`; use `npm run quality` for lint and type checks when relevant |
 | UI behavior | The relevant `verify:*` command against a matching build; `verify:browser-smoke` covers basic chat and global prompt settings |
-| Verification tooling | `npm run test:tooling` and regressions for the runner or contract that changed |
-| Broad changes, shared behavior, dependencies, or uncertain impact | `npm run quality:full`; add `verify:smoke` or wider browser coverage when the affected behavior warrants it |
+| Verification tooling | Tests for the affected runner; `npm run test:tooling` covers the full tooling suite |
+| Cross-cutting changes beyond focused coverage | Consider `npm run quality:full`, `verify:smoke`, or broader browser coverage for the interactions at risk |
 | Documentation only | Check accuracy, links, commands, consistency, and `git diff --check` |
 | Release candidate | `npm run release:check -- --area <verify:*>`; see below |
 

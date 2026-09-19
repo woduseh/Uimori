@@ -62,4 +62,4 @@ Remove-Item Env:NR_CODEX_PREFLIGHT
 
 설치 사전 검사 결과는 `output/codex-preflight/summary.json`에 남아요. 합성 stdio 검사는 인증 취소·오류 가림·정상 이벤트·시간 초과·종료 경합·내장 도구 진행과 최종 응답 분리·환경/승인 경계·대기 취소·attempt 선기록을 확인해요. 앱 통합 검사는 6개 역할과 등록 제안, export/import, 비활성 프로바이더 및 인증/Origin 경계를 확인해요. `npm run verify:providers`에는 390px의 Codex 설정·모의 로그인·취소·연결 해제 검사가 포함돼요. 이 검사들은 실제 구독 모델 응답 품질·소모량을 입증하지 않아요.
 
-공식 계약: [App Server](https://learn.chatgpt.com/docs/app-server), [인증](https://learn.chatgpt.com/docs/auth), [설정 schema](https://learn.chatgpt.com/config-schema.json). 버전별 실제 생성 타입과 채택 근거는 [SOURCES](../project-plan/SOURCES.md)에 기록해요.
+공식 계약: [App Server](https://learn.chatgpt.com/docs/app-server), [인증](https://learn.chatgpt.com/docs/auth), [설정 schema](https://learn.chatgpt.com/config-schema.json).

@@ -1,6 +1,6 @@
 # 상태 계산 코드
 
-현재 [베타 계획](../project-plan/BETA-PLAN.md)의 2~3단계 구현이에요. 봇·페르소나·모듈의 사용자 버튼, 생성 전 자동 준비, 모델이 호출하는 행동과 응답 후 처리에 JavaScript·Lua 계산을 연결할 수 있어요. `model.generate`와 `conversation.read`는 제작자가 요청하고 사용자가 채팅에서 정확한 자료 개정에 별도로 허용하는 capability예요. 추가 모델 호출에는 전역 `extensionModel` 선택도 필요해요. 자료별 알고리즘은 코드에 두고 상태 schema·소유권·충돌·저장은 Uimori가 담당해요. Risu 어댑터의 이벤트/API 범위는 [가져오기](RISU-IMPORT.md#lua-콜백-가져오기)를 따르며 일반 HTTP, 게스트가 모델·키·endpoint·옵션을 고르는 권한, 확장 설치 관리 전체는 아직 지원하지 않아요.
+봇·페르소나·모듈의 사용자 버튼, 생성 전 자동 준비, 모델이 호출하는 행동과 응답 후 처리에 JavaScript·Lua 계산을 연결할 수 있어요. `model.generate`와 `conversation.read`는 제작자가 요청하고 사용자가 채팅에서 정확한 자료 개정에 별도로 허용하는 capability예요. 추가 모델 호출에는 전역 `extensionModel` 선택도 필요해요. 자료별 알고리즘은 코드에 두고 상태 schema·소유권·충돌·저장은 Uimori가 담당해요. Risu 어댑터의 이벤트/API 범위는 [가져오기](RISU-IMPORT.md#lua-콜백-가져오기)를 따르며 일반 HTTP, 게스트가 모델·키·endpoint·옵션을 고르는 권한, 확장 설치 관리 전체는 아직 지원하지 않아요.
 
 ## 제작과 사용
 

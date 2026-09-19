@@ -1,6 +1,6 @@
 # Risu 자료와 native JSON 가져오기
 
-> 현재 구현의 사용 안내예요. [베타 결정](DECISIONS-2026-09-12-BETA.md)에 따라 Risu 가져오기·표현 변환·선택적 호환 실행을 준비하며 구현/검증 상태는 [베타 계획](../project-plan/BETA-PLAN.md)에 기록해요.
+> Risu 파일 가져오기와 선택적 호환 실행의 현재 지원 범위를 설명해요.
 
 앱은 `.charx`·Character Card JSON과 구조화된 Risu 모듈 JSON/프로젝트 ZIP의 기본 자료를 가져오며, Uimori의 `ContentPackage`·`PromptProgram` JSON도 읽어요. 프리셋 `.risup`·`.risupreset` 바이너리와 JSON/프로젝트 ZIP은 아래 프리셋 범위에서 읽어요. 독립 `.risum` 파일은 지원 대상에서 제외해요. CharX 내부 모듈의 자료와 아래 범위의 Lua 콜백을 읽고, 아직 연결하지 않은 동적 스크립트·표시 기능은 원본과 안내로 보존해요. `.risup` 해독에는 RPack 치환표를 사용하며 [라이선스와 원본 고지](../THIRD_PARTY_NOTICES.md)를 보존해요.
 

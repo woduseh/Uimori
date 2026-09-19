@@ -71,16 +71,4 @@ Run의 `agents.consult` tool event에 의견·상태·호출량·질문·출처�
 
 설정·보관 검사는 `tests/agent-collaboration-config.test.ts`, `tests/agent-collaboration-store.test.ts`예요. `tests/agent-collaboration-runtime.test.ts`는 실제 loopback Responses 서버와 새 SQLite DB로 순서·추가 조회·권한·호출량·중복·취소·설정 변경을 검사해요. `tests/agent-collaboration-context.test.ts`는 선택 문맥·초안·구성·문맥별 캐시와 호출 예산, 새 문맥 창 뒤 참조, 수정 가능한 오류를 확인하고 `tests/agent-context-backup.test.ts`는 전체 채팅 백업의 반복 복원에서 전송 영수증을 확인해요. 브라우저는 `tests/agent-collaboration-browser.spec.ts`의 AGENTUI01/02에서 모바일·데스크톱 편집과 실제 저장/미리보기 API를 확인해요.
 
-합성 검사는 구현 계약의 증거예요. 실제 모델의 창작 품질 향상, 비용 대비 효과, 실제 공급자 응답 지연은 평가하지 않았어요. 이를 비교하려면 같은 요청·프롬프트·모델로 협업 OFF와 필요한 보조만 켠 구성을 사용자가 직접 비교해야 해요.
-
-## 2026-09-11 선택 문맥 개선 검증
-
-- `npm run quality:full`: 서식·lint·타입·도구 검사·새 빌드와 전체 단위/통합 **1,956 PASS / 선택 1 skip**(184개 파일 PASS, 선택 1개 파일 skip). 로그는 `output/collaboration-context-quality-full-20260911.log`예요.
-- `npm run verify:smoke`: **F02·F03·F06 PASS**, cleanup PASS. 실행 `2026-09-11T10-08-48-689Z-c90f85ba`의 `output/playwright/<run-id>/summary.json`에 기록했어요.
-- `npm run verify:collaboration`: **AGENTUI01·02·03 PASS**, cleanup PASS. 실행 `collaboration-2026-09-11T10-08-48-515Z-6b52b219`이며 390/1440px 편집·저장·미리보기 연결을 확인해요.
-- 두 화면 실행의 빌드/앱 소스 ID는 `d24215d2e23528e14dce472c7b716dba95eac7672c9148ab11148681869f3b68`예요. 전체 검사 이후 앱 소스·테스트 변경은 없어요.
-- 개인 프리셋은 기본 3명, 시뮬 4명, OOC 검토 1명의 세 사본이에요. `output/pheme-collaborators-uimori-2026-09-11/create.mjs`가 원본 5개와 보관본의 바이트 일치·의도한 변경 범위·현재 스키마를 검사해요. `verify-wire.mjs`의 세 모드 × 다섯 전송 형식은 **메인 45건·협업자 120건 PASS**이며 외부 요청 없는 정적 인코딩이에요.
-
-개발 중 집중 검사는 처음 Vite 자식 실행의 `spawn EPERM`으로 미실행됐어요. 허용된 환경에서 테스트용 ID의 대문자 오류를 수정했고, `context.new` 뒤 이전 읽기 참조가 사라지는 제품 결함을 재현해 완료 영수증을 별도로 보관하도록 고쳤어요. 백업의 새 ID 매핑이 명시 문맥의 본문만 바꾸고 해시는 남기는 문제도 역사적 전송 영수증 보존으로 수정했어요. 그 뒤 새 문맥 집중 4건과 반복 백업 1건을 통과하고 위 전체 검사를 수행했어요.
-
-실제 모델이 협업을 적절히 선택하는지, 창작 품질·비용·지연이 개선되는지와 물리 기기는 검증하지 않았어요. 사용자 DB 적용·배포는 수행하지 않았고, 전체 `verify:redesign`은 이번 변경의 완료 게이트가 아니어서 실행하지 않았어요.
+합성 검사는 구현 계약의 증거예요. 실제 모델의 창작 품질 향상, 비용 대비 효과, 실제 공급자 응답 지연은 평가하지 않았어요.

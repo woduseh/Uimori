@@ -1,8 +1,8 @@
 import { DESKTOP_WIDTH } from './browser-viewports.js';
 import type { Page } from '@playwright/test';
 
-/** Every numeric target below is the one written in this section; change them there first. */
-export const metricSource = 'docs/UI-PRINCIPLES-AI-PRODUCTS.md#4-적용-순서-제안';
+/** This module owns the measurements and targets documented in the gallery reference. */
+export const metricSource = 'docs/UI-GALLERY.md#metrics';
 
 export const metricNames = [
   'header-controls',

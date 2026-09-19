@@ -2,8 +2,8 @@ import browserWidths from '../../fixtures/browser-viewports.json' with { type: '
 const { mobile: MOBILE_WIDTH, desktop: DESKTOP_WIDTH } = browserWidths;
 // One entry per screen or modal the gallery captures. `url` values starting with `$` are
 // replaced from the seed result (see seed.mjs). Steps run after the page is ready; the step
-// vocabulary is documented in steps.mjs. `principles` are identifiers from
-// docs/UI-PRINCIPLES-AI-PRODUCTS.md.
+// vocabulary is documented in steps.mjs. `principles` are historical grouping labels;
+// measurements are documented in docs/UI-GALLERY.md#metrics.
 
 export const viewports = {
   mobile: { width: MOBILE_WIDTH, height: 844, isMobile: true, hasTouch: true },

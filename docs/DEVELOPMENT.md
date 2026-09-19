@@ -1,6 +1,6 @@
 # Development
 
-Use [QUALITY](QUALITY.md#verification) to choose checks and [CODE-MAP](../project-plan/CODE-MAP.md) to find feature contracts and entry points. This page covers running the tools.
+Use [QUALITY](QUALITY.md#verification) to choose checks and [CODE-MAP](CODE-MAP.md) to find feature contracts and entry points. This page covers running the tools.
 
 ## Environment and setup
 
@@ -30,8 +30,6 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run verify:gallery` | Screen and journey captures; see [UI-GALLERY](UI-GALLERY.md). |
 | `npm run benchmark:story` | Repeated long-story performance measurements. |
 | `npm run verify:selftest` | Runner failure-detection tests. |
-
-The [test audit](TESTING-AUDIT.md) records suite coverage and historical consolidation decisions.
 
 For a specific milestone or case:
 
