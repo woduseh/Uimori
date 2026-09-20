@@ -81,6 +81,11 @@ export function ContentPicker({
     onChange(next);
     setOpen(false);
   };
+  const emptyTitle = needle
+    ? '검색 조건에 맞는 자료가 없어요.'
+    : activeFolder !== 'all'
+      ? '이 폴더에 연결할 자료가 없어요.'
+      : `연결할 ${roleTitles[role]} 자료가 없어요.`;
   function moveFocus(event: KeyboardEvent<HTMLElement>) {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     // Search text editing keeps its Home/End behavior; arrows enter the result list.
@@ -193,26 +198,29 @@ export function ContentPicker({
             </div>
           )}
           <label className="content-picker-search">
-            <SearchIcon size={17} aria-hidden="true" />
-            <input
-              type="search"
-              aria-label={`${label} 검색`}
-              placeholder="이름 또는 설명으로 검색"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  if (!event.nativeEvent.isComposing)
-                    list.current
-                      ?.querySelector<HTMLButtonElement>('[data-content-choice]')
-                      ?.focus();
-                  return;
-                }
-                moveFocus(event);
-              }}
-            />
+            <span className="content-picker-filter-label">검색</span>
+            <span className="content-picker-search-field">
+              <SearchIcon size={17} aria-hidden="true" />
+              <input
+                type="search"
+                aria-label={`${label} 검색`}
+                placeholder="이름 또는 설명으로 검색"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!event.nativeEvent.isComposing)
+                      list.current
+                        ?.querySelector<HTMLButtonElement>('[data-content-choice]')
+                        ?.focus();
+                    return;
+                  }
+                  moveFocus(event);
+                }}
+              />
+            </span>
           </label>
           <label>
             폴더
@@ -253,7 +261,16 @@ export function ContentPicker({
           {visible.map((content) =>
             renderChoice(reference(content) === value && current ? current : content)
           )}
-          {!candidates.length && <p className="muted">조건에 맞는 자료가 없어요.</p>}
+          {!candidates.length && (
+            <div className="content-picker-empty">
+              <strong>{emptyTitle}</strong>
+              <small>
+                {allowAll && !all
+                  ? '다른 분류까지 넓혀서 찾거나 서재에서 새 모듈을 추가해 보세요.'
+                  : '검색어나 폴더를 바꾸거나 서재에서 새 자료를 추가해 보세요.'}
+              </small>
+            </div>
+          )}
         </div>
         {candidates.length > visibleCount && (
           <button
@@ -264,23 +281,27 @@ export function ContentPicker({
             자료 더 보기 ({Math.min(visibleCount, candidates.length)} / {candidates.length})
           </button>
         )}
-        {allowAll && !all && (
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => {
-              setAll(true);
-              setFolder('all');
-            }}
-          >
-            다른 분류의 자료도 찾기
-          </button>
-        )}
-        {activeFolder !== 'all' && (
-          <button type="button" className="ghost" onClick={() => setFolder('all')}>
-            전체 폴더에서 찾기
-          </button>
-        )}
+        {(allowAll && !all) || activeFolder !== 'all' ? (
+          <div className="content-picker-footer">
+            {allowAll && !all && (
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  setAll(true);
+                  setFolder('all');
+                }}
+              >
+                다른 분류의 자료도 찾기
+              </button>
+            )}
+            {activeFolder !== 'all' && (
+              <button type="button" className="ghost" onClick={() => setFolder('all')}>
+                전체 폴더에서 찾기
+              </button>
+            )}
+          </div>
+        ) : null}
       </Dialog>
     </div>
   );

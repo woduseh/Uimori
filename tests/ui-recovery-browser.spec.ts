@@ -525,6 +525,7 @@ for (const viewport of viewports) {
         relatedIds: [],
         package: pkg,
       });
+      await page.addInitScript(() => localStorage.setItem('uimori:theme', 'dark'));
       await page.goto('/');
       await navigationAction(page, '봇');
       await page.getByLabel('서재 검색', { exact: true }).fill(title);
@@ -563,7 +564,64 @@ for (const viewport of viewports) {
 
       await advancedNav.getByRole('button', { name: '연결 모듈', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
+      const moduleEditor = editor.getByLabel('패키지 모듈과 기능 편집', { exact: true });
+      const modulePicker = moduleEditor.getByRole('button', {
+        name: '연결할 공통 모듈',
+        exact: true,
+      });
+      const moduleConnect = moduleEditor.getByRole('button', { name: '모듈 연결', exact: true });
+      await expect(modulePicker).toBeEnabled();
+      await expect(moduleConnect).toBeDisabled();
+      await expect(
+        moduleEditor.getByRole('button', { name: '목록 새로고침', exact: true })
+      ).toBeVisible();
+      const [pickerBounds, connectBounds] = await Promise.all([
+        modulePicker.boundingBox(),
+        moduleConnect.boundingBox(),
+      ]);
+      if (viewport.width >= 1200) {
+        expect(
+          Math.abs(
+            pickerBounds!.y + pickerBounds!.height - connectBounds!.y - connectBounds!.height
+          )
+        ).toBeLessThanOrEqual(1);
+        expect(connectBounds!.x).toBeGreaterThan(pickerBounds!.x + pickerBounds!.width);
+      } else {
+        expect(connectBounds!.y).toBeGreaterThanOrEqual(pickerBounds!.y + pickerBounds!.height);
+        expect(Math.abs(connectBounds!.width - pickerBounds!.width)).toBeLessThanOrEqual(1);
+      }
       await page.screenshot({ path: info.outputPath(`bot-advanced-modules-${viewport.name}.png`) });
+
+      const moduleDialogErrors: string[] = [];
+      const recordConsoleError = (message: { type(): string; text(): string }) => {
+        if (message.type() === 'error') moduleDialogErrors.push(message.text());
+      };
+      const recordPageError = (error: Error) => moduleDialogErrors.push(error.message);
+      page.on('console', recordConsoleError);
+      page.on('pageerror', recordPageError);
+      await modulePicker.click();
+      const moduleDialog = page.getByRole('dialog', { name: '연결할 공통 모듈', exact: true });
+      await expect(moduleDialog).toBeVisible();
+      await expect(moduleDialog.getByText('검색', { exact: true })).toBeVisible();
+      await expect(moduleDialog.getByLabel('연결할 공통 모듈 검색', { exact: true })).toBeVisible();
+      await expect(moduleDialog.getByLabel('연결할 공통 모듈 폴더', { exact: true })).toBeVisible();
+      expect(
+        await moduleDialog.evaluate((node) => node.scrollWidth - node.clientWidth)
+      ).toBeLessThanOrEqual(1);
+      const dialogBounds = await moduleDialog.boundingBox();
+      expect(dialogBounds!.x).toBeGreaterThanOrEqual(0);
+      expect(dialogBounds!.y).toBeGreaterThanOrEqual(0);
+      expect(dialogBounds!.x + dialogBounds!.width).toBeLessThanOrEqual(viewport.width + 1);
+      expect(dialogBounds!.y + dialogBounds!.height).toBeLessThanOrEqual(viewport.height + 1);
+      await page.screenshot({
+        path: info.outputPath(`bot-advanced-module-picker-${viewport.name}.png`),
+      });
+      await page.keyboard.press('Escape');
+      await expect(moduleDialog).toBeHidden();
+      await expect(modulePicker).toBeFocused();
+      page.off('console', recordConsoleError);
+      page.off('pageerror', recordPageError);
+      expect(moduleDialogErrors).toEqual([]);
 
       await advancedNav.getByRole('button', { name: '스크립트', exact: true }).click();
       await advancedWorkspaceFits(page, editor);

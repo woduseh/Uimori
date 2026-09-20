@@ -48,18 +48,25 @@
   flex-shrink: 0;
 }
 .content-picker-dialog {
-  width: min(580px, calc(100vw - 32px));
+  width: min(640px, calc(100vw - 32px));
+}
+.content-picker-dialog > .dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px 24px;
 }
 .content-picker-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.55fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.55fr);
+  gap: 14px;
   align-items: end;
 }
 .content-picker-scope {
   grid-column: 1 / -1;
   display: flex;
   gap: 8px;
+  padding-bottom: 2px;
 }
 .content-picker-scope [aria-pressed="true"] {
   border-color: var(--accent);
@@ -69,22 +76,29 @@
   min-width: 0;
 }
 .content-picker-search {
+  min-width: 0;
+}
+.content-picker-filter-label {
+  min-height: 22px;
+}
+.content-picker-search-field {
   display: flex;
   position: relative;
   align-items: center;
 }
-.content-picker-search > svg {
+.content-picker-search-field > svg {
   position: absolute;
   left: 12px;
   color: var(--muted);
   pointer-events: none;
 }
-.content-picker-search > input {
+.content-picker-search-field > input {
   width: 100%;
   padding-left: 37px;
 }
 .content-picker-count {
   font-size: 12px;
+  margin: -4px 0 0;
 }
 .content-picker-results,
 .package-portrait-choices {
@@ -93,6 +107,23 @@
   max-height: 50vh;
   overflow-y: auto;
   min-height: var(--control-h);
+}
+.content-picker-empty {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 28px 20px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  text-align: center;
+  background: var(--surface);
+}
+.content-picker-empty strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.content-picker-empty small {
+  max-width: 360px;
 }
 .content-picker-choice {
   display: flex;
@@ -130,6 +161,12 @@
 }
 .content-picker-action {
   flex: 0 0 auto;
+}
+.content-picker-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
 }
 .package-portrait-editor {
   display: flex;
@@ -192,8 +229,18 @@
   margin-top: 14px;
 }
 @media (max-width: 520px) {
+  .content-picker-dialog > .dialog-body {
+    gap: 14px;
+    padding: 18px;
+  }
   .content-picker-filters {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .content-picker-empty {
+    padding: 24px 16px;
+  }
+  .content-picker-footer > button {
+    flex: 1 1 100%;
   }
   .content-picker-action {
     display: none;

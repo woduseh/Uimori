@@ -28,6 +28,43 @@
   color: var(--muted);
   overflow-wrap: anywhere;
 }
+.package-module-heading {
+  display: grid;
+  gap: 4px;
+}
+.package-module-heading h3,
+.package-module-heading p {
+  margin: 0;
+}
+.package-module-connect {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+.package-module-connect-button {
+  min-width: 132px;
+  justify-content: center;
+}
+.package-module-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding-top: 2px;
+}
+.package-module-refresh {
+  flex: none;
+  min-height: 34px;
+  padding: 5px 8px;
+  color: var(--muted);
+}
+.package-module-status:empty {
+  display: none;
+}
+.package-module-status p {
+  margin: 0;
+}
 .package-instruction-roles {
   display: flex;
   flex-wrap: wrap;
@@ -205,5 +242,15 @@
   }
   .package-authoring-editor .package-role-actions > button {
     flex-basis: 100%;
+  }
+  .package-module-connect {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .package-module-connect-button {
+    width: 100%;
+  }
+  .package-module-footer {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
