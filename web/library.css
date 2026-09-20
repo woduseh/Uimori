@@ -670,6 +670,20 @@
   padding: 12px;
   gap: 10px;
 }
+.library-portrait-card[draggable="true"],
+.library-list-item[draggable="true"] {
+  cursor: grab;
+}
+.library-portrait-card[data-dragging="true"],
+.library-list-item[data-dragging="true"] {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+.library-portrait-card[data-drop-target="true"],
+.library-list-item[data-drop-target="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
 .library-portrait-card .library-open-content {
   display: flex;
   flex-direction: column;
@@ -1077,6 +1091,11 @@
   padding: 8px;
   min-width: 0;
   background: var(--panel);
+}
+.library-folder-card[data-drop-target="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  background: var(--accent-soft);
 }
 .library-folder-open {
   flex: 1;

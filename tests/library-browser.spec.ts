@@ -521,3 +521,90 @@ test('LIBUI07 a wide desktop centres the library and prompt columns inside the d
     await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   ).toBeLessThanOrEqual(1);
 });
+
+test('LIBUI08 manual order persists and a bot card can be dropped into a folder', async ({
+  page,
+  request,
+}, info) => {
+  const prefix = `LIBUI08 ${Date.now()}`;
+  const alpha = await createContent(request, `${prefix} Alpha`);
+  const beta = await createContent(request, `${prefix} Beta`);
+  let state = await organization(request);
+  const response = await request.post('/api/library/folders', {
+    data: {
+      expectedRevision: state.revision,
+      category: 'bot',
+      title: `${prefix} Folder`,
+    },
+  });
+  expect(response.ok()).toBe(true);
+  state = await response.json();
+  const folder = state.folders.find((entry) => entry.title === `${prefix} Folder`)!;
+  // Keep the source card and destination folder within one representative viewport. Other cases in
+  // this shared runner deliberately leave many folders and materials behind.
+  await page.route(/\/api\/library(?:\?|$)/, async (route) => {
+    const upstream = await route.fetch();
+    const current = (await upstream.json()) as Library;
+    if (!current.organization) throw new Error('Library organization missing');
+    await route.fulfill({
+      response: upstream,
+      json: {
+        ...current,
+        contents: current.contents.filter((item) => [alpha.id, beta.id].includes(item.id)),
+        organization: {
+          ...current.organization,
+          folders: current.organization.folders.filter((entry) => entry.id === folder.id),
+          items: current.organization.items.filter((entry) =>
+            [alpha.id, beta.id].includes(entry.id)
+          ),
+        },
+      },
+    });
+  });
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+  let panel = page.getByTestId('library-panel');
+  await revealListOptions(panel);
+  await panel.getByLabel('자료 정렬', { exact: true }).selectOption('manual');
+  await page.keyboard.press('Escape');
+
+  const item = (id: string) => panel.locator(`[data-library-item-id="${id}"]`);
+  await item(beta.id).dragTo(item(alpha.id));
+  await expect
+    .poll(() =>
+      panel
+        .locator('[data-library-item-id]')
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-library-item-id')))
+    )
+    .toEqual(expect.arrayContaining([beta.id, alpha.id]));
+  const beforeReload = await panel
+    .locator('[data-library-item-id]')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-library-item-id')));
+  expect(beforeReload.indexOf(beta.id)).toBeLessThan(beforeReload.indexOf(alpha.id));
+
+  await page.reload();
+  panel = page.getByTestId('library-panel');
+  await revealListOptions(panel);
+  await expect(panel.getByLabel('자료 정렬', { exact: true })).toHaveValue('manual');
+  await page.keyboard.press('Escape');
+  const afterReload = await panel
+    .locator('[data-library-item-id]')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-library-item-id')));
+  expect(afterReload.indexOf(beta.id)).toBeLessThan(afterReload.indexOf(alpha.id));
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('library-manual-order-desktop.png') });
+
+  await panel
+    .locator(`[data-library-item-id="${beta.id}"]`)
+    .dragTo(panel.locator(`[data-folder-id="${folder.id}"]`));
+  await expect
+    .poll(
+      async () =>
+        (await organization(request)).items.find((entry) => entry.id === beta.id)?.folderId
+    )
+    .toBe(folder.id);
+  await expect(panel.locator(`[data-library-item-id="${beta.id}"]`)).toHaveCount(0);
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('library-folder-drop-desktop.png') });
+});
