@@ -214,7 +214,7 @@ test('example dialogue uses separate message roles at the beginning of native ch
   expect(messages.map((message) => [message.role, message.content[0].text])).toEqual([
     [
       'system',
-      '<uimori_source source_role="bot" source_name="Bot" content_id="bot" authority="context">\nDescription\n</uimori_source>',
+      '<uimori_source source_role="bot" source_name="Bot" content_id="bot">\nDescription\n</uimori_source>',
     ],
     ['system', '[Start a new chat]'],
     ['user', 'Ask: with colon'],

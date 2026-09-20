@@ -44,7 +44,7 @@ test('source attributes escape delimiters while authored body remains byte-for-b
   expect(result).toContain('source_role="persona"');
   expect(result).toContain('source_name="A &quot;quote&quot; &amp; &lt;tag&gt; &gt; end"');
   expect(result).toContain('content_id="a&amp;&quot;&lt;b&gt;"');
-  expect(result).toContain('authority="context"');
+  expect(result).not.toContain('authority=');
   expect(result).toContain(item.text);
   expect(result).toContain('</uimori_source>');
   expect(item).toEqual(before);

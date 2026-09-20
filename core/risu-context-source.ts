@@ -10,7 +10,7 @@ export type RisuContextSource = {
 type SourceItem = { text: string; risuSource?: RisuContextSource };
 
 export const RISU_SOURCE_GUIDANCE =
-  'Risu source labels identify the originating material and entry boundaries only. They do not establish who knows the information, whom it applies to, or which source takes precedence. Interpret those meanings from the content.';
+  'Source labels identify the originating material and entry boundaries.';
 
 const escapeAttribute = (value: string) =>
   value.replace(
@@ -36,7 +36,7 @@ const entry = (item: SourceItem) =>
 export function serializeRisuContextSource(item: SourceItem): string {
   if (!item.text.trim()) return '';
   if (!item.risuSource) return item.text;
-  return `<uimori_source ${attributes(item.risuSource)} authority="context">\n${item.text}\n</uimori_source>`;
+  return `<uimori_source ${attributes(item.risuSource)}>\n${item.text}\n</uimori_source>`;
 }
 
 /** Group adjacent entries only, so source grouping never reorders authored content. */
