@@ -1,3 +1,4 @@
+import { canRejudgeTranslation } from '../core/translation-recovery.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { translationPolicy } from '../core/translation-settings.js';
 import { workspaceModelRef } from '../core/product.js';
@@ -142,6 +143,58 @@ export function requestTranslation(
     return store.job(jobId);
   });
 }
+/** One admitted recovery per failed job; replaying its request returns the same job. */
+export function rejudgeTranslation(store: Store, id: string): Job {
+  return store.transaction(() => {
+    const original = store.job(id);
+    const recoveryId = createHash('sha256').update(`translation-judgment:${id}`).digest('hex');
+    if (store.db.prepare('SELECT 1 FROM jobs WHERE id=?').get(recoveryId))
+      return store.job(recoveryId);
+    const source = store.source(original.sourceRevision);
+    const input = record(original.input);
+    if (
+      !canRejudgeTranslation(original) ||
+      source.hash !== original.sourceHash ||
+      latestTranslation(store, source.id)?.id !== id ||
+      translationPolicy(input.translationPolicy).judgment.enabled === false
+    )
+      throw new HttpError(409, 'Translation judgment recovery unavailable');
+    const time = new Date().toISOString();
+    store.db
+      .prepare(
+        "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,input,created_at,updated_at) VALUES(?,?,?,?,'translation','queued',?,?,?,?)"
+      )
+      .run(
+        recoveryId,
+        source.chatId,
+        source.id,
+        source.hash,
+        (original.revision ?? 0) + 1,
+        JSON.stringify({
+          ...input,
+          judgmentRecovery: { text: original.result!.text, sourceHash: source.hash },
+        }),
+        time,
+        time
+      );
+    store.event(source.chatId, 'job.queued', recoveryId);
+    return store.job(recoveryId);
+  });
+}
+
+export function translationRecovery(input: unknown, sourceHash: string): string | undefined {
+  const value = record(input);
+  if (value.judgmentRecovery === undefined) return undefined;
+  const recovery = record(value.judgmentRecovery);
+  fields(recovery, ['text', 'sourceHash']);
+  if (
+    recovery.sourceHash !== sourceHash ||
+    translationPolicy(value.translationPolicy).judgment.enabled === false
+  )
+    throw new HttpError(400, 'Translation judgment recovery dependency mismatch');
+  return text(recovery.text, 'translation recovery', TRANSLATION_TEXT_MAX_CHARS);
+}
+
 export function requestStatus(
   store: Store,
   id: string,

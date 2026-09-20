@@ -245,7 +245,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           : undefined;
       store.db
         .prepare(
-          'INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,source_revision,usage,created_at,updated_at,branch_id,partial_text,error) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+          'INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,source_revision,usage,created_at,updated_at,branch_id,partial_text,error) VALUES(?,?,?,?,?,snapshot_pack(?),?,?,?,?,?,?,?,?,?)'
         )
         .run(
           runId,
@@ -454,7 +454,9 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       if (snapshot.contextPlan?.status === 'ready')
         snapshot.contextPlan.estimatedInputTokens =
           measureMainContext(snapshot).estimatedInputTokens;
-      store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(json(snapshot), copiedId);
+      store.db
+        .prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?')
+        .run(json(snapshot), copiedId);
     }
     store.context.forkInTransaction(
       chatId,

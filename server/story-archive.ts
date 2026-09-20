@@ -266,7 +266,7 @@ export function copyStoryFork(
     const columns = Object.keys(row);
     store.db
       .prepare(
-        `INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`
+        `INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map((column) => (column === 'snapshot' ? 'snapshot_pack(?)' : '?')).join(',')})`
       )
       .run(...columns.map((column) => row[column]));
   };
@@ -346,7 +346,9 @@ export function copyStoryFork(
       delete mapped.story;
       exclude('run snapshot', 'unavailable immutable dependency; original prose preserved');
     }
-    store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(mapped), newRun);
+    store.db
+      .prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?')
+      .run(JSON.stringify(mapped), newRun);
   }
   if (excluded.length) store.event(newChatId, 'story.fork.excluded', JSON.stringify(excluded));
   return { mapStory, commands };

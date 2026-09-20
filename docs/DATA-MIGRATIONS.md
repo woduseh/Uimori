@@ -7,7 +7,7 @@
 | 구분 | 현재 버전 | 소유 코드 | 의미 |
 | --- | --- | --- | --- |
 | 앱 | 0.0.1 | `package.json` | 개인 개발 중인 버전 |
-| SQLite DB | 21 | `server/database-schema.ts`의 `DATABASE_SCHEMA_VERSION` | Risu 원본 콘텐츠를 사용하는 현재 저장 구조 |
+| SQLite DB | 22 | `server/database-schema.ts`의 `DATABASE_SCHEMA_VERSION` | Risu 원본 콘텐츠를 사용하는 현재 저장 구조 |
 | 전체 JSON archive | 1 (`uimori-archive`) | `server/product-store.ts` | 현재 버전의 전체 자료 내보내기와 빈 DB 복원 |
 | 채팅 전체 백업 | 1 | `core/chat-backup.ts`의 `CHAT_BACKUP_VERSION` | `uimori-chat-backup` 교환 형식 |
 | 자료 파일 이동 | 1 | `core/native-transfer.ts`의 `NATIVE_TRANSFER_VERSION` | `uimori-native-transfer` 교환 형식 |
@@ -31,3 +31,11 @@
 ## 검증
 
 `tests/database-schema.test.ts`는 현재 DB의 생성·재개방, 구형·미래 DB의 바이트 보존과 거절, 구조 손상 거절, 초기화 실패 rollback을 확인해요. `tests/schema-baseline-reset.test.ts`는 현재 archive 왕복과 개발 초기화 명령의 고정 대상·소유권·경로 경계를 확인해요. 검증에는 격리된 합성 DB만 사용해요.
+
+## 스냅샷 본문 저장
+
+스키마 22는 실행·컨텍스트·보조 작업과 보조 산출물 스냅샷의 긴 문자열을 SHA-256 공용 본문 테이블에 한 번 저장해요. 각 스냅샷은 경로별 해시를 보관하고, 읽을 때 해시를 검증하여 정확한 문자열을 복원해요. 본문은 불변이며 마지막 참조가 없어질 때 같은 transaction에서 정리해요. 원문 수정은 이미 고정된 스냅샷에 영향을 주지 않아요.
+
+일반 JSON archive는 참조를 풀어 자체 완결된 스냅샷을 내보내고, 복원할 때 대상 DB의 공용 본문과 참조를 다시 만들어요. SQLite 백업은 공용 본문과 참조까지 포함해요. JSON archive 크기나 실행 중 메모리를 줄이는 변경은 아니에요. 이전 DB를 변환하는 이관 경로는 제공하지 않아요.
+
+저장 경계는 `server/snapshot-database.ts`에 있어요. 앱 SQL은 `snapshot_pack(?)`로 본문을 분리한 뒤 행을 써서 큰 JSON의 임시 페이지 할당을 피하고, 트리거가 참조와 정리를 관리해요. `SELECT snapshot`의 행은 DB 어댑터에서 복원되며, 목록 SQL은 작은 메타데이터를 직접 읽거나 `snapshot_text(snapshot, JSON 경로 배열)`로 필요한 문자열 하나만 읽어요.

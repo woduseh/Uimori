@@ -165,13 +165,13 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     (status='failed' AND substr(error,1,4)='JEV_' AND source_revision IS NULL
       AND COALESCE(json_extract(snapshot,'$.mainJudgmentEnabled'),1)!=0
       AND json_type(snapshot,'$.mainJudgment')='object'
-      AND partial_text=json_extract(snapshot,'$.mainJudgment.response')
+      AND partial_text=snapshot_text(snapshot,'["mainJudgment","response"]')
       AND json_type(snapshot,'$.nativeRisuExecution.output') IS NULL) AS canRejudge,
     json_extract(command,'$.retryOf') AS retryOf,
     CASE WHEN source_revision IS NULL THEN (SELECT newer.id FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id ORDER BY newer.created_at DESC,newer.id DESC LIMIT 1) END AS supersededBy,
-    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE json_extract(snapshot,'$.profile.models.main.title') END AS modelTitle,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
-    CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
-    CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
+    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE snapshot_text(snapshot,'["profile","models","main","title"]') END AS modelTitle,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
+    CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',snapshot_text(snapshot,'["packageStart","title"]')) END AS packageStart,
+    CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',snapshot_text(snapshot,'["contextPlan","error"]')) END AS contextSummary,
     json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
     FROM runs
     WHERE runs.chat_id=? ${scope ? 'AND runs.id IN (SELECT value FROM json_each(?))' : ''} ORDER BY runs.created_at,runs.id`)

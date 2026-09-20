@@ -80,7 +80,7 @@ Actual local Risu materials are excluded from ordinary browser discovery. Set `U
 
 [CI](../.github/workflows/quality.yml) reports the quality job for every PR and main push. Changes limited to Markdown under `docs/`, root README/AGENTS or LICENSE skip installation/build/tests; mixed changes, missing comparison history and manual runs execute full quality. Manual browser runs build and execute `verify:browser`. Local results and CI results are separate evidence.
 
-`node scripts/measure-native-storage.mjs` measures JSON fields and SQLite pages for actual native preparation over 10, 100 and 300 synthetic 8 KB scenes. It retains an isolated measurement DB and report under `output/benchmarks/`; it never opens user databases or calls providers. These are individual snapshots, not cumulative production DB growth.
+`node scripts/measure-native-storage.mjs` measures expanded JSON, packed rows, shared text and SQLite pages for actual native preparation over 10, 100 and 300 synthetic 8 KB scenes. It retains an isolated measurement DB and report under `output/benchmarks/`; it never opens user databases or calls providers. The three snapshots share one isolated text pool; the report checks JSON roundtrip equality. These are not measurements of cumulative production DB growth.
 
 ## Results and troubleshooting
 
@@ -99,4 +99,4 @@ Local fixtures, browser emulation, live providers, and physical devices establis
 
 `npm run reset:dev` deletes only this checkout's default `.local/uimori.sqlite` and its SQLite sidecars. Existing backups and older database files remain untouched. Stop the server first. The command rejects an in-use database or unsafe paths and does not reset an arbitrary `UIMORI_DB`.
 
-Only empty and current schema-21 databases are admitted. Older databases are rejected before schema writes; use a separate empty path for new development. Current data formats and this boundary are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).
+Only empty and current schema-22 databases are admitted. Older databases are rejected before schema writes; use a separate empty path for new development. Current data formats and this boundary are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).

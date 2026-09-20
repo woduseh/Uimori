@@ -1,3 +1,4 @@
+import { translationRecovery } from './source-editing.js';
 import { detectRisuImageHandoff, type RisuImageHandoff } from '../core/risu-image-handoff.js';
 import { validateRisuContentSource } from '../core/risu-native.js';
 import { effectiveRisuControls } from '../core/risu-effective-controls.js';
@@ -1439,7 +1440,7 @@ export class ProductStore {
             normalizeResponseStreamArchiveRow(table, row);
             this.db
               .prepare(
-                `INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`
+                `INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map((column) => (column === 'snapshot' ? 'snapshot_pack(?)' : '?')).join(',')})`
               )
               .run(
                 ...columns.map((k) =>
@@ -2045,6 +2046,11 @@ function validateArchiveGraph(product: ProductStore) {
     sameChat(job.source_revision, job.chat_id, sources);
     const source = product.store.sourceAtHash(job.source_revision, job.source_hash);
     const jobInput = parse(job.input);
+    if (jobInput?.judgmentRecovery !== undefined) {
+      if (job.kind !== 'translation')
+        throw new HttpError(400, 'Judgment recovery requires translation job');
+      translationRecovery(jobInput, job.source_hash);
+    }
     if (jobInput && typeof jobInput === 'object' && !Array.isArray(jobInput)) {
       for (const role of ['translation', 'status'] as const) {
         if (
@@ -2094,6 +2100,8 @@ function validateArchiveGraph(product: ProductStore) {
         resultRow!.generation > job.generation)
     )
       throw new HttpError(400, 'Job result dependency mismatch');
+    if (jobInput?.judgmentRecovery && result && result.text !== jobInput.judgmentRecovery.text)
+      throw new HttpError(400, 'Translation recovery result mismatch');
     if (job.status === 'completed' && !result)
       throw new HttpError(400, 'Completed job result missing');
     if (result?.manual !== undefined && (job.kind !== 'translation' || result.manual !== true))
@@ -2225,7 +2233,8 @@ function validateArchiveGraph(product: ProductStore) {
         validateTranslationJudgmentWire(
           owner.source_hash,
           record(parse(owner.input)).translationPolicy?.judgment,
-          request as import('../core/transport.js').WireRecord
+          request as import('../core/transport.js').WireRecord,
+          record(parse(owner.input)).judgmentRecovery?.text
         );
       } else {
         const snapshot =

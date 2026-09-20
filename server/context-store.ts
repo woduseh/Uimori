@@ -199,7 +199,7 @@ export class ContextStore {
         this.store.story.notes.revision(snapshot.chatId) === base.notesRevision &&
         unchanged;
       this.db
-        .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?,?)')
+        .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,snapshot_pack(?),?,?)')
         .run(
           checkpoint.id,
           checkpoint.scopeKey,
@@ -401,7 +401,7 @@ export class ContextStore {
         time = new Date().toISOString();
       this.db
         .prepare(
-          "INSERT INTO context_jobs(id,chat_id,branch_id,request_key,command,status,snapshot,created_at,updated_at) VALUES(?,?,?,?,?,'queued',?,?,?)"
+          "INSERT INTO context_jobs(id,chat_id,branch_id,request_key,command,status,snapshot,created_at,updated_at) VALUES(?,?,?,?,?,'queued',snapshot_pack(?),?,?)"
         )
         .run(
           id,
@@ -451,7 +451,7 @@ export class ContextStore {
       const published = this.publishPrepared(snapshot, { origin: 'manual' });
       this.db
         .prepare(
-          "UPDATE context_jobs SET status='completed',snapshot=?,checkpoint=?,noop=?,updated_at=? WHERE id=? AND status='running'"
+          "UPDATE context_jobs SET status='completed',snapshot=snapshot_pack(?),checkpoint=?,noop=?,updated_at=? WHERE id=? AND status='running'"
         )
         .run(
           JSON.stringify(published),
@@ -532,7 +532,7 @@ export class ContextStore {
         hash: checkpointHash(scopeKey, Number(row.revision), plan),
       };
       this.db
-        .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?,?)')
+        .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,snapshot_pack(?),?,?)')
         .run(
           mapped.id,
           scopeKey,
@@ -572,7 +572,7 @@ export class ContextStore {
         snapshot.contextPlan.checkpoint = mapped;
       }
       this.db
-        .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+        .prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?')
         .run(JSON.stringify(snapshot), newRunId);
     }
   }

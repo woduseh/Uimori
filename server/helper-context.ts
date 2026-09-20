@@ -140,7 +140,7 @@ export function publishHelperContext(
     };
     const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
     store.db
-      .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?,?)')
+      .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,snapshot_pack(?),?,?)')
       .run(
         checkpoint.id,
         scopeKey,

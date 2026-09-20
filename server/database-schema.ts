@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
 
-export const DATABASE_SCHEMA_VERSION = 21;
+export const DATABASE_SCHEMA_VERSION = 22;
 const BASELINE = 'uimori-risu-native';
 const METADATA_SCHEMA =
   'CREATE TABLE schema_metadata(id INTEGER PRIMARY KEY CHECK(id=1),baseline TEXT NOT NULL,signature TEXT NOT NULL)';
