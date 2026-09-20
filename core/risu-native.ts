@@ -90,7 +90,7 @@ export function nativeRisuAssetNames(
   ];
 }
 /** Validate bounded JSON data without interpreting authored CBS, regex or Lua. */
-export function validateRisuContentSource(value: unknown): RisuContentSource {
+export function assertRisuContentSource(value: unknown): asserts value is RisuContentSource {
   const source = object(value);
   if (
     source.version !== 1 ||
@@ -134,5 +134,10 @@ export function validateRisuContentSource(value: unknown): RisuContentSource {
   }
   if (new TextEncoder().encode(JSON.stringify(source)).byteLength > 8 * 1024 * 1024)
     throw new Error('PACKAGE_NATIVE_RISU_LIMIT');
-  return structuredClone(source) as RisuContentSource;
+}
+
+/** Editors and external callers retain the detached-copy contract. */
+export function validateRisuContentSource(value: unknown): RisuContentSource {
+  assertRisuContentSource(value);
+  return structuredClone(value);
 }

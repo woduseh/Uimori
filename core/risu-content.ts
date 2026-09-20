@@ -3,7 +3,7 @@ import { validatePackageImages, type PackageImage } from './package-images.js';
 import { validatePackageStarts, type PackageStart } from './package-start.js';
 import { validatePackageModules, type PackageModuleRef } from './package-features.js';
 import { validateTemplateVariableDefaults } from './template-variables.js';
-import { validateRisuContentSource, type RisuContentSource } from './risu-native.js';
+import { assertRisuContentSource, type RisuContentSource } from './risu-native.js';
 
 export const CONTENT_ROLES = ['bot', 'persona', 'module'] as const;
 export type ContentRole = (typeof CONTENT_ROLES)[number];
@@ -103,7 +103,10 @@ export function validateContentAttachment(value: unknown): ContentAttachment {
   return structuredClone(a) as ContentAttachment;
 }
 
-export function validateRisuContent(value: unknown): RisuContent {
+/** Validate a JSON content value without taking ownership of it.
+ * Synchronous read-only consumers may borrow it; editors use validateRisuContent for an owned copy.
+ */
+export function assertRisuContent(value: unknown): asserts value is RisuContent {
   const p = object(value, [
     'version',
     'id',
@@ -248,7 +251,8 @@ export function validateRisuContent(value: unknown): RisuContent {
   unique(instructionIds);
   try {
     {
-      const native = validateRisuContentSource(p.nativeRisu);
+      assertRisuContentSource(p.nativeRisu);
+      const native = p.nativeRisu;
       if (p.imageHandoff !== undefined) validateRisuImageHandoff(p.imageHandoff, native);
       for (const asset of native.assets)
         if (!(p.images as PackageImage[] | undefined)?.some((image) => image.id === asset.imageId))
@@ -278,5 +282,10 @@ export function validateRisuContent(value: unknown): RisuContent {
   const serialized = JSON.stringify(value);
   if (new TextEncoder().encode(serialized).byteLength > 12 * 1024 * 1024)
     fail('PACKAGE_SIZE_LIMIT');
-  return structuredClone(value) as RisuContent;
+}
+
+/** Preserve the detached-copy contract used by importers, editors and archive validation. */
+export function validateRisuContent(value: unknown): RisuContent {
+  assertRisuContent(value);
+  return structuredClone(value);
 }

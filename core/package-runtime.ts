@@ -1,6 +1,6 @@
 import {
   RisuContentError,
-  validateRisuContent,
+  assertRisuContent,
   validateContentAttachment,
   type RisuContent,
   type ContentAttachment,
@@ -24,7 +24,8 @@ export function compileContentAttachment(
     loreSelection?: ReadonlySet<string>;
   }
 ): CompiledContentAttachment {
-  const pkg = validateRisuContent(value),
+  assertRisuContent(value);
+  const pkg = value,
     attachment = validateContentAttachment(ref);
   if (pkg.id !== attachment.id || pkg.revision !== attachment.revision)
     throw new RisuContentError('PACKAGE_REVISION_MISMATCH');
@@ -57,7 +58,9 @@ export function compileContentAttachment(
   const groups = new Map<string, typeof pkg.lore>();
   for (const lore of pkg.lore) {
     const key = lore.loreContext?.group ?? '';
-    groups.set(key, [...(groups.get(key) ?? []), lore]);
+    const group = groups.get(key);
+    if (group) group.push(lore);
+    else groups.set(key, [lore]);
   }
   const chosen = pkg.loreActivation?.mode === 'model' ? context.loreSelection : undefined;
   const resources: Resource[] = [...groups.values()]
