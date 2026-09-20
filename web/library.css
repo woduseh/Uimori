@@ -508,9 +508,24 @@
   display: flex;
   gap: 3px;
 }
-.library-view-buttons button[aria-pressed="true"] {
+.library-view-buttons button[aria-pressed="true"],
+.library-ratio-buttons button[aria-pressed="true"] {
   background: var(--accent-soft);
   border-color: var(--accent);
+}
+.library-card-ratio {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+}
+.library-ratio-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+}
+.library-ratio-buttons button {
+  min-width: 0;
+  padding-inline: 6px;
 }
 .library-result-count {
   margin: 14px 0;
@@ -638,8 +653,18 @@
   justify-content: center;
 }
 .library-portrait-cards {
+  --library-card-aspect-ratio: 1 / 1;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 224px), 288px));
   gap: 16px;
+}
+.library-portrait-cards[data-card-ratio="2:3"] {
+  --library-card-aspect-ratio: 2 / 3;
+}
+.library-portrait-cards[data-card-ratio="3:4"] {
+  --library-card-aspect-ratio: 3 / 4;
+}
+.library-portrait-cards[data-card-ratio="9:16"] {
+  --library-card-aspect-ratio: 9 / 16;
 }
 .library-portrait-card {
   padding: 12px;
@@ -654,7 +679,7 @@
 .library-portrait-card .library-item-avatar {
   width: 100%;
   height: auto;
-  aspect-ratio: 1.45;
+  aspect-ratio: var(--library-card-aspect-ratio);
   font-size: 48px;
   border-radius: 8px;
 }
@@ -946,6 +971,11 @@
   }
   .library-page .library-portrait-cards {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .library-page .library-portrait-cards[data-card-ratio="2:3"],
+  .library-page .library-portrait-cards[data-card-ratio="3:4"],
+  .library-page .library-portrait-cards[data-card-ratio="9:16"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .library-page .library-item-copy strong {
     font-size: 15px;

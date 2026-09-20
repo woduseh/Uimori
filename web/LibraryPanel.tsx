@@ -91,6 +91,8 @@ const contentGuidance: Record<PrimaryLibraryTab, { description: string; example:
   },
 };
 type ViewMode = 'cards' | 'list';
+type CardRatio = '1:1' | '2:3' | '3:4' | '9:16';
+const cardRatios: CardRatio[] = ['1:1', '2:3', '3:4', '9:16'];
 function savedViews(): Record<PrimaryLibraryTab, ViewMode> {
   const defaults: Record<PrimaryLibraryTab, ViewMode> = {
     bot: 'cards',
@@ -104,6 +106,23 @@ function savedViews(): Record<PrimaryLibraryTab, ViewMode> {
     >;
     for (const { id } of libraryTabs)
       if (stored[id] === 'cards' || stored[id] === 'list') defaults[id] = stored[id];
+  } catch {
+    /* A restricted browser still has sensible defaults. */
+  }
+  return defaults;
+}
+function savedCardRatios(): Record<PrimaryLibraryTab, CardRatio> {
+  const defaults: Record<PrimaryLibraryTab, CardRatio> = {
+    bot: '1:1',
+    persona: '1:1',
+    module: '1:1',
+  };
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem('uimori-library-card-ratios') ?? '{}'
+    ) as Record<string, unknown>;
+    for (const { id } of libraryTabs)
+      if (cardRatios.includes(stored[id] as CardRatio)) defaults[id] = stored[id] as CardRatio;
   } catch {
     /* A restricted browser still has sensible defaults. */
   }
@@ -149,6 +168,7 @@ export function LibraryPanel({
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('name');
   const [views, setViews] = useState(savedViews);
+  const [cardRatioByTab, setCardRatioByTab] = useState(savedCardRatios);
   const [folder, setFolder] = useState<FolderFilter>('all');
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -365,6 +385,15 @@ export function LibraryPanel({
     setViews(next);
     try {
       localStorage.setItem('uimori-library-views', JSON.stringify(next));
+    } catch {
+      /* Keep this session's choice. */
+    }
+  }
+  function setCardRatio(ratio: CardRatio) {
+    const next = { ...cardRatioByTab, [tab]: ratio };
+    setCardRatioByTab(next);
+    try {
+      localStorage.setItem('uimori-library-card-ratios', JSON.stringify(next));
     } catch {
       /* Keep this session's choice. */
     }
@@ -776,6 +805,29 @@ export function LibraryPanel({
                                 목록
                               </button>
                             </div>
+                            {views[tab] === 'cards' && (
+                              <div className="library-card-ratio">
+                                <span>카드 비율</span>
+                                <div
+                                  className="library-ratio-buttons"
+                                  role="group"
+                                  aria-label="카드 비율"
+                                >
+                                  {cardRatios.map((ratio) => (
+                                    <button
+                                      type="button"
+                                      className="secondary"
+                                      key={ratio}
+                                      aria-label={`${ratio} 카드 비율`}
+                                      aria-pressed={cardRatioByTab[tab] === ratio}
+                                      onClick={() => setCardRatio(ratio)}
+                                    >
+                                      {ratio}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             <button
                               type="button"
                               className="secondary"
@@ -842,6 +894,7 @@ export function LibraryPanel({
                 className={
                   views[tab] === 'cards' ? 'library-cards library-portrait-cards' : 'library-list'
                 }
+                data-card-ratio={views[tab] === 'cards' ? cardRatioByTab[tab] : undefined}
               >
                 {filtered.map((item) => (
                   <article
