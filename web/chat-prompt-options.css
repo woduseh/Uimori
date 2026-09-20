@@ -84,9 +84,6 @@
 .chat-specific-options button {
   white-space: normal;
 }
-.chat-specific-options .prompt-option-field .prompt-option-unset {
-  min-height: var(--control-h);
-}
 .chat-options-extra {
   border-top: 1px solid var(--line);
   padding-top: 4px;
@@ -268,14 +265,6 @@
 .prompt-option-field small {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-.prompt-option-field .prompt-option-unset {
-  align-self: flex-start;
-  padding: 2px 5px;
-  min-height: 32px;
-  font-size: 11px;
-  background: transparent;
-  color: var(--muted);
 }
 .chat-options-footer {
   flex-shrink: 0;

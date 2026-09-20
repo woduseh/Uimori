@@ -48,7 +48,11 @@ export function nativeToggleVariables(
   return Object.fromEntries(
     controls.map((control) => [
       `toggle_${control.nativeKey ?? control.id}`,
-      String(values[control.id] ?? null),
+      String(
+        Object.hasOwn(values, control.id)
+          ? (values[control.id] ?? control.default)
+          : control.default
+      ),
     ])
   );
 }

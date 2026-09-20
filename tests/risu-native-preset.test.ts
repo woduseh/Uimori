@@ -170,13 +170,15 @@ test('retired preset options and blocks disappear silently on import and edit wh
   expect(validateEditableRisuPrompt(historical)).toEqual(clean.program);
   expect(input).toEqual(original);
 });
-test('native CBS evaluates loops and toggle conditions without changing chat defaults into global toggles', async () => {
+test('native toggles default to zero independently of chat variables and preserve text values', async () => {
   const input = preset(
-    '{{#when::mode::tis::0}}zero{{:else}}other{{/when}}|{{#each ["a","b"] as item}}{{slot::item}}{{/each}}',
-    { templateDefaultVariables: 'mode=0' }
+    '{{#when::mode::tis::0}}zero{{:else}}other{{/when}}|{{getvar::mode}}|{{getglobalvar::toggle_custom}}|{{#each ["a","b"] as item}}{{slot::item}}{{/each}}',
+    { templateDefaultVariables: 'mode=1' }
   );
-  expect((await render(input)).text).toBe('other|ab');
-  expect((await render(input, { mode: '0' })).text).toBe('zero|ab');
+  expect(importRisuPresetProgram(input).values).toEqual({ mode: '0', custom: '' });
+  expect((await render(input)).text).toBe('zero|1||ab');
+  expect((await render(input, { mode: null, custom: null })).text).toBe('zero|1||ab');
+  expect((await render(input, { mode: '1', custom: 'kept' })).text).toBe('other|1|kept|ab');
 });
 test('native fields share variable mutations and replay uses their frozen result', async () => {
   const input = preset('', {

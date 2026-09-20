@@ -8,7 +8,7 @@ RISUP 가져오기는 프롬프트 관련 필드만 선택해요. API 키·연�
 
 레거시 옵션 `jailbreakToggle`, `chainOfThought`, `promptSettings`의 `sendName`, `sendChatAsSystem`, `postEndInnerFormat`, `assistantPrefill`은 UI와 실행에서 제거했어요. 가져오기·새 저장·내보내기에서는 별도 안내 없이 제외하고, `jailbreak`·`cot` 블록도 일반 텍스트로 바꾸지 않고 제외해요. 대화 블록의 종속 옵션 `chatAsOriginalOnSystem`과 `type2: jailbreak` 분류도 제거해요. 해당 기능의 과거 실행 결과를 재현하는 호환 분기는 두지 않아요.
 
-`promptControls()`는 `customPromptTemplateToggle`에서 입력 UI를 계산해요. 선택 토글 값은 Risu의 문자열 인덱스, 텍스트 값은 문자열, 미설정은 null이에요. UI 옵션 정의는 별도 작성 원본이 아니에요. 현재 선택값과 저장 조합은 workspace revision CAS로 저장하며, 정의가 다른 조합은 적용하지 않아요.
+`promptControls()`는 `customPromptTemplateToggle`에서 입력 UI를 계산해요. 선택 토글 값은 Risu의 문자열 인덱스이고 기본은 `"0"`(첫 항목), 켜기/끄기 기본은 `"0"`(끔), 텍스트 기본은 빈 문자열이에요. 별도의 미설정 선택지는 없어요. 값이 없거나 null이면 해당 기본값으로 해석하며, 이미 선택한 값과 프리셋의 명시적 기본 선택값은 유지해요. UI 옵션 정의는 별도 작성 원본이 아니에요. 현재 선택값과 저장 조합은 workspace revision CAS로 저장하며, 정의가 다른 조합은 적용하지 않아요.
 
 채팅 옵션은 프리셋에 더해 연결 모듈의 `customModuleToggle`과 카드의 `extensions.risuai.toggles`를 합쳐 계산해요. 이 합산은 원본 프리셋을 수정하지 않아요. 같은 키의 호환되는 정의는 한 값을 공유하고, 타입이나 선택값 구성이 다르면 충돌을 알려요. 한글·점 등 원래 키를 CBS의 `toggle_<원래 키>`로 전달하며 객체 예약키는 충돌 없는 호스트 ID로 표시해요. 카드·모듈 값도 채팅 고정·다음 요청·위임의 정의 해시와 예약 트랜잭션으로 보호해요. 모델·연결·샘플링 선택은 토글 원본으로 덮어쓰지 않아요.
 

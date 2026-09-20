@@ -47,7 +47,6 @@ function ValueInput({
               value={JSON.stringify(value)}
               onChange={(event) => onChange(JSON.parse(event.target.value) as PromptValue)}
             >
-              <option value="null">미설정</option>
               {control.options
                 ?.filter((option) => option.value !== null)
                 .map((option, index) => (
@@ -91,16 +90,6 @@ function ValueInput({
       )}
       {!compact && !isToggle && control.description && (
         <small id={descriptionId}>{control.description}</small>
-      )}
-      {!compact && control.type !== 'select' && control.type !== 'boolean' && (
-        <button
-          type="button"
-          className="ghost prompt-option-unset"
-          disabled={value === null}
-          onClick={() => onChange(null)}
-        >
-          {value === null ? '미설정' : '미설정으로'}
-        </button>
       )}
     </div>
   );
@@ -166,7 +155,7 @@ export function PromptControlFields({
               label={item.control.label}
               value={
                 Object.hasOwn(values, item.control.id)
-                  ? values[item.control.id]!
+                  ? (values[item.control.id] ?? item.control.default)
                   : item.control.default
               }
               onChange={(value) => onChange(item.control.id, value)}
@@ -218,7 +207,11 @@ export function PromptControlFields({
                   key={`control:${control.id}`}
                   control={control}
                   label={control.label}
-                  value={Object.hasOwn(values, control.id) ? values[control.id]! : control.default}
+                  value={
+                    Object.hasOwn(values, control.id)
+                      ? (values[control.id] ?? control.default)
+                      : control.default
+                  }
                   onChange={(value) => onChange(control.id, value)}
                 />
               );
