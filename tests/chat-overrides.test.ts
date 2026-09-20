@@ -11,7 +11,14 @@ import {
   validateChatOverrideSnapshot,
   type ChatOverrideAuthority,
 } from '../server/chat-overrides.js';
-import { chatOverrideHash, type ChatLoreSelector } from '../core/chat-overrides.js';
+import {
+  chatAttachmentKey,
+  chatOverrideHash,
+  projectChatPackageCompilation,
+  type ChatLoreSelector,
+} from '../core/chat-overrides.js';
+import { compileContentAttachment } from '../core/package-runtime.js';
+import { serializeRisuLoreSources } from '../core/risu-context-source.js';
 import type { Content } from '../core/product.js';
 import type { RisuContent, ContentAttachment } from '../core/risu-content.js';
 import { compiledPackages } from '../core/package-context.js';
@@ -154,6 +161,78 @@ const selector = (
   role: ContentAttachment['role'] = 'bot',
   modulePath: string[] = []
 ): ChatLoreSelector => ({ id: content.id, role, modulePath, loreId: 'lore-0', field: 'text' });
+
+test('shared module lore with different link overrides keeps distinct request source boundaries', () => {
+  const store = database(),
+    bot = save(store, 'Scope owner'),
+    chat = store.createChat('Module source scopes', 'calm', { botId: bot.id });
+  const pkg = nativeContent({
+    name: 'Shared module',
+    character_book: {
+      entries: [{ comment: 'Memory', content: 'Original memory', constant: true, enabled: true }],
+    },
+  });
+  const attachment: ContentAttachment = { id: pkg.id, revision: pkg.revision, role: 'module' };
+  const scopes = (['bot', 'persona'] as const).map((role) => ({
+    id: bot.id,
+    role,
+    modulePath: [pkg.id],
+  }));
+  const projections = scopes.map((scope, index) => ({
+    scope,
+    attachment,
+    package: {
+      ...pkg,
+      lore: pkg.lore.map((entry) => ({ ...entry, text: `Memory from link ${index}` })),
+    },
+    overrideIds: [],
+    conflicts: [],
+  }));
+  const original = structuredClone(pkg);
+  const projected = projectChatPackageCompilation(
+    {
+      ...store.product.snapshot(chat.id),
+      chatOverrides: {
+        version: 1,
+        revision: 1,
+        roots: [],
+        entries: [],
+        headRevision: null,
+        headHash: null,
+        projections,
+        conflicts: [],
+      },
+    },
+    attachment,
+    pkg,
+    compileContentAttachment(pkg, attachment, { chatId: chat.id, target: 'main' })
+  );
+  const lore = projected.compiled.pinned.filter((item) => item.sourceKind === 'lore');
+  expect(lore).toHaveLength(2);
+  expect(lore.map((item) => item.risuSource)).toEqual(
+    scopes.map((scope) => ({
+      sourceRole: 'module',
+      sourceName: 'Shared module',
+      contentId: pkg.id,
+      entryId: pkg.lore[0].id,
+      title: 'Memory',
+      sourceScope: chatAttachmentKey(scope),
+    }))
+  );
+  const serialized = serializeRisuLoreSources(lore);
+  const groups = [...serialized.matchAll(/<source [^>]+>[\s\S]*?<\/source>/g)].map(
+    (match) => match[0]
+  );
+  expect(groups).toHaveLength(2);
+  groups.forEach((group, index) => {
+    expect(group).toContain(
+      `source_scope="${chatAttachmentKey(scopes[index]).replaceAll('"', '&quot;')}"`
+    );
+    expect(group).toContain(`Memory from link ${index}`);
+    expect(group).not.toContain(`Memory from link ${1 - index}`);
+  });
+  expect(pkg).toEqual(original);
+});
 
 test('the same package in bot and persona roles receives an override only on the requested attachment', () => {
   const store = database(),

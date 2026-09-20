@@ -212,7 +212,10 @@ test('example dialogue uses separate message roles at the beginning of native ch
     (message) => message.id !== NATIVE_HOST_CONTEXT_ID
   );
   expect(messages.map((message) => [message.role, message.content[0].text])).toEqual([
-    ['system', 'Description'],
+    [
+      'system',
+      '<uimori_source source_role="bot" source_name="Bot" content_id="bot" authority="context">\nDescription\n</uimori_source>',
+    ],
     ['system', '[Start a new chat]'],
     ['user', 'Ask: with colon'],
     ['assistant', 'Reply 2\nSecond line'],
