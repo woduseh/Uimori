@@ -77,12 +77,6 @@ export function AppAbout() {
         <summary>저작권·제3자 고지</summary>
         <pre className="app-about-document">{notices}</pre>
       </details>
-      <section className="recovery-settings-note">
-        <h3>보증 안내</h3>
-        <p className="muted">
-          보증 없이 제공돼요. 자세한 조건은 라이선스 전문에서 확인할 수 있어요.
-        </p>
-      </section>
     </section>
   );
 }
