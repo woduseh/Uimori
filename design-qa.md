@@ -2,6 +2,8 @@
 
 Review date: 2026-09-20. Scope: native preset editor, native bot editor, and reader first-message presentation. This is the agreed representative-screen checkpoint before extending the remaining v3 screens. It is not completion of the entire 36-screen set or human aesthetic acceptance.
 
+The sections before **Follow-up: user feedback on density and native editing** record the earlier `4c85abc` checkpoint. Their test totals and full-width interpretation are historical; the follow-up section owns the current result.
+
 ## Visual truth and capture conditions
 
 Source folder: `C:/Users/wodus/Downloads/Uimori_UI_Recovery_v3`.
@@ -71,5 +73,42 @@ Final implementation screenshot folder: `output/ui-recovery-preview/captures/`.
 - No actionable P0/P1/P2 remains within the representative-screen scope. The P3 density/discoverability choices above and the source-card mobile limitation remain explicit follow-up items.
 
 Implementation checklist: foundation/native cleanup complete; three representative screens implemented; desktop/mobile interactions and visual comparisons complete; user aesthetic checkpoint pending before remaining-screen expansion.
+
+Previous representative-screen result: passed. Superseded by the user feedback and follow-up review below; the earlier overflow checks did not establish comfortable density or long-list legibility.
+
+## Follow-up: user feedback on density and native editing
+
+The current visual authority is the user's nine supplied screenshots and explicit request to use Codex/ChatGPT-like centered working widths, native regex form editing, simpler scene navigation and less information in the new-chat dialog. These instructions supersede the earlier full-width/left-aligned interpretation of v3.
+
+Reference images: `output/ui-recovery-preview/user-feedback-refs/01.png` through `09.png` are exact copies of the supplied screenshots. Images 01–03 show the editor issues; 04–05 show RisuAI/RisuToki regex forms; 06 establishes the centered-workspace reference; 07–09 show scene navigation, translation editing and new-chat issues. They include browser chrome and do not identify CSS viewport/DPR, so no pixel-equality claim is made against them.
+
+Confirmed findings resolved in the follow-up:
+
+- P1: 48-item/real long block lists compress item boxes and overlap titles/subtitles. Preserve each row's intrinsic height and scroll the list.
+- P1: composition fills the entire large window while single forms align left. Center a bounded working area in the space beside the app sidebar, keeping text left aligned.
+- P1: regex editing requires whole-array JSON, exposing serialization rather than the author's task. Supply named fields and list operations while preserving native ownership, unknown values and unapplied raw drafts.
+- P2: scene navigation repeats the first-message label and puts it into a number-width column. Simplify row hierarchy and use a suitable dialog width.
+- P2: source/translation editing repeats the displayed text below the edit form and includes unnecessary always-visible implementation copy. Use one editable presentation with save/cancel; retain actionable conflict/error feedback.
+- P2: the new-chat dialog is too narrow and shows an entire greeting inside a nested scrolling fieldset. Use a normal section, compact excerpt and explicit full-preview disclosure.
+
+Implementation uses a 1248 px centered editor workspace (including padding), 880 px centered single-form sections, and compact non-shrinking list rows. Text stays left aligned within those workspaces. Regex forms share the native list/detail editor, with 120 px IN and 250 px OUT fields, explicit custom flags and a collapsed advanced JSON fallback. Bot/module ownership, existing aliases and unknown fields are preserved. Applied raw buffers follow parent-document changes, while local unapplied and restored remote drafts retain their text.
+
+The new-chat dialog is 680 px on desktop and full width on mobile. Its creation button has a separate footer, the first message uses a three-line excerpt, and the full authored preview loads only when expanded. The scene list is 640 px on desktop and full width on mobile; the first message has one title. Source/translation editing hides the duplicate reading body without unmounting its native frame.
+
+Visual iteration found and fixed additional concrete issues: inherited 440 px regex fields, checkbox-driven mobile overflow, a clipped creation button, and the mobile dialog's unused right strip. Reading regression exposed delayed native frame growth moving an explicit scene/end target. Navigation now retains its target through asynchronous layout and yields to user input or direct scrolling; epoch/query checks prevent stale navigation from moving a different view.
+
+Follow-up dark screenshots and viewport/overflow JSON are in `output/ui-recovery-preview/review-captures/`: `preset-composition`, `preset-variables`, `preset-regex`, `scene-list`, `translation-edit`, and `new-chat`, each at 2560 × 1440 and 412 × 915, DPR 1. The actual 45-block Phémē preset supplies editor evidence; the synthetic library opening supplies popup/edit evidence. The supplied before screenshots and these after screenshots were reviewed for relative widths, centering, density, hierarchy, wrapping and clipping. The screenshots have different browser chrome/DPR contexts, so this is a layout comparison, not a pixel-difference claim.
+
+Current follow-up verification:
+
+- `npm run quality`: Biome checked 835 files and TypeScript passed.
+- Focused Vitest: 35 tests passed across `native-risu-regex-editor`, `risu-export`, `reader`, and `edit-draft-session`. This covers flag/alias preservation, export, reader behavior and draft ownership. The earlier 2062-test full-suite result is not reused as proof of this follow-up.
+- `npm run verify:ui-recovery -- --visual`: 41 tests passed. Receipt: `output/playwright/ui-recovery-2026-09-20T02-39-27-194Z-1a7cfb5b/summary.json`. Includes form editing and raw-draft recovery, long lists, CHARX/RISUP save/export/reimport, new-chat choices, source/translation edit focus and late frame navigation.
+- Actual-app reader navigation: LOADUI06/07 passed (2 tests). Receipt: `output/playwright/loading-ui-2026-09-20T02-35-10-960Z-b5304ac4/summary.json`. The tests wait for actual native body/font/height readiness before manual scrolling; their scroll-position assertions are unchanged.
+- Actual cards: Cheongwon, Hinano and Vela passed (3 tests, both requested widths) with the local Phémē preset. Receipt: `output/playwright/risu-native-samples-2026-09-20T02-39-27-855Z-017c8272/summary.json`. Source inputs remain read-only; the next-turn provider is a loopback fixture.
+- All three successful receipts identify build/source `eb4d4fa37601e7b830a24f1360cf75d161c07b02c3aaf73440058442a3c8ead7` and pass final identity checks. Earlier runs invalidated by concurrent verification-file edits are not counted as successful receipts. Only documentation changed after these final runs.
+- The 12 final dark screenshots were refreshed against that build. Their corresponding JSON records zero horizontal overflow; desktop workspaces are centered and bounded, mobile dialog footers remain reachable, and long titles no longer collide. The final desktop regex and mobile new-chat captures were inspected again after integration.
+
+No actionable P0/P1/P2 remains within this follow-up scope. Cheongwon's authored icon overlap is accepted by the user and preserved. User aesthetic acceptance of the new density remains a separate checkpoint before expanding the remaining v3 screens. Live-provider output and physical-mobile behavior were not tested.
 
 final result: passed

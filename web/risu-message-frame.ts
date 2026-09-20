@@ -134,6 +134,9 @@ export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage 
     });
     document.addEventListener('click',event=>{const target=event.target instanceof Element?event.target.closest('[risu-trigger],[risu-btn]'):null;if(!target)return;event.preventDefault();event.stopPropagation();if(disabled)return;const actionKind=target.hasAttribute('risu-trigger')?'trigger':'button';const name=target.getAttribute(actionKind==='trigger'?'risu-trigger':'risu-btn');if(name&&name.length<=1000){disabled=true;send('action',{actionKind,name});}},true);
     document.addEventListener('submit',event=>event.preventDefault(),true);
+    for(const name of ['wheel','touchstart','pointerdown','keydown'])document.addEventListener(name,event=>{
+      if(event.isTrusted&&(name!=='keydown'||['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)))send('interaction');
+    },{capture:true,passive:true});
     const observer=new ResizeObserver(schedule);observer.observe(document.body);addEventListener('resize',schedule);document.addEventListener('load',schedule,true);document.addEventListener('toggle',schedule,true);send('ready');schedule();
   })();`;
   const origin = location.origin.replaceAll('"', '');

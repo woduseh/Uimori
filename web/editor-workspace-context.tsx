@@ -663,7 +663,8 @@ export function EditorDraftProvider({
 /** Use stable semantic field keys (including item IDs), not labels or browser-generated IDs. */
 export function useBufferedEditorState<T>(
   path: string,
-  initial: T | (() => T)
+  initial: T | (() => T),
+  options?: { syncPristineInitial?: boolean }
 ): [T, Dispatch<SetStateAction<T>>] {
   const context = useContext(DraftContext);
   path = `${useContext(FieldPrefix)}${path}`;
@@ -691,12 +692,31 @@ export function useBufferedEditorState<T>(
   const contextRef = useRef(context);
   contextRef.current = context;
   const restore = context?.state.restoreVersion ?? 0;
+  const previousInitial = useRef({ path, restore, signature: initialSignature });
+  const syncPristineInitial = options?.syncPristineInitial === true;
   // biome-ignore lint/correctness/useExhaustiveDependencies: Restoring buffers is triggered only by an adopted remote revision or a different field, never by typing.
   useEffect(() => {
-    const next = decode();
+    let next = decode();
+    const previous = previousInitial.current;
+    // A second form may replace the same model field. Only update a formerly applied buffer;
+    // an adopted remote draft and authored invalid/different input always retain their own text.
+    if (
+      syncPristineInitial &&
+      previous.path === path &&
+      previous.restore === restore &&
+      previous.signature !== initialSignature &&
+      serialize(next) === previous.signature
+    ) {
+      next =
+        typeof initialRef.current === 'function'
+          ? (initialRef.current as () => T)()
+          : initialRef.current;
+      contextRef.current?.session.setField(path, typeof next === 'string' ? next : serialize(next));
+    }
+    previousInitial.current = { path, restore, signature: initialSignature };
     current.current = next;
     setValue(next);
-  }, [path, restore, initialSignature]);
+  }, [path, restore, initialSignature, syncPristineInitial]);
   const update = useCallback<Dispatch<SetStateAction<T>>>(
     (action) => {
       const next =

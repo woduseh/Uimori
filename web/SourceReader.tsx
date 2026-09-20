@@ -13,6 +13,7 @@ import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
 import { RisuMessageFrame } from './RisuMessageFrame.js';
+import { retainReaderNavigation } from './reader-navigation-scroll.js';
 import { RisuInteractionDialog } from './RisuInteractionDialog.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -220,15 +221,32 @@ function SourceReaderContent({
     if (!origin) return;
     // The parent restores the composer when editing ends. Wait for that layout
     // before returning to the control beside the passage the reader was viewing.
+    let release: (() => void) | undefined;
     const frame = requestAnimationFrame(() => {
       const { button, scrollport, offset } = origin;
       if (!button.isConnected || !scrollport.isConnected) return;
-      scrollport.scrollTop +=
-        button.getBoundingClientRect().top - scrollport.getBoundingClientRect().top - offset;
-      button.focus({ preventScroll: true });
-      button.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+      let focused = false;
+      release = retainReaderNavigation(
+        scrollport,
+        {
+          kind: 'source',
+          element: button,
+          offset: Math.max(
+            0,
+            Math.min(offset, scrollport.clientHeight - button.getBoundingClientRect().height - 8)
+          ),
+        },
+        () => button.isConnected && scrollport.isConnected,
+        () => {
+          if (!focused) button.focus({ preventScroll: true });
+          focused = true;
+        }
+      );
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      release?.();
+    };
   }, [editor]);
   const openEditor = (role: ReaderMode, button: HTMLButtonElement) => {
     const menu = button.closest<HTMLDetailsElement>('.action-menu');
@@ -499,114 +517,120 @@ function SourceReaderContent({
           }}
         />
       )}
-      {validTranslation && translation?.status !== 'completed' && mode === 'translation' && (
-        <p role="status">이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.</p>
-      )}
-      {hasPackages && !presentation ? (
-        <p role="status">봇 화면을 준비하고 있어요.</p>
-      ) : projected?.format === 'risu-html' &&
-        (mode === 'original' || (validTranslation && projected.translation?.html !== undefined)) ? (
-        <div data-testid={mode === 'original' ? 'source-text' : 'translation-text'}>
-          <RisuMessageFrame
-            html={
-              (mode === 'original' ? projected.original.html : projected.translation?.html) ?? ''
-            }
-            css={mode === 'original' ? projected.original.css : projected.translation?.css}
-            onAction={nativeAction}
-            disabled={presentation?.pending}
-            revisionKey={`${source.id}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
-          />
-        </div>
-      ) : mode === 'original' && projected?.original.changed ? (
-        <div className="prose" data-testid="source-text">
-          <div
-            className="source-block"
-            data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
-          >
-            <Prose text={projected.original.text} allowedImageUrls={projected.inlineImageUrls} />
+      <div hidden={!!editor} className="source-reading-content">
+        {validTranslation && translation?.status !== 'completed' && mode === 'translation' && (
+          <p role="status">이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.</p>
+        )}
+        {hasPackages && !presentation ? (
+          <p role="status">봇 화면을 준비하고 있어요.</p>
+        ) : projected?.format === 'risu-html' &&
+          (mode === 'original' ||
+            (validTranslation && projected.translation?.html !== undefined)) ? (
+          <div data-testid={mode === 'original' ? 'source-text' : 'translation-text'}>
+            <RisuMessageFrame
+              html={
+                (mode === 'original' ? projected.original.html : projected.translation?.html) ?? ''
+              }
+              css={mode === 'original' ? projected.original.css : projected.translation?.css}
+              onAction={nativeAction}
+              disabled={presentation?.pending}
+              revisionKey={`${source.id}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
+            />
           </div>
-          {annotations.length > 0 && (
-            <p className="muted" role="status">
-              {IMAGE_POSITION_UNAVAILABLE}
-            </p>
-          )}
-        </div>
-      ) : mode === 'translation' && validTranslation && projected?.translation?.changed ? (
-        <div className="prose translated" data-testid="translation-text">
-          <div className="source-block">
-            <Prose text={projected.translation.text} allowedImageUrls={projected.inlineImageUrls} />
-          </div>
-          {annotations.length > 0 && (
-            <p className="muted" role="status">
-              {IMAGE_POSITION_UNAVAILABLE}
-            </p>
-          )}
-        </div>
-      ) : mode === 'original' ? (
-        <div className="prose" data-testid="source-text">
-          {source.text.slice(0, blocks[0].start)}
-          {blocks.map((block, position) => (
-            <Fragment key={block.anchor}>
-              <div
-                className="source-block"
-                data-block-anchor={block.anchor}
-                id={`block-${source.id}-${block.anchor}`}
-              >
-                <Prose
-                  allowedImageUrls={projected?.inlineImageUrls}
-                  text={source.text.slice(
-                    block.start,
-                    blocks[position + 1]?.start ?? source.text.length
-                  )}
-                />
-              </div>
-              {inline(block.anchor)}
-            </Fragment>
-          ))}
-        </div>
-      ) : validTranslation ? (
-        <div className="prose translated" data-testid="translation-text">
-          {translationBlocks.length ? (
-            <>
-              {translationText.slice(0, translationBlocks[0].start)}
-              {translationBlocks.map((block, position) => (
-                <Fragment key={block.anchor}>
-                  <div className="source-block" data-block-anchor={block.anchor}>
-                    <Prose
-                      allowedImageUrls={projected?.inlineImageUrls}
-                      text={
-                        block.text +
-                        translationText.slice(
-                          block.end,
-                          translationBlocks[position + 1]?.start ?? translationText.length
-                        )
-                      }
-                    />
-                  </div>
-                  {inline(block.anchor)}
-                </Fragment>
-              ))}
-            </>
-          ) : (
-            <div className="source-block">
-              <Prose text={translationText} allowedImageUrls={projected?.inlineImageUrls} />
+        ) : mode === 'original' && projected?.original.changed ? (
+          <div className="prose" data-testid="source-text">
+            <div
+              className="source-block"
+              data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
+            >
+              <Prose text={projected.original.text} allowedImageUrls={projected.inlineImageUrls} />
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="translation-placeholder" role="status">
-          <p>
-            {translation
-              ? activeJob(translation)
-                ? '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.'
-                : '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.'
-              : '이 장면에는 아직 한국어 번역이 없어요.'}
-          </p>
-          <button type="button" className="secondary" onClick={() => switchMode('original')}>
-            원문부터 읽기
-          </button>
-        </div>
-      )}
+            {annotations.length > 0 && (
+              <p className="muted" role="status">
+                {IMAGE_POSITION_UNAVAILABLE}
+              </p>
+            )}
+          </div>
+        ) : mode === 'translation' && validTranslation && projected?.translation?.changed ? (
+          <div className="prose translated" data-testid="translation-text">
+            <div className="source-block">
+              <Prose
+                text={projected.translation.text}
+                allowedImageUrls={projected.inlineImageUrls}
+              />
+            </div>
+            {annotations.length > 0 && (
+              <p className="muted" role="status">
+                {IMAGE_POSITION_UNAVAILABLE}
+              </p>
+            )}
+          </div>
+        ) : mode === 'original' ? (
+          <div className="prose" data-testid="source-text">
+            {source.text.slice(0, blocks[0].start)}
+            {blocks.map((block, position) => (
+              <Fragment key={block.anchor}>
+                <div
+                  className="source-block"
+                  data-block-anchor={block.anchor}
+                  id={`block-${source.id}-${block.anchor}`}
+                >
+                  <Prose
+                    allowedImageUrls={projected?.inlineImageUrls}
+                    text={source.text.slice(
+                      block.start,
+                      blocks[position + 1]?.start ?? source.text.length
+                    )}
+                  />
+                </div>
+                {inline(block.anchor)}
+              </Fragment>
+            ))}
+          </div>
+        ) : validTranslation ? (
+          <div className="prose translated" data-testid="translation-text">
+            {translationBlocks.length ? (
+              <>
+                {translationText.slice(0, translationBlocks[0].start)}
+                {translationBlocks.map((block, position) => (
+                  <Fragment key={block.anchor}>
+                    <div className="source-block" data-block-anchor={block.anchor}>
+                      <Prose
+                        allowedImageUrls={projected?.inlineImageUrls}
+                        text={
+                          block.text +
+                          translationText.slice(
+                            block.end,
+                            translationBlocks[position + 1]?.start ?? translationText.length
+                          )
+                        }
+                      />
+                    </div>
+                    {inline(block.anchor)}
+                  </Fragment>
+                ))}
+              </>
+            ) : (
+              <div className="source-block">
+                <Prose text={translationText} allowedImageUrls={projected?.inlineImageUrls} />
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="translation-placeholder" role="status">
+            <p>
+              {translation
+                ? activeJob(translation)
+                  ? '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.'
+                  : '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.'
+                : '이 장면에는 아직 한국어 번역이 없어요.'}
+            </p>
+            <button type="button" className="secondary" onClick={() => switchMode('original')}>
+              원문부터 읽기
+            </button>
+          </div>
+        )}
+      </div>
       <IllustrationStrip
         sourceId={source.id}
         sourceHash={source.hash}
@@ -1003,11 +1027,6 @@ function TextEditor({
           onChange={(event) => persist({ ...draft, text: event.target.value })}
         />
       </label>
-      <small>
-        {role === 'original'
-          ? '수정한 원문은 다음 요청에 사용하고, 번역 보기를 누르면 새로 번역해요.'
-          : '직접 저장한 번역은 모델을 호출하지 않아요.'}
-      </small>
       {conflict && (
         <div role="alert" className="error">
           <p>편집 중 저장된 내용이 바뀌었어요. 작성한 내용은 유지돼요.</p>

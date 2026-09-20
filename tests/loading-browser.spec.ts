@@ -50,6 +50,37 @@ async function seed(request: APIRequestContext, count: number) {
 const articles = (page: Page) => page.getByTestId('source');
 const article = (page: Page, id: string) =>
   page.locator(`[data-testid="source"][data-source-id="${id}"]`);
+async function settledNativeSources(page: Page, ids: string[]) {
+  const expectedFontSize = await page
+    .locator('html')
+    .evaluate((root) => Number.parseFloat(getComputedStyle(root).getPropertyValue('--reading')));
+  // Scene metadata and placeholders arrive before native documents. A direct scroll
+  // against those short placeholders clamps before it can reach the requested scene.
+  // Wait for real text, inherited appearance, and its measured height to reach the host.
+  await Promise.all(
+    ids.map(async (id) => {
+      const iframe = article(page, id).locator('iframe[title="봇 메시지"]');
+      const body = iframe.contentFrame().locator('body');
+      await expect(body).toContainText('The lantern marks a safe crossing over the river.');
+      await expect
+        .poll(async () => {
+          const content = await body.evaluate((node) => {
+            const rect = node.getBoundingClientRect();
+            return {
+              height: Math.ceil(Math.max(rect.height, rect.bottom)),
+              fontSize: Number.parseFloat(getComputedStyle(node).fontSize),
+            };
+          });
+          const frame = await iframe.boundingBox();
+          return {
+            fontSize: content.fontSize,
+            heightDifference: Math.max(0, Math.abs((frame?.height ?? 0) - content.height) - 2),
+          };
+        })
+        .toEqual({ fontSize: expectedFontSize, heightDifference: 0 });
+    })
+  );
+}
 
 test('LOADUI08 task history loads on demand and preserves off-page reading, inspection and forks', async ({
   page,
@@ -215,6 +246,7 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
   await expect(latest).toBeVisible();
   await latest.click();
   await expect(article(page, ids[11])).toBeVisible();
+  await settledNativeSources(page, ids.slice(10));
   await expect.poll(distance).toBeLessThanOrEqual(2);
   await expect(latest).toHaveCount(0);
   // The latest scene is longer than the viewport: its top still needs a return button.
@@ -769,6 +801,7 @@ test('LOADUI07 synthetic navigation metadata covers long-list paging, search and
     'location'
   );
   await navigator.getByRole('button', { name: /^1번째 장면 ·/ }).click();
+  await settledNativeSources(page, ids);
   await expect(navigator).toContainText('1 / 65');
   await article(page, ids[1]).evaluate((element) => {
     const viewport = element.closest<HTMLElement>('[data-reader-scrollport]')!;

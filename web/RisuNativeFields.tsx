@@ -17,6 +17,7 @@ import { PackageFeaturesEditor } from './PackageFeaturesEditor.js';
 import { RisuImageHandoffFields } from './RisuImageHandoffFields.js';
 import { NativeCollectionEditor } from './NativeCollectionEditor.js';
 import { NativeRisuAssetsEditor } from './NativeRisuAssetsEditor.js';
+import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { SectionNavigation } from './SectionNavigation.js';
 import './native-editor.css';
 
@@ -80,6 +81,7 @@ export function RisuNativeFields({
   );
   const [error, setError] = useState('');
   const [modulesDirty, setModulesDirty] = useState(false);
+  const [regexDirty, setRegexDirty] = useState(false);
   const [portraitBusy, setPortraitBusy] = useState(false);
   const [assetsBusy, setAssetsBusy] = useState(false);
   useEffect(() => {
@@ -88,8 +90,8 @@ export function RisuNativeFields({
   useEffect(() => () => onPortraitBusy(false), [onPortraitBusy]);
   useUnappliedEditorField('package.native.source', !!draft);
   useEffect(() => {
-    onDraftChange(!!draft || modulesDirty);
-  }, [draft, modulesDirty, onDraftChange]);
+    onDraftChange(!!draft || modulesDirty || regexDirty);
+  }, [draft, modulesDirty, regexDirty, onDraftChange]);
   useEffect(() => () => onDraftChange(false), [onDraftChange]);
   const update = (input: RisuContentSource) => {
     const next = normalizeRisuContentSource(input);
@@ -119,6 +121,23 @@ export function RisuNativeFields({
       },
     });
   const lore = nativeRisuLore(native);
+  const regex =
+    (native.module ? native.module.regex : nativeRisuExtension(native).customScripts) ?? [];
+  const writeRegex = (entries: unknown[]) =>
+    update({
+      ...native,
+      ...(native.module
+        ? { module: { ...native.module, regex: entries } }
+        : {
+            card: {
+              ...native.card,
+              extensions: {
+                ...object(native.card.extensions),
+                risuai: { ...nativeRisuExtension(native), customScripts: entries },
+              },
+            },
+          }),
+    });
   const moduleLore = native.module?.lorebook != null || standalone;
   const writeLore = (entries: Record<string, unknown>[]) =>
     update({
@@ -547,7 +566,10 @@ export function RisuNativeFields({
           </div>
         )}
       </fieldset>
-      <div {...panel('advanced')} className="native-section-body">
+      <div
+        {...panel('advanced')}
+        className={`native-section-body${advanced === 'scripts' ? ' native-regex-panel' : ''}`}
+      >
         <div className="segmented native-advanced-tabs" role="group" aria-label="고급 설정 영역">
           {(
             [
@@ -673,7 +695,30 @@ export function RisuNativeFields({
             />
           </div>
         </fieldset>
-        {(advanced === 'source' || advanced === 'scripts') && rawEditor}
+        <div hidden={advanced !== 'scripts'}>
+          <NativeRisuRegexEditor
+            value={Array.isArray(regex) ? regex : []}
+            draftPath="package.native.regex"
+            onChange={writeRegex}
+            onPendingChange={setRegexDirty}
+            disabled={!!draft}
+          />
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => {
+              setAdvanced('source');
+              if (!draft) setPart('triggers');
+            }}
+          >
+            트리거·Lua 원문 편집
+          </button>
+        </div>
+        {advanced === 'source' && (
+          <fieldset className="native-panel-fields" disabled={regexDirty}>
+            {rawEditor}
+          </fieldset>
+        )}
       </div>
     </div>
   );

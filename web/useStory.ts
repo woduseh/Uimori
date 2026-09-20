@@ -8,6 +8,10 @@ import { api, ApiError, libraryChangedKey } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { refValue } from './content-ref.js';
+import {
+  retainReaderNavigation,
+  type ReaderNavigationPosition,
+} from './reader-navigation-scroll.js';
 
 const lastWorkspaceKey = 'uimori:last-workspace';
 function initialView(restore = false) {
@@ -156,6 +160,7 @@ export function useStory() {
   // A completed server operation may navigate only while its original viewing intent is current.
   // Increment on every navigation, including A -> B -> A and changes within the same story.
   const navigationEpoch = useRef(0);
+  const cancelNavigationScroll = useRef<(() => void) | null>(null);
   const latestIntent = useRef<{ epoch: number; source: string } | null>(null);
   const readerQuery = useRef({ branch: '', source: '', key: '' });
   const readerCache = useRef<{ key: string; detail: ReaderDetail } | null>(null);
@@ -483,6 +488,35 @@ export function useStory() {
   const draftKey = `draft:${selected}${storageBranch ? `:${storageBranch}` : ''}`;
   currentDraftKey.current = draftKey;
   currentView.current = viewKey;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Leaving this navigation scope releases its resize observer, even before new content mounts.
+  useLayoutEffect(
+    () => () => {
+      cancelNavigationScroll.current?.();
+      cancelNavigationScroll.current = null;
+    },
+    [viewKey, readSource, destination]
+  );
+  const holdNavigationPosition = useCallback(
+    (node: HTMLElement, position: ReaderNavigationPosition) => {
+      cancelNavigationScroll.current?.();
+      const epoch = navigationEpoch.current;
+      const query = readerQuery.current.key;
+      cancelNavigationScroll.current = retainReaderNavigation(
+        node,
+        position,
+        () =>
+          current.current === selected &&
+          currentView.current === viewKey &&
+          navigationEpoch.current === epoch &&
+          readerQuery.current.key === query &&
+          reader.current === node,
+        () => {
+          restoredView.current = viewKey;
+        }
+      );
+    },
+    [selected, viewKey]
+  );
   const savePosition = useCallback(() => {
     const node = reader.current;
     if (!node || restoredView.current !== viewKey || !selected) return;
@@ -606,12 +640,12 @@ export function useStory() {
         latest?.epoch === navigationEpoch.current &&
         detail.reader.order.includes(latest.source)
       ) {
-        node.scrollTop = node.scrollHeight;
+        holdNavigationPosition(node, { kind: 'end' });
         latestIntent.current = null;
-      } else if (sourceTarget && node.contains(sourceTarget))
-        node.scrollTop +=
-          sourceTarget.getBoundingClientRect().top - node.getBoundingClientRect().top;
-      else {
+      } else if (sourceTarget && node.contains(sourceTarget)) {
+        holdNavigationPosition(node, { kind: 'source', element: sourceTarget });
+      } else {
+        // Ordinary opening/restoration does not turn reading into a pinned navigation target.
         const block = saved?.anchor
           ? [...node.querySelectorAll<HTMLElement>('[data-block-anchor]')].find(
               (item) =>
@@ -628,7 +662,7 @@ export function useStory() {
       restoredView.current = viewKey;
     });
     return () => cancelAnimationFrame(frame);
-  }, [detail, selected, viewKey, readSource, destination]);
+  }, [detail, selected, viewKey, readSource, destination, holdNavigationPosition]);
   const setViewUrl = (chat: string, branchId = '', source = '') => {
     const params = new URLSearchParams({ chat });
     if (branchId) params.set('branch', branchId);
@@ -660,6 +694,7 @@ export function useStory() {
     restoredView.current = '';
   };
   const chooseSource = (id: string, toEnd = false) => {
+    cancelNavigationScroll.current?.();
     navigationEpoch.current++;
     latestIntent.current = toEnd ? { epoch: navigationEpoch.current, source: id } : null;
     savePosition();
@@ -679,9 +714,10 @@ export function useStory() {
           target &&
           node.contains(target)
         ) {
-          if (toEnd) node.scrollTop = node.scrollHeight;
-          else
-            node.scrollTop += target.getBoundingClientRect().top - node.getBoundingClientRect().top;
+          holdNavigationPosition(
+            node,
+            toEnd ? { kind: 'end' } : { kind: 'source', element: target }
+          );
           latestIntent.current = null;
           restoredView.current = key;
         }
