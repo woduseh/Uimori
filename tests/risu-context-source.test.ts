@@ -99,7 +99,7 @@ test('positioned lore includes its own source and escaped entry identity', () =>
   expect(result).toContain('content_id="traveler"');
   expect(result).toContain('entry_id="entry&quot;&lt;&amp;"');
   expect(result).toContain('title="Title &quot;&lt;&amp;&gt;"');
-  expect(result).toContain('knowledge_scope="unspecified"');
+  expect(result).not.toContain('knowledge_scope=');
   expect(result).toContain(item.text);
 });
 

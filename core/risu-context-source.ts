@@ -10,7 +10,7 @@ export type RisuContextSource = {
 type SourceItem = { text: string; risuSource?: RisuContextSource };
 
 export const RISU_SOURCE_GUIDANCE =
-  'Risu source labels identify the originating material and entry boundaries only. They do not establish who knows the information, whom it applies to, or which source takes precedence. Interpret those meanings from the content; unspecified knowledge scope remains unspecified.';
+  'Risu source labels identify the originating material and entry boundaries only. They do not establish who knows the information, whom it applies to, or which source takes precedence. Interpret those meanings from the content.';
 
 const escapeAttribute = (value: string) =>
   value.replace(
@@ -31,7 +31,7 @@ const attributes = (source: RisuContextSource) =>
   `source_role="${escapeAttribute(source.sourceRole)}" source_name="${escapeAttribute(source.sourceName)}" content_id="${escapeAttribute(source.contentId)}"` +
   (source.sourceScope ? ` source_scope="${escapeAttribute(source.sourceScope)}"` : '');
 const entry = (item: SourceItem) =>
-  `<entry entry_id="${escapeAttribute(item.risuSource?.entryId ?? '')}" title="${escapeAttribute(item.risuSource?.title ?? '')}" knowledge_scope="unspecified">\n${item.text}\n</entry>`;
+  `<entry entry_id="${escapeAttribute(item.risuSource?.entryId ?? '')}" title="${escapeAttribute(item.risuSource?.title ?? '')}">\n${item.text}\n</entry>`;
 
 export function serializeRisuContextSource(item: SourceItem): string {
   if (!item.text.trim()) return '';
