@@ -162,7 +162,14 @@ for (const viewport of viewports) {
       await editor.getByLabel('로어 본문', { exact: true }).fill('수도는 강과 성벽 사이에 있어요.');
       await editor.getByLabel('로어 폴더', { exact: true }).selectOption('');
       await editor.getByLabel('포함 방식', { exact: true }).selectOption('always');
-      await editor.getByRole('switch', { name: '로어 사용', exact: true }).uncheck();
+      await editor.getByLabel('포함 방식', { exact: true }).selectOption('none');
+      await expect(
+        editor.getByRole('switch', { name: '로어 사용', exact: true })
+      ).not.toBeChecked();
+      await editor.getByLabel('포함 방식', { exact: true }).selectOption('conditional');
+      await expect(editor.getByRole('switch', { name: '로어 사용', exact: true })).toBeChecked();
+      await editor.getByLabel('포함 방식', { exact: true }).selectOption('always');
+      await editor.getByLabel('포함 방식', { exact: true }).selectOption('none');
 
       navigation = await loreNavigation(editor);
       await navigation.getByRole('button', { name: '폴더 추가', exact: true }).click();
@@ -232,7 +239,7 @@ for (const viewport of viewports) {
         '수도는 강과 성벽 사이에 있어요.'
       );
       await expect(reloaded.getByLabel('로어 폴더', { exact: true })).toHaveValue('');
-      await expect(reloaded.getByLabel('포함 방식', { exact: true })).toHaveValue('always');
+      await expect(reloaded.getByLabel('포함 방식', { exact: true })).toHaveValue('none');
       await expect(
         reloaded.getByRole('switch', { name: '로어 사용', exact: true })
       ).not.toBeChecked();
