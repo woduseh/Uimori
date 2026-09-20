@@ -1,8 +1,12 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import { archiveRejector, isSha256Hex, type ArchiveReject } from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
   validateLoreContextPolicy,
+  isTokenLorePolicy,
+  loreBudget,
+  measureLoreText,
   type LoreDependency,
   type RetainedLore,
 } from '../core/lore-context.js';
@@ -296,12 +300,24 @@ export function validateArchivedLoreContext(store: Store, snapshot: RunSnapshot)
   forkReads(store, snapshot);
   const stats = object(
     context.stats,
-    ['retainedChars', 'retainedEntries', 'appendedChars', 'droppedEntries', 'reasons'],
+    [
+      'retainedChars',
+      'retainedEntries',
+      'appendedChars',
+      'droppedEntries',
+      'reasons',
+      ...(isTokenLorePolicy(policy) ? ['retainedTokens'] : []),
+    ],
     'stats fields'
   );
   const chars = entries.reduce((sum, entry) => sum + entry.text.length, 0);
+  const used = entries.reduce(
+    (sum, entry) => sum + measureLoreText(entry.text, policy, countTextTokens),
+    0
+  );
   if (
-    chars > policy.maxRetainedChars ||
+    used > loreBudget(policy).retained ||
+    (isTokenLorePolicy(policy) && stats.retainedTokens !== used) ||
     stats.retainedChars !== chars ||
     stats.retainedEntries !== entries.length ||
     !Number.isSafeInteger(stats.appendedChars) ||

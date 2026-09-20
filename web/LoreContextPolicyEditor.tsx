@@ -2,6 +2,9 @@ import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_LORE_CONTEXT,
+  DEFAULT_TOKEN_LORE_CONTEXT,
+  LORE_TOKEN_ESTIMATOR,
+  isTokenLorePolicy,
   validateLoreContextPolicy,
   type LoreContextPolicy,
   type LoreContextSnapshot,
@@ -12,25 +15,53 @@ import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 import './lore-context.css';
 import { DEFAULT_JEV_JUDGMENT } from '../core/judgment.js';
 
-const fields = [
+const legacyFields = [
   { key: 'maxRetainedChars', label: '조회 로어 문자 한도', min: 0, max: 200_000, unit: 'UTF-16자' },
   { key: 'maxRetainedEntries', label: '조회 로어 구간 한도', min: 0, max: 256, unit: '구간' },
   { key: 'maxPinnedChars', label: '고정 자료 문자 한도', min: 1, max: 2_000_000, unit: 'UTF-16자' },
 ] as const;
+const tokenFields = [
+  {
+    key: 'maxRetainedTokens',
+    label: '조회 로어 토큰 한도',
+    min: 0,
+    max: 200_000,
+    unit: '추정 토큰',
+  },
+  { key: 'maxRetainedEntries', label: '조회 로어 구간 한도', min: 0, max: 256, unit: '구간' },
+  {
+    key: 'maxPinnedTokens',
+    label: '고정 자료 토큰 한도',
+    min: 1,
+    max: 1_000_000,
+    unit: '추정 토큰',
+  },
+] as const;
 type PolicyDraft = {
   enabled: boolean;
-  maxRetainedChars: string;
+  budgetUnit?: 'tokens' | 'utf16';
+  maxRetainedChars?: string;
+  maxRetainedTokens?: string;
   maxRetainedEntries: string;
-  maxPinnedChars: string;
+  maxPinnedChars?: string;
+  maxPinnedTokens?: string;
   threshold?: string;
   maxSelectedTokens?: string;
   maxInputTokens?: string;
 };
 const draftOf = (policy: LoreContextPolicy): PolicyDraft => ({
   enabled: policy.enabled,
-  maxRetainedChars: String(policy.maxRetainedChars),
+  ...(isTokenLorePolicy(policy)
+    ? {
+        budgetUnit: 'tokens' as const,
+        maxRetainedTokens: String(policy.maxRetainedTokens),
+        maxPinnedTokens: String(policy.maxPinnedTokens),
+      }
+    : {
+        maxRetainedChars: String(policy.maxRetainedChars),
+        maxPinnedChars: String(policy.maxPinnedChars),
+      }),
   maxRetainedEntries: String(policy.maxRetainedEntries),
-  maxPinnedChars: String(policy.maxPinnedChars),
   threshold: String(policy.judgment?.threshold ?? DEFAULT_JEV_JUDGMENT.threshold),
   maxSelectedTokens: String(
     policy.judgment?.maxSelectedTokens ?? DEFAULT_JEV_JUDGMENT.maxSelectedTokens
@@ -38,14 +69,13 @@ const draftOf = (policy: LoreContextPolicy): PolicyDraft => ({
   maxInputTokens: String(policy.judgment?.maxInputTokens ?? DEFAULT_JEV_JUDGMENT.maxInputTokens),
 });
 export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
+  if (draft.budgetUnit !== undefined && !['tokens', 'utf16'].includes(draft.budgetUnit))
+    throw new Error('로어 예산 단위를 확인해 주세요.');
+  const fields = draft.budgetUnit === 'tokens' ? tokenFields : legacyFields;
   for (const field of fields) {
-    const number = Number(draft[field.key]);
-    if (
-      !draft[field.key].trim() ||
-      !Number.isSafeInteger(number) ||
-      number < field.min ||
-      number > field.max
-    )
+    const raw = draft[field.key] ?? '';
+    const number = Number(raw);
+    if (!raw.trim() || !Number.isSafeInteger(number) || number < field.min || number > field.max)
       throw new Error(
         `${field.label}는 ${field.min.toLocaleString()}–${field.max.toLocaleString()} 사이 정수로 입력해 주세요.`
       );
@@ -69,9 +99,18 @@ export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
   }
   return validateLoreContextPolicy({
     enabled: draft.enabled,
-    maxRetainedChars: Number(draft.maxRetainedChars),
-    maxRetainedEntries: Number(draft.maxRetainedEntries),
-    maxPinnedChars: Number(draft.maxPinnedChars),
+    ...(draft.budgetUnit === 'tokens'
+      ? {
+          tokenEstimator: LORE_TOKEN_ESTIMATOR,
+          maxRetainedTokens: Number(draft.maxRetainedTokens),
+          maxRetainedEntries: Number(draft.maxRetainedEntries),
+          maxPinnedTokens: Number(draft.maxPinnedTokens),
+        }
+      : {
+          maxRetainedChars: Number(draft.maxRetainedChars),
+          maxRetainedEntries: Number(draft.maxRetainedEntries),
+          maxPinnedChars: Number(draft.maxPinnedChars),
+        }),
     judgment: {
       threshold: Number(draft.threshold),
       maxSelectedTokens: Number(draft.maxSelectedTokens),
@@ -118,7 +157,8 @@ export function LoreContextPolicyEditor({
       const prior = previous.current;
       setDraft((current) => {
         try {
-          return JSON.stringify(parseLorePolicyDraft(current)) === prior
+          return JSON.stringify(parseLorePolicyDraft(current)) ===
+            JSON.stringify(parseLorePolicyDraft(draftOf(JSON.parse(prior))))
             ? draftOf(JSON.parse(serialized))
             : current;
         } catch {
@@ -163,6 +203,19 @@ export function LoreContextPolicyEditor({
     } catch {
       /* Preserve incomplete numeric input until it is valid. */
     }
+  }
+  function changeBudgetUnit(unit: 'tokens' | 'utf16') {
+    // A character budget has no exact scalar token equivalent. Reset only the
+    // two size budgets; preserve other authored settings and incomplete inputs.
+    const defaults = unit === 'tokens' ? DEFAULT_TOKEN_LORE_CONTEXT : DEFAULT_LORE_CONTEXT;
+    change({
+      ...draftOf(defaults),
+      enabled: draft.enabled,
+      maxRetainedEntries: draft.maxRetainedEntries,
+      threshold: draft.threshold,
+      maxSelectedTokens: draft.maxSelectedTokens,
+      maxInputTokens: draft.maxInputTokens,
+    });
   }
   async function showPreview() {
     if (!policy) return;
@@ -210,8 +263,25 @@ export function LoreContextPolicyEditor({
       <details className="lore-context-advanced">
         <summary>선별 기준과 용량</summary>
         <h4>문맥 유지 한도</h4>
+        <label>
+          로어 예산 단위
+          <select
+            aria-label="로어 예산 단위"
+            value={draft.budgetUnit ?? 'utf16'}
+            onChange={(event) =>
+              changeBudgetUnit(event.target.value === 'tokens' ? 'tokens' : 'utf16')
+            }
+          >
+            <option value="tokens">로컬 토큰 추정 (권장)</option>
+            <option value="utf16">기존 문자 예산 (UTF-16)</option>
+          </select>
+        </label>
+        <p className="muted">
+          단위를 바꾸면 조회·고정 자료 한도만 새 단위의 기본값으로 바꿔요. 기존 숫자를 환산하지
+          않으며 과거 실행 기록은 변경하지 않아요. 저장 후 다음 실행부터 적용돼요.
+        </p>
         <div className="lore-context-policy-grid">
-          {fields.map((field) => (
+          {(draft.budgetUnit === 'tokens' ? tokenFields : legacyFields).map((field) => (
             <label key={field.key}>
               {field.label}
               <input
@@ -273,9 +343,13 @@ export function LoreContextPolicyEditor({
             테스트할 수 있어요. 작문·문맥 요약 모델은 바뀌지 않아요.
           </p>
           <p className="muted">
-            문자 한도는 UTF-16 코드 단위예요. 예를 들어 이모지 하나가 2자로 계산될 수 있어요. 고정
-            자료는 한도를 넘으면 요청을 중단해 알려요. 이 한도는 로어와 고정 자료에 적용하며 전체
-            모델 입력 토큰 한도는 별도예요.
+            토큰 예산은 로컬 o200k_base로 렌더링된 본문을 계산해요. 자료마다 JSON 따옴표나 10%
+            여유분을 더하지 않으며, 전체 요청 검사의 여유분은 별도로 유지해요. 원격 토큰 계산은 하지
+            않아요. 모델별 실제 토큰 수나 청구량과 다를 수 있어요.
+          </p>
+          <p className="muted">
+            기존 문자 예산은 UTF-16 코드 단위예요. 고정 자료가 선택한 단위의 한도를 넘으면 임의로
+            자르지 않고 알려요. 전체 모델 입력 한도와 저장·파싱 용량 제한은 별도예요.
           </p>
           <p className="muted">
             사용자가 만든 Risu 프롬프트의 역할·순서·캐시 기준은 그대로 사용해요. 이 설정이 사용자
@@ -291,7 +365,13 @@ export function LoreContextPolicyEditor({
           <button
             type="button"
             className="secondary"
-            onClick={() => change(draftOf(DEFAULT_LORE_CONTEXT))}
+            onClick={() =>
+              change(
+                draftOf(
+                  draft.budgetUnit === 'tokens' ? DEFAULT_TOKEN_LORE_CONTEXT : DEFAULT_LORE_CONTEXT
+                )
+              )
+            }
           >
             기본 정책으로
           </button>

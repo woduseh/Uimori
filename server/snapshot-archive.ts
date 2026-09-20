@@ -19,6 +19,7 @@ import {
   loreSelectionInputHash,
   loreSelectionPending,
   loreSelectionTargets,
+  validateLoreSelectionTokenBudgets,
 } from './lore-selection.js';
 import { validateNativeRisuExecution, nativeRisuPending } from './risu-native-run.js';
 import { mapNativeMessageId, remapNativeRisuSnapshot } from './risu-native-archive.js';
@@ -77,6 +78,11 @@ function validateLoreSelection(store: Store, snapshot: RunSnapshot, runId?: stri
       )
         reject('lore judgment selection mismatch');
     }
+  }
+  try {
+    validateLoreSelectionTokenBudgets(snapshot, targets);
+  } catch {
+    reject('lore token budget mismatch');
   }
 }
 

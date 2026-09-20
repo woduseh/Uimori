@@ -1,4 +1,4 @@
-import { get_encoding, type Tiktoken } from 'tiktoken';
+import { countTextTokens } from './text-tokens.js';
 import { ProviderContractError } from './provider-errors.js';
 import { modelCapability } from './model-capabilities.js';
 import type { ProviderProtocol } from './product.js';
@@ -78,9 +78,9 @@ export function contextBudgetForModel(model: {
   });
 }
 
-let tokenizer: Tiktoken | undefined;
-/** Offline o200k estimate of the serialized final body, with 10% host safety margin.
- * Provider framing and other model tokenizers can differ. This is not billable usage.
+/** Preserve the persisted o200k_base-v1 request estimate: JSON body plus 10%.
+ * Call countTextTokens for text-only sub-budgets so quoting and margin are not
+ * charged per lore entry. The final request still passes this admission check.
  */
 export function estimateContextTokens(value: unknown): number {
   let serialized: string | undefined;
@@ -90,30 +90,7 @@ export function estimateContextTokens(value: unknown): number {
     throw new ProviderContractError('INVALID_CONTEXT_INPUT');
   }
   if (serialized === undefined) throw new ProviderContractError('INVALID_CONTEXT_INPUT');
-  tokenizer ??= get_encoding('o200k_base');
-  // Special-token spellings in authored text are ordinary text, not tokenizer controls.
-  // BPE on a single huge repeated word can be quadratic even in the native tokenizer.
-  // Bounded UTF-16 spans keep admission responsive; boundary differences remain an estimate.
-  const pieces = new Map<string, number>();
-  let tokens = 0;
-  for (let start = 0; start < serialized.length; ) {
-    let end = Math.min(serialized.length, start + 4096);
-    if (
-      end < serialized.length &&
-      /[\uD800-\uDBFF]/u.test(serialized[end - 1]) &&
-      /[\uDC00-\uDFFF]/u.test(serialized[end])
-    )
-      end--;
-    const piece = serialized.slice(start, end);
-    let count = pieces.get(piece);
-    if (count === undefined) {
-      count = tokenizer.encode(piece, [], []).length;
-      pieces.set(piece, count);
-    }
-    tokens += count;
-    start = end;
-  }
-  return Math.ceil((tokens * 11) / 10);
+  return Math.ceil((countTextTokens(serialized) * 11) / 10);
 }
 
 /** Fail before credentials, journaling or transmission; never edit a continuation to fit. */
