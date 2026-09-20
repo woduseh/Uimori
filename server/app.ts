@@ -61,6 +61,7 @@ import { applyNativeRisuAction } from './risu-native-actions.js';
 import { pruneUploads, uploadRoutes } from './uploads.js';
 import { admissionOpen, maintenanceRoutes, maintenanceStatus } from './maintenance.js';
 import { risuPresetImportRoutes } from './risu-preset-import.js';
+import { risuExportRoutes } from './risu-export.js';
 import { NativeTransferError } from '../core/native-transfer-validation.js';
 import { diagnosticReportRoutes } from './diagnostic-report.js';
 import { packageFeatureRoutes } from './package-features.js';
@@ -1254,6 +1255,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     }
   );
   risuPresetImportRoutes(app, store);
+  risuExportRoutes(app, store);
   diagnosticReportRoutes(app, store, { buildId: options.buildId, testMode: options.testMode });
   app.post<{ Params: { id: string } }>('/api/chats/:id/package-start', async (request) => {
     const result = createPackageStart(store, request.params.id, request.body);

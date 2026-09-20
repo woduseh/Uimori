@@ -37,17 +37,9 @@ export function applyRisuImport(
   readStaged?: (uploadId: string) => Buffer
 ): RisuImportResult {
   const body = record(value);
-  fields(body, [
-    'source',
-    'kind',
-    'digest',
-    'memoryIds',
-    'imageHandoffIds',
-    'allowPartial',
-    'idempotencyKey',
-  ]);
+  fields(body, ['source', 'kind', 'digest', 'imageHandoffIds', 'allowPartial', 'idempotencyKey']);
   const requestKey = text(body.idempotencyKey, 'request key', 100);
-  const { file, preview, hash } = analyze(
+  const { file, preview } = analyze(
     body.source,
     body.kind as RisuImportKind | undefined,
     readStaged
@@ -56,19 +48,6 @@ export function applyRisuImport(
   if (typeof body.allowPartial !== 'boolean') throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   if (preview.findings.some((item) => item.level === 'unsupported') && !body.allowPartial)
     throw new HttpError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');
-  if (
-    !Array.isArray(body.memoryIds) ||
-    (preview.kind === 'module' && body.memoryIds.length > 0) ||
-    new Set(body.memoryIds).size !== body.memoryIds.length ||
-    body.memoryIds.some(
-      (id: unknown) =>
-        typeof id !== 'string' ||
-        !preview.lore.some(
-          (item) => item.id === id && item.enabled && item.text.trim() && item.text.length <= 32000
-        )
-    )
-  )
-    throw new HttpError(400, 'RISU_IMPORT_MEMORY_SELECTION');
   if (body.imageHandoffIds !== undefined) {
     const policy = file.contents[0].source.package!.imageHandoff;
     if (
@@ -85,24 +64,6 @@ export function applyRisuImport(
         enabled: body.imageHandoffIds.includes(range.id),
       }));
   }
-  const selected = new Set<string>(body.memoryIds);
-  const memories = preview.lore.filter((item) => selected.has(item.id));
-  file.contents[0].source.package!.lore = file.contents[0].source.package!.lore.filter(
-    (item) => !selected.has(item.id)
-  );
-  const native = file.contents[0].source.package!.nativeRisu;
-  if (native && selected.size) {
-    const entries =
-      native.module?.lorebook ??
-      (native.card.character_book as { entries?: unknown[] } | undefined)?.entries;
-    if (Array.isArray(entries)) {
-      const updated = entries.map((entry, index) =>
-        selected.has(`lore-${index}`) ? { ...record(entry), enabled: false } : entry
-      );
-      if (native.module?.lorebook != null) native.module.lorebook = updated;
-      else native.card.character_book = { ...record(native.card.character_book), entries: updated };
-    }
-  }
   const prepared = prepareNativeTransfer({ file });
   return store.transaction(() => {
     const receipt = applyNativeTransfer(store, {
@@ -118,17 +79,6 @@ export function applyRisuImport(
     }
     const botId = receipt.items.find((item) => item.key === 'bot')!.id;
     const chat = store.createChat(preview.title, undefined, { botId }, receipt.id);
-    for (const [index, memory] of memories.entries())
-      store.story.notes.write(chat.id, {
-        kind: 'imported-memory',
-        origin: { fileHash: hash, entryId: memory.id, title: memory.title },
-        text: memory.text,
-        author: '가져온 자료',
-        branchId: `main:${chat.id}`,
-        expectedRevision: index,
-        expectedHeadRevision: null,
-        idempotencyKey: `import:${memory.id}`,
-      });
     const content = store.product.get<Content>('content', botId);
     const first =
       content.package?.nativeRisu &&

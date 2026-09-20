@@ -60,11 +60,11 @@ const hostText = (compiled: RunSnapshot) =>
   compiled.promptCompilation!.messages.find((message) => message.id === NATIVE_HOST_CONTEXT_ID)!
     .content[0].text;
 
-test('the native compilation uses one compiler and a compact reference catalog', () => {
+test('the current native compiler uses a compact reference catalog', () => {
   const many = Array.from({ length: 120 }, (_, index) => lore(index));
   const current = compileSnapshotPrompt(snapshot(many));
   expect(current.promptCompilation!.compilerVersion).toBe(PROMPT_COMPILER_VERSION);
-  expect(PROMPT_COMPILER_VERSION).toBe('risu-native-prompt-1');
+  expect(PROMPT_COMPILER_VERSION).toBe('risu-native-prompt-2');
   const compact = buildMainInput(snapshot(many));
   expect(hostText(current)).toBe(nativeHostContextText({ input: requestInput(current, compact) }));
   expect(compact.catalog[0].description).toHaveLength(CATALOG_SUMMARY_CHARS);

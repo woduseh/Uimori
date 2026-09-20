@@ -10,7 +10,7 @@ import {
 import { DEFAULT_LORE_CONTEXT, type LorePlacement } from './lore-context.js';
 import { OUTLINE_CONTRACT, type OutlineSnapshot } from './outline.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
-import { PROMPT_COMPILER_VERSION, type PromptCompilerVersion } from './risu-prompt.js';
+import { PROMPT_COMPILER_VERSIONS, type PromptCompilerVersion } from './risu-prompt.js';
 
 // These are host permissions, never instructions read from a content package.
 const ALLOWED_TOOLS = Object.freeze([
@@ -123,7 +123,10 @@ export function buildMainInput(
   results: readonly ToolEvent[] = [],
   options: { compilerVersion?: PromptCompilerVersion } = {}
 ): MainInput {
-  if (options.compilerVersion !== undefined && options.compilerVersion !== PROMPT_COMPILER_VERSION)
+  if (
+    options.compilerVersion !== undefined &&
+    !PROMPT_COMPILER_VERSIONS.has(options.compilerVersion)
+  )
     throw new Error('PROMPT_INVALID_COMPILED');
   const packages = compiledPackages(snapshot, 'main'),
     resources = collectRoleResources(snapshot, packages);

@@ -15,7 +15,7 @@ export function createDefaultRisuPrompt(text: string, role: PromptRole = 'main')
                 { type: 'persona' },
                 { type: 'description' },
                 { type: 'lorebook' },
-                { type: 'plain', role: 'system', type2: 'globalNote', text: '{{slot}}' },
+                { type: 'plain', role: 'system', type2: 'globalNote', text: '' },
                 { type: 'authornote' },
                 { type: 'postEverything' },
               ]

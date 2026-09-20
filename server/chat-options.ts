@@ -1,4 +1,6 @@
 import { promptControls } from '../core/risu-prompt.js';
+import { effectiveRisuControls } from '../core/risu-effective-controls.js';
+import { resolvePackageProfile } from './package-features.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
@@ -14,7 +16,6 @@ import type { HelperTask, HelperGrant } from '../core/helper.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { CurrentPrompt, ProfileSnapshot } from '../core/product.js';
 import {
-  resolvePromptValues,
   resolveControlValues,
   validateControlDefinitions,
   validateRisuPrompt,
@@ -51,17 +52,30 @@ export type ChatOptionIntent = {
 };
 /** A direct UI route or a separately verified helper grant creates this capability. */
 export type ChatOptionAuthority = { requestId: string; assert: (intent: ChatOptionIntent) => void };
-export function optionBinding(prompt: Pick<CurrentPrompt, 'presetId' | 'program'>): OptionBinding {
+export function optionBinding(
+  prompt: Pick<CurrentPrompt, 'presetId' | 'program'>,
+  controls = promptControls(prompt.program)
+): OptionBinding {
   return {
     owner: promptOptionOwner(prompt),
-    definitionHash: hash(promptControls(prompt.program)),
+    definitionHash: hash(controls),
   };
 }
 /** The binding a frozen profile implies; its owner was recorded from the workspace at freeze time. */
 function frozenOptionBinding(profile: ProfileSnapshot): OptionBinding | undefined {
   const preset = profile.promptPresets?.main;
   if (!preset || profile.promptOptionOwner === undefined) return undefined;
-  return { owner: profile.promptOptionOwner, definitionHash: hash(promptControls(preset.program)) };
+  return {
+    owner: profile.promptOptionOwner,
+    definitionHash: hash(frozenOptionControls(profile, preset.program)),
+  };
+}
+function frozenOptionControls(profile: ProfileSnapshot, program: RisuPrompt): PromptControl[] {
+  const original = promptControls(program);
+  // Old receipts prove their original preset-only scope; adding a module later cannot rewrite them.
+  return profile.chatOptions?.binding.definitionHash === hash(original)
+    ? original
+    : effectiveRisuControls(profile, program);
 }
 const readBinding = (value: unknown): OptionBinding => {
   const b = record(value);
@@ -154,9 +168,14 @@ export class ChatOptionsStore {
     );
   }
   get(chatId: string, branchId?: string): ChatOptionState {
+    const profile = this.store.product.profile(chatId);
     const branch = this.store.product.branch(chatId, branchId),
-      workspace = chatPromptWorkspace(this.store, this.store.product.profile(chatId).pinned),
-      binding = optionBinding(workspace.main),
+      workspace = chatPromptWorkspace(this.store, profile.pinned),
+      controls = effectiveRisuControls(
+        resolvePackageProfile(this.store.product, profile),
+        workspace.main.program
+      ),
+      binding = optionBinding(workspace.main, controls),
       saved = this.saved(chatId);
     const compatible = !saved.binding || isDeepStrictEqual(saved.binding, binding);
     const pending = this.pending(chatId, branch.id).filter((item) => item.status === 'pending');
@@ -185,8 +204,9 @@ export class ChatOptionsStore {
       binding,
       workspaceRevision: workspace.revision,
       program: workspace.main.program,
-      globalValues: resolvePromptValues(workspace.main.program, workspace.main.values),
-      fixedValues: compatible ? valuesFor(workspace.main.program, saved.values) : {},
+      controls,
+      globalValues: resolveControlValues(controls, workspace.main.values),
+      fixedValues: compatible ? valuesFor(controls, saved.values) : {},
       pending,
       delegations: this.delegations(chatId, branch.id),
       conflicts,
@@ -213,7 +233,7 @@ export class ChatOptionsStore {
     const selectedFields = b.values
       ? Object.keys(record(b.values))
       : Array.isArray(b.fields)
-        ? b.fields.map((v) => text(v, 'option field', 100))
+        ? b.fields.map((v) => text(v, 'option field', 1500))
         : [];
     const intent: ChatOptionIntent = {
       action,
@@ -262,8 +282,8 @@ export class ChatOptionsStore {
       this.assertBinding(b.binding, state);
       this.bump(chatId, {
         binding: state.binding,
-        values: valuesFor(state.program, b.values),
-        definitions: promptControls(state.program),
+        values: valuesFor(state.controls ?? state.program, b.values),
+        definitions: state.controls ?? promptControls(state.program),
       });
     });
   }
@@ -287,7 +307,7 @@ export class ChatOptionsStore {
         this.assertBinding(b.binding, state);
         if (b.expectedHeadRevision !== state.headRevision)
           conflict('옵션을 선택하는 동안 본편이 변경됐어요.');
-        const values = valuesFor(state.program, b.values);
+        const values = valuesFor(state.controls ?? state.program, b.values);
         if (!Object.keys(values).length)
           throw new HttpError(400, '한 개 이상의 옵션을 선택해 주세요.');
         let delegationId: string | undefined;
@@ -312,7 +332,7 @@ export class ChatOptionsStore {
           branchId: state.branchId,
           kind,
           binding: state.binding,
-          definitions: promptControls(state.program),
+          definitions: state.controls ?? promptControls(state.program),
           values,
           ...(delegationId ? { delegationId, delegation } : {}),
           headRevision: state.headRevision,
@@ -364,9 +384,14 @@ export class ChatOptionsStore {
         this.assertBinding(b.binding, state);
         if (!Array.isArray(b.fields) || !b.fields.length)
           throw new HttpError(400, '위임할 옵션을 선택해 주세요.');
-        const selected = [...new Set(b.fields.map((v) => text(v, 'option field', 100)))];
+        const selected = [...new Set(b.fields.map((v) => text(v, 'option field', 1500)))];
         if (
-          selected.some((id) => !promptControls(state.program).some((control) => control.id === id))
+          selected.some(
+            (id) =>
+              !(state.controls ?? promptControls(state.program)).some(
+                (control) => control.id === id
+              )
+          )
         )
           throw new HttpError(400, '실제 프롬프트 옵션만 위임할 수 있어요.');
         const workspace = new HelperWorkspace(this.store);
@@ -386,7 +411,7 @@ export class ChatOptionsStore {
           conversationId: conversation.id,
           scope: { kind: 'chat', chatId, branchId: state.branchId },
           binding: state.binding,
-          definitions: promptControls(state.program),
+          definitions: state.controls ?? promptControls(state.program),
           fields: selected,
           startedAt: now(),
           revokedAt: null,
@@ -488,8 +513,9 @@ export class ChatOptionsStore {
       profile.promptWorkspaceRevision !== state.workspaceRevision
     )
       conflict('옵션 예약 전 현재 프롬프트가 변경됐어요.');
-    const globalValues = resolvePromptValues(
-      preset.program,
+    const controls = effectiveRisuControls(profile, preset.program);
+    const globalValues = resolveControlValues(
+      controls,
       profile.chatOptions?.globalValues ??
         profile.promptControls?.[`${ref.id}@${ref.revision}`]?.values ??
         preset.values
@@ -521,7 +547,7 @@ export class ChatOptionsStore {
         pendingIds.push(pending.id);
         this.updatePending({ ...pending, status: 'consumed', runId });
       }
-    const values = resolvePromptValues(preset.program, {
+    const values = resolveControlValues(controls, {
       ...globalValues,
       ...state.fixedValues,
       ...delegatedValues,
@@ -588,7 +614,7 @@ export function helperOptionState(
   return {
     ...state,
     delegations,
-    definitions: promptControls(program),
+    definitions: state.controls ?? promptControls(program),
     // The current delegation list already carries the scope, definitions and revocation state.
     // Keep the choice's own frozen binding/definitions so old choices remain inspectable.
     pending: pending
@@ -798,12 +824,13 @@ export function validateChatOptionSnapshot(profile: ProfileSnapshot): void {
     resolution.delegatedValues,
     resolution.oneoffValues,
   ];
-  for (const map of maps) valuesFor(preset.program, map);
+  const controls = frozenOptionControls(profile, preset.program);
+  for (const map of maps) valuesFor(controls, map);
   if (
     Object.keys(resolution.delegatedValues).some((id) => Object.hasOwn(resolution.fixedValues, id))
   )
     throw new HttpError(400, 'Delegated snapshot overrides fixed option');
-  const values = resolvePromptValues(preset.program, Object.assign({}, ...maps));
+  const values = resolveControlValues(controls, Object.assign({}, ...maps));
   if (
     !isDeepStrictEqual(values, resolution.values) ||
     !isDeepStrictEqual(values, profile.promptControls?.[`${ref.id}@${ref.revision}`]?.values)
@@ -1074,6 +1101,7 @@ export function validateChatOptionArchive(store: Store): void {
       'binding',
       'workspaceRevision',
       'program',
+      'controls',
       'globalValues',
       'fixedValues',
       'pending',
@@ -1100,12 +1128,13 @@ export function validateChatOptionArchive(store: Store): void {
     )
       throw new HttpError(400, 'Invalid option receipt command');
     const program = validateRisuPrompt(result.program);
-    definitionControls(result.binding, promptControls(program));
-    valuesFor(program, result.globalValues);
-    valuesFor(program, result.fixedValues);
+    const controls = result.controls ?? promptControls(program);
+    definitionControls(result.binding, controls);
+    valuesFor(controls, result.globalValues);
+    valuesFor(controls, result.fixedValues);
     if (
       intent.action === 'fixed' &&
-      !isDeepStrictEqual(valuesFor(program, body.values), result.fixedValues)
+      !isDeepStrictEqual(valuesFor(controls, body.values), result.fixedValues)
     )
       throw new HttpError(400, 'Invalid fixed option receipt');
     if (

@@ -42,7 +42,18 @@ export function exportChatTranscript(
       note.atRevision === null
         ? null
         : history.findIndex((item) => item.revision === note.atRevision);
-    return atIndex === -1 ? [] : [{ text: note.text, author: note.declaration.author, atIndex }];
+    return atIndex === -1
+      ? []
+      : [
+          {
+            text: note.text,
+            author: note.declaration.author,
+            atIndex,
+            ...(note.kind === 'imported-memory'
+              ? { kind: note.kind, origin: structuredClone(note.origin) }
+              : { kind: note.kind }),
+          },
+        ];
   });
   return {
     format: CHAT_TRANSCRIPT_FORMAT,
@@ -85,8 +96,17 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
     body.title === undefined ? transcript.title : text(body.title, 'title', CHAT_TITLE_MAX_CHARS);
   // Validation reconstructs every object in a fixed order. Export time and the overridden file
   // title do not affect the imported chat; references are bound before current-library lookup.
+  // Keep v1 request receipts stable even though the reader upgrades their note shape in memory.
+  const digestTranscript =
+    record(body.transcript).version === 1
+      ? {
+          ...transcript,
+          version: 1,
+          notes: transcript.notes.map(({ text, author, atIndex }) => ({ text, author, atIndex })),
+        }
+      : transcript;
   const digest = createHash('sha256')
-    .update(JSON.stringify({ ...transcript, exportedAt: undefined, title }))
+    .update(JSON.stringify({ ...digestTranscript, exportedAt: undefined, title }))
     .digest('hex');
   return store.transaction(() => {
     const prior = store.db
@@ -153,6 +173,8 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
         store.story.notes.write(id, {
           text: note.text,
           author: note.author,
+          kind: note.kind,
+          ...(note.kind === 'imported-memory' ? { origin: note.origin } : {}),
           branchId,
           expectedRevision: store.story.notes.revision(id),
           expectedHeadRevision: head,

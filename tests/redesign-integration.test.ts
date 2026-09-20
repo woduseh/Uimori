@@ -40,7 +40,8 @@ function packageBody(): RisuContent {
       name: 'Imported title',
       creator_notes: 'Imported description',
       description: 'Imported body',
-      system_prompt: 'Exact original instruction',
+      system_prompt: 'RETIRED_SYSTEM_MUST_NOT_EXECUTE',
+      post_history_instructions: 'Exact original global note',
       character_book: {
         entries: [{ uid: 1, name: 'Lore', content: 'Exact original lore', constant: false }],
       },
@@ -122,16 +123,28 @@ test('native source normalizes projections and freezes old run content after edi
       ...saved.package,
       nativeRisu: {
         ...saved.package.nativeRisu,
-        card: { ...saved.package.nativeRisu.card, system_prompt: 'NEW' },
+        card: {
+          ...saved.package.nativeRisu.card,
+          description: 'NEW_BODY',
+          post_history_instructions: 'New global note',
+        },
       },
     },
     saved
   );
   expect(edited.revision).toBe(2);
   expect(JSON.stringify(store.run(run.id).snapshot)).toBe(before);
-  expect(packageContext(store.run(run.id).snapshot, 'main')!.instructions[0].text).toBe(
-    'Exact original instruction'
+  expect(
+    packageContext(store.run(run.id).snapshot, 'main')!.pinned.map((item) => item.text)
+  ).toContain('Imported body');
+  expect(edited.package.body).toBe('NEW_BODY');
+  expect(
+    store.run(run.id).snapshot.profile!.packages![0].nativeRisu.card.post_history_instructions
+  ).toBe('Exact original global note');
+  expect(JSON.stringify(store.run(run.id).snapshot.promptCompilation?.messages)).toContain(
+    'Exact original global note'
   );
+  expect(before).not.toContain('RETIRED_SYSTEM_MUST_NOT_EXECUTE');
   const summary = store.product.library(true).contents.find((c) => c.id === saved.id)!;
   expect(summary.hasPackage).toBe(true);
   expect(summary.package).toBeUndefined();

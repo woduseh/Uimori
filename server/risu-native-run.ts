@@ -12,9 +12,23 @@ import { evaluateNativeRisuFields } from './risu-native-cbs.js';
 import { processNativeRisuText } from './risu-native-render.js';
 import { prepareNativeRisuPreset, nativeRisuPresetPending } from './risu-native-preset.js';
 import type { NativeRisuMessage } from '../core/risu-native-execution.js';
-import { projectRisuImageHandoff } from '../core/risu-image-handoff.js';
+import { projectRisuImageHandoff, risuImageHandoffText } from '../core/risu-image-handoff.js';
 import { validateProviderPrompt } from '../core/risu-prompt.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
+import { nativeExampleMessages } from '../core/risu-native-messages.js';
+
+function exampleFields(snapshot: RunSnapshot, pkg: Parameters<typeof risuImageHandoffText>[0]) {
+  const identity = packageIdentityFromProfile(snapshot.profile!);
+  const text = snapshot.profile?.image
+    ? risuImageHandoffText(pkg, 'card:mes_example')
+    : String(pkg.nativeRisu?.card.mes_example ?? '');
+  return Object.fromEntries(
+    nativeExampleMessages(text, identity.bot.name, identity.user.name).map((message, index) => [
+      `example:${index}`,
+      message.text,
+    ])
+  );
+}
 
 export function nativeHistoryRevision(
   before: NativeRisuMessage[],
@@ -67,7 +81,7 @@ export function validateNativeRisuExecution(snapshot: RunSnapshot): void {
   if (
     typeof receipt !== 'object' ||
     Array.isArray(receipt) ||
-    receipt.version !== 1 ||
+    ![1, 2].includes(receipt.version) ||
     receipt.inputHash !== nativeRisuInputHash(snapshot) ||
     receipt.beforeVariableRevision !== (snapshot.profile?.variableState?.revision ?? 0) ||
     typeof receipt.request !== 'string' ||
@@ -156,6 +170,9 @@ export function validateNativeRisuExecution(snapshot: RunSnapshot): void {
     const fields = receipt.fields[nativeRisuFieldKey(attachment)];
     const names = [
       'body',
+      ...(receipt.version === 2 && attachment.role === 'bot'
+        ? Object.keys(exampleFields(snapshot, pkg))
+        : []),
       ...pkg.lore.map((item) => `lore:${item.id}`),
       ...pkg.instructions.map((item) => `instruction:${item.id}`),
     ].sort();
@@ -235,6 +252,7 @@ export async function prepareNativeRisuRun(
     const projected = projectRisuImageHandoff(pkg, snapshot.profile?.image === true);
     const authored = {
       body: projected.body ?? '',
+      ...(attachment.role === 'bot' ? exampleFields(snapshot, projected) : {}),
       ...Object.fromEntries(projected.lore.map((entry) => [`lore:${entry.id}`, entry.text])),
       ...Object.fromEntries(
         projected.instructions.map((entry) => [`instruction:${entry.id}`, entry.text])
@@ -289,7 +307,7 @@ export async function prepareNativeRisuRun(
   const prepared = {
     ...snapshot,
     nativeRisuExecution: {
-      version: 1 as const,
+      version: 2 as const,
       inputHash: nativeRisuInputHash(snapshot),
       beforeVariableRevision: snapshot.profile?.variableState?.revision ?? 0,
       variables,

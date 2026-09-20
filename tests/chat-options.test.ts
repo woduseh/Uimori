@@ -22,6 +22,8 @@ import {
   updatePromptWorkspace,
 } from '../server/prompt-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import type { Content } from '../core/product.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { forkChat } from '../server/chat-fork.js';
 import type { OptionValues } from '../core/chat-options.js';
 import type { HelperTask } from '../core/helper.js';
@@ -161,6 +163,69 @@ test('global, chat fixed, delegated unfixed and explicit oneoff resolve once in 
   complete(f, first.run.id);
   const next = run(f);
   expect(next.run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'bold', detail: '1' });
+});
+
+test('card and module native toggles share the chat reservation and archive boundaries without entering the preset', () => {
+  const f = fixture();
+  const profile = f.store.product.profile(f.chat.id);
+  const owner = f.store.product.get<Content>(
+    'content',
+    profile.packageAttachments!.find((item) => item.role === 'bot')!.id
+  );
+  const { id, revision, ...body } = structuredClone(owner);
+  body.package!.nativeRisu.card.extensions = {
+    risuai: { toggles: '카드.옵션=Card=text\n__proto__=Reserved=text' },
+  };
+  const bot = f.store.product.content({ ...body, expectedRevision: revision }, id) as Content;
+  const modulePackage = nativeContent({}, { id: 'toggle-module' }, 'module');
+  modulePackage.nativeRisu.card = {};
+  modulePackage.nativeRisu.module = {
+    name: 'Toggle module',
+    customModuleToggle: '연결.옵션=Module=text',
+  };
+  const module = f.store.product.content({
+    kind: 'module',
+    title: 'Toggle module',
+    description: '',
+    text: '',
+    loading: 'pinned',
+    relatedIds: [],
+    package: modulePackage,
+  }) as Content;
+  f.store.product.updateProfile(f.chat.id, {
+    expectedRevision: profile.revision,
+    image: false,
+    packageAttachments: [
+      { id: bot.id, revision: bot.revision, role: 'bot' },
+      { id: module.id, revision: module.revision, role: 'module' },
+    ],
+  });
+  const state = f.service.get(f.chat.id);
+  expect(state.controls!.map((item) => item.id)).toEqual([
+    'tone',
+    'detail',
+    '연결.옵션',
+    '카드.옵션',
+    'risu-toggle:__proto__',
+  ]);
+  f.service.fixed(
+    f.chat.id,
+    input(f, { '카드.옵션': '고정', 'risu-toggle:__proto__': 'safe' }),
+    authority
+  );
+  stage(f, { '연결.옵션': '한 번' });
+  const reserved = run(f).run;
+  expect(reserved.snapshot.profile!.chatOptions!.values).toMatchObject({
+    '카드.옵션': '고정',
+    '연결.옵션': '한 번',
+    'risu-toggle:__proto__': 'safe',
+  });
+  expect(promptControls(promptWorkspace(f.store).main.program).map((item) => item.id)).toEqual([
+    'tone',
+    'detail',
+  ]);
+  expect(() => validateChatOptionArchive(f.store)).not.toThrow();
+  expect(() => database().product.import(f.store.product.export())).not.toThrow();
 });
 test('failed reservation rolls back oneoff consumption and changed global values remain independent of the definition binding', () => {
   const f = fixture();

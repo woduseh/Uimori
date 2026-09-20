@@ -41,6 +41,8 @@ export type ChatOptionState = {
   binding: OptionBinding;
   workspaceRevision: number;
   program: RisuPrompt;
+  /** Effective native preset/card/module declarations; never another authored program. */
+  controls?: PromptControl[];
   globalValues: OptionValues;
   fixedValues: OptionValues;
   pending: PendingChatOptions[];

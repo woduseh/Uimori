@@ -43,7 +43,6 @@ export type RisuImportPreview = {
     text: string;
     enabled: boolean;
     loading: 'pinned' | 'discoverable';
-    memoryCandidate: boolean;
     /** The preserved Risu activation keys, when the entry has any, so the screen can name them. */
     keys?: string;
   }[];
@@ -54,7 +53,6 @@ export type RisuImportApply = {
   source: RisuImportSource | RisuImportStagedSource;
   kind?: RisuImportKind;
   digest: string;
-  memoryIds: string[];
   imageHandoffIds?: string[];
   allowPartial: boolean;
   idempotencyKey: string;

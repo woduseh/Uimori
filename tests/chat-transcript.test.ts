@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Store, HttpError } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
@@ -116,6 +116,77 @@ const requests = (store: Store, chatId: string) =>
     .map((item) => store.run(store.source(item.revision).runId).request);
 
 describe('chat transcript export and import', () => {
+  test('external memory remains attributed reference data through transcript, fork and backup', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, 'Imported memory fixture');
+    const origin = { fileHash: 'a'.repeat(64), entryId: 'lore-4', title: 'Earlier account' };
+    store.story.notes.write(chat.id, {
+      text: 'A character claims the old gate was open.',
+      author: '가져온 자료',
+      kind: 'imported-memory',
+      origin,
+      branchId: `main:${chat.id}`,
+      expectedRevision: 0,
+      expectedHeadRevision: null,
+      idempotencyKey: 'historical-memory',
+    });
+    turn(store, chat.id, 'Continue', 'The gate is closed.');
+    const transcript = exportChatTranscript(store, chat.id);
+    expect(transcript.version).toBe(2);
+    expect(transcript.notes[0]).toMatchObject({ kind: 'imported-memory', origin, atIndex: null });
+    const imported = importChatTranscript(store, { transcript, idempotencyKey: 'attributed-copy' });
+    const fork = forkChat(store, imported.chat.id, {
+      fromRevision: imported.chat.headRevision!,
+      idempotencyKey: 'memory-fork',
+    });
+    for (const copied of [imported.chat, fork]) {
+      expect(
+        store.story.notes.entries(store.story.notes.scope(copied.id, copied.headRevision))[0]
+      ).toMatchObject({ kind: 'imported-memory', origin, atRevision: null });
+      expect(exportChatTranscript(store, copied.id).notes).toEqual(transcript.notes);
+    }
+    const backup = exportChatBackup(store, imported.chat.id);
+    const fresh = await database();
+    const restored = importChatBackup(fresh, { backup, idempotencyKey: 'memory-backup' });
+    expect(exportChatTranscript(fresh, restored.chat.id).notes).toEqual(transcript.notes);
+    expect(() =>
+      validateChatTranscript({
+        ...transcript,
+        notes: [{ ...transcript.notes[0], origin: undefined }],
+      })
+    ).toThrow();
+  });
+
+  test('v1 authored notes remain readable and v2 requires their explicit kind', async () => {
+    const store = await database();
+    const { chat } = authoredChat(store);
+    const current = exportChatTranscript(store, chat.id);
+    const legacy = {
+      ...current,
+      version: 1,
+      notes: current.notes.map(({ text, author, atIndex }) => ({ text, author, atIndex })),
+    };
+    expect(validateChatTranscript(legacy).notes).toEqual(current.notes);
+    const imported = importChatTranscript(store, { transcript: legacy, idempotencyKey: 'v1-note' });
+    expect(exportChatTranscript(store, imported.chat.id).notes).toEqual(current.notes);
+    const receipt = store.db
+      .prepare(
+        "SELECT entity_id FROM events WHERE kind='chat.transcript-import-receipt' AND chat_id=?"
+      )
+      .get(imported.chat.id) as { entity_id: string };
+    expect(JSON.parse(receipt.entity_id).digest).toBe(
+      createHash('sha256')
+        .update(JSON.stringify({ ...legacy, exportedAt: undefined }))
+        .digest('hex')
+    );
+    expect(
+      importChatTranscript(store, { transcript: legacy, idempotencyKey: 'v1-note' }).created
+    ).toBe(false);
+    expect(() => validateChatTranscript({ ...legacy, version: 2 })).toThrow(
+      'CHAT_TRANSCRIPT_INVALID_NOTE_KIND'
+    );
+  });
+
   test('the largest editable source and full chat title round trip without truncation', async () => {
     const store = await database();
     const { chat, first } = authoredChat(store);
@@ -191,7 +262,7 @@ describe('chat transcript export and import', () => {
       { request: 'Continue', text: 'Scene two.', translation: null },
     ]);
     expect(transcript.notes).toEqual([
-      { text: 'Keep the narrator formal.', author: 'user', atIndex: 0 },
+      { text: 'Keep the narrator formal.', author: 'user', atIndex: 0, kind: 'author-note' },
     ]);
     expect(transcript.packageAttachments.map((item) => item.role)).toEqual(['bot', 'module']);
     expect(JSON.stringify(transcript)).not.toMatch(/snapshot|usage|attempt|runId/);
@@ -407,7 +478,7 @@ describe('chat transcript export and import', () => {
     const before = store.chats().length;
     const cases: [unknown, string][] = [
       [{ ...transcript, format: 'uimori-archive' }, 'CHAT_TRANSCRIPT_INVALID_FORMAT'],
-      [{ ...transcript, version: 2 }, 'CHAT_TRANSCRIPT_UNSUPPORTED_VERSION'],
+      [{ ...transcript, version: 3 }, 'CHAT_TRANSCRIPT_UNSUPPORTED_VERSION'],
       [{ ...transcript, runs: [] }, 'CHAT_TRANSCRIPT_UNKNOWN_FIELD'],
       [
         { ...transcript, entries: [{ request: 'x', text: '   ', translation: null }] },

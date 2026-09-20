@@ -13,6 +13,7 @@ import {
   type ProviderProtocol,
 } from '../core/product.js';
 import type { Run, RunSnapshot } from '../core/types.js';
+import { installJevFixture } from './fixtures/jev.js';
 
 const roots: Record<ProviderProtocol, string> = {
   'fixture-sse-v1': 'http://127.0.0.1:9/turn',
@@ -40,6 +41,7 @@ beforeEach(() => {
   vi.stubEnv(env, 'SYNTHETIC_TEST_VALUE');
 });
 afterEach(async () => {
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   for (const item of owned.splice(0).reverse()) {
@@ -483,7 +485,8 @@ describe('provider settings, catalogs and archive contracts', () => {
       started = resolve;
     });
     const wire: { url: string; body: Record<string, unknown> }[] = [];
-    vi.mocked(fetch).mockImplementation(async (url, init) => {
+    const providerFetch = vi.mocked(fetch);
+    providerFetch.mockImplementation(async (url, init) => {
       wire.push({ url: String(url), body: JSON.parse(String(init?.body)) });
       if (wire.length === 1) {
         started();
@@ -493,6 +496,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       }
       return stream('The current configuration writes the next synthetic sentence.');
     });
+    const judgments = installJevFixture();
     try {
       const first = await request<Run>(app, `/chats/${chat.id}/runs`, command());
       await began;
@@ -551,7 +555,8 @@ describe('provider settings, catalogs and archive contracts', () => {
         'PUT'
       );
       await request(app, `/chats/${chat.id}/runs`, command(), 403);
-      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(providerFetch).toHaveBeenCalledTimes(2);
+      expect(judgments).toHaveLength(2);
       expect(app.store.product.profile(chat.id).routes.main).toEqual({ id: disabled.id });
       expect(app.store.run(first.id).snapshot.profile!.models.main).toEqual(frozen);
     } finally {

@@ -35,6 +35,35 @@ export function RisuMessageFrame({
       ),
     [prepared.token]
   );
+  const sendAppearance = useCallback(() => {
+    const root = document.documentElement;
+    const style = getComputedStyle(root);
+    frame.current?.contentWindow?.postMessage(
+      {
+        channel: RISU_FRAME_CHANNEL,
+        token: prepared.token,
+        kind: 'appearance',
+        color: style.getPropertyValue('--text').trim() || getComputedStyle(document.body).color,
+        fontSize: Number.parseFloat(style.getPropertyValue('--reading')) || 18,
+        lineHeight: Number.parseFloat(style.getPropertyValue('--reading-line-height')) || 1.9,
+        fontFamily:
+          root.dataset.readingFont === 'serif'
+            ? 'Georgia, "Batang", "Noto Serif CJK KR", serif'
+            : style.fontFamily,
+        colorScheme: root.dataset.theme === 'dark' ? 'dark' : 'light',
+      },
+      '*'
+    );
+  }, [prepared.token]);
+  useEffect(() => {
+    const observer = new MutationObserver(sendAppearance);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['style', 'data-theme', 'data-reading-font'],
+    });
+    sendAppearance();
+    return () => observer.disconnect();
+  }, [sendAppearance]);
   useEffect(() => {
     sendDisabled(disabled || busy);
   }, [disabled, busy, sendDisabled]);
@@ -56,6 +85,7 @@ export function RisuMessageFrame({
         return;
       if (data.kind === 'ready') {
         sendDisabled(disabledRef.current || locked.current);
+        sendAppearance();
         return;
       }
       if (data.kind === 'resize') {
@@ -92,7 +122,7 @@ export function RisuMessageFrame({
       mounted = false;
       window.removeEventListener('message', receive);
     };
-  }, [prepared, sendDisabled]);
+  }, [prepared, sendDisabled, sendAppearance]);
   return (
     <div className="risu-message-frame" aria-busy={busy}>
       {issue && <p role="alert">{issue}</p>}

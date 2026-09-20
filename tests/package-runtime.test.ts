@@ -5,7 +5,8 @@ const fixture = () =>
   nativeContent({
     name: 'Ari',
     description: 'Authored {{char}} body',
-    system_prompt: 'System {{user}}',
+    system_prompt: 'RETIRED_SYSTEM {{user}}',
+    post_history_instructions: 'Global note {{user}}',
     character_book: {
       entries: [
         { keys: [], comment: 'Always', content: 'Pinned lore', constant: true, enabled: true },
@@ -37,7 +38,9 @@ describe('native content resource projection', () => {
     expect(persona.resources.every((r) => r.id.startsWith(`package:${pkg.id}:persona:`))).toBe(
       true
     );
-    expect(bot.instructions.map((r) => r.text)).toEqual(['System {{user}}']);
+    expect(bot.instructions).toEqual([]);
+    expect(pkg.nativeRisu.card.post_history_instructions).toBe('Global note {{user}}');
+    expect(JSON.stringify(bot)).not.toContain('RETIRED_SYSTEM');
     expect(bot.pinned.some((r) => r.text === 'Optional lore')).toBe(false);
   });
   it('adds selected optional lore while leaving source and discoverable resources intact', () => {

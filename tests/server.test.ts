@@ -90,7 +90,8 @@ async function setup(testMode = true) {
     ],
   };
   bot.package.loreActivation = { mode: 'discoverable' };
-  bot.package.nativeRisu.card.system_prompt = 'Leave the reader choice open.';
+  bot.package.nativeRisu.card.post_history_instructions = 'Leave the reader choice open.';
+  bot.package.nativeRisu.card.system_prompt = 'RETIRED_CARD_SYSTEM_MUST_NOT_EXECUTE';
   const owner = await api<{ id: string }>(url, '/api/content', bot);
   const chat = await api<Chat>(url, '/api/chats', { title: '합성 항구', botId: owner.id });
   return { app, url, chat, directory };
@@ -430,7 +431,7 @@ describe('file SQLite HTTP runtime', () => {
     expect(rebound.statusCode).toBe(403);
   });
 
-  it('F04 reads scoped SQLite references through research calls and applies package main instructions', async () => {
+  it('F04 reads scoped SQLite references through research calls and applies the native global note', async () => {
     const { app, url, chat } = await setup();
     const other = await api<Chat>(url, '/api/chats', { title: '다른 자료 범위' });
     const configured = await api<Chat>(
@@ -448,7 +449,12 @@ describe('file SQLite HTTP runtime', () => {
     expect(result.inputs[0].prefetch).toEqual([]);
     expect(result.inputs[0].results).toEqual([]);
     expect(result.inputs[0].catalog.every((resource) => !('text' in resource))).toBe(true);
-    expect(result.inputs[0].facts).toContain('Leave the reader choice open.');
+    expect(JSON.stringify(result.snapshot.promptCompilation?.messages)).toContain(
+      'Leave the reader choice open.'
+    );
+    expect(
+      JSON.stringify({ inputs: result.inputs, prompt: result.snapshot.promptCompilation })
+    ).not.toContain('RETIRED_CARD_SYSTEM_MUST_NOT_EXECUTE');
     expect(result.toolEvents.map((event) => event.name)).toEqual([
       'knowledge.search',
       'knowledge.read',

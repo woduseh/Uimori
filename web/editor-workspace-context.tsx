@@ -23,6 +23,7 @@ import type {
 } from '../core/edit-drafts.js';
 import { api, ApiError, libraryChangedKey } from './api.js';
 import { ReviewIcon, CloseIcon } from './ui-icons.js';
+import { Dialog } from './Dialog.js';
 import './editor-drafts.css';
 
 type Buffer = {
@@ -716,6 +717,47 @@ export function useUnappliedEditorField(path: string, pending: boolean) {
   useEffect(() => {
     session?.pendingField(path, pending);
   }, [session, path, pending]);
+}
+
+/** Keep routine draft status in the editor header; retain the complete recovery/review UI. */
+export function EditorDraftStatusButton({
+  value,
+}: {
+  value: ReturnType<typeof useServerEditDraft>;
+}) {
+  const [open, setOpen] = useState(false);
+  const { state } = value;
+  const label = state.conflict
+    ? '초안 충돌 확인'
+    : state.error
+      ? '초안 동기화 오류'
+      : state.syncing
+        ? '초안 보관 중'
+        : state.dirty
+          ? '이 기기에 보관됨'
+          : '초안 보관됨';
+  return (
+    <>
+      <button
+        type="button"
+        className="ghost editor-draft-status-button"
+        aria-label="초안 상태와 변경 검토"
+        title={label}
+        onClick={() => setOpen(true)}
+      >
+        <ReviewIcon size={18} aria-hidden="true" />
+        <span role="status">{label}</span>
+      </button>
+      <Dialog
+        open={open}
+        title="초안 상태와 변경 검토"
+        onClose={() => setOpen(false)}
+        className="editor-draft-dialog"
+      >
+        <EditorDraftStatus value={value} />
+      </Dialog>
+    </>
+  );
 }
 
 export function EditorDraftStatus({

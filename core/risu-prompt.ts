@@ -3,8 +3,10 @@ import { validateAgentCollaboration } from './agent-collaboration.js';
 import {
   validateNativeRisuPreset,
   nativeRisuPresetControls,
+  nativeRisuBlockEnabled,
   type NativeRisuPreset,
 } from './risu-native-preset.js';
+import { nativeChatMlMessages, type NativePromptMessage } from './risu-native-messages.js';
 import {
   PromptBudget,
   jsonStringSize,
@@ -17,6 +19,7 @@ export type PromptRoleName = 'system' | 'user' | 'assistant';
 /** A UI projection of the preset's native toggle declarations, never an authored AST. */
 export type PromptControl = {
   id: string;
+  nativeKey?: string;
   label: string;
   type: 'select' | 'text' | 'number' | 'boolean';
   default: PromptValue;
@@ -56,9 +59,12 @@ export type PromptCacheAnchor = {
   afterMessageId: string;
   policy: 'prefer' | 'require';
 };
-export type PromptCompilerVersion = 'risu-native-prompt-1';
-export const PROMPT_COMPILER_VERSION: PromptCompilerVersion = 'risu-native-prompt-1';
-const PROMPT_COMPILER_VERSIONS: ReadonlySet<unknown> = new Set([PROMPT_COMPILER_VERSION]);
+export type PromptCompilerVersion = 'risu-native-prompt-1' | 'risu-native-prompt-2';
+export const PROMPT_COMPILER_VERSION: PromptCompilerVersion = 'risu-native-prompt-2';
+export const PROMPT_COMPILER_VERSIONS: ReadonlySet<unknown> = new Set([
+  'risu-native-prompt-1',
+  PROMPT_COMPILER_VERSION,
+]);
 export type PromptCompilation = {
   usedSlots?: string[];
   execution?: { storySubmission: boolean };
@@ -112,6 +118,10 @@ function str(value: unknown, max = 200): asserts value is string {
 function id(value: unknown): asserts value is string {
   str(value, 160);
   if (!value || !/^[a-zA-Z0-9_.:-]+$/u.test(value)) fail('PROMPT_INVALID_ID');
+}
+function controlKey(value: unknown): asserts value is string {
+  str(value, 1500);
+  if (!value || /\p{Cc}/u.test(value)) fail('PROMPT_INVALID_ID');
 }
 function primitive(value: unknown): asserts value is PromptValue {
   if (
@@ -232,7 +242,7 @@ export function validateProviderPrompt(value: unknown): ProviderPrompt {
       fail('PROMPT_INVALID_CACHE');
   }
   for (const [key, value] of Object.entries(p.values)) {
-    id(key);
+    controlKey(key);
     primitive(value);
   }
   if (JSON.stringify(value).length > 1_500_000) fail('PROMPT_COMPILED_LIMIT');
@@ -282,8 +292,9 @@ export function validateControlDefinitions(value: unknown): PromptControl[] {
   if (!Array.isArray(value) || value.length > 150) fail('PROMPT_INVALID_CONTROLS');
   const ids = new Set<string>();
   for (const raw of value) {
-    const c = object(raw, ['id', 'label', 'type', 'default', 'options', 'group']);
-    id(c.id);
+    const c = object(raw, ['id', 'nativeKey', 'label', 'type', 'default', 'options', 'group']);
+    controlKey(c.id);
+    if (c.nativeKey !== undefined) str(c.nativeKey, 120);
     str(c.label, 200);
     if (ids.has(c.id)) fail('PROMPT_DUPLICATE_CONTROL');
     ids.add(c.id);
@@ -323,10 +334,10 @@ export function resolvePromptValues(
 }
 export const resolveEditablePromptValues = resolvePromptValues;
 export function reconcilePromptValues(
-  program: RisuPrompt,
+  program: RisuPrompt | PromptControl[],
   values: Record<string, PromptValue> = {}
 ): { values: Record<string, PromptValue>; resetKeys: string[] } {
-  const controls = promptControls(program);
+  const controls = Array.isArray(program) ? program : promptControls(program);
   const resetKeys = Object.keys(values).filter((key) => !controls.some((c) => c.id === key));
   const resolved = Object.fromEntries(
     controls.map((control) => {
@@ -355,6 +366,9 @@ export function compileRisuPrompt(
     values?: Record<string, PromptValue>;
     slots: Record<string, string>;
     history: PromptHistoryMessage[];
+    examples?: NativePromptMessage[];
+    names?: { char: string; user: string };
+    controls?: PromptControl[];
     runtime?: Record<string, RuntimeValue>;
     limits?: PromptEvaluationLimits;
     budget?: PromptBudget;
@@ -369,9 +383,13 @@ export function compileRisuPrompt(
     )
       fail('PROMPT_INVALID_HISTORY_SOURCE');
   }
-  if (context.compilerVersion !== undefined && context.compilerVersion !== PROMPT_COMPILER_VERSION)
+  if (
+    context.compilerVersion !== undefined &&
+    !PROMPT_COMPILER_VERSIONS.has(context.compilerVersion)
+  )
     fail('PROMPT_INVALID_COMPILED');
-  const values = resolvePromptValues(program, context.values),
+  const legacy = context.compilerVersion === 'risu-native-prompt-1';
+  const values = resolveControlValues(context.controls ?? promptControls(program), context.values),
     messages: LogicalMessage[] = [],
     cachePlan: PromptCacheAnchor[] = [],
     trace: PromptCompilation['trace'] = [],
@@ -398,7 +416,7 @@ export function compileRisuPrompt(
         provenance: { blockId: id, origin: 'prompt' },
       });
   };
-  const insert = (format: string, slot: string) => {
+  const legacyInsert = (format: string, slot: string) => {
     if (!Object.hasOwn(context.slots, slot)) fail('PROMPT_UNKNOWN_SLOT', slot);
     const content = context.slots[slot];
     if (content) usedSlots.add(slot);
@@ -408,21 +426,40 @@ export function compileRisuPrompt(
     const id = `risu-block-${index + 1}`,
       type = text(raw.type),
       start = messages.length;
-    const included =
-      type === 'jailbreak'
+    const included = legacy
+      ? type === 'jailbreak'
         ? preset.jailbreakToggle !== false
         : type === 'cot'
           ? preset.chainOfThought !== false
-          : type !== 'memory';
+          : type !== 'memory'
+      : nativeRisuBlockEnabled(program.nativeRisuPreset, type);
     if (!included) {
       trace.push({ blockId: id, included: false, messageIds: [], reason: 'disabled' });
       continue;
     }
     if (['plain', 'jailbreak', 'cot'].includes(type)) {
       const content = text(raw.text);
-      add(id, raw.type2 === 'globalNote' ? insert(content, 'globalNote') : content, role(raw.role));
+      add(
+        id,
+        legacy && raw.type2 === 'globalNote' ? legacyInsert(content, 'globalNote') : content,
+        role(raw.role)
+      );
+    } else if (type === 'chatML' && !legacy) {
+      for (const [part, message] of nativeChatMlMessages(text(raw.text)).entries())
+        add(`${id}:chatml-${part}`, message.text, message.role);
     } else if (type === 'chat') {
-      const size = context.history.length,
+      const history: (
+        | PromptHistoryMessage
+        | (NativePromptMessage & { id: string; example: true })
+      )[] = [
+        ...(legacy ? [] : (context.examples ?? [])).map((item, i) => ({
+          ...item,
+          id: `example-${i}`,
+          example: true as const,
+        })),
+        ...context.history,
+      ];
+      const size = history.length,
         offset = (n: number) => Math.min(size, Math.max(0, n < 0 ? size + n : n));
       const from =
         raw.rangeStart === -1000
@@ -433,13 +470,28 @@ export function compileRisuPrompt(
           ? size
           : offset(Number(raw.rangeEnd));
       if (!Number.isSafeInteger(to) || from > to) fail('PROMPT_REVERSED_HISTORY', id);
-      for (const item of context.history.slice(from, to)) {
+      for (const item of history.slice(from, to)) {
         if (usedHistory.has(item.id)) fail('PROMPT_DUPLICATE_HISTORY', id);
         usedHistory.add(item.id);
+        if ('example' in item) {
+          add(
+            `${id}:${item.id}`,
+            item.text,
+            settings.sendChatAsSystem && !raw.chatAsOriginalOnSystem ? 'system' : item.role
+          );
+          continue;
+        }
+        const name = item.role === 'user' ? context.names?.user : context.names?.char;
+        const content =
+          !legacy && settings.sendName && name
+            ? item.sourceKind === 'authored-start'
+              ? `${name}: ${item.text}`
+              : `<${name}'s Message>\n${item.text}\n</${name}'s Message>`
+            : item.text;
         messages.push({
           id: `${id}:${item.id}`,
           role: settings.sendChatAsSystem && !raw.chatAsOriginalOnSystem ? 'system' : item.role,
-          content: [{ type: 'text', text: item.text }],
+          content: [{ type: 'text', text: content }],
           completion: 'complete',
           provenance: {
             blockId: id,
@@ -467,19 +519,26 @@ export function compileRisuPrompt(
       const content = context.slots[slot] || (type === 'authornote' ? text(raw.defaultText) : '');
       if (content) {
         usedSlots.add(slot);
+        const formatted = legacy || ['persona', 'description', 'authornote'].includes(type);
         add(
           id,
-          text(raw.innerFormat)
+          formatted && text(raw.innerFormat)
             ? text(raw.innerFormat).replace('{{slot}}', () => content)
             : content,
-          role(raw.role2)
+          formatted ? role(raw.role2) : 'system'
         );
       }
+      if (!legacy && type === 'postEverything' && settings.postEndInnerFormat)
+        add(`${id}:post-end`, text(settings.postEndInnerFormat), 'system');
     } else fail('RISU_NATIVE_PRESET_BLOCK', type);
     trace.push({ blockId: id, included: true, messageIds: messages.slice(start).map((m) => m.id) });
   }
-  if (settings.postEndInnerFormat)
-    add('risu-post-end', insert(text(settings.postEndInnerFormat), 'postEverything'), 'system');
+  if (legacy && settings.postEndInnerFormat)
+    add(
+      'risu-post-end',
+      legacyInsert(text(settings.postEndInnerFormat), 'postEverything'),
+      'system'
+    );
   if (settings.assistantPrefill)
     add('risu-assistant-prefill', text(settings.assistantPrefill), 'assistant', 'prefill');
   if (messages.some((m, i) => m.completion === 'prefill' && i !== messages.length - 1))
@@ -489,7 +548,7 @@ export function compileRisuPrompt(
   return {
     usedSlots: [...usedSlots],
     ...(program.execution ? { execution: { ...program.execution } } : {}),
-    compilerVersion: PROMPT_COMPILER_VERSION,
+    compilerVersion: context.compilerVersion ?? PROMPT_COMPILER_VERSION,
     values,
     messages,
     cachePlan,
@@ -503,7 +562,7 @@ export function validateChatPromptControls(value: unknown): ChatPromptControls {
   const values = (v: unknown) => {
     if (!isObject(v) || Object.keys(v).length > 150) fail('PROMPT_INVALID_VALUES');
     for (const [key, item] of Object.entries(v)) {
-      id(key);
+      controlKey(key);
       primitive(item);
     }
     return structuredClone(v) as Record<string, PromptValue>;

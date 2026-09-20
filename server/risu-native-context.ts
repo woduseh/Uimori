@@ -11,7 +11,8 @@ import type { RisuContentSource } from '../core/risu-native.js';
 import { resolveTemplateVariableContext } from '../core/template-variables.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 import { createHash } from 'node:crypto';
-import { resolvePromptValues } from '../core/risu-prompt.js';
+import { resolveControlValues } from '../core/risu-prompt.js';
+import { effectiveRisuControls, nativeToggleVariables } from '../core/risu-effective-controls.js';
 
 export function nativeRisuSessionKey(snapshot: RunSnapshot): string {
   const revisions = nativeRisuPackages(snapshot).map(({ attachment, native }) => [
@@ -80,6 +81,7 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
     },
   };
   const identity = packageIdentityFromProfile(snapshot.profile!);
+  const controls = effectiveRisuControls(snapshot.profile!, preset?.program);
   const assetUrls: Record<string, string> = Object.create(null);
   for (const entry of entries)
     for (const asset of entry.native.assets) {
@@ -94,19 +96,20 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
     background: natives.map(nativeRisuBackground).filter(Boolean).join('\n'),
     charName: identity.bot.name,
     userName: identity.user.name,
-    globalVariables: preset
-      ? Object.fromEntries(
-          Object.entries(
-            resolvePromptValues(
-              preset.program,
-              snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values ??
-                preset.values
-            )
-          ).map(([key, value]) => [`toggle_${key}`, String(value)])
-        )
-      : {},
-    mainPrompt: typeof presetSource?.mainPrompt === 'string' ? presetSource.mainPrompt : '',
-    globalNote: typeof presetSource?.globalNote === 'string' ? presetSource.globalNote : '',
+    globalVariables: nativeToggleVariables(
+      controls,
+      resolveControlValues(
+        controls,
+        preset
+          ? (snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values ??
+              preset.values)
+          : {}
+      )
+    ),
+    globalNote:
+      typeof base.card.post_history_instructions === 'string'
+        ? base.card.post_history_instructions
+        : '',
     now: snapshot.executionClock ? Date.parse(snapshot.executionClock.iso) : 0,
     variables: {
       ...resolveTemplateVariableContext(snapshot.profile).variables,

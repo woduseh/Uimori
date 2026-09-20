@@ -168,8 +168,14 @@ describe('collaboration limits and references', () => {
     }
   });
 
-  test('shared controls accept existing prompt IDs, enforce uniqueness and optionally check existence', () => {
-    const sharedControls = ['Style.Mode:1', '_private', 'a'.repeat(160)];
+  test('shared controls accept native keys and host aliases, enforce uniqueness and optionally check existence', () => {
+    const sharedControls = [
+      'Style.Mode:1',
+      '_private',
+      '한글 옵션',
+      'risu-toggle:__proto__',
+      'a'.repeat(1500),
+    ];
     const value = { ...config(), sharedControls };
     expect(validateAgentCollaboration(value)).toEqual(value);
     expect(validateAgentCollaboration(value, sharedControls)).toEqual(value);
@@ -185,16 +191,7 @@ describe('collaboration limits and references', () => {
     ).toEqual(maximum);
     rejects({ ...config(), sharedControls: [...maximum, 'extra'] });
     rejects({ ...config(), sharedControls: ['same', 'same'] }, 'DUPLICATE_CONTROL');
-    for (const id of [
-      '',
-      'a'.repeat(161),
-      'space id',
-      'a\n',
-      '__proto__',
-      'constructor',
-      'prototype',
-      1,
-    ])
+    for (const id of ['', 'a'.repeat(1501), 'a\n', '__proto__', 'constructor', 'prototype', 1])
       rejects({ ...config(), sharedControls: [id] }, 'INVALID_CONTROL_ID');
   });
 

@@ -2,21 +2,22 @@
 
 한 분기의 **요청·원문·최신 번역·사용자 메모**를 담는 작은 JSON 형식이에요. 외부에서 작성한 본문을 새 채팅으로 읽거나 글만 교환할 때 사용해요. 모든 분기·자료 본문·이미지·상태·실행 기록까지 보존하려면 [채팅 전체 백업](CHAT-BACKUP.md)을 사용해요. 파일 형식의 버전은 SQLite schema와 독립이며, 지원하지 않는 파일 버전은 거절해요.
 
-## 형식 · `uimori-chat-transcript` v1
+## 형식 · `uimori-chat-transcript` v2
 
 정의는 `core/chat-transcript.ts`, 검증은 `validateChatTranscript`예요.
 
 | 필드 | 내용 |
 | --- | --- |
-| `format` · `version` | `uimori-chat-transcript` · `1`. 다른 값은 거절해요. |
+| `format` · `version` | `uimori-chat-transcript` · `2`. 가져오기는 기존 `1`도 읽어요. |
 | `exportedAt` | ISO 시각. |
 | `title` | 채팅 제목(200자). |
-| `attachments` | 채팅 프로필의 자료 참조 `{id, revision}` 목록. |
 | `packageAttachments` | 장착 패키지 참조 `{id, revision, role}` 목록. `role`은 `bot`·`persona`·`module`. |
-| `notes` | 사용자 메모 `{text, author, atIndex}`. `atIndex`는 메모가 붙은 항목 번호이고 `null`은 첫 항목 이전이에요. |
+| `notes` | 메모 `{text, author, atIndex, kind, origin?}`. `kind`는 `author-note` 또는 `imported-memory`이며 후자는 `{fileHash, entryId, title}` 출처가 필수예요. `atIndex`는 메모가 붙은 항목 번호이고 `null`은 첫 항목 이전이에요. |
 | `entries` | 순서대로 `{request, text, translation}`. `request`는 그 원문을 만든 요청(빈 문자열 가능), `text`는 최신 수정을 반영한 원문, `translation`은 원문 hash가 일치하는 최신 번역 또는 `null`. |
 
 담지 않는 것: Run·snapshot·attempt·사용량·패키지 상태·추첨·삽화·이미지 배치·구성(outline)·도우미 대화·로어 변경·옵션 위임·읽기 위치·폴더. 이 형식은 언어 정보를 갖지 않아요. 번역은 한 벌만 담아요.
+
+v2는 기존 외부 기억을 사용자 지시로 승격시키지 않고 종류와 출처를 그대로 왕복해요. v1은 `kind`와 `origin`이 없는 사용자 메모 형식이므로 종전과 같이 `author-note`로 읽어요. 이미 v1 파일에서 손실된 외부 기억의 분류·출처는 복구할 수 없어요. 그 구분이 필요한 기존 채팅은 v2로 다시 추출하거나 전체 백업을 사용해요. v2에서 종류를 생략하거나 사용자 메모에 외부 출처를 붙이면 거절해요.
 
 한도: 항목 5,000개, 항목마다 원문 2,000,000자·요청 20,000자·번역 2,000,000자, 메모 500개(본문 32,000자·작성자 200자), 각 참조 목록 300개, 채팅 제목 200자예요. 글자 수는 JavaScript 문자열 길이인 UTF-16 단위로 계산해요. 일반 원문 저장·수정과 본문 가져오기는 `core/content-limits.ts`의 같은 원문·번역·제목 한도를 사용하며 내용을 잘라 맞추지 않아요. HTTP 가져오기 본문 한도는 64MiB여서 개별 항목 한도와 별도로 적용돼요. 알 수 없는 필드도 거절해요.
 

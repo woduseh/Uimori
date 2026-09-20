@@ -1,0 +1,446 @@
+.native-editor {
+  min-width: 0;
+  width: 100%;
+}
+.native-editor [hidden] {
+  display: none !important;
+}
+.native-editor > .section-navigation {
+  display: flex;
+  gap: 24px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  padding: 0;
+  margin: 0;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
+}
+.native-editor > .section-navigation > button {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 54px;
+  padding: 12px 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.native-editor > .section-navigation > button[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.native-editor-split {
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 560px;
+}
+.native-item-list {
+  min-width: 0;
+  padding: 20px 14px 28px 0;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: stretch;
+}
+.native-item-list > input {
+  margin-bottom: 8px;
+  width: 100%;
+}
+.native-list-heading,
+.native-detail-heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.native-list-heading {
+  margin-bottom: 14px;
+}
+.native-list-heading > strong,
+.native-detail-heading > h3 {
+  flex: 1;
+  min-width: 0;
+}
+.native-detail-heading > h3 {
+  margin: 0;
+  font-size: 19px;
+  overflow-wrap: anywhere;
+}
+.native-item-list > button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 13px 12px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+.native-item-list > button[aria-current="true"] {
+  background: var(--accent-soft);
+}
+.native-item-list > button small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.native-item-detail,
+.native-section-body {
+  min-width: 0;
+  padding: 28px 0 32px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.native-section-body {
+  padding-left: 0;
+  max-width: 960px;
+}
+.native-editor label:not(.check) {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.native-editor input:not([type="checkbox"]),
+.native-editor select,
+.native-editor textarea {
+  width: 100%;
+  color: var(--text);
+}
+.native-editor textarea {
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.65;
+  height: auto;
+  min-height: 100px;
+  max-height: none;
+}
+.native-editor textarea[spellcheck="false"] {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.native-editor .native-main-text {
+  min-height: 360px;
+  height: min(46dvh, 550px);
+}
+.native-editor .native-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 1fr);
+  gap: 20px;
+}
+.native-setting-group {
+  display: grid;
+  gap: 20px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.native-advanced {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.native-advanced > summary {
+  min-height: 44px;
+  cursor: pointer;
+}
+.native-advanced[open] > label {
+  margin-block: 16px;
+}
+.native-editor-notice {
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.native-mobile-picker {
+  display: none;
+}
+.prompt-editor .prompt-composer-frame {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+  margin: 0;
+}
+.native-editor .package-portrait-editor {
+  border: 0;
+  background: transparent;
+  padding: 0 0 6px;
+}
+.native-editor .native-section-body > h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.native-panel-fields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.native-form-stack,
+.native-source-editor {
+  display: grid;
+  gap: 24px;
+}
+.native-advanced-tabs {
+  flex-wrap: wrap;
+  width: fit-content;
+}
+.native-content-editor .native-section-body {
+  max-width: 960px;
+}
+@media (max-width: 800px) {
+  .native-editor-split {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+  .native-item-detail {
+    padding-left: 20px;
+  }
+}
+@media (max-width: 600px) {
+  .native-editor > .section-navigation {
+    gap: 22px;
+  }
+  .native-editor-split {
+    display: block;
+    min-height: 0;
+  }
+  .native-item-list {
+    display: none;
+  }
+  .native-item-detail,
+  .native-section-body {
+    padding: 20px 0;
+    gap: 20px;
+  }
+  .native-mobile-picker {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 6px;
+  }
+  .native-mobile-picker button {
+    padding-inline: 8px;
+  }
+  .native-editor .native-field-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .native-editor input,
+  .native-editor select,
+  .native-editor textarea {
+    font-size: 16px;
+  }
+  .native-editor .native-main-text {
+    height: 45dvh;
+    min-height: 280px;
+  }
+}
+.library-page-editing > .library-heading[hidden] {
+  display: none;
+}
+.library-page-editing {
+  --editor-heading-h: 72px;
+}
+.library-page-editing .library-prompt-editor .prompt-editor {
+  margin: 0;
+  max-width: none;
+}
+.library-page-editing .prompt-editor-heading,
+.library-page-editing .library-content-editor > .library-detail-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  min-height: var(--editor-heading-h);
+  z-index: 8;
+  margin: 0 -24px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.prompt-editor-heading > h2,
+.library-page-editing .library-content-editor > .library-detail-heading > h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  order: initial;
+  width: auto;
+}
+.prompt-editor-heading .prompt-save-actions {
+  position: static;
+  order: initial;
+  padding: 0;
+  border: 0;
+  flex: none;
+}
+.prompt-editor-heading .prompt-save-buttons {
+  flex-direction: row;
+  flex-wrap: nowrap;
+}
+.prompt-editor-heading .prompt-save-scope {
+  order: -1;
+  flex: none;
+}
+.prompt-editor-heading .prompt-management-menu > .action-menu-body {
+  top: calc(100% + 4px);
+  bottom: auto;
+}
+.library-page-editing .native-editor > .section-navigation {
+  top: var(--editor-heading-h);
+}
+.library-page-editing .library-content-editor .editor-grid {
+  margin-top: 0;
+}
+@media (max-width: 760px) {
+  .library-page-editing {
+    --editor-heading-h: 64px;
+  }
+  .library-page-editing .prompt-editor-heading,
+  .library-page-editing .library-content-editor > .library-detail-heading {
+    margin-inline: -16px;
+    padding: 8px 16px;
+    gap: 8px;
+  }
+  .prompt-editor-heading .prompt-save-scope {
+    display: none;
+  }
+  .prompt-editor-heading > h2,
+  .library-page-editing .library-content-editor > .library-detail-heading > h2 {
+    font-size: 17px;
+  }
+  .prompt-editor-heading .prompt-save-buttons > button {
+    flex: none;
+  }
+  .library-page-editing .library-detail-actions {
+    flex: none;
+  }
+}
+/* Editor defaults remain prose-friendly; raw JSON opts in to monospace. */
+.prompt-editor .native-editor textarea {
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.prompt-editor .native-editor textarea[spellcheck="false"] {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.native-editor > .section-navigation > button[aria-selected="true"] {
+  background: transparent;
+}
+.editor-draft-status-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.editor-draft-dialog {
+  width: min(720px, 100%);
+}
+@media (max-width: 760px) {
+  .editor-draft-status-button {
+    padding-inline: 8px;
+  }
+  .editor-draft-status-button > span {
+    display: none;
+  }
+  .prompt-editor .native-editor textarea {
+    font-size: 16px;
+  }
+}
+.native-editor-save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+@media (max-width: 600px) {
+  .library-page-editing .mobile-menu {
+    display: none;
+  }
+  .native-editor-save {
+    width: 44px;
+    min-width: 44px;
+    padding-inline: 8px;
+  }
+  .native-editor-save > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+.library-page-editing .library-content-editor {
+  max-width: none;
+  margin: 0;
+}
+.library-page-editing .library-content-editor > .editor-grid {
+  padding-top: 0;
+}
+.native-content-editor .native-section-body {
+  max-width: 856px;
+}
+.native-editor .native-description {
+  min-height: 270px;
+  height: 270px;
+}
+.library-page-editing .library-package-tools {
+  max-width: 856px;
+}
+.library-page-editing .library-savebar {
+  max-width: 856px;
+}
+@media (min-width: 601px) {
+  .library-page-editing .native-editor-split {
+    height: calc(100dvh - var(--editor-heading-h) - 56px);
+    min-height: 0;
+    overflow: hidden;
+  }
+  .library-page-editing .native-item-list,
+  .library-page-editing .native-item-detail {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    min-height: 0;
+  }
+  .library-page-editing .native-item-detail > * {
+    flex-shrink: 0;
+  }
+}
+.native-editor > .section-navigation {
+  scrollbar-width: none;
+}
+/* Headers use the page's full width without expanding an editor's scrollable box. */
+.library-page-editing {
+  padding-inline: 0;
+}
+.library-page-editing .prompt-editor-heading,
+.library-page-editing .library-content-editor > .library-detail-heading {
+  margin-inline: 0;
+}
+.library-page-editing .native-editor {
+  padding-inline: 24px;
+}
+.library-page-editing .library-package-tools,
+.library-page-editing .library-savebar {
+  margin-inline: 24px;
+}
+@media (max-width: 760px) {
+  .library-page-editing .native-editor {
+    padding-inline: 16px;
+  }
+  .library-page-editing .library-package-tools,
+  .library-page-editing .library-savebar {
+    margin-inline: 16px;
+  }
+}

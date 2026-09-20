@@ -561,7 +561,6 @@ describe('standalone context summaries and explicit corrections', () => {
       source,
       kind: 'module',
       digest: preview.digest,
-      memoryIds: [],
       allowPartial: false,
       idempotencyKey: 'native-context',
     });

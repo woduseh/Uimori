@@ -105,9 +105,15 @@ function agentId(value: unknown): string {
   return value;
 }
 
-/** Shared controls use the existing RisuPrompt ID syntax, not the narrower agent syntax. */
+/** Native control keys may contain Unicode; agent IDs keep their narrower host syntax. */
 function controlId(value: unknown): string {
-  if (typeof value !== 'string' || !/^[a-zA-Z0-9_.:-]{1,160}$/u.test(value) || unsafeIds.has(value))
+  if (
+    typeof value !== 'string' ||
+    !value ||
+    value.length > 1500 ||
+    /\p{Cc}/u.test(value) ||
+    unsafeIds.has(value)
+  )
     fail('INVALID_CONTROL_ID');
   return value;
 }

@@ -216,18 +216,7 @@ function AttemptTable({
             </tr>
           </thead>
           <tbody>
-            {(
-              [
-                'main',
-                'translation',
-                'status',
-                'image',
-                'state',
-                'context',
-                'helper',
-                'title',
-              ] as Attempt['role'][]
-            ).map((role) => {
+            {(Object.keys(roleLabels) as Attempt['role'][]).map((role) => {
               const selected = attempts.filter((attempt) => attempt.role === role);
               const cost = total(selected, 'costUsd');
               return (

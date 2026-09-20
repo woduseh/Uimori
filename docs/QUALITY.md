@@ -31,6 +31,10 @@ Reuse relevant results while their source, environment, and test assumptions rem
 
 Browser defaults are defined in [`fixtures/browser-viewports.json`](../fixtures/browser-viewports.json). Shared runners accept `--grep` for focused cases and `--visual` (or `UIMORI_VISUAL_REVIEW=1`) for extra visual checks and screenshots. Failure screenshots and traces are retained. Inspect the rendered output when making a visual claim.
 
+`verify:ui-recovery` covers native bot/preset editing, draft retention across tabs, saved CHARX/RISUP downloads, retired import controls, and isolated message rendering. The representative recovery screens use a 2560 × 1440 desktop viewport and a 412 × 915 mobile viewport (412 px is the requested mobile width; 915 px is the test height). Other suites may choose their own heights while sharing the width defaults.
+
+Actual local Risu materials are opt-in: set `UIMORI_RISU_SAMPLE_ROOT` for `node scripts/verify-risu-native-samples.mjs`, optionally `UIMORI_RISU_SAMPLE_PRESET` for an external `.risup`, and use `--grep` for the intended samples. Source files stay read-only and outside Git; rendered private content remains in ignored evidence directories. These checks use a loopback model fixture and do not establish live-provider quality, physical-mobile behavior, or compatibility with every authored script.
+
 ## Release checks
 
 The [`release-check` runner](../scripts/release-check.mjs) runs `quality:full` and the selected local feature `verify:*` command. The default area is `verify:browser-smoke`; `--full` adds `verify:redesign`. The older `verify:smoke` bundle remains available as an explicit area, but is not repeated automatically. Release/self-host tooling normally uses `--area verify:selfhost`.

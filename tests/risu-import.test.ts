@@ -82,6 +82,7 @@ test('imported bot and preset defaults share one read context with module lore a
     templateDefaultVariables: 'shared=PRESET\nfallback=FALLBACK',
     promptTemplate: [
       { type: 'plain', role: 'system', text: 'PRESET:{{getvar::shared}}/{{getvar::fallback}}' },
+      { type: 'plain', role: 'system', type2: 'globalNote', text: '' },
       { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
     ],
   });
@@ -111,7 +112,6 @@ test('imported bot and preset defaults share one read context with module lore a
   const saved = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'variables',
   });
@@ -145,7 +145,6 @@ test('imported bot and preset defaults share one read context with module lore a
     source: moduleSource,
     kind: 'module',
     digest: modulePreview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'reader-module',
   });
@@ -217,7 +216,7 @@ test('imported bot and preset defaults share one read context with module lore a
 });
 
 test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
-  'card fields stay authored while importing cannot replace the selected prompt: %s',
+  'retired card fields are excluded while active global notes and source bytes remain: %s',
   (globalNote) => {
     const store = database();
     const workspace = modelWorkspace(store);
@@ -247,7 +246,6 @@ test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
     const saved = applyRisuImport(store, {
       source,
       digest: preview.digest,
-      memoryIds: [],
       allowPartial: false,
       idempotencyKey: 'guidance',
     });
@@ -267,21 +265,11 @@ test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
     });
     const delivered = JSON.stringify(compiled.promptCompilation!.messages);
     expect(delivered.match(/KEEP_SELECTED_MAIN/gu)).toHaveLength(1);
-    expect(content.package!.nativeRisu!.card).toMatchObject({
-      personality: 'EXCLUDED_PERSONALITY {{setvar::x::1}}',
-      scenario: 'EXCLUDED_SCENARIO',
-      system_prompt: 'EXCLUDED_MAIN',
-      post_history_instructions: globalNote,
-    });
-    if (globalNote) {
-      expect(
-        content.package!.instructions.find((item) => item.id === 'writing-guidance')
-      ).toMatchObject({
-        id: 'writing-guidance',
-        target: 'main',
-        text: globalNote,
-      });
-    }
+    expect(content.package!.nativeRisu!.card.post_history_instructions).toBe(globalNote);
+    for (const key of ['personality', 'scenario', 'system_prompt'])
+      expect(content.package!.nativeRisu!.card).not.toHaveProperty(key);
+    expect(content.package!.instructions).toEqual([]);
+    expect(delivered).not.toContain('EXCLUDED_');
     expect(modelWorkspace(store)).toEqual(before);
     expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
       source.base64
@@ -330,7 +318,6 @@ test('module JSON registers a reusable module without a bot, chat or memory', as
   const body = {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'module-json',
   };
@@ -407,7 +394,6 @@ test('module lorebook keys, secondary keys and mode remain in authoritative Risu
   const result = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: true,
     idempotencyKey: 'module-keyed',
   });
@@ -439,7 +425,6 @@ test('module scripts remain native source and module import cannot create memory
   const body = {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'scripted-module',
   };
@@ -450,7 +435,7 @@ test('module scripts remain native source and module import cannot create memory
   ).toEqual([{ type: 'output', effect: [{ type: 'triggerlua', code: 'return "not executed"' }] }]);
   expect(() =>
     applyRisuImport(store, { ...body, allowPartial: true, memoryIds: ['lore-0'] })
-  ).toThrow('RISU_IMPORT_MEMORY_SELECTION');
+  ).toThrow('Unknown request field');
   expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
   expect(() =>
     prepareRisuImport({
@@ -484,7 +469,6 @@ test('card display regex stays native without creating a second transform progra
   const saved = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'display-regex',
   });
@@ -512,7 +496,6 @@ test('imported opening identity tokens stay native until the opening runtime eva
   const saved = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'opening-template',
   });
@@ -526,7 +509,7 @@ test('imported opening identity tokens stay native until the opening runtime eva
   );
 });
 
-test('card routes import a usable bot and chat; memory separation is opt-in, exact and idempotent', async () => {
+test('card imports preserve all lore and cannot move it into the first chat notes', async () => {
   const store = database(),
     app = Fastify();
   risuImportRoutes(app, store);
@@ -540,14 +523,13 @@ test('card routes import a usable bot and chat; memory separation is opt-in, exa
     expect(preparation.statusCode).toBe(200);
     const preview = preparation.json();
     expect(preview.summary).toEqual({ lore: 2, starts: 2, images: 0 });
-    expect(preview.lore.every((item: { memoryCandidate: boolean }) => !item.memoryCandidate)).toBe(
+    expect(preview.lore.every((item: object) => !Object.hasOwn(item, 'memoryCandidate'))).toBe(
       true
     );
     expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
     const body = {
       source,
       digest: preview.digest,
-      memoryIds: [],
       allowPartial: false,
       idempotencyKey: 'normal',
     };
@@ -576,33 +558,26 @@ test('card routes import a usable bot and chat; memory separation is opt-in, exa
     expect(store.story.notes.revision(result.chat.id)).toBe(0);
     expect(JSON.stringify(bot)).not.toContain(source.base64);
     const selectedBody = { ...body, idempotencyKey: 'with-memory', memoryIds: ['lore-1'] };
-    const selected = applyRisuImport(store, selectedBody);
+    expect(() => applyRisuImport(store, selectedBody)).toThrow('Unknown request field');
     expect(
-      store.product.get<Content>('content', selected.receipt.items[0].id).package!.lore
-    ).toHaveLength(1);
-    const notes = store.story.notes.entries(store.story.notes.scope(selected.chat!.id, null));
-    expect(notes).toHaveLength(1);
-    expect(notes[0]).toMatchObject({
-      kind: 'imported-memory',
-      text: 'Earlier travel with {{user}}.',
-      atRevision: null,
-      atHash: null,
-      origin: { entryId: 'lore-1', title: 'History' },
-    });
+      (
+        bot.package!.nativeRisu.card.character_book as { entries: { enabled: boolean }[] }
+      ).entries.every((entry) => entry.enabled !== false)
+    ).toBe(true);
+    const secondChat = store.createChat('Another chat', undefined, { botId: bot.id });
     expect(
-      store.db.prepare('SELECT count(*) AS n FROM sources WHERE chat_id=?').get(selected.chat!.id)!
-        .n
-    ).toBe(1);
-    expect(nativeTransferOriginal(store, selected.receipt.id).sourceFiles![0].base64).toBe(
+      store.product
+        .resources(secondChat.id, store.product.snapshot(secondChat.id))
+        .find((item) => item.id.endsWith(':lore:lore-1'))?.text
+    ).toBe('Earlier travel with {{user}}.');
+    expect(store.story.notes.revision(secondChat.id)).toBe(0);
+    expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0].base64).toBe(
       source.base64
     );
-    expect(applyRisuImport(store, selectedBody)).toMatchObject({
-      receipt: { id: selected.receipt.id, created: false },
-      chat: { id: selected.chat!.id },
+    expect(applyRisuImport(store, body)).toMatchObject({
+      receipt: { id: result.receipt.id, created: false },
+      chat: { id: result.chat.id },
     });
-    expect(() => applyRisuImport(store, { ...selectedBody, memoryIds: [] })).toThrow(
-      'NATIVE_TRANSFER_IMPORT_CONFLICT'
-    );
   } finally {
     await app.close();
   }
@@ -713,7 +688,6 @@ test('one CharX imports as a module, attaches to a bot, and uses canonical lore 
     source,
     kind: 'module' as const,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'canonical-module',
   };
@@ -856,7 +830,6 @@ test('module project ZIP reads ordered asset files within one project folder wit
   const result = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'module-project',
   });
@@ -934,7 +907,6 @@ test('charx keeps card-owned images while reading its embedded module; corrupt f
   const body = {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'charx',
   };
@@ -1013,7 +985,6 @@ test('a container beyond the inline limit is staged on disk, imported, and never
       payload: {
         source,
         digest: preview.digest,
-        memoryIds: [],
         allowPartial: true,
         idempotencyKey: 'staged-import',
       },
@@ -1067,7 +1038,6 @@ test('a comment in card text stays in native source without a converted template
   const saved = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'comment',
   });
@@ -1250,14 +1220,16 @@ test('card metadata and typed assets remain in native source without conversion 
   const saved = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: true,
     idempotencyKey: 'surfaces',
   });
   const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
   expect(bot.description).toBe('Written by the card author.');
   expect(bot.package!.description).toBe('Written by the card author.');
-  expect(bot.package!.nativeRisu!.card).toEqual(value.data);
+  const expectedCard = structuredClone(value.data) as Record<string, any>;
+  delete expectedCard.nickname;
+  delete expectedCard.extensions.risuai.license;
+  expect(bot.package!.nativeRisu!.card).toEqual(expectedCard);
   // Image projections link storage; the source keeps their authored roles and extension fields.
   expect(bot.package!.images!.map((image) => image.title)).toEqual(['main', 'happy']);
 
@@ -1270,7 +1242,6 @@ test('card metadata and typed assets remain in native source without conversion 
   const plainSaved = applyRisuImport(store, {
     source: plain,
     digest: plainPreview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'plain-card',
   });
@@ -1294,7 +1265,6 @@ test('creator notes beyond the description limit are cut with an ellipsis and a 
   const saved = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'long-notes',
   });

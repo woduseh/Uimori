@@ -7,7 +7,8 @@ function snapshot(): RunSnapshot {
   const pkg = nativeContent({
     name: 'Ari',
     description: 'EXACT_BODY',
-    system_prompt: 'MAIN_ONLY',
+    system_prompt: 'RETIRED_MAIN_ONLY',
+    post_history_instructions: 'ACTIVE_GLOBAL_NOTE',
     character_book: {
       entries: [
         { keys: [], comment: 'Facts', content: 'EXACT_LORE', constant: true, enabled: true },
@@ -31,14 +32,18 @@ function snapshot(): RunSnapshot {
   };
 }
 describe('frozen Risu resource context', () => {
-  it('provides pinned body, lore and native system instructions without rewriting the source', () => {
+  it('provides pinned body and lore while leaving global-note placement to the native preset', () => {
     const s = snapshot(),
       before = structuredClone(s),
       result = packageContext(s, 'main')!;
     expect(result.pinned.map((r) => r.text)).toEqual(
       expect.arrayContaining(['EXACT_BODY', 'EXACT_LORE'])
     );
-    expect(result.instructions.map((r) => r.text)).toEqual(['MAIN_ONLY']);
+    expect(result.instructions).toEqual([]);
+    expect(s.profile!.packages![0].nativeRisu.card.post_history_instructions).toBe(
+      'ACTIVE_GLOBAL_NOTE'
+    );
+    expect(JSON.stringify(result)).not.toContain('RETIRED_MAIN_ONLY');
     expect(packageSlots(s, 'main')).toMatchObject({ char: 'Ari', lore: 'EXACT_LORE' });
     expect(packageContext(s, 'translation')!.instructions).toEqual([]);
     expect(s).toEqual(before);

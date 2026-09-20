@@ -1,3 +1,4 @@
+import { nativeContent } from './fixtures/native-content.js';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
@@ -25,19 +26,14 @@ async function content(
     text: 'Synthetic source retained verbatim.',
     loading: 'pinned',
     relatedIds: [],
-    package: {
-      version: 1,
-      id: 'synthetic-transfer',
-      revision: 1,
-      title,
-      description: 'Synthetic',
-      body: 'Synthetic source retained verbatim.',
-      lore: [],
-      instructions: [],
-      controls: [],
-      transforms: [],
-      ...(module ? { modules: [{ id: module.id, revision: module.revision }] } : {}),
-    },
+    package: nativeContent(
+      { name: title, description: 'Synthetic source retained verbatim.' },
+      {
+        id: 'synthetic-transfer',
+        ...(module ? { modules: [{ id: module.id, revision: module.revision }] } : {}),
+      },
+      kind
+    ),
   });
 }
 async function openTransfer(page: Page, where = '서재') {
@@ -292,15 +288,13 @@ test('NATIVEUI03 Risu card JSON keeps ordinary lore by default and opens the new
   await expect(
     dialog.getByText('로어 2개 · 시작문 1개 · 이미지 0개', { exact: true })
   ).toBeVisible();
-  const memory = dialog.locator('details.risu-import-memory');
-  await expect(memory).toHaveJSProperty('open', false);
-  await expect(memory.locator('summary').first()).toHaveText(
-    '로어북에서 과거 진행 기억 분리하기 (선택)'
-  );
+  await expect(dialog.locator('.risu-import-memory')).toHaveCount(0);
+  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+  await dialog.getByText('로어 미리보기 (2개)', { exact: true }).click();
   for (const name of ['World', 'Culture'])
     await expect(
-      memory.getByLabel(`${name} 과거 진행 기억으로 옮기기`, { exact: true })
-    ).not.toBeChecked();
+      dialog.locator('.risu-import-lore-entry > summary').filter({ hasText: name })
+    ).toBeVisible();
   const submit = dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true });
   await expect(submit).toBeEnabled();
   const applied = page.waitForResponse(
@@ -311,7 +305,7 @@ test('NATIVEUI03 Risu card JSON keeps ordinary lore by default and opens the new
   const response = await applied;
   expect(response.ok(), await response.text()).toBe(true);
   const payload = response.request().postDataJSON() as RisuImportApply;
-  expect(payload.memoryIds).toEqual([]);
+  expect(payload).not.toHaveProperty('memoryIds');
   expect(payload.allowPartial).toBe(false);
   const imported = (await response.json()) as RisuImportResult;
   expect(imported.chat).not.toBeNull();
@@ -362,7 +356,9 @@ test('NATIVEUI04 Risu module JSON registers a library module without creating a 
   await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await expect(dialog.locator('.risu-import-memory')).toHaveCount(0);
   await expect(
-    dialog.getByText('.risum 파일 직접 가져오기는 지원하지 않아요.', { exact: true })
+    dialog.getByText('.charx, .risum, 카드·모듈 JSON, 모듈 프로젝트 ZIP을 가져올 수 있어요.', {
+      exact: true,
+    })
   ).toBeVisible();
   const applied = page.waitForResponse(
     (response) =>
@@ -372,7 +368,7 @@ test('NATIVEUI04 Risu module JSON registers a library module without creating a 
   const response = await applied;
   expect(response.ok(), await response.text()).toBe(true);
   const imported = (await response.json()) as RisuImportResult;
-  expect((response.request().postDataJSON() as RisuImportApply).memoryIds).toEqual([]);
+  expect(response.request().postDataJSON()).not.toHaveProperty('memoryIds');
   expect(imported.chat).toBeNull();
   const root = imported.receipt.items.find((item) => item.root)!;
   expect(root.category).toBe('module');

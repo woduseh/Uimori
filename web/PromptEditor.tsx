@@ -3,8 +3,9 @@ import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
 import { CopyIcon, SaveIcon } from './ui-icons.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
+import { RisuExportButton } from './RisuExportButton.js';
 import type { ContentRef, Library, PromptPreset, PromptRole } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import {
@@ -18,6 +19,7 @@ import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import {
   EditorDraftProvider,
   EditorDraftStatus,
+  EditorDraftStatusButton,
   useServerEditDraft,
 } from './editor-workspace-context.js';
 import type { PromptDraftModel } from '../core/edit-drafts.js';
@@ -38,6 +40,8 @@ type Draft = {
   program: RisuPrompt;
 };
 type Props = {
+  heading?: ReactNode;
+  headingTrailing?: ReactNode;
   initialRole?: PromptRole;
   initialPreset?: PromptPreset | null;
   onSaved?: (preset: PromptPreset, created: boolean) => Promise<void>;
@@ -57,6 +61,8 @@ const draftFor = (role: PromptRole, preset?: PromptPreset): Draft => ({
 });
 
 export function PromptEditor({
+  heading,
+  headingTrailing,
   initialRole = 'main',
   initialPreset,
   onSaved,
@@ -242,6 +248,153 @@ export function PromptEditor({
   }
   const pendingSavedText = draft.source !== 'builtin' && draft.source !== 'new' && !draft.base;
   if (!shared.state.ready) return <EditorDraftStatus value={shared} />;
+  const saveActions = (
+    <div className="prompt-save-actions">
+      <div className="prompt-save-buttons">
+        <button
+          type="button"
+          disabled={
+            busy ||
+            pendingSavedText ||
+            pendingTemplate ||
+            !!collaborationIssue ||
+            !draft.title.trim() ||
+            (!!draft.base && !draft.dirty)
+          }
+          className="primary native-editor-save"
+          onClick={() => void save(!!draft.base)}
+        >
+          <SaveIcon size={18} aria-hidden="true" /> <span>프리셋 저장</span>
+        </button>
+        {draft.base && (
+          <ActionMenu label="프롬프트 관리" className="prompt-management-menu">
+            <RisuExportButton
+              kind="prompt-presets"
+              id={draft.base.id}
+              revision={draft.base.revision}
+              title={draft.base.title}
+              disabled={busy || draft.dirty || pendingTemplate}
+              onError={setError}
+            />
+            {draft.base && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={
+                  pendingSavedText || pendingTemplate || !!collaborationIssue || !draft.title.trim()
+                }
+                onClick={() => void save(false)}
+              >
+                <CopyIcon size={18} aria-hidden="true" /> 복사본으로 저장
+              </button>
+            )}
+            {draft.base && (
+              <DeleteButton
+                path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
+                revision={draft.base.revision}
+                title={draft.base.title}
+                label="프롬프트 삭제"
+                disabled={busy}
+                onError={onError}
+                onDeleted={async () => {
+                  const removed = draft.base!.id;
+                  setLocalPresets((current) => current.filter((item) => item.id !== removed));
+                  for (const key of Object.keys(draftCache.current))
+                    if (draftCache.current[key].base?.id === removed)
+                      delete draftCache.current[key];
+                  setComposerDirty((current) =>
+                    Object.fromEntries(
+                      Object.entries(current).filter(([key]) => !key.includes(`:${removed}@`))
+                    )
+                  );
+                  setDrafts(
+                    (current) =>
+                      Object.fromEntries(
+                        roles.map((role) => [
+                          role,
+                          current[role].base?.id === removed ? draftFor(role) : current[role],
+                        ])
+                      ) as Record<PromptRole, Draft>
+                  );
+                  await reload?.();
+                  setStatus('프롬프트를 삭제했어요.');
+                }}
+              />
+            )}
+          </ActionMenu>
+        )}
+      </div>
+    </div>
+  );
+  const metadata = (
+    <div className="prompt-metadata-fields">
+      <div className="prompt-editor-row">
+        <label>
+          역할
+          <select
+            aria-label="프롬프트 역할"
+            disabled={pendingTemplate || !!initialPreset}
+            value={role}
+            onChange={(event) => {
+              setRole(event.target.value as PromptRole);
+              setError('');
+              setStatus('');
+            }}
+          >
+            <option value="main">작문</option>
+            <option value="translation">번역</option>
+          </select>
+        </label>
+        {initialPreset === undefined && (
+          <label>
+            불러올 프롬프트
+            <select
+              aria-label="불러올 프롬프트"
+              disabled={pendingTemplate}
+              value={draft.source === 'builtin' || draft.source === 'new' ? '' : draft.source}
+              onChange={(event) => choose(event.target.value)}
+            >
+              <option value="" disabled>
+                저장된 프롬프트 선택
+              </option>
+              {presets
+                .filter((item) => item.role === role)
+                .map((item) => (
+                  <option key={keyOf(item)} value={keyOf(item)}>
+                    {item.title}
+                  </option>
+                ))}
+              {pendingSavedText && (
+                <option value={draft.source}>선택한 프롬프트 불러오는 중…</option>
+              )}
+              {draft.base && !presets.some((item) => keyOf(item) === draft.source) && (
+                <option value={draft.source}>{draft.title} · 편집 중</option>
+              )}
+            </select>
+          </label>
+        )}
+        {initialPreset === undefined && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={pendingTemplate}
+            onClick={() => choose('new')}
+          >
+            새 프롬프트 생성
+          </button>
+        )}
+      </div>
+      <label>
+        프롬프트 이름
+        <input
+          aria-label="프롬프트 이름"
+          maxLength={160}
+          value={draft.title}
+          onChange={(event) => edit({ title: event.target.value })}
+        />
+      </label>
+    </div>
+  );
   return (
     <EditorDraftProvider value={shared}>
       <section
@@ -249,7 +402,12 @@ export function PromptEditor({
         data-testid="prompt-editor"
         aria-label="전체 프롬프트 편집"
       >
-        <EditorDraftStatus value={shared} />
+        <div className="prompt-editor-heading">
+          {heading ?? <h2>{draft.title || '프롬프트 편집'}</h2>}
+          <EditorDraftStatusButton value={shared} />
+          {saveActions}
+          {headingTrailing}
+        </div>
         {initialPreset === undefined && (
           <p className="muted">
             본문·메시지 구성과 옵션을 독립된 프리셋으로 저장해요. 현재 프롬프트에서 불러와 사용할 수
@@ -260,75 +418,12 @@ export function PromptEditor({
           className={`prompt-editor-fields${initialPreset !== undefined ? ' prompt-preset-fields' : ''}`}
           disabled={busy}
         >
-          <div className="prompt-editor-row">
-            <label>
-              역할
-              <select
-                aria-label="프롬프트 역할"
-                disabled={pendingTemplate || !!initialPreset}
-                value={role}
-                onChange={(event) => {
-                  setRole(event.target.value as PromptRole);
-                  setError('');
-                  setStatus('');
-                }}
-              >
-                <option value="main">작문</option>
-                <option value="translation">번역</option>
-              </select>
-            </label>
-            {initialPreset === undefined && (
-              <label>
-                불러올 프롬프트
-                <select
-                  aria-label="불러올 프롬프트"
-                  disabled={pendingTemplate}
-                  value={draft.source === 'builtin' || draft.source === 'new' ? '' : draft.source}
-                  onChange={(event) => choose(event.target.value)}
-                >
-                  <option value="" disabled>
-                    저장된 프롬프트 선택
-                  </option>
-                  {presets
-                    .filter((item) => item.role === role)
-                    .map((item) => (
-                      <option key={keyOf(item)} value={keyOf(item)}>
-                        {item.title}
-                      </option>
-                    ))}
-                  {pendingSavedText && (
-                    <option value={draft.source}>선택한 프롬프트 불러오는 중…</option>
-                  )}
-                  {draft.base && !presets.some((item) => keyOf(item) === draft.source) && (
-                    <option value={draft.source}>{draft.title} · 편집 중</option>
-                  )}
-                </select>
-              </label>
-            )}
-            {initialPreset === undefined && (
-              <button
-                type="button"
-                className="secondary"
-                disabled={pendingTemplate}
-                onClick={() => choose('new')}
-              >
-                새 프롬프트 생성
-              </button>
-            )}
-          </div>
-          <label>
-            프롬프트 이름
-            <input
-              aria-label="프롬프트 이름"
-              maxLength={160}
-              value={draft.title}
-              onChange={(event) => edit({ title: event.target.value })}
-            />
-          </label>
+          {initialPreset === undefined && metadata}
           <fieldset className="prompt-composer-frame" disabled={pendingSavedText}>
             <NativeRisuPresetEditor
               key={`${role}:${draft.source}`}
               program={draft.program}
+              metadata={initialPreset !== undefined ? metadata : undefined}
               values={model.values}
               onValuesChange={(values) => {
                 controlDraftCache.current[`${role}:${draft.source}`] = {
@@ -345,93 +440,22 @@ export function PromptEditor({
                 edit({ program });
               }}
               onPendingDraftChange={setPendingTemplate}
+              collaboration={
+                role === 'main' ? (
+                  <AgentCollaborationEditor
+                    expanded={collaborationExpanded}
+                    onExpandedChange={setCollaborationExpanded}
+                    value={draft.program.collaboration}
+                    controls={promptControls(draft.program)}
+                    models={library.models}
+                    onChange={(collaboration) =>
+                      edit({ program: { ...draft.program, collaboration } })
+                    }
+                  />
+                ) : undefined
+              }
             />
-
-            {role === 'main' && (
-              <AgentCollaborationEditor
-                expanded={collaborationExpanded}
-                onExpandedChange={setCollaborationExpanded}
-                value={draft.program.collaboration}
-                controls={promptControls(draft.program)}
-                models={library.models}
-                onChange={(collaboration) => edit({ program: { ...draft.program, collaboration } })}
-              />
-            )}
           </fieldset>
-          <div className="prompt-save-actions">
-            <div className="prompt-save-buttons">
-              <button
-                type="button"
-                disabled={
-                  pendingSavedText ||
-                  pendingTemplate ||
-                  !!collaborationIssue ||
-                  !draft.title.trim() ||
-                  (!!draft.base && !draft.dirty)
-                }
-                onClick={() => void save(!!draft.base)}
-              >
-                <SaveIcon size={18} aria-hidden="true" /> 프리셋 저장
-              </button>
-              <small className="prompt-save-scope">
-                {draft.base
-                  ? '전역 사용 설정 유지 · 고정 채팅은 다음 요청부터 반영'
-                  : '새 프리셋으로 저장해요. 현재 프롬프트에 불러와 사용할 수 있어요.'}
-              </small>
-              {draft.base && (
-                <ActionMenu label="프롬프트 관리" className="prompt-management-menu">
-                  {draft.base && (
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={
-                        pendingSavedText ||
-                        pendingTemplate ||
-                        !!collaborationIssue ||
-                        !draft.title.trim()
-                      }
-                      onClick={() => void save(false)}
-                    >
-                      <CopyIcon size={18} aria-hidden="true" /> 복사본으로 저장
-                    </button>
-                  )}
-                  {draft.base && (
-                    <DeleteButton
-                      path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
-                      revision={draft.base.revision}
-                      title={draft.base.title}
-                      label="프롬프트 삭제"
-                      disabled={busy}
-                      onError={onError}
-                      onDeleted={async () => {
-                        const removed = draft.base!.id;
-                        setLocalPresets((current) => current.filter((item) => item.id !== removed));
-                        for (const key of Object.keys(draftCache.current))
-                          if (draftCache.current[key].base?.id === removed)
-                            delete draftCache.current[key];
-                        setComposerDirty((current) =>
-                          Object.fromEntries(
-                            Object.entries(current).filter(([key]) => !key.includes(`:${removed}@`))
-                          )
-                        );
-                        setDrafts(
-                          (current) =>
-                            Object.fromEntries(
-                              roles.map((role) => [
-                                role,
-                                current[role].base?.id === removed ? draftFor(role) : current[role],
-                              ])
-                            ) as Record<PromptRole, Draft>
-                        );
-                        await reload?.();
-                        setStatus('프롬프트를 삭제했어요.');
-                      }}
-                    />
-                  )}
-                </ActionMenu>
-              )}
-            </div>
-          </div>
         </fieldset>
         <p role="status" className="prompt-status">
           {busy ? '처리 중…' : status}

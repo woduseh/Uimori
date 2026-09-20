@@ -3,8 +3,10 @@ import { basename } from 'node:path';
 import { readFileSync } from 'node:fs';
 import {
   detectRisuImageHandoff,
+  imageHandoffSource,
   projectRisuImageHandoff,
   risuImageGuidance,
+  risuImageHandoffText,
   validateRisuImageHandoff,
 } from '../core/risu-image-handoff.js';
 import { nativeRisuAssetNames, type RisuContentSource } from '../core/risu-native.js';
@@ -78,7 +80,8 @@ test('image handoff moves exact explicit instruction ranges only when automatic 
   expect(projectRisuImageHandoff(original, false)).toBe(original);
   const projected = projectRisuImageHandoff(original, true);
   expect(projected.body).toBe('Keep story configuration.');
-  expect(projected.instructions[0].text).toBe(
+  expect(projected.instructions).toEqual([]);
+  expect(risuImageHandoffText(original, 'card:post_history_instructions')).toBe(
     'A. Narrative\nKeep this.\nD. Outfit\nKeep this too.'
   );
   expect(projected.lore[0].text).toBe('');
@@ -128,6 +131,35 @@ test('disabled lore and folders do not become image instructions', () => {
   expect(
     detectRisuImageHandoff(native)!.ranges.every((range) => range.field.startsWith('card:'))
   ).toBe(true);
+});
+
+test('retired image instruction fields remain readable in historical receipts but never execute', () => {
+  const native = source();
+  const retired = 'C. Image Tag Insertion\nUse <img="retired"> {{setvar::retired::1}}';
+  native.card.scenario = retired;
+  native.card.character_book = { entries: [] };
+  native.card.post_history_instructions = '';
+  const historical = {
+    version: 1 as const,
+    ranges: [
+      {
+        id: 'old-scenario',
+        field: 'card:scenario',
+        start: 0,
+        end: retired.length,
+        text: retired,
+        enabled: true,
+        confidence: 'section' as const,
+      },
+    ],
+    tagTemplates: ['<img="{asset}">'],
+  };
+  expect(validateRisuImageHandoff(historical, native)).toEqual(historical);
+  expect(detectRisuImageHandoff(native)?.ranges).toEqual([]);
+  const value = { ...pkg(native), imageHandoff: historical };
+  expect(imageHandoffSource(native, 'card:scenario')).toBe('');
+  expect(risuImageGuidance(value)).toBe('');
+  expect(risuImageHandoffText(value, 'card:scenario')).toBe('');
 });
 
 test('reverse mapping preserves original image tag spelling and box instead of emitting a generic image', async () => {

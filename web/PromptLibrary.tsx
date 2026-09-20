@@ -239,7 +239,7 @@ export function PromptLibrary({
       aria-label="프롬프트 관리"
       data-testid="prompt-library"
     >
-      <header className="library-heading">
+      <header className="library-heading" hidden={!!editing}>
         {headerLeading}
         <h1>프롬프트</h1>
         {library && !editing && <NativeTransfer library={library} reload={reload} />}
@@ -304,18 +304,22 @@ export function PromptLibrary({
         <p role="status">프롬프트를 불러오는 중이에요…</p>
       ) : editing ? (
         <div className="library-prompt-editor">
-          <div className="library-detail-heading">
-            <IconButton
-              className="secondary"
-              label="프롬프트 목록"
-              icon={BackIcon}
-              onClick={close}
-            />
-            <h2 ref={editorHeading} tabIndex={-1}>
-              {editing.preset?.title ?? '새 프롬프트'}
-            </h2>
-          </div>
           <PromptEditor
+            heading={
+              <>
+                {headerLeading}
+                <IconButton
+                  className="secondary"
+                  label="프롬프트 목록"
+                  icon={BackIcon}
+                  onClick={close}
+                />
+                <h2 ref={editorHeading} tabIndex={-1}>
+                  {editing.preset?.title ?? '새 프롬프트'}
+                </h2>
+              </>
+            }
+            headingTrailing={headerTrailing}
             key={
               editing.preset
                 ? `${editing.preset.id}@${editing.preset.revision}`

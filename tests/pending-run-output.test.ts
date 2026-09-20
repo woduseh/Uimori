@@ -120,6 +120,9 @@ test('cancellation and recovery preserve staged text without publishing source o
   const interrupted = queued(store, recoveryChat.id);
   store.startRun(interrupted.id);
   store.stageRunOutput(interrupted.id, 'Text received before server stop');
+  const variableStates = store.db
+    .prepare('SELECT * FROM chat_variable_states ORDER BY chat_id,branch_id')
+    .all();
 
   expect(rawRun(store, run.id)).toEqual({
     status: 'cancelled',
@@ -141,10 +144,10 @@ test('cancellation and recovery preserve staged text without publishing source o
     usage: null,
   });
   expect(store.db.prepare('SELECT count(*) AS count FROM sources').get()).toEqual({ count: 0 });
-  expect(store.db.prepare('SELECT count(*) AS count FROM story_states').get()).toEqual({
-    count: 0,
-  });
-  expect(store.db.prepare('SELECT count(*) AS count FROM package_behavior_states').get()).toEqual({
+  expect(
+    store.db.prepare('SELECT * FROM chat_variable_states ORDER BY chat_id,branch_id').all()
+  ).toEqual(variableStates);
+  expect(store.db.prepare('SELECT count(*) AS count FROM chat_variable_outputs').get()).toEqual({
     count: 0,
   });
 
