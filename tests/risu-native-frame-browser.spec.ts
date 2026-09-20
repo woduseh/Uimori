@@ -254,6 +254,27 @@ test('native preset blocks reorder by drag and keep the moved block selected', a
   await expect.poll(savedOrder).toEqual(['Second', 'First', 'Third']);
 });
 
+test('native collection rows share drag ordering and selection feedback', async ({ page }) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  await page.goto(origin);
+  await page.evaluate(async () => {
+    const path = '/tests/fixtures/native-regex-editor.tsx';
+    const { mount } = await import(path);
+    mount();
+  });
+  const list = page.getByRole('complementary', { name: '정규식 목록', exact: true });
+  const rows = list.locator(':scope > button');
+  await rows.nth(0).dragTo(rows.nth(2), { targetPosition: { x: 20, y: 48 } });
+  const value = () =>
+    page
+      .locator('output')
+      .textContent()
+      .then((text) => JSON.parse(text!).map((item: { comment: string }) => item.comment));
+  await expect.poll(value).toEqual(['Second rule', 'Future rule', 'First rule']);
+  await expect(page.getByLabel('정규식 이름', { exact: true })).toHaveValue('First rule');
+  await expect(list.getByRole('status')).toContainText('3번째');
+});
+
 test('native regex synced buffers follow parent JSON changes while local and remote drafts survive', async ({
   page,
 }) => {

@@ -75,9 +75,10 @@
   margin-left: 0;
 }
 .nt-body {
+  --native-rail-w: 280px;
   display: grid;
-  grid-template-columns: 210px minmax(0, 1fr);
-  gap: 32px;
+  grid-template-columns: var(--native-rail-w) minmax(0, 1fr);
+  gap: 24px;
   min-height: 560px;
 }
 .nt-groups {
@@ -97,7 +98,7 @@
   text-align: left;
   gap: 8px;
   width: 100%;
-  min-height: 48px;
+  min-height: 52px;
   padding: 10px;
   margin-bottom: 4px;
   font-size: 13px;
@@ -106,6 +107,7 @@
   border: 0;
   background: transparent;
   box-shadow: none;
+  border-radius: 8px;
 }
 .nt-groups > button > svg {
   flex-shrink: 0;

@@ -99,6 +99,12 @@ export function NativeRisuRegexEditor({
             [next[index], next[index + delta]] = [next[index + delta], next[index]];
             write(next);
           }}
+          onReorder={(from, to) => {
+            const next = [...value];
+            const [moved] = next.splice(from, 1);
+            next.splice(to, 0, moved);
+            write(next);
+          }}
           onRemove={(index) => write(value.filter((_, i) => index !== i))}
         >
           {(index) => {

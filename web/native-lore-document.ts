@@ -44,6 +44,71 @@ export function removeLoreFolder(entries: LoreEntry[], index: number): LoreEntry
     });
 }
 
+export type LoreDropPosition = 'before' | 'after' | 'inside' | 'root';
+
+/** Reorder or reparent one native entry without rewriting opaque folder keys or unrelated fields. */
+export function moveLoreEntry(
+  entries: LoreEntry[],
+  sourceIndex: number,
+  targetIndex: number | null,
+  position: LoreDropPosition
+): { entries: LoreEntry[]; index: number } | null {
+  const source = entries[sourceIndex];
+  if (!source || (targetIndex !== null && !entries[targetIndex]) || sourceIndex === targetIndex)
+    return null;
+  const parents = loreParents(entries);
+  const folderOwners = new Map<string, number>();
+  entries.forEach((entry, index) => {
+    const key = loreFolderKey(entry);
+    if (isLoreFolder(entry) && key && !folderOwners.has(key)) folderOwners.set(key, index);
+  });
+  let parentIndex: number | null;
+  if (position === 'root') parentIndex = null;
+  else if (position === 'inside') {
+    if (targetIndex === null || !isLoreFolder(entries[targetIndex])) return null;
+    const key = loreFolderKey(entries[targetIndex]);
+    if (!key || folderOwners.get(key) !== targetIndex) return null;
+    parentIndex = targetIndex;
+  } else {
+    if (targetIndex === null) return null;
+    parentIndex = parents[targetIndex];
+  }
+  if (isLoreFolder(source) && parentIndex !== null) {
+    let cursor: number | null = parentIndex;
+    const visited = new Set<number>();
+    while (cursor !== null) {
+      if (cursor === sourceIndex) return null;
+      if (visited.has(cursor)) return null;
+      visited.add(cursor);
+      cursor = folderOwners.get(loreText(entries[cursor].folder)) ?? null;
+    }
+  }
+  const moved = { ...source };
+  if (parentIndex === null) {
+    if (position === 'root' || parents[sourceIndex] !== null) delete moved.folder;
+  } else moved.folder = loreFolderKey(entries[parentIndex]);
+
+  let anchor = targetIndex;
+  if (position === 'inside' && targetIndex !== null) {
+    const children = entries
+      .map((_, index) => index)
+      .filter((index) => parents[index] === targetIndex);
+    anchor = children.at(-1) ?? targetIndex;
+  } else if (position === 'root') {
+    const roots = entries.map((_, index) => index).filter((index) => parents[index] === null);
+    anchor = roots.at(-1) ?? null;
+  }
+
+  const next = [...entries];
+  next.splice(sourceIndex, 1);
+  let insertion = anchor === null ? next.length : anchor + (position === 'before' ? 0 : 1);
+  if (anchor !== null && sourceIndex < insertion) insertion -= 1;
+  insertion = Math.max(0, Math.min(insertion, next.length));
+  next.splice(insertion, 0, moved);
+  if (insertion === sourceIndex && loreText(source.folder) === loreText(moved.folder)) return null;
+  return { entries: next, index: insertion };
+}
+
 export function newLoreEntry(entries: LoreEntry[], moduleLore: boolean, folder = false): LoreEntry {
   const key = folder ? `\uf000folder:${crypto.randomUUID()}` : '';
   const common = { content: '', mode: folder ? 'folder' : 'normal' };

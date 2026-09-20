@@ -347,6 +347,12 @@ export function RisuNativeFields({
                 [next[i], next[i + delta]] = [next[i + delta], next[i]];
                 writeGreetings(next);
               }}
+              onReorder={(from, to) => {
+                const next = [...greetings];
+                const [moved] = next.splice(from, 1);
+                next.splice(to, 0, moved);
+                writeGreetings(next);
+              }}
               onRemove={(i) =>
                 writeGreetings(greetings.length === 1 ? [''] : greetings.filter((_, n) => n !== i))
               }

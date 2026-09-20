@@ -33,8 +33,10 @@
   border-bottom-color: var(--accent);
 }
 .native-editor-split {
+  --native-rail-w: 280px;
+  --native-row-min-h: 52px;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: var(--native-rail-w) minmax(0, 1fr);
   min-width: 0;
   min-height: 560px;
 }
@@ -63,6 +65,7 @@
 }
 .native-list-heading {
   margin-bottom: 14px;
+  min-height: 40px;
 }
 .native-list-heading > strong,
 .native-detail-heading > h3 {
@@ -85,10 +88,13 @@
   overflow-wrap: anywhere;
   align-content: start;
   line-height: 1.5;
+  min-height: var(--native-row-min-h);
+  border-radius: 8px;
 }
 .native-item-list > button[draggable="true"] {
   cursor: grab;
   position: relative;
+  padding-right: 34px;
 }
 .native-item-list > button[data-dragging="true"] {
   cursor: grabbing;
@@ -112,6 +118,30 @@
 .native-item-list > button[aria-current="true"] {
   background: var(--accent-soft);
 }
+@media (hover: hover) {
+  .native-item-list > button:hover {
+    background: var(--hover);
+  }
+  .native-item-list > button[aria-current="true"]:hover {
+    background: var(--accent-soft);
+  }
+}
+.native-row-drag-handle {
+  position: absolute;
+  inset-inline-end: 8px;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 120ms ease;
+}
+.native-item-list > button:hover .native-row-drag-handle,
+.native-item-list > button:focus-visible .native-row-drag-handle,
+.native-item-list > button[data-dragging="true"] .native-row-drag-handle {
+  opacity: 1;
+}
 .native-item-list > button small {
   color: var(--muted);
   font-size: 12px;
@@ -123,6 +153,22 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+.native-empty {
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  gap: 12px;
+  width: min(100%, 440px);
+  min-height: 280px;
+  padding: 32px;
+  box-sizing: border-box;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+.native-empty p {
+  margin: 0;
 }
 .native-section-body {
   padding-left: 0;
@@ -216,8 +262,9 @@
 }
 .native-advanced-workspace {
   max-width: none;
+  --native-rail-w: 280px;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: var(--native-rail-w) minmax(0, 1fr);
   align-items: stretch;
   gap: 0;
   padding: 0;
@@ -238,8 +285,8 @@
   gap: 6px;
   justify-content: stretch;
   flex: none;
-  min-height: 72px;
-  padding: 12px 14px;
+  min-height: 60px;
+  padding: 10px 14px;
   text-align: left;
   border: 0;
   background: transparent;
@@ -308,7 +355,8 @@
 }
 @media (max-width: 800px) {
   .native-editor-split {
-    grid-template-columns: 190px minmax(0, 1fr);
+    --native-rail-w: 190px;
+    grid-template-columns: var(--native-rail-w) minmax(0, 1fr);
   }
   .native-item-detail {
     padding-left: 20px;
