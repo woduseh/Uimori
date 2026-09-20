@@ -35,6 +35,7 @@
 }
 .lore-context-policy-grid label {
   display: grid;
+  align-content: start;
   gap: 5px;
   min-width: 0;
 }

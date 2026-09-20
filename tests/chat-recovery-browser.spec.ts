@@ -49,6 +49,18 @@ for (const viewport of [
       await expect(dialog.getByLabel('Jev 관련성 기준', { exact: true })).toBeHidden();
       await dialog.getByText('선별 기준과 용량', { exact: true }).click();
       await dialog.getByLabel('Jev 관련성 기준', { exact: true }).fill('0.7');
+      const thresholdBox = await dialog
+        .getByLabel('Jev 관련성 기준', { exact: true })
+        .boundingBox();
+      const budgetBox = await dialog
+        .getByLabel('Jev 선택 로어 토큰 한도', { exact: true })
+        .boundingBox();
+      expect(thresholdBox).not.toBeNull();
+      expect(budgetBox).not.toBeNull();
+      expect(Math.abs(thresholdBox!.height - budgetBox!.height)).toBeLessThanOrEqual(1);
+      if (viewport.width === DESKTOP_WIDTH)
+        expect(Math.abs(thresholdBox!.y - budgetBox!.y)).toBeLessThanOrEqual(1);
+
       await dialog.getByLabel('조회 로어 문자 한도', { exact: true }).fill('');
       await selectChatSettingsSection(page, '이미지');
       const manager = dialog.locator('.chat-settings-image-management');
