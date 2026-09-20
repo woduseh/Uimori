@@ -5,6 +5,7 @@ import type { PackageModuleRef } from '../core/package-features.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import { api } from './api.js';
+import { AddIcon, RefreshIcon } from './ui-icons.js';
 import './package-authoring.css';
 
 const referenceKey = (ref: PackageModuleRef | null | undefined) =>
@@ -143,12 +144,14 @@ export function PackageFeaturesEditor({
   }
   return (
     <div className="package-stack package-authoring-editor" aria-label="패키지 모듈과 기능 편집">
-      <section className="package-stack">
-        <h3>함께 사용하는 모듈</h3>
-        <p className="muted">
-          이 자료를 장착하면 아래 모듈을 함께 사용해요. 여러 자료가 같은 모듈을 요구해도 한 번만
-          포함해요.
-        </p>
+      <section className="package-stack package-module-section">
+        <header className="package-module-heading">
+          <h3>함께 사용하는 모듈</h3>
+          <p className="muted">
+            이 자료를 장착하면 아래 모듈을 함께 사용해요. 여러 자료가 같은 모듈을 요구해도 한 번만
+            포함해요.
+          </p>
+        </header>
         {(value.modules ?? []).map((ref) => {
           const status = statuses[referenceKey(ref)];
           return (
@@ -176,38 +179,46 @@ export function PackageFeaturesEditor({
             </fieldset>
           );
         })}
-        <ContentPicker
-          library={library ?? { contents: [], connections: [], models: [], assets: [] }}
-          value={selected}
-          onChange={setSelected}
-          role="module"
-          label="연결할 공통 모듈"
-          disabled={busy || loading || !library}
-          excludeIds={[value.id, ...(value.modules ?? []).map((ref) => ref.id)]}
-        />
-        <button
-          type="button"
-          className="secondary"
-          disabled={!selected || busy}
-          onClick={() => void addModule()}
-        >
-          필수 모듈 연결
-        </button>
-        <small>서재에서 모듈을 수정하면 다음 실행부터 최신 내용을 사용해요.</small>
+        <div className="package-module-connect">
+          <ContentPicker
+            library={library ?? { contents: [], connections: [], models: [], assets: [] }}
+            value={selected}
+            onChange={setSelected}
+            role="module"
+            label="연결할 공통 모듈"
+            disabled={busy || loading || !library}
+            excludeIds={[value.id, ...(value.modules ?? []).map((ref) => ref.id)]}
+          />
+          <button
+            type="button"
+            className="primary package-module-connect-button"
+            disabled={!selected || busy}
+            onClick={() => void addModule()}
+          >
+            <AddIcon size={17} aria-hidden="true" />
+            모듈 연결
+          </button>
+        </div>
+        <footer className="package-module-footer">
+          <small>서재에서 모듈을 수정하면 다음 실행부터 최신 내용을 사용해요.</small>
+          <button
+            type="button"
+            className="ghost package-module-refresh"
+            disabled={busy || loading}
+            onClick={() => {
+              setError('');
+              setReload((current) => current + 1);
+            }}
+          >
+            <RefreshIcon size={16} aria-hidden="true" />
+            목록 새로고침
+          </button>
+        </footer>
       </section>
-      {loading && <p role="status">자료와 기능 목록을 확인하는 중이에요…</p>}
-      {busy && <p role="status">선택한 자료를 확인하는 중이에요…</p>}
-      <button
-        type="button"
-        className="secondary"
-        disabled={busy || loading}
-        onClick={() => {
-          setError('');
-          setReload((current) => current + 1);
-        }}
-      >
-        자료와 기능 목록 새로고침
-      </button>
+      <div className="package-module-status" aria-live="polite">
+        {loading && <p role="status">자료와 기능 목록을 확인하는 중이에요…</p>}
+        {busy && <p role="status">선택한 자료를 확인하는 중이에요…</p>}
+      </div>
       {error && (
         <p className="error" role="alert">
           {error}

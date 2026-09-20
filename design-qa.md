@@ -231,7 +231,6 @@ Findings fixed during implementation:
 No actionable P0/P1/P2 remains in this implementation scope. This is focused local browser and source-unit evidence, not a new full-suite, live-provider, physical-phone, or IME acceptance claim. Original external Risu files were not edited. Remaining aesthetic adjustments can be evaluated on the working screen.
 
 final result: passed
-
 ## Follow-up: recovery design expanded to remaining screens
 
 The requested recovery folder resolves locally to `C:/Users/wodus/Downloads/Uimori_UI_Recovery_v3`. Its 36 HTML/image references were used alongside the later approved centered editor density and toggle-editor-v2 design. The source's full-width/left-aligned forms and broken three-column mobile library were not reintroduced. Existing Risu-native data, retired-option removal, captions and switches remain authoritative.
@@ -287,5 +286,55 @@ Final screenshots after these fixes were compared again; no actionable P0/P1/P2 
 This is local browser, source-unit and visual evidence. It does not establish live-provider, physical-phone/IME or production acceptance. No external Risu source file, push or deployment was performed.
 
 Final functional follow-up: **P01 passed 1/1** with the correct JSON-encoded select expectation. Receipt `output/playwright/redesign-2026-09-20T05-12-24-388Z-ba2af20a/summary.json` matches final build/source `5e48c9b8ede86c8dd07a23cb82624fdad10318d3d393269d5e496799123aefd8`; cleanup passed. Combined relevant results cover all 51 cases in the corrected focused regression selection, while the separate pre-existing TURNUI05 failure remains disclosed above. The follow-up changed tests only.
+
+final result: passed
+
+---
+
+# 연결 모듈 UI design QA
+
+## 비교 대상
+
+- Source visual truth: `C:\Users\wodus\AppData\Local\Temp\codex-clipboard-ae86bd48-546b-4665-982a-8b71aaaddf88.png`
+- Desktop implementation: `C:\Users\wodus\ai-workspace\uimori\output\playwright\ui-recovery-2026-09-20T07-32-39-090Z-31614f3c\browser\ui-recovery-browser-UI-rec-9bbd0-to-a-current-CHARX-download\bot-advanced-module-picker-desktop.png`
+- Mobile implementation: `C:\Users\wodus\ai-workspace\uimori\output\playwright\ui-recovery-2026-09-20T07-32-39-090Z-31614f3c\browser\ui-recovery-browser-UI-rec-2f0bc-to-a-current-CHARX-download\bot-advanced-module-picker-mobile.png`
+- Full-view comparison: `C:\Users\wodus\ai-workspace\uimori\output\design-qa\connected-modules-source-vs-implementation.png`
+- Focused dialog comparison: `C:\Users\wodus\ai-workspace\uimori\output\design-qa\connected-modules-dialog-comparison.png`
+- State: dark theme, 연결 모듈 고급 설정, 연결 가능한 모듈이 없는 선택 팝업
+
+## Viewport와 정규화
+
+- Source pixels: 3840 × 2088. 브라우저 크롬을 포함한 사용자 캡처이며 CSS viewport와 device pixel ratio는 알 수 없음.
+- Desktop implementation: 2560 × 1440 CSS viewport, device scale factor 1, screenshot pixels 2560 × 1440.
+- Mobile implementation: 412 × 915 CSS viewport, device scale factor 1, screenshot pixels 412 × 915.
+- Full-view 비교에서는 source를 비율 유지한 2560 × 1392로 축소하고 implementation은 원본 2560 × 1440을 유지해 나란히 배치함. 브라우저 크롬과 세로 비율 차이는 정밀 위치 판정에서 제외함.
+- Focused 비교에서는 두 팝업을 각각 잘라 동일한 720 px 폭으로 정규화함.
+
+## Findings
+
+- P0/P1/P2 잔여 항목 없음.
+- Fonts and typography: 기존 시스템 글꼴, 크기, 굵기와 텍스트 색 토큰을 유지했다. 검색과 폴더에 같은 수준의 가시 레이블을 제공해 필터 위계가 일치한다.
+- Spacing and layout rhythm: 선택기와 연결 CTA가 데스크톱에서 같은 기준선에 놓이고 모바일에서는 전체 폭으로 쌓인다. 새로고침은 설명과 묶인 낮은 우선순위 푸터로 이동했다. 팝업 내부는 16 px 흐름, 필터 그리드, 분리된 빈 상태로 정돈되며 데스크톱과 모바일 모두 가로 넘침이 없다.
+- Colors and visual tokens: 배경, 테두리, accent, muted, surface 토큰을 재사용했다. 새 색이나 그라데이션은 추가하지 않았다.
+- Image quality and asset fidelity: 이 화면에는 래스터 이미지가 필요하지 않다. 추가된 연결/새로고침 표시는 프로젝트의 기존 Lucide 아이콘 라이브러리를 사용한다.
+- Copy and content: `모듈 연결`, `목록 새로고침`, 검색/폴더 레이블, 상황별 빈 상태 문구가 각 행동과 상태를 직접 설명한다.
+- Accessibility and interaction: 팝업은 기존 native dialog의 포커스 관리를 유지한다. 검색·폴더의 접근 가능한 이름, 범위 버튼 상태, Escape 닫기, 트리거 포커스 복귀를 확인했다.
+
+## Comparison history
+
+1. Initial source findings
+   - [P2] 전체 폭 선택기 아래에 작은 연결 버튼과 새로고침이 각각 흩어져 주 작업의 순서와 우선순위가 약함.
+   - [P2] 팝업에서 검색만 가시 레이블이 없고 개수·빈 상태·보조 행동 사이의 간격이 없어 내부 위계가 불명확함.
+2. Fixes made
+   - 선택기와 primary 연결 버튼을 반응형 작업 행으로 묶고 안내문과 새로고침을 보조 푸터로 분리함.
+   - 팝업 폭과 body 간격을 조정하고 검색 레이블, 카드형 빈 상태, 보조 행동 푸터를 추가함.
+3. Post-fix evidence
+   - 집중 브라우저 테스트 2개 viewport가 통과함.
+   - 데스크톱 2560 × 1440과 모바일 412 × 915 캡처에서 컨트롤이 viewport 안에 있고 가로 넘침이 없음.
+   - 팝업 열기, 검색/폴더 표시, Escape 닫기, 트리거 포커스 복귀, 해당 상호작용 중 console/page error 없음이 확인됨.
+
+## Follow-up polish
+
+- 없음. 실제 사용자 서재의 긴 모듈 이름과 다수 결과 밀도는 이번 synthetic empty-state 검증 범위 밖이다.
 
 final result: passed
