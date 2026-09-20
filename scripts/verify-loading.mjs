@@ -8,7 +8,6 @@ await runBrowserVerification({
   files: ['tests/loading-browser.spec.ts'],
   limitations: [
     'LOADUI07 projects 65 synthetic navigation entries over two stored fixture sources; off-page synthetic entries do not establish server paging.',
-    'This runner does not replace provider codec, loopback transport, M0 or M1-local verification.',
   ],
   timeout: 180000,
 });

@@ -21,7 +21,8 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 
 | Command | Purpose |
 | --- | --- |
-| `npm run verify:smoke` | M0 F02/F03/F06: environment, build, server identity, generation/conflicts/reconnection, runner selftest, and cleanup. |
+| `npm run quality:full` | Formatting, lint, types, tooling tests, fresh build and complete Vitest suite. |
+| `npm run test:tooling` | Build, verification and release-tooling tests, including failure detection. |
 | `npm run verify:browser-smoke` | Small browser suite for chat and global prompt settings. |
 | `npm run verify:ui` | Reader layout, editing and reading preferences; accepts `--grep` and `--visual`. Renderer unit tests run separately with `npm test -- tests/prose.test.ts`. |
 | Feature-specific `verify:*` scripts | Suites such as `verify:packages`, `verify:providers`, `verify:library`, and `verify:navigation`; see [package scripts](../package.json). |
@@ -30,7 +31,6 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run verify:visual` | Full browser suite with extra viewport and layout checks; use `--grep` to focus it. |
 | `npm run verify:gallery` | Screen and journey captures; see [UI-GALLERY](UI-GALLERY.md). |
 | `npm run benchmark:story` | Repeated long-story performance measurements. |
-| `npm run verify:selftest` | Runner failure-detection tests. |
 
 Feature runners using the [shared browser harness](../scripts/browser-verification.mjs) accept `--grep <pattern>` to narrow their existing selection and `--visual` to enable extra visual checks:
 
@@ -40,15 +40,6 @@ npm run verify:providers -- --grep PMUI03 --visual
 ```
 
 A report records the selected files, filter and executed tests. A run with no tests, failed or skipped tests, or incomplete cleanup fails. Visual runs also list the screenshots they captured; filenames and test titles are not duplicated in a separate acceptance list.
-
-For a specific milestone or case:
-
-```powershell
-npm run verify -- --milestone M1-local --case P07,P08
-npm run verify -- --case F04
-```
-
-`M0`, `M1-local`, and `M2-local` select local synthetic case groups. `M1` and `M2` are aliases for their local groups. These runners reuse a matching build and rebuild only when it is missing or stale; run `quality` separately when lint or type checks are needed. Live-model, creative-quality, and physical-device evaluation are outside these commands.
 
 The worktree isolation runner takes two prepared, clean worktrees at the same commit, each with dependencies and a build:
 

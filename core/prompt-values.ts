@@ -157,10 +157,3 @@ export function inspectRuntimeValue(
   }
   return { nodes, chars };
 }
-export function validateRuntimeValue(
-  value: unknown,
-  limits?: PromptEvaluationLimits
-): RuntimeValue {
-  inspectRuntimeValue(value, new PromptBudget(limits));
-  return structuredClone(value) as RuntimeValue;
-}

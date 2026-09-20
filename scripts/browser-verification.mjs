@@ -15,7 +15,7 @@ import {
   browserPath,
   startServer,
   command,
-  readReport,
+  readBrowserReport,
   requireCommand,
   killOwned,
   removeOwned,
@@ -160,7 +160,7 @@ export async function runBrowserVerification({
     summary.command = record;
     // Preserve both the command failure and the reporter observations.
     try {
-      summary.report = await readReport(reporter, since, 'playwright');
+      summary.report = await readBrowserReport(reporter, since);
     } catch (error) {
       summary.report = error.observations ?? { status: 'FAIL', error: error.message };
       failures.push(error.message);

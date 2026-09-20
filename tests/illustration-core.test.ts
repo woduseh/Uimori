@@ -11,7 +11,6 @@ import {
   parseCodexIllustrationCaption,
   parseComfyWorkflow,
   parseIllustrationPlan,
-  parseIllustrationPrompt,
   randomComfySeed,
 } from '../core/illustration.js';
 import { FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
@@ -59,24 +58,29 @@ describe('ComfyUI API-format workflow templates', () => {
 describe('prompt model output and Codex caption parsing', () => {
   test('accepts fenced, BOM-prefixed and embedded JSON while bounding field lengths', () => {
     expect(
-      parseIllustrationPrompt(
-        '```json\n{"prompt":"a girl","negativePrompt":"text","caption":"소녀"}\n```'
+      parseIllustrationPlan(
+        '```json\n{"prompt":"a girl","negativePrompt":"text","caption":"소녀"}\n```',
+        false
       )
-    ).toEqual({ prompt: 'a girl', negativePrompt: 'text', caption: '소녀' });
-    expect(parseIllustrationPrompt('﻿ {"prompt":"a"} ')).toEqual({
-      prompt: 'a',
-      negativePrompt: '',
-      caption: '',
+    ).toEqual({
+      kind: 'generate',
+      prompt: { prompt: 'a girl', negativePrompt: 'text', caption: '소녀' },
     });
-    expect(parseIllustrationPrompt('Sure! {"prompt":"b","caption":"c"} done')).toMatchObject({
-      prompt: 'b',
-      caption: 'c',
+    expect(parseIllustrationPlan('﻿ {"prompt":"a"} ', false)).toEqual({
+      kind: 'generate',
+      prompt: { prompt: 'a', negativePrompt: '', caption: '' },
     });
-    expect(parseIllustrationPrompt(`{"prompt":"${'x'.repeat(3000)}"}`).prompt).toHaveLength(2000);
+    expect(parseIllustrationPlan('Sure! {"prompt":"b","caption":"c"} done', false)).toMatchObject({
+      kind: 'generate',
+      prompt: { prompt: 'b', caption: 'c' },
+    });
+    const bounded = parseIllustrationPlan(`{"prompt":"${'x'.repeat(3000)}"}`, false);
+    expect(bounded.kind).toBe('generate');
+    if (bounded.kind === 'generate') expect(bounded.prompt.prompt).toHaveLength(2000);
     for (const bad of ['', 'nope', '{"negativePrompt":"only"}', '{"prompt":"  "}', '[1]'])
-      expect(() => parseIllustrationPrompt(bad)).toThrow('ILLUSTRATION_PROMPT_INVALID');
+      expect(() => parseIllustrationPlan(bad, false)).toThrow('ILLUSTRATION_PROMPT_INVALID');
     try {
-      parseIllustrationPrompt('nope');
+      parseIllustrationPlan('nope', false);
     } catch (error) {
       expect((error as IllustrationError).retryable).toBe(true);
     }

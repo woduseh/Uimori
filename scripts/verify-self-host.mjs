@@ -19,7 +19,7 @@ import {
   fingerprint,
   browserPath,
   command,
-  readReport,
+  readBrowserReport,
   requireCommand,
   killOwned,
   removeOwned,
@@ -343,7 +343,7 @@ try {
   const { output: _output, ...record } = result;
   summary.command = record;
   try {
-    summary.report = await readReport(reporter, since, 'playwright');
+    summary.report = await readBrowserReport(reporter, since);
   } catch (error) {
     summary.report = error.observations;
     throw error;

@@ -211,9 +211,6 @@ const readerAssets = (chatId: string, entries: AssetEntry[]): Asset[] =>
     allowedUse: entry.uses.length === 2 ? 'both' : entry.uses[0],
     url: entry.url,
   }));
-export function catalogReaderAssets(chatId: string, input: unknown): Asset[] {
-  return readerAssets(chatId, imageCatalog(input));
-}
 /** Project only displayed references; a large authoring catalog never reaches the Reader. */
 export function readerImageAssets(store: Store, chatId: string, sourceIds?: string[]): Asset[] {
   if (sourceIds && !sourceIds.length) return [];

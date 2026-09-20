@@ -131,9 +131,6 @@ export function captureLogicalHistory(
     return accumulated;
   }, []);
 }
-export function promptContext(snapshot: RunSnapshot) {
-  return contextFromPackages(snapshot, compiledPackages(snapshot, 'main'));
-}
 function contextFromPackages(
   snapshot: RunSnapshot,
   packages: readonly ResolvedPackage[],

@@ -9,8 +9,6 @@ import { afterEach, describe, expect, test } from 'vitest';
 import {
   executeProvider,
   parseCatalog,
-  refreshCatalog,
-  registerManualModel,
   transportConnection,
   validateConnection,
   validateRequest,
@@ -651,29 +649,26 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     expect(() => validateRequest(unsupported)).toThrow('UNSUPPORTED_OPTIONS');
   });
 
-  test('P04 validates catalog data separately, keeps unknown metadata and preserves manual models on refresh failure', () => {
-    const manual = registerManualModel('user-supplied-unverified-id');
-    expect(manual.capabilities).toEqual({ tools: null, structuredOutput: null });
-    expect(manual.pricing.inputUsdPerMillion).toBeNull();
-    const refreshed = refreshCatalog([manual], {
+  test('P04 validates catalog data separately and keeps unknown metadata', () => {
+    const models = parseCatalog({
       models: [
         { id: 'new-catalog-entry', label: 'New fixture entry', capabilities: { tools: true } },
       ],
     });
-    expect(refreshed.models.map((item) => item.id)).toEqual(['new-catalog-entry', manual.id]);
-    expect(refreshed.models[0].pricing).toEqual({
+    expect(models.map((item) => item.id)).toEqual(['new-catalog-entry']);
+    expect(models[0].pricing).toEqual({
       inputUsdPerMillion: null,
       outputUsdPerMillion: null,
       revision: null,
     });
-    expect(refreshed.models[0].capabilities.structuredOutput).toBeNull();
-    const failed = refreshCatalog(refreshed.models, {
-      models: [],
-      credentialEnv: 'UIMORI_PROVIDER_OTHER',
-      preset: 'override',
-    });
-    expect(failed.error).toBe('UNSUPPORTED_OPTIONS');
-    expect(failed.models).toEqual(refreshed.models);
+    expect(models[0].capabilities.structuredOutput).toBeNull();
+    expect(() =>
+      parseCatalog({
+        models: [],
+        credentialEnv: 'UIMORI_PROVIDER_OTHER',
+        preset: 'override',
+      })
+    ).toThrow('UNSUPPORTED_OPTIONS');
     expect(() =>
       parseCatalog({
         models: [{ id: 'bad', label: 'bad', headers: { authorization: 'overwrite' } }],

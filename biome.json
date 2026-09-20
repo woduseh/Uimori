@@ -60,6 +60,16 @@
   },
   "overrides": [
     {
+      "includes": ["scripts/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUndeclaredVariables": "error"
+          }
+        }
+      }
+    },
+    {
       "includes": ["core/**"],
       "linter": {
         "rules": {

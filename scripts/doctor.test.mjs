@@ -106,3 +106,23 @@ test('unsupported runtime and malformed child output remain visible with indepen
     if (existsSync(directory)) await removeOwned(artifactRoot, directory);
   }
 });
+
+test('missing browser blocks doctor without hiding successful local probes or cleanup', async (t) => {
+  const directory = path.join(artifactRoot, `doctor-selftest-${newId()}`);
+  const previous = process.env.UIMORI_BROWSER_PATH;
+  t.after(async () => {
+    if (previous === undefined) delete process.env.UIMORI_BROWSER_PATH;
+    else process.env.UIMORI_BROWSER_PATH = previous;
+    if (existsSync(directory)) await removeOwned(artifactRoot, directory);
+  });
+  process.env.UIMORI_BROWSER_PATH = path.join(directory, 'nonexistent-browser.exe');
+  const result = await doctor(directory, { spawnChild: childStub() });
+  assert.equal(result.status, 'BLOCKED');
+  const browser = result.checks.find((check) => check.name === 'browser-launch-and-local-page');
+  assert.equal(browser.status, 'BLOCKED');
+  assert.match(browser.error, /Browser executable missing/);
+  assert.ok(
+    result.checks.filter((check) => check !== browser).every((check) => check.status === 'PASS')
+  );
+  assert.equal(result.cleanup.status, 'PASS');
+});

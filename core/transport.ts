@@ -9,7 +9,6 @@ import {
   keys,
   numeric,
   object,
-  parseCatalog,
   reject,
   sha,
   string,
@@ -25,7 +24,6 @@ export type { ProviderProgress } from './provider-progress.js';
 export { ProviderContractError } from './provider-errors.js';
 export {
   parseCatalog,
-  registerManualModel,
   validateConnection,
   validateRequest,
 } from './provider-request.js';
@@ -146,31 +144,6 @@ export type CatalogModel = {
   };
   origin: 'catalog' | 'manual';
 };
-
-export function refreshCatalog(
-  previous: readonly CatalogModel[],
-  payload: unknown
-): { models: CatalogModel[]; error: string | null } {
-  try {
-    const incoming = parseCatalog(payload);
-    return {
-      models: [
-        ...incoming,
-        ...previous
-          .filter(
-            (model) => model.origin === 'manual' && !incoming.some((item) => item.id === model.id)
-          )
-          .map((model) => structuredClone(model)),
-      ],
-      error: null,
-    };
-  } catch (error) {
-    return {
-      models: structuredClone([...previous]),
-      error: error instanceof ProviderContractError ? error.code : 'CATALOG_UNAVAILABLE',
-    };
-  }
-}
 
 function redact(value: Json, secret?: string): Json {
   if (typeof value === 'string') return secret ? value.split(secret).join('[REDACTED]') : value;

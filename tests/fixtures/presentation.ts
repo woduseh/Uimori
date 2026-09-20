@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { AssetEntry, BlockScene, SourceBlock } from '../auxiliary.js';
+import type { AssetEntry, BlockScene, SourceBlock } from '../../core/auxiliary.js';
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 

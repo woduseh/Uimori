@@ -40,7 +40,7 @@ npm run dev
 | [프로바이더](docs/PROVIDERS.md) | Vertex, Responses·Chat 호환, Anthropic, Vercel, Codex 프로바이더와 선택형 평가 도구·합성 시험 |
 | [개발과 검증](docs/DEVELOPMENT.md) · [코드 품질](docs/QUALITY.md) | 검사·정리 명령, 격리 실행, 코드 구조와 증거 보관 |
 | [개인 서버 배포](docs/SELF-HOST.md) | Docker Compose, HTTPS, 로그인, 영구 데이터, 모델 API 키와 업데이트 |
-| [커밋·푸시·Oracle 업데이트](docs/ORACLE-RELEASE.md) | 현재 PC의 빠른 배포 명령, 데이터 보존, 실패 대응, 정식 자동화 설계 |
+| [Oracle 릴리스](docs/ORACLE-RELEASE.md) | 검증·배포 명령, 데이터 보존과 실패 복구 |
 | [코드 지도](docs/CODE-MAP.md) | 기능별 현행 문서와 구현 진입점 |
 
 ## 데이터와 접속

@@ -19,36 +19,6 @@ export type NativeLuaWorkerResultCode =
   | 'RISU_LUA_PROGRAM_RESULT_VALUE'
   | 'RISU_LUA_PROGRAM_OUTPUT_SIZE';
 
-/** Host denial codes the runtime forwards to a guest unchanged; anything else becomes CALL_FAILED. */
-export type NativeLuaHostErrorCode =
-  | 'RISU_LUA_HOST_CALL_FAILED'
-  | 'RISU_LUA_HOST_DENIED'
-  | 'RISU_LUA_HOST_ARGUMENTS'
-  | 'RISU_LUA_HOST_MATERIAL_UNAVAILABLE'
-  | 'RISU_LUA_HOST_ABORTED'
-  | 'RISU_LUA_HOST_RESULT_LIMIT'
-  | 'RISU_LUA_HOST_MODEL_DENIED'
-  | 'RISU_LUA_HOST_MODEL_UNAVAILABLE'
-  | 'RISU_LUA_HOST_MODEL_BUDGET_EXHAUSTED'
-  | 'RISU_LUA_HOST_VARIABLES_DENIED'
-  | 'RISU_LUA_HOST_VARIABLES_LIMIT'
-  | 'RISU_LUA_HOST_CONVERSATION_DENIED'
-  | 'RISU_LUA_HOST_CONVERSATION_UNAVAILABLE';
-
-/** Codes a guest harness raises on its own, on top of the forwarded host codes. */
-export type NativeLuaGuestHostErrorCode =
-  | NativeLuaHostErrorCode
-  | 'RISU_LUA_HOST_CALL_LIMIT'
-  | 'RISU_LUA_HOST_PENDING_LIMIT';
-
-/**
- * The single string a guest harness returns: `E` the program threw, `V` the result is not an
- * exact `{ state, result }` value, `L` the encoded result exceeds the JSON limit, `O` + JSON.
- * Both harnesses encode the same envelope for the same program; tests/extension-runtime.test.ts
- * pins that agreement.
- */
-export type NativeLuaResultEnvelope = 'E' | 'V' | 'L' | `O${string}`;
-
 /**
  * Numeric bounds the runtime owns and hands to a worker. A worker refuses to start when any of
  * them is missing or malformed rather than falling back to a literal of its own.

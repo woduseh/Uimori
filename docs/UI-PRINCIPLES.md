@@ -12,7 +12,7 @@ Use the current components and styles as the starting point. [Library](LIBRARY.m
 
 ## Unsaved changes
 
-Draft confirmations use `Dialog` with `variant="confirmation"` and `DraftDiscardActions` across library, prompt, chat settings, and global settings flows. They share a bounded 620 px desktop width, a centered mobile shell with 16 px outer margins, and full-width stacked mobile actions. Discard stays separate from continue editing and save-and-leave; closing a settings panel labels the save action as save-and-close.
+Draft confirmations use the shared `Dialog` confirmation variant and `DraftDiscardActions` across library, prompt, chat settings, and global settings flows. Discard stays separate from continue editing and save-and-leave; closing a settings panel labels the save action as save-and-close.
 
 Save-and-leave runs the editor's existing validated save operation and navigates only on success. Invalid or unapplied input, revision conflicts, and failed writes retain the draft and confirmation. Multiple edited sections save sequentially; successful sections remain saved if a later section fails. Staged backup imports, destructive confirmations, and model execution are not treated as draft saves. Reloading saved settings remains a separate discard-and-reload confirmation.
 

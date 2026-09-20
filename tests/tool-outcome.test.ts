@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
-import { executeTool, syntheticResources } from '../core/provider.js';
+import { executeTool } from '../core/provider.js';
+import { syntheticResources } from './fixtures/resources.js';
 import { MAIN_READ_TOOLS } from '../server/main-request.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 

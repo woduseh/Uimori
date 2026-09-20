@@ -161,11 +161,6 @@ import { validateNativeTransferArchive } from './native-transfer.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
-const _ref = (v: unknown): ContentRef => {
-  const b = record(v);
-  fields(b, ['id', 'revision']);
-  return { id: text(b.id, 'reference', 100), revision: number(b.revision, 'revision') };
-};
 export const modelRef = (v: unknown): ModelRef => {
   const b = record(v);
   fields(b, ['id']);
@@ -728,7 +723,7 @@ export class ProductStore {
               ...r,
               ...currentRef(this, 'content', r),
             }));
-      const _resolvedPackages = resolvePackageModules(this, packageAttachments ?? [], {
+      resolvePackageModules(this, packageAttachments ?? [], {
         latest: true,
       });
       this.store.organization.assertBotAttachments(chatId, packageAttachments);

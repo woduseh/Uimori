@@ -481,7 +481,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     expect(source.pinnedSources).toEqual([]);
     expect(source.facts).toEqual([]);
 
-    const _messages = built.request.prompt!.messages;
     const wire = JSON.stringify(encodeMainPreview(built.request, work.profile!.models.main!).body);
     for (const marker of ['SYNTHETIC_PINNED_BOT', 'SYNTHETIC_CANON_ALWAYS_PINNED'])
       expect(wire.split(marker).length - 1).toBe(1);

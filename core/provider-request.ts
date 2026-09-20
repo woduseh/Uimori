@@ -269,13 +269,3 @@ export function parseCatalog(value: unknown): CatalogModel[] {
     };
   });
 }
-export function registerManualModel(id: string): CatalogModel {
-  string(id);
-  return {
-    id,
-    label: id,
-    capabilities: { tools: null, structuredOutput: null },
-    pricing: { inputUsdPerMillion: null, outputUsdPerMillion: null, revision: null },
-    origin: 'manual',
-  };
-}
