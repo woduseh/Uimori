@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CloseIcon, EditIcon } from './ui-icons.js';
+import { CloseIcon, EditIcon, SaveIcon } from './ui-icons.js';
 import './draft-discard.css';
 
 export function DraftDiscardActions({
@@ -70,6 +70,7 @@ export function DraftDiscardActions({
               }
             }}
           >
+            <SaveIcon size={18} aria-hidden="true" />
             {saving ? '저장 중…' : '저장하고 이동'}
           </button>
         )}
