@@ -99,7 +99,6 @@ test('retired native fields are stripped from current saves and cannot execute t
     variables,
     mainPrompt: obsolete,
     jailbreak: obsolete,
-    jailbreakToggle: true,
   });
   expect(cbs.parse('{{personality}}|{{scenario}}|{{mainprompt}}|{{jb}}')).toBe('|||');
   expect(variables).toEqual({});

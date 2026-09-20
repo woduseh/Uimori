@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'vitest';
 import { nativeRisuFieldKey } from '../core/risu-native-execution.js';
+import { validateRisuPrompt } from '../core/risu-prompt.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import {
   nativeRisuSnapshotNeedsRefresh,
@@ -57,6 +58,48 @@ test('a new read-only operation reprojects historical native source without muta
   expect(JSON.stringify(refreshed)).not.toMatch(/RETIRED_|EXECUTED/);
   expect(refreshed.profile!.packages![0].body).toBe('Mira has not learned the keeper identity.');
   expect(refreshed.profile!.packages![0].instructions).toEqual([]);
+  expect(nativeRisuSnapshotNeedsRefresh(refreshed)).toBe(false);
+  expect(seed.snapshot).toEqual(before);
+});
+
+test('current-version historical preset receipts refresh before new work without replaying retired CBS', async () => {
+  const seed = bundle();
+  const program = validateRisuPrompt({
+    version: 1,
+    nativeRisuPreset: {
+      version: 1,
+      preset: {
+        promptTemplate: [{ type: 'plain', role: 'system', text: 'ACTIVE' }, { type: 'chat' }],
+      },
+    },
+  });
+  seed.snapshot.profile!.promptPresets = {
+    main: { id: 'historical-preset', revision: 1, title: 'Preset', role: 'main', program },
+  };
+  seed.snapshot = await prepareNativeRisuRun(seed.snapshot, { preview: true });
+  const native = seed.snapshot.profile!.promptPresets!.main!.program.nativeRisuPreset.preset;
+  native.jailbreakToggle = true;
+  native.chainOfThought = true;
+  native.promptSettings = {
+    sendName: true,
+    sendChatAsSystem: true,
+    postEndInnerFormat: '{{setvar::retired::EXECUTED}}RETIRED_POST_END',
+    assistantPrefill: '{{setvar::retired::EXECUTED}}RETIRED_PREFILL',
+  };
+  (native.promptTemplate as Record<string, unknown>[]).unshift(
+    { type: 'jailbreak', text: '{{setvar::retired::EXECUTED}}RETIRED_JAILBREAK' },
+    { type: 'cot', text: '{{setvar::retired::EXECUTED}}RETIRED_COT' }
+  );
+  const oldReceipt = seed.snapshot.nativeRisuPresetProgram!;
+  oldReceipt.fields['settings:assistantPrefill'] = 'RETIRED_PREFILL';
+  oldReceipt.variables.retired = 'EXECUTED';
+  const before = structuredClone(seed.snapshot);
+  expect(oldReceipt.version).toBe(2);
+  expect(nativeRisuSnapshotNeedsRefresh(seed.snapshot)).toBe(true);
+  const refreshed = await prepareNativeRisuReadOnly(seed.snapshot, 'context');
+  expect(refreshed.nativeRisuPresetProgram!.fields).toEqual({ 'block:0:text': 'ACTIVE' });
+  expect(refreshed.nativeRisuPresetProgram!.variables.retired).toBeUndefined();
+  expect(JSON.stringify(refreshed)).not.toMatch(/RETIRED_|EXECUTED/);
   expect(nativeRisuSnapshotNeedsRefresh(refreshed)).toBe(false);
   expect(seed.snapshot).toEqual(before);
 });

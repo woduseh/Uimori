@@ -1,5 +1,6 @@
 /** Risu prompt source and host-owned execution receipts; no alternate authoring language. */
 import { validateAgentCollaboration } from './agent-collaboration.js';
+import { stripDeprecatedRisuPresetFields } from './risu-deprecated-fields.js';
 import {
   validateNativeRisuPreset,
   nativeRisuPresetControls,
@@ -269,7 +270,11 @@ export function validateRisuPrompt(value: unknown): RisuPrompt {
     );
   return structuredClone(value) as RisuPrompt;
 }
-export const validateEditableRisuPrompt = validateRisuPrompt;
+export function validateEditableRisuPrompt(value: unknown): RisuPrompt {
+  const program = validateRisuPrompt(value);
+  stripDeprecatedRisuPresetFields(program.nativeRisuPreset.preset);
+  return program;
+}
 export function validateControlValue(control: PromptControl, value: PromptValue): void {
   primitive(value);
   if (value === null) return;
@@ -398,7 +403,6 @@ export function compileRisuPrompt(
     usedSlots = new Set<string>(),
     usedHistory = new Set<string>();
   const preset = program.nativeRisuPreset.preset;
-  const settings = isObject(preset.promptSettings) ? preset.promptSettings : {};
   const text = (v: unknown) => (typeof v === 'string' ? v : '');
   const role = (v: unknown): PromptRoleName =>
     v === 'user' ? 'user' : v === 'assistant' || v === 'bot' ? 'assistant' : 'system';
@@ -427,18 +431,12 @@ export function compileRisuPrompt(
     const id = `risu-block-${index + 1}`,
       type = text(raw.type),
       start = messages.length;
-    const included = legacy
-      ? type === 'jailbreak'
-        ? preset.jailbreakToggle !== false
-        : type === 'cot'
-          ? preset.chainOfThought !== false
-          : type !== 'memory'
-      : nativeRisuBlockEnabled(program.nativeRisuPreset, type);
+    const included = nativeRisuBlockEnabled(type);
     if (!included) {
       trace.push({ blockId: id, included: false, messageIds: [], reason: 'disabled' });
       continue;
     }
-    if (['plain', 'jailbreak', 'cot'].includes(type)) {
+    if (type === 'plain') {
       const content = text(raw.text);
       add(
         id,
@@ -475,24 +473,13 @@ export function compileRisuPrompt(
         if (usedHistory.has(item.id)) fail('PROMPT_DUPLICATE_HISTORY', id);
         usedHistory.add(item.id);
         if ('example' in item) {
-          add(
-            `${id}:${item.id}`,
-            item.text,
-            settings.sendChatAsSystem && !raw.chatAsOriginalOnSystem ? 'system' : item.role
-          );
+          add(`${id}:${item.id}`, item.text, item.role);
           continue;
         }
-        const name = item.role === 'user' ? context.names?.user : context.names?.char;
-        const content =
-          !legacy && settings.sendName && name
-            ? item.sourceKind === 'authored-start'
-              ? `${name}: ${item.text}`
-              : `<${name}'s Message>\n${item.text}\n</${name}'s Message>`
-            : item.text;
         messages.push({
           id: `${id}:${item.id}`,
-          role: settings.sendChatAsSystem && !raw.chatAsOriginalOnSystem ? 'system' : item.role,
-          content: [{ type: 'text', text: content }],
+          role: item.role,
+          content: [{ type: 'text', text: item.text }],
           completion: 'complete',
           provenance: {
             blockId: id,
@@ -529,19 +516,9 @@ export function compileRisuPrompt(
           formatted ? role(raw.role2) : 'system'
         );
       }
-      if (!legacy && type === 'postEverything' && settings.postEndInnerFormat)
-        add(`${id}:post-end`, text(settings.postEndInnerFormat), 'system');
     } else fail('RISU_NATIVE_PRESET_BLOCK', type);
     trace.push({ blockId: id, included: true, messageIds: messages.slice(start).map((m) => m.id) });
   }
-  if (legacy && settings.postEndInnerFormat)
-    add(
-      'risu-post-end',
-      legacyInsert(text(settings.postEndInnerFormat), 'postEverything'),
-      'system'
-    );
-  if (settings.assistantPrefill)
-    add('risu-assistant-prefill', text(settings.assistantPrefill), 'assistant', 'prefill');
   if (messages.some((m, i) => m.completion === 'prefill' && i !== messages.length - 1))
     fail('PROMPT_PREFILL_MUST_BE_LAST');
   inspectPromptData(messages, 1_500_000);

@@ -1,5 +1,9 @@
 import { expect, test } from 'vitest';
-import { compileRisuPrompt, validateRisuPrompt } from '../core/risu-prompt.js';
+import {
+  compileRisuPrompt,
+  validateEditableRisuPrompt,
+  validateRisuPrompt,
+} from '../core/risu-prompt.js';
 import { defaultProfile } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { importRisuPresetProgram } from '../server/risu-preset-program.js';
@@ -84,8 +88,39 @@ test('native preset stores original CBS and excludes model configuration, keys a
   });
   const imported = importRisuPresetProgram(input);
   expect(imported.program.nativeRisuPreset?.preset.promptTemplate).toEqual(input.promptTemplate);
-  expect(JSON.stringify(imported.program)).not.toMatch(/secret|foreign|temperature/u);
+  expect(JSON.stringify(imported.program)).not.toMatch(
+    /secret|foreign|temperature|assistantPrefill/u
+  );
   expect(imported.findings.some((item) => item.level === 'unsupported')).toBe(false);
+});
+
+test('retired preset options and blocks disappear silently on import and edit while historical source stays readable', () => {
+  const active = preset('ACTIVE', { promptSettings: { utilOverride: false } });
+  const input = {
+    ...active,
+    jailbreakToggle: true,
+    chainOfThought: true,
+    promptSettings: {
+      utilOverride: false,
+      sendName: true,
+      sendChatAsSystem: true,
+      postEndInnerFormat: '{{setvar::retired::POST_END}}',
+      assistantPrefill: '{{setvar::retired::PREFILL}}',
+    },
+    promptTemplate: [
+      { type: 'jailbreak', text: '{{setvar::retired::JAILBREAK}}' },
+      { ...active.promptTemplate[0], type2: 'jailbreak' },
+      { ...active.promptTemplate[1], chatAsOriginalOnSystem: true },
+      { type: 'cot', text: '{{setvar::retired::COT}}' },
+    ],
+  };
+  const original = structuredClone(input);
+  const clean = importRisuPresetProgram(active);
+  expect(importRisuPresetProgram(input)).toEqual(clean);
+  const historical = { version: 1, nativeRisuPreset: { version: 1, preset: input } };
+  expect(validateRisuPrompt(historical)).toEqual(historical);
+  expect(validateEditableRisuPrompt(historical)).toEqual(clean.program);
+  expect(input).toEqual(original);
 });
 test('native CBS evaluates loops and toggle conditions without changing chat defaults into global toggles', async () => {
   const input = preset(
@@ -138,7 +173,7 @@ test('preset CBS sees messages after pre-turn scripts and the current input', as
   const result = await prepareNativeRisuPreset(input);
   expect(result.nativeRisuPresetProgram?.fields['block:0:text']).toBe('AFTER PRE-TURN');
 });
-test('slot wrappers, fallback author note, role overrides and prefill retain ordering', async () => {
+test('slot wrappers and fallback notes keep ordering without retired role overrides or prefill', async () => {
   const result = await render(
     preset('', {
       promptTemplate: [
@@ -154,8 +189,7 @@ test('slot wrappers, fallback author note, role overrides and prefill retain ord
   ).toEqual([
     ['system', '<box>BOT</box>'],
     ['system', 'default note'],
-    ['system', 'CURRENT'],
-    ['assistant', '3'],
+    ['user', 'CURRENT'],
   ]);
 });
 test('native regex keeps captures and evaluates CBS after substitution in every supported stage', async () => {

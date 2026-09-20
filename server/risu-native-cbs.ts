@@ -26,7 +26,6 @@ export type NativeRisuCbsContext = {
   maxContext?: number;
   mainPrompt?: string;
   jailbreak?: string;
-  jailbreakToggle?: boolean;
   templateDefaultVariables?: string;
   globalNote?: string;
   assetUrls?: Record<string, string>;
@@ -82,7 +81,7 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
     mainPrompt: '',
     jailbreak: '',
     globalNote: context.globalNote ?? '',
-    jailbreakToggle: context.jailbreakToggle ?? false,
+    jailbreakToggle: false,
     maxContext: context.maxContext ?? 0,
     aiModel: context.modelName ?? 'uimori',
     subModel: context.modelName ?? 'uimori',

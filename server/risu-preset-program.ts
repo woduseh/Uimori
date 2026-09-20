@@ -12,8 +12,6 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
   const program = validateRisuPrompt(createNativeRisuPresetProgram(native));
   const supported = new Set([
     'plain',
-    'jailbreak',
-    'cot',
     'chatML',
     'chat',
     'cache',

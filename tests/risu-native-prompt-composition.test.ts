@@ -44,12 +44,11 @@ describe('native Risu prompt composition', () => {
       ['user', '<character>Character description</character>'],
       ['assistant', 'Previous story'],
       ['user', 'Continue'],
-      ['assistant', 'Opening'],
     ]);
     expect(result.cachePlan).toEqual([
       { blockId: 'risu-block-4', afterMessageId: 'risu-block-3:previous', policy: 'prefer' },
     ]);
-    expect(result.messages.at(-1)?.completion).toBe('prefill');
+    expect(result.messages.every((message) => message.completion === 'complete')).toBe(true);
     expect(result.usedSlots).toEqual(['description']);
     expect(program).not.toHaveProperty('blocks');
     expect(program).not.toHaveProperty('controls');

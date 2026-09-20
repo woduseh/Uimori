@@ -262,7 +262,7 @@ test('saved edited RISUP uses the real binary importer and preserves authored bl
     regex: [{ in: 'x', out: '{{getvar::x}}', type: 'editprocess' }],
     customPromptTemplateToggle: 'style=Style=select=Calm,Bold',
     templateDefaultVariables: 'x=1',
-    promptSettings: { assistantPrefill: '{{char}}:' },
+    promptSettings: { utilOverride: false },
     openAIKey: 'do-not-export',
     aiModel: 'not-a-prompt',
   };
@@ -300,6 +300,52 @@ test('saved edited RISUP uses the real binary importer and preserves authored bl
     prepareRisuPresetImport({ source: source(output.bytes, output.filename) }).summary.blocks
   ).toBe(2);
   expect(store.product.export().tables).toEqual(before);
+});
+
+test('saving and exporting a historical RISUP silently removes retired execution data without changing its input', () => {
+  const { store } = fixture();
+  const preset = {
+    promptTemplate: [
+      { type: 'jailbreak', text: 'RETIRED_JAILBREAK' },
+      { type: 'plain', role: 'system', text: 'ACTIVE' },
+      { type: 'cot', text: 'RETIRED_COT' },
+      { type: 'chat' },
+    ],
+    jailbreakToggle: true,
+    chainOfThought: true,
+    promptSettings: {
+      utilOverride: false,
+      sendName: true,
+      sendChatAsSystem: true,
+      postEndInnerFormat: 'RETIRED_POST_END',
+      assistantPrefill: 'RETIRED_PREFILL',
+    },
+  };
+  const body = {
+    title: 'Historical preset',
+    role: 'main',
+    program: {
+      version: 1,
+      nativeRisuPreset: { version: 1, preset },
+    },
+  };
+  const before = structuredClone(body);
+  const saved = store.product.promptPreset(body) as PromptPreset;
+  const clean = {
+    promptTemplate: [preset.promptTemplate[1], preset.promptTemplate[3]],
+    promptSettings: { utilOverride: false },
+  };
+  expect(saved.program.nativeRisuPreset.preset).toEqual(clean);
+  // Export must also normalize already-saved history, even without a new save first.
+  const historical = structuredClone(saved);
+  historical.program.nativeRisuPreset.preset = structuredClone(preset);
+  const output = exportRisuPrompt(historical);
+  expect(readRisuPresetFile(source(output.bytes, output.filename)).preset).toEqual({
+    ...clean,
+    name: 'Historical preset',
+  });
+  expect(historical.program.nativeRisuPreset.preset).toEqual(preset);
+  expect(body).toEqual(before);
 });
 
 test('download routes guard revision and hidden items and return a Unicode attachment without modifying data', async () => {

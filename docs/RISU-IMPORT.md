@@ -29,7 +29,9 @@
 
 서재의 Risu 편집기는 이름·설정·기본 시작문·대화 예시·제작자 코멘트를 원문 필드에 저장해요. 글로벌 노트·배경 HTML/CSS·기본 변수를 직접 수정하고, 대체 시작문·로어·정규식·트리거/Lua는 JSON 편집에서 적용해요. 카드 또는 모듈 전체 JSON도 편집할 수 있어요. 알 수 없는 활성 확장 필드는 그대로 남아요. 콘텐츠 편집과 실행의 기준은 이 원문 하나예요.
 
-폐기 필드는 RisuToki `deprecated-save-policy.ts`와 같은 범위예요. 카드의 `personality`, `scenario`, `system_prompt`, `nickname`, `source`, `group_only_greetings`, 카드 `extensions.risuai`의 `additionalText`, `license`, `virtualscript`, 모듈의 `cjs`를 신규 가져오기·저장에서 제외해요. 프리셋에서는 `mainPrompt`, `jailbreak`, `globalNote`, `useInstructPrompt`, `instructChatTemplate`, `JinjaTemplate`을 제외해요. 활성 `promptTemplate` 블록·카드 `post_history_instructions`·토글·스크립트는 이 목록에 포함하지 않아요. 공통 정책은 `core/risu-deprecated-fields.ts`에 있어요.
+RisuToki `deprecated-save-policy.ts`에 맞춰 카드의 `personality`, `scenario`, `system_prompt`, `nickname`, `source`, `group_only_greetings`, 카드 `extensions.risuai`의 `additionalText`, `license`, `virtualscript`, 모듈의 `cjs`를 신규 가져오기·저장에서 제외해요. 프리셋에서는 `mainPrompt`, `jailbreak`, `globalNote`, `useInstructPrompt`, `instructChatTemplate`, `JinjaTemplate`을 제외해요.
+
+Uimori는 추가로 프리셋의 `jailbreakToggle`, `chainOfThought`, `promptSettings`의 `sendName`, `sendChatAsSystem`, `postEndInnerFormat`, `assistantPrefill`과 `promptTemplate`의 `jailbreak`·`cot` 블록, 종속 설정 `chatAsOriginalOnSystem`을 제외해요. 일반 블록으로 바꾸거나 별도 경고·알림을 표시하지 않아요. 다른 활성 블록·카드 `post_history_instructions`·사용자 토글·스크립트는 유지해요. 공통 정책은 `core/risu-deprecated-fields.ts`에 있어요.
 
 과거 자료 버전이나 완료된 실행 영수증을 일괄 수정하지 않아요. 새 실행은 보존된 원본에서 현재 정책으로 다시 투영하고, CBS에서도 폐기 필드를 읽거나 그 안의 변수 변경을 실행하지 않아요. 원본 파일 다운로드용 `sourceFiles` 바이트는 폐기 필드를 포함해 입력 그대로 남아요.
 
