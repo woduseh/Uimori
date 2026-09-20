@@ -450,13 +450,6 @@
   width: calc(100% - 48px);
   max-width: 880px;
 }
-.library-page-editing .library-content-editor > .editor-grid > small.full,
-.library-page-editing .library-content-editor > .editor-grid > .library-diagnostics.full {
-  width: calc(100% - 48px);
-  max-width: 880px;
-  margin-inline: auto;
-  box-sizing: border-box;
-}
 @media (min-width: 601px) {
   .library-page-editing .native-editor-split {
     height: calc(100dvh - var(--editor-heading-h) - 56px);
@@ -494,9 +487,7 @@
     padding-inline: 16px;
   }
 
-  .library-page-editing .library-savebar,
-  .library-page-editing .library-content-editor > .editor-grid > small.full,
-  .library-page-editing .library-content-editor > .editor-grid > .library-diagnostics.full {
+  .library-page-editing .library-savebar {
     width: calc(100% - 32px);
   }
 }

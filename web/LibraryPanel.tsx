@@ -1208,19 +1208,6 @@ function ContentEditor({
 
             <span role="status">{saved}</span>
           </div>
-          {selected && (
-            <>
-              <small className="full">
-                저장하면 이 자료를 사용하는 채팅의 다음 실행부터 반영돼요. 이전 설정을 유지하려면
-                복제해 주세요.
-              </small>
-              <details className="library-diagnostics full">
-                <summary>자료 저장 정보</summary>
-
-                <code>{selected.id}</code>
-              </details>
-            </>
-          )}
         </form>
       </section>
     </EditorDraftProvider>
