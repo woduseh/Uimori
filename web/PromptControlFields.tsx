@@ -9,18 +9,20 @@ function ValueInput({
   value,
   onChange,
   label,
+  compact = false,
 }: {
   control: PromptControl;
   value: PromptValue;
   onChange: (value: PromptValue) => void;
   label: string;
+  compact?: boolean;
 }) {
   const descriptionId = useId();
   const describedBy = control.description ? descriptionId : undefined;
   const nativeToggle = control.input === 'switch';
   const isToggle = nativeToggle || control.type === 'boolean';
   return (
-    <div className="prompt-option-field">
+    <div className={`prompt-option-field${compact ? ' is-compact' : ''}`}>
       {isToggle ? (
         <ToggleRow
           label={label}
@@ -30,7 +32,14 @@ function ValueInput({
         />
       ) : (
         <label>
-          {label}
+          {compact ? (
+            <span>
+              {label}
+              {control.description && <small id={descriptionId}>{control.description}</small>}
+            </span>
+          ) : (
+            label
+          )}
           {control.type === 'select' ? (
             <select
               aria-label={label}
@@ -80,8 +89,10 @@ function ValueInput({
           )}
         </label>
       )}
-      {!isToggle && control.description && <small id={descriptionId}>{control.description}</small>}
-      {control.type !== 'select' && control.type !== 'boolean' && (
+      {!compact && !isToggle && control.description && (
+        <small id={descriptionId}>{control.description}</small>
+      )}
+      {!compact && control.type !== 'select' && control.type !== 'boolean' && (
         <button
           type="button"
           className="ghost prompt-option-unset"
@@ -102,6 +113,7 @@ export function PromptControlFields({
   controlIds,
   definitions,
   onChange,
+  compact = false,
 }: {
   program: RisuPrompt;
   values: Record<string, PromptValue>;
@@ -109,6 +121,7 @@ export function PromptControlFields({
   controlIds?: string[];
   definitions?: PromptControl[];
   onChange: (id: string, value: PromptValue) => void;
+  compact?: boolean;
 }) {
   let items: NativeRisuToggleItem[];
   try {
@@ -128,6 +141,51 @@ export function PromptControlFields({
     );
   }
   const groups: { name: string; items: NativeRisuToggleItem[] }[] = [];
+  if (compact) {
+    const rows: NativeRisuToggleItem[] = [];
+    for (const item of items) {
+      const previous = rows.at(-1);
+      if (
+        item.type === 'caption' &&
+        previous?.type === 'control' &&
+        item.group === previous.control.group
+      ) {
+        previous.control = {
+          ...previous.control,
+          description: [previous.control.description, item.label].filter(Boolean).join('\n'),
+        };
+      } else rows.push(item.type === 'control' ? { ...item } : item);
+    }
+    return (
+      <div className="prompt-option-inline">
+        {rows.map((item, index) =>
+          item.type === 'control' ? (
+            <ValueInput
+              key={`control:${item.control.id}`}
+              control={item.control}
+              label={item.control.label}
+              value={
+                Object.hasOwn(values, item.control.id)
+                  ? values[item.control.id]!
+                  : item.control.default
+              }
+              onChange={(value) => onChange(item.control.id, value)}
+              compact
+            />
+          ) : item.type === 'caption' ? (
+            <p className="prompt-option-caption" key={index}>
+              {item.label}
+            </p>
+          ) : (
+            <div className="prompt-option-divider" key={index}>
+              {item.label && <span>{item.label}</span>}
+              <hr />
+            </div>
+          )
+        )}
+      </div>
+    );
+  }
   for (const item of items) {
     const name = (item.type === 'control' ? item.control.group : item.group)?.trim() || '기본 설정';
     const previous = groups.at(-1);

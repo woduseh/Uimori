@@ -1,78 +1,697 @@
+.native-editor .native-toggle-panel {
+  max-width: none;
+  padding-top: 24px;
+}
 .native-toggle-editor {
   width: 100%;
   min-width: 0;
 }
-.native-toggle-fields {
+.native-toggle-editor button {
+  font-weight: 400;
+}
+.nt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+.nt-sections {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.nt-sections button,
+.nt-modes button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  white-space: nowrap;
+}
+.nt-sections button[aria-pressed="true"],
+.nt-modes button[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--panel);
+  font-weight: 600;
+}
+.native-editor .native-toggle-editor .nt-search {
+  display: flex;
+  position: relative;
+  margin-left: auto;
+  width: 230px;
+  align-items: center;
+}
+.nt-search > svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.native-editor .native-toggle-editor .nt-search input {
+  padding-left: 36px;
+  font-size: 13px;
+  height: 40px;
+  min-height: 40px;
+}
+.nt-modes {
+  display: flex;
+  gap: 3px;
+  margin-left: auto;
+}
+.nt-search + .nt-modes {
+  margin-left: 0;
+}
+.nt-body {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 32px;
+  min-height: 560px;
+}
+.nt-groups {
+  padding-right: 20px;
+  border-right: 1px solid var(--line);
+}
+.nt-nav-heading {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 10px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.nt-groups > button {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.nt-groups > button > svg {
+  flex-shrink: 0;
+}
+.nt-groups > button > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nt-groups > button[aria-current="true"] {
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+.nt-groups > button.nt-add-group {
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  margin-top: 20px;
+}
+.nt-mobile-groups {
+  display: none;
+}
+.nt-main {
+  min-width: 0;
+}
+.nt-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin: 4px 0 22px;
+}
+.nt-heading > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.native-editor .native-toggle-editor .nt-heading h3 {
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.4;
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.nt-heading p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 0;
+}
+.nt-heading > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.nt-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.nt-heading-actions .nt-add-item > summary {
+  display: flex;
+  flex-direction: row;
+  width: auto;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--panel);
+  font-size: 12px;
+}
+.nt-add-item > summary > .sr-only {
+  position: static;
+  width: auto;
+  height: auto;
   margin: 0;
   padding: 0;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  white-space: nowrap;
+}
+.nt-item {
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.nt-item.is-open {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  background: var(--panel);
+  border-radius: 10px;
+  margin: 6px 0 12px;
+}
+.nt-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.nt-row-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  flex: 1;
+  min-width: 0;
+  min-height: 80px;
+  padding: 17px 8px 17px 0;
   border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+}
+.is-open .nt-row-main {
+  padding-left: 16px;
+}
+.nt-row .action-menu {
+  flex-shrink: 0;
+}
+.nt-type-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--muted);
+}
+.is-open .nt-type-icon {
+  color: var(--accent);
+}
+.nt-item-copy {
+  flex: 1;
   min-width: 0;
 }
-.native-toggle-add-type {
-  display: grid;
-  gap: 8px;
-  max-width: 260px;
-  margin-bottom: 18px;
-}
-.native-editor .native-toggle-editor .native-editor-split {
-  min-height: 0;
-  height: auto;
-}
-.native-toggle-editor .native-item-list,
-.native-toggle-editor .native-item-detail {
-  height: auto;
-  max-height: none;
-}
-.native-toggle-editor .native-item-list {
-  max-height: min(68dvh, 760px);
-}
-.native-toggle-form {
-  display: grid;
-  gap: 18px;
-  min-width: 0;
-}
-.native-toggle-form label,
-.native-toggle-raw label {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-.native-toggle-editor pre {
-  white-space: pre-wrap;
+.nt-item-copy strong {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  display: block;
   overflow-wrap: anywhere;
 }
-.native-toggle-editor p,
-.native-toggle-editor code {
-  overflow-wrap: anywhere;
+.nt-item-copy small {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.native-toggle-raw {
-  margin-bottom: 16px;
+.nt-kind {
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--muted);
+  background: var(--bg);
+  border-radius: 5px;
+  padding: 4px 7px;
 }
-.native-toggle-raw label {
-  font-weight: 700;
+.nt-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
 }
-.native-toggle-raw textarea {
+.is-open .nt-chevron {
+  transform: rotate(180deg);
+}
+.nt-item.is-divider {
+  margin-top: 18px;
+  border: 0;
+}
+.is-divider .nt-row-main {
+  min-height: 54px;
+}
+.is-divider .nt-item-copy {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.is-divider .nt-item-copy strong {
+  font-size: 12px;
   font-weight: 400;
-  font-family: var(--font-mono, monospace);
-  font-size: 13px;
-  line-height: 1.65;
-  min-height: 180px;
-  resize: vertical;
+  color: var(--muted);
 }
-.native-toggle-raw p {
-  margin: 8px 0;
+.is-divider .nt-item-copy::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--line);
 }
-.native-toggle-gui {
-  margin-top: 24px;
+.nt-form {
+  padding: 0 20px 20px 58px;
+  min-width: 0;
+  display: grid;
+  gap: 16px;
 }
-.native-toggle-gui > summary {
+.nt-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 18px;
+}
+.native-editor .native-toggle-editor .nt-form label {
+  font-size: 12px;
+  gap: 8px;
+}
+.native-editor .native-toggle-editor .nt-form input,
+.native-editor .native-toggle-editor .nt-form select,
+.native-editor .native-toggle-editor .nt-form textarea {
+  font-size: 14px;
+  padding: 8px 12px;
+  min-height: 40px;
+  background: var(--bg);
+}
+.native-editor .native-toggle-editor .nt-form textarea {
+  height: auto;
+  min-height: 76px;
+}
+.native-editor .native-toggle-editor label.nt-type-field {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.native-editor .native-toggle-editor .nt-type-field select {
+  width: auto;
+  max-width: 190px;
+}
+.nt-type-field small {
+  font-size: 11px;
+}
+.nt-options-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.nt-options-heading small {
+  font-size: 11px;
+}
+.nt-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+.nt-option > span {
+  width: 20px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.native-editor .native-toggle-editor .nt-option input {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+}
+.nt-option-actions {
+  display: flex;
+  flex-shrink: 0;
+}
+.nt-option-actions .icon-button {
+  width: 32px;
+  min-width: 32px;
+  min-height: 36px;
+  height: 36px;
+}
+.nt-option-actions svg {
+  width: 15px;
+  height: 15px;
+}
+.nt-inline-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.nt-form-bottom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.native-editor .native-toggle-editor .nt-form-bottom label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.native-editor .native-toggle-editor .nt-form-bottom select {
+  width: auto;
+  max-width: 240px;
+}
+.nt-form-bottom button {
+  font-size: 12px;
+}
+.nt-link-info {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.nt-link-info summary {
   cursor: pointer;
 }
-.native-toggle-gui[open] > summary {
-  margin-bottom: 16px;
+.native-toggle-editor pre,
+.native-toggle-editor code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
-@media (max-width: 700px) {
-  .native-toggle-raw textarea {
+.nt-variables,
+.nt-raw {
+  max-width: 900px;
+  margin-inline: auto;
+}
+.nt-preview-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+.nt-preview-notice button {
+  flex-shrink: 0;
+}
+.nt-preview .prompt-option-field {
+  padding-block: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.native-editor .nt-preview .prompt-option-field > label:not(.toggle-row) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 230px;
+  gap: 24px;
+  align-items: center;
+  color: var(--text);
+  font-size: 14px;
+}
+.nt-preview .prompt-option-field > label > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nt-preview .prompt-option-field small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.nt-preview .prompt-option-caption,
+.nt-preview .prompt-option-divider {
+  margin-block: 20px;
+}
+.nt-preview .prompt-option-divider hr {
+  border-color: var(--line);
+}
+.native-editor .native-toggle-editor .nt-raw textarea {
+  min-height: 420px;
+  height: min(58dvh, 680px);
+  font-size: 13px;
+  line-height: 1.7;
+  resize: vertical;
+}
+.nt-raw-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  gap: 16px;
+  color: var(--muted);
+}
+.nt-variable-heading,
+.nt-variable-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 44px;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0;
+}
+.nt-variable-heading {
+  font-size: 12px;
+  color: var(--muted);
+  padding-bottom: 8px;
+}
+.native-editor .native-toggle-editor .nt-variable-row input {
+  font-size: 13px;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.nt-opaque-variable {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--muted);
+  margin: 12px 0;
+}
+.nt-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 28px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.nt-footer > div {
+  display: flex;
+  flex-shrink: 0;
+}
+.nt-notice,
+.nt-error {
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.nt-error p {
+  color: var(--danger, #b34949);
+}
+.nt-empty {
+  padding-block: 28px;
+}
+@media (max-width: 760px) {
+  .native-editor .nt-preview .prompt-option-field > label:not(.toggle-row) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .native-editor .nt-preview input:not([type="checkbox"]),
+  .native-editor .nt-preview select,
+  .native-editor .nt-preview textarea {
     font-size: 16px;
+  }
+  .native-editor .native-toggle-panel {
+    padding-top: 20px;
+  }
+  .nt-toolbar {
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .nt-sections button,
+  .nt-modes button {
+    padding: 7px 9px;
+    font-size: 12px;
+    min-height: 40px;
+  }
+  .nt-modes button > svg {
+    display: none;
+  }
+  .native-editor .native-toggle-editor .nt-search {
+    order: 3;
+    width: 100%;
+  }
+  .nt-search + .nt-modes {
+    margin-left: auto;
+  }
+  .native-editor .native-toggle-editor .nt-search input {
+    font-size: 16px;
+    height: 44px;
+  }
+  .nt-mobile-groups {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 22px;
+  }
+  .native-editor .native-toggle-editor .nt-mobile-groups label {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+  }
+  .native-editor .native-toggle-editor .nt-mobile-groups select {
+    flex: 1;
+    min-width: 0;
+    font-size: 16px;
+  }
+  .nt-groups {
+    display: none;
+  }
+  .nt-body {
+    display: block;
+    min-height: 400px;
+  }
+  .native-editor .native-toggle-editor .nt-heading h3 {
+    font-size: 22px;
+  }
+  .nt-heading {
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .nt-heading p {
+    font-size: 12px;
+  }
+  .nt-row-main {
+    min-height: 88px;
+    gap: 10px;
+    padding-block: 16px;
+  }
+  .nt-item-copy strong {
+    font-size: 14px;
+  }
+  .nt-item-copy small {
+    font-size: 11px;
+  }
+  .nt-kind {
+    font-size: 10px;
+    padding: 3px 5px;
+  }
+  .nt-type-icon {
+    width: 26px;
+    height: 26px;
+  }
+  .nt-form {
+    padding: 0 12px 16px;
+    gap: 16px;
+  }
+  .is-open .nt-row-main {
+    padding-left: 12px;
+  }
+  .nt-fields {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .native-editor .native-toggle-editor .nt-form input,
+  .native-editor .native-toggle-editor .nt-form textarea,
+  .native-editor .native-toggle-editor .nt-form select,
+  .native-editor .native-toggle-editor .nt-variable-row input,
+  .native-editor .native-toggle-editor .nt-raw textarea {
+    font-size: 16px;
+  }
+  .nt-option {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .nt-option-actions .icon-button {
+    width: 36px;
+    min-width: 36px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .nt-options-heading {
+    align-items: flex-start;
+  }
+  .nt-options-heading small {
+    max-width: 155px;
+    text-align: right;
+  }
+  .nt-form-bottom {
+    flex-wrap: wrap;
+  }
+  .native-editor .native-toggle-editor .nt-form-bottom select {
+    max-width: 230px;
+  }
+  .nt-variable-heading {
+    display: none;
+  }
+  .nt-variable-row {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    border-bottom: 1px solid var(--line);
+    gap: 8px;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+  }
+  .nt-variable-row > input:nth-child(2) {
+    grid-column: 1;
+  }
+  .nt-variable-row > button {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+  .nt-footer {
+    font-size: 11px;
+    margin-top: 20px;
   }
 }

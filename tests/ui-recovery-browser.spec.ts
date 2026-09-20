@@ -20,7 +20,7 @@ async function post<T>(request: APIRequestContext, path: string, data: unknown):
   return response.json();
 }
 
-async function editorFits(page: Page, editor: Locator, save: Locator) {
+async function editorFits(page: Page, editor: Locator, save: Locator, formMaxWidth = 960) {
   await expect(editor).toBeVisible();
   await expect(save).toBeVisible();
   expect(
@@ -58,7 +58,7 @@ async function editorFits(page: Page, editor: Locator, save: Locator) {
     if (await form.count()) {
       const body = await form.boundingBox();
       const outer = await workspace.boundingBox();
-      expect(body!.width).toBeLessThanOrEqual(960);
+      expect(body!.width).toBeLessThanOrEqual(formMaxWidth);
       expect(Math.abs(body!.x + body!.width / 2 - outer!.x - outer!.width / 2)).toBeLessThanOrEqual(
         2
       );
@@ -158,17 +158,17 @@ for (const viewport of viewports) {
       await page.screenshot({ path: info.outputPath(`centered-variables-${viewport.name}.png`) });
     });
 
-    test('native toggle forms preserve input types, option values and unapplied source', async ({
+    test('native basic options preserve input types, captions and retired-field removal', async ({
       page,
       request,
     }, info) => {
-      const title = `UIREC toggle preset ${randomUUID().slice(0, 8)}`;
+      const title = `UIREC toggle options ${randomUUID().slice(0, 8)}`;
       const declarations =
         '=기본 입력=group\nshort=짧은 입력=text\n=짧은 입력에 사용할 이름을 작성해요.=caption\n=추가 입력=divider\nlong=긴 입력=textarea\nflag=분위기 강조\nmode=시점=select=1인칭,3인칭\n==groupEnd\n=그룹 밖 안내예요.=caption\n=안내만 있는 그룹=group\n=입력 없이도 안내를 표시해요.=caption\n==groupEnd';
       await post<PromptPreset>(request, '/api/prompt-presets', {
         title,
         role: 'main',
-        program: nativePrompt('Toggle form fixture', {
+        program: nativePrompt('Toggle options fixture', {
           customPromptTemplateToggle: declarations,
           jailbreakToggle: true,
           chainOfThought: true,
@@ -215,22 +215,17 @@ for (const viewport of viewports) {
       const caption = editor
         .getByRole('tabpanel', { name: '기본 옵션', exact: true })
         .getByText('짧은 입력에 사용할 이름을 작성해요.', { exact: true });
-      await expect(caption).toBeVisible();
       const captionBounds = await caption.boundingBox();
-      const inputBounds = await editor.getByLabel('짧은 입력', { exact: true }).boundingBox();
-      const nextBounds = await editor.getByLabel('긴 입력', { exact: true }).boundingBox();
+      const input = editor.getByLabel('짧은 입력', { exact: true });
+      const textarea = editor.getByLabel('긴 입력', { exact: true });
+      const inputBounds = await input.boundingBox();
+      const nextBounds = await textarea.boundingBox();
       expect(captionBounds!.y).toBeGreaterThan(inputBounds!.y + inputBounds!.height);
       expect(captionBounds!.y + captionBounds!.height).toBeLessThan(nextBounds!.y);
-      await expect(editor.getByLabel('짧은 입력', { exact: true })).toHaveJSProperty(
-        'tagName',
-        'INPUT'
-      );
-      await expect(editor.getByLabel('긴 입력', { exact: true })).toHaveJSProperty(
-        'tagName',
-        'TEXTAREA'
-      );
-      await editor.getByLabel('짧은 입력', { exact: true }).fill('부산');
-      await editor.getByLabel('긴 입력', { exact: true }).fill('수정 첫 줄\n수정 둘째 줄');
+      await expect(input).toHaveJSProperty('tagName', 'INPUT');
+      await expect(textarea).toHaveJSProperty('tagName', 'TEXTAREA');
+      await input.fill('부산');
+      await textarea.fill('수정 첫 줄\n수정 둘째 줄');
       const toggle = editor.getByRole('switch', { name: '분위기 강조', exact: true });
       await expect(toggle).toBeChecked();
       await toggle.press('Space');
@@ -240,73 +235,200 @@ for (const viewport of viewports) {
       await toggle.press('Space');
       await expect(toggle).not.toBeChecked();
       await expect(editor.getByLabel('시점', { exact: true })).toHaveValue('"0"');
-      await editorFits(page, editor, save);
-      const toggleBounds = await toggle.boundingBox();
-      expect(toggleBounds!.width).toBe(44);
+      await editorFits(page, editor, save, 1200);
+      expect((await toggle.boundingBox())!.width).toBe(44);
       await page.screenshot({ path: info.outputPath(`native-options-${viewport.name}.png`) });
+    });
 
+    test('native toggle editor preserves source, isolated previews and grouped inline edits', async ({
+      page,
+      request,
+    }, info) => {
+      const title = `UIREC toggle preset ${randomUUID().slice(0, 8)}`;
+      const declarations =
+        '=기본 입력=group\nshort=짧은 입력=text\n=짧은 입력에 사용할 이름을 작성해요.=caption\nmode=시점=select=1인칭,,3인칭\n=시점을 골라요.=caption\n==groupEnd\n=보조 입력=group\nlong=긴 입력=textarea\nflag=분위기 강조\n==groupEnd\n=그룹 밖 안내예요.=caption\nunknown source line';
+      const defaultVariables = 'number=001\ntruth=false\njson={"nested":true}\nempty=';
+      await post<PromptPreset>(request, '/api/prompt-presets', {
+        title,
+        role: 'main',
+        program: nativePrompt('Toggle form fixture', {
+          customPromptTemplateToggle: declarations,
+          templateDefaultVariables: defaultVariables,
+        }),
+        values: { short: '서울', long: '첫 줄\n둘째 줄', flag: '1', mode: '0' },
+      });
+      await page.goto('/');
+      await navigationAction(page, '프롬프트');
+      await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
+      await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+      const editor = page.getByTestId('prompt-editor');
+      const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
       await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
       const definitions = editor.getByRole('region', { name: '토글 정의 편집기', exact: true });
-      const raw = definitions.getByLabel('토글 정의 원문', { exact: true });
-      const gui = definitions.locator('.native-toggle-gui');
-      await expect(raw).toBeVisible();
-      await expect(gui).toHaveJSProperty('open', false);
-      expect(
-        await raw.evaluate((node) =>
-          Boolean(
-            node.compareDocumentPosition(
-              node.closest('section')!.querySelector('.native-toggle-gui')!
-            ) & Node.DOCUMENT_POSITION_FOLLOWING
-          )
-        )
-      ).toBe(true);
-      await editorFits(page, editor, save);
-      await page.screenshot({
-        path: info.outputPath(`native-toggle-raw-first-${viewport.name}.png`),
+      const editView = definitions.getByRole('button', { name: '편집', exact: true });
+      const previewView = definitions.getByRole('button', { name: '미리보기', exact: true });
+      const rawView = definitions.getByRole('button', { name: '원문', exact: true });
+      await expect(editView).toHaveAttribute('aria-pressed', 'true');
+      await expect(
+        definitions.getByRole('button', { name: '토글 구성', exact: true })
+      ).toHaveAttribute('aria-pressed', 'true');
+      await expect(definitions.getByLabel('이름, 키, 설명 검색', { exact: true })).toBeVisible();
+      if (viewport.name === 'desktop') {
+        await expect(definitions.getByRole('navigation', { name: '토글 그룹' })).toBeVisible();
+        await expect(definitions.getByLabel('토글 그룹 선택', { exact: true })).toBeHidden();
+      } else {
+        await expect(definitions.getByLabel('토글 그룹 선택', { exact: true })).toBeVisible();
+        await expect(definitions.getByRole('navigation', { name: '토글 그룹' })).toBeHidden();
+      }
+      const chooseGroup = async (label: string) => {
+        if (viewport.name === 'mobile')
+          await definitions.getByLabel('토글 그룹 선택', { exact: true }).selectOption({ label });
+        else await definitions.getByRole('button', { name: new RegExp(`^${label}`) }).click();
+      };
+
+      // Preview values are local UI state and must not dirty either persisted document.
+      await previewView.click();
+      await definitions.getByLabel('짧은 입력', { exact: true }).fill('미리보기 전용');
+      await definitions.getByLabel('시점', { exact: true }).selectOption({ label: '3인칭' });
+      await expect(definitions.getByLabel('긴 입력', { exact: true })).toHaveCount(0);
+      await expect(
+        definitions.getByRole('switch', { name: '분위기 강조', exact: true })
+      ).toHaveCount(0);
+      await chooseGroup('보조 입력');
+      await expect(definitions.getByLabel('짧은 입력', { exact: true })).toHaveCount(0);
+      await expect(definitions.getByLabel('긴 입력', { exact: true })).toBeVisible();
+      const previewToggle = definitions.getByRole('switch', {
+        name: '분위기 강조',
+        exact: true,
       });
-      const withUnknown = `${declarations}\nunknown source line`;
-      await raw.fill(withUnknown);
+      await expect(previewToggle).not.toBeChecked();
+      await previewToggle.click();
+      await expect(previewToggle).toBeChecked();
+      await previewToggle.click();
+      await expect(previewToggle).not.toBeChecked();
+      await expect(save).toBeDisabled();
+      await chooseGroup('기본 입력');
+      await rawView.click();
+      let raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      await expect(raw).toHaveValue(declarations);
+      await editView.click();
+
+      // Basic-variable strings and the untouched toggle source survive view switches byte-for-byte.
+      await definitions.getByRole('button', { name: '기본 변수', exact: true }).click();
+      await expect(definitions.getByLabel('변수 1 키', { exact: true })).toHaveValue('number');
+      await expect(definitions.getByLabel('number 기본값', { exact: true })).toHaveValue('001');
+      await expect(definitions.getByLabel('truth 기본값', { exact: true })).toHaveValue('false');
+      await expect(definitions.getByLabel('json 기본값', { exact: true })).toHaveValue(
+        '{"nested":true}'
+      );
+      const guiDefaultVariables = defaultVariables.replace('number=001', 'number=0007');
+      await definitions.getByLabel('number 기본값', { exact: true }).fill('0007');
+      await definitions.getByRole('button', { name: '편집 되돌리기', exact: true }).click();
+      await expect(definitions.getByLabel('number 기본값', { exact: true })).toHaveValue('001');
+      await definitions.getByRole('button', { name: '편집 다시 적용', exact: true }).click();
+      await expect(definitions.getByLabel('number 기본값', { exact: true })).toHaveValue('0007');
+      await rawView.click();
+      await expect(definitions.getByLabel('Risu 기본 변수', { exact: true })).toHaveValue(
+        guiDefaultVariables
+      );
+      await editView.click();
+      await definitions.getByRole('button', { name: '토글 구성', exact: true }).click();
+      await rawView.click();
+      raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      await expect(raw).toHaveValue(declarations);
+      await editView.click();
+
+      // Search includes captions, and an unknown line stays represented instead of being dropped.
+      const search = definitions.getByLabel('이름, 키, 설명 검색', { exact: true });
+      await search.fill('시점을 골라요.');
+      await expect(
+        definitions.getByRole('button', { name: '시점 편집', exact: true })
+      ).toBeVisible();
+      await search.fill('unknown source line');
+      await expect(definitions.getByText('unknown source line', { exact: true })).toBeVisible();
+      await search.fill('');
+
+      // Inline edits update the shared source; undo and redo restore the exact field value.
+      await definitions.getByRole('button', { name: '짧은 입력 편집', exact: true }).click();
+      const displayName = definitions.getByLabel('표시 이름', { exact: true });
+      await displayName.fill('이름 입력');
+      await definitions.getByRole('button', { name: '편집 되돌리기', exact: true }).click();
+      await expect(
+        definitions.getByRole('button', { name: '짧은 입력 편집', exact: true })
+      ).toBeVisible();
+      await definitions.getByRole('button', { name: '편집 다시 적용', exact: true }).click();
+      await definitions.getByRole('button', { name: '이름 입력 편집', exact: true }).click();
+      await expect(definitions.getByLabel('표시 이름', { exact: true })).toHaveValue('이름 입력');
+      let variableKey = definitions.getByLabel('변수 키', { exact: true });
+      await variableKey.fill('');
+      await expect(variableKey).toHaveValue('');
       await expect(save).toBeDisabled();
       await editor.getByRole('tab', { name: '구성', exact: true }).click();
       await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
-      await expect(raw).toHaveValue(withUnknown);
+      variableKey = definitions.getByLabel('변수 키', { exact: true });
+      await expect(variableKey).toHaveValue('');
+      await variableKey.fill('short');
+      await expect(save).toBeEnabled();
+      await definitions.getByLabel('입력 형식', { exact: true }).selectOption('textarea');
+      await definitions.getByLabel('설명', { exact: true }).fill('이름을 여러 줄로 작성해요.');
+      await definitions
+        .getByLabel('소속 그룹', { exact: true })
+        .selectOption({ label: '보조 입력' });
+
+      await chooseGroup('기본 입력');
+      await expect(
+        definitions.getByRole('button', { name: '이름 입력 편집', exact: true })
+      ).toHaveCount(0);
+      await chooseGroup('보조 입력');
+      await expect(
+        definitions.getByRole('button', { name: '이름 입력 편집', exact: true })
+      ).toBeVisible();
+      await expect(
+        definitions.getByText('이름을 여러 줄로 작성해요.', { exact: true })
+      ).toBeVisible();
+
+      await chooseGroup('기본 입력');
+      await definitions.getByRole('button', { name: '시점 편집', exact: true }).click();
+      await definitions.getByLabel('선택지 0', { exact: true }).fill('주인공 시점');
+      await editorFits(page, editor, save, 1200);
+      await page.screenshot({
+        path: info.outputPath(`native-toggle-editor-${viewport.name}.png`),
+      });
+
+      // Independent raw drafts survive tab switches and keep persistence blocked until both apply.
+      await rawView.click();
+      raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      const editedSource = await raw.inputValue();
+      const withPendingSource = `${editedSource}\nsecond unknown line`;
+      await raw.fill(withPendingSource);
+      await expect(save).toBeDisabled();
+      await editor.getByRole('tab', { name: '구성', exact: true }).click();
+      await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
+      await rawView.click();
+      raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      await expect(raw).toHaveValue(withPendingSource);
+      await definitions.getByRole('button', { name: '기본 변수', exact: true }).click();
+      const rawDefaults = definitions.getByLabel('Risu 기본 변수', { exact: true });
+      const withPendingDefaults = `${guiDefaultVariables}\nleadingZero=0007`;
+      await rawDefaults.fill(withPendingDefaults);
+      await expect(save).toBeDisabled();
       await definitions.getByRole('button', { name: '원문 적용', exact: true }).click();
-      await gui.locator('summary').first().click();
-      if (viewport.name === 'mobile')
-        await definitions.getByLabel('현재 토글 정의', { exact: true }).selectOption('1');
-      else
-        await definitions
-          .getByRole('button', { name: '짧은 입력 2행 · 한 줄 입력', exact: true })
-          .click();
-      await definitions.getByLabel('토글 항목 종류', { exact: true }).selectOption('textarea');
-      await definitions.getByLabel('토글 표시 이름', { exact: true }).fill('이름 입력');
-      await expect(raw).toHaveValue(
-        withUnknown.replace('short=짧은 입력=text', 'short=이름 입력=textarea')
-      );
-      await editorFits(page, editor, save);
-      await page.screenshot({ path: info.outputPath(`native-toggle-editor-${viewport.name}.png`) });
-      await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
-      await expect(editor.getByLabel('이름 입력', { exact: true })).toHaveJSProperty(
-        'tagName',
-        'TEXTAREA'
-      );
-      await expect(editor.getByLabel('이름 입력', { exact: true })).toHaveValue('부산');
+      await definitions.getByRole('button', { name: '토글 구성', exact: true }).click();
+      raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      await expect(raw).toHaveValue(withPendingSource);
+      await expect(save).toBeDisabled();
+      await definitions.getByRole('button', { name: '원문 적용', exact: true }).click();
       const responsePromise = nextSave(page);
       await save.click();
       const response = await responsePromise;
       expect(response.ok(), await response.text()).toBe(true);
       const saved = (await response.json()).saved as PromptPreset;
-      expect(saved.values).toMatchObject({
-        short: '부산',
-        long: '수정 첫 줄\n수정 둘째 줄',
-        flag: '0',
-        mode: '0',
-      });
-      expect(saved.program.nativeRisuPreset.preset).not.toHaveProperty('jailbreakToggle');
-      expect(saved.program.nativeRisuPreset.preset).not.toHaveProperty('chainOfThought');
-      expect(saved.program.nativeRisuPreset.preset.promptSettings).toEqual({});
+      expect(saved.values).toEqual({ short: '서울', long: '첫 줄\n둘째 줄', flag: '1', mode: '0' });
+      expect(saved.program.nativeRisuPreset.preset.templateDefaultVariables).toBe(
+        withPendingDefaults
+      );
       expect(saved.program.nativeRisuPreset.preset.customPromptTemplateToggle).toBe(
-        withUnknown.replace('short=짧은 입력=text', 'short=이름 입력=textarea')
+        withPendingSource
       );
     });
 

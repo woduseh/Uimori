@@ -184,4 +184,50 @@ Verification:
 
 This is focused local verification. No full-suite, live-provider, physical-device or historical fork/backup compatibility claim is made.
 
+Previous legacy-option retirement result: passed.
+
+## Follow-up: toggle editor v2
+
+The user supplied `C:/Users/wodus/Downloads/uimori-toggle-editor-v2` as the new GUI reference. Its grouped inline editor replaces the temporary raw-first/collapsed-GUI arrangement. The source HTML, README, editor styles/scripts and supplied screenshots were inspected; prototype content and its JSON/localStorage storage mechanism are not production requirements.
+
+### Implemented experience
+
+- **Toggle configuration:** group-only desktop navigation, a mobile group selector, in-place item editing, whole-document search, group/item menus, captions travelling with their control, select indices and confirmation before index-changing actions.
+- **Default variables:** a separate key/string document with editable rows. Values such as `001`, `false`, JSON text and embedded `=` remain strings.
+- **Preview:** selected-group controls with captions beside their desktop input, isolated values and a reset action. It reuses the production native-control renderer without changing source, defaults or saved options.
+- **Source:** explicit apply, two independent pending buffers, invalid-input save gating and draft retention across upper-level editor tabs. Switching views does not serialize either document. Unknown lines, blank lines and unchanged EOLs remain intact; malformed group boundaries block structural changes.
+- **Undo/redo:** bounded local document history with a typing transaction, including both toggle declarations and variable defaults. Existing preset save, draft/conflict controls and RISUP export remain the production integration.
+
+### Matched visual review
+
+Source and implementation were rendered at **2560 × 1440** and **412 × 915**, DPR 1, dark theme. Paired editor/inline screenshots were inspected together, followed by paired preview and variable-table captures. Evidence lives under `output/ui-recovery-preview/toggle-v2-captures/`:
+
+- `source-editor-{2560,412}.png` / `app-editor-{2560,412}.png`
+- `source-inline-{2560,412}.png` / `app-inline-{2560,412}.png`
+- `source-preview-{2560,412}.png` / `app-preview-{2560,412}.png`
+- `source-variables-{2560,412}.png` / `app-variables-{2560,412}.png`
+- `app-raw-{2560,412}.png`
+
+The implementation retains Uimori's accepted 1248 px editor workspace, app shell, typography, Lucide icons and semantic theme tokens. The source sample contains 3 groups/18 settings, while the actual Phémē preset contains 4 groups/45 settings. These are intentional content differences. Default variables and raw forms keep the centered, narrower form width. At 412 px, long keys and preview captions use vertically stacked fields and 16 px inputs for legibility instead of compressing a two-column desktop row. No artwork or generated assets were necessary. Prototype-only sidebar entries, sample copy, floating export/status chrome and separate theme controls were not copied into the production editor.
+
+Findings fixed during implementation:
+
+- **P1:** applying one raw document could overwrite the other document's pending input. Independent source buffers now retain that input; the browser regression applies one document while the other remains pending, then applies the retained document.
+- **P1:** shared form CSS made inline type/group selectors stack vertically and displaced their labels. Scoped layout and flex direction now keep desktop labels horizontal and mobile fields within the viewport.
+- **P2:** source-index changes could reset the selected group after item operations. Structural actions retain group identity and select the explicit destination on a move.
+- **P2:** the first preview used all groups in full-width disclosure forms. It now retains group navigation and displays the selected group in compact rows, matching the reference hierarchy.
+- **P2:** the search icon inherited an incorrect vertical position. It is centered within its input.
+
+### Final verification
+
+- `npm run quality`: 842 files and TypeScript passed.
+- `npm test -- tests/native-risu-toggle-editor.test.ts tests/native-toggle-document.test.ts tests/risu-native-semantics.test.ts`: **37 tests passed**. The 12 new document-helper cases include caption ownership, unknown lines, empty options, structural operations, preserved string values and original line endings.
+- Current build passed: `output/build/build-2026-09-20T04-22-54-140Z-0f01e859/summary.json`.
+- `npm run verify:ui-recovery -- --grep "native basic options|native toggle editor"`: **4 cases passed**, covering both viewport sizes, existing basic-option captions/switches and retired-control absence, group navigation, inline changes, preview isolation, original-source preservation, independent pending documents, invalid drafts, undo/redo, variable strings and persisted saves.
+- Browser receipt: `output/playwright/ui-recovery-2026-09-20T04-23-20-032Z-aac72355/summary.json`; matching build/source hash `5832e7720c7877a6251bea93c6679656f509ddeee7792789b83cd24280ce1fce`. Final identity, artifact scan and cleanup passed. Only documentation changed after the final product build/test run.
+- Two additional read-only actual-Phémē capture flows passed against the same build at both requested sizes, with zero page errors and zero page horizontal overflow. View changes left preset save disabled. The initial source-capture locator timed out; the corrected exact accessible name was used for the final successful 2-case run, and the failed capture was not counted as evidence.
+- The existing in-app preview was refreshed and left on Phémē's new variable/toggle editor with the temporary viewport override reset.
+
+No actionable P0/P1/P2 remains in this implementation scope. This is focused local browser and source-unit evidence, not a new full-suite, live-provider, physical-phone, or IME acceptance claim. Original external Risu files were not edited. Remaining aesthetic adjustments can be evaluated on the working screen.
+
 final result: passed

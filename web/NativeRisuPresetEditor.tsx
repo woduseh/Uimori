@@ -55,11 +55,6 @@ export function NativeRisuPresetEditor({
   const [selected, setSelected] = useState(0);
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
-  const [defaultDraft, setDefaultDraft] = useBufferedEditorState(
-    'prompt.native.defaults',
-    text(source.templateDefaultVariables),
-    { syncPristineInitial: true }
-  );
   const [regexPending, setRegexPending] = useState(false);
   const [togglePending, setTogglePending] = useState(false);
   const [pendingParts, setPendingParts] = useBufferedEditorState<string[]>(
@@ -69,8 +64,7 @@ export function NativeRisuPresetEditor({
   const pending =
     pendingParts.some((part) => part !== 'regex' && part !== 'toggles') ||
     regexPending ||
-    togglePending ||
-    defaultDraft !== text(source.templateDefaultVariables);
+    togglePending;
   useUnappliedEditorField('prompt.native.source', pending);
   useEffect(() => {
     onPendingDraftChange?.(pending);
@@ -416,26 +410,20 @@ export function NativeRisuPresetEditor({
           <p className="muted">정의된 토글이 없어요. 변수·토글에서 추가할 수 있어요.</p>
         )}
       </div>
-      <div {...panel('variables')} className="native-section-body">
-        <h3>변수·토글</h3>
+      <div {...panel('variables')} className="native-section-body native-toggle-panel">
         <NativeRisuToggleEditor
           value={text(source.customPromptTemplateToggle)}
+          variables={text(source.templateDefaultVariables)}
+          program={program}
           draftPath="prompt.native.toggles"
           onPendingChange={setTogglePending}
-          onChange={(value) => update({ customPromptTemplateToggle: value }, 'toggles')}
+          onChange={({ toggles, variables }) =>
+            update(
+              { customPromptTemplateToggle: toggles, templateDefaultVariables: variables },
+              'toggles'
+            )
+          }
         />
-        <label>
-          채팅 변수 기본값
-          <textarea
-            aria-label="Risu 기본 변수"
-            rows={8}
-            value={defaultDraft}
-            onChange={(e) => {
-              setDefaultDraft(e.target.value);
-              update({ templateDefaultVariables: e.target.value }, 'defaults');
-            }}
-          />
-        </label>
       </div>
       <div {...panel('regex')} className="native-section-body native-regex-panel">
         <NativeRisuRegexEditor
