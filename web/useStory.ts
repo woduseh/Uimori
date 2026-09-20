@@ -221,101 +221,105 @@ export function useStory() {
           '',
     key: `${selected}:${activeBranchId}:${readSource}`,
   };
-  const refresh = useCallback(async (id: string, incremental = false) => {
-    if (
-      navigation.current.chat !== id ||
-      readerQuery.current.chat !== id ||
-      readerQuery.current.epoch !== navigation.current.epoch
-    )
-      return;
-    const version = ++refreshVersion.current;
-    const epoch = navigation.current.epoch;
-    const query = readerQuery.current;
-    const cached = readerCache.current?.key === query.key ? readerCache.current.detail : null;
-    const params = new URLSearchParams({
-      branch: query.branch,
-      source: cached?.reader?.order[0] || query.source,
-    });
-    if (incremental && cached?.reader) {
-      params.set('since', String(cached.reader.cursor));
-      params.set('known', cached.reader.order.join(','));
-    }
-    let value: ReaderDetail;
-    let replacementSource: string | undefined;
-    try {
-      value = await api<ReaderDetail>(`/chats/${id}/reader?${params}`);
-    } catch (error) {
-      // Native card actions replace an immutable suffix. An SSE refresh can arrive
-      // before the action response, while this page still names the old source.
-      // Only rebase a page we already read; invalid explicit navigation stays an error.
-      if (!cached || !(error instanceof ApiError) || error.status !== 404) throw error;
+  const refresh = useCallback(
+    async (id: string, incremental = false) => {
       if (
         navigation.current.chat !== id ||
-        navigation.current.epoch !== epoch ||
-        readerQuery.current.key !== query.key
+        readerQuery.current.chat !== id ||
+        readerQuery.current.epoch !== navigation.current.epoch
       )
         return;
-      const rebasedParams = new URLSearchParams({ branch: query.branch });
-      value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
-      replacementSource =
-        value.reader.navigation[Math.min(cached.reader.start, value.reader.navigation.length - 1)]
-          ?.id ?? '';
-      if (replacementSource && !value.reader.order.includes(replacementSource)) {
-        rebasedParams.set('source', replacementSource);
+      const version = ++refreshVersion.current;
+      const epoch = navigation.current.epoch;
+      const query = readerQuery.current;
+      const cached = readerCache.current?.key === query.key ? readerCache.current.detail : null;
+      const params = new URLSearchParams({
+        branch: query.branch,
+        source: cached?.reader?.order[0] || query.source,
+      });
+      if (incremental && cached?.reader) {
+        params.set('since', String(cached.reader.cursor));
+        params.set('known', cached.reader.order.join(','));
+      }
+      let value: ReaderDetail;
+      let replacementSource: string | undefined;
+      try {
+        value = await api<ReaderDetail>(`/chats/${id}/reader?${params}`);
+      } catch (error) {
+        // Native card actions replace an immutable suffix. An SSE refresh can arrive
+        // before the action response, while this page still names the old source.
+        // Only rebase a page we already read; invalid explicit navigation stays an error.
+        if (!cached || !(error instanceof ApiError) || error.status !== 404) throw error;
+        if (
+          navigation.current.chat !== id ||
+          navigation.current.epoch !== epoch ||
+          readerQuery.current.key !== query.key
+        )
+          return;
+        const rebasedParams = new URLSearchParams({ branch: query.branch });
         value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
+        replacementSource =
+          value.reader.navigation[Math.min(cached.reader.start, value.reader.navigation.length - 1)]
+            ?.id ?? '';
+        if (replacementSource && !value.reader.order.includes(replacementSource)) {
+          rebasedParams.set('source', replacementSource);
+          value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
+        }
       }
-    }
-    if (
-      navigation.current.chat === id &&
-      navigation.current.epoch === epoch &&
-      readerQuery.current.key === query.key &&
-      refreshVersion.current === version
-    ) {
-      const nextDefault = value.branches?.find((item) => item.default);
-      if (query.branch && nextDefault && nextDefault.id !== query.branch)
-        preserveDefaultView.current(query.branch);
-      const changed = new Set(value.sources.map((source) => source.id));
-      const available = new Map(
-        [...(cached?.sources ?? []), ...value.sources].map((source) => [source.id, source])
-      );
-      const merged = {
-        ...value,
-        assets: value.assets ?? cached?.assets ?? [],
-        sources: value.reader!.order.map((id) => available.get(id)!).filter(Boolean),
-        jobs: [
-          ...(cached?.jobs ?? []).filter(
-            (job) =>
-              !changed.has(job.sourceRevision) && value.reader!.order.includes(job.sourceRevision)
-          ),
-          ...value.jobs,
-        ],
-        illustrations: [
-          ...(cached?.illustrations ?? []).filter(
-            (item) =>
-              !changed.has(item.sourceRevision) && value.reader!.order.includes(item.sourceRevision)
-          ),
-          ...(value.illustrations ?? []),
-        ],
-      };
-      let cacheKey = query.key;
-      if (replacementSource !== undefined) {
-        restoredView.current = '';
-        const storageBranch = query.branch === `main:${id}` ? '' : query.branch;
-        sessionStorage.removeItem(`reading:${id}:${storageBranch}`);
-        cacheKey = `${id}:${query.branch}:${replacementSource}`;
-        readerQuery.current = { ...query, source: replacementSource, key: cacheKey };
-        navigate({ kind: 'rebase-source', source: replacementSource });
-        const url = new URL(location.href);
-        if (replacementSource) url.searchParams.set('source', replacementSource);
-        else url.searchParams.delete('source');
-        history.replaceState(null, '', url);
+      if (
+        navigation.current.chat === id &&
+        navigation.current.epoch === epoch &&
+        readerQuery.current.key === query.key &&
+        refreshVersion.current === version
+      ) {
+        const nextDefault = value.branches?.find((item) => item.default);
+        if (query.branch && nextDefault && nextDefault.id !== query.branch)
+          preserveDefaultView.current(query.branch);
+        const changed = new Set(value.sources.map((source) => source.id));
+        const available = new Map(
+          [...(cached?.sources ?? []), ...value.sources].map((source) => [source.id, source])
+        );
+        const merged = {
+          ...value,
+          assets: value.assets ?? cached?.assets ?? [],
+          sources: value.reader!.order.map((id) => available.get(id)!).filter(Boolean),
+          jobs: [
+            ...(cached?.jobs ?? []).filter(
+              (job) =>
+                !changed.has(job.sourceRevision) && value.reader!.order.includes(job.sourceRevision)
+            ),
+            ...value.jobs,
+          ],
+          illustrations: [
+            ...(cached?.illustrations ?? []).filter(
+              (item) =>
+                !changed.has(item.sourceRevision) &&
+                value.reader!.order.includes(item.sourceRevision)
+            ),
+            ...(value.illustrations ?? []),
+          ],
+        };
+        let cacheKey = query.key;
+        if (replacementSource !== undefined) {
+          restoredView.current = '';
+          const storageBranch = query.branch === `main:${id}` ? '' : query.branch;
+          sessionStorage.removeItem(`reading:${id}:${storageBranch}`);
+          cacheKey = `${id}:${query.branch}:${replacementSource}`;
+          readerQuery.current = { ...query, source: replacementSource, key: cacheKey };
+          navigate({ kind: 'rebase-source', source: replacementSource });
+          const url = new URL(location.href);
+          if (replacementSource) url.searchParams.set('source', replacementSource);
+          else url.searchParams.delete('source');
+          history.replaceState(null, '', url);
+        }
+        readerCache.current = { key: cacheKey, detail: merged };
+        setDetail(merged);
+        setChats((old) => old.map((chat) => (chat.id === id ? value.chat : chat)));
+        return true;
       }
-      readerCache.current = { key: cacheKey, detail: merged };
-      setDetail(merged);
-      setChats((old) => old.map((chat) => (chat.id === id ? value.chat : chat)));
-      return true;
-    }
-  }, [navigate]);
+    },
+    [navigate]
+  );
   const refreshView = useCallback(
     async (id: string, incremental = false): Promise<void> => {
       await refresh(id, incremental);

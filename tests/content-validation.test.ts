@@ -170,9 +170,9 @@ test('revision, attachment and chat scope checks are retained', () => {
   expect(() =>
     compileContentAttachment(content(), { ...attachment, revision: 0 }, context)
   ).toThrow('PACKAGE_INVALID_ATTACHMENT');
-  expect(() =>
-    compileContentAttachment(content(), attachment, { ...context, chatId: '' })
-  ).toThrow('PACKAGE_CHAT_REQUIRED');
+  expect(() => compileContentAttachment(content(), attachment, { ...context, chatId: '' })).toThrow(
+    'PACKAGE_CHAT_REQUIRED'
+  );
 });
 
 test('native source validation borrows data while the editing API keeps a detached copy', () => {

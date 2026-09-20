@@ -236,7 +236,10 @@ test('READERNAV a late reader response cannot acknowledge a newer A-B-A navigati
     await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toBeVisible();
     holdNext = true;
     const changed = await request.patch(`/api/chats/${chat.id}/title`, {
-      data: { title: 'Navigation current title', expectedTitleRevision: initial.chat.titleRevision },
+      data: {
+        title: 'Navigation current title',
+        expectedTitleRevision: initial.chat.titleRevision,
+      },
     });
     expect(changed.ok()).toBe(true);
     await expect.poll(() => captured).toBe(true);
