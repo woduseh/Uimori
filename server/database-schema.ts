@@ -1,4 +1,5 @@
-import { createHash } from 'node:crypto';
+import { databaseSchemaSignature } from './database-signature.js';
+import { initDatabaseReadIndexes } from './database-performance.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
@@ -19,20 +20,6 @@ export class DatabaseSchemaError extends Error {
   }
 }
 
-function signature(db: DatabaseSync): string {
-  return createHash('sha256')
-    .update(
-      JSON.stringify(
-        db
-          .prepare(
-            "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name"
-          )
-          .all()
-      )
-    )
-    .digest('hex');
-}
-
 function assertCurrentSchema(db: DatabaseSync): void {
   const metadata = db
     .prepare("SELECT type,sql FROM sqlite_schema WHERE name='schema_metadata'")
@@ -44,7 +31,7 @@ function assertCurrentSchema(db: DatabaseSync): void {
     rows.length !== 1 ||
     rows[0].id !== 1 ||
     rows[0].baseline !== BASELINE ||
-    rows[0].signature !== signature(db)
+    rows[0].signature !== databaseSchemaSignature(db)
   )
     throw new DatabaseSchemaError('DATABASE_SCHEMA_MISMATCH', DATABASE_SCHEMA_VERSION);
 }
@@ -95,10 +82,11 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     for (const sql of [...CHAT_VARIABLE_SCHEMA, ...MAINTENANCE_SCHEMA]) db.exec(sql);
     if (db.prepare('PRAGMA foreign_key_check').all().length)
       throw new DatabaseSchemaError('DATABASE_INITIALIZATION_FOREIGN_KEYS', version);
+    initDatabaseReadIndexes(db);
     db.exec(METADATA_SCHEMA);
     db.prepare('INSERT INTO schema_metadata(id,baseline,signature) VALUES(1,?,?)').run(
       BASELINE,
-      signature(db)
+      databaseSchemaSignature(db)
     );
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}`);
     assertCurrentSchema(db);
