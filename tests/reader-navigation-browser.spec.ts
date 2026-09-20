@@ -163,3 +163,43 @@ test('direct reading scroll wins over a queued geometry update before its scroll
   await settleLayout(page);
   expect(await page.locator('#reader').evaluate((node) => node.scrollTop)).toBe(80);
 });
+
+test('CHATREC03 mobile mini navigator follows source IDs and keeps the opening outside scene counts', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto(origin);
+  await page.evaluate(async () => {
+    const path = '/tests/fixtures/reader-navigation.tsx';
+    const { mountMiniNavigator } = await import(path);
+    mountMiniNavigator();
+  });
+  const nav = page.getByRole('navigation', { name: '장면 탐색', exact: true });
+  const selected = page.getByLabel('Selected source', { exact: true });
+  const previous = nav.getByRole('button', { name: '이전 장면', exact: true });
+  const next = nav.getByRole('button', { name: '다음 장면', exact: true });
+  const list = nav.getByRole('button', { name: '장면 목록 열기', exact: true });
+  await expect(previous).toBeDisabled();
+  await expect(list).toHaveText('첫 메시지');
+  await next.click();
+  await expect(selected).toHaveText('source:nonsequential:a');
+  await expect(list).toHaveText('1 / 2');
+  await next.click();
+  await expect(selected).toHaveText('source:nonsequential:z');
+  await expect(list).toHaveText('2 / 2');
+  await expect(next).toBeDisabled();
+  await previous.click();
+  await expect(list).toHaveText('1 / 2');
+  const before = await page.locator('.reader-scrollport').evaluate((node) => node.scrollTop);
+  await page.getByRole('button', { name: 'Append scene', exact: true }).click();
+  await expect(list).toHaveText('1 / 3');
+  expect(await page.locator('.reader-scrollport').evaluate((node) => node.scrollTop)).toBe(before);
+  await list.click();
+  const dialog = page.getByRole('dialog', { name: '장면 목록', exact: true });
+  await dialog.getByRole('button', { name: '첫 메시지', exact: true }).click();
+  await expect(selected).toHaveText('opening:id');
+  await expect(previous).toBeDisabled();
+  const reader = await page.locator('.reader-scrollport').boundingBox();
+  const bar = await nav.boundingBox();
+  expect(bar!.y).toBeGreaterThanOrEqual(reader!.y + reader!.height - 1);
+});

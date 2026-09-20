@@ -237,10 +237,10 @@ export async function setCurrentModels(
 
 export async function selectCurrentSettingsSection(
   page: Page,
-  name: '모델' | '프롬프트·창작 프리셋'
+  name: '역할별 모델' | '현재 프롬프트'
 ) {
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, name === '모델' ? '역할별 모델' : '현재 프롬프트');
+  await selectSettingsSection(page, name);
 }
 /** Chat settings: a header button on wide widths, the first chat ⋯ item on compact widths. */
 export async function openChatSettings(page: Page) {

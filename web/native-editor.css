@@ -194,12 +194,60 @@
   flex-wrap: wrap;
   width: fit-content;
 }
+.native-advanced-workspace {
+  max-width: none;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 32px;
+}
+.native-advanced-workspace > .native-advanced-tabs {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.native-advanced-workspace > .native-advanced-tabs > button {
+  justify-content: flex-start;
+  min-height: 48px;
+  padding-inline: 14px;
+  text-align: left;
+}
+.native-advanced-workspace > .native-panel-fields,
+.native-advanced-workspace > div:not(.native-advanced-tabs) {
+  grid-column: 2;
+  min-width: 0;
+  width: 100%;
+}
+.native-advanced-workspace .native-form-stack,
+.native-advanced-workspace .native-form-stack > label,
+.native-advanced-workspace .native-source-editor {
+  width: 100%;
+  min-width: 0;
+}
 @media (max-width: 800px) {
   .native-editor-split {
     grid-template-columns: 190px minmax(0, 1fr);
   }
   .native-item-detail {
     padding-left: 20px;
+  }
+  .native-advanced-workspace {
+    display: flex;
+  }
+  .native-advanced-workspace > .native-advanced-tabs {
+    width: fit-content;
+    max-width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .native-advanced-workspace > .native-advanced-tabs > button {
+    justify-content: center;
+    min-height: var(--control-h);
+    padding-inline: 12px;
+    white-space: nowrap;
   }
 }
 @media (max-width: 600px) {
@@ -405,6 +453,13 @@
   width: calc(100% - 48px);
   max-width: 880px;
 }
+.library-page-editing .library-content-editor > .editor-grid > small.full,
+.library-page-editing .library-content-editor > .editor-grid > .library-diagnostics.full {
+  width: calc(100% - 48px);
+  max-width: 880px;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
 @media (min-width: 601px) {
   .library-page-editing .native-editor-split {
     height: calc(100dvh - var(--editor-heading-h) - 56px);
@@ -442,7 +497,9 @@
     padding-inline: 16px;
   }
   .library-page-editing .library-package-tools,
-  .library-page-editing .library-savebar {
+  .library-page-editing .library-savebar,
+  .library-page-editing .library-content-editor > .editor-grid > small.full,
+  .library-page-editing .library-content-editor > .editor-grid > .library-diagnostics.full {
     width: calc(100% - 32px);
   }
 }

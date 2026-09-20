@@ -11,7 +11,7 @@ import { ApiError, api } from './api.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
-import { UploadIcon } from './ui-icons.js';
+import { CheckIcon, UploadIcon } from './ui-icons.js';
 import './risu-import.css';
 
 /** Closing the dialog retains the reviewed file and exact uncertain submission. */
@@ -123,14 +123,26 @@ export function RisuPresetImport({
         className="risu-import-dialog"
         wide
       >
-        <section className="risu-import-body" aria-label="Risu 프리셋 검토" aria-busy={busy}>
-          <p className="muted">
-            Risu 프롬프트·토글·정규식 원본을 새 작문 프롬프트로 저장해요. 원본 파일도 보존해요.
-            가져온 뒤 현재 채팅의 작문 프롬프트로 선택해서 사용할 수 있어요.
-          </p>
-          <p className="muted">모델 연결과 전역 기본 프롬프트는 바뀌지 않아요.</p>
-          <label className="risu-import-file">
-            .risup · .risupreset · 프리셋 JSON · 프로젝트 ZIP · 최대 24 MiB
+        <section
+          className={`risu-import-body${result ? ' complete' : ''}`}
+          aria-label="Risu 프리셋 검토"
+          aria-busy={busy}
+        >
+          {!preview && (
+            <>
+              <p className="muted">
+                Risu 프롬프트·토글·정규식 원본을 새 작문 프롬프트로 저장해요. 원본 파일도 보존해요.
+                가져온 뒤 현재 채팅의 작문 프롬프트로 선택해서 사용할 수 있어요.
+              </p>
+              <p className="muted">모델 연결과 전역 기본 프롬프트는 바뀌지 않아요.</p>
+            </>
+          )}
+          <label className={`risu-import-file${preview ? ' risu-import-file-ready' : ''}`}>
+            <span>
+              {preview
+                ? source?.name
+                : '.risup · .risupreset · 프리셋 JSON · 프로젝트 ZIP · 최대 24 MiB'}
+            </span>
             <input
               type="file"
               aria-label="Risu 프리셋 파일 선택"
@@ -142,20 +154,34 @@ export function RisuPresetImport({
                 if (file) void prepare(file);
               }}
             />
+            {preview && <span className="risu-import-change">파일 변경</span>}
           </label>
           {preview && (
             <>
-              <div className="risu-import-summary">
+              <div className="risu-import-summary risu-import-hero">
                 <h3>{preview.title}</h3>
-                <small className="muted">{source?.name}</small>
-                <p>
-                  프롬프트 블록 {preview.summary.blocks}개 · 옵션 {preview.summary.controls}개 ·
-                  정규식 {preview.summary.regex}개
-                </p>
+                <small className="muted">작문 프롬프트</small>
+                <dl className="risu-import-counts">
+                  <div>
+                    <dt>블록</dt>
+                    <dd>{preview.summary.blocks}</dd>
+                  </div>
+                  <div>
+                    <dt>옵션</dt>
+                    <dd>{preview.summary.controls}</dd>
+                  </div>
+                  <div>
+                    <dt>정규식</dt>
+                    <dd>{preview.summary.regex}</dd>
+                  </div>
+                </dl>
               </div>
               {preview.findings.length > 0 ? (
-                <section className="risu-import-findings" aria-label="프리셋 가져오기 지원 범위">
-                  <h3>가져오기 안내</h3>
+                <section
+                  className={`risu-import-findings${unsupported ? ' warn' : ''}`}
+                  aria-label="프리셋 가져오기 지원 범위"
+                >
+                  <h3>{unsupported ? '실행 전에 확인이 필요해요' : '가져오기 안내'}</h3>
                   <ul>
                     {preview.findings.map((finding, index) => (
                       <li key={`${finding.code}:${index}`}>
@@ -170,6 +196,13 @@ export function RisuPresetImport({
               ) : (
                 <p className="muted">현재 파일에서 보고된 미지원 항목은 없어요.</p>
               )}
+              <details className="risu-import-processing">
+                <summary>원본 처리와 확인 사항</summary>
+                <p className="muted">
+                  CBS · 토글 · 변수 · 정규식 원본을 보존해요. 현재 사용 프롬프트와 모델은 바뀌지
+                  않아요.
+                </p>
+              </details>
               {unsupported && (
                 <label className="risu-import-choice risu-import-partial">
                   <SelectionCheckbox
@@ -193,6 +226,9 @@ export function RisuPresetImport({
               )}
               {result ? (
                 <div className="risu-import-result">
+                  <CheckIcon size={28} aria-hidden="true" />
+                  <h3>프롬프트를 가져왔어요</h3>
+                  <p className="muted">{preview.title}</p>
                   <p role="status">새 작문 프롬프트로 저장했어요.</p>
                   <button
                     type="button"

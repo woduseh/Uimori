@@ -32,12 +32,12 @@ for (const width of DEFAULT_WIDTHS) {
     await page.goto(`/?chat=${chat.id}`);
     await openChatSettings(page);
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-    await selectChatSettingsSection(page, '봇·페르소나·모듈');
+    await selectChatSettingsSection(page, '대화 구성');
     const save = dialog.getByRole('button', { name: '채팅 설정 저장', exact: true });
     await save.scrollIntoViewIfNeeded();
     await accessibleControl(save);
     await page.screenshot({ path: info.outputPath(`chat-save-${width}.png`) });
-    await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+    await selectChatSettingsSection(page, '프롬프트·모델');
     const promptPanel = dialog.getByRole('tabpanel');
     const promptChoice = promptPanel.getByRole('combobox', {
       name: '이 채팅의 작문 프롬프트',
@@ -49,10 +49,12 @@ for (const width of DEFAULT_WIDTHS) {
     );
     // The select above already states whether the chat follows the global prompt, so the page
     // repeats only what it inherits and cannot change here.
-    const inherited = promptPanel.locator('.settings-inherited');
+    const inherited = promptPanel.locator('.settings-inherited').filter({
+      has: page.getByRole('heading', { name: '전체 채팅 설정에서 사용하는 프롬프트', exact: true }),
+    });
     await expect(inherited.getByRole('term')).toHaveText(['번역']);
     await expect(inherited.getByRole('definition')).toHaveText([workspace.translation.title]);
-    await selectChatSettingsSection(page, '자동 후속 작업');
+    await selectChatSettingsSection(page, '자동 작업');
     const runtimeSave = dialog.getByRole('button', { name: '설정 저장', exact: true });
     await accessibleControl(runtimeSave);
     await dialog.getByRole('switch', { name: '장면 해설 자동 생성' }).click();
@@ -61,6 +63,7 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(dialog.getByText('후속 작업 설정을 저장했어요.', { exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath(`runtime-save-${width}.png`) });
     await selectChatSettingsSection(page, '이미지');
+    await dialog.locator('.chat-settings-image-management > summary').click();
     await accessibleControl(dialog.getByRole('button', { name: '이미지 등록', exact: true }));
     await page.screenshot({ path: info.outputPath(`image-register-${width}.png`) });
     await page.keyboard.press('Escape');

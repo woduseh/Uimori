@@ -7,6 +7,9 @@ import { discardActiveEditor } from './editor-workspace-context.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActivityDetails } from './ActivityStatus.js';
 import { CodexAgentSettings } from './CodexAgentSettings.js';
+import { AppAbout } from './AppAbout.js';
+import { Info } from 'lucide-react';
+import './recovery-settings.css';
 import { IllustrationSettingsEditor } from './IllustrationSettingsEditor.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
@@ -500,10 +503,11 @@ export function AppSettingsPanel({
     { key: 'models', label: '역할별 모델', icon: ModelIcon },
     { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon },
     { key: 'connections', label: '프로바이더·모델', icon: ConnectionIcon },
-    { key: 'agents', label: '에이전트', icon: AgentIcon },
+    { key: 'agents', label: 'Codex 연결', icon: AgentIcon },
     { key: 'illustrations', label: '삽화', icon: IllustrationIcon },
     { key: 'data', label: '데이터 관리', icon: DataIcon },
     { key: 'security', label: '접근 보안', icon: SecurityIcon },
+    { key: 'about', label: '앱 정보·라이선스', icon: Info },
   ];
   const title = categories.find((item) => item.key === active)?.label ?? '일반';
   const showingDetail = !compact || detail;
@@ -620,6 +624,7 @@ export function AppSettingsPanel({
           {categories.map(({ key, label }) => (
             <section
               className="settings-page"
+              data-settings-section={key}
               role="tabpanel"
               id={`${id}-${key}-panel`}
               aria-labelledby={`${id}-${key}-tab`}
@@ -630,6 +635,7 @@ export function AppSettingsPanel({
               {visited.includes(key) && (
                 <>
                   {!compact && <h3 className="settings-page-title">{label}</h3>}
+                  {key === 'about' && <AppAbout />}
                   {key === 'general' && (
                     <section className="settings-section">
                       <h3>
@@ -747,8 +753,8 @@ export function AppSettingsPanel({
                         onError={state.setError}
                         onDirtyChange={setArchiveDirty}
                       />
-                      <section aria-label="문제 보고용 진단" className="settings-section">
-                        <h3>문제 보고용 진단</h3>
+                      <details className="recovery-settings-disclosure">
+                        <summary>문제 보고용 진단</summary>
                         <DiagnosticReport scope={{ scope: 'system' }} label="시스템 진단 만들기" />
                         {state.selected && (
                           <DiagnosticReport
@@ -756,7 +762,7 @@ export function AppSettingsPanel({
                             label="선택 채팅 진단 만들기"
                           />
                         )}
-                      </section>
+                      </details>
                     </>
                   )}
                   {key === 'security' && (
@@ -794,17 +800,6 @@ export function AppSettingsPanel({
           {state.error}
         </p>
       )}
-      <p className="muted">
-        Uimori ·{' '}
-        <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noreferrer">
-          AGPL-3.0
-        </a>
-        {' · '}
-        <a href="https://github.com/woduseh/Uimori" target="_blank" rel="noreferrer">
-          소스 저장소
-        </a>
-        {' · '}보증 없이 제공돼요.
-      </p>
       <Dialog
         open={discard}
         title="미저장 설정 확인"

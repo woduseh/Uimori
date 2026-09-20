@@ -223,3 +223,33 @@
     transition: none;
   }
 }
+
+@media (max-width: 760px) {
+  .reader-stage.has-scenes {
+    flex-direction: column;
+  }
+  .scene-mini-navigator {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    min-height: 48px;
+    border-top: 1px solid var(--line);
+    background: var(--bg);
+  }
+  .scene-mini-navigator button {
+    min-width: 44px;
+    min-height: 44px;
+    color: var(--muted);
+  }
+  .scene-mini-current {
+    display: inline-flex;
+    gap: 10px;
+    align-items: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .reader-stage .scene-latest-floating {
+    bottom: 60px;
+  }
+}

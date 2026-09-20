@@ -167,16 +167,11 @@
 .helper-work-selector {
   display: flex;
   gap: 8px;
-  align-items: flex-end;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--line);
+  align-items: center;
 }
 .helper-work-selector label {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
-  display: grid;
-  gap: 4px;
 }
 .helper-work-selector select {
   min-width: 0;
@@ -326,10 +321,29 @@
   margin: 0 0 8px;
 }
 .helper-work-selector {
-  align-items: flex-end;
+  align-items: center;
 }
 .helper-work-selector .icon-button {
   flex-shrink: 0;
+}
+
+.helper-session-block {
+  padding: 10px 16px 9px;
+  border-bottom: 1px solid var(--line);
+}
+.helper-session-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 18px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.helper-session-meta strong {
+  color: var(--accent);
+  font-size: inherit;
 }
 
 /* The notice keeps its message on one line and splits its two actions to the edges. */

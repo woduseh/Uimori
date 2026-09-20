@@ -275,7 +275,7 @@ for (const width of DEFAULT_WIDTHS) {
     await composer.fill('고정 설정을 바꿔도 보존할 요청');
     await openChatSettings(page);
     const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-    await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+    await selectChatSettingsSection(page, '프롬프트·모델');
     const promptSelect = settings.getByRole('combobox', {
       name: '이 채팅의 작문 프롬프트',
       exact: true,
@@ -311,7 +311,7 @@ for (const width of DEFAULT_WIDTHS) {
     await settings.getByRole('button', { name: '장착 설정 다시 불러오기', exact: true }).click();
     await expect(promptSelect).toHaveValue('');
     await promptSelect.selectOption(preset.id);
-    await selectChatSettingsSection(page, '이 채팅의 모델');
+    await selectChatSettingsSection(page, '프롬프트·모델');
     const modelSelect = settings.getByRole('combobox', {
       name: '이 채팅의 본문 모델',
       exact: true,
@@ -415,7 +415,7 @@ for (const width of DEFAULT_WIDTHS) {
       await expect(chip).toContainText('사용 불가');
       await chip.click();
       await expect(modelSelect).toHaveValue(pinnedModel.id);
-      await expect(settings.getByRole('alert')).toContainText('고정한 본문 모델');
+      await expect(settings.getByRole('alert')).toContainText('선택한 본문 모델');
       await modelSelect.selectOption('');
       await settings.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
       await expect

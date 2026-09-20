@@ -6,11 +6,8 @@
   overflow-wrap: anywhere;
 }
 .lore-context-panel {
-  margin-top: 20px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
+  margin-top: 0;
+  padding: 0;
 }
 .lore-context-panel h3,
 .lore-context-result h4,
@@ -33,7 +30,7 @@
 }
 .lore-context-policy-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 .lore-context-policy-grid label {
@@ -141,5 +138,33 @@
   }
   .lore-context-actions > button {
     flex: 1;
+  }
+}
+
+.lore-context-advanced,
+.lore-context-preview {
+  border-top: 1px solid var(--line);
+  padding-block: 16px;
+}
+.lore-context-advanced > summary,
+.lore-context-preview > summary {
+  min-height: 28px;
+  cursor: pointer;
+}
+.lore-context-advanced[open] > * + * {
+  margin-top: 16px;
+}
+.lore-context-advanced h4 {
+  margin-bottom: 0;
+}
+.lore-context-policy-grid > label:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.lore-context-units p {
+  margin-top: 12px;
+}
+@media (max-width: 760px) {
+  .lore-context-policy-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

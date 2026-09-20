@@ -38,6 +38,7 @@ export type Props = {
   destination: 'story' | 'library';
   onSelect: (id: string) => void;
   onNew: (bot: Content, folder?: ChatFolder) => void;
+  onImportChat?: (bot: Content) => void;
   onLibrary: (tab: LibraryDestination) => void;
   onChatsChanged: () => Promise<void>;
   onError: (message: string) => void;
@@ -518,6 +519,15 @@ export function BotBranch(
               서재에서 관리
             </button>
             {managementActions}
+            {bot && props.onImportChat && (
+              <button
+                type="button"
+                onClick={(event) => openFromMenu(event, () => props.onImportChat?.(bot))}
+              >
+                <LibraryIcon size={18} aria-hidden="true" />
+                채팅 가져오기
+              </button>
+            )}
           </ActionMenu>
           <IconButton
             label={`${bot?.title ?? '봇'} 새 채팅`}

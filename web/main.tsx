@@ -1,5 +1,6 @@
 import { promptControls } from '../core/risu-prompt.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
+import { BotChatImportDialog } from './BotChatImportDialog.js';
 import { ReadabilitySettings } from './ReadabilitySettings.js';
 import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
 import { useReadingPreferences } from './useReadingPreferences.js';
@@ -20,7 +21,7 @@ import { HelperPanel } from './HelperPanel.js';
 import { selectedHelperSession } from './useHelperSessions.js';
 import type { HelperScope } from '../core/helper.js';
 import { StreamingResponse } from './StreamingResponse.js';
-import { discardActiveEditor } from './editor-workspace-context.js';
+import { discardActiveEditor, saveActiveEditor } from './editor-workspace-context.js';
 import type { Section as ChatSettingsSection } from './ChatSettingsPanel.js';
 import { ReaderPages } from './ReaderPages.js';
 import { SceneNavigator } from './SceneNavigator.js';
@@ -339,6 +340,7 @@ function App() {
   const reading = useReadingPreferences(font, fontSize, readingWidth);
 
   const [libraryDirty, setLibraryDirty] = useState(false);
+  const [importBot, setImportBot] = useState<Content | null>(null);
   const [pendingNavigation, setPendingNavigation] = useState<null | (() => void)>(null);
   const [discardingNavigation, setDiscardingNavigation] = useState(false);
   const [navigationDiscardError, setNavigationDiscardError] = useState('');
@@ -554,6 +556,10 @@ function App() {
       libraryTab={libraryTab}
       onSelect={select}
       onNew={newStory}
+      onImportChat={(bot) => {
+        setPanel('');
+        setImportBot(bot);
+      }}
       onLibrary={showLibrary}
       onChatsChanged={s.loadChats}
       onLibraryChanged={s.loadLibrary}
@@ -592,7 +598,6 @@ function App() {
   function renderReadingSettings(onStartFocus?: () => void) {
     return (
       <div className="settings-stack">
-        <ReadabilitySettings value={reading.settings} onChange={reading.update} />
         <label>
           새 원고의 기본 보기
           <select
@@ -649,6 +654,7 @@ function App() {
           </select>
         </label>
         <small>한 줄이 짧을수록 눈이 다음 줄을 찾기 쉬워요. 이 기기에만 적용해요.</small>
+        <ReadabilitySettings value={reading.settings} onChange={reading.update} />
         {onStartFocus && (
           <button className="secondary" onClick={onStartFocus}>
             집중 읽기 시작
@@ -661,6 +667,13 @@ function App() {
     <div
       className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarHidden ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''} ${workspacePanelOpen ? (panelModal ? 'panel-overlay' : 'panel-docked') : ''}`}
     >
+      {importBot && (
+        <BotChatImportDialog
+          bot={importBot}
+          onClose={() => setImportBot(null)}
+          onImported={s.loadChats}
+        />
+      )}
       <aside id="workspace-sidebar" className="sidebar" aria-label="탐색">
         {!compact && panel !== 'navigation' && navigation(true, sidebarHidden)}
       </aside>
@@ -1530,6 +1543,20 @@ function App() {
           open={!!pendingNavigation}
           disabled={discardingNavigation}
           onContinue={() => setPendingNavigation(null)}
+          onSave={async () => {
+            const go = pendingNavigation;
+            if (!go) return false;
+            setDiscardingNavigation(true);
+            try {
+              if (!(await saveActiveEditor())) return false;
+              setPendingNavigation(null);
+              setLibraryDirty(false);
+              go();
+              return true;
+            } finally {
+              setDiscardingNavigation(false);
+            }
+          }}
           onDiscard={async () => {
             setDiscardingNavigation(true);
             setNavigationDiscardError('');

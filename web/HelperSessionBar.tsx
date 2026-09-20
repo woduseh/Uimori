@@ -82,76 +82,91 @@ export function HelperSessionBar(props: Props) {
       setWorking(false);
     }
   }
+  const currentScope = props.conversation?.scope;
+  const currentBranch =
+    currentScope?.kind === 'chat'
+      ? props.branches.find((item) => item.id === currentScope.branchId)
+      : null;
   return (
     <>
-      <div className="helper-work-selector">
-        <label>
-          도우미 세션{props.unread.length > 0 ? ` · 새 소식 ${props.unread.length}` : ''}
-          <select
-            aria-label="도우미 세션 선택"
-            value={props.currentId ?? ''}
-            onChange={(event) => {
-              const session = props.sessions.find((item) => item.id === event.target.value);
-              if (session) props.onSelect(session);
-            }}
-          >
-            <option value="" disabled>
-              세션을 불러오는 중…
-            </option>
-            {props.sessions.map((session) => {
-              const scope = session.scope;
-              const branch =
-                scope.kind === 'chat'
-                  ? props.branches.find((item) => item.id === scope.branchId)
-                  : null;
-              return (
-                <option key={session.id} value={session.id}>
-                  {props.unread.includes(session.id) ? '● ' : ''}
-                  {session.title || '새 대화'}
-                  {branch && props.detail ? ` · ${branchLabel(branch, props.detail)}` : ''}
-                  {session.activity?.running
-                    ? ' · 진행 중'
-                    : session.activity?.queued
-                      ? ` · 대기 ${session.activity.queued}`
-                      : ''}
-                </option>
-              );
-            })}
-          </select>
-        </label>
-        <IconButton
-          label="새 도우미 세션"
-          icon={Plus}
-          disabled={props.creating}
-          onClick={props.onCreate}
-        />
-        <ActionMenu label="도우미 세션 관리" viewport>
-          <button
-            type="button"
-            disabled={!props.conversation || props.busy}
-            onClick={() => {
-              setRename(props.conversation);
-              setTitle(props.conversation?.title ?? '');
-              setError('');
-            }}
-          >
-            <EditIcon size={18} aria-hidden="true" />
-            세션 이름 변경
-          </button>
-          <button
-            type="button"
-            className="danger"
-            disabled={!props.conversation || props.busy}
-            onClick={() => {
-              setDeleting(props.conversation);
-              setImpact(null);
-              setError('');
-            }}
-          >
-            <DeleteIcon size={18} aria-hidden="true" />
-            세션 삭제
-          </button>
-        </ActionMenu>
+      <div className="helper-session-block">
+        <div className="helper-work-selector">
+          <label>
+            <span className="sr-only">도우미 세션</span>
+            <select
+              aria-label="도우미 세션 선택"
+              value={props.currentId ?? ''}
+              onChange={(event) => {
+                const session = props.sessions.find((item) => item.id === event.target.value);
+                if (session) props.onSelect(session);
+              }}
+            >
+              <option value="" disabled>
+                세션을 불러오는 중…
+              </option>
+              {props.sessions.map((session) => {
+                const scope = session.scope;
+                const branch =
+                  scope.kind === 'chat'
+                    ? props.branches.find((item) => item.id === scope.branchId)
+                    : null;
+                return (
+                  <option key={session.id} value={session.id}>
+                    {props.unread.includes(session.id) ? '● ' : ''}
+                    {session.title || '새 대화'}
+                    {branch && props.detail ? ` · ${branchLabel(branch, props.detail)}` : ''}
+                    {session.activity?.running
+                      ? ' · 진행 중'
+                      : session.activity?.queued
+                        ? ` · 대기 ${session.activity.queued}`
+                        : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          <IconButton
+            label="새 도우미 세션"
+            icon={Plus}
+            disabled={props.creating}
+            onClick={props.onCreate}
+          />
+          <ActionMenu label="도우미 세션 관리" viewport>
+            <button
+              type="button"
+              disabled={!props.conversation || props.busy}
+              onClick={() => {
+                setRename(props.conversation);
+                setTitle(props.conversation?.title ?? '');
+                setError('');
+              }}
+            >
+              <EditIcon size={18} aria-hidden="true" />
+              세션 이름 변경
+            </button>
+            <button
+              type="button"
+              className="danger"
+              disabled={!props.conversation || props.busy}
+              onClick={() => {
+                setDeleting(props.conversation);
+                setImpact(null);
+                setError('');
+              }}
+            >
+              <DeleteIcon size={18} aria-hidden="true" />
+              세션 삭제
+            </button>
+          </ActionMenu>
+        </div>
+        <div className="helper-session-meta">
+          <span>
+            {props.conversation?.scope.kind === 'chat'
+              ? `이 채팅${currentBranch && props.detail ? ` · ${branchLabel(currentBranch, props.detail)}` : ''}`
+              : '서재 작업'}
+          </span>
+          {props.unread.length > 0 && <strong>새 소식 {props.unread.length}</strong>}
+        </div>
       </div>
       <Dialog
         open={!!rename}

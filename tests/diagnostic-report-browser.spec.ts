@@ -59,6 +59,7 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(page.locator('.run-task-details pre').first()).toContainText(privateMarker);
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '데이터 관리');
+    await page.getByText('문제 보고용 진단', { exact: true }).click();
     await page.getByRole('button', { name: '시스템 진단 만들기', exact: true }).click();
     await expect(dialog.getByRole('status')).toContainText('시스템 정보 · 실행 0개');
     await page.keyboard.press('Escape');
@@ -73,6 +74,7 @@ for (const width of DEFAULT_WIDTHS) {
     await page.goto('/');
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '데이터 관리');
+    await page.getByText('문제 보고용 진단', { exact: true }).click();
     const pattern = '**/api/diagnostics/report';
     await page.route(pattern, (route) =>
       route.fulfill({

@@ -82,3 +82,168 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+.chat-settings-panel .profile-fields > div[hidden],
+.chat-settings-panel .chat-settings-memory[hidden],
+.chat-settings-panel .chat-settings-images[hidden] {
+  display: none;
+}
+.chat-profile-model-options > label,
+.chat-profile-prompt-options > label {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  padding-block: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.chat-profile-prompt-options {
+  margin-top: 24px;
+}
+.chat-settings-panel .settings-inherited > dl > div {
+  justify-content: space-between;
+  gap: 24px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.chat-settings-panel .settings-inherited > dl dt {
+  flex: 1;
+}
+.chat-settings-panel .settings-inherited > dl dd {
+  flex: 1;
+}
+.chat-profile-image-options {
+  display: grid;
+  gap: 12px;
+}
+.chat-profile-image-options h3 {
+  margin-block: 8px;
+}
+.chat-settings-memory,
+.chat-settings-images {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+  margin-top: 20px;
+}
+.chat-settings-panel .chat-composition-row {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 18px 0;
+  margin: 0;
+}
+.chat-composition-role {
+  display: block;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.chat-composition-persona {
+  margin-bottom: 20px;
+}
+.chat-composition-add {
+  margin-top: 20px;
+}
+.chat-composition-add > summary {
+  min-height: 44px;
+  cursor: pointer;
+}
+.chat-settings-panel .chat-composition-add .package-entry {
+  border: 0;
+  padding: 8px 0;
+}
+@media (max-width: 760px) {
+  .chat-profile-model-options > label,
+  .chat-profile-prompt-options > label {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .chat-settings-panel .settings-inherited > dl > div {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .chat-settings-panel .settings-inherited > dl dt {
+    flex-basis: auto;
+  }
+}
+
+.chat-settings-panel .package-attachments {
+  display: flex;
+  flex-direction: column;
+}
+.chat-settings-panel .chat-composition-persona {
+  order: 1;
+  margin-block: 20px;
+}
+.chat-settings-panel .chat-composition-row {
+  order: 2;
+}
+.chat-settings-panel .package-attachment-fixed-bot {
+  order: 0;
+}
+.chat-settings-panel .chat-composition-add {
+  order: 3;
+}
+
+/* Keep the attachment identity compact even when other editor headers stack on phones. */
+.chat-settings-panel .chat-composition-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 12px;
+  padding-block: 14px;
+}
+.chat-settings-panel .chat-composition-row > header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+.chat-settings-panel .chat-composition-row > header > .content-avatar {
+  --content-avatar-size: 36px;
+  flex: 0 0 36px;
+}
+.chat-settings-panel .chat-composition-row > header > div {
+  min-width: 0;
+  flex: 1;
+}
+.chat-settings-panel .chat-composition-row h3 {
+  margin: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.chat-settings-panel .chat-composition-row > small:not(.chat-composition-role) {
+  color: var(--muted);
+  font-size: 12px;
+}
+.chat-settings-panel .chat-composition-row > .chat-composition-role,
+.chat-settings-panel .chat-composition-row > details,
+.chat-settings-panel .chat-composition-row > p {
+  grid-column: 1 / -1;
+}
+.chat-settings-panel .chat-composition-row > .chat-composition-role {
+  margin: 0;
+}
+
+.chat-settings-image-management > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  cursor: pointer;
+}
+.chat-settings-image-management > summary::before {
+  content: "▸";
+}
+.chat-settings-image-management[open] > summary::before {
+  content: "▾";
+}
+.chat-settings-image-management > summary small {
+  margin-left: auto;
+  color: var(--text-muted);
+}
+.chat-settings-image-management > .workspace-tools > p.muted {
+  display: none;
+}

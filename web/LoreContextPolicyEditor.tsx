@@ -191,7 +191,7 @@ export function LoreContextPolicyEditor({
   }
   return (
     <section className="lore-context-panel" aria-label="로어 문맥 정책">
-      <h3>로어 문맥</h3>
+      <h3>로어 사용</h3>
       <p className="muted">
         모델이 실제로 읽은 구간을 다음 생성에 이어 사용해요. 처음 읽은 이력 위치에 두며, 예산이 차면
         오래 사용하지 않은 자료부터 정리해요.
@@ -204,94 +204,109 @@ export function LoreContextPolicyEditor({
         />
         조회한 로어를 다음 생성에 유지
       </label>
-      <div className="lore-context-policy-grid">
-        {fields.map((field) => (
-          <label key={field.key}>
-            {field.label}
+      <p className="muted">
+        로어 관련성 판단 · JEV · 실제 연결 상태는 전체 연결 설정에서 확인할 수 있어요.
+      </p>
+      <details className="lore-context-advanced">
+        <summary>선별 기준과 용량</summary>
+        <h4>문맥 유지 한도</h4>
+        <div className="lore-context-policy-grid">
+          {fields.map((field) => (
+            <label key={field.key}>
+              {field.label}
+              <input
+                aria-label={field.label}
+                inputMode="numeric"
+                value={draft[field.key]}
+                onChange={(event) => change({ ...draft, [field.key]: event.target.value })}
+                aria-invalid={validation.startsWith(field.label)}
+              />
+              <small>
+                {field.min.toLocaleString()}–{field.max.toLocaleString()} {field.unit}
+              </small>
+            </label>
+          ))}
+        </div>
+        <h4>관련성 판단</h4>
+        <div className="lore-context-policy-grid">
+          <label>
+            관련성 기준
             <input
-              aria-label={field.label}
-              inputMode="numeric"
-              value={draft[field.key]}
-              onChange={(event) => change({ ...draft, [field.key]: event.target.value })}
-              aria-invalid={validation.startsWith(field.label)}
+              aria-label="Jev 관련성 기준"
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              value={draft.threshold}
+              onChange={(event) => change({ ...draft, threshold: event.target.value })}
             />
-            <small>
-              {field.min.toLocaleString()}–{field.max.toLocaleString()} {field.unit}
-            </small>
+            <small>0–1, 높일수록 관련성이 높은 로어만 포함해요.</small>
           </label>
-        ))}
-      </div>
-      <p>로어 관련성은 JEV가 판단해요.</p>
-      <div className="lore-context-policy-grid">
-        <label>
-          관련성 기준
-          <input
-            aria-label="Jev 관련성 기준"
-            type="number"
-            min="0"
-            max="1"
-            step="0.05"
-            value={draft.threshold}
-            onChange={(event) => change({ ...draft, threshold: event.target.value })}
-          />
-          <small>0–1, 높일수록 관련성이 높은 로어만 포함해요.</small>
-        </label>
-        <label>
-          선택 로어 토큰 한도
-          <input
-            aria-label="Jev 선택 로어 토큰 한도"
-            type="number"
-            min="0"
-            max="100000"
-            value={draft.maxSelectedTokens}
-            onChange={(event) => change({ ...draft, maxSelectedTokens: event.target.value })}
-          />
-        </label>
-        <label>
-          판단 입력 토큰 한도
-          <input
-            aria-label="Jev 판단 입력 토큰 한도"
-            type="number"
-            min="1000"
-            max="30000"
-            value={draft.maxInputTokens}
-            onChange={(event) => change({ ...draft, maxInputTokens: event.target.value })}
-          />
-        </label>
-      </div>
-      <p className="muted">
-        Jev는 선택 로어의 관련성을 한 번에 판단해요. 상시 로어와 카드의 명시적 조건은 유지해요. 토큰
-        수는 호스트 추정값이에요. 프로바이더·모델 등록의 JEV 판단에서 API 키를 연결하고 테스트할 수
-        있어요. 작문·문맥 요약 모델은 바뀌지 않아요.
-      </p>
-      <p className="muted">
-        문자 한도는 UTF-16 코드 단위예요. 예를 들어 이모지 하나가 2자로 계산될 수 있어요. 고정
-        자료는 한도를 넘으면 요청을 중단해 알려요. 이 한도는 로어와 고정 자료에 적용하며 전체 모델
-        입력 토큰 한도는 별도예요.
-      </p>
-      <p className="muted">
-        사용자가 만든 Risu 프롬프트의 역할·순서·캐시 기준은 그대로 사용해요. 이 설정이 사용자
-        프롬프트를 다시 배치하지 않아요.
-      </p>
+          <label>
+            선택 로어 토큰 한도
+            <input
+              aria-label="Jev 선택 로어 토큰 한도"
+              type="number"
+              min="0"
+              max="100000"
+              value={draft.maxSelectedTokens}
+              onChange={(event) => change({ ...draft, maxSelectedTokens: event.target.value })}
+            />
+          </label>
+          <label>
+            판단 입력 토큰 한도
+            <input
+              aria-label="Jev 판단 입력 토큰 한도"
+              type="number"
+              min="1000"
+              max="30000"
+              value={draft.maxInputTokens}
+              onChange={(event) => change({ ...draft, maxInputTokens: event.target.value })}
+            />
+          </label>
+        </div>
+        <details className="lore-context-units">
+          <summary>단위와 예산 설명</summary>
+          <p className="muted">
+            Jev는 선택 로어의 관련성을 한 번에 판단해요. 상시 로어와 카드의 명시적 조건은 유지해요.
+            토큰 수는 호스트 추정값이에요. 프로바이더·모델 등록의 JEV 판단에서 API 키를 연결하고
+            테스트할 수 있어요. 작문·문맥 요약 모델은 바뀌지 않아요.
+          </p>
+          <p className="muted">
+            문자 한도는 UTF-16 코드 단위예요. 예를 들어 이모지 하나가 2자로 계산될 수 있어요. 고정
+            자료는 한도를 넘으면 요청을 중단해 알려요. 이 한도는 로어와 고정 자료에 적용하며 전체
+            모델 입력 토큰 한도는 별도예요.
+          </p>
+          <p className="muted">
+            사용자가 만든 Risu 프롬프트의 역할·순서·캐시 기준은 그대로 사용해요. 이 설정이 사용자
+            프롬프트를 다시 배치하지 않아요.
+          </p>
+        </details>
+        {validation && (
+          <p className="error" role="alert">
+            {validation} 입력한 초안은 유지돼요.
+          </p>
+        )}
+        <div className="lore-context-actions">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => change(draftOf(DEFAULT_LORE_CONTEXT))}
+          >
+            기본 정책으로
+          </button>
+          {validation && (
+            <button type="button" className="ghost" onClick={() => setDraft(draftOf(effective))}>
+              마지막 유효값으로 되돌리기
+            </button>
+          )}
+        </div>
+      </details>
       {validation && (
         <p className="error" role="alert">
-          {validation} 입력한 초안은 유지돼요.
+          선별 기준과 용량의 입력을 확인해 주세요. {validation}
         </p>
       )}
-      <div className="lore-context-actions">
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => change(draftOf(DEFAULT_LORE_CONTEXT))}
-        >
-          기본 정책으로
-        </button>
-        {validation && (
-          <button type="button" className="ghost" onClick={() => setDraft(draftOf(effective))}>
-            마지막 유효값으로 되돌리기
-          </button>
-        )}
-      </div>
       <details className="lore-context-preview">
         <summary>다음 생성의 로어 미리보기</summary>
         <p className="muted">

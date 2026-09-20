@@ -12,6 +12,8 @@ import {
   EditorDraftStatus,
   EditorDraftStatusButton,
   discardActiveEditor,
+  saveActiveEditor,
+  useEditorSaveCommand,
   useServerEditDraft,
 } from './editor-workspace-context.js';
 import type { ContentDraftModel } from '../core/edit-drafts.js';
@@ -141,6 +143,7 @@ export function LibraryPanel({
 }) {
   const [tab, setTab] = useState(initialTab);
   const [dirty, setDirty] = useState(false);
+  const [savingNavigation, setSavingNavigation] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<{
     tab: PrimaryLibraryTab;
     closeOnly?: boolean;
@@ -451,12 +454,6 @@ export function LibraryPanel({
         {headerLeading}
         <h1>서재</h1>
         {library && !editing && !detail && <NativeTransfer library={library} reload={reload} />}
-        <RisuImport
-          showTrigger={!!library && (tab === 'bot' || tab === 'module') && !editing && !detail}
-          defaultKind={tab === 'module' ? 'module' : ''}
-          reload={reload}
-          onContinueChat={onContinueChat}
-        />
         {headerTrailing}
       </header>
       <Dialog
@@ -464,12 +461,22 @@ export function LibraryPanel({
         title="미저장 자료 확인"
         role="alertdialog"
         className="library-discard-dialog"
-        onClose={continueEditing}
+        onClose={() => {
+          if (!savingNavigation) continueEditing();
+        }}
       >
         <p>이동하면 저장하지 않은 편집 내용이 사라져요.</p>
         <DraftDiscardActions
           open={!!pendingNavigation}
+          onSavingChange={setSavingNavigation}
           onContinue={continueEditing}
+          onSave={async () => {
+            const destination = pendingNavigation;
+            if (!destination || !(await saveActiveEditor())) return false;
+            switchTab(destination.tab, destination.closeOnly);
+            setPendingNavigation(null);
+            return true;
+          }}
           onDiscard={async () => {
             if (!pendingNavigation) return;
             try {
@@ -787,6 +794,12 @@ export function LibraryPanel({
                         </LibraryItemMenu>
                       </>
                     )}
+                    <RisuImport
+                      showTrigger={tab === 'bot' || tab === 'module'}
+                      defaultKind={tab === 'module' ? 'module' : ''}
+                      reload={reload}
+                      onContinueChat={onContinueChat}
+                    />
                   </>
                 )}
                 {!selecting && (filtered.length > 0 || !!query) && (
@@ -1045,10 +1058,10 @@ function ContentEditor({
       body: value.text,
     });
   async function saveContent(copyKind?: 'bot' | 'persona' | 'module') {
-    if (editorUnavailable || portraitBusy) return;
-    if (nativeDraftDirty) {
+    if (editorUnavailable || portraitBusy || !value.title.trim()) return false;
+    if (nativeDraftDirty || importedPackage) {
       setError('패키지의 초안을 먼저 검증하고 적용해 주세요.');
-      return;
+      return false;
     }
     setBusy(true);
     onError('');
@@ -1078,14 +1091,17 @@ function ContentEditor({
       setSaved(item.title + ' 저장됨 · 다음 실행부터 사용해요.');
       if (!selected || copying) await onCreated?.(item);
       await reload();
+      return true;
     } catch (caught) {
       const message = (caught as Error).message;
       setError(message);
       onError(message);
+      return false;
     } finally {
       setBusy(false);
     }
   }
+  useEditorSaveCommand(shared.session, () => saveContent());
   if (!hasShownEditor.current) return <EditorDraftStatus value={shared} />;
   return (
     <EditorDraftProvider value={shared}>

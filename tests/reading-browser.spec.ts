@@ -120,6 +120,8 @@ async function clipboard(page: Page) {
   const copied: string[] = [];
   await page.exposeFunction('recordReadingClipboard', (text: string) => copied.push(text));
   await page.addInitScript(() => {
+    // Host preferences and clipboard mocks must not run inside opaque Risu card frames.
+    if (window !== window.top) return;
     localStorage.setItem('uimori:reading-language', 'original');
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,

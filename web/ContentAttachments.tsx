@@ -130,6 +130,7 @@ export function ContentAttachments({
       );
     void changeAttachments([...next, ref]);
   }
+  const persona = attachments.find((item) => item.role === 'persona');
   const current = resolved?.key === viewKey ? resolved.value : null;
   const shown = current?.attachments ?? attachments,
     required = new Set(current?.required.map(keyOf) ?? []);
@@ -160,19 +161,46 @@ export function ContentAttachments({
           </button>
         </div>
       )}
+      <div className="chat-composition-persona">
+        <ContentPicker
+          library={library}
+          role="persona"
+          label="페르소나"
+          value={persona ? refValue(persona) : ''}
+          allowNone
+          noneLabel="선택 안 함"
+          disabled={busy}
+          onChange={(reference) => {
+            const selectedPersona = library.contents.find((item) => refValue(item) === reference);
+            if (reference && !selectedPersona) return;
+            void changeAttachments([
+              ...attachments.filter((item) => item.role !== 'persona'),
+              ...(selectedPersona
+                ? [
+                    {
+                      id: selectedPersona.id,
+                      revision: selectedPersona.revision,
+                      role: 'persona' as const,
+                    },
+                  ]
+                : []),
+            ]);
+          }}
+        />
+      </div>
       {shown.map((ref, index) => {
         const pkg = current?.packages[index],
           scope = keyOf(ref),
           automatic = required.has(scope),
           title = pkg?.title ?? '연결한 패키지',
           fixedBot = ref.role === 'bot',
-          Attachment = fixedBot ? 'fieldset' : 'article';
+          Attachment = 'article';
         return (
           <Attachment
-            className={`package-attachment${fixedBot ? ' package-entry package-attachment-fixed-bot' : ''}`}
+            className={`package-attachment chat-composition-row${fixedBot ? ' package-attachment-fixed-bot' : ''}`}
             key={scope}
           >
-            {fixedBot && <legend>소속 봇 · 고정</legend>}
+            {fixedBot && <small className="chat-composition-role">소속 봇 · 고정</small>}
             <header>
               <ContentAvatar
                 content={
@@ -246,42 +274,45 @@ export function ContentAttachments({
           </Attachment>
         );
       })}
-      <fieldset className="package-entry" disabled={busy}>
-        <legend>패키지 추가</legend>
-        <label>
-          이 채팅에서의 역할
-          <select
-            aria-label="패키지 장착 역할"
-            value={role}
-            onChange={(event) => {
-              setRole(event.target.value as ContentRole);
-              setSelected('');
+      <details className="chat-composition-add">
+        <summary>함께 사용하는 모듈 · 자료 추가</summary>
+        <fieldset className="package-entry" disabled={busy}>
+          <legend>자료 추가</legend>
+          <label>
+            이 채팅에서의 역할
+            <select
+              aria-label="패키지 장착 역할"
+              value={role}
+              onChange={(event) => {
+                setRole(event.target.value as ContentRole);
+                setSelected('');
+              }}
+            >
+              <option value="module">모듈 · 추가 지침과 설정</option>
+              <option value="persona">페르소나 · 내가 맡는 인물</option>
+            </select>
+          </label>
+          <ContentPicker
+            library={{
+              ...library,
+              contents: library.contents.filter((content) => content.package || content.hasPackage),
             }}
-          >
-            <option value="module">모듈 · 추가 지침과 설정</option>
-            <option value="persona">페르소나 · 내가 맡는 인물</option>
-          </select>
-        </label>
-        <ContentPicker
-          library={{
-            ...library,
-            contents: library.contents.filter((content) => content.package || content.hasPackage),
-          }}
-          role={role}
-          label="추가할 패키지"
-          value={selected}
-          onChange={setSelected}
-          disabled={busy}
-          excludeIds={attachments.filter((ref) => ref.role === role).map((ref) => ref.id)}
-        />
-        <button type="button" className="secondary" disabled={!selected || busy} onClick={add}>
-          패키지 장착
-        </button>
-        <small>
-          같은 자료를 다른 역할로 사용할 수 있어요. 요구하는 모듈도 함께 연결하며 공유 모듈은 한
-          번만 포함해요.
-        </small>
-      </fieldset>
+            role={role}
+            label="추가할 패키지"
+            value={selected}
+            onChange={setSelected}
+            disabled={busy}
+            excludeIds={attachments.filter((ref) => ref.role === role).map((ref) => ref.id)}
+          />
+          <button type="button" className="secondary" disabled={!selected || busy} onClick={add}>
+            패키지 장착
+          </button>
+          <small>
+            같은 자료를 다른 역할로 사용할 수 있어요. 요구하는 모듈도 함께 연결하며 공유 모듈은 한
+            번만 포함해요.
+          </small>
+        </fieldset>
+      </details>
     </section>
   );
 }
