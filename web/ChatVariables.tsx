@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatVariableState } from '../core/chat-variables.js';
 import { api, ApiError } from './api.js';
-import { ResetIcon } from './ui-icons.js';
+import { RefreshIcon, SaveIcon, ResetIcon } from './ui-icons.js';
 import './chat-variables.css';
 
 type VariableView = ChatVariableState & {
@@ -261,6 +261,14 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
             재정의 {Object.keys(view.values).length}개 · 개정 {view.revision}
           </small>
         )}
+        <button
+          type="button"
+          className="ghost"
+          disabled={loading || busy}
+          onClick={() => void load()}
+        >
+          <RefreshIcon size={16} aria-hidden="true" /> 새로고침
+        </button>
       </header>
       <p className="muted">
         카드와 스크립트가 이 분기에서 함께 읽는 문자열 값이에요. 서재 원본은 바꾸지 않아요. 빈
@@ -418,18 +426,6 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
         )}
         <div className="form-actions">
           <button
-            type="submit"
-            disabled={
-              !view ||
-              loading ||
-              busy ||
-              !parsed ||
-              (!hasUncertainSave && (!dirty || conflict || view.pending))
-            }
-          >
-            {hasUncertainSave ? '저장 결과 확인' : '공유 변수 저장'}
-          </button>
-          <button
             type="button"
             className="secondary"
             disabled={!view || busy || hasUncertainSave}
@@ -445,15 +441,21 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
               setNotice('서버에 저장된 값으로 되돌렸어요.');
             }}
           >
-            서버 값으로 되돌리기
+            <ResetIcon size={16} aria-hidden="true" /> 서버 값으로 되돌리기
           </button>
+
           <button
-            type="button"
-            className="ghost"
-            disabled={loading || busy}
-            onClick={() => void load()}
+            type="submit"
+            disabled={
+              !view ||
+              loading ||
+              busy ||
+              !parsed ||
+              (!hasUncertainSave && (!dirty || conflict || view.pending))
+            }
           >
-            새로고침
+            <SaveIcon size={16} aria-hidden="true" />
+            {hasUncertainSave ? '저장 결과 확인' : '공유 변수 저장'}
           </button>
         </div>
       </form>
