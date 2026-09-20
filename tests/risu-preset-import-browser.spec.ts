@@ -93,7 +93,8 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   const title = `RISUPRESETUI02 ${Date.now()}`;
   const source = {
     name: title,
-    customPromptTemplateToggle: 'mood=Imported Mood=select=Calm,Vivid',
+    customPromptTemplateToggle:
+      'mood=Imported Mood=select=Calm,Vivid\nmemo=Imported Memo=textarea\nlight=Imported Light',
     templateDefaultVariables: 'location=DECLARED_LOCATION',
     promptTemplate: [
       {
@@ -130,7 +131,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   expect(saved.ok(), await saved.text()).toBe(true);
   expect(promptControls((await saved.json()).preset.program)[0]).toMatchObject({
     id: 'mood',
-    default: null,
+    default: '0',
   });
   await dialog.getByRole('button', { name: '가져온 프롬프트 편집', exact: true }).click();
   await expect(dialog).not.toBeVisible();
@@ -142,7 +143,17 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   );
   await composer.getByRole('tab', { name: '기본 옵션', exact: true }).click();
   await expect(composer.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(title);
-  await expect(composer.getByLabel('Imported Mood', { exact: true })).toHaveValue('null');
+  await expect(composer.getByLabel('Imported Mood', { exact: true })).toHaveValue('"0"');
+  await expect(composer.getByRole('option', { name: '미설정', exact: true })).toHaveCount(0);
+  await expect(composer.getByRole('button', { name: /미설정/ })).toHaveCount(0);
+  await expect(composer.getByLabel('Imported Memo', { exact: true })).toHaveValue('');
+  await expect(composer.getByRole('switch', { name: 'Imported Light' })).not.toBeChecked();
+  await composer.getByLabel('Imported Memo', { exact: true }).fill('First line\nSecond line');
+  if (process.env.UIMORI_VISUAL_REVIEW === '1')
+    await page.screenshot({
+      path: info.outputPath('risup-default-options-mobile.png'),
+      fullPage: true,
+    });
   await composer.getByLabel('Imported Mood', { exact: true }).selectOption('"1"');
   await composer.getByRole('tab', { name: '구성', exact: true }).click();
   await expect(composer.getByLabel('1번 프롬프트 본문')).toHaveValue(
@@ -174,6 +185,10 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
   await composer.getByRole('tab', { name: '기본 옵션', exact: true }).click();
   await expect(composer.getByLabel('Imported Mood', { exact: true })).toHaveValue('"1"');
+  await expect(composer.getByLabel('Imported Memo', { exact: true })).toHaveValue(
+    'First line\nSecond line'
+  );
+  await expect(composer.getByRole('switch', { name: 'Imported Light' })).not.toBeChecked();
   await composer.getByRole('tab', { name: '정규식', exact: true }).click();
   await expect
     .poll(async () =>

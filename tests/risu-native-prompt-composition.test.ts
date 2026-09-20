@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
-import { compileRisuPrompt, promptControls, validateRisuPrompt } from '../core/risu-prompt.js';
+import {
+  compileRisuPrompt,
+  promptControls,
+  resolvePromptValues,
+  reconcilePromptValues,
+  validateRisuPrompt,
+} from '../core/risu-prompt.js';
 import {
   createNativeRisuPresetProgram,
   evaluatedNativeRisuPreset,
@@ -63,15 +69,26 @@ describe('native Risu prompt composition', () => {
       },
     });
     expect(promptControls(program)).toMatchObject([
-      { id: 'mode', options: [{ value: null }, { value: '0' }, { value: '1' }] },
-      { id: 'name', type: 'text' },
+      { id: 'mode', default: '0', options: [{ value: '0' }, { value: '1' }] },
+      { id: 'name', type: 'text', default: '' },
     ]);
+    expect(resolvePromptValues(program)).toEqual({ mode: '0', name: '' });
+    expect(resolvePromptValues(program, { mode: null, name: null })).toEqual({
+      mode: '0',
+      name: '',
+    });
+    expect(reconcilePromptValues(program, { mode: null, name: null })).toEqual({
+      values: { mode: '0', name: '' },
+      resetKeys: [],
+    });
     expect(() => validateRisuPrompt({ ...program, transforms: [] })).toThrow();
+    program.nativeRisuPreset.preset.customPromptTemplateToggle += '\ntoString=Named toggle';
+    expect(resolvePromptValues(program).toString).toBe('0');
   });
-  test.each(['0', '2'])(
-    'bundled Phēmē source executes native CBS with session mode %s',
-    async (mode) => {
-      const selectedValues = { ...defaults, pheme_session_mode: mode };
+  test.each(['0', '1', '2'].flatMap((mode) => ['0', '1'].map((botType) => [mode, botType])))(
+    'bundled Phēmē source executes native CBS with session mode %s and bot type %s',
+    async (mode, botType) => {
+      const selectedValues = { ...defaults, pheme_session_mode: mode, pheme_bot_type: botType };
       const program = validateRisuPrompt(pheme),
         source = program.nativeRisuPreset;
       const before = JSON.stringify(program);
@@ -104,14 +121,24 @@ describe('native Risu prompt composition', () => {
       const text = result.messages.flatMap((m) => m.content.map((p) => p.text)).join('\n');
       expect(text).toContain('Phēmē');
       expect(text).toContain('Character description');
-      expect(text).not.toMatch(/\{\{(?:#if|:else|#when|getglobalvar|equal|not_equal)::?/u);
+      expect(text).not.toMatch(/\{\{/u);
+      expect(text.match(/Character description/gu)).toHaveLength(1);
+      const wrappers = [
+        '<character primary_ai_authored="true">',
+        '<roleplay_setting>',
+        '<session_reference purpose="ooc_source_material">',
+      ];
+      const selectedWrapper = wrappers[mode === '2' ? 2 : Number(botType)]!;
+      expect(text).toContain(selectedWrapper);
+      for (const wrapper of wrappers.filter((item) => item !== selectedWrapper))
+        expect(text).not.toContain(wrapper);
       expect(text).toContain(
-        mode === '0'
+        mode !== '2'
           ? 'Use detail when it improves perception, character'
           : 'Use detail when it improves correctness or verification'
       );
       expect(text).not.toContain(
-        mode === '0'
+        mode !== '2'
           ? 'correctness or verification in the requested task.'
           : 'perception, character, causality, atmosphere, or consequence in fiction.'
       );

@@ -47,7 +47,7 @@ function reviewedValues(
       .filter(
         (control) => Object.hasOwn(values, control.id) && !reconciled.resetKeys.includes(control.id)
       )
-      .map((control) => [control.id, values[control.id]!])
+      .map((control) => [control.id, reconciled.values[control.id]!])
   );
 }
 
@@ -335,7 +335,11 @@ export function ChatOptionSettings(props: Props) {
               .map((item) => (
                 <div key={item.id} className="chat-option-record">
                   <strong>{item.kind === 'delegated' ? '도우미가 조정한 옵션' : '1회 옵션'}</strong>
-                  <OptionValues values={item.values} fieldLabel={fieldLabel} />
+                  <OptionValues
+                    values={item.values}
+                    fieldLabel={fieldLabel}
+                    controls={displayState.controls ?? promptControls(displayState.program)}
+                  />
                   <button
                     type="button"
                     disabled={blocked}
@@ -505,11 +509,11 @@ const SCOPE_WORDS = {
 } as const;
 
 function optionText(control: PromptControl, value: PromptValue | undefined) {
-  if (value === null || value === undefined) return '미설정';
-  if (typeof value === 'boolean') return value ? '켬' : '끔';
-  const choice = control.options?.find((option) => option.value === value);
+  const effective = value ?? control.default ?? (control.type === 'text' ? '' : '0');
+  if (typeof effective === 'boolean') return effective ? '켬' : '끔';
+  const choice = control.options?.find((option) => option.value === effective);
   if (choice) return choice.label;
-  return value === '' ? '비어 있음' : String(value);
+  return effective === '' ? '비어 있음' : String(effective);
 }
 
 function SelectiveValues({
@@ -548,7 +552,7 @@ function SelectiveValues({
   }
   const row = (control: PromptControl) => {
     const selected = Object.hasOwn(values, control.id);
-    const current = Object.hasOwn(effective, control.id) ? effective[control.id]! : control.default;
+    const current = visibilityValues[control.id]!;
     /* A switch already says what it will do, so flipping it is the act of setting a
        value for this chat. Every other control keeps its value readable as text until
        the row is explicitly switched into editing. */
@@ -617,26 +621,23 @@ function SelectiveValues({
 function OptionValues({
   values,
   fieldLabel,
+  controls,
 }: {
   values: Values;
   fieldLabel: (id: string) => string;
+  controls: PromptControl[];
 }) {
   return (
     <dl className="chat-option-values">
-      {Object.entries(values).map(([id, value]) => (
-        <div key={id}>
-          <dt>{fieldLabel(id)}</dt>
-          <dd>
-            {value === null
-              ? '미설정'
-              : typeof value === 'boolean'
-                ? value
-                  ? '켬'
-                  : '끔'
-                : String(value)}
-          </dd>
-        </div>
-      ))}
+      {Object.entries(values).map(([id, value]) => {
+        const control = controls.find((item) => item.id === id);
+        return (
+          <div key={id}>
+            <dt>{fieldLabel(id)}</dt>
+            <dd>{control ? optionText(control, value) : String(value ?? '') || '비어 있음'}</dd>
+          </div>
+        );
+      })}
     </dl>
   );
 }

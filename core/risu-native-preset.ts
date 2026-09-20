@@ -121,12 +121,11 @@ export function nativeRisuToggleItems(declaration: string): NativeRisuToggleItem
         : type === 'select'
           ? {}
           : { input: 'switch' }),
-      default: null,
+      default: text ? '' : '0',
       ...(group ? { group } : {}),
       ...(!text
         ? {
             options: [
-              { label: '미설정', value: null },
               ...(type === 'select'
                 ? (options ?? '')
                     .split(',')

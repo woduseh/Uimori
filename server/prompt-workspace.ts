@@ -132,6 +132,8 @@ export function promptWorkspace(store: Store): PromptWorkspace {
   const saved = JSON.parse(row.body) as PromptWorkspace;
   return {
     ...saved,
+    main: validateCurrentPrompt(saved.main, 'main'),
+    translation: validateCurrentPrompt(saved.translation, 'translation'),
     titleModel: validateTitleModel(saved.titleModel ?? null),
     helperModel: validateTitleModel(saved.helperModel ?? null),
     contextModel: validateTitleModel(saved.contextModel ?? null),

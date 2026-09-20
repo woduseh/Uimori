@@ -340,7 +340,7 @@ export function resolveControlValues(
     fail('PROMPT_UNKNOWN_CONTROL');
   return Object.fromEntries(
     controls.map((c) => {
-      const value = Object.hasOwn(values, c.id) ? values[c.id] : c.default;
+      const value = Object.hasOwn(values, c.id) ? (values[c.id] ?? c.default) : c.default;
       validateControlValue(c, value);
       return [c.id, value];
     })
@@ -363,8 +363,9 @@ export function reconcilePromptValues(
     controls.map((control) => {
       if (!Object.hasOwn(values, control.id)) return [control.id, control.default];
       try {
-        validateControlValue(control, values[control.id]);
-        return [control.id, values[control.id]];
+        const value = values[control.id] ?? control.default;
+        validateControlValue(control, value);
+        return [control.id, value];
       } catch {
         resetKeys.push(control.id);
         return [control.id, control.default];
