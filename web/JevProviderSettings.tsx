@@ -249,82 +249,76 @@ export function JevProviderSettings({
           <RefreshIcon size={16} aria-hidden="true" /> 연결 상태 새로고침
         </button>
       </div>
-      <p>
-        JEV가 로어 관련성, 생성 거절 여부와 이미지 배치를 판단해요. 키를 저장하면 모델 목록에 JEV가
-        등록돼요.
-      </p>
-      <div className="jev-provider-links">
-        <a href="https://console.typesafe.ai" target="_blank" rel="noreferrer">
-          TypeSafe에서 API 키 발급
-        </a>
-        <a
-          href="https://typesafe.ai/blog/introducing-system-one-models-and-jev"
-          target="_blank"
-          rel="noreferrer"
-        >
-          JEV 안내
-        </a>
-      </div>
       {loading && <p role="status">연결 상태를 불러오는 중이에요…</p>}
       {status && (
         <>
-          <dl className="jev-provider-details">
-            <div>
-              <dt>연결 키</dt>
-              <dd>
-                {status.credentialSource === 'saved'
-                  ? 'Uimori에 저장한 키'
-                  : status.credentialSource === 'environment'
-                    ? '서버 환경변수의 키'
-                    : '등록되지 않음'}
-              </dd>
-            </div>
-            <div>
-              <dt>모델</dt>
-              <dd>JEV · {status.modelId} · 판단 전용</dd>
-            </div>
-          </dl>
           <form
+            className="editor-grid provider-management-form"
             onSubmit={(event) => {
               event.preventDefault();
               void save();
             }}
           >
-            <label>
-              JEV API 키{status.configured ? ' 교체' : ''}
-              <input
-                type="password"
-                aria-label="JEV API 키"
-                autoComplete="new-password"
-                spellCheck={false}
-                value={apiKey}
-                disabled={busy || unresolved}
-                onChange={(event) => {
-                  setApiKey(event.target.value);
-                  setMessage('');
-                }}
-              />
-              <small>
-                키는 서버에 저장하며 이 화면에 다시 표시하지 않아요. 연결 상태 새로고침과 관리 탭
-                전환은 입력한 키를 유지해요.
-              </small>
-            </label>
-            <div className="provider-actions">
-              <SaveButton
-                label="JEV API 키 저장"
-                text="키 저장"
-                disabled={!apiKey.trim() || busy || unresolved || conflict}
-              />
-              {apiKey && (
-                <button
-                  type="button"
-                  className="secondary"
+            <fieldset className="editor-fields provider-connection-fields full">
+              <legend>접속 정보</legend>
+              <label>
+                프로바이더
+                <input value={JEV_PROVIDER_DEFINITION.label} readOnly />
+              </label>
+              <label>
+                모델
+                <input value={`JEV · ${status.modelId} · 판단 전용`} readOnly />
+              </label>
+              <label>
+                JEV API 키{status.configured ? ' 교체' : ''}
+                <input
+                  type="password"
+                  aria-label="JEV API 키"
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  value={apiKey}
                   disabled={busy || unresolved}
-                  onClick={() => setApiKey('')}
+                  onChange={(event) => {
+                    setApiKey(event.target.value);
+                    setMessage('');
+                  }}
+                />
+                <small>
+                  <span>
+                    {status.credentialSource === 'saved'
+                      ? 'Uimori에 저장한 키'
+                      : status.credentialSource === 'environment'
+                        ? '서버 환경변수의 키'
+                        : '등록되지 않음'}
+                  </span>
+                  {' · '}
+                  키는 서버에 저장하며 다시 표시하지 않아요.
+                </small>
+              </label>
+              <div className="jev-provider-links">
+                <a href="https://console.typesafe.ai" target="_blank" rel="noreferrer">
+                  TypeSafe에서 API 키 발급
+                </a>
+                <a
+                  href="https://typesafe.ai/blog/introducing-system-one-models-and-jev"
+                  target="_blank"
+                  rel="noreferrer"
                 >
-                  입력 지우기
-                </button>
-              )}
+                  JEV 안내
+                </a>
+              </div>
+              <details className="provider-auth-settings">
+                <summary>키 보관 및 우선순위</summary>
+                <div className="provider-auth-settings-body">
+                  <p>
+                    저장한 키를 우선 사용해요. 삭제하면 서버의 TYPESAFE_API_KEY가 설정되어 있을 때
+                    그 키를 사용해요.
+                  </p>
+                  <p>연결 상태 새로고침과 관리 탭 전환은 입력한 키를 유지해요.</p>
+                </div>
+              </details>
+            </fieldset>
+            <div className="provider-actions full provider-save-actions">
               {status.hasSavedKey && (
                 <button
                   type="button"
@@ -335,27 +329,47 @@ export function JevProviderSettings({
                   저장한 JEV 키 삭제
                 </button>
               )}
+              <small className="provider-save-status">
+                {apiKey
+                  ? '아직 저장하지 않은 키가 있어요.'
+                  : status.configured
+                    ? '연결 키가 설정되어 있어요.'
+                    : '키를 저장하면 JEV 모델이 등록돼요.'}
+              </small>
+              {apiKey && (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy || unresolved}
+                  onClick={() => setApiKey('')}
+                >
+                  입력 지우기
+                </button>
+              )}
+              <SaveButton
+                label="JEV API 키 저장"
+                text="키 저장"
+                disabled={!apiKey.trim() || busy || unresolved || conflict}
+              />
             </div>
-            <small>
-              저장한 키를 우선 사용해요. 삭제하면 서버의 TYPESAFE_API_KEY가 설정되어 있을 때 그 키를
-              사용해요.
-            </small>
           </form>
-          <section className="jev-provider-test provider-draft-note" aria-label="JEV 연결 테스트">
+          <section className="jev-provider-test provider-model-test" aria-label="JEV 연결 테스트">
             <h4>판단 응답 테스트</h4>
-            <p>짧은 예제의 관련성을 한 번 판단해요. 실제 JEV 요청이며 요금이 발생할 수 있어요.</p>
-            <button
-              type="button"
-              className="secondary"
-              disabled={!status.configured || busy || !!apiKey || conflict}
-              onClick={() => void startTest()}
-            >
-              {operation || polling
-                ? 'JEV 응답 확인 중…'
-                : unresolved || testError
-                  ? 'JEV 테스트 상태 확인'
-                  : 'JEV 연결 테스트'}
-            </button>
+            <div className="provider-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={!status.configured || busy || !!apiKey || conflict}
+                onClick={() => void startTest()}
+              >
+                {operation || polling
+                  ? 'JEV 응답 확인 중…'
+                  : unresolved || testError
+                    ? 'JEV 테스트 상태 확인'
+                    : 'JEV 연결 테스트'}
+              </button>
+              <small>짧은 예제의 관련성을 판단해요. 요금이 발생할 수 있어요.</small>
+            </div>
             {apiKey && <small>입력한 키를 저장하거나 지운 뒤 테스트해 주세요.</small>}
             {testError && (
               <p role="alert" className="error">
@@ -363,7 +377,7 @@ export function JevProviderSettings({
               </p>
             )}
             {test && (
-              <div role="status" className="jev-test-result">
+              <div role="status" className="jev-test-result provider-test-result">
                 {test.modelRevision !== status.revision && (
                   <p>이 결과는 이전 연결 정보로 실행한 테스트예요.</p>
                 )}
@@ -409,15 +423,17 @@ export function JevProviderSettings({
               </div>
             )}
           </section>
-          <aside className="provider-draft-note">
-            <strong>JEV가 맡는 판단</strong>
-            <p>로어 선별: 채팅 설정 → 로어 문맥에서 관련성 기준과 예산을 조절해요.</p>
-            <p>번역 거절 판정: 역할별 모델 → 번역 오류 감지와 재시도에서 확신 기준을 조절해요.</p>
-            <p>
-              본문 거절 판정과 이미지 배치도 JEV를 사용해요. 본문과 번역 생성 모델은 역할별 모델에서
-              따로 선택해요.
-            </p>
-          </aside>
+          <details className="provider-auth-settings">
+            <summary>JEV가 맡는 판단</summary>
+            <div className="provider-auth-settings-body">
+              <p>로어 선별: 채팅 설정 → 로어 문맥에서 관련성 기준과 예산을 조절해요.</p>
+              <p>번역 거절 판정: 역할별 모델 → 번역 오류 감지와 재시도에서 확신 기준을 조절해요.</p>
+              <p>
+                본문 거절 판정과 이미지 배치도 JEV를 사용해요. 본문과 번역 생성 모델은 역할별
+                모델에서 따로 선택해요.
+              </p>
+            </div>
+          </details>
         </>
       )}
       {error && (

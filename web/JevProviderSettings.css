@@ -1,28 +1,14 @@
 .jev-provider-settings:not([hidden]) {
   display: grid;
-  gap: 18px;
-  max-width: 760px;
+  gap: 16px;
   min-width: 0;
-  margin-top: 24px;
+}
+.jev-provider-settings .provider-section-heading h3 {
+  font-size: 16px;
 }
 .jev-provider-settings p,
 .jev-provider-settings h4 {
   margin: 0;
-}
-.jev-provider-settings form,
-.jev-provider-test,
-.jev-test-result {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-}
-.jev-provider-settings form > label {
-  display: grid;
-  gap: 8px;
-}
-.jev-provider-settings input {
-  min-width: 0;
-  width: 100%;
 }
 .jev-provider-settings small {
   color: var(--muted);
@@ -32,11 +18,12 @@
   display: flex;
   gap: 12px 20px;
   flex-wrap: wrap;
+  font-size: 12px;
 }
 .jev-provider-details {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 24px;
+  gap: 8px 24px;
   margin: 0;
 }
 .jev-provider-details dt {
@@ -56,12 +43,14 @@
     gap: 5px;
   }
 }
-.jev-provider-test > button {
-  justify-self: start;
+.jev-provider-settings .jev-provider-test {
+  margin: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
 }
-.jev-test-result {
-  border-radius: 8px;
-  background: var(--surface-raised);
-  padding: 14px;
-  overflow-wrap: anywhere;
+.jev-provider-test h4 {
+  font-size: 14px;
+}
+.jev-provider-settings .jev-provider-details dd {
+  font-size: 13px;
 }

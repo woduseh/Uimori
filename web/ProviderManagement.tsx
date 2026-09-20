@@ -974,14 +974,16 @@ export function ConnectionEditor({
                     {jevStatus?.credentialSource === 'saved' ? '저장한 API 키' : '서버 환경변수'}
                   </span>
                 </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() => openJev('connections')}
-                >
-                  연결 테스트
-                </button>
+                <ActionMenu label="TypeSafe AI 프로바이더 메뉴">
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    onClick={() => openJev('connections')}
+                  >
+                    <ConnectionIcon size={18} aria-hidden="true" /> 연결 설정
+                  </button>
+                </ActionMenu>
               </div>
             </article>
           )}
@@ -1105,19 +1107,37 @@ export function ConnectionEditor({
                     TypeSafe AI · {JEV_PROVIDER_DEFINITION.modelId} · 판단 전용
                   </span>
                 </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    setSetup(false);
-                    openJev('models');
-                  }}
-                >
-                  연결 테스트
-                </button>
+                <ActionMenu label="JEV 모델 메뉴">
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    onClick={() => {
+                      setSetup(false);
+                      openJev('models');
+                    }}
+                  >
+                    <ConnectionIcon size={18} aria-hidden="true" /> 연결 설정
+                  </button>
+                </ActionMenu>
               </div>
-              <p className="provider-item-notice">{JEV_PROVIDER_DEFINITION.description}</p>
+              <section className="provider-model-test" aria-label="JEV 응답 테스트 설정">
+                <div className="provider-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    aria-label="JEV 응답 테스트 설정 열기"
+                    onClick={() => {
+                      setSetup(false);
+                      openJev('models');
+                    }}
+                  >
+                    테스트 보기
+                  </button>
+                  <small>요금이 발생할 수 있어요.</small>
+                </div>
+              </section>
             </article>
           )}
           {models.map((item) => (
