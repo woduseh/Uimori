@@ -127,3 +127,9 @@ Risu 자료를 들여올 때는 서재의 봇·페르소나·모듈 탭에서 **
 정규식의 알 수 없는 필드와 기존 `find`/`replace` 별칭, 실행 미지원 단계·플래그는 보존해요. 기존 별칭이 있으면 IN/OUT 수정 시 함께 갱신하고, 내장 모듈이 있으면 그 모듈의 정규식을 편집해요. **고급 JSON 편집**의 원문은 명시적으로 적용하며, 미적용 입력이나 오류가 있으면 폼 편집과 저장을 잠시 막고 탭을 바꿔도 입력을 유지해요. 번역문 전용 단계와 일부 특수 명령은 편집·보존과 실행 지원을 구분하며 [실행 범위](RISU-IMPORT.md)를 참고하세요.
 
 저장한 봇은 자료 메뉴에서 CHARX, 프리셋은 관리 메뉴에서 RISUP으로 내보내요. 미저장 입력이나 이미지 업로드 중에는 내보낼 수 없어요. 폐기 필드를 제외한 현재 원문을 내보내며, 원본 파일 다운로드와는 구분돼요. 연결 모듈·독립 RISUM 등 범위는 [Risu 내보내기](RISU-EXPORT.md)를 참고하세요.
+
+## Unsaved changes
+
+Draft confirmations use the shared `Dialog` confirmation variant and `DraftDiscardActions` across library, prompt, chat settings, and global settings flows. Discard stays separate from continue editing and save-and-leave; closing a settings panel labels the save action as save-and-close.
+
+Save-and-leave runs the editor's existing validated save operation and navigates only on success. Invalid or unapplied input, revision conflicts, and failed writes retain the draft and confirmation. Multiple edited sections save sequentially; successful sections remain saved if a later section fails. Staged backup imports, destructive confirmations, and model execution are not treated as draft saves. Reloading saved settings remains a separate discard-and-reload confirmation.

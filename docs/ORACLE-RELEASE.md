@@ -48,9 +48,9 @@ npm run release:oracle -- --config .local/oracle-release.json --source-ref codex
 
 `release:oracle`도 같은 검증을 요구해요. 현재 source와 실행 환경·검사 계약 지문이 모두 같은 성공 영수증은 검사별로 재사용해요. 성공 검사의 빌드만 없거나 stale이면 검사를 반복하지 않고 build만 복구한 뒤 현재 source와 artifact 일치를 다시 확인해요. source나 실행 환경·검사 계약이 달라졌으면 stale로 판정해 다시 실행해요. 같은 source에 실패 기록이 있으면 `--area`를 줄이거나 `--full`을 빼서 우회할 수 없어요. 실패 원인을 해결하고 그 범위를 다시 통과해야 해요. 커밋 때문에 내용이 바뀌지 않았다면 커밋 전 성공한 영수증도 clean HEAD가 된 뒤 재사용할 수 있어요.
 
-`--area`는 변경 영역의 기존 `verify:*` npm script를 선택하며 기본값은 `verify:browser-smoke`예요. `--full`은 `verify:redesign`을 추가해요. 추가 범위는 [QUALITY](QUALITY.md#verification)에 따라 선택해요.
+`--area`는 변경 영역의 기존 `verify:*` npm script를 선택하며 기본값은 `verify:browser-smoke`예요. `--full`은 기본 smoke 대신 `verify:browser`를 실행하며, 명시한 기능 영역은 함께 검사해요. 추가 범위는 [DEVELOPMENT](DEVELOPMENT.md#verification)에 따라 선택해요.
 
-Development checks follow [QUALITY](QUALITY.md#verification). For a release involving deployment tooling, select `verify:selfhost`; changes to the broader browser connection flow may also need `verify:browser-smoke`. The release runner applies the receipt checks described above.
+Development checks follow [DEVELOPMENT](DEVELOPMENT.md#verification). For a release involving deployment tooling, select `verify:selfhost`; changes to the broader browser connection flow may also need `verify:browser-smoke`. The release runner applies the receipt checks described above.
 
 ## 실행 모드
 

@@ -86,6 +86,11 @@ export function validateRunSnapshot(
   snapshot: RunSnapshot,
   runId?: string
 ): RunSnapshot {
+  if (
+    snapshot.judgmentRecovery !== undefined &&
+    (snapshot.judgmentRecovery !== true || !snapshot.candidateOf || !snapshot.mainJudgment)
+  )
+    reject('invalid judgment recovery');
   if (snapshot.mainJudgmentThreshold !== undefined)
     mainJudgmentThreshold(snapshot.mainJudgmentThreshold);
   if (

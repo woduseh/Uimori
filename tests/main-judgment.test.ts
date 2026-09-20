@@ -57,7 +57,7 @@ async function fixture(
   scores: number | 'failure' | 'invalid' | 'budget',
   maxCalls = 8,
   key = true,
-  scriptStage?: 'input' | 'editRequest',
+  scriptStage?: 'input' | 'editRequest' | 'recovery',
   judgmentEnabled = true,
   generationStatus: 'completed' | 'partial' = 'completed',
   mainThreshold = 0.9
@@ -172,9 +172,11 @@ local function tryCalls(id)
   setChatVar(id, 'budgetBlocked', tostring(not ok))
 end
 ${
-  scriptStage === 'input'
-    ? 'function onInput(id) tryCalls(id) end'
-    : "listenEdit('editRequest', function(id, messages) tryCalls(id); return messages end)"
+  scriptStage === 'recovery'
+    ? "function onInput(id) setChatVar(id, 'inputCount', tostring((tonumber(getChatVar(id, 'inputCount')) or 0) + 1)) end; function onOutput(id) setChatVar(id, 'outputCount', tostring((tonumber(getChatVar(id, 'outputCount')) or 0) + 1)) end"
+    : scriptStage === 'input'
+      ? 'function onInput(id) tryCalls(id) end'
+      : "listenEdit('editRequest', function(id, messages) tryCalls(id); return messages end)"
 }
 `;
     const bot = await api(app, '/api/content', {
@@ -475,4 +477,119 @@ test('disabled main judgment does not accept a partial generation', async () => 
   expect(f.run.status).not.toBe('completed');
   expect(f.run.sourceRevision).toBeNull();
   expect(f.judged).toHaveLength(0);
+});
+
+test('rejudges preserved text once without writer/input replay and preserves archive lineage', async () => {
+  const f = await fixture('Preserved response', 'failure', 8, true, 'recovery');
+  expect(f.run.snapshot.nativeRisuExecution?.variables.inputCount).toBe('1');
+  vi.stubGlobal(
+    'fetch',
+    async () =>
+      new Response(
+        JSON.stringify({
+          model: 'jev-latest',
+          answers: { explicitRefusal: { type: 'noul', noul: 0.1 } },
+          usage: { input_tokens: 7, output_tokens: 3 },
+        })
+      )
+  );
+  const reader = await api(f.app, `/api/chats/${f.chat.id}/reader`);
+  expect(reader.runs.find((run: { id: string }) => run.id === f.run.id).canRejudge).toBe(true);
+  const key = randomUUID();
+  const recovered = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: key });
+  const duplicate = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: key });
+  expect(duplicate.id).toBe(recovered.id);
+  await expect.poll(() => f.app.store.run(recovered.id).status).toBe('completed');
+  const run = f.app.store.run(recovered.id);
+  expect(f.calls).toHaveLength(1);
+  expect(run.usage.modelCalls).toBe(1);
+  expect(run.snapshot.nativeRisuExecution?.output?.variables).toMatchObject({
+    inputCount: '1',
+    outputCount: '1',
+  });
+  expect(f.app.store.sourceOriginal(run.sourceRevision!).text).toBe('Preserved response');
+  expect(f.app.store.run(f.run.id)).toEqual(f.run);
+  expect(run.snapshot.branchId).not.toBe(f.run.snapshot.branchId);
+  const fork = await api(f.app, `/api/chats/${f.chat.id}/fork`, {
+    fromRevision: run.sourceRevision,
+    idempotencyKey: randomUUID(),
+  });
+  const forked = (await api(f.app, `/api/chats/${fork.id}`)).runs[0];
+  expect(forked.snapshot.judgmentRecovery).toBeUndefined();
+  const restored = new Store(join(owned.at(-1)!.directory, 'rejudge-restore.sqlite'));
+  try {
+    restored.product.import(f.app.store.product.export());
+    expect(restored.run(run.id).snapshot.judgmentRecovery).toBe(true);
+  } finally {
+    restored.close();
+  }
+  const denied = await f.app.inject({
+    method: 'POST',
+    url: `/api/runs/${run.id}/rejudge`,
+    headers: { host: '127.0.0.1' },
+    payload: { idempotencyKey: randomUUID() },
+  });
+  expect(denied.statusCode).toBe(409);
+});
+
+test('a second judgment failure keeps the same response recoverable without writer charges', async () => {
+  const f = await fixture('Keep this output', 'failure');
+  const next = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: randomUUID() });
+  await expect.poll(() => f.app.store.run(next.id).status).toBe('failed');
+  expect(f.app.store.run(next.id)).toMatchObject({
+    partialText: 'Keep this output',
+    usage: { modelCalls: 1 },
+  });
+  expect(f.calls).toHaveLength(1);
+  expect(f.judged).toHaveLength(2);
+});
+
+test('rejudgment credential failure preserves its response and does not recharge the writer', async () => {
+  const f = await fixture('Still available', 'failure');
+  vi.stubEnv('TYPESAFE_API_KEY', '');
+  const next = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: randomUUID() });
+  await expect.poll(() => f.app.store.run(next.id).status).toBe('failed');
+  expect(f.app.store.run(next.id)).toMatchObject({
+    partialText: 'Still available',
+    error: 'JEV_CREDENTIAL_REQUIRED',
+    usage: { modelCalls: 0 },
+  });
+  expect(f.calls).toHaveLength(1);
+});
+
+test('cancelled rejudgment cannot adopt a late successful verdict', async () => {
+  const f = await fixture('Preserve on cancellation', 'failure');
+  let finish!: (response: Response) => void;
+  let started = false;
+  vi.stubGlobal('fetch', () => {
+    started = true;
+    return new Promise<Response>((resolve) => {
+      finish = resolve;
+    });
+  });
+  const next = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: randomUUID() });
+  await expect.poll(() => started).toBe(true);
+  await api(f.app, `/api/runs/${next.id}/cancel`, {});
+  finish(
+    new Response(
+      JSON.stringify({
+        model: 'jev-latest',
+        answers: { explicitRefusal: { type: 'noul', noul: 0.1 } },
+      })
+    )
+  );
+  await f.app.close();
+  owned.at(-1)!.app = undefined;
+  const db = new Store(join(owned.at(-1)!.directory, 'test.sqlite'));
+  try {
+    expect(db.run(next.id)).toMatchObject({
+      status: 'cancelled',
+      sourceRevision: null,
+      partialText: 'Preserve on cancellation',
+    });
+    expect(db.run(next.id).snapshot.nativeRisuExecution?.output).toBeUndefined();
+  } finally {
+    db.close();
+  }
+  expect(f.calls).toHaveLength(1);
 });

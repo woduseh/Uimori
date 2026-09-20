@@ -75,6 +75,6 @@
 
 ## 검증
 
-`tests/illustration-*.test.ts`는 저장·실행·API 계약을, `tests/comfyui-client.test.ts`와 `tests/codex-image.test.ts`는 합성 공급자 응답을 확인해요. `npm run verify:illustration`은 생성·재요청·삭제·설정 충돌과 새로고침 후 표시를 검사해요. 검사 선택은 [QUALITY](QUALITY.md#verification)를 따라요.
+`tests/illustration-*.test.ts`는 저장·실행·API 계약을, `tests/comfyui-client.test.ts`와 `tests/codex-image.test.ts`는 합성 공급자 응답을 확인해요. `npm run verify:illustration`은 생성·재요청·삭제·설정 충돌과 새로고침 후 표시를 검사해요. 검사 선택은 [DEVELOPMENT](DEVELOPMENT.md#verification)를 따라요.
 
 합성 검사는 실제 Codex 구독 사용량이나 ComfyUI 설치·워크플로 호환성을 입증하지 않아요. 실제 서비스 검증에서는 연결·이미지 저장·참조 반영·오류 표시를 확인하고, 유료 호출 여부와 사용한 모델·워크플로를 결과에 구분해요.

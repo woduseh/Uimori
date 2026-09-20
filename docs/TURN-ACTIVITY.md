@@ -15,6 +15,6 @@
 
 ## 검증
 
-[검증 선택](QUALITY.md#verification)에 따라 `npm run verify:turn-activity`로 응답별 펼침·진단 조회·초안 보존·생성 완료 전환을 검사해요. 화면 크기는 공통 [브라우저 설정](../fixtures/browser-viewports.json)을 사용하고 결과는 `output/playwright/turn-activity-ui-*/summary.json`에 남아요.
+[검증 선택](DEVELOPMENT.md#verification)에 따라 `npm run verify:turn-activity`로 응답별 펼침·진단 조회·초안 보존·생성 완료 전환을 검사해요. 화면 크기는 공통 [브라우저 설정](../fixtures/browser-viewports.json)을 사용하고 결과는 `output/playwright/turn-activity-ui-*/summary.json`에 남아요.
 
 기존 전역 알림과 요청 재시도 회귀는 `node scripts/verify-activity.mjs`, `node scripts/verify-run-retry.mjs`로 검사해요. 실제 외부 모델이나 물리적 휴대폰 검증을 의미하지 않아요.

@@ -30,7 +30,7 @@
 
 본문·번역의 서비스 거절 감지는 각각 기본 켜짐이며 독립적으로 끌 수 있어요. 끄면 해당 역할의 JEV 키 확인·거절 검사 없이 생성 결과를 바로 채택해요. 빈 응답·부분 응답·공급자 오류 등 생성 자체의 실패는 그대로 처리하며, 번역 거절 자동 재요청도 하지 않아요. 설정은 작업 예약 때 고정되어 진행 중이거나 이미 예약된 작업에는 소급 적용되지 않아요. 본문 판정을 끄면 판정용 호출 예산도 예약하지 않아요. 로어 관련성·이미지 선택은 별도 기능이라 영향을 받지 않아요.
 
-본문·번역 거절 판정의 발췌와 앱 내부 6,000/5,000 추정 토큰 제한은 제거했어요. [공식 모델 사양](https://docs.typesafe.ai/models)은 요청의 state와 모든 질문 합계 64,000토큰, state와 가장 긴 질문 합계 32,000토큰을 허용해요. 앱은 `o200k_base` 추정치로 전송 전에 두 예산을 검사하며 초과 시 `JEV_INPUT_BUDGET`으로 실패해요. 이 추정기는 공급자 토크나이저와 동일하다고 보장하지 않아요. 전체 생성문을 자르지 않고 전송하며 공급자의 `max_tokens_exceeded`는 `JEV_INPUT_BUDGET`으로, 그 외 형식·연결 오류도 실패로 남겨요. 실제 장문 호출의 검증 범위는 [JEV 입력 검증](JEV-INPUT-VERIFICATION.md)을 참고해요.
+본문·번역 거절 판정의 발췌와 앱 내부 6,000/5,000 추정 토큰 제한은 제거했어요. [공식 모델 사양](https://docs.typesafe.ai/models)은 요청의 state와 모든 질문 합계 64,000토큰, state와 가장 긴 질문 합계 32,000토큰을 허용해요. 앱은 `o200k_base` 추정치로 전송 전에 두 예산을 검사하며 초과 시 `JEV_INPUT_BUDGET`으로 실패해요. 이 추정기는 공급자 토크나이저와 동일하다고 보장하지 않아요. 전체 생성문을 자르지 않고 전송하며 공급자의 `max_tokens_exceeded`는 `JEV_INPUT_BUDGET`으로, 그 외 형식·연결 오류도 실패로 남겨요. 실제 장문 호출의 검증 범위는 [JEV 입력 검증](PROVIDERS.md#jev-input-verification)을 참고해요.
 
 판단 작업은 JEV로 통일해요. 로어의 관련성·예산은 **채팅 설정 → 로어 문맥**, 번역 거절의 확신 기준·재시도 한도는 **역할별 모델 → 작업 동작 → 거절 감지 → 번역**에서 조절해요. 판단용 생성형 모델과 공급자 선택 설정은 없어요. 키가 없거나 JEV 요청이 실패해도 다른 모델로 대체 호출하지 않아요. 번역·문맥 요약·본문 생성과 원본 Lua의 모델 호출은 각 생성 모델을 계속 사용해요.
 
@@ -109,3 +109,11 @@ Flex는 `shared`와 `flex` 요청 헤더를 함께 보내고 응답에서 적용
 서비스 계정 형식·RSA 키·Google 토큰 주소를 서버가 검사하고, 등록 참조는 해당 프로젝트의 Gemini 프로바이더에서만 사용할 수 있어요. 공식 Google global 주소는 기본 허용하지만 프로젝트·인증 참조·최신 프로바이더 권한 검사는 별도로 유지해요. 업로드한 파일은 Git 및 Docker 빌드 입력에서 제외해요. Linux 파일 생성 권한은 디렉터리 0700·파일 0600이며, Windows는 호스트의 파일 접근 권한을 따라요. 실제 Google 인증·모델 응답 검증과 파일 저장 검증은 구분해요.
 
 프로바이더·모델 편집은 하단의 편집 끝내기로 목록에 돌아가요. 같은 동작의 상단 버튼은 생략하고 저장 상태는 하단 작업 버튼 위의 별도 줄에 표시해요. 하단 종료 동작이 없는 제공자 선택·JEV 연결 화면은 목록으로 버튼을 유지해요.
+
+## JEV input verification
+
+After a current build, `node scripts/verify-jev-input.mjs --live` sends synthetic 128- and 16,000-estimated-token responses through the main and translation judgment paths (four paid calls). `--within-budget` selects only the two long calls. The probe uses the saved server credential or environment fallback, never reads conversations, and does not retry calls or modify app data. An optional positional path overrides `.local/jev-input-verification.json`.
+
+`--live --diagnostic-max-main` instead verifies that a 500,000-token candidate receives local `JEV_INPUT_BUDGET`, zero attempts and zero HTTP transports. That expected rejection passes; any unexpected transport or other failure fails. Each outgoing request must preserve the complete candidate in `state.response` with only `explicitRefusal`. The report records expected outcome and `passed`; failed cases exit nonzero. Provider error bodies are bounded to 8 KiB and exclude credentials and headers.
+
+These probes verify transport and whole-input delivery, not refusal-classification quality or every language/input distribution. The local estimator is not the provider tokenizer. Candidate preservation and recovery are covered by application tests and the [generation contract](GENERATION.md).

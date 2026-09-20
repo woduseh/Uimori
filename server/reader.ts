@@ -162,6 +162,11 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     store.db
       .prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,
     CASE WHEN status IN ('queued','running') THEN '' ELSE partial_text END AS partialText,
+    (status='failed' AND substr(error,1,4)='JEV_' AND source_revision IS NULL
+      AND COALESCE(json_extract(snapshot,'$.mainJudgmentEnabled'),1)!=0
+      AND json_type(snapshot,'$.mainJudgment')='object'
+      AND partial_text=json_extract(snapshot,'$.mainJudgment.response')
+      AND json_type(snapshot,'$.nativeRisuExecution.output') IS NULL) AS canRejudge,
     json_extract(command,'$.retryOf') AS retryOf,
     CASE WHEN source_revision IS NULL THEN (SELECT newer.id FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id ORDER BY newer.created_at DESC,newer.id DESC LIMIT 1) END AS supersededBy,
     json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE json_extract(snapshot,'$.profile.models.main.title') END AS modelTitle,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
@@ -179,6 +184,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     })[]
   ).map((row) => ({
     ...row,
+    canRejudge: !!row.canRejudge,
     estimatedCost: runCosts.get(row.id),
     snapshot: {
       ...JSON.parse(row.snapshot),

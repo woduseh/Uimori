@@ -601,6 +601,8 @@ export async function createApp(options: AppOptions): Promise<App> {
         let priorUsage: Usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
         try {
           if (!store.startRun(id)) return;
+          if (run.snapshot.judgmentRecovery)
+            store.stageRunOutput(id, run.snapshot.mainJudgment!.response);
           response = streams.createWriter({
             taskKind: 'main',
             taskId: id,
@@ -611,7 +613,10 @@ export async function createApp(options: AppOptions): Promise<App> {
           requireModel(run.snapshot.profile?.models.main, 'main');
           if (judgeResponse && !(await jevCredentials.resolve()))
             throw new JevError('JEV_CREDENTIAL_REQUIRED');
-          if (judgeResponse && run.snapshot.settings.maxCalls < 2)
+          if (
+            judgeResponse &&
+            run.snapshot.settings.maxCalls < (run.snapshot.judgmentRecovery ? 1 : 2)
+          )
             throw new JevError('MAIN_JUDGMENT_CALL_BUDGET');
           publish(run.chatId);
           await controls.wait('run', controller.signal);
@@ -733,176 +738,192 @@ export async function createApp(options: AppOptions): Promise<App> {
               throw new Error('CONTEXT_DEPENDENCIES_CHANGED');
           };
           hooks.initialUsage = structuredClone(priorUsage);
-          const reservedCompilationSnapshot = candidateCompilationSnapshot(store, run.snapshot, id);
-          let executionSnapshot = run.snapshot,
-            compilationSnapshot = reservedCompilationSnapshot;
-          executionSnapshot = await prepareNativeRisuRun(executionSnapshot, {
-            signal: controller.signal,
-            host: createNativeRisuHost(
+          let executionSnapshot = run.snapshot;
+          let result: Awaited<ReturnType<typeof runMain>>;
+          if (run.snapshot.judgmentRecovery) {
+            candidateCompilationSnapshot(store, run.snapshot, id);
+            const preserved = run.snapshot.mainJudgment!;
+            result = {
+              status: 'completed',
+              text: preserved.response,
+              usage: priorUsage,
+              error: null,
+            };
+          } else {
+            const reservedCompilationSnapshot = candidateCompilationSnapshot(
               store,
-              id,
-              executionSnapshot,
-              priorUsage,
-              hooks,
-              'before-turn',
-              1 + Number(judgeResponse)
-            ),
-          });
-          hooks.initialUsage = structuredClone(priorUsage);
-          compilationSnapshot =
-            reservedCompilationSnapshot === run.snapshot
-              ? executionSnapshot
-              : {
-                  ...compilationSnapshot,
-                  nativeRisuExecution: executionSnapshot.nativeRisuExecution,
-                  nativeRisuPresetProgram: executionSnapshot.nativeRisuPresetProgram,
-                };
-          if (executionSnapshot.nativeRisuExecution) {
-            store.transaction(() => {
-              assertCurrent();
-              store.db
-                .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
-                .run(
-                  JSON.stringify(
-                    persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
-                  ),
-                  new Date().toISOString(),
-                  id
-                );
+              run.snapshot,
+              id
+            );
+            let compilationSnapshot = reservedCompilationSnapshot;
+            executionSnapshot = await prepareNativeRisuRun(executionSnapshot, {
+              signal: controller.signal,
+              host: createNativeRisuHost(
+                store,
+                id,
+                executionSnapshot,
+                priorUsage,
+                hooks,
+                'before-turn',
+                1 + Number(judgeResponse)
+              ),
             });
-          }
-          // The selection reads the reserved snapshot, exactly as archive validation recomputes its
-          // inputs, and freezes before the lore context and the input plan measure what is pinned.
-          if (loreSelectionPending(executionSnapshot)) {
-            assertCurrent();
-            const selection = await prepareLoreSelection(executionSnapshot, hooks, {
-              jev: { credential: jevCredentials.resolve },
-              reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
-            });
-            priorUsage = mergeUsage(priorUsage, selection.usage);
             hooks.initialUsage = structuredClone(priorUsage);
-            const receipt = selection.snapshot.loreSelection;
-            executionSnapshot = { ...executionSnapshot, loreSelection: receipt };
-            compilationSnapshot = { ...compilationSnapshot, loreSelection: receipt };
-            store.transaction(() => {
-              assertCurrent();
-              store.db
-                .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
-                .run(
-                  JSON.stringify(
-                    persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
-                  ),
-                  new Date().toISOString(),
-                  id
-                );
-              store.event(run.chatId, 'run.context.updated', id);
-            });
-            publish(run.chatId);
-          }
-          if (
-            (executionSnapshot.nativeRisuExecution !== undefined ||
-              executionSnapshot.loreSelection !== undefined) &&
-            !executionSnapshot.contextPlan
-          ) {
-            assertCurrent();
-            executionSnapshot = freezeLoreContext(store, executionSnapshot);
             compilationSnapshot =
               reservedCompilationSnapshot === run.snapshot
                 ? executionSnapshot
-                : freezeLoreContext(store, compilationSnapshot);
-            const contextBase = run.snapshot.contextBase;
-            executionSnapshot = store.context.prepareRun(executionSnapshot);
-            compilationSnapshot =
-              reservedCompilationSnapshot === run.snapshot
-                ? executionSnapshot
-                : store.context.prepareRun(compilationSnapshot);
-            executionSnapshot.contextBase = contextBase;
-            compilationSnapshot.contextBase = contextBase;
-          }
-          if (executionSnapshot.contextPlan) {
-            assertCurrent();
-            const reuse =
-              executionSnapshot.candidateOf &&
-              executionSnapshot.contextPlan.status === 'ready' &&
-              executionSnapshot.promptCompilation;
-            if (!reuse) {
-              const prepared = await prepareInputContext(
-                compilationSnapshot,
-                {
-                  ...hooks,
-                  reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
-                  authorize: (connection) => {
-                    assertCurrent();
-                    return store.product.authorize(connection);
-                  },
-                  onAttemptStart: (wire) => {
-                    assertCurrent();
-                    return hooks.onAttemptStart(wire);
-                  },
-                  onProgress: (plan) => {
-                    store.transaction(() => {
-                      assertCurrent();
-                      const current = store.run(id);
-                      store.db.prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?').run(
-                        JSON.stringify(
-                          persistedContextSnapshot(current.snapshot, {
-                            ...executionSnapshot,
-                            contextPlan: plan,
-                          })
-                        ),
-                        new Date().toISOString(),
-                        id
-                      );
-                      store.event(run.chatId, 'run.context.updated', id);
-                    });
-                    publish(run.chatId);
-                  },
-                },
-                previousContextPlan(store, executionSnapshot)
-              );
-              priorUsage = mergeUsage(priorUsage, prepared.usage);
-              hooks.initialUsage = structuredClone(priorUsage);
-              prepared.snapshot.branchId = executionSnapshot.branchId;
+                : {
+                    ...compilationSnapshot,
+                    nativeRisuExecution: executionSnapshot.nativeRisuExecution,
+                    nativeRisuPresetProgram: executionSnapshot.nativeRisuPresetProgram,
+                  };
+            if (executionSnapshot.nativeRisuExecution) {
               store.transaction(() => {
                 assertCurrent();
-                prepared.snapshot = store.context.publishPrepared(prepared.snapshot, {
-                  origin: 'automatic',
-                });
-                validateContextPlan(prepared.snapshot);
                 store.db
                   .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
                   .run(
                     JSON.stringify(
-                      persistedContextSnapshot(store.run(id).snapshot, prepared.snapshot)
+                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                    ),
+                    new Date().toISOString(),
+                    id
+                  );
+              });
+            }
+            // The selection reads the reserved snapshot, exactly as archive validation recomputes its
+            // inputs, and freezes before the lore context and the input plan measure what is pinned.
+            if (loreSelectionPending(executionSnapshot)) {
+              assertCurrent();
+              const selection = await prepareLoreSelection(executionSnapshot, hooks, {
+                jev: { credential: jevCredentials.resolve },
+                reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
+              });
+              priorUsage = mergeUsage(priorUsage, selection.usage);
+              hooks.initialUsage = structuredClone(priorUsage);
+              const receipt = selection.snapshot.loreSelection;
+              executionSnapshot = { ...executionSnapshot, loreSelection: receipt };
+              compilationSnapshot = { ...compilationSnapshot, loreSelection: receipt };
+              store.transaction(() => {
+                assertCurrent();
+                store.db
+                  .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
+                  .run(
+                    JSON.stringify(
+                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
                     ),
                     new Date().toISOString(),
                     id
                   );
                 store.event(run.chatId, 'run.context.updated', id);
               });
-              executionSnapshot = prepared.snapshot;
+              publish(run.chatId);
             }
-          }
-          // Native preparation invalidates the old compilation even when a fixture has no
-          // model/context plan. Persist the exact prepared prompt before any writer input.
-          if (!executionSnapshot.promptCompilation) {
-            executionSnapshot = {
-              ...executionSnapshot,
-              promptCompilation: compileSnapshotPrompt(compilationSnapshot).promptCompilation,
-            };
-            store.transaction(() => {
+            if (
+              (executionSnapshot.nativeRisuExecution !== undefined ||
+                executionSnapshot.loreSelection !== undefined) &&
+              !executionSnapshot.contextPlan
+            ) {
               assertCurrent();
-              store.db
-                .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-                .run(
-                  JSON.stringify(
-                    persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
-                  ),
-                  id
+              executionSnapshot = freezeLoreContext(store, executionSnapshot);
+              compilationSnapshot =
+                reservedCompilationSnapshot === run.snapshot
+                  ? executionSnapshot
+                  : freezeLoreContext(store, compilationSnapshot);
+              const contextBase = run.snapshot.contextBase;
+              executionSnapshot = store.context.prepareRun(executionSnapshot);
+              compilationSnapshot =
+                reservedCompilationSnapshot === run.snapshot
+                  ? executionSnapshot
+                  : store.context.prepareRun(compilationSnapshot);
+              executionSnapshot.contextBase = contextBase;
+              compilationSnapshot.contextBase = contextBase;
+            }
+            if (executionSnapshot.contextPlan) {
+              assertCurrent();
+              const reuse =
+                executionSnapshot.candidateOf &&
+                executionSnapshot.contextPlan.status === 'ready' &&
+                executionSnapshot.promptCompilation;
+              if (!reuse) {
+                const prepared = await prepareInputContext(
+                  compilationSnapshot,
+                  {
+                    ...hooks,
+                    reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
+                    authorize: (connection) => {
+                      assertCurrent();
+                      return store.product.authorize(connection);
+                    },
+                    onAttemptStart: (wire) => {
+                      assertCurrent();
+                      return hooks.onAttemptStart(wire);
+                    },
+                    onProgress: (plan) => {
+                      store.transaction(() => {
+                        assertCurrent();
+                        const current = store.run(id);
+                        store.db.prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?').run(
+                          JSON.stringify(
+                            persistedContextSnapshot(current.snapshot, {
+                              ...executionSnapshot,
+                              contextPlan: plan,
+                            })
+                          ),
+                          new Date().toISOString(),
+                          id
+                        );
+                        store.event(run.chatId, 'run.context.updated', id);
+                      });
+                      publish(run.chatId);
+                    },
+                  },
+                  previousContextPlan(store, executionSnapshot)
                 );
-            });
+                priorUsage = mergeUsage(priorUsage, prepared.usage);
+                hooks.initialUsage = structuredClone(priorUsage);
+                prepared.snapshot.branchId = executionSnapshot.branchId;
+                store.transaction(() => {
+                  assertCurrent();
+                  prepared.snapshot = store.context.publishPrepared(prepared.snapshot, {
+                    origin: 'automatic',
+                  });
+                  validateContextPlan(prepared.snapshot);
+                  store.db
+                    .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
+                    .run(
+                      JSON.stringify(
+                        persistedContextSnapshot(store.run(id).snapshot, prepared.snapshot)
+                      ),
+                      new Date().toISOString(),
+                      id
+                    );
+                  store.event(run.chatId, 'run.context.updated', id);
+                });
+                executionSnapshot = prepared.snapshot;
+              }
+            }
+            // Native preparation invalidates the old compilation even when a fixture has no
+            // model/context plan. Persist the exact prepared prompt before any writer input.
+            if (!executionSnapshot.promptCompilation) {
+              executionSnapshot = {
+                ...executionSnapshot,
+                promptCompilation: compileSnapshotPrompt(compilationSnapshot).promptCompilation,
+              };
+              store.transaction(() => {
+                assertCurrent();
+                store.db
+                  .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+                  .run(
+                    JSON.stringify(
+                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                    ),
+                    id
+                  );
+              });
+            }
+            result = await runMain(executionSnapshot, hooks);
           }
-          const result = await runMain(executionSnapshot, hooks);
           response.flush();
           if (controller.signal.aborted) {
             // Cancellation owns the terminal state; late provider usage is accounting only.
@@ -1425,6 +1446,22 @@ export async function createApp(options: AppOptions): Promise<App> {
       text(body.idempotencyKey, 'idempotency key', 120),
       body.title === undefined ? '후보 분기' : text(body.title, 'title', 200),
       (snapshot) => requireModel(snapshot.profile?.models.main, 'main')
+    );
+    if (result.created) {
+      publish(result.run.chatId);
+      execute(result.run.id);
+    }
+    return result.run;
+  });
+  app.post<{ Params: { id: string } }>('/api/runs/:id/rejudge', async (request) => {
+    const body = record(request.body);
+    fields(body, ['idempotencyKey']);
+    const result = store.candidate(
+      request.params.id,
+      text(body.idempotencyKey, 'idempotency key', 120),
+      '판정 복구',
+      undefined,
+      true
     );
     if (result.created) {
       publish(result.run.chatId);

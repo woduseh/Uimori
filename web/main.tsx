@@ -1156,6 +1156,13 @@ function App() {
                               />
                               {runFailed(run.status) && (
                                 <RetryFailure
+                                  onRejudge={
+                                    run.canRejudge && s.canReuseRun(run.id)
+                                      ? () => {
+                                          void s.generate(run.id, undefined, true);
+                                        }
+                                      : undefined
+                                  }
                                   status={run.status}
                                   error={run.error}
                                   disabled={s.reuseBlocked || optionsBusy}

@@ -1,3 +1,4 @@
+import { canRecoverMainJudgment } from '../core/main-judgment-recovery.js';
 import { DatabaseSync } from 'node:sqlite';
 import { initHelperWorkspace } from './helper-workspace.js';
 import { databaseSchemaVersion, initializeDatabaseSchema } from './database-schema.js';
@@ -515,7 +516,8 @@ export class Store {
     runId: string,
     key: string,
     title: string,
-    validate?: (snapshot: RunSnapshot) => void
+    validate?: (snapshot: RunSnapshot) => void,
+    judgmentRecovery = false
   ): { run: Run; created: boolean } {
     return this.transaction(() => {
       const original = this.run(runId);
@@ -526,7 +528,11 @@ export class Store {
         throw new HttpError(409, 'Authored opening cannot be regenerated as a model candidate');
       if (['queued', 'running'].includes(original.status))
         throw new HttpError(409, 'Original run is still active');
-      const canonical = json({ candidateOf: runId, title });
+      const canonical = json({
+        candidateOf: runId,
+        title,
+        ...(judgmentRecovery ? { judgmentRecovery: true } : {}),
+      });
       const prior = this.db
         .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
         .get(original.chatId, key) as Row | undefined;
@@ -535,6 +541,8 @@ export class Store {
           throw new HttpError(409, 'Idempotency key reused with different command');
         return { run: this.run(prior.id), created: false };
       }
+      if (judgmentRecovery && !canRecoverMainJudgment(original))
+        throw new HttpError(409, '보존된 본문의 판정 실패만 다시 판정할 수 있어요.');
       if (nativeRisuPending(original.snapshot))
         throw new HttpError(
           409,
@@ -563,8 +571,12 @@ export class Store {
         branchId: branch.id,
         candidateOf: original.id,
       };
-      resetNativeRisuCandidate(snapshot);
-      delete snapshot.mainJudgment;
+      if (judgmentRecovery) snapshot.judgmentRecovery = true;
+      else {
+        delete snapshot.judgmentRecovery;
+        resetNativeRisuCandidate(snapshot);
+        delete snapshot.mainJudgment;
+      }
       if (snapshot.contextPlan?.status === 'ready' && snapshot.promptCompilation) {
         snapshot.contextPlan.summaryCalls = 0;
         snapshot.contextPlan.usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };

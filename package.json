@@ -43,7 +43,7 @@
     "verify:outline": "node scripts/verify-outline.mjs",
     "verify:library": "node scripts/verify-library.mjs",
     "verify:ui-recovery": "node scripts/verify-ui-recovery.mjs",
-    "verify:redesign": "node scripts/verify-redesign.mjs",
+    "verify:browser": "node scripts/verify-browser.mjs",
     "verify:browser-smoke": "node scripts/verify-browser-smoke.mjs",
     "verify:chat-unification": "node scripts/verify-chat-unification.mjs",
     "verify:chat-backup": "node scripts/verify-chat-backup.mjs",
@@ -68,6 +68,7 @@
     "wasmoon": "1.16.0"
   },
   "devDependencies": {
+    "@babel/parser": "7.29.9",
     "@biomejs/biome": "2.5.12",
     "@playwright/test": "1.63.0",
     "@types/markdown-it": "14.2.0",

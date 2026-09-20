@@ -114,6 +114,8 @@ export type RunSnapshot = {
   branchId?: string;
   profile?: import('./product.js').ProfileSnapshot;
   candidateOf?: string;
+  /** Rejudge the preserved response without invoking the writer or input hooks. */
+  judgmentRecovery?: true;
   forkedFrom?: {
     chatId: string;
     runId: string;
@@ -232,6 +234,7 @@ export type ChatDetail = {
 
 /** Reader summaries never stand in for frozen execution inputs. */
 export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
+  canRejudge?: boolean;
   /** Stable admission order of the first request in this retry chain. */
   requestOrder?: number;
   retryOf?: string | null;

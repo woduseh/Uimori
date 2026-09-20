@@ -38,7 +38,7 @@ npm run dev
 | [Risu 콘텐츠](docs/PACKAGES.md) | 원본 카드·모듈과 채팅별 연결, 카드 변수·이야기 기억의 책임 |
 | [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |
 | [프로바이더](docs/PROVIDERS.md) | Vertex, Responses·Chat 호환, Anthropic, Vercel, Codex 프로바이더와 선택형 평가 도구·합성 시험 |
-| [개발과 검증](docs/DEVELOPMENT.md) · [코드 품질](docs/QUALITY.md) | 검사·정리 명령, 격리 실행, 코드 구조와 증거 보관 |
+| [개발과 검증](docs/DEVELOPMENT.md) | 검사·정리 명령, 격리 실행, 코드 구조와 증거 보관 |
 | [개인 서버 배포](docs/SELF-HOST.md) | Docker Compose, HTTPS, 로그인, 영구 데이터, 모델 API 키와 업데이트 |
 | [Oracle 릴리스](docs/ORACLE-RELEASE.md) | 검증·배포 명령, 데이터 보존과 실패 복구 |
 | [코드 지도](docs/CODE-MAP.md) | 기능별 현행 문서와 구현 진입점 |

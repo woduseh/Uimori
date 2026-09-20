@@ -514,6 +514,41 @@ async function startChild(directory: string) {
 }
 
 describe('built server process boundary', () => {
+  it('isolates two processes and databases from one build and preserves each across restart', async () => {
+    const directories = await Promise.all(
+      ['a', 'b'].map((name) => mkdtemp(join(tmpdir(), `서사 M0 isolate-${name}-`)))
+    );
+    const instances = await Promise.all(directories.map(startChild));
+    expect(instances[0].url).not.toBe(instances[1].url);
+    expect(instances[0].child.pid).not.toBe(instances[1].child.pid);
+    const records = await Promise.all(
+      instances.map(async ({ url }, index) => {
+        const chat = await api<Chat>(url, '/api/chats', { title: `Isolated ${index}` });
+        const admitted = await api<Run>(
+          url,
+          `/api/chats/${chat.id}/runs`,
+          command(chat, 'same-key-in-independent-databases')
+        );
+        const run = await completed(url, admitted.id);
+        return { chat, run };
+      })
+    );
+    for (const [index, instance] of instances.entries()) {
+      await api(instance.url, `/api/chats/${records[1 - index].chat.id}`, undefined, 'GET', 404);
+      const exit = new Promise<void>((done) => instance.child.once('exit', () => done()));
+      instance.child.kill();
+      await exit;
+      const restarted = await startChild(directories[index]);
+      const kept = await api<Run>(restarted.url, `/api/runs/${records[index].run.id}`);
+      expect(kept.sourceRevision).toBe(records[index].run.sourceRevision);
+      expect(kept.usage).toEqual(records[index].run.usage);
+      const chat = await detail(restarted.url, records[index].chat);
+      expect(chat.sources).toHaveLength(1);
+      expect(chat.runs).toHaveLength(1);
+      await api(restarted.url, `/api/chats/${records[1 - index].chat.id}`, undefined, 'GET', 404);
+    }
+  });
+
   it('F03 F05 restarts after source commit before worker wake, without regenerating source', async () => {
     const directory = await mkdtemp(join(tmpdir(), '서사 M0 crash '));
     const first = await startChild(directory);

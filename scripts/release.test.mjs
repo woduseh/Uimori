@@ -40,7 +40,7 @@ const scripts = Object.fromEntries(
     'verify:ui',
     'verify:browser-smoke',
     'verify:selfhost',
-    'verify:redesign',
+    'verify:browser',
     'verify:visual',
   ].map((name) => [name, 'fixture'])
 );
@@ -114,12 +114,12 @@ test('release options reject ambiguity and remote arguments are POSIX quoted', (
   assert.throws(() => shellQuote('one\ntwo'));
   assert.deepEqual(requiredChecks('verify:browser-smoke', true, scripts), [
     'quality:full',
-    'verify:redesign',
+    'verify:browser',
   ]);
   assert.deepEqual(requiredChecks('verify:ui', true, scripts), [
     'quality:full',
     'verify:ui',
-    'verify:redesign',
+    'verify:browser',
   ]);
   assert.deepEqual(requiredChecks('verify:browser-smoke', false, scripts), [
     'quality:full',
@@ -129,7 +129,7 @@ test('release options reject ambiguity and remote arguments are POSIX quoted', (
   for (const name of [
     'verify:visual',
     'verify:unknown',
-    'verify:redesign',
+    'verify:browser',
     'quality:full',
     'verify:live',
   ])
@@ -171,29 +171,29 @@ test('unchanged release reuses successful evidence and refreshes only a missing 
 
 test('failed later check preserves earlier passes but cannot be bypassed by a narrower scope', async (t) => {
   const fixture = await checksFixture(t);
-  fixture.setFailure((name) => (name === 'verify:redesign' ? { code: 1 } : {}));
+  fixture.setFailure((name) => (name === 'verify:browser' ? { code: 1 } : {}));
   const first = await fixture.run({ full: true });
   assert.equal(first.status, 'FAIL');
   const narrower = await fixture.run();
   assert.equal(narrower.status, 'FAIL');
   assert.match(narrower.error, /recorded failures/);
-  assert.deepEqual(fixture.calls, ['quality:full', 'verify:redesign']);
+  assert.deepEqual(fixture.calls, ['quality:full', 'verify:browser']);
   fixture.setFailure(undefined);
   const fixed = await fixture.run({ full: true });
   assert.equal(fixed.status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(2), ['verify:redesign']);
+  assert.deepEqual(fixture.calls.slice(2), ['verify:browser']);
 });
 
 test('unstarted optional checks remain recorded without blocking a narrower request', async (t) => {
   const fixture = await checksFixture(t);
   const previous = await fixture.run();
   previous.status = 'FAIL';
-  previous.requested.push('verify:redesign');
+  previous.requested.push('verify:browser');
   await json(previous.report, previous);
   for (let attempt = 0; attempt < 2; attempt++) {
     const result = await fixture.run();
     assert.equal(result.status, 'PASS');
-    assert.equal(result.checks['verify:redesign'].status, 'NOT_RUN');
+    assert.equal(result.checks['verify:browser'].status, 'NOT_RUN');
     await verifyReleaseReceipt(result, identity, requiredChecks(undefined, false, scripts));
     await assert.rejects(
       verifyReleaseReceipt(result, identity, requiredChecks(undefined, true, scripts)),
@@ -202,13 +202,13 @@ test('unstarted optional checks remain recorded without blocking a narrower requ
   }
   assert.equal(fixture.calls.length, 2);
   assert.equal((await fixture.run({ full: true })).status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(2), ['verify:redesign']);
+  assert.deepEqual(fixture.calls.slice(2), ['verify:browser']);
 });
 
 test('an interrupted started check still blocks narrowing until it is rerun', async (t) => {
   const fixture = await checksFixture(t);
   const previous = await fixture.run();
-  previous.checks['verify:redesign'] = { command: 'verify:redesign', status: 'RUNNING' };
+  previous.checks['verify:browser'] = { command: 'verify:browser', status: 'RUNNING' };
   await json(previous.report, previous);
   await assert.rejects(
     verifyReleaseReceipt(previous, identity, requiredChecks(undefined, false, scripts)),
@@ -219,7 +219,7 @@ test('an interrupted started check still blocks narrowing until it is rerun', as
   assert.match(narrower.error, /recorded failures/);
   assert.equal(fixture.calls.length, 2);
   assert.equal((await fixture.run({ full: true })).status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(2), ['verify:redesign']);
+  assert.deepEqual(fixture.calls.slice(2), ['verify:browser']);
 });
 
 test('failed termination without a close event still produces a bounded timeout result', async () => {
@@ -264,7 +264,7 @@ test('timeout, cancellation, missing logs and swapped commands cannot certify a 
     /stale/
   );
   await assert.rejects(
-    () => verifyReleaseReceipt(receipt, identity, ['verify:redesign']),
+    () => verifyReleaseReceipt(receipt, identity, ['verify:browser']),
     /unavailable/
   );
   const quality = receipt.checks['quality:full'];
