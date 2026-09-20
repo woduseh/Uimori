@@ -148,4 +148,21 @@ The user replaced the radio-control preference with switches. Basic prompt optio
 
 This is focused local browser evidence; the earlier 43-case run was not repeated or treated as current full-suite evidence. No live-provider or physical-mobile validation was needed for this control substitution.
 
+Previous switch follow-up result: passed.
+
+## Follow-up: source-first toggle editing and missing captions
+
+The user requested the raw toggle definition first, with the GUI editor collapsed below it, and reported missing `=caption` text in basic options. The GUI redesign remains deferred to their future references.
+
+The missing captions were discarded by the control-only projection. The display now includes captions and dividers in authored order and groups, including standalone captions and groups containing only explanatory text. Stored option values and runtime variables still contain controls only. Captions render as text, not executable markup. Source-first editing retains the unapplied buffer, explicit apply action, save gating, and existing GUI operations.
+
+Verification:
+
+- `npm run quality` and the build passed. Focused Vitest passed 22 tests across native semantics and toggle-editor preservation, including a regression proving captions/dividers never become runtime variables.
+- `npm run verify:ui-recovery -- --grep "native toggle forms|long block" --visual` passed 4 cases at 2560 × 1440 and 412 × 915. It checks caption visibility/order, source-first layout, initially collapsed GUI, long lists, pending-source retention, GUI edits and saved values.
+- Final receipt: `output/playwright/ui-recovery-2026-09-20T03-24-42-871Z-8d615814/summary.json`; matching build/source `6ef722862acd36394326ddacf74211b1ef0de776a30782f26f6e99dd473cdee4`. The initial browser run failed because a caption locator also matched hidden GUI text; scoping it to the basic-options panel resolved the test ambiguity without weakening visibility or ordering assertions.
+- Actual Phémē preset: two read-only capture flows passed at both sizes. Inspected `output/ui-recovery-preview/caption-captures/{raw-first,captions}-{2560,412}.png`: raw text appears before the closed GUI, captions follow their associated options, divider text is visible, and mobile text wraps within the available width. These captures preceded only the final React key namespace correction, which has no visual effect; the final browser receipt covers that correction.
+
+The six legacy-option removals/runtime changes remain paused. No original material, live-provider behavior or physical device was changed or tested. This is focused verification, not a new full-suite result.
+
 final result: passed

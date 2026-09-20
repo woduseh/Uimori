@@ -164,7 +164,7 @@ for (const viewport of viewports) {
     }, info) => {
       const title = `UIREC toggle preset ${randomUUID().slice(0, 8)}`;
       const declarations =
-        '=기본 입력=group\nshort=짧은 입력=text\nlong=긴 입력=textarea\nflag=분위기 강조\nmode=시점=select=1인칭,3인칭\n==groupEnd';
+        '=기본 입력=group\nshort=짧은 입력=text\n=짧은 입력에 사용할 이름을 작성해요.=caption\n=추가 입력=divider\nlong=긴 입력=textarea\nflag=분위기 강조\nmode=시점=select=1인칭,3인칭\n==groupEnd\n=그룹 밖 안내예요.=caption\n=안내만 있는 그룹=group\n=입력 없이도 안내를 표시해요.=caption\n==groupEnd';
       await post<PromptPreset>(request, '/api/prompt-presets', {
         title,
         role: 'main',
@@ -178,6 +178,21 @@ for (const viewport of viewports) {
       const editor = page.getByTestId('prompt-editor');
       const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
       await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      await expect(editor.locator('.prompt-option-caption')).toHaveText([
+        '짧은 입력에 사용할 이름을 작성해요.',
+        '그룹 밖 안내예요.',
+        '입력 없이도 안내를 표시해요.',
+      ]);
+      await expect(editor.locator('.prompt-option-divider')).toHaveText('추가 입력');
+      const caption = editor
+        .getByRole('tabpanel', { name: '기본 옵션', exact: true })
+        .getByText('짧은 입력에 사용할 이름을 작성해요.', { exact: true });
+      await expect(caption).toBeVisible();
+      const captionBounds = await caption.boundingBox();
+      const inputBounds = await editor.getByLabel('짧은 입력', { exact: true }).boundingBox();
+      const nextBounds = await editor.getByLabel('긴 입력', { exact: true }).boundingBox();
+      expect(captionBounds!.y).toBeGreaterThan(inputBounds!.y + inputBounds!.height);
+      expect(captionBounds!.y + captionBounds!.height).toBeLessThan(nextBounds!.y);
       await expect(editor.getByLabel('짧은 입력', { exact: true })).toHaveJSProperty(
         'tagName',
         'INPUT'
@@ -204,8 +219,23 @@ for (const viewport of viewports) {
 
       await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
       const definitions = editor.getByRole('region', { name: '토글 정의 편집기', exact: true });
-      await definitions.locator('.native-toggle-raw > summary').click();
       const raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      const gui = definitions.locator('.native-toggle-gui');
+      await expect(raw).toBeVisible();
+      await expect(gui).toHaveJSProperty('open', false);
+      expect(
+        await raw.evaluate((node) =>
+          Boolean(
+            node.compareDocumentPosition(
+              node.closest('section')!.querySelector('.native-toggle-gui')!
+            ) & Node.DOCUMENT_POSITION_FOLLOWING
+          )
+        )
+      ).toBe(true);
+      await editorFits(page, editor, save);
+      await page.screenshot({
+        path: info.outputPath(`native-toggle-raw-first-${viewport.name}.png`),
+      });
       const withUnknown = `${declarations}\nunknown source line`;
       await raw.fill(withUnknown);
       await expect(save).toBeDisabled();
@@ -213,6 +243,7 @@ for (const viewport of viewports) {
       await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
       await expect(raw).toHaveValue(withUnknown);
       await definitions.getByRole('button', { name: '원문 적용', exact: true }).click();
+      await gui.locator('summary').first().click();
       if (viewport.name === 'mobile')
         await definitions.getByLabel('현재 토글 정의', { exact: true }).selectOption('1');
       else
@@ -224,7 +255,6 @@ for (const viewport of viewports) {
       await expect(raw).toHaveValue(
         withUnknown.replace('short=짧은 입력=text', 'short=이름 입력=textarea')
       );
-      await definitions.locator('.native-toggle-raw > summary').click();
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`native-toggle-editor-${viewport.name}.png`) });
       await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();

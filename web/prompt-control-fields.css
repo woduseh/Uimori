@@ -11,3 +11,28 @@
   height: 96px;
   resize: vertical;
 }
+.prompt-option-caption {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.prompt-option-divider {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.prompt-option-divider hr {
+  flex: 1;
+  min-width: 20px;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
