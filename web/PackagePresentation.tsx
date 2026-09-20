@@ -27,12 +27,14 @@ export function usePackagePresentation(
   refreshKey: string,
   branchId?: string
 ) {
-  const identity = `${source.chatId}:${branchId ?? ''}:${source.id}:${source.hash}:${translation?.id ?? ''}:${translation?.revision ?? 0}:${translation?.status ?? ''}`;
+  const sourceIdentity = `${source.chatId}:${branchId ?? ''}:${source.id}:${source.hash}`;
+  const identity = `${sourceIdentity}:${translation?.id ?? ''}:${translation?.revision ?? 0}:${translation?.status ?? ''}`;
   const key = `${identity}:${refreshKey}`;
   const sequence = useRef(0);
   const [result, setResult] = useState<{
     key: string;
     identity: string;
+    sourceIdentity: string;
     data?: PackagePresentation;
     error?: string;
   }>();
@@ -64,12 +66,13 @@ export function usePackagePresentation(
         )
           throw new Error('표시 결과의 번역 버전이 달라요.');
         if (!controller.signal.aborted && sequence.current === requestId)
-          setResult({ key, identity, data });
+          setResult({ key, identity, sourceIdentity, data });
       } catch (error) {
         if (!controller.signal.aborted && sequence.current === requestId)
           setResult({
             key,
             identity,
+            sourceIdentity,
             error: `표시 변환을 적용하지 못해 저장된 본문을 표시해요. ${error instanceof Error ? error.message : ''}`,
           });
       }
@@ -80,6 +83,7 @@ export function usePackagePresentation(
   }, [
     enabled,
     identity,
+    sourceIdentity,
     key,
     source.chatId,
     source.id,
@@ -88,9 +92,20 @@ export function usePackagePresentation(
     translation?.revision,
     branchId,
   ]);
-  return enabled && result?.identity === identity
-    ? { ...result, pending: result.key !== key }
-    : undefined;
+  if (!enabled || result?.sourceIdentity !== sourceIdentity) return;
+  if (result.identity === identity) return { ...result, pending: result.key !== key };
+  // A translation refresh must not unmount the unchanged original and collapse its scroll area.
+  // Keep only the matching source; stale translations and native actions remain unavailable.
+  return {
+    ...result,
+    pending: true,
+    data: result.data && {
+      ...result.data,
+      translation: undefined,
+      translationId: null,
+      translationRevision: null,
+    },
+  };
 }
 export function PackagePresentationIssues({ data }: { data?: PackagePresentation }) {
   if (!data) return null;

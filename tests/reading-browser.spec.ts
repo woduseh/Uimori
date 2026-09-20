@@ -7,6 +7,7 @@ import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { visualReview } from './fixtures/visual-review.js';
+import { waitForNativeLayout } from './fixtures/native-message.js';
 import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import {
   navigationAction,
@@ -109,13 +110,6 @@ async function fits(page: Page, region: Locator) {
 
 const quotes = (region: Locator, role: 'dialogue' | 'thought' | 'quote') =>
   region.locator(`.reading-quote[data-quote-role="${role}"]`);
-const anchors = (region: Locator) =>
-  region
-    .locator('[data-block-anchor]')
-    .evaluateAll((elements) =>
-      elements.map((element) => element.getAttribute('data-block-anchor'))
-    );
-
 async function clipboard(page: Page) {
   const copied: string[] = [];
   await page.exposeFunction('recordReadingClipboard', (text: string) => copied.push(text));
@@ -147,7 +141,7 @@ function watch(page: Page) {
   return { writes, errors };
 }
 
-test('READUI01 browser reading styles preserve source and translation text, anchors and copies at the default phone and desktop widths', async ({
+test('READUI01 native source and translation keep text and copies while shared reading settings persist', async ({
   page,
   request,
 }, info) => {
@@ -159,139 +153,74 @@ test('READUI01 browser reading styles preserve source and translation text, anch
     await page.goto(`/?chat=${before.chat.id}`);
     const source = page.getByTestId('source');
     await source.getByRole('button', { name: '원문 보기', exact: true }).click();
-    const prose = source.getByTestId('source-text');
+    const prose = source.getByTestId('source-text').frameLocator('iframe').locator('body');
     await expect(prose).toContainText('정말 괜찮아');
-    const textBefore = await prose.textContent();
-    const anchorsBefore = await anchors(prose);
-    const existingLines = prose.locator('p').filter({ hasText: '첫째 줄' });
-    const existingLineHeight = (await existingLines.boundingBox())!.height;
-    await expect(prose.locator('.reading-quote-break')).toHaveCount(0);
-    const positionBlock = prose.locator('[data-block-anchor]').nth(8);
-    const positionBefore = await positionBlock.evaluate((element) => {
-      const scrollport = element.closest('[data-reader-scrollport]')!;
-      scrollport.scrollTop +=
-        element.getBoundingClientRect().top - scrollport.getBoundingClientRect().top + 3;
-      return element.getBoundingClientRect().top;
-    });
+    const authored = prose.locator('.risu-chat-text');
+    const textBefore = await authored.textContent();
+    await waitForNativeLayout(source.getByTestId('source-text'));
+    const copy = source.getByRole('button', { name: '본문 복사', exact: true });
+    await copy.scrollIntoViewIfNeeded();
+    await expect(copy).toBeInViewport();
+    await copy.click();
+    await expect.poll(() => copied.at(-1)).toBe(sourceText);
 
     let settings = await readingDialog(page);
-    await expect(settings.getByLabel('인용 강조', { exact: true })).toHaveValue('off');
-    await expect(
-      settings.getByRole('switch', { name: '대사 줄바꿈', exact: true })
-    ).not.toBeChecked();
     await settings.getByLabel('읽기 스타일', { exact: true }).selectOption({ label: '여유롭게' });
-    await expect(settings.getByLabel('줄 간격', { exact: true })).not.toHaveValue('default');
-    await settings.getByRole('button', { name: '읽기 스타일 초기화', exact: true }).click();
-    await expect(settings.getByLabel('줄 간격', { exact: true })).toHaveValue('default');
-    await settings.getByLabel('읽기 스타일', { exact: true }).selectOption({ label: '대사 중심' });
-    await expect(settings.getByLabel('인용 강조', { exact: true })).toHaveValue('subtle');
-    await expect(settings.getByRole('switch', { name: '대사 줄바꿈', exact: true })).toBeChecked();
-    await expect(
-      settings.getByRole('switch', { name: '생각 줄바꿈', exact: true })
-    ).not.toBeChecked();
-    await expect(
-      settings.getByTestId('reading-preview').locator('.reading-quote-break').first()
-    ).toBeVisible();
+    const slider = settings.getByRole('slider', { name: '본문 크기' });
+    await slider.focus();
+    await page.keyboard.press('End');
+    await expect(slider).toHaveValue('28');
     await fits(page, settings);
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath(`reading-settings-${width}.png`) });
     await closeDialog(page, settings);
+    await expect(prose).toHaveCSS('font-size', '28px');
     await expect
-      .poll(async () => Math.abs((await positionBlock.boundingBox())!.y - positionBefore))
-      .toBeLessThanOrEqual(3);
-
-    const dialogue = quotes(prose, 'dialogue').filter({ hasText: '정말 괜찮아' });
-    await expect(dialogue).toHaveAttribute('data-emphasis', 'subtle');
-    await expect(dialogue).toHaveClass(/reading-quote-break/u);
-    await expect(dialogue.locator('strong')).toHaveText('괜찮아');
-    expect(Math.abs((await existingLines.boundingBox())!.height - existingLineHeight)).toBeLessThan(
-      1
-    );
-    await expect(quotes(prose, 'thought').first()).not.toHaveClass(/reading-quote-break/u);
-    await expect(quotes(prose, 'quote')).toHaveText('『별의 기록』');
-    await expect(prose.locator('code .reading-quote')).toHaveCount(0);
-    expect(await prose.textContent()).toBe(textBefore);
-    expect(await anchors(prose)).toEqual(anchorsBefore);
-    await expect(page.getByTestId('source-request').locator('.reading-quote')).toHaveCount(0);
-    await source.getByRole('button', { name: '본문 복사', exact: true }).click();
-    expect(copied.at(-1)).toBe(sourceText);
-
-    await source.getByRole('button', { name: '번역 보기', exact: true }).click();
-    const translated = source.getByTestId('translation-text');
-    await expect(quotes(translated, 'dialogue').first()).toHaveClass(/reading-quote-break/u);
-    const translation = before.jobs.find((job) => job.kind === 'translation')!;
-    expect(await anchors(translated)).toEqual(
-      translation.translationLayout!.blocks.map((block) => block.anchor)
-    );
-    await source.getByRole('button', { name: '본문 복사', exact: true }).click();
-    expect(copied.at(-1)).toBe(translatedText);
-    if (visualReview) {
-      await page.screenshot({ path: info.outputPath(`reading-translation-${width}.png`) });
-      await page.emulateMedia({ colorScheme: 'dark' });
-      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-      await page.screenshot({ path: info.outputPath(`reading-translation-dark-${width}.png`) });
-      await page.emulateMedia({ colorScheme: 'light' });
-    }
-
-    settings = await readingDialog(page, true);
-    await expect(settings.getByLabel('인용 강조', { exact: true })).toHaveValue('subtle');
-    await settings.getByLabel('인용 강조', { exact: true }).selectOption('strong');
-    await settings.getByRole('switch', { name: '대사 줄바꿈', exact: true }).uncheck();
-    await settings.getByRole('switch', { name: '생각 줄바꿈', exact: true }).check();
-    await settings.getByLabel('줄 간격', { exact: true }).selectOption('2.2');
-    await settings.getByLabel('문단 간격', { exact: true }).selectOption('2');
-    await settings.getByText('표기별 스타일', { exact: true }).click();
-    await settings.getByLabel('『겹낫표』 스타일', { exact: true }).selectOption('thought');
-    await fits(page, settings);
-    await closeDialog(page, settings);
-    await expect(quotes(translated, 'dialogue').first()).not.toHaveClass(/reading-quote-break/u);
-    await expect(quotes(translated, 'thought').filter({ hasText: '『여행의 끝』' })).toHaveClass(
-      /reading-quote-break/u
-    );
+      .poll(() =>
+        prose.evaluate((node) => {
+          const style = getComputedStyle(node);
+          return Number.parseFloat(style.lineHeight) / Number.parseFloat(style.fontSize);
+        })
+      )
+      .toBeCloseTo(2.2);
+    expect(await authored.textContent()).toBe(textBefore);
 
     await page.reload();
-    settings = await readingDialog(page);
-    await expect(settings.getByLabel('인용 강조', { exact: true })).toHaveValue('strong');
-    await expect(
-      settings.getByRole('switch', { name: '대사 줄바꿈', exact: true })
-    ).not.toBeChecked();
-    await expect(settings.getByRole('switch', { name: '생각 줄바꿈', exact: true })).toBeChecked();
+    settings = await readingDialog(page, true);
+    await expect(settings.getByRole('slider', { name: '본문 크기' })).toHaveValue('28');
     await expect(settings.getByLabel('줄 간격', { exact: true })).toHaveValue('2.2');
-    await expect(settings.getByLabel('문단 간격', { exact: true })).toHaveValue('2');
-    await settings.getByText('표기별 스타일', { exact: true }).click();
-    await expect(settings.getByLabel('『겹낫표』 스타일', { exact: true })).toHaveValue('thought');
-    await settings.getByRole('button', { name: '읽기 스타일 초기화', exact: true }).click();
-    await expect(settings.getByLabel('인용 강조', { exact: true })).toHaveValue('off');
-    await expect(settings.getByLabel('『겹낫표』 스타일', { exact: true })).toHaveValue('quote');
     await closeDialog(page, settings);
+    await expect(prose).toHaveCSS('font-size', '28px');
+    await source.getByRole('button', { name: '번역 보기', exact: true }).click();
+    const translated = source
+      .getByTestId('translation-text')
+      .frameLocator('iframe')
+      .locator('body');
+    await expect(translated).toContainText('번역된 장면이다.');
+    await expect(translated).toHaveCSS('font-size', '28px');
+    await waitForNativeLayout(source.getByTestId('translation-text'));
+    await copy.scrollIntoViewIfNeeded();
+    await expect(copy).toBeInViewport();
+    await copy.click();
+    await expect.poll(() => copied.at(-1)).toBe(translatedText);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`reading-translation-${width}.png`) });
+
     await source.getByRole('button', { name: '원문 보기', exact: true }).click();
-    await expect(prose.locator('.reading-quote-break')).toHaveCount(0);
-    expect(await prose.textContent()).toBe(textBefore);
-    expect(await anchors(prose)).toEqual(anchorsBefore);
-    await source.getByRole('button', { name: '원문 수정', exact: true }).click();
+    await expect(prose).toContainText('정말 괜찮아');
+    await waitForNativeLayout(source.getByTestId('source-text'));
+    const edit = source.locator('.scene-action[aria-label="원문 수정"]');
+    await edit.scrollIntoViewIfNeeded();
+    await expect(edit).toBeInViewport();
+    await edit.click();
     await expect(source.getByLabel('원문 수정 내용', { exact: true })).toHaveValue(sourceText);
     await source.getByRole('button', { name: '수정 취소', exact: true }).click();
-    for (const size of [9, 28]) {
-      settings = await readingDialog(page);
-      const slider = settings.getByRole('slider', { name: '본문 크기' });
-      await expect(slider).toHaveAttribute('min', '9');
-      await expect(slider).toHaveAttribute('max', '28');
-      await slider.focus();
-      await page.keyboard.press(size === 9 ? 'Home' : 'End');
-      await expect(slider).toHaveValue(String(size));
-      await closeDialog(page, settings);
-      await expect(prose).toHaveCSS('font-size', `${size}px`);
-      await fits(page, prose);
-      await page.reload();
-      settings = await readingDialog(page, true);
-      await expect(settings.getByRole('slider', { name: '본문 크기' })).toHaveValue(String(size));
-      await closeDialog(page, settings);
-    }
+    expect(await authored.textContent()).toBe(textBefore);
     settings = await readingDialog(page);
+    await settings.getByRole('button', { name: '읽기 스타일 초기화', exact: true }).click();
     await settings.getByRole('slider', { name: '본문 크기' }).focus();
     for (let step = 28; step > 18; step--) await page.keyboard.press('ArrowLeft');
     await expect(settings.getByRole('slider', { name: '본문 크기' })).toHaveValue('18');
     await closeDialog(page, settings);
+    await expect(prose).toHaveCSS('font-size', '18px');
   }
   const other = await page.context().newPage();
   try {

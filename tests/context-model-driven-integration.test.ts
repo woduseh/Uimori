@@ -23,7 +23,7 @@ import type { Json, ProviderRequest } from '../core/transport.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import type { HelperConversation, HelperTask } from '../core/helper.js';
-import type { OutlineDetail } from '../core/outline.js';
+import { OUTLINE_CONTRACT, type OutlineDetail } from '../core/outline.js';
 import { fixtureSettings } from './fixtures/illustration.js';
 import {
   illustrationJob,
@@ -417,7 +417,7 @@ describe('model-written summary and window switch through the real App and file 
         expect(native).toContain('USER_PLAN_CORRECTION_CANARY');
         expect(native).not.toContain('UNWRITTEN_SIBLING_CANARY');
         expect(native).not.toContain('LATER_PLAN_EDIT_CANARY');
-        expect(native).toContain('planning, not story that already happened');
+        expect(native).toContain(OUTLINE_CONTRACT);
       }
       expect(bodies[2]).not.toHaveProperty('opaqueState');
       expect(bodies[2].input.results).toEqual([]);

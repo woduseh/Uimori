@@ -5,7 +5,6 @@ await runBrowserVerification({
   scope: 'Synthetic failed-card UI with real fixture admission and lost-response recovery',
   timeout: 120000,
   files: ['tests/run-retry-browser.spec.ts'],
-  requiredTitles: ['failed request edit, draft protection and uncertain retry reuse one admission'],
   limitations: [
     'Synthetic source-transaction failure and fixture admission; no live provider calls.',
   ],

@@ -10,7 +10,7 @@ import { Store, type HttpError } from '../server/store.js';
 import { forkChat } from '../server/chat-fork.js';
 import { directHelperGrants } from '../server/helper-workspace.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
-import { OUTLINE_LEVEL_LABELS } from '../core/outline.js';
+import { OUTLINE_CONTRACT, OUTLINE_LEVEL_LABELS } from '../core/outline.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 
@@ -848,7 +848,7 @@ describe('hierarchical composition', () => {
     const sent = JSON.stringify(request);
     expect(sent).toContain('사서가 도서관 지하에서 자기 이름이 적힌 장부를 찾아요.');
     expect(sent).toContain('열쇠 없는 자물쇠');
-    expect(request.stable.contract).toContain('planning, not story that already happened');
+    expect(request.stable.contract).toContain(OUTLINE_CONTRACT);
 
     // One request writes exactly one source, and only its own unit becomes written.
     expect(store.product.branch(chat.id).headRevision).toBe(source.id);
@@ -874,7 +874,7 @@ describe('hierarchical composition', () => {
     const { input } = buildMainProviderRequest(
       await prepareNativeRisuReadOnly(run.snapshot, 'context')
     );
-    expect(input.contract).toContain('stay unrevealed until their own unit is written');
+    expect(input.contract).toContain(OUTLINE_CONTRACT);
     expect(store.story.detail(chat.id).notes).toEqual([]);
     expect(store.context.detail(chat.id).checkpoint).toBeNull();
   });

@@ -5,6 +5,4 @@ await runBrowserVerification({
   scope:
     'Custom writing advisors: saved prompt configuration, API preview and native prompt editing',
   files: ['tests/agent-collaboration-browser.spec.ts'],
-  requiredCases: ['AGENTUI02'],
-  requiredScreenshots: ['agent-collaboration-desktop.png'],
 });

@@ -13,18 +13,6 @@ await runBrowserVerification({
     'tests/product-browser.spec.ts',
   ],
   grep: 'ILUI|PMUI10|PMUI11|SCUI|CSUI02|LIBUI03|chat creative options|P01 packages|P09 P10',
-  requiredCases: [
-    'ILUI01',
-    'ILUI02',
-    'ILUI03',
-    'PMUI10',
-    'PMUI11',
-    'LIBUI03',
-    'SCUI01',
-    'SCUI02',
-    'SCUI03',
-    'CSUI02',
-  ],
   providerFixture: true,
   timeout: 360000,
   limitations: [

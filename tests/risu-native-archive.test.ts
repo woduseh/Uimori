@@ -12,6 +12,7 @@ import {
   prepareNativeRisuRun,
   prepareNativeRisuOutput,
   validateNativeRisuExecution,
+  nativeRisuInputHash,
 } from '../server/risu-native-run.js';
 import { prepareNativeRisuRequest } from '../server/risu-native-request.js';
 import { disposeAllNativeRisuSessions } from '../server/risu-native-runtime.js';
@@ -118,7 +119,7 @@ function request(snapshot: RunSnapshot): ProviderRequest {
     },
   };
 }
-async function turn(store: Store, chatId: string) {
+async function turn(store: Store, chatId: string, legacyNativeOutputReplay = false) {
   const branch = store.product.branch(chatId),
     chat = store.chat(chatId);
   const result = store.createRun(
@@ -143,7 +144,10 @@ async function turn(store: Store, chatId: string) {
     })
   );
   store.startRun(result.run.id);
-  const prepared = compileSnapshotPrompt(await prepareNativeRisuRun(result.run.snapshot));
+  const snapshot = result.run.snapshot;
+  if (legacyNativeOutputReplay)
+    snapshot.logicalHistory = captureLogicalHistory(store, snapshot, { legacyNativeOutputReplay });
+  const prepared = compileSnapshotPrompt(await prepareNativeRisuRun(snapshot));
   // Literal identity-looking variable names and values must not be treated as references.
   Object.assign(prepared.nativeRisuExecution!.variables, {
     id: chatId,
@@ -177,6 +181,69 @@ function logical(store: Store, chatId: string) {
     parentRevision: branch.headRevision,
   });
 }
+
+test('legacy stale native history restores exactly while fresh continuations preserve user source edits', async () => {
+  const { store, chatId } = setup();
+  const first = await turn(store, chatId);
+  await turn(store, chatId);
+  const edited = store.editSource(first.id, { expectedRevision: 0, text: 'User corrected first' });
+  const third = await turn(store, chatId, true);
+  const historical = store.run(third.runId).snapshot;
+  expect(
+    historical.logicalHistory!.find((message) => message.id === `source:${first.id}`)
+  ).toMatchObject({
+    text: first.text,
+    sourceHash: edited.hash,
+  });
+  expect(captureLogicalHistory(store, historical)).not.toEqual(historical.logicalHistory);
+  expect(captureLogicalHistory(store, historical, { legacyNativeOutputReplay: true })).toEqual(
+    historical.logicalHistory
+  );
+  validateRunSnapshot(store, historical, third.runId);
+  const forged = structuredClone(historical);
+  forged.logicalHistory!.find((message) => message.id === `source:${first.id}`)!.text =
+    'Forged text';
+  forged.nativeRisuExecution!.inputHash = nativeRisuInputHash(forged);
+  expect(() => validateRunSnapshot(store, forged, third.runId)).toThrow('logical history mismatch');
+
+  const backup = exportChatBackup(store, chatId);
+  const restored = importChatBackup(store, { backup, idempotencyKey: 'restore-legacy-history' });
+  const restoredThird = store.source(restored.chat.headRevision!);
+  const restoredHistorical = store.run(restoredThird.runId).snapshot;
+  expect(restoredHistorical.logicalHistory!.map((message) => message.text)).toEqual(
+    historical.logicalHistory!.map((message) => message.text)
+  );
+  validateRunSnapshot(store, restoredHistorical, restoredThird.runId);
+
+  const archivePath = mkdtempSync(join(tmpdir(), 'uimori-native-archive-'));
+  const archiveStore = new Store(join(archivePath, 'restored.sqlite'));
+  owned.push({ path: archivePath, store: archiveStore });
+  archiveStore.product.import(store.product.export());
+  expect(archiveStore.run(third.runId).snapshot).toEqual(historical);
+  validateRunSnapshot(archiveStore, archiveStore.run(third.runId).snapshot, third.runId);
+
+  for (const [currentStore, currentChat] of [
+    [store, chatId],
+    [store, restored.chat.id],
+    [archiveStore, chatId],
+  ] as const) {
+    const corrected = currentStore
+      .history(currentStore.chat(currentChat).headRevision)
+      .find((source) => source.text === edited.text)!;
+    const fourth = await turn(currentStore, currentChat);
+    const captured = currentStore.run(fourth.runId).snapshot;
+    expect(
+      captured.logicalHistory!.find((message) => message.id === `source:${corrected.revision}`)
+    ).toMatchObject({
+      text: edited.text,
+      sourceHash: edited.hash,
+    });
+    expect(JSON.stringify(captured.promptCompilation!.messages)).toContain(edited.text);
+    validateRunSnapshot(currentStore, captured, fourth.runId);
+  }
+  expect(store.run(third.runId).snapshot).toEqual(historical);
+  expect(store.run(restoredThird.runId).snapshot).toEqual(restoredHistorical);
+});
 
 test('historical native candidates require a current-settings retry without changing saved history', async () => {
   const { store, chatId } = setup();

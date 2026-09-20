@@ -27,7 +27,7 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true });
   }
 });
-function setup(extraOutput = false) {
+function setup(extraOutput = false, historyEdit = '') {
   const path = mkdtempSync(join(tmpdir(), 'uimori-native-host-'));
   const store = new Store(join(path, 'test.sqlite'));
   owned.push({ path, store });
@@ -67,6 +67,7 @@ listenEdit('editOutput', function(id, text) return text .. ' OUTPUT' end)
 function onOutput(id)
   setChatVar(id, 'finished', 'yes')
   ${extraOutput ? "addChat(id, 'char', 'Script postscript'); addChat(id, 'user', 'Script user reply'); addChat(id, 'char', 'Script followup')" : ''}
+  ${historyEdit}
 end
 ${extraOutput ? "listenEdit('editDisplay', function(id, text, meta) return '[' .. tostring(meta.index) .. ']' .. text end)" : ''}
 function ask(id)
@@ -119,6 +120,147 @@ function actionBody(store: Store, chatId: string, name: string, key: string) {
     idempotencyKey: key,
   };
 }
+
+async function appendNativeSource(store: Store, chatId: string, text: string) {
+  const chat = store.chat(chatId),
+    branch = store.product.branch(chatId);
+  const { run } = store.createRun(
+    chatId,
+    {
+      request: `Continue ${text}`,
+      expectedRevision: branch.headRevision,
+      expectedSettingsRevision: chat.settingsRevision,
+      branchId: branch.id,
+      idempotencyKey: text,
+    },
+    () => ({
+      chatId,
+      branchId: branch.id,
+      parentRevision: branch.headRevision,
+      request: `Continue ${text}`,
+      settingsRevision: chat.settingsRevision,
+      settings: chat.settings,
+      history: store.history(branch.headRevision),
+      profile: store.product.snapshot(chatId),
+      resources: [],
+    })
+  );
+  store.startRun(run.id);
+  const output = await prepareNativeRisuOutput(
+    compileSnapshotPrompt(await prepareNativeRisuRun(run.snapshot)),
+    text
+  );
+  store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(output), run.id);
+  return store.completeRun(
+    run.id,
+    output.nativeRisuExecution!.output!.text,
+    { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    chat.settings
+  );
+}
+
+test('later native output preserves Lua history edits until a newer user source edit replaces them', async () => {
+  const { store, chatId } = setup(
+    false,
+    "if getChatLength(id) > 2 then setChat(id, 0, 'Lua revised first request'); setChat(id, 1, 'Lua revised first source') end"
+  );
+  const first = await appendNativeSource(store, chatId, 'First');
+  const second = await appendNativeSource(store, chatId, 'Second');
+  const message = () =>
+    nativeSourceSnapshot(store, chatId, second.id).snapshot.logicalHistory!.find(
+      (entry) => entry.id === `source:${first.id}`
+    );
+  expect(message()).toMatchObject({ text: 'Lua revised first source', sourceHash: first.hash });
+  expect(store.source(first.id).text).toBe('First OUTPUT');
+  const edited = store.editSource(first.id, {
+    expectedRevision: 0,
+    text: 'User corrected first source',
+  });
+  expect(message()).toMatchObject({ text: edited.text, sourceHash: edited.hash });
+  expect(
+    nativeSourceSnapshot(store, chatId, second.id).snapshot.logicalHistory!.find(
+      (entry) => entry.id === `request:${first.id}`
+    )
+  ).toMatchObject({ text: 'Lua revised first request' });
+  expect(store.source(second.id)).toMatchObject({ ...second, editRevision: 0 });
+});
+
+test('a new Lua edit can revise source text after the user edit enters its input', async () => {
+  const { store, chatId } = setup(
+    false,
+    "if getChatLength(id) > 2 then setChat(id, 1, getChat(id, 1).data .. ' LUA') end"
+  );
+  const first = await appendNativeSource(store, chatId, 'First');
+  const edited = store.editSource(first.id, { expectedRevision: 0, text: 'User corrected first' });
+  const second = await appendNativeSource(store, chatId, 'Second');
+  const saved = store.run(second.runId).snapshot;
+  expect(
+    saved.logicalHistory!.find((message) => message.id === `source:${first.id}`)
+  ).toMatchObject({
+    text: edited.text,
+    sourceHash: edited.hash,
+  });
+  expect(
+    nativeSourceSnapshot(store, chatId, second.id).snapshot.logicalHistory!.find(
+      (message) => message.id === `source:${first.id}`
+    )
+  ).toMatchObject({ text: `${edited.text} LUA`, sourceHash: edited.hash });
+  expect(store.source(first.id).text).toBe(edited.text);
+});
+
+test('user edits to an authored native char survive older output receipts', async () => {
+  const { store, chatId } = setup(false, "setChat(id, 0, 'Lua revised authored source')");
+  const head = store.source(store.chat(chatId).headRevision!);
+  await applyNativeRisuAction(store, chatId, head.id, actionBody(store, chatId, 'start', 'start'));
+  const authored = store.source(store.chat(chatId).headRevision!);
+  const next = await appendNativeSource(store, chatId, 'Next');
+  const edited = store.editSource(authored.id, {
+    expectedRevision: 0,
+    text: 'User corrected opening',
+  });
+  expect(
+    nativeSourceSnapshot(store, chatId, next.id).snapshot.logicalHistory!.find(
+      (message) => message.id === `native:${authored.id}:0`
+    )
+  ).toMatchObject({ text: edited.text, sourceHash: edited.hash });
+});
+
+test('source edits enter the next native prompt while archived snapshots reproduce their captured versions', async () => {
+  const { store, chatId } = setup();
+  const first = await appendNativeSource(store, chatId, 'First');
+  const second = await appendNativeSource(store, chatId, 'Second');
+  const historical = store.run(second.runId).snapshot;
+  const edited = store.editSource(first.id, {
+    expectedRevision: 0,
+    text: 'User corrected first source',
+  });
+  const third = await appendNativeSource(store, chatId, 'Third');
+  const captured = store.run(third.runId).snapshot;
+  expect(captured.logicalHistory!.find((entry) => entry.id === `source:${first.id}`)).toMatchObject(
+    {
+      text: edited.text,
+      sourceHash: edited.hash,
+    }
+  );
+  expect(JSON.stringify(captured.promptCompilation!.messages)).toContain(edited.text);
+  expect(captureLogicalHistory(store, historical)).toEqual(historical.logicalHistory);
+  validateRunSnapshot(store, historical, second.runId);
+  store.editSource(first.id, { expectedRevision: 1, text: 'An even later user edit' });
+  expect(captureLogicalHistory(store, captured)).toEqual(captured.logicalHistory);
+  validateRunSnapshot(store, captured, third.runId);
+  const restored = new Store(join(owned.at(-1)!.path, 'restored.sqlite'));
+  try {
+    restored.product.import(store.product.export());
+    for (const source of [second, third]) {
+      const saved = store.run(source.runId).snapshot;
+      expect(restored.run(source.runId).snapshot).toEqual(saved);
+      expect(captureLogicalHistory(restored, saved)).toEqual(saved.logicalHistory);
+      validateRunSnapshot(restored, saved, source.runId);
+    }
+  } finally {
+    restored.close();
+  }
+});
 
 test('native first-message button renders, checkpoints state, and survives source refresh', async () => {
   const { store, chatId } = setup();

@@ -14,6 +14,7 @@ import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json } from '../core/transport.js';
 import {
   CONTEXT_TOOL_NAMES,
+  CONTEXT_TOOLS_CONTRACT,
   contextToolsEnabled,
   contextWindowStatus,
 } from '../core/context-tools.js';
@@ -1038,7 +1039,7 @@ describe('model-driven working summary and window switch inside one main run', (
     expect(first.stable.tools.map((tool) => tool.name)).toEqual(
       expect.arrayContaining([...CONTEXT_TOOL_NAMES, 'story.list', 'story.search', 'story.read'])
     );
-    expect(first.stable.contract).toContain('Context window tools are registered');
+    expect(first.stable.contract).toContain(CONTEXT_TOOLS_CONTRACT);
     expect(first.stable.contract).toContain(CONTEXT_SUMMARY_SEMANTICS);
     expect(first.stable.contract).toContain(CONTEXT_RETRIEVAL_GUIDANCE);
     expect(first.input.source.contextWindow).toMatchObject({
@@ -1201,7 +1202,7 @@ describe('model-driven working summary and window switch inside one main run', (
     expect(built.stable.tools.some((tool) => CONTEXT_TOOL_NAMES.includes(tool.name as never))).toBe(
       false
     );
-    expect(built.stable.contract).not.toContain('Context window tools');
+    expect(built.stable.contract).not.toContain(CONTEXT_TOOLS_CONTRACT);
     expect(built.input.source).not.toHaveProperty('contextWindow');
     const evaluated = await snapshot();
     evaluated.profile!.models.main!.evaluationTools = {

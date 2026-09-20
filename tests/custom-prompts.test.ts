@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import { translationInput } from '../core/auxiliary.js';
 import { defaultProfile, type PromptPreset, type ProviderProtocol } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
+import { TRANSLATION_FORMAT_INSTRUCTION } from '../core/provider-format.js';
 import { buildMainInput } from '../core/provider.js';
 import {
   executeProvider,
@@ -266,7 +267,7 @@ describe('custom prompt native request/response through actual loopback HTTP, no
         expect(combined).not.toContain(DEFAULT_TRANSLATION_PROMPT);
         if (role === 'translation') {
           expect(combined).not.toMatch(/Korean|사십 년/);
-          expect(combined).toContain('complete translated text only');
+          expect(combined).toContain(TRANSLATION_FORMAT_INSTRUCTION);
           expect(combined).not.toContain('[[p_...]]');
           expect(combined).not.toContain('segments.text');
         }

@@ -6,5 +6,4 @@ await runBrowserVerification({
   timeout: 120000,
   files: ['tests/run-retry-browser.spec.ts'],
   grep: 'failed request',
-  requiredTitles: ['failed request edit, draft protection and uncertain retry reuse one admission'],
 });

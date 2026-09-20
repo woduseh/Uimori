@@ -98,10 +98,9 @@ async function openDetails(page: Page, testId: string) {
   return profileInfo(page);
 }
 
-test('P01 packages use latest settings and prompt-owned creative choices replace prior values', async ({
-  page,
-  request,
-}) => {
+test('P01 packages use latest settings and prompt-owned creative choices replace prior values', {
+  tag: '@smoke',
+}, async ({ page, request }) => {
   const unique = `P01-${Date.now()}`;
   const chat = await createChat(page, `합성 ${unique}`);
   const owner = { id: chat.botId, revision: 1, role: 'bot' };

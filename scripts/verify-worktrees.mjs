@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 import { mkdir, copyFile, readdir, realpath } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { chromium, expect } from '@playwright/test';
-import { postFixtureChat } from '../tests/fixtures/chat.ts';
 import {
   artifactRoot,
   newId,
@@ -29,10 +28,24 @@ async function parallel(operations) {
   if (failure) throw failure.reason;
 }
 export async function prepareWorktreeChat(request, title) {
-  const response = await postFixtureChat(request, { data: { title } });
+  const created = await request.post('/api/content', {
+    data: {
+      kind: 'bot',
+      title: 'Synthetic worktree owner',
+      description: 'Synthetic isolation test data',
+      text: 'A synthetic character for the isolated worktree scene.',
+      loading: 'pinned',
+      relatedIds: [],
+    },
+  });
+  if (!created.ok()) throw new Error(`Worktree fixture bot HTTP ${created.status()}`);
+  const bot = await created.json();
+  if (typeof bot.id !== 'string' || !bot.id)
+    throw new Error('Invalid worktree fixture bot identity');
+  const response = await request.post('/api/chats', { data: { title, botId: bot.id } });
   if (!response.ok()) throw new Error(`Worktree fixture chat HTTP ${response.status()}`);
   const chat = await response.json();
-  if (typeof chat.id !== 'string' || !chat.id || chat.title !== title)
+  if (typeof chat.id !== 'string' || !chat.id || chat.title !== title || chat.botId !== bot.id)
     throw new Error('Invalid worktree fixture chat identity');
   return chat;
 }

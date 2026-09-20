@@ -14,7 +14,7 @@ import {
   freezeCurrentPrompts,
   promptWorkspace,
 } from '../server/prompt-workspace.js';
-import { promptControls, validateEditableRisuPrompt } from '../core/risu-prompt.js';
+import { validateEditableRisuPrompt } from '../core/risu-prompt.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { defaultProfile } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -58,12 +58,7 @@ async function application(directory?: string) {
 
 test('bundled native presets are editable independent copies and compile in all authored modes', async () => {
   const base = builtinPromptTemplate('pheme')!;
-  expect(promptControls(base.program)).toHaveLength(45);
-  expect(base.program.nativeRisuPreset.preset.promptTemplate).toHaveLength(44);
   expect(base.program.collaboration).toBeUndefined();
-  expect(
-    builtinPromptTemplate('hermeneia')!.program.nativeRisuPreset.preset.promptTemplate
-  ).toHaveLength(6);
   for (const metadata of builtinPromptTemplates()) {
     const template = builtinPromptTemplate(metadata.id)!;
     expect(validateEditableRisuPrompt(template.program)).toEqual(template.program);

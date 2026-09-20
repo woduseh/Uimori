@@ -93,7 +93,6 @@ async function run(options: Record<string, unknown> = {}) {
   const result = await runBrowserVerification({
     name: 'harness-selftest',
     scope: 'Synthetic harness fault injection only',
-    requiredCases: ['CASE01'],
     ...options,
   });
   directories.add(result.directory);
@@ -247,21 +246,13 @@ test.each(['command', 'timeout', 'source', 'tests'])(
   }
 );
 
-test('functional mode records separate verification identity and does not require design PNGs', async () => {
+test('functional mode records separate verification identity', async () => {
   lib.fingerprint.mockResolvedValue({ hash: 'test-only-change' });
-  const { summary } = await run({ requiredScreenshots: ['design-only.png'] });
+  const { summary } = await run();
   expect(summary.status).toBe('PASS');
   expect(summary.visualReview).toBe(false);
-  expect(summary.requiredScreenshots).toEqual([]);
   expect(summary.identity.sourceHash).toBe(identity.sourceHash);
   expect(summary.verificationIdentity.hash).toBe('test-only-change');
-});
-
-test('missing required IDs cannot be satisfied by a longer ID with the same prefix', async () => {
-  report = browserReport({ title: 'CASE010 unrelated scenario' });
-  const { summary } = await run();
-  expect(summary.status).toBe('FAIL');
-  expect(summary.failures).toContain('Missing CASE01 evidence');
 });
 
 test('focused visual checks narrow the existing selection and record their actual scope', async () => {
@@ -269,9 +260,6 @@ test('focused visual checks narrow the existing selection and record their actua
   const { summary } = await run({
     files: ['tests/fixture-browser.spec.ts'],
     grep: 'CASE01|CASE02',
-    requiredCases: ['CASE01', 'CASE02'],
-    requiredTitles: ['an unselected assertion'],
-    requiredScreenshots: ['an-unselected-screen.png'],
   });
   expect(summary.status).toBe('PASS');
   expect(summary.selection).toMatchObject({
@@ -282,8 +270,7 @@ test('focused visual checks narrow the existing selection and record their actua
   expect(filter.test('fixture CASE01 selected scenario')).toBe(true);
   expect(filter.test('fixture CASE02 unselected scenario')).toBe(false);
   expect(filter.test('fixture OTHER unselected scenario')).toBe(false);
-  expect(summary.requiredCases).toEqual([]);
-  expect(summary.requiredScreenshots).toEqual([]);
+  expect(summary.screenshots).toEqual([]);
   expect(summary.visualReview).toBe(true);
   expect(lib.command).toHaveBeenCalledWith(
     expect.arrayContaining(['--grep', summary.selection.grep]),
@@ -332,42 +319,42 @@ test('missing browser records BLOCKED before any server or test launch', async (
   expect(lib.command).not.toHaveBeenCalled();
 });
 
-test.each(['missing', 'invalid-signature', 'truncated', 'valid'])(
-  'required PNG evidence is checked on disk: %s',
-  async (scenario) => {
-    vi.stubEnv('UIMORI_VISUAL_REVIEW', '1');
-    const originalCommand = lib.command.getMockImplementation();
-    const relativeScreenshot = path.join('browser', 'nested-output', 'required.png');
-    lib.command.mockImplementation(
-      async (args: string[], options: { env: Record<string, string> }) => {
-        if (scenario !== 'missing') {
-          const directory = path.join(options.env.UIMORI_BROWSER_OUTPUT!, 'nested-output');
-          await mkdir(directory, { recursive: true });
-          const valid = Buffer.from(
-            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9n8AAAAASUVORK5CYII=',
-            'base64'
-          );
-          const bytes = scenario === 'truncated' ? valid.subarray(0, 16) : Buffer.from(valid);
-          if (scenario === 'invalid-signature') bytes[0] = 0;
-          await writeFile(path.join(directory, 'required.png'), bytes);
-        }
-        return originalCommand(args, options);
-      }
-    );
-    const { directory, summary } = await run({ requiredScreenshots: ['required.png'] });
-    expect(summary.report.passed).toBe(1);
-    expect(summary.cleanup.status).toBe('PASS');
-    if (scenario === 'valid') {
-      expect(summary.status).toBe('PASS');
-      expect(summary.screenshots).toContain(relativeScreenshot);
-      expect(existsSync(path.join(directory, relativeScreenshot))).toBe(true);
-    } else {
-      expect(summary.status).toBe('FAIL');
-      expect(summary.failures).toContain(
-        `${scenario === 'missing' ? 'Missing' : 'Invalid'} screenshot: required.png`
+test('visual mode records captured screenshots without a second filename manifest', async () => {
+  vi.stubEnv('UIMORI_VISUAL_REVIEW', '1');
+  const originalCommand = lib.command.getMockImplementation();
+  const relativeScreenshot = path.join('browser', 'nested-output', 'required.png');
+  lib.command.mockImplementation(
+    async (args: string[], options: { env: Record<string, string> }) => {
+      const directory = path.join(options.env.UIMORI_BROWSER_OUTPUT!, 'nested-output');
+      await mkdir(directory, { recursive: true });
+      const valid = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9n8AAAAASUVORK5CYII=',
+        'base64'
       );
-      expect(process.exitCode).toBe(1);
+      await writeFile(path.join(directory, 'required.png'), valid);
+      return originalCommand(args, options);
     }
+  );
+  const { directory, summary } = await run();
+  expect(summary.report.passed).toBe(1);
+  expect(summary.cleanup.status).toBe('PASS');
+  expect(summary.status).toBe('PASS');
+  expect(summary.screenshots).toContain(relativeScreenshot);
+  expect(existsSync(path.join(directory, relativeScreenshot))).toBe(true);
+});
+
+test.each([false, true])(
+  'private sample discovery follows the runner opt-in: %s',
+  async (privateMaterials) => {
+    vi.stubEnv('UIMORI_PRIVATE_MATERIALS', '1');
+    const { summary } = await run({ privateMaterials });
+    expect(summary.status).toBe('PASS');
+    expect(lib.command).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({ UIMORI_PRIVATE_MATERIALS: privateMaterials ? '1' : '0' }),
+      })
+    );
   }
 );
 

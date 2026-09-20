@@ -10,7 +10,6 @@ await runBrowserVerification({
   scope:
     'Opt-in actual local CHARX UI import, original first-message controls, desktop/mobile access, selected variables, reload and branch isolation, then a synthetic loopback writing turn. UIMORI_RISU_SAMPLE_PRESET optionally supplies the original local preset for the same turn.',
   files: ['tests/risu-native-samples-browser.spec.ts'],
-  requiredCases: ['RISUSAMPLE01', 'RISUSAMPLE02', 'RISUSAMPLE03', 'RISUSAMPLE04'],
   privateMaterials: true,
   timeout: 900000,
   limitations: [

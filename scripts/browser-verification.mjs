@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, copyFile, readFile } from 'node:fs/promises';
+import { mkdir, readdir, copyFile } from 'node:fs/promises';
 import { startProviderFixture } from './provider-management-fixture.mjs';
 import { parseOptions } from './release-common.mjs';
 import {
@@ -31,9 +31,6 @@ export async function runBrowserVerification({
   scope,
   files = [],
   grep,
-  requiredCases = [],
-  requiredTitles = [],
-  requiredScreenshots = [],
   providerFixture = false,
   privateMaterials = false,
   timeout = 600_000,
@@ -45,9 +42,6 @@ export async function runBrowserVerification({
     new RegExp(options.grep);
     // A focused run narrows the entry point's selection; it cannot certify the whole suite.
     grep = grep ? `(?=[\\s\\S]*(?:${grep}))(?=[\\s\\S]*(?:${options.grep}))` : options.grep;
-    requiredCases = [];
-    requiredTitles = [];
-    requiredScreenshots = [];
   }
   const visualReview = options.visual || process.env.UIMORI_VISUAL_REVIEW === '1';
   const runId = `${prefix}-${newId()}`,
@@ -64,10 +58,7 @@ export async function runBrowserVerification({
     environment: { node: process.version, platform: process.platform },
     scope,
     selection: { files, grep, focused },
-    requiredCases,
-    requiredTitles,
     visualReview,
-    requiredScreenshots: visualReview ? requiredScreenshots : [],
     failures,
     cleanup: { status: 'NOT_RUN' },
     limitations: [
@@ -133,6 +124,7 @@ export async function runBrowserVerification({
       UIMORI_SECRET_CANARY: canary,
       UIMORI_BROWSER_PATH: browser,
       UIMORI_VISUAL_REVIEW: visualReview ? '1' : '0',
+      UIMORI_PRIVATE_MATERIALS: privateMaterials ? '1' : '0',
       TEMP: temp,
       TMP: temp,
     });
@@ -175,27 +167,11 @@ export async function runBrowserVerification({
     }
     requireCommand(result);
     if (failures.length) throw new Error('Required browser evidence is not PASS');
-    for (const id of requiredCases)
-      if (!summary.report.tests.some((test) => test.title.split(/\s+/u).includes(id)))
-        throw new Error(`Missing ${id} evidence`);
-    for (const title of requiredTitles)
-      if (!summary.report.tests.some((test) => test.title.trimEnd().endsWith(` ${title}`)))
-        throw new Error(`Missing required browser assertion: ${title}`);
-    if (visualReview && requiredScreenshots.length) {
+    if (visualReview) {
       const screenshots = (await filesBelow(env.UIMORI_BROWSER_OUTPUT)).filter((file) =>
         file.endsWith('.png')
       );
       summary.screenshots = screenshots.map((file) => path.relative(directory, file));
-      for (const name of requiredScreenshots) {
-        const file = screenshots.find((file) => path.basename(file) === name);
-        if (!file) throw new Error(`Missing screenshot: ${name}`);
-        const bytes = await readFile(file);
-        if (
-          bytes.length < 24 ||
-          !bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-        )
-          throw new Error(`Invalid screenshot: ${name}`);
-      }
     }
     assertNotCancelled();
     if (

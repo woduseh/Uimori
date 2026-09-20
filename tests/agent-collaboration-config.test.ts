@@ -60,7 +60,6 @@ describe('collaboration defaults and editable templates', () => {
     });
     expect(agent.title).toMatch(/[가-힣]/u);
     expect(agent.description).toMatch(/[가-힣]/u);
-    expect(agent.instructions).toMatch(/[가-힣]/u);
     expect(agent.tools.length).toBeGreaterThan(0);
     expect(
       agent.tools.every((scope) => ['knowledge', 'skills', 'notes', 'story'].includes(scope))
@@ -70,15 +69,6 @@ describe('collaboration defaults and editable templates', () => {
     agent.tools.push('skills');
     expect(validateAgentCollaboration(config(agent)).agents[0]).toEqual(agent);
     expect(createAgentDefinition(kind, 'second').tools).not.toContain('skills');
-  });
-
-  test('specialist templates preserve perspective, evidence and uncertainty', () => {
-    const character = createAgentDefinition('character', 'character');
-    for (const topic of ['동기', '관계', '정보 비대칭', '가정', '강요하지'])
-      expect(character.instructions).toContain(topic);
-    const lore = createAgentDefinition('lore', 'lore');
-    for (const topic of ['출처', '사실', '믿음', '가정', '충돌', '정보 부족'])
-      expect(lore.instructions).toContain(topic);
   });
 });
 

@@ -23,6 +23,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | --- | --- |
 | `npm run verify:smoke` | M0 F02/F03/F06: environment, build, server identity, generation/conflicts/reconnection, runner selftest, and cleanup. |
 | `npm run verify:browser-smoke` | Small browser suite for chat and global prompt settings. |
+| `npm run verify:ui` | Reader layout, editing and reading preferences; accepts `--grep` and `--visual`. Renderer unit tests run separately with `npm test -- tests/prose.test.ts`. |
 | Feature-specific `verify:*` scripts | Suites such as `verify:packages`, `verify:providers`, `verify:library`, and `verify:navigation`; see [package scripts](../package.json). |
 | `npm run verify:redesign` | Full local synthetic browser regression. |
 | `npm run verify:selfhost` | Local synthetic HTTPS proxy, session, and reconnection checks using Chromium. |
@@ -38,7 +39,7 @@ npm run verify:providers -- --grep PMUI03
 npm run verify:providers -- --grep PMUI03 --visual
 ```
 
-A focused report records the selected files and filter. It requires at least one executed test, but does not claim the full suite's coverage or require screenshots from unselected cases.
+A report records the selected files, filter and executed tests. A run with no tests, failed or skipped tests, or incomplete cleanup fails. Visual runs also list the screenshots they captured; filenames and test titles are not duplicated in a separate acceptance list.
 
 For a specific milestone or case:
 

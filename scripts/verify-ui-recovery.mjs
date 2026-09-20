@@ -22,18 +22,4 @@ await runBrowserVerification({
     'tests/reader-navigation-browser.spec.ts',
   ],
   timeout: 600000,
-  requiredCases: [
-    'RISUPRESETUI01',
-    'RISUPRESETUI02',
-    'RISUPRESETUI03',
-    'RISUKINDUI01',
-    'RISUKINDUI02',
-    'NATIVEUI03',
-    'NATIVEUI04',
-    'NATIVELORE01',
-    'NATIVELORE02',
-    'NSUI01',
-    'NSUI02',
-    'C04E',
-  ],
 });

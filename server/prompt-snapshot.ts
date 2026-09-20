@@ -25,8 +25,13 @@ import { projectedLogicalHistory } from '../core/context-projection.js';
 import { nativeRisuPresetPending, projectNativeRisuPresetProgram } from './risu-native-preset.js';
 
 /** Pair each exact source version with its actual user request; never infer roles from prose. */
-export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): PromptHistoryMessage[] {
+export function captureLogicalHistory(
+  store: Store,
+  snapshot: RunSnapshot,
+  options: { legacyNativeOutputReplay?: boolean } = {}
+): PromptHistoryMessage[] {
   const entries = snapshot.history;
+  const sourceMessages = new Set<string>();
   return entries.reduce<PromptHistoryMessage[]>((accumulated, entry) => {
     const source = entry.contentHash
       ? store.sourceAtHash(entry.revision, entry.contentHash)
@@ -45,13 +50,38 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
     const owner = store.run(source.runId).snapshot;
     const native = owner.nativeRisuAuthored;
     const output = owner.nativeRisuExecution?.output;
+    if (native)
+      native.messages.forEach((message, index) => {
+        if (message.role === 'char') sourceMessages.add(`native:${entry.revision}:${index}`);
+      });
+    else sourceMessages.add(`source:${entry.revision}`);
     if (output) {
       const prior = new Map(accumulated.map((message) => [message.id, message]));
+      const capturedHashes = new Map(
+        owner.history.map((item) => [
+          item.revision,
+          item.contentHash ?? store.sourceOriginal(item.revision).hash,
+        ])
+      );
+      const capturedMessages = new Map(
+        owner.logicalHistory?.map((message) => [message.id, message.text]) ??
+          owner.nativeRisuExecution!.messages.map((message) => [message.id, message.data])
+      );
       return [
         ...accumulated.filter((message) => message.sourceKind === 'authored-start'),
         ...output.messages.map((message, index) => {
           const existing = message.id ? prior.get(message.id) : undefined;
           const current = message.id === 'current-output';
+          // Only source text is edited by the user; requests and script-added messages
+          // keep their own Lua changes. Unchanged receipt input is a carried-forward
+          // value, which must not resurrect text already corrected earlier in this fold.
+          const preserveSource =
+            !options.legacyNativeOutputReplay &&
+            existing?.sourceRevision !== undefined &&
+            sourceMessages.has(existing.id) &&
+            ((capturedHashes.has(existing.sourceRevision) &&
+              capturedHashes.get(existing.sourceRevision) !== existing.sourceHash) ||
+              capturedMessages.get(message.id) === message.data);
           return {
             ...(existing ?? provenance),
             id:
@@ -62,7 +92,7 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
                   ? `request:${entry.revision}`
                   : `native:${entry.revision}:${index}`),
             role: message.role === 'user' ? ('user' as const) : ('assistant' as const),
-            text: current ? entry.text : message.data,
+            text: current ? entry.text : preserveSource ? existing!.text : message.data,
           };
         }),
       ];
