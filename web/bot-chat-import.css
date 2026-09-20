@@ -1,0 +1,72 @@
+.app-dialog.bot-chat-import-dialog {
+  width: min(620px, calc(100vw - 32px));
+}
+.chat-import-target {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-block: 4px 24px;
+}
+.chat-import-target .content-avatar {
+  width: 40px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.chat-import-target > div,
+.chat-import-choices button span,
+.chat-import-review {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.chat-import-target small,
+.chat-import-choices small,
+.chat-import-review small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.chat-import-choices > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.chat-import-choices button span {
+  flex: 1;
+}
+.chat-import-choices svg {
+  flex: 0 0 auto;
+}
+.chat-import-choices > p {
+  font-size: 12px;
+  margin-block: 20px;
+}
+.chat-import-back {
+  margin-bottom: 20px;
+}
+.chat-transcript-import {
+  display: grid;
+  gap: 20px;
+}
+.chat-transcript-import input {
+  width: 100%;
+  min-width: 0;
+}
+.chat-import-review {
+  padding: 16px;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+.chat-import-review button {
+  justify-self: end;
+}

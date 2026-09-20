@@ -12,11 +12,12 @@ import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
 import './library.css';
 import './settings-actions.css';
 
-export type ProfileSection = 'characters' | 'prompts' | 'models';
+export type ProfileSection = 'characters' | 'prompts' | 'models' | 'story' | 'images';
 const sections: { id: ProfileSection; title: string }[] = [
-  { id: 'characters', title: '봇·페르소나·모듈' },
-  { id: 'prompts', title: '프롬프트·창작 프리셋' },
-  { id: 'models', title: '모델' },
+  { id: 'characters', title: '대화 구성' },
+  { id: 'prompts', title: '프롬프트·모델' },
+  { id: 'story', title: '기억·로어' },
+  { id: 'images', title: '이미지' },
 ];
 
 export function ProfileEditor({
@@ -56,7 +57,8 @@ export function ProfileEditor({
     [loreResetVersion, setLoreResetVersion] = useState(0);
   const [saving, setSaving] = useState(false);
   const [localTab, setTab] = useState<ProfileSection>(initialTab);
-  const tab = activeTab ?? localTab;
+  const selectedTab = activeTab ?? localTab;
+  const tab = selectedTab === 'models' ? 'prompts' : selectedTab;
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   useEffect(() => {
@@ -170,6 +172,7 @@ export function ProfileEditor({
           </button>
         ))}
       </div>
+      <p className="muted">이 채팅에만 적용돼요.</p>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -194,7 +197,8 @@ export function ProfileEditor({
                 onPendingChange={setAttachmentPending}
               />
             </div>
-            <div hidden={tab !== 'characters'}>
+            <div hidden={tab !== 'images'} className="chat-profile-image-options">
+              <h3>등록된 이미지 자동 배치</h3>
               <label className="check">
                 <Switch
                   aria-label="원문 이미지 자동 배치"
@@ -218,7 +222,7 @@ export function ProfileEditor({
                 메뉴에서 직접 실행할 수 있어요.
               </small>
             </div>
-            <div hidden={tab !== 'characters'}>
+            <div hidden={tab !== 'story'}>
               <LoreContextPolicyEditor
                 key={`${profile.chatId}:${loreResetVersion}`}
                 value={value.loreContext}
@@ -231,7 +235,49 @@ export function ProfileEditor({
                 reset={loreContextReset}
               />
             </div>
-            <div hidden={tab !== 'prompts'}>
+            <div hidden={tab !== 'prompts'} className="chat-profile-model-options">
+              <label>
+                이 채팅의 본문 모델
+                <select
+                  value={modelId ?? ''}
+                  onChange={(event) =>
+                    change({
+                      ...value,
+                      pinned: {
+                        ...value.pinned,
+                        mainModel: event.target.value ? { id: event.target.value } : undefined,
+                      },
+                    })
+                  }
+                >
+                  <option value="">
+                    전역 따르기 ·{' '}
+                    {library.models.find((item) => item.id === workspace?.modelRoutes.main?.id)
+                      ?.title ?? '미지정 또는 확인 필요'}
+                  </option>
+                  {modelId && !modelChoices.some((item) => item.id === modelId) && (
+                    <option value={modelId}>사용 불가 · {selectedModel?.title ?? modelId}</option>
+                  )}
+                  {modelChoices.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {modelLabel(item, library)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {!modelAvailable && workspace && (
+                <p className="error" role="alert">
+                  {!selectedModelId
+                    ? '본문 모델이 지정되지 않았어요. 저장된 원고는 읽을 수 있지만 새 생성은 시작할 수 없어요.'
+                    : '선택한 본문 모델을 사용할 수 없어 새 본문 실행이 차단돼요. 사용 가능한 모델을 고르거나 전체 설정을 확인해 주세요.'}
+                </p>
+              )}
+              <small>
+                본문 모델의 최신 저장본을 다음 요청부터 사용해요. 진행 중이거나 과거의 작업은 바뀌지
+                않아요.
+              </small>
+            </div>
+            <div hidden={tab !== 'prompts'} className="chat-profile-prompt-options">
               <label>
                 이 채팅의 작문 프롬프트
                 <select
@@ -267,90 +313,54 @@ export function ProfileEditor({
                 고정한 프리셋의 최신 저장본을 다음 요청부터 사용해요. 과거와 진행 중인 작업은 바뀌지
                 않아요. 창작 옵션은 선택한 프롬프트의 정의를 따라요.
               </small>
-              <div className="settings-inherited">
-                <h4>이 채팅이 따르는 전역 설정</h4>
-                <dl>
-                  <div>
-                    <dt>번역</dt>
-                    <dd>{workspace?.translation.title ?? '불러오는 중…'}</dd>
-                  </div>
-                </dl>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => onGlobalSettings('prompts')}
-                >
-                  <SettingsIcon size={18} aria-hidden="true" />
-                  전역 프롬프트 설정
-                </button>
-              </div>
             </div>
-            <div hidden={tab !== 'models'}>
-              <label>
-                이 채팅의 본문 모델
-                <select
-                  value={modelId ?? ''}
-                  onChange={(event) =>
-                    change({
-                      ...value,
-                      pinned: {
-                        ...value.pinned,
-                        mainModel: event.target.value ? { id: event.target.value } : undefined,
-                      },
-                    })
-                  }
-                >
-                  <option value="">
-                    전역 따르기 ·{' '}
-                    {library.models.find((item) => item.id === workspace?.modelRoutes.main?.id)
-                      ?.title ?? '미지정 또는 확인 필요'}
-                  </option>
-                  {modelId && !modelChoices.some((item) => item.id === modelId) && (
-                    <option value={modelId}>사용 불가 · {selectedModel?.title ?? modelId}</option>
-                  )}
-                  {modelChoices.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {modelLabel(item, library)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {!modelAvailable && workspace && (
-                <p className="error" role="alert">
-                  {modelId ? '고정한 본문 모델' : '전역 본문 모델'}을 사용할 수 없어 새 본문 실행이
-                  차단돼요. 사용 가능한 모델을 고르거나 전역 설정을 확인해 주세요.
-                </p>
-              )}
-              <small>
-                본문 모델의 최신 저장본을 다음 요청부터 사용해요. 진행 중이거나 과거의 작업은 바뀌지
-                않아요.
-              </small>
-              <div className="settings-inherited">
-                <h4>이 채팅이 따르는 전역 설정</h4>
-                <dl>
-                  {(['translation', 'status'] as const).map((role, index) => (
-                    <div key={role}>
-                      <dt>{['번역', '장면 해설'][index]}</dt>
-                      <dd>
-                        {library.models.find((item) => item.id === workspace?.modelRoutes[role]?.id)
-                          ?.title ?? '미지정 또는 확인 필요'}
-                      </dd>
-                    </div>
-                  ))}
-                  <div>
-                    <dt>로어·번역 거절·이미지 배치 판단</dt>
-                    <dd>JEV</dd>
+            <div hidden={tab !== 'prompts'} className="settings-inherited">
+              <h4>전체 채팅 설정에서 사용하는 모델</h4>
+              <dl>
+                {(['translation', 'status'] as const).map((role, index) => (
+                  <div key={role}>
+                    <dt>{['번역', '장면 해설'][index]}</dt>
+                    <dd>
+                      {library.models.find((item) => item.id === workspace?.modelRoutes[role]?.id)
+                        ?.title ??
+                        (workspace
+                          ? workspace.modelRoutes[role]?.id
+                            ? '사용 불가 · 등록된 모델을 찾을 수 없어요'
+                            : '사용할 모델 미지정'
+                          : '불러오는 중…')}
+                    </dd>
                   </div>
-                </dl>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => onGlobalSettings('models')}
-                >
-                  <SettingsIcon size={18} aria-hidden="true" />
-                  전역 모델 설정
-                </button>
-              </div>
+                ))}
+                <div>
+                  <dt>로어·번역 거절·이미지 배치 판단</dt>
+                  <dd>JEV</dd>
+                </div>
+              </dl>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => onGlobalSettings('models')}
+              >
+                <SettingsIcon size={18} aria-hidden="true" />
+                전역 모델 설정
+              </button>
+            </div>
+            <div hidden={tab !== 'prompts'} className="settings-inherited">
+              <h4>전체 채팅 설정에서 사용하는 프롬프트</h4>
+              <dl>
+                <div>
+                  <dt>번역</dt>
+                  <dd>{workspace?.translation.title ?? '불러오는 중…'}</dd>
+                </div>
+              </dl>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => onGlobalSettings('prompts')}
+              >
+                <SettingsIcon size={18} aria-hidden="true" />
+                전역 프롬프트 설정
+              </button>
             </div>
           </fieldset>
         </div>
@@ -392,7 +402,9 @@ export function ProfileEditor({
               ? '저장 중…'
               : status || (dirty || lorePending ? '저장하지 않은 변경이 있어요.' : '')}
           </span>
-          {(dirty || lorePending) && <small>인물·자료·프롬프트·모델의 변경을 함께 저장해요.</small>}
+          {(dirty || lorePending) && (
+            <small>대화 구성·프롬프트·모델·로어 정책·자동 배치의 변경을 함께 저장해요.</small>
+          )}
           <SaveButton
             label="채팅 설정 저장"
             disabled={saving || !dirty || lorePending}

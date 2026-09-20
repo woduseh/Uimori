@@ -220,9 +220,9 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
   await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();
 
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  // Compact widths replace the bar with the header title opener and a floating latest button.
-  await expect(navigator).toHaveCount(0);
-  const opener = page.getByRole('button', { name: '장면 목록 열기', exact: true });
+  // Compact widths retain previous/current/next navigation; the header also opens the list.
+  await expect(navigator).toBeVisible();
+  const opener = navigator.getByRole('button', { name: '장면 목록 열기', exact: true });
   await expect(opener).toBeVisible();
   await opener.click();
   const choice = list.getByRole('button', { name: /^3번째 장면 · Synthetic page 3\./ });
@@ -541,7 +541,7 @@ test('LOADUI03 large library uses summaries then fetches current content on clic
   });
   expect(update.ok()).toBeTruthy();
   await editLibraryContent(page, `${first.title}`);
-  await expect(page.getByLabel('자료 본문')).toHaveValue(
+  await expect(page.getByLabel('캐릭터 설정', { exact: true })).toHaveValue(
     'Current content replaces the earlier library summary on open.'
   );
   expect(revisionRequests).toHaveLength(1);

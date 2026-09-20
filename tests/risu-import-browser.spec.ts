@@ -116,8 +116,8 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   const trigger = page.getByRole('button', { name: 'Risu 자료 가져오기', exact: true });
   await trigger.click();
   const dialog = page.getByRole('dialog', { name: 'Risu 자료 가져오기', exact: true });
-  const kind = dialog.getByRole('combobox', { name: '가져올 자료 종류', exact: true });
-  await expect(kind).toHaveValue('');
+  const initialKind = dialog.getByRole('combobox', { name: '가져올 자료 종류', exact: true });
+  await expect(initialKind).toHaveValue('');
   await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
     name: 'synthetic.charx',
     mimeType: 'application/zip',
@@ -128,30 +128,36 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   await dialog.locator('.risu-import-lore-entry > summary').click();
   await expect(dialog.getByText('The sky is green.', { exact: true })).toBeVisible();
   await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+  const revealKind = async () => {
+    const processing = dialog.locator('.risu-import-processing');
+    if ((await processing.getAttribute('open')) === null)
+      await processing.locator('summary').click();
+    return processing.getByRole('combobox', { name: '자료 종류', exact: true });
+  };
   rejectKind = true;
-  await kind.selectOption('module');
+  await (await revealKind()).selectOption('module');
   await expect(dialog.getByRole('alert')).toContainText('자료 종류는 유지했어요');
-  await expect(kind).toHaveValue('');
+  await expect(await revealKind()).toHaveValue('');
   await expect(dialog.getByText('The sky is green.', { exact: true })).toBeVisible();
   rejectKind = false;
-  await kind.selectOption('module');
-  await expect(kind).toHaveValue('module');
+  await (await revealKind()).selectOption('module');
+  await expect(await revealKind()).toHaveValue('module');
   await expect(dialog.locator('.risu-import-memory')).toHaveCount(0);
-  await kind.selectOption('bot');
-  await expect(kind).toHaveValue('bot');
+  await (await revealKind()).selectOption('bot');
+  await expect(await revealKind()).toHaveValue('bot');
   await dialog.getByText('로어 미리보기 (1개)', { exact: true }).click();
   await dialog.locator('.risu-import-lore-entry > summary').click();
   await expect(dialog.getByText('The sky is green.', { exact: true })).toBeVisible();
   await expect(dialog.getByRole('checkbox')).toHaveCount(0);
   await dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true }).click();
   await expect(dialog.getByRole('button', { name: '같은 요청으로 다시 확인' })).toBeVisible();
-  await expect(kind).toBeDisabled();
+  await expect(await revealKind()).toBeDisabled();
   await expect(dialog.getByLabel('Risu 파일 선택', { exact: true })).toBeDisabled();
   await dialog.getByRole('button', { name: 'Risu 자료 가져오기 닫기', exact: true }).click();
   await page.getByTestId('library-panel').getByRole('tab', { name: '모듈', exact: true }).click();
   await trigger.click();
-  await expect(kind).toHaveValue('bot');
-  await expect(kind).toBeDisabled();
+  await expect(await revealKind()).toHaveValue('bot');
+  await expect(await revealKind()).toBeDisabled();
   await dialog.getByRole('button', { name: '같은 요청으로 다시 확인' }).click();
   await expect(dialog).not.toBeVisible();
   expect(submissions).toHaveLength(2);

@@ -55,7 +55,8 @@ test('UXUI01 compact composer and mobile settings details preserve the draft', a
   await selectSettingsSection(page, '데이터 관리');
   await expect(nav).toBeHidden();
   await expect(dialog.getByRole('button', { name: '설정 목록으로', exact: true })).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: '백업 받기', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: '백업', exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('가져올 JSON 파일', { exact: true })).toBeHidden();
   await expect(dialog.getByText(/SQLite 백업은 서버를 종료하고/)).toBeHidden();
   if (visualReview) await page.screenshot({ path: info.outputPath('compact-settings-360.png') });
   const after = await (await request.get(`/api/chats/${chat.id}`)).json();

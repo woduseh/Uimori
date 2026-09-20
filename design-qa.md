@@ -231,3 +231,61 @@ Findings fixed during implementation:
 No actionable P0/P1/P2 remains in this implementation scope. This is focused local browser and source-unit evidence, not a new full-suite, live-provider, physical-phone, or IME acceptance claim. Original external Risu files were not edited. Remaining aesthetic adjustments can be evaluated on the working screen.
 
 final result: passed
+
+## Follow-up: recovery design expanded to remaining screens
+
+The requested recovery folder resolves locally to `C:/Users/wodus/Downloads/Uimori_UI_Recovery_v3`. Its 36 HTML/image references were used alongside the later approved centered editor density and toggle-editor-v2 design. The source's full-width/left-aligned forms and broken three-column mobile library were not reintroduced. Existing Risu-native data, retired-option removal, captions and switches remain authoritative.
+
+### Implemented scope
+
+- Library and prompt import entry points, compact import review/success, and the native bot's desktop side navigation/mobile horizontal advanced navigation.
+- Chat settings grouped into conversation contents, prompt/model, memory/lore, images, automatic work and card variables. Shared profile drafts remain mounted across sections. Variable strings support rows/search/origin/reset and JSON, with invalid draft and conflict retention.
+- Mobile previous/current/next scene navigation, using the existing source IDs and reading-position behavior.
+- General/reading settings, grouped data management, actual Codex connection status and steps, and app/build/license information from repository notices.
+- Collapsible collaboration agents, a searchable shared-option picker, and a compact helper-session toolbar. Mock-only helper lore proposals were not added.
+- Validated save-and-leave and bot-scoped transcript/backup import. Transcript confirmation chooses the bot; backups retain their original owner. Uncertain import results retain the same request key.
+
+### Matched visual review and intentional differences
+
+References and implementation were rendered at **2560 × 1440** and **412 × 915**, DPR 1. Main paired screenshots are in `output/ui-recovery-preview/expansion-captures/`: `source-*`/`app-*` for 01, 11–17, 20–23, 30, 35–36; `source-*`/`actual-*` for 06, 07, 33; and `settings-source-*`/`settings-actual-*` for 25, 26, 28, 29. The existing opening, scene-list and source-edit flows were also exercised by the recovery suite. Capture flows perform no provider requests or external file edits. The stable preview uses its existing isolated database and literal `ui-recovery-review` server ID; the verification runners separately validate fresh source/build identity.
+
+Source/implementation pairs were opened together. Full desktop views established composition, while 412 px captures and focused import/control views made typography, spacing, controls and text wrapping readable. Final captures wait for the Risu message frame rather than accepting its loading placeholder.
+
+| Required fidelity surface | Review result |
+| --- | --- |
+| Fonts and typography | Existing Uimori typography and monospace code/keys retained. Labels, multiline names and long variable keys wrap within their columns. |
+| Spacing and layout | Centered bounded desktop workspaces; full-width mobile forms, compact variable rows and clear disclosure hierarchy. Existing mobile settings list/detail navigation is retained. |
+| Colors and tokens | Existing semantic surface, line, text and muted-green accent tokens used; no new palette. Light settings states are covered by SCUI04 in addition to dark preview comparisons. |
+| Images and assets | Existing card images and Lucide icons reused; no generated artwork or replacement brand assets. Actual sample data differs from the prototype. |
+| Copy and content | Current product capabilities and native ownership are retained. Real connection states, actual build IDs and license documents replace mock status. Advanced raw HTML/Lua remains editable without introducing prototype-only preview features. |
+
+The source's sample bot/variables/agent rows are not identical to the installed materials. The option picker remains a real dialog, and image management is a disclosure around the existing form rather than a new route. These are intentional product constraints. The accepted editor workspace and narrower forms remain centered even where the original recovery mock was left-aligned.
+
+### Findings fixed
+
+- **P1:** changing a malformed variable JSON draft into valid JSON closed the editor. Raw-edit mode now remains explicit.
+- **P1:** backup result loss could discard its request identity when the import dialog closed. Pending/uncertain imports now keep the dialog and selection until the same request resolves.
+- **P1:** save-and-leave could leave other cached role drafts unsaved. It now refuses that navigation and identifies the remaining drafts before saving.
+- **P1:** data import completion/failure removed the disclosure's controlled `open` attribute and hid its result. Native disclosure state now survives both outcomes.
+- **P2:** mobile variable rows and the owner-bot block were excessively tall. Keys/origins, fields and reset icons now share compact rows; avatar/title/lore count share a line.
+- **P2:** agent templates and image-upload fields displaced primary settings. Both now open on demand without unmounting drafts.
+- **P2:** native advanced textareas used their intrinsic width and editor diagnostics sat outside the centered form. Scoped widths now fill the available form and align the footer.
+- **P2:** full restore forms and empty Codex action rows consumed unnecessary space. Restore starts collapsed; empty actions do not occupy a row.
+- **P2:** a shared `align-self: flex-end` rule offset the restore file-clear button. A scoped override reduced the measured center difference from 3.195 px to 0.0078 px, retaining the existing 1 px check.
+
+Final screenshots after these fixes were compared again; no actionable P0/P1/P2 remains in the reviewed visual scope.
+
+### Verification and limits
+
+- `npm run quality`: 850 files and TypeScript passed. Six focused unit suites passed **60 tests**, covering variables, transcript/backup and collaboration contracts.
+- `verify:ui-recovery -- --visual`: **67 passed** on build `9744584e3209a4e41201016510d81f8c2b756c08ea4bae0024bf9c6c2f7bd4db`; receipt `output/playwright/ui-recovery-2026-09-20T05-05-20-006Z-1b3e491d/summary.json`. This includes native authoring/downloads, captions/switches, import ownership/retry, shared drafts, JSON recovery, scene navigation and save-and-leave. Mobile editor leave uses the actual list-back path; the desktop-only global sidebar path is not claimed as mobile coverage.
+- The last product change after that run is only the archive file-clear selector. Final build: `output/build/build-2026-09-20T05-10-01-254Z-03c81ca0/summary.json`, build ID `5e48c9b8ede86c8dd07a23cb82624fdad10318d3d393269d5e496799123aefd8`.
+- Expanded regression first exposed both genuine issues above and outdated navigation/native fixtures. The corrected broad selection passed 47 cases, with 4 unresolved cases retained in its FAIL receipt. A subsequent focused run passed ACOM01, two SICON01 cases, SCUI04 and RACOM01 (5 cases), including the final archive alignment. It still reported P01's old numeric/string DOM expectation; its final follow-up result is recorded below. Failed receipts are not presented as successful runs.
+- A separately discovered **pre-existing failure**, TURNUI05, still expects the removed `hasPackageIssues` legacy projection. Baseline `f110109` already lacks that contract. The test/source was not changed and legacy execution was not restored; the focused final selection excludes it explicitly. This does not establish a clean full regression suite or native issue-badge coverage.
+- The main final source/implementation capture flow passed at both requested sizes with zero page errors/overflow; settings passed two capture flows; collaboration/helper paired review passed. Synthetic fixtures created for ad hoc preview checks were moved through the normal reversible trash API, preserving the four sample materials and every chat.
+
+This is local browser, source-unit and visual evidence. It does not establish live-provider, physical-phone/IME or production acceptance. No external Risu source file, push or deployment was performed.
+
+Final functional follow-up: **P01 passed 1/1** with the correct JSON-encoded select expectation. Receipt `output/playwright/redesign-2026-09-20T05-12-24-388Z-ba2af20a/summary.json` matches final build/source `5e48c9b8ede86c8dd07a23cb82624fdad10318d3d393269d5e496799123aefd8`; cleanup passed. Combined relevant results cover all 51 cases in the corrected focused regression selection, while the separate pre-existing TURNUI05 failure remains disclosed above. The follow-up changed tests only.
+
+final result: passed

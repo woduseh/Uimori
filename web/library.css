@@ -353,7 +353,7 @@
 }
 
 .app-dialog.library-discard-dialog {
-  width: min(440px, calc(100vw - 32px));
+  width: min(620px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
   height: fit-content;
   max-height: calc(100dvh - 32px);
@@ -1107,7 +1107,12 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 16px;
+}
+.prompt-library-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: auto;
 }
 
 .library-folder-section {

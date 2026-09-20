@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatVariableState } from '../core/chat-variables.js';
 import { api, ApiError } from './api.js';
+import { ResetIcon } from './ui-icons.js';
+import './chat-variables.css';
 
 type VariableView = ChatVariableState & {
   defaults: Record<string, string>;
@@ -97,6 +99,9 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [raw, setRaw] = useState(false);
+  const [query, setQuery] = useState('');
+  const [newKey, setNewKey] = useState('');
   const alive = useRef(true);
   const readEpoch = useRef(0);
   const saving = useRef(false);
@@ -227,19 +232,39 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
   const text = draft?.text ?? (view ? encodeValues(view.values) : '{}');
   const dirty = Boolean(draft && view && draft.text !== encodeValues(view.values));
 
+  const overrides = draft ? parsed : (view?.values ?? {});
+  const showJson = raw || Boolean(draft && !parsed);
+  const locked = !view || loading || busy || Boolean(view?.pending) || hasUncertainSave;
+  const keys = [
+    ...new Set([...Object.keys(view?.defaults ?? {}), ...Object.keys(overrides ?? {})]),
+  ];
+  const visibleKeys = keys.filter((key) =>
+    key.toLocaleLowerCase().includes(query.toLocaleLowerCase())
+  );
+  const changeValue = (key: string, value: string) => {
+    if (locked || !overrides) return;
+    updateDraft(encodeValues({ ...overrides, [key]: value }));
+  };
+  const removeOverride = (key: string) => {
+    if (locked || !overrides) return;
+    updateDraft(
+      encodeValues(Object.fromEntries(Object.entries(overrides).filter(([name]) => name !== key)))
+    );
+  };
+
   return (
-    <details className="chat-variables">
-      <summary>
-        <strong>공유 변수</strong>
+    <section className="chat-variables" aria-label="카드 변수 편집">
+      <header className="chat-variable-heading">
+        <strong>현재 분기</strong>
         {view && (
           <small>
             재정의 {Object.keys(view.values).length}개 · 개정 {view.revision}
           </small>
         )}
-      </summary>
+      </header>
       <p className="muted">
-        이 분기의 템플릿이 함께 읽는 문자열 값이에요. 빈 문자열도 값으로 저장하며, 키를 지우면
-        자료의 기본값을 다시 사용해요.
+        카드와 스크립트가 이 분기에서 함께 읽는 문자열 값이에요. 서재 원본은 바꾸지 않아요. 빈
+        문자열도 값으로 저장하며, 키를 지우면 자료의 기본값을 다시 사용해요.
       </p>
       {loading && <p role="status">공유 변수를 읽고 있어요…</p>}
       {view?.pending && (
@@ -295,17 +320,99 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
           void save();
         }}
       >
-        <label>
-          공유 변수 재정의 · JSON
-          <textarea
-            aria-label="공유 변수 재정의 · JSON"
-            rows={6}
-            spellCheck={false}
-            value={text}
-            disabled={!view || loading || busy || Boolean(view?.pending) || hasUncertainSave}
-            onChange={(event) => updateDraft(event.target.value)}
-          />
-        </label>
+        <div className="chat-variable-toolbar">
+          <label>
+            변수 이름으로 찾기
+            <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          <button
+            type="button"
+            className="ghost"
+            disabled={Boolean(draft && !parsed)}
+            onClick={() => setRaw(!showJson)}
+          >
+            {showJson ? '행 편집' : 'JSON 편집'}
+          </button>
+        </div>
+        <div hidden={showJson}>
+          <div className="chat-variable-rows">
+            {visibleKeys.map((key) => {
+              const overridden = Object.hasOwn(overrides ?? {}, key);
+              return (
+                <div className="chat-variable-row" key={key}>
+                  <label>
+                    <span className="chat-variable-identity">
+                      <span className="chat-variable-key">{key}</span>
+                      <span className="chat-variable-origin">
+                        {overridden ? '이 분기' : '기본값'}
+                      </span>
+                    </span>
+                    <input
+                      aria-label={`${key} 문자열 값`}
+                      value={overridden ? overrides![key] : (view?.defaults[key] ?? '')}
+                      disabled={locked}
+                      onChange={(event) => changeValue(key, event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="ghost chat-variable-reset"
+                    title={`${key} 재정의 해제`}
+                    disabled={locked || !overridden}
+                    aria-label={`${key} 재정의 해제`}
+                    onClick={() => removeOverride(key)}
+                  >
+                    <ResetIcon size={18} aria-hidden="true" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {!visibleKeys.length && (
+            <p className="muted">{query ? '일치하는 변수가 없어요.' : '현재 변수가 없어요.'}</p>
+          )}
+          <details className="chat-variable-add">
+            <summary>변수 추가</summary>
+            <div className="chat-variable-toolbar">
+              <label>
+                새 변수 이름
+                <input
+                  value={newKey}
+                  disabled={locked}
+                  onChange={(event) => setNewKey(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="secondary"
+                disabled={locked || !newKey.trim() || keys.includes(newKey.trim())}
+                onClick={() => {
+                  changeValue(newKey.trim(), '');
+                  setNewKey('');
+                }}
+              >
+                빈 문자열로 추가
+              </button>
+            </div>
+          </details>
+        </div>
+        <div hidden={!showJson}>
+          <label>
+            공유 변수 재정의 · JSON
+            <textarea
+              aria-label="공유 변수 재정의 · JSON"
+              rows={6}
+              spellCheck={false}
+              value={text}
+              disabled={!view || loading || busy || Boolean(view?.pending) || hasUncertainSave}
+              onChange={(event) => {
+                // A recovered invalid buffer also opens JSON. Keep that mode while it becomes valid.
+                setRaw(true);
+                updateDraft(event.target.value);
+              }}
+            />
+          </label>
+        </div>
         {draft && !parsed && (
           <small className="error">키와 문자열 값으로만 이루어진 JSON 객체여야 해요.</small>
         )}
@@ -362,6 +469,6 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
           </details>
         </div>
       )}
-    </details>
+    </section>
   );
 }

@@ -154,7 +154,7 @@ for (const viewport of viewports) {
         'Instruction 48'
       );
       await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
-      await editorFits(page, editor, save);
+      await editorFits(page, editor, save, 1200);
       await page.screenshot({ path: info.outputPath(`centered-variables-${viewport.name}.png`) });
     });
 

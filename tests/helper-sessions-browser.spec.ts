@@ -1,4 +1,9 @@
-import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
+import {
+  MOBILE_HEIGHT,
+  MOBILE_WIDTH,
+  DESKTOP_HEIGHT,
+  DESKTOP_WIDTH,
+} from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import type { Chat } from '../core/types.js';
@@ -20,6 +25,7 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
   const panel = page.locator('#helper-panel');
   const input = panel.getByLabel('도우미에게 요청');
   await expect(input).toBeEnabled();
+  await expect(panel.locator('.helper-session-meta')).toContainText('이 채팅');
   const picker = panel.getByLabel('도우미 세션 선택');
   const first = await picker.inputValue();
   await input.fill('첫 세션에 남겨 둘 초안');
@@ -51,6 +57,15 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
       .toBe(true);
     await page.screenshot({ path: info.outputPath(`helper-sessions-${width}.png`) });
+  }
+  for (const viewport of [
+    { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
+    { width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.screenshot({
+      path: info.outputPath(`helper-session-${viewport.width}x${viewport.height}.png`),
+    });
   }
   await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
   await panel.getByRole('button', { name: '세션 삭제', exact: true }).click();

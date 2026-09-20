@@ -69,6 +69,7 @@ test(`CBACK01 downloads every branch and restores the same file twice as new cha
     await page.setViewportSize({ width, height: 900 });
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '데이터 관리');
+    await page.getByText('개별 채팅 가져오기', { exact: true }).click();
     const section = page.getByRole('region', { name: '채팅 백업 가져오기', exact: true });
     const file = section.getByLabel('채팅 백업 파일 선택', { exact: true });
     await file.setInputFiles({
@@ -95,6 +96,7 @@ test(`CBACK01 downloads every branch and restores the same file twice as new cha
     const result = await response.json();
     restored.push(result.chat.id);
     await expect(section.getByRole('status')).toContainText('분기 2개, 본문 1개를 복원했어요');
+    await expect(section.locator('..')).toHaveAttribute('open', '');
     expect(await file.evaluate((node) => (node as HTMLInputElement).files?.length)).toBe(0);
     const restoredBackup = await request.get(`/api/chats/${result.chat.id}/backup`);
     expect(restoredBackup.ok(), await restoredBackup.text()).toBe(true);
@@ -127,6 +129,7 @@ test('CBACK02 rejected or uncertain imports keep the selection and reuse only it
   await page.goto('/');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '데이터 관리');
+  await page.getByText('개별 채팅 가져오기', { exact: true }).click();
   const section = page.getByRole('region', { name: '채팅 백업 가져오기', exact: true });
   const file = section.getByLabel('채팅 백업 파일 선택', { exact: true });
   const backup = {
@@ -140,6 +143,7 @@ test('CBACK02 rejected or uncertain imports keep the selection and reuse only it
     buffer: Buffer.from(JSON.stringify({ ...backup, version: 999 })),
   });
   await expect(section.getByRole('alert')).toContainText('지원하지 않아요');
+  await expect(section.locator('..')).toHaveAttribute('open', '');
   expect(calls).toHaveLength(0);
   await file.setInputFiles({
     name: 'backup.json',
@@ -149,12 +153,15 @@ test('CBACK02 rejected or uncertain imports keep the selection and reuse only it
   const submit = section.getByRole('button', { name: '새 채팅으로 가져오기', exact: true });
   await submit.click();
   await expect(section.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요');
-  await expect(submit).toBeEnabled();
+  const retry = section.getByRole('button', { name: '같은 요청 확인', exact: true });
+  await expect(retry).toBeEnabled();
+  await expect(file).toBeDisabled();
   expect(await file.evaluate((node) => (node as HTMLInputElement).files?.[0]?.name)).toBe(
     'backup.json'
   );
-  await submit.click();
+  await retry.click();
   await expect(section.getByRole('status')).toContainText('새 채팅으로 가져왔어요');
+  await expect(section.locator('..')).toHaveAttribute('open', '');
   expect(calls).toHaveLength(2);
   expect(calls[0]).toEqual(calls[1]);
 });

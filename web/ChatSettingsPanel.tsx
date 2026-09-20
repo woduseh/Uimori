@@ -13,15 +13,7 @@ import { api } from './api.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { useSettingsHistory } from './useSettingsHistory.js';
 import type { StoryState } from './useStory.js';
-import {
-  BackIcon,
-  BotIcon,
-  PromptIcon,
-  ModelIcon,
-  LoreIcon,
-  ImagesIcon,
-  BehaviorIcon,
-} from './ui-icons.js';
+import { BackIcon, BotIcon, PromptIcon, LoreIcon, ImagesIcon, BehaviorIcon } from './ui-icons.js';
 import './chat-settings.css';
 
 export type Section = ProfileSection | 'story' | 'images' | 'runtime' | 'packages';
@@ -30,28 +22,21 @@ export type Section = ProfileSection | 'story' | 'images' | 'runtime' | 'package
 const categories = [
   {
     id: 'characters',
-    title: '봇·페르소나·모듈',
+    title: '대화 구성',
     icon: BotIcon,
     description: '인물과 함께 사용할 자료',
     group: '기본',
   },
   {
     id: 'prompts',
-    title: '프롬프트·창작 프리셋',
+    title: '프롬프트·모델',
     icon: PromptIcon,
     description: '작문 지침과 창작 옵션',
     group: '기본',
   },
   {
-    id: 'models',
-    title: '이 채팅의 모델',
-    icon: ModelIcon,
-    description: '본문과 보조 작업의 모델',
-    group: '기본',
-  },
-  {
     id: 'story',
-    title: '기억과 메모',
+    title: '기억·로어',
     icon: LoreIcon,
     description: '장면 기억과 메모 관리',
     group: '고급',
@@ -65,21 +50,21 @@ const categories = [
   },
   {
     id: 'runtime',
-    title: '자동 후속 작업',
+    title: '자동 작업',
     icon: BehaviorIcon,
     description: '장면 해설과 호출 한도',
     group: '고급',
   },
   {
     id: 'packages',
-    title: '자료 기능',
+    title: '카드 변수',
     icon: BehaviorIcon,
     description: '이 채팅의 카드 변수',
     group: '고급',
   },
 ] as const;
 const isProfile = (section: Section): section is ProfileSection =>
-  ['characters', 'prompts', 'models'].includes(section);
+  ['characters', 'prompts', 'models', 'story', 'images'].includes(section);
 
 export function ChatSettingsPanel({
   state,
@@ -93,11 +78,12 @@ export function ChatSettingsPanel({
   initialSection?: Section;
   onGlobalSettings: (section: 'models' | 'prompts') => void;
 }) {
-  const [active, setActive] = useState<Section>(initialSection ?? 'characters');
+  const startSection = initialSection === 'models' ? 'prompts' : (initialSection ?? 'characters');
+  const [active, setActive] = useState<Section>(startSection);
   const [profileTab, setProfileTab] = useState<ProfileSection>(
-    initialSection && isProfile(initialSection) ? initialSection : 'characters'
+    isProfile(startSection) ? startSection : 'characters'
   );
-  const [visited, setVisited] = useState<Section[]>([initialSection ?? 'characters']);
+  const [visited, setVisited] = useState<Section[]>([startSection]);
   const [detailOpen, setDetailOpen] = useState(!!initialSection);
   const [profileDirty, setProfileDirty] = useState(false);
   const [storyDirty, setStoryDirty] = useState(false);
@@ -334,6 +320,49 @@ export function ChatSettingsPanel({
                 loreContextReset={state.loreContextReset}
               />
             )}
+            {visited.includes('story') && detail && (
+              <div hidden={profileTab !== 'story'} className="chat-settings-memory">
+                <h3>기억과 요약</h3>
+                <StoryPanel
+                  chatId={state.selected}
+                  refreshKey={state.detail?.reader.cursor ?? 0}
+                  branchId={state.branch?.id ?? `main:${state.selected}`}
+                  headRevision={state.branch?.headRevision ?? detail.chat.headRevision}
+                  settingsRevision={detail.chat.settingsRevision}
+                  profileRevision={detail.profile?.revision}
+                  active={active === 'story' && showingDetail}
+                  hideHeading
+                  onDirtyChange={setStoryDirty}
+                  onChanged={() => {
+                    void state.refresh(state.selected);
+                  }}
+                  onError={state.setError}
+                />
+              </div>
+            )}
+            {visited.includes('images') && detail && (
+              <div hidden={profileTab !== 'images'} className="chat-settings-images">
+                <details className="chat-settings-image-management">
+                  <summary>
+                    이미지 관리 <small>등록된 이미지 {(detail.assets ?? []).length}개</small>
+                  </summary>
+                  <AssetEditor
+                    chatId={state.selected}
+                    assets={detail.assets ?? []}
+                    expanded
+                    refresh={() => state.refresh(state.selected)}
+                    onError={state.setError}
+                    onDirtyChange={setImageDirty}
+                  />
+                </details>
+                <IllustrationReferencesEditor
+                  chatId={state.selected}
+                  refreshKey={`${detail.profile?.revision ?? 0}:${(detail.assets ?? []).length}`}
+                  onDirtyChange={setReferenceDirty}
+                  onError={state.setError}
+                />
+              </div>
+            )}
           </section>
           {categories
             .filter((item) => !isProfile(item.id))
@@ -350,41 +379,6 @@ export function ChatSettingsPanel({
                 {visited.includes(section) && detail && library && (
                   <>
                     {!compact && <h3 className="settings-page-title">{label}</h3>}
-                    {section === 'story' && (
-                      <StoryPanel
-                        chatId={state.selected}
-                        refreshKey={state.detail?.reader.cursor ?? 0}
-                        branchId={state.branch?.id ?? `main:${state.selected}`}
-                        headRevision={state.branch?.headRevision ?? detail.chat.headRevision}
-                        settingsRevision={detail.chat.settingsRevision}
-                        profileRevision={detail.profile?.revision}
-                        active={active === section && showingDetail}
-                        hideHeading
-                        onDirtyChange={setStoryDirty}
-                        onChanged={() => {
-                          void state.refresh(state.selected);
-                        }}
-                        onError={state.setError}
-                      />
-                    )}
-                    {section === 'images' && (
-                      <>
-                        <AssetEditor
-                          chatId={state.selected}
-                          assets={detail.assets ?? []}
-                          expanded
-                          refresh={() => state.refresh(state.selected)}
-                          onError={state.setError}
-                          onDirtyChange={setImageDirty}
-                        />
-                        <IllustrationReferencesEditor
-                          chatId={state.selected}
-                          refreshKey={`${detail.profile?.revision ?? 0}:${(detail.assets ?? []).length}`}
-                          onDirtyChange={setReferenceDirty}
-                          onError={state.setError}
-                        />
-                      </>
-                    )}
                     {section === 'runtime' && (
                       <SettingsEditor
                         chat={detail.chat}
@@ -396,6 +390,7 @@ export function ChatSettingsPanel({
                     )}
                     {section === 'packages' && packageFeatures && (
                       <ChatVariables
+                        key={packageScope}
                         chatId={state.selected}
                         branchId={branchId}
                         refreshKey={state.detail?.reader.cursor ?? 0}

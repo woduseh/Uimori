@@ -568,7 +568,7 @@ export function RisuNativeFields({
       </fieldset>
       <div
         {...panel('advanced')}
-        className={`native-section-body${advanced === 'scripts' ? ' native-regex-panel' : ''}`}
+        className={`native-section-body native-advanced-workspace${advanced === 'scripts' ? ' native-regex-panel' : ''}`}
       >
         <div className="segmented native-advanced-tabs" role="group" aria-label="고급 설정 영역">
           {(

@@ -183,7 +183,7 @@ test('LAZY03 failed settings script stays local and preserves unsent text', asyn
   await draft.fill('SYNTHETIC_STILL_EDITABLE');
   await openChatSettings(page);
   const profile = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await selectChatSettingsSection(page, '봇·페르소나·모듈');
+  await selectChatSettingsSection(page, '대화 구성');
   await expect(profile.getByTestId('profile-editor')).toBeVisible();
   if (visualReview)
     await info.attach('profile-after-settings-failure', {

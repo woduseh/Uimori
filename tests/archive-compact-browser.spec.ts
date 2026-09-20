@@ -9,6 +9,9 @@ async function openArchive(page: Page) {
   await selectSettingsSection(page, '데이터 관리');
   const panel = page.getByTestId('archive-panel');
   await expect(panel).toBeVisible();
+  const restore = panel.locator('.archive-restore');
+  await expect(restore).not.toHaveAttribute('open', '');
+  await restore.getByText('전체 데이터 복원', { exact: true }).click();
   return panel;
 }
 const jsonFile = (name: string, value: unknown) => ({
@@ -35,12 +38,17 @@ test('ACOM01 backup choices and native file selection stay compact across deskto
   const name = '합성-아주-긴-자료와-대화-백업-선택-파일.json';
   await file.setInputFiles(jsonFile(name, { synthetic: 'selected archive' }));
   await expect(panel.getByRole('button', { name: '빈 DB에 가져오기', exact: true })).toBeEnabled();
+  await panel.getByText('전체 데이터 복원', { exact: true }).click();
+  await expect(file).toBeHidden();
+  await panel.getByText('전체 데이터 복원', { exact: true }).click();
+  expect(await file.evaluate((node: HTMLInputElement) => node.files?.[0]?.name)).toBe(name);
+  await expect(panel.getByRole('button', { name: '빈 DB에 가져오기', exact: true })).toBeEnabled();
   // The native input already names the selected file; the app does not repeat it below.
   await expect(panel.getByText(name, { exact: true })).toHaveCount(0);
   for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(panel.getByRole('heading', { name: '백업 받기', exact: true })).toBeVisible();
-    await expect(panel.getByRole('heading', { name: '가져오기', exact: true })).toBeVisible();
+    await expect(panel.getByRole('heading', { name: '백업', exact: true })).toBeVisible();
+    await expect(panel.getByText('전체 데이터 복원', { exact: true })).toBeVisible();
     await expect(panel.getByText(/SQLite 백업은 서버를 종료하고/)).toBeHidden();
     await expect(panel.getByText(/새 빈 데이터베이스에만 복원할 수 있어요/)).toBeVisible();
     const clear = panel.getByRole('button', { name: '선택한 파일 해제', exact: true });
@@ -263,6 +271,7 @@ test('ACOM03 a chat transcript file creates a new chat through the data panel wi
     });
   });
   const panel = await openArchive(page);
+  await panel.getByText('개별 채팅 가져오기', { exact: true }).click();
   const section = panel.getByRole('region', { name: '채팅 본문 가져오기', exact: true });
   await expect(section.getByText(/완전 백업은 위의 채팅 백업 가져오기를 사용해요/)).toBeVisible();
   const transcript = {
@@ -281,6 +290,7 @@ test('ACOM03 a chat transcript file creates a new chat through the data panel wi
   const done = section.getByRole('status').filter({ hasText: '채팅을 만들었어요' });
   await expect(done).toContainText('"복원된 작품" 채팅을 만들었어요.');
   await expect(done).toContainText('서재에 없는 자료 1개는 장착하지 않았어요.');
+  await expect(section.locator('..')).toHaveAttribute('open', '');
   // The busy notice ends when the server has created the chat, not after the list refresh.
   await expect(section.getByText('채팅을 만들고 있어요…', { exact: true })).toBeHidden();
   expect(imports).toHaveLength(1);
@@ -293,5 +303,6 @@ test('ACOM03 a chat transcript file creates a new chat through the data panel wi
     .getByLabel('채팅 본문 JSON 파일', { exact: true })
     .setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{') });
   await expect(section.getByRole('alert')).toContainText('JSON 형식이 아니에요');
+  await expect(section.locator('..')).toHaveAttribute('open', '');
   expect(imports).toHaveLength(1);
 });

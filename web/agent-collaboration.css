@@ -41,6 +41,24 @@
 .ac-agents {
   gap: 18px;
 }
+.ac-add {
+  order: 2;
+}
+.ac-agents {
+  order: 1;
+}
+.ac-shared-instructions {
+  order: 3;
+}
+.ac-shared-summary {
+  order: 4;
+}
+.ac-limits {
+  order: 5;
+}
+.ac-settings > .ac-validation {
+  order: 6;
+}
 .agent-collaboration .ac-field {
   font-size: 13px;
   gap: 7px;
@@ -100,6 +118,13 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
+.ac-add-trigger {
+  justify-self: start;
+}
+.ac-template-picker {
+  display: grid;
+  gap: 8px;
+}
 .ac-templates > button {
   display: grid;
   gap: 6px;
@@ -121,12 +146,12 @@
 }
 .ac-agent {
   min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
 }
 .ac-agent > summary {
   min-height: var(--control-h);
-  padding: 12px;
+  padding: 14px 4px;
   cursor: pointer;
   box-sizing: border-box;
   font-size: 13px;
@@ -136,8 +161,150 @@
   font-size: 12px;
 }
 .ac-agent-fields {
-  padding: 4px 12px 12px;
+  padding: 6px 4px 18px;
   gap: 14px;
+}
+.ac-shared-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding-block: 14px;
+  border-block: 1px solid var(--border);
+}
+.ac-shared-summary > div:first-child {
+  min-width: 0;
+}
+.ac-shared-summary > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.ac-shared-tags {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ac-shared-tags > span {
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+.ac-shared-tags > span.missing {
+  color: var(--error);
+}
+.ac-shared-summary > small {
+  grid-column: 1 / -1;
+}
+.ac-limits {
+  border-bottom: 1px solid var(--border);
+}
+.ac-limits > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 4px;
+  cursor: pointer;
+}
+.ac-limits > summary small {
+  color: var(--muted);
+}
+.ac-limits > .ac-budget {
+  padding: 4px 4px 16px;
+}
+.ac-control-picker {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  min-height: min(620px, 70dvh);
+}
+.ac-control-picker > aside {
+  min-width: 0;
+  padding: 16px;
+  border-right: 1px solid var(--line);
+}
+.ac-control-picker > section {
+  min-width: 0;
+  padding: 20px 24px;
+}
+.ac-control-search {
+  position: relative;
+  display: block;
+}
+.ac-control-search > svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.ac-control-search input {
+  width: 100%;
+  padding-left: 38px;
+}
+.ac-control-groups {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+}
+.ac-control-groups > button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-height: 54px;
+  padding: 9px 12px;
+  border-color: transparent;
+  text-align: left;
+}
+.ac-control-groups > button[aria-pressed="true"] {
+  background: var(--accent-soft);
+}
+.ac-control-groups small {
+  color: var(--muted);
+}
+.ac-control-picker-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.ac-control-picker-heading h3 {
+  margin: 0 0 4px;
+}
+.ac-control-picker-heading > span {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+.ac-control-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.ac-control-row > small {
+  color: var(--muted);
+}
+.ac-control-row.missing {
+  color: var(--error);
+}
+.ac-control-empty {
+  padding: 24px 0;
+}
+.ac-control-note {
+  margin-top: 24px !important;
+  padding: 14px 16px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
 }
 .ac-agent-actions {
   display: flex;
@@ -160,6 +327,39 @@
   }
   .ac-templates > button {
     min-height: 64px;
+  }
+  .ac-shared-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ac-shared-summary > button {
+    width: 100%;
+    justify-content: center;
+  }
+  .ac-control-picker {
+    display: block;
+  }
+  .ac-control-picker > aside,
+  .ac-control-picker > section {
+    padding: 14px 16px;
+  }
+  .ac-control-picker > aside {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .ac-control-groups {
+    display: flex;
+    overflow-x: auto;
+  }
+  .ac-control-groups > button {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 44px;
+  }
+  .ac-control-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .ac-control-row > small {
+    grid-column: 2;
   }
 }
 

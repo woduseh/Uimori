@@ -109,7 +109,7 @@ export function CodexAgentSettings({
           onClick={() => setRefresh((value) => value + 1)}
         />
       </div>
-      <p className="muted">ChatGPT 구독으로 연결해요.</p>
+      <p className="muted">Uimori 서버에서 사용하는 ChatGPT 구독 연결</p>
       {!status ? (
         <p role="status">{error ? '상태 확인 실패' : '상태 확인 중…'}</p>
       ) : (
@@ -137,6 +137,36 @@ export function CodexAgentSettings({
               {runtimeErrors[status.error] ?? 'Codex 실행 환경을 확인해 주세요.'}
             </p>
           ) : null}
+          <ol className="codex-connection-steps" aria-label="Codex 연결 단계">
+            <li>
+              <strong>서버 준비</strong>
+              <p>
+                {status.available
+                  ? '서버 실행 환경이 준비됐어요.'
+                  : '서버 관리자가 실행 환경을 설정해야 해요. 아래 연결 도움말을 확인해 주세요.'}
+              </p>
+            </li>
+            <li>
+              <strong>로그인</strong>
+              <p>
+                {status.authenticated && status.authMode === 'chatgpt'
+                  ? 'ChatGPT 구독으로 로그인했어요.'
+                  : status.login
+                    ? '로그인 페이지에 아래 코드를 입력해 주세요.'
+                    : status.available
+                      ? '이 서버에서 사용할 ChatGPT 계정으로 로그인해요.'
+                      : '서버가 준비되면 로그인할 수 있어요.'}
+              </p>
+            </li>
+            <li>
+              <strong>연결 확인</strong>
+              <p>
+                {status.authenticated && status.authMode === 'chatgpt'
+                  ? '연결 상태와 확인된 사용량을 표시해요.'
+                  : '로그인 완료 후 연결 상태와 사용량을 확인해요.'}
+              </p>
+            </li>
+          </ol>
           {status.login && (
             <div className="compact-card" role="region" aria-label="Codex 로그인 코드">
               <strong>로그인 코드</strong>

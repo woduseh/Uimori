@@ -10,6 +10,9 @@
 .codex-agent-status {
   font-weight: 600;
 }
+.codex-agent-settings .provider-actions:empty {
+  display: none;
+}
 .codex-agent-help {
   margin-top: 20px;
 }

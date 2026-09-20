@@ -66,6 +66,7 @@ const buffer = (draft: EditDraft): Buffer => ({
   unappliedFields: draft.unappliedFields,
 });
 const sessions = new Map<symbol, EditorDraftSession>();
+const saveCommands = new Map<EditorDraftSession, () => Promise<boolean>>();
 let focused: symbol | null = null;
 export const editorContextChanged = 'uimori-editor-context-changed';
 function changed() {
@@ -113,6 +114,24 @@ export async function discardActiveEditor(editorKey?: string): Promise<void> {
 }
 export function refreshActiveEditor(): Promise<void> {
   return activeSession()?.refresh() ?? Promise.resolve();
+}
+
+/** Navigation uses the editor's ordinary validated save, including its pending buffers. */
+export function useEditorSaveCommand(session: EditorDraftSession, save: () => Promise<boolean>) {
+  const current = useRef(save);
+  current.current = save;
+  useEffect(() => {
+    saveCommands.set(session, () => current.current());
+    return () => {
+      saveCommands.delete(session);
+    };
+  }, [session]);
+}
+export async function saveActiveEditor(): Promise<boolean> {
+  const session = activeSession();
+  const save = session && saveCommands.get(session);
+  if (!save) return false;
+  return save();
 }
 
 /** A per-editor local buffer with serialized network writes and recoverable operation identities. */

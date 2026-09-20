@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { DownIcon, ListIcon } from './ui-icons.js';
+import { BackIcon, ForwardIcon, DownIcon, ListIcon } from './ui-icons.js';
 import type { ReaderDetail } from '../core/types.js';
 import { Dialog } from './Dialog.js';
 import './scene-navigator.css';
@@ -19,7 +19,7 @@ export function SceneNavigator({
   target: string;
   onSelect: (id: string) => void;
   onLatest: () => void;
-  /** Compact widths have no rail: the header title opens the list and a button jumps to the text end. */
+  /** Compact widths show previous/current/next above the composer; the header can also open the list. */
   compact?: boolean;
   /** Controlled list state on compact widths (the header owns the opener). */
   listOpen?: boolean;
@@ -191,6 +191,35 @@ export function SceneNavigator({
   if (compact)
     return (
       <>
+        <nav className="scene-mini-navigator" aria-label="장면 탐색">
+          <button
+            type="button"
+            className="ghost"
+            aria-label="이전 장면"
+            disabled={index === 0}
+            onClick={() => select(entries[index - 1].id)}
+          >
+            <BackIcon size={19} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="ghost scene-mini-current"
+            aria-label="장면 목록 열기"
+            onClick={openList}
+          >
+            <ListIcon size={19} aria-hidden="true" />
+            <span>{active.opening ? '첫 메시지' : `${active.number} / ${sceneCount}`}</span>
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            aria-label="다음 장면"
+            disabled={index === entries.length - 1}
+            onClick={() => select(entries[index + 1].id)}
+          >
+            <ForwardIcon size={19} aria-hidden="true" />
+          </button>
+        </nav>
         {last && canGoLatest && (
           <button
             type="button"

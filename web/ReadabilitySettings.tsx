@@ -7,6 +7,7 @@ import {
   type QuoteRole,
 } from './reading-preferences.js';
 import './reading.css';
+import './recovery-settings.css';
 
 const previewText =
   '그녀는 문 앞에서 돌아섰다. “정말 같이 갈 거야?” 나는 고개를 끄덕였다. ‘이번에는 도망치지 않겠어.’\n\n「그럼 출발하자.」 그녀는 『별의 기록』을 가방에 넣었다.';
@@ -56,12 +57,6 @@ export function ReadabilitySettings({
           </option>
         </select>
       </label>
-      <div className="reading-preview" aria-label="읽기 스타일 미리보기">
-        <small>미리보기</small>
-        <div className="prose" data-testid="reading-preview">
-          <Prose text={previewText} reading={value} />
-        </div>
-      </div>
       <label>
         인용 강조
         <select
@@ -158,6 +153,12 @@ export function ReadabilitySettings({
           ))}
         </div>
       </details>
+      <div className="reading-preview" aria-label="읽기 스타일 미리보기">
+        <small>미리보기</small>
+        <div className="prose" data-testid="reading-preview">
+          <Prose text={previewText} reading={value} />
+        </div>
+      </div>
       <div className="reading-settings-footer">
         <small>이 브라우저의 본문과 도우미 내용에 적용해요.</small>
         <button type="button" className="secondary" onClick={() => onChange(DEFAULT_READABILITY)}>

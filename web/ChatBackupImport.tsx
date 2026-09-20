@@ -6,15 +6,17 @@ import {
   type ChatBackup,
   type ChatBackupImport as ImportResult,
 } from '../core/chat-backup.js';
-import { api } from './api.js';
+import { api, ApiError } from './api.js';
 
 export function ChatBackupImport({
   onImported,
   onDirtyChange,
+  onBusyChange,
   disabled = false,
 }: {
   onImported: () => Promise<void>;
   onDirtyChange: (dirty: boolean) => void;
+  onBusyChange?: (busy: boolean) => void;
   disabled?: boolean;
 }) {
   const [selection, setSelection] = useState<{
@@ -23,12 +25,17 @@ export function ChatBackupImport({
   } | null>(null);
   const [reading, setReading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const input = useRef<HTMLInputElement>(null),
     version = useRef(0),
     lock = useRef(false);
   const id = useId();
+  useEffect(
+    () => onBusyChange?.(reading || busy || uncertain),
+    [onBusyChange, reading, busy, uncertain]
+  );
   useEffect(
     () => onDirtyChange(!!selection || reading || busy),
     [onDirtyChange, selection, reading, busy]
@@ -91,6 +98,7 @@ export function ChatBackupImport({
         idempotencyKey: selection.requestKey,
       });
       setSelection(null);
+      setUncertain(false);
       if (input.current) input.current.value = '';
       setMessage(
         `“${result.chat.title}”을 새 채팅으로 가져왔어요. 분기 ${result.branches}개, 본문 ${result.sources}개를 복원했어요.`
@@ -99,6 +107,14 @@ export function ChatBackupImport({
         setError('채팅은 복원했어요. 목록을 새로 읽지 못했으니 새로고침해 주세요.')
       );
     } catch (caught) {
+      setUncertain(
+        !(
+          caught instanceof ApiError &&
+          caught.status >= 400 &&
+          caught.status < 500 &&
+          caught.status !== 408
+        )
+      );
       setError((caught as Error).message);
     } finally {
       lock.current = false;
@@ -120,7 +136,7 @@ export function ChatBackupImport({
             accept=".json,application/json"
             aria-label="채팅 백업 파일 선택"
             aria-describedby={`${id}-help`}
-            disabled={disabled || busy || reading}
+            disabled={disabled || busy || reading || uncertain}
             onChange={(event) => {
               void read(event.currentTarget.files?.[0]);
             }}
@@ -137,12 +153,12 @@ export function ChatBackupImport({
           </p>
           <div className="archive-import-actions">
             <button type="button" disabled={disabled || busy} onClick={() => void restore()}>
-              {busy ? '복원 중…' : '새 채팅으로 가져오기'}
+              {busy ? '복원 중…' : uncertain ? '같은 요청 확인' : '새 채팅으로 가져오기'}
             </button>
             <button
               type="button"
               className="secondary"
-              disabled={busy}
+              disabled={busy || uncertain}
               onClick={() => {
                 setSelection(null);
                 if (input.current) input.current.value = '';
@@ -156,6 +172,11 @@ export function ChatBackupImport({
       {error && (
         <p className="error" role="alert">
           {error}
+        </p>
+      )}
+      {uncertain && (
+        <p role="status">
+          복원 결과가 아직 확인되지 않았어요. 같은 요청 확인으로 중복 없이 결과를 확인해 주세요.
         </p>
       )}
       {message && <p role="status">{message}</p>}

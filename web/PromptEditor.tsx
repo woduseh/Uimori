@@ -21,6 +21,7 @@ import {
   EditorDraftStatus,
   EditorDraftStatusButton,
   useServerEditDraft,
+  useEditorSaveCommand,
 } from './editor-workspace-context.js';
 import type { PromptDraftModel } from '../core/edit-drafts.js';
 import './prompt-editor.css';
@@ -205,8 +206,15 @@ export function PromptEditor({
     setStatus('');
   }
   async function save(update: boolean) {
-    if (pendingTemplate || collaborationIssue || !draft.title.trim() || (update && !draft.base))
-      return;
+    if (
+      busy ||
+      !shared.state.ready ||
+      pendingTemplate ||
+      collaborationIssue ||
+      !draft.title.trim() ||
+      (update && !draft.base)
+    )
+      return false;
     setBusy(true);
     setError('');
     setStatus('');
@@ -239,13 +247,29 @@ export function PromptEditor({
       setStatus('프롬프트를 저장했어요.');
       await onSaved?.(accepted, !update);
       await reload?.();
+      return true;
     } catch (caught) {
       const message = (caught as Error).message;
       setError(message);
+      return false;
     } finally {
       setBusy(false);
     }
   }
+  useEditorSaveCommand(shared.session, () => {
+    const currentKey = `${role}:${draft.source}`;
+    const otherDrafts =
+      Object.entries(drafts).some(([key, value]) => key !== role && value.dirty) ||
+      Object.entries(draftCache.current).some(
+        ([key, value]) => key !== currentKey && value.dirty
+      ) ||
+      Object.entries(composerDirty).some(([key, value]) => key !== currentKey && value);
+    if (otherDrafts)
+      throw new Error(
+        '다른 역할이나 프리셋에도 미저장 초안이 있어요. 계속 편집에서 각 초안을 저장한 뒤 이동해 주세요.'
+      );
+    return save(!!draft.base);
+  });
   const pendingSavedText = draft.source !== 'builtin' && draft.source !== 'new' && !draft.base;
   if (!shared.state.ready) return <EditorDraftStatus value={shared} />;
   const saveActions = (

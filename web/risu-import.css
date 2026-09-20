@@ -23,8 +23,73 @@
   width: 100%;
   min-width: 0;
 }
+.risu-import-file-ready {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+.risu-import-file-ready > span:first-child {
+  min-width: 0;
+  flex: 1;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.risu-import-file-ready input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.risu-import-change {
+  flex: 0 0 auto;
+  min-height: var(--control-h);
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-weight: 500;
+  cursor: pointer;
+}
 .risu-import-summary {
   gap: 6px;
+}
+.risu-import-hero {
+  padding: 10px 0 4px;
+}
+.risu-import-hero h3 {
+  font-size: 20px;
+}
+.risu-import-counts {
+  display: flex;
+  gap: 28px;
+  margin: 12px 0 0;
+}
+.risu-import-counts > div {
+  display: grid;
+  gap: 3px;
+}
+.risu-import-counts dt {
+  color: var(--muted);
+  font-size: 12px;
+  order: 2;
+}
+.risu-import-counts dd {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.risu-import-findings {
+  padding: 12px 14px;
+  border-left: 3px solid var(--border);
+  background: var(--panel);
+}
+.risu-import-findings.warn {
+  border-left-color: var(--warning, #9a6b24);
 }
 .risu-import-findings ul {
   margin: 8px 0 0;
@@ -78,4 +143,43 @@
 }
 .risu-import-summary > p {
   white-space: pre-wrap;
+}
+.risu-import-processing {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.risu-import-processing > summary {
+  cursor: pointer;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
+.risu-import-processing > div,
+.risu-import-processing > p {
+  margin: 0;
+  padding: 0 0 14px;
+}
+.risu-import-processing label {
+  display: grid;
+  gap: 7px;
+}
+.risu-import-result {
+  padding: 16px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+}
+.risu-import-body.complete > :not(.risu-import-result):not([role="status"]):not(.error) {
+  display: none;
+}
+.risu-import-result > svg {
+  color: var(--accent);
+}
+@media (max-width: 600px) {
+  .risu-import-counts {
+    gap: 20px;
+  }
+  .risu-import-file-ready {
+    align-items: flex-start;
+  }
 }

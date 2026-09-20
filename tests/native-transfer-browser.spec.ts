@@ -285,9 +285,13 @@ test('NATIVEUI03 Risu card JSON keeps ordinary lore by default and opens the new
     buffer: Buffer.from(JSON.stringify(card)),
   });
   await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
-  await expect(
-    dialog.getByText('로어 2개 · 시작문 1개 · 이미지 0개', { exact: true })
-  ).toBeVisible();
+  const counts = dialog.locator('.risu-import-counts');
+  await expect(counts).toContainText('로어');
+  await expect(counts).toContainText('2');
+  await expect(counts).toContainText('첫 메시지');
+  await expect(counts).toContainText('1');
+  await expect(counts).toContainText('이미지');
+  await expect(counts).toContainText('0');
   await expect(dialog.locator('.risu-import-memory')).toHaveCount(0);
   await expect(dialog.getByRole('checkbox')).toHaveCount(0);
   await dialog.getByText('로어 미리보기 (2개)', { exact: true }).click();
@@ -348,6 +352,11 @@ test('NATIVEUI04 Risu module JSON registers a library module without creating a 
   await navigationAction(page, '모듈');
   await page.getByRole('button', { name: 'Risu 자료 가져오기', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Risu 자료 가져오기', exact: true });
+  await expect(
+    dialog.getByText('.charx, .risum, 카드·모듈 JSON, 모듈 프로젝트 ZIP을 가져올 수 있어요.', {
+      exact: true,
+    })
+  ).toBeVisible();
   await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
     name: 'synthetic-risu-module.json',
     mimeType: 'application/json',
@@ -355,11 +364,6 @@ test('NATIVEUI04 Risu module JSON registers a library module without creating a 
   });
   await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await expect(dialog.locator('.risu-import-memory')).toHaveCount(0);
-  await expect(
-    dialog.getByText('.charx, .risum, 카드·모듈 JSON, 모듈 프로젝트 ZIP을 가져올 수 있어요.', {
-      exact: true,
-    })
-  ).toBeVisible();
   const applied = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/risu-imports/apply') && response.request().method() === 'POST'

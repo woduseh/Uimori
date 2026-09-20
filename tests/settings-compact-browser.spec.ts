@@ -8,6 +8,84 @@ import {
   startProviderConnection,
 } from './ui-navigation.js';
 
+test('SCUI04 recovery settings expose real build information and grouped data at desktop and phone sizes', async ({
+  page,
+  request,
+}, info) => {
+  const health = await (await request.get('/api/health')).json();
+  await page.route('**/api/agent-runtimes/codex', (route) =>
+    route.fulfill({
+      json: {
+        available: false,
+        authenticated: false,
+        authMode: null,
+        limits: [],
+        error: 'CODEX_DISABLED',
+      },
+    })
+  );
+  for (const viewport of [
+    { width: 2560, height: 1440 },
+    { width: 412, height: 915 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    const dialog = page.getByRole('dialog', { name: '설정', exact: true });
+    for (const section of ['일반', '데이터 관리', 'Codex 연결', '앱 정보·라이선스']) {
+      await selectSettingsSection(page, section);
+      const pane = dialog.getByRole('tabpanel');
+      if (section === '일반') {
+        await expect(pane.getByLabel('앱 화면 테마')).toBeVisible();
+      } else if (section === '데이터 관리') {
+        await expect(pane.getByRole('heading', { name: '백업', exact: true })).toBeVisible();
+        const restore = pane.locator('.archive-restore');
+        await expect(restore).not.toHaveAttribute('open', '');
+        await expect(pane.getByLabel('가져올 JSON 파일', { exact: true })).toBeHidden();
+        await restore.getByText('전체 데이터 복원', { exact: true }).click();
+        await expect(pane.getByLabel('가져올 JSON 파일', { exact: true })).toBeVisible();
+        await restore.getByText('전체 데이터 복원', { exact: true }).click();
+        await expect(
+          pane
+            .locator('details')
+            .filter({ has: page.locator('summary', { hasText: '서버 관리' }) })
+            .first()
+        ).not.toHaveAttribute('open', '');
+      } else if (section === 'Codex 연결') {
+        await expect(pane.getByText('서버 설정 필요', { exact: true })).toBeVisible();
+        await expect(
+          pane.getByRole('list', { name: 'Codex 연결 단계' }).getByRole('listitem')
+        ).toHaveCount(3);
+        await expect(
+          pane.getByRole('button', { name: 'ChatGPT로 로그인', exact: true })
+        ).toHaveCount(0);
+        await expect(pane.locator('.provider-actions')).toBeHidden();
+      } else {
+        await expect(pane.getByTestId('app-build-id')).toHaveText(health.buildId);
+        await pane.getByText('라이선스 전문', { exact: true }).click();
+        await expect(pane.locator('.app-about-document').first()).toContainText(
+          'GNU AFFERO GENERAL PUBLIC LICENSE'
+        );
+        await pane.getByText('라이선스 전문', { exact: true }).click();
+        await pane.getByText('저작권·제3자 고지', { exact: true }).click();
+        await expect(pane.locator('.app-about-document').last()).toContainText('RisuAI');
+        await pane.getByText('저작권·제3자 고지', { exact: true }).click();
+      }
+      expect(
+        await pane.evaluate((node) => node.scrollWidth - node.clientWidth)
+      ).toBeLessThanOrEqual(1);
+      const bounds = (await dialog.boundingBox())!;
+      expect(Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(2);
+      if (viewport.width > 760) expect(bounds.width).toBeLessThan(1300);
+      await pane.evaluate((node) => {
+        node.scrollTop = 0;
+      });
+      await page.screenshot({ path: info.outputPath(`recovery-${section}-${viewport.width}.png`) });
+    }
+    await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  }
+});
+
 test('SCUI03 multi-entry browser back keeps the address and chat consistent with clean and dirty settings', async ({
   page,
   request,
@@ -71,7 +149,7 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
   await navigationAction(page, '설정');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   const nav = dialog.locator('.settings-navigation');
-  await expect(nav.getByRole('button')).toHaveCount(8);
+  await expect(nav.getByRole('button')).toHaveCount(9);
   await expect(nav.getByRole('button', { name: '삽화', exact: true })).toBeVisible();
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
   if (visualReview) {
@@ -96,7 +174,7 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
       expect(bounds!.height).toBeGreaterThanOrEqual(44);
     } else {
       await expect(nav).toBeVisible();
-      await expect(nav.getByRole('tab')).toHaveCount(8);
+      await expect(nav.getByRole('tab')).toHaveCount(9);
     }
     expect(
       await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)
@@ -110,8 +188,8 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
   }
   await nav.getByRole('tab', { name: '일반', exact: true }).focus();
   await page.keyboard.press('End');
-  await expect(nav.getByRole('tab', { name: '접근 보안', exact: true })).toBeFocused();
-  await expect(dialog.getByRole('button', { name: '접속 해제', exact: true })).toBeVisible();
+  await expect(nav.getByRole('tab', { name: '앱 정보·라이선스', exact: true })).toBeFocused();
+  await expect(dialog.getByRole('region', { name: 'Uimori 앱 정보' })).toBeVisible();
   await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(dialog).toBeHidden();
   const opener = page

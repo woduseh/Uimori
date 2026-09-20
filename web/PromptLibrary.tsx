@@ -24,7 +24,7 @@ import { PromptEditor } from './PromptEditor.js';
 import { NativeTransfer } from './NativeTransfer.js';
 import { RisuPresetImport } from './RisuPresetImport.js';
 import { PromptTemplatesDialog, type PromptTemplate } from './PromptTemplatesDialog.js';
-import { discardActiveEditor } from './editor-workspace-context.js';
+import { discardActiveEditor, saveActiveEditor } from './editor-workspace-context.js';
 import {
   LibraryFolders,
   LibraryItemMenu,
@@ -82,6 +82,7 @@ export function PromptLibrary({
 
   const [dirty, setDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
+  const [savingNavigation, setSavingNavigation] = useState(false);
   const externalList = useRef(listRequest);
   const [moving, setMoving] = useState<LibraryItemKey[] | null>(null);
   const [selecting, setSelecting] = useState(false);
@@ -243,14 +244,6 @@ export function PromptLibrary({
         {headerLeading}
         <h1>프롬프트</h1>
         {library && !editing && <NativeTransfer library={library} reload={reload} />}
-        <RisuPresetImport
-          showTrigger={!!library && !editing}
-          reload={reload}
-          onImported={(preset) => {
-            createdPresetFocus.current = preset.id;
-            changeEditing({ preset, role: preset.role });
-          }}
-        />
         {headerTrailing}
       </header>
       <PromptTemplatesDialog
@@ -270,12 +263,23 @@ export function PromptLibrary({
         title="미저장 프롬프트 확인"
         role="alertdialog"
         className="library-discard-dialog"
-        onClose={() => setDiscard(false)}
+        onClose={() => {
+          if (!savingNavigation) setDiscard(false);
+        }}
       >
         <p>이동하면 저장하지 않은 프롬프트 편집 내용이 사라져요.</p>
         <DraftDiscardActions
           open={discard}
+          onSavingChange={setSavingNavigation}
           onContinue={() => setDiscard(false)}
+          onSave={async () => {
+            const destination = pendingEditing.current;
+            if (!(await saveActiveEditor())) return false;
+            setDiscard(false);
+            setDirty(false);
+            setEditing(destination);
+            return true;
+          }}
           onDiscard={async () => {
             try {
               await discardActiveEditor();
@@ -448,22 +452,32 @@ export function PromptLibrary({
               )}
               {!selecting && library && (
                 <div className="prompt-library-actions">
+                  <RisuPresetImport
+                    showTrigger
+                    reload={reload}
+                    onImported={(preset) => {
+                      createdPresetFocus.current = preset.id;
+                      changeEditing({ preset, role: preset.role });
+                    }}
+                  />
                   <button
                     type="button"
-                    className="secondary prompt-settings-link"
+                    className="secondary prompt-settings-link ui-icon-button"
+                    aria-label="현재 프롬프트 설정"
+                    title="현재 프롬프트 설정"
                     onClick={onOpenCurrentPrompts}
                   >
                     <SettingsIcon size={18} aria-hidden="true" />
-                    현재 프롬프트 설정
                   </button>
                   <button
                     type="button"
-                    className="secondary prompt-templates-open"
+                    className="secondary prompt-templates-open ui-icon-button"
+                    aria-label="기본 프롬프트"
+                    title="기본 프롬프트"
                     disabled={busy || organizer.busy}
                     onClick={() => setTemplatesOpen(true)}
                   >
                     <PromptIcon size={18} aria-hidden="true" />
-                    기본 프롬프트
                   </button>
                 </div>
               )}

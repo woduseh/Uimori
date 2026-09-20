@@ -62,7 +62,7 @@ async function expectSourceRaw(page: Page, text: string) {
 async function storySettings(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   if (!(await dialog.isVisible())) await openChatSettings(page);
-  await selectChatSettingsSection(page, '자동 후속 작업');
+  await selectChatSettingsSection(page, '자동 작업');
   const fixture = dialog
     .locator('details')
     .filter({ has: page.locator('summary', { hasText: '개발자용 모의 실행 제어' }) });

@@ -172,14 +172,9 @@ export function ArchivePanel({
       aria-label="백업과 가져오기"
     >
       {!expanded && <summary>내보내기와 복원</summary>}
-      <ChatBackupImport
-        onImported={onImported}
-        onDirtyChange={setChatBackupDirty}
-        disabled={busy !== null || transcriptBusy}
-      />
-      {expanded && <MaintenanceControl />}
+      <p className="muted">전체 작업 공간의 백업과 복원</p>
       <section aria-label="백업 받기">
-        <h3>백업 받기</h3>
+        <h3>백업</h3>
         <div className="archive-backup-options">
           <div className="archive-backup-option">
             <button
@@ -197,9 +192,12 @@ export function ArchivePanel({
             >
               <DownloadIcon size={18} aria-hidden="true" /> JSON 내보내기
             </button>
-            <p id={`${id}-json-help`} className="muted">
-              자료와 대화를 새 빈 DB로 옮겨요.
-            </p>
+            <div className="archive-backup-description">
+              <strong>전체 데이터 내보내기</strong>
+              <p id={`${id}-json-help`} className="muted">
+                JSON · 자료와 대화를 새 빈 DB로 옮겨요.
+              </p>
+            </div>
           </div>
           <div className="archive-backup-option">
             <button
@@ -223,9 +221,12 @@ export function ArchivePanel({
             >
               <DownloadIcon size={18} aria-hidden="true" /> SQLite 백업 다운로드
             </button>
-            <p id={`${id}-sqlite-help`} className="muted">
-              서버 데이터베이스 전체를 보관해요.
-            </p>
+            <div className="archive-backup-description">
+              <strong>데이터베이스 백업</strong>
+              <p id={`${id}-sqlite-help`} className="muted">
+                SQLite · 서버 데이터베이스 전체를 보관해요.
+              </p>
+            </div>
           </div>
         </div>
         {backupError && (
@@ -235,8 +236,8 @@ export function ArchivePanel({
         )}
         {backupMessage && <p role="status">{backupMessage}</p>}
       </section>
-      <section aria-label="가져오기">
-        <h3>가져오기</h3>
+      <details className="recovery-settings-disclosure archive-restore">
+        <summary>전체 데이터 복원</summary>
         <p className="muted" id={`${id}-import-condition`}>
           새 빈 데이터베이스에만 복원할 수 있어요. 현재 자료에 덮어쓰거나 합치지 않아요.
         </p>
@@ -284,10 +285,11 @@ export function ArchivePanel({
             });
           }}
         >
-          <div className="archive-file-field full">
-            <label>
-              가져올 JSON 파일
+          <div className="full">
+            <label htmlFor={`${id}-archive-file`}>가져올 JSON 파일</label>
+            <div className="archive-file-field archive-restore-file-row">
               <input
+                id={`${id}-archive-file`}
                 ref={fileInput}
                 aria-label="가져올 JSON 파일"
                 aria-describedby={`${id}-import-condition${fileError ? ` ${id}-file-error` : ''}`}
@@ -297,15 +299,15 @@ export function ArchivePanel({
                 disabled={busy !== null}
                 onChange={(event) => void readFile(event.target.files?.[0])}
               />
-            </label>
-            {fileSelected && (
-              <IconButton
-                label="선택한 파일 해제"
-                icon={CloseIcon}
-                disabled={busy !== null}
-                onClick={clearSelection}
-              />
-            )}
+              {fileSelected && (
+                <IconButton
+                  label="선택한 파일 해제"
+                  icon={CloseIcon}
+                  disabled={busy !== null}
+                  onClick={clearSelection}
+                />
+              )}
+            </div>
           </div>
           {reading && (
             <p className="full" role="status">
@@ -343,39 +345,56 @@ export function ArchivePanel({
             거절해요.
           </p>
         </details>
-      </section>
-      <section aria-label="채팅 본문 가져오기">
-        <h3>채팅 본문 가져오기</h3>
-        <p className="muted" id={`${id}-transcript-help`}>
-          외부에서 만든 uimori-chat-transcript 형식의 본문 JSON을 새 채팅으로 읽어요. 원문·요청·최신
-          번역·메모만 담은 한 분기의 자료이며, 완전 백업은 위의 채팅 백업 가져오기를 사용해요. 봇은
-          이 서재에 있어야 해요.
+      </details>
+      {expanded && (
+        <details className="recovery-settings-disclosure">
+          <summary>서버 관리</summary>
+          <MaintenanceControl />
+        </details>
+      )}
+      <details className="recovery-settings-disclosure">
+        <summary>개별 채팅 가져오기</summary>
+        <p className="muted">
+          채팅 백업은 분기와 실행 기록까지, 본문 JSON은 원문·요청·번역·메모를 가져와요.
         </p>
-        <div className="archive-file-field">
-          <label>
-            채팅 본문 JSON 파일
-            <input
-              aria-label="채팅 본문 JSON 파일"
-              aria-describedby={`${id}-transcript-help`}
-              type="file"
-              accept="application/json,.json"
-              disabled={busy !== null || transcriptBusy}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = '';
-                if (file) void importTranscript(file);
-              }}
-            />
-          </label>
-        </div>
-        {transcriptBusy && <p role="status">채팅을 만들고 있어요…</p>}
-        {transcriptError && (
-          <p className="error" role="alert">
-            {transcriptError}
+        <ChatBackupImport
+          onImported={onImported}
+          onDirtyChange={setChatBackupDirty}
+          disabled={busy !== null || transcriptBusy}
+        />
+        <section aria-label="채팅 본문 가져오기">
+          <h3>채팅 본문 가져오기</h3>
+          <p className="muted" id={`${id}-transcript-help`}>
+            외부에서 만든 uimori-chat-transcript 형식의 본문 JSON을 새 채팅으로 읽어요.
+            원문·요청·최신 번역·메모만 담은 한 분기의 자료이며, 완전 백업은 위의 채팅 백업
+            가져오기를 사용해요. 봇은 이 서재에 있어야 해요.
           </p>
-        )}
-        {transcriptMessage && <p role="status">{transcriptMessage}</p>}
-      </section>
+          <div className="archive-file-field">
+            <label>
+              채팅 본문 JSON 파일
+              <input
+                aria-label="채팅 본문 JSON 파일"
+                aria-describedby={`${id}-transcript-help`}
+                type="file"
+                accept="application/json,.json"
+                disabled={busy !== null || transcriptBusy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (file) void importTranscript(file);
+                }}
+              />
+            </label>
+          </div>
+          {transcriptBusy && <p role="status">채팅을 만들고 있어요…</p>}
+          {transcriptError && (
+            <p className="error" role="alert">
+              {transcriptError}
+            </p>
+          )}
+          {transcriptMessage && <p role="status">{transcriptMessage}</p>}
+        </section>
+      </details>
     </Container>
   );
 }

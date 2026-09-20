@@ -418,7 +418,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(changed.title);
   await openChatSettings(page);
-  await selectCurrentSettingsSection(page, '모델');
+  await selectCurrentSettingsSection(page, '역할별 모델');
   await expect(page.getByLabel('원문 모델', { exact: true })).toHaveValue(`${original.id}`);
   await expect(
     page.getByLabel('원문 모델', { exact: true }).locator('option:checked')
@@ -1363,7 +1363,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await expect(form.getByLabel('Codex 실행 위치')).toHaveValue('codex://local');
   await expect(form.getByLabel('Codex 실행 위치')).toHaveAttribute('readonly', '');
   await expect(form.getByLabel('서버 환경변수 이름')).toBeHidden();
-  await selectSettingsSection(page, '에이전트');
+  await selectSettingsSection(page, 'Codex 연결');
   const panel = page.getByRole('region', { name: 'Codex 에이전트 연결' });
   await expect(panel).toContainText('로그인 필요');
   const help = panel.locator('details');
@@ -1437,7 +1437,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
     maxOutputTokens: 2048,
     temperature: null,
   });
-  await selectSettingsSection(page, '에이전트');
+  await selectSettingsSection(page, 'Codex 연결');
   await panel.getByRole('button', { name: '연결 해제', exact: true }).click();
   await expect(panel).toContainText('로그인 필요');
   available = false;

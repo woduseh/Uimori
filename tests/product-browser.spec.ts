@@ -1,3 +1,5 @@
+import { nativeContent } from './fixtures/native-content.js';
+import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
@@ -71,7 +73,7 @@ async function profileInfo(page: Page) {
   return page.getByTestId('profile-editor');
 }
 async function promptTab(page: Page) {
-  await selectCurrentSettingsSection(page, '프롬프트·창작 프리셋');
+  await selectCurrentSettingsSection(page, '현재 프롬프트');
   return page.getByRole('region', { name: '현재 프롬프트 설정' });
 }
 async function send(page: Page, text: string): Promise<Run> {
@@ -92,7 +94,7 @@ async function openDetails(page: Page, testId: string) {
     return page.getByTestId(testId);
   }
   await storySettings(page);
-  await selectChatSettingsSection(page, '봇·페르소나·모듈');
+  await selectChatSettingsSection(page, '대화 구성');
   return profileInfo(page);
 }
 
@@ -112,18 +114,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       text: firstBody,
       loading: 'pinned',
       relatedIds: [],
-      package: {
-        version: 1,
-        id: 'synthetic-harbor',
-        revision: 1,
-        title: `Mira ${unique}`,
-        description: 'Synthetic harbor setting.',
-        body: firstBody,
-        lore: [],
-        instructions: [],
-        controls: [],
-        transforms: [],
-      },
+      package: nativeContent({ name: `Mira ${unique}`, description: firstBody }, {}, 'module'),
     },
   });
   expect(addedResponse.ok()).toBeTruthy();
@@ -135,7 +126,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       role: 'main',
       owner: { kind: 'preset', id: choice.prompt.id },
       expectedRevision: choice.prompt.revision,
-      values: { detail: 1, coNarration: false },
+      values: { detail: '1', coNarration: '0' },
     },
   });
   expect(secondResponse.ok()).toBeTruthy();
@@ -153,15 +144,9 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       .locator('.section-navigation')
       .filter({ visible: true })
       .locator('button .section-navigation-title')
-  ).toHaveText([
-    '봇·페르소나·모듈',
-    '프롬프트·창작 프리셋',
-    '이 채팅의 모델',
-    '기억과 메모',
-    '이미지',
-    '자동 후속 작업',
-  ]);
-  await selectChatSettingsSection(page, '봇·페르소나·모듈');
+  ).toHaveText(['대화 구성', '프롬프트·모델', '기억·로어', '이미지', '자동 작업']);
+  await selectChatSettingsSection(page, '대화 구성');
+  await page.getByText('함께 사용하는 모듈 · 자료 추가', { exact: true }).click();
   await selectContent(page, '추가할 패키지', added.title);
   await page.getByRole('button', { name: '패키지 장착', exact: true }).click();
   await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
@@ -173,13 +158,16 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   await library.getByRole('tab', { name: '모듈', exact: true }).click();
   await editLibraryContent(page, `Mira ${unique}`);
   await page
-    .getByLabel('자료 본문', { exact: true })
+    .getByLabel('캐릭터 설정', { exact: true })
     .fill('Mira is a synthetic harbor keeper. Her compass is silver in this revision.');
+  const savedContent = waitForContentDraftSave(page, added.id);
   await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
-  await expect(library.locator('.library-savebar [role="status"]')).toContainText(
-    '저장됨 · 다음 실행부터 사용해요.'
+  expect((await savedContent).package?.nativeRisu.card.description).toBe(
+    'Mira is a synthetic harbor keeper. Her compass is silver in this revision.'
   );
-  // The library has its own URL, so return through the chat navigation before its settings.
+  // Compact editors hide global navigation until the user returns to the library list.
+  await library.getByRole('button', { name: '서재 목록', exact: true }).click();
+  await expect(library.getByLabel('서재 검색', { exact: true })).toBeVisible();
   await selectStoredChat(page, chat);
   await expect(page.getByRole('textbox', { name: '다음 장면 요청', exact: true })).toBeVisible();
   await openDetails(page, 'profile-editor');
@@ -199,9 +187,9 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       .toEqual(combination.values);
     await expect(editor.getByText('변경사항을 자동 저장했어요.', { exact: true })).toBeVisible();
   }
-  await expect(
-    composer.getByRole('switch', { name: '합성 공동 서술', exact: true })
-  ).not.toBeChecked();
+  await expect(composer.getByRole('combobox', { name: '합성 공동 서술', exact: true })).toHaveValue(
+    JSON.stringify('0')
+  );
   await expect(composer.getByLabel('합성 상세도', { exact: true })).toHaveValue('1');
   await expect(editor.getByLabel('현재 프롬프트 프리셋', { exact: true })).toBeEnabled();
   const run = await send(page, '(OOC: Continue the harbor scene.) SYNTHETIC_P01');
@@ -212,18 +200,19 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     )
     .toBe('completed');
   const saved = (await getDetail(request, chat.id)).runs.find((item) => item.id === run.id)!;
-  expect(saved.snapshot.profile?.packages?.find((pkg) => pkg.id === added.id)?.body).toBe(
-    'Mira is a synthetic harbor keeper. Her compass is silver in this revision.'
-  );
+  expect(
+    saved.snapshot.profile?.packages?.find((pkg) => pkg.id === added.id)?.nativeRisu.card
+      .description
+  ).toBe('Mira is a synthetic harbor keeper. Her compass is silver in this revision.');
   expect(saved.snapshot.profile?.packageAttachments).toEqual([
     owner,
     { id: added.id, revision: 2, role: 'module' },
   ]);
   expect(saved.snapshot.profile?.promptPresets?.main?.values).toEqual({
-    detail: 1,
-    coNarration: false,
+    detail: '1',
+    coNarration: '0',
   });
-  expect(saved.snapshot.promptCompilation?.values).toEqual({ detail: 1, coNarration: false });
+  expect(saved.snapshot.promptCompilation?.values).toEqual({ detail: '1', coNarration: '0' });
   expect(saved.inputs[0].task).toBe('(OOC: Continue the harbor scene.) SYNTHETIC_P01');
 });
 
@@ -281,7 +270,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   });
   expect((await request.get(`/api/revisions/connection/${connection.id}/1`)).ok()).toBe(false);
   await openDetails(page, 'profile-editor');
-  await selectCurrentSettingsSection(page, '모델');
+  await selectCurrentSettingsSection(page, '역할별 모델');
   // A model saved against a disabled connection is excluded from a new role selection.
   for (const roleLabel of ['원문 모델', '번역 모델'])
     for (const model of modelRefs) {
@@ -319,7 +308,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   for (const model of modelRefs)
     expect(activatedModels.find((item) => item.id === model.id)).toEqual(model);
   await openDetails(page, 'profile-editor');
-  await selectCurrentSettingsSection(page, '모델');
+  await selectCurrentSettingsSection(page, '역할별 모델');
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${modelRefs[0].id}`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${modelRefs[1].id}`);
   await page.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
@@ -363,6 +352,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   await storySettings(page);
   await selectChatSettingsSection(page, '이미지');
   const imagePanel = page.getByRole('region', { name: '이 이야기의 이미지', exact: true });
+  await page.locator('.chat-settings-image-management > summary').click();
   await expect(imagePanel.getByLabel('PNG 또는 JPEG 이미지', { exact: true })).toBeVisible();
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9n8AAAAASUVORK5CYII=',
@@ -410,7 +400,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   const imageModel = (await modelReply.json()) as ModelPreset;
   await page.reload();
   await openDetails(page, 'profile-editor');
-  await selectCurrentSettingsSection(page, '모델');
+  await selectCurrentSettingsSection(page, '역할별 모델');
   await page.locator('summary').filter({ hasText: '기타 자동 작업 모델' }).click();
   await page.getByLabel('이미지 배치 모델', { exact: true }).selectOption(imageModel.id);
   await page.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
@@ -421,7 +411,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     page.getByRole('region', { name: '역할별 모델 설정', exact: true }).getByRole('status')
   ).toContainText('역할별 모델 설정을 저장했어요.');
   await openDetails(page, 'profile-editor');
-  await selectChatSettingsSection(page, '봇·페르소나·모듈');
+  await selectChatSettingsSection(page, '이미지');
   await page.getByLabel('원문 이미지 자동 배치', { exact: true }).check();
   await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
@@ -705,6 +695,7 @@ test('P06 P11 export/backup downloads preserve source and reject restore into an
   const backup = await backupPromise;
   const dbBytes = await readFile((await backup.path())!);
   expect(dbBytes.subarray(0, 16).toString('utf8')).toBe('SQLite format 3\u0000');
+  await page.getByText('전체 데이터 복원', { exact: true }).click();
   await page
     .getByLabel('가져올 JSON 파일')
     .setInputFiles({ name: 'synthetic-export.json', mimeType: 'application/json', buffer: bytes });
@@ -797,7 +788,7 @@ test('P04 Vertex settings use service-account references and persist distinct ma
       fullPage: true,
     });
   await openDetails(page, 'profile-editor');
-  await selectCurrentSettingsSection(page, '모델');
+  await selectCurrentSettingsSection(page, '역할별 모델');
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${models[0].id}`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${models[1].id}`);
   await page.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();

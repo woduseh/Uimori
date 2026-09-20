@@ -9,6 +9,11 @@
   color: var(--accent-ink);
   border-color: var(--accent);
 }
+.draft-discard-actions:has(.draft-save-leave) .draft-continue {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--line);
+}
 .draft-discard-actions .draft-discard {
   margin-right: auto;
   color: var(--error);

@@ -190,7 +190,10 @@ for (const [viewportName, viewport] of [
     await expect(reader.locator('body')).toContainText(`Harbor greets ${personaTitle}.`);
     await expect(reader.locator('img')).toBeVisible();
     expect(executionRequests).toEqual([]);
-    await page.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
+    await page
+      .getByRole('navigation', { name: '장면 탐색', exact: true })
+      .getByRole('button', { name: '장면 목록 열기', exact: true })
+      .click();
     const scenes = page.getByRole('dialog', { name: '장면 목록', exact: true });
     const firstMessage = scenes.getByRole('button', { name: '첫 메시지', exact: true });
     await expect(firstMessage).toBeVisible();

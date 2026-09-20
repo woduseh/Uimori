@@ -1,6 +1,6 @@
 import { Switch, SelectionCheckbox } from './BooleanControls.js';
 import { useId, useState } from 'react';
-import { ExpandIcon, CloseIcon } from './ui-icons.js';
+import { ExpandIcon, CloseIcon, EditIcon, SearchIcon } from './ui-icons.js';
 import {
   createAgentCollaboration,
   createAgentDefinition,
@@ -84,6 +84,11 @@ export function AgentCollaborationEditor({
   const id = useId();
   const collaboration = value ?? createAgentCollaboration();
   const [removing, setRemoving] = useState<{ id: string; title: string } | null>(null);
+  const [controlDialog, setControlDialog] = useState(false);
+  const [controlQuery, setControlQuery] = useState('');
+  const [controlGroup, setControlGroup] = useState('selected');
+  const [openAgents, setOpenAgents] = useState<string[]>([]);
+  const [showTemplates, setShowTemplates] = useState(false);
   const issue = agentCollaborationIssue(value, controls);
   const update = (changes: Partial<AgentCollaboration>) =>
     onChange({ ...collaboration, ...changes });
@@ -102,6 +107,24 @@ export function AgentCollaborationEditor({
   const missingControls = collaboration.sharedControls.filter(
     (controlId) => !controls.some((control) => control.id === controlId)
   );
+  const controlGroups = [...new Set(controls.map((control) => control.group || '기본 설정'))];
+  const visibleControls = controls.filter((control) => {
+    if (controlGroup === 'selected' && !collaboration.sharedControls.includes(control.id))
+      return false;
+    if (controlGroup !== 'all' && controlGroup !== 'selected') {
+      if ((control.group || '기본 설정') !== controlGroup) return false;
+    }
+    return `${control.label} ${control.description ?? ''}`
+      .toLocaleLowerCase()
+      .includes(controlQuery.trim().toLocaleLowerCase());
+  });
+  const addAgent = (kind: (typeof templates)[number]['kind']) => {
+    if (collaboration.agents.length >= 6) return;
+    const agent = createAgentDefinition(kind, `agent-${crypto.randomUUID()}`);
+    update({ agents: [...collaboration.agents, agent] });
+    setOpenAgents((current) => [...current, agent.id]);
+    setShowTemplates(false);
+  };
 
   return (
     <section className="agent-collaboration" aria-labelledby={`${id}-heading`}>
@@ -143,23 +166,29 @@ export function AgentCollaborationEditor({
           )}
           {collaboration.enabled && (
             <div className="ac-settings">
-              <label className="ac-field ac-budget">
-                전체 추가 호출 한도
-                <input
-                  type="number"
-                  min={1}
-                  max={12}
-                  step={1}
-                  value={collaboration.maxCalls || ''}
-                  aria-describedby={`${id}-budget-note`}
-                  aria-label="전체 추가 호출 한도"
-                  onChange={(event) => update({ maxCalls: Number(event.target.value) })}
-                />
-                <small id={`${id}-budget-note`} className="muted">
-                  모든 에이전트가 나눠 쓰는 한도예요. 채팅의 전체 호출 한도에도 포함돼요.
-                </small>
-              </label>
-              <label className="ac-field">
+              <details className="ac-limits">
+                <summary>
+                  <span>호출·응답 한도</span>
+                  <small>전체 추가 호출 {collaboration.maxCalls}회</small>
+                </summary>
+                <label className="ac-field ac-budget">
+                  전체 추가 호출 한도
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    step={1}
+                    value={collaboration.maxCalls || ''}
+                    aria-describedby={`${id}-budget-note`}
+                    aria-label="전체 추가 호출 한도"
+                    onChange={(event) => update({ maxCalls: Number(event.target.value) })}
+                  />
+                  <small id={`${id}-budget-note`} className="muted">
+                    모든 에이전트가 나눠 쓰는 한도예요. 채팅의 전체 호출 한도에도 포함돼요.
+                  </small>
+                </label>
+              </details>
+              <label className="ac-field ac-shared-instructions">
                 함께 따를 지침
                 <textarea
                   aria-label="함께 따를 지침"
@@ -170,67 +199,74 @@ export function AgentCollaborationEditor({
                   onChange={(event) => update({ sharedInstructions: event.target.value })}
                 />
               </label>
-              <fieldset className="ac-options">
-                <legend>공유할 프롬프트 옵션</legend>
-                <p className="muted">선택한 옵션의 현재 값을 에이전트에게 알려 줘요.</p>
-                {controls.length || missingControls.length ? (
-                  <div className="ac-checks">
-                    {controls.map((control) => (
-                      <label className="ac-check" key={control.id}>
-                        <SelectionCheckbox
-                          checked={collaboration.sharedControls.includes(control.id)}
-                          disabled={
-                            collaboration.sharedControls.length >= 64 &&
-                            !collaboration.sharedControls.includes(control.id)
-                          }
-                          onChange={(event) => setSharedControl(control.id, event.target.checked)}
-                        />
-                        <span>{control.label}</span>
-                      </label>
-                    ))}
-                    {missingControls.map((controlId, index) => (
-                      <label className="ac-check" key={controlId}>
-                        <SelectionCheckbox
-                          checked
-                          onChange={() => setSharedControl(controlId, false)}
-                        />
-                        <span>삭제된 옵션 {index + 1} · 선택을 해제해 주세요.</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="muted">이 프롬프트에는 아직 공유할 옵션이 없어요.</p>
-                )}
-              </fieldset>
+              <section className="ac-shared-summary" aria-label="전달할 창작 옵션">
+                <div>
+                  <strong>전달할 창작 옵션</strong>
+                  <p className="muted">선택한 옵션의 실행 시점 값을 읽기용으로 전달해요.</p>
+                </div>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!controls.length && !missingControls.length}
+                  onClick={() => setControlDialog(true)}
+                >
+                  <EditIcon size={18} aria-hidden="true" />
+                  선택 변경
+                </button>
+                <div className="ac-shared-tags">
+                  {collaboration.sharedControls.length ? (
+                    collaboration.sharedControls.map((controlId, index) => (
+                      <span
+                        className={
+                          controls.some((control) => control.id === controlId) ? '' : 'missing'
+                        }
+                        key={controlId}
+                      >
+                        {controls.find((control) => control.id === controlId)?.label ??
+                          `삭제된 옵션 ${index + 1}`}
+                      </span>
+                    ))
+                  ) : (
+                    <small className="muted">선택한 옵션 없음</small>
+                  )}
+                </div>
+                <small className="muted">프롬프트 전체나 옵션 수정 권한은 전달하지 않아요.</small>
+              </section>
               <div className="ac-add">
                 <div className="ac-heading">
                   <h4>함께할 에이전트</h4>
                   <span className="muted">{collaboration.agents.length} / 6명</span>
                 </div>
-                <p className="muted">템플릿으로 시작한 뒤 이름과 지침을 자유롭게 바꿀 수 있어요.</p>
-                <div className="ac-templates">
-                  {templates.map((template) => (
-                    <button
-                      type="button"
-                      className="secondary"
-                      key={template.kind}
-                      disabled={collaboration.agents.length >= 6}
-                      aria-label={`${template.title} 에이전트 추가`}
-                      onClick={() => {
-                        if (collaboration.agents.length >= 6) return;
-                        update({
-                          agents: [
-                            ...collaboration.agents,
-                            createAgentDefinition(template.kind, `agent-${crypto.randomUUID()}`),
-                          ],
-                        });
-                      }}
-                    >
-                      <strong>{template.title}</strong>
-                      <span>{template.description}</span>
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  className="secondary ac-add-trigger"
+                  aria-expanded={showTemplates}
+                  disabled={collaboration.agents.length >= 6}
+                  onClick={() => setShowTemplates((current) => !current)}
+                >
+                  에이전트 추가
+                </button>
+                {showTemplates && (
+                  <div className="ac-template-picker">
+                    <p className="muted">
+                      템플릿으로 시작한 뒤 이름과 지침을 자유롭게 바꿀 수 있어요.
+                    </p>
+                    <div className="ac-templates">
+                      {templates.map((template) => (
+                        <button
+                          type="button"
+                          className="secondary"
+                          key={template.kind}
+                          aria-label={`${template.title} 에이전트 추가`}
+                          onClick={() => addAgent(template.kind)}
+                        >
+                          <strong>{template.title}</strong>
+                          <span>{template.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               {issue && (
                 <p className="ac-validation" role="status">
@@ -243,7 +279,21 @@ export function AgentCollaborationEditor({
                   const availableModel =
                     !agent.model || models.some((model) => model.id === agent.model?.id);
                   return (
-                    <details className="ac-agent" key={agent.id} open>
+                    <details
+                      className="ac-agent"
+                      key={agent.id}
+                      open={openAgents.includes(agent.id)}
+                      onToggle={(event) => {
+                        const opened = event.currentTarget.open;
+                        setOpenAgents((current) =>
+                          opened
+                            ? current.includes(agent.id)
+                              ? current
+                              : [...current, agent.id]
+                            : current.filter((id) => id !== agent.id)
+                        );
+                      }}
+                    >
                       <summary>
                         <strong>{agent.title || agentLabel}</strong>
                         <span className="muted">
@@ -405,6 +455,106 @@ export function AgentCollaborationEditor({
           )}
         </div>
       </div>
+      <Dialog
+        open={controlDialog}
+        title="전달할 창작 옵션"
+        className="ac-control-dialog"
+        wide
+        onClose={() => setControlDialog(false)}
+      >
+        <div className="ac-control-picker">
+          <aside>
+            <label className="ac-control-search">
+              <SearchIcon size={18} aria-hidden="true" />
+              <span className="sr-only">옵션 이름으로 찾기</span>
+              <input
+                type="search"
+                aria-label="옵션 이름으로 찾기"
+                placeholder="옵션 이름으로 찾기"
+                value={controlQuery}
+                onChange={(event) => setControlQuery(event.target.value)}
+              />
+            </label>
+            <div className="ac-control-groups" role="group" aria-label="옵션 그룹">
+              <button
+                type="button"
+                aria-pressed={controlGroup === 'selected'}
+                onClick={() => setControlGroup('selected')}
+              >
+                <strong>선택한 옵션</strong>
+                <small>{collaboration.sharedControls.length}개</small>
+              </button>
+              <button
+                type="button"
+                aria-pressed={controlGroup === 'all'}
+                onClick={() => setControlGroup('all')}
+              >
+                <strong>모든 옵션</strong>
+                <small>{controls.length}개</small>
+              </button>
+              {controlGroups.map((group) => (
+                <button
+                  type="button"
+                  key={group}
+                  aria-pressed={controlGroup === group}
+                  onClick={() => setControlGroup(group)}
+                >
+                  <strong>{group}</strong>
+                  <small>
+                    {controls.filter((control) => (control.group || '기본 설정') === group).length}
+                    개
+                  </small>
+                </button>
+              ))}
+            </div>
+          </aside>
+          <section aria-label="창작 옵션 목록">
+            <div className="ac-control-picker-heading">
+              <div>
+                <h3>전달할 창작 옵션</h3>
+                <p className="muted">체크한 옵션의 현재값을 보조 에이전트가 참고해요.</p>
+              </div>
+              <span>{collaboration.sharedControls.length} / 64개 선택</span>
+            </div>
+            {(controlGroup === 'selected' || controlGroup === 'all') &&
+              missingControls.map((controlId, index) => (
+                <label className="ac-control-row missing" key={controlId}>
+                  <SelectionCheckbox checked onChange={() => setSharedControl(controlId, false)} />
+                  <strong>삭제된 옵션 {index + 1}</strong>
+                  <small>선택을 해제해 주세요.</small>
+                </label>
+              ))}
+            {visibleControls.map((control) => (
+              <label className="ac-control-row" key={control.id}>
+                <SelectionCheckbox
+                  aria-label={control.label}
+                  checked={collaboration.sharedControls.includes(control.id)}
+                  disabled={
+                    collaboration.sharedControls.length >= 64 &&
+                    !collaboration.sharedControls.includes(control.id)
+                  }
+                  onChange={(event) => setSharedControl(control.id, event.target.checked)}
+                />
+                <strong>{control.label}</strong>
+                <small>
+                  {collaboration.sharedControls.includes(control.id)
+                    ? '실행 시점 값'
+                    : control.description || ''}
+                </small>
+              </label>
+            ))}
+            {!visibleControls.length &&
+              !(
+                (controlGroup === 'selected' || controlGroup === 'all') &&
+                missingControls.length
+              ) && <p className="muted ac-control-empty">조건에 맞는 옵션이 없어요.</p>}
+            <p className="ac-control-note">
+              옵션 선택은 이 프리셋의 초안에 바로 반영돼요. 새 보조 호출에 쓰일 실제 값은 실행 준비
+              시점에 확정돼요.
+            </p>
+          </section>
+        </div>
+      </Dialog>
       <Dialog
         open={!!removing}
         title="에이전트 삭제 확인"
