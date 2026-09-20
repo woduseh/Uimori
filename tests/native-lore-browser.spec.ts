@@ -105,6 +105,53 @@ const viewports = [
   { name: 'mobile', width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
 ];
 
+test.describe('Native lore drag and drop', () => {
+  test.use({ viewport: { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT } });
+
+  test('NATIVELOREDND01 moves lore into a folder and preserves it after save', async ({
+    page,
+    request,
+  }) => {
+    const title = `NATIVELOREDND01 ${randomUUID().slice(0, 8)}`;
+    await seedFolderBot(request, title);
+    const editor = await openLoreEditor(page, title);
+    const navigation = await loreNavigation(editor);
+    const row = (name: string) =>
+      navigation.getByRole('button', { name, exact: true }).locator('..');
+
+    const target = row('세계관');
+    const targetBounds = await target.boundingBox();
+    expect(targetBounds).not.toBeNull();
+    await row('미분류 길')
+      .getByTitle('끌어서 순서 또는 폴더 변경')
+      .dragTo(target, {
+        targetPosition: {
+          x: Math.floor(targetBounds!.width / 2),
+          y: Math.floor(targetBounds!.height / 2),
+        },
+      });
+    await expect(editor.getByLabel('로어 이름', { exact: true })).toHaveValue('미분류 길');
+    await expect(editor.getByLabel('로어 폴더', { exact: true })).toHaveValue(FOLDER_KEY);
+    await expect(navigation.getByRole('status')).toContainText('세계관 폴더');
+
+    const saveResponse = nextSave(page);
+    await editor.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+    const response = await saveResponse;
+    expect(response.ok(), await response.text()).toBe(true);
+    const saved = ((await response.json()) as { saved: Content }).saved;
+    const lorebook = saved.package.nativeRisu.module!.lorebook as Record<string, unknown>[];
+    expect(lorebook.find((entry) => entry.comment === '미분류 길')).toMatchObject({
+      folder: FOLDER_KEY,
+      preservedLoreValue: 'road-source',
+    });
+
+    await page.reload();
+    const reloaded = await openLoreEditor(page, title);
+    await selectLore(reloaded, '미분류 길');
+    await expect(reloaded.getByLabel('로어 폴더', { exact: true })).toHaveValue(FOLDER_KEY);
+  });
+});
+
 for (const viewport of viewports) {
   test.describe(`Native lore browser ${viewport.name} ${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });

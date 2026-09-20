@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { Switch } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
@@ -12,6 +12,7 @@ import {
   UpIcon,
   DownIcon,
   ListIcon,
+  DragHandleIcon,
 } from './ui-icons.js';
 import {
   isLoreFolder,
@@ -19,9 +20,11 @@ import {
   loreParents,
   loreText,
   loreTitle,
+  moveLoreEntry,
   newLoreEntry,
   removeLoreFolder,
   type LoreEntry,
+  type LoreDropPosition,
 } from './native-lore-document.js';
 import './native-risu-lore.css';
 
@@ -69,6 +72,19 @@ export function NativeRisuLoreEditor({
   const [query, setQuery] = useState('');
   const [showList, setShowList] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [dragged, setDragged] = useState<number | null>(null);
+  const draggedRef = useRef<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    index: number | null;
+    position: LoreDropPosition;
+  } | null>(null);
+  const dropTargetRef = useRef<{
+    index: number | null;
+    position: LoreDropPosition;
+  } | null>(null);
+  const [moveAnnouncement, setMoveAnnouncement] = useState('');
+  const expandTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const expandKey = useRef('');
   const index = Math.min(selected, Math.max(0, entries.length - 1));
   const entry = entries[index];
   const parents = loreParents(entries);
@@ -95,6 +111,12 @@ export function NativeRisuLoreEditor({
     setSelected(i);
     setShowList(false);
   };
+  useEffect(
+    () => () => {
+      if (expandTimer.current) clearTimeout(expandTimer.current);
+    },
+    []
+  );
   const edit = (patch: LoreEntry) =>
     onChange(entries.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   const add = (isFolder: boolean) => {
@@ -132,6 +154,89 @@ export function NativeRisuLoreEditor({
     }
     return true;
   };
+  const clearDrag = () => {
+    draggedRef.current = null;
+    setDragged(null);
+    dropTargetRef.current = null;
+    setDropTarget(null);
+    cancelExpand();
+  };
+  const cancelExpand = () => {
+    if (expandTimer.current) clearTimeout(expandTimer.current);
+    expandTimer.current = null;
+    expandKey.current = '';
+  };
+  const targetFor = (event: DragEvent<HTMLElement>, targetIndex: number) => {
+    const target = entries[targetIndex];
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const ratio = (event.clientY - bounds.top) / Math.max(1, bounds.height);
+    const position: LoreDropPosition =
+      isLoreFolder(target) && ratio >= 0.25 && ratio <= 0.75
+        ? 'inside'
+        : ratio < 0.5
+          ? 'before'
+          : 'after';
+    return { index: targetIndex, position };
+  };
+  const over = (event: DragEvent<HTMLElement>, targetIndex: number) => {
+    const sourceIndex = draggedRef.current;
+    if (sourceIndex === null) return;
+    const target = targetFor(event, targetIndex);
+    if (!moveLoreEntry(entries, sourceIndex, target.index, target.position)) {
+      dropTargetRef.current = null;
+      setDropTarget(null);
+      cancelExpand();
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    dropTargetRef.current = target;
+    setDropTarget(target);
+    const targetEntry = entries[targetIndex];
+    const key = target.position === 'inside' ? loreFolderKey(targetEntry) : '';
+    if (!needle && key && collapsed.has(key) && expandKey.current !== key) {
+      if (expandTimer.current) clearTimeout(expandTimer.current);
+      expandKey.current = key;
+      expandTimer.current = setTimeout(() => {
+        setCollapsed((current) => {
+          const next = new Set(current);
+          next.delete(key);
+          return next;
+        });
+      }, 650);
+    } else if (!key || needle || !collapsed.has(key)) cancelExpand();
+    const list = event.currentTarget.closest('.nl-list');
+    if (list) {
+      const listBounds = list.getBoundingClientRect();
+      if (event.clientY < listBounds.top + 36) list.scrollTop -= 12;
+      if (event.clientY > listBounds.bottom - 36) list.scrollTop += 12;
+    }
+  };
+  const commitDrop = (
+    event: DragEvent<HTMLElement>,
+    target: { index: number | null; position: LoreDropPosition }
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const sourceIndex = draggedRef.current;
+    const sourceTitle = sourceIndex === null ? '' : loreTitle(entries[sourceIndex]);
+    const result =
+      sourceIndex === null
+        ? null
+        : moveLoreEntry(entries, sourceIndex, target.index, target.position);
+    clearDrag();
+    if (!result) return;
+    onChange(result.entries);
+    setSelected(result.index);
+    const destination =
+      target.position === 'root' || target.index === null
+        ? '최상위'
+        : target.position === 'inside'
+          ? `${loreTitle(entries[target.index])} 폴더`
+          : loreTitle(entries[target.index]);
+    setMoveAnnouncement(`${sourceTitle} 항목을 ${destination}(으)로 이동했어요.`);
+  };
   const row = (i: number, depth: number): ReactNode => {
     if (!visible.has(i)) return null;
     const item = entries[i],
@@ -143,6 +248,28 @@ export function NativeRisuLoreEditor({
         <div
           className={`nl-row${index === i ? ' is-selected' : ''}`}
           style={{ paddingLeft: Math.min(depth, 5) * 14 }}
+          data-dragging={dragged === i ? 'true' : undefined}
+          data-drop-position={dropTarget?.index === i ? dropTarget.position : undefined}
+          draggable
+          onDragStart={(event) => {
+            if ((event.target as HTMLElement).closest('.icon-button')) {
+              event.preventDefault();
+              return;
+            }
+            setSelected(i);
+            draggedRef.current = i;
+            setDragged(i);
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', String(i));
+          }}
+          onDragEnd={clearDrag}
+          onDragOver={(event) => over(event, i)}
+          onDrop={(event) =>
+            commitDrop(
+              event,
+              dropTargetRef.current?.index === i ? dropTargetRef.current : targetFor(event, i)
+            )
+          }
         >
           {isFolder && (
             <IconButton
@@ -180,6 +307,14 @@ export function NativeRisuLoreEditor({
                     : '필요할 때'}
             </small>
           </button>
+          <span
+            className="nl-drag-handle"
+            title="끌어서 순서 또는 폴더 변경"
+            aria-hidden="true"
+            draggable
+          >
+            <DragHandleIcon size={16} />
+          </span>
         </div>
         {isFolder &&
           !closed &&
@@ -213,12 +348,35 @@ export function NativeRisuLoreEditor({
         </div>
         <div className="nl-tree">
           {entries.map((_, i) => (parents[i] === null ? row(i, 0) : null))}
+          {dragged !== null && (
+            <div
+              className="nl-root-drop"
+              data-drop-active={dropTarget?.position === 'root' ? 'true' : undefined}
+              onDragOver={(event) => {
+                const sourceIndex = draggedRef.current;
+                if (sourceIndex === null || !moveLoreEntry(entries, sourceIndex, null, 'root'))
+                  return;
+                event.preventDefault();
+                event.stopPropagation();
+                event.dataTransfer.dropEffect = 'move';
+                cancelExpand();
+                dropTargetRef.current = { index: null, position: 'root' };
+                setDropTarget({ index: null, position: 'root' });
+              }}
+              onDrop={(event) => commitDrop(event, { index: null, position: 'root' })}
+            >
+              최상위로 이동
+            </div>
+          )}
           {!visible.size && (
             <p className="muted">
               {entries.length ? '검색 결과가 없어요.' : '아직 로어가 없어요.'}
             </p>
           )}
         </div>
+        <p className="sr-only" role="status" aria-live="polite">
+          {moveAnnouncement}
+        </p>
         <details className="nl-policy">
           <summary>로어 선택 설정</summary>
           {selectionControl}
@@ -444,7 +602,8 @@ export function NativeRisuLoreEditor({
           </>
         ) : (
           <div className="native-empty">
-            <p>로어북에 첫 항목을 추가해 보세요.</p>
+            <strong>아직 로어가 없어요.</strong>
+            <p className="muted">첫 로어를 추가하거나 폴더부터 만들어 정리하세요.</p>
             <button type="button" onClick={() => add(false)}>
               로어 추가
             </button>

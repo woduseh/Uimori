@@ -8,9 +8,39 @@
   min-width: 0;
 }
 .nl-row {
+  position: relative;
   display: flex;
   align-items: center;
+  min-height: var(--native-row-min-h, 52px);
   border-radius: 8px;
+}
+.nl-row[draggable="true"] {
+  cursor: grab;
+}
+.nl-row[data-dragging="true"] {
+  cursor: grabbing;
+  opacity: 0.45;
+}
+.nl-row[data-drop-position="before"]::after,
+.nl-row[data-drop-position="after"]::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset-inline: 8px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.nl-row[data-drop-position="before"]::after {
+  top: -2px;
+}
+.nl-row[data-drop-position="after"]::after {
+  bottom: -2px;
+}
+.nl-row[data-drop-position="inside"] {
+  outline: 1px solid var(--accent);
+  background: var(--accent-soft);
 }
 .nl-row.is-selected {
   background: var(--accent-soft);
@@ -30,11 +60,28 @@
   text-align: left;
   overflow-wrap: anywhere;
 }
+.nl-drag-handle {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  min-height: 40px;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.nl-row:hover .nl-drag-handle,
+.nl-row:focus-within .nl-drag-handle,
+.nl-row[data-dragging="true"] .nl-drag-handle {
+  opacity: 1;
+}
 .nl-select strong {
   display: flex;
   gap: 6px;
   align-items: baseline;
   line-height: 1.5;
+  max-height: 3em;
+  overflow: hidden;
 }
 .nl-select svg {
   flex-shrink: 0;
@@ -42,6 +89,21 @@
 .nl-select small {
   color: var(--muted);
   font-size: 12px;
+}
+.nl-root-drop {
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  margin-top: 6px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.nl-root-drop[data-drop-active="true"] {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .nl-policy {
   border-top: 1px solid var(--line);

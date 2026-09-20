@@ -11,7 +11,7 @@ import { NativeRisuToggleEditor } from './NativeRisuToggleEditor.js';
 import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import { SectionNavigation } from './SectionNavigation.js';
 import { IconButton } from './IconButton.js';
-import { AddIcon, UpIcon, DownIcon, DeleteIcon } from './ui-icons.js';
+import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
 import './native-editor.css';
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
@@ -233,6 +233,9 @@ export function NativeRisuPresetEditor({
                 <small>
                   {blockRole(block)} · {blockTypes[text(block.type)] ?? text(block.type)}
                 </small>
+                <span className="native-row-drag-handle" aria-hidden="true">
+                  <DragHandleIcon size={16} />
+                </span>
               </button>
             ))}
           {!items.length && <p className="muted">첫 프롬프트 블록을 추가해 주세요.</p>}
