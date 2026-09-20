@@ -365,40 +365,6 @@
   margin: 0 0 8px;
 }
 
-.library-package-tools {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
-  min-width: 0;
-}
-.library-package-tools > summary {
-  padding: 16px 18px;
-  font-weight: 600;
-  cursor: pointer;
-  line-height: 1.6;
-}
-.library-package-tools-body {
-  display: grid;
-  gap: 20px;
-  padding: 0 18px 18px;
-}
-.library-package-tools h3 {
-  font-size: 14px;
-  line-height: 1.5;
-  margin: 0;
-}
-.library-package-tools p {
-  font-size: 13px;
-  line-height: 1.7;
-  margin: 0;
-}
-.library-package-copies {
-  display: grid;
-  gap: 10px;
-  border-top: 1px solid var(--line);
-  padding-top: 18px;
-}
-.library-package-copies .form-actions,
 .library-import-preview {
   display: flex;
   flex-wrap: wrap;
@@ -471,9 +437,6 @@
   justify-self: start;
   align-self: start;
 }
-.library-content-editor .library-package-tools {
-  margin-top: 20px;
-}
 @media (max-width: 760px) {
   .library-content-editor > .library-detail-heading {
     position: static;
@@ -489,16 +452,6 @@
   }
 }
 @media (max-width: 600px) {
-  .library-package-tools > summary {
-    padding: 14px;
-  }
-  .library-package-tools-body {
-    padding: 0 14px 14px;
-    gap: 16px;
-  }
-  .library-package-copies .form-actions > button {
-    flex: 1;
-  }
   .library-savebar > button {
     width: 100%;
   }
