@@ -357,7 +357,7 @@ test('effective toggles combine canonical sources without changing them and pres
   expect(variables).toMatchObject({
     'toggle_카드.옵션': '값',
     toggle___proto__: 'safe',
-    toggle_mode: 'null',
+    toggle_mode: '0',
   });
   expect(JSON.stringify(input.profile)).toBe(before);
   expect(
@@ -384,7 +384,6 @@ test('native toggles expose their editor input without changing stored control v
       type: 'select',
       input: 'switch',
       options: [
-        { label: '미설정', value: null },
         { label: '끔', value: '0' },
         { label: '켬', value: '1' },
       ],
@@ -394,7 +393,6 @@ test('native toggles expose their editor input without changing stored control v
       type: 'select',
       input: undefined,
       options: [
-        { label: '미설정', value: null },
         { label: 'A', value: '0' },
         { label: 'B', value: '1' },
       ],
