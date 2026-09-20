@@ -1,0 +1,139 @@
+.native-lore-editor .nl-list {
+  gap: 12px;
+}
+.nl-tree,
+.nl-tree-node,
+.nl-row,
+.nl-select {
+  min-width: 0;
+}
+.nl-row {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+.nl-row.is-selected {
+  background: var(--accent-soft);
+}
+.nl-row > .icon-button {
+  flex: 0 0 32px;
+  width: 32px;
+  padding: 4px;
+}
+.nl-row .nl-select {
+  flex: 1;
+  display: grid;
+  gap: 3px;
+  background: transparent;
+  border: 0;
+  padding: 10px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.nl-select strong {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  line-height: 1.5;
+}
+.nl-select svg {
+  flex-shrink: 0;
+}
+.nl-select small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.nl-policy {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: auto;
+}
+.nl-policy summary {
+  cursor: pointer;
+  padding-block: 10px;
+}
+.nl-policy > label {
+  padding-block: 12px;
+}
+.nl-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+}
+.native-editor .nl-switch.check {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  white-space: normal;
+}
+.nl-detail > *,
+.nl-advanced > *,
+.nl-fields > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.nl-folder-content,
+.nl-folder-children {
+  display: grid;
+  gap: 12px;
+}
+.nl-folder-content button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.nl-folder-children button {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  padding: 12px;
+  justify-content: flex-start;
+}
+.nl-folder-children button:hover {
+  background: var(--accent-soft);
+}
+.nl-advanced[open] > .check {
+  margin-block: 8px;
+}
+.native-lore-editor > .nl-mobile-list {
+  display: none;
+}
+.nl-detail .native-detail-heading h3 svg {
+  vertical-align: middle;
+}
+@media (max-width: 600px) {
+  .native-lore-editor .nl-list {
+    display: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 16px 6px;
+    max-height: 55dvh;
+    overflow-y: auto;
+  }
+  .native-lore-editor.nl-show-list .nl-list {
+    display: flex;
+  }
+  .native-lore-editor > .nl-mobile-list {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: fit-content;
+    margin: 20px 6px 0;
+  }
+  .nl-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .nl-row .nl-select {
+    min-height: 48px;
+  }
+}
