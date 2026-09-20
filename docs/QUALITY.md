@@ -35,6 +35,8 @@ Browser defaults are defined in [`fixtures/browser-viewports.json`](../fixtures/
 
 Actual local Risu materials are opt-in: set `UIMORI_RISU_SAMPLE_ROOT` for `node scripts/verify-risu-native-samples.mjs`, optionally `UIMORI_RISU_SAMPLE_PRESET` for an external `.risup`, and use `--grep` for the intended samples. Source files stay read-only and outside Git; rendered private content remains in ignored evidence directories. These checks use a loopback model fixture and do not establish live-provider quality, physical-mobile behavior, or compatibility with every authored script.
 
+For native toggle authoring, `npm run verify:ui-recovery -- --grep "native basic options|native toggle editor"` covers authored input types/captions/switches, grouped inline editing, isolated preview values, string defaults, independent pending source documents, invalid drafts, undo/redo and persisted saves at both recovery viewport sizes. `tests/native-toggle-document.test.ts` covers source-preserving group/item operations and default-variable strings; pair it with `tests/native-risu-toggle-editor.test.ts` and `tests/risu-native-semantics.test.ts` when changing the document projection.
+
 ## Release checks
 
 The [`release-check` runner](../scripts/release-check.mjs) runs `quality:full` and the selected local feature `verify:*` command. The default area is `verify:browser-smoke`; `--full` adds `verify:redesign`. The older `verify:smoke` bundle remains available as an explicit area, but is not repeated automatically. Release/self-host tooling normally uses `--area verify:selfhost`.
