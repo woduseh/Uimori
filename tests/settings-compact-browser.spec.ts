@@ -1,9 +1,11 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { test, expect } from '@playwright/test';
-import { fixtureBotInput } from './fixtures/chat.js';
+import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
 import {
   navigationAction,
+  openChatSettings,
+  selectChatSettingsSection,
   selectSettingsSection,
   startProviderConnection,
 } from './ui-navigation.js';
@@ -247,6 +249,71 @@ test('SCUI05 global lore defaults are saved and copied only to new chats', async
     data: { expectedRevision: saved.revision, ...policy },
   });
   expect(restored.ok()).toBe(true);
+});
+
+test('SCUI06 global lore defaults require a successful read and preserve chat drafts on retry', async ({
+  page,
+  request,
+}) => {
+  const original = await (await request.get('/api/lore-context-defaults')).json();
+  const { revision: _revision, ...policy } = original;
+  const chat = await (
+    await postFixtureChat(request, { data: { title: '로어 기본값 조회 복구' } })
+  ).json();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reads = 0;
+  await page.route('**/api/lore-context-defaults', async (route) => {
+    if (route.request().method() !== 'GET' || ++reads > 1) return route.continue();
+    await gate;
+    await route.fulfill({ status: 503, json: { error: 'SCUI06 synthetic read failure' } });
+  });
+  try {
+    const updated = await request.put('/api/lore-context-defaults', {
+      data: { ...policy, expectedRevision: original.revision, maxRetainedTokens: 32_000 },
+    });
+    expect(updated.ok()).toBe(true);
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    await expect(
+      page.locator('.workspace-header').getByText(chat.title, { exact: true })
+    ).toBeVisible();
+    await openChatSettings(page);
+    await selectChatSettingsSection(page, '기억·로어');
+    const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+    await dialog.getByText('선별 기준과 용량', { exact: true }).click();
+    const retained = dialog.getByLabel('조회 로어 토큰 한도', { exact: true });
+    const reset = dialog.getByRole('button', { name: '전역 기본값 적용', exact: true });
+    await expect.poll(() => reads).toBe(1);
+    await expect(reset).toBeDisabled();
+    await retained.fill('12000');
+    release();
+    await expect(dialog.getByRole('alert')).toContainText('전역 로어 기본값을 불러오지 못했어요');
+    await expect(reset).toBeDisabled();
+    await expect(retained).toHaveValue('12000');
+    await dialog.getByRole('button', { name: '전역 기본값 다시 불러오기', exact: true }).click();
+    await expect(reset).toBeEnabled();
+    await expect(retained).toHaveValue('12000');
+    await expect(dialog.getByRole('alert')).toHaveCount(0);
+    await reset.click();
+    await expect(retained).toHaveValue('32000');
+    await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
+    await expect
+      .poll(async () => {
+        const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
+        return detail.profile.loreContext.maxRetainedTokens;
+      })
+      .toBe(32_000);
+  } finally {
+    release();
+    const current = await (await request.get('/api/lore-context-defaults')).json();
+    const restored = await request.put('/api/lore-context-defaults', {
+      data: { ...policy, expectedRevision: current.revision },
+    });
+    expect(restored.ok()).toBe(true);
+  }
 });
 
 test('SCUI02 settings back, resize and close preserve provider and chat drafts until explicit discard', async ({

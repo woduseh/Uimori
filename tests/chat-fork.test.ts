@@ -737,6 +737,7 @@ describe('independent stored-story fork without generation', () => {
       if (
         name === 'versions' ||
         name === 'prompt_workspace' ||
+        name === 'lore_context_defaults' ||
         name === 'package_behavior_entropy' ||
         name.startsWith('library_')
       )
