@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createServer, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
+import { postFixtureChat } from './fixtures/chat.js';
 
 let server: ViteDevServer;
 let origin: string;
@@ -202,4 +203,57 @@ test('CHATREC03 mobile mini navigator follows source IDs and keeps the opening o
   const reader = await page.locator('.reader-scrollport').boundingBox();
   const bar = await nav.boundingBox();
   expect(bar!.y).toBeGreaterThanOrEqual(reader!.y + reader!.height - 1);
+});
+
+// One JS task reproduces A -> B -> A before React can commit a different query.
+// The reader must reject the old response by intent, not by comparing URL fields alone.
+test('READERNAV a late reader response cannot acknowledge a newer A-B-A navigation', async ({
+  page,
+  request,
+}) => {
+  const chat = await (await postFixtureChat(request, { data: { title: 'Navigation A' } })).json();
+  const other = await (await postFixtureChat(request, { data: { title: 'Navigation B' } })).json();
+  const initial = await (await request.get(`/api/chats/${chat.id}/reader`)).json();
+  const staleTitle = 'READERNAV stale response must not be applied';
+  let holdNext = false;
+  let captured = false;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
+    if (!holdNext) return route.continue();
+    holdNext = false;
+    const response = await route.fetch();
+    const body = await response.json();
+    body.chat.title = staleTitle;
+    captured = true;
+    await gate;
+    await route.fulfill({ response, json: body });
+  });
+  try {
+    await page.goto(`/?chat=${chat.id}`);
+    await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toBeVisible();
+    holdNext = true;
+    const changed = await request.patch(`/api/chats/${chat.id}/title`, {
+      data: { title: 'Navigation current title', expectedTitleRevision: initial.chat.titleRevision },
+    });
+    expect(changed.ok()).toBe(true);
+    await expect.poll(() => captured).toBe(true);
+    await page.evaluate(
+      ({ first, second }) => {
+        for (const id of [second, first]) {
+          history.pushState(null, '', `/?chat=${id}`);
+          dispatchEvent(new PopStateEvent('popstate'));
+        }
+      },
+      { first: chat.id, second: other.id }
+    );
+    release();
+    await expect(page.getByText('Navigation current title', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(staleTitle, { exact: true })).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`[?&]chat=${chat.id}(?:&|$)`));
+  } finally {
+    release();
+  }
 });
