@@ -113,6 +113,29 @@ test('auxiliary failures show separate safe causes and recreate status with curr
     await expect(failure).not.toContainText('구간을 자동');
     await expect(failure.getByRole('button', { name: '현재 설정으로 번역 재시도' })).toBeVisible();
   }
+  jobs[1].error = 'TRANSLATION_REFUSAL_CHECK_FAILED';
+  jobs[1].result = {
+    mock: false,
+    sourceRevision: source.id,
+    sourceHash: source.hash,
+    text: 'Saved translation',
+  };
+  let judgmentRequests = 0;
+  await page.route('**/api/jobs/synthetic-translation/rejudge', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({});
+    judgmentRequests++;
+    await route.fulfill({
+      json: { ...jobs[1], id: 'synthetic-judgment-recovery', status: 'queued' },
+    });
+  });
+  await page.reload();
+  const recoveredActivity = page.getByTestId('turn-activity').first();
+  if (!(await recoveredActivity.evaluate((element) => (element as HTMLDetailsElement).open)))
+    await recoveredActivity.locator(':scope > summary').click();
+  await recoveredActivity
+    .getByRole('button', { name: '번역 판정만 다시 시도', exact: true })
+    .click();
+  await expect.poll(() => judgmentRequests).toBe(1);
   const after: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(after.sources).toEqual(detail!.sources);
 });

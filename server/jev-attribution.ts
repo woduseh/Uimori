@@ -12,11 +12,15 @@ import { HttpError, record } from './request-validation.js';
 export function validateTranslationJudgmentWire(
   sourceHash: string,
   policy: unknown,
-  wire: WireRecord
+  wire: WireRecord,
+  expectedResponse?: string
 ) {
   const judgment = validateTranslationJudgmentPolicy(policy);
   const response = record(record(wire.body).state).response;
-  if (typeof response !== 'string')
+  if (
+    typeof response !== 'string' ||
+    (expectedResponse !== undefined && response !== expectedResponse)
+  )
     throw new HttpError(400, 'TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
   const request = translationJudgmentRequest(response);
   const body = { model: JEV_MODEL, ...request };

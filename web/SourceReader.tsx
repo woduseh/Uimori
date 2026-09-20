@@ -1,3 +1,4 @@
+import { canRejudgeTranslation } from '../core/translation-recovery.js';
 import { displayTranslationJob } from './translation-display.js';
 import { resolveInlineImage, IMAGE_POSITION_UNAVAILABLE } from './image-placement.js';
 import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
@@ -1089,7 +1090,7 @@ function JobActions({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const perform = async (operation: 'retry' | 'cancel' | 'status') => {
+  const perform = async (operation: 'retry' | 'cancel' | 'status' | 'rejudge') => {
     setPending(true);
     setError('');
     onError('');
@@ -1111,6 +1112,16 @@ function JobActions({
   };
   return (
     <>
+      {canRejudgeTranslation(job) && (
+        <button
+          type="button"
+          className="secondary"
+          disabled={pending}
+          onClick={() => void perform('rejudge')}
+        >
+          번역 판정만 다시 시도
+        </button>
+      )}
       {retryable(job.status) && (
         <button
           type="button"

@@ -1,3 +1,6 @@
+import { createApp } from '../server/app.js';
+import { JEV_ENDPOINT } from '../server/jev-judgment.js';
+import { rejudgeTranslation } from '../server/source-editing.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -452,5 +455,116 @@ test('unsupported v2 database refuses startup without rewriting translation rese
     expect(original.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
   } finally {
     original.close();
+  }
+});
+
+function failedJudgment(store: Store) {
+  const original = source(store);
+  const successful = store.editTranslation(original.id, {
+    text: 'Previous successful translation',
+    expectedRevision: 0,
+    expectedSourceHash: original.hash,
+  });
+  const job = store.retranslate(original.id);
+  const active = store.claimJob(job.id, 'owner', {})!;
+  store.finishAuxiliary(job.id, active.generation, 'owner', {
+    status: 'failed',
+    error: 'TRANSLATION_REFUSAL_CHECK_FAILED',
+    result: {
+      mock: false,
+      sourceRevision: original.id,
+      sourceHash: original.hash,
+      text: 'Saved translation 😀\r\n',
+    },
+  });
+  return { original, successful, job: store.job(job.id) };
+}
+test('translation judgment recovery reserves original candidate and policy exactly once, preserving previous success', () => {
+  const store = database();
+  const { original, successful, job } = failedJudgment(store);
+  promptSetting(store, 'Later settings', 5);
+  const recovery = rejudgeTranslation(store, job.id);
+  expect(recovery.input).toMatchObject({
+    ...(job.input as object),
+    judgmentRecovery: { text: job.result!.text, sourceHash: original.hash },
+  });
+  expect(recovery.previousResult?.jobId).toBe(successful.id);
+  expect(rejudgeTranslation(store, job.id).id).toBe(recovery.id);
+  store.cancelJob(recovery.id);
+  expect(rejudgeTranslation(store, job.id).status).toBe('cancelled');
+  expect(store.job(job.id).result).toEqual(job.result);
+  const restored = database();
+  restored.product.import(store.product.export());
+  expect(restored.job(recovery.id).input).toEqual(recovery.input);
+  expect(rejudgeTranslation(restored, job.id).id).toBe(recovery.id);
+});
+test.each(['source edit', 'newer translation', 'refusal', 'no candidate'])(
+  'rejects judgment recovery after %s',
+  (reason) => {
+    const store = database();
+    const { original, job } = failedJudgment(store);
+    if (reason === 'source edit')
+      store.editSource(original.id, { text: 'Changed', expectedRevision: 0 });
+    if (reason === 'newer translation') store.retranslate(original.id);
+    if (reason === 'refusal')
+      store.db
+        .prepare('UPDATE jobs SET error=? WHERE id=?')
+        .run('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED', job.id);
+    if (reason === 'no candidate')
+      store.db.prepare('DELETE FROM job_results WHERE job_id=?').run(job.id);
+    expect(() => rejudgeTranslation(store, job.id)).toThrow('recovery unavailable');
+  }
+);
+
+test('HTTP judgment recovery completes with one JEV attempt and no translator, then survives archive restore', async () => {
+  const store = database();
+  const { job } = failedJudgment(store);
+  const item = owned.find((item) => item.store === store)!;
+  store.close();
+  item.store = undefined;
+  vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-key');
+  const fetch = vi.fn(async (url: unknown, init?: RequestInit) => {
+    expect(url).toBe(JEV_ENDPOINT);
+    expect(JSON.parse(String(init?.body)).state.response).toBe(job.result!.text);
+    return new Response(
+      JSON.stringify({
+        model: 'jev-latest',
+        answers: { explicitRefusal: { type: 'noul', noul: 0.05 } },
+      })
+    );
+  });
+  vi.stubGlobal('fetch', fetch);
+  const app = await createApp({
+    dbPath: join(item.dir, 'test.sqlite'),
+    buildId: 'synthetic-recovery',
+    testMode: true,
+  });
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/jobs/${job.id}/rejudge`,
+      payload: {},
+      headers: { host: '127.0.0.1' },
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    const recovery = response.json();
+    await vi.waitFor(() => expect(app.store.job(recovery.id).status).toBe('completed'));
+    expect(app.store.job(recovery.id).result?.text).toBe(job.result!.text);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const again = await app.inject({
+      method: 'POST',
+      url: `/api/jobs/${job.id}/rejudge`,
+      payload: {},
+      headers: { host: '127.0.0.1' },
+    });
+    expect(again.json().id).toBe(recovery.id);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const restored = database();
+    restored.product.import(app.store.product.export());
+    expect(restored.job(recovery.id).result).toEqual(app.store.job(recovery.id).result);
+  } finally {
+    await app.close();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   }
 });

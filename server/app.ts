@@ -1,3 +1,4 @@
+import { rejudgeTranslation } from './source-editing.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -442,7 +443,10 @@ export async function createApp(options: AppOptions): Promise<App> {
               store.run(source.runId).snapshot,
               queued.input
             );
-            if (queued.kind !== 'image')
+            if (
+              queued.kind !== 'image' &&
+              !(queued.kind === 'translation' && record(queued.input).judgmentRecovery)
+            )
               requireModel(snapshot.profile?.models[queued.kind], queued.kind);
             const log = (kind: 'inputs' | 'toolEvents', value: unknown) => {
               const current = store.job(id);
@@ -476,7 +480,8 @@ export async function createApp(options: AppOptions): Promise<App> {
                     validateTranslationJudgmentWire(
                       current.sourceHash,
                       record(record(current.input).translationPolicy).judgment,
-                      wire
+                      wire,
+                      record(current.input).judgmentRecovery?.text
                     );
                   else throw new Error('Invalid judgment job kind');
                 }
@@ -640,7 +645,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 store.transaction(() => {
                   assertCurrent();
                   store.db
-                    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+                    .prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?')
                     .run(JSON.stringify(prepared.snapshot), id);
                 });
                 executionSnapshot.nativeRisuExecution = prepared.snapshot.nativeRisuExecution;
@@ -781,7 +786,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               store.transaction(() => {
                 assertCurrent();
                 store.db
-                  .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
+                  .prepare('UPDATE runs SET snapshot=snapshot_pack(?),updated_at=? WHERE id=?')
                   .run(
                     JSON.stringify(
                       persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
@@ -807,7 +812,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               store.transaction(() => {
                 assertCurrent();
                 store.db
-                  .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
+                  .prepare('UPDATE runs SET snapshot=snapshot_pack(?),updated_at=? WHERE id=?')
                   .run(
                     JSON.stringify(
                       persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
@@ -863,16 +868,20 @@ export async function createApp(options: AppOptions): Promise<App> {
                       store.transaction(() => {
                         assertCurrent();
                         const current = store.run(id);
-                        store.db.prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?').run(
-                          JSON.stringify(
-                            persistedContextSnapshot(current.snapshot, {
-                              ...executionSnapshot,
-                              contextPlan: plan,
-                            })
-                          ),
-                          new Date().toISOString(),
-                          id
-                        );
+                        store.db
+                          .prepare(
+                            'UPDATE runs SET snapshot=snapshot_pack(?),updated_at=? WHERE id=?'
+                          )
+                          .run(
+                            JSON.stringify(
+                              persistedContextSnapshot(current.snapshot, {
+                                ...executionSnapshot,
+                                contextPlan: plan,
+                              })
+                            ),
+                            new Date().toISOString(),
+                            id
+                          );
                         store.event(run.chatId, 'run.context.updated', id);
                       });
                       publish(run.chatId);
@@ -890,7 +899,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                   });
                   validateContextPlan(prepared.snapshot);
                   store.db
-                    .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
+                    .prepare('UPDATE runs SET snapshot=snapshot_pack(?),updated_at=? WHERE id=?')
                     .run(
                       JSON.stringify(
                         persistedContextSnapshot(store.run(id).snapshot, prepared.snapshot)
@@ -913,7 +922,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               store.transaction(() => {
                 assertCurrent();
                 store.db
-                  .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+                  .prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?')
                   .run(
                     JSON.stringify(
                       persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
@@ -953,7 +962,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             store.transaction(() => {
               assertCurrent();
               store.db
-                .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+                .prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?')
                 .run(JSON.stringify({ ...store.run(id).snapshot, mainJudgment: input }), id);
             });
             const judgment = await judgeMainRefusal(input, {
@@ -994,7 +1003,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           store.transaction(() => {
             assertCurrent();
             if (nativeOutput.nativeRisuExecution)
-              store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
+              store.db.prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?').run(
                 JSON.stringify({
                   ...store.run(id).snapshot,
                   nativeRisuExecution: nativeOutput.nativeRisuExecution,
@@ -1025,7 +1034,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 const current = store.run(id);
                 if (current.status === 'running')
                   store.db
-                    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+                    .prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?')
                     .run(JSON.stringify({ ...current.snapshot, contextPlan: error.plan }), id);
               });
               store.finishRun(
@@ -1474,6 +1483,13 @@ export async function createApp(options: AppOptions): Promise<App> {
     runs.get(run.id)?.abort(new Error('Run cancelled'));
     publish(run.chatId);
     return run;
+  });
+  app.post<{ Params: { id: string } }>('/api/jobs/:id/rejudge', async (request) => {
+    fields(record(request.body ?? {}), []);
+    const job = rejudgeTranslation(store, request.params.id);
+    publish(job.chatId);
+    pumpJobs();
+    return job;
   });
   app.post<{ Params: { id: string } }>('/api/jobs/:id/retry', async (request) => {
     const body: RecordBody = record(request.body ?? {});

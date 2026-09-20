@@ -684,7 +684,7 @@ export class HelperWorkspace {
       if (titled.changes) this.event(conversationId, null, 'conversation.updated');
       this.store.db
         .prepare(
-          'INSERT INTO helper_tasks(id,conversation_id,request_key,request,status,snapshot,usage,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)'
+          'INSERT INTO helper_tasks(id,conversation_id,request_key,request,status,snapshot,usage,created_at,updated_at) VALUES(?,?,?,?,?,snapshot_pack(?),?,?,?)'
         )
         .run(
           id,
@@ -972,7 +972,7 @@ export class HelperWorkspace {
         }
         const revision = (previous?.revision ?? 0) + 1;
         this.store.db
-          .prepare('INSERT INTO helper_artifacts VALUES(?,?,?,?,?,?,?,?,?,?)')
+          .prepare('INSERT INTO helper_artifacts VALUES(?,?,?,?,?,?,snapshot_pack(?),?,?,?)')
           .run(
             id,
             revision,
@@ -1007,7 +1007,7 @@ export class HelperWorkspace {
         createdAt: now(),
       };
       this.store.db
-        .prepare('INSERT INTO helper_artifacts VALUES(?,?,?,?,?,?,?,?,?,?)')
+        .prepare('INSERT INTO helper_artifacts VALUES(?,?,?,?,?,?,snapshot_pack(?),?,?,?)')
         .run(
           id,
           updated.revision,

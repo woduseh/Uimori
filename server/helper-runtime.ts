@@ -680,7 +680,7 @@ export class HelperRuntime {
       };
     }
     this.store.db
-      .prepare('UPDATE helper_tasks SET snapshot=? WHERE id=?')
+      .prepare('UPDATE helper_tasks SET snapshot=snapshot_pack(?) WHERE id=?')
       .run(JSON.stringify(task.snapshot), id);
     const signal = AbortSignal.any([
       controller.signal,
@@ -1398,7 +1398,9 @@ export class HelperRuntime {
       );
       if (count >= task.snapshot.limits.artifacts) throw new HttpError(409, 'ARTIFACT_JOB_LIMIT');
       this.store.db
-        .prepare("INSERT INTO helper_artifact_jobs VALUES(?,?,?,?,'running',NULL,NULL,NULL,?)")
+        .prepare(
+          "INSERT INTO helper_artifact_jobs VALUES(?,?,?,snapshot_pack(?),'running',NULL,NULL,NULL,?)"
+        )
         .run(
           childId,
           task.id,
@@ -1456,7 +1458,7 @@ export class HelperRuntime {
       );
       const compiled = compileSnapshotPrompt(published);
       this.store.db
-        .prepare('UPDATE helper_artifact_jobs SET snapshot=? WHERE id=?')
+        .prepare('UPDATE helper_artifact_jobs SET snapshot=snapshot_pack(?) WHERE id=?')
         .run(JSON.stringify(compiled), childId);
       const result = await runMain(compiled, {
         ...hooks,

@@ -64,6 +64,7 @@ export type AuxiliaryBundle = {
   assets?: AssetEntry[];
   translationReferences?: TranslationReference[];
   translationPolicy?: TranslationPolicy;
+  judgmentRecovery?: string;
 };
 export type AuxiliaryJobResult = {
   imageTarget?: ImageTarget;
@@ -387,7 +388,7 @@ export async function runAuxiliaryJob(
   )
     throw new Error('SOURCE_DEPENDENCY_MISMATCH');
   let nativePreparationError: unknown;
-  if (nativeRisuSnapshotNeedsRefresh(snapshot)) {
+  if (!bundle.judgmentRecovery && nativeRisuSnapshotNeedsRefresh(snapshot)) {
     try {
       // This is a new operation against frozen source-time inputs. The original receipt stays intact.
       snapshot = supportedNativeRisuSnapshot(snapshot);
@@ -432,9 +433,12 @@ export async function runAuxiliaryJob(
   const readTranslation = translationReader(snapshot, bundle.translationReferences ?? []);
   const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
   // Fixture annotations remain explicitly marked; live output still requires artifact validation.
-  const mock = job.kind !== 'image' && (!target || target.connection.protocol === 'fixture-sse-v1');
+  const mock =
+    !bundle.judgmentRecovery &&
+    job.kind !== 'image' &&
+    (!target || target.connection.protocol === 'fixture-sse-v1');
   const maxCalls = job.kind === 'translation' ? policy.maxCalls : snapshot.settings.maxCalls;
-  let candidateText: string | undefined;
+  let candidateText: string | undefined = bundle.judgmentRecovery;
   let stage: AuxiliaryFailureDiagnostic['stage'] = 'preparation';
   let lastAttemptId: string | undefined;
   const cancelState = () => hooks.cancellationStatus ?? 'cancelled';
@@ -644,11 +648,12 @@ export async function runAuxiliaryJob(
     }
 
     if (job.kind === 'translation') {
-      executionSnapshot = await prepareNativeRisuTranslationPrompt(snapshot);
+      if (!bundle.judgmentRecovery)
+        executionSnapshot = await prepareNativeRisuTranslationPrompt(snapshot);
       for (let retry = 0; ; retry++) {
         if (hooks.signal.aborted) throw new AuxiliaryExecutionError('AUXILIARY_CANCELLED');
         try {
-          const output = (await runInput(input)).output;
+          const output = bundle.judgmentRecovery ?? (await runInput(input)).output;
           if (typeof output !== 'string' || !output.trim())
             throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_EMPTY');
           candidateText = output;
@@ -660,7 +665,7 @@ export async function runAuxiliaryJob(
             error.retryable &&
             !hooks.signal.aborted
           ) {
-            if (retry < policy.maxRetries) continue;
+            if (!bundle.judgmentRecovery && retry < policy.maxRetries) continue;
             throw new AuxiliaryExecutionError('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED');
           }
           throw error;
@@ -707,7 +712,7 @@ export async function runAuxiliaryJob(
         }
         if (hooks.signal.aborted) throw new AuxiliaryExecutionError('AUXILIARY_CANCELLED');
         if (verdict === 'refused') {
-          if (retry < policy.maxRetries) continue;
+          if (!bundle.judgmentRecovery && retry < policy.maxRetries) continue;
           throw new AuxiliaryExecutionError('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED');
         }
         const outcome: AuxiliaryOutcome = {

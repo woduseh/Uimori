@@ -264,7 +264,9 @@ export async function applyNativeRisuAction(
         if (index === first) {
           id = reserved.id;
           store.db
-            .prepare('UPDATE runs SET parent_revision=?,request=?,snapshot=? WHERE id=?')
+            .prepare(
+              'UPDATE runs SET parent_revision=?,request=?,snapshot=snapshot_pack(?) WHERE id=?'
+            )
             .run(head, request, JSON.stringify(snapshot), id);
         } else {
           const added = store.createRunInTransaction(

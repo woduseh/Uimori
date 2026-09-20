@@ -1,3 +1,4 @@
+import { SnapshotDatabase, initSnapshotStorage } from './snapshot-database.js';
 import { canRecoverMainJudgment } from '../core/main-judgment-recovery.js';
 import { DatabaseSync } from 'node:sqlite';
 import { initHelperWorkspace } from './helper-workspace.js';
@@ -99,7 +100,7 @@ export class Store {
       throw new Error('Database already has a running server owner');
     }
     try {
-      this.db = new DatabaseSync(this.path);
+      this.db = new SnapshotDatabase(this.path);
     } catch (error) {
       this.ownership.close();
       throw error;
@@ -139,6 +140,7 @@ export class Store {
         initChatOverrides(this);
         initChatOptions(this);
         initResponseStreams(this.db);
+        initSnapshotStorage(this.db);
       });
       // The maintenance row belongs to every boot, not only to a fresh database.
       initMaintenance(this);
@@ -413,7 +415,7 @@ export class Store {
     const status = 'queued';
     this.db
       .prepare(
-        'INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)'
+        'INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,?,?,snapshot_pack(?),?,?,?,?,?)'
       )
       .run(
         id,
@@ -591,7 +593,7 @@ export class Store {
       const time = now();
       this.db
         .prepare(
-          "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,'queued',?,?,?,?,?,?,?)"
+          "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,'queued',?,snapshot_pack(?),?,?,?,?,?)"
         )
         .run(
           id,

@@ -209,7 +209,7 @@ export function importChatBackup(store: Store, value: unknown): ChatBackupImport
           }
           store.db
             .prepare(
-              `INSERT INTO ${table}(${columns.map((field) => field.column).join(',')}) VALUES(${columns.map(() => '?').join(',')})`
+              `INSERT INTO ${table}(${columns.map((field) => field.column).join(',')}) VALUES(${columns.map((field) => (field.column === 'snapshot' ? 'snapshot_pack(?)' : '?')).join(',')})`
             )
             .run(
               ...columns.map((field) =>

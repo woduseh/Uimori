@@ -1,3 +1,4 @@
+import { translationRecovery } from './source-editing.js';
 import { translationPolicy, type TranslationPolicy } from '../core/translation-settings.js';
 import type { Store } from './store.js';
 import { type AssetEntry } from '../core/auxiliary.js';
@@ -34,7 +35,10 @@ export function auxiliaryBridge(
         snapshot,
         ...(job.kind === 'image' ? { imageSource: imageTargetSource(store, job, true) } : {}),
         ...(job.kind === 'translation'
-          ? { translationReferences: translationReferences(store, snapshot) }
+          ? {
+              translationReferences: translationReferences(store, snapshot),
+              judgmentRecovery: translationRecovery(job.input, source.hash),
+            }
           : {}),
         assets: job.kind === 'image' ? imageCatalog(job.input) : assets,
         ...(job.kind === 'translation' &&

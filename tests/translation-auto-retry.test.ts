@@ -50,6 +50,64 @@ describe('shared Jev translation refusal judgment', () => {
       }),
       { status: 200 }
     );
+  test.each([0.05, 0.95])(
+    'judgment-only recovery never invokes translator, including refusal %s',
+    async (refusal) => {
+      const seed = bundle();
+      native(seed, 'http://127.0.0.1:1');
+      seed.judgmentRecovery = '보존된 번역 😀\r\n' + '후보 '.repeat(1000);
+      seed.translationPolicy = { judgment: { threshold: 0.9 }, maxRetries: 4, maxCalls: 10 };
+      const observed = hooks();
+      const send = vi.fn(async (_url: unknown, init?: RequestInit) => {
+        expect(JSON.parse(String(init?.body)).state.response).toBe(seed.judgmentRecovery);
+        return answer(refusal);
+      });
+      const result = await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', {
+        ...observed.options,
+        jev: { credential: () => 'key', fetch: send },
+      });
+      expect(result).toMatchObject({
+        status: refusal < 0.9 ? 'completed' : 'failed',
+        result: { text: seed.judgmentRecovery, mock: false },
+      });
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(observed.wire).toHaveLength(1);
+      expect(observed.wire[0].protocol).toBe('typesafe-systemone-v1');
+      expect(() =>
+        validateTranslationJudgmentWire(
+          seed.source.hash,
+          seed.translationPolicy!.judgment,
+          observed.wire[0],
+          seed.judgmentRecovery
+        )
+      ).not.toThrow();
+      expect(() =>
+        validateTranslationJudgmentWire(
+          seed.source.hash,
+          seed.translationPolicy!.judgment,
+          observed.wire[0],
+          'Substituted candidate'
+        )
+      ).toThrow('TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
+    }
+  );
+  test('judgment-only failure preserves candidate for another explicit recovery', async () => {
+    const seed = bundle();
+    seed.judgmentRecovery = 'Saved candidate';
+    const result = await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', {
+      ...hooks().options,
+      jev: {
+        credential: () => {
+          throw new Error('No credential');
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: 'TRANSLATION_REFUSAL_CHECK_FAILED',
+      result: { text: seed.judgmentRecovery, mock: false },
+    });
+  });
   test.each([
     [0.05, 0.9, 'completed', null],
     [0.58, 0.9, 'completed', null],

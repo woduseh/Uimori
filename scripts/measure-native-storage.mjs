@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
+import { SnapshotDatabase, initSnapshotStorage } from '../dist/server/snapshot-database.js';
+import { isDeepStrictEqual } from 'node:util';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { defaultProfile } from '../dist/core/product.js';
@@ -10,7 +11,7 @@ import { assertBuild, root, newId, json } from './lib.mjs';
 const identity = await assertBuild();
 const directory = path.join(root, 'output', 'benchmarks', `native-storage-${newId()}`);
 await mkdir(directory, { recursive: true });
-const db = new DatabaseSync(path.join(directory, 'synthetic.sqlite'));
+const db = new SnapshotDatabase(path.join(directory, 'synthetic.sqlite'));
 const bytes = (value) => Buffer.byteLength(JSON.stringify(value));
 const card = { name: 'Synthetic storage card', description: 'A synthetic guide.' };
 const pkg = projectNativeRisuPackage(
@@ -33,7 +34,19 @@ const pkg = projectNativeRisuPackage(
 ).pkg;
 const results = [];
 try {
-  db.exec('CREATE TABLE snapshots (scene_count INTEGER PRIMARY KEY, snapshot TEXT NOT NULL)');
+  db.exec('PRAGMA foreign_keys=ON');
+  for (const table of [
+    'runs',
+    'context_checkpoints',
+    'context_jobs',
+    'helper_tasks',
+    'helper_artifact_jobs',
+    'helper_artifacts',
+  ])
+    db.exec(
+      `CREATE TABLE ${table} (id TEXT PRIMARY KEY, revision INTEGER, snapshot TEXT NOT NULL)`
+    );
+  initSnapshotStorage(db);
   for (const count of [10, 100, 300]) {
     const history = Array.from({ length: count }, (_, index) => ({
       revision: `source-${index}`,
@@ -73,11 +86,28 @@ try {
     };
     collect(snapshot);
     const native = snapshot.nativeRisuExecution;
-    db.prepare('INSERT INTO snapshots VALUES (?,?)').run(count, JSON.stringify(snapshot));
+    db.prepare('INSERT INTO runs VALUES (?,1,snapshot_pack(?))').run(
+      String(count),
+      JSON.stringify(snapshot)
+    );
+    const restored = JSON.parse(
+      db.prepare('SELECT snapshot FROM runs WHERE id=?').get(String(count)).snapshot
+    );
+    if (!isDeepStrictEqual(restored, JSON.parse(JSON.stringify(snapshot))))
+      throw new Error('Snapshot roundtrip mismatch');
     results.push({
       count,
       manuscriptBytes: history.reduce((sum, item) => sum + Buffer.byteLength(item.text), 0),
       snapshotBytes: bytes(snapshot),
+      storedSnapshotBytes: db
+        .prepare('SELECT length(CAST(snapshot AS BLOB)) AS bytes FROM runs WHERE id=?')
+        .get(String(count)).bytes,
+      cumulativeStoredJsonBytes: db
+        .prepare('SELECT sum(length(CAST(snapshot AS BLOB))) AS bytes FROM runs')
+        .get().bytes,
+      sharedTextBytes: db
+        .prepare('SELECT sum(length(CAST(body AS BLOB))) AS bytes FROM snapshot_texts')
+        .get().bytes,
       historyBytes: bytes(snapshot.history),
       logicalHistoryBytes: bytes(snapshot.logicalHistory),
       nativeHistoryBytes: bytes(native.history),
@@ -99,7 +129,7 @@ const report = {
   identity,
   results,
   limitations:
-    'Synthetic 8 KB scenes, actual native preparation and JSON stored in a measurement SQLite table. Three isolated history lengths, not cumulative production growth. No model calls, request/output callbacks, prompt wire receipts, indexes or archive overhead. Duplicated text is an upper-bound opportunity, not a migration saving guarantee.',
+    'Synthetic 8 KB scenes and actual native preparation. Three snapshots share one isolated SQLite text pool; physical bytes include its indexes and triggers. No model calls, request/output callbacks, wire receipts or full application tables. Not production growth or archive size.',
 };
 await json(path.join(directory, 'summary.json'), report);
 console.log(JSON.stringify({ results, limitations: report.limitations }));
