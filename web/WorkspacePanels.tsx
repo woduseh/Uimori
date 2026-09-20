@@ -1,3 +1,4 @@
+import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
 import type { ReactNode } from 'react';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Switch } from './BooleanControls.js';
@@ -456,6 +457,8 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
   );
 }
 
+const appSaveSections = ['connection', 'model', 'prompt', 'illustration'] as const;
+
 export function AppSettingsPanel({
   initialTab = 'general',
   state,
@@ -493,6 +496,8 @@ export function AppSettingsPanel({
   const [illustrationDirty, setIllustrationDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  const [savingClose, setSavingClose] = useState(false);
+  const saveGroup = useSettingsSaveGroup(appSaveSections);
   const [discardError, setDiscardError] = useState('');
   const dirty = connectionDirty || archiveDirty || modelDirty || promptDirty || illustrationDirty;
   const root = useRef<HTMLElement>(null);
@@ -516,6 +521,7 @@ export function AppSettingsPanel({
     requestAnimationFrame(() => document.getElementById(`${id}-${active}-tab`)?.focus());
   }
   const closeHistory = useSettingsHistory(() => {
+    if (savingClose) return true;
     const nested = root.current
       ?.closest('dialog')
       ?.querySelector<HTMLDialogElement>('dialog[open]');
@@ -534,6 +540,7 @@ export function AppSettingsPanel({
     return false;
   }, onClose);
   function requestClose() {
+    if (savingClose) return;
     if (dirty) setDiscard(true);
     else closeHistory();
   }
@@ -703,6 +710,7 @@ export function AppSettingsPanel({
                     <ModelWorkspaceEditor
                       library={state.library}
                       onDirtyChange={setModelDirty}
+                      onSaveHandlerChange={saveGroup.registrations.model}
                       onManage={() => select('connections')}
                     />
                   )}
@@ -711,6 +719,7 @@ export function AppSettingsPanel({
                       library={state.library}
                       reload={state.loadLibrary}
                       onDirtyChange={setPromptDirty}
+                      onSaveHandlerChange={saveGroup.registrations.prompt}
                       onEditPrompt={onEditPrompt}
                       navigationDisabled={dirty}
                     />
@@ -723,6 +732,7 @@ export function AppSettingsPanel({
                           reload={state.loadLibrary}
                           onError={state.setError}
                           onDirtyChange={setConnectionDirty}
+                          onSaveHandlerChange={saveGroup.registrations.connection}
                         />
                       ) : (
                         <p role="status">프로바이더 목록을 불러오는 중이에요…</p>
@@ -739,6 +749,7 @@ export function AppSettingsPanel({
                     <IllustrationSettingsEditor
                       library={state.library}
                       onDirtyChange={setIllustrationDirty}
+                      onSaveHandlerChange={saveGroup.registrations.illustration}
                     />
                   )}
                   {key === 'data' && (
@@ -803,9 +814,10 @@ export function AppSettingsPanel({
       <Dialog
         open={discard}
         title="미저장 설정 확인"
+        variant="confirmation"
         role="alertdialog"
         onClose={() => {
-          if (!discarding) setDiscard(false);
+          if (!discarding && !savingClose) setDiscard(false);
         }}
       >
         <p>저장하지 않은 편집 내용이나 선택한 파일이 있어요. 닫으면 이 초안이 사라져요.</p>
@@ -817,6 +829,26 @@ export function AppSettingsPanel({
         <DraftDiscardActions
           open={discard}
           disabled={discarding}
+          onSavingChange={setSavingClose}
+          saveLabel="저장하고 닫기"
+          onSave={async () => {
+            if (archiveDirty)
+              throw new Error(
+                '데이터 관리에 선택한 가져오기 파일이 있어요. 계속 편집에서 가져오기를 완료하거나 선택을 취소해 주세요.'
+              );
+            if (
+              !(await saveGroup.save({
+                connection: connectionDirty,
+                model: modelDirty,
+                prompt: promptDirty,
+                illustration: illustrationDirty,
+              }))
+            )
+              return false;
+            setDiscard(false);
+            closeHistory();
+            return true;
+          }}
           onContinue={() => setDiscard(false)}
           onDiscard={async () => {
             setDiscarding(true);

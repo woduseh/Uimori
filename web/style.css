@@ -1251,6 +1251,19 @@ input[type="checkbox"] {
   padding: 24px;
   overscroll-behavior: contain;
 }
+/* All draft confirmation flows share the same shell, independent of their host panel. */
+.app-dialog.confirmation-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  height: fit-content;
+  max-height: calc(var(--app-height, 100dvh) - 32px);
+  margin: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.confirmation-dialog > .dialog-body > p {
+  margin: 0 0 8px;
+}
 .navigation-dialog {
   background: var(--nav);
 }

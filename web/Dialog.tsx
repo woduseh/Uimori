@@ -9,6 +9,7 @@ export function Dialog({
   onClose,
   children,
   wide = false,
+  variant = 'default',
   className = '',
   scopeKey = '',
   role = 'dialog',
@@ -20,6 +21,7 @@ export function Dialog({
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  variant?: 'default' | 'confirmation';
   className?: string;
   scopeKey?: string;
   role?: 'dialog' | 'alertdialog';
@@ -53,7 +55,7 @@ export function Dialog({
     <dialog
       ref={ref}
       role={role}
-      className={`app-dialog ${wide ? 'wide' : ''} ${className}`}
+      className={`app-dialog ${wide ? 'wide' : ''} ${variant === 'confirmation' ? 'confirmation-dialog' : ''} ${className}`}
       aria-labelledby={headerTitle ? undefined : id}
       aria-label={headerTitle ? title : undefined}
       onKeyDown={(event) => {

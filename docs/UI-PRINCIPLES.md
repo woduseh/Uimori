@@ -10,6 +10,12 @@ Uimori is a writing and reading workspace. Keep the manuscript and composer prom
 
 Use the current components and styles as the starting point. [Library](LIBRARY.md) and [usage](USAGE.md) describe feature behavior; [QUALITY](QUALITY.md#verification) covers verification selection.
 
+## Unsaved changes
+
+Draft confirmations use `Dialog` with `variant="confirmation"` and `DraftDiscardActions` across library, prompt, chat settings, and global settings flows. They share a bounded 620 px desktop width, a centered mobile shell with 16 px outer margins, and full-width stacked mobile actions. Discard stays separate from continue editing and save-and-leave; closing a settings panel labels the save action as save-and-close.
+
+Save-and-leave runs the editor's existing validated save operation and navigates only on success. Invalid or unapplied input, revision conflicts, and failed writes retain the draft and confirmation. Multiple edited sections save sequentially; successful sections remain saved if a later section fails. Staged backup imports, destructive confirmations, and model execution are not treated as draft saves. Reloading saved settings remains a separate discard-and-reload confirmation.
+
 ## Helper sessions and branches
 
 A chat branch can have multiple helper sessions, selected in one panel. Conversation history, drafts, context, and permissions belong to the session. The list includes sessions from other branches: users can read them, then navigate to the owning branch to send requests or make changes. Moving between branches restores that branch's session selection; switching sessions or closing the panel does not cancel work. Sessions use the global helper model.

@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import {
   JEV_PROVIDER_DEFINITION,
   jevRegistered,
@@ -109,11 +110,13 @@ export function ConnectionEditor({
   reload,
   onError,
   onDirtyChange,
+  onSaveHandlerChange,
 }: {
   library: Library;
   reload: () => Promise<void>;
   onError: (error: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
   const modelTests = useProviderModelTests();
   const [forcedVertexTier, setForcedVertexTier] = useState<VertexRequestTier>();
@@ -228,6 +231,8 @@ export function ConnectionEditor({
     [confirmation, setConfirmation] = useState<Confirmation>();
   const [registeredModel, setRegisteredModel] = useState<ModelPreset>();
   const operationLock = useRef(false);
+  const jevSave = useRef<(() => Promise<boolean>) | null>(null);
+  const connectionForm = useRef<HTMLFormElement>(null);
   const modelForm = useRef<HTMLFormElement>(null),
     confirmationPanel = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -339,7 +344,7 @@ export function ConnectionEditor({
     work: () => Promise<void>,
     scope: 'connection' | 'model' | 'status' = 'status'
   ) {
-    if (operationLock.current) return;
+    if (operationLock.current) return false;
     operationLock.current = true;
     setBusy(true);
     setError('');
@@ -348,12 +353,14 @@ export function ConnectionEditor({
     try {
       await work();
       await reload();
+      return true;
     } catch (caught) {
       const detail = caught instanceof Error ? caught.message : '작업을 완료하지 못했어요.';
       setError(detail);
       onError(detail);
       if (caught instanceof ApiError && caught.status === 409) setConflict(scope);
       await reload().catch(() => undefined);
+      return false;
     } finally {
       operationLock.current = false;
       setBusy(false);
@@ -416,7 +423,12 @@ export function ConnectionEditor({
   function chooseConnection(item: Connection) {
     setModel((current) => selectModelConnection(current, item));
   }
-  async function saveConnection(body: Record<string, unknown>, id?: string, fromForm = true) {
+  async function saveConnection(
+    body: Record<string, unknown>,
+    id?: string,
+    fromForm = true,
+    leave = false
+  ) {
     const saved = await api<Connection>(
       id ? `/connections/${id}` : '/connections',
       body,
@@ -428,14 +440,19 @@ export function ConnectionEditor({
       setConnectionBaseline(JSON.stringify(connectionDraft(saved)));
       setConnectionCopy(false);
       setConflict(null);
-      if (!id) {
+      if (!id && !leave) {
         replaceDraft('model', () => startModelFor(saved));
       }
     }
     setConfirmation(undefined);
     setMessage(saved.title + (id ? ' 프로바이더 변경 저장됨' : ' 프로바이더 등록됨'));
   }
-  async function saveModel(body: Record<string, unknown>, id?: string, fromForm = true) {
+  async function saveModel(
+    body: Record<string, unknown>,
+    id?: string,
+    fromForm = true,
+    leave = false
+  ) {
     const saved = await api<ModelPreset>(
       id ? `/model-presets/${id}` : '/model-presets',
       body,
@@ -450,7 +467,7 @@ export function ConnectionEditor({
       setRegisteredModel(saved);
       returnItem.current = { screen: 'models', id: saved.id };
       setSetup(false);
-      navigate('models');
+      if (!leave) navigate('models');
     }
     setConfirmation(undefined);
     setMessage(saved.title + (id ? ' 모델 변경 저장됨' : ' 모델 프리셋 등록됨'));
@@ -555,6 +572,95 @@ export function ConnectionEditor({
     navigate('model');
   }
 
+  async function submitConnection(leave = false): Promise<boolean> {
+    if (busy) return false;
+    if (!connectionForm.current?.checkValidity()) {
+      setScreen('connection');
+      requestAnimationFrame(() => connectionForm.current?.reportValidity());
+      return false;
+    }
+    const body = {
+      ...connectionPayload(connection),
+      ...(editingConnection ? { expectedRevision: editingConnection.revision } : {}),
+    };
+    if (editingConnection?.enabled && !connection.enabled) {
+      setConfirmation({
+        kind: 'connection',
+        id: editingConnection.id,
+        title: connection.title,
+        body,
+        fromForm: true,
+      });
+      return false;
+    }
+    return perform(() => saveConnection(body, editingConnection?.id, true, leave), 'connection');
+  }
+  async function submitModel(leave = false): Promise<boolean> {
+    if (busy || !modelForm.current) return false;
+    const invalid = modelForm.current.querySelector<HTMLInputElement | HTMLSelectElement>(
+      'input:invalid,select:invalid,textarea:invalid'
+    );
+    if (invalid) {
+      setScreen('model');
+      const section = invalid.closest<HTMLElement>('[data-model-section]')?.dataset.modelSection;
+      setModelSection((section as typeof modelSection) || 'basic');
+      for (
+        let parent: HTMLElement | null = invalid.parentElement;
+        parent && parent !== modelForm.current;
+        parent = parent.parentElement
+      )
+        if (parent instanceof HTMLDetailsElement) parent.open = true;
+      requestAnimationFrame(() => {
+        invalid.focus();
+        invalid.reportValidity();
+      });
+      return false;
+    }
+    if (!chosen) return false;
+    const optionError = modelDraftError(model, chosen, forcedVertexTier);
+    if (optionError) {
+      setScreen('model');
+      setModelSection('advanced');
+      setError(optionError);
+      onError(optionError);
+      requestAnimationFrame(() =>
+        modelForm.current
+          ?.querySelector<HTMLElement>('[data-model-section="generation"]')
+          ?.scrollIntoView({ block: 'nearest' })
+      );
+      return false;
+    }
+    const body = {
+      ...modelPayload(model, chosen),
+      ...(editingModel ? { expectedRevision: editingModel.revision } : {}),
+    };
+    if (editingModel && editingModel.enabled !== false && !model.enabled) {
+      setConfirmation({
+        kind: 'model',
+        id: editingModel.id,
+        title: model.title,
+        body,
+        fromForm: true,
+      });
+      return false;
+    }
+    return perform(() => saveModel(body, editingModel?.id, true, leave), 'model');
+  }
+  const savePending = async (): Promise<boolean> => {
+    if (busy) return false;
+    if (
+      connectionStarted &&
+      JSON.stringify(connection) !== connectionBaseline &&
+      !(await submitConnection(true))
+    )
+      return false;
+    if (modelStarted && JSON.stringify(model) !== modelBaseline && !(await submitModel(true)))
+      return false;
+    if (jevDirty && !(await jevSave.current?.())) return false;
+    return true;
+  };
+  useSettingsSaveHandler(onSaveHandlerChange, savePending);
+
   return (
     <section
       className="connection-editor"
@@ -565,11 +671,12 @@ export function ConnectionEditor({
         open={!!discard}
         role="alertdialog"
         title="편집 중인 초안 확인"
+        variant="confirmation"
         onClose={() => {
-          if (!discard) return;
+          if (!discard || busy || operationLock.current) return;
           const kind = discard.kind;
           setDiscard(undefined);
-          navigate(kind);
+          setScreen(kind);
         }}
       >
         {discard && (
@@ -579,10 +686,22 @@ export function ConnectionEditor({
             </strong>
             <p>다른 항목을 편집하면 현재 초안이 교체돼요.</p>
             <DraftDiscardActions
+              disabled={busy}
+              onSave={async () => {
+                const pending = discard;
+                const saved =
+                  pending.kind === 'connection'
+                    ? await submitConnection(true)
+                    : await submitModel(true);
+                if (!saved) return false;
+                setDiscard(undefined);
+                pending.proceed();
+                return true;
+              }}
               onContinue={() => {
                 const kind = discard.kind;
                 setDiscard(undefined);
-                navigate(kind);
+                setScreen(kind);
               }}
               onDiscard={() => {
                 const action = discard.proceed;
@@ -828,6 +947,9 @@ export function ConnectionEditor({
         </section>
       )}
       <JevProviderSettings
+        onSaveHandlerChange={(handler) => {
+          jevSave.current = handler;
+        }}
         active={screen === 'jev'}
         onDirtyChange={setJevDirty}
         onBusyChange={setJevBusy}
@@ -1133,25 +1255,12 @@ export function ConnectionEditor({
       )}
       <form
         hidden={screen !== 'connection'}
+        ref={connectionForm}
         className="editor-grid provider-management-form"
         aria-label="프로바이더 편집 양식"
         onSubmit={(event) => {
           event.preventDefault();
-          const body = {
-            ...connectionPayload(connection),
-            ...(editingConnection ? { expectedRevision: editingConnection.revision } : {}),
-          };
-          if (editingConnection?.enabled && !connection.enabled) {
-            setConfirmation({
-              kind: 'connection',
-              id: editingConnection.id,
-              title: connection.title,
-              body,
-              fromForm: true,
-            });
-            return;
-          }
-          void perform(() => saveConnection(body, editingConnection?.id), 'connection');
+          void submitConnection();
         }}
       >
         <h3 className="full">
@@ -1425,53 +1534,7 @@ export function ConnectionEditor({
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
-          const invalid = event.currentTarget.querySelector<HTMLInputElement | HTMLSelectElement>(
-            'input:invalid,select:invalid,textarea:invalid'
-          );
-          if (invalid) {
-            const section =
-              invalid.closest<HTMLElement>('[data-model-section]')?.dataset.modelSection;
-            setModelSection((section as typeof modelSection) || 'basic');
-            for (
-              let parent: HTMLElement | null = invalid.parentElement;
-              parent && parent !== event.currentTarget;
-              parent = parent.parentElement
-            )
-              if (parent instanceof HTMLDetailsElement) parent.open = true;
-            requestAnimationFrame(() => {
-              invalid.focus();
-              invalid.reportValidity();
-            });
-            return;
-          }
-          if (!chosen) return;
-          const optionError = modelDraftError(model, chosen, forcedVertexTier);
-          if (optionError) {
-            setModelSection('advanced');
-            setError(optionError);
-            onError(optionError);
-            requestAnimationFrame(() =>
-              modelForm.current
-                ?.querySelector<HTMLElement>('[data-model-section="generation"]')
-                ?.scrollIntoView({ block: 'nearest' })
-            );
-            return;
-          }
-          const body = {
-            ...modelPayload(model, chosen),
-            ...(editingModel ? { expectedRevision: editingModel.revision } : {}),
-          };
-          if (editingModel && editingModel.enabled !== false && !model.enabled) {
-            setConfirmation({
-              kind: 'model',
-              id: editingModel.id,
-              title: model.title,
-              body,
-              fromForm: true,
-            });
-            return;
-          }
-          void perform(() => saveModel(body, editingModel?.id), 'model');
+          void submitModel();
         }}
       >
         <h3 className="full">

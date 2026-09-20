@@ -8,6 +8,7 @@ export function DraftDiscardActions({
   onSave,
   onSavingChange,
   discardLabel = '초안 버리고 이동',
+  saveLabel = '저장하고 이동',
   disabled = false,
   open = true,
 }: {
@@ -16,6 +17,7 @@ export function DraftDiscardActions({
   onSave?: () => Promise<boolean>;
   onSavingChange?: (saving: boolean) => void;
   discardLabel?: string;
+  saveLabel?: string;
   disabled?: boolean;
   open?: boolean;
 }) {
@@ -71,7 +73,7 @@ export function DraftDiscardActions({
             }}
           >
             <SaveIcon size={18} aria-hidden="true" />
-            {saving ? '저장 중…' : '저장하고 이동'}
+            {saving ? '저장 중…' : saveLabel}
           </button>
         )}
       </div>

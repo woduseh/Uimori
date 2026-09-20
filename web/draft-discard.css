@@ -1,8 +1,11 @@
-.draft-discard-actions {
+.form-actions.draft-discard-actions {
   margin-top: 24px;
+  flex-wrap: nowrap;
 }
 .draft-discard-actions button {
   min-height: var(--control-h);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .draft-discard-actions .draft-continue {
   background: var(--accent);
@@ -26,8 +29,9 @@
   }
 }
 @media (max-width: 540px) {
-  .draft-discard-actions {
+  .form-actions.draft-discard-actions {
     flex-direction: column;
+    align-items: stretch;
   }
   .draft-discard-actions button {
     width: 100%;

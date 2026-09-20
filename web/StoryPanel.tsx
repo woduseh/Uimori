@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { DeleteButton } from './DeleteButton.js';
 import { useEffect, useRef, useState } from 'react';
 import { ContextPanel } from './ContextPanel.js';
@@ -13,6 +14,7 @@ type PanelProps = {
   onChanged: () => void;
   onError: (message: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
   active?: boolean;
   hideHeading?: boolean;
   refreshKey?: unknown;
@@ -50,6 +52,7 @@ function StoryPanelEditor({
   onChanged,
   onError,
   onDirtyChange,
+  onSaveHandlerChange,
   active = true,
   hideHeading = false,
   refreshKey,
@@ -66,6 +69,10 @@ function StoryPanelEditor({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [contextDirty, setContextDirty] = useState(false);
+  const contextSave = useRef<(() => Promise<boolean>) | null>(null);
+  const registerContextSave = useRef((handler: (() => Promise<boolean>) | null) => {
+    contextSave.current = handler;
+  }).current;
   const [commandLabel, setCommandLabel] = useState('');
   const [commandText, setCommandText] = useState('');
   const commandKey = useRef(crypto.randomUUID());
@@ -117,7 +124,7 @@ function StoryPanelEditor({
     return () => clearInterval(timer);
   }, [active, detail, chatId, branchId, headRevision]);
   async function act(path: string, body: unknown = {}, success?: () => void, method = 'POST') {
-    if (actionLock.current) return;
+    if (actionLock.current) return false;
     const valid = capture();
     actionLock.current = true;
     setBusy(true);
@@ -126,7 +133,7 @@ function StoryPanelEditor({
     setMessage('');
     try {
       await api(path, body, method);
-      if (!valid()) return;
+      if (!valid()) return false;
       setWriting(false);
       success?.();
       await load();
@@ -134,11 +141,13 @@ function StoryPanelEditor({
         setMessage('반영했어요.');
         onChanged();
       }
+      return valid();
     } catch (caught) {
       if (valid()) {
         report(caught);
         if (caught instanceof ApiError && caught.status === 409) await load();
       }
+      return false;
     } finally {
       if (valid()) {
         actionLock.current = false;
@@ -163,6 +172,31 @@ function StoryPanelEditor({
       }
     );
   }
+  async function saveCommand() {
+    if (!commandLabel && !commandText) return true;
+    if (
+      !commandLabel.trim() ||
+      !commandText.trim() ||
+      commandLabel.length > 120 ||
+      commandText.length > 4000 ||
+      busy
+    )
+      return false;
+    return act(
+      `${base}/scene-commands`,
+      { label: commandLabel, request: commandText, branchId, idempotencyKey: commandKey.current },
+      () => {
+        setCommandLabel('');
+        setCommandText('');
+        commandKey.current = crypto.randomUUID();
+      }
+    );
+  }
+  useSettingsSaveHandler(onSaveHandlerChange, async () => {
+    if (busy || actionLock.current) return false;
+    if (contextDirty && !(await contextSave.current?.())) return false;
+    return saveCommand();
+  });
   return (
     <section className="story-panel" aria-label="이야기 기억과 문맥">
       {!hideHeading && <h3>기억과 문맥</h3>}
@@ -187,6 +221,7 @@ function StoryPanelEditor({
         onChanged={onChanged}
         onError={onError}
         onDirtyChange={setContextDirty}
+        onSaveHandlerChange={registerContextSave}
       />
       {detail && (
         <details>
@@ -248,20 +283,7 @@ function StoryPanelEditor({
             className="editor-grid"
             onSubmit={(event) => {
               event.preventDefault();
-              void act(
-                `${base}/scene-commands`,
-                {
-                  label: commandLabel,
-                  request: commandText,
-                  branchId,
-                  idempotencyKey: commandKey.current,
-                },
-                () => {
-                  setCommandLabel('');
-                  setCommandText('');
-                  commandKey.current = crypto.randomUUID();
-                }
-              );
+              void saveCommand();
             }}
           >
             <label>

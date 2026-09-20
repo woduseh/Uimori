@@ -1,3 +1,4 @@
+import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
@@ -15,6 +16,8 @@ import { useSettingsHistory } from './useSettingsHistory.js';
 import type { StoryState } from './useStory.js';
 import { BackIcon, BotIcon, PromptIcon, LoreIcon, ImagesIcon, BehaviorIcon } from './ui-icons.js';
 import './chat-settings.css';
+
+const saveSections = ['story', 'profile', 'image', 'reference', 'runtime'] as const;
 
 export type Section = ProfileSection | 'story' | 'images' | 'runtime' | 'packages';
 // Two groups: the basics every chat needs, then the advanced automation sections.
@@ -92,6 +95,8 @@ export function ChatSettingsPanel({
   const [runtimeDirty, setRuntimeDirty] = useState(false);
   const [packageFeatures, setPackageFeatures] = useState(false);
   const [discard, setDiscard] = useState(false);
+  const [savingClose, setSavingClose] = useState(false);
+  const saveGroup = useSettingsSaveGroup(saveSections);
   const dirty = profileDirty || storyDirty || imageDirty || referenceDirty || runtimeDirty;
   const compact = useCompactLayout();
   const showingDetail = !compact || detailOpen;
@@ -114,6 +119,7 @@ export function ChatSettingsPanel({
   }
   const closeHistory = useSettingsHistory(
     () => {
+      if (savingClose) return true;
       const nested = root.current
         ?.closest('dialog')
         ?.querySelector<HTMLDialogElement>('dialog[open]');
@@ -137,6 +143,7 @@ export function ChatSettingsPanel({
     }
   );
   function requestClose(next?: () => void) {
+    if (savingClose) return;
     afterClose.current = next ?? null;
     if (dirty) setDiscard(true);
     else closeHistory();
@@ -315,6 +322,7 @@ export function ChatSettingsPanel({
                 onSaved={() => state.refresh(state.selected)}
                 onError={state.setError}
                 onDirtyChange={setProfileDirty}
+                onSaveHandlerChange={saveGroup.registrations.profile}
                 onGlobalSettings={(section) => requestClose(() => onGlobalSettings(section))}
                 nextRequest={state.pendingRequest ?? state.draft}
                 loreContextReset={state.loreContextReset}
@@ -333,6 +341,7 @@ export function ChatSettingsPanel({
                   active={active === 'story' && showingDetail}
                   hideHeading
                   onDirtyChange={setStoryDirty}
+                  onSaveHandlerChange={saveGroup.registrations.story}
                   onChanged={() => {
                     void state.refresh(state.selected);
                   }}
@@ -353,12 +362,14 @@ export function ChatSettingsPanel({
                     refresh={() => state.refresh(state.selected)}
                     onError={state.setError}
                     onDirtyChange={setImageDirty}
+                    onSaveHandlerChange={saveGroup.registrations.image}
                   />
                 </details>
                 <IllustrationReferencesEditor
                   chatId={state.selected}
                   refreshKey={`${detail.profile?.revision ?? 0}:${(detail.assets ?? []).length}`}
                   onDirtyChange={setReferenceDirty}
+                  onSaveHandlerChange={saveGroup.registrations.reference}
                   onError={state.setError}
                 />
               </div>
@@ -386,6 +397,7 @@ export function ChatSettingsPanel({
                         onError={state.setError}
                         hideHeading
                         onDirtyChange={setRuntimeDirty}
+                        onSaveHandlerChange={saveGroup.registrations.runtime}
                       />
                     )}
                     {section === 'packages' && packageFeatures && (
@@ -413,8 +425,10 @@ export function ChatSettingsPanel({
       <Dialog
         open={discard}
         title="미저장 채팅 설정 확인"
+        variant="confirmation"
         role="alertdialog"
         onClose={() => {
+          if (savingClose) return;
           setDiscard(false);
           afterClose.current = null;
         }}
@@ -422,6 +436,23 @@ export function ChatSettingsPanel({
         <p>저장하지 않은 편집 내용이나 선택한 파일이 있어요. 닫으면 이 초안이 사라져요.</p>
         <DraftDiscardActions
           open={discard}
+          onSavingChange={setSavingClose}
+          saveLabel="저장하고 닫기"
+          onSave={async () => {
+            if (
+              !(await saveGroup.save({
+                profile: profileDirty,
+                story: storyDirty,
+                image: imageDirty,
+                reference: referenceDirty,
+                runtime: runtimeDirty,
+              }))
+            )
+              return false;
+            setDiscard(false);
+            closeHistory();
+            return true;
+          }}
           onContinue={() => {
             setDiscard(false);
             afterClose.current = null;

@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IllustrationReferenceRole, IllustrationReferences } from '../core/illustration.js';
 import { api } from './api.js';
@@ -19,11 +20,13 @@ export function IllustrationReferencesEditor({
   chatId,
   refreshKey,
   onDirtyChange,
+  onSaveHandlerChange,
   onError,
 }: {
   chatId: string;
   refreshKey: string | number;
   onDirtyChange?: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
   onError: (message: string) => void;
 }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -55,10 +58,12 @@ export function IllustrationReferencesEditor({
     onDirtyChange?.(dirty || saving);
   }, [dirty, saving, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useSettingsSaveHandler(onSaveHandlerChange, async () => (!loaded ? false : save()));
   if (!loaded) return null;
   const selected = loaded.candidates.filter((item) => roles[item.ref]);
   const save = async () => {
-    if (lock.current) return;
+    if (lock.current) return false;
+    if (!dirty) return true;
     lock.current = true;
     setSaving(true);
     setMessage('');
@@ -74,8 +79,10 @@ export function IllustrationReferencesEditor({
       setLoaded({ ...loaded, revision: value.revision, references: value.references });
       setDirty(false);
       setMessage('삽화 참조 이미지를 저장했어요. 다음 삽화 요청부터 사용해요.');
+      return true;
     } catch (error) {
       onError((error as Error).message);
+      return false;
     } finally {
       lock.current = false;
       setSaving(false);

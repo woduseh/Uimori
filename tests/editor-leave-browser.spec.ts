@@ -20,6 +20,39 @@ const viewports = [
 ];
 const flows = ['content-list', 'prompt-list', 'global-navigation'] as const;
 
+async function expectDraftLeaveDialogLayout(guard: Locator, viewportWidth: number) {
+  const dialog = await guard.boundingBox();
+  expect(dialog).not.toBeNull();
+  expect(dialog!.width).toBeCloseTo(Math.min(viewportWidth - 32, 620), 0);
+
+  const bodyCopy = guard.locator('.dialog-body > p').first();
+  const copyMetrics = await bodyCopy.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      height: node.getBoundingClientRect().height,
+      lineHeight: Number.parseFloat(style.lineHeight),
+    };
+  });
+  if (viewportWidth > 760)
+    expect(copyMetrics.height).toBeLessThanOrEqual(copyMetrics.lineHeight * 1.1);
+
+  const buttons = guard.locator('.draft-discard-actions > button');
+  await expect(buttons).toHaveCount(3);
+  const boxes = await buttons.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width };
+    })
+  );
+  if (viewportWidth <= 540) {
+    expect(boxes[0].y).toBeLessThan(boxes[1].y);
+    expect(boxes[1].y).toBeLessThan(boxes[2].y);
+    for (const box of boxes) expect(box.width).toBeCloseTo(boxes[0].width, 0);
+  } else {
+    for (const box of boxes) expect(box.y).toBeCloseTo(boxes[0].y, 0);
+  }
+}
+
 for (const viewport of viewports) {
   // Compact editor headers expose local list navigation only. Global navigation is
   // a desktop sidebar action; browser Back does not enter main's navigation guard.
@@ -95,6 +128,10 @@ for (const viewport of viewports) {
         if (isEditDraftSaveRequest(value)) saves.push(value.url());
       });
       await leave();
+      await expectDraftLeaveDialogLayout(guard, viewport.width);
+      await page.screenshot({
+        path: info.outputPath(`leave-${flow}-confirmation-${viewport.width}.png`),
+      });
       await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
       await expect(guard.getByRole('alert')).toContainText('저장하지 못했어요');
       expect(saves).toHaveLength(0);

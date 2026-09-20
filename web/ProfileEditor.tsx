@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { Switch } from './BooleanControls.js';
 import { SettingsIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
@@ -26,6 +27,7 @@ export function ProfileEditor({
   onSaved,
   onError,
   onDirtyChange,
+  onSaveHandlerChange,
   onGlobalSettings,
   initialTab = 'characters',
   activeTab,
@@ -42,6 +44,7 @@ export function ProfileEditor({
   onSaved: () => Promise<void>;
   onError: (error: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
   onGlobalSettings: (section: 'models' | 'prompts') => void;
   initialTab?: ProfileSection;
   activeTab?: ProfileSection;
@@ -73,6 +76,13 @@ export function ProfileEditor({
     onDirtyChange?.(dirty || lorePending || saving || attachmentPending);
   }, [dirty, lorePending, saving, attachmentPending, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useSettingsSaveHandler(onSaveHandlerChange, async () => {
+    if (saving || attachmentPending || lorePending) return false;
+    if (!dirty) return true;
+    return save(() =>
+      api<ChatProfile>(`/chats/${profile.chatId}/profile`, profileBody(value), 'PUT')
+    );
+  });
   const change = (next: ChatProfile) => {
     setValue(next);
     setDirty(true);
