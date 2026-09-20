@@ -8,6 +8,7 @@ export function RetryFailure({
   error,
   disabled,
   onRetry,
+  onRejudge,
   onSettings,
   onDetails,
   onHistory,
@@ -16,6 +17,7 @@ export function RetryFailure({
   error?: string | null;
   disabled?: boolean;
   onRetry?: () => void;
+  onRejudge?: () => void;
   onSettings?: () => void;
   onDetails: () => void;
   onHistory: () => void;
@@ -42,8 +44,23 @@ export function RetryFailure({
                   : '응답을 만들지 못했어요.';
   return (
     <div className="turn-failure chat-retry-failure" role="group" aria-label="실패한 요청">
-      <p>{mainJudgmentError(error) ?? message}</p>
+      <p>
+        {onRejudge
+          ? '본문은 생성됐지만 판정을 완료하지 못했어요. 보존된 본문을 다시 판정할 수 있어요.'
+          : (mainJudgmentError(error) ?? message)}
+      </p>
       <div className="turn-failure-actions">
+        {onRejudge && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={disabled}
+            title="새 분기에서 보존된 본문을 판정해요. 본문 생성은 반복하지 않아요."
+            onClick={onRejudge}
+          >
+            판정만 다시 시도
+          </button>
+        )}
         {onRetry && (
           <button
             type="button"

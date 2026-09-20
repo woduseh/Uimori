@@ -223,6 +223,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         },
       };
       delete snapshot.candidateOf;
+      delete snapshot.judgmentRecovery;
       delete snapshot.forkedLoreReads;
       if (snapshot.loreContext)
         snapshot.loreContext = {
@@ -476,6 +477,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           })),
         };
         delete mapped.candidateOf;
+        delete mapped.judgmentRecovery;
         if (original.story) mapped.story = storyFork.mapStory(original.story, original.history);
         if (mapped.profile) {
           mapped.profile.chatId = id;

@@ -1,7 +1,8 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
+import { sourceFiles, sourceImports } from './fixtures/source-imports.js';
 
 // Value-import cycles between `core/` and `server/` modules. Biome checks directory boundaries,
 // not cycles, so this keeps the ones removed on 2026-09-10 (decision 6) from returning.
@@ -9,28 +10,14 @@ import { expect, test } from 'vitest';
 // are erased at runtime and are not edges here.
 const root = fileURLToPath(new URL('../', import.meta.url));
 const KNOWN_CYCLES = [['server/package-images.ts', 'server/source-editing.ts']];
-const statement =
-  /^import\s+(?!type\s)([\s\S]*?)from\s+'([^']+)';|^export\s+(?!type\s)\{[\s\S]*?\}\s+from\s+'([^']+)';/gm;
-
 function valueImports(file: string): string[] {
-  const edges: string[] = [];
-  for (const match of readFileSync(join(root, file), 'utf8').matchAll(statement)) {
-    const specifier = match[2] ?? match[3];
-    if (!specifier.startsWith('.')) continue;
-    const names = match[1]?.replace(/^[\s\S]*?\{|\}[\s\S]*$/g, '') ?? '';
-    const parts = names
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean);
-    if (match[1] !== undefined && parts.length && parts.every((part) => part.startsWith('type ')))
-      continue;
-    edges.push(
+  return sourceImports(readFileSync(join(root, file), 'utf8'), file)
+    .filter((item) => item.runtime && item.eager && item.specifier.startsWith('.'))
+    .map(({ specifier }) =>
       relative(root, resolve(dirname(join(root, file)), specifier))
         .replaceAll('\\', '/')
         .replace(/\.js$/, '.ts')
     );
-  }
-  return edges;
 }
 
 function stronglyConnected(graph: Map<string, string[]>): string[][] {
@@ -68,11 +55,7 @@ function stronglyConnected(graph: Map<string, string[]>): string[][] {
 }
 
 test('core and server modules have no value-import cycles beyond the known list', () => {
-  const files = ['core', 'server'].flatMap((dir) =>
-    readdirSync(join(root, dir))
-      .filter((name) => name.endsWith('.ts'))
-      .map((name) => `${dir}/${name}`)
-  );
+  const files = ['core', 'server'].flatMap((dir) => sourceFiles(root, dir));
   const graph = new Map(files.map((file) => [file, valueImports(file)]));
   for (const cycle of stronglyConnected(graph))
     expect(

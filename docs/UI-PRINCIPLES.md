@@ -8,16 +8,6 @@ Uimori is a writing and reading workspace. Keep the manuscript and composer prom
 - Preserve the user's place and unfinished work when opening panels, changing layouts, or returning from an editor. Respect [reading preferences](READING.md).
 - Make each screen's primary action easy to find. Distinguish an empty collection, an empty folder, no search results, and a loading or failed request.
 
-Use the current components and styles as the starting point. [Library](LIBRARY.md) and [usage](USAGE.md) describe feature behavior; [QUALITY](QUALITY.md#verification) covers verification selection.
+Use the current components and styles as the starting point. [Library](LIBRARY.md) and [usage](USAGE.md) describe feature behavior; [DEVELOPMENT](DEVELOPMENT.md#verification) covers verification selection.
 
-## Unsaved changes
-
-Draft confirmations use the shared `Dialog` confirmation variant and `DraftDiscardActions` across library, prompt, chat settings, and global settings flows. Discard stays separate from continue editing and save-and-leave; closing a settings panel labels the save action as save-and-close.
-
-Save-and-leave runs the editor's existing validated save operation and navigates only on success. Invalid or unapplied input, revision conflicts, and failed writes retain the draft and confirmation. Multiple edited sections save sequentially; successful sections remain saved if a later section fails. Staged backup imports, destructive confirmations, and model execution are not treated as draft saves. Reloading saved settings remains a separate discard-and-reload confirmation.
-
-## Helper sessions and branches
-
-A chat branch can have multiple helper sessions, selected in one panel. Conversation history, drafts, context, and permissions belong to the session. The list includes sessions from other branches: users can read them, then navigate to the owning branch to send requests or make changes. Moving between branches restores that branch's session selection; switching sessions or closing the panel does not cancel work. Sessions use the global helper model.
-
-Setting a branch as the default changes which branch opens when entering the chat. It does not merge or copy content, move running requests, or redirect an already open reader. A chat has one default branch; choose another before deleting it.
+Detailed editor behavior is in [LIBRARY](LIBRARY.md#unsaved-changes); helper sessions and branch defaults are in [READING](READING.md#helper-sessions-and-branches).

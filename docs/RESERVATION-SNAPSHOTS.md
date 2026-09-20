@@ -21,3 +21,5 @@ CBS의 사용자 이름과 페르소나 본문은 예약된 프로필과 채팅�
 ## 검증
 
 예약·동시 저장·도우미의 읽기 전용 경계는 reservation-snapshot, chat-options, chat-variables-flow 테스트가 확인해요. 네이티브 준비·원문 귀속·포크·복원은 risu-native-*, source-history-storage, snapshot-archive, chat-backup-* 테스트에서 확인해요. 실제 모델 품질은 이러한 합성 회귀와 별도로 확인해야 해요.
+
+Native preparation retains distinct reserved history, logical history, processed history/messages and pre-request state. They can contain equal text, but callbacks can make them diverge. The native storage measurement in [DEVELOPMENT](DEVELOPMENT.md) quantifies duplicate text; it does not justify dropping one of these execution stages. Replacing repeated bodies with immutable content references requires archive/fork/remapping compatibility and a separate persisted-format change.

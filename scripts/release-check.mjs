@@ -16,7 +16,8 @@ export function requiredChecks(area = 'verify:browser-smoke', full = false, scri
   if (
     !/^verify:[a-z][a-z0-9-]*$/u.test(area) ||
     !Object.hasOwn(scripts, area) ||
-    /(?:live|gallery|visual|worktrees|redesign)/u.test(area)
+    area === 'verify:browser' ||
+    /(?:live|gallery|visual)/u.test(area)
   )
     throw new Error(
       'Choose a local feature verify:* script; use --full for the complete regression'
@@ -25,7 +26,7 @@ export function requiredChecks(area = 'verify:browser-smoke', full = false, scri
     ...new Set([
       'quality:full',
       ...(full && area === 'verify:browser-smoke' ? [] : [area]),
-      ...(full ? ['verify:redesign'] : []),
+      ...(full ? ['verify:browser'] : []),
     ]),
   ];
 }
@@ -143,7 +144,7 @@ export async function runReleaseChecks(
       summary.checks[name] = { command: name, status: 'RUNNING' };
       await json(report, summary);
       const result = await execute(process.execPath, [cli, 'run', name], {
-        timeoutMs: name === 'verify:redesign' ? 2_100_000 : 1_200_000,
+        timeoutMs: name === 'verify:browser' ? 2_100_000 : 1_200_000,
         log: path.join(directory, `${name.replaceAll(':', '-')}-${newId()}.log`),
         signal,
         env: { UIMORI_VISUAL_REVIEW: undefined, UIMORI_BENCHMARK: undefined },

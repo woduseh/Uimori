@@ -58,3 +58,9 @@ Reader는 SSE의 목표 cursor까지 조회를 이어가며, 일시적인 조회
 번역 결과를 새로 불러오는 동안 같은 채팅·분기·원문 버전의 원문 프레임을 유지해 읽던 위치가 줄어든 임시 화면으로 이동하지 않게 해요. 이전 번역은 새 번역처럼 표시하지 않고, 갱신 중에는 봇의 실행 버튼을 잠시 비활성화해요.
 
 봇 자체의 고정 폭·고정 위치 UI를 모바일용으로 자동 재배치하지는 않아요. 따라서 앱의 탐색·입력창이 정상이어도 원본 카드 내부의 버튼이나 문구가 좁은 화면에서 겹칠 수 있어요.
+
+## Helper sessions and branches
+
+A chat branch can have multiple helper sessions, selected in one panel. Conversation history, drafts, context, and permissions belong to the session. The list includes sessions from other branches: users can read them, then navigate to the owning branch to send requests or make changes. Moving between branches restores that branch's session selection; switching sessions or closing the panel does not cancel work. Sessions use the global helper model.
+
+Setting a branch as the default changes which branch opens when entering the chat. It does not merge or copy content, move running requests, or redirect an already open reader. A chat has one default branch; choose another before deleting it.

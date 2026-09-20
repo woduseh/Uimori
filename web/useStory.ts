@@ -55,6 +55,7 @@ function ancestry(sources: Source[], head: string | null) {
 }
 type RunPayload = {
   retryOf?: string;
+  judgmentRecovery?: true;
   editedRequest?: boolean;
   loreContextReset?: boolean;
   request: string;
@@ -93,6 +94,11 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
       (payload.branchId !== undefined && typeof payload.branchId !== 'string') ||
       (payload.expectedProfileRevision !== undefined &&
         !Number.isInteger(payload.expectedProfileRevision))
+    )
+      return null;
+    if (
+      payload.judgmentRecovery !== undefined &&
+      (payload.judgmentRecovery !== true || !payload.retryOf || payload.editedRequest)
     )
       return null;
     if (payload.retryOf !== undefined && (typeof payload.retryOf !== 'string' || !payload.retryOf))
@@ -755,7 +761,11 @@ export function useStory() {
     !detail ||
     !!sessionStorage.getItem(`pending-profile:${selected}`) ||
     !!readCommand(commandStorageKey(selected, activeBranchId));
-  async function generate(retryRunId?: string, editedRequest?: string): Promise<boolean> {
+  async function generate(
+    retryRunId?: string,
+    editedRequest?: string,
+    judgmentRecovery = false
+  ): Promise<boolean> {
     if (
       !detail ||
       detail.chat.id !== selected ||
@@ -779,7 +789,9 @@ export function useStory() {
     const payload: RunPayload = previous?.payload ?? {
       request: editedRequest ?? retryRun?.request ?? draft,
       ...(editedRequest !== undefined ? { editedRequest: true } : {}),
-      ...(retryRun ? { retryOf: retryRun.id } : {}),
+      ...(retryRun
+        ? { retryOf: retryRun.id, ...(judgmentRecovery ? { judgmentRecovery: true as const } : {}) }
+        : {}),
       ...((retryRun ? retryRun.snapshot.loreContextReset : loreResetDraft)
         ? { loreContextReset: true }
         : {}),
@@ -827,10 +839,13 @@ export function useStory() {
     let accepted = false;
     try {
       const admitted = payload.retryOf
-        ? await api<Run>(`/runs/${encodeURIComponent(payload.retryOf)}/retry`, {
-            idempotencyKey,
-            ...(payload.editedRequest ? { request: payload.request } : {}),
-          })
+        ? await api<Run>(
+            `/runs/${encodeURIComponent(payload.retryOf)}/${payload.judgmentRecovery ? 'rejudge' : 'retry'}`,
+            {
+              idempotencyKey,
+              ...(payload.editedRequest ? { request: payload.request } : {}),
+            }
+          )
         : await api<Run>(`/chats/${chat.id}/runs`, { ...payload, idempotencyKey });
       track('accepted', admitted.id);
       accepted = true;

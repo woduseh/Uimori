@@ -250,3 +250,76 @@ test('READERREC final SSE event recovers from one failed reader GET without anot
   await expect(page.getByTestId('source-request')).toContainText('마지막 이벤트 뒤 복구할 장면');
   expect(refreshes).toBeGreaterThanOrEqual(2);
 });
+
+test('READERREC rejudgment survives an uncertain response and reload without sending a generation request', async ({
+  page,
+  request,
+}) => {
+  const chat = await (
+    await postFixtureChat(request, { data: { title: 'Judgment recovery' } })
+  ).json();
+  const accepted = await (
+    await request.post(`/api/chats/${chat.id}/runs`, {
+      data: {
+        request: 'Preserved response request',
+        expectedRevision: null,
+        expectedSettingsRevision: chat.settingsRevision,
+        idempotencyKey: 'judgment-ui-fixture',
+      },
+    })
+  ).json();
+  await expect
+    .poll(async () => (await (await request.get(`/api/runs/${accepted.id}`)).json()).status)
+    .toBe('completed');
+  let recovered = false;
+  await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    if (!recovered) {
+      body.sources = [];
+      body.reader.order = [];
+      body.reader.pendingRunIds = [accepted.id];
+      body.runs = body.runs.map((run: { id: string }) =>
+        run.id === accepted.id
+          ? {
+              ...run,
+              status: 'failed',
+              error: 'JEV_EXECUTION_FAILED',
+              sourceRevision: null,
+              canRejudge: true,
+            }
+          : run
+      );
+    }
+    await route.fulfill({ response, json: body });
+  });
+  const payloads: unknown[] = [];
+  let writerRequests = 0;
+  page.on('request', (req) => {
+    if (req.method() === 'POST' && (req.url().endsWith('/runs') || req.url().endsWith('/retry')))
+      writerRequests++;
+  });
+  await page.route(`**/api/runs/${accepted.id}/rejudge`, async (route) => {
+    payloads.push(route.request().postDataJSON());
+    if (payloads.length === 1) await route.abort('failed');
+    else {
+      recovered = true;
+      await route.fulfill({ json: accepted });
+    }
+  });
+  await page.goto(`/?chat=${chat.id}`);
+  await page
+    .getByRole('textbox', { name: '다음 장면 요청', exact: true })
+    .fill('Keep this new draft');
+  await page.getByRole('button', { name: '판정만 다시 시도', exact: true }).click();
+  await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await expect.poll(() => payloads.length).toBe(2);
+  expect(payloads[0]).toEqual(payloads[1]);
+  expect(payloads[0]).toEqual({ idempotencyKey: expect.any(String) });
+  await expect(page.getByRole('textbox', { name: '다음 장면 요청', exact: true })).toHaveValue(
+    'Keep this new draft'
+  );
+  expect(writerRequests).toBe(0);
+});

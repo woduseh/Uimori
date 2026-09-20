@@ -1,3 +1,4 @@
+import { canRecoverMainJudgment } from '../core/main-judgment-recovery.js';
 import { HttpError } from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -28,6 +29,7 @@ export function candidateCompilationSnapshot(
     contextPlan: _plan,
     loreContext: _lore,
     mainJudgment: _judgment,
+    judgmentRecovery: _recovery,
     ...input
   }: RunSnapshot) => {
     if (!input.nativeRisuExecution) return input;
@@ -53,7 +55,11 @@ export function candidateCompilationSnapshot(
     seen.add(originId);
     if (owner) {
       const row = store.db.prepare('SELECT command FROM runs WHERE id=?').get(owner);
-      if (!row || JSON.parse(String(row.command)).candidateOf !== originId)
+      if (
+        !row ||
+        JSON.parse(String(row.command)).candidateOf !== originId ||
+        !!original.judgmentRecovery !== !!JSON.parse(String(row.command)).judgmentRecovery
+      )
         reject('command origin');
     }
     let source: ReturnType<Store['run']> | undefined;
@@ -70,6 +76,12 @@ export function candidateCompilationSnapshot(
       ['queued', 'running'].includes(source.status)
     )
       reject('origin scope');
+    if (
+      original.judgmentRecovery &&
+      (!canRecoverMainJudgment(source!) ||
+        !isDeepStrictEqual(original.mainJudgment, source!.snapshot.mainJudgment))
+    )
+      reject('judgment recovery input');
     const prior = source!.snapshot;
     if (
       prior.branchId === original.branchId ||

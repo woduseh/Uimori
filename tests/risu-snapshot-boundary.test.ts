@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
+import { sourceImports } from './fixtures/source-imports.js';
 
 // The RisuAI snapshot is GPL-3.0 code kept behind a compat layer. These rules keep it that way:
 // snapshot code never reaches into Uimori, and Uimori reaches the snapshot only through
@@ -9,7 +10,6 @@ import { expect, test } from 'vitest';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const SNAPSHOT_ROOT = 'third_party/risuai';
 const COMPAT_LAYER = 'server/compat/risu';
-const specifier = /^(?:import|export)\s[^;]*?from\s+['"]([^'"]+)['"]/gm;
 
 function walk(dir: string, out: string[] = []): string[] {
   const absolute = join(root, dir);
@@ -23,7 +23,7 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 function specifiers(file: string): string[] {
-  return [...readFileSync(join(root, file), 'utf8').matchAll(specifier)].map((match) => match[1]);
+  return sourceImports(readFileSync(join(root, file), 'utf8'), file).map((item) => item.specifier);
 }
 
 function resolveRelative(file: string, spec: string): string {

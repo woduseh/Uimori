@@ -26,12 +26,23 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: '24.14.0'
           cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: npm run quality:full
+      - id: changes
+        run: node scripts/ci-changes.mjs
+        env:
+          UIMORI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      - if: steps.changes.outputs.docs_only != 'true'
+        run: npm ci --no-audit --no-fund
+      - if: steps.changes.outputs.docs_only != 'true'
+        run: npm run quality:full
+      - if: steps.changes.outputs.docs_only == 'true'
+        run: git diff --check $env:UIMORI_DIFF_BASE HEAD
+        env:
+          UIMORI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
 
   browser:
     if: github.event_name == 'workflow_dispatch' && inputs.browser
@@ -49,4 +60,4 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - run: npm run verify:redesign
+      - run: npm run verify:browser
