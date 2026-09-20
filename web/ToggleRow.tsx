@@ -6,11 +6,13 @@ export function ToggleRow({
   label,
   description,
   checked,
+  disabled,
   onChange,
 }: {
   label: string;
   description?: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   const id = useId();
@@ -24,6 +26,7 @@ export function ToggleRow({
         aria-label={label}
         aria-describedby={description ? id : undefined}
         checked={checked}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
       />
     </label>

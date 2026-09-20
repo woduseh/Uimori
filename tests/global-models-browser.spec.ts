@@ -6,7 +6,7 @@ import type {
   PromptPreset,
   PromptWorkspace,
 } from '../core/product.js';
-import type { Chat, ChatDetail, Run } from '../core/types.js';
+import type { Chat, ChatDetail, ReaderDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
@@ -78,20 +78,57 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(editor).toContainText('모든 채팅의 이후 요청에 적용');
     await expect(editor.getByLabel('원문 모델', { exact: true })).toHaveValue('');
     await editor.locator('summary').filter({ hasText: '기타 자동 작업 모델' }).click();
-    await editor.locator('summary').filter({ hasText: '번역 오류 감지와 재시도' }).click();
+    const mainRefusal = editor.getByRole('region', { name: '본문 서비스 거절 감지', exact: true });
+    await expect(mainRefusal).toBeVisible();
+    await expect(mainRefusal).toContainText('0.9로 고정');
+    await expect(mainRefusal.getByRole('spinbutton')).toHaveCount(0);
+    const mainToggle = editor.getByRole('switch', { name: '본문 서비스 거절 감지 사용' });
+    await expect(mainToggle).toBeChecked();
+    await editor
+      .locator('summary')
+      .filter({ hasText: '번역 서비스 거절 감지와 자동 재시도' })
+      .click();
+    await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toBeVisible();
+    const translationToggle = editor.getByRole('switch', { name: '번역 서비스 거절 감지 사용' });
+    await expect(translationToggle).toBeChecked();
+    await expect(editor).toContainText(
+      '이 설정은 번역에만 적용되며 본문 판정에는 적용되지 않아요.'
+    );
     for (const label of ['원문 모델', '번역 모델', '장면 해설 모델', '채팅 제목 모델'])
       await editor.getByLabel(label, { exact: true }).selectOption(ids[0]);
     await editor.getByLabel('번역 자동 재요청 횟수').fill('2');
     await editor.getByLabel('번역 전체 호출 한도').fill('12');
+    await mainToggle.uncheck();
+    await translationToggle.uncheck();
+    await editor.getByLabel('번역 거절 확신 기준', { exact: true }).fill('0.85');
     await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
     await expect.poll(async () => (await models(request)).routes.main?.id).toBe(ids[0]);
     const selected = await models(request);
     expect(selected.titleModel).toEqual({ id: ids[0] });
+    expect(selected.mainJudgmentEnabled).toBe(false);
     expect(selected.translationPolicy).toEqual({
-      judgment: { threshold: 0.9 },
+      judgment: { threshold: 0.85, enabled: false },
       maxRetries: 2,
       maxCalls: 12,
     });
+    await page.reload();
+    await page.getByRole('button', { name: /^현재 본문 모델 ·/ }).click();
+    await editor
+      .locator('summary')
+      .filter({ hasText: '번역 서비스 거절 감지와 자동 재시도' })
+      .click();
+    await expect(mainToggle).not.toBeChecked();
+    await expect(translationToggle).not.toBeChecked();
+    await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toHaveValue('0.85');
+    await mainToggle.check();
+    await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
+    await expect.poll(async () => (await models(request)).mainJudgmentEnabled).toBe(true);
+    expect((await models(request)).translationPolicy.judgment.enabled).toBe(false);
+    await translationToggle.check();
+    await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
+    await expect
+      .poll(async () => (await models(request)).translationPolicy.judgment.enabled)
+      .toBe(true);
     await page.screenshot({ path: info.outputPath(`global-models-${width}.png`) });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
@@ -200,6 +237,24 @@ for (const width of DEFAULT_WIDTHS) {
       for (const run of reserved) await request.post(`/api/runs/${run.id}/cancel`);
       await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
     }
+    // Inject only the failure projection to check recovery navigation without a provider call.
+    await page.route(`**/api/chats/${existing.id}/reader?*`, async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as ReaderDetail;
+      body.runs = [{ ...reserved[0], status: 'refused', error: 'MAIN_RESPONSE_REFUSED' }];
+      await route.fulfill({ response, json: body });
+    });
+    await page.goto(`/?chat=${existing.id}`);
+    await page
+      .getByRole('group', { name: '실패한 요청' })
+      .getByRole('button', { name: '설정 확인' })
+      .click();
+    await expect(
+      page.getByRole('region', { name: '본문 서비스 거절 감지', exact: true })
+    ).toBeVisible();
+    await expect(page.getByLabel('번역 거절 확신 기준', { exact: true })).toBeHidden();
+    await page.screenshot({ path: info.outputPath(`main-refusal-settings-${width}.png`) });
+    await page.keyboard.press('Escape');
     await page.goto(`/?chat=${other.id}`);
     await navigationAction(page, '새 채팅');
     const create = page.getByRole('dialog', { name: '새 채팅', exact: true });

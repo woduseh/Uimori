@@ -593,6 +593,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       (async () => {
         const run = store.run(id);
         const judgeResponse =
+          run.snapshot.mainJudgmentEnabled !== false &&
           !!run.snapshot.profile?.models.main &&
           run.snapshot.profile.models.main.connection.protocol !== 'fixture-sse-v1';
         let response: ReturnType<ResponseStreamStore['createWriter']> | undefined;
@@ -953,13 +954,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               },
             });
             if (judgment.verdict !== 'accepted') {
-              store.finishRun(
-                id,
-                judgment.verdict === 'refused' ? 'refused' : 'failed',
-                judgment.verdict === 'refused' ? 'MAIN_RESPONSE_REFUSED' : 'MAIN_REFUSAL_UNCERTAIN',
-                result.text,
-                priorUsage
-              );
+              store.finishRun(id, 'refused', 'MAIN_RESPONSE_REFUSED', result.text, priorUsage);
               publish(run.chatId);
               return;
             }

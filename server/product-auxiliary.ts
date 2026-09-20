@@ -656,6 +656,7 @@ export async function runAuxiliaryJob(
           if (
             error instanceof AuxiliaryExecutionError &&
             error.code === 'AUXILIARY_PROVIDER_REFUSED' &&
+            policy.judgment.enabled !== false &&
             error.retryable &&
             !hooks.signal.aborted
           ) {
@@ -664,8 +665,8 @@ export async function runAuxiliaryJob(
           }
           throw error;
         }
-        let verdict: 'accepted' | 'refused' | 'uncertain' = 'accepted';
-        if (!mock) {
+        let verdict: 'accepted' | 'refused' = 'accepted';
+        if (!mock && policy.judgment.enabled !== false) {
           stage = 'translation-refusal';
           lastAttemptId = undefined;
           {
@@ -693,16 +694,18 @@ export async function runAuxiliaryJob(
                 }
               );
               verdict = judgment.verdict;
-            } catch {
+            } catch (error) {
               throw new AuxiliaryExecutionError(
-                hooks.signal.aborted ? 'AUXILIARY_CANCELLED' : 'TRANSLATION_REFUSAL_CHECK_FAILED'
+                hooks.signal.aborted
+                  ? 'AUXILIARY_CANCELLED'
+                  : error instanceof JevError && error.code === 'JEV_INPUT_BUDGET'
+                    ? error.code
+                    : 'TRANSLATION_REFUSAL_CHECK_FAILED'
               );
             }
           }
         }
         if (hooks.signal.aborted) throw new AuxiliaryExecutionError('AUXILIARY_CANCELLED');
-        if (verdict === 'uncertain')
-          throw new AuxiliaryExecutionError('TRANSLATION_REFUSAL_UNCERTAIN');
         if (verdict === 'refused') {
           if (retry < policy.maxRetries) continue;
           throw new AuxiliaryExecutionError('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED');

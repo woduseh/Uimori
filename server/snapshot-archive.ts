@@ -85,6 +85,11 @@ export function validateRunSnapshot(
   snapshot: RunSnapshot,
   runId?: string
 ): RunSnapshot {
+  if (
+    snapshot.mainJudgmentEnabled !== undefined &&
+    typeof snapshot.mainJudgmentEnabled !== 'boolean'
+  )
+    reject('invalid main judgment enabled flag');
   if (snapshot.mainJudgment !== undefined) validateMainJudgmentInput(snapshot.mainJudgment);
   if (snapshot.nativeRisuAuthored) {
     const authored = snapshot.nativeRisuAuthored;

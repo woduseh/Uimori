@@ -93,3 +93,12 @@ describe('safe auxiliary error diagnostics', () => {
     }
   });
 });
+
+it('explains the JEV input budget without connection or automatic retry advice', () => {
+  const diagnostic = auxiliaryErrorDiagnostic('JEV_INPUT_BUDGET');
+  expect(diagnostic.code).toBe('JEV_INPUT_BUDGET');
+  expect(diagnostic.message).toContain('토큰 한도');
+  expect(diagnostic.action).toContain('보존된 출력');
+  expect(diagnostic.action).toContain('자동 재호출하지 않았어요');
+  expect(diagnostic.action).not.toContain('연결');
+});

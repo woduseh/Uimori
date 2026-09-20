@@ -7,6 +7,7 @@ import { useModelSelection } from './model-selection.js';
 import { RefreshIcon, SettingsIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
+import { ToggleRow } from './ToggleRow.js';
 import './settings-actions.css';
 
 export function ModelWorkspaceEditor({
@@ -37,6 +38,7 @@ export function ModelWorkspaceEditor({
         contextModel: workspace.contextModel ?? null,
         scriptModel: workspace.scriptModel ?? null,
         routes: workspace.modelRoutes,
+        mainJudgmentEnabled: workspace.mainJudgmentEnabled !== false,
         translationPolicy: workspace.translationPolicy,
       });
   }, [workspace, dirty, busy]);
@@ -81,6 +83,7 @@ export function ModelWorkspaceEditor({
       {
         expectedRevision: draft.revision,
         routes: draft.routes,
+        mainJudgmentEnabled: draft.mainJudgmentEnabled !== false,
         titleModel: draft.titleModel ?? null,
         helperModel: draft.helperModel ?? null,
         contextModel: draft.contextModel ?? null,
@@ -154,6 +157,24 @@ export function ModelWorkspaceEditor({
       <p>
         모든 채팅의 이후 요청에 적용해요. 진행 중인 작업과 과거 실행·결과의 설정은 바뀌지 않아요.
       </p>
+      <section aria-label="본문 서비스 거절 감지" className="model-secondary-settings">
+        <h3>본문 서비스 거절 감지</h3>
+        <ToggleRow
+          label="본문 서비스 거절 감지 사용"
+          checked={draft.mainJudgmentEnabled !== false}
+          disabled={busy}
+          onChange={(enabled) => change({ ...draft, mainJudgmentEnabled: enabled })}
+        />
+        <p>
+          켜면 JEV가 전체 본문에서 명시적 서비스 거절만 검사해요. 거절 확신 기준은 0.9로 고정돼요.
+          기준 미만이면 정상 응답으로 채택해요.
+        </p>
+        <p>끄면 JEV 거절 판정 없이 생성된 본문을 채택해요. 생성 자체의 오류는 계속 처리해요.</p>
+        <p>
+          거절하거나 JEV 판정에 실패하면 출력을 보존하고 원문으로 채택하지 않아요. 자동으로
+          재생성하지 않아요.
+        </p>
+      </section>
       <fieldset disabled={busy} className="control-grid">
         {selector('원문 모델', draft.routes.main, (ref) =>
           change({ ...draft, routes: { ...draft.routes, main: ref } })
@@ -206,17 +227,34 @@ export function ModelWorkspaceEditor({
         </details>
         <details className="full model-secondary-settings">
           <summary>
-            번역 오류 감지와 재시도 <small>세부 설정</small>
+            번역 서비스 거절 감지와 자동 재시도 <small>세부 설정</small>
           </summary>
           <div className="control-grid">
+            <ToggleRow
+              label="번역 서비스 거절 감지 사용"
+              checked={draft.translationPolicy.judgment.enabled !== false}
+              onChange={(enabled) =>
+                change({
+                  ...draft,
+                  translationPolicy: {
+                    ...draft.translationPolicy,
+                    judgment: { ...draft.translationPolicy.judgment, enabled },
+                  },
+                })
+              }
+            />
             <p>
-              번역 거절 판정과 기존 이미지 선택은 JEV를 사용해요. 프로바이더·모델의 JEV 판단에서
-              연결해 주세요.
+              켜면 JEV가 전체 번역문에서 명시적 서비스 거절만 검사해요. 이 설정은 번역에만 적용되며
+              본문 판정에는 적용되지 않아요.
+            </p>
+            <p>
+              끄면 JEV 거절 판정과 거절에 따른 자동 재시도 없이 생성된 번역을 채택해요. 빈 출력·부분
+              출력·공급자 오류 같은 생성 오류는 계속 처리해요.
             </p>
             <label>
-              판정 확신 기준
+              번역 거절 확신 기준
               <input
-                aria-label="번역 Jev 판정 확신 기준"
+                aria-label="번역 거절 확신 기준"
                 type="number"
                 min="0.51"
                 max="1"
@@ -231,14 +269,18 @@ export function ModelWorkspaceEditor({
                     ...draft,
                     translationPolicy: {
                       ...draft.translationPolicy,
-                      judgment: { threshold: event.target.valueAsNumber },
+                      judgment: {
+                        ...draft.translationPolicy.judgment,
+                        threshold: event.target.valueAsNumber,
+                      },
                     },
                   })
                 }
               />
               <small>
-                0.5 초과–1. 모호하거나 상충하는 판정은 후보를 보존하고 중단해요. 프로바이더·모델
-                등록의 JEV 판단에서 API 키를 연결하고 테스트할 수 있어요.
+                0.5 초과–1. 기준 이상인 명시적 거절만 자동 재요청해요. 기준 미만이면 번역으로
+                채택해요. JEV 판정에 실패하면 후보와 이전 성공 번역을 보존하고 자동 재호출 없이
+                중단해요. 프로바이더·모델 등록의 JEV 판단에서 연결을 확인할 수 있어요.
               </small>
             </label>
             <label>

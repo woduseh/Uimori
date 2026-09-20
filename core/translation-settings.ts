@@ -3,7 +3,7 @@ export type TranslationPolicy = {
   maxRetries: number;
   maxCalls: number;
 };
-export type TranslationJudgmentPolicy = { threshold: number };
+export type TranslationJudgmentPolicy = { threshold: number; enabled?: boolean };
 export const DEFAULT_TRANSLATION_JUDGMENT: TranslationJudgmentPolicy = Object.freeze({
   threshold: 0.9,
 });
@@ -12,14 +12,18 @@ export function validateTranslationJudgmentPolicy(value: unknown): TranslationJu
     throw new Error('TRANSLATION_JUDGMENT_INVALID');
   const policy = value as TranslationJudgmentPolicy;
   if (
-    Object.keys(policy).some((key) => key !== 'threshold') ||
+    Object.keys(policy).some((key) => !['threshold', 'enabled'].includes(key)) ||
+    (policy.enabled !== undefined && typeof policy.enabled !== 'boolean') ||
     typeof policy.threshold !== 'number' ||
     !Number.isFinite(policy.threshold) ||
     policy.threshold <= 0.5 ||
     policy.threshold > 1
   )
     throw new Error('TRANSLATION_JUDGMENT_INVALID');
-  return { threshold: policy.threshold };
+  return {
+    threshold: policy.threshold,
+    ...(policy.enabled !== undefined ? { enabled: policy.enabled } : {}),
+  };
 }
 export const DEFAULT_TRANSLATION_MAX_RETRIES = 1;
 export const DEFAULT_TRANSLATION_MAX_CALLS = 16;
@@ -50,4 +54,4 @@ export function translationPolicy(value?: TranslationPolicy): TranslationPolicy 
     maxCalls: translationMaxCalls(value?.maxCalls),
   };
 }
-export type TranslationRefusalVerdict = 'accepted' | 'refused' | 'uncertain';
+export type TranslationRefusalVerdict = 'accepted' | 'refused';

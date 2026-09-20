@@ -1,3 +1,4 @@
+import { estimateContextTokens } from '../core/context-budget.js';
 import { describe, expect, it, vi } from 'vitest';
 import { executeJevJudgment, JEV_ENDPOINT, type JevRequest } from '../server/jev-judgment.js';
 import { prepareLoreSelection, loreSelectionAttemptInputHashes } from '../server/lore-selection.js';
@@ -382,5 +383,103 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
       executeTool(value, { name: 'knowledge.read', callId: 'bad', args: { ids: ['one', 'one'] } })
         .denied
     ).toBe(true);
+  });
+});
+
+it.each([
+  { error_type: 'max_tokens_exceeded' },
+  { error: { error_type: 'max_tokens_exceeded' } },
+  { detail: { error_type: 'max_tokens_exceeded' } },
+])(
+  'preserves an explicit provider input limit as JEV_INPUT_BUDGET without replay: %j',
+  async (payload) => {
+    const h = hooks();
+    const send = vi.fn(async () => new Response(JSON.stringify(payload), { status: 400 }));
+    await expect(
+      executeJevJudgment(request, 'e'.repeat(64), null, { ...h, fetch: send })
+    ).rejects.toThrow('JEV_INPUT_BUDGET');
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(h.onAttemptFinish).toHaveBeenCalledWith(
+      'attempt-1',
+      expect.objectContaining({
+        status: 'error',
+        error: { code: 'JEV_INPUT_BUDGET' },
+        usage: expect.objectContaining({ inputTokens: null }),
+      })
+    );
+  }
+);
+
+describe('documented JEV input admission limits', () => {
+  const sized = (count: number, copies = 1): JevRequest => ({
+    state: { response: 'State' },
+    questions: Object.fromEntries(
+      Array.from({ length: copies }, (_, i) => [
+        `question${i}`,
+        { type: 'noul' as const, instructions: 'word '.repeat(count) },
+      ])
+    ),
+  });
+  const costs = (value: JevRequest) => {
+    const state = estimateContextTokens(value.state);
+    const questions = Object.values(value.questions).map(estimateContextTokens);
+    return {
+      longest: state + Math.max(...questions),
+      total: state + questions.reduce((a, b) => a + b, 0),
+    };
+  };
+  it.each(['longest', 'total'] as const)(
+    'rejects the independent %s limit before credentials, attempts, or fetch',
+    async (limit) => {
+      const value = limit === 'longest' ? sized(30000) : sized(22000, 3);
+      const cost = costs(value);
+      expect(cost[limit]).toBeGreaterThan(limit === 'longest' ? 32000 : 64000);
+      expect(cost[limit === 'longest' ? 'total' : 'longest']).toBeLessThan(
+        limit === 'longest' ? 64000 : 32000
+      );
+      const h = hooks(),
+        credential = vi.fn(() => 'test-key'),
+        send = vi.fn();
+      await expect(
+        executeJevJudgment(value, 'f'.repeat(64), null, { ...h, credential, fetch: send })
+      ).rejects.toThrow('JEV_INPUT_BUDGET');
+      expect(credential).not.toHaveBeenCalled();
+      expect(h.onAttemptStart).not.toHaveBeenCalled();
+      expect(h.onAttemptFinish).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+    }
+  );
+  it('accepts the complete request just below the longest-question boundary and rejects its next increment', async () => {
+    let low = 0,
+      high = 32000;
+    while (low + 1 < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (costs(sized(middle)).longest <= 32000) low = middle;
+      else high = middle;
+    }
+    const value = sized(low);
+    expect(costs(value).longest).toBeGreaterThanOrEqual(31998);
+    const h = hooks(),
+      send = vi.fn(async (_url: unknown, _init?: RequestInit) => response({ question0: 0.58 }));
+    await expect(
+      executeJevJudgment(value, 'f'.repeat(64), null, { ...h, fetch: send })
+    ).resolves.toMatchObject({ scores: { question0: 0.58 } });
+    expect(JSON.parse(String(send.mock.calls[0]?.[1]?.body))).toMatchObject(value);
+    const blocked = hooks(),
+      blockedSend = vi.fn();
+    await expect(
+      executeJevJudgment(sized(high), 'f'.repeat(64), null, { ...blocked, fetch: blockedSend })
+    ).rejects.toThrow('JEV_INPUT_BUDGET');
+    expect(blockedSend).not.toHaveBeenCalled();
+    expect(blocked.onAttemptStart).not.toHaveBeenCalled();
+  });
+  it('retains a narrower application input budget', async () => {
+    const h = hooks(),
+      send = vi.fn();
+    await expect(
+      executeJevJudgment(sized(1000), 'f'.repeat(64), 100, { ...h, fetch: send })
+    ).rejects.toThrow('JEV_INPUT_BUDGET');
+    expect(send).not.toHaveBeenCalled();
+    expect(h.onAttemptStart).not.toHaveBeenCalled();
   });
 });

@@ -764,7 +764,6 @@ describe('M1 real HTTP application boundaries', () => {
             model: 'jev-latest',
             answers: {
               explicitRefusal: { type: 'noul', noul: 0.01 },
-              startsTranslation: { type: 'noul', noul: 0.99 },
             },
             usage: { input_tokens: 10, output_tokens: 2 },
           })
