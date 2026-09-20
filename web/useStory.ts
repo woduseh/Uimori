@@ -1,6 +1,11 @@
 import { readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
 import {
+  transitionReaderNavigation,
+  type ReaderNavigation,
+  type ReaderNavigationAction,
+} from './reader-navigation.js';
+import {
   commandStorageKey,
   readReadingPosition,
   readDraftCursor,
@@ -126,9 +131,9 @@ export function useStory() {
   const { workspace: promptWorkspace } = usePromptWorkspace();
   const [initial] = useState(() => initialView(true));
   const [chats, setChats] = useState<Chat[]>([]);
-  const [selected, setSelected] = useState(initial.chat);
-  const [viewedBranch, setViewedBranch] = useState(initial.branch);
-  const [readSource, setReadSource] = useState(initial.source);
+  const [view, setView] = useState<ReaderNavigation>(() => ({ ...initial, epoch: 0 }));
+  const navigation = useRef(view);
+  const { chat: selected, branch: viewedBranch, source: readSource, destination } = view;
   const [loadedDetail, setDetail] = useState<ReaderDetail | null>(null);
   const [library, setLibrary] = useState<Library | null>(null);
   const [libraryError, setLibraryError] = useState('');
@@ -142,7 +147,6 @@ export function useStory() {
   const submitLocks = useRef(new Set<string>());
   const [requestActivities, setRequestActivities] = useState<Record<string, RequestActivity>>({});
   const [connected, setConnected] = useState(false);
-  const [destination, setDestination] = useState<'story' | 'library'>(initial.destination);
   const [profileDirty, setProfileDirty] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
   useEffect(() => {
@@ -165,21 +169,28 @@ export function useStory() {
   }, [initial]);
   const reader = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
-  const current = useRef(selected);
   const currentView = useRef('');
   const currentDraftKey = useRef('');
   const refreshVersion = useRef(0);
   const restoredView = useRef('');
-  // A completed server operation may navigate only while its original viewing intent is current.
-  // Increment on every navigation, including A -> B -> A and changes within the same story.
-  const navigationEpoch = useRef(0);
   const cancelNavigationScroll = useRef<(() => void) | null>(null);
   const latestIntent = useRef<{ epoch: number; source: string } | null>(null);
-  const readerQuery = useRef({ branch: '', source: '', key: '' });
+  const readerQuery = useRef({ chat: '', branch: '', source: '', key: '', epoch: 0 });
   const readerCache = useRef<{ key: string; detail: ReaderDetail } | null>(null);
   // Bind an implicit default to the branch actually opened. Later default changes must not
   // retarget reading, drafts, or an in-flight request in this viewing session.
   const defaultView = useRef<{ chatId: string; branchId: string } | null>(null);
+  const navigate = useCallback((action: ReaderNavigationAction) => {
+    const previous = navigation.current;
+    const next = transitionReaderNavigation(previous, action);
+    // Publish intent synchronously: an HTTP response can settle before React renders again.
+    navigation.current = next;
+    if (next.epoch !== previous.epoch) {
+      restoredView.current = '';
+      if (action.kind !== 'source' && action.kind !== 'library') defaultView.current = null;
+    }
+    setView(next);
+  }, []);
   if (!viewedBranch && detail && defaultView.current?.chatId !== selected) {
     const opened = detail.branches?.find((item) => item.default);
     if (opened) defaultView.current = { chatId: selected, branchId: opened.id };
@@ -191,14 +202,16 @@ export function useStory() {
   const storageBranch = activeBranchId === `main:${selected}` ? '' : activeBranchId;
   const preserveDefaultView = useRef<(branchId: string) => void>(() => {});
   preserveDefaultView.current = (branchId) => {
-    if (viewedBranch || current.current !== selected) return;
-    setViewedBranch(branchId);
+    if (viewedBranch || navigation.current.chat !== selected) return;
+    navigate({ kind: 'bind-default', branch: branchId });
     const url = new URL(location.href);
     url.searchParams.set('branch', branchId);
     history.replaceState(null, '', url);
   };
   const savedPosition = readReadingPosition(`reading:${selected}:${storageBranch}`);
   readerQuery.current = {
+    chat: selected,
+    epoch: view.epoch,
     branch: activeBranchId,
     source:
       !activeBranchId && !readSource
@@ -209,8 +222,14 @@ export function useStory() {
     key: `${selected}:${activeBranchId}:${readSource}`,
   };
   const refresh = useCallback(async (id: string, incremental = false) => {
-    if (current.current !== id) return;
+    if (
+      navigation.current.chat !== id ||
+      readerQuery.current.chat !== id ||
+      readerQuery.current.epoch !== navigation.current.epoch
+    )
+      return;
     const version = ++refreshVersion.current;
+    const epoch = navigation.current.epoch;
     const query = readerQuery.current;
     const cached = readerCache.current?.key === query.key ? readerCache.current.detail : null;
     const params = new URLSearchParams({
@@ -230,7 +249,12 @@ export function useStory() {
       // before the action response, while this page still names the old source.
       // Only rebase a page we already read; invalid explicit navigation stays an error.
       if (!cached || !(error instanceof ApiError) || error.status !== 404) throw error;
-      if (current.current !== id || readerQuery.current.key !== query.key) return;
+      if (
+        navigation.current.chat !== id ||
+        navigation.current.epoch !== epoch ||
+        readerQuery.current.key !== query.key
+      )
+        return;
       const rebasedParams = new URLSearchParams({ branch: query.branch });
       value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
       replacementSource =
@@ -242,7 +266,8 @@ export function useStory() {
       }
     }
     if (
-      current.current === id &&
+      navigation.current.chat === id &&
+      navigation.current.epoch === epoch &&
       readerQuery.current.key === query.key &&
       refreshVersion.current === version
     ) {
@@ -279,7 +304,7 @@ export function useStory() {
         sessionStorage.removeItem(`reading:${id}:${storageBranch}`);
         cacheKey = `${id}:${query.branch}:${replacementSource}`;
         readerQuery.current = { ...query, source: replacementSource, key: cacheKey };
-        setReadSource(replacementSource);
+        navigate({ kind: 'rebase-source', source: replacementSource });
         const url = new URL(location.href);
         if (replacementSource) url.searchParams.set('source', replacementSource);
         else url.searchParams.delete('source');
@@ -290,42 +315,36 @@ export function useStory() {
       setChats((old) => old.map((chat) => (chat.id === id ? value.chat : chat)));
       return true;
     }
-  }, []);
+  }, [navigate]);
   const refreshView = useCallback(
     async (id: string, incremental = false): Promise<void> => {
       await refresh(id, incremental);
     },
     [refresh]
   );
-  current.current = selected;
   const chatsRequest = useRef(0);
   const loadChats = useCallback(async () => {
     const request = ++chatsRequest.current;
-    const selectedAtRequest = current.current,
-      epoch = navigationEpoch.current;
+    const selectedAtRequest = navigation.current.chat,
+      epoch = navigation.current.epoch;
     const chats = await api<Chat[]>('/chats');
     if (chatsRequest.current !== request) return;
     setChats(chats);
     if (
       selectedAtRequest &&
-      current.current === selectedAtRequest &&
-      navigationEpoch.current === epoch &&
+      navigation.current.chat === selectedAtRequest &&
+      navigation.current.epoch === epoch &&
       !chats.some((chat) => chat.id === selectedAtRequest)
     ) {
-      navigationEpoch.current++;
+      navigate({ kind: 'chat-deleted' });
       refreshVersion.current++;
-      current.current = '';
       readerCache.current = null;
-      setSelected('');
-      setViewedBranch('');
-      setReadSource('');
       setDetail(null);
-      setDestination('library');
       const url = new URL(location.href);
       for (const key of ['chat', 'branch', 'source']) url.searchParams.delete(key);
       history.replaceState(null, '', url);
     }
-  }, []);
+  }, [navigate]);
   const libraryRequest = useRef(0);
   const loadLibrary = useCallback(async () => {
     const request = ++libraryRequest.current;
@@ -385,7 +404,7 @@ export function useStory() {
       };
       // Batch event bursts; refreshVersion still rejects out-of-order HTTP responses.
       stream.onmessage = (event) => {
-        if (!alive) return;
+        if (!alive || navigation.current.chat !== selected) return;
         const message = JSON.parse(event.data) as { kind: string; seq?: number; entityId?: string };
         if (message.kind === 'chat.deleted') {
           stream.close();
@@ -400,12 +419,12 @@ export function useStory() {
           void loadLibrary().catch((e) => {
             if (alive) setError(e.message);
           });
-        if (message.kind === 'branch.deleted' && readerQuery.current.branch === message.entityId) {
-          navigationEpoch.current++;
-          defaultView.current = null;
+        const currentBranch =
+          navigation.current.branch ||
+          (defaultView.current?.chatId === selected ? defaultView.current.branchId : '');
+        if (message.kind === 'branch.deleted' && currentBranch === message.entityId) {
+          navigate({ kind: 'branch-deleted' });
           readerCache.current = null;
-          setViewedBranch('');
-          setReadSource('');
           sessionStorage.removeItem(`branch:${selected}`);
           const url = new URL(location.href);
           url.searchParams.delete('branch');
@@ -446,7 +465,7 @@ export function useStory() {
       removeEventListener('offline', offline);
       removeEventListener('online', online);
     };
-  }, [selected, refresh, loadChats, loadLibrary]);
+  }, [selected, refresh, loadChats, loadLibrary, navigate]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Branch and source navigation reload the query held by refresh's stable refs.
   useEffect(() => {
     let alive = true;
@@ -495,15 +514,15 @@ export function useStory() {
   const holdNavigationPosition = useCallback(
     (node: HTMLElement, position: ReaderNavigationPosition) => {
       cancelNavigationScroll.current?.();
-      const epoch = navigationEpoch.current;
+      const epoch = navigation.current.epoch;
       const query = readerQuery.current.key;
       cancelNavigationScroll.current = retainReaderNavigation(
         node,
         position,
         () =>
-          current.current === selected &&
+          navigation.current.chat === selected &&
           currentView.current === viewKey &&
-          navigationEpoch.current === epoch &&
+          navigation.current.epoch === epoch &&
           readerQuery.current.key === query &&
           reader.current === node,
         () => {
@@ -613,12 +632,12 @@ export function useStory() {
       return;
     const node = reader.current;
     const saved = readReadingPosition(`reading:${viewKey}`);
-    const epoch = navigationEpoch.current;
+    const epoch = navigation.current.epoch;
     const frame = requestAnimationFrame(() => {
       if (
-        current.current !== selected ||
+        navigation.current.chat !== selected ||
         currentView.current !== viewKey ||
-        navigationEpoch.current !== epoch ||
+        navigation.current.epoch !== epoch ||
         reader.current !== node
       )
         return;
@@ -628,7 +647,7 @@ export function useStory() {
           : null;
       const latest = latestIntent.current;
       if (
-        latest?.epoch === navigationEpoch.current &&
+        latest?.epoch === navigation.current.epoch &&
         detail.reader.order.includes(latest.source)
       ) {
         holdNavigationPosition(node, { kind: 'end' });
@@ -661,46 +680,33 @@ export function useStory() {
     history.pushState(null, '', `?${params}`);
   };
   const select = (id: string) => {
-    navigationEpoch.current++;
     savePosition();
     rememberCursor();
-    const target = '';
-    defaultView.current = null;
-    setViewUrl(id, target);
-    setSelected(id);
-    setViewedBranch(target);
-    setReadSource('');
-    setDestination('story');
-    restoredView.current = '';
+    setViewUrl(id);
+    navigate({ kind: 'chat', chat: id });
   };
   const chooseBranch = (id: string, source = '') => {
-    navigationEpoch.current++;
     savePosition();
     rememberCursor();
-    defaultView.current = null;
     setViewUrl(selected, id, source);
     sessionStorage.setItem(`branch:${selected}`, id);
-    setViewedBranch(id);
-    setReadSource(source);
-    restoredView.current = '';
+    navigate({ kind: 'branch', branch: id, source });
   };
   const chooseSource = (id: string, toEnd = false) => {
     cancelNavigationScroll.current?.();
-    navigationEpoch.current++;
-    latestIntent.current = toEnd ? { epoch: navigationEpoch.current, source: id } : null;
     savePosition();
-    restoredView.current = '';
-    setReadSource(id);
+    navigate({ kind: 'source', source: id });
+    latestIntent.current = toEnd ? { epoch: navigation.current.epoch, source: id } : null;
     setViewUrl(selected, viewedBranch, id);
     if (id === readSource) {
       const key = currentView.current;
-      const epoch = navigationEpoch.current;
+      const epoch = navigation.current.epoch;
       requestAnimationFrame(() => {
         const node = reader.current,
           target = document.getElementById(`source-${id}`);
         if (
           currentView.current === key &&
-          navigationEpoch.current === epoch &&
+          navigation.current.epoch === epoch &&
           node &&
           target &&
           node.contains(target)
@@ -721,25 +727,16 @@ export function useStory() {
   };
   useEffect(() => {
     const onPop = () => {
-      navigationEpoch.current++;
       savePosition();
       rememberCursor();
-      const view = initialView();
-      defaultView.current = null;
-      setSelected(view.chat);
-      setViewedBranch(view.branch);
-      setReadSource(view.source);
-      setDestination(view.destination);
-      restoredView.current = '';
+      navigate({ kind: 'restore', view: initialView() });
     };
     return subscribeAppHistory(onPop);
-  }, [savePosition, rememberCursor]);
+  }, [savePosition, rememberCursor, navigate]);
   function showLibrary() {
-    navigationEpoch.current++;
     savePosition();
     history.pushState(null, '', '?workspace=library');
-    setDestination('library');
-    restoredView.current = '';
+    navigate({ kind: 'library' });
   }
   function canReuseRun(id: string) {
     const run = visibleRuns.find((run) => run.id === id);
@@ -778,6 +775,7 @@ export function useStory() {
     const chat = detail.chat;
     const sentKey = draftKey;
     const sentView = viewKey;
+    const sentEpoch = navigation.current.epoch;
     const commandKey = commandStorageKey(chat.id, activeBranchId);
     const previous = readCommand(commandKey);
     // Recovering an uncertain admission reuses its key even if SSE already shows a running run.
@@ -872,7 +870,8 @@ export function useStory() {
         payload.retryOf &&
         admitted.snapshot.branchId &&
         admitted.snapshot.branchId !== branch?.id &&
-        currentView.current === sentView
+        currentView.current === sentView &&
+        navigation.current.epoch === sentEpoch
       )
         chooseBranch(admitted.snapshot.branchId);
     } catch (error) {
@@ -907,7 +906,7 @@ export function useStory() {
   } | null>(null);
   async function fork(sourceId: string) {
     const chatId = selected;
-    const epoch = navigationEpoch.current;
+    const epoch = navigation.current.epoch;
     const lock = `${chatId}:${sourceId}`;
     const key = `fork-command:${lock}`;
     // The reader contains only the current page; the server verifies source ownership and ancestry.
@@ -924,7 +923,7 @@ export function useStory() {
       });
       if (sessionStorage.getItem(key) === idempotencyKey) sessionStorage.removeItem(key);
       setChats((current) => [next, ...current.filter((chat) => chat.id !== next.id)]);
-      if (current.current === chatId && navigationEpoch.current === epoch) {
+      if (navigation.current.chat === chatId && navigation.current.epoch === epoch) {
         setForkOrigin({
           id: chatId,
           title: chats.find((chat) => chat.id === chatId)?.title ?? '원본 채팅',
@@ -935,7 +934,7 @@ export function useStory() {
     } catch (error) {
       if (definiteRejection(error) && sessionStorage.getItem(key) === idempotencyKey)
         sessionStorage.removeItem(key);
-      if (current.current === chatId && navigationEpoch.current === epoch)
+      if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
         setError(
           error instanceof Error
             ? error.message
@@ -1023,7 +1022,7 @@ export function useStory() {
           });
         }
       } else if (kind === 'module') {
-        const epoch = navigationEpoch.current;
+        const epoch = navigation.current.epoch;
         let module = library.contents.find((item) => refValue(item) === value);
         if (!module) {
           const separator = value.lastIndexOf('@');
@@ -1033,7 +1032,7 @@ export function useStory() {
             throw new Error('추가할 모듈을 다시 선택해 주세요.');
           module = await api<Content>(`/content/${encodeURIComponent(id)}`);
         }
-        if (current.current !== chatId || navigationEpoch.current !== epoch) return false;
+        if (navigation.current.chat !== chatId || navigation.current.epoch !== epoch) return false;
         if (!module.package && !module.hasPackage)
           throw new Error('추가할 모듈을 찾지 못했어요. 서재를 다시 확인해 주세요.');
         const existing = profile.packageAttachments ?? [];
@@ -1077,11 +1076,11 @@ export function useStory() {
           'PUT'
         );
       }
-      if (current.current === chatId) setNotice('다음 요청에 적용할 설정을 저장했어요.');
+      if (navigation.current.chat === chatId) setNotice('다음 요청에 적용할 설정을 저장했어요.');
       await refresh(chatId);
       return true;
     } catch (error) {
-      if (current.current === chatId)
+      if (navigation.current.chat === chatId)
         setError(error instanceof Error ? error.message : '설정을 저장하지 못했어요.');
       await refresh(chatId).catch(() => undefined);
       return false;
