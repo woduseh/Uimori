@@ -236,13 +236,6 @@
 .library-detail textarea {
   line-height: 1.75;
 }
-.library-diagnostics {
-  margin-top: 12px;
-  font-size: 12px;
-}
-.library-diagnostics code {
-  overflow-wrap: anywhere;
-}
 .library-detail .control-grid {
   background: transparent;
   border-color: var(--border);
