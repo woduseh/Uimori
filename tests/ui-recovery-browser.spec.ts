@@ -168,7 +168,17 @@ for (const viewport of viewports) {
       await post<PromptPreset>(request, '/api/prompt-presets', {
         title,
         role: 'main',
-        program: nativePrompt('Toggle form fixture', { customPromptTemplateToggle: declarations }),
+        program: nativePrompt('Toggle form fixture', {
+          customPromptTemplateToggle: declarations,
+          jailbreakToggle: true,
+          chainOfThought: true,
+          promptSettings: {
+            sendName: true,
+            sendChatAsSystem: true,
+            postEndInnerFormat: 'Retired suffix',
+            assistantPrefill: 'Retired prefill',
+          },
+        }),
         values: { short: '서울', long: '첫 줄\n둘째 줄', flag: '1', mode: '0' },
       });
       await page.goto('/');
@@ -177,7 +187,25 @@ for (const viewport of viewports) {
       await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
       const editor = page.getByTestId('prompt-editor');
       const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
+      await editor.locator('summary').filter({ hasText: '블록 종류' }).click();
+      const blockType = editor.getByLabel('1번 블록 종류', { exact: true });
+      await expect(blockType.locator('option[value="jailbreak"], option[value="cot"]')).toHaveCount(
+        0
+      );
+      await expect(editor.locator('option[value="jailbreak"]')).toHaveCount(0);
+      await expect(
+        editor.getByLabel('시스템 메시지로 보내기 설정에서도 원래 대화 역할 유지', { exact: true })
+      ).toHaveCount(0);
       await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      for (const label of [
+        '탈옥 프롬프트 사용',
+        '사고 지침 사용',
+        '대화에 화자 이름 포함',
+        '대화를 시스템 메시지로 보내기',
+        '마지막 지침 뒤에 추가할 문구',
+        '응답 시작 문구',
+      ])
+        await expect(editor.getByLabel(label, { exact: true })).toHaveCount(0);
       await expect(editor.locator('.prompt-option-caption')).toHaveText([
         '짧은 입력에 사용할 이름을 작성해요.',
         '그룹 밖 안내예요.',
@@ -274,6 +302,9 @@ for (const viewport of viewports) {
         flag: '0',
         mode: '0',
       });
+      expect(saved.program.nativeRisuPreset.preset).not.toHaveProperty('jailbreakToggle');
+      expect(saved.program.nativeRisuPreset.preset).not.toHaveProperty('chainOfThought');
+      expect(saved.program.nativeRisuPreset.preset.promptSettings).toEqual({});
       expect(saved.program.nativeRisuPreset.preset.customPromptTemplateToggle).toBe(
         withUnknown.replace('short=짧은 입력=text', 'short=이름 입력=textarea')
       );

@@ -1,4 +1,4 @@
-/** Matches RisuToki's deprecated-save-policy; retained source-file bytes are never changed. */
+/** RisuToki's deprecated-save-policy plus retired Uimori preset options; source-file bytes stay intact. */
 const CARD_FIELDS = [
   'personality',
   'scenario',
@@ -15,6 +15,14 @@ const PRESET_FIELDS = [
   'useInstructPrompt',
   'instructChatTemplate',
   'JinjaTemplate',
+  'jailbreakToggle',
+  'chainOfThought',
+] as const;
+const PRESET_SETTING_FIELDS = [
+  'sendName',
+  'sendChatAsSystem',
+  'postEndInnerFormat',
+  'assistantPrefill',
 ] as const;
 const object = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -34,4 +42,18 @@ export function stripDeprecatedRisuModuleFields(module: Record<string, unknown>)
 
 export function stripDeprecatedRisuPresetFields(preset: Record<string, unknown>): void {
   for (const key of PRESET_FIELDS) delete preset[key];
+  const settings = object(preset.promptSettings);
+  if (settings) for (const key of PRESET_SETTING_FIELDS) delete settings[key];
+  if (Array.isArray(preset.promptTemplate))
+    preset.promptTemplate = preset.promptTemplate.filter(
+      (block) => !['jailbreak', 'cot'].includes(String(object(block)?.type))
+    );
+  if (Array.isArray(preset.promptTemplate))
+    for (const block of preset.promptTemplate) {
+      const item = object(block);
+      if (item) {
+        delete item.chatAsOriginalOnSystem;
+        if (item.type2 === 'jailbreak') delete item.type2;
+      }
+    }
 }

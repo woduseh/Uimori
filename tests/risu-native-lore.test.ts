@@ -104,7 +104,7 @@ test('native depth/end/reverse-depth preserve role and position once while norma
   expect(buildMainInput(snapshot).catalog.some((item) => item.id.includes('lore-0'))).toBe(true);
 });
 
-test('conditional native positions use the frozen lore selection and keep pinned budget and existing prefill', async () => {
+test('conditional native positions use frozen lore selection and pinned budgets without retired prefill', async () => {
   const { snapshot } = await fixture([
     entry('@@end\nPINNED'),
     entry('@@depth 1\nCONDITIONAL', 2, false),
@@ -129,9 +129,10 @@ test('conditional native positions use the frozen lore selection and keep pinned
   const after = compileSnapshotPrompt(snapshot, program).promptCompilation!;
   expect(after.messages.some((message) => message.content[0].text === 'CONDITIONAL')).toBe(true);
   expect(after.messages.at(-1)).toMatchObject({
-    completion: 'prefill',
-    content: [{ text: 'PREFIX' }],
+    completion: 'complete',
+    content: [{ text: 'PINNED' }],
   });
+  expect(after.messages.some((message) => message.content[0].text === 'PREFIX')).toBe(false);
   snapshot.profile!.loreContext = { ...DEFAULT_LORE_CONTEXT, maxPinnedChars: 2 };
   expect(() => compileSnapshotPrompt(snapshot)).toThrow('LORE_PINNED_BUDGET_EXCEEDED');
 });

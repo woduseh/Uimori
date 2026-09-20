@@ -11,7 +11,7 @@ import { prepareNativeRisuRequest } from '../server/risu-native-request.js';
 import { disposeAllNativeRisuSessions } from '../server/risu-native-runtime.js';
 
 afterEach(disposeAllNativeRisuSessions);
-async function prepared(code?: string) {
+async function prepared(code?: string, providerPrefill = false) {
   const program = importRisuPresetProgram({
     name: 'Prefill',
     promptTemplate: [
@@ -65,6 +65,15 @@ async function prepared(code?: string) {
   } as unknown as RunSnapshot;
   const compiled = compileSnapshotPrompt(await prepareNativeRisuRun(snapshot));
   const p = compiled.promptCompilation!;
+  // Exercise the generic provider prefill contract independently of RISUP settings.
+  if (providerPrefill)
+    p.messages.push({
+      id: 'provider-prefill',
+      role: 'assistant',
+      completion: 'prefill',
+      content: [{ type: 'text', text: 'Continue: ' }],
+      provenance: { blockId: 'provider-prefill', origin: 'prompt' },
+    });
   const request: ProviderRequest = {
     role: 'main',
     modelId: 'synthetic',
@@ -80,21 +89,28 @@ async function prepared(code?: string) {
   return { snapshot: compiled, request };
 }
 
-test('native request without callbacks retains the RISUP assistant prefill', async () => {
+test('native request without callbacks never adds the retired RISUP assistant prefill', async () => {
   const input = await prepared();
-  expect(input.request.prompt!.messages.at(-1)!.completion).toBe('prefill');
+  expect(input.request.prompt!.messages.at(-1)).toMatchObject({
+    role: 'user',
+    completion: 'complete',
+    content: [{ type: 'text', text: 'A scene' }],
+  });
   const result = await prepareNativeRisuRequest(input.snapshot, input.request);
   expect(result.request.prompt).toEqual(input.request.prompt);
   expect(
     result.snapshot.nativeRisuExecution!.requestEdits![0]!.prompt.messages.at(-1)!.completion
-  ).toBe('prefill');
+  ).toBe('complete');
 });
 
 test('native request body edits preserve completion when the final role and position stay fixed', async () => {
-  const input = await prepared(`listenEdit('editRequest', function(id, messages)
+  const input = await prepared(
+    `listenEdit('editRequest', function(id, messages)
     messages[#messages].content = 'Edited prefix: '
     return messages
-  end)`);
+  end)`,
+    true
+  );
   const result = await prepareNativeRisuRequest(input.snapshot, input.request);
   expect(result.request.prompt!.messages.at(-1)).toMatchObject({
     role: 'assistant',
@@ -111,7 +127,8 @@ test.each([
   'native request resets prefill when its terminal role or position changes: %s',
   async (change) => {
     const input = await prepared(
-      `listenEdit('editRequest', function(id, messages) ${change}; return messages end)`
+      `listenEdit('editRequest', function(id, messages) ${change}; return messages end)`,
+      true
     );
     const result = await prepareNativeRisuRequest(input.snapshot, input.request);
     expect(

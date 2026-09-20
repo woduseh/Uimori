@@ -15,12 +15,8 @@ import { AddIcon, UpIcon, DownIcon, DeleteIcon } from './ui-icons.js';
 import './native-editor.css';
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
-const object = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
 const roleField = (block: Record<string, unknown>) =>
-  ['plain', 'jailbreak', 'cot', 'cache'].includes(text(block.type)) ? 'role' : 'role2';
+  ['plain', 'cache'].includes(text(block.type)) ? 'role' : 'role2';
 const blockRole = (block: Record<string, unknown>) =>
   text(block[roleField(block)]) || (block.type === 'cache' ? 'all' : 'system');
 const blockTypes: Record<string, string> = {
@@ -32,8 +28,6 @@ const blockTypes: Record<string, string> = {
   authornote: '작가 노트',
   postEverything: '마지막 지침',
   cache: '캐시',
-  jailbreak: '탈옥 프롬프트',
-  cot: '사고 지침',
   chatML: 'ChatML',
 };
 type Section = 'blocks' | 'options' | 'variables' | 'regex' | 'collaboration';
@@ -55,7 +49,7 @@ export function NativeRisuPresetEditor({
   collaboration?: ReactNode;
   metadata?: ReactNode;
 }) {
-  const source = program.nativeRisuPreset.preset;
+  const source = nativeRisuPresetSource(program.nativeRisuPreset.preset).preset;
   const id = useId();
   const [section, setSection] = useState<Section>('blocks');
   const [selected, setSelected] = useState(0);
@@ -85,7 +79,6 @@ export function NativeRisuPresetEditor({
   const items = source.promptTemplate as Record<string, unknown>[];
   const index = Math.min(selected, Math.max(0, items.length - 1));
   const entry = items[index];
-  const settings = object(source.promptSettings);
   const sections: { id: Section; title: string }[] = [
     { id: 'blocks', title: '구성' },
     { id: 'options', title: '기본 옵션' },
@@ -253,15 +246,9 @@ export function NativeRisuPresetEditor({
                     onChange={(e) => item({ name: e.target.value })}
                   />
                 </label>
-                {[
-                  'plain',
-                  'jailbreak',
-                  'cot',
-                  'cache',
-                  'persona',
-                  'description',
-                  'authornote',
-                ].includes(text(entry.type)) && (
+                {['plain', 'cache', 'persona', 'description', 'authornote'].includes(
+                  text(entry.type)
+                ) && (
                   <label>
                     메시지 역할
                     <select
@@ -282,7 +269,7 @@ export function NativeRisuPresetEditor({
                   </label>
                 )}
               </div>
-              {['plain', 'jailbreak', 'cot', 'chatML'].includes(text(entry.type)) ? (
+              {['plain', 'chatML'].includes(text(entry.type)) ? (
                 <label>
                   본문 · Risu CBS
                   <textarea
@@ -366,14 +353,6 @@ export function NativeRisuPresetEditor({
                       </label>
                     )}
                   </div>
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={entry.chatAsOriginalOnSystem === true}
-                      onChange={(e) => item({ chatAsOriginalOnSystem: e.target.checked })}
-                    />
-                    시스템 메시지로 보내기 설정에서도 원래 대화 역할 유지
-                  </label>
                 </>
               )}
               {entry.type === 'memory' && (
@@ -410,11 +389,9 @@ export function NativeRisuPresetEditor({
                       <option value="">일반</option>
                       <option value="main">메인 지침</option>
                       <option value="globalNote">글로벌노트</option>
-                      <option value="jailbreak">탈옥 지침</option>
-                      {text(entry.type2) &&
-                        !['main', 'globalNote', 'jailbreak'].includes(text(entry.type2)) && (
-                          <option value={text(entry.type2)}>{text(entry.type2)}</option>
-                        )}
+                      {text(entry.type2) && !['main', 'globalNote'].includes(text(entry.type2)) && (
+                        <option value={text(entry.type2)}>{text(entry.type2)}</option>
+                      )}
                     </select>
                   </label>
                 )}
@@ -438,60 +415,6 @@ export function NativeRisuPresetEditor({
         ) : (
           <p className="muted">정의된 토글이 없어요. 변수·토글에서 추가할 수 있어요.</p>
         )}
-        <div className="native-setting-group">
-          {(
-            [
-              ['jailbreakToggle', '탈옥 프롬프트 사용'],
-              ['chainOfThought', '사고 지침 사용'],
-            ] as const
-          ).map(([key, label]) => (
-            <label className="check" key={key}>
-              <input
-                type="checkbox"
-                checked={source[key] === true}
-                onChange={(e) => update({ [key]: e.target.checked })}
-              />
-              {label}
-            </label>
-          ))}
-          {(
-            [
-              ['sendName', '대화에 화자 이름 포함'],
-              ['sendChatAsSystem', '대화를 시스템 메시지로 보내기'],
-            ] as const
-          ).map(([key, label]) => (
-            <label className="check" key={key}>
-              <input
-                type="checkbox"
-                checked={settings[key] === true}
-                onChange={(e) =>
-                  update({ promptSettings: { ...settings, [key]: e.target.checked } })
-                }
-              />
-              {label}
-            </label>
-          ))}
-          <label>
-            마지막 지침 뒤에 추가할 문구
-            <textarea
-              rows={4}
-              value={text(settings.postEndInnerFormat)}
-              onChange={(e) =>
-                update({ promptSettings: { ...settings, postEndInnerFormat: e.target.value } })
-              }
-            />
-          </label>
-          <label>
-            응답 시작 문구
-            <textarea
-              rows={4}
-              value={text(settings.assistantPrefill)}
-              onChange={(e) =>
-                update({ promptSettings: { ...settings, assistantPrefill: e.target.value } })
-              }
-            />
-          </label>
-        </div>
       </div>
       <div {...panel('variables')} className="native-section-body">
         <h3>변수·토글</h3>

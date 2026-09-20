@@ -61,7 +61,7 @@ export async function prepareNativeRisuPreset(snapshot: RunSnapshot): Promise<Ru
     fields: fieldPlan,
     fieldRoles: Object.fromEntries(
       (source.preset.promptTemplate as Record<string, unknown>[]).flatMap((raw, index) =>
-        ['plain', 'jailbreak', 'cot'].includes(String(raw.type))
+        raw.type === 'plain'
           ? [
               [
                 `block:${index}:text`,
@@ -91,7 +91,6 @@ export async function prepareNativeRisuPreset(snapshot: RunSnapshot): Promise<Ru
       charName: identity.bot.name,
       userName: identity.user.name,
       globalNote: context.globalNoteReplacement,
-      jailbreakToggle: source.preset.jailbreakToggle === true,
       templateDefaultVariables: string(source.preset.templateDefaultVariables),
       now: snapshot.executionClock ? Date.parse(snapshot.executionClock.iso) : 0,
     },

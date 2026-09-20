@@ -165,4 +165,23 @@ Verification:
 
 The six legacy-option removals/runtime changes remain paused. No original material, live-provider behavior or physical device was changed or tested. This is focused verification, not a new full-suite result.
 
+Previous source-first/caption result: passed.
+
+## Follow-up: retire six legacy preset options
+
+The user approved removing the UI and execution of `jailbreakToggle`, `chainOfThought`, `sendName`, `sendChatAsSystem`, `postEndInnerFormat`, and `assistantPrefill`, without notices on import. They explicitly declined historical-record compatibility work. No archive replay adapter or compatibility branch was added.
+
+Imports, editable saves, exports, and new request snapshots discard these fields, `jailbreak`/`cot` blocks and the dependent `chatAsOriginalOnSystem` flag. The obsolete `type2: jailbreak` classification is removed without deleting an ordinary plain block's text. Neither compiler path executes the removed blocks or setting CBS, prefixes names, changes history roles, or creates a preset prefill. The old `jbtoggled` macro returns `0` without a diagnostic. Generic provider prefill serialization remains independent of these removed preset features.
+
+Verification:
+
+- `npm run quality` passed (840 files and TypeScript), and the current build passed.
+- Nine focused unit suites passed 63 tests, with 2 opt-in private-material tests skipped in that run. Coverage includes silent import, direct API save, export, CBS side effects, history roles, and provider input preparation. An initial test-fixture import error was corrected before the successful run.
+- The explicit actual-material test separately passed with Cheongwon, Hinano v2.4.3-test, Vela, and the Phémē preset; input file hashes stayed unchanged. The first attempt used an outdated Hinano path; the successful run used the file confirmed in the current local directory.
+- `npm run verify:ui-recovery -- --grep "native toggle forms|RISUPRESETUI" --visual` passed 5 focused browser cases. Receipt: `output/playwright/ui-recovery-2026-09-20T03-46-14-011Z-e825b564/summary.json`. Build/source identity: `1616a4c8892bf00b8d53412e148a073ea75659ec640ed7f1ede5efa64de53807`; final identity checks passed.
+- Inspected that run's `native-options-desktop.png` and `native-options-mobile.png` at 2560 × 1440 and 412 × 915. Authored input types, captions and switches remain visible, the removed controls are absent, and editing/saving and raw-first toggle authoring pass.
+- Restarted the existing local preview against the new build while retaining its database. Both actual Phémē read-only capture flows passed; the refreshed mobile caption screen was inspected under `output/ui-recovery-preview/caption-captures/`.
+
+This is focused local verification. No full-suite, live-provider, physical-device or historical fork/backup compatibility claim is made.
+
 final result: passed

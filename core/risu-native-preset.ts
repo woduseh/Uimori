@@ -11,6 +11,7 @@ export type NativeRisuPresetExecution = {
   variables: Record<string, string>;
   issues: string[];
 };
+// Input keys are accepted here; current imports and edits strip retired fields below.
 const allowed = new Set([
   'name',
   'promptTemplate',
@@ -171,17 +172,10 @@ export function evaluatedNativeRisuPreset(
     for (const key of ['text', 'innerFormat', 'defaultText'])
       if (Object.hasOwn(fields, `block:${index}:${key}`))
         raw[key] = fields[`block:${index}:${key}`];
-  const settings = object(result.preset.promptSettings);
-  for (const key of ['postEndInnerFormat', 'assistantPrefill'])
-    if (Object.hasOwn(fields, `settings:${key}`)) settings[key] = fields[`settings:${key}`];
   return result;
 }
-export function nativeRisuBlockEnabled(source: NativeRisuPreset, type: unknown): boolean {
-  return type === 'jailbreak'
-    ? source.preset.jailbreakToggle === true
-    : type === 'cot'
-      ? source.preset.chainOfThought === true
-      : type !== 'memory';
+export function nativeRisuBlockEnabled(type: unknown): boolean {
+  return !['jailbreak', 'cot', 'memory'].includes(String(type));
 }
 export type NativePresetFieldContext = {
   slots?: Record<string, string>;
@@ -193,24 +187,20 @@ export function nativeRisuPresetFields(
   context: NativePresetFieldContext = {}
 ): Record<string, string> {
   const result: Record<string, string> = {};
-  const settings = object(source.preset.promptSettings);
-  const appendSetting = (key: string) => {
-    if (typeof settings[key] === 'string') result[`settings:${key}`] = settings[key];
-  };
   for (const [index, raw] of (
     source.preset.promptTemplate as Record<string, unknown>[]
   ).entries()) {
+    if (!nativeRisuBlockEnabled(raw.type)) continue;
     if (context.legacy) {
       for (const key of ['text', 'innerFormat', 'defaultText'])
         if (typeof raw[key] === 'string') result[`block:${index}:${key}`] = raw[key];
       continue;
     }
-    if (!nativeRisuBlockEnabled(source, raw.type)) continue;
     if (raw.type === 'chatML') {
       result[`block:${index}:text`] = nativeChatMlMessages(string(raw.text))
         .map((message) => `<|im_start|>${message.role}<|im_sep|>${message.text}<|im_end|>`)
         .join('\n');
-    } else if (['plain', 'jailbreak', 'cot'].includes(string(raw.type))) {
+    } else if (raw.type === 'plain') {
       const text = string(raw.text);
       result[`block:${index}:text`] =
         raw.type2 === 'globalNote' && context.globalNoteReplacement
@@ -230,7 +220,5 @@ export function nativeRisuPresetFields(
         result[`block:${index}:innerFormat`] = raw.innerFormat;
     }
   }
-  if (context.legacy) appendSetting('postEndInnerFormat');
-  appendSetting('assistantPrefill');
   return result;
 }
