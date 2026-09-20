@@ -233,23 +233,9 @@ export function PackagePortraitEditor({
               disabled={disabled || busy}
               onClick={() => selectImage(image.id)}
             >
-              <ContentAvatar
-                content={{
-                  id: value.id,
-                  revision: value.revision,
-                  title: image.title,
-                  kind: 'module',
-                  package: value,
-                  description: '',
-                  text: '',
-                  loading: 'pinned',
-                  relatedIds: [],
-                  coverImage: {
-                    url: `/api/package-image-blobs/${image.blobHash}`,
-                    title: image.title,
-                  },
-                }}
-              />
+              <span className="content-avatar" aria-hidden="true">
+                <img src={`/api/package-image-blobs/${image.blobHash}`} alt="" loading="lazy" />
+              </span>
               <span className="content-picker-copy">
                 <strong>{image.title}</strong>
                 <small>
