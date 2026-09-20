@@ -26,6 +26,11 @@ const vercelConnection: Connection = {
 };
 
 describe('model numeric drafts', () => {
+  test('uses a 600-second response timeout for new models', () => {
+    expect(initialModel().timeoutSeconds).toBe('600');
+    expect(modelPayload(initialModel(), connection).timeoutMs).toBe(600_000);
+  });
+
   test.each(['', ' ', '0', '-1', '1.5', 'NaN', 'Infinity', '500001'])(
     'rejects invalid required output tokens %j before saving',
     (maxOutputTokens) => {

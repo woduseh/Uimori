@@ -103,7 +103,7 @@ export const initialModel = (): ModelDraft => ({
   topP: '',
   stopSequences: [],
   thinkingLevel: '',
-  timeoutSeconds: '300',
+  timeoutSeconds: '600',
   structuredOutput: 'default',
   reasoningEffort: '',
   outputEffort: '',
