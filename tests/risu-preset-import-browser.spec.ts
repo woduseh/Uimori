@@ -49,9 +49,9 @@ test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission th
   });
   await page.goto('/');
   await navigationAction(page, '프롬프트');
-  const trigger = page.getByRole('button', { name: 'Risu 프리셋 가져오기', exact: true });
+  const trigger = page.getByRole('button', { name: '프롬프트 가져오기', exact: true });
   await trigger.click();
-  const dialog = page.getByRole('dialog', { name: 'Risu 프리셋 가져오기', exact: true });
+  const dialog = page.getByRole('dialog', { name: '프롬프트 가져오기', exact: true });
   await dialog.getByLabel('Risu 프리셋 파일 선택', { exact: true }).setInputFiles({
     name: 'synthetic.risupreset',
     mimeType: 'application/json',
@@ -61,7 +61,7 @@ test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission th
   const save = dialog.getByRole('button', { name: '작문 프롬프트로 저장', exact: true });
   await expect(save).toBeDisabled();
   expect(submissions).toHaveLength(0);
-  await dialog.getByRole('button', { name: 'Risu 프리셋 가져오기 닫기', exact: true }).click();
+  await dialog.getByRole('button', { name: '프롬프트 가져오기 닫기', exact: true }).click();
   await trigger.click();
   await expect(dialog.getByRole('heading', { name: title })).toBeVisible();
   expect(prepares).toBe(1);
@@ -70,7 +70,7 @@ test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission th
   await expect(dialog.getByRole('button', { name: '같은 요청으로 다시 확인' })).toBeVisible();
   await expect(dialog.getByLabel('Risu 프리셋 파일 선택', { exact: true })).toBeDisabled();
   await expect(dialog.getByRole('checkbox')).toBeDisabled();
-  await dialog.getByRole('button', { name: 'Risu 프리셋 가져오기 닫기', exact: true }).click();
+  await dialog.getByRole('button', { name: '프롬프트 가져오기 닫기', exact: true }).click();
   await trigger.click();
   await dialog.getByRole('button', { name: '같은 요청으로 다시 확인' }).click();
   await expect(dialog.getByText('새 작문 프롬프트로 저장했어요.', { exact: true })).toBeVisible();
@@ -111,8 +111,8 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   const before = await (await request.get('/api/model-workspace')).json();
   await page.goto('/');
   await navigationAction(page, '프롬프트');
-  await page.getByRole('button', { name: 'Risu 프리셋 가져오기', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Risu 프리셋 가져오기', exact: true });
+  await page.getByRole('button', { name: '프롬프트 가져오기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '프롬프트 가져오기', exact: true });
   await dialog.getByLabel('Risu 프리셋 파일 선택', { exact: true }).setInputFiles({
     name: 'synthetic.json',
     mimeType: 'application/json',

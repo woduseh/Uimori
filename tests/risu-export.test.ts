@@ -238,7 +238,7 @@ test('native asset edits export replaced bytes and a removed module asset withou
   expect(reimported.file.images.some((image) => image.hash === blob.hash)).toBe(true);
 });
 
-test('export rejects missing or unsafe embedded assets and linked/standalone modules without dropping them', () => {
+test('export rejects missing or unsafe embedded assets without dropping them', () => {
   const { store } = fixture(),
     saved = imported(store);
   for (const uri of ['embeded://missing.png', 'embeded://../outside.png', 'C:/local.png']) {
@@ -248,10 +248,108 @@ test('export rejects missing or unsafe embedded assets and linked/standalone mod
     if (uri.includes('missing')) edited.package.nativeRisu.assets = [];
     expect(() => exportRisuContent(store.product, edited)).toThrow(/RISU_EXPORT_ASSET/);
   }
-  saved.package.modules = [{ id: 'linked-module', revision: 1 }];
-  expect(() => exportRisuContent(store.product, saved)).toThrow('RISU_EXPORT_LINKED_MODULES');
-  saved.kind = 'module';
-  expect(() => exportRisuContent(store.product, saved)).toThrow('RISU_EXPORT_MODULE_UNSUPPORTED');
+});
+
+function importedModule(store: Store, name: string, extra: Record<string, unknown> = {}) {
+  const input = writeEmbeddedRisuModule(
+    { name, description: '', lorebook: [], regex: [], trigger: [], ...extra },
+    Array.isArray(extra.assets) ? extra.assets.map(() => png) : []
+  );
+  const result = analyzeNativeRisuImport(readCharacterCard(source(input, `${name}.risum`)));
+  for (const image of result.file.images) putValidatedImageBlob(store.product, image);
+  const { id: _id, revision: _revision, ...body } = result.file.contents[0].source;
+  return store.product.content(body) as Content;
+}
+
+test('standalone RISUM preserves authored fields, scripts and asset bytes through binary import', () => {
+  const { store } = fixture();
+  const saved = importedModule(store, 'module', {
+    assets: [['scene', '', 'png']],
+    namespace: 'scope',
+    lowLevelAccess: true,
+    trigger: [{ type: 'start', effect: [] }],
+    customModuleToggle: 'x=X',
+  });
+  const before = structuredClone(saved);
+  const output = exportRisuContent(store.product, saved);
+  expect(output.filename).toBe('module.risum');
+  const read = readCharacterCard(source(output.bytes, output.filename));
+  expect(read.nativeModule).toMatchObject(before.package.nativeRisu.module!);
+  expect(analyzeNativeRisuImport(read).file.images[0].base64).toBe(png.toString('base64'));
+  expect(saved).toEqual(before);
+});
+
+test('linked nested modules export latest declaration-order scripts, converted lore and portable card assets without writes', () => {
+  const { store } = fixture(),
+    saved = imported(store);
+  const child = importedModule(store, 'child', {
+    lorebook: [{ key: 'child', content: 'nested', alwaysActive: true }],
+    trigger: [{ type: 'start', effect: [{ type: 'triggerlua', code: 'return' }] }],
+    lowLevelAccess: true,
+    assets: [['scene', '', 'png']],
+  });
+  const parent = importedModule(store, 'parent', {
+    regex: [{ in: 'old', out: 'new', type: 'editdisplay' }],
+  });
+  const { id, revision, ...body } = parent;
+  const latest = store.product.content(
+    {
+      ...body,
+      expectedRevision: revision,
+      package: { ...body.package, modules: [{ id: child.id, revision: child.revision }] },
+    },
+    id
+  ) as Content;
+  saved.package.modules = [{ id, revision }];
+  const original = structuredClone(saved);
+  const before = store.product.export().tables;
+  const read = readCharacterCard(source(exportRisuContent(store.product, saved).bytes));
+  const module = read.nativeModule!;
+  expect(module.regex).toEqual(latest.package.nativeRisu.module!.regex);
+  expect(module.lorebook).toMatchObject([
+    { alwaysActive: true, content: 'stale inline' },
+    { key: 'child', content: 'nested' },
+  ]);
+  expect((read.nativeCard as Record<string, any>).extensions.risuai.defaultVariables).toBe(
+    'stage=first'
+  );
+  expect((read.nativeCard as Record<string, any>).extensions.risuai.lowLevelAccess).toBe(true);
+  expect(
+    (read.nativeCard as Record<string, any>).assets.some(
+      (asset: { name: string }) => asset.name === 'scene'
+    )
+  ).toBe(true);
+  const restored = analyzeNativeRisuImport(read);
+  expect(
+    nativeRisuTriggers(restored.file.contents[0].source.package!.nativeRisu)[0].lowLevelAccess
+  ).toBe(true);
+  expect(store.product.export().tables).toEqual(before);
+  expect(saved).toEqual(original);
+});
+
+test('linked modules reject mixed permissions, scoped metadata, missing payload and asset name conflicts', () => {
+  const { store } = fixture();
+  for (const extra of [
+    { namespace: 'separate-scope' },
+    { assets: [['main', '', 'png']] },
+    { trigger: [{ type: 'start', effect: [] }], lowLevelAccess: false },
+  ]) {
+    const saved = imported(store, card(), { trigger: [{ type: 'start', effect: [] }] });
+    const dependency = importedModule(store, 'dependency', extra);
+    saved.package.modules = [{ id: dependency.id, revision: dependency.revision }];
+    expect(() => exportRisuContent(store.product, saved)).toThrow('RISU_EXPORT_MODULE_CONFLICT');
+  }
+  const saved = imported(store);
+  const dependency = importedModule(store, 'missing', { assets: [['scene', '', 'png']] });
+  dependency.package.nativeRisu.assets = [];
+  dependency.package.images = [];
+  const { id, revision, ...body } = dependency;
+  store.product.content({ ...body, expectedRevision: revision }, id);
+  saved.package.modules = [{ id, revision }];
+  expect(() => exportRisuContent(store.product, saved)).toThrow('RISU_EXPORT_ASSET_UNAVAILABLE');
+  const empty = structuredClone(dependency);
+  delete empty.package.nativeRisu.module;
+  expect(() => exportRisuContent(store.product, empty)).toThrow('RISU_EXPORT_MODULE_UNSUPPORTED');
 });
 
 test('saved edited RISUP uses the real binary importer and preserves authored blocks, CBS, settings and regex', () => {

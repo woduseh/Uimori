@@ -32,9 +32,14 @@ export function nativeRisuSnapshotNeedsRefresh(snapshot: RunSnapshot): boolean {
 export function supportedNativeRisuSnapshot(snapshot: RunSnapshot): RunSnapshot {
   const input = structuredClone(snapshot);
   if (input.profile?.packages)
-    input.profile.packages = input.profile.packages.map((pkg) =>
-      pkg.nativeRisu ? projectNativeRisuPackage(pkg, pkg.identity ? 'bot' : 'module').pkg : pkg
-    );
+    input.profile.packages = input.profile.packages.map((pkg) => {
+      const role = input.profile?.packageAttachments?.find(
+        (ref) => ref.id === pkg.id && ref.revision === pkg.revision
+      )?.role;
+      return pkg.nativeRisu
+        ? projectNativeRisuPackage(pkg, role ?? (pkg.identity ? 'bot' : 'module')).pkg
+        : pkg;
+    });
   for (const preset of Object.values(input.profile?.promptPresets ?? {}))
     if (preset.program.nativeRisuPreset)
       stripDeprecatedRisuPresetFields(preset.program.nativeRisuPreset.preset);

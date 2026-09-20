@@ -19,7 +19,7 @@ export type RisuImportSource = { name: string; base64: string; uploadId?: undefi
 export type RisuImportStagedSource = { name: string; uploadId: string; base64?: undefined };
 /** Above this size the app reads a staged file and records the original's identity only. */
 export const RISU_IMPORT_MAX_UPLOAD_BYTES = 256 * 1024 * 1024;
-export type RisuImportKind = 'bot' | 'module';
+export type RisuImportKind = 'bot' | 'persona' | 'module';
 export type RisuImportFinding = {
   code: string;
   level: 'info' | 'warning' | 'unsupported';

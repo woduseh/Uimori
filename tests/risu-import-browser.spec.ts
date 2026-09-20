@@ -55,8 +55,8 @@ for (const format of ['charx', 'json'] as const) {
     const before = await (await request.get('/api/chats')).json();
     await page.goto('/');
     await navigationAction(page, '모듈');
-    await page.getByRole('button', { name: 'Risu 자료 가져오기', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Risu 자료 가져오기', exact: true });
+    await page.getByRole('button', { name: '자료 가져오기', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '자료 가져오기', exact: true });
     await expect(
       dialog.getByRole('combobox', { name: '가져올 자료 종류', exact: true })
     ).toHaveValue('module');
@@ -113,9 +113,9 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   });
   await page.goto('/');
   await navigationAction(page, '서재');
-  const trigger = page.getByRole('button', { name: 'Risu 자료 가져오기', exact: true });
+  const trigger = page.getByRole('button', { name: '자료 가져오기', exact: true });
   await trigger.click();
-  const dialog = page.getByRole('dialog', { name: 'Risu 자료 가져오기', exact: true });
+  const dialog = page.getByRole('dialog', { name: '자료 가져오기', exact: true });
   const initialKind = dialog.getByRole('combobox', { name: '가져올 자료 종류', exact: true });
   await expect(initialKind).toHaveValue('');
   await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
@@ -153,7 +153,7 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   await expect(dialog.getByRole('button', { name: '같은 요청으로 다시 확인' })).toBeVisible();
   await expect(await revealKind()).toBeDisabled();
   await expect(dialog.getByLabel('Risu 파일 선택', { exact: true })).toBeDisabled();
-  await dialog.getByRole('button', { name: 'Risu 자료 가져오기 닫기', exact: true }).click();
+  await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
   await page.getByTestId('library-panel').getByRole('tab', { name: '모듈', exact: true }).click();
   await trigger.click();
   await expect(await revealKind()).toHaveValue('bot');

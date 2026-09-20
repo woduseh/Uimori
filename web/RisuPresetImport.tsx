@@ -110,7 +110,7 @@ export function RisuPresetImport({
     <>
       {showTrigger && (
         <IconButton
-          label="Risu 프리셋 가져오기"
+          label="프롬프트 가져오기"
           className="secondary"
           icon={UploadIcon}
           onClick={() => setOpen(true)}
@@ -118,7 +118,7 @@ export function RisuPresetImport({
       )}
       <Dialog
         open={open}
-        title="Risu 프리셋 가져오기"
+        title="프롬프트 가져오기"
         onClose={() => setOpen(false)}
         className="risu-import-dialog"
         wide

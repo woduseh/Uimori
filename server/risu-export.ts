@@ -14,6 +14,7 @@ import type { Store } from './store.js';
 import { assertLibraryVisible } from './library-deletion.js';
 import { validateImageBlob, type PackageImageBlob } from './package-images.js';
 import { HttpError } from './request-validation.js';
+import { bundleRisuModules } from './risu-export-modules.js';
 import {
   assertExportPath,
   exportJson,
@@ -44,10 +45,15 @@ function filename(title: string, suffix: string) {
 
 /** Serialize the edited native source and the current image blobs, never the import receipt. */
 export function exportRisuContent(product: ProductStore, content: Content): RisuExport {
-  const pkg = content.package;
-  if (content.kind === 'module' || !Object.keys(pkg.nativeRisu.card).length)
+  const standalone =
+    content.kind === 'module' && !Object.keys(content.package.nativeRisu.card).length;
+  if (standalone && !content.package.nativeRisu.module)
     throw new HttpError(409, 'RISU_EXPORT_MODULE_UNSUPPORTED');
-  if (pkg.modules?.length) throw new HttpError(409, 'RISU_EXPORT_LINKED_MODULES');
+  if (standalone && content.package.modules?.length)
+    throw new HttpError(409, 'RISU_EXPORT_MODULE_CONFLICT');
+  const pkg = bundleRisuModules(product, content).package;
+  if (!standalone && !Object.keys(pkg.nativeRisu.card).length)
+    throw new HttpError(409, 'RISU_EXPORT_MODULE_UNSUPPORTED');
   const native = validateRisuContentSource(pkg.nativeRisu),
     card = native.card;
   stripDeprecatedRisuCardFields(card);
@@ -106,7 +112,8 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
         return failAsset();
       const matches = native.assets.filter(
         (item) =>
-          item.uri.startsWith('embeded://__risu_module__/module-assets/') && item.name === entry[0]
+          /^embeded:\/\/(?:__risu_module__\/)?module-assets\//u.test(item.uri) &&
+          item.name === entry[0]
       );
       if (matches.length !== 1) return failAsset();
       const match = matches[0];
@@ -116,7 +123,7 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
     // module.icon is inline data in the Risu format; preserve edits to its stored image as well.
     const icon = native.assets.find(
       (item) =>
-        item.uri.startsWith('embeded://__risu_module__/module-assets/') &&
+        /^embeded:\/\/(?:__risu_module__\/)?module-assets\//u.test(item.uri) &&
         item.name === 'main' &&
         !moduleImageIds.has(item.imageId)
     );
@@ -127,6 +134,24 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
     if (module.icon && pkg.portraitImageId) {
       const portrait = imageBytes(pkg.portraitImageId);
       module.icon = `data:${portrait.image.mime};base64,${portrait.bytes.toString('base64')}`;
+    }
+    if (standalone) {
+      for (const image of pkg.images ?? []) {
+        if (consumed.has(image.id)) continue;
+        if (metadata.some((entry) => Array.isArray(entry) && entry[0] === image.title))
+          throw new HttpError(409, 'RISU_EXPORT_MODULE_CONFLICT');
+        metadata.push([image.title, '', extension(image)]);
+        bytes.push(imageBytes(image.id).bytes);
+      }
+      module.assets = metadata;
+      if (metadata.length > RISU_IMPORT_MAX_ASSETS)
+        throw new HttpError(413, 'RISU_EXPORT_TOO_LARGE');
+      return {
+        bytes: writeEmbeddedRisuModule(module, bytes),
+        filename: filename(content.title, 'risum'),
+        mediaType: 'application/octet-stream',
+        revision: content.revision,
+      };
     }
     files.set('module.risum', writeEmbeddedRisuModule(module, bytes));
   }
@@ -212,7 +237,7 @@ export function risuExportRoutes(app: FastifyInstance, store: Store): void {
           .header('X-Uimori-Revision', exported.revision)
           .header(
             'Content-Disposition',
-            `attachment; filename="uimori.${kind === 'content' ? 'charx' : 'risup'}"; filename*=UTF-8''${encodeURIComponent(exported.filename).replace(/[!'()*]/gu, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`
+            `attachment; filename="uimori.${exported.filename.split('.').pop()}"; filename*=UTF-8''${encodeURIComponent(exported.filename).replace(/[!'()*]/gu, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`
           )
           .type(exported.mediaType)
           .send(exported.bytes);

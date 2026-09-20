@@ -1,19 +1,20 @@
 import { runBrowserVerification } from './browser-verification.mjs';
 import widths from '../fixtures/browser-viewports.json' with { type: 'json' };
-
 await runBrowserVerification({
   name: 'native-transfer',
   prefix: 'native-transfer',
   scope:
-    'Synthetic native library graph export, reviewed copy import, model mapping, uncertain response recovery, Risu card JSON import with new-chat navigation and module JSON library registration',
+    'Single native Risu import entry, synthetic bot/persona card import, new-chat navigation, and module library registration',
   files: ['tests/native-transfer-browser.spec.ts'],
   requiredCases: ['NATIVEUI01', 'NATIVEUI02', 'NATIVEUI03', 'NATIVEUI04'],
   requiredScreenshots: [
-    `native-transfer-${widths.mobile}.png`,
-    `native-transfer-${widths.desktop}.png`,
+    `native-transfer-entry-${widths.mobile}.png`,
+    `native-transfer-modal-${widths.mobile}.png`,
+    `native-transfer-entry-${widths.desktop}.png`,
+    `native-transfer-modal-${widths.desktop}.png`,
   ],
   timeout: 180000,
   limitations: [
-    'Synthetic native files, Risu card JSON and module JSON only; no charx/risum browser upload, private source execution, live provider, or Linux updater proof.',
+    'Synthetic Risu card JSON and module JSON only; no charx/risum browser upload, private source execution, live provider, or physical-device proof.',
   ],
 });

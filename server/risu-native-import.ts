@@ -17,7 +17,7 @@ export function analyzeNativeRisuImport(input: RisuCardInput) {
   const notes = string(card.creator_notes);
   const description =
     notes ||
-    (input.kind === 'bot' ? `Risu 캐릭터 카드에서 가져온 자료 · ${input.source.name}` : '');
+    (input.kind !== 'module' ? `Risu 캐릭터 카드에서 가져온 자료 · ${input.source.name}` : '');
   if (description.length > 4000)
     findings.add(
       'creator-notes-truncated',

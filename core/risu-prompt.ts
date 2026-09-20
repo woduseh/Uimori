@@ -298,13 +298,27 @@ export function validateControlDefinitions(value: unknown): PromptControl[] {
   if (!Array.isArray(value) || value.length > 150) fail('PROMPT_INVALID_CONTROLS');
   const ids = new Set<string>();
   for (const raw of value) {
-    const c = object(raw, ['id', 'nativeKey', 'label', 'type', 'default', 'options', 'group']);
+    const c = object(raw, [
+      'id',
+      'nativeKey',
+      'label',
+      'type',
+      'input',
+      'default',
+      'options',
+      'group',
+    ]);
     controlKey(c.id);
     if (c.nativeKey !== undefined) str(c.nativeKey, 120);
     str(c.label, 200);
     if (ids.has(c.id)) fail('PROMPT_DUPLICATE_CONTROL');
     ids.add(c.id);
     if (c.type !== 'select' && c.type !== 'text') fail('PROMPT_INVALID_CONTROL');
+    if (
+      c.input !== undefined &&
+      !(c.type === 'text' ? c.input === 'text' || c.input === 'textarea' : c.input === 'switch')
+    )
+      fail('PROMPT_INVALID_CONTROL');
     if (c.group !== undefined) str(c.group, 200);
     if (c.type === 'select') {
       if (!Array.isArray(c.options) || c.options.length > 200) fail('PROMPT_INVALID_CONTROL');
