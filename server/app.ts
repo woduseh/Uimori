@@ -928,7 +928,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           if (judgeResponse) {
             if (priorUsage.modelCalls >= run.snapshot.settings.maxCalls)
               throw new JevError('MAIN_JUDGMENT_CALL_BUDGET');
-            const input = mainJudgmentInput(result.text);
+            const input = mainJudgmentInput(result.text, run.snapshot.mainJudgmentThreshold);
             store.transaction(() => {
               assertCurrent();
               store.db

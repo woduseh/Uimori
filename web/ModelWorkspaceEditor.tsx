@@ -7,7 +7,7 @@ import { useModelSelection } from './model-selection.js';
 import { RefreshIcon, SettingsIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
-import { ToggleRow } from './ToggleRow.js';
+import { Switch } from './BooleanControls.js';
 import './settings-actions.css';
 
 export function ModelWorkspaceEditor({
@@ -39,6 +39,7 @@ export function ModelWorkspaceEditor({
         scriptModel: workspace.scriptModel ?? null,
         routes: workspace.modelRoutes,
         mainJudgmentEnabled: workspace.mainJudgmentEnabled !== false,
+        mainJudgmentThreshold: workspace.mainJudgmentThreshold ?? 0.9,
         translationPolicy: workspace.translationPolicy,
       });
   }, [workspace, dirty, busy]);
@@ -62,6 +63,9 @@ export function ModelWorkspaceEditor({
   const conflict = !!workspace && workspace.revision > draft.revision;
   const invalid =
     conflict ||
+    !Number.isFinite(draft.mainJudgmentThreshold) ||
+    (draft.mainJudgmentThreshold ?? 0.9) <= 0.5 ||
+    (draft.mainJudgmentThreshold ?? 0.9) > 1 ||
     !Number.isInteger(draft.translationPolicy.maxRetries) ||
     draft.translationPolicy.maxRetries < 0 ||
     draft.translationPolicy.maxRetries > 5 ||
@@ -84,6 +88,7 @@ export function ModelWorkspaceEditor({
         expectedRevision: draft.revision,
         routes: draft.routes,
         mainJudgmentEnabled: draft.mainJudgmentEnabled !== false,
+        mainJudgmentThreshold: draft.mainJudgmentThreshold,
         titleModel: draft.titleModel ?? null,
         helperModel: draft.helperModel ?? null,
         contextModel: draft.contextModel ?? null,
@@ -157,24 +162,6 @@ export function ModelWorkspaceEditor({
       <p>
         모든 채팅의 이후 요청에 적용해요. 진행 중인 작업과 과거 실행·결과의 설정은 바뀌지 않아요.
       </p>
-      <section aria-label="본문 서비스 거절 감지" className="model-secondary-settings">
-        <h3>본문 서비스 거절 감지</h3>
-        <ToggleRow
-          label="본문 서비스 거절 감지 사용"
-          checked={draft.mainJudgmentEnabled !== false}
-          disabled={busy}
-          onChange={(enabled) => change({ ...draft, mainJudgmentEnabled: enabled })}
-        />
-        <p>
-          켜면 JEV가 전체 본문에서 명시적 서비스 거절만 검사해요. 거절 확신 기준은 0.9로 고정돼요.
-          기준 미만이면 정상 응답으로 채택해요.
-        </p>
-        <p>끄면 JEV 거절 판정 없이 생성된 본문을 채택해요. 생성 자체의 오류는 계속 처리해요.</p>
-        <p>
-          거절하거나 JEV 판정에 실패하면 출력을 보존하고 원문으로 채택하지 않아요. 자동으로
-          재생성하지 않아요.
-        </p>
-      </section>
       <fieldset disabled={busy} className="control-grid">
         {selector('원문 모델', draft.routes.main, (ref) =>
           change({ ...draft, routes: { ...draft.routes, main: ref } })
@@ -225,112 +212,152 @@ export function ModelWorkspaceEditor({
             </div>
           </div>
         </details>
-        <details className="full model-secondary-settings">
+        <details className="full model-secondary-settings refusal-settings">
           <summary>
-            번역 서비스 거절 감지와 자동 재시도 <small>세부 설정</small>
+            거절 감지 <small>본문 · 번역</small>
           </summary>
-          <div className="control-grid">
-            <ToggleRow
-              label="번역 서비스 거절 감지 사용"
-              checked={draft.translationPolicy.judgment.enabled !== false}
-              onChange={(enabled) =>
-                change({
-                  ...draft,
-                  translationPolicy: {
-                    ...draft.translationPolicy,
-                    judgment: { ...draft.translationPolicy.judgment, enabled },
-                  },
-                })
-              }
-            />
-            <p>
-              켜면 JEV가 전체 번역문에서 명시적 서비스 거절만 검사해요. 이 설정은 번역에만 적용되며
-              본문 판정에는 적용되지 않아요.
+          <div className="refusal-settings-body">
+            <p className="refusal-settings-help">
+              전체 생성문에서 서비스 거절만 감지해요. 점수가 각 확신 기준 이상이면 거절로 처리해요.
             </p>
-            <p>
-              끄면 JEV 거절 판정과 거절에 따른 자동 재시도 없이 생성된 번역을 채택해요. 빈 출력·부분
-              출력·공급자 오류 같은 생성 오류는 계속 처리해요.
-            </p>
-            <label>
-              번역 거절 확신 기준
-              <input
-                aria-label="번역 거절 확신 기준"
-                type="number"
-                min="0.51"
-                max="1"
-                step="0.01"
-                value={
-                  Number.isFinite(draft.translationPolicy.judgment.threshold)
-                    ? draft.translationPolicy.judgment.threshold
-                    : ''
-                }
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    translationPolicy: {
-                      ...draft.translationPolicy,
-                      judgment: {
-                        ...draft.translationPolicy.judgment,
-                        threshold: event.target.valueAsNumber,
+            <section aria-label="본문 서비스 거절 감지" className="refusal-role">
+              <div className="refusal-role-heading">
+                <h4>본문</h4>
+                <Switch
+                  aria-label="본문 서비스 거절 감지 사용"
+                  checked={draft.mainJudgmentEnabled !== false}
+                  onChange={(event) =>
+                    change({ ...draft, mainJudgmentEnabled: event.target.checked })
+                  }
+                />
+              </div>
+              <div className="refusal-field-row">
+                <label htmlFor="main-refusal-threshold">거절 확신 기준</label>
+                <input
+                  id="main-refusal-threshold"
+                  aria-label="본문 거절 확신 기준"
+                  type="number"
+                  min="0.51"
+                  max="1"
+                  step="0.01"
+                  value={
+                    Number.isFinite(draft.mainJudgmentThreshold) ? draft.mainJudgmentThreshold : ''
+                  }
+                  onChange={(event) =>
+                    change({ ...draft, mainJudgmentThreshold: event.target.valueAsNumber })
+                  }
+                />
+              </div>
+              <p className="refusal-settings-help">
+                거절 시 출력을 보존하고 중단해요. 자동 재생성은 하지 않아요.
+              </p>
+            </section>
+            <section aria-label="번역 서비스 거절 감지" className="refusal-role">
+              <div className="refusal-role-heading">
+                <h4>번역</h4>
+                <Switch
+                  aria-label="번역 서비스 거절 감지 사용"
+                  checked={draft.translationPolicy.judgment.enabled !== false}
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      translationPolicy: {
+                        ...draft.translationPolicy,
+                        judgment: {
+                          ...draft.translationPolicy.judgment,
+                          enabled: event.target.checked,
+                        },
                       },
-                    },
-                  })
-                }
-              />
-              <small>
-                0.5 초과–1. 기준 이상인 명시적 거절만 자동 재요청해요. 기준 미만이면 번역으로
-                채택해요. JEV 판정에 실패하면 후보와 이전 성공 번역을 보존하고 자동 재호출 없이
-                중단해요. 프로바이더·모델 등록의 JEV 판단에서 연결을 확인할 수 있어요.
-              </small>
-            </label>
-            <label>
-              자동 재요청 횟수
-              <input
-                aria-label="번역 자동 재요청 횟수"
-                type="number"
-                min={0}
-                max={5}
-                step={1}
-                value={
-                  Number.isFinite(draft.translationPolicy.maxRetries)
-                    ? draft.translationPolicy.maxRetries
-                    : ''
-                }
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    translationPolicy: {
-                      ...draft.translationPolicy,
-                      maxRetries: event.target.valueAsNumber,
-                    },
-                  })
-                }
-              />
-            </label>
-            <label>
-              번역 작업 전체 호출 한도
-              <input
-                aria-label="번역 전체 호출 한도"
-                type="number"
-                min={2}
-                max={64}
-                step={1}
-                value={
-                  Number.isFinite(draft.translationPolicy.maxCalls)
-                    ? draft.translationPolicy.maxCalls
-                    : ''
-                }
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    translationPolicy: {
-                      ...draft.translationPolicy,
-                      maxCalls: event.target.valueAsNumber,
-                    },
-                  })
-                }
-              />
-            </label>
+                    })
+                  }
+                />
+              </div>
+              <div className="refusal-field-row">
+                <label htmlFor="translation-refusal-threshold">거절 확신 기준</label>
+                <input
+                  id="translation-refusal-threshold"
+                  aria-label="번역 거절 확신 기준"
+                  type="number"
+                  min="0.51"
+                  max="1"
+                  step="0.01"
+                  value={
+                    Number.isFinite(draft.translationPolicy.judgment.threshold)
+                      ? draft.translationPolicy.judgment.threshold
+                      : ''
+                  }
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      translationPolicy: {
+                        ...draft.translationPolicy,
+                        judgment: {
+                          ...draft.translationPolicy.judgment,
+                          threshold: event.target.valueAsNumber,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="refusal-field-row">
+                <label htmlFor="translation-refusal-retries">자동 재요청 횟수</label>
+                <input
+                  id="translation-refusal-retries"
+                  aria-label="번역 자동 재요청 횟수"
+                  type="number"
+                  min={0}
+                  max={5}
+                  step={1}
+                  value={
+                    Number.isFinite(draft.translationPolicy.maxRetries)
+                      ? draft.translationPolicy.maxRetries
+                      : ''
+                  }
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      translationPolicy: {
+                        ...draft.translationPolicy,
+                        maxRetries: event.target.valueAsNumber,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="refusal-field-row">
+                <label htmlFor="translation-call-limit">작업 전체 호출 한도</label>
+                <input
+                  id="translation-call-limit"
+                  aria-label="번역 전체 호출 한도"
+                  type="number"
+                  min={2}
+                  max={64}
+                  step={1}
+                  value={
+                    Number.isFinite(draft.translationPolicy.maxCalls)
+                      ? draft.translationPolicy.maxCalls
+                      : ''
+                  }
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      translationPolicy: {
+                        ...draft.translationPolicy,
+                        maxCalls: event.target.valueAsNumber,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <p className="refusal-settings-help">
+                거절 시 설정한 횟수만큼 다시 요청해요. 실패하면 이전 번역을 유지해요.
+              </p>
+            </section>
+            <p className="refusal-settings-help">
+              확신 기준은 0.5 초과~1이에요. 끄면 JEV 검사 없이 결과를 채택해요. 생성 오류는 계속
+              처리해요.
+            </p>
           </div>
         </details>
         <div className="form-actions settings-save-actions full">

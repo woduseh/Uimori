@@ -59,7 +59,8 @@ async function fixture(
   key = true,
   scriptStage?: 'input' | 'editRequest',
   judgmentEnabled = true,
-  generationStatus: 'completed' | 'partial' = 'completed'
+  generationStatus: 'completed' | 'partial' = 'completed',
+  mainThreshold = 0.9
 ) {
   vi.stubEnv('TYPESAFE_API_KEY', key ? 'synthetic-jev-key' : '');
   const judged: Record<string, any>[] = [];
@@ -139,13 +140,14 @@ async function fixture(
     codexRuntime: runtime,
   });
   owner.app = app;
-  if (!judgmentEnabled) {
+  if (!judgmentEnabled || mainThreshold !== 0.9) {
     const workspace = modelWorkspace(app.store);
     updateModelWorkspace(app.store, {
       routes: workspace.routes,
       translationPolicy: workspace.translationPolicy,
       expectedRevision: workspace.revision,
-      mainJudgmentEnabled: false,
+      mainJudgmentEnabled: judgmentEnabled,
+      mainJudgmentThreshold: mainThreshold,
     });
   }
   const connection = await api(app, '/api/connections', {
@@ -339,6 +341,7 @@ test('preserves the whole Unicode response and only asks about service refusal',
     version: 'main-refusal-jev-v2',
     candidateHash: createHash('sha256').update(candidate).digest('hex'),
     response: candidate,
+    threshold: 0.9,
   });
   expect(mainJudgmentRequest(input).state).toEqual({ response: candidate });
   expect(Object.keys(mainJudgmentRequest(input).questions)).toEqual(['explicitRefusal']);
@@ -366,6 +369,30 @@ test('sends and archives the entire long response, including its middle', async 
     restored.close();
   }
 });
+
+test.each([
+  { threshold: 0.7, score: 0.7, status: 'refused' },
+  { threshold: 0.7, score: 0.69, status: 'completed' },
+  { threshold: 0.95, score: 0.9, status: 'completed' },
+])(
+  'uses the independently configured main threshold $threshold for score $score',
+  async ({ threshold, score, status }) => {
+    const f = await fixture('A response.', score, 8, true, undefined, true, 'completed', threshold);
+    expect(f.run.status).toBe(status);
+    expect(f.run.snapshot.mainJudgmentThreshold).toBe(threshold);
+    expect(f.run.snapshot.mainJudgment?.threshold).toBe(threshold);
+    expect(modelWorkspace(f.app.store).translationPolicy.judgment.threshold).toBe(0.9);
+    expect(() =>
+      validateMainJudgmentWire(
+        { ...f.run.snapshot.mainJudgment!, threshold: threshold === 0.7 ? 0.8 : 0.7 },
+        f.app.store.product
+          .attempts(f.chat.id)
+          .find((item) => (item.request as WireRecord).judgment?.kind === 'main-refusal')!
+          .request as WireRecord
+      )
+    ).toThrow('MAIN_JUDGMENT_ATTEMPT_MISMATCH');
+  }
+);
 
 test('rejects changed response contents, receipt hashes, and judgment wire questions', async () => {
   const f = await fixture('Original full response.', 0.58);

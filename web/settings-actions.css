@@ -49,3 +49,40 @@
 .model-secondary-settings > .control-grid {
   padding: 8px 0 12px;
 }
+
+.refusal-settings-body {
+  display: grid;
+  gap: 16px;
+  padding: 12px 0;
+}
+.refusal-settings-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.refusal-role {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.refusal-role-heading,
+.refusal-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.refusal-role-heading h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+.refusal-field-row > label {
+  margin: 0;
+}
+.refusal-field-row > input {
+  flex: 0 0 100px;
+  width: 100px;
+  min-width: 0;
+}
