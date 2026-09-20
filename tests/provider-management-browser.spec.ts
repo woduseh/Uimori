@@ -519,7 +519,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     await route.fulfill({ response, json: body });
   });
   for (const width of DEFAULT_WIDTHS) {
-    await page.setViewportSize({ width, height: width === MOBILE_WIDTH ? 844 : 1000 });
+    await page.setViewportSize({ width, height: width === MOBILE_WIDTH ? 915 : 1440 });
     await settings(page);
     const title = `PMUI07 ${width} ${Date.now()}`,
       form = page.getByRole('form', { name: '프로바이더 편집 양식' }),

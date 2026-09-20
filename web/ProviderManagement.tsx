@@ -875,20 +875,20 @@ export function ConnectionEditor({
         screen === 'providers' ||
         screen === 'jev') && (
         <div className="provider-editor-heading">
-          <button
-            type="button"
-            className="secondary"
-            disabled={busy}
-            onClick={() => {
-              setSetup(false);
-              navigate(
-                screen === 'jev' ? jevReturn : screen === 'model' ? 'models' : 'connections'
-              );
-            }}
-          >
-            <BackIcon size={16} />
-            목록으로
-          </button>
+          {(screen === 'providers' || screen === 'jev') && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={() => {
+                setSetup(false);
+                navigate(screen === 'jev' ? jevReturn : 'connections');
+              }}
+            >
+              <BackIcon size={16} />
+              목록으로
+            </button>
+          )}
           {setup && (
             <ol className="provider-steps" aria-label="빠른 프로바이더 진행">
               <li aria-current={screen === 'providers' ? 'step' : undefined}>1. 프로바이더 종류</li>
