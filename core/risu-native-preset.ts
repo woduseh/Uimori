@@ -109,7 +109,7 @@ export function nativeRisuToggleControls(declaration: string): PromptControl[] {
         ? { input: type === 'textarea' ? 'textarea' : 'text' }
         : type === 'select'
           ? {}
-          : { input: 'radio' }),
+          : { input: 'switch' }),
       default: null,
       ...(group ? { group } : {}),
       ...(!text

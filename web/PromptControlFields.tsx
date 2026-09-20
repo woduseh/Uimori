@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { ToggleRow } from './ToggleRow.js';
 import './prompt-control-fields.css';
 import {
   promptControls,
@@ -20,43 +21,17 @@ function ValueInput({
 }) {
   const descriptionId = useId();
   const describedBy = control.description ? descriptionId : undefined;
-  const radioOptions =
-    control.input === 'radio'
-      ? [
-          { label: 'OFF', value: '0' },
-          { label: 'ON', value: '1' },
-        ]
-      : control.type === 'boolean'
-        ? [
-            { label: 'OFF', value: false },
-            { label: 'ON', value: true },
-          ]
-        : undefined;
+  const nativeToggle = control.input === 'switch';
+  const isToggle = nativeToggle || control.type === 'boolean';
   return (
     <div className="prompt-option-field">
-      {radioOptions ? (
-        <div className="prompt-option-radio-row">
-          <span id={`${descriptionId}-label`}>{label}</span>
-          <div
-            className="prompt-option-radios"
-            role="radiogroup"
-            aria-labelledby={`${descriptionId}-label`}
-            aria-describedby={describedBy}
-          >
-            {radioOptions.map((option, index) => (
-              <label key={index}>
-                <input
-                  type="radio"
-                  name={descriptionId}
-                  value={JSON.stringify(option.value)}
-                  checked={(value ?? (control.input === 'radio' ? '0' : false)) === option.value}
-                  onChange={() => onChange(option.value)}
-                />
-                <span>{option.label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+      {isToggle ? (
+        <ToggleRow
+          label={label}
+          description={control.description}
+          checked={nativeToggle ? value === '1' : value === true}
+          onChange={(checked) => onChange(nativeToggle ? (checked ? '1' : '0') : checked)}
+        />
       ) : (
         <label>
           {label}
@@ -109,7 +84,7 @@ function ValueInput({
           )}
         </label>
       )}
-      {control.description && <small id={descriptionId}>{control.description}</small>}
+      {!isToggle && control.description && <small id={descriptionId}>{control.description}</small>}
       {control.type !== 'select' && control.type !== 'boolean' && (
         <button
           type="button"

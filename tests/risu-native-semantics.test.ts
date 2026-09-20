@@ -333,7 +333,7 @@ test('native toggles expose their editor input without changing stored control v
     {
       id: 'enabled',
       type: 'select',
-      input: 'radio',
+      input: 'switch',
       options: [
         { label: '미설정', value: null },
         { label: '끔', value: '0' },

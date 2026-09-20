@@ -134,4 +134,18 @@ Verification:
 
 No full unit-suite, live-provider or physical-mobile claim is made. The completed input/toggle/preview scope passes; the explicitly paused legacy-removal decision remains open. No original Risu material was edited.
 
+Previous input/toggle/preview result: passed.
+
+## Follow-up: switches for binary prompt options
+
+The user replaced the radio-control preference with switches. Basic prompt options now reuse Uimori's existing labelled switch control. Native toggles still store `"0"` / `"1"`, unset values display off without a viewing-time write, and explicit select definitions keep their authored choices. The six legacy-option removals and execution changes remain paused.
+
+- `npm run quality`: 840 files checked and TypeScript passed.
+- `npm test -- tests/risu-native-semantics.test.ts`: 12 tests passed.
+- `npm run verify:ui-recovery -- --grep "native toggle forms" --visual`: 2 focused cases passed at 2560 × 1440 and 412 × 915. They exercise click and Space-key toggling, switch sizing, saved native values, and the existing raw-draft flow.
+- Receipt: `output/playwright/ui-recovery-2026-09-20T03-15-07-021Z-904b16e8/summary.json`; build/source identity `a11ad752b4b53cf8533f1747dac1de3a0f9348fb2791d06d602069480e4169de`. Final identity checks passed.
+- Visually inspected `native-options-desktop.png` and `native-options-mobile.png` under that receipt's `browser/` directory. Labels and switches share a horizontal row, the switch retains its 44 px width, and the mobile form fits without horizontal overflow. The focused keyboard ring is visible in the captures.
+
+This is focused local browser evidence; the earlier 43-case run was not repeated or treated as current full-suite evidence. No live-provider or physical-mobile validation was needed for this control substitution.
+
 final result: passed
