@@ -77,19 +77,22 @@
   margin-bottom: 12px;
 }
 .chat-variable-editor > .form-actions {
-  position: sticky;
-  bottom: -28px;
+  position: static;
   padding-block: 14px;
-  background: var(--panel);
+  background: transparent;
   border-top: 1px solid var(--line);
-  z-index: 1;
+  justify-content: flex-end;
 }
 @media (max-width: 760px) {
   .chat-variable-row {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) 44px;
     gap: 8px;
   }
-  .chat-variable-editor > .form-actions {
-    bottom: -18px;
-  }
+}
+
+.chat-variable-heading {
+  flex-wrap: wrap;
+}
+.chat-variable-heading > small {
+  margin-left: auto;
 }
