@@ -79,24 +79,31 @@ for (const width of DEFAULT_WIDTHS) {
     const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
     await expect(editor).toContainText('모든 채팅의 이후 요청에 적용');
     await expect(editor.getByLabel('원문 모델', { exact: true })).toHaveValue('');
-    const refusalSummary = editor.locator('summary').filter({ hasText: /^거절 감지/ });
+    await expect(editor.getByText('핵심 작업', { exact: true })).toBeVisible();
+    await expect(editor.getByLabel('도우미 모델', { exact: true })).toBeHidden();
+    await expect(editor.getByLabel('문맥 요약 모델', { exact: true })).toBeHidden();
+    await expect(editor.getByLabel('장면 해설 모델', { exact: true })).toBeHidden();
+    await expect(editor.getByLabel('채팅 제목 모델', { exact: true })).toBeHidden();
+    await expect(editor.getByLabel('확장 호출 모델', { exact: true })).toBeHidden();
+    const behaviorSummary = editor.locator('summary').filter({ hasText: /^작업 동작/ });
     const mainRefusal = editor.getByRole('region', { name: '본문 서비스 거절 감지', exact: true });
     const translationRefusal = editor.getByRole('region', {
       name: '번역 서비스 거절 감지',
       exact: true,
     });
     const mainThreshold = editor.getByLabel('본문 거절 확신 기준', { exact: true });
-    await expect(refusalSummary).toBeVisible();
+    await expect(behaviorSummary).toBeVisible();
+    await expect(behaviorSummary).toContainText('번역 16회 · 거절 감지 2/2');
     await expect(mainThreshold).toBeHidden();
     await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toBeHidden();
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
       await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme);
-      await refusalSummary.scrollIntoViewIfNeeded();
+      await behaviorSummary.scrollIntoViewIfNeeded();
       await page.screenshot({
         path: info.outputPath(`refusal-collapsed-${colorScheme}-${width}.png`),
       });
-      await refusalSummary.click();
+      await behaviorSummary.click();
       await expect(mainRefusal).toBeVisible();
       await expect(translationRefusal).toBeVisible();
       await mainRefusal.scrollIntoViewIfNeeded();
@@ -110,9 +117,12 @@ for (const width of DEFAULT_WIDTHS) {
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
       ).toBe(true);
-      await refusalSummary.click();
+      await behaviorSummary.click();
     }
-    await refusalSummary.click();
+    await behaviorSummary.click();
+    const translationLimit = editor.getByLabel('번역 작업 호출 한도', { exact: true });
+    await expect(translationLimit).toBeVisible();
+    await expect(translationRefusal.getByLabel('번역 작업 호출 한도')).toHaveCount(0);
     await expect(mainThreshold).toHaveValue('0.9');
     const mainToggle = editor.getByRole('switch', { name: '본문 서비스 거절 감지 사용' });
     await expect(mainToggle).toBeChecked();
@@ -123,11 +133,14 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(
       translationRefusal.getByLabel('번역 거절 확신 기준', { exact: true })
     ).toBeVisible();
-    await editor.locator('summary').filter({ hasText: '기타 자동 작업 모델' }).click();
+    await editor
+      .locator('summary')
+      .filter({ hasText: /^자동 작업/ })
+      .click();
     for (const label of ['원문 모델', '번역 모델', '장면 해설 모델', '채팅 제목 모델'])
       await editor.getByLabel(label, { exact: true }).selectOption(ids[0]);
     await editor.getByLabel('번역 자동 재요청 횟수').fill('2');
-    await editor.getByLabel('번역 전체 호출 한도').fill('12');
+    await translationLimit.fill('12');
     await mainThreshold.fill('0.8');
     await editor.getByLabel('번역 거절 확신 기준', { exact: true }).fill('0.85');
     await mainToggle.uncheck();
@@ -146,7 +159,7 @@ for (const width of DEFAULT_WIDTHS) {
     await page.reload();
     await page.getByRole('button', { name: /^현재 본문 모델 ·/ }).click();
     await expect(mainThreshold).toBeHidden();
-    await refusalSummary.click();
+    await behaviorSummary.click();
     await expect(mainToggle).not.toBeChecked();
     await expect(translationToggle).not.toBeChecked();
     await expect(mainThreshold).toHaveValue('0.8');
@@ -280,10 +293,10 @@ for (const width of DEFAULT_WIDTHS) {
       .getByRole('group', { name: '실패한 요청' })
       .getByRole('button', { name: '설정 확인' })
       .click();
-    await expect(refusalSummary).toBeVisible();
+    await expect(behaviorSummary).toBeVisible();
     await expect(mainThreshold).toBeHidden();
     await expect(page.getByLabel('번역 거절 확신 기준', { exact: true })).toBeHidden();
-    await refusalSummary.click();
+    await behaviorSummary.click();
     await expect(mainRefusal).toBeVisible();
     await expect(translationRefusal).toBeVisible();
     await expect(mainThreshold).toHaveValue('0.8');

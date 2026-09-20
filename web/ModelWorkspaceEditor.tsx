@@ -157,47 +157,59 @@ export function ModelWorkspaceEditor({
       </label>
     );
   };
+  const configuredSummary = (values: Array<ModelRef | null | undefined>) => {
+    const configured = values.filter(Boolean).length;
+    if (configured === 0) return '모두 미지정';
+    if (configured === values.length) return `${configured}개 설정됨`;
+    return `${configured}/${values.length}개 설정됨`;
+  };
+  const enabledJudgments =
+    Number(draft.mainJudgmentEnabled !== false) +
+    Number(draft.translationPolicy.judgment.enabled !== false);
   return (
     <section aria-label="역할별 모델 설정" className="settings-section">
       <p>
         모든 채팅의 이후 요청에 적용해요. 진행 중인 작업과 과거 실행·결과의 설정은 바뀌지 않아요.
       </p>
       <fieldset disabled={busy} className="control-grid">
-        {selector('원문 모델', draft.routes.main, (ref) =>
-          change({ ...draft, routes: { ...draft.routes, main: ref } })
-        )}
-        {selector('번역 모델', draft.routes.translation, (ref) =>
-          change({ ...draft, routes: { ...draft.routes, translation: ref } })
-        )}
-        <div>
-          {selector('도우미 모델', draft.helperModel ?? null, (ref) =>
-            change({ ...draft, helperModel: ref })
+        <fieldset className="control-grid full model-primary-settings">
+          <legend>핵심 작업</legend>
+          {selector('원문 모델', draft.routes.main, (ref) =>
+            change({ ...draft, routes: { ...draft.routes, main: ref } })
           )}
-          <small>
-            작품 질문과 자료 작업에 사용해요. 미지정하면 도우미의 모델 실행을 시작하지 않아요.
-          </small>
-        </div>
-        <div>
-          {selector('문맥 요약 모델', draft.contextModel ?? null, (ref) =>
-            change({ ...draft, contextModel: ref })
+          {selector('번역 모델', draft.routes.translation, (ref) =>
+            change({ ...draft, routes: { ...draft.routes, translation: ref } })
           )}
-          <small>
-            자동·수동 요약에 사용해요. 미지정하면 압축이 필요한 작업만 멈추며 다른 모델로 대체하지
-            않아요.
-          </small>
-        </div>
-        <div>
-          {selector('확장 호출 모델', draft.scriptModel ?? null, (ref) =>
-            change({ ...draft, scriptModel: ref })
-          )}
-          <small>
-            사용자가 허용한 패키지 코드의 추가 생성 요청에 사용해요. 미지정하면 추가 호출을 시작하지
-            않아요.
-          </small>
-        </div>
+        </fieldset>
         <details className="full model-secondary-settings">
           <summary>
-            기타 자동 작업 모델 <small>장면 해설 · 채팅 제목</small>
+            대화와 자료 지원
+            <small>{configuredSummary([draft.helperModel, draft.contextModel])}</small>
+          </summary>
+          <div className="control-grid">
+            <div>
+              {selector('도우미 모델', draft.helperModel ?? null, (ref) =>
+                change({ ...draft, helperModel: ref })
+              )}
+              <small>
+                작품 질문과 자료 작업에 사용해요. 미지정하면 도우미의 모델 실행을 시작하지 않아요.
+              </small>
+            </div>
+            <div>
+              {selector('문맥 요약 모델', draft.contextModel ?? null, (ref) =>
+                change({ ...draft, contextModel: ref })
+              )}
+              <small>
+                자동·수동 요약에 사용해요. 미지정하면 압축이 필요한 작업만 멈추며 다른 모델로
+                대체하지 않아요.
+              </small>
+            </div>
+          </div>
+        </details>
+        <details className="full model-secondary-settings">
+          <summary>
+            자동 작업
+            <small>{configuredSummary([draft.routes.status, draft.titleModel])}</small>
           </summary>
           <div className="control-grid">
             <div>
@@ -212,124 +224,41 @@ export function ModelWorkspaceEditor({
             </div>
           </div>
         </details>
-        <details className="full model-secondary-settings refusal-settings">
+        <details className="full model-secondary-settings">
           <summary>
-            거절 감지 <small>본문 · 번역</small>
+            확장 기능 <small>{draft.scriptModel ? '설정됨' : '미지정'}</small>
           </summary>
-          <div className="refusal-settings-body">
-            <p className="refusal-settings-help">
-              전체 생성문에서 서비스 거절만 감지해요. 점수가 각 확신 기준 이상이면 거절로 처리해요.
-            </p>
-            <section aria-label="본문 서비스 거절 감지" className="refusal-role">
-              <div className="refusal-role-heading">
-                <h4>본문</h4>
-                <Switch
-                  aria-label="본문 서비스 거절 감지 사용"
-                  checked={draft.mainJudgmentEnabled !== false}
-                  onChange={(event) =>
-                    change({ ...draft, mainJudgmentEnabled: event.target.checked })
-                  }
-                />
-              </div>
+          <div className="control-grid">
+            <div>
+              {selector('확장 호출 모델', draft.scriptModel ?? null, (ref) =>
+                change({ ...draft, scriptModel: ref })
+              )}
+              <small>
+                사용자가 허용한 패키지 코드의 추가 생성 요청에 사용해요. 미지정하면 추가 호출을
+                시작하지 않아요.
+              </small>
+            </div>
+          </div>
+        </details>
+        <details className="full model-secondary-settings task-behavior-settings">
+          <summary>
+            작업 동작
+            <small>
+              번역{' '}
+              {Number.isFinite(draft.translationPolicy.maxCalls)
+                ? draft.translationPolicy.maxCalls
+                : '확인 필요'}
+              회{' · '}거절 감지 {enabledJudgments}/2
+            </small>
+          </summary>
+          <div className="task-behavior-settings-body">
+            <section aria-labelledby="translation-task-heading" className="task-behavior-section">
+              <h4 id="translation-task-heading">번역 작업</h4>
               <div className="refusal-field-row">
-                <label htmlFor="main-refusal-threshold">거절 확신 기준</label>
-                <input
-                  id="main-refusal-threshold"
-                  aria-label="본문 거절 확신 기준"
-                  type="number"
-                  min="0.51"
-                  max="1"
-                  step="0.01"
-                  value={
-                    Number.isFinite(draft.mainJudgmentThreshold) ? draft.mainJudgmentThreshold : ''
-                  }
-                  onChange={(event) =>
-                    change({ ...draft, mainJudgmentThreshold: event.target.valueAsNumber })
-                  }
-                />
-              </div>
-              <p className="refusal-settings-help">
-                거절 시 출력을 보존하고 중단해요. 자동 재생성은 하지 않아요.
-              </p>
-            </section>
-            <section aria-label="번역 서비스 거절 감지" className="refusal-role">
-              <div className="refusal-role-heading">
-                <h4>번역</h4>
-                <Switch
-                  aria-label="번역 서비스 거절 감지 사용"
-                  checked={draft.translationPolicy.judgment.enabled !== false}
-                  onChange={(event) =>
-                    change({
-                      ...draft,
-                      translationPolicy: {
-                        ...draft.translationPolicy,
-                        judgment: {
-                          ...draft.translationPolicy.judgment,
-                          enabled: event.target.checked,
-                        },
-                      },
-                    })
-                  }
-                />
-              </div>
-              <div className="refusal-field-row">
-                <label htmlFor="translation-refusal-threshold">거절 확신 기준</label>
-                <input
-                  id="translation-refusal-threshold"
-                  aria-label="번역 거절 확신 기준"
-                  type="number"
-                  min="0.51"
-                  max="1"
-                  step="0.01"
-                  value={
-                    Number.isFinite(draft.translationPolicy.judgment.threshold)
-                      ? draft.translationPolicy.judgment.threshold
-                      : ''
-                  }
-                  onChange={(event) =>
-                    change({
-                      ...draft,
-                      translationPolicy: {
-                        ...draft.translationPolicy,
-                        judgment: {
-                          ...draft.translationPolicy.judgment,
-                          threshold: event.target.valueAsNumber,
-                        },
-                      },
-                    })
-                  }
-                />
-              </div>
-              <div className="refusal-field-row">
-                <label htmlFor="translation-refusal-retries">자동 재요청 횟수</label>
-                <input
-                  id="translation-refusal-retries"
-                  aria-label="번역 자동 재요청 횟수"
-                  type="number"
-                  min={0}
-                  max={5}
-                  step={1}
-                  value={
-                    Number.isFinite(draft.translationPolicy.maxRetries)
-                      ? draft.translationPolicy.maxRetries
-                      : ''
-                  }
-                  onChange={(event) =>
-                    change({
-                      ...draft,
-                      translationPolicy: {
-                        ...draft.translationPolicy,
-                        maxRetries: event.target.valueAsNumber,
-                      },
-                    })
-                  }
-                />
-              </div>
-              <div className="refusal-field-row">
-                <label htmlFor="translation-call-limit">작업 전체 호출 한도</label>
+                <label htmlFor="translation-call-limit">번역 작업 호출 한도</label>
                 <input
                   id="translation-call-limit"
-                  aria-label="번역 전체 호출 한도"
+                  aria-label="번역 작업 호출 한도"
                   type="number"
                   min={2}
                   max={64}
@@ -351,13 +280,131 @@ export function ModelWorkspaceEditor({
                 />
               </div>
               <p className="refusal-settings-help">
-                거절 시 설정한 횟수만큼 다시 요청해요. 실패하면 이전 번역을 유지해요.
+                번역 생성, 자료 조회 후속 요청, 거절 판정을 한 작업에서 합산해요. 범위는 2~64회예요.
               </p>
             </section>
-            <p className="refusal-settings-help">
-              확신 기준은 0.5 초과~1이에요. 끄면 JEV 검사 없이 결과를 채택해요. 생성 오류는 계속
-              처리해요.
-            </p>
+            <section aria-labelledby="refusal-settings-heading" className="task-behavior-section">
+              <h4 id="refusal-settings-heading">거절 감지</h4>
+              <p className="refusal-settings-help">
+                전체 생성문에서 서비스 거절만 감지해요. 점수가 각 확신 기준 이상이면 거절로
+                처리해요.
+              </p>
+              <section aria-label="본문 서비스 거절 감지" className="refusal-role">
+                <div className="refusal-role-heading">
+                  <h5>본문</h5>
+                  <Switch
+                    aria-label="본문 서비스 거절 감지 사용"
+                    checked={draft.mainJudgmentEnabled !== false}
+                    onChange={(event) =>
+                      change({ ...draft, mainJudgmentEnabled: event.target.checked })
+                    }
+                  />
+                </div>
+                <div className="refusal-field-row">
+                  <label htmlFor="main-refusal-threshold">거절 확신 기준</label>
+                  <input
+                    id="main-refusal-threshold"
+                    aria-label="본문 거절 확신 기준"
+                    type="number"
+                    min="0.51"
+                    max="1"
+                    step="0.01"
+                    value={
+                      Number.isFinite(draft.mainJudgmentThreshold)
+                        ? draft.mainJudgmentThreshold
+                        : ''
+                    }
+                    onChange={(event) =>
+                      change({ ...draft, mainJudgmentThreshold: event.target.valueAsNumber })
+                    }
+                  />
+                </div>
+                <p className="refusal-settings-help">
+                  거절 시 출력을 보존하고 중단해요. 자동 재생성은 하지 않아요.
+                </p>
+              </section>
+              <section aria-label="번역 서비스 거절 감지" className="refusal-role">
+                <div className="refusal-role-heading">
+                  <h5>번역</h5>
+                  <Switch
+                    aria-label="번역 서비스 거절 감지 사용"
+                    checked={draft.translationPolicy.judgment.enabled !== false}
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        translationPolicy: {
+                          ...draft.translationPolicy,
+                          judgment: {
+                            ...draft.translationPolicy.judgment,
+                            enabled: event.target.checked,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </div>
+                <div className="refusal-field-row">
+                  <label htmlFor="translation-refusal-threshold">거절 확신 기준</label>
+                  <input
+                    id="translation-refusal-threshold"
+                    aria-label="번역 거절 확신 기준"
+                    type="number"
+                    min="0.51"
+                    max="1"
+                    step="0.01"
+                    value={
+                      Number.isFinite(draft.translationPolicy.judgment.threshold)
+                        ? draft.translationPolicy.judgment.threshold
+                        : ''
+                    }
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        translationPolicy: {
+                          ...draft.translationPolicy,
+                          judgment: {
+                            ...draft.translationPolicy.judgment,
+                            threshold: event.target.valueAsNumber,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </div>
+                <div className="refusal-field-row">
+                  <label htmlFor="translation-refusal-retries">자동 재요청 횟수</label>
+                  <input
+                    id="translation-refusal-retries"
+                    aria-label="번역 자동 재요청 횟수"
+                    type="number"
+                    min={0}
+                    max={5}
+                    step={1}
+                    value={
+                      Number.isFinite(draft.translationPolicy.maxRetries)
+                        ? draft.translationPolicy.maxRetries
+                        : ''
+                    }
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        translationPolicy: {
+                          ...draft.translationPolicy,
+                          maxRetries: event.target.valueAsNumber,
+                        },
+                      })
+                    }
+                  />
+                </div>
+                <p className="refusal-settings-help">
+                  거절 시 설정한 횟수만큼 다시 요청해요. 실패하면 이전 번역을 유지해요.
+                </p>
+              </section>
+              <p className="refusal-settings-help">
+                확신 기준은 0.5 초과~1이에요. 끄면 JEV 검사 없이 결과를 채택해요. 생성 오류는 계속
+                처리해요.
+              </p>
+            </section>
           </div>
         </details>
         <div className="form-actions settings-save-actions full">
