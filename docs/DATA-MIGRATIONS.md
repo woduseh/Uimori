@@ -39,3 +39,21 @@
 일반 JSON archive는 참조를 풀어 자체 완결된 스냅샷을 내보내고, 복원할 때 대상 DB의 공용 본문과 참조를 다시 만들어요. SQLite 백업은 공용 본문과 참조까지 포함해요. JSON archive 크기나 실행 중 메모리를 줄이는 변경은 아니에요. 이전 DB를 변환하는 이관 경로는 제공하지 않아요.
 
 저장 경계는 `server/snapshot-database.ts`에 있어요. 앱 SQL은 `snapshot_pack(?)`로 본문을 분리한 뒤 행을 써서 큰 JSON의 임시 페이지 할당을 피하고, 트리거가 참조와 정리를 관리해요. `SELECT snapshot`의 행은 DB 어댑터에서 복원되며, 목록 SQL은 작은 메타데이터를 직접 읽거나 `snapshot_text(snapshot, JSON 경로 배열)`로 필요한 문자열 하나만 읽어요.
+
+## 동일 스키마의 선택적 성능 정리
+
+새 DB는 변경된 소유자의 새 참조를 먼저 추가하고, 사라진 참조만 제거해요. 본문 정리는 삭제된 참조의 해시 하나를 인덱스로 조회하며, 매 저장마다 공용 본문 풀 전체를 훑지 않아요. 공통 참조는 삭제·재삽입하지 않아요. 실행 로그·장면·attempt 조회에는 `server/database-performance.ts`의 보조 인덱스를 만들어요. 본문 형식, 현재 스키마 버전 23, 해시 검증과 transaction 경계는 유지해요.
+
+이미 생성한 정상 schema-23 DB는 그대로 열리며, 앱 시작 시 트리거나 인덱스를 자동 변경하지 않아요. 기존 DB에 이 물리적 최적화를 적용하려면 Node 24로 빌드한 뒤 서버를 중지하고 명시적 경로를 지정해요.
+
+```powershell
+npm run build
+node scripts/optimize-database.mjs --db C:\absolute\path\uimori.sqlite
+node scripts/optimize-database.mjs --db C:\absolute\path\uimori.sqlite --apply
+```
+
+첫 명령은 상태 조회만 수행해요. `--apply`는 Store와 같은 파일 소유권 잠금을 얻고 기존 서명을 검증한 뒤, DB 옆의 새 `uimori-performance-backup-*` 디렉터리에 SQLite 백업을 먼저 만들고 검사해요. 백업에는 WAL의 확정된 데이터도 포함돼요. 백업 성공 후 알려진 트리거·인덱스와 구조 서명만 한 transaction에서 갱신하며, 스냅샷·본문·참조 행을 다시 쓰거나 전체 orphan 정리, VACUUM, 모델 호출을 하지 않아요. 기존 백업 파일은 덮어쓰지 않아요.
+
+실행 중인 서버, 변조된 서명, 알 수 없는 트리거·동명 인덱스, 외래키 오류, 다른 스키마 버전은 거절해요. 설치 실패는 rollback하며, 반복 실행은 추가 백업 없이 무변경으로 끝나요. 이 명령은 schema-22 이하를 읽도록 하는 migration이나 손상 복구 기능이 아니에요. 수동 DDL로 서명 검증을 우회하지 말고 명령이 출력한 백업 경로를 보관해요.
+
+`tests/database-performance.test.ts`는 참조 차이·중첩 packing·공유/복합 소유권·rollback·쿼리 계획을 검증하고, `tests/database-performance-store.test.ts`는 기존 DB의 무변경 재개방 및 명시적 최적화 후 Store 재개방을 검증해요. 빌드 후 `node --test scripts/optimize-database.test.mjs`는 읽기 전용 조회, 백업, 서버 소유권 잠금, 재실행, WAL을 합성 DB로 확인해요.

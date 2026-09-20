@@ -14,6 +14,7 @@ import { chatVariableProfile } from './chat-variable-context.js';
 import { readChatVariables, writeChatVariablesInTransaction } from './chat-variables.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import { readRunSnapshot } from './run-projections.js';
 
 const zeroUsage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -51,14 +52,10 @@ export function nativeSourceSnapshot(
     throw new HttpError(409, 'RISU_NATIVE_SOURCE_OUTSIDE_BRANCH');
   const source = store.source(sourceId);
   if (source.chatId !== chatId) throw new HttpError(404, 'Source not found');
+  const own = readRunSnapshot(store, source.runId);
   const snapshot: RunSnapshot = {
-    ...store.run(source.runId).snapshot,
-    profile: chatVariableProfile(
-      store,
-      chatId,
-      branch.id,
-      store.run(source.runId).snapshot.profile
-    ),
+    ...own,
+    profile: chatVariableProfile(store, chatId, branch.id, own.profile),
     history,
     parentRevision: branch.headRevision,
     branchId: branch.id,

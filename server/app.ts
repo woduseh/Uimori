@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
+import { readRunStatus } from './run-projections.js';
 import { ChatTitleService } from './chat-title.js';
 import { BranchTitleService } from './branch-title.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
@@ -614,7 +615,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             taskId: id,
             chatId: run.chatId,
             signal: controller.signal,
-            isActive: () => store.run(id).status === 'running',
+            isActive: () => readRunStatus(store, id) === 'running',
           });
           requireModel(run.snapshot.profile?.models.main, 'main');
           if (judgeResponse && !(await jevCredentials.resolve()))

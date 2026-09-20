@@ -1,12 +1,15 @@
 import { HttpError } from './request-validation.js';
-import { latestTranslation, validateTranslationArtifact } from './source-editing.js';
+import { validateTranslationArtifact } from './source-editing.js';
 import type { Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
 import { illustrationsForSources } from './illustrations.js';
-import type { BranchTreeNode, ReaderActivity } from '../core/types.js';
-import type { Branch } from '../core/product.js';
+import type { ReaderActivity } from '../core/types.js';
+import { branchTree } from '../core/reader-branch-tree.js';
+import { changedReaderSources, readerJobIds } from './reader-data.js';
 import { providerRejection } from '../core/provider-rejection.js';
 import { readerRequestOrder } from '../core/reader-conversation.js';
+
+export { branchTree };
 
 /** The failing attempt's stored provider diagnostic, read only for 4xx failures being displayed. */
 export function attemptRejection(store: Store, column: 'run_id' | 'job_id', id: string) {
@@ -207,81 +210,6 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
   return runs;
 }
 
-/**
- * `branches` records no parent, so the shape comes from the source chains: branches whose chains
- * share a prefix diverged at its last source. Walking that trie orders and indents them.
- */
-export function branchTree(
-  branches: Branch[],
-  parents: Map<string, string | null>
-): BranchTreeNode[] {
-  const chains = new Map<string, string[]>();
-  for (const branch of branches) {
-    const chain: string[] = [];
-    const seen = new Set<string>();
-    let head = branch.headRevision;
-    while (head && !seen.has(head)) {
-      seen.add(head);
-      if (!parents.has(head)) break;
-      chain.push(head);
-      head = parents.get(head) ?? null;
-    }
-    chains.set(branch.id, chain.reverse());
-  }
-  const nodes: BranchTreeNode[] = [];
-  const emit = (branch: Branch, depth: number, fork: number) => {
-    const chain = chains.get(branch.id)!;
-    nodes.push({
-      id: branch.id,
-      depth,
-      forkSourceId: fork > 0 ? chain[fork - 1] : null,
-      forkIndex: fork > 0 ? fork : null,
-      ownScenes: chain.length - fork,
-      totalScenes: chain.length,
-    });
-  };
-  /**
-   * `members` share the first `start` sources and left their siblings after `fork` of them.
-   * Only a position where the members actually part ways indents them and moves the fork.
-   */
-  // Explicit DFS preserves sibling order without a call frame for every shared scene.
-  const pending = [
-    {
-      members: branches.filter((branch) => chains.get(branch.id)!.length > 0),
-      start: 0,
-      depth: 0,
-      fork: 0,
-    },
-  ];
-  for (const branch of branches) if (!chains.get(branch.id)!.length) emit(branch, 0, 0);
-  while (pending.length) {
-    const { members, start, depth, fork } = pending.pop()!;
-    if (members.length === 1) {
-      emit(members[0], depth, fork);
-      continue;
-    }
-    const ending = members.filter((branch) => chains.get(branch.id)!.length === start);
-    const groups = new Map<string, Branch[]>();
-    for (const branch of members.filter((item) => chains.get(item.id)!.length > start)) {
-      const next = chains.get(branch.id)![start];
-      groups.set(next, [...(groups.get(next) ?? []), branch]);
-    }
-    const parting = ending.length + groups.size > 1;
-    // A branch ending here parted from the row above it earlier; `start` is only where its own
-    // continuations leave it, and those rows carry that themselves.
-    for (const branch of ending) emit(branch, depth, fork);
-    for (const group of [...groups.values()].reverse()) {
-      pending.push({
-        members: group,
-        start: start + 1,
-        depth: parting ? depth + 1 : depth,
-        fork: parting ? start : fork,
-      });
-    }
-  }
-  return nodes;
-}
-
 /** Read projection only. Frozen execution records remain available through detail/run APIs. */
 export function readerDetail(store: Store, id: string, query: Record<string, string | undefined>) {
   const chat = store.chat(id);
@@ -320,37 +248,19 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     throw new HttpError(400, 'Invalid reader cursor');
   const events =
     since === null ? null : (store.events(id, since) as { kind: string; entityId: string }[]);
-  const changed = new Set<string>();
-  for (const event of events ?? []) {
-    if (event.kind.startsWith('source.')) changed.add(event.entityId);
-    if (event.kind.startsWith('job.')) {
-      const job = store.db
-        .prepare('SELECT source_revision FROM jobs WHERE id=? AND chat_id=?')
-        .get(event.entityId, id) as { source_revision: string } | undefined;
-      if (job) changed.add(job.source_revision);
-    }
-    if (event.kind.startsWith('illustration.')) {
-      const job = store.db
-        .prepare('SELECT source_revision FROM illustration_jobs WHERE id=? AND chat_id=?')
-        .get(event.entityId, id) as { source_revision: string } | undefined;
-      if (job) changed.add(job.source_revision);
-    }
-  }
+  const changed = changedReaderSources(store, id, events ?? []);
   // The caller supplies only IDs from its current page; identity is scoped again by order.
   const known = new Set((query.known ?? '').split(','));
   const sources = order
     .filter((sourceId) => !events || !known.has(sourceId) || changed.has(sourceId))
     .map((sourceId) => store.source(sourceId));
   const jobs = sources.flatMap((source) => {
-    const ids = store.db
-      .prepare('SELECT id FROM jobs WHERE source_revision=? ORDER BY created_at,id')
-      .all(source.id) as { id: string }[];
+    const ids = readerJobIds(store, source.id, source.hash);
     return ids
       .map((row) => store.job(row.id))
       .filter((job) => {
         if (job.sourceHash !== source.hash && job.kind !== 'image') return false;
         if (job.kind !== 'translation') return true;
-        if (latestTranslation(store, source.id)?.id !== job.id) return false;
         if (job.status === 'completed') {
           try {
             validateTranslationArtifact(store, job, source);
@@ -468,6 +378,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         event.kind.startsWith('job.') ||
         event.kind.startsWith('source.')
     );
+  const branches = store.product.branches(id);
   return {
     chat,
     runs,
@@ -478,15 +389,12 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
       sources.map((source) => source.id)
     ),
     profile: store.product.profile(id),
-    branches: store.product.branches(id),
+    branches,
     ...(assetsChanged ? { assets: mergedReaderAssets(store, id, order) } : {}),
     reader: {
       navigation,
       pendingRunIds,
-      branchTree: branchTree(
-        store.product.branches(id),
-        new Map(rows.map((row) => [row.id, row.parentRevision]))
-      ),
+      branchTree: branchTree(branches, new Map(rows.map((row) => [row.id, row.parentRevision]))),
       latestBranchRuns: Object.fromEntries(
         indexRows.filter((run) => run.branchId !== null).map((run) => [run.branchId!, run.id])
       ),

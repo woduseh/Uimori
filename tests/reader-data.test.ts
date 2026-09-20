@@ -1,0 +1,144 @@
+import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import { afterEach, test } from 'vitest';
+import { changedReaderSources, readerJobIds } from '../server/reader-data.js';
+
+const databases = new Set<DatabaseSync>();
+afterEach(() => {
+  for (const db of databases) db.close();
+  databases.clear();
+});
+function fixture() {
+  const db = new DatabaseSync(':memory:');
+  databases.add(db);
+  db.exec(`CREATE TABLE jobs(id TEXT PRIMARY KEY,chat_id TEXT,source_revision TEXT,source_hash TEXT,kind TEXT,revision INTEGER,created_at TEXT);
+    CREATE TABLE illustration_jobs(id TEXT PRIMARY KEY,chat_id TEXT,source_revision TEXT);`);
+  const insert = (
+    id: string,
+    hash: string,
+    kind: string,
+    revision = 1,
+    source = 'source',
+    chat = 'chat',
+    at = '2026-01-01'
+  ) =>
+    db
+      .prepare('INSERT INTO jobs VALUES(?,?,?,?,?,?,?)')
+      .run(id, chat, source, hash, kind, revision, at);
+  return { db, insert };
+}
+
+test('event replay groups repeated IDs without crossing chat or task-table ownership', () => {
+  const state = fixture();
+  state.insert('same', 'hash', 'translation');
+  state.insert('secret', 'hash', 'translation', 1, 'foreign', 'another-chat');
+  state.db.exec("INSERT INTO illustration_jobs VALUES('same','chat','image-source')");
+  let reads = 0;
+  const db = {
+    prepare: (sql: string) => {
+      reads++;
+      return state.db.prepare(sql);
+    },
+  } as DatabaseSync;
+  const events = Array.from({ length: 2000 }, (_, i) => ({
+    kind: i % 2 ? 'job.running' : 'job.completed',
+    entityId: 'same',
+  }));
+  events.push(
+    { kind: 'illustration.completed', entityId: 'same' },
+    { kind: 'job.completed', entityId: 'secret' },
+    { kind: 'source.edited', entityId: 'edited' },
+    { kind: 'job.completed', entityId: 'deleted' },
+    { kind: 'run.completed', entityId: 'not-a-source' }
+  );
+  assert.deepEqual([...changedReaderSources({ db }, 'chat', events)].sort(), [
+    'edited',
+    'image-source',
+    'source',
+  ]);
+  assert.equal(reads, 2);
+});
+
+test('source-only and irrelevant events need no task-table queries', () => {
+  const db = {
+    prepare: () => {
+      throw new Error('unexpected task query');
+    },
+  } as unknown as DatabaseSync;
+  assert.deepEqual([...changedReaderSources({ db }, 'chat', [])], []);
+  assert.deepEqual(
+    [
+      ...changedReaderSources({ db }, 'chat', [
+        { kind: 'run.running', entityId: 'run' },
+        { kind: 'source.edited', entityId: 'source' },
+      ]),
+    ],
+    ['source']
+  );
+});
+
+test('visible jobs match the original hash/kind/latest-translation filtering and ordering', () => {
+  const state = fixture();
+  state.insert('old-translation', 'hash', 'translation', 1);
+  state.insert('new-translation', 'hash', 'translation', 2);
+  state.insert('current-status', 'hash', 'status');
+  state.insert('stale-status', 'stale', 'status');
+  state.insert('stale-image', 'stale', 'image');
+  state.insert('foreign-source', 'hash', 'translation', 3, 'other-source');
+  assert.deepEqual(
+    readerJobIds(state, 'source', 'hash').map((row) => row.id),
+    ['current-status', 'new-translation', 'stale-image']
+  );
+});
+
+test('the latest translation uses all revisions before source-hash filtering, not a fallback', () => {
+  const state = fixture();
+  state.insert('old-matching', 'hash', 'translation', 1);
+  state.insert('latest-nonmatching', 'different', 'translation', 2);
+  assert.deepEqual(readerJobIds(state, 'source', 'hash'), []);
+});
+
+test('translation ranking retains revision, creation-time and ID tie breaks', () => {
+  const state = fixture();
+  state.insert('a', 'hash', 'translation', 3, 'source', 'chat', '2026-01-01');
+  state.insert('b', 'hash', 'translation', 3, 'source', 'chat', '2026-01-02');
+  state.insert('c', 'hash', 'translation', 3, 'source', 'chat', '2026-01-02');
+  assert.deepEqual(
+    readerJobIds(state, 'source', 'hash').map((row) => row.id),
+    ['c']
+  );
+});
+
+test('generated job rows have the same selection as the former reader predicate', () => {
+  const state = fixture();
+  const all: { id: string; hash: string; kind: string; revision: number; at: string }[] = [];
+  for (let i = 0; i < 400; i++) {
+    const row = {
+      id: String(i).padStart(4, '0'),
+      hash: `h-${i % 3}`,
+      kind: ['translation', 'image', 'status'][i % 3],
+      revision: i % 17,
+      at: `time-${i % 4}`,
+    };
+    all.push(row);
+    state.insert(row.id, row.hash, row.kind, row.revision, 'source', 'chat', row.at);
+  }
+  const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const latest = all
+    .filter((row) => row.kind === 'translation')
+    .sort((a, b) => b.revision - a.revision || compare(b.at, a.at) || compare(b.id, a.id))[0];
+  for (const hash of ['h-0', 'h-1', 'h-2']) {
+    const expected = all
+      .filter(
+        (row) =>
+          (row.hash === hash || row.kind === 'image') &&
+          (row.kind !== 'translation' || row.id === latest.id)
+      )
+      .sort((a, b) => compare(a.at, b.at) || compare(a.id, b.id))
+      .map((row) => row.id);
+    assert.deepEqual(
+      readerJobIds(state, 'source', hash).map((row) => row.id),
+      expected
+    );
+  }
+});

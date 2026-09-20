@@ -5,6 +5,7 @@ import { successfulTranslation, validateTranslationArtifact } from './source-edi
 import { buildPackagePresentation } from './package-presentation.js';
 import { nativeSourceSnapshot } from './risu-native-actions.js';
 import { nativeImageDisplayText } from './risu-native-images.js';
+import { readRunSnapshot } from './run-projections.js';
 
 export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
   app.get<{ Params: { id: string; sourceId: string }; Querystring: { branchId?: string } }>(
@@ -15,7 +16,7 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
       if (source.chatId !== request.params.id) throw new HttpError(404, 'Source not found');
       // Read the same execution projection the model input used, so the reader compares the
       // stored request with the text actually sent instead of the reserved copy.
-      const snapshot = structuredClone(store.run(source.runId).snapshot);
+      const snapshot = readRunSnapshot(store, source.runId);
       if (snapshot.chatId !== source.chatId) throw new HttpError(409, 'Source run mismatch');
       const job = successfulTranslation(store, source);
       let translation: { text: string; sourceRevision: string; sourceHash: string } | undefined;
@@ -29,7 +30,7 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
       }
       if (snapshot.profile?.packages?.some((pkg) => pkg.nativeRisu)) {
         const live = nativeSourceSnapshot(store, source.chatId, source.id, request.query.branchId);
-        const own = store.run(source.runId).snapshot;
+        const own = snapshot;
         const first = own.packageStart?.mode === 'authored' || own.nativeRisuAuthored?.greeting;
         const messages = first
           ? [{ text: source.text, index: -1, role: 'assistant' as const, primary: true }]
