@@ -97,6 +97,64 @@ const portraitPart = (hash: string, id = 'portrait'): Partial<RisuContent> => ({
   portraitImageId: id,
 });
 
+for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+  test(`LIMG06 portrait candidates keep their own images before and after selection ${width}`, async ({
+    page,
+    request,
+  }) => {
+    const firstHash = await blob(request),
+      secondHash = await blob(request, otherPng),
+      original = await seed(request, 'bot', `이미지 후보 ${width} ${Date.now()}`, {
+        ...portraitPart(firstHash),
+        images: [
+          ...portraitPart(firstHash).images!,
+          {
+            id: 'inline',
+            title: '다른 본문 그림',
+            description: '',
+            blobHash: secondHash,
+            mime: 'image/png',
+            allowedUse: 'inline',
+          },
+        ],
+      });
+    const library = await edit(page, original);
+    await page.setViewportSize({ width, height: width === MOBILE_WIDTH ? 915 : 1440 });
+    const portrait = library.getByRole('region', { name: '대표 이미지 설정', exact: true });
+    const picker = page.getByRole('dialog', { name: '대표 이미지 선택', exact: true });
+    const first = picker.getByRole('button').filter({ hasText: '합성 대표 이미지' });
+    const second = picker.getByRole('button').filter({ hasText: '다른 본문 그림' });
+    const checkCandidates = async () => {
+      await portrait.getByRole('button', { name: '기존 이미지에서 선택', exact: true }).click();
+      await expect(first.locator('img')).toHaveAttribute(
+        'src',
+        `/api/package-image-blobs/${firstHash}`
+      );
+      await expect(second.locator('img')).toHaveAttribute(
+        'src',
+        `/api/package-image-blobs/${secondHash}`
+      );
+    };
+    await checkCandidates();
+    await expect(first).toHaveAttribute('aria-pressed', 'true');
+    await second.click();
+    await expect(picker).not.toBeVisible();
+    await expect(portrait.locator('.package-portrait-avatar img')).toHaveAttribute(
+      'src',
+      `/api/package-image-blobs/${secondHash}`
+    );
+    const saved = await save(page, library, original);
+    expect(saved.package!.portraitImageId).toBe('inline');
+    expect(saved.package!.images!.find((image) => image.id === 'inline')!.allowedUse).toBe('both');
+    await page.reload();
+    await edit(page, saved);
+    await page.setViewportSize({ width, height: width === MOBILE_WIDTH ? 915 : 1440 });
+    await checkCandidates();
+    await expect(second).toHaveAttribute('aria-pressed', 'true');
+    await expect(first).toHaveAttribute('aria-pressed', 'false');
+  });
+}
+
 test('LIMG01 representative image upload, unset and existing inline selection preserve immutable revisions', async ({
   page,
   request,
