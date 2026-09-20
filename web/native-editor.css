@@ -446,10 +446,6 @@
   min-height: 270px;
   height: 270px;
 }
-.library-page-editing .library-package-tools {
-  width: calc(100% - 48px);
-  max-width: 880px;
-}
 .library-page-editing .library-savebar {
   width: calc(100% - 48px);
   max-width: 880px;
@@ -489,7 +485,7 @@
   margin-inline: auto;
   padding-inline: 24px;
 }
-.library-page-editing .library-package-tools,
+
 .library-page-editing .library-savebar {
   margin-inline: auto;
 }
@@ -497,7 +493,7 @@
   .library-page-editing .native-editor {
     padding-inline: 16px;
   }
-  .library-page-editing .library-package-tools,
+
   .library-page-editing .library-savebar,
   .library-page-editing .library-content-editor > .editor-grid > small.full,
   .library-page-editing .library-content-editor > .editor-grid > .library-diagnostics.full {

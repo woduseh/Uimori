@@ -1116,37 +1116,54 @@ function ContentEditor({
               <SaveIcon size={18} aria-hidden="true" />
               <span>{busy ? '저장 중…' : selected ? '변경사항 저장' : '자료 등록'}</span>
             </button>
-            {selected && (
-              <LibraryItemMenu title="자료 메뉴">
-                <RisuExportButton
-                  kind="content"
-                  format={
-                    selected.kind === 'module' &&
-                    !Object.keys(selected.package?.nativeRisu.card ?? {}).length
-                      ? 'RISUM'
-                      : 'CHARX'
-                  }
-                  id={selected.id}
-                  revision={selected.revision}
-                  title={selected.title}
-                  disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
-                  onError={setError}
-                />
-                <DeleteButton
-                  path={`/content/${encodeURIComponent(selected.id)}`}
-                  revision={selected.revision}
-                  title={selected.title}
-                  label="자료 삭제"
-                  disabled={editorUnavailable}
-                  description="이 자료를 목록에서 삭제하고 현재 편집 초안을 닫아요. 과거 채팅과 실행이 사용하는 내용은 유지돼요."
-                  onError={onError}
-                  onDeleted={async () => {
-                    onDeleted();
-                    await reload();
-                  }}
-                />
-              </LibraryItemMenu>
-            )}
+            <LibraryItemMenu title="자료 메뉴">
+              {(['bot', 'persona', 'module'] as const)
+                .filter((role) => role !== value.kind)
+                .map((role) => (
+                  <button
+                    type="button"
+                    key={role}
+                    disabled={
+                      editorUnavailable || !value.title.trim() || nativeDraftDirty || portraitBusy
+                    }
+                    onClick={() => void saveContent(role)}
+                  >
+                    <CopyIcon size={18} aria-hidden="true" />
+                    {contentLabels[role]}로 사본 만들기
+                  </button>
+                ))}
+              {selected && (
+                <>
+                  <RisuExportButton
+                    kind="content"
+                    format={
+                      selected.kind === 'module' &&
+                      !Object.keys(selected.package?.nativeRisu.card ?? {}).length
+                        ? 'RISUM'
+                        : 'CHARX'
+                    }
+                    id={selected.id}
+                    revision={selected.revision}
+                    title={selected.title}
+                    disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
+                    onError={setError}
+                  />
+                  <DeleteButton
+                    path={`/content/${encodeURIComponent(selected.id)}`}
+                    revision={selected.revision}
+                    title={selected.title}
+                    label="자료 삭제"
+                    disabled={editorUnavailable}
+                    description="이 자료를 목록에서 삭제하고 현재 편집 초안을 닫아요. 과거 채팅과 실행이 사용하는 내용은 유지돼요."
+                    onError={onError}
+                    onDeleted={async () => {
+                      onDeleted();
+                      await reload();
+                    }}
+                  />
+                </>
+              )}
+            </LibraryItemMenu>
           </div>
           {headerTrailing}
         </div>
@@ -1167,35 +1184,6 @@ function ContentEditor({
               onDraftChange={setNativeDraftDirty}
               onPortraitBusy={setPortraitBusy}
             />
-            <details className="library-package-tools full">
-              <summary>고급 · 역할 사본</summary>
-              <div className="library-package-tools-body">
-                <section className="library-package-copies">
-                  <h3>다른 역할로 사본 만들기</h3>
-                  <p className="muted">
-                    로어와 지침을 함께 복사해요. 인물 관점과 역할별 지침은 직접 조정해 주세요.
-                  </p>
-                  {!value.title.trim() && (
-                    <p className="muted">자료 이름을 입력하면 사본을 만들 수 있어요.</p>
-                  )}
-                  <div className="form-actions">
-                    {(['bot', 'persona', 'module'] as const)
-                      .filter((role) => role !== value.kind)
-                      .map((role) => (
-                        <button
-                          type="button"
-                          className="secondary"
-                          key={role}
-                          disabled={!value.title.trim()}
-                          onClick={() => void saveContent(role)}
-                        >
-                          {contentLabels[role]}로 사본 만들기
-                        </button>
-                      ))}
-                  </div>
-                </section>
-              </div>
-            </details>
           </fieldset>
           {error && (
             <p className="error full" role="alert">
