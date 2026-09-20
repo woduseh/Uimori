@@ -163,10 +163,11 @@ export function selectLoreContext(
       reads,
       {
         ...DEFAULT_LORE_CONTEXT,
-        maxRetainedChars: Number.MAX_SAFE_INTEGER,
+        maxRetainedTokens: Number.MAX_SAFE_INTEGER,
         maxRetainedEntries: Number.MAX_SAFE_INTEGER,
       },
-      dependencies.map((d) => d.sourceRevision)
+      dependencies.map((d) => d.sourceRevision),
+      countTextTokens
     ).entries.length;
     previous = [];
     reads = [];
@@ -203,9 +204,7 @@ export function selectLoreContext(
       entries: selected.entries,
       stats: {
         retainedChars: selected.retainedChars,
-        ...(selected.retainedTokens !== undefined
-          ? { retainedTokens: selected.retainedTokens }
-          : {}),
+        retainedTokens: selected.retainedTokens,
         retainedEntries: selected.entries.length,
         appendedChars: selected.appendedChars,
         droppedEntries: droppedEntries + selected.droppedEntries,

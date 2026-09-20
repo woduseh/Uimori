@@ -1,6 +1,7 @@
 import { rejudgeTranslation } from './source-editing.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
+import { loreContextDefaultRoutes } from './lore-context-defaults.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
@@ -1432,6 +1433,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     store.run(request.params.id)
   );
   promptWorkspaceRoutes(app, store, publish);
+  loreContextDefaultRoutes(app, store);
   app.post<{ Params: { id: string } }>('/api/runs/:id/retry', async (request) => {
     const body = record(request.body);
     fields(body, ['idempotencyKey', 'request']);

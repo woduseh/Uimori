@@ -2,9 +2,7 @@ import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_LORE_CONTEXT,
-  DEFAULT_TOKEN_LORE_CONTEXT,
   LORE_TOKEN_ESTIMATOR,
-  isTokenLorePolicy,
   validateLoreContextPolicy,
   type LoreContextPolicy,
   type LoreContextSnapshot,
@@ -15,11 +13,6 @@ import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 import './lore-context.css';
 import { DEFAULT_JEV_JUDGMENT } from '../core/judgment.js';
 
-const legacyFields = [
-  { key: 'maxRetainedChars', label: '조회 로어 문자 한도', min: 0, max: 200_000, unit: 'UTF-16자' },
-  { key: 'maxRetainedEntries', label: '조회 로어 구간 한도', min: 0, max: 256, unit: '구간' },
-  { key: 'maxPinnedChars', label: '고정 자료 문자 한도', min: 1, max: 2_000_000, unit: 'UTF-16자' },
-] as const;
 const tokenFields = [
   {
     key: 'maxRetainedTokens',
@@ -39,28 +32,17 @@ const tokenFields = [
 ] as const;
 type PolicyDraft = {
   enabled: boolean;
-  budgetUnit?: 'tokens' | 'utf16';
-  maxRetainedChars?: string;
-  maxRetainedTokens?: string;
+  maxRetainedTokens: string;
   maxRetainedEntries: string;
-  maxPinnedChars?: string;
-  maxPinnedTokens?: string;
+  maxPinnedTokens: string;
   threshold?: string;
   maxSelectedTokens?: string;
   maxInputTokens?: string;
 };
 const draftOf = (policy: LoreContextPolicy): PolicyDraft => ({
   enabled: policy.enabled,
-  ...(isTokenLorePolicy(policy)
-    ? {
-        budgetUnit: 'tokens' as const,
-        maxRetainedTokens: String(policy.maxRetainedTokens),
-        maxPinnedTokens: String(policy.maxPinnedTokens),
-      }
-    : {
-        maxRetainedChars: String(policy.maxRetainedChars),
-        maxPinnedChars: String(policy.maxPinnedChars),
-      }),
+  maxRetainedTokens: String(policy.maxRetainedTokens),
+  maxPinnedTokens: String(policy.maxPinnedTokens),
   maxRetainedEntries: String(policy.maxRetainedEntries),
   threshold: String(policy.judgment?.threshold ?? DEFAULT_JEV_JUDGMENT.threshold),
   maxSelectedTokens: String(
@@ -69,11 +51,8 @@ const draftOf = (policy: LoreContextPolicy): PolicyDraft => ({
   maxInputTokens: String(policy.judgment?.maxInputTokens ?? DEFAULT_JEV_JUDGMENT.maxInputTokens),
 });
 export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
-  if (draft.budgetUnit !== undefined && !['tokens', 'utf16'].includes(draft.budgetUnit))
-    throw new Error('로어 예산 단위를 확인해 주세요.');
-  const fields = draft.budgetUnit === 'tokens' ? tokenFields : legacyFields;
-  for (const field of fields) {
-    const raw = draft[field.key] ?? '';
+  for (const field of tokenFields) {
+    const raw = draft[field.key];
     const number = Number(raw);
     if (!raw.trim() || !Number.isSafeInteger(number) || number < field.min || number > field.max)
       throw new Error(
@@ -99,18 +78,10 @@ export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
   }
   return validateLoreContextPolicy({
     enabled: draft.enabled,
-    ...(draft.budgetUnit === 'tokens'
-      ? {
-          tokenEstimator: LORE_TOKEN_ESTIMATOR,
-          maxRetainedTokens: Number(draft.maxRetainedTokens),
-          maxRetainedEntries: Number(draft.maxRetainedEntries),
-          maxPinnedTokens: Number(draft.maxPinnedTokens),
-        }
-      : {
-          maxRetainedChars: Number(draft.maxRetainedChars),
-          maxRetainedEntries: Number(draft.maxRetainedEntries),
-          maxPinnedChars: Number(draft.maxPinnedChars),
-        }),
+    tokenEstimator: LORE_TOKEN_ESTIMATOR,
+    maxRetainedTokens: Number(draft.maxRetainedTokens),
+    maxRetainedEntries: Number(draft.maxRetainedEntries),
+    maxPinnedTokens: Number(draft.maxPinnedTokens),
     judgment: {
       threshold: Number(draft.threshold),
       maxSelectedTokens: Number(draft.maxSelectedTokens),
@@ -134,15 +105,19 @@ export function LoreContextPolicyEditor({
   profileRevision,
   request = '',
   reset = false,
+  defaults = DEFAULT_LORE_CONTEXT,
+  resetLabel = '전역 기본값 적용',
 }: {
   value?: LoreContextPolicy;
   onChange: (value: LoreContextPolicy) => void;
   onPendingChange?: (dirty: boolean) => void;
-  chatId: string;
+  chatId?: string;
   branchId?: string;
   profileRevision: number;
   request?: string;
   reset?: boolean;
+  defaults?: LoreContextPolicy;
+  resetLabel?: string;
 }) {
   const effective = value ?? DEFAULT_LORE_CONTEXT,
     serialized = JSON.stringify(effective);
@@ -204,21 +179,8 @@ export function LoreContextPolicyEditor({
       /* Preserve incomplete numeric input until it is valid. */
     }
   }
-  function changeBudgetUnit(unit: 'tokens' | 'utf16') {
-    // A character budget has no exact scalar token equivalent. Reset only the
-    // two size budgets; preserve other authored settings and incomplete inputs.
-    const defaults = unit === 'tokens' ? DEFAULT_TOKEN_LORE_CONTEXT : DEFAULT_LORE_CONTEXT;
-    change({
-      ...draftOf(defaults),
-      enabled: draft.enabled,
-      maxRetainedEntries: draft.maxRetainedEntries,
-      threshold: draft.threshold,
-      maxSelectedTokens: draft.maxSelectedTokens,
-      maxInputTokens: draft.maxInputTokens,
-    });
-  }
   async function showPreview() {
-    if (!policy) return;
+    if (!policy || !chatId) return;
     const version = ++sequence.current,
       source = fingerprint;
     setBusy(true);
@@ -263,25 +225,11 @@ export function LoreContextPolicyEditor({
       <details className="lore-context-advanced">
         <summary>선별 기준과 용량</summary>
         <h4>문맥 유지 한도</h4>
-        <label>
-          로어 예산 단위
-          <select
-            aria-label="로어 예산 단위"
-            value={draft.budgetUnit ?? 'utf16'}
-            onChange={(event) =>
-              changeBudgetUnit(event.target.value === 'tokens' ? 'tokens' : 'utf16')
-            }
-          >
-            <option value="tokens">로컬 토큰 추정 (권장)</option>
-            <option value="utf16">기존 문자 예산 (UTF-16)</option>
-          </select>
-        </label>
         <p className="muted">
-          단위를 바꾸면 조회·고정 자료 한도만 새 단위의 기본값으로 바꿔요. 기존 숫자를 환산하지
-          않으며 과거 실행 기록은 변경하지 않아요. 저장 후 다음 실행부터 적용돼요.
+          렌더링된 로어 본문을 로컬 o200k_base로 추정해요. 저장 후 다음 실행부터 적용돼요.
         </p>
         <div className="lore-context-policy-grid">
-          {(draft.budgetUnit === 'tokens' ? tokenFields : legacyFields).map((field) => (
+          {tokenFields.map((field) => (
             <label key={field.key}>
               {field.label}
               <input
@@ -348,8 +296,8 @@ export function LoreContextPolicyEditor({
             않아요. 모델별 실제 토큰 수나 청구량과 다를 수 있어요.
           </p>
           <p className="muted">
-            기존 문자 예산은 UTF-16 코드 단위예요. 고정 자료가 선택한 단위의 한도를 넘으면 임의로
-            자르지 않고 알려요. 전체 모델 입력 한도와 저장·파싱 용량 제한은 별도예요.
+            고정 자료가 토큰 한도를 넘으면 임의로 자르지 않고 알려요. 전체 모델 입력 한도와
+            저장·파싱 용량 제한은 별도예요.
           </p>
           <p className="muted">
             사용자가 만든 Risu 프롬프트의 역할·순서·캐시 기준은 그대로 사용해요. 이 설정이 사용자
@@ -362,18 +310,8 @@ export function LoreContextPolicyEditor({
           </p>
         )}
         <div className="lore-context-actions">
-          <button
-            type="button"
-            className="secondary"
-            onClick={() =>
-              change(
-                draftOf(
-                  draft.budgetUnit === 'tokens' ? DEFAULT_TOKEN_LORE_CONTEXT : DEFAULT_LORE_CONTEXT
-                )
-              )
-            }
-          >
-            기본 정책으로
+          <button type="button" className="secondary" onClick={() => change(draftOf(defaults))}>
+            {resetLabel}
           </button>
           {validation && (
             <button type="button" className="ghost" onClick={() => setDraft(draftOf(effective))}>
@@ -387,69 +325,71 @@ export function LoreContextPolicyEditor({
           선별 기준과 용량의 입력을 확인해 주세요. {validation}
         </p>
       )}
-      <details className="lore-context-preview">
-        <summary>다음 생성의 로어 미리보기</summary>
-        <p className="muted">
-          저장된 자료·프롬프트와 위 정책 초안을 사용해요. 모델을 호출하거나 조회 기록을 바꾸지
-          않아요. 다른 채팅 설정의 초안은 먼저 저장해 주세요.
-        </p>
-        <p>
-          {reset
-            ? '새 장면 · 조회 로어 정리 선택을 포함해요.'
-            : '현재 조회 로어를 이어 사용하는 요청이에요.'}
-          {!request.trim() && ' 입력이 비어 있어 확인용 요청을 사용해요.'}
-        </p>
-        <button
-          type="button"
-          className="secondary"
-          disabled={busy || !policy}
-          onClick={() => void showPreview()}
-        >
-          {busy ? '로어 미리보기 구성 중…' : '로어 미리보기 갱신'}
-        </button>
-        {preview && (
-          <div className="lore-context-preview-result">
-            {preview.fingerprint !== fingerprint && (
-              <p className="muted" role="status">
-                정책이나 다음 요청이 바뀌었어요. 아래는 이전 미리보기예요.
-              </p>
-            )}
-            <LoreContextDiagnostics
-              snapshot={preview.value.loreContext}
-              reset={JSON.parse(preview.fingerprint).reset === true}
-              label="미리보기의 조회 로어"
-            />
-            <details>
-              <summary>
-                프롬프트 안의 실제 배치 · {preview.value.compilation.messages.length}메시지
-              </summary>
-              <ol className="lore-context-messages">
-                {preview.value.compilation.messages.map((message, index) => (
-                  <li key={message.id}>
-                    <details>
-                      <summary>
-                        {index + 1}. {message.role} · {message.provenance.origin} ·{' '}
-                        {message.provenance.blockId}
-                      </summary>
-                      <pre>{message.content.map((part) => part.text).join('\n')}</pre>
-                    </details>
-                  </li>
-                ))}
-              </ol>
-            </details>
-            {preview.value.error && (
-              <p className="error" role="alert">
-                {preview.value.error}
-              </p>
-            )}
-          </div>
-        )}
-        {error && (
-          <p className="error" role="alert">
-            {error}
+      {chatId && (
+        <details className="lore-context-preview">
+          <summary>다음 생성의 로어 미리보기</summary>
+          <p className="muted">
+            저장된 자료·프롬프트와 위 정책 초안을 사용해요. 모델을 호출하거나 조회 기록을 바꾸지
+            않아요. 다른 채팅 설정의 초안은 먼저 저장해 주세요.
           </p>
-        )}
-      </details>
+          <p>
+            {reset
+              ? '새 장면 · 조회 로어 정리 선택을 포함해요.'
+              : '현재 조회 로어를 이어 사용하는 요청이에요.'}
+            {!request.trim() && ' 입력이 비어 있어 확인용 요청을 사용해요.'}
+          </p>
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy || !policy}
+            onClick={() => void showPreview()}
+          >
+            {busy ? '로어 미리보기 구성 중…' : '로어 미리보기 갱신'}
+          </button>
+          {preview && (
+            <div className="lore-context-preview-result">
+              {preview.fingerprint !== fingerprint && (
+                <p className="muted" role="status">
+                  정책이나 다음 요청이 바뀌었어요. 아래는 이전 미리보기예요.
+                </p>
+              )}
+              <LoreContextDiagnostics
+                snapshot={preview.value.loreContext}
+                reset={JSON.parse(preview.fingerprint).reset === true}
+                label="미리보기의 조회 로어"
+              />
+              <details>
+                <summary>
+                  프롬프트 안의 실제 배치 · {preview.value.compilation.messages.length}메시지
+                </summary>
+                <ol className="lore-context-messages">
+                  {preview.value.compilation.messages.map((message, index) => (
+                    <li key={message.id}>
+                      <details>
+                        <summary>
+                          {index + 1}. {message.role} · {message.provenance.origin} ·{' '}
+                          {message.provenance.blockId}
+                        </summary>
+                        <pre>{message.content.map((part) => part.text).join('\n')}</pre>
+                      </details>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+              {preview.value.error && (
+                <p className="error" role="alert">
+                  {preview.value.error}
+                </p>
+              )}
+            </div>
+          )}
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+        </details>
+      )}
     </section>
   );
 }

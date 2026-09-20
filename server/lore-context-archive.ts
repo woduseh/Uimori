@@ -4,8 +4,6 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
   validateLoreContextPolicy,
-  isTokenLorePolicy,
-  loreBudget,
   measureLoreText,
   type LoreDependency,
   type RetainedLore,
@@ -306,18 +304,18 @@ export function validateArchivedLoreContext(store: Store, snapshot: RunSnapshot)
       'appendedChars',
       'droppedEntries',
       'reasons',
-      ...(isTokenLorePolicy(policy) ? ['retainedTokens'] : []),
+      'retainedTokens',
     ],
     'stats fields'
   );
   const chars = entries.reduce((sum, entry) => sum + entry.text.length, 0);
   const used = entries.reduce(
-    (sum, entry) => sum + measureLoreText(entry.text, policy, countTextTokens),
+    (sum, entry) => sum + measureLoreText(entry.text, countTextTokens),
     0
   );
   if (
-    used > loreBudget(policy).retained ||
-    (isTokenLorePolicy(policy) && stats.retainedTokens !== used) ||
+    used > policy.maxRetainedTokens ||
+    stats.retainedTokens !== used ||
     stats.retainedChars !== chars ||
     stats.retainedEntries !== entries.length ||
     !Number.isSafeInteger(stats.appendedChars) ||

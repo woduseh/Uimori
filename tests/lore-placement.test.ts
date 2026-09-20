@@ -19,6 +19,7 @@ import {
   type RetainedLore,
   type LoreContextSnapshot,
 } from '../core/lore-context.js';
+import { countTextTokens } from '../core/text-tokens.js';
 
 function fixture(): RunSnapshot {
   const pkg: RisuContent = {
@@ -98,9 +99,9 @@ test('pinned budget fails explicitly without silently dropping content', () => {
   s.profile!.loreContext = {
     ...DEFAULT_LORE_CONTEXT,
     enabled: true,
-    maxRetainedChars: 100,
+    maxRetainedTokens: 100,
     maxRetainedEntries: 2,
-    maxPinnedChars: 2,
+    maxPinnedTokens: 2,
   };
   expect(() => buildMainInput(s)).toThrow('LORE_PINNED_BUDGET_EXCEEDED');
 });
@@ -195,7 +196,13 @@ test('a new retained read appends without changing old reference ranges or text'
     origin: { sourceRevision: 'new', sourceHash: 'new-hash', runId: 'run2', callId: 'call2' },
     lastUsed: 'new',
   };
-  const appended = appendLoreReads([first], [read], DEFAULT_LORE_CONTEXT, ['old', 'new']);
+  const appended = appendLoreReads(
+    [first],
+    [read],
+    DEFAULT_LORE_CONTEXT,
+    ['old', 'new'],
+    countTextTokens
+  );
   expect(appended.entries.map(({ lastUsed: _lastUsed, ...entry }) => entry)).toEqual([
     (({ lastUsed: _lastUsed, ...entry }) => entry)(first),
     (({ lastUsed: _lastUsed, ...entry }) => entry)({ ...read, start: 3, end: 6, text: 'DEF' }),
@@ -208,6 +215,7 @@ test('a new retained read appends without changing old reference ranges or text'
     entries,
     stats: {
       retainedChars: 0,
+      retainedTokens: 0,
       retainedEntries: entries.length,
       appendedChars: 0,
       droppedEntries: 0,

@@ -7,12 +7,7 @@ import {
   packageContextFromCompiled,
   type ResolvedPackage,
 } from './package-context.js';
-import {
-  DEFAULT_LORE_CONTEXT,
-  loreBudget,
-  measureLoreText,
-  type LorePlacement,
-} from './lore-context.js';
+import { DEFAULT_LORE_CONTEXT, measureLoreText, type LorePlacement } from './lore-context.js';
 import { countTextTokens } from './text-tokens.js';
 import { OUTLINE_CONTRACT, type OutlineSnapshot } from './outline.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
@@ -179,15 +174,14 @@ export function buildMainInput(
     });
     const policy =
       snapshot.loreContext?.policy ?? snapshot.profile?.loreContext ?? DEFAULT_LORE_CONTEXT;
-    const budget = loreBudget(policy);
     const used = input.pinnedSources.reduce(
-      (sum, item) => sum + measureLoreText(item.text, policy, countTextTokens),
+      (sum, item) => sum + measureLoreText(item.text, countTextTokens),
       0
     );
-    if (used > budget.pinned)
+    if (used > policy.maxPinnedTokens)
       throw Object.assign(
         new Error(
-          `LORE_PINNED_BUDGET_EXCEEDED: 고정 자료가 설정한 ${budget.unit === 'tokens' ? '토큰' : '문자'} 한도를 초과했어요. 자료를 줄이거나 고정 자료 한도를 조정해 주세요.`
+          'LORE_PINNED_BUDGET_EXCEEDED: 고정 자료가 설정한 토큰 한도를 초과했어요. 자료를 줄이거나 고정 자료 한도를 조정해 주세요.'
         ),
         { statusCode: 409 }
       );

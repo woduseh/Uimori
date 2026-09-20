@@ -1,5 +1,4 @@
 import { countTextTokens } from '../core/text-tokens.js';
-import { isTokenLorePolicy } from '../core/lore-context.js';
 import { canRecoverMainJudgment } from '../core/main-judgment-recovery.js';
 import { HttpError } from './request-validation.js';
 import { createHash } from 'node:crypto';
@@ -231,11 +230,10 @@ export function fitFixedLoreContext(snapshot: RunSnapshot): RunSnapshot {
     lore.stats.droppedEntries++;
     lore.stats.retainedEntries = lore.entries.length;
     lore.stats.retainedChars = lore.entries.reduce((sum, entry) => sum + entry.text.length, 0);
-    if (isTokenLorePolicy(lore.policy))
-      lore.stats.retainedTokens = lore.entries.reduce(
-        (sum, entry) => sum + countTextTokens(entry.text),
-        0
-      );
+    lore.stats.retainedTokens = lore.entries.reduce(
+      (sum, entry) => sum + countTextTokens(entry.text),
+      0
+    );
     if (!lore.stats.reasons.includes('overall-context-budget'))
       lore.stats.reasons.push('overall-context-budget');
   } while (lore.entries.length && measureMainContext(fitted).estimatedInputTokens > limit * 0.75);

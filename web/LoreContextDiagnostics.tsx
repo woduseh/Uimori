@@ -1,4 +1,4 @@
-import { loreBudget, type LoreContextSnapshot } from '../core/lore-context.js';
+import type { LoreContextSnapshot } from '../core/lore-context.js';
 import './lore-context.css';
 
 const reasons: Record<string, string> = {
@@ -20,15 +20,11 @@ export function LoreContextDiagnostics({
   label?: string;
 }) {
   if (!snapshot) return <p className="muted">이 실행에는 조회 로어 유지 기록이 없어요.</p>;
-  const budget = loreBudget(snapshot.policy);
-  const tokenBudget = budget.unit === 'tokens';
   return (
     <section className="lore-context-result" aria-label={label}>
       <h4>{label}</h4>
       <p className="muted">
-        {tokenBudget
-          ? '이 실행의 로컬 o200k 토큰 추정값이에요. 전체 요청이나 실제 청구 토큰 수는 아니에요.'
-          : '이 실행에 고정한 자료 범위예요. 문자 수는 UTF-16 기준이며 토큰 수와 달라요.'}
+        이 실행의 로컬 o200k 토큰 추정값이에요. 전체 요청이나 실제 청구 토큰 수는 아니에요.
       </p>
       <dl className="lore-context-stats">
         <div>
@@ -39,13 +35,10 @@ export function LoreContextDiagnostics({
           </dd>
         </div>
         <div>
-          <dt>{tokenBudget ? '유지한 추정 토큰' : '유지한 문자'}</dt>
+          <dt>유지한 추정 토큰</dt>
           <dd>
-            {tokenBudget
-              ? (snapshot.stats.retainedTokens?.toLocaleString() ?? '미측정')
-              : snapshot.stats.retainedChars.toLocaleString()}{' '}
-            / {budget.retained.toLocaleString()}
-            {tokenBudget ? '토큰' : '자'}
+            {snapshot.stats.retainedTokens.toLocaleString()} /{' '}
+            {snapshot.policy.maxRetainedTokens.toLocaleString()}토큰
           </dd>
         </div>
         <div>
@@ -58,10 +51,7 @@ export function LoreContextDiagnostics({
         </div>
         <div>
           <dt>고정 자료 한도</dt>
-          <dd>
-            {budget.pinned.toLocaleString()}
-            {tokenBudget ? '토큰' : '자'}
-          </dd>
+          <dd>{snapshot.policy.maxPinnedTokens.toLocaleString()}토큰</dd>
         </div>
       </dl>
       {reset && <p>이 요청에서 새 장면 정리를 선택했어요.</p>}

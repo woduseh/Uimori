@@ -186,10 +186,10 @@ test('overlapping reads append uncovered pieces, repeated use leaves the rendere
   expect(entries[0].origin.sourceRevision).toBe(sa.id);
   expect(loreHistory([], c.snapshot.loreContext)[0]).toEqual(oldMessage);
 });
-test('character and entry budgets evict the least recently used whole slices and do not rescan evicted reads', async () => {
+test('token and entry budgets evict the least recently used whole slices and do not rescan evicted reads', async () => {
   const f = fixture();
   update(f, {
-    loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedChars: 8, maxRetainedEntries: 2 },
+    loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedTokens: 200, maxRetainedEntries: 2 },
   });
   const a = (await queue(f)).run;
   read(f, a, 0, 4);
@@ -454,9 +454,9 @@ test('disabled retention, zero budgets and invalid policy are explicit; selectio
   expect(freezeLoreContext(f.store, snapshot).loreContext!.entries).toEqual([]);
   expect(f.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
   expect(() =>
-    update(f, { loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedChars: -1 } })
+    update(f, { loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedTokens: -1 } })
   ).toThrow('Invalid lore context policy');
-  update(f, { loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedChars: 0 } });
+  update(f, { loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedTokens: 0 } });
   expect((await queue(f)).run.snapshot.loreContext!.entries).toEqual([]);
 });
 test('no-call preview accepts the selected default prompt and unsaved policy without writes', async () => {
@@ -474,14 +474,14 @@ test('no-call preview accepts the selected default prompt and unsaved policy wit
     url: `/api/chats/${chat.id}/prompt-preview`,
     payload: {
       request: 'Synthetic preview',
-      loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedChars: 1234 },
+      loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedTokens: 1234 },
       loreContextReset: true,
     },
   });
   expect(response.statusCode).toBe(200);
   expect(response.json()).toMatchObject({
     scope: 'preview-only-no-provider-call',
-    loreContext: { policy: { maxRetainedChars: 1234 }, stats: { reasons: ['new-scene'] } },
+    loreContext: { policy: { maxRetainedTokens: 1234 }, stats: { reasons: ['new-scene'] } },
   });
   expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
 });

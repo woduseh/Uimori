@@ -53,7 +53,7 @@ function fixture() {
   };
 }
 
-test.each([1, 14, 15, 16, 17, 18, 19, 20, DATABASE_SCHEMA_VERSION + 1])(
+test.each([1, 14, 15, 16, 17, 18, 19, 20, 21, 22, DATABASE_SCHEMA_VERSION + 1])(
   'unsupported schema %i is rejected before modifying any database bytes',
   (version) => {
     const f = fixture();

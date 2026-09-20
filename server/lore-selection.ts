@@ -1,11 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { RisuContent, ContentAttachment } from '../core/risu-content.js';
-import {
-  validateLoreContextPolicy,
-  isTokenLorePolicy,
-  loreBudget,
-  type LoreContextPolicy,
-} from '../core/lore-context.js';
+import { validateLoreContextPolicy } from '../core/lore-context.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import {
   LORE_SELECTION_LIMITS,
@@ -37,10 +32,7 @@ export type LoreSelectionTarget = {
 };
 const sha256 = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex');
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
-/** Old receipts retain their JSON-plus-margin count; new lore budgets count plain text. */
-function selectedLoreTokens(text: string, policy: LoreContextPolicy): number {
-  return isTokenLorePolicy(policy) ? countTextTokens(text) : estimateContextTokens(text);
-}
+const selectedLoreTokens = countTextTokens;
 /**
  * Every attached package this snapshot owes a selection for, in attachment order: the ones in model
  * mode that still offer at least one discoverable entry. Preparation asks about these; archive
@@ -149,7 +141,7 @@ function selectionInputs(target: LoreSelectionTarget) {
     ''
   ).slice(0, LORE_SELECTION_LIMITS.requestChars);
   const payload = {
-    budget: loreBudget(policy).retained,
+    budget: policy.maxRetainedTokens,
     maxEntries: policy.maxRetainedEntries,
     catalog,
     conversation,
@@ -157,10 +149,8 @@ function selectionInputs(target: LoreSelectionTarget) {
   };
   const inputHash = sha256(
     JSON.stringify({
-      version: isTokenLorePolicy(policy)
-        ? 'lore-selection-jev-v3-local-tokens'
-        : 'lore-selection-jev-v2',
-      ...(isTokenLorePolicy(policy) ? { tokenEstimator: policy.tokenEstimator } : {}),
+      version: 'lore-selection-jev-v3-local-tokens',
+      tokenEstimator: policy.tokenEstimator,
       judgment: policy.judgment,
       key: loreSelectionKey(target.attachment),
       package: { id: target.package.id, revision: target.package.revision },
@@ -177,9 +167,8 @@ export function loreSelectionInputHash(target: LoreSelectionTarget): string {
 }
 
 /**
- * Replay only the new token contract. Stored counts are claims, not evidence:
+ * Stored counts are claims, not evidence:
  * recount rendered selected bodies and check the shared budget across attachments.
- * Legacy receipts retain their historical validation and counting semantics.
  * The caller validates receipt shape, scope, hashes and scores separately.
  */
 export function validateLoreSelectionTokenBudgets(
@@ -187,7 +176,7 @@ export function validateLoreSelectionTokenBudgets(
   targets: readonly LoreSelectionTarget[]
 ): void {
   const policy = validateLoreContextPolicy(snapshot.profile?.loreContext);
-  if (!isTokenLorePolicy(policy) || !snapshot.loreSelection) return;
+  if (!snapshot.loreSelection) return;
   const fail = (): never => {
     throw new Error('LORE_SELECTION_TOKEN_BUDGET');
   };
@@ -274,7 +263,7 @@ async function selectOne(
   const base: LoreSelectionEntry = {
     key,
     inputHash,
-    budget: loreBudget(policy).retained,
+    budget: policy.maxRetainedTokens,
     selected: [],
     omitted: [],
     ...(partial ? { partial } : {}),
@@ -353,11 +342,10 @@ async function selectOne(
           omitted.push({ id: entry.id, reason: 'irrelevant' });
           continue;
         }
-        const tokens = selectedLoreTokens(entry.text ?? entry.summary, policy);
-        const cost = isTokenLorePolicy(policy) ? tokens : entry.chars;
+        const tokens = selectedLoreTokens(entry.text ?? entry.summary);
         if (
           selectedTokens + tokens > policy.judgment.maxSelectedTokens ||
-          retainedCost + cost > loreBudget(policy).retained ||
+          retainedCost + tokens > policy.maxRetainedTokens ||
           selected.length >= policy.maxRetainedEntries
         ) {
           omitted.push({ id: entry.id, reason: 'budget' });
@@ -365,7 +353,7 @@ async function selectOne(
         }
         selected.push(entry.id);
         selectedTokens += tokens;
-        retainedCost += cost;
+        retainedCost += tokens;
       }
       return {
         ...base,
@@ -443,11 +431,7 @@ export async function prepareLoreSelection(
                 ...selected.judgment,
                 selectedTokens: original.payload.catalog
                   .filter((entry) => selectedIds.includes(entry.id))
-                  .reduce(
-                    (sum, entry) =>
-                      sum + selectedLoreTokens(entry.text ?? entry.summary, original.policy),
-                    0
-                  ),
+                  .reduce((sum, entry) => sum + selectedLoreTokens(entry.text ?? entry.summary), 0),
                 scores: selected.judgment.scores.flatMap((score) => {
                   const mapped = batch.mapping.get(score.id);
                   return mapped?.owner === owner ? [{ ...score, id: mapped.entry.id }] : [];

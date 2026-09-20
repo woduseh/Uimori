@@ -139,7 +139,7 @@ test('conditional native positions use frozen lore selection and pinned budgets 
     content: [{ text: expect.stringContaining('>\nPINNED\n</entry>') }],
   });
   expect(after.messages.some((message) => message.content[0].text === 'PREFIX')).toBe(false);
-  snapshot.profile!.loreContext = { ...DEFAULT_LORE_CONTEXT, maxPinnedChars: 2 };
+  snapshot.profile!.loreContext = { ...DEFAULT_LORE_CONTEXT, maxPinnedTokens: 2 };
   expect(() => compileSnapshotPrompt(snapshot)).toThrow('LORE_PINNED_BUDGET_EXCEEDED');
 });
 

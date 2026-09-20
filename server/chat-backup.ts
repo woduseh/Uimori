@@ -26,7 +26,12 @@ import { CONNECTION_CREDENTIAL_FIELDS } from '../core/product.js';
 import { Store } from './store.js';
 
 const receiptKind = 'chat.backup-imported';
-const GLOBAL = new Set(['prompt_workspace', 'illustration_settings', 'library_organization_state']);
+const GLOBAL = new Set([
+  'prompt_workspace',
+  'lore_context_defaults',
+  'illustration_settings',
+  'library_organization_state',
+]);
 const SHARED = new Set([
   'versions',
   'provider_settings',
@@ -47,6 +52,10 @@ function recordedEnvironment(tables: BackupTables): string {
   return JSON.stringify({
     version: 1,
     promptWorkspace: JSON.parse(tables.prompt_workspace[0].body),
+    loreContextDefaults: {
+      revision: tables.lore_context_defaults[0].revision,
+      ...JSON.parse(tables.lore_context_defaults[0].body),
+    },
     illustrationSettings: tables.illustration_settings.map((row) => {
       const settings = JSON.parse(row.body);
       settings.comfyui.authorizationEnv = '';

@@ -74,6 +74,7 @@ export const BACKUP_COLLECTIONS = [
   collection('toolEvents', 'tool_events', 'seq run_id @event'),
   collection('chatEvents', 'events', 'seq chat_id kind entity_id at'),
   collection('promptEnvironment', 'prompt_workspace', 'id @body'),
+  collection('loreContextDefaults', 'lore_context_defaults', 'id revision @body'),
   collection('hiddenLibraryItems', 'library_hidden', 'kind id'),
   collection(
     'attempts',

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { defaultProfile, type Content, type ContentRef, type ChatFolder } from '../core/product.js';
 import type { Store } from './store.js';
+import { loreContextDefaults } from './lore-context-defaults.js';
 
 export const organizationTables = ['chat_folders', 'chat_organization'];
 export type { ChatFolder } from '../core/product.js';
@@ -163,31 +164,30 @@ export class ChatOrganizationStore {
     this.store.db
       .prepare('INSERT INTO chat_organization VALUES(?,?,?,1,?)')
       .run(chatId, botId, folderId, this.firstPosition(botId, folderId));
-    if (bot || folder?.defaultPersona) {
-      const profile = defaultProfile(chatId);
-      const persona = folder?.defaultPersona
-        ? this.store.product.get<Content>(
-            'content',
-            folder.defaultPersona.id,
-            folder.defaultPersona.revision
-          )
-        : null;
-      const packageAttachments = [
-        ...(bot?.package ? [{ id: bot.id, revision: bot.revision, role: 'bot' as const }] : []),
-        ...(persona?.package
-          ? [{ id: persona.id, revision: persona.revision, role: 'persona' as const }]
-          : []),
-      ];
-      if (packageAttachments.length) profile.packageAttachments = packageAttachments;
-      this.store.db
-        .prepare('INSERT INTO profiles VALUES(?,?)')
-        .run(
-          chatId,
-          JSON.stringify(
-            Object.fromEntries(Object.entries(profile).filter(([key]) => key !== 'routes'))
-          )
-        );
-    }
+    const { revision: _revision, ...loreContext } = loreContextDefaults(this.store);
+    const profile = { ...defaultProfile(chatId), loreContext };
+    const persona = folder?.defaultPersona
+      ? this.store.product.get<Content>(
+          'content',
+          folder.defaultPersona.id,
+          folder.defaultPersona.revision
+        )
+      : null;
+    const packageAttachments = [
+      ...(bot?.package ? [{ id: bot.id, revision: bot.revision, role: 'bot' as const }] : []),
+      ...(persona?.package
+        ? [{ id: persona.id, revision: persona.revision, role: 'persona' as const }]
+        : []),
+    ];
+    if (packageAttachments.length) profile.packageAttachments = packageAttachments;
+    this.store.db
+      .prepare('INSERT INTO profiles VALUES(?,?)')
+      .run(
+        chatId,
+        JSON.stringify(
+          Object.fromEntries(Object.entries(profile).filter(([key]) => key !== 'routes'))
+        )
+      );
   }
   copy(originalId: string, newId: string) {
     const original = this.metadata(originalId);

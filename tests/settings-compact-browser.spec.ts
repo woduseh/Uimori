@@ -149,7 +149,7 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
   await navigationAction(page, '설정');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   const nav = dialog.locator('.settings-navigation');
-  await expect(nav.getByRole('button')).toHaveCount(9);
+  await expect(nav.getByRole('button')).toHaveCount(10);
   await expect(nav.getByRole('button', { name: '삽화', exact: true })).toBeVisible();
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
   if (visualReview) {
@@ -174,7 +174,7 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
       expect(bounds!.height).toBeGreaterThanOrEqual(44);
     } else {
       await expect(nav).toBeVisible();
-      await expect(nav.getByRole('tab')).toHaveCount(9);
+      await expect(nav.getByRole('tab')).toHaveCount(10);
     }
     expect(
       await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)
@@ -202,6 +202,51 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
   await expect(dialog).toBeHidden();
   await expect(opener).toBeFocused();
   expect(errors).toEqual([]);
+});
+
+test('SCUI05 global lore defaults are saved and copied only to new chats', async ({
+  page,
+  request,
+}) => {
+  const original = await (await request.get('/api/lore-context-defaults')).json();
+  const created = await request.post('/api/content', {
+    data: fixtureBotInput('로어 기본값 합성 봇'),
+  });
+  expect(created.ok()).toBe(true);
+  const bot = await created.json();
+  const firstResponse = await request.post('/api/chats', {
+    data: { botId: bot.id, title: '기본값 변경 전 채팅' },
+  });
+  expect(firstResponse.ok()).toBe(true);
+  const first = await firstResponse.json();
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '로어 문맥');
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  const section = settings.getByRole('region', { name: '로어 문맥 기본값', exact: true });
+  await section.getByText('선별 기준과 용량', { exact: true }).click();
+  const retained = section.getByLabel('조회 로어 토큰 한도', { exact: true });
+  await expect(retained).toBeVisible();
+  await expect(retained).toHaveValue(String(original.maxRetainedTokens));
+  const nextLimit = original.maxRetainedTokens === 24_000 ? 20_000 : 24_000;
+  await retained.fill(String(nextLimit));
+  await section.getByRole('button', { name: '로어 문맥 기본값 저장', exact: true }).click();
+  await expect(section.getByRole('status')).toContainText('이후 만드는 새 채팅부터 사용해요');
+  const secondResponse = await request.post('/api/chats', {
+    data: { botId: bot.id, title: '기본값 변경 후 채팅' },
+  });
+  expect(secondResponse.ok()).toBe(true);
+  const second = await secondResponse.json();
+  const firstDetail = await (await request.get(`/api/chats/${first.id}`)).json();
+  const secondDetail = await (await request.get(`/api/chats/${second.id}`)).json();
+  expect(firstDetail.profile.loreContext.maxRetainedTokens).toBe(original.maxRetainedTokens);
+  expect(secondDetail.profile.loreContext.maxRetainedTokens).toBe(nextLimit);
+  const saved = await (await request.get('/api/lore-context-defaults')).json();
+  const { revision: _revision, ...policy } = original;
+  const restored = await request.put('/api/lore-context-defaults', {
+    data: { expectedRevision: saved.revision, ...policy },
+  });
+  expect(restored.ok()).toBe(true);
 });
 
 test('SCUI02 settings back, resize and close preserve provider and chat drafts until explicit discard', async ({
