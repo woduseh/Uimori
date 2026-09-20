@@ -66,6 +66,24 @@ async function editorFits(page: Page, editor: Locator, save: Locator, formMaxWid
   }
 }
 
+async function advancedWorkspaceFits(page: Page, editor: Locator) {
+  const workspace = editor.locator('.native-advanced-workspace');
+  const nav = workspace.getByRole('group', { name: '고급 설정 영역', exact: true });
+  const detail = workspace.locator('.native-advanced-detail:visible');
+  await expect(workspace).toBeVisible();
+  await expect(nav).toBeVisible();
+  await expect(detail).toHaveCount(1);
+  const [pageOverflow, editorOverflow] = await Promise.all([
+    page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+    editor.evaluate((node) => node.scrollWidth - node.clientWidth),
+  ]);
+  expect(Math.max(pageOverflow, editorOverflow)).toBeLessThanOrEqual(1);
+  if ((page.viewportSize()?.width ?? 0) >= 1200) {
+    const [navBounds, detailBounds] = await Promise.all([nav.boundingBox(), detail.boundingBox()]);
+    expect(Math.abs(navBounds!.y - detailBounds!.y)).toBeLessThanOrEqual(1);
+  }
+}
+
 async function openMenu(editor: Locator, label: string) {
   const trigger = editor.getByLabel(label, { exact: true });
   await expect(trigger).toBeVisible();
@@ -475,6 +493,15 @@ for (const viewport of viewports) {
                 untouched: 'keep',
               },
             ],
+            triggerscript: [
+              {
+                comment: 'Arrival trigger',
+                type: 'start',
+                conditions: [{ type: 'exists', value: 'place', untouched: 'condition' }],
+                effect: [{ type: 'triggerlua', code: 'return "original"', untouched: 'effect' }],
+                untouched: 'trigger',
+              },
+            ],
           },
         },
         first_mes: 'Original opening {{user}}',
@@ -525,9 +552,55 @@ for (const viewport of viewports) {
       await page.screenshot({ path: info.outputPath(`bot-opening-${viewport.name}.png`) });
 
       await editor.getByRole('tab', { name: '고급 설정', exact: true }).click();
-      await editor.getByRole('button', { name: '스크립트', exact: true }).click();
+      const advancedNav = editor.getByRole('group', { name: '고급 설정 영역', exact: true });
+      await expect(advancedNav.getByRole('button')).toHaveCount(6);
+      for (const label of ['지침', '기본 변수·토글', '표시', '스크립트', '연결 모듈', '원문'])
+        await expect(advancedNav.getByRole('button', { name: label, exact: true })).toBeVisible();
+
+      await advancedNav.getByRole('button', { name: '표시', exact: true }).click();
+      await advancedWorkspaceFits(page, editor);
+      await page.screenshot({ path: info.outputPath(`bot-advanced-display-${viewport.name}.png`) });
+
+      await advancedNav.getByRole('button', { name: '연결 모듈', exact: true }).click();
+      await advancedWorkspaceFits(page, editor);
+      await page.screenshot({ path: info.outputPath(`bot-advanced-modules-${viewport.name}.png`) });
+
+      await advancedNav.getByRole('button', { name: '스크립트', exact: true }).click();
+      await advancedWorkspaceFits(page, editor);
+      await page.screenshot({ path: info.outputPath(`bot-advanced-scripts-${viewport.name}.png`) });
+      await editor.getByLabel('트리거 이름', { exact: true }).fill('Edited arrival trigger');
+      await editor.getByLabel('Lua 원문', { exact: true }).fill('return "edited"');
+      await editor.getByText('실행 조건과 순서 · 원문 편집', { exact: true }).click();
+      const triggerRaw = editor.getByLabel('트리거 원문 JSON', { exact: true });
+      const pendingTriggerRaw = '{"unfinished":';
+      await triggerRaw.fill(pendingTriggerRaw);
+      await expect(save).toBeDisabled();
+      await advancedNav.getByRole('button', { name: '표시', exact: true }).click();
+      await advancedWorkspaceFits(page, editor);
+      await advancedNav.getByRole('button', { name: '스크립트', exact: true }).click();
+      await expect(triggerRaw).toHaveValue(pendingTriggerRaw);
+      await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
+      await editor.getByText('정규식 스크립트', { exact: true }).click();
+      const currentRegex = editor.getByLabel('현재 정규식', { exact: true });
+      if (viewport.name === 'desktop') {
+        await expect(currentRegex).toBeVisible();
+        await expect(currentRegex).toHaveJSProperty('tagName', 'SELECT');
+      }
       await editor.getByLabel('정규식 바꿀 내용', { exact: true }).fill('Edited display {{char}}');
-      await page.screenshot({ path: info.outputPath(`bot-regex-${viewport.name}.png`) });
+      await advancedWorkspaceFits(page, editor);
+      await page.screenshot({ path: info.outputPath(`bot-advanced-regex-${viewport.name}.png`) });
+
+      // An unapplied source document remains byte-for-byte intact while visiting other advanced panes.
+      await advancedNav.getByRole('button', { name: '원문', exact: true }).click();
+      const raw = editor.getByLabel('Risu 원문 JSON', { exact: true });
+      const pendingRaw = '{"unfinished":';
+      await raw.fill(pendingRaw);
+      await expect(save).toBeDisabled();
+      await advancedNav.getByRole('button', { name: '표시', exact: true }).click();
+      await advancedWorkspaceFits(page, editor);
+      await advancedNav.getByRole('button', { name: '원문', exact: true }).click();
+      await expect(raw).toHaveValue(pendingRaw);
+      await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
       await editor.getByRole('tab', { name: '첫 메시지', exact: true }).click();
 
       const responsePromise = nextSave(page);
@@ -574,6 +647,15 @@ for (const viewport of viewports) {
                 replace: 'Edited display {{char}}',
                 type: 'editdisplay',
                 untouched: 'keep',
+              },
+            ],
+            triggerscript: [
+              {
+                comment: 'Edited arrival trigger',
+                type: 'start',
+                conditions: [{ type: 'exists', value: 'place', untouched: 'condition' }],
+                effect: [{ type: 'triggerlua', code: 'return "edited"', untouched: 'effect' }],
+                untouched: 'trigger',
               },
             ],
           },
