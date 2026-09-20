@@ -22,6 +22,8 @@ jobs:
   quality:
     runs-on: windows-latest
     timeout-minutes: 15
+    outputs:
+      docs_only: ${{ steps.changes.outputs.docs_only }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -43,6 +45,30 @@ jobs:
         run: git diff --check $env:UIMORI_DIFF_BASE HEAD
         env:
           UIMORI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+
+  linux-core:
+    needs: quality
+    if: needs.quality.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.14.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Server persistence, restart and backup recovery
+        run: npm test -- tests/server.test.ts tests/chat-backup.test.ts
+      - name: Install Chromium for Reader recovery
+        run: |
+          npx playwright install --with-deps chromium
+          node --input-type=module -e "import { appendFileSync } from 'node:fs'; import { chromium } from '@playwright/test'; appendFileSync(process.env.GITHUB_ENV, 'UIMORI_BROWSER_PATH=' + chromium.executablePath() + '\n');"
+      - name: Reader recovery
+        run: npm run verify:browser -- --grep READERREC
 
   browser:
     if: github.event_name == 'workflow_dispatch' && inputs.browser
