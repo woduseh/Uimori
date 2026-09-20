@@ -1643,3 +1643,47 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
 });
 
 preservePromptWorkspace();
+
+test('PMLEAVE provider draft switch saves before replacement and preserves validation and disable confirmation', async ({
+  page,
+  request,
+}) => {
+  const title = 'PMLEAVE ' + Date.now();
+  const a = await api<Connection>(request, '/connections', connectionInput(title + ' A'));
+  const b = await api<Connection>(request, '/connections', connectionInput(title + ' B'));
+  await settings(page);
+  await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await page.getByRole('button', { name: a.title + ' 프로바이더 수정', exact: true }).click();
+  const form = page.getByRole('form', { name: '프로바이더 편집 양식' });
+  const discard = page.getByRole('alertdialog', { name: '편집 중인 초안 확인' });
+  const switchToB = async () => {
+    await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+    await page.getByRole('button', { name: b.title + ' 프로바이더 수정', exact: true }).click();
+    await expect(discard).toBeVisible();
+  };
+  await form.getByLabel('프로바이더 이름', { exact: true }).fill('');
+  await switchToB();
+  await discard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
+  await expect(discard.getByRole('alert')).toBeVisible();
+  expect((await library(request)).connections.find((item) => item.id === a.id)).toEqual(a);
+  await discard.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await form.getByLabel('프로바이더 이름', { exact: true }).fill(title + ' saved');
+  await form.getByLabel('이 프로바이더 사용').uncheck();
+  await switchToB();
+  await discard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
+  await expect(discard.getByRole('alert')).toBeVisible();
+  expect((await library(request)).connections.find((item) => item.id === a.id)).toEqual(a);
+  await discard.getByRole('button', { name: '계속 편집', exact: true }).click();
+  const impact = page.getByRole('region', { name: '비활성 영향 확인' });
+  await expect(impact).toBeVisible();
+  await impact.getByRole('button', { name: '비활성 취소', exact: true }).click();
+  await form.getByLabel('이 프로바이더 사용').check();
+  await switchToB();
+  await discard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
+  await expect(discard).toBeHidden();
+  await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(b.title);
+  const saved = (await library(request)).connections.find((item) => item.id === a.id)!;
+  expect(saved.title).toBe(title + ' saved');
+  expect(saved.revision).toBe(a.revision + 1);
+  expect(saved.enabled).toBe(true);
+});

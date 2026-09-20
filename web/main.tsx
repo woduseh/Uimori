@@ -1529,6 +1529,7 @@ function App() {
       <Dialog
         open={!!pendingNavigation}
         title="편집 중인 자료"
+        variant="confirmation"
         onClose={() => {
           if (!discardingNavigation) setPendingNavigation(null);
         }}

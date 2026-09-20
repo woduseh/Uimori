@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Library, ModelRef, ModelWorkspace } from '../core/product.js';
 import { api } from './api.js';
@@ -11,10 +12,12 @@ import './settings-actions.css';
 export function ModelWorkspaceEditor({
   library,
   onDirtyChange,
+  onSaveHandlerChange,
   onManage,
 }: {
   library: Library;
   onDirtyChange: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
   onManage: () => void;
 }) {
   const { workspace, error, refresh } = usePromptWorkspace();
@@ -41,6 +44,7 @@ export function ModelWorkspaceEditor({
     onDirtyChange(dirty || busy);
   }, [dirty, busy, onDirtyChange]);
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
+  useSettingsSaveHandler(onSaveHandlerChange, async () => (!draft ? false : save()));
   if (!draft)
     return (
       <p role="status" className="settings-loading-status">
@@ -54,6 +58,53 @@ export function ModelWorkspaceEditor({
       </p>
     );
   const conflict = !!workspace && workspace.revision > draft.revision;
+  const invalid =
+    conflict ||
+    !Number.isInteger(draft.translationPolicy.maxRetries) ||
+    draft.translationPolicy.maxRetries < 0 ||
+    draft.translationPolicy.maxRetries > 5 ||
+    !Number.isInteger(draft.translationPolicy.maxCalls) ||
+    draft.translationPolicy.maxCalls < 2 ||
+    draft.translationPolicy.maxCalls > 64 ||
+    !Number.isFinite(draft.translationPolicy.judgment.threshold) ||
+    draft.translationPolicy.judgment.threshold <= 0.5 ||
+    draft.translationPolicy.judgment.threshold > 1;
+  async function save() {
+    if (!draft || lock.current || invalid) return false;
+    if (!dirty) return true;
+    lock.current = true;
+    setBusy(true);
+    setSaveError('');
+    setMessage('');
+    return api<ModelWorkspace>(
+      '/model-workspace',
+      {
+        expectedRevision: draft.revision,
+        routes: draft.routes,
+        titleModel: draft.titleModel ?? null,
+        helperModel: draft.helperModel ?? null,
+        contextModel: draft.contextModel ?? null,
+        scriptModel: draft.scriptModel ?? null,
+        translationPolicy: draft.translationPolicy,
+      },
+      'PUT'
+    )
+      .then(async (accepted) => {
+        setDraft(accepted);
+        setDirty(false);
+        await refresh();
+        setMessage('역할별 모델 설정을 저장했어요. 모든 채팅의 이후 요청에 적용해요.');
+        return true;
+      })
+      .catch((caught: Error) => {
+        setSaveError(caught.message);
+        return false;
+      })
+      .finally(() => {
+        lock.current = false;
+        setBusy(false);
+      });
+  }
   function change(next: ModelWorkspace) {
     setDraft(next);
     setDirty(true);
@@ -259,50 +310,8 @@ export function ModelWorkspaceEditor({
             type="button"
             label="역할별 모델 설정 저장"
             aria-busy={busy}
-            disabled={
-              !dirty ||
-              conflict ||
-              !Number.isInteger(draft.translationPolicy.maxRetries) ||
-              draft.translationPolicy.maxRetries < 0 ||
-              draft.translationPolicy.maxRetries > 5 ||
-              !Number.isInteger(draft.translationPolicy.maxCalls) ||
-              draft.translationPolicy.maxCalls < 2 ||
-              draft.translationPolicy.maxCalls > 64 ||
-              !Number.isFinite(draft.translationPolicy.judgment.threshold) ||
-              draft.translationPolicy.judgment.threshold <= 0.5 ||
-              draft.translationPolicy.judgment.threshold > 1
-            }
-            onClick={() => {
-              if (lock.current) return;
-              lock.current = true;
-              setBusy(true);
-              setSaveError('');
-              setMessage('');
-              void api<ModelWorkspace>(
-                '/model-workspace',
-                {
-                  expectedRevision: draft.revision,
-                  routes: draft.routes,
-                  titleModel: draft.titleModel ?? null,
-                  helperModel: draft.helperModel ?? null,
-                  contextModel: draft.contextModel ?? null,
-                  scriptModel: draft.scriptModel ?? null,
-                  translationPolicy: draft.translationPolicy,
-                },
-                'PUT'
-              )
-                .then(async (accepted) => {
-                  setDraft(accepted);
-                  setDirty(false);
-                  await refresh();
-                  setMessage('역할별 모델 설정을 저장했어요. 모든 채팅의 이후 요청에 적용해요.');
-                })
-                .catch((caught: Error) => setSaveError(caught.message))
-                .finally(() => {
-                  lock.current = false;
-                  setBusy(false);
-                });
-            }}
+            disabled={!dirty || invalid}
+            onClick={() => void save()}
           />
         </div>
       </fieldset>

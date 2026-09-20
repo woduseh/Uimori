@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshIcon } from './ui-icons.js';
 import type { Library, ModelRef } from '../core/product.js';
@@ -27,9 +28,11 @@ type TestResult =
 export function IllustrationSettingsEditor({
   library,
   onDirtyChange,
+  onSaveHandlerChange,
 }: {
   library: Library;
   onDirtyChange: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
   const [saved, setSaved] = useState<IllustrationSettings | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -63,6 +66,7 @@ export function IllustrationSettingsEditor({
     onDirtyChange(dirty || busy);
   }, [dirty, busy, onDirtyChange]);
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
+  useSettingsSaveHandler(onSaveHandlerChange, async () => (!draft ? false : save()));
   if (!draft)
     return (
       <p role="status" className="settings-loading-status">
@@ -156,14 +160,15 @@ export function IllustrationSettingsEditor({
     draft.comfyui.timeoutMs >= 10_000 &&
     Number.isInteger(draft.comfyui.pollIntervalMs) &&
     draft.comfyui.pollIntervalMs >= 250;
-  const save = () => {
-    if (lock.current) return;
+  const save = async () => {
+    if (lock.current || conflict || !valid) return false;
+    if (!dirty) return true;
     lock.current = true;
     setBusy(true);
     setSaveError('');
     setMessage('');
     const { revision, ...body } = draft;
-    void api<IllustrationSettings>(
+    return api<IllustrationSettings>(
       '/illustration-settings',
       { expectedRevision: revision, ...body },
       'PUT'
@@ -173,8 +178,12 @@ export function IllustrationSettingsEditor({
         setDraft(structuredClone(accepted));
         setDirty(false);
         setMessage('삽화 설정을 저장했어요. 이후 예약하는 삽화 작업부터 적용해요.');
+        return true;
       })
-      .catch((caught: Error) => setSaveError(caught.message))
+      .catch((caught: Error) => {
+        setSaveError(caught.message);
+        return false;
+      })
       .finally(() => {
         lock.current = false;
         setBusy(false);
@@ -444,6 +453,7 @@ export function IllustrationSettingsEditor({
       <Dialog
         open={confirmReload}
         title="삽화 설정 다시 불러오기"
+        variant="confirmation"
         role="alertdialog"
         onClose={() => {
           if (!busy) setConfirmReload(false);

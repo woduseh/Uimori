@@ -345,19 +345,6 @@
   }
 }
 
-.app-dialog.library-discard-dialog {
-  width: min(620px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-  height: fit-content;
-  max-height: calc(100dvh - 32px);
-  margin: auto;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-}
-.library-discard-dialog .dialog-body > p {
-  margin: 0 0 8px;
-}
-
 .library-import-preview {
   display: flex;
   flex-wrap: wrap;

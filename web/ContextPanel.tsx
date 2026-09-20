@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { CheckIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -36,6 +37,7 @@ export function ContextPanel({
   onChanged,
   onError,
   onDirtyChange,
+  onSaveHandlerChange,
 }: {
   chatId: string;
   branchId: string;
@@ -48,10 +50,15 @@ export function ContextPanel({
   onChanged: () => void;
   onError: (message: string) => void;
   onDirtyChange: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
   const [detail, setDetail] = useState<ContextDetail | null>(null);
   const [draft, setDraft] = useState<SummaryDraft | null>(null);
   const [notesDirty, setNotesDirty] = useState(false);
+  const notesSave = useRef<(() => Promise<boolean>) | null>(null);
+  const registerNotesSave = useRef((handler: (() => Promise<boolean>) | null) => {
+    notesSave.current = handler;
+  }).current;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -144,7 +151,7 @@ export function ContextPanel({
     success: string,
     clearDraft = false
   ) {
-    if (actionLock.current) return;
+    if (actionLock.current) return false;
     actionLock.current = true;
     setBusy(true);
     setError('');
@@ -152,16 +159,18 @@ export function ContextPanel({
     const generation = scope.current.generation;
     try {
       await api(path, body, method);
-      if (!alive.current) return;
+      if (!alive.current) return false;
       commandKey.current = { fingerprint: '', key: crypto.randomUUID() };
       if (clearDraft) setDraft(null);
       setMessage(success);
       if (generation === scope.current.generation) await load();
       onChanged();
+      return true;
     } catch (caught) {
-      if (!alive.current) return;
+      if (!alive.current) return false;
       report(caught);
       if (caught instanceof ApiError && caught.status === 409) await load();
+      return false;
     } finally {
       actionLock.current = false;
       if (alive.current) setBusy(false);
@@ -175,6 +184,28 @@ export function ContextPanel({
   async function refreshAll() {
     await Promise.all([load(), onRefreshStory()]);
   }
+  async function saveSummary() {
+    if (!draft) return true;
+    if (busy || conflict || !current || !draft.text.trim() || draft.text.length > 200000)
+      return false;
+    return write(
+      `${base}/summary`,
+      keyed({
+        branchId,
+        expectedRevision: draft.revision,
+        expectedHeadRevision: draft.headRevision,
+        summary: draft.text,
+      }),
+      'PUT',
+      '요약을 저장했어요. 이후 요청부터 반영해요.',
+      true
+    );
+  }
+  useSettingsSaveHandler(onSaveHandlerChange, async () => {
+    if (busy || actionLock.current) return false;
+    if (notesDirty && !(await notesSave.current?.())) return false;
+    return saveSummary();
+  });
   return (
     <section className="context-panel" aria-label="문맥 관리" data-testid="context-panel">
       <div className="context-heading">
@@ -304,19 +335,7 @@ export function ContextPanel({
               className="context-summary-editor"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (!conflict && current)
-                  void write(
-                    `${base}/summary`,
-                    keyed({
-                      branchId,
-                      expectedRevision: draft.revision,
-                      expectedHeadRevision: draft.headRevision,
-                      summary: draft.text,
-                    }),
-                    'PUT',
-                    '요약을 저장했어요. 이후 요청부터 반영해요.',
-                    true
-                  );
+                void saveSummary();
               }}
             >
               {conflict && (
@@ -429,6 +448,7 @@ export function ContextPanel({
         }}
         onError={onError}
         onDirtyChange={setNotesDirty}
+        onSaveHandlerChange={registerNotesSave}
       />
     </section>
   );

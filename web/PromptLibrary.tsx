@@ -259,8 +259,8 @@ export function PromptLibrary({
       <Dialog
         open={discard}
         title="미저장 프롬프트 확인"
+        variant="confirmation"
         role="alertdialog"
-        className="library-discard-dialog"
         onClose={() => {
           if (!savingNavigation) setDiscard(false);
         }}

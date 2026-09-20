@@ -264,3 +264,63 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
   expect(after.runs).toHaveLength(0);
   expect(after.jobs).toHaveLength(0);
 });
+
+test('SCUILEAVE global illustration settings retain failed drafts and save before closing', async ({
+  page,
+  request,
+}) => {
+  for (const width of [2560, 412]) {
+    const original = await (await request.get('/api/illustration-settings')).json();
+    const nextCount = original.maxPerSource === 8 ? 7 : original.maxPerSource + 1;
+    await page.setViewportSize({ width, height: 915 });
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '삽화');
+    const settings = page.getByRole('dialog', { name: '설정', exact: true });
+    const count = settings.getByLabel('장면당 최대 삽화 개수', { exact: true });
+    await count.fill('0');
+    await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+    const confirm = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
+    await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+    await expect(confirm.getByRole('alert')).toBeVisible();
+    expect((await (await request.get('/api/illustration-settings')).json()).revision).toBe(
+      original.revision
+    );
+    await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
+    await expect(count).toHaveValue('0');
+    await count.fill(String(nextCount));
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let intercepted = false;
+    await page.route('**/api/illustration-settings', async (route) => {
+      if (route.request().method() !== 'PUT') return route.continue();
+      intercepted = true;
+      await held;
+      await route.fulfill({ status: 503, json: { error: 'SCUILEAVE synthetic write failure' } });
+    });
+    await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+    await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+    await expect.poll(() => intercepted).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(confirm).toBeVisible();
+    await expect(confirm.getByRole('button', { name: '계속 편집', exact: true })).toBeDisabled();
+    release();
+    await expect(confirm.getByRole('alert')).toBeVisible();
+    await page.unroute('**/api/illustration-settings');
+    await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
+    await expect(count).toHaveValue(String(nextCount));
+    await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+    await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+    await expect(settings).toBeHidden();
+    const saved = await (await request.get('/api/illustration-settings')).json();
+    expect(saved.maxPerSource).toBe(nextCount);
+    expect(saved.revision).toBe(original.revision + 1);
+    const { revision: _revision, ...body } = original;
+    const restored = await request.put('/api/illustration-settings', {
+      data: { ...body, expectedRevision: saved.revision },
+    });
+    expect(restored.ok()).toBe(true);
+  }
+});

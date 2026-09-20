@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useRef, useState } from 'react';
 import { ImageAddIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
@@ -21,6 +22,7 @@ export function AssetEditor({
   refresh,
   onError,
   onDirtyChange,
+  onSaveHandlerChange,
   expanded = false,
 }: {
   chatId: string;
@@ -28,6 +30,7 @@ export function AssetEditor({
   refresh: () => Promise<void>;
   onError: (error: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
   expanded?: boolean;
 }) {
   const [value, setValue] = useState({ ...emptyFields });
@@ -51,6 +54,45 @@ export function AssetEditor({
     onDirtyChange?.(hasUnsavedChanges);
   }, [hasUnsavedChanges, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useSettingsSaveHandler(onSaveHandlerChange, save);
+  async function save() {
+    if (uploadLock.current) return false;
+    if (!file || !value.title.trim()) {
+      onError('이미지 파일과 이미지 이름을 확인해 주세요.');
+      return false;
+    }
+    uploadLock.current = true;
+    setBusy(true);
+    setMessage('');
+    onError('');
+    try {
+      if (!['image/png', 'image/jpeg'].includes(file.type) || file.size > 2_000_000)
+        throw new Error('2MB 이하 PNG 또는 JPEG를 선택해 주세요.');
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = () => reject(new Error('이미지 파일을 읽지 못했어요.'));
+        reader.readAsDataURL(file);
+      });
+      await api(`/chats/${chatId}/assets`, { ...value, mime: file.type, base64 });
+      setFile(null);
+      setValue({ ...emptyFields });
+      if (fileInput.current) fileInput.current.value = '';
+      setMessage('이미지를 등록했어요.');
+      try {
+        await refresh();
+      } catch (error) {
+        onError(`이미지는 등록했지만 목록을 새로 불러오지 못했어요. ${(error as Error).message}`);
+      }
+      return true;
+    } catch (error) {
+      onError((error as Error).message);
+      return false;
+    } finally {
+      uploadLock.current = false;
+      setBusy(false);
+    }
+  }
   const visible = expanded || open;
   const pageSize = 48;
   const start = Math.min(
@@ -110,40 +152,9 @@ export function AssetEditor({
         </nav>
       )}
       <form
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          if (!file || uploadLock.current) return;
-          uploadLock.current = true;
-          setBusy(true);
-          setMessage('');
-          onError('');
-          try {
-            if (!['image/png', 'image/jpeg'].includes(file.type) || file.size > 2_000_000)
-              throw new Error('2MB 이하 PNG 또는 JPEG를 선택해 주세요.');
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(String(reader.result).split(',')[1]);
-              reader.onerror = () => reject(new Error('이미지 파일을 읽지 못했어요.'));
-              reader.readAsDataURL(file);
-            });
-            await api(`/chats/${chatId}/assets`, { ...value, mime: file.type, base64 });
-            setFile(null);
-            setValue({ ...emptyFields });
-            if (fileInput.current) fileInput.current.value = '';
-            setMessage('이미지를 등록했어요.');
-            try {
-              await refresh();
-            } catch (error) {
-              onError(
-                `이미지는 등록했지만 목록을 새로 불러오지 못했어요. ${(error as Error).message}`
-              );
-            }
-          } catch (error) {
-            onError((error as Error).message);
-          } finally {
-            uploadLock.current = false;
-            setBusy(false);
-          }
+          void save();
         }}
       >
         <fieldset className="editor-fields editor-grid" disabled={busy}>

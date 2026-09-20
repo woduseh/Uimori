@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { RefreshIcon } from './ui-icons.js';
 import { Switch } from './BooleanControls.js';
 import { SaveButton } from './SaveButton.js';
@@ -11,12 +12,14 @@ export function SettingsEditor({
   onSaved,
   onError,
   onDirtyChange,
+  onSaveHandlerChange,
   hideHeading = false,
 }: {
   chat: Chat;
   onSaved: () => Promise<void>;
   onError: (e: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
   hideHeading?: boolean;
 }) {
   const [value, setValue] = useState<Settings>(chat.settings);
@@ -30,6 +33,7 @@ export function SettingsEditor({
     onDirtyChange?.(dirty || saving);
   }, [dirty, saving, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useSettingsSaveHandler(onSaveHandlerChange, save);
   useEffect(() => {
     if (!dirty && chat.settingsRevision >= revision) {
       setValue(chat.settings);
@@ -41,36 +45,47 @@ export function SettingsEditor({
     setMessage('');
     setValue((old) => ({ ...old, [key]: next }));
   }
+  async function save() {
+    if (saving) return false;
+    if (!dirty) return true;
+    if (!Number.isInteger(value.maxCalls) || value.maxCalls < 1 || value.maxCalls > 32) {
+      setLocalError('작업당 모델 호출 한도는 1~32 사이의 정수로 입력해 주세요.');
+      return false;
+    }
+    setSaving(true);
+    setLocalError('');
+    try {
+      const saved = await api<Chat>(
+        `/chats/${chat.id}/settings`,
+        { ...value, expectedSettingsRevision: revision },
+        'PATCH'
+      );
+      setValue(saved.settings);
+      setRevision(saved.settingsRevision);
+      setDirty(false);
+      setMessage('후속 작업 설정을 저장했어요.');
+      onError('');
+      // Persisted; the refresh below is not an unsaved draft.
+      setSaving(false);
+      await onSaved();
+      return true;
+    } catch (error) {
+      const text = (error as Error).message;
+      setLocalError(text);
+      onError(text);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
   return (
     <section className="settings">
       {!hideHeading && <h3>자동 후속 작업</h3>}
       <small>저장한 설정은 다음 실행부터 적용해요.</small>
       <form
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          setSaving(true);
-          setLocalError('');
-          try {
-            const saved = await api<Chat>(
-              `/chats/${chat.id}/settings`,
-              { ...value, expectedSettingsRevision: revision },
-              'PATCH'
-            );
-            setValue(saved.settings);
-            setRevision(saved.settingsRevision);
-            setDirty(false);
-            setMessage('후속 작업 설정을 저장했어요.');
-            onError('');
-            // Persisted; the refresh below is not an unsaved draft.
-            setSaving(false);
-            await onSaved();
-          } catch (error) {
-            const text = (error as Error).message;
-            setLocalError(text);
-            onError(text);
-          } finally {
-            setSaving(false);
-          }
+          void save();
         }}
       >
         <fieldset className="editor-fields full" disabled={saving}>

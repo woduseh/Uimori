@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { AddIcon, BackIcon, CloseIcon, EditIcon, PowerIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import type { AuthorNote, ImportedMemoryOrigin } from '../core/notes.js';
@@ -35,6 +36,7 @@ export function AuthorNotesEditor({
   onRefresh,
   onError,
   onDirtyChange,
+  onSaveHandlerChange,
   disabled = false,
 }: {
   branchId: string;
@@ -45,6 +47,7 @@ export function AuthorNotesEditor({
   onRefresh: () => Promise<void>;
   onError: (message: string) => void;
   onDirtyChange: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
   disabled?: boolean;
 }) {
   const [draft, setDraft] = useState<NoteDraft | null>(null);
@@ -98,7 +101,15 @@ export function AuthorNotesEditor({
     }
   }
   async function save(value: NoteDraft, retired = false) {
-    if (locked.current || conflict || disabled) return;
+    if (locked.current || conflict || disabled) return false;
+    if (
+      !retired &&
+      (!value.text.trim() ||
+        !value.author.trim() ||
+        value.text.length > 32000 ||
+        value.author.length > 200)
+    )
+      return false;
     const command = {
       branchId,
       expectedRevision: value.revision,
@@ -118,7 +129,7 @@ export function AuthorNotesEditor({
     setMessage('');
     try {
       await onSave({ ...command, idempotencyKey: commandKey.current.key });
-      if (!alive.current) return;
+      if (!alive.current) return false;
       setDraft(null);
       setRetiring(null);
       commandKey.current = { fingerprint: '', key: crypto.randomUUID() };
@@ -128,17 +139,24 @@ export function AuthorNotesEditor({
           : '메모를 저장했어요. 이후 요청부터 반영해요.'
       );
       await refresh();
+      return true;
     } catch (caught) {
-      if (!alive.current) return;
+      if (!alive.current) return false;
       const text = caught instanceof Error ? caught.message : '메모를 저장하지 못했어요.';
       setError(text);
       onError(text);
       if (caught instanceof ApiError && caught.status === 409) await refresh();
+      return false;
     } finally {
       locked.current = false;
       if (alive.current) setBusy(false);
     }
   }
+  useSettingsSaveHandler(onSaveHandlerChange, async () => {
+    if (retiring) throw new Error('메모 사용 중단은 계속 편집에서 확인해 주세요.');
+    if (locked.current || busy) return false;
+    return draft ? save(draft) : true;
+  });
   return (
     <details className="context-notes" data-testid="context-notes">
       <summary>

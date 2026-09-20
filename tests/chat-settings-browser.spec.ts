@@ -2,6 +2,7 @@ import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
+import type { StoryDetail } from '../core/story.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { openChatMenu, selectChatSettingsSection } from './ui-navigation.js';
@@ -384,5 +385,63 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
   const after = await read();
   expect(after.runs).toHaveLength(0);
   expect(after.attempts ?? []).toHaveLength(0);
+  expect(errors).toEqual([]);
+});
+
+test('CSUI05 save and close persists a valid user note and keeps an invalid note draft open', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1440 });
+  const { chat, errors } = await prepare(page, request, `CSUI05 ${Date.now()}`);
+  const noteText = `저장하고 닫기 메모 ${Date.now()}`;
+  const readStory = async () => {
+    const response = await request.get(`/api/chats/${chat.id}/story`);
+    expect(response.ok(), await response.text()).toBe(true);
+    return (await response.json()) as StoryDetail;
+  };
+  const confirm = page.getByRole('alertdialog', {
+    name: '미저장 채팅 설정 확인',
+    exact: true,
+  });
+
+  let dialog = await openSettings(page);
+  await selectChatSettingsSection(page, '기억·로어');
+  let notes = dialog.getByTestId('context-notes');
+  await expect(notes).toBeVisible();
+  await notes.locator(':scope > summary').click();
+  await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
+  await notes.getByLabel('메모 작성자', { exact: true }).fill('합성 사용자');
+  await notes.getByLabel('메모·정정 내용', { exact: true }).fill(noteText);
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+  await expect(confirm).toBeHidden();
+  await expect(dialog).toBeHidden();
+  await expect
+    .poll(async () => (await readStory()).notes.map((note) => note.text))
+    .toEqual([noteText]);
+
+  dialog = await openSettings(page);
+  await selectChatSettingsSection(page, '기억·로어');
+  notes = dialog.getByTestId('context-notes');
+  await expect(notes).toBeVisible();
+  await notes.locator(':scope > summary').click();
+  await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
+  await notes.getByLabel('메모 작성자', { exact: true }).fill('');
+  await notes.getByLabel('메모·정정 내용', { exact: true }).fill('작성자가 없는 메모 초안');
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+  await expect(confirm.getByRole('alert')).toContainText('저장하지 못했어요');
+  await expect(confirm).toBeVisible();
+  expect((await readStory()).notes.map((note) => note.text)).toEqual([noteText]);
+  await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: '메모·정정 내용', exact: true })).toHaveValue(
+    '작성자가 없는 메모 초안'
+  );
+  await notes.getByRole('button', { name: '편집 취소', exact: true }).click();
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  await expect(dialog).toBeHidden();
   expect(errors).toEqual([]);
 });

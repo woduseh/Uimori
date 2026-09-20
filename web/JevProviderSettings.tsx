@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { JEV_PROVIDER_DEFINITION, type JevProviderStatus } from '../core/jev-provider.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
@@ -38,8 +39,10 @@ export function JevProviderSettings({
   onDirtyChange,
   onBusyChange,
   onStatusChange,
+  onSaveHandlerChange,
 }: {
   active: boolean;
+  onSaveHandlerChange?: SettingsSaveRegistration;
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange: (busy: boolean) => void;
   onStatusChange: (status: JevProviderStatus) => void;
@@ -142,7 +145,8 @@ export function JevProviderSettings({
   }, [test, testError, acceptTest]);
 
   async function save(remove = false) {
-    if (!status || lock.current || busy || unresolved || conflict) return;
+    if (!status || lock.current || busy || unresolved || conflict || (!remove && !apiKey.trim()))
+      return false;
     lock.current = true;
     setOperation(true);
     setError('');
@@ -153,7 +157,7 @@ export function JevProviderSettings({
         { expectedRevision: status.revision, ...(remove ? {} : { apiKey }) },
         remove ? 'DELETE' : 'PUT'
       );
-      if (!alive.current) return;
+      if (!alive.current) return false;
       setStatus(next);
       setApiKey('');
       setTest(next.latestTest);
@@ -162,8 +166,9 @@ export function JevProviderSettings({
           ? '저장한 키를 삭제했어요.'
           : 'TypeSafe AI와 JEV를 등록했어요. 연결 테스트를 실행할 수 있어요.'
       );
+      return true;
     } catch (caught) {
-      if (!alive.current) return;
+      if (!alive.current) return false;
       if (caught instanceof ApiError && caught.status === 409) {
         setConflict(true);
         setError(
@@ -174,11 +179,14 @@ export function JevProviderSettings({
           '연결 정보 변경을 확인하지 못했어요. 새로고침으로 저장 상태를 확인해 주세요. 입력한 키는 유지돼요.'
         );
       }
+      return false;
     } finally {
       lock.current = false;
       if (alive.current) setOperation(false);
     }
   }
+
+  useSettingsSaveHandler(onSaveHandlerChange, save);
 
   async function startTest() {
     if (!status || lock.current || busy || apiKey || conflict) return;

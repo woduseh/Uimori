@@ -1,3 +1,4 @@
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { ExpandIcon, ExternalLinkIcon, ResetIcon, SaveIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
@@ -27,12 +28,14 @@ export function PromptWorkspaceEditor({
   library,
   reload,
   onDirtyChange,
+  onSaveHandlerChange,
   onEditPrompt,
   navigationDisabled = false,
 }: {
   library: Library;
   reload?: () => Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
   onEditPrompt?: (presetId?: string) => void;
   navigationDisabled?: boolean;
 }) {
@@ -89,6 +92,7 @@ export function PromptWorkspaceEditor({
     onDirtyChange?.(dirty || busy);
   }, [dirty, busy, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useSettingsSaveHandler(onSaveHandlerChange, save);
 
   // A save acknowledges only the input it sent. Restored drafts require explicit retry.
   // biome-ignore lint/correctness/useExhaustiveDependencies: save reads latest input via refs; edits and completed saves alone schedule a write.
@@ -110,7 +114,7 @@ export function PromptWorkspaceEditor({
 
   async function save() {
     const next = currentDraft.current;
-    if (!next || lock.current || shared.state.conflict) return;
+    if (!next || lock.current || shared.state.conflict) return false;
     lock.current = true;
     setBusy(true);
     setSaveError('');
@@ -134,9 +138,11 @@ export function PromptWorkspaceEditor({
       setDirty(unsaved);
       setMessage('변경사항을 자동 저장했어요.');
       await refresh();
+      return !unsaved;
     } catch (caught) {
       setSaveError(`${(caught as Error).message} 선택한 옵션은 유지했어요.`);
       await refresh();
+      return false;
     } finally {
       lock.current = false;
       setBusy(false);

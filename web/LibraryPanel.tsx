@@ -456,8 +456,8 @@ export function LibraryPanel({
       <Dialog
         open={!!pendingNavigation}
         title="미저장 자료 확인"
+        variant="confirmation"
         role="alertdialog"
-        className="library-discard-dialog"
         onClose={() => {
           if (!savingNavigation) continueEditing();
         }}
