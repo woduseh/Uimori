@@ -183,7 +183,8 @@ export function importRisuLore({
     const content = parsed.body;
     // Risu never sends an entry it never activates; that content belongs to the material's own use.
     const executable = parsed.decorators.dont_activate;
-    const enabled = entry.enabled !== false && !executable;
+    // Folder records organize native lore; even a preserved body or @@activate is not prompt lore.
+    const enabled = entry.mode !== 'folder' && entry.enabled !== false && !executable;
     const loading =
       entry.constant === true || parsed.decorators.activate
         ? ('pinned' as const)
