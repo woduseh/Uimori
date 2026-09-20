@@ -474,7 +474,9 @@
 .provider-save-actions {
   justify-content: flex-end;
 }
-.provider-save-status {
+.provider-save-actions > .provider-save-status {
+  flex: 0 0 100%;
+  order: -1;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.6;
@@ -503,10 +505,6 @@
   .provider-management-form > .provider-actions {
     position: static;
     padding-block: 10px;
-  }
-  .provider-save-actions > .provider-save-status {
-    flex-basis: 100%;
-    order: -1;
   }
 }
 .provider-saved-item {
