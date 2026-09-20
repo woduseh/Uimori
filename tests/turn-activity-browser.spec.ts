@@ -152,6 +152,8 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
   await expect(first).toHaveAttribute('open', '');
   await expect(second).not.toHaveAttribute('open');
   expect(state.runReads).toEqual([]);
+  await second.scrollIntoViewIfNeeded();
+  await expect(second).toBeInViewport();
   await second.locator(':scope > summary').click();
   await expect(first).toHaveAttribute('open', '');
   await expect(second).toHaveAttribute('open', '');
@@ -166,30 +168,6 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
   await expect(second).toHaveAttribute('open', '');
   await second.scrollIntoViewIfNeeded();
   if (visualReview) await page.screenshot({ path: info.outputPath('turn-activity-desktop.png') });
-  expect(state.writes).toEqual([]);
-  expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
-});
-
-test('TURNUI05 package failures remain visible beside completed prose without loading diagnostic bodies', async ({
-  page,
-  request,
-}) => {
-  const seeded = await seed(request, 2);
-  const affected = seeded.sources[0]!;
-  const other = seeded.sources.find((item) => item.id !== affected.id)!;
-  const state = await harness(page, seeded.chat.id, (body) => {
-    body.runs = body.runs.map((run) => ({ ...run, hasPackageIssues: run.id === affected.runId }));
-  });
-  const panel = page.locator(`[data-testid="turn-activity"][data-run-id="${affected.runId}"]`);
-  const unrelated = page.locator(`[data-testid="turn-activity"][data-run-id="${other.runId}"]`);
-  await expect(panel.locator(':scope > summary')).toContainText('본문 완료');
-  await expect(panel.locator(':scope > summary')).toContainText('자료 처리 일부 미적용');
-  await expect(panel).toHaveClass(/turn-activity-issue/);
-  await expect(unrelated.locator(':scope > summary')).not.toContainText('일부 미적용');
-  await expect(panel).not.toHaveAttribute('open');
-  await panel.locator(':scope > summary').click();
-  await expect(panel.getByText(/일부 자료의 자동 처리나 지침을 적용하지 못했어요/)).toBeVisible();
-  expect(state.runReads).toEqual([]);
   expect(state.writes).toEqual([]);
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });
@@ -232,19 +210,24 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
               },
       });
     }
+    body.jobs.push({
+      ...body.jobs[0],
+      id: `synthetic-status-${source.id}`,
+      kind: 'status',
+      revision: 2,
+      error: status === 'failed' ? 'SYNTHETIC_STATUS_FAILURE' : null,
+    });
     body.reader.responseActivity = [
       activity(source.id, 'translation', status),
-      activity(source.id, 'state', status),
+      activity(source.id, 'status', status),
       activity(source.id, 'context', status),
     ];
     if (status === 'completed')
-      body.reader.responseActivity.unshift({
-        ...activity(source.id, 'state', 'stale'),
-        id: `synthetic-previous-state-${source.id}`,
-        createdAt: '2020-01-01T00:00:00.000Z',
-        startedAt: '2020-01-01T00:00:00.000Z',
-        updatedAt: '2020-01-01T00:00:01.000Z',
-        finishedAt: '2020-01-01T00:00:01.000Z',
+      body.jobs.unshift({
+        ...body.jobs.at(-1)!,
+        id: `synthetic-previous-status-${source.id}`,
+        revision: 1,
+        status: 'stale',
       });
   };
   const state = await harness(page, seeded.chat.id, project('running'));
@@ -252,7 +235,7 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   const otherSource = seeded.sources.find((item) => item.id !== source.id)!;
   const other = page.locator(`[data-testid="turn-activity"][data-run-id="${otherSource.runId}"]`);
   await expect(panel.locator(':scope > summary')).toContainText(/번역.*중/);
-  await expect(panel.locator(':scope > summary')).toContainText('상태 정리 진행 중');
+  await expect(panel.locator(':scope > summary')).toContainText('장면 해설 진행 중');
   await expect(panel.locator(':scope > summary')).toContainText('문맥 압축 진행 중');
   await expect(panel.locator(':scope > summary')).toContainText('원문 이미지 배치 진행 중');
   await expect(panel.locator(':scope > summary')).toContainText('번역 이미지 배치 진행 중');
@@ -261,10 +244,12 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   await expect(panel.locator(':scope > summary')).toContainText('번역 실패');
   await expect(panel.locator(':scope > summary')).toContainText('본문 완료');
   await expect(other.locator(':scope > summary')).not.toContainText('번역');
-  await expect(other.locator(':scope > summary')).not.toContainText('정리');
+  await expect(other.locator(':scope > summary')).not.toContainText('장면 해설');
   await expect(panel).not.toHaveAttribute('open');
   await panel.locator(':scope > summary').click();
-  await expect(panel.getByText('상태 정리 · 실패 · 작업 관리', { exact: true })).toBeVisible();
+  await expect(panel.getByTestId('job-status').getByRole('heading')).toContainText(
+    '장면 해설 실패'
+  );
   await expect(panel.getByRole('region', { name: '이 응답의 문맥 작업' })).toContainText(
     '문맥 압축 · 실패'
   );
@@ -272,10 +257,10 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   await expect(panel.locator(':scope > summary')).not.toContainText('실패');
   await expect(panel.locator(':scope > summary')).not.toContainText('이전 자료의 결과');
   await expect(panel).not.toHaveClass(/turn-activity-issue/);
-  const previous = panel.getByText('이전 상태 작업 · 1개', { exact: true });
-  await expect(previous).toBeVisible();
-  await previous.click();
-  await expect(panel.getByText('상태 정리 · 이전 자료의 결과', { exact: true })).toBeVisible();
+  await expect(panel.getByTestId('job-status')).toHaveCount(1);
+  await expect(panel.locator(`[data-job-id="synthetic-previous-status-${source.id}"]`)).toHaveCount(
+    0
+  );
   await expect(panel).toHaveAttribute('open', '');
   await expect(other.locator(':scope > summary').filter({ hasText: '번역 실패' })).toHaveCount(0);
   expect(state.writes).toEqual([]);

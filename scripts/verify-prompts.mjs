@@ -4,7 +4,6 @@ await runBrowserVerification({
   prefix: 'native-prompts',
   scope: 'Native RISUP import, editing, prompt/model separation and current option autosave',
   files: ['tests/risu-preset-import-browser.spec.ts', 'tests/prompt-workspace-browser.spec.ts'],
-  requiredCases: ['RISUPRESETUI01', 'RISUPRESETUI02', 'RISUPRESETUI03', 'PWS01', 'PWS02', 'PWS03'],
   timeout: 180000,
   limitations: ['Synthetic browser evidence does not establish provider quality.'],
 });

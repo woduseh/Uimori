@@ -11,7 +11,7 @@ import { removeOwned } from '../scripts/lib.mjs';
 
 // These checks exercise HTTP fixture setup and retained SQLite evidence without
 // launching a browser. They do not establish two-checkout or browser UI success.
-async function fixture(t, chatStatus = 200) {
+async function fixture(t, { botStatus = 200, botId = 'synthetic-bot', chatStatus = 200 } = {}) {
   const received = [];
   const server = http.createServer(async (req, res) => {
     let raw = '';
@@ -19,10 +19,12 @@ async function fixture(t, chatStatus = 200) {
     const body = JSON.parse(raw);
     received.push({ url: req.url, body });
     res.setHeader('content-type', 'application/json');
-    if (req.url === '/api/content') res.end(JSON.stringify({ id: 'synthetic-bot' }));
-    else {
+    if (req.url === '/api/content') {
+      res.statusCode = botStatus;
+      res.end(JSON.stringify({ id: botId }));
+    } else {
       res.statusCode = chatStatus;
-      res.end(JSON.stringify({ id: 'synthetic-chat', title: body.title }));
+      res.end(JSON.stringify({ id: 'synthetic-chat', title: body.title, botId: body.botId }));
     }
   });
   await new Promise((resolve, reject) => {
@@ -45,11 +47,15 @@ async function fixture(t, chatStatus = 200) {
 test('worktree setup sends an explicit owning bot before its chat over loopback HTTP', async (t) => {
   const { api, received } = await fixture(t);
   const chat = await prepareWorktreeChat(api, 'Synthetic isolated chat');
-  assert.deepEqual(chat, { id: 'synthetic-chat', title: 'Synthetic isolated chat' });
+  assert.deepEqual(chat, {
+    id: 'synthetic-chat',
+    title: 'Synthetic isolated chat',
+    botId: 'synthetic-bot',
+  });
   assert.equal(received.length, 2);
   assert.equal(received[0].url, '/api/content');
   assert.equal(received[0].body.kind, 'bot');
-  assert.equal(received[0].body.package.version, 1);
+  assert.ok(received[0].body.text);
   assert.deepEqual(received[1], {
     url: '/api/chats',
     body: { title: 'Synthetic isolated chat', botId: 'synthetic-bot' },
@@ -57,12 +63,23 @@ test('worktree setup sends an explicit owning bot before its chat over loopback 
 });
 
 test('worktree setup rejects a failed chat admission before browser generation', async (t) => {
-  const { api } = await fixture(t, 409);
+  const { api } = await fixture(t, { chatStatus: 409 });
   await assert.rejects(
     prepareWorktreeChat(api, 'Synthetic rejected chat'),
     /fixture chat HTTP 409/
   );
 });
+
+for (const options of [{ botStatus: 409 }, { botId: '' }]) {
+  test(`worktree setup rejects an unusable owning bot before chat admission: ${JSON.stringify(options)}`, async (t) => {
+    const { api, received } = await fixture(t, options);
+    await assert.rejects(prepareWorktreeChat(api, 'Unowned chat'));
+    assert.deepEqual(
+      received.map(({ url }) => url),
+      ['/api/content']
+    );
+  });
+}
 
 for (const scenario of ['expected', 'wrong-source', 'wrong-chat', 'missing']) {
   test(`retained worktree SQLite evidence detects ${scenario}`, async (t) => {

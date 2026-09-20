@@ -149,7 +149,13 @@ export function validateRunSnapshot(
   validateContextPlan(snapshot);
   if (
     snapshot.logicalHistory !== undefined &&
-    !isDeepStrictEqual(snapshot.logicalHistory, captureLogicalHistory(store, snapshot))
+    !isDeepStrictEqual(snapshot.logicalHistory, captureLogicalHistory(store, snapshot)) &&
+    // Older receipts replayed carried-forward output over subsequent source edits.
+    // Accept only their exact historical reconstruction; never rewrite frozen inputs.
+    !isDeepStrictEqual(
+      snapshot.logicalHistory,
+      captureLogicalHistory(store, snapshot, { legacyNativeOutputReplay: true })
+    )
   )
     reject('logical history mismatch');
   if (snapshot.promptCompilation) {

@@ -7,6 +7,7 @@ import {
   VertexProtocolError,
 } from '../core/vertex-protocol.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
+import { TRANSLATION_FORMAT_INSTRUCTION } from '../core/provider-format.js';
 
 const request = (): ProviderRequest => ({
   role: 'main',
@@ -136,7 +137,7 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     const instructions = wire.systemInstruction.parts
       .map((part: { text: string }) => part.text)
       .join('\n');
-    expect(instructions).toContain('complete translated text only');
+    expect(instructions).toContain(TRANSLATION_FORMAT_INSTRUCTION);
     expect(instructions).not.toMatch(/Korean number words|\[\[p_|segments.text/);
     expect(input).toEqual(original);
     first.decoder.accept(

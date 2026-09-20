@@ -1,7 +1,7 @@
 import { DESKTOP_WIDTH } from './browser-viewports.js';
 import type { Page } from '@playwright/test';
 
-/** This module owns the measurements and targets documented in the gallery reference. */
+/** Screen measurements and usability checks documented in the gallery reference. */
 export const metricSource = 'docs/UI-GALLERY.md#metrics';
 
 export const metricNames = [
@@ -49,19 +49,18 @@ function measureInPage({ names, compact }: { names: readonly string[]; compact: 
       results.push({
         metric: name,
         value: controls.length,
-        target: '좁은 화면 헤더 제어 4개 이하',
-        pass: header ? (compact ? controls.length <= 4 : null) : false,
+        target: '보이는 헤더 제어 개수',
+        pass: null,
         detail: controls.map(label),
       });
     } else if (name === 'composer-dock') {
       const dock = document.querySelector('.composer-dock');
       const height = dock ? Math.round(dock.getBoundingClientRect().height) : null;
-      const target = compact ? 52 : 56;
       results.push({
         metric: name,
         value: height,
-        target: `빈 입력창 ${target}px 이하`,
-        pass: height === null ? false : height <= target,
+        target: '입력창 높이 (px)',
+        pass: null,
       });
     } else if (name === 'body-share') {
       const body = document.querySelector('[data-testid=source-text]');
@@ -73,8 +72,8 @@ function measureInPage({ names, compact }: { names: readonly string[]; compact: 
       results.push({
         metric: name,
         value: Math.round(share * 100) / 100,
-        target: '좁은 화면 첫 화면 본문 60% 이상',
-        pass: body ? (compact ? share >= 0.6 : null) : false,
+        target: '첫 화면 본문 비율',
+        pass: null,
       });
     } else if (name === 'menu-in-viewport') {
       const bodies = [...document.querySelectorAll('details[open] .action-menu-body')].filter(
@@ -184,15 +183,15 @@ function inventoryInPage() {
     {
       metric: 'font-size-values',
       value: fontSizes.size,
-      target: 'font-size 선언값 8종 이하',
-      pass: fontSizes.size <= 8,
+      target: 'font-size 선언값 종류',
+      pass: null,
       detail: [...fontSizes].sort(),
     },
     {
       metric: 'border-radius-values',
       value: scalars.size,
-      target: 'border-radius 길이 값 3종 이하 (모양 0·50%·알약 제외)',
-      pass: scalars.size <= 3,
+      target: 'border-radius 길이 값 종류 (모양 0·50%·알약 제외)',
+      pass: null,
       detail: { scalars: [...scalars].sort(), shapes: [...shapes].sort(), raw: [...radii].sort() },
     },
   ];

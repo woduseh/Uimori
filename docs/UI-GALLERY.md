@@ -17,16 +17,16 @@ Results are under `output/playwright/gallery-<timestamp>-<id>/`: screenshots, th
 
 [`tests/fixtures/ui-metrics.ts`](../tests/fixtures/ui-metrics.ts) owns the calculations and targets shared by browser tests and the gallery. These are diagnostic measurements of selected elements, not universal UI design requirements. Update that implementation when intentionally changing a measurement; keep this reference consistent.
 
-| Metric | Current target |
+| Metric | Interpretation |
 | --- | --- |
-| `header-controls` | At most 4 visible header controls at compact widths |
-| `composer-dock` | Empty dock height at most 52px compact / 56px wide |
-| `body-share` | First source text occupies at least 60% of the compact viewport height |
+| `header-controls` | Visible header control count; measured without a fixed target |
+| `composer-dock` | Empty dock height; measured without a fixed target |
+| `body-share` | First source text's share of viewport height; measured without a fixed target |
 | `menu-in-viewport` | Open action menus and their items remain in the viewport |
 | `overflow` | Horizontal overflow at most 1px |
 | `touch-44` | No visible controls below 44px in either dimension at compact widths, excluding source text |
 | `min-font` | No visible text below 12px |
-| `font-size-values` | At most 8 declared font sizes |
-| `border-radius-values` | At most 3 scalar radius values, excluding square, circle, and pill shapes |
+| `font-size-values` | Declared font-size count; measured without a fixed target |
+| `border-radius-values` | Scalar radius count, excluding square, circle, and pill shapes; measured without a fixed target |
 
-Compact means at most 760px. A `null` pass value means a measurement is recorded without scoring it at that width. Inspect selectors and the screenshot before interpreting a missing or unexpected value. Gallery metrics do not fail the capture run; browser tests choose which measurements to assert.
+Compact means at most 760px. A `null` pass value means a measurement is recorded without scoring it. Control counts, layout proportions and token variety inform visual review without prescribing a design. Inspect selectors and the screenshot before interpreting a missing or unexpected value. Gallery metrics do not fail the capture run; browser tests choose which measurements to assert.

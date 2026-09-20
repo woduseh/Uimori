@@ -5,6 +5,7 @@ import {
   diagnosticResponsesBody,
 } from '../core/openai-protocol.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
+import { STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION } from '../core/provider-format.js';
 const record = (value: Json) => value as Record<string, any>;
 const request = (): ProviderRequest => ({
   role: 'main',
@@ -439,7 +440,7 @@ describe('native Responses pure protocol (no live calls)', () => {
         },
       },
     });
-    expect(encoded.instructions).toContain('provider-supplied translation schema');
+    expect(encoded.instructions).toContain(STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION);
     expect(JSON.stringify(encoded.input)).toContain('Turn LEFT.');
     input.generation!.structuredOutput = false;
     expect(record(encodeResponses(input).body)).not.toHaveProperty('text');

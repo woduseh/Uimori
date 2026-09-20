@@ -21,14 +21,16 @@ import { Store } from '../server/store.js';
 import { freezeLoreContext } from '../server/lore-context.js';
 import { validateArchivedLoreContext } from '../server/lore-context-archive.js';
 import { captureLogicalHistory } from '../server/prompt-snapshot.js';
+import { freezeReservationSnapshot } from '../server/reservation-snapshot.js';
 import {
+  contextSourceRefs,
   fitFixedLoreContext,
   measureMainContext,
   seedContextPlan,
   withContextProjection,
 } from '../server/context-planning.js';
 import { executeTool } from '../core/provider.js';
-import { estimateContextTokens } from '../core/context-budget.js';
+import { estimateContextTokens, MIN_INPUT_TOKEN_LIMIT } from '../core/context-budget.js';
 import { DEFAULT_LORE_CONTEXT, type RetainedLore } from '../core/lore-context.js';
 import type { Connection, Content, ModelPreset } from '../core/product.js';
 import type { Run, RunSnapshot, Source } from '../core/types.js';
@@ -39,6 +41,7 @@ const scene = '비 오는 항구에서 미라는 지도를 살펴봐요. 선택�
 const summaryText =
   '이전 장면에서 미라는 항구의 지도를 살폈어요. 사용자는 미라의 선택을 대신 정하지 말라고 요청했어요.';
 const finalText = '미라는 젖은 지도를 조심스럽게 펼쳤어요.';
+const nextRequest = '미라가 지도를 펼치는 다음 장면을 써 주세요.';
 const owned: { directory: string; app?: App; store?: Store }[] = [];
 type Body = {
   role: string;
@@ -153,6 +156,46 @@ async function seed(
     run.snapshot.settings
   );
 }
+
+async function lorePressureBudget(store: Store, chatId: string) {
+  const now = new Date();
+  const reserved = freezeReservationSnapshot(store, snapshot(store, chatId, nextRequest), {
+    purpose: 'preview-main',
+    executionClock: () => ({ iso: now.toISOString(), unix: Math.floor(now.getTime() / 1000) }),
+  });
+  const prepared = seedContextPlan(
+    freezeLoreContext(store, await prepareNativeRisuReadOnly(reserved, 'context'))
+  );
+  const references = prepared.loreContext!.entries;
+  expect(references).toHaveLength(3);
+  const measure = (entries: RetainedLore[], includeHistory: boolean) => {
+    const projected = structuredClone(prepared);
+    const context = projected.loreContext!;
+    context.entries = entries;
+    context.stats.retainedEntries = entries.length;
+    context.stats.retainedChars = entries.reduce((sum, entry) => sum + entry.text.length, 0);
+    context.stats.droppedEntries += references.length - entries.length;
+    return measureMainContext(
+      withContextProjection(projected, includeHistory ? [] : contextSourceRefs(projected), null)
+    ).estimatedInputTokens;
+  };
+  // A is newest; B then C must be evicted. Place the budget between measured costs:
+  // all fixed references trigger eviction, two cannot meet its target, and one plus
+  // the actual conversation fits below that target without a summary call.
+  const allFixed = measure(references, false);
+  const twoFixed = measure([references[0], references[2]], false);
+  const oneWithHistory = measure([references[0]], true);
+  const minimum = Math.max(MIN_INPUT_TOKEN_LIMIT, Math.ceil(oneWithHistory / 0.75));
+  const maximum = Math.floor(Math.min(allFixed / 0.85, twoFixed / 0.75));
+  expect(minimum, 'Fixture must leave room between retention and eviction costs').toBeLessThan(
+    maximum
+  );
+  return {
+    inputTokenLimit: Math.floor((minimum + maximum) / 2),
+    relaxedInputTokenLimit: Math.ceil(measure(references, true) / 0.75),
+  };
+}
+
 async function fixture(kind: 'lore-pressure' | 'history-pressure') {
   const item = await directory(),
     app = (item.app = await createApp({
@@ -244,14 +287,13 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     endpoint,
     enabled: true,
   }) as Connection;
-  const model = app.store.product.model({
+  let model = app.store.product.model({
     title: 'Synthetic bounded model',
     connectionId: connection.id,
     modelId: 'synthetic-context-lore',
     maxOutputTokens: 8192,
-    // Every body carries per-run UUIDs and hashes, and the o200k estimate of the same
-    // body shape moves about 70 tokens between runs. Both fixtures must stay far from the
-    // 85% trigger and 75% target, or the estimate decides compaction by chance.
+    // The history-pressure case needs compaction; the lore-pressure case derives
+    // its budget from the complete measured request below.
     inputTokenLimit: 10_000,
     temperature: null,
   }) as ModelPreset;
@@ -272,6 +314,23 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     translationPolicy: workspace.translationPolicy,
     contextModel: { id: model.id },
   });
+  let relaxedInputTokenLimit = model.inputTokenLimit!;
+  if (kind === 'lore-pressure') {
+    const budget = await lorePressureBudget(app.store, chat.id);
+    relaxedInputTokenLimit = budget.relaxedInputTokenLimit;
+    model = app.store.product.model(
+      {
+        title: model.title,
+        connectionId: model.connectionId,
+        modelId: model.modelId,
+        maxOutputTokens: model.maxOutputTokens,
+        inputTokenLimit: budget.inputTokenLimit,
+        temperature: model.temperature,
+        expectedRevision: model.revision,
+      },
+      model.id
+    ) as ModelPreset;
+  }
   const bodies: Body[] = [];
   vi.mocked(fetch).mockImplementation(async (url, options) => {
     expect(String(url)).toBe(endpoint);
@@ -283,7 +342,7 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     );
     return complete(body.role === 'context' ? summaryText : finalText);
   });
-  return { app, chatId: chat.id, sources, lore, model, bodies };
+  return { app, chatId: chat.id, sources, lore, model, bodies, relaxedInputTokenLimit };
 }
 async function start(app: App, chatId: string) {
   const chat = app.store.chat(chatId);
@@ -292,7 +351,7 @@ async function start(app: App, chatId: string) {
     url: `/api/chats/${chatId}/runs`,
     headers: { host: '127.0.0.1' },
     payload: {
-      request: '미라가 지도를 펼치는 다음 장면을 써 주세요.',
+      request: nextRequest,
       expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       idempotencyKey: randomUUID(),
@@ -338,8 +397,7 @@ describe('automatic summary and retained lore at the same input boundary', () =>
     const run = await terminal(f.app, started.id),
       context = run.snapshot.loreContext!,
       retained = context.entries;
-    expect(retained.length).toBeGreaterThan(0);
-    expect(retained.length).toBeLessThan(candidates.length);
+    expect(retained).toHaveLength(1);
     orderedSubset(retained, candidates);
     expect(context.stats.reasons).toContain('overall-context-budget');
     expect(context.stats.droppedEntries).toBe(candidates.length - retained.length);
@@ -361,7 +419,7 @@ describe('automatic summary and retained lore at the same input boundary', () =>
         connectionId: f.model.connectionId,
         modelId: f.model.modelId,
         maxOutputTokens: f.model.maxOutputTokens,
-        inputTokenLimit: 20000,
+        inputTokenLimit: f.relaxedInputTokenLimit,
         temperature: null,
         expectedRevision: f.model.revision,
       },

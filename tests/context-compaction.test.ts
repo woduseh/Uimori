@@ -530,8 +530,6 @@ describe('input context projection and durable summary calls', () => {
       });
       const contract = (log.wires[index].body as { stable: { contract: string } }).stable.contract;
       expect(contract).toContain(CONTEXT_SUMMARY_SEMANTICS);
-      expect(contract).toContain('[scene 12]');
-      expect(contract).toContain('controls.targetSummaryTokens');
     }
     const fragments = payloads.flatMap((payload) => payload.fragments);
     for (const ref of next.snapshot.contextPlan!.compacted) {

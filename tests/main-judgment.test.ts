@@ -345,12 +345,7 @@ test('preserves the whole Unicode response and only asks about service refusal',
   });
   expect(mainJudgmentRequest(input).state).toEqual({ response: candidate });
   expect(Object.keys(mainJudgmentRequest(input).questions)).toEqual(['explicitRefusal']);
-  expect(mainJudgmentRequest(input).questions.explicitRefusal.instructions).toContain(
-    'Character dialogue, quoted refusals'
-  );
-  expect(mainJudgmentRequest(input).questions.explicitRefusal.instructions).toContain(
-    'Planning, analysis, answers, useful clarification questions'
-  );
+  expect(mainJudgmentRequest(input).questions.explicitRefusal.type).toBe('noul');
 });
 
 test('sends and archives the entire long response, including its middle', async () => {

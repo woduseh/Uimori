@@ -3,6 +3,7 @@ import { nativeContent } from './fixtures/native-content.js';
 import { packageContext } from '../core/package-context.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
+import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
@@ -507,7 +508,7 @@ describe('server main runner through the actual loopback adapter', () => {
     expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('AUXILIARY_ONLY');
     expect(
       compileSnapshotPrompt(snapshot).promptCompilation!.messages[0].content[0].text
-    ).toContain('An (OOC: ...) request is an author direction inside the fiction');
+    ).toContain(DEFAULT_MAIN_PROMPT);
     snapshot.profile!.packages = [];
     snapshot.profile!.packageAttachments = [];
     snapshot.resources = [];

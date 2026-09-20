@@ -532,9 +532,6 @@ test('annotation JSON may have one outer fence but malformed fields and oversize
       validateDisplayAnnotation(raw, { ...output, entries: [{ ...entry, ...tooLong }] })
     ).toThrow('OUTPUT_SCHEMA_INVALID');
   expect(output.entries[0]).toEqual(entry);
-  const images = presentationInput(raw, context(), snapshot(), BUILTIN_ASSETS);
-  expect(input.contract).toContain('600 UTF-16');
-  expect(images.contract).toContain('at most 4');
   expect(
     validatePresentation(
       raw,

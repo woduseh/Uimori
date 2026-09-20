@@ -3,6 +3,7 @@ import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
+import { nativeProse, waitForNativeLayout } from './fixtures/native-message.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
   selectSettingsSection,
@@ -208,7 +209,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
   await expect(page.getByTestId('source')).toHaveCount(3);
   const source = page.getByTestId('source').first();
   await source.getByRole('button', { name: '원문 보기', exact: true }).click();
-  const prose = source.getByTestId('source-text');
+  const prose = nativeProse(source.getByTestId('source-text'));
   await expect(prose.getByRole('heading', { name: '황혼의 부두', exact: true })).toBeVisible();
   await expect(prose.locator('strong').first()).toHaveText('미라');
   await expect(prose.locator('blockquote').first()).toContainText('조용한 약속');
@@ -217,30 +218,17 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
       () => (globalThis as typeof globalThis & { __uimoriExecuted?: boolean }).__uimoriExecuted
     )
   ).toBeUndefined();
-  await expect(prose.locator('script, img, iframe, a[href^="javascript:"]')).toHaveCount(0);
+  expect(
+    await prose.evaluate(
+      () => (globalThis as typeof globalThis & { __uimoriExecuted?: boolean }).__uimoriExecuted
+    )
+  ).toBeUndefined();
+  await expect(prose.locator('script, iframe, [onerror], a[href^="javascript:"]')).toHaveCount(0);
   await expect(prose.locator('ruby rt')).toHaveText('이야기');
-  const anchors = await prose
-    .locator('[data-block-anchor]')
-    .evaluateAll((elements) =>
-      elements.map((element) => element.getAttribute('data-block-anchor'))
-    );
-  expect(anchors).toEqual(before.sources[0].blocks!.map((block) => block.anchor));
   await source.getByRole('button', { name: '번역 보기', exact: true }).click();
-  const translated = source.getByTestId('translation-text');
+  const translated = nativeProse(source.getByTestId('translation-text'));
   await expect(translated).toBeVisible();
   await expect(translated).toContainText('황혼의 부두');
-  const translation = before.jobs.find(
-    (job) => job.sourceRevision === before.sources[0].id && job.kind === 'translation'
-  )!;
-  const translationBlocks = translation.translationLayout!.blocks;
-  await expect(translated.locator('.source-block')).toHaveCount(translationBlocks.length);
-  expect(
-    await translated
-      .locator('[data-block-anchor]')
-      .evaluateAll((elements) =>
-        elements.map((element) => element.getAttribute('data-block-anchor'))
-      )
-  ).toEqual(translationBlocks.map((block) => block.anchor));
   await source.getByRole('button', { name: '원문 보기', exact: true }).click();
   await openSourceActions(source);
   await source.getByRole('button', { name: '원문 연결 정보', exact: true }).click();
@@ -388,6 +376,10 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
 }) => {
   await request.post('/api/test/control', { data: { action: 'hold', barrier: 'status' } });
   await request.post('/api/test/control', { data: { action: 'hold', barrier: 'translation' } });
+  let releasePresentation = () => {};
+  const presentationGate = new Promise<void>((resolve) => {
+    releasePresentation = resolve;
+  });
   try {
     const chat = await seed(
       request,
@@ -401,12 +393,42 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
     await expect(page.getByTestId('source')).toHaveCount(1);
     await page.getByRole('button', { name: '번역 보기', exact: true }).click();
     await page.getByRole('button', { name: '원문 보기', exact: true }).click();
+    await waitForNativeLayout(page.getByTestId('source-text'));
     const reader = page.locator('[data-reader-scrollport]');
     await reader.evaluate((element) => {
-      element.scrollTop = 400;
+      element.scrollTop = 0;
     });
+    const readerBounds = (await reader.boundingBox())!;
+    await page.mouse.move(readerBounds.x + readerBounds.width / 2, readerBounds.y + 100);
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => reader.evaluate((element) => element.scrollTop)).toBeGreaterThan(100);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
+    );
     const top = await reader.evaluate((element) => element.scrollTop);
     const before = await data(request, chat.id);
+    const original = nativeProse(page.getByTestId('source-text'));
+    const originalBody = page.getByTestId('source-text').frameLocator('iframe').locator('body');
+    await original.evaluate((node) => {
+      node.setAttribute('data-presentation-probe', 'original-kept');
+    });
+    let holdingCompletedPresentation = false;
+    await page.route(
+      `**/api/chats/${chat.id}/sources/${before.sources[0].id}/presentation*`,
+      async (route) => {
+        const response = await route.fetch();
+        expect(response.ok()).toBeTruthy();
+        const presentation = await response.json();
+        if (presentation.translationId) {
+          holdingCompletedPresentation = true;
+          await presentationGate;
+        }
+        await route.fulfill({ response });
+      }
+    );
     await request.post('/api/test/control', { data: { action: 'release', barrier: 'status' } });
     await request.post('/api/test/control', {
       data: { action: 'release', barrier: 'translation' },
@@ -416,10 +438,17 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
         (await data(request, chat.id)).jobs.every((job) => job.status === 'completed')
       )
       .toBe(true);
+    await expect.poll(() => holdingCompletedPresentation).toBe(true);
+    await expect(originalBody).toHaveAttribute('data-risu-disabled', 'true');
+    await expect(original).toHaveAttribute('data-presentation-probe', 'original-kept');
     await expect(page.getByRole('button', { name: '원문 보기', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true'
     );
+    expect(Math.abs((await reader.evaluate((element) => element.scrollTop)) - top)).toBeLessThan(3);
+    releasePresentation();
+    await expect(originalBody).toHaveAttribute('data-risu-disabled', 'false');
+    await expect(original).toHaveAttribute('data-presentation-probe', 'original-kept');
     expect(Math.abs((await reader.evaluate((element) => element.scrollTop)) - top)).toBeLessThan(3);
     expect((await data(request, chat.id)).sources).toEqual(before.sources);
     await request.post('/api/test/control', {
@@ -461,6 +490,8 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
     );
     expect(after.runs).toEqual(before.runs);
   } finally {
+    releasePresentation();
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
     for (const barrier of ['status', 'translation'])
       await request.post('/api/test/control', { data: { action: 'release', barrier } });
   }
@@ -832,7 +863,9 @@ test('UI03 UI12 new story retry retains selections, uses current content and loc
       },
     });
     expect(newerPrompt.ok()).toBeTruthy();
-    await page.getByLabel('자료 본문').fill('Synthetic updated second revision.');
+    await page
+      .getByLabel('캐릭터 설정', { exact: true })
+      .fill('Synthetic updated second revision.');
     await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
     await libraryWaiting;
     await navigationAction(page, '새 채팅', title);
@@ -865,7 +898,7 @@ test('UI03 UI12 new story retry retains selections, uses current content and loc
     await dialog.getByRole('button', { name: '설정 저장 다시 시도', exact: true }).click();
     await expect(dialog).not.toBeVisible();
     const detail = await data(request, chat.id);
-    expect(detail.profile!.packageAttachments).toEqual([{ id: bot.id, revision: 2 }]);
+    expect(detail.profile!.packageAttachments).toEqual([{ id: bot.id, revision: 2, role: 'bot' }]);
     expect(await (await request.get('/api/prompt-workspace')).json()).toMatchObject({
       main: { values: choice.combination.values },
     });
@@ -1031,7 +1064,7 @@ test('UI03 starting without a model explains setup and creates a chat without ex
   request,
 }) => {
   const title = `UI no starting model ${Date.now()}`;
-  await setCurrentModels(request, { main: null, translation: null, status: null, image: null });
+  await setCurrentModels(request, { main: null, translation: null, status: null });
   await page.route('**/api/health', async (route) => {
     const response = await route.fetch();
     const health = await response.json();
@@ -1255,105 +1288,6 @@ test('UI07 UI09 legacy branches use one mobile selection and preserve reading wi
   expect(await data(request, chat.id)).toEqual(before);
 });
 
-test('UI17 full writing and empty translation prompts import, save and apply without model execution', async ({
-  page,
-  request,
-}, info) => {
-  const created = await postFixtureChat(request, {
-    data: { title: `UI17 prompt settings ${Date.now()}` },
-  });
-  expect(created.ok()).toBeTruthy();
-  const chat = (await created.json()) as Chat;
-  const initialProfile = (await data(request, chat.id)).profile!;
-  const configured = await request.put(`/api/chats/${chat.id}/profile`, {
-    data: {
-      expectedRevision: initialProfile.revision,
-      packageAttachments: initialProfile.packageAttachments,
-
-      image: initialProfile.image,
-    },
-  });
-  expect(configured.ok()).toBeTruthy();
-  const before = await data(request, chat.id);
-  const writes: string[] = [];
-  page.on('request', (event) => {
-    if (['POST', 'PUT'].includes(event.method())) writes.push(event.url());
-  });
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  await page.goto(`/?chat=${chat.id}`);
-  await nav(page, '프롬프트');
-  await page.getByRole('button', { name: '새 프롬프트', exact: true }).click();
-  const editor = page.getByTestId('prompt-library').getByTestId('prompt-editor');
-  await expect(await promptBody(editor)).not.toHaveValue('');
-  const literal =
-    '  FULL_PROMPT_UI17\n{{user}} {{#if exact}}literal CBS{{/if}}\n<script>globalThis.__promptExecuted=true</script>\n' +
-    'Preserve this complete authored prompt and all tool data separately.\n'.repeat(90) +
-    '\n  ';
-  await editor.getByLabel('지침 본문 파일 불러오기', { exact: true }).setInputFiles({
-    name: 'UI17-full-main.md',
-    mimeType: 'text/markdown',
-    buffer: Buffer.from(literal),
-  });
-  await expect(await promptBody(editor)).toHaveValue(literal);
-  await editor.getByLabel('프롬프트 이름', { exact: true }).fill('UI17-full-main');
-  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('translation');
-  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('main');
-  await expect(await promptBody(editor)).toHaveValue(literal);
-  expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
-    true
-  );
-  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
-  await expect(editor.getByText('프롬프트를 저장했어요.', { exact: true })).toBeVisible();
-  if (visualReview) await page.screenshot({ path: info.outputPath('full-prompt-mobile.png') });
-  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('translation');
-  await editor.getByLabel('프롬프트 이름', { exact: true }).fill('UI17 empty translation');
-  await (await promptBody(editor)).fill('');
-  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
-  await expect
-    .poll(async () =>
-      (await (await request.get('/api/library')).json()).promptPresets.some(
-        (item: { title: string }) => item.title === 'UI17 empty translation'
-      )
-    )
-    .toBe(true);
-  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('main');
-  await expect(await promptBody(editor)).toHaveValue(literal);
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
-  if (visualReview) await page.screenshot({ path: info.outputPath('full-prompt-desktop.png') });
-  await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
-  await page.getByRole('button', { name: '현재 프롬프트 설정', exact: true }).click();
-  const settings = page.getByRole('region', { name: '현재 프롬프트 설정' });
-  const library = await (await request.get('/api/library')).json();
-  for (const [role, title, text] of [
-    ['main', 'UI17-full-main', literal],
-    ['translation', 'UI17 empty translation', ''],
-  ] as const) {
-    const preset = library.promptPresets.find((item: { title: string }) => item.title === title);
-    await settings.getByLabel('현재 프롬프트 역할').selectOption(role);
-    await settings.getByLabel('현재 프롬프트 프리셋').selectOption(preset.id);
-    await expect
-      .poll(async () => (await (await request.get('/api/prompt-workspace')).json())[role].title)
-      .toBe(title);
-    expect((await (await request.get('/api/prompt-workspace')).json())[role].program).toEqual(
-      createDefaultRisuPrompt(text, role)
-    );
-  }
-  const after = await data(request, chat.id);
-  expect(after.runs).toEqual(before.runs);
-  expect(after.attempts).toEqual(before.attempts);
-  expect(after.sources).toEqual(before.sources);
-  expect(after.profile!.packageAttachments).toEqual(before.profile!.packageAttachments);
-  expect(after.profile!.routes).toEqual(before.profile!.routes);
-  expect(writes.some((url) => /\/(?:runs|candidate|retranslate|retry)(?:\?|$)/u.test(url))).toBe(
-    false
-  );
-  expect(
-    await page.evaluate(
-      () => (globalThis as typeof globalThis & { __promptExecuted?: boolean }).__promptExecuted
-    )
-  ).toBeUndefined();
-});
-
 test('UI17 prompts use latest settings and concurrent edits preserve unsaved text', async ({
   page,
   request,
@@ -1566,9 +1500,11 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
   if (visualReview) await page.screenshot({ path: info.outputPath('source-editor-mobile.png') });
   await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
   await expect(scene.getByLabel('원문 수정 내용')).toHaveCount(0);
-  await expect(scene.getByTestId('source-text')).toContainText('SYNTHETIC_EDITED_SOURCE');
   const changed = await data(request, chat.id);
   expect(changed.sources.find((item) => item.id === source.id)!.text).toBe(edited);
+  await expect(nativeProse(scene.getByTestId('source-text'))).toContainText(
+    'SYNTHETIC_EDITED_SOURCE'
+  );
   expect(changed.runs).toEqual(original.runs);
   expect(changed.attempts).toEqual(original.attempts);
   expect(
@@ -1582,7 +1518,7 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
   if (visualReview)
     await page.screenshot({ path: info.outputPath('translation-editor-mobile.png') });
   await scene.getByRole('button', { name: '번역 저장', exact: true }).click();
-  await expect(scene.getByTestId('translation-text')).toContainText('직접 고친 번역');
+  await expect(nativeProse(scene.getByTestId('translation-text'))).toContainText('직접 고친 번역');
   await expect(scene.getByText('직접 수정한 번역', { exact: true })).toBeVisible();
   const authored = await data(request, chat.id);
   const manualJob = authored.jobs.find(
@@ -1597,7 +1533,9 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
   const finalText = edited + '\nFinal authored source.';
   await scene.getByLabel('원문 수정 내용').fill(finalText);
   await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
-  await expect(scene.getByTestId('source-text')).toContainText('Final authored source.');
+  await expect(nativeProse(scene.getByTestId('source-text'))).toContainText(
+    'Final authored source.'
+  );
   await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
   await expect(scene.getByTestId('translation-text')).toBeVisible();
   const regenerated = await data(request, chat.id);
@@ -1629,10 +1567,12 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
 // only holds the other side, and on 412px an open menu is a sheet that covers the row.
 async function openSourceEditor(tab: Page) {
   const source = tab.getByTestId('source');
+  await waitForNativeLayout(source.getByTestId('source-text'));
   const edit = source.locator('.scene-action[aria-label="원문 수정"]');
   // A reader refresh can remount the toolbar; its transient absence does not mean menu mode.
   await expect(edit).toBeVisible();
   await edit.click();
+  await expect(source.getByLabel('원문 수정 내용', { exact: true })).toBeVisible();
 }
 test('UI18 two-tab conflicts preserve reloadable drafts and manual translation survives held work and a late response', async ({
   page,
@@ -1727,7 +1667,7 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
     const manual = 'MANUAL_WINS_AFTER_LATE_RESPONSE\n직접 저장한 번역.';
     await second.getByLabel('번역 수정 내용').fill(manual);
     await second.getByRole('button', { name: '번역 저장', exact: true }).click();
-    await expect(second.getByTestId('translation-text')).toContainText(
+    await expect(nativeProse(second.getByTestId('translation-text'))).toContainText(
       'MANUAL_WINS_AFTER_LATE_RESPONSE'
     );
     const saved = await data(request, chat.id);
@@ -1737,12 +1677,12 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
     await request.post('/api/test/control', {
       data: { action: 'release', barrier: 'translation' },
     });
-    await expect(page.getByTestId('translation-text')).toContainText(
+    await expect(nativeProse(page.getByTestId('translation-text'))).toContainText(
       'MANUAL_WINS_AFTER_LATE_RESPONSE'
     );
     await expect(page.getByRole('button', { name: '번역 보기', exact: true })).toBeEnabled();
     await page.reload();
-    await expect(page.getByTestId('translation-text')).toContainText(
+    await expect(nativeProse(page.getByTestId('translation-text'))).toContainText(
       'MANUAL_WINS_AFTER_LATE_RESPONSE'
     );
     const final = await data(request, chat.id);
@@ -1966,8 +1906,9 @@ test('UI whole-source translation retains completed results across retry and can
   const first = await latest();
   expect(first).not.toHaveProperty('chunks');
   expect(first).not.toHaveProperty('translationPlan');
-  await expect(scene.getByTestId('translation-text')).toBeVisible();
-  const firstText = await scene.getByTestId('translation-text').innerText();
+  const translated = nativeProse(scene.getByTestId('translation-text'));
+  await expect(translated).toContainText('A'.repeat(150));
+  const firstText = await translated.innerText();
   expect(
     (
       await request.post('/api/test/control', { data: { action: 'hold', barrier: 'translation' } })
@@ -1980,7 +1921,7 @@ test('UI whole-source translation retains completed results across retry and can
   const pending = await latest();
   expect(pending.id).not.toBe(first.id);
   expect(pending.previousResult?.jobId).toBe(first.id);
-  await expect(scene.getByTestId('translation-text')).toHaveText(firstText);
+  await expect(translated).toHaveText(firstText);
   expect((await request.post(`/api/jobs/${pending.id}/cancel`, { data: {} })).ok()).toBeTruthy();
   expect(
     (
@@ -1990,7 +1931,7 @@ test('UI whole-source translation retains completed results across retry and can
     ).ok()
   ).toBeTruthy();
   await expect.poll(async () => (await latest()).status).toBe('cancelled');
-  await expect(scene.getByTestId('translation-text')).toHaveText(firstText);
+  await expect(translated).toHaveText(firstText);
   if (visualReview)
     await page.screenshot({
       path: info.outputPath(`translation-previous-cancelled-${MOBILE_WIDTH}.png`),

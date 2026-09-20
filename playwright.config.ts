@@ -17,7 +17,10 @@ const executablePath =
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*browser.spec.ts',
+  testIgnore:
+    process.env.UIMORI_PRIVATE_MATERIALS === '1' ? [] : ['**/risu-native-samples-browser.spec.ts'],
   fullyParallel: false,
+  forbidOnly: true,
   workers: 1,
   retries: 0,
   timeout: 30000,
