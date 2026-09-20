@@ -1,7 +1,9 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
   appendLoreReads,
+  DEFAULT_LORE_CONTEXT,
   validateLoreContextPolicy,
   type LoreContextSnapshot,
   type LoreDependency,
@@ -160,7 +162,7 @@ export function selectLoreContext(
       previous,
       reads,
       {
-        ...policy,
+        ...DEFAULT_LORE_CONTEXT,
         maxRetainedChars: Number.MAX_SAFE_INTEGER,
         maxRetainedEntries: Number.MAX_SAFE_INTEGER,
       },
@@ -187,7 +189,8 @@ export function selectLoreContext(
     permitted(previous),
     permitted(reads),
     policy,
-    dependencies.map((d) => d.sourceRevision)
+    dependencies.map((d) => d.sourceRevision),
+    countTextTokens
   );
   if (selected.droppedEntries) reasons.push('retention-budget');
   return {
@@ -200,6 +203,9 @@ export function selectLoreContext(
       entries: selected.entries,
       stats: {
         retainedChars: selected.retainedChars,
+        ...(selected.retainedTokens !== undefined
+          ? { retainedTokens: selected.retainedTokens }
+          : {}),
         retainedEntries: selected.entries.length,
         appendedChars: selected.appendedChars,
         droppedEntries: droppedEntries + selected.droppedEntries,

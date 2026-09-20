@@ -6,37 +6,95 @@ import {
 } from './judgment.js';
 
 export type LorePlacement = { placement: 'background' | 'scene'; group?: string; order?: number };
-export type LoreContextPolicy = {
+type LoreContextCommon = {
   enabled: boolean;
-  maxRetainedChars: number;
   maxRetainedEntries: number;
-  maxPinnedChars: number;
   judgment: JevJudgmentPolicy;
 };
-export const DEFAULT_LORE_CONTEXT: LoreContextPolicy = Object.freeze({
+/** Kept for stored profiles, immutable Run snapshots and their archive hashes. */
+export type LegacyLoreContextPolicy = LoreContextCommon & {
+  maxRetainedChars: number;
+  maxPinnedChars: number;
+  tokenEstimator?: never;
+  maxRetainedTokens?: never;
+  maxPinnedTokens?: never;
+};
+export const LORE_TOKEN_ESTIMATOR = 'o200k_base-text-v1' as const;
+export type TokenLoreContextPolicy = LoreContextCommon & {
+  tokenEstimator: typeof LORE_TOKEN_ESTIMATOR;
+  maxRetainedTokens: number;
+  maxPinnedTokens: number;
+  maxRetainedChars?: never;
+  maxPinnedChars?: never;
+};
+export type LoreContextPolicy = LegacyLoreContextPolicy | TokenLoreContextPolicy;
+
+// An absent policy in an old snapshot means these values. Never migrate on read.
+export const DEFAULT_LORE_CONTEXT: LegacyLoreContextPolicy = Object.freeze({
   enabled: true,
   judgment: DEFAULT_JEV_JUDGMENT,
   maxRetainedChars: 48_000,
   maxRetainedEntries: 64,
   maxPinnedChars: 200_000,
 });
+/** New policy defaults, not a conversion of the old character limits. */
+export const DEFAULT_TOKEN_LORE_CONTEXT: TokenLoreContextPolicy = Object.freeze({
+  enabled: true,
+  judgment: DEFAULT_JEV_JUDGMENT,
+  tokenEstimator: LORE_TOKEN_ESTIMATOR,
+  maxRetainedTokens: 16_000,
+  maxRetainedEntries: 64,
+  maxPinnedTokens: 64_000,
+});
+export function isTokenLorePolicy(policy: LoreContextPolicy): policy is TokenLoreContextPolicy {
+  return Object.hasOwn(policy, 'tokenEstimator') && policy.tokenEstimator === LORE_TOKEN_ESTIMATOR;
+}
+export function loreBudget(policy: LoreContextPolicy): {
+  unit: 'tokens' | 'utf16';
+  retained: number;
+  pinned: number;
+} {
+  return isTokenLorePolicy(policy)
+    ? { unit: 'tokens', retained: policy.maxRetainedTokens, pinned: policy.maxPinnedTokens }
+    : { unit: 'utf16', retained: policy.maxRetainedChars, pinned: policy.maxPinnedChars };
+}
+export type LoreTokenCounter = (text: string) => number;
+/** Browser-safe policy code; only server callers supply the local WASM counter. */
+export function measureLoreText(
+  text: string,
+  policy: LoreContextPolicy,
+  countTokens?: LoreTokenCounter
+): number {
+  if (!isTokenLorePolicy(policy)) return text.length;
+  if (!countTokens) throw new Error('LORE_TOKEN_COUNTER_REQUIRED');
+  const count = countTokens(text);
+  if (!Number.isSafeInteger(count) || count < 0) throw new Error('LORE_TOKEN_COUNT_INVALID');
+  return count;
+}
 export function validateLoreContextPolicy(value: unknown): LoreContextPolicy {
   if (value === undefined) return { ...DEFAULT_LORE_CONTEXT };
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new Error('LORE_CONTEXT_POLICY_INVALID');
   const p = value as LoreContextPolicy;
+  const token = isTokenLorePolicy(p);
+  const allowed = token ? DEFAULT_TOKEN_LORE_CONTEXT : DEFAULT_LORE_CONTEXT;
+  const budget = loreBudget(p);
   if (
-    Object.keys(p).some((k) => k !== 'judgment' && !Object.hasOwn(DEFAULT_LORE_CONTEXT, k)) ||
+    Object.keys(p).some((k) => k !== 'judgment' && !Object.hasOwn(allowed, k)) ||
+    (token &&
+      ['maxRetainedTokens', 'maxPinnedTokens', 'maxRetainedEntries', 'enabled', 'judgment'].some(
+        (key) => !Object.hasOwn(p, key)
+      )) ||
     typeof p.enabled !== 'boolean' ||
-    !Number.isSafeInteger(p.maxRetainedChars) ||
-    p.maxRetainedChars < 0 ||
-    p.maxRetainedChars > 200_000 ||
+    !Number.isSafeInteger(budget.retained) ||
+    budget.retained < 0 ||
+    budget.retained > 200_000 ||
     !Number.isSafeInteger(p.maxRetainedEntries) ||
     p.maxRetainedEntries < 0 ||
     p.maxRetainedEntries > 256 ||
-    !Number.isSafeInteger(p.maxPinnedChars) ||
-    p.maxPinnedChars < 1 ||
-    p.maxPinnedChars > 2_000_000
+    !Number.isSafeInteger(budget.pinned) ||
+    budget.pinned < 1 ||
+    budget.pinned > (token ? 1_000_000 : 2_000_000)
   )
     throw new Error('LORE_CONTEXT_POLICY_INVALID');
   return {
@@ -65,6 +123,8 @@ export type LoreContextSnapshot = {
   entries: RetainedLore[];
   stats: {
     retainedChars: number;
+    /** Present only for policies with an explicit tokenEstimator. */
+    retainedTokens?: number;
     retainedEntries: number;
     appendedChars: number;
     droppedEntries: number;
@@ -85,7 +145,8 @@ export function appendLoreReads(
   previous: readonly RetainedLore[],
   reads: readonly RetainedLore[],
   policy: LoreContextPolicy,
-  ancestry: readonly string[]
+  ancestry: readonly string[],
+  countTokens?: LoreTokenCounter
 ) {
   const entries = structuredClone([...previous]);
   let appendedChars = 0;
@@ -109,18 +170,29 @@ export function appendLoreReads(
         appendedChars += text.length;
       }
   }
-  let chars = entries.reduce((n, e) => n + e.text.length, 0),
+  const costs = entries.map((entry) => measureLoreText(entry.text, policy, countTokens));
+  const limit = loreBudget(policy).retained;
+  let used = costs.reduce((sum, cost) => sum + cost, 0),
+    chars = entries.reduce((n, e) => n + e.text.length, 0),
     droppedEntries = 0;
-  while (entries.length > policy.maxRetainedEntries || chars > policy.maxRetainedChars) {
+  while (entries.length > policy.maxRetainedEntries || used > limit) {
     let oldest = 0;
     for (let i = 1; i < entries.length; i++)
       if (ancestry.indexOf(entries[i]!.lastUsed) < ancestry.indexOf(entries[oldest]!.lastUsed))
         oldest = i;
+    used -= costs[oldest]!;
+    costs.splice(oldest, 1);
     chars -= entries[oldest]!.text.length;
     entries.splice(oldest, 1);
     droppedEntries++;
   }
-  return { entries, appendedChars, droppedEntries, retainedChars: chars };
+  return {
+    entries,
+    appendedChars,
+    droppedEntries,
+    retainedChars: chars,
+    ...(isTokenLorePolicy(policy) ? { retainedTokens: used } : {}),
+  };
 }
 /** These are explicitly labelled reference messages, not replayed tool results. */
 export function loreHistory(

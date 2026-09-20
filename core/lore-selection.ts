@@ -14,7 +14,7 @@ import {
 export type LoreSelectionEntry = {
   key: string;
   inputHash: string;
-  /** The 조회 로어 문자 한도 the trim counted against, in UTF-16 code units. */
+  /** Retention budget in the frozen policy unit: legacy UTF-16 or explicit local tokens. */
   budget: number;
   /** Lore ids the model chose, in its own order, after the budget trim. */
   selected: string[];
