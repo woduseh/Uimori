@@ -76,11 +76,16 @@ export async function removeOwned(parent, target) {
   }
   await rm(target, { recursive: true, force: true });
 }
-export async function fingerprint(sourceRoot = root, { buildOnly = false } = {}) {
+export async function fingerprint(
+  sourceRoot = root,
+  { buildOnly = false, verificationOnly = false } = {}
+) {
   const root = sourceRoot;
-  const dirs = buildOnly
-    ? ['core', 'server', 'web', 'src']
-    : ['core', 'server', 'web', 'src', 'tests', 'scripts', 'fixtures'];
+  const dirs = verificationOnly
+    ? ['tests', 'scripts', 'fixtures']
+    : buildOnly
+      ? ['core', 'server', 'web', 'src', 'third_party']
+      : ['core', 'server', 'web', 'src', 'third_party', 'tests', 'scripts', 'fixtures'];
   const config = (await readdir(root)).filter((name) =>
     (buildOnly
       ? /^(package(?:-lock)?\.json|tsconfig(?:\.server)?\.json|vite\.config\.[cm]?[jt]s|\.gitattributes)$/
@@ -91,7 +96,12 @@ export async function fingerprint(sourceRoot = root, { buildOnly = false } = {})
     ...(await Promise.all(dirs.map((dir) => filesBelow(path.join(root, dir))))).flat(),
     ...config.map((name) => path.join(root, name)),
     ...(buildOnly
-      ? ['scripts/build.mjs', 'scripts/build-runner.mjs', 'scripts/lib.mjs']
+      ? [
+          'scripts/build.mjs',
+          'scripts/build-runner.mjs',
+          'scripts/lib.mjs',
+          'scripts/browser-path.mjs',
+        ]
           .map((name) => path.join(root, name))
           .filter(existsSync)
       : []),
@@ -126,34 +136,17 @@ export async function distHash(directory = path.join(root, 'dist')) {
   }
   return hash.digest('hex');
 }
-export async function assertBuild() {
+export async function assertBuild({ checkSource = true } = {}) {
   const manifest = JSON.parse(
     await readFile(path.join(root, 'dist', 'build-identity.json'), 'utf8')
   );
-  if ((await buildFingerprint()).hash !== manifest.sourceHash)
+  if (checkSource && (await buildFingerprint()).hash !== manifest.sourceHash)
     throw new Error('Source fingerprint differs from build. Run npm run build.');
   if ((await distHash()) !== manifest.distHash)
     throw new Error('Compiled build fingerprint mismatch.');
   return manifest;
 }
-/**
- * CI runs on Windows, but a review or a fix often happens on macOS or Linux. Without a local
- * candidate there the harness reports BLOCKED before it starts. `playwright.config.ts` repeats
- * this list on purpose so the Playwright config resolves its browser without server tooling.
- */
-export function browserPath() {
-  if (process.env.UIMORI_BROWSER_PATH) return process.env.UIMORI_BROWSER_PATH;
-  return [
-    'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-    'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/microsoft-edge',
-  ].find(existsSync);
-}
+export { browserPath } from './browser-path.mjs';
 export async function killOwned(child) {
   if (child.exitCode !== null || child.signalCode !== null)
     return { pid: child.pid, alreadyExited: true };

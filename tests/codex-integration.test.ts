@@ -317,7 +317,7 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     .toBe(0);
   expect(app.store.product.attempts(chat.id)).toHaveLength(6);
   expect(judgments).toHaveLength(3);
-  expect(judgments.find((item) => item.questions.explicitRefusal)?.state.prefix).toBe(
+  expect(judgments.find((item) => item.questions.explicitRefusal)?.state.response).toBe(
     'The keeper opened the gate.'
   );
   const attempts = app.store.product.attempts(chat.id);

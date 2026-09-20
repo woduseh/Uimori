@@ -2,18 +2,6 @@ import type { ModelGeneration, ProviderProtocol } from './product.js';
 import { providerDefinition } from './provider-definitions.js';
 import { ProviderContractError } from './provider-errors.js';
 
-/** Operating guideline for reviewing the hint table; it never blocks execution. */
-export const MODEL_SUPPORT_POLICY = {
-  supportWindowMonths: 6,
-  checkedAt: '2026-09-09',
-  exceptions: [
-    {
-      id: 'gemini-3.1-pro-preview',
-      reason: 'User-selected baseline model',
-      releasedAt: '2026-02-19',
-    },
-  ],
-} as const;
 export const GENERATION_KEYS = [
   'maxOutputTokens',
   'temperature',

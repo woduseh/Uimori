@@ -11,6 +11,7 @@ import {
   localVerificationEnv,
   assertBuild,
   buildFingerprint,
+  root,
   fingerprint,
   browserPath,
   startServer,
@@ -107,6 +108,7 @@ export async function runBrowserVerification({
       before = await fingerprint();
     summary.identity = identity;
     summary.verificationIdentity = before;
+    const verificationHash = (await fingerprint(root, { verificationOnly: true })).hash;
     if (identity.sourceHash !== (await buildFingerprint()).hash)
       throw new Error('Source changed during initial build identity check');
     const temp = path.join(runtime, 'temp');
@@ -174,12 +176,19 @@ export async function runBrowserVerification({
       summary.screenshots = screenshots.map((file) => path.relative(directory, file));
     }
     assertNotCancelled();
+    const finalBuild = await assertBuild({ checkSource: false });
     if (
-      (await assertBuild()).buildId !== identity.buildId ||
-      (await fingerprint()).hash !== before.hash
+      finalBuild.buildId !== identity.buildId ||
+      verificationHash !== (await fingerprint(root, { verificationOnly: true })).hash
     )
-      throw new Error(`Build/source identity changed during ${name} verification`);
-    summary.identityVerifiedAt = new Date().toISOString();
+      throw new Error(`Build or verification inputs changed during ${name} verification`);
+    summary.finalSourceHash = (await fingerprint()).hash;
+    summary.reusableForCurrentSource = summary.finalSourceHash === before.hash;
+    if (summary.reusableForCurrentSource) summary.identityVerifiedAt = new Date().toISOString();
+    else
+      summary.limitations.push(
+        'Source changed during this invocation. Results describe the recorded build only, not the current source.'
+      );
   } catch (error) {
     failures.push(error.message);
     if (/spawn EPERM|Browser executable missing/u.test(error.message)) environmentBlocked = true;
@@ -243,7 +252,8 @@ export async function runBrowserVerification({
     process.removeListener('SIGTERM', onTerminate);
     await Promise.all(cancellationCleanup);
     if (summary.identity && !summary.identityVerifiedAt)
-      summary.evidenceIdentity = 'NOT_CONFIRMED_AT_END';
+      summary.evidenceIdentity =
+        summary.reusableForCurrentSource === false ? 'RECORDED_BUILD_ONLY' : 'NOT_CONFIRMED_AT_END';
     summary.status = failures.length ? (environmentBlocked ? 'BLOCKED' : 'FAIL') : 'PASS';
     summary.finishedAt = new Date().toISOString();
     await json(path.join(directory, 'summary.json'), summary);

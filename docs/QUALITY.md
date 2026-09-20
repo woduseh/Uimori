@@ -35,9 +35,11 @@ Feature runners list their selected test files in `scripts/verify-*.mjs`; assert
 
 Actual local Risu materials are excluded from ordinary browser discovery. To run their dedicated suite, set `UIMORI_RISU_SAMPLE_ROOT` for `node scripts/verify-risu-native-samples.mjs`, optionally `UIMORI_RISU_SAMPLE_PRESET` for an external `.risup`, and use `--grep` for selected samples. The runner enables their discovery explicitly. Source files stay read-only and outside Git; rendered private content stays in ignored evidence directories. These checks use a loopback model fixture and do not establish live-provider quality or universal script compatibility.
 
+Local tooling and browser reports distinguish an executed PASS from reuse against current source. Changes to selected tests, runners or fixtures invalidate the invocation; browser runs also reject changed compiled artifacts. An unrelated product-source edit is recorded as `reusableForCurrentSource: false`, without relabeling the executed checks as failures. Release receipts still require unchanged full source identity. Both build and verification fingerprints include runtime vendor inputs in `third_party`.
+
 ## Release checks
 
-The [`release-check` runner](../scripts/release-check.mjs) runs `quality:full` and the selected local feature `verify:*` command. The default area is `verify:browser-smoke`; `--full` adds `verify:redesign`. Release/self-host tooling normally uses `--area verify:selfhost`.
+The [`release-check` runner](../scripts/release-check.mjs) runs `quality:full` and the selected local feature `verify:*` command. The default area is `verify:browser-smoke`; `--full` replaces that default smoke with `verify:redesign`. Explicit feature areas still run alongside the full suite. Release/self-host tooling normally uses `--area verify:selfhost`.
 
 The runner writes a receipt to `output/release/checks/`. It reuses successful checks when source, verification inputs, Node version, platform, and the saved log hash match. A missing or stale build can be rebuilt without repeating valid checks. Failed or interrupted checks remain unresolved; checks never started may stay `NOT_RUN` outside the current selection. Plain terminal output from separately run commands is not an importable receipt. Deployment behavior and source/remote requirements are in [ORACLE-RELEASE](ORACLE-RELEASE.md).
 

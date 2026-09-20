@@ -1,4 +1,11 @@
 import { readerConversation } from '../core/reader-conversation.js';
+import { createReaderSync } from './reader-sync.js';
+import {
+  commandStorageKey,
+  readReadingPosition,
+  readDraftCursor,
+  type ReadingPosition,
+} from './story-storage.js';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { subscribeAppHistory } from './app-history.js';
 import type { Chat, ReaderDetail, Run, Source } from '../core/types.js';
@@ -108,7 +115,7 @@ function definiteRejection(error: unknown): boolean {
   );
 }
 
-type Position = { target?: string; source: string; anchor: string; offset: number; top: number };
+type Position = ReadingPosition;
 export function useStory() {
   const { workspace: promptWorkspace } = usePromptWorkspace();
   const [initial] = useState(() => initialView(true));
@@ -184,9 +191,7 @@ export function useStory() {
     url.searchParams.set('branch', branchId);
     history.replaceState(null, '', url);
   };
-  const savedPosition = JSON.parse(
-    sessionStorage.getItem(`reading:${selected}:${storageBranch}`) || 'null'
-  ) as Position | null;
+  const savedPosition = readReadingPosition(`reading:${selected}:${storageBranch}`);
   readerQuery.current = {
     branch: activeBranchId,
     source:
@@ -277,8 +282,15 @@ export function useStory() {
       readerCache.current = { key: cacheKey, detail: merged };
       setDetail(merged);
       setChats((old) => old.map((chat) => (chat.id === id ? value.chat : chat)));
+      return true;
     }
   }, []);
+  const refreshView = useCallback(
+    async (id: string, incremental = false): Promise<void> => {
+      await refresh(id, incremental);
+    },
+    [refresh]
+  );
   current.current = selected;
   const chatsRequest = useRef(0);
   const loadChats = useCallback(async () => {
@@ -350,11 +362,13 @@ export function useStory() {
     setArchivedContents([]);
     if (!selected) return;
     let alive = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     let firstSnapshot = true;
-    let requestedCursor = 0;
     let reconnect = false;
-    let eventRefreshInFlight = false;
+    const sync = createReaderSync({
+      refresh: (incremental) => refresh(selected, incremental),
+      cursor: () => readerCache.current?.detail.reader.cursor ?? -1,
+      onError: (error) => setError(error instanceof Error ? error.message : String(error)),
+    });
     const openStream = () => {
       const stream = new EventSource(`/api/chats/${selected}/events`);
       stream.onopen = () => {
@@ -400,32 +414,8 @@ export function useStory() {
           }
           reconnect = true;
         }
-        requestedCursor = Math.max(requestedCursor, message.seq ?? 0);
-        if (timer) return;
-        const flush = () => {
-          if (!alive) return;
-          // Serialize event refreshes only. A stalled initial/manual HTTP response
-          // must not block newer SSE state; refreshVersion rejects its late result.
-          if (eventRefreshInFlight) {
-            timer = setTimeout(flush, 100);
-            return;
-          }
-          timer = undefined;
-          const applied = readerCache.current?.detail.reader.cursor ?? -1;
-          if (reconnect || requestedCursor > applied) {
-            const incremental = !reconnect;
-            reconnect = false;
-            eventRefreshInFlight = true;
-            void refresh(selected, incremental)
-              .catch((e) => {
-                if (alive) setError(e.message);
-              })
-              .finally(() => {
-                eventRefreshInFlight = false;
-              });
-          }
-        };
-        timer = setTimeout(flush, 100);
+        sync.request(message.seq ?? 0, reconnect);
+        reconnect = false;
       };
       return stream;
     };
@@ -445,7 +435,7 @@ export function useStory() {
     addEventListener('online', online);
     return () => {
       alive = false;
-      clearTimeout(timer);
+      sync.dispose();
       stream?.close();
       removeEventListener('offline', offline);
       removeEventListener('online', online);
@@ -542,10 +532,7 @@ export function useStory() {
   useLayoutEffect(() => {
     setDraft(sessionStorage.getItem(draftKey) || '');
     setLoreResetDraft(sessionStorage.getItem(`lore-reset:${draftKey}`) === 'true');
-    const cursor = JSON.parse(sessionStorage.getItem(`cursor:${draftKey}`) || 'null') as {
-      start: number;
-      end: number;
-    } | null;
+    const cursor = readDraftCursor(`cursor:${draftKey}`);
     const frame = requestAnimationFrame(() => {
       if (cursor && currentDraftKey.current === draftKey)
         input.current?.setSelectionRange(cursor.start, cursor.end);
@@ -573,7 +560,7 @@ export function useStory() {
     sessionStorage.setItem(draftKey, value);
   }
   function editLoreContextReset(value: boolean) {
-    if (readCommand(`command:${selected}${storageBranch ? `:${storageBranch}` : ''}`)) return;
+    if (readCommand(commandStorageKey(selected, storageBranch))) return;
     setLoreResetDraft(value);
     if (value) sessionStorage.setItem(`lore-reset:${draftKey}`, 'true');
     else sessionStorage.removeItem(`lore-reset:${draftKey}`);
@@ -619,9 +606,7 @@ export function useStory() {
     )
       return;
     const node = reader.current;
-    const saved = JSON.parse(
-      sessionStorage.getItem(`reading:${viewKey}`) || 'null'
-    ) as Position | null;
+    const saved = readReadingPosition(`reading:${viewKey}`);
     const epoch = navigationEpoch.current;
     const frame = requestAnimationFrame(() => {
       if (
@@ -769,7 +754,7 @@ export function useStory() {
     profileDirty ||
     !detail ||
     !!sessionStorage.getItem(`pending-profile:${selected}`) ||
-    !!readCommand(`command:${selected}${storageBranch ? `:${storageBranch}` : ''}`);
+    !!readCommand(commandStorageKey(selected, activeBranchId));
   async function generate(retryRunId?: string, editedRequest?: string): Promise<boolean> {
     if (
       !detail ||
@@ -778,14 +763,16 @@ export function useStory() {
       sessionStorage.getItem(`pending-profile:${selected}`)
     )
       return false;
-    if (activeRun() || (retryRunId && (reuseBlocked || !canReuseRun(retryRunId)))) return false;
     if (editedRequest !== undefined && (!retryRunId || !editedRequest.trim())) return false;
     const retryRun = retryRunId ? visibleRuns.find((run) => run.id === retryRunId)! : undefined;
     const chat = detail.chat;
     const sentKey = draftKey;
     const sentView = viewKey;
-    const commandKey = `command:${chat.id}${storageBranch ? `:${storageBranch}` : ''}`;
+    const commandKey = commandStorageKey(chat.id, activeBranchId);
     const previous = readCommand(commandKey);
+    // Recovering an uncertain admission reuses its key even if SSE already shows a running run.
+    if ((!previous && activeRun()) || (retryRunId && (reuseBlocked || !canReuseRun(retryRunId))))
+      return false;
     if (!previous && !retryRun && !draft.trim()) return false;
     // An uncertain request keeps its original snapshot as well as its key.
     // A newer draft is never silently sent after recovering that earlier request.
@@ -810,15 +797,28 @@ export function useStory() {
         ...old,
         [sentView]: { id: idempotencyKey, startedAt, status, runId },
       }));
-    sessionStorage.setItem(
-      commandKey,
-      JSON.stringify({
-        payload: JSON.stringify(payload),
-        id: idempotencyKey,
-        startedAt,
-        ...(preserveDraft ? { preserveDraft: true } : {}),
-      })
-    );
+    try {
+      if (!previous && sessionStorage.getItem(commandKey)) {
+        setError(
+          '이전 요청 기록을 읽을 수 없어 새 요청을 보내지 않았어요. 기록을 보존한 상태로 복구가 필요해요.'
+        );
+        return false;
+      }
+      sessionStorage.setItem(
+        commandKey,
+        JSON.stringify({
+          payload: JSON.stringify(payload),
+          id: idempotencyKey,
+          startedAt,
+          ...(preserveDraft ? { preserveDraft: true } : {}),
+        })
+      );
+    } catch {
+      setError(
+        '요청 복구 기록을 저장하지 못해 요청을 보내지 않았어요. 브라우저 저장 공간을 확인해 주세요.'
+      );
+      return false;
+    }
     track('sending');
     submitLocks.current.add(sentView);
     setSubmitting([...submitLocks.current]);
@@ -1082,9 +1082,7 @@ export function useStory() {
     (detail.profile.packageAttachments ?? []).every((ref) =>
       allContents.some((item) => refValue(item) === refValue(ref))
     );
-  const pendingCommand = selected
-    ? readCommand(`command:${selected}${viewedBranch ? `:${viewedBranch}` : ''}`)
-    : null;
+  const pendingCommand = selected ? readCommand(commandStorageKey(selected, activeBranchId)) : null;
   const pendingRequest = pendingCommand?.payload.request ?? null;
   const pendingEditedRunId = pendingCommand?.payload.editedRequest
     ? pendingCommand.payload.retryOf
@@ -1168,7 +1166,7 @@ export function useStory() {
     setError,
     setNotice,
     setProfileDirty,
-    refresh,
+    refresh: refreshView,
     loadChats,
     loadLibrary,
     savePosition,

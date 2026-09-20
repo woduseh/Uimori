@@ -21,7 +21,13 @@ export function requiredChecks(area = 'verify:browser-smoke', full = false, scri
     throw new Error(
       'Choose a local feature verify:* script; use --full for the complete regression'
     );
-  return [...new Set(['quality:full', area, ...(full ? ['verify:redesign'] : [])])];
+  return [
+    ...new Set([
+      'quality:full',
+      ...(full && area === 'verify:browser-smoke' ? [] : [area]),
+      ...(full ? ['verify:redesign'] : []),
+    ]),
+  ];
 }
 
 export async function cachedCheckPassed(check, command) {

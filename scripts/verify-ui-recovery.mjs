@@ -5,6 +5,7 @@ await runBrowserVerification({
   scope:
     'Native authoring, saved CHARX/RISUP downloads, retired import UI and isolated message appearance at the selected desktop/mobile dimensions',
   files: [
+    'tests/reader-recovery-browser.spec.ts',
     'tests/ui-recovery-browser.spec.ts',
     'tests/chat-recovery-browser.spec.ts',
     'tests/chat-settings-browser.spec.ts',

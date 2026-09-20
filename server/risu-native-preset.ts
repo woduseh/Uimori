@@ -5,7 +5,7 @@ import type { RunSnapshot } from '../core/types.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 import { resolveTemplateVariableContext } from '../core/template-variables.js';
 import type { RisuContentSource } from '../core/risu-native.js';
-import { nativeRisuContext } from './risu-native-context.js';
+import { nativeRisuContext, nativeRisuPromptContext } from './risu-native-context.js';
 import { evaluateNativeRisuFields } from './risu-native-cbs.js';
 import { nativePromptSlots } from './native-prompt-slots.js';
 import { risuImageHandoffText } from '../core/risu-image-handoff.js';
@@ -81,11 +81,9 @@ export async function prepareNativeRisuPreset(snapshot: RunSnapshot): Promise<Ru
           role: message.role === 'user' ? 'user' : 'char',
           data: message.text,
         })),
-      charName: identity.bot.name,
-      userName: identity.user.name,
+      ...nativeRisuPromptContext(snapshot),
       globalNote: context.globalNoteReplacement,
       templateDefaultVariables: string(source.preset.templateDefaultVariables),
-      now: snapshot.executionClock ? Date.parse(snapshot.executionClock.iso) : 0,
     },
   });
   const next = {

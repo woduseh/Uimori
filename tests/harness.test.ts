@@ -225,12 +225,12 @@ test.each(['missing', 'zero', 'skipped', 'retried', 'global'])(
   }
 );
 
-test.each(['command', 'timeout', 'source', 'tests'])(
+test.each(['command', 'timeout', 'build', 'tests'])(
   'passing assertions cannot hide a %s failure',
   async (fault) => {
     if (fault === 'command') commandFailure.code = 1;
     if (fault === 'timeout') commandFailure.timedOut = true;
-    if (fault === 'source')
+    if (fault === 'build')
       lib.assertBuild
         .mockResolvedValueOnce(identity)
         .mockRejectedValueOnce(new Error('stale build'));
@@ -253,6 +253,27 @@ test('functional mode records separate verification identity', async () => {
   expect(summary.visualReview).toBe(false);
   expect(summary.identity.sourceHash).toBe(identity.sourceHash);
   expect(summary.verificationIdentity.hash).toBe('test-only-change');
+});
+
+test('an unrelated source edit preserves executed results but cannot certify the current source', async () => {
+  let observations = 0;
+  lib.fingerprint.mockImplementation(
+    async (_root: string, options?: { verificationOnly?: boolean }) => ({
+      hash: options?.verificationOnly
+        ? 'same-tests'
+        : ++observations === 1
+          ? 'old-source'
+          : 'new-source',
+    })
+  );
+  const { summary } = await run();
+  expect(summary.status).toBe('PASS');
+  expect(summary.reusableForCurrentSource).toBe(false);
+  expect(summary.identityVerifiedAt).toBeUndefined();
+  expect(summary.evidenceIdentity).toBe('RECORDED_BUILD_ONLY');
+  expect(summary.verificationIdentity.hash).toBe('old-source');
+  expect(summary.finalSourceHash).toBe('new-source');
+  expect(lib.assertBuild).toHaveBeenLastCalledWith({ checkSource: false });
 });
 
 test('focused visual checks narrow the existing selection and record their actual scope', async () => {
