@@ -188,16 +188,18 @@ for (const viewport of viewports) {
       );
       await editor.getByLabel('짧은 입력', { exact: true }).fill('부산');
       await editor.getByLabel('긴 입력', { exact: true }).fill('수정 첫 줄\n수정 둘째 줄');
-      const radios = editor.getByRole('radiogroup', { name: '분위기 강조', exact: true });
-      await expect(radios.getByRole('radio')).toHaveCount(2);
-      await expect(radios.getByRole('radio', { name: 'ON', exact: true })).toBeChecked();
-      await radios.getByRole('radio', { name: 'ON', exact: true }).focus();
-      await page.keyboard.press('ArrowLeft');
-      await expect(radios.getByRole('radio', { name: 'OFF', exact: true })).toBeChecked();
+      const toggle = editor.getByRole('switch', { name: '분위기 강조', exact: true });
+      await expect(toggle).toBeChecked();
+      await toggle.press('Space');
+      await expect(toggle).not.toBeChecked();
+      await toggle.click();
+      await expect(toggle).toBeChecked();
+      await toggle.press('Space');
+      await expect(toggle).not.toBeChecked();
       await expect(editor.getByLabel('시점', { exact: true })).toHaveValue('"0"');
       await editorFits(page, editor, save);
-      const radioBounds = await radios.boundingBox();
-      expect(radioBounds!.width).toBeLessThan(320);
+      const toggleBounds = await toggle.boundingBox();
+      expect(toggleBounds!.width).toBe(44);
       await page.screenshot({ path: info.outputPath(`native-options-${viewport.name}.png`) });
 
       await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
