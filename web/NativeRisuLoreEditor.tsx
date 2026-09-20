@@ -273,14 +273,25 @@ export function NativeRisuLoreEditor({
                   <select
                     aria-label="포함 방식"
                     value={
-                      (moduleLore ? entry.alwaysActive : entry.constant) ? 'always' : 'conditional'
+                      entry.enabled === false
+                        ? 'none'
+                        : (moduleLore ? entry.alwaysActive : entry.constant)
+                          ? 'always'
+                          : 'conditional'
                     }
                     onChange={(e) =>
                       edit({
-                        [moduleLore ? 'alwaysActive' : 'constant']: e.target.value === 'always',
+                        enabled: e.target.value !== 'none',
+                        ...(e.target.value === 'none'
+                          ? {}
+                          : {
+                              [moduleLore ? 'alwaysActive' : 'constant']:
+                                e.target.value === 'always',
+                            }),
                       })
                     }
                   >
+                    <option value="none">미포함</option>
                     <option value="conditional">필요할 때 · 관련성 판단</option>
                     <option value="always">항상 포함</option>
                   </select>
