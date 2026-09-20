@@ -12,7 +12,6 @@ import {
   type ChatOverrideAuthority,
 } from '../server/chat-overrides.js';
 import {
-  chatAttachmentKey,
   chatOverrideHash,
   projectChatPackageCompilation,
   type ChatLoreSelector,
@@ -210,13 +209,13 @@ test('shared module lore with different link overrides keeps distinct request so
   const lore = projected.compiled.pinned.filter((item) => item.sourceKind === 'lore');
   expect(lore).toHaveLength(2);
   expect(lore.map((item) => item.risuSource)).toEqual(
-    scopes.map((scope) => ({
+    scopes.map((_, index) => ({
       sourceRole: 'module',
       sourceName: 'Shared module',
       contentId: pkg.id,
       entryId: pkg.lore[0].id,
       title: 'Memory',
-      sourceScope: chatAttachmentKey(scope),
+      sourceScope: `connection-${index + 1}`,
     }))
   );
   const serialized = serializeRisuLoreSources(lore);
@@ -225,9 +224,7 @@ test('shared module lore with different link overrides keeps distinct request so
   );
   expect(groups).toHaveLength(2);
   groups.forEach((group, index) => {
-    expect(group).toContain(
-      `source_scope="${chatAttachmentKey(scopes[index]).replaceAll('"', '&quot;')}"`
-    );
+    expect(group).toContain(`source_scope="connection-${index + 1}"`);
     expect(group).toContain(`Memory from link ${index}`);
     expect(group).not.toContain(`Memory from link ${1 - index}`);
   });

@@ -233,7 +233,7 @@ export function projectChatPackageCompilation(
   const prefix = `package:${pkg.id}:${attachment.role}`;
   const resources = [
     ...compiled.resources.filter((resource) => resource.sourceKind !== 'lore'),
-    ...selected.flatMap((projection) => {
+    ...selected.flatMap((projection, scopeIndex) => {
       const scopePrefix = distinct
         ? `${prefix}:scope:${chatOverrideHash(chatAttachmentKey(projection.scope)).slice(0, 24)}`
         : prefix;
@@ -261,7 +261,7 @@ export function projectChatPackageCompilation(
                   ? {
                       risuSource: {
                         ...resource.risuSource,
-                        sourceScope: chatAttachmentKey(projection.scope),
+                        sourceScope: `connection-${scopeIndex + 1}`,
                       },
                     }
                   : {}),
