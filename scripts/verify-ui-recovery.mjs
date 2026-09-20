@@ -10,6 +10,9 @@ await runBrowserVerification({
     'tests/risu-preset-import-browser.spec.ts',
     'tests/risu-import-browser.spec.ts',
     'tests/native-transfer-browser.spec.ts',
+    'tests/new-story-browser.spec.ts',
+    'tests/source-edit-focus-browser.spec.ts',
+    'tests/reader-navigation-browser.spec.ts',
   ],
   timeout: 600000,
   requiredCases: [
@@ -20,5 +23,8 @@ await runBrowserVerification({
     'RISUKINDUI02',
     'NATIVEUI03',
     'NATIVEUI04',
+    'NSUI01',
+    'NSUI02',
+    'C04E',
   ],
 });

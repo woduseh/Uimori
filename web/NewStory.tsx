@@ -29,6 +29,55 @@ type StorySelection = {
 };
 
 const selectedId = (key: string) => key.slice(0, key.lastIndexOf('@'));
+
+function openingExcerpt(text: string, character: string, user: string) {
+  return text
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\{\{char\}\}/gi, () => character)
+    .replace(/\{\{user\}\}/gi, () => user)
+    .replace(/\{\{[\s\S]*?\}\}/g, '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/&nbsp;|&#160;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 360);
+}
+
+function OpeningPreview({
+  content,
+  opening,
+  userName,
+}: {
+  content: Content;
+  opening: PackageStartSnapshot;
+  userName?: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const excerpt = openingExcerpt(opening.text, content.title, userName ?? '사용자');
+  return (
+    <div className="new-story-opening-preview">
+      {excerpt && <p className="new-story-opening-excerpt">{excerpt}</p>}
+      <details onToggle={(event) => setExpanded(event.currentTarget.open)}>
+        <summary>전체 미리보기</summary>
+        {expanded && (
+          <div className="new-story-opening-full" aria-label="첫 메시지 전체 미리보기">
+            <RisuStartPreview content={content} startId={opening.startId} userName={userName} />
+          </div>
+        )}
+      </details>
+    </div>
+  );
+}
+
 export function NewStory({
   library,
   initialBot,
@@ -305,192 +354,179 @@ export function NewStory({
         void create();
       }}
     >
-      {initialBot ? (
-        <div className="new-story-bot" aria-label="채팅의 봇">
-          <ContentAvatar content={activeBot ?? initialBot} />
-          <strong>{initialBot.title}</strong>
-          <p className="muted">
-            {initialFolder
-              ? `${initialFolder.title} 폴더에서 새 채팅을 시작해요.`
-              : '이 봇과 새 채팅을 시작해요.'}
-          </p>
-        </div>
-      ) : (
-        <>
-          <p className="muted">함께할 봇을 고르면 현재 전역 모델과 프롬프트로 시작해요.</p>
-          <ContentPicker
-            library={{ ...library, contents }}
-            role="bot"
-            label="시작할 봇"
-            value={bot}
-            selectedContent={activeBot}
-            onChange={(value) => {
-              setBot(value);
-              initializedStart.current = null;
-              setStart('');
-            }}
-            disabled={locked}
-          />
-        </>
-      )}
-      <ContentPicker
-        library={{ ...library, contents }}
-        role="persona"
-        label="시작 페르소나"
-        value={persona}
-        selectedContent={activePersona}
-        onChange={setPersona}
-        allowNone
-        noneLabel="페르소나 없음"
-        disabled={locked}
-      />
-      <div className="new-story-main-model" aria-label="새 채팅에 사용할 전역 설정">
-        <dl className="new-story-settings-summary">
-          <div>
-            <dt>본문 모델</dt>
-            <dd>
-              {mainModel?.title ?? '미지정'} <span>· 전역 따름</span>
-            </dd>
+      <div className="new-story-fields">
+        {initialBot ? (
+          <div className="new-story-bot" aria-label="채팅의 봇">
+            <ContentAvatar content={activeBot ?? initialBot} />
+            <strong>{initialBot.title}</strong>
+            <p className="muted">
+              {initialFolder
+                ? `${initialFolder.title} 폴더에서 새 채팅을 시작해요.`
+                : '이 봇과 새 채팅을 시작해요.'}
+            </p>
           </div>
-          <div>
-            <dt>작문 프롬프트</dt>
-            <dd>
-              {workspace?.main.title ?? '확인 중…'} <span>· 전역 따름</span>
-            </dd>
-          </div>
-        </dl>
-        {!mainAvailable && (
-          <p role="status">
-            본문 생성 전에 사용 가능한 전역 본문 모델을 선택해 주세요. 채팅만 먼저 만들 수도 있어요.
-          </p>
-        )}
-        <button type="button" className="ghost" disabled={locked} onClick={onModelSettings}>
-          전역 모델 설정
-        </button>
-      </div>
-      {packageLoading && <p role="status">시작 자료를 불러오는 중이에요…</p>}
-      {!!activeBot?.package?.starts?.length && (
-        <fieldset>
-          <legend>첫 장면</legend>
-          <label>
-            사용할 시작
-            <select
-              aria-label="사용할 시작"
-              value={start}
-              disabled={locked || packageLoading}
-              onChange={(event) => {
-                const id = event.target.value;
-                if (id === start) return;
-                setStart(id);
+        ) : (
+          <>
+            <p className="muted">함께할 봇을 고르면 현재 전역 모델과 프롬프트로 시작해요.</p>
+            <ContentPicker
+              library={{ ...library, contents }}
+              role="bot"
+              label="시작할 봇"
+              value={bot}
+              selectedContent={activeBot}
+              onChange={(value) => {
+                setBot(value);
+                initializedStart.current = null;
+                setStart('');
               }}
-            >
-              <option value="">직접 첫 장면 요청하기</option>
-              {activeBot.package.starts.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.title} · 작성된 도입문
-                </option>
-              ))}
-            </select>
-          </label>
-          {opening && (
-            <>
-              <p className="muted">
-                {activeBot.package.starts.find((item) => item.id === start)?.description}
-              </p>
-              <div
-                className="source-text"
-                aria-label="시작 미리보기"
-                style={{ whiteSpace: 'pre-wrap', maxHeight: 260, overflow: 'auto' }}
-              >
-                <RisuStartPreview
-                  content={activeBot}
-                  startId={start}
-                  userName={activePersona?.package?.identity?.name ?? activePersona?.title}
-                />
-              </div>
-              <p className="muted">
-                확정하면 이 도입문을 저장하고 봇의 설정 화면을 열어요. 본문 모델은 호출하지 않아요.
-              </p>
-            </>
-          )}
-          {openingError && (
-            <p className="error" role="alert">
-              {openingError}
+              disabled={locked}
+            />
+          </>
+        )}
+        <ContentPicker
+          library={{ ...library, contents }}
+          role="persona"
+          label="시작 페르소나"
+          value={persona}
+          selectedContent={activePersona}
+          onChange={setPersona}
+          allowNone
+          noneLabel="페르소나 없음"
+          disabled={locked}
+        />
+        <div className="new-story-main-model" aria-label="새 채팅에 사용할 전역 설정">
+          <dl className="new-story-settings-summary">
+            <div>
+              <dt>본문 모델</dt>
+              <dd>
+                {mainModel?.title ?? '미지정'} <span>· 전역 따름</span>
+              </dd>
+            </div>
+            <div>
+              <dt>작문 프롬프트</dt>
+              <dd>
+                {workspace?.main.title ?? '확인 중…'} <span>· 전역 따름</span>
+              </dd>
+            </div>
+          </dl>
+          {!mainAvailable && (
+            <p role="status">
+              본문 생성 전에 사용 가능한 전역 본문 모델을 선택해 주세요. 채팅만 먼저 만들 수도
+              있어요.
             </p>
           )}
-        </fieldset>
-      )}
-      <details className="new-story-options">
-        <summary>
-          <span>추가 설정</span>
-          <small>{additionalSummary || '모듈 · 채팅 이름'}</small>
-        </summary>
-        <div className="new-story-options-content">
-          <fieldset>
-            <legend>함께 사용할 모듈</legend>
-            {modules.map((key) => {
-              const item = activeModules.find((item) => refValue(item) === key);
-              return (
-                <div className="new-story-module" key={key}>
-                  <ContentAvatar content={item} title="모듈 확인 중" />
-                  <span>{item?.title ?? '모듈 확인 중…'}</span>
-                  <button
-                    type="button"
-                    className="ghost"
-                    disabled={locked}
-                    aria-label={`${item?.title ?? '모듈'} 선택 해제`}
-                    onClick={() => setModules((values) => values.filter((value) => value !== key))}
-                  >
-                    해제
-                  </button>
-                </div>
-              );
-            })}
-            <ContentPicker
-              library={{
-                ...library,
-                contents: contents.filter((item) => item.hasPackage || item.package),
-              }}
-              role="module"
-              label="추가할 시작 모듈"
-              value=""
-              onChange={(value) =>
-                setModules((values) => (values.includes(value) ? values : [...values, value]))
-              }
-              excludeIds={modules.map((key) => key.slice(0, key.lastIndexOf('@')))}
-              disabled={locked}
-            />
-          </fieldset>
-          <label>
-            채팅 이름 <small>비워 두면 자동으로 정해요</small>
-            <input
-              aria-label="새 채팅 이름"
-              value={title}
-              maxLength={100}
-              onChange={(e) => setTitle(e.target.value)}
-              disabled={locked}
-            />
-          </label>
+          <button type="button" className="ghost" disabled={locked} onClick={onModelSettings}>
+            전역 모델 설정
+          </button>
         </div>
-      </details>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-          {created.current && ' 채팅은 하나만 만들었어요. 설정 저장만 다시 시도해요.'}
-        </p>
-      )}
-      <button
-        className="primary"
-        disabled={busy || uncertain.current || !bot || packageLoading || !!openingError}
-      >
-        {busy
-          ? '채팅을 준비하는 중…'
-          : created.current
-            ? '설정 저장 다시 시도'
-            : opening
-              ? '도입문 확정하고 채팅 만들기'
-              : '채팅 만들기'}
-      </button>
+        {packageLoading && <p role="status">시작 자료를 불러오는 중이에요…</p>}
+        {!!activeBot?.package?.starts?.length && (
+          <section className="new-story-opening" aria-label="첫 메시지">
+            <label>
+              첫 메시지
+              <select
+                aria-label="첫 메시지 선택"
+                value={start}
+                disabled={locked || packageLoading}
+                onChange={(event) => {
+                  const id = event.target.value;
+                  if (id === start) return;
+                  setStart(id);
+                }}
+              >
+                <option value="">첫 메시지 없이 시작</option>
+                {activeBot.package.starts.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {opening && (
+              <OpeningPreview
+                key={`${activeStartKey}:${start}`}
+                content={activeBot}
+                opening={opening}
+                userName={activePersona?.package?.identity?.name ?? activePersona?.title}
+              />
+            )}
+            {openingError && (
+              <p className="error" role="alert">
+                {openingError}
+              </p>
+            )}
+          </section>
+        )}
+        <details className="new-story-options">
+          <summary>
+            <span>추가 설정</span>
+            <small>{additionalSummary || '모듈 · 채팅 이름'}</small>
+          </summary>
+          <div className="new-story-options-content">
+            <fieldset>
+              <legend>함께 사용할 모듈</legend>
+              {modules.map((key) => {
+                const item = activeModules.find((item) => refValue(item) === key);
+                return (
+                  <div className="new-story-module" key={key}>
+                    <ContentAvatar content={item} title="모듈 확인 중" />
+                    <span>{item?.title ?? '모듈 확인 중…'}</span>
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={locked}
+                      aria-label={`${item?.title ?? '모듈'} 선택 해제`}
+                      onClick={() =>
+                        setModules((values) => values.filter((value) => value !== key))
+                      }
+                    >
+                      해제
+                    </button>
+                  </div>
+                );
+              })}
+              <ContentPicker
+                library={{
+                  ...library,
+                  contents: contents.filter((item) => item.hasPackage || item.package),
+                }}
+                role="module"
+                label="추가할 시작 모듈"
+                value=""
+                onChange={(value) =>
+                  setModules((values) => (values.includes(value) ? values : [...values, value]))
+                }
+                excludeIds={modules.map((key) => key.slice(0, key.lastIndexOf('@')))}
+                disabled={locked}
+              />
+            </fieldset>
+            <label>
+              채팅 이름 <small>비워 두면 자동으로 정해요</small>
+              <input
+                aria-label="새 채팅 이름"
+                value={title}
+                maxLength={100}
+                onChange={(e) => setTitle(e.target.value)}
+                disabled={locked}
+              />
+            </label>
+          </div>
+        </details>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+            {created.current && ' 채팅은 하나만 만들었어요. 설정 저장만 다시 시도해요.'}
+          </p>
+        )}
+      </div>
+      <div className="new-story-submit">
+        <button
+          className="primary"
+          disabled={busy || uncertain.current || !bot || packageLoading || !!openingError}
+        >
+          {busy ? '채팅을 준비하는 중…' : created.current ? '설정 저장 다시 시도' : '채팅 만들기'}
+        </button>
+      </div>
     </form>
   );
 }

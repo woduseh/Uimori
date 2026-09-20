@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { prepareRisuMessage, RISU_FRAME_CHANNEL, risuActionKey } from './risu-message-frame.js';
+import { READER_INTERACTION_EVENT } from './reader-navigation-scroll.js';
 
 export function RisuMessageFrame({
   html,
@@ -86,6 +87,10 @@ export function RisuMessageFrame({
       if (data.kind === 'ready') {
         sendDisabled(disabledRef.current || locked.current);
         sendAppearance();
+        return;
+      }
+      if (data.kind === 'interaction') {
+        frame.current?.dispatchEvent(new Event(READER_INTERACTION_EVENT, { bubbles: true }));
         return;
       }
       if (data.kind === 'resize') {

@@ -1,4 +1,9 @@
-import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
+import {
+  MOBILE_WIDTH,
+  MOBILE_HEIGHT,
+  DESKTOP_WIDTH,
+  DESKTOP_HEIGHT,
+} from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { openSourceActions } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Locator } from '@playwright/test';
@@ -84,8 +89,8 @@ const readerOffset = (control: Locator) =>
   );
 
 for (const [label, viewport] of [
-  ['mobile', { width: MOBILE_WIDTH, height: 844 }],
-  ['desktop', { width: DESKTOP_WIDTH, height: 900 }],
+  ['mobile', { width: MOBILE_WIDTH, height: MOBILE_HEIGHT }],
+  ['desktop', { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT }],
 ] as const) {
   test(`C04E ${label} long source editing focuses the visible editor and restores reading after Escape, cancel and save`, async ({
     page,
@@ -99,22 +104,34 @@ for (const [label, viewport] of [
     // Editing the current view starts from the footer button; the menu holds the other editor.
     const trigger = scene.getByRole('button', { name: '원문 수정', exact: true });
     const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
-    await expect(scene.getByTestId('source-text')).toContainText('Synthetic paragraph 40.');
-    expect(
-      await scene.getByTestId('source-text').evaluate((element) => {
-        const reader = element.closest('[data-reader-scrollport]')!;
-        return element.getBoundingClientRect().height > reader.getBoundingClientRect().height * 2;
-      })
-    ).toBe(true);
+    const sourceBody = scene
+      .getByTestId('source-text')
+      .frameLocator('iframe[title="봇 메시지"]')
+      .locator('body');
+    await expect(sourceBody).toContainText('Synthetic paragraph 40.');
+    await sourceBody.evaluate((body) => {
+      body.dataset.editFocusProbe = 'preserved';
+    });
+    await expect
+      .poll(() =>
+        scene.getByTestId('source-text').evaluate((element) => {
+          const reader = element.closest('[data-reader-scrollport]')!;
+          return element.getBoundingClientRect().height > reader.getBoundingClientRect().height * 2;
+        })
+      )
+      .toBe(true);
 
     await trigger.scrollIntoViewIfNeeded();
     const offset = await readerOffset(trigger);
     await trigger.click();
     await expect(field).toBeFocused();
+    await expect(scene.getByTestId('source-text')).toBeHidden();
+    await expect(scene.locator('.source-text-editor > small')).toHaveCount(0);
     await insideReader(field);
     await field.fill('A cancelled synthetic edit.');
     await page.keyboard.press('Escape');
     await expect(field).toHaveCount(0);
+    await expect(sourceBody).toHaveAttribute('data-edit-focus-probe', 'preserved');
     await expect(trigger).toBeFocused();
     await insideReader(trigger);
     await expect
@@ -142,7 +159,20 @@ for (const [label, viewport] of [
     await expect(field).toHaveCount(0);
     await expect(trigger).toBeFocused();
     await insideReader(trigger);
-    await expect(scene.getByTestId('source-text')).toContainText('returns to the lamp.');
+    await expect(sourceBody).toContainText('returns to the lamp.');
+    // The saved native document replaces its iframe. Its text arrives before the
+    // frame's measured height reaches the host; interact with the settled footer.
+    await expect
+      .poll(async () => {
+        const height = await sourceBody.evaluate((body) => {
+          const rect = body.getBoundingClientRect();
+          return Math.ceil(Math.max(rect.height, rect.bottom));
+        });
+        const frame = await scene.locator('iframe[title="봇 메시지"]').boundingBox();
+        return Math.abs((frame?.height ?? 0) - height);
+      })
+      .toBeLessThanOrEqual(2);
+    await insideReader(trigger);
     const after = await detail(request, before.chat.id);
     expect(after.sources[0].text).toBe(edited);
     expect(after.runs).toEqual(before.runs);
@@ -152,6 +182,8 @@ for (const [label, viewport] of [
     await scene.getByRole('button', { name: '번역 수정', exact: true }).click();
     const translation = scene.getByRole('textbox', { name: '번역 수정 내용', exact: true });
     await expect(translation).toBeFocused();
+    await expect(scene.getByTestId('source-text')).toBeHidden();
+    await expect(scene.locator('.source-text-editor > small')).toHaveCount(0);
     await insideReader(translation);
     await translation.fill('저장 버튼 배치를 확인하는 합성 번역이에요.');
     const translationSave = scene.getByRole('button', { name: '번역 저장', exact: true });
@@ -180,7 +212,7 @@ test('C04E failed source save keeps the draft available and a later save restore
 }) => {
   const before = await seed(request, 'failed save');
   const source = before.sources[0];
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
   await page.goto(`/?chat=${before.chat.id}`);
   const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
   const trigger = scene.getByRole('button', { name: '원문 수정', exact: true });

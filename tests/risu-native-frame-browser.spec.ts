@@ -20,7 +20,7 @@ test.beforeAll(async () => {
       noDiscovery: true,
       include: ['react', 'react-dom/client', 'dompurify', 'lucide-react'],
     },
-    server: { host: '127.0.0.1', port: 0 },
+    server: { host: '127.0.0.1', port: 0, watch: { ignored: ['**/output/**'] } },
   });
   server.middlewares.use(async (request, response, next) => {
     if (request.url !== '/') return next();
@@ -198,6 +198,7 @@ test('native preset editor keeps raw CBS, toggle values, and invalid regex draft
   await expect(editor.getByLabel('1번 프롬프트 본문')).toHaveValue('{{getvar::place}}');
   await editor.getByLabel('1번 프롬프트 본문').fill('{{#when::mood::tis::1}}VIVID{{/when}}');
   await editor.getByRole('tab', { name: '정규식', exact: true }).click();
+  await editor.getByText('고급 JSON 편집', { exact: true }).click();
   await editor.getByLabel('Risu 정규식 JSON').fill('[invalid');
   await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
   await editor.getByRole('tab', { name: '구성', exact: true }).click();
@@ -220,12 +221,144 @@ test('native preset editor keeps raw CBS, toggle values, and invalid regex draft
   expect(saved.program.nativeRisuPreset.preset.apiKey).toBeUndefined();
 });
 
+test('native regex synced buffers follow parent JSON changes while local and remote drafts survive', async ({
+  page,
+}) => {
+  await page.goto(origin);
+  await page.evaluate(async () => {
+    const path = '/tests/fixtures/native-regex-draft.tsx';
+    const { mount } = await import(path);
+    mount();
+  });
+  await page.getByLabel('정규식 찾을 표현식', { exact: true }).fill('form edit');
+  await page.getByRole('button', { name: '부모 JSON 적용', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+  await expect(page.getByLabel('정규식 찾을 표현식', { exact: true })).toHaveValue('parent-1');
+  if (
+    !(await page.locator('.native-regex-raw').evaluate((node) => (node as HTMLDetailsElement).open))
+  )
+    await page.getByText('고급 JSON 편집', { exact: true }).click();
+  const raw = page.getByLabel('Risu 정규식 JSON', { exact: true });
+  await expect.poll(async () => JSON.parse(await raw.inputValue())[0].in).toBe('parent-1');
+  await raw.fill('[local unfinished');
+  await page.getByRole('button', { name: '부모 JSON 적용', exact: true }).click();
+  await expect(raw).toHaveValue('[local unfinished');
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
+  await expect.poll(async () => JSON.parse(await raw.inputValue())[0].in).toBe('parent-2');
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '원격 초안 복원', exact: true }).click();
+  await expect(raw).toHaveValue('[remote unfinished');
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+  await expect
+    .poll(async () => JSON.parse((await page.locator('output').textContent())!)[0].in)
+    .toBe('remote');
+});
+
 for (const viewport of [
   { width: MOBILE_WIDTH, height: 915 },
   { width: DESKTOP_WIDTH, height: 1440 },
 ]) {
   test.describe(`native editor input at ${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport });
+
+    test('native regex forms preserve aliases, custom flags, order and invalid raw drafts', async ({
+      page,
+    }) => {
+      await page.goto(origin);
+      await page.evaluate(async () => {
+        const path = '/tests/fixtures/native-regex-editor.tsx';
+        const { mount } = await import(path);
+        mount();
+      });
+      const value = () =>
+        page
+          .locator('output')
+          .textContent()
+          .then((text) => JSON.parse(text!));
+      await expect(page.getByLabel('정규식 찾을 표현식', { exact: true })).toHaveCSS(
+        'height',
+        '120px'
+      );
+      await expect(page.getByLabel('정규식 바꿀 내용', { exact: true })).toHaveCSS(
+        'height',
+        '250px'
+      );
+      await page.getByLabel('정규식 찾을 표현식', { exact: true }).fill('(world)');
+      await page.getByLabel('정규식 바꿀 내용', { exact: true }).fill('$1 {{getvar::place}}');
+      await expect.poll(value).toMatchObject([
+        {
+          in: '(world)',
+          find: '(world)',
+          out: '$1 {{getvar::place}}',
+          replace: '$1 {{getvar::place}}',
+          ableFlag: false,
+          extra: { preserved: true },
+        },
+        {},
+        {},
+      ]);
+      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+      await page.getByRole('checkbox', { name: '사용자 지정 플래그', exact: true }).check();
+      await page.getByRole('button', { name: '대소문자 무시 (i)', exact: true }).click();
+      await page.getByText('고급 플래그', { exact: true }).click();
+      await page.getByLabel('정규식 실행 우선순위', { exact: true }).fill('8');
+      await expect(page.getByLabel('정규식 플래그 원문', { exact: true })).toHaveValue(
+        'g<cbs><future_flag><order 8>'
+      );
+      await page.getByRole('checkbox', { name: '사용자 지정 플래그', exact: true }).uncheck();
+      await expect
+        .poll(value)
+        .toMatchObject([
+          { ableFlag: false, flag: 'g<cbs><future_flag><order 8>', type: 'editdisplay' },
+          {},
+          {},
+        ]);
+      await page.getByLabel('정규식 적용 단계', { exact: true }).selectOption('disabled');
+      await page.getByRole('button', { name: '정규식 아래로', exact: true }).click();
+      await expect
+        .poll(async () => (await value()).map((item: { comment: string }) => item.comment))
+        .toEqual(['Second rule', 'First rule', 'Future rule']);
+      await page.getByRole('button', { name: '정규식 복제', exact: true }).click();
+      await expect
+        .poll(async () => (await value())[2])
+        .toMatchObject({
+          comment: 'First rule 사본',
+          type: 'disabled',
+          extra: { preserved: true },
+        });
+      await page.getByRole('button', { name: '선택한 정규식 삭제', exact: true }).click();
+      await expect.poll(async () => (await value()).length).toBe(3);
+      await page.getByText('고급 JSON 편집', { exact: true }).click();
+      await page.getByLabel('Risu 정규식 JSON', { exact: true }).fill('[invalid');
+      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+      await expect(page.getByLabel('정규식 이름', { exact: true })).toBeDisabled();
+      await page.getByRole('button', { name: '다른 탭', exact: true }).click();
+      await page.getByRole('button', { name: '다른 탭', exact: true }).click();
+      await expect(page.getByLabel('Risu 정규식 JSON', { exact: true })).toHaveValue('[invalid');
+      await page.getByRole('button', { name: '정규식 적용', exact: true }).click();
+      await expect(page.getByRole('alert')).toBeVisible();
+      await page.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+      await expect
+        .poll(async () => (await value())[2])
+        .toEqual({ comment: 'Future rule', in: '', out: '', type: 'future_mode', unknown: [1, 2] });
+      const bounds = await page.getByRole('region', { name: '정규식 편집기' }).evaluate((node) => {
+        const edge = node.getBoundingClientRect().right;
+        return {
+          overflow: node.scrollWidth - node.clientWidth,
+          outside: [...node.querySelectorAll('*')]
+            .filter((child) => child.getBoundingClientRect().right > edge + 1)
+            .map((child) => ({
+              tag: child.tagName,
+              classes: child.className,
+              right: child.getBoundingClientRect().right,
+              width: child.getBoundingClientRect().width,
+            })),
+        };
+      });
+      expect(bounds.overflow, JSON.stringify(bounds.outside)).toBeLessThanOrEqual(1);
+    });
 
     test('native lore keywords accept sequential comma input without losing the next key', async ({
       page,

@@ -1566,7 +1566,12 @@ function App() {
       >
         {panel === 'navigation' && navigation(false)}
       </Dialog>
-      <Dialog open={panel === 'new'} title="새 채팅" onClose={() => setPanel('')}>
+      <Dialog
+        open={panel === 'new'}
+        title="새 채팅"
+        onClose={() => setPanel('')}
+        className="new-story-dialog"
+      >
         {s.library && (
           <NewStory
             key={newKey}

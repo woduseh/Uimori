@@ -161,6 +161,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
     await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   }
   await composer.getByRole('tab', { name: '정규식', exact: true }).click();
+  await composer.getByText('고급 JSON 편집', { exact: true }).click();
   const regex = [{ in: '원래', out: '전송', type: 'editinput', ableFlag: true, flag: 'g' }];
   await composer.getByLabel('Risu 정규식 JSON', { exact: true }).fill(JSON.stringify(regex));
   const savePreset = page.getByRole('button', { name: '프리셋 저장', exact: true });

@@ -119,6 +119,7 @@ export function SceneNavigator({
       : entries;
   }, [entries, query]);
   const page = filtered.slice(offset, offset + 60);
+  const sceneCount = entries.filter((entry) => !entry.opening).length;
   function select(id: string) {
     setOpen(false);
     onSelect(id);
@@ -131,9 +132,10 @@ export function SceneNavigator({
   const dialog = (
     <Dialog open={open} title="장면 목록" onClose={() => setOpen(false)} className="scene-dialog">
       <label className="scene-search">
-        장면 번호 또는 요청으로 찾기
         <input
           type="search"
+          aria-label="장면 번호 또는 요청으로 찾기"
+          placeholder="장면 번호 또는 요청으로 찾기"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -141,11 +143,7 @@ export function SceneNavigator({
           }}
         />
       </label>
-      <p className="muted">
-        현재 분기 · {entries.filter((entry) => !entry.opening).length}개 장면
-        {entries.some((entry) => entry.opening) ? ' · 첫 메시지 포함' : ''}
-        {!compact && entries.length > capacity ? ' · 눈금에는 일부 장면을 표시해요.' : ''}
-      </p>
+      {sceneCount > 0 && <p className="scene-list-count">현재 채팅 · 장면 {sceneCount}개</p>}
       <ol className="scene-list" start={offset + 1} ref={list}>
         {page.map((entry) => (
           <li key={entry.id}>
@@ -155,8 +153,10 @@ export function SceneNavigator({
               aria-label={entry.opening ? '첫 메시지' : `${entry.number}번째 장면 · ${entry.label}`}
               onClick={() => select(entry.id)}
             >
-              <span>{entry.opening ? '첫 메시지' : entry.number}</span>
-              <span>{entry.label}</span>
+              <span className="scene-list-number" aria-hidden="true">
+                {entry.opening ? <ListIcon size={16} /> : entry.number}
+              </span>
+              <span className="scene-list-title">{entry.opening ? '첫 메시지' : entry.label}</span>
               {entry.id === active.id && <small>읽는 중</small>}
             </button>
           </li>

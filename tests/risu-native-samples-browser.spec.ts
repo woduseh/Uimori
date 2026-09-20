@@ -240,19 +240,22 @@ test.describe('actual local native Risu cards', () => {
           });
           return {
             height: Math.ceil(Math.max(rect.height, rect.bottom)),
-            fixedControlsFit: fixedControls.every((control) => {
+            clippedFixedControls: fixedControls.filter((control) => {
               const box = control.getBoundingClientRect();
-              return box.top >= -1 && box.bottom <= innerHeight + 1;
-            }),
+              return box.top < -1 || box.bottom > innerHeight + 1;
+            }).length,
           };
         });
         const frameHeight = (await iframe.boundingBox())?.height ?? 0;
-        return (
-          frameHeight + 1 >= Math.max(48, Math.min(30000, authored.height)) &&
-          authored.fixedControlsFit
-        );
+        return {
+          heightDeficit: Math.max(
+            0,
+            Math.max(48, Math.min(30000, authored.height)) - frameHeight - 1
+          ),
+          clippedFixedControls: authored.clippedFixedControls,
+        };
       })
-      .toBe(true);
+      .toEqual({ heightDeficit: 0, clippedFixedControls: 0 });
   }
 
   for (const sample of cases) {

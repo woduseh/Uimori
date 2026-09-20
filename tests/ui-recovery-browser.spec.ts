@@ -42,6 +42,28 @@ async function editorFits(page: Page, editor: Locator, save: Locator) {
       );
     })
   ).toBe(true);
+  if ((page.viewportSize()?.width ?? 0) >= 1200) {
+    const workspace = editor.locator('.native-editor');
+    const layout = await workspace.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      const parent = node.closest('.library-page')!.getBoundingClientRect();
+      return {
+        width: rect.width,
+        centerOffset: rect.x + rect.width / 2 - parent.x - parent.width / 2,
+      };
+    });
+    expect(layout.width).toBeLessThanOrEqual(1300);
+    expect(Math.abs(layout.centerOffset)).toBeLessThanOrEqual(2);
+    const form = workspace.locator('.native-section-body:visible').first();
+    if (await form.count()) {
+      const body = await form.boundingBox();
+      const outer = await workspace.boundingBox();
+      expect(body!.width).toBeLessThanOrEqual(960);
+      expect(Math.abs(body!.x + body!.width / 2 - outer!.x - outer!.width / 2)).toBeLessThanOrEqual(
+        2
+      );
+    }
+  }
 }
 
 async function openMenu(editor: Locator, label: string) {
@@ -68,6 +90,74 @@ for (const viewport of viewports) {
   test.describe(`UI recovery ${viewport.name} ${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
+    test('long block lists stay readable and settings retain the centered workspace', async ({
+      page,
+      request,
+    }, info) => {
+      const title = `UIREC long preset ${randomUUID().slice(0, 8)}`;
+      const names = Array.from(
+        { length: 48 },
+        (_, i) => `${i + 1}. Perspective, Character Motivation and Narrative Continuity ${i + 1}`
+      );
+      const program = nativePrompt('Long-list fixture', {
+        promptTemplate: names.map((name, i) => ({
+          type: 'plain',
+          role: 'system',
+          name,
+          text: `Instruction ${i + 1}`,
+        })),
+        customPromptTemplateToggle: 'tone=분위기=select=Quiet,Bright',
+        templateDefaultVariables: 'place=library',
+      });
+      await post<PromptPreset>(request, '/api/prompt-presets', {
+        title,
+        role: 'main',
+        program,
+        values: {},
+      });
+      await page.goto('/');
+      await navigationAction(page, '프롬프트');
+      await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
+      await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+      const editor = page.getByTestId('prompt-editor');
+      const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
+      await editorFits(page, editor, save);
+      if (viewport.name === 'desktop') {
+        const list = editor.getByRole('complementary', { name: '프롬프트 블록 목록' });
+        const rows = list.locator(':scope > button');
+        await expect(rows).toHaveCount(48);
+        const bounds = await rows.evaluateAll((nodes) =>
+          nodes.map((node) => {
+            const row = node.getBoundingClientRect();
+            const title = node.querySelector('strong')!.getBoundingClientRect();
+            const subtitle = node.querySelector('small')!.getBoundingClientRect();
+            return {
+              top: row.top,
+              bottom: row.bottom,
+              titleBottom: title.bottom,
+              subtitleTop: subtitle.top,
+              subtitleBottom: subtitle.bottom,
+            };
+          })
+        );
+        for (let i = 0; i < bounds.length; i++) {
+          expect(bounds[i].subtitleTop).toBeGreaterThanOrEqual(bounds[i].titleBottom - 1);
+          expect(bounds[i].subtitleBottom).toBeLessThanOrEqual(bounds[i].bottom + 1);
+          if (i) expect(bounds[i].top).toBeGreaterThanOrEqual(bounds[i - 1].bottom);
+        }
+        await page.screenshot({ path: info.outputPath('long-list-desktop.png') });
+        await rows.last().click();
+      } else {
+        await editor.getByLabel('현재 프롬프트 블록', { exact: true }).selectOption('47');
+      }
+      await expect(editor.getByLabel('48번 프롬프트 본문', { exact: true })).toHaveValue(
+        'Instruction 48'
+      );
+      await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
+      await editorFits(page, editor, save);
+      await page.screenshot({ path: info.outputPath(`centered-variables-${viewport.name}.png`) });
+    });
+
     test('bot edits survive tabs and save into a current CHARX download', async ({
       page,
       request,
@@ -80,6 +170,21 @@ for (const viewport of viewports) {
         name: title,
         description,
         creator_notes: 'Synthetic creator notes must survive.',
+        extensions: {
+          risuai: {
+            customScripts: [
+              {
+                comment: 'Greeting display',
+                in: 'greet',
+                out: 'original',
+                find: 'greet',
+                replace: 'original',
+                type: 'editdisplay',
+                untouched: 'keep',
+              },
+            ],
+          },
+        },
         first_mes: 'Original opening {{user}}',
         alternate_greetings: ['Unchanged alternate opening'],
         post_history_instructions: globalNote,
@@ -127,6 +232,12 @@ for (const viewport of viewports) {
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`bot-opening-${viewport.name}.png`) });
 
+      await editor.getByRole('tab', { name: '고급 설정', exact: true }).click();
+      await editor.getByRole('button', { name: '스크립트', exact: true }).click();
+      await editor.getByLabel('정규식 바꿀 내용', { exact: true }).fill('Edited display {{char}}');
+      await page.screenshot({ path: info.outputPath(`bot-regex-${viewport.name}.png`) });
+      await editor.getByRole('tab', { name: '첫 메시지', exact: true }).click();
+
       const responsePromise = nextSave(page);
       await save.click();
       const response = await responsePromise;
@@ -161,6 +272,20 @@ for (const viewport of viewports) {
         mes_example: example,
         creator_notes: 'Synthetic creator notes must survive.',
         unknown_active: { preserved: true },
+        extensions: {
+          risuai: {
+            customScripts: [
+              {
+                in: 'greet',
+                out: 'Edited display {{char}}',
+                find: 'greet',
+                replace: 'Edited display {{char}}',
+                type: 'editdisplay',
+                untouched: 'keep',
+              },
+            ],
+          },
+        },
       });
       for (const key of ['personality', 'scenario', 'system_prompt'])
         expect(read.nativeCard).not.toHaveProperty(key);
@@ -207,6 +332,11 @@ for (const viewport of viewports) {
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`preset-body-${viewport.name}.png`) });
 
+      await editor.getByRole('tab', { name: '정규식', exact: true }).click();
+      await editor.getByLabel('정규식 바꿀 내용', { exact: true }).fill('Edited regex {{user}}');
+      await page.screenshot({ path: info.outputPath(`preset-regex-${viewport.name}.png`) });
+      await editor.getByRole('tab', { name: '구성', exact: true }).click();
+
       const responsePromise = nextSave(page);
       await save.click();
       const response = await responsePromise;
@@ -245,7 +375,7 @@ for (const viewport of viewports) {
       expect(read.preset).toMatchObject({
         customPromptTemplateToggle: toggle,
         templateDefaultVariables: 'place=forest',
-        regex: [{ in: 'hello', out: 'Hello {{user}}', type: 'editoutput' }],
+        regex: [{ in: 'hello', out: 'Edited regex {{user}}', type: 'editoutput' }],
       });
       for (const key of ['mainPrompt', 'jailbreak', 'globalNote'])
         expect(read.preset).not.toHaveProperty(key);

@@ -10,6 +10,7 @@ import {
   type PromptValue,
 } from '../core/risu-prompt.js';
 import { PromptControlFields } from './PromptControlFields.js';
+import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import { SectionNavigation } from './SectionNavigation.js';
 import { IconButton } from './IconButton.js';
@@ -71,25 +72,14 @@ export function NativeRisuPresetEditor({
     'prompt.native.defaults',
     text(source.templateDefaultVariables)
   );
-  const [regexDraft, setRegexDraft] = useBufferedEditorState(
-    'prompt.native.regex',
-    JSON.stringify(source.regex ?? source.presetRegex ?? [], null, 2)
-  );
+  const [regexPending, setRegexPending] = useState(false);
   const [pendingParts, setPendingParts] = useBufferedEditorState<string[]>(
     'prompt.native.pendingParts',
     []
   );
-  let regexDiffers = true;
-  try {
-    regexDiffers =
-      JSON.stringify(JSON.parse(regexDraft)) !==
-      JSON.stringify(source.regex ?? source.presetRegex ?? []);
-  } catch {
-    /* Keep unapplied JSON in its draft. */
-  }
   const pending =
-    pendingParts.length > 0 ||
-    regexDiffers ||
+    pendingParts.some((part) => part !== 'regex') ||
+    regexPending ||
     toggleDraft !== text(source.customPromptTemplateToggle) ||
     defaultDraft !== text(source.templateDefaultVariables);
   useUnappliedEditorField('prompt.native.source', pending);
@@ -534,48 +524,17 @@ export function NativeRisuPresetEditor({
           />
         </label>
       </div>
-      <div {...panel('regex')} className="native-section-body">
-        <h3>프리셋 정규식</h3>
-        <label>
-          Risu 정규식 JSON
-          <textarea
-            aria-label="Risu 정규식 JSON"
-            spellCheck={false}
-            rows={16}
-            value={regexDraft}
-            onChange={(e) => {
-              setRegexDraft(e.target.value);
-              mark('regex', true);
-            }}
-          />
-        </label>
-        <div className="form-actions">
-          <button
-            type="button"
-            disabled={!regexDiffers && !pendingParts.includes('regex')}
-            onClick={() => {
-              try {
-                update({ regex: JSON.parse(regexDraft) }, 'regex');
-              } catch (caught) {
-                setError((caught as Error).message);
-              }
-            }}
-          >
-            정규식 적용
-          </button>
-          <button
-            type="button"
-            className="ghost"
-            disabled={!regexDiffers && !pendingParts.includes('regex')}
-            onClick={() => {
-              setRegexDraft(JSON.stringify(source.regex ?? source.presetRegex ?? [], null, 2));
-              mark('regex', false);
-              setError('');
-            }}
-          >
-            입력 되돌리기
-          </button>
-        </div>
+      <div {...panel('regex')} className="native-section-body native-regex-panel">
+        <NativeRisuRegexEditor
+          value={(source.regex ?? source.presetRegex ?? []) as unknown[]}
+          draftPath="prompt.native.regex"
+          onPendingChange={setRegexPending}
+          onChange={(regex) =>
+            update({
+              [source.regex != null || source.presetRegex == null ? 'regex' : 'presetRegex']: regex,
+            })
+          }
+        />
       </div>
       {collaboration && (
         <div {...panel('collaboration')} className="native-section-body">
