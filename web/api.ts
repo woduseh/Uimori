@@ -34,6 +34,26 @@ export function rememberMaintenance(next: MaintenanceStatus | undefined): void {
 }
 export const libraryChangedKey = 'uimori:library-change';
 
+/** JSON requests and binary uploads share response errors, not mutation side effects. */
+async function readApiResponse<T>(
+  response: Response,
+  method: string,
+  notifySession = true
+): Promise<T> {
+  if (response.ok) return (await response.json()) as T;
+  if (response.status === 401 && notifySession && typeof window !== 'undefined')
+    window.dispatchEvent(new Event(sessionRequiredEvent));
+  const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
+  if (
+    response.status === 503 &&
+    payload?.error === 'MAINTENANCE_CLOSED' &&
+    typeof window !== 'undefined'
+  )
+    window.dispatchEvent(new Event(maintenanceChangedEvent));
+  const diagnostic = apiErrorDiagnostic(payload?.error, response.status, method);
+  throw new ApiError(diagnostic.message, response.status, diagnostic.code);
+}
+
 export async function api<T>(
   path: string,
   body?: unknown,
@@ -51,24 +71,7 @@ export async function api<T>(
           body: JSON.stringify(body),
         }
   );
-  if (!response.ok) {
-    if (
-      response.status === 401 &&
-      path.split('?')[0] !== '/session' &&
-      typeof window !== 'undefined'
-    )
-      window.dispatchEvent(new Event(sessionRequiredEvent));
-    const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
-    if (
-      response.status === 503 &&
-      payload?.error === 'MAINTENANCE_CLOSED' &&
-      typeof window !== 'undefined'
-    )
-      window.dispatchEvent(new Event(maintenanceChangedEvent));
-    const diagnostic = apiErrorDiagnostic(payload?.error, response.status, method);
-    throw new ApiError(diagnostic.message, response.status, diagnostic.code);
-  }
-  const result = (await response.json()) as T;
+  const result = await readApiResponse<T>(response, method, path.split('?')[0] !== '/session');
   const providerSettingsChanged =
     body !== undefined && /^(?:\/model-presets|\/connections)(?:\/[^/]+)?$/.test(path);
   if (
@@ -103,20 +106,7 @@ export async function apiBinary<T>(path: string, body: Blob): Promise<T> {
     headers: { 'Content-Type': 'application/octet-stream' },
     body,
   });
-  if (!response.ok) {
-    if (response.status === 401 && typeof window !== 'undefined')
-      window.dispatchEvent(new Event(sessionRequiredEvent));
-    const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
-    if (
-      response.status === 503 &&
-      payload?.error === 'MAINTENANCE_CLOSED' &&
-      typeof window !== 'undefined'
-    )
-      window.dispatchEvent(new Event(maintenanceChangedEvent));
-    const diagnostic = apiErrorDiagnostic(payload?.error, response.status, 'POST');
-    throw new ApiError(diagnostic.message, response.status, diagnostic.code);
-  }
-  return (await response.json()) as T;
+  return readApiResponse<T>(response, 'POST');
 }
 
 export const labels: Record<string, string> = {
