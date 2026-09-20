@@ -2,7 +2,7 @@
 
 Review date: 2026-09-20. Scope: native preset editor, native bot editor, and reader first-message presentation. This is the agreed representative-screen checkpoint before extending the remaining v3 screens. It is not completion of the entire 36-screen set or human aesthetic acceptance.
 
-The sections before **Follow-up: user feedback on density and native editing** record the earlier `4c85abc` checkpoint. Their test totals and full-width interpretation are historical; the follow-up section owns the current result.
+The sections before **Follow-up: user feedback on density and native editing** record the earlier `4c85abc` checkpoint. Its follow-up records `5e1bd1a`. Those test totals are historical; the final follow-up section owns the current result.
 
 ## Visual truth and capture conditions
 
@@ -110,5 +110,28 @@ Current follow-up verification:
 - The 12 final dark screenshots were refreshed against that build. Their corresponding JSON records zero horizontal overflow; desktop workspaces are centered and bounded, mobile dialog footers remain reachable, and long titles no longer collide. The final desktop regex and mobile new-chat captures were inspected again after integration.
 
 No actionable P0/P1/P2 remains within this follow-up scope. Cheongwon's authored icon overlap is accepted by the user and preserved. User aesthetic acceptance of the new density remains a separate checkpoint before expanding the remaining v3 screens. Live-provider output and physical-mobile behavior were not tested.
+
+Previous density and native editing result: passed.
+
+## Follow-up: input types and toggle definitions
+
+The user accepted the editor density, removed the default first-message excerpt, requested distinct single-line/multiline fields and compact ON/OFF radio controls, and requested RisuToki-like structured toggle authoring in Uimori's own style. Their four new screenshots establish these requested changes. The user subsequently paused all six legacy-option removal/runtime changes pending their own review. Those controls and their execution behavior remain intact; the general input-width fix only corrects their layout.
+
+Reviewed flow and findings:
+
+1. **Basic options — passed:** native `text` uses an input and `textarea` uses a compact resizable textarea. Boolean-like toggle declarations use only OFF/ON radios with native keyboard behavior, scoped group names, and `"0"`/`"1"` storage. Existing unset values display OFF without being changed by viewing the screen. Native select declarations retain their authored choices. A shared 100%-width input selector previously affected checkboxes/radios; it now applies only to text-like controls.
+2. **Toggle definitions — passed:** a Uimori list/detail editor supports eight native row types, add/remove/reorder and compatible type changes. Unknown rows, empty lines and unchanged line endings remain intact. Unapplied raw text survives tab changes and blocks saving until applied. This is a native string editor; no separate persisted AST is introduced.
+3. **New chat — passed:** the opening selector and collapsed preview remain. The default three-line excerpt is removed. Expanding the preview still renders the authored greeting without generating a new turn.
+4. **Legacy options — paused by user:** no removal or execution changes for `jailbreakToggle`, `chainOfThought`, `sendName`, `sendChatAsSystem`, `postEndInnerFormat` or `assistantPrefill` are included. Local RisuAI inspection found active runtime uses for the first five, so presumed obsolescence was not used to alter existing execution semantics.
+
+Verification:
+
+- `npm run quality`: 840 files checked and TypeScript passed.
+- Focused Vitest: 9 toggle-editor preservation tests and 12 native-semantics tests passed. The original Windows sandbox `spawn EPERM` attempts were not counted as tests; the approved reruns passed.
+- `npm run verify:ui-recovery -- --visual`: 43 tests passed. Receipt: `output/playwright/ui-recovery-2026-09-20T03-03-03-989Z-4ef0443d/summary.json`. The new desktop/mobile cases exercise input element types, radio keyboard selection, original string values, type changes, raw-draft retention and save persistence.
+- Build/source identity: `57395ac2e6c9b5b0d002022960e6c8edc6f638440bc295f1e2633cda592ca803`; the successful browser receipt passes final identity checks. Documentation-only edits followed.
+- Actual Phémē screen captures: `output/ui-recovery-preview/options-captures/{options,radios,toggle-editor,new-chat}-{2560,412}.png`, with matching viewport JSON. The two capture flows passed with zero page errors and zero horizontal overflow at 2560 × 1440 and 412 × 915, DPR 1. Desktop forms, mobile radio/input rows, mobile toggle details and preview-only new-chat layouts were visually inspected. The mobile toggle capture starts at the top of that screen rather than accepting an inherited scrolled position as its layout evidence.
+
+No full unit-suite, live-provider or physical-mobile claim is made. The completed input/toggle/preview scope passes; the explicitly paused legacy-removal decision remains open. No original Risu material was edited.
 
 final result: passed

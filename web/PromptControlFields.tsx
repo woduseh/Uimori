@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { ToggleRow } from './ToggleRow.js';
+import './prompt-control-fields.css';
 import {
   promptControls,
   type PromptControl,
@@ -20,15 +20,43 @@ function ValueInput({
 }) {
   const descriptionId = useId();
   const describedBy = control.description ? descriptionId : undefined;
+  const radioOptions =
+    control.input === 'radio'
+      ? [
+          { label: 'OFF', value: '0' },
+          { label: 'ON', value: '1' },
+        ]
+      : control.type === 'boolean'
+        ? [
+            { label: 'OFF', value: false },
+            { label: 'ON', value: true },
+          ]
+        : undefined;
   return (
     <div className="prompt-option-field">
-      {control.type === 'boolean' ? (
-        <ToggleRow
-          label={label}
-          description={control.description}
-          checked={value === true}
-          onChange={onChange}
-        />
+      {radioOptions ? (
+        <div className="prompt-option-radio-row">
+          <span id={`${descriptionId}-label`}>{label}</span>
+          <div
+            className="prompt-option-radios"
+            role="radiogroup"
+            aria-labelledby={`${descriptionId}-label`}
+            aria-describedby={describedBy}
+          >
+            {radioOptions.map((option, index) => (
+              <label key={index}>
+                <input
+                  type="radio"
+                  name={descriptionId}
+                  value={JSON.stringify(option.value)}
+                  checked={(value ?? (control.input === 'radio' ? '0' : false)) === option.value}
+                  onChange={() => onChange(option.value)}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
       ) : (
         <label>
           {label}
@@ -61,8 +89,17 @@ function ValueInput({
                 onChange(event.target.value === '' ? null : Number(event.target.value))
               }
             />
+          ) : control.input === 'text' ? (
+            <input
+              aria-label={label}
+              aria-describedby={describedBy}
+              type="text"
+              value={value === null ? '' : String(value)}
+              onChange={(event) => onChange(event.target.value)}
+            />
           ) : (
             <textarea
+              className="prompt-option-textarea"
               aria-label={label}
               aria-describedby={describedBy}
               rows={2}
@@ -72,9 +109,7 @@ function ValueInput({
           )}
         </label>
       )}
-      {control.type !== 'boolean' && control.description && (
-        <small id={descriptionId}>{control.description}</small>
-      )}
+      {control.description && <small id={descriptionId}>{control.description}</small>}
       {control.type !== 'select' && control.type !== 'boolean' && (
         <button
           type="button"

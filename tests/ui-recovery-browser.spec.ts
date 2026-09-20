@@ -158,6 +158,95 @@ for (const viewport of viewports) {
       await page.screenshot({ path: info.outputPath(`centered-variables-${viewport.name}.png`) });
     });
 
+    test('native toggle forms preserve input types, option values and unapplied source', async ({
+      page,
+      request,
+    }, info) => {
+      const title = `UIREC toggle preset ${randomUUID().slice(0, 8)}`;
+      const declarations =
+        '=기본 입력=group\nshort=짧은 입력=text\nlong=긴 입력=textarea\nflag=분위기 강조\nmode=시점=select=1인칭,3인칭\n==groupEnd';
+      await post<PromptPreset>(request, '/api/prompt-presets', {
+        title,
+        role: 'main',
+        program: nativePrompt('Toggle form fixture', { customPromptTemplateToggle: declarations }),
+        values: { short: '서울', long: '첫 줄\n둘째 줄', flag: '1', mode: '0' },
+      });
+      await page.goto('/');
+      await navigationAction(page, '프롬프트');
+      await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
+      await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+      const editor = page.getByTestId('prompt-editor');
+      const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
+      await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      await expect(editor.getByLabel('짧은 입력', { exact: true })).toHaveJSProperty(
+        'tagName',
+        'INPUT'
+      );
+      await expect(editor.getByLabel('긴 입력', { exact: true })).toHaveJSProperty(
+        'tagName',
+        'TEXTAREA'
+      );
+      await editor.getByLabel('짧은 입력', { exact: true }).fill('부산');
+      await editor.getByLabel('긴 입력', { exact: true }).fill('수정 첫 줄\n수정 둘째 줄');
+      const radios = editor.getByRole('radiogroup', { name: '분위기 강조', exact: true });
+      await expect(radios.getByRole('radio')).toHaveCount(2);
+      await expect(radios.getByRole('radio', { name: 'ON', exact: true })).toBeChecked();
+      await radios.getByRole('radio', { name: 'ON', exact: true }).focus();
+      await page.keyboard.press('ArrowLeft');
+      await expect(radios.getByRole('radio', { name: 'OFF', exact: true })).toBeChecked();
+      await expect(editor.getByLabel('시점', { exact: true })).toHaveValue('"0"');
+      await editorFits(page, editor, save);
+      const radioBounds = await radios.boundingBox();
+      expect(radioBounds!.width).toBeLessThan(320);
+      await page.screenshot({ path: info.outputPath(`native-options-${viewport.name}.png`) });
+
+      await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
+      const definitions = editor.getByRole('region', { name: '토글 정의 편집기', exact: true });
+      await definitions.locator('.native-toggle-raw > summary').click();
+      const raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      const withUnknown = `${declarations}\nunknown source line`;
+      await raw.fill(withUnknown);
+      await expect(save).toBeDisabled();
+      await editor.getByRole('tab', { name: '구성', exact: true }).click();
+      await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
+      await expect(raw).toHaveValue(withUnknown);
+      await definitions.getByRole('button', { name: '원문 적용', exact: true }).click();
+      if (viewport.name === 'mobile')
+        await definitions.getByLabel('현재 토글 정의', { exact: true }).selectOption('1');
+      else
+        await definitions
+          .getByRole('button', { name: '짧은 입력 2행 · 한 줄 입력', exact: true })
+          .click();
+      await definitions.getByLabel('토글 항목 종류', { exact: true }).selectOption('textarea');
+      await definitions.getByLabel('토글 표시 이름', { exact: true }).fill('이름 입력');
+      await expect(raw).toHaveValue(
+        withUnknown.replace('short=짧은 입력=text', 'short=이름 입력=textarea')
+      );
+      await definitions.locator('.native-toggle-raw > summary').click();
+      await editorFits(page, editor, save);
+      await page.screenshot({ path: info.outputPath(`native-toggle-editor-${viewport.name}.png`) });
+      await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      await expect(editor.getByLabel('이름 입력', { exact: true })).toHaveJSProperty(
+        'tagName',
+        'TEXTAREA'
+      );
+      await expect(editor.getByLabel('이름 입력', { exact: true })).toHaveValue('부산');
+      const responsePromise = nextSave(page);
+      await save.click();
+      const response = await responsePromise;
+      expect(response.ok(), await response.text()).toBe(true);
+      const saved = (await response.json()).saved as PromptPreset;
+      expect(saved.values).toMatchObject({
+        short: '부산',
+        long: '수정 첫 줄\n수정 둘째 줄',
+        flag: '0',
+        mode: '0',
+      });
+      expect(saved.program.nativeRisuPreset.preset.customPromptTemplateToggle).toBe(
+        withUnknown.replace('short=짧은 입력=text', 'short=이름 입력=textarea')
+      );
+    });
+
     test('bot edits survive tabs and save into a current CHARX download', async ({
       page,
       request,

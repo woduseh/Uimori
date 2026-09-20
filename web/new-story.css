@@ -56,17 +56,6 @@
 .new-story-opening > label {
   margin: 0;
 }
-.new-story-opening-excerpt {
-  margin: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--muted);
-}
 .new-story-opening-preview summary {
   padding-block: 10px;
   font-size: 13px;

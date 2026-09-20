@@ -11,6 +11,7 @@ import {
 } from '../core/risu-prompt.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
+import { NativeRisuToggleEditor } from './NativeRisuToggleEditor.js';
 import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import { SectionNavigation } from './SectionNavigation.js';
 import { IconButton } from './IconButton.js';
@@ -64,23 +65,21 @@ export function NativeRisuPresetEditor({
   const [selected, setSelected] = useState(0);
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
-  const [toggleDraft, setToggleDraft] = useBufferedEditorState(
-    'prompt.native.toggles',
-    text(source.customPromptTemplateToggle)
-  );
   const [defaultDraft, setDefaultDraft] = useBufferedEditorState(
     'prompt.native.defaults',
-    text(source.templateDefaultVariables)
+    text(source.templateDefaultVariables),
+    { syncPristineInitial: true }
   );
   const [regexPending, setRegexPending] = useState(false);
+  const [togglePending, setTogglePending] = useState(false);
   const [pendingParts, setPendingParts] = useBufferedEditorState<string[]>(
     'prompt.native.pendingParts',
     []
   );
   const pending =
-    pendingParts.some((part) => part !== 'regex') ||
+    pendingParts.some((part) => part !== 'regex' && part !== 'toggles') ||
     regexPending ||
-    toggleDraft !== text(source.customPromptTemplateToggle) ||
+    togglePending ||
     defaultDraft !== text(source.templateDefaultVariables);
   useUnappliedEditorField('prompt.native.source', pending);
   useEffect(() => {
@@ -499,18 +498,12 @@ export function NativeRisuPresetEditor({
       </div>
       <div {...panel('variables')} className="native-section-body">
         <h3>변수·토글</h3>
-        <label>
-          Risu 토글 정의
-          <textarea
-            aria-label="Risu 토글 정의"
-            rows={8}
-            value={toggleDraft}
-            onChange={(e) => {
-              setToggleDraft(e.target.value);
-              update({ customPromptTemplateToggle: e.target.value }, 'toggles');
-            }}
-          />
-        </label>
+        <NativeRisuToggleEditor
+          value={text(source.customPromptTemplateToggle)}
+          draftPath="prompt.native.toggles"
+          onPendingChange={setTogglePending}
+          onChange={(value) => update({ customPromptTemplateToggle: value }, 'toggles')}
+        />
         <label>
           채팅 변수 기본값
           <textarea

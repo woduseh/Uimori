@@ -30,28 +30,6 @@ type StorySelection = {
 
 const selectedId = (key: string) => key.slice(0, key.lastIndexOf('@'));
 
-function openingExcerpt(text: string, character: string, user: string) {
-  return text
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\{\{char\}\}/gi, () => character)
-    .replace(/\{\{user\}\}/gi, () => user)
-    .replace(/\{\{[\s\S]*?\}\}/g, '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/&nbsp;|&#160;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 360);
-}
-
 function OpeningPreview({
   content,
   opening,
@@ -62,12 +40,10 @@ function OpeningPreview({
   userName?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const excerpt = openingExcerpt(opening.text, content.title, userName ?? '사용자');
   return (
     <div className="new-story-opening-preview">
-      {excerpt && <p className="new-story-opening-excerpt">{excerpt}</p>}
       <details onToggle={(event) => setExpanded(event.currentTarget.open)}>
-        <summary>전체 미리보기</summary>
+        <summary>미리보기</summary>
         {expanded && (
           <div className="new-story-opening-full" aria-label="첫 메시지 전체 미리보기">
             <RisuStartPreview content={content} startId={opening.startId} userName={userName} />
