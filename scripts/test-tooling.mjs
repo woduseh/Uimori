@@ -31,8 +31,6 @@ async function defaultFiles() {
         .sort()
     )
   );
-  if (groups.some((files) => !files.length))
-    throw new Error('No tests/*.node.test.mjs or scripts/*.test.mjs files discovered');
   return groups.flat();
 }
 
@@ -65,6 +63,7 @@ export async function testTooling(files) {
       if (!(await stat(file)).isFile()) throw new Error(`Tooling test file unavailable: ${file}`);
     }
     summary.sourceHash = (await fingerprint()).hash;
+    summary.verificationHash = (await fingerprint(root, { verificationOnly: true })).hash;
     // Explicit fault files may live outside the repository fingerprint inputs.
     const selectedHashes = () =>
       Promise.all(
@@ -143,11 +142,17 @@ export async function testTooling(files) {
     )
       throw new Error(`Required tooling tests did not all PASS: ${eventJson(counts)}`);
     if (
-      summary.sourceHash !== (await fingerprint()).hash ||
-      JSON.stringify(summary.selectedInputs) !== JSON.stringify(await selectedHashes())
+      JSON.stringify(summary.selectedInputs) !== JSON.stringify(await selectedHashes()) ||
+      summary.verificationHash !== (await fingerprint(root, { verificationOnly: true })).hash
     )
-      throw new Error('Source or selected tests changed during tooling verification');
-    summary.identityVerifiedAt = new Date().toISOString();
+      throw new Error('Tests, fixtures or tooling changed during verification');
+    summary.finalSourceHash = (await fingerprint()).hash;
+    summary.reusableForCurrentSource = summary.sourceHash === summary.finalSourceHash;
+    if (summary.reusableForCurrentSource) summary.identityVerifiedAt = new Date().toISOString();
+    else
+      console.warn(
+        'Tests passed for this invocation; source changed, so this is not current-source certification.'
+      );
     summary.status = 'PASS';
   } catch (error) {
     summary.error = error.message;

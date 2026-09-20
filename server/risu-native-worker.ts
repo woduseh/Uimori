@@ -24,11 +24,13 @@ export function runNativeRisuWorker<T>(
   module: URL,
   method: string,
   input: unknown,
-  timeoutMs = 3000
+  timeoutMs = 3000,
+  signal?: AbortSignal
 ): Promise<T> {
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 10 || timeoutMs > 15_000)
     throw new Error('RISU_NATIVE_TIMEOUT_INVALID');
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error('CANCELLED'));
     const worker = new Worker(bootstrap, {
       eval: true,
       env: {},
@@ -41,9 +43,12 @@ export function runNativeRisuWorker<T>(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
       void worker.terminate().then(() => (error ? reject(error) : resolve(result!)), reject);
     };
     const timer = setTimeout(() => finish(new Error('RISU_NATIVE_TIMEOUT')), timeoutMs);
+    const abort = () => finish(new Error('CANCELLED'));
+    signal?.addEventListener('abort', abort, { once: true });
     worker.once('message', (message) =>
       message.ok ? finish(undefined, message.result) : finish(new Error(message.code))
     );

@@ -73,3 +73,18 @@ test('a branch head that lost its source stops the chain instead of looping', ()
     { id: 'main', depth: 0, fork: null, forkIndex: null, own: 0, total: 0 },
   ]);
 });
+
+test('long histories and shared prefixes do not consume the call stack', () => {
+  const count = 20_000;
+  const parents = Object.fromEntries(
+    Array.from({ length: count }, (_, i) => [`s${i}`, i ? `s${i - 1}` : null])
+  );
+  const head = `s${count - 1}`;
+  expect(tree({ main: head }, parents)).toEqual([
+    { id: 'main', depth: 0, fork: null, forkIndex: null, own: count, total: count },
+  ]);
+  expect(tree({ main: 'left', other: 'right' }, { ...parents, left: head, right: head })).toEqual([
+    { id: 'main', depth: 1, fork: head, forkIndex: count, own: 1, total: count + 1 },
+    { id: 'other', depth: 1, fork: head, forkIndex: count, own: 1, total: count + 1 },
+  ]);
+});

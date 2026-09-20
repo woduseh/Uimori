@@ -8,7 +8,7 @@ import {
   nativeRisuSessionKey,
 } from './risu-native-context.js';
 import { executeRisuNative, type NativeRisuExecutionOptions } from './risu-native-runtime.js';
-import { evaluateNativeRisuFields } from './risu-native-cbs.js';
+import { prepareNativeRisuText } from './risu-native-prepare.js';
 import { processNativeRisuText } from './risu-native-render.js';
 import { prepareNativeRisuPreset, nativeRisuPresetPending } from './risu-native-preset.js';
 import type { NativeRisuMessage } from '../core/risu-native-execution.js';
@@ -247,7 +247,7 @@ export async function prepareNativeRisuRun(
   issues.push(...edited.issues);
   messages.push({ id: 'current-input', role: 'user', data: edited.text });
   await invoke('start');
-  const fields: Record<string, Record<string, string>> = {};
+  const fieldPlan: { key: string; fields: Record<string, string> }[] = [];
   for (const { attachment, pkg } of nativeRisuPackages(snapshot)) {
     const projected = projectRisuImageHandoff(pkg, snapshot.profile?.image === true);
     const authored = {
@@ -258,41 +258,30 @@ export async function prepareNativeRisuRun(
         projected.instructions.map((entry) => [`instruction:${entry.id}`, entry.text])
       ),
     };
-    const evaluated = await evaluateNativeRisuFields({
-      native: context.native,
-      fields: authored,
-      context: { ...context, variables, messages },
-    });
-    fields[nativeRisuFieldKey(attachment)] = evaluated.fields;
-    variables = evaluated.variables;
-    issues.push(...evaluated.issues);
+    fieldPlan.push({ key: nativeRisuFieldKey(attachment), fields: authored });
   }
   const original = new Map((snapshot.logicalHistory ?? []).map((message) => [message.id, message]));
   const history: NonNullable<RunSnapshot['logicalHistory']> = [];
   const greeting = snapshot.logicalHistory?.find((entry) => entry.sourceKind === 'authored-start');
-  if (greeting) {
-    const result = await processNativeRisuText({
+  const processed = await prepareNativeRisuText(
+    {
       native: context.native,
-      text: greeting.text,
-      context: { ...context, variables, messages, messageIndex: -1 },
-      mode: 'editprocess',
-    });
-    history.push({ ...greeting, text: result.text });
-    variables = result.variables;
-    issues.push(...result.issues);
+      context: { ...context, variables, messages },
+      fields: fieldPlan,
+      greeting: greeting?.text,
+    },
+    options.signal
+  );
+  const fields = processed.fields;
+  variables = processed.variables;
+  issues.push(...processed.issues);
+  if (greeting) {
+    history.push({ ...greeting, text: processed.greeting! });
   }
   let request = '';
   for (const [index, message] of messages.entries()) {
-    const processed = await processNativeRisuText({
-      native: context.native,
-      text: message.data,
-      context: { ...context, variables, messages, messageIndex: index },
-      mode: 'editprocess',
-    });
-    variables = processed.variables;
-    issues.push(...processed.issues);
     if (message.id === 'current-input') {
-      request = processed.text;
+      request = processed.texts[index];
       continue;
     }
     const prior = message.id ? original.get(message.id) : undefined;
@@ -300,7 +289,7 @@ export async function prepareNativeRisuRun(
       ...prior,
       id: message.id ?? `native-input:${index}`,
       role: message.role === 'char' ? 'assistant' : 'user',
-      text: processed.text,
+      text: processed.texts[index],
     });
   }
   validateChatVariableValues(variables);

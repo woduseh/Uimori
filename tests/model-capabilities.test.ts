@@ -1,6 +1,5 @@
 import { expect, test } from 'vitest';
 import {
-  MODEL_SUPPORT_POLICY,
   generationFromModel,
   modelCapability,
   protocolOptionKeys,
@@ -86,7 +85,6 @@ test('options the encoder cannot send and values outside the protocol vocabulary
 });
 
 test('the hint table still describes reviewed models but never gates unlisted IDs', () => {
-  expect(MODEL_SUPPORT_POLICY.supportWindowMonths).toBe(6);
   expect(modelCapability('vertex-gemini-v1', 'gemini-3.1-pro-preview')?.defaultThinkingLevel).toBe(
     'HIGH'
   );

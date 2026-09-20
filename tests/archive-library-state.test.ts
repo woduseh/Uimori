@@ -53,6 +53,20 @@ test('only default working content counts as empty; explicit reset preserves imp
   expect(promptWorkspace(store).revision).toBeGreaterThan(1);
   expect(store.product.importStatus().canImport).toBe(true);
 });
+test('explicit default judgment settings remain empty but customized judgment settings block restore', () => {
+  const store = database();
+  const update = (settings: Record<string, unknown>) =>
+    updatePromptWorkspace(store, {
+      expectedRevision: promptWorkspace(store).revision,
+      ...settings,
+    });
+  update({ mainJudgmentEnabled: true, mainJudgmentThreshold: 0.9 });
+  expect(store.product.importStatus().canImport).toBe(true);
+  update({ mainJudgmentEnabled: false });
+  expect(store.product.importStatus().canImport).toBe(false);
+  update({ mainJudgmentEnabled: true, mainJudgmentThreshold: 0.8 });
+  expect(store.product.importStatus().canImport).toBe(false);
+});
 test('archive requires one working slot and validates hidden kind and retained target before committing', () => {
   const archive = database().product.export();
   const attacks = [

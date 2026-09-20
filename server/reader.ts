@@ -238,7 +238,22 @@ export function branchTree(
    * `members` share the first `start` sources and left their siblings after `fork` of them.
    * Only a position where the members actually part ways indents them and moves the fork.
    */
-  const walk = (members: Branch[], start: number, depth: number, fork: number) => {
+  // Explicit DFS preserves sibling order without a call frame for every shared scene.
+  const pending = [
+    {
+      members: branches.filter((branch) => chains.get(branch.id)!.length > 0),
+      start: 0,
+      depth: 0,
+      fork: 0,
+    },
+  ];
+  for (const branch of branches) if (!chains.get(branch.id)!.length) emit(branch, 0, 0);
+  while (pending.length) {
+    const { members, start, depth, fork } = pending.pop()!;
+    if (members.length === 1) {
+      emit(members[0], depth, fork);
+      continue;
+    }
     const ending = members.filter((branch) => chains.get(branch.id)!.length === start);
     const groups = new Map<string, Branch[]>();
     for (const branch of members.filter((item) => chains.get(item.id)!.length > start)) {
@@ -249,20 +264,15 @@ export function branchTree(
     // A branch ending here parted from the row above it earlier; `start` is only where its own
     // continuations leave it, and those rows carry that themselves.
     for (const branch of ending) emit(branch, depth, fork);
-    for (const group of groups.values()) {
-      if (!parting) walk(group, start + 1, depth, fork);
-      else if (group.length === 1) emit(group[0], depth + 1, start);
-      else walk(group, start + 1, depth + 1, start);
+    for (const group of [...groups.values()].reverse()) {
+      pending.push({
+        members: group,
+        start: start + 1,
+        depth: parting ? depth + 1 : depth,
+        fork: parting ? start : fork,
+      });
     }
-  };
-  // A branch with no scene sits outside the source tree, so it cannot part anything.
-  for (const branch of branches) if (!chains.get(branch.id)!.length) emit(branch, 0, 0);
-  walk(
-    branches.filter((branch) => chains.get(branch.id)!.length > 0),
-    0,
-    0,
-    0
-  );
+  }
   return nodes;
 }
 

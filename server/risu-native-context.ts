@@ -10,6 +10,7 @@ import {
 import type { RisuContentSource } from '../core/risu-native.js';
 import { resolveTemplateVariableContext } from '../core/template-variables.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
+import { packageSlots } from '../core/package-context.js';
 import { createHash } from 'node:crypto';
 import { resolveControlValues } from '../core/risu-prompt.js';
 import { effectiveRisuControls, nativeToggleVariables } from '../core/risu-effective-controls.js';
@@ -41,6 +42,27 @@ export function nativeRisuMessages(snapshot: RunSnapshot): NativeRisuMessage[] {
           data: entry.text,
         }))
     : snapshot.history.map((entry) => ({ role: 'char', data: entry.text }));
+}
+
+/** Names and persona text always come from the reserved profile, including chat overrides. */
+export function nativeRisuPromptContext(snapshot: RunSnapshot) {
+  const identity = packageIdentityFromProfile(snapshot.profile!);
+  const personas =
+    snapshot.profile?.packageAttachments?.filter((entry) => entry.role === 'persona') ?? [];
+  return {
+    charName: identity.bot.name,
+    userName: identity.user.name,
+    persona: personas.length
+      ? packageSlots(
+          {
+            ...snapshot,
+            profile: { ...snapshot.profile!, packageAttachments: personas },
+          },
+          'main'
+        ).persona
+      : '',
+    now: snapshot.executionClock ? Date.parse(snapshot.executionClock.iso) : 0,
+  };
 }
 
 /** Each invocation receives its own character, modules, variables and asset namespace. */
@@ -80,7 +102,6 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
       backgroundHTML: natives.map(nativeRisuBackground).filter(Boolean).join('\n'),
     },
   };
-  const identity = packageIdentityFromProfile(snapshot.profile!);
   const controls = effectiveRisuControls(snapshot.profile!, preset?.program);
   const assetUrls: Record<string, string> = Object.create(null);
   for (const entry of entries)
@@ -94,8 +115,7 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
     native,
     effectiveTriggers,
     background: natives.map(nativeRisuBackground).filter(Boolean).join('\n'),
-    charName: identity.bot.name,
-    userName: identity.user.name,
+    ...nativeRisuPromptContext(snapshot),
     globalVariables: nativeToggleVariables(
       controls,
       resolveControlValues(
@@ -110,7 +130,6 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
       typeof base.card.post_history_instructions === 'string'
         ? base.card.post_history_instructions
         : '',
-    now: snapshot.executionClock ? Date.parse(snapshot.executionClock.iso) : 0,
     variables: {
       ...resolveTemplateVariableContext(snapshot.profile).variables,
       ...snapshot.nativeRisuExecution?.variables,

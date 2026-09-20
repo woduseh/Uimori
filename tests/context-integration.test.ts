@@ -16,6 +16,7 @@ import { createApp, type App } from '../server/app.js';
 import { Store } from '../server/store.js';
 import { forkChat } from '../server/chat-fork.js';
 import { estimateContextTokens } from '../core/context-budget.js';
+import { measureMainContext, withContextProjection } from '../server/context-planning.js';
 import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
 import { importRisuPresetProgram } from '../server/risu-preset-program.js';
@@ -246,8 +247,20 @@ describe('automatic input summaries through real App and file SQLite', () => {
     expect(plan.status).toBe('ready');
     expect(plan.compacted.length).toBeGreaterThan(0);
     expect(plan.recentSourceRevisions).toEqual(
-      expect.arrayContaining(sources.slice(-2).map((source) => source.id))
+      sources.slice(plan.compacted.length).map((source) => source.id)
     );
+    expect(plan.recentSourceRevisions).toContain(sources.at(-1)!.id);
+    // Two recent sources are preferred, not mandatory when they exceed the target budget.
+    if (plan.recentSourceRevisions.length < 2) {
+      const twoRecent = withContextProjection(
+        run.snapshot,
+        plan.compacted.slice(0, sources.length - 2),
+        plan.summary
+      );
+      expect(measureMainContext(twoRecent).estimatedInputTokens).toBeGreaterThan(
+        plan.budget.inputTokenLimit * 0.75
+      );
+    }
     expect(run.snapshot.history.map((source) => source.text)).toEqual(
       sources.map((source) => source.text)
     );

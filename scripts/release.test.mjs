@@ -114,7 +114,11 @@ test('release options reject ambiguity and remote arguments are POSIX quoted', (
   assert.throws(() => shellQuote('one\ntwo'));
   assert.deepEqual(requiredChecks('verify:browser-smoke', true, scripts), [
     'quality:full',
-    'verify:browser-smoke',
+    'verify:redesign',
+  ]);
+  assert.deepEqual(requiredChecks('verify:ui', true, scripts), [
+    'quality:full',
+    'verify:ui',
     'verify:redesign',
   ]);
   assert.deepEqual(requiredChecks('verify:browser-smoke', false, scripts), [
@@ -173,11 +177,11 @@ test('failed later check preserves earlier passes but cannot be bypassed by a na
   const narrower = await fixture.run();
   assert.equal(narrower.status, 'FAIL');
   assert.match(narrower.error, /recorded failures/);
-  assert.equal(fixture.calls.length, 3);
+  assert.deepEqual(fixture.calls, ['quality:full', 'verify:redesign']);
   fixture.setFailure(undefined);
   const fixed = await fixture.run({ full: true });
   assert.equal(fixed.status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(3), ['verify:redesign']);
+  assert.deepEqual(fixture.calls.slice(2), ['verify:redesign']);
 });
 
 test('unstarted optional checks remain recorded without blocking a narrower request', async (t) => {

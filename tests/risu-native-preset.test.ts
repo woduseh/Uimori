@@ -10,9 +10,14 @@ import { importRisuPresetProgram } from '../server/risu-preset-program.js';
 import {
   nativeRisuPresetPending,
   prepareNativeRisuPreset,
+  prepareNativeRisuTranslationPrompt,
   projectNativeRisuPresetProgram,
 } from '../server/risu-native-preset.js';
 import { processNativeRisuText } from '../server/risu-native-render.js';
+import { nativeContent } from './fixtures/native-content.js';
+import { nativeRisuContext } from '../server/risu-native-context.js';
+import { nativePromptSlots } from '../server/native-prompt-slots.js';
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 
 const preset = (text: string, extra: Record<string, unknown> = {}) => ({
   name: 'Synthetic native preset',
@@ -22,6 +27,49 @@ const preset = (text: string, extra: Record<string, unknown> = {}) => ({
     { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
   ],
   ...extra,
+});
+
+test('persona macros in cards and presets use the frozen selected body, also present in the persona slot', async () => {
+  const body = 'A navigator carrying a silver compass.';
+  const persona = nativeContent(
+    { name: 'Navigator', description: body },
+    { id: 'persona' },
+    'persona'
+  );
+  const bot = nativeContent(
+    { name: 'Guide', description: '{{persona}}|{{userpersona}}' },
+    { id: 'bot' }
+  );
+  const source = snapshot(preset('{{user}}|{{persona}}|{{userpersona}}'));
+  source.profile!.packages = structuredClone([bot, persona]);
+  source.profile!.packageAttachments = [
+    { id: 'bot', revision: 1, role: 'bot' },
+    { id: 'persona', revision: 1, role: 'persona' },
+  ];
+  persona.body = 'Changed library value';
+  expect(nativeRisuContext(source)?.persona).toBe(body);
+  expect(nativePromptSlots(source).persona).toContain(body);
+  const prepared = await prepareNativeRisuRun(source, { preview: true });
+  expect(
+    Object.values(prepared.nativeRisuExecution!.fields).some(
+      (fields) => fields.body === `${body}|${body}`
+    )
+  ).toBe(true);
+  expect(prepared.nativeRisuPresetProgram!.fields['block:0:text']).toBe(
+    `Navigator|${body}|${body}`
+  );
+  prepared.profile!.promptPresets!.translation = {
+    ...prepared.profile!.promptPresets!.main!,
+    role: 'translation',
+  };
+  const translated = await prepareNativeRisuTranslationPrompt(prepared);
+  const translatedSource =
+    translated.profile!.promptPresets!.translation!.program.nativeRisuPreset!.preset;
+  expect(JSON.stringify(translatedSource.promptTemplate)).toContain(body);
+  expect(JSON.stringify(translatedSource.promptTemplate)).not.toContain('{{persona}}');
+  const frozen = structuredClone(prepared.nativeRisuPresetProgram);
+  prepared.profile!.packages![1].body = 'Later edited profile';
+  expect((await prepareNativeRisuPreset(prepared)).nativeRisuPresetProgram).toEqual(frozen);
 });
 function snapshot(source: unknown, values: Record<string, string | null> = {}): RunSnapshot {
   const imported = importRisuPresetProgram(source);

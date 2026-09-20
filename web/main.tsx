@@ -1421,8 +1421,9 @@ function App() {
                       )}
                     </ComposerMore>
                   </div>
-                  {s.active ? (
+                  {s.active && !s.pendingRequest ? (
                     <button
+                      key="cancel"
                       type="button"
                       className="send-button"
                       aria-label="원문 생성 취소"
@@ -1437,6 +1438,7 @@ function App() {
                     </button>
                   ) : (
                     <button
+                      key="send"
                       className="send-button"
                       aria-label={s.pendingRequest ? '이전 요청 확인' : '원문 생성'}
                       title={

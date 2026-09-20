@@ -5,6 +5,7 @@ import { get_encoding } from 'tiktoken';
 import { JevCredentialStore } from '../dist/server/jev-credentials.js';
 import { judgeMainRefusal, mainJudgmentInput } from '../dist/server/main-judgment.js';
 import { judgeTranslationRefusal } from '../dist/server/translation-judgment.js';
+import { jevProbePassed } from './jev-probe-result.mjs';
 
 // Explicit opt-in: synthetic content only, no automatic retries. Published input budgets
 // reject maximum-size cases before transport; --within-budget makes two long live calls.
@@ -36,7 +37,7 @@ const report = {
 };
 await mkdir(dirname(output), { recursive: true });
 try {
-  for (const targetTokens of diagnostic ? [500_000] : withinBudget ? [16_000] : [128, 500_000]) {
+  for (const targetTokens of diagnostic ? [500_000] : withinBudget ? [16_000] : [128, 16_000]) {
     const candidate = ' story'.repeat(targetTokens);
     const candidateTokens = tokenizer.encode(candidate).length;
     if (candidateTokens !== targetTokens) throw new Error('SYNTHETIC_TOKEN_COUNT_MISMATCH');
@@ -49,6 +50,8 @@ try {
         candidateSha256: hash(candidate),
         startedAt: new Date().toISOString(),
         attemptCount: 0,
+        transportCount: 0,
+        expected: diagnostic ? 'budget-rejected' : 'completed',
       };
       const started = performance.now();
       const hooks = {
@@ -56,6 +59,7 @@ try {
         credential,
         timeoutMs: report.timeoutMs,
         async fetch(url, options) {
+          entry.transportCount++;
           const response = await fetch(url, options);
           if (!response.ok && diagnostic) {
             const reader = response.clone().body?.getReader();
@@ -117,6 +121,7 @@ try {
         entry.errorCode = error.code ?? 'PROBE_FAILED';
       }
       entry.elapsedMs = Math.round(performance.now() - started);
+      entry.passed = jevProbePassed(entry);
       report.cases.push(entry);
       await writeFile(output, JSON.stringify(report, null, 2) + '\n');
       console.log(JSON.stringify(entry));
@@ -127,4 +132,4 @@ try {
   report.finishedAt = new Date().toISOString();
   await writeFile(output, JSON.stringify(report, null, 2) + '\n');
 }
-if (report.cases.some((entry) => entry.status !== 'completed')) process.exitCode = 1;
+if (report.cases.some((entry) => !entry.passed)) process.exitCode = 1;

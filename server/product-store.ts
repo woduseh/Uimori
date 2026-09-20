@@ -1241,11 +1241,18 @@ export class ProductStore {
     }
   }
   importStatus() {
-    const { revision: _currentRevision, ...current } = promptWorkspace(this.store);
-    const { revision: _defaultRevision, ...defaults } = defaultPromptWorkspace();
+    const { revision: _currentRevision, ...current } = validatePromptWorkspace(
+      promptWorkspace(this.store)
+    );
+    const { revision: _defaultRevision, ...defaults } = validatePromptWorkspace(
+      defaultPromptWorkspace()
+    );
     return {
       canImport:
-        isDeepStrictEqual(current, defaults) &&
+        isDeepStrictEqual(
+          { ...current, mainJudgmentEnabled: current.mainJudgmentEnabled !== false },
+          { ...defaults, mainJudgmentEnabled: defaults.mainJudgmentEnabled !== false }
+        ) &&
         !archiveTables.some(
           (table) =>
             !['library_organization_state', 'prompt_workspace', 'illustration_settings'].includes(
