@@ -1,4 +1,5 @@
 import { promptOptionOwner } from '../core/chat-options.js';
+import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
 import type { FastifyInstance } from 'fastify';
 import type {
   ChatProfile,
@@ -71,6 +72,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'translation',
     'translationPolicy',
     'mainJudgmentEnabled',
+    'mainJudgmentThreshold',
     'modelRoutes',
     'titleModel',
     'helperModel',
@@ -83,6 +85,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
   if (b.mainJudgmentEnabled !== undefined && typeof b.mainJudgmentEnabled !== 'boolean')
     throw new HttpError(400, 'MAIN_JUDGMENT_ENABLED_INVALID');
   return {
+    mainJudgmentThreshold: mainJudgmentThreshold(b.mainJudgmentThreshold),
     ...(b.mainJudgmentEnabled !== undefined
       ? { mainJudgmentEnabled: b.mainJudgmentEnabled as boolean }
       : {}),
@@ -200,6 +203,7 @@ export function modelWorkspace(store: Store): ModelWorkspace {
   const current = promptWorkspace(store);
   return {
     mainJudgmentEnabled: current.mainJudgmentEnabled !== false,
+    mainJudgmentThreshold: mainJudgmentThreshold(current.mainJudgmentThreshold),
     revision: current.revision,
     titleModel: workspaceModelRef(current, 'title'),
     helperModel: workspaceModelRef(current, 'helper'),
@@ -216,6 +220,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     'routes',
     'translationPolicy',
     'mainJudgmentEnabled',
+    'mainJudgmentThreshold',
     'titleModel',
     'helperModel',
     'contextModel',
@@ -241,6 +246,9 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
         : (prior.scriptModel ?? null),
       modelRoutes: validateModelRoutes(input.routes),
       translationPolicy: input.translationPolicy,
+      ...(Object.hasOwn(input, 'mainJudgmentThreshold')
+        ? { mainJudgmentThreshold: input.mainJudgmentThreshold }
+        : {}),
       ...(Object.hasOwn(input, 'mainJudgmentEnabled')
         ? { mainJudgmentEnabled: input.mainJudgmentEnabled }
         : {}),
@@ -272,6 +280,7 @@ export function updatePromptWorkspace(
     'translation',
     'translationPolicy',
     'mainJudgmentEnabled',
+    'mainJudgmentThreshold',
   ]);
   const expected = number(b.expectedRevision, 'prompt workspace revision');
   const apply = () => {
@@ -294,6 +303,9 @@ export function updatePromptWorkspace(
     const result = validatePromptWorkspace({
       ...prior,
       ...updates,
+      ...(Object.hasOwn(b, 'mainJudgmentThreshold')
+        ? { mainJudgmentThreshold: b.mainJudgmentThreshold }
+        : {}),
       ...(b.translationPolicy !== undefined ? { translationPolicy: b.translationPolicy } : {}),
       ...(Object.hasOwn(b, 'mainJudgmentEnabled')
         ? { mainJudgmentEnabled: b.mainJudgmentEnabled }

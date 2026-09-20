@@ -79,6 +79,7 @@ export type CurrentPrompt = {
   defaultValues?: Record<string, import('./risu-prompt.js').PromptValue>;
 };
 export type ModelWorkspace = {
+  mainJudgmentThreshold?: number;
   mainJudgmentEnabled?: boolean;
   titleModel?: ModelRef | null;
   helperModel?: ModelRef | null;
@@ -89,6 +90,7 @@ export type ModelWorkspace = {
   translationPolicy: PromptWorkspace['translationPolicy'];
 };
 export type PromptWorkspace = {
+  mainJudgmentThreshold?: number;
   mainJudgmentEnabled?: boolean;
   titleModel?: ModelRef | null;
   helperModel?: ModelRef | null;

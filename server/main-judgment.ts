@@ -10,14 +10,22 @@ import {
   type JevRequest,
 } from './jev-judgment.js';
 import { HttpError } from './request-validation.js';
+import {
+  DEFAULT_MAIN_JUDGMENT_THRESHOLD,
+  mainJudgmentThreshold,
+} from '../core/main-judgment-settings.js';
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
-export const MAIN_JUDGMENT_THRESHOLD = 0.9;
-export function mainJudgmentInput(candidate: string): NonNullable<RunSnapshot['mainJudgment']> {
+export const MAIN_JUDGMENT_THRESHOLD = DEFAULT_MAIN_JUDGMENT_THRESHOLD;
+export function mainJudgmentInput(
+  candidate: string,
+  threshold = MAIN_JUDGMENT_THRESHOLD
+): NonNullable<RunSnapshot['mainJudgment']> {
   return {
     version: 'main-refusal-jev-v2',
     candidateHash: digest(candidate),
     response: candidate,
+    threshold: mainJudgmentThreshold(threshold),
   };
 }
 export function validateMainJudgmentInput(
@@ -26,18 +34,20 @@ export function validateMainJudgmentInput(
   const input = value as NonNullable<RunSnapshot['mainJudgment']> | undefined;
   if (
     !input ||
-    Object.keys(input).sort().join(',') !== 'candidateHash,response,version' ||
+    Object.keys(input).sort().join(',') !== 'candidateHash,response,threshold,version' ||
     input.version !== 'main-refusal-jev-v2' ||
     !/^[a-f0-9]{64}$/u.test(input.candidateHash) ||
     typeof input.response !== 'string' ||
-    input.candidateHash !== digest(input.response)
+    input.candidateHash !== digest(input.response) ||
+    typeof input.threshold !== 'number' ||
+    !Number.isFinite(input.threshold) ||
+    input.threshold <= 0.5 ||
+    input.threshold > 1
   )
     throw new HttpError(400, 'MAIN_JUDGMENT_INPUT_INVALID');
 }
 export function mainJudgmentInputHash(input: NonNullable<RunSnapshot['mainJudgment']>): string {
-  return digest(
-    JSON.stringify({ version: 'main-refusal-jev-v2', input, threshold: MAIN_JUDGMENT_THRESHOLD })
-  );
+  return digest(JSON.stringify({ version: 'main-refusal-jev-v2', input }));
 }
 export function mainJudgmentRequest(input: NonNullable<RunSnapshot['mainJudgment']>): JevRequest {
   const boundary =
@@ -87,7 +97,6 @@ export async function judgeMainRefusal(
     null,
     { ...hooks, kind: 'main-refusal' }
   );
-  const verdict =
-    result.scores.explicitRefusal! >= MAIN_JUDGMENT_THRESHOLD ? 'refused' : 'accepted';
+  const verdict = result.scores.explicitRefusal! >= input.threshold ? 'refused' : 'accepted';
   return { ...result, verdict };
 }

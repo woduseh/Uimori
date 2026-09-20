@@ -23,6 +23,7 @@ import {
 import { validateNativeRisuExecution, nativeRisuPending } from './risu-native-run.js';
 import { mapNativeMessageId, remapNativeRisuSnapshot } from './risu-native-archive.js';
 import { validateMainJudgmentInput } from './main-judgment.js';
+import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
 
 const reject: ArchiveReject = archiveRejector('Invalid snapshot archive');
 
@@ -85,6 +86,13 @@ export function validateRunSnapshot(
   snapshot: RunSnapshot,
   runId?: string
 ): RunSnapshot {
+  if (snapshot.mainJudgmentThreshold !== undefined)
+    mainJudgmentThreshold(snapshot.mainJudgmentThreshold);
+  if (
+    snapshot.mainJudgment &&
+    snapshot.mainJudgment.threshold !== mainJudgmentThreshold(snapshot.mainJudgmentThreshold)
+  )
+    reject('main judgment threshold mismatch');
   if (
     snapshot.mainJudgmentEnabled !== undefined &&
     typeof snapshot.mainJudgmentEnabled !== 'boolean'

@@ -19,6 +19,7 @@ import {
 } from './source-editing.js';
 import { ProductStore } from './product-store.js';
 import { promptWorkspace } from './prompt-workspace.js';
+import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
 import { HttpError, text } from './request-validation.js';
 export { HttpError } from './request-validation.js';
 import { StoryStore } from './story-store.js';
@@ -384,6 +385,7 @@ export class Store {
     const base = {
       ...snapshot({ ...chat, headRevision: branch.headRevision }),
       mainJudgmentEnabled: promptWorkspace(this).mainJudgmentEnabled !== false,
+      mainJudgmentThreshold: mainJudgmentThreshold(promptWorkspace(this).mainJudgmentThreshold),
       ...(command.loreContextReset ? { loreContextReset: true } : {}),
       executionClock: { iso: time, unix: Math.floor(Date.parse(time) / 1000) },
       branchId: branch.id,

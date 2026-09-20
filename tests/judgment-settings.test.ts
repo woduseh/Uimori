@@ -39,6 +39,7 @@ test('independent judgment settings persist and missing values remain enabled wi
   const store = setup();
   const original = store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get();
   expect(modelWorkspace(store).mainJudgmentEnabled).toBe(true);
+  expect(modelWorkspace(store).mainJudgmentThreshold).toBe(0.9);
   expect(store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get()).toEqual(original);
   const current = modelWorkspace(store);
   const changed = updateModelWorkspace(store, {
@@ -85,6 +86,7 @@ test('main judgment is frozen at reservation and archived flags are validated', 
     routes: current.routes,
     translationPolicy: current.translationPolicy,
     mainJudgmentEnabled: false,
+    mainJudgmentThreshold: 0.75,
   });
   const run = store.createRun(
     chat.id,
@@ -109,12 +111,27 @@ test('main judgment is frozen at reservation and archived flags are validated', 
     routes: changed.routes,
     translationPolicy: changed.translationPolicy,
     mainJudgmentEnabled: true,
+    mainJudgmentThreshold: 0.95,
   });
   expect(store.run(run.id).snapshot.mainJudgmentEnabled).toBe(false);
+  expect(store.run(run.id).snapshot.mainJudgmentThreshold).toBe(0.75);
+  expect(modelWorkspace(store).mainJudgmentThreshold).toBe(0.95);
   expect(() =>
     validateRunSnapshot(store, {
       ...run.snapshot,
       mainJudgmentEnabled: 'false' as unknown as boolean,
     })
   ).toThrow('invalid main judgment enabled flag');
+});
+
+test('main threshold rejects nonnumeric and out-of-range settings and snapshots', () => {
+  for (const invalid of [null, '0.9', 0.5, 1.01, NaN, Infinity]) {
+    expect(() =>
+      validatePromptWorkspace({ ...defaultPromptWorkspace(), mainJudgmentThreshold: invalid })
+    ).toThrow('MAIN_JUDGMENT_THRESHOLD_INVALID');
+  }
+  expect(
+    validatePromptWorkspace({ ...defaultPromptWorkspace(), mainJudgmentThreshold: 1 })
+      .mainJudgmentThreshold
+  ).toBe(1);
 });
