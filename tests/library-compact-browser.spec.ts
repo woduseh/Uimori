@@ -169,7 +169,7 @@ test('LCOM02 empty categories hide unused tools while empty folders and searches
   await expectNoOverflow(page);
 });
 
-test('LCOM03 selection replaces list tools and retains search and saved view across resizing', async ({
+test('LCOM03 selection replaces list tools and retains search, view and card ratio', async ({
   page,
   request,
 }, info) => {
@@ -185,7 +185,15 @@ test('LCOM03 selection replaces list tools and retains search and saved view acr
     'aria-pressed',
     'true'
   );
+  const ratioOptions = panel.getByRole('group', { name: '카드 비율', exact: true });
+  await expect(ratioOptions).toBeVisible();
+  await expect(ratioOptions.getByRole('button')).toHaveText(['1:1', '2:3', '3:4', '9:16']);
+  await expect(panel.getByRole('button', { name: '1:1 카드 비율', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
   await panel.getByRole('button', { name: '목록', exact: true }).click();
+  await expect(panel.getByRole('group', { name: '카드 비율', exact: true })).toHaveCount(0);
   await options.press('Escape');
   await page.reload();
   await search.fill(title);
@@ -210,13 +218,48 @@ test('LCOM03 selection replaces list tools and retains search and saved view acr
   await expect(options).toBeFocused();
   await options.press('Enter');
   await panel.getByRole('button', { name: '카드', exact: true }).click();
+  for (const [ratio, expected] of [
+    ['1:1', 1],
+    ['2:3', 2 / 3],
+    ['3:4', 3 / 4],
+    ['9:16', 9 / 16],
+  ] as const) {
+    await panel.getByRole('button', { name: `${ratio} 카드 비율`, exact: true }).click();
+    await expect
+      .poll(() =>
+        panel.locator('.library-item-avatar').evaluate((node) => {
+          const box = node.getBoundingClientRect();
+          return box.width / box.height;
+        })
+      )
+      .toBeCloseTo(expected, 2);
+  }
+  await expect(panel.locator('.library-portrait-cards')).toHaveAttribute('data-card-ratio', '9:16');
   await options.press('Escape');
   await expect(options).toBeFocused();
   await expect(panel.locator('.library-list-options')).not.toHaveAttribute('open');
   await page.reload();
   await search.fill(title);
   await expect(panel.locator('.library-portrait-card')).toHaveCount(1);
+  await expect(panel.locator('.library-portrait-cards')).toHaveAttribute('data-card-ratio', '9:16');
+  await options.click();
+  await expect(panel.getByRole('button', { name: '9:16 카드 비율', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('library-card-ratio-options.png') });
+  await options.press('Escape');
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 800 });
   await expect(panel.locator('.library-portrait-card')).toHaveCount(1);
+  expect(
+    await panel
+      .locator('.library-portrait-cards')
+      .evaluate(
+        (node) => getComputedStyle(node).gridTemplateColumns.split(' ').filter(Boolean).length
+      )
+  ).toBe(2);
   await expectNoOverflow(page);
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('library-card-ratio-9-16-mobile.png') });
 });
