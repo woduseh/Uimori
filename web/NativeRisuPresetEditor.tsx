@@ -2,13 +2,9 @@ import { useEffect, useId, useState, type ReactNode } from 'react';
 import {
   createNativeRisuPresetProgram,
   nativeRisuPresetSource,
+  nativeRisuToggleItems,
 } from '../core/risu-native-preset.js';
-import {
-  promptControls,
-  validateRisuPrompt,
-  type RisuPrompt,
-  type PromptValue,
-} from '../core/risu-prompt.js';
+import { validateRisuPrompt, type RisuPrompt, type PromptValue } from '../core/risu-prompt.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { NativeRisuToggleEditor } from './NativeRisuToggleEditor.js';
@@ -432,7 +428,8 @@ export function NativeRisuPresetEditor({
       <div {...panel('options')} className="native-section-body">
         {metadata}
         <h3>프리셋 기본 옵션</h3>
-        {!!promptControls(program).length && onValuesChange ? (
+        {!!nativeRisuToggleItems(text(source.customPromptTemplateToggle)).length &&
+        onValuesChange ? (
           <PromptControlFields
             program={program}
             values={values}

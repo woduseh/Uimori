@@ -46,17 +46,30 @@
   overflow-wrap: anywhere;
 }
 .native-toggle-raw {
-  margin-top: 24px;
+  margin-bottom: 16px;
 }
 .native-toggle-raw label {
-  margin: 16px 0;
+  font-weight: 700;
 }
 .native-toggle-raw textarea {
+  font-weight: 400;
   font-family: var(--font-mono, monospace);
   font-size: 13px;
   line-height: 1.65;
   min-height: 180px;
   resize: vertical;
+}
+.native-toggle-raw p {
+  margin: 8px 0;
+}
+.native-toggle-gui {
+  margin-top: 24px;
+}
+.native-toggle-gui > summary {
+  cursor: pointer;
+}
+.native-toggle-gui[open] > summary {
+  margin-bottom: 16px;
 }
 @media (max-width: 700px) {
   .native-toggle-raw textarea {

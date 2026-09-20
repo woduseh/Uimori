@@ -1,12 +1,8 @@
 import { useId } from 'react';
 import { ToggleRow } from './ToggleRow.js';
 import './prompt-control-fields.css';
-import {
-  promptControls,
-  type PromptControl,
-  type RisuPrompt,
-  type PromptValue,
-} from '../core/risu-prompt.js';
+import { type PromptControl, type RisuPrompt, type PromptValue } from '../core/risu-prompt.js';
+import { nativeRisuToggleItems, type NativeRisuToggleItem } from '../core/risu-native-preset.js';
 
 function ValueInput({
   control,
@@ -114,10 +110,15 @@ export function PromptControlFields({
   definitions?: PromptControl[];
   onChange: (id: string, value: PromptValue) => void;
 }) {
-  let controls: PromptControl[];
+  let items: NativeRisuToggleItem[];
   try {
-    controls = (definitions ?? promptControls(program)).filter(
-      (control) => !controlIds || controlIds.includes(control.id)
+    const declaration = program.nativeRisuPreset.preset.customPromptTemplateToggle;
+    items = (
+      definitions
+        ? definitions.map((control): NativeRisuToggleItem => ({ type: 'control', control }))
+        : nativeRisuToggleItems(typeof declaration === 'string' ? declaration : '')
+    ).filter(
+      (item) => !controlIds || (item.type === 'control' && controlIds.includes(item.control.id))
     );
   } catch {
     return (
@@ -126,26 +127,44 @@ export function PromptControlFields({
       </p>
     );
   }
-  const groups = new Map<string, PromptControl[]>();
-  for (const control of controls) {
-    const group = control.group?.trim() || '기본 설정';
-    groups.set(group, [...(groups.get(group) ?? []), control]);
+  const groups: { name: string; items: NativeRisuToggleItem[] }[] = [];
+  for (const item of items) {
+    const name = (item.type === 'control' ? item.control.group : item.group)?.trim() || '기본 설정';
+    const previous = groups.at(-1);
+    if (previous?.name === name) previous.items.push(item);
+    else groups.push({ name, items: [item] });
   }
   return (
     <div className="prompt-option-groups">
-      {[...groups].map(([group, items]) => (
-        <details key={group} open className="prompt-option-group">
-          <summary>{group}</summary>
+      {groups.map(({ name, items }, index) => (
+        <details key={index} open className="prompt-option-group">
+          <summary>{name}</summary>
           <div className="pc-control-values">
-            {items.map((control) => (
-              <ValueInput
-                key={control.id}
-                control={control}
-                label={control.label}
-                value={Object.hasOwn(values, control.id) ? values[control.id]! : control.default}
-                onChange={(value) => onChange(control.id, value)}
-              />
-            ))}
+            {items.map((item, index) => {
+              if (item.type === 'caption')
+                return (
+                  <p className="prompt-option-caption" key={`caption:${index}`}>
+                    {item.label}
+                  </p>
+                );
+              if (item.type === 'divider')
+                return (
+                  <div className="prompt-option-divider" key={`divider:${index}`}>
+                    {item.label && <span>{item.label}</span>}
+                    <hr />
+                  </div>
+                );
+              const { control } = item;
+              return (
+                <ValueInput
+                  key={`control:${control.id}`}
+                  control={control}
+                  label={control.label}
+                  value={Object.hasOwn(values, control.id) ? values[control.id]! : control.default}
+                  onChange={(value) => onChange(control.id, value)}
+                />
+              );
+            })}
           </div>
         </details>
       ))}

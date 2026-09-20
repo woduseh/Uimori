@@ -5,7 +5,11 @@ import { NATIVE_HOST_CONTEXT_ID } from '../core/provider-messages.js';
 import type { RisuContent } from '../core/risu-content.js';
 import type { RunSnapshot } from '../core/types.js';
 import { effectiveRisuControls, nativeToggleVariables } from '../core/risu-effective-controls.js';
-import { nativeRisuPresetControls, nativeRisuPresetFields } from '../core/risu-native-preset.js';
+import {
+  nativeRisuPresetControls,
+  nativeRisuPresetFields,
+  nativeRisuToggleItems,
+} from '../core/risu-native-preset.js';
 import { compileRisuPrompt, resolveControlValues } from '../core/risu-prompt.js';
 import { importRisuPresetProgram } from '../server/risu-preset-program.js';
 import { prepareNativeRisuRun, validateNativeRisuExecution } from '../server/risu-native-run.js';
@@ -351,6 +355,48 @@ test('native toggles expose their editor input without changing stored control v
       ],
     },
   ]);
+});
+
+test('native captions and dividers retain authored order without becoming control values', () => {
+  const declaration = [
+    '=Before group=caption',
+    '=Settings=group',
+    '=Group introduction=caption',
+    'mode=Mode=select=A,B',
+    '=Mode explanation=caption',
+    '=More options=divider',
+    '=Another explanation=caption',
+    '==groupEnd',
+    '=After group=caption',
+    '=Notes only=group',
+    '=No controls required=caption',
+    '==groupEnd',
+  ].join('\r\n');
+  const items = nativeRisuToggleItems(declaration);
+  expect(
+    items.map((item) =>
+      item.type === 'control'
+        ? [item.type, item.control.label, item.control.group]
+        : [item.type, item.label, item.group]
+    )
+  ).toEqual([
+    ['caption', 'Before group', undefined],
+    ['caption', 'Group introduction', 'Settings'],
+    ['control', 'Mode', 'Settings'],
+    ['caption', 'Mode explanation', 'Settings'],
+    ['divider', 'More options', 'Settings'],
+    ['caption', 'Another explanation', 'Settings'],
+    ['caption', 'After group', undefined],
+    ['caption', 'No controls required', 'Notes only'],
+  ]);
+  const controls = nativeRisuPresetControls({
+    version: 1,
+    preset: { customPromptTemplateToggle: declaration },
+  });
+  expect(controls.map((control) => control.id)).toEqual(['mode']);
+  expect(nativeToggleVariables(controls, resolveControlValues(controls, { mode: '1' }))).toEqual({
+    toggle_mode: '1',
+  });
 });
 
 test('import review distinguishes unsupported native blocks and host-specific switches', () => {

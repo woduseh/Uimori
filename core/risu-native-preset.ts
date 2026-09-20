@@ -81,8 +81,14 @@ export function validateNativeRisuPreset(value: unknown): NativeRisuPreset {
   return structuredClone(value) as NativeRisuPreset;
 }
 
-export function nativeRisuToggleControls(declaration: string): PromptControl[] {
-  const controls: PromptControl[] = [],
+/** Read-only display projection; captions and dividers never become stored option values. */
+export type NativeRisuToggleItem =
+  | { type: 'control'; control: PromptControl }
+  | { type: 'caption'; label: string; group?: string }
+  | { type: 'divider'; label: string; group?: string };
+
+export function nativeRisuToggleItems(declaration: string): NativeRisuToggleItem[] {
+  const items: NativeRisuToggleItem[] = [],
     seen = new Set<string>();
   let group: string | undefined;
   for (const line of declaration.split('\n')) {
@@ -95,12 +101,16 @@ export function nativeRisuToggleControls(declaration: string): PromptControl[] {
       group = undefined;
       continue;
     }
-    if (type === 'caption' || type === 'divider' || !key || !label) continue;
+    if (type === 'caption' || type === 'divider') {
+      items.push({ type, label: label ?? '', ...(group ? { group } : {}) });
+      continue;
+    }
+    if (!key || !label) continue;
     if (key.length > 120 || /\p{Cc}/u.test(key) || seen.has(key))
       throw new Error('RISU_NATIVE_PRESET_TOGGLE_KEY');
     seen.add(key);
     const text = type === 'text' || type === 'textarea';
-    controls.push({
+    const control: PromptControl = {
       id: nativeToggleId(key),
       ...(nativeToggleId(key) !== key ? { nativeKey: key } : {}),
       label,
@@ -127,9 +137,15 @@ export function nativeRisuToggleControls(declaration: string): PromptControl[] {
             ],
           }
         : {}),
-    });
+    };
+    items.push({ type: 'control', control });
   }
-  return controls;
+  return items;
+}
+export function nativeRisuToggleControls(declaration: string): PromptControl[] {
+  return nativeRisuToggleItems(declaration).flatMap((item) =>
+    item.type === 'control' ? [item.control] : []
+  );
 }
 export function nativeRisuPresetControls(source: NativeRisuPreset): PromptControl[] {
   return nativeRisuToggleControls(string(source.preset.customPromptTemplateToggle));
