@@ -7,12 +7,15 @@ import { createApp, type App } from '../server/app.js';
 import {
   mainJudgmentInput,
   mainJudgmentRequest,
+  mainJudgmentInputHash,
+  validateMainJudgmentInput,
   validateMainJudgmentWire,
 } from '../server/main-judgment.js';
 import type { CodexRuntimeService } from '../server/codex-runtime.js';
 import type { ProviderRequest, WireRecord } from '../core/transport.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
 import { JEV_ENDPOINT } from '../server/jev-judgment.js';
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { Store } from '../server/store.js';
 import { nativeContent } from './fixtures/native-content.js';
 
@@ -51,10 +54,12 @@ async function api(
 }
 async function fixture(
   candidate: string,
-  scores: [number, number] | 'failure',
+  scores: number | 'failure' | 'invalid' | 'budget',
   maxCalls = 8,
   key = true,
-  scriptStage?: 'input' | 'editRequest'
+  scriptStage?: 'input' | 'editRequest',
+  judgmentEnabled = true,
+  generationStatus: 'completed' | 'partial' = 'completed'
 ) {
   vi.stubEnv('TYPESAFE_API_KEY', key ? 'synthetic-jev-key' : '');
   const judged: Record<string, any>[] = [];
@@ -62,12 +67,15 @@ async function fixture(
     expect(url).toBe(JEV_ENDPOINT);
     judged.push(JSON.parse(String(init?.body)));
     if (scores === 'failure') throw new Error('synthetic transport failed');
+    if (scores === 'budget')
+      return new Response(JSON.stringify({ detail: { error_type: 'max_tokens_exceeded' } }), {
+        status: 400,
+      });
     return new Response(
       JSON.stringify({
         model: 'jev-latest',
         answers: {
-          explicitRefusal: { type: 'noul', noul: scores[0] },
-          taskAccepted: { type: 'noul', noul: scores[1] },
+          explicitRefusal: { type: 'noul', noul: scores === 'invalid' ? 2 : scores },
         },
         usage: { input_tokens: 7, output_tokens: 3 },
       })
@@ -110,7 +118,7 @@ async function fixture(
         stablePrefixSha256: digest(request.stable),
       });
       return {
-        status: 'completed',
+        status: generationStatus,
         text: output.text,
         toolCalls: [],
         refusal: null,
@@ -131,6 +139,15 @@ async function fixture(
     codexRuntime: runtime,
   });
   owner.app = app;
+  if (!judgmentEnabled) {
+    const workspace = modelWorkspace(app.store);
+    updateModelWorkspace(app.store, {
+      routes: workspace.routes,
+      translationPolicy: workspace.translationPolicy,
+      expectedRevision: workspace.revision,
+      mainJudgmentEnabled: false,
+    });
+  }
   const connection = await api(app, '/api/connections', {
     title: 'Synthetic Codex',
     protocol: 'codex-app-server-v1',
@@ -218,11 +235,13 @@ ${
 }
 
 test.each([
-  ['I cannot fulfill this request.', [0.99, 0.01], 'refused', 'MAIN_RESPONSE_REFUSED'],
-  ['I am considering the request.', [0.5, 0.5], 'failed', 'MAIN_REFUSAL_UNCERTAIN'],
+  ['I cannot fulfill this request.', 0.99, 'refused', 'MAIN_RESPONSE_REFUSED'],
+  ['I cannot provide this service.', 0.9, 'refused', 'MAIN_RESPONSE_REFUSED'],
   ['A preserved candidate.', 'failure', 'failed', 'JEV_EXECUTION_FAILED'],
+  ['Invalid judgment keeps output.', 'invalid', 'failed', 'JEV_RESPONSE_INVALID'],
+  ['Oversized judgment keeps output.', 'budget', 'failed', 'JEV_INPUT_BUDGET'],
 ] as const)('keeps %s out of canon without retrying', async (text, scores, status, error) => {
-  const f = await fixture(text, typeof scores === 'string' ? scores : [...scores]);
+  const f = await fixture(text, scores);
   expect(f.run).toMatchObject({
     status,
     error,
@@ -241,7 +260,7 @@ test.each([
   'Here is a plan: first review the evidence.',
   'Which of the two scenes should I analyze?',
 ])('accepts the selected task output without requiring fiction: %s', async (text) => {
-  const f = await fixture(text, [0.01, 0.99]);
+  const f = await fixture(text, 0.58);
   expect(f.run).toMatchObject({
     status: 'completed',
     error: null,
@@ -249,7 +268,7 @@ test.each([
     usage: { modelCalls: 2, inputTokens: 18, outputTokens: 8 },
   });
   expect(f.app.store.sourceOriginal(f.run.sourceRevision!).text).toBe(text);
-  expect(f.judged[0].state).toEqual({ prefix: text, suffix: '' });
+  expect(f.judged[0].state).toEqual({ response: text });
   const attempt = f.app.store.product
     .attempts(f.chat.id)
     .find((item) => (item.request as WireRecord).judgment?.kind === 'main-refusal')!;
@@ -277,14 +296,14 @@ test.each([
 ] as const)(
   'checks judgment budget/connection before paying for generation',
   async (budget, key, error) => {
-    const f = await fixture('Never generated', [0.01, 0.99], budget, key);
+    const f = await fixture('Never generated', 0.58, budget, key);
     expect(f.run).toMatchObject({ status: 'failed', error, sourceRevision: null });
     expect(f.calls).toEqual([]);
     expect(f.judged).toEqual([]);
   }
 );
 test('a candidate owns its response judgment while preserving the original frozen input', async () => {
-  const f = await fixture('First response.', [0.01, 0.99]);
+  const f = await fixture('First response.', 0.58);
   f.output.text = 'Independent candidate response.';
   const candidate = await api(f.app, `/api/runs/${f.run.id}/candidate`, {
     idempotencyKey: randomUUID(),
@@ -306,22 +325,132 @@ test('a candidate owns its response judgment while preserving the original froze
 test.each(['input', 'editRequest'] as const)(
   'Lua %s preserves a writer call and its JEV judgment',
   async (stage) => {
-    const f = await fixture('A completed response.', [0.01, 0.99], 3, true, stage);
+    const f = await fixture('A completed response.', 0.58, 3, true, stage);
     expect(f.run).toMatchObject({ status: 'completed', error: null, usage: { modelCalls: 3 } });
     expect(f.calls.map((call) => call.role)).toEqual(['script', 'main']);
     expect(f.judged).toHaveLength(1);
     expect(f.run.snapshot.nativeRisuExecution?.variables.budgetBlocked).toBe('true');
   }
 );
-test('bounds Unicode excerpts and distinguishes character/quoted refusals from service refusal', () => {
+test('preserves the whole Unicode response and only asks about service refusal', () => {
   const candidate = '😀'.repeat(5000);
   const input = mainJudgmentInput(candidate);
-  expect(Array.from(input.prefix)).toHaveLength(2000);
-  expect(Array.from(input.suffix)).toHaveLength(1000);
+  expect(input).toEqual({
+    version: 'main-refusal-jev-v2',
+    candidateHash: createHash('sha256').update(candidate).digest('hex'),
+    response: candidate,
+  });
+  expect(mainJudgmentRequest(input).state).toEqual({ response: candidate });
+  expect(Object.keys(mainJudgmentRequest(input).questions)).toEqual(['explicitRefusal']);
   expect(mainJudgmentRequest(input).questions.explicitRefusal.instructions).toContain(
     'Character dialogue, quoted refusals'
   );
-  expect(mainJudgmentRequest(input).questions.taskAccepted.instructions).toContain(
+  expect(mainJudgmentRequest(input).questions.explicitRefusal.instructions).toContain(
     'Planning, analysis, answers, useful clarification questions'
   );
+});
+
+test('sends and archives the entire long response, including its middle', async () => {
+  const candidate =
+    'Beginning 😀' + '가나다'.repeat(3000) + ' middle refusal quote ' + '漢字'.repeat(3000) + 'End';
+  const f = await fixture(candidate, 0.58);
+  expect(f.run.status).toBe('completed');
+  expect(f.judged[0].state).toEqual({ response: candidate });
+  expect(Object.keys(f.judged[0].questions)).toEqual(['explicitRefusal']);
+  expect(f.run.snapshot.mainJudgment).toEqual(mainJudgmentInput(candidate));
+  const restored = new Store(join(owned.at(-1)!.directory, 'long-restore.sqlite'));
+  try {
+    restored.product.import(f.app.store.product.export());
+    expect(restored.run(f.run.id).snapshot.mainJudgment?.response).toBe(candidate);
+  } finally {
+    restored.close();
+  }
+});
+
+test('rejects changed response contents, receipt hashes, and judgment wire questions', async () => {
+  const f = await fixture('Original full response.', 0.58);
+  const input = f.run.snapshot.mainJudgment!;
+  const wire = f.app.store.product
+    .attempts(f.chat.id)
+    .find((item) => (item.request as WireRecord).judgment?.kind === 'main-refusal')!
+    .request as WireRecord;
+  expect(() => validateMainJudgmentInput({ ...input, response: 'Changed' })).toThrow(
+    'MAIN_JUDGMENT_INPUT_INVALID'
+  );
+  expect(mainJudgmentInputHash(input)).not.toBe(
+    mainJudgmentInputHash(mainJudgmentInput(input.response + 'tail'))
+  );
+  const changed = structuredClone(wire);
+  const body = changed.body as { questions: Record<string, unknown> };
+  body.questions.extra = { type: 'noul', instructions: 'Another question' };
+  changed.bodySha256 = digest(changed.body);
+  changed.stablePrefixSha256 = digest(body.questions);
+  expect(() => validateMainJudgmentWire(input, changed)).toThrow('MAIN_JUDGMENT_ATTEMPT_MISMATCH');
+  const archive = f.app.store.product.export();
+  const serialized = JSON.stringify(archive).replaceAll(
+    'Original full response.',
+    'Tampered full response.'
+  );
+  const restored = new Store(join(owned.at(-1)!.directory, 'tampered-restore.sqlite'));
+  try {
+    expect(() => restored.product.import(JSON.parse(serialized))).toThrow();
+  } finally {
+    restored.close();
+  }
+});
+
+test('preserves oversized main output when JEV preflight rejects it before an attempt', async () => {
+  const candidate = '가😀 '.repeat(20000);
+  const f = await fixture(candidate, 0.58);
+  expect(f.run).toMatchObject({
+    status: 'failed',
+    error: 'JEV_INPUT_BUDGET',
+    partialText: candidate,
+    sourceRevision: null,
+    usage: { modelCalls: 1 },
+  });
+  expect(f.app.store.chat(f.chat.id).headRevision).toBeNull();
+  expect(f.calls).toHaveLength(1);
+  expect(f.judged).toHaveLength(0);
+  expect(f.run.snapshot.mainJudgment?.response).toBe(candidate);
+  expect(f.app.store.product.attempts(f.chat.id)).toHaveLength(1);
+});
+
+test('disabled main judgment accepts refusal text without a JEV key, receipt, or reserved call', async () => {
+  const candidate = 'I cannot fulfill this request.';
+  const f = await fixture(candidate, 0.99, 1, false, undefined, false);
+  expect(f.run).toMatchObject({ status: 'completed', error: null, usage: { modelCalls: 1 } });
+  expect(f.run.snapshot.mainJudgmentEnabled).toBe(false);
+  expect(f.run.snapshot.mainJudgment).toBeUndefined();
+  expect(f.app.store.sourceOriginal(f.run.sourceRevision!).text).toBe(candidate);
+  expect(f.calls).toHaveLength(1);
+  expect(f.judged).toHaveLength(0);
+  expect(f.app.store.product.attempts(f.chat.id)).toHaveLength(1);
+  const workspace = modelWorkspace(f.app.store);
+  updateModelWorkspace(f.app.store, {
+    routes: workspace.routes,
+    translationPolicy: workspace.translationPolicy,
+    expectedRevision: workspace.revision,
+    mainJudgmentEnabled: true,
+  });
+  f.output.text = 'A candidate using the frozen disabled judgment setting.';
+  const candidateRun = await api(f.app, `/api/runs/${f.run.id}/candidate`, {
+    idempotencyKey: randomUUID(),
+    title: 'Frozen disabled setting',
+  });
+  await expect
+    .poll(() => f.app.store.run(candidateRun.id).status)
+    .not.toMatch(/^(queued|running)$/u);
+  expect(f.app.store.run(candidateRun.id)).toMatchObject({
+    status: 'completed',
+    snapshot: { mainJudgmentEnabled: false },
+  });
+  expect(f.judged).toHaveLength(0);
+});
+
+test('disabled main judgment does not accept a partial generation', async () => {
+  const f = await fixture('Incomplete output', 0.01, 1, false, undefined, false, 'partial');
+  expect(f.run.status).not.toBe('completed');
+  expect(f.run.sourceRevision).toBeNull();
+  expect(f.judged).toHaveLength(0);
 });

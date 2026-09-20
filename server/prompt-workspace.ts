@@ -70,6 +70,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'main',
     'translation',
     'translationPolicy',
+    'mainJudgmentEnabled',
     'modelRoutes',
     'titleModel',
     'helperModel',
@@ -79,7 +80,12 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
   const policy = record(b.translationPolicy);
   fields(policy, ['maxRetries', 'maxCalls', 'judgment']);
   const judgment = validateTranslationJudgmentPolicy(policy.judgment);
+  if (b.mainJudgmentEnabled !== undefined && typeof b.mainJudgmentEnabled !== 'boolean')
+    throw new HttpError(400, 'MAIN_JUDGMENT_ENABLED_INVALID');
   return {
+    ...(b.mainJudgmentEnabled !== undefined
+      ? { mainJudgmentEnabled: b.mainJudgmentEnabled as boolean }
+      : {}),
     revision: number(b.revision, 'prompt workspace revision'),
     titleModel: validateTitleModel(b.titleModel ?? null),
     helperModel: validateTitleModel(b.helperModel ?? null),
@@ -193,6 +199,7 @@ function validateModelRoutes(value: unknown): ModelWorkspace['routes'] {
 export function modelWorkspace(store: Store): ModelWorkspace {
   const current = promptWorkspace(store);
   return {
+    mainJudgmentEnabled: current.mainJudgmentEnabled !== false,
     revision: current.revision,
     titleModel: workspaceModelRef(current, 'title'),
     helperModel: workspaceModelRef(current, 'helper'),
@@ -208,6 +215,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     'expectedRevision',
     'routes',
     'translationPolicy',
+    'mainJudgmentEnabled',
     'titleModel',
     'helperModel',
     'contextModel',
@@ -233,6 +241,9 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
         : (prior.scriptModel ?? null),
       modelRoutes: validateModelRoutes(input.routes),
       translationPolicy: input.translationPolicy,
+      ...(Object.hasOwn(input, 'mainJudgmentEnabled')
+        ? { mainJudgmentEnabled: input.mainJudgmentEnabled }
+        : {}),
       revision: prior.revision + 1,
     });
     for (const role of Object.keys(emptyModelRoutes()) as (keyof ModelWorkspace['routes'])[])
@@ -255,7 +266,13 @@ export function updatePromptWorkspace(
   inTransaction = false
 ): PromptWorkspace {
   const b = record(value);
-  fields(b, ['expectedRevision', 'main', 'translation', 'translationPolicy']);
+  fields(b, [
+    'expectedRevision',
+    'main',
+    'translation',
+    'translationPolicy',
+    'mainJudgmentEnabled',
+  ]);
   const expected = number(b.expectedRevision, 'prompt workspace revision');
   const apply = () => {
     const prior = promptWorkspace(store);
@@ -278,6 +295,9 @@ export function updatePromptWorkspace(
       ...prior,
       ...updates,
       ...(b.translationPolicy !== undefined ? { translationPolicy: b.translationPolicy } : {}),
+      ...(Object.hasOwn(b, 'mainJudgmentEnabled')
+        ? { mainJudgmentEnabled: b.mainJudgmentEnabled }
+        : {}),
       revision: prior.revision + 1,
     });
     for (const agent of result.main.program.collaboration?.agents ?? [])

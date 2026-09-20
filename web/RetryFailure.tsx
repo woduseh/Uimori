@@ -20,9 +20,10 @@ export function RetryFailure({
   onDetails: () => void;
   onHistory: () => void;
 }) {
-  const settings = /PROMPT_|UNSUPPORTED_OPTIONS|HTTP_40[0134]|JEV_|MAIN_JUDGMENT_CALL_BUDGET/u.test(
-    error ?? ''
-  );
+  const settings =
+    /PROMPT_|UNSUPPORTED_OPTIONS|HTTP_40[0134]|JEV_|MAIN_RESPONSE_REFUSED|MAIN_JUDGMENT_CALL_BUDGET/u.test(
+      error ?? ''
+    );
   const message =
     status === 'cancelled'
       ? '응답 생성을 취소했어요.'

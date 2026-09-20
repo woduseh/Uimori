@@ -36,13 +36,12 @@ define(
   '프로바이더·모델의 JEV 판단에서 API 키를 저장하고 연결 테스트를 한 뒤 새 작업을 요청해 주세요.'
 );
 define(
-  [
-    'JEV_EXECUTION_FAILED',
-    'JEV_TIMEOUT',
-    'JEV_RESPONSE_INVALID',
-    'JEV_INPUT_BUDGET',
-    'JEV_HTTP_429',
-  ],
+  ['JEV_INPUT_BUDGET'],
+  'JEV 판단 입력이 허용된 토큰 한도를 초과했어요.',
+  '입력을 자르거나 자동 재호출하지 않았어요. 보존된 출력과 생성 모델의 출력 길이 설정을 확인해 주세요.'
+);
+define(
+  ['JEV_EXECUTION_FAILED', 'JEV_TIMEOUT', 'JEV_RESPONSE_INVALID', 'JEV_HTTP_429'],
   'JEV 판단을 완료하지 못했어요.',
   '작업 상세와 JEV 연결을 확인해 주세요. 다른 모델로 대체하거나 자동 재호출하지 않았어요.'
 );

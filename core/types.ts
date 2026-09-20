@@ -65,8 +65,10 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
+  /** Frozen at reservation; omitted historical values mean enabled. */
+  mainJudgmentEnabled?: boolean;
   /** Bounded input receipt for the host judgment of the unmodified model response. */
-  mainJudgment?: { candidateHash: string; prefix: string; suffix: string };
+  mainJudgment?: { version: 'main-refusal-jev-v2'; candidateHash: string; response: string };
   nativeRisuPresetProgram?: import('./risu-native-preset.js').NativeRisuPresetExecution;
   nativeRisuExecution?: import('./risu-native-execution.js').NativeRisuExecution;
   nativeRisuAuthored?: import('./risu-native-execution.js').NativeRisuAuthored;

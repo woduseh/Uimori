@@ -155,7 +155,6 @@ export function hooks(origin = 'http://127.0.0.1:1') {
             model: 'jev-latest',
             answers: {
               explicitRefusal: { type: 'noul', noul: 0.01 },
-              startsTranslation: { type: 'noul', noul: 0.99 },
             },
             usage: { input_tokens: 10, output_tokens: 2 },
           })

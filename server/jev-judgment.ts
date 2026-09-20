@@ -4,6 +4,10 @@ import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
 
 export const JEV_ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 export const JEV_MODEL = 'jev-latest';
+// https://docs.typesafe.ai/models (2026-09-20). Host estimates use o200k_base,
+// not a guaranteed provider tokenizer; explicit provider budget failures also remain fatal.
+export const JEV_REQUEST_TOKEN_LIMIT = 64_000;
+export const JEV_STATE_QUESTION_TOKEN_LIMIT = 32_000;
 export type JevQuestion =
   | { type: 'noul'; instructions: string }
   | { type: 'choice'; instructions: string; criteria: Record<string, string | null> };
@@ -59,7 +63,7 @@ const emptyUsage = (): ProviderResult['usage'] => ({
 export async function executeJevJudgment(
   request: JevRequest,
   inputHash: string,
-  maxInputTokens: number,
+  maxInputTokens: number | null,
   hooks: JevHooks
 ): Promise<JevResult> {
   if (hooks.signal.aborted) throw new JevError('JEV_CANCELLED');
@@ -70,7 +74,17 @@ export async function executeJevJudgment(
   )
     throw new JevError('JEV_REQUEST_INVALID');
   const body = { model: JEV_MODEL, ...request };
-  if (estimateContextTokens(body) > maxInputTokens) throw new JevError('JEV_INPUT_BUDGET');
+  const stateTokens = estimateContextTokens(request.state);
+  const questionTokens = Object.values(request.questions).map((question) =>
+    estimateContextTokens(question)
+  );
+  if (
+    stateTokens + Math.max(...questionTokens) > JEV_STATE_QUESTION_TOKEN_LIMIT ||
+    stateTokens + questionTokens.reduce((sum, tokens) => sum + tokens, 0) >
+      JEV_REQUEST_TOKEN_LIMIT ||
+    (maxInputTokens !== null && estimateContextTokens(body) > maxInputTokens)
+  )
+    throw new JevError('JEV_INPUT_BUDGET');
   const key = await (hooks.credential ?? (() => process.env.TYPESAFE_API_KEY))();
   if (!key || /[\r\n]/u.test(key)) throw new JevError('JEV_CREDENTIAL_REQUIRED');
   if (hooks.signal.aborted) throw new JevError('JEV_CANCELLED');
@@ -121,9 +135,9 @@ export async function executeJevJudgment(
       body: encoded,
       signal: controller.signal,
     });
-    if (!response.ok) throw new JevError(`JEV_HTTP_${response.status}`);
     const reader = response.body?.getReader();
-    if (!reader) throw new JevError('JEV_RESPONSE_INVALID');
+    if (!reader)
+      throw new JevError(response.ok ? 'JEV_RESPONSE_INVALID' : `JEV_HTTP_${response.status}`);
     const chunks: Uint8Array[] = [];
     let size = 0;
     while (true) {
@@ -137,6 +151,21 @@ export async function executeJevJudgment(
       chunks.push(part.value);
     }
     const responseText = Buffer.concat(chunks).toString('utf8');
+    if (!response.ok) {
+      let errorType: unknown;
+      try {
+        const payload = object(JSON.parse(responseText));
+        errorType =
+          payload.error_type ??
+          object(payload.error).error_type ??
+          object(payload.detail).error_type;
+      } catch {
+        // Non-JSON provider errors retain their HTTP status.
+      }
+      throw new JevError(
+        errorType === 'max_tokens_exceeded' ? 'JEV_INPUT_BUDGET' : `JEV_HTTP_${response.status}`
+      );
+    }
     const payload = object(JSON.parse(responseText)),
       answers = object(payload.answers),
       usage = object(payload.usage);
