@@ -8,14 +8,6 @@ export function isEditDraftSaveRequest(request: Pick<Request, 'url' | 'method'>)
     /^\/api\/edit-drafts\/[^/]+\/save$/u.test(new URL(request.url()).pathname)
   );
 }
-/** Opening/synchronizing a shared buffer does not save its library target. Other writes remain observable. */
-export function isEditDraftBufferRequest(request: Pick<Request, 'url' | 'method'>): boolean {
-  const path = new URL(request.url()).pathname;
-  return (
-    (request.method() === 'POST' && path === '/api/edit-drafts') ||
-    (request.method() === 'PATCH' && /^\/api\/edit-drafts\/[^/]+$/u.test(path))
-  );
-}
 /** Start before the UI action. Assert the saved receipt and target instead of waiting for the retired editor transport. */
 export async function waitForEditDraftSave(
   page: Page,

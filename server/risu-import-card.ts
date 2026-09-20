@@ -1,10 +1,4 @@
-import type {
-  CharacterCardV3,
-  CharacterCardV3Asset,
-  LorebookEntry,
-  customscript,
-  triggerscript,
-} from './compat/risu/types.js';
+import type { CharacterCardV3, CharacterCardV3Asset, LorebookEntry } from './compat/risu/types.js';
 import type { readCharacterCard } from './character-card-file.js';
 
 /** The parsed card and the identity of the file it came from, as the reader hands it over. */
@@ -18,13 +12,6 @@ export type RisuCardInput = ReturnType<typeof readCharacterCard>;
 export type RisuCard = Partial<CharacterCardV3['data']> & Record<string, unknown>;
 export type RisuCardAsset = Partial<CharacterCardV3Asset> & Record<string, unknown>;
 export type RisuCardLoreEntry = Partial<LorebookEntry> & Record<string, unknown>;
-/** Risu's own bag under `extensions.risuai`, holding the code surfaces of a card. */
-export type RisuCardExtension = {
-  customScripts?: customscript[];
-  defaultVariables?: string;
-  triggerscript?: triggerscript[];
-  lowLevelAccess?: boolean;
-} & Record<string, unknown>;
 
 export const string = (value: unknown) => (typeof value === 'string' ? value : '');
 export const object = (value: unknown): Record<string, unknown> =>

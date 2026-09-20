@@ -1,11 +1,7 @@
 import { nativeRisuPresetVariableDefaults, type NativeRisuPreset } from './risu-native-preset.js';
 import type { ProfileSnapshot } from './product.js';
 import { PromptEvaluationError } from './prompt-values.js';
-import {
-  CHAT_VARIABLE_LIMITS,
-  validateChatVariableValues,
-  validateChatVariableState,
-} from './chat-variables.js';
+import { validateChatVariableValues, validateChatVariableState } from './chat-variables.js';
 
 /** Minimal frozen declaration view, also usable before a new chat exists. */
 export type TemplateVariableProfile = Pick<
@@ -14,9 +10,6 @@ export type TemplateVariableProfile = Pick<
 > & {
   promptPresets?: { main?: { program: { nativeRisuPreset: NativeRisuPreset } } };
 };
-
-/** Native variable declarations share the branch variable storage limits. */
-export const TEMPLATE_VARIABLE_LIMITS = CHAT_VARIABLE_LIMITS;
 
 /** Keys are authored data: preserve Unicode, whitespace and empty names exactly. */
 export const validateTemplateVariableDefaults = validateChatVariableValues;

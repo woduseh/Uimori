@@ -302,46 +302,33 @@ export async function startServer(env, directory, children, cwd = root) {
   });
   return { child, ready };
 }
-export async function readReport(file, since, kind, selectedPattern) {
-  if (!existsSync(file)) throw new Error(`${kind} report missing`);
-  if ((await stat(file)).mtimeMs < since - 1000) throw new Error(`${kind} stale report`);
+export async function readBrowserReport(file, since) {
+  if (!existsSync(file)) throw new Error('playwright report missing');
+  if ((await stat(file)).mtimeMs < since - 1000) throw new Error('playwright stale report');
   const report = JSON.parse(await readFile(file, 'utf8'));
-  let tests = [];
-  let globalFailure = false;
-  if (kind === 'vitest') {
-    for (const suite of report.testResults || [])
-      for (const item of suite.assertionResults || [])
-        tests.push({ title: item.fullName || item.title, status: item.status });
-    globalFailure = report.success === false;
-  } else {
-    function visit(suite, parents = []) {
-      for (const spec of suite.specs || [])
-        for (const test of spec.tests || []) {
-          const results = test.results || [];
-          tests.push({
-            title: [...parents, suite.title || '', spec.title].join(' '),
-            status:
-              test.status === 'expected' &&
-              test.expectedStatus === 'passed' &&
-              results.length === 1 &&
-              results[0].status === 'passed'
-                ? 'passed'
-                : test.status || 'missing',
-          });
-        }
-      for (const nested of suite.suites || []) visit(nested, [...parents, suite.title || '']);
-    }
-    for (const suite of report.suites || []) visit(suite);
-    globalFailure = Boolean(report.errors?.length);
+  const tests = [];
+  function visit(suite, parents = []) {
+    for (const spec of suite.specs || [])
+      for (const test of spec.tests || []) {
+        const results = test.results || [];
+        tests.push({
+          title: [...parents, suite.title || '', spec.title].join(' '),
+          status:
+            test.status === 'expected' &&
+            test.expectedStatus === 'passed' &&
+            results.length === 1 &&
+            results[0].status === 'passed'
+              ? 'passed'
+              : test.status || 'missing',
+        });
+      }
+    for (const nested of suite.suites || []) visit(nested, [...parents, suite.title || '']);
   }
-  const totalReported = tests.length;
-  if (selectedPattern) tests = tests.filter((test) => selectedPattern.test(test.title));
-  const skipped = tests.filter((test) =>
-    ['pending', 'skipped', 'todo', 'disabled'].includes(test.status)
-  ).length;
+  for (const suite of report.suites || []) visit(suite);
+  const globalFailure = Boolean(report.errors?.length);
+  const skipped = tests.filter((test) => test.status === 'skipped').length;
   const failed = tests.filter(
-    (test) =>
-      test.status !== 'passed' && !['pending', 'skipped', 'todo', 'disabled'].includes(test.status)
+    (test) => test.status !== 'passed' && test.status !== 'skipped'
   ).length;
   const observations = {
     discovered: tests.length,
@@ -350,16 +337,15 @@ export async function readReport(file, since, kind, selectedPattern) {
     skipped,
     failed,
     globalFailure,
-    excludedBySelection: totalReported - tests.length,
     tests,
     report: path.relative(root, file),
   };
   const problem = !tests.length
-    ? `${kind}: zero discovered tests`
+    ? 'playwright: zero discovered tests'
     : skipped || failed
-      ? `${kind}: required tests not PASS (${skipped} skipped, ${failed} failed)`
+      ? `playwright: required tests not PASS (${skipped} skipped, ${failed} failed)`
       : globalFailure
-        ? `${kind} reporter records global failure`
+        ? 'playwright reporter records global failure'
         : undefined;
   if (problem) {
     const error = new Error(problem);

@@ -1253,6 +1253,7 @@ function ContentEditor({
     model: editableModel,
     onRestore: (draft) => {
       const model = draft.model as ContentDraftModel;
+      setSaved('');
       setValue(model);
       setBaseline(JSON.stringify(draft.baseModel));
       setSelected(

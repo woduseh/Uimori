@@ -16,7 +16,7 @@ export function requiredChecks(area = 'verify:browser-smoke', full = false, scri
   if (
     !/^verify:[a-z][a-z0-9-]*$/u.test(area) ||
     !Object.hasOwn(scripts, area) ||
-    /(?:live|gallery|visual|worktrees|redesign|selftest)/u.test(area)
+    /(?:live|gallery|visual|worktrees|redesign)/u.test(area)
   )
     throw new Error(
       'Choose a local feature verify:* script; use --full for the complete regression'

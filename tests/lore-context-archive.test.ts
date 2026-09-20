@@ -10,7 +10,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { executeTool, syntheticResources } from '../core/provider.js';
+import { executeTool } from '../core/provider.js';
+import { syntheticResources } from './fixtures/resources.js';
 import type { RunSnapshot } from '../core/types.js';
 import { forkChat } from '../server/chat-fork.js';
 import {

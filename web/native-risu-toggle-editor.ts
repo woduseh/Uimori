@@ -63,62 +63,6 @@ export function serializeNativeToggleDefinition(item: NativeToggleDefinition): s
   return `${item.key}=${item.label}=${item.type}`;
 }
 
-export function editNativeToggleLine(
-  value: string,
-  index: number,
-  patch: Partial<NativeToggleDefinition>
-): string {
-  const lines = parseNativeToggleLines(value);
-  const line = lines[index];
-  if (!line?.definition) return value;
-  const next = { ...line.definition, ...patch };
-  if (
-    Object.keys(patch).every(
-      (key) =>
-        next[key as keyof NativeToggleDefinition] ===
-        line.definition?.[key as keyof NativeToggleDefinition]
-    )
-  )
-    return value;
-  line.raw = serializeNativeToggleDefinition(next);
-  return serializeNativeToggleLines(lines);
-}
-
-export function addNativeToggleLine(value: string, type: NativeToggleType): string {
-  const lines = parseNativeToggleLines(value);
-  // An unknown suffix can still be a working toggle in Risu; reserve its key too.
-  const keys = new Set(lines.map((line) => line.raw.split('=')[0]));
-  let key = 'new_toggle';
-  for (let i = 2; keys.has(key); i++) key = `new_toggle_${i}`;
-  const control = ['toggle', 'select', 'text', 'textarea'].includes(type);
-  const raw = serializeNativeToggleDefinition({
-    type,
-    key: control ? key : '',
-    label: type === 'groupEnd' ? '' : '새 항목',
-    options: type === 'select' ? '선택 1,선택 2' : '',
-  });
-  const ending = lines.find((line) => line.ending)?.ending ?? '\n';
-  const last = lines.at(-1);
-  const separator = last && !last.ending ? ending : '';
-  return value + separator + raw;
-}
-
-export function removeNativeToggleLine(value: string, index: number): string {
-  return serializeNativeToggleLines(parseNativeToggleLines(value).filter((_, i) => i !== index));
-}
-
-export function moveNativeToggleLine(value: string, index: number, delta: number): string {
-  const lines = parseNativeToggleLines(value);
-  const target = index + delta;
-  if (!lines[index] || !lines[target]) return value;
-  // Keep line separators at their positions, including an absent final newline.
-  const source = lines[index];
-  const other = lines[target];
-  lines[index] = { ...other, ending: source.ending };
-  lines[target] = { ...source, ending: other.ending };
-  return serializeNativeToggleLines(lines);
-}
-
 export function nativeToggleGroupWarnings(lines: NativeToggleLine[]): string[] {
   const warnings: string[] = [];
   let open = false;

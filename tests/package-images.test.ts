@@ -13,7 +13,6 @@ import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { forkChat } from '../server/chat-fork.js';
 import {
-  catalogReaderAssets,
   readerImageAssets,
   decodeImage,
   imageCatalog,
@@ -326,7 +325,7 @@ test('completed package images survive fork and archive, and forged or missing b
     blockAnchor: splitSource(copiedSource)[0].anchor,
   });
   expect(
-    catalogReaderAssets(copied.id, store.job(copiedJob.id).input).find(
+    readerImageAssets(store, copied.id, [copiedSource.id]).find(
       (asset) => asset.id === before.result!.annotations![0].assetRef
     )
   ).toMatchObject({ chatId: copied.id, hash: item.blobHash, revision: content.revision });

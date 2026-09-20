@@ -167,8 +167,7 @@ test('catastrophic native regex is terminated without blocking the host', async 
   expect(hostTick).toBe(true);
 });
 
-const sampleRoot =
-  process.env.UIMORI_NATIVE_CARD_ROOT ?? 'C:/Users/wodus/ai-workspace/RisuToki/risu/bot';
+const sampleRoot = process.env.UIMORI_NATIVE_CARD_ROOT;
 const cases = [
   ['Cheongwon High School', 'Reference/Cheongwon High School.charx'],
   ['Harper', 'Reference/Harper.charx'],
@@ -176,8 +175,8 @@ const cases = [
 ] as const;
 describe('local native CHARX display evidence (optional private fixtures)', () => {
   for (const [title, path] of cases)
-    test.skipIf(!existsSync(join(sampleRoot, path)))(title, async () => {
-      const zip = cardZip(readFileSync(join(sampleRoot, path)));
+    test.skipIf(!sampleRoot || !existsSync(join(sampleRoot, path)))(title, async () => {
+      const zip = cardZip(readFileSync(join(sampleRoot!, path)));
       const document = JSON.parse(zip.get('card.json')!().toString('utf8'));
       const card = document.data ?? document;
       const module = zip.has('module.risum')

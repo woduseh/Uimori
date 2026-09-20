@@ -59,7 +59,6 @@ export type NativeTransferFile = {
   images: NativeTransferImage[];
   sourceFiles?: NativeTransferSourceFile[];
 };
-export type NativeTransferExportRequest = { items: { kind: NativeTransferKind; id: string }[] };
 export type NativeTransferSummary = {
   contents: number;
   prompts: number;
@@ -91,12 +90,6 @@ export type NativeTransferPrepare = {
   entries: NativeTransferEntry[];
   modelRequirements: NativeTransferModelRequirement[];
   warnings: { code: string; key: string; message: string }[];
-};
-export type NativeTransferApplyRequest = {
-  file: NativeTransferFile;
-  digest: string;
-  modelBindings: NativeTransferModelBinding[];
-  idempotencyKey: string;
 };
 export type NativeTransferReceipt = {
   id: string;

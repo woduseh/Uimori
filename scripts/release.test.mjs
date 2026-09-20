@@ -37,7 +37,7 @@ const commit = 'e'.repeat(40);
 const scripts = Object.fromEntries(
   [
     'quality:full',
-    'verify:smoke',
+    'verify:ui',
     'verify:browser-smoke',
     'verify:selfhost',
     'verify:redesign',
@@ -105,8 +105,8 @@ async function checksFixture(t) {
 
 test('release options reject ambiguity and remote arguments are POSIX quoted', () => {
   assert.deepEqual(
-    parseOptions(['--area', 'verify:smoke', '--full'], { values: ['area'], flags: ['full'] }),
-    { area: 'verify:smoke', full: true }
+    parseOptions(['--area', 'verify:ui', '--full'], { values: ['area'], flags: ['full'] }),
+    { area: 'verify:ui', full: true }
   );
   for (const args of [['--full', '--full'], ['--area'], ['--skip-tests'], ['other']])
     assert.throws(() => parseOptions(args, { values: ['area'], flags: ['full'] }));
@@ -121,10 +121,7 @@ test('release options reject ambiguity and remote arguments are POSIX quoted', (
     'quality:full',
     'verify:browser-smoke',
   ]);
-  assert.deepEqual(requiredChecks('verify:smoke', false, scripts), [
-    'quality:full',
-    'verify:smoke',
-  ]);
+  assert.deepEqual(requiredChecks('verify:ui', false, scripts), ['quality:full', 'verify:ui']);
   for (const name of [
     'verify:visual',
     'verify:unknown',
@@ -270,7 +267,7 @@ test('timeout, cancellation, missing logs and swapped commands cannot certify a 
   assert.equal(await cachedCheckPassed({ ...quality, timedOut: true }, 'quality:full'), false);
   assert.equal(await cachedCheckPassed({ ...quality, cancelled: true }, 'quality:full'), false);
   assert.equal(
-    await cachedCheckPassed({ ...quality, command: 'verify:smoke' }, 'quality:full'),
+    await cachedCheckPassed({ ...quality, command: 'verify:ui' }, 'quality:full'),
     false
   );
   await writeFile(quality.log, 'changed log');

@@ -20,4 +20,4 @@ The run's call budget and deadline also cover evaluation rounds. Provider config
 
 ## Implementation
 
-Settings and runtime coverage are in `tests/evaluation-settings.test.ts`, `tests/evaluation-tools.test.ts`, `tests/evaluation-runtime.test.ts`, and `tests/evaluation-story-runtime.test.ts`. `npm run verify:evaluation` exercises the settings UI with synthetic data. Select checks according to [QUALITY](QUALITY.md#verification).
+Settings and runtime coverage are in `tests/evaluation-settings.test.ts`, `tests/evaluation-tools.test.ts`, and `tests/evaluation-runtime.test.ts`. `npm run verify:evaluation` exercises the settings UI with synthetic data. Select checks according to [QUALITY](QUALITY.md#verification).

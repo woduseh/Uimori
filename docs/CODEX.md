@@ -44,11 +44,7 @@ Linux Docker의 실제 이미지 빌드·기동과 실계정 로그인·구독 �
 
 터미널·파일 읽기/쓰기·Node REPL·로컬 이미지 보기·브라우저/컴퓨터 제어·앱/MCP·외부 스킬·지속 메모·내장 하위 에이전트·추가 권한 요청은 제공하지 않아요. 이들은 호스트 파일·인증·외부 변경 권한, Uimori의 저장·협업·문맥 관리와 연결되므로 검색·계산과 같은 범위가 아니에요. `code_mode`는 Node REPL과 다른 V8 JavaScript 실행기예요. 등록된 도구만 호출하고 Node·파일·네트워크 API 및 모듈 import를 제공하지 않는 계약을 사용해요. Uimori 도구는 native registry에 등록하지 않고 JSON envelope로만 처리하므로 code mode에서 직접 저장 권한을 얻지 못해요. 지원하지 않는 승인/동적 도구 요청과 호스트 환경 도구 이벤트는 기존대로 실패 처리해요.
 
-read-only sandbox만 남기고 셸을 열면 쓰기는 막아도 서버 파일과 전용 인증 파일의 읽기까지 격리하지는 못해요. 확인한 Codex Windows 제한 토큰 테스트는 루트 읽기 권한이 없는 파일시스템 정책을 지원하지 않는다고 명시하므로, 단순한 설정 삭제로 셸까지 허용하지 않았어요. 환경 도구를 추가하려면 별도 실행 환경과 읽기 범위를 먼저 정해야 해요. 검색은 Codex의 cached 모드이며 셸의 네트워크는 계속 차단해요.
-
-2026-09-11 정적 근거는 로컬 `codex` 체크아웃 `459a79eb85400af759e9220c7bafb4429ae07516`의 `code-mode-runtime/src/runtime/{globals,module_loader,callbacks}.rs`(허용 전역·import 거부·등록 도구 인덱스), `core/src/tools/code_mode/execute_handler.rs`(현재 도구만 전달), `core/src/tools/spec_plan_tests.rs::disabling_shell_tools_disables_command_tools_for_all_environments`, `app-server/tests/suite/v2/thread_start.rs::create_config_toml_with_profile_workspace_root`예요. 경로는 모두 `codex-rs/` 아래예요. 이 원리를 Uimori의 `core/codex-protocol.ts`, `server/codex-runtime.ts`에 적용하고 합성 stdio 이벤트·실행 설정 검사를 추가했어요. 실제 설치 CLI에서의 도구 실행과 플랫폼 sandbox 검증은 사용자가 진행하며, 이 소스 조사와 합성 검사는 그 실증을 대신하지 않아요.
-
-같은 소스의 `core/src/stream_events_utils.rs::{handle_output_item_done,handle_non_tool_response_item}`와 `app-server-protocol/src/protocol/v2/item.rs::ThreadItem`을 따라가면 code mode의 `exec`/`wait` 호출은 내부 도구 실행이며 별도 `codeMode` 공개 item을 만들지 않아요. 원시 이벤트를 요청한 경우 호출·출력은 `rawResponseItem/completed`에 해당하며 Uimori의 최종 응답 처리에 들어가지 않아요. 중첩한 검색은 `webSearch`, 삽화 생성은 `imageGeneration`처럼 해당 도구의 항목으로 나타나요. `core/src/tools/spec_plan.rs::register_code_mode_executors`는 환경 목록과 무관하게 실행기를 등록하고, `code-mode-runtime/src/service_contract_tests.rs::yields_and_resumes`는 빈 등록 도구 목록으로 계산을 실행하는 합성 사례예요. 단, `code-mode/src/remote_session.rs::ProcessOwnedCodeModeSessionProvider`는 설치 패키지의 `codex-code-mode-host` 실행 파일을 요구해요. 파일이 없으면 `core/src/tools/mod.rs::effective_tool_mode`에 따라 직접 도구로 돌아가거나 해당 모델의 code-mode-only 요청이 실패할 수 있으므로, 설정 허용을 모든 설치에서의 실제 계산 가능으로 해석하지 않아요.
+read-only만으로는 서버 파일과 전용 인증 파일의 읽기를 격리하지 못하므로 환경 도구는 별도 실행 환경·읽기 범위 없이는 제공하지 않아요. 실행 설정과 이벤트 경계는 `core/codex-protocol.ts`, `server/codex-runtime.ts`에서 관리해요. `code_mode` 설정을 허용해도 설치 패키지의 실행기 제공 여부에 따라 실제 계산이 불가능할 수 있어요. 합성 stdio 검사는 설치 CLI의 도구 실행이나 플랫폼 sandbox 실증을 대신하지 않아요.
 
 ## 로컬 검증
 

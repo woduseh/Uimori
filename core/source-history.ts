@@ -26,13 +26,6 @@ export function sourceSceneAnchors(scope: SourceScope): SourceSceneAnchor[] {
     hash: source.contentHash ?? sourceHash(source.text),
   }));
 }
-export type SourceEvidence = {
-  revision: string;
-  hash: string;
-  start: number;
-  end: number;
-  quote: string;
-};
 export const sourceHash = (text: string): string => createHash('sha256').update(text).digest('hex');
 const fail = (code: string): never => {
   throw new Error(`STORY_${code}`);

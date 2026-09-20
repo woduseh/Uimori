@@ -653,17 +653,6 @@ export function useServerEditDraft(options: SessionOptions) {
 }
 
 const DraftContext = createContext<ReturnType<typeof useServerEditDraft> | null>(null);
-const FieldPrefix = createContext('');
-export function EditorDraftFieldScope({
-  prefix,
-  children,
-}: {
-  prefix: string;
-  children: ReactNode;
-}) {
-  const parent = useContext(FieldPrefix);
-  return <FieldPrefix.Provider value={`${parent}${prefix}.`}>{children}</FieldPrefix.Provider>;
-}
 export function EditorDraftProvider({
   value,
   children,
@@ -686,7 +675,6 @@ export function useBufferedEditorState<T>(
   options?: { syncPristineInitial?: boolean }
 ): [T, Dispatch<SetStateAction<T>>] {
   const context = useContext(DraftContext);
-  path = `${useContext(FieldPrefix)}${path}`;
   const initialRef = useRef(initial);
   initialRef.current = initial;
   const initialSignature = serialize(
@@ -750,7 +738,6 @@ export function useBufferedEditorState<T>(
   return [value, update];
 }
 export function useUnappliedEditorField(path: string, pending: boolean) {
-  path = `${useContext(FieldPrefix)}${path}`;
   const context = useContext(DraftContext),
     session = context?.session;
   useEffect(() => {

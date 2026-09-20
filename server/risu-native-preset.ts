@@ -31,13 +31,6 @@ export function nativeRisuPresetPending(snapshot: RunSnapshot): boolean {
     !snapshot.nativeRisuPresetProgram
   );
 }
-export function nativeRisuPresetRegex(snapshot: RunSnapshot): Record<string, unknown>[] {
-  const preset = snapshot.profile?.promptPresets?.main?.program.nativeRisuPreset?.preset;
-  const value = preset?.regex ?? preset?.presetRegex;
-  return Array.isArray(value)
-    ? value.filter((item) => item && typeof item === 'object' && !Array.isArray(item))
-    : [];
-}
 export async function prepareNativeRisuPreset(snapshot: RunSnapshot): Promise<RunSnapshot> {
   const preset = snapshot.profile?.promptPresets?.main,
     source = preset?.program.nativeRisuPreset;

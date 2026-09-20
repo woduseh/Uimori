@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
-import { executeMain, executeTool, syntheticResources } from '../core/provider.js';
+import { executeMain, executeTool } from '../core/provider.js';
+import { syntheticResources } from './fixtures/resources.js';
 import type { ModelInput, RunSnapshot, ToolEvent } from '../core/types.js';
 
 const snapshot = (mode: 'direct' | 'research' = 'research'): RunSnapshot => ({

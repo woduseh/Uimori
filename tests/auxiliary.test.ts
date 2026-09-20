@@ -14,7 +14,7 @@ import {
   type AuxiliarySource,
   type SourceTimeContext,
 } from '../core/auxiliary.js';
-import { BUILTIN_ASSETS, builtinAssetSvg, sourceScenes } from '../core/fixtures/presentation.js';
+import { BUILTIN_ASSETS, builtinAssetSvg, sourceScenes } from './fixtures/presentation.js';
 import type { RunSnapshot } from '../core/types.js';
 import { translationReader } from '../core/translation-context.js';
 

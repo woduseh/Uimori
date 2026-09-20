@@ -5,11 +5,8 @@ import { CONTEXT_RETRIEVAL_GUIDANCE, CONTEXT_SUMMARY_SEMANTICS } from './context
 
 /** Opt-in main-role tools: a model-written working summary and a model-requested window switch. */
 export const CONTEXT_TOOL_NAMES = ['context.read', 'context.write', 'context.new'] as const;
-export type ContextToolName = (typeof CONTEXT_TOOL_NAMES)[number];
 export const CONTEXT_NOTICE_RATIO = 0.7;
 export const CONTEXT_URGENT_RATIO = 0.8;
-/** Mirrors the host compaction trigger; documented to the model, enforced by the compaction path. */
-export const CONTEXT_AUTOMATIC_RATIO = 0.85;
 export const CONTEXT_SUMMARY_MAX_CHARS = 200_000;
 export const CONTEXT_KEEP_RECENT_DEFAULT = 2;
 export const CONTEXT_KEEP_RECENT_MAX = 8;

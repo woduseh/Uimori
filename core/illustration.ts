@@ -341,10 +341,6 @@ const field = (value: unknown, max: number, required: boolean): string => {
     throw new IllustrationError('ILLUSTRATION_PROMPT_INVALID', true);
   return Array.from(value.trim()).slice(0, max).join('');
 };
-/** Lenient about BOM, whitespace and one Markdown code fence; strict about the shape. */
-export function parseIllustrationPrompt(text: string): IllustrationPrompt {
-  return planOf(text, false).prompt!;
-}
 /** A skip decision is only honored when the host allowed it for this run. */
 export function parseIllustrationPlan(text: string, allowSkip: boolean): IllustrationPlan {
   const plan = planOf(text, allowSkip);

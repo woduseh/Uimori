@@ -1,6 +1,6 @@
 # 장면 삽화 생성
 
-완성된 응답의 장면을 골라 삽화를 만들어 그 응답 아래에 표시하는 기능이에요. 삽화 생성은 본문 작성·번역·상태 작업과 별도 작업 큐에서 실행되며, 생성 중이거나 실패해도 읽기·쓰기·번역은 계속돼요. 생성기는 **Codex 프로바이더의 공식 이미지 생성 도구**와 **원격 PC의 ComfyUI API** 두 가지이며, NovelAI는 이번 범위에 없어요.
+완성된 응답의 장면을 골라 삽화를 만들어 그 응답 아래에 표시하는 기능이에요. 삽화 생성은 본문 작성·번역·상태 작업과 별도 작업 큐에서 실행되며, 생성 중이거나 실패해도 읽기·쓰기·번역은 계속돼요. 생성기는 **Codex 프로바이더의 공식 이미지 생성 도구**와 **원격 PC의 ComfyUI API**예요.
 
 기존 **이미지 배치**(`image` 역할, 등록된 이미지를 문단 사이에 고르는 기능)와는 다른 기능이에요. 삽화는 새 이미지를 만들고, 배치는 이미 있는 이미지를 골라요. 두 기능은 저장 표·작업 큐·설정이 분리되어 있어요.
 
@@ -75,24 +75,6 @@
 
 ## 검증
 
-로컬 합성 검사(실제 Codex·ComfyUI 호출 없음):
+`tests/illustration-*.test.ts`는 저장·실행·API 계약을, `tests/comfyui-client.test.ts`와 `tests/codex-image.test.ts`는 합성 공급자 응답을 확인해요. `npm run verify:illustration`은 생성·재요청·삭제·설정 충돌과 새로고침 후 표시를 검사해요. 검사 선택은 [QUALITY](QUALITY.md#verification)를 따라요.
 
-```powershell
-npx vitest run tests/illustration-core.test.ts tests/comfyui-client.test.ts tests/codex-image.test.ts tests/illustration-store.test.ts tests/illustration-runner.test.ts tests/illustration-api.test.ts
-```
-
-| 검사 | 확인 내용 |
-| --- | --- |
-| `illustration-core` | 워크플로 파싱·치환, 프롬프트 JSON 해석, 캡션 envelope, 이미지 형식 감지, 재요청 분류 |
-| `comfyui-client` | 합성 HTTP 서버로 인증·접수/조회/이미지 body 정체·응답 유실·5xx·대상별 취소와 구버전 대기 삭제·shutdown 미접촉·결과 회수 검사 |
-| `codex-image` | 합성 app-server로 `features.image_generation`, data URL 첨부, base64/저장 파일 결과, 사용량 한도, 이미지 없음, 텍스트 턴의 이미지 차단 |
-| `illustration-store` | 현재 DB 초기화·재개방, 설정 CAS·검증, 예약 한도·동시 1개, 자동 예약과 설정 오류 표시, 재요청·취소·복구, 참조 고정, 포크·삭제·archive |
-| `illustration-runner` | 모의 생성기의 자동 재요청·한도·취소, Codex 턴 입력·attempt·캡션, 프롬프트 모델+ComfyUI 전체 경로와 실패 분류, 자동 예약의 생략(skip)과 직접 요청의 생략 금지, 시간 초과 후 결과 확인(reconcile) |
-| `illustration-api` | 테스트 모드 App에서 수동·자동 생성, 한도, 자동 재요청, 다시 요청, 취소, 주입 실패, 참조·설정 API, Reader·이벤트 반영 |
-| `npm run verify:illustration` | 빌드 후 합성 브라우저(2560·412px): 장면 메뉴의 삽화 생성, 완료 이미지 표시와 새로고침 유지, 실패 카드의 다시 요청, 삭제 확인, 설정 저장과 CAS 충돌 시 초안 유지 |
-
-사용자가 직접 확인해야 하는 항목(실제 서비스 호출):
-
-1. **Codex**: 설정 → 에이전트에서 로그인 후 Codex 모델 프리셋을 삽화 모델로 지정하고 한 장면에서 **삽화 생성**을 눌러요. 확인할 것: 이미지가 장면 아래에 표시되는지, 참조 이미지를 지정했을 때 인물·화풍이 반영되는지, 실패 시 코드(`CODEX_IMAGE_USAGE_LIMIT` 등)가 표시되는지, ChatGPT 계정의 이미지 생성 사용량이 늘어나는지.
-2. **ComfyUI**: 원격 PC에서 ComfyUI를 `--listen`으로 띄우고 방화벽을 열어요. **ComfyUI 연결 확인**으로 버전·장치가 보이는지, 실제 워크플로(Export API)에 `{{prompt}}` 자리표시자를 넣고 생성이 끝나 이미지가 저장되는지, 워크플로에 없는 모델 이름을 넣었을 때 노드 오류가 화면에 나오는지, ComfyUI를 끈 상태에서 `COMFYUI_UNREACHABLE`과 자동 재요청 횟수가 표시되는지.
-3. **공통**: 자동 생성을 켠 채 본문을 여러 번 이어 쓰면서 읽기·번역이 막히지 않는지, 새로고침·재접속 뒤 삽화가 그대로 보이는지, 장면당 최대 개수에 닿으면 요청이 거절되는지.
+합성 검사는 실제 Codex 구독 사용량이나 ComfyUI 설치·워크플로 호환성을 입증하지 않아요. 실제 서비스 검증에서는 연결·이미지 저장·참조 반영·오류 표시를 확인하고, 유료 호출 여부와 사용한 모델·워크플로를 결과에 구분해요.
