@@ -1,0 +1,46 @@
+.prompt-option-radio-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-width: 0;
+}
+.prompt-option-radio-row > span {
+  flex: 1 1 160px;
+  overflow-wrap: anywhere;
+}
+.prompt-option-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-width: 0;
+}
+:root .prompt-option-field .prompt-option-radios > label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control-h);
+  margin: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+:root .prompt-option-radios input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  flex: 0 0 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.prompt-option-radios input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.prompt-editor .native-editor textarea.prompt-option-textarea {
+  min-height: 96px;
+  height: 96px;
+  resize: vertical;
+}

@@ -22,6 +22,7 @@ export type PromptControl = {
   nativeKey?: string;
   label: string;
   type: 'select' | 'text' | 'number' | 'boolean';
+  input?: 'text' | 'textarea' | 'radio';
   default: PromptValue;
   options?: { label: string; value: PromptValue }[];
   min?: number;

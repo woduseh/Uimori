@@ -114,7 +114,7 @@
   color: var(--muted);
   font-size: 14px;
 }
-.native-editor input:not([type="checkbox"]),
+.native-editor input:not([type="checkbox"]):not([type="radio"]),
 .native-editor select,
 .native-editor textarea {
   width: 100%;

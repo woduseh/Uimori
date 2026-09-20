@@ -319,6 +319,40 @@ test('effective toggles combine canonical sources without changing them and pres
   ).not.toBe('risu-toggle:__proto__');
 });
 
+test('native toggles expose their editor input without changing stored control values', () => {
+  const controls = nativeRisuPresetControls({
+    version: 1,
+    preset: {
+      customPromptTemplateToggle:
+        'line=Line=text\nnotes=Notes=textarea\nenabled=Enabled=check\nmode=Mode=select=A,B',
+    },
+  });
+  expect(controls.map(({ id, type, input, options }) => ({ id, type, input, options }))).toEqual([
+    { id: 'line', type: 'text', input: 'text', options: undefined },
+    { id: 'notes', type: 'text', input: 'textarea', options: undefined },
+    {
+      id: 'enabled',
+      type: 'select',
+      input: 'radio',
+      options: [
+        { label: '미설정', value: null },
+        { label: '끔', value: '0' },
+        { label: '켬', value: '1' },
+      ],
+    },
+    {
+      id: 'mode',
+      type: 'select',
+      input: undefined,
+      options: [
+        { label: '미설정', value: null },
+        { label: 'A', value: '0' },
+        { label: 'B', value: '1' },
+      ],
+    },
+  ]);
+});
+
 test('import review distinguishes unsupported native blocks and host-specific switches', () => {
   const imported = importRisuPresetProgram({
     promptTemplate: [{ type: 'unknown' }, { type: 'memory' }],

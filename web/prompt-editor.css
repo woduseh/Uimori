@@ -22,7 +22,7 @@
   min-width: 0;
   font-size: 13px;
 }
-.prompt-editor input:not([type="file"]),
+.prompt-editor input:not([type="file"]):not([type="checkbox"]):not([type="radio"]),
 .prompt-editor select,
 .prompt-editor textarea {
   width: 100%;

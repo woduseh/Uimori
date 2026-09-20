@@ -1,0 +1,65 @@
+.native-toggle-editor {
+  width: 100%;
+  min-width: 0;
+}
+.native-toggle-fields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.native-toggle-add-type {
+  display: grid;
+  gap: 8px;
+  max-width: 260px;
+  margin-bottom: 18px;
+}
+.native-editor .native-toggle-editor .native-editor-split {
+  min-height: 0;
+  height: auto;
+}
+.native-toggle-editor .native-item-list,
+.native-toggle-editor .native-item-detail {
+  height: auto;
+  max-height: none;
+}
+.native-toggle-editor .native-item-list {
+  max-height: min(68dvh, 760px);
+}
+.native-toggle-form {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.native-toggle-form label,
+.native-toggle-raw label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.native-toggle-editor pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.native-toggle-editor p,
+.native-toggle-editor code {
+  overflow-wrap: anywhere;
+}
+.native-toggle-raw {
+  margin-top: 24px;
+}
+.native-toggle-raw label {
+  margin: 16px 0;
+}
+.native-toggle-raw textarea {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  line-height: 1.65;
+  min-height: 180px;
+  resize: vertical;
+}
+@media (max-width: 700px) {
+  .native-toggle-raw textarea {
+    font-size: 16px;
+  }
+}

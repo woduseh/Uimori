@@ -125,7 +125,8 @@ for (const [viewportName, viewport] of [
       ratio: 1,
     });
     await expect(dialog.locator('iframe')).toHaveCount(0);
-    await expect(dialog.locator('.new-story-opening-excerpt')).toContainText('Harbor greets');
+    await expect(dialog.getByText('Harbor greets', { exact: false })).toHaveCount(0);
+    await expect(dialog.getByText('미리보기', { exact: true })).toBeVisible();
     if (viewportName === 'desktop') expect((await dialog.boundingBox())!.width).toBe(680);
     await dialog.getByLabel('첫 메시지 선택').selectOption('');
     await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
@@ -162,13 +163,13 @@ for (const [viewportName, viewport] of [
       .getByRole('button')
       .filter({ has: page.getByText(personaTitle, { exact: true }) })
       .click();
-    await dialog.getByText('전체 미리보기', { exact: true }).click();
+    await dialog.getByText('미리보기', { exact: true }).click();
     const frame = dialog.frameLocator('iframe[title="봇 메시지"]');
     await expect(frame.locator('body')).toContainText(`Harbor greets ${personaTitle}.`);
     await expect(frame.locator('img')).toBeVisible();
     await dialog.getByLabel('첫 메시지 선택').selectOption('start-1');
     await expect(dialog.locator('iframe')).toHaveCount(0);
-    await dialog.getByText('전체 미리보기', { exact: true }).click();
+    await dialog.getByText('미리보기', { exact: true }).click();
     await expect(frame.locator('body')).toContainText('Night watch begins.');
     await dialog.getByLabel('첫 메시지 선택').selectOption('start-0');
     await expect(dialog.locator('iframe')).toHaveCount(0);
@@ -297,7 +298,7 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   await library.getByRole('button', { name: '채팅 시작', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
   await expect(dialog.getByLabel('첫 메시지 선택')).toHaveValue('start-0');
-  await dialog.getByText('전체 미리보기', { exact: true }).click();
+  await dialog.getByText('미리보기', { exact: true }).click();
   const frame = dialog.frameLocator('iframe[title="봇 메시지"]');
   await expect(frame.getByRole('button', { name: `${title} route`, exact: true })).toBeVisible();
   await expect(frame.locator('body')).toHaveAttribute('data-risu-disabled', 'true');
@@ -309,7 +310,7 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   await page.screenshot({ path: info.outputPath('native-default-preview.png') });
   await dialog.getByLabel('첫 메시지 선택').selectOption('start-1');
   await expect(dialog.locator('iframe')).toHaveCount(0);
-  await dialog.getByText('전체 미리보기', { exact: true }).click();
+  await dialog.getByText('미리보기', { exact: true }).click();
   await expect(dialog.getByLabel('첫 메시지 선택')).toHaveValue('start-1');
   await expect(dialog.frameLocator('iframe[title="봇 메시지"]').locator('body')).toContainText(
     'Other greeting'
