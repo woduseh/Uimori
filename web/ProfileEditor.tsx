@@ -10,6 +10,11 @@ import { isModelSelectable } from './model-selection.js';
 import { modelLabel } from './storyLabels.js';
 import { ContentAttachments } from './ContentAttachments.js';
 import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
+import {
+  DEFAULT_LORE_CONTEXT,
+  type LoreContextDefaults,
+  type LoreContextPolicy,
+} from '../core/lore-context.js';
 import './library.css';
 import './settings-actions.css';
 
@@ -58,12 +63,26 @@ export function ProfileEditor({
   const [attachmentPending, setAttachmentPending] = useState(false);
   const [lorePending, setLorePending] = useState(false),
     [loreResetVersion, setLoreResetVersion] = useState(0);
+  const [loreDefaults, setLoreDefaults] = useState<LoreContextPolicy>(DEFAULT_LORE_CONTEXT);
   const [saving, setSaving] = useState(false);
   const [localTab, setTab] = useState<ProfileSection>(initialTab);
   const selectedTab = activeTab ?? localTab;
   const tab = selectedTab === 'models' ? 'prompts' : selectedTab;
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
+  useEffect(() => {
+    let active = true;
+    void api<LoreContextDefaults>('/lore-context-defaults')
+      .then(({ revision: _revision, ...policy }) => {
+        if (active) setLoreDefaults(policy);
+      })
+      .catch(() => {
+        /* The saved chat policy remains editable when global defaults are temporarily unavailable. */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   useEffect(() => {
     if (!dirty && !lorePending)
       setValue((current) =>
@@ -243,6 +262,7 @@ export function ProfileEditor({
                 profileRevision={value.revision}
                 request={nextRequest}
                 reset={loreContextReset}
+                defaults={loreDefaults}
               />
             </div>
             <div hidden={tab !== 'prompts'} className="chat-profile-model-options">

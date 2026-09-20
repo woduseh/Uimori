@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { defaultProfile } from '../core/product.js';
-import { DEFAULT_TOKEN_LORE_CONTEXT, type TokenLoreContextPolicy } from '../core/lore-context.js';
+import { DEFAULT_LORE_CONTEXT, type LoreContextPolicy } from '../core/lore-context.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { validateLoreSelectionReceipt } from '../core/lore-selection.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -14,9 +14,9 @@ import {
 const text = 'The harbor is open. 항구의 문이 열려 있다. 日本語も含む。';
 
 async function selectedSnapshot(attachments = 1) {
-  const policy: TokenLoreContextPolicy = {
-    ...DEFAULT_TOKEN_LORE_CONTEXT,
-    judgment: { ...DEFAULT_TOKEN_LORE_CONTEXT.judgment },
+  const policy: LoreContextPolicy = {
+    ...DEFAULT_LORE_CONTEXT,
+    judgment: { ...DEFAULT_LORE_CONTEXT.judgment },
   };
   const snapshot: RunSnapshot = {
     chatId: 'token-selection',
@@ -119,7 +119,7 @@ describe('local-token selection receipt accounting', () => {
     'enforces the shared %s budget across attachments, not just each receipt',
     async (limit) => {
       const { snapshot } = await selectedSnapshot(2);
-      const policy = snapshot.profile!.loreContext as TokenLoreContextPolicy;
+      const policy = snapshot.profile!.loreContext as LoreContextPolicy;
       if (limit === 'retention') {
         policy.maxRetainedTokens = countTextTokens(text);
         for (const entry of snapshot.loreSelection!.entries)

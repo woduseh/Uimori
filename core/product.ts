@@ -1,5 +1,6 @@
 import type { EvaluationToolOptions } from './evaluation-tool-config.js';
 import type { ProviderOptions } from './provider-options.js';
+import { DEFAULT_LORE_CONTEXT } from './lore-context.js';
 export const PROVIDER_PROTOCOLS = [
   'fixture-sse-v1',
   'vertex-gemini-v1',
@@ -310,6 +311,7 @@ export type Library = {
 export const defaultProfile = (chatId: string): ChatProfile => ({
   chatId,
   revision: 1,
+  loreContext: structuredClone(DEFAULT_LORE_CONTEXT),
   packageAttachments: [],
   routes: { main: null, translation: null, status: null },
   image: false,

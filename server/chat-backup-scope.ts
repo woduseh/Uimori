@@ -2,7 +2,12 @@ import { BACKUP_COLLECTIONS, type BackupTables } from './chat-backup-codec.js';
 import type { Store } from './store.js';
 
 type Row = Record<string, any>;
-const GLOBAL = new Set(['prompt_workspace', 'illustration_settings', 'library_organization_state']);
+const GLOBAL = new Set([
+  'prompt_workspace',
+  'lore_context_defaults',
+  'illustration_settings',
+  'library_organization_state',
+]);
 
 /** Select the complete chat graph and referenced shared definitions, never another chat's history. */
 export function chatBackupTables(store: Store, chatId: string): BackupTables {

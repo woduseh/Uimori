@@ -8,9 +8,9 @@ import { parseLorePolicyDraft } from '../web/LoreContextPolicyEditor.js';
 describe('lore context UI boundaries', () => {
   const valid = {
     enabled: true,
-    maxRetainedChars: '48000',
+    maxRetainedTokens: '16000',
     maxRetainedEntries: '64',
-    maxPinnedChars: '200000',
+    maxPinnedTokens: '64000',
     threshold: '0.65',
     maxSelectedTokens: '8000',
     maxInputTokens: '28000',
@@ -21,43 +21,45 @@ describe('lore context UI boundaries', () => {
       parseLorePolicyDraft({
         ...valid,
         enabled: false,
-        maxRetainedChars: '0',
+        maxRetainedTokens: '0',
         maxRetainedEntries: '0',
-        maxPinnedChars: '1',
+        maxPinnedTokens: '1',
       })
     ).toEqual({
       judgment: DEFAULT_LORE_CONTEXT.judgment,
       enabled: false,
-      maxRetainedChars: 0,
+      tokenEstimator: DEFAULT_LORE_CONTEXT.tokenEstimator,
+      maxRetainedTokens: 0,
       maxRetainedEntries: 0,
-      maxPinnedChars: 1,
+      maxPinnedTokens: 1,
     });
     expect(
       parseLorePolicyDraft({
         ...valid,
         enabled: true,
-        maxRetainedChars: '200000',
+        maxRetainedTokens: '200000',
         maxRetainedEntries: '256',
-        maxPinnedChars: '2000000',
+        maxPinnedTokens: '1000000',
       })
     ).toEqual({
       judgment: DEFAULT_LORE_CONTEXT.judgment,
       enabled: true,
-      maxRetainedChars: 200000,
+      tokenEstimator: DEFAULT_LORE_CONTEXT.tokenEstimator,
+      maxRetainedTokens: 200000,
       maxRetainedEntries: 256,
-      maxPinnedChars: 2000000,
+      maxPinnedTokens: 1000000,
     });
   });
   it('rejects incomplete, fractional and out-of-bound drafts without changing their text', () => {
     for (const [key, text] of [
-      ['maxRetainedChars', ''],
+      ['maxRetainedTokens', ''],
       ['maxRetainedEntries', ' '],
       ['maxRetainedEntries', '1.5'],
-      ['maxRetainedChars', '-1'],
-      ['maxPinnedChars', '0'],
-      ['maxPinnedChars', '2000001'],
+      ['maxRetainedTokens', '-1'],
+      ['maxPinnedTokens', '0'],
+      ['maxPinnedTokens', '1000001'],
       ['maxRetainedEntries', '257'],
-      ['maxRetainedChars', 'Infinity'],
+      ['maxRetainedTokens', 'Infinity'],
     ] as const) {
       const draft = { ...valid, [key]: text },
         before = structuredClone(draft);
@@ -92,6 +94,7 @@ describe('lore context UI boundaries', () => {
         ],
         stats: {
           retainedChars: text.length,
+          retainedTokens: 12,
           retainedEntries: 1,
           appendedChars: 4,
           droppedEntries: 2,
@@ -104,6 +107,7 @@ describe('lore context UI boundaries', () => {
     expect(html).toContain('처음 읽은 원문 source-one · Run run-one');
     expect(html).toContain('4자');
     expect(html).toContain('조회 로어 예산에 맞춰 정리');
+    expect(html).toContain('12 / 16,000토큰');
     expect(html).toContain('이 요청에서 새 장면 정리를 선택했어요.');
     expect(html).toContain('&lt;script&gt;unsafe()&lt;/script&gt;');
     expect(html).toContain('&lt;img src=x&gt;');

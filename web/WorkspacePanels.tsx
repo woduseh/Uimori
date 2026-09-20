@@ -12,6 +12,7 @@ import { AppAbout } from './AppAbout.js';
 import { Info } from 'lucide-react';
 import './recovery-settings.css';
 import { IllustrationSettingsEditor } from './IllustrationSettingsEditor.js';
+import { LoreContextDefaultsEditor } from './LoreContextDefaultsEditor.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
@@ -457,7 +458,7 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
   );
 }
 
-const appSaveSections = ['connection', 'model', 'prompt', 'illustration'] as const;
+const appSaveSections = ['connection', 'model', 'prompt', 'lore', 'illustration'] as const;
 
 export function AppSettingsPanel({
   initialTab = 'general',
@@ -494,12 +495,14 @@ export function AppSettingsPanel({
   const [promptDirty, setPromptDirty] = useState(false);
   const [archiveDirty, setArchiveDirty] = useState(false);
   const [illustrationDirty, setIllustrationDirty] = useState(false);
+  const [loreDirty, setLoreDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [savingClose, setSavingClose] = useState(false);
   const saveGroup = useSettingsSaveGroup(appSaveSections);
   const [discardError, setDiscardError] = useState('');
-  const dirty = connectionDirty || archiveDirty || modelDirty || promptDirty || illustrationDirty;
+  const dirty =
+    connectionDirty || archiveDirty || modelDirty || promptDirty || loreDirty || illustrationDirty;
   const root = useRef<HTMLElement>(null);
   const wasCompact = useRef(compact);
   const id = useId();
@@ -508,6 +511,7 @@ export function AppSettingsPanel({
     { key: 'models', label: '역할별 모델', icon: ModelIcon },
     { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon },
     { key: 'connections', label: '프로바이더·모델', icon: ConnectionIcon },
+    { key: 'lore', label: '로어 문맥', icon: LibraryIcon },
     { key: 'agents', label: 'Codex 연결', icon: AgentIcon },
     { key: 'illustrations', label: '삽화', icon: IllustrationIcon },
     { key: 'data', label: '데이터 관리', icon: DataIcon },
@@ -745,6 +749,12 @@ export function AppSettingsPanel({
                       onOpenModels={() => select('connections')}
                     />
                   )}
+                  {key === 'lore' && (
+                    <LoreContextDefaultsEditor
+                      onDirtyChange={setLoreDirty}
+                      onSaveHandlerChange={saveGroup.registrations.lore}
+                    />
+                  )}
                   {key === 'illustrations' && state.library && (
                     <IllustrationSettingsEditor
                       library={state.library}
@@ -841,6 +851,7 @@ export function AppSettingsPanel({
                 connection: connectionDirty,
                 model: modelDirty,
                 prompt: promptDirty,
+                lore: loreDirty,
                 illustration: illustrationDirty,
               }))
             )

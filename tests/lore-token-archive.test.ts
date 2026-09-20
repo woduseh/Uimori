@@ -3,11 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import {
-  DEFAULT_LORE_CONTEXT,
-  DEFAULT_TOKEN_LORE_CONTEXT,
-  type LoreContextPolicy,
-} from '../core/lore-context.js';
+import { DEFAULT_LORE_CONTEXT, type LoreContextPolicy } from '../core/lore-context.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { executeTool } from '../core/provider.js';
 import { Store } from '../server/store.js';
@@ -110,24 +106,19 @@ async function fixture() {
     .resources(chat.id, store.product.snapshot(chat.id))
     .find((item) => item.id.endsWith(':lore-0'))!;
   const first = await complete(store, chat.id, resource.id);
-  const legacy = await complete(store, chat.id);
-  setPolicy(store, chat.id, DEFAULT_TOKEN_LORE_CONTEXT);
   const token = await complete(store, chat.id);
-  return { store, chat, first, legacy, token };
+  return { store, chat, first, token };
 }
 
 describe('token lore persistence with real SQLite and local tokenizer', () => {
-  it('preserves mixed history through export, restore and a subsequent turn', async () => {
+  it('preserves token history through export, restore and a subsequent turn', async () => {
     const f = await fixture();
-    expect(f.legacy.snapshot.loreContext!.stats).not.toHaveProperty('retainedTokens');
     const context = f.token.snapshot.loreContext!;
     const tokens = context.entries.reduce((sum, entry) => sum + countTextTokens(entry.text), 0);
     expect(context.entries.length).toBeGreaterThan(0);
     expect(context.stats.retainedTokens).toBe(tokens);
-    const original = structuredClone(f.legacy.snapshot);
     const restored = database();
     expect(restored.product.import(f.store.product.export()).restored).toBe(true);
-    expect(restored.run(f.legacy.id).snapshot).toEqual(original);
     expect(restored.run(f.token.id).snapshot.loreContext).toEqual(context);
     const next = await complete(restored, f.chat.id);
     expect(next.snapshot.loreContext!.stats.retainedTokens).toBe(tokens);

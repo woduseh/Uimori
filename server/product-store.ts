@@ -156,9 +156,10 @@ import {
   imageTargetSource,
 } from './package-images.js';
 import { validateArchivedPackageStart } from './package-start.js';
-import { validateLoreContextPolicy } from '../core/lore-context.js';
+import { DEFAULT_LORE_CONTEXT, validateLoreContextPolicy } from '../core/lore-context.js';
 import { validateArchivedLoreContext } from './lore-context-archive.js';
 import { validateNativeTransferArchive } from './native-transfer.js';
+import { loreContextDefaults, validateLoreContextDefaultsRow } from './lore-context-defaults.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -1248,17 +1249,22 @@ export class ProductStore {
     const { revision: _defaultRevision, ...defaults } = validatePromptWorkspace(
       defaultPromptWorkspace()
     );
+    const { revision: _loreRevision, ...loreDefaults } = loreContextDefaults(this.store);
     return {
       canImport:
         isDeepStrictEqual(
           { ...current, mainJudgmentEnabled: current.mainJudgmentEnabled !== false },
           { ...defaults, mainJudgmentEnabled: defaults.mainJudgmentEnabled !== false }
         ) &&
+        isDeepStrictEqual(loreDefaults, DEFAULT_LORE_CONTEXT) &&
         !archiveTables.some(
           (table) =>
-            !['library_organization_state', 'prompt_workspace', 'illustration_settings'].includes(
-              table
-            ) && this.db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get()
+            ![
+              'library_organization_state',
+              'prompt_workspace',
+              'lore_context_defaults',
+              'illustration_settings',
+            ].includes(table) && this.db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get()
         ),
     };
   }
@@ -1283,13 +1289,15 @@ export class ProductStore {
       throw new HttpError(400, 'Archive requires at most one illustration settings row');
     if (tables.prompt_workspace.length !== 1)
       throw new HttpError(400, 'Archive requires exactly one prompt workspace');
+    if (tables.lore_context_defaults.length !== 1)
+      throw new HttpError(400, 'Archive requires exactly one lore context defaults row');
     try {
       this.store.transaction(() => {
         if (!this.importStatus().canImport)
           throw new HttpError(409, 'Restore requires an empty database');
         this.db.exec('PRAGMA defer_foreign_keys=ON');
         this.db.exec(
-          'DELETE FROM library_organization_state; DELETE FROM prompt_workspace; DELETE FROM illustration_settings'
+          'DELETE FROM library_organization_state; DELETE FROM prompt_workspace; DELETE FROM lore_context_defaults; DELETE FROM illustration_settings'
         );
         for (const table of archiveTables) {
           const columns = (this.db.prepare(`PRAGMA table_info(${table})`).all() as Row[]).map(
@@ -1327,6 +1335,7 @@ export class ProductStore {
               if (row.id !== 1) throw new HttpError(400, 'Invalid prompt workspace row');
               validatePromptWorkspace(parse(row.body));
             }
+            if (table === 'lore_context_defaults') validateLoreContextDefaultsRow(row);
             if (table === 'assets') validateArchiveAsset(row);
             if (table === 'illustration_settings') {
               if (row.id !== 1) throw new HttpError(400, 'Invalid illustration settings row');
@@ -1496,6 +1505,7 @@ const archiveTables = [
   'tool_events',
   'events',
   'prompt_workspace',
+  'lore_context_defaults',
   'library_hidden',
   'attempts',
   'assets',

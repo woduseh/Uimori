@@ -1,6 +1,7 @@
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { freezeLoreContext } from '../server/lore-context.js';
 import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
+import { countTextTokens } from '../core/text-tokens.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { writeNote } from './fixtures/notes.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
@@ -143,7 +144,13 @@ function standalone(store: Store, chatId: string) {
       archive.tables.sources.filter((row) => row.chat_id === chatId).map((row) => row.id)
     );
   for (const [name, rows] of Object.entries(archive.tables)) {
-    if (name === 'versions' || name === 'prompt_workspace' || name.startsWith('library_')) continue;
+    if (
+      name === 'versions' ||
+      name === 'prompt_workspace' ||
+      name === 'lore_context_defaults' ||
+      name.startsWith('library_')
+    )
+      continue;
     archive.tables[name] = rows.filter((row) =>
       Object.hasOwn(row, 'chat_id')
         ? row.chat_id === chatId
@@ -335,6 +342,10 @@ test('archive cannot resurrect an ancestor read after the immediate parent reset
     snapshot.loreContext!.entries = historicalRunLoreReads(store, first);
     Object.assign(snapshot.loreContext!.stats, {
       retainedChars: 30,
+      retainedTokens: snapshot.loreContext!.entries.reduce(
+        (sum, entry) => sum + countTextTokens(entry.text),
+        0
+      ),
       retainedEntries: 1,
       appendedChars: 30,
     });
@@ -396,9 +407,9 @@ test('archive cannot resurrect an evicted read when a later policy provides more
   const policy = {
     ...DEFAULT_LORE_CONTEXT,
     enabled: true,
-    maxRetainedChars: 1000,
+    maxRetainedTokens: 1000,
     maxRetainedEntries: 1,
-    maxPinnedChars: 200000,
+    maxPinnedTokens: 200000,
   };
   updateTestProfile(store.product, chat.id, {
     ...body,
@@ -441,6 +452,10 @@ test('archive cannot resurrect an evicted read when a later policy provides more
     snapshot.loreContext!.entries.unshift(firstEntry);
     Object.assign(snapshot.loreContext!.stats, {
       retainedChars: 40,
+      retainedTokens: snapshot.loreContext!.entries.reduce(
+        (sum, entry) => sum + countTextTokens(entry.text),
+        0
+      ),
       retainedEntries: 2,
       appendedChars: 20,
     });
@@ -460,6 +475,10 @@ test('a later context budget may keep whole ordered entries but cannot reorder o
     snapshot.loreContext!.entries = snapshot.loreContext!.entries.slice(1);
     Object.assign(snapshot.loreContext!.stats, {
       retainedChars: 20,
+      retainedTokens: snapshot.loreContext!.entries.reduce(
+        (sum, entry) => sum + countTextTokens(entry.text),
+        0
+      ),
       retainedEntries: 1,
       droppedEntries: 1,
     });
