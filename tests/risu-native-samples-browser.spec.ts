@@ -275,8 +275,8 @@ test.describe('actual local native Risu cards', () => {
       });
       await page.goto(origin);
       await navigationAction(page, '봇');
-      await page.getByRole('button', { name: 'Risu 자료 가져오기', exact: true }).click();
-      const dialog = page.getByRole('dialog', { name: 'Risu 자료 가져오기', exact: true });
+      await page.getByRole('button', { name: '자료 가져오기', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: '자료 가져오기', exact: true });
       const preparation = page.waitForResponse(
         (response) => response.url().endsWith('/api/risu-imports/prepare'),
         { timeout: 90_000 }

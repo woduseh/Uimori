@@ -382,22 +382,6 @@
   gap: 20px;
   padding: 0 18px 18px;
 }
-.library-package-transfer {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-.library-transfer-card {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 16px;
-  background: var(--bg);
-}
 .library-package-tools h3 {
   font-size: 14px;
   line-height: 1.5;
@@ -407,17 +391,6 @@
   font-size: 13px;
   line-height: 1.7;
   margin: 0;
-}
-.library-transfer-card > button,
-.library-transfer-card > label {
-  margin-top: auto;
-  min-width: 0;
-}
-.library-transfer-card input[type="file"] {
-  min-height: var(--control-h);
-  min-width: 0;
-  max-width: 100%;
-  background: var(--panel);
 }
 .library-package-copies {
   display: grid;
@@ -516,18 +489,12 @@
   }
 }
 @media (max-width: 600px) {
-  .library-package-transfer {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .library-package-tools > summary {
     padding: 14px;
   }
   .library-package-tools-body {
     padding: 0 14px 14px;
     gap: 16px;
-  }
-  .library-transfer-card {
-    padding: 14px;
   }
   .library-package-copies .form-actions > button {
     flex: 1;

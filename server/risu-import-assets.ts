@@ -102,7 +102,7 @@ export function importRisuAssets({
       allowedUse: 'both',
     });
     if (asset.type === 'emotion' || asset.type === 'background') typedAsset = true;
-    if ((kind === 'bot' || asset.type === 'icon') && (!portraitImageId || name === 'main'))
+    if ((kind !== 'module' || asset.type === 'icon') && (!portraitImageId || name === 'main'))
       portraitImageId = id;
     const url = `/api/package-image-blobs/${image.hash}`;
     assetUrls.set(uri, url);

@@ -13,8 +13,19 @@ import {
 import {
   compileRisuPrompt,
   resolveControlValues,
+  validateControlDefinitions,
   validateRisuPrompt,
 } from '../core/risu-prompt.js';
+
+test('frozen option definitions preserve native input metadata for transfer and backup', () => {
+  const controls = nativeRisuToggleItems(
+    'short=Short=text\nlong=Long=textarea\non=Enabled'
+  ).flatMap((item) => (item.type === 'control' ? [item.control] : []));
+  expect(validateControlDefinitions(controls)).toEqual(controls);
+  for (const input of ['switch', 'unexpected'])
+    expect(() => validateControlDefinitions([{ ...controls[0], input }])).toThrow();
+  expect(() => validateControlDefinitions([{ ...controls[2], input: 'textarea' }])).toThrow();
+});
 import { importRisuPresetProgram } from '../server/risu-preset-program.js';
 import { prepareNativeRisuRun, validateNativeRisuExecution } from '../server/risu-native-run.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';

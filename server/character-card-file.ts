@@ -117,7 +117,7 @@ export function readCharacterCard(
   /** Reads a file the app staged for this import; a large container never enters the body. */
   readStaged?: (uploadId: string) => Buffer
 ) {
-  if (kind !== undefined && kind !== 'bot' && kind !== 'module')
+  if (kind !== undefined && kind !== 'bot' && kind !== 'persona' && kind !== 'module')
     throw new HttpError(400, 'RISU_IMPORT_KIND');
   const envelope = readImportEnvelope(value, {
     maxBytes: RISU_IMPORT_MAX_BYTES,
@@ -131,7 +131,7 @@ export function readCharacterCard(
   const { name, bytes, sha256: hash } = envelope;
   const source: RisuImportSource | RisuImportStagedSource = envelope.source;
   if (/\.risum$/iu.test(name) || (bytes[0] === 111 && bytes[1] === 0)) {
-    if (kind === 'bot') throw new HttpError(400, 'RISU_IMPORT_KIND');
+    if (kind === 'bot' || kind === 'persona') throw new HttpError(400, 'RISU_IMPORT_KIND');
     const { module, assets } = readEmbeddedRisuModule(bytes);
     const members = new Map<string, () => Buffer>();
     const card = moduleJsonDocument(
@@ -179,7 +179,7 @@ export function readCharacterCard(
   }
   const outer = record(document);
   if ((format === 'character-card-json' || moduleProject) && outer.type === 'risuModule') {
-    if (kind === 'bot') throw new HttpError(400, 'RISU_IMPORT_KIND');
+    if (kind === 'bot' || kind === 'persona') throw new HttpError(400, 'RISU_IMPORT_KIND');
     let assetFiles: string[] = [];
     if (moduleProject) {
       const markerBytes = members.get('.risutoki/workspace.json')?.();

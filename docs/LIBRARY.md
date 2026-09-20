@@ -4,7 +4,7 @@
 
 공유 타입과 조회 helper는 [library-organization.ts](../core/library-organization.ts), 저장·검증·API는 [server/library-organization.ts](../server/library-organization.ts)에 있어요. 패키지 내부 기능은 [PACKAGES.md](PACKAGES.md)를 봐요.
 
-저장된 자료를 다른 설치로 옮길 때는 서재·프롬프트 목록 상단의 **자료 파일 가져오기·내보내기**를 사용해요. 연결 모듈·이미지·프롬프트 옵션 조합을 함께 담고 확인 후 새 사본으로 저장해요. 단일 편집 초안의 기존 패키지 JSON 도구와 구분하며 자세한 보존 범위는 [자료 묶음 이동](NATIVE-TRANSFER.md)을 봐요.
+Risu 자료를 들여올 때는 서재의 봇·페르소나·모듈 탭에서 **자료 가져오기**를 사용해요. 봇 탭은 파일 종류를 자동 판별하고, 페르소나와 모듈 탭은 해당 종류를 기본으로 선택해요. 봇만 새 채팅을 만들어요. Risu 프리셋은 프롬프트 목록의 **프롬프트 가져오기**를 사용해요. 각 자료 편집기의 Risu 내보내기는 현재 저장본을 CHARX·RISUM·RISUP으로 만들어요. 자세한 지원 범위는 [Risu 가져오기](RISU-IMPORT.md)와 [Risu 내보내기](RISU-EXPORT.md)를 봐요.
 
 ## 화면에서 찾고 선택하기
 
@@ -92,7 +92,7 @@
 
 현재 DB·archive 버전과 지원 이관은 [DB migration](DATA-MIGRATIONS.md#현재-버전)을 봐요. `library_organization_state`, `library_folders`, `library_placements`를 전체 보관에 포함하며 SQLite backup에도 저장해요. 복원은 폴더 순서, 분류 일치, 모든 항목의 배치, 존재하는 자료 참조와 전역 revision을 검증하고 오류 시 전체 transaction을 되돌려요.
 
-개발 DB 초기화가 필요하면 서버를 멈추고 고정된 기본 개발 DB만 대상으로 하는 `npm run reset:dev`를 사용해요. 단일 패키지 JSON에는 전역 서재 폴더를 넣지 않으며 새로 저장한 자료는 미분류에서 시작해요.
+개발 DB 초기화가 필요하면 서버를 멈추고 고정된 기본 개발 DB만 대상으로 하는 `npm run reset:dev`를 사용해요. Risu 파일에는 전역 서재 폴더를 넣지 않으며 새로 가져온 자료는 미분류에서 시작해요.
 
 [library-organization.test.ts](../tests/library-organization.test.ts)는 실제 임시 SQLite DB로 CAS·다중 이동 원자성·역할/개정 보존·폴더 삭제·자료 삭제 보호·archive 위조 거부·대표 이미지의 최신/과거 개정 분리를 검사해요. 이 검사는 브라우저의 전체 선택 정책이나 실제 공급자 의미 품질을 증명하지 않아요.
 

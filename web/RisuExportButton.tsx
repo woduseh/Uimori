@@ -3,10 +3,11 @@ import { DownloadIcon } from './ui-icons.js';
 import { sessionRequiredEvent } from './api.js';
 
 const messages: Record<string, string> = {
-  RISU_EXPORT_MODULE_UNSUPPORTED:
-    '독립 모듈의 RISUM 내보내기는 지원하지 않아요. 자료 파일 가져오기·내보내기를 사용해 주세요.',
+  RISU_EXPORT_MODULE_UNSUPPORTED: '이 모듈에는 내보낼 수 있는 Risu 원문이 없어요.',
   RISU_EXPORT_LINKED_MODULES:
-    '연결 모듈이 있는 자료는 아직 CHARX로 내보낼 수 없어요. 연결 자료를 함께 옮기려면 자료 파일 가져오기·내보내기를 사용해 주세요.',
+    '연결 모듈을 현재 Risu 파일 형식에 보존할 수 없어요. 개별 자료로 내보내거나 전체 백업을 사용해 주세요.',
+  RISU_EXPORT_MODULE_CONFLICT:
+    '연결 모듈의 권한·설정 또는 자산 이름을 하나의 파일에 보존할 수 없어요. 개별 자료로 내보내거나 전체 백업을 사용해 주세요.',
   RISU_EXPORT_ASSET_UNAVAILABLE:
     '원문에 연결된 에셋 파일을 찾을 수 없어요. 에셋 탭에서 확인해 주세요.',
   RISU_EXPORT_ASSET_PATH: '원문 에셋의 파일 경로가 겹치거나 올바르지 않아요. 에셋을 확인해 주세요.',
@@ -17,6 +18,7 @@ const messages: Record<string, string> = {
 
 export function RisuExportButton({
   kind,
+  format: requestedFormat,
   id,
   revision,
   title,
@@ -24,6 +26,7 @@ export function RisuExportButton({
   onError,
 }: {
   kind: 'content' | 'prompt-presets';
+  format?: 'CHARX' | 'RISUM';
   id: string;
   revision: number;
   title: string;
@@ -33,7 +36,7 @@ export function RisuExportButton({
   const [busy, setBusy] = useState(false);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
-  const format = kind === 'content' ? 'CHARX' : 'RISUP';
+  const format = kind === 'content' ? (requestedFormat ?? 'CHARX') : 'RISUP';
   return (
     <button
       type="button"

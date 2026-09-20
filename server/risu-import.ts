@@ -72,7 +72,7 @@ export function applyRisuImport(
       modelBindings: [],
       idempotencyKey: `risu:${requestKey}`,
     });
-    if (preview.kind === 'module') return { receipt, chat: null };
+    if (preview.kind !== 'bot') return { receipt, chat: null };
     if (!receipt.created) {
       const exists = store.db.prepare('SELECT id FROM chats WHERE id=?').get(receipt.id);
       return { receipt, chat: exists ? store.chat(receipt.id) : null };

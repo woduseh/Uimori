@@ -4,8 +4,6 @@ import { RisuExportButton } from './RisuExportButton.js';
 import { IconButton } from './IconButton.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
-import { PackageTransfer } from './PackageTransfer.js';
-import { NativeTransfer } from './NativeTransfer.js';
 import { RisuImport } from './RisuImport.js';
 import {
   EditorDraftProvider,
@@ -24,7 +22,7 @@ import { libraryCategory, libraryFolderOf } from '../core/library-organization.j
 import { api } from './api.js';
 import { refValue } from './content-ref.js';
 import { nativeContentDraft, withNativeContentTitle } from './native-content-draft.js';
-import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
+import { validateRisuContent } from '../core/risu-content.js';
 import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
 import { ContentAvatar } from './ContentAvatar.js';
@@ -453,7 +451,6 @@ export function LibraryPanel({
       <header className="library-heading" hidden={!!editing}>
         {headerLeading}
         <h1>서재</h1>
-        {library && !editing && !detail && <NativeTransfer library={library} reload={reload} />}
         {headerTrailing}
       </header>
       <Dialog
@@ -795,8 +792,7 @@ export function LibraryPanel({
                       </>
                     )}
                     <RisuImport
-                      showTrigger={tab === 'bot' || tab === 'module'}
-                      defaultKind={tab === 'module' ? 'module' : ''}
+                      defaultKind={tab === 'bot' ? '' : tab}
                       reload={reload}
                       onContinueChat={onContinueChat}
                     />
@@ -999,7 +995,6 @@ function ContentEditor({
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
   const [baseline, setBaseline] = useState(() => JSON.stringify(initial ?? freshContent(kind)));
-  const [importedPackage, setImportedPackage] = useState<RisuContent | null>(null);
   const [nativeDraftDirty, setNativeDraftDirty] = useState(false);
   const [portraitBusy, setPortraitBusy] = useState(false);
   const hasShownEditor = useRef(false);
@@ -1030,26 +1025,14 @@ function ContentEditor({
             }
           : null
       );
-      try {
-        setImportedPackage(
-          JSON.parse(draft.rawFields['package.import'] ?? 'null') as RisuContent | null
-        );
-      } catch {
-        setImportedPackage(null);
-      }
     },
   });
   if (shared.state.ready) hasShownEditor.current = true;
   const editorUnavailable = busy || !shared.state.ready;
-  const updateImportedPackage = (pkg: RisuContent | null) => {
-    setImportedPackage(pkg);
-    shared.session.setField('package.import', JSON.stringify(pkg));
-    shared.session.pendingField('package.import', !!pkg);
-  };
   const dirty = JSON.stringify(value) !== baseline;
   useEffect(() => {
-    onDirtyChange(dirty || !!importedPackage || nativeDraftDirty || portraitBusy);
-  }, [dirty, importedPackage, nativeDraftDirty, portraitBusy, onDirtyChange]);
+    onDirtyChange(dirty || nativeDraftDirty || portraitBusy);
+  }, [dirty, nativeDraftDirty, portraitBusy, onDirtyChange]);
   const packageSnapshot = () =>
     validateRisuContent({
       ...value.package,
@@ -1059,7 +1042,7 @@ function ContentEditor({
     });
   async function saveContent(copyKind?: 'bot' | 'persona' | 'module') {
     if (editorUnavailable || portraitBusy || !value.title.trim()) return false;
-    if (nativeDraftDirty || importedPackage) {
+    if (nativeDraftDirty) {
       setError('패키지의 초안을 먼저 검증하고 적용해 주세요.');
       return false;
     }
@@ -1127,11 +1110,7 @@ function ContentEditor({
               form={formId}
               className="primary native-editor-save"
               disabled={
-                editorUnavailable ||
-                !value.title.trim() ||
-                !!importedPackage ||
-                nativeDraftDirty ||
-                portraitBusy
+                editorUnavailable || !value.title.trim() || nativeDraftDirty || portraitBusy
               }
             >
               <SaveIcon size={18} aria-hidden="true" />
@@ -1139,22 +1118,20 @@ function ContentEditor({
             </button>
             {selected && (
               <LibraryItemMenu title="자료 메뉴">
-                {value.kind !== 'module' && (
-                  <RisuExportButton
-                    kind="content"
-                    id={selected.id}
-                    revision={selected.revision}
-                    title={selected.title}
-                    disabled={
-                      editorUnavailable ||
-                      dirty ||
-                      nativeDraftDirty ||
-                      !!importedPackage ||
-                      portraitBusy
-                    }
-                    onError={setError}
-                  />
-                )}
+                <RisuExportButton
+                  kind="content"
+                  format={
+                    selected.kind === 'module' &&
+                    !Object.keys(selected.package?.nativeRisu.card ?? {}).length
+                      ? 'RISUM'
+                      : 'CHARX'
+                  }
+                  id={selected.id}
+                  revision={selected.revision}
+                  title={selected.title}
+                  disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
+                  onError={setError}
+                />
                 <DeleteButton
                   path={`/content/${encodeURIComponent(selected.id)}`}
                   revision={selected.revision}
@@ -1191,47 +1168,8 @@ function ContentEditor({
               onPortraitBusy={setPortraitBusy}
             />
             <details className="library-package-tools full">
-              <summary>고급 · Uimori 자료 교환과 역할 사본</summary>
+              <summary>고급 · 역할 사본</summary>
               <div className="library-package-tools-body">
-                <PackageTransfer
-                  getPackage={packageSnapshot}
-                  onPrepared={(pkg) => {
-                    updateImportedPackage(pkg);
-                    setError('');
-                  }}
-                  onError={setError}
-                  disabled={nativeDraftDirty || (!!value.package?.nativeRisu && dirty)}
-                />
-                {importedPackage && (
-                  <div className="library-import-preview">
-                    <p>
-                      {importedPackage.title} · 로어 {importedPackage.lore.length}개 · 지침{' '}
-                      {importedPackage.instructions.length}개
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setValue({
-                          ...value,
-                          title: importedPackage.title,
-                          description: importedPackage.description,
-                          text: importedPackage.body ?? '',
-                          package: importedPackage,
-                        });
-                        updateImportedPackage(null);
-                      }}
-                    >
-                      가져온 패키지로 초안 바꾸기
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => updateImportedPackage(null)}
-                    >
-                      가져오기 취소
-                    </button>
-                  </div>
-                )}
                 <section className="library-package-copies">
                   <h3>다른 역할로 사본 만들기</h3>
                   <p className="muted">
@@ -1273,13 +1211,7 @@ function ContentEditor({
             {selected && (selected.kind === 'bot' || selected.package) && onStartStory && (
               <button
                 type="button"
-                disabled={
-                  editorUnavailable ||
-                  dirty ||
-                  !!importedPackage ||
-                  nativeDraftDirty ||
-                  portraitBusy
-                }
+                disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
                 onClick={() => onStartStory(selected)}
               >
                 {selected.kind === 'bot' ? '채팅 시작' : '이 자료를 봇으로 시작'}

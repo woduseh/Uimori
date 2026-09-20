@@ -33,7 +33,7 @@ npm run dev
 | [사용 안내](docs/USAGE.md) | 봇별 채팅·폴더, 패키지, 프롬프트·창작 프리셋, 번역·포크, 백업 |
 | [서재와 프롬프트](docs/LIBRARY.md) · [항목 삭제](docs/DELETION.md) | 자료 분류·폴더·대표 이미지, 삭제 위치와 참조 보호 |
 | [Risu 원본 가져오기](docs/RISU-IMPORT.md) | `.charx` 카드·모듈·`.risup` 프롬프트 원본, CBS·Lua·정규식·CSS 실행과 지원 범위 |
-| [자료 파일 이동](docs/NATIVE-TRANSFER.md) | 저장된 자료·연결 모듈·이미지·프롬프트 옵션을 함께 옮기고 새 사본으로 가져오기 |
+| [Risu 자료 내보내기](docs/RISU-EXPORT.md) | 저장한 카드·모듈·프롬프트를 CHARX·RISUM·RISUP으로 내보내기 |
 | [문제 보고용 진단](docs/DIAGNOSTICS.md) | 원문·키를 제외한 보고서 미리보기와 다운로드 |
 | [Risu 콘텐츠](docs/PACKAGES.md) | 원본 카드·모듈과 채팅별 연결, 카드 변수·이야기 기억의 책임 |
 | [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |

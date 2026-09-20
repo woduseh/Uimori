@@ -91,7 +91,8 @@ export function projectNativeRisuPackage(
     const values = importRisuVariableDefaults(
       object(object(card.extensions).risuai).defaultVariables
     );
-    if (values) pkg.variableDefaults = { values, attachmentRoles: ['bot'] };
+    if (values)
+      pkg.variableDefaults = { values, attachmentRoles: [kind === 'persona' ? 'persona' : 'bot'] };
   } catch {
     findings.add(
       'native-variable-projection',
