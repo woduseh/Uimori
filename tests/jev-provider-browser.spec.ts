@@ -1,7 +1,12 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { JevProviderStatus } from '../core/jev-provider.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
-import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
+import {
+  MOBILE_WIDTH,
+  DESKTOP_WIDTH,
+  MOBILE_HEIGHT,
+  DESKTOP_HEIGHT,
+} from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 
@@ -71,6 +76,7 @@ async function revealResult(page: Page, section: Locator) {
 
 test.beforeEach(async ({ page, request }) => {
   await removeKey(request);
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
   // A browser spec must never submit this endpoint to the server: doing so could call JEV.
   // Response tests register a more specific later handler and fulfill synthetic receipts.
   await page.route('**/api/provider-management/jev/test', (route) =>
@@ -106,12 +112,22 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
   expect(saved).toMatchObject({ configured: true, hasSavedKey: true, credentialSource: 'saved' });
   await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
   await expect(page.getByRole('article', { name: 'JEV 모델', exact: true })).toBeVisible();
+  const modelRow = page.getByRole('article', { name: 'JEV 모델', exact: true });
+  await expect(modelRow.getByLabel('JEV 모델 메뉴', { exact: true })).toBeVisible();
+  if (visualReview) {
+    await page.screenshot({ path: info.outputPath('jev-model-list-mobile.png') });
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+    await containedControls(modelRow, DESKTOP_WIDTH);
+    await page.screenshot({ path: info.outputPath('jev-model-list-desktop.png') });
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
+  }
   await page.getByRole('button', { name: 'JEV 모델 설정', exact: true }).click();
   await expect(section).toBeVisible();
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await expect(
     page.getByRole('article', { name: 'TypeSafe AI 프로바이더', exact: true })
   ).toBeVisible();
+  await expect(page.getByLabel('TypeSafe AI 프로바이더 메뉴', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'TypeSafe AI 프로바이더 수정', exact: true }).click();
   await expect(page.getByRole('button', { name: 'JEV 판단 연결', exact: true })).toHaveCount(0);
   expect(saved).not.toHaveProperty('apiKey');
@@ -132,7 +148,7 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
   if (visualReview) {
     await section.getByRole('heading', { name: 'TypeSafe AI' }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath('jev-connection-mobile.png') });
-    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
     await containedControls(section, DESKTOP_WIDTH);
     await page.screenshot({ path: info.outputPath('jev-connection-desktop.png') });
   }
@@ -264,10 +280,10 @@ test('JEVUI03 recovers a synthetic uncertain test and shows structured success a
   if (visualReview) {
     await revealResult(page, section);
     await page.screenshot({ path: info.outputPath('jev-test-success-mobile.png') });
-    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
     await revealResult(page, section);
     await page.screenshot({ path: info.outputPath('jev-test-success-desktop.png') });
-    await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
   }
   await section.getByRole('button', { name: 'JEV 연결 테스트', exact: true }).click();
   await expect(
