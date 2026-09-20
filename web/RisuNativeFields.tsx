@@ -19,6 +19,7 @@ import { NativeCollectionEditor } from './NativeCollectionEditor.js';
 import { NativeRisuLoreEditor } from './NativeRisuLoreEditor.js';
 import { NativeRisuAssetsEditor } from './NativeRisuAssetsEditor.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
+import { NativeRisuTriggerEditor } from './NativeRisuTriggerEditor.js';
 import { SectionNavigation } from './SectionNavigation.js';
 import './native-editor.css';
 
@@ -56,6 +57,7 @@ export function RisuNativeFields({
   const [error, setError] = useState('');
   const [modulesDirty, setModulesDirty] = useState(false);
   const [regexDirty, setRegexDirty] = useState(false);
+  const [triggersDirty, setTriggersDirty] = useState(false);
   const [portraitBusy, setPortraitBusy] = useState(false);
   const [assetsBusy, setAssetsBusy] = useState(false);
   useEffect(() => {
@@ -64,8 +66,8 @@ export function RisuNativeFields({
   useEffect(() => () => onPortraitBusy(false), [onPortraitBusy]);
   useUnappliedEditorField('package.native.source', !!draft);
   useEffect(() => {
-    onDraftChange(!!draft || modulesDirty || regexDirty);
-  }, [draft, modulesDirty, regexDirty, onDraftChange]);
+    onDraftChange(!!draft || modulesDirty || regexDirty || triggersDirty);
+  }, [draft, modulesDirty, regexDirty, triggersDirty, onDraftChange]);
   useEffect(() => () => onDraftChange(false), [onDraftChange]);
   const update = (input: RisuContentSource) => {
     const next = normalizeRisuContentSource(input);
@@ -113,6 +115,24 @@ export function RisuNativeFields({
           }),
     });
   const moduleLore = native.module?.lorebook != null || standalone;
+  const triggers = native.module
+    ? native.module.trigger
+    : nativeRisuExtension(native).triggerscript;
+  const writeTriggers = (entries: unknown[]) =>
+    update({
+      ...native,
+      ...(native.module
+        ? { module: { ...native.module, trigger: entries } }
+        : {
+            card: {
+              ...native.card,
+              extensions: {
+                ...object(native.card.extensions),
+                risuai: { ...nativeRisuExtension(native), triggerscript: entries },
+              },
+            },
+          }),
+    });
   const writeLore = (entries: Record<string, unknown>[]) =>
     update({
       ...native,
@@ -410,36 +430,40 @@ export function RisuNativeFields({
           </div>
         )}
       </fieldset>
-      <div
-        {...panel('advanced')}
-        className={`native-section-body native-advanced-workspace${advanced === 'scripts' ? ' native-regex-panel' : ''}`}
-      >
-        <div className="segmented native-advanced-tabs" role="group" aria-label="고급 설정 영역">
+      <div {...panel('advanced')} className="native-section-body native-advanced-workspace">
+        <div className="native-advanced-tabs" role="group" aria-label="고급 설정 영역">
           {(
             [
-              ['instructions', '지침'],
-              ['variables', '기본 변수·토글'],
-              ['display', '표시'],
-              ['scripts', '스크립트'],
-              ['modules', '연결 모듈'],
-              ['source', '원문'],
+              ['instructions', '지침', '글로벌 노트 · 예시 대화'],
+              ['variables', '기본 변수·토글', '초기값 · 토글 정의'],
+              ['display', '표시', '백그라운드 HTML / CSS'],
+              ['scripts', '스크립트', 'Lua · 트리거 · 정규식'],
+              ['modules', '연결 모듈', '함께 사용하는 자료'],
+              ['source', '원문', 'Risu 원문 JSON'],
             ] as const
-          ).map(([key, title]) => (
+          ).map(([key, title, subtitle]) => (
             <button
               type="button"
               key={key}
+              aria-label={title}
               aria-pressed={advanced === key}
               onClick={() => {
                 setAdvanced(key);
                 if (key === 'scripts' && !draft) setPart('triggers');
               }}
             >
-              {title}
+              <strong>{title}</strong>
+              <small>{subtitle}</small>
             </button>
           ))}
         </div>
-        <fieldset className="native-panel-fields" disabled={!!draft}>
+        <fieldset
+          className="native-panel-fields native-advanced-detail"
+          hidden={advanced === 'scripts' || advanced === 'source'}
+          disabled={!!draft}
+        >
           <div hidden={advanced !== 'instructions'} className="native-form-stack">
+            <h3>추가 지침</h3>
             {!standalone ? (
               <>
                 <label>
@@ -465,6 +489,7 @@ export function RisuNativeFields({
             )}
           </div>
           <div hidden={advanced !== 'variables'} className="native-form-stack">
+            <h3>기본 변수·토글</h3>
             <label>
               기본 변수
               <textarea
@@ -499,16 +524,21 @@ export function RisuNativeFields({
             </label>
           </div>
           <div hidden={advanced !== 'display'} className="native-form-stack">
+            <h3>백그라운드 임베딩</h3>
             {!standalone && (
               <label>
                 배경 HTML / CSS
                 <textarea
                   rows={12}
+                  className="native-main-text"
                   spellCheck={false}
                   value={nativeRisuBackground(native)}
                   onChange={(e) => extension('backgroundHTML', e.target.value)}
                 />
               </label>
+            )}
+            {standalone && (
+              <p className="muted">배경 HTML / CSS는 봇 카드의 표시 설정에서 편집해요.</p>
             )}
             {value.imageHandoff && (
               <RisuImageHandoffFields
@@ -539,27 +569,33 @@ export function RisuNativeFields({
             />
           </div>
         </fieldset>
-        <div hidden={advanced !== 'scripts'}>
-          <NativeRisuRegexEditor
-            value={Array.isArray(regex) ? regex : []}
-            draftPath="package.native.regex"
-            onChange={writeRegex}
-            onPendingChange={setRegexDirty}
+        <div
+          hidden={advanced !== 'scripts'}
+          className="native-advanced-detail native-script-editor"
+        >
+          <NativeRisuTriggerEditor
+            value={Array.isArray(triggers) ? triggers : []}
+            draftPath="package.native.triggers"
+            onChange={writeTriggers}
+            onPendingChange={setTriggersDirty}
             disabled={!!draft}
           />
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => {
-              setAdvanced('source');
-              if (!draft) setPart('triggers');
-            }}
-          >
-            트리거·Lua 원문 편집
-          </button>
+          <details className="native-advanced native-script-regex">
+            <summary>정규식 스크립트</summary>
+            <NativeRisuRegexEditor
+              value={Array.isArray(regex) ? regex : []}
+              draftPath="package.native.regex"
+              onChange={writeRegex}
+              onPendingChange={setRegexDirty}
+              disabled={!!draft}
+            />
+          </details>
         </div>
         {advanced === 'source' && (
-          <fieldset className="native-panel-fields" disabled={regexDirty}>
+          <fieldset
+            className="native-panel-fields native-advanced-detail"
+            disabled={regexDirty || triggersDirty}
+          >
             {rawEditor}
           </fieldset>
         )}

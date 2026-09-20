@@ -1,0 +1,44 @@
+.native-trigger-editor,
+.native-trigger-json {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.native-trigger-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.native-trigger-heading h3 {
+  margin: 0 0 10px;
+}
+.native-trigger-heading p {
+  margin: 0;
+}
+.native-trigger-heading > button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.native-trigger-editor textarea {
+  font-family: var(--font-mono, monospace);
+  line-height: 1.65;
+  tab-size: 2;
+  resize: vertical;
+}
+.native-trigger-editor > .native-advanced > summary {
+  padding-block: 16px;
+}
+.native-trigger-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .native-trigger-heading {
+    flex-wrap: wrap;
+  }
+}
