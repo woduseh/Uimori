@@ -17,8 +17,10 @@ import './native-editor.css';
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const roleField = (block: Record<string, unknown>) =>
   ['plain', 'cache'].includes(text(block.type)) ? 'role' : 'role2';
-const blockRole = (block: Record<string, unknown>) =>
-  text(block[roleField(block)]) || (block.type === 'cache' ? 'all' : 'system');
+const blockRole = (block: Record<string, unknown>) => {
+  const role = text(block[roleField(block)]) || (block.type === 'cache' ? 'all' : 'system');
+  return role === 'bot' ? 'assistant' : role;
+};
 const blockTypes: Record<string, string> = {
   plain: '일반 텍스트',
   description: '캐릭터 설명',
@@ -250,14 +252,16 @@ export function NativeRisuPresetEditor({
                       value={blockRole(entry)}
                       onChange={(e) =>
                         item({
-                          [roleField(entry)]: e.target.value,
+                          [roleField(entry)]:
+                            e.target.value === 'assistant' && entry.type !== 'cache'
+                              ? 'bot'
+                              : e.target.value,
                         })
                       }
                     >
                       {entry.type === 'cache' && <option value="all">전체 역할</option>}
                       <option value="system">system</option>
                       <option value="user">user</option>
-                      {entry.type !== 'cache' && <option value="bot">캐릭터</option>}
                       <option value="assistant">assistant</option>
                     </select>
                   </label>

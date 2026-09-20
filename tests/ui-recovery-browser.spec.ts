@@ -102,7 +102,7 @@ for (const viewport of viewports) {
       const program = nativePrompt('Long-list fixture', {
         promptTemplate: names.map((name, i) => ({
           type: 'plain',
-          role: 'system',
+          role: i === 0 ? 'bot' : 'system',
           name,
           text: `Instruction ${i + 1}`,
         })),
@@ -122,6 +122,24 @@ for (const viewport of viewports) {
       const editor = page.getByTestId('prompt-editor');
       const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
       await editorFits(page, editor, save);
+      const role = editor.getByLabel('1번 블록 역할', { exact: true });
+      await expect(role).toHaveValue('assistant');
+      await expect(role.locator('option')).toHaveText(['system', 'user', 'assistant']);
+      await role.focus();
+      const roleBounds = await role.evaluate((node) => {
+        const control = node.getBoundingClientRect();
+        const detail = node.closest('.native-item-detail')!.getBoundingClientRect();
+        return { right: control.right, limit: detail.right };
+      });
+      expect(roleBounds.right + 3).toBeLessThanOrEqual(roleBounds.limit);
+      await page.screenshot({ path: info.outputPath(`message-role-${viewport.name}.png`) });
+      await role.selectOption('user');
+      await role.selectOption('assistant');
+      await editor.getByLabel('1번 블록 이름', { exact: true }).fill('Assistant instruction');
+      const savedResponse = nextSave(page);
+      await save.click();
+      const saved = (await (await savedResponse).json()).saved;
+      expect(saved.program.nativeRisuPreset.preset.promptTemplate[0].role).toBe('bot');
       if (viewport.name === 'desktop') {
         const list = editor.getByRole('complementary', { name: '프롬프트 블록 목록' });
         const rows = list.locator(':scope > button');

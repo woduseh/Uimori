@@ -96,7 +96,7 @@
 .native-item-detail,
 .native-section-body {
   min-width: 0;
-  padding: 28px 0 32px 32px;
+  padding: 28px 6px 32px 32px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -118,6 +118,7 @@
 .native-editor select,
 .native-editor textarea {
   width: 100%;
+  min-width: 0;
   color: var(--text);
 }
 .native-editor textarea {
@@ -263,7 +264,7 @@
   }
   .native-item-detail,
   .native-section-body {
-    padding: 20px 0;
+    padding: 20px 6px;
     gap: 20px;
   }
   .native-mobile-picker {
