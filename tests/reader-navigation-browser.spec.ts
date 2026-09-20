@@ -207,6 +207,68 @@ test('CHATREC03 mobile mini navigator follows source IDs and keeps the opening o
 
 // One JS task reproduces A -> B -> A before React can commit a different query.
 // The reader must reject the old response by intent, not by comparing URL fields alone.
+for (const action of ['same-chat', 'A-B-A'] as const) {
+  test(`READERNAV initial loading recovers after ${action} navigation`, async ({
+    page,
+    request,
+  }) => {
+    const chat = await (
+      await postFixtureChat(request, { data: { title: `Initial navigation ${action}` } })
+    ).json();
+    const other = await (
+      await postFixtureChat(request, { data: { title: 'Initial navigation other chat' } })
+    ).json();
+    const staleTitle = 'READERNAV superseded initial response';
+    let reads = 0;
+    let captured = false;
+    let released = false;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
+      if (++reads > 1) return route.continue();
+      const response = await route.fetch();
+      const body = await response.json();
+      body.chat.title = staleTitle;
+      captured = true;
+      await gate;
+      await route.fulfill({ response, json: body });
+      released = true;
+    });
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(`/?chat=${chat.id}`);
+      await expect.poll(() => captured).toBe(true);
+      await expect(page.getByText('채팅을 불러오는 중이에요…', { exact: true })).toBeVisible();
+      if (action === 'same-chat') {
+        await page.getByRole('button', { name: chat.title, exact: true }).click();
+      } else {
+        await page.evaluate(
+          ({ first, second }) => {
+            for (const id of [second, first]) {
+              history.pushState(null, '', `/?chat=${id}`);
+              dispatchEvent(new PopStateEvent('popstate'));
+            }
+          },
+          { first: chat.id, second: other.id }
+        );
+      }
+      // Recover before the superseded HTTP request settles, without an SSE event or reload.
+      const title = page.locator('.workspace-header').getByText(chat.title, { exact: true });
+      await expect(title).toBeVisible();
+      await expect.poll(() => reads).toBeGreaterThan(1);
+      await expect(page.getByText('채팅을 불러오는 중이에요…', { exact: true })).toHaveCount(0);
+      release();
+      await expect.poll(() => released).toBe(true);
+      await expect(title).toBeVisible();
+      await expect(page.getByText(staleTitle, { exact: true })).toHaveCount(0);
+    } finally {
+      release();
+    }
+  });
+}
+
 test('READERNAV a late reader response cannot acknowledge a newer A-B-A navigation', async ({
   page,
   request,

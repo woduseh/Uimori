@@ -116,7 +116,7 @@ export function LoreContextPolicyEditor({
   profileRevision: number;
   request?: string;
   reset?: boolean;
-  defaults?: LoreContextPolicy;
+  defaults?: LoreContextPolicy | null;
   resetLabel?: string;
 }) {
   const effective = value ?? DEFAULT_LORE_CONTEXT,
@@ -310,7 +310,14 @@ export function LoreContextPolicyEditor({
           </p>
         )}
         <div className="lore-context-actions">
-          <button type="button" className="secondary" onClick={() => change(draftOf(defaults))}>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!defaults}
+            onClick={() => {
+              if (defaults) change(draftOf(defaults));
+            }}
+          >
             {resetLabel}
           </button>
           {validation && (

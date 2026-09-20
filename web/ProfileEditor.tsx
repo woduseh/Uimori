@@ -10,11 +10,7 @@ import { isModelSelectable } from './model-selection.js';
 import { modelLabel } from './storyLabels.js';
 import { ContentAttachments } from './ContentAttachments.js';
 import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
-import {
-  DEFAULT_LORE_CONTEXT,
-  type LoreContextDefaults,
-  type LoreContextPolicy,
-} from '../core/lore-context.js';
+import type { LoreContextDefaults, LoreContextPolicy } from '../core/lore-context.js';
 import './library.css';
 import './settings-actions.css';
 
@@ -63,26 +59,30 @@ export function ProfileEditor({
   const [attachmentPending, setAttachmentPending] = useState(false);
   const [lorePending, setLorePending] = useState(false),
     [loreResetVersion, setLoreResetVersion] = useState(0);
-  const [loreDefaults, setLoreDefaults] = useState<LoreContextPolicy>(DEFAULT_LORE_CONTEXT);
+  const [loreDefaults, setLoreDefaults] = useState<LoreContextPolicy | null>(null);
+  const [loreDefaultsError, setLoreDefaultsError] = useState(false);
+  const [loreDefaultsRequest, setLoreDefaultsRequest] = useState(0);
   const [saving, setSaving] = useState(false);
   const [localTab, setTab] = useState<ProfileSection>(initialTab);
   const selectedTab = activeTab ?? localTab;
   const tab = selectedTab === 'models' ? 'prompts' : selectedTab;
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: An explicit retry starts a new read and invalidates the previous effect's response.
   useEffect(() => {
     let active = true;
+    setLoreDefaultsError(false);
     void api<LoreContextDefaults>('/lore-context-defaults')
       .then(({ revision: _revision, ...policy }) => {
         if (active) setLoreDefaults(policy);
       })
       .catch(() => {
-        /* The saved chat policy remains editable when global defaults are temporarily unavailable. */
+        if (active) setLoreDefaultsError(true);
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [loreDefaultsRequest]);
   useEffect(() => {
     if (!dirty && !lorePending)
       setValue((current) =>
@@ -252,6 +252,25 @@ export function ProfileEditor({
               </small>
             </div>
             <div hidden={tab !== 'story'}>
+              {!loreDefaults &&
+                (loreDefaultsError ? (
+                  <div>
+                    <p className="error" role="alert">
+                      전역 로어 기본값을 불러오지 못했어요. 현재 채팅 설정은 계속 편집할 수 있어요.
+                    </p>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => setLoreDefaultsRequest((current) => current + 1)}
+                    >
+                      전역 기본값 다시 불러오기
+                    </button>
+                  </div>
+                ) : (
+                  <p className="muted" role="status">
+                    전역 로어 기본값을 불러오는 중이에요.
+                  </p>
+                ))}
               <LoreContextPolicyEditor
                 key={`${profile.chatId}:${loreResetVersion}`}
                 value={value.loreContext}

@@ -470,20 +470,22 @@ export function useStory() {
       removeEventListener('online', online);
     };
   }, [selected, refresh, loadChats, loadLibrary, navigate]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Branch and source navigation reload the query held by refresh's stable refs.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Address changes and committed navigation intents reload the query held by refresh's stable refs.
   useEffect(() => {
     let alive = true;
-    if (selected) {
+    const epoch = view.epoch;
+    if (selected && destination === 'story') {
       restoredView.current = '';
-      setDetail(null);
+      // A repeated selection needs a fresh read, but can keep its already displayed page.
+      if (readerCache.current?.key !== readerQuery.current.key) setDetail(null);
       void refresh(selected).catch((e) => {
-        if (alive) setError(e.message);
+        if (alive && navigation.current.epoch === epoch) setError(e.message);
       });
     }
     return () => {
       alive = false;
     };
-  }, [selected, activeBranchId, readSource, refresh]);
+  }, [selected, activeBranchId, readSource, destination, view.epoch, refresh]);
   const attachmentKey = [...(detail?.profile?.packageAttachments ?? [])].map(refValue).join(',');
   // biome-ignore lint/correctness/useExhaustiveDependencies: Current content reads follow IDs/revisions, library changes and chat switches, not SSE object identity.
   useEffect(() => {

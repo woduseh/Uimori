@@ -14,7 +14,7 @@ import {
 export type LoreSelectionEntry = {
   key: string;
   inputHash: string;
-  /** Retention budget in the frozen policy unit: legacy UTF-16 or explicit local tokens. */
+  /** Retention budget in local tokens, as recorded in the frozen policy. */
   budget: number;
   /** Lore ids the model chose, in its own order, after the budget trim. */
   selected: string[];
