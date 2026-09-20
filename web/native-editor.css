@@ -86,6 +86,29 @@
   align-content: start;
   line-height: 1.5;
 }
+.native-item-list > button[draggable="true"] {
+  cursor: grab;
+  position: relative;
+}
+.native-item-list > button[data-dragging="true"] {
+  cursor: grabbing;
+  opacity: 0.48;
+}
+.native-item-list > button[data-drop-position]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 8px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.native-item-list > button[data-drop-position="before"]::after {
+  top: -3px;
+}
+.native-item-list > button[data-drop-position="after"]::after {
+  bottom: -3px;
+}
 .native-item-list > button[aria-current="true"] {
   background: var(--accent-soft);
 }

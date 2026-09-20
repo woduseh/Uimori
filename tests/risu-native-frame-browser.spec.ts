@@ -221,6 +221,39 @@ test('native preset editor keeps raw CBS, toggle values, and invalid regex draft
   expect(saved.program.nativeRisuPreset.preset.apiKey).toBeUndefined();
 });
 
+test('native preset blocks reorder by drag and keep the moved block selected', async ({ page }) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  await page.goto(origin);
+  await page.evaluate(async () => {
+    const path = '/tests/fixtures/native-preset-editor.tsx';
+    const { mountReorderFixture } = await import(path);
+    mountReorderFixture();
+  });
+  const editor = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집' });
+  const list = editor.getByRole('complementary', { name: '프롬프트 블록 목록' });
+  const rows = list.locator(':scope > button');
+  await expect(rows).toHaveCount(3);
+  await rows.nth(0).dragTo(rows.nth(2), { targetPosition: { x: 20, y: 40 } });
+  await expect(rows.locator('strong')).toHaveText(['1. Second', '2. Third', '3. First']);
+  await expect(editor.getByLabel('3번 프롬프트 본문')).toHaveValue('First');
+  const savedOrder = () =>
+    page
+      .locator('output')
+      .textContent()
+      .then((value) =>
+        JSON.parse(value!).nativeRisuPreset.preset.promptTemplate.map(
+          (block: { name: string }) => block.name
+        )
+      );
+  await expect.poll(savedOrder).toEqual(['Second', 'Third', 'First']);
+
+  await list.getByPlaceholder('블록 찾기').fill('i');
+  const filteredRows = list.locator(':scope > button');
+  await expect(filteredRows).toHaveCount(2);
+  await filteredRows.nth(1).dragTo(filteredRows.nth(0), { targetPosition: { x: 20, y: 1 } });
+  await expect.poll(savedOrder).toEqual(['Second', 'First', 'Third']);
+});
+
 test('native regex synced buffers follow parent JSON changes while local and remote drafts survive', async ({
   page,
 }) => {

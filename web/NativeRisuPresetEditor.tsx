@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type DragEvent, type ReactNode } from 'react';
 import {
   createNativeRisuPresetProgram,
   nativeRisuPresetSource,
@@ -33,6 +33,7 @@ const blockTypes: Record<string, string> = {
   chatML: 'ChatML',
 };
 type Section = 'blocks' | 'options' | 'variables' | 'regex' | 'collaboration';
+type BlockDropTarget = { index: number; position: 'before' | 'after' };
 
 export function NativeRisuPresetEditor({
   program,
@@ -57,6 +58,8 @@ export function NativeRisuPresetEditor({
   const [selected, setSelected] = useState(0);
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
+  const [dragged, setDragged] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<BlockDropTarget | null>(null);
   const [regexPending, setRegexPending] = useState(false);
   const [togglePending, setTogglePending] = useState(false);
   const [pendingParts, setPendingParts] = useBufferedEditorState<string[]>(
@@ -115,6 +118,44 @@ export function NativeRisuPresetEditor({
     update({ promptTemplate: next });
     setSelected(index + delta);
   }
+  function clearDrag() {
+    setDragged(null);
+    setDropTarget(null);
+  }
+  function blockDropTarget(event: DragEvent<HTMLButtonElement>, targetIndex: number) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return {
+      index: targetIndex,
+      position: event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after',
+    } satisfies BlockDropTarget;
+  }
+  function dragOver(event: DragEvent<HTMLButtonElement>, targetIndex: number) {
+    if (dragged == null) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget(blockDropTarget(event, targetIndex));
+    const list = event.currentTarget.closest('.native-item-list');
+    if (list) {
+      const listBounds = list.getBoundingClientRect();
+      if (event.clientY < listBounds.top + 36) list.scrollTop -= 12;
+      if (event.clientY > listBounds.bottom - 36) list.scrollTop += 12;
+    }
+  }
+  function drop(event: DragEvent<HTMLButtonElement>, target: BlockDropTarget) {
+    event.preventDefault();
+    const from = dragged;
+    clearDrag();
+    if (from == null) return;
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    if (!moved) return;
+    let insertion = target.index + (target.position === 'after' ? 1 : 0);
+    if (from < insertion) insertion -= 1;
+    next.splice(insertion, 0, moved);
+    if (insertion === from) return;
+    update({ promptTemplate: next });
+    setSelected(insertion);
+  }
   function add() {
     update({
       promptTemplate: [...items, { type: 'plain', role: 'system', text: '', name: '새 프롬프트' }],
@@ -171,7 +212,20 @@ export function NativeRisuPresetEditor({
                 type="button"
                 key={i}
                 aria-current={index === i ? 'true' : undefined}
+                data-dragging={dragged === i ? 'true' : undefined}
+                data-drop-position={dropTarget?.index === i ? dropTarget.position : undefined}
+                draggable
+                title="끌어서 순서 변경"
                 onClick={() => setSelected(i)}
+                onDragStart={(event) => {
+                  setSelected(i);
+                  setDragged(i);
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', String(i));
+                }}
+                onDragEnd={clearDrag}
+                onDragOver={(event) => dragOver(event, i)}
+                onDrop={(event) => drop(event, blockDropTarget(event, i))}
               >
                 <strong>
                   {i + 1}. {text(block.name) || blockTypes[text(block.type)] || text(block.type)}

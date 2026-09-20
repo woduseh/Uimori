@@ -40,3 +40,28 @@ export function mount() {
   }
   createRoot(document.getElementById('mount')!).render(<Harness />);
 }
+
+export function mountReorderFixture() {
+  function Harness() {
+    const [program, setProgram] = useState(() =>
+      createNativeRisuPresetProgram(
+        nativeRisuPresetSource({
+          name: 'Reorder fixture',
+          promptTemplate: ['First', 'Second', 'Third'].map((name) => ({
+            type: 'plain',
+            role: 'system',
+            name,
+            text: name,
+          })),
+        })
+      )
+    );
+    return (
+      <>
+        <NativeRisuPresetEditor program={program} onChange={setProgram} />
+        <output>{JSON.stringify(program)}</output>
+      </>
+    );
+  }
+  createRoot(document.getElementById('mount')!).render(<Harness />);
+}
