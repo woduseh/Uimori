@@ -1,8 +1,14 @@
+import { nativePromptSlots } from './native-prompt-slots.js';
+import { nativeExampleMessages } from '../core/risu-native-messages.js';
+import { nativeRisuFieldKey } from '../core/risu-native-execution.js';
+import { packageIdentityFromProfile } from '../core/package-identity.js';
+import { effectiveRisuControls } from '../core/risu-effective-controls.js';
+import { risuImageHandoffText } from '../core/risu-image-handoff.js';
 import { loreHistory } from '../core/lore-context.js';
 import { placeNativeRisuLore } from '../core/risu-native-lore.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { attachMainHostContext } from './main-host-context.js';
-import { buildMainInput, pinnedSlotSources } from '../core/provider.js';
+import { buildMainInput } from '../core/provider.js';
 import {
   compileRisuPrompt,
   type PromptCompilerVersion,
@@ -104,47 +110,7 @@ function contextFromPackages(
   compilerVersion?: PromptCompilerVersion
 ) {
   const input = buildMainInput(snapshot, [], { compilerVersion });
-  const body = (slot: string) =>
-    pinnedSlotSources(input, slot)
-      .map((item) => item.text)
-      .join('\n\n');
-  const slots: Record<string, string> = {
-    char: packages.find((entry) => entry.attachment.role === 'bot')?.package.title ?? 'Character',
-    bot: body('bot'),
-    description: body('description'),
-    persona: body('persona'),
-    lore: body('lore'),
-    notes: input.notes ? JSON.stringify(input.notes) : '',
-    outline: input.outline ? JSON.stringify(input.outline) : '',
-    globalNote: '',
-    authorNote: '',
-    postEverything: '',
-    slot: '',
-    backgroundLore: pinnedSlotSources(input, 'backgroundLore')
-      .map((item) => JSON.stringify(item))
-      .join('\n'),
-    sceneLore: pinnedSlotSources(input, 'sceneLore')
-      .map((item) => JSON.stringify(item))
-      .join('\n'),
-    references: JSON.stringify(
-      input.pinnedSources?.length
-        ? { pinnedSources: pinnedSlotSources(input, 'references') }
-        : { facts: input.facts }
-    ),
-    catalog: JSON.stringify(input.catalog),
-    source: '',
-  };
-  const bot = packages.find((p) => p.attachment.role === 'bot')?.package;
-  const name = bot?.identity?.name ?? bot?.title;
-  if (name) slots.char = name;
-  slots.description = slots.bot;
-  slots.lorebook = slots.lore;
-  slots.authornote = slots.authorNote;
-  for (const instruction of packages.flatMap((p) => p.instructions))
-    if (instruction.position)
-      slots[instruction.position] = [slots[instruction.position], instruction.text]
-        .filter(Boolean)
-        .join('\n\n');
+  const slots = nativePromptSlots(snapshot, compilerVersion);
   const inputHistoryIds = new Set(input.history.map((entry) => entry.revision));
   const logical = (
     snapshot.nativeRisuExecution?.history ??
@@ -178,7 +144,28 @@ function contextFromPackages(
     current,
   ];
   const preset = snapshot.profile?.promptPresets?.main;
+  const identity = snapshot.profile ? packageIdentityFromProfile(snapshot.profile) : undefined;
+  const bot = packages.find((entry) => entry.attachment.role === 'bot');
+  const exampleText = bot
+    ? snapshot.profile?.image
+      ? risuImageHandoffText(bot.package, 'card:mes_example')
+      : String(bot.package.nativeRisu?.card.mes_example ?? '')
+    : '';
+  const examples = nativeExampleMessages(
+    exampleText,
+    identity?.bot.name ?? '',
+    identity?.user.name ?? ''
+  ).map((message, index) => ({
+    ...message,
+    text: bot
+      ? (snapshot.nativeRisuExecution?.fields[nativeRisuFieldKey(bot.attachment)]?.[
+          `example:${index}`
+        ] ?? message.text)
+      : message.text,
+  }));
   return {
+    examples,
+    names: { char: identity?.bot.name ?? 'Character', user: identity?.user.name ?? 'User' },
     slots,
     history,
     runtime: executionContext(snapshot),
@@ -204,6 +191,9 @@ export function compileSnapshotPrompt(
   const context = contextFromPackages(snapshot, packages, options.compilerVersion);
   const promptCompilation = compileRisuPrompt(selected, {
     ...context,
+    ...(snapshot.profile && options.compilerVersion !== 'risu-native-prompt-1'
+      ? { controls: effectiveRisuControls(snapshot.profile, selected) }
+      : {}),
     ...(values ? { values } : {}),
     ...(options.compilerVersion ? { compilerVersion: options.compilerVersion } : {}),
   });

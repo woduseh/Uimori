@@ -743,6 +743,36 @@ describe('global working prompts and independent library copies', () => {
 });
 
 describe('translation prompt preview uses the job compiler without writes', () => {
+  test('historical source previews use supported fields while retaining the original run', async () => {
+    const app = await application();
+    const chat = createFixtureChat(app.store, 'Historical translation preview');
+    const run = await prepareNativeFixtureRun(app.store, capture(app, chat.id));
+    const source = complete(app, run);
+    const snapshot = structuredClone(run.snapshot);
+    const pkg = snapshot.profile!.packages![0];
+    pkg.nativeRisu.card.personality = 'RETIRED_PERSONALITY';
+    pkg.body += '\nRETIRED_PERSONALITY';
+    snapshot.nativeRisuExecution!.version = 1;
+    for (const fields of Object.values(snapshot.nativeRisuExecution!.fields))
+      fields.body += '\nRETIRED_PERSONALITY';
+    app.store.db
+      .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+      .run(JSON.stringify(snapshot), run.id);
+    const before = app.store.db.prepare('SELECT total_changes() AS n').get();
+    const preview = await request(app, `/chats/${chat.id}/prompt-preview`, {
+      role: 'translation',
+      request: 'New preview request',
+    });
+    expect(preview.previewSource).toMatchObject({
+      sourceRevision: source.id,
+      sourceHash: source.hash,
+    });
+    expect(JSON.stringify(preview)).not.toContain('RETIRED_PERSONALITY');
+    expect(JSON.stringify(preview)).toContain(source.text);
+    expect(app.store.run(run.id).snapshot).toEqual(snapshot);
+    expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
+    expect(fetch).not.toHaveBeenCalled();
+  });
   test.each([false, true])('default translation preview with stored source=%s', async (stored) => {
     const app = await application(),
       chat = createFixtureChat(app.store, 'Translation preview');

@@ -5,6 +5,7 @@ Entry points by feature. Paths are relative to the repository root; linked docum
 | Area | Contracts | Entry points |
 | --- | --- | --- |
 | Risu native import and editing | [Import](RISU-IMPORT.md) | `core/risu-native.ts`, `server/character-card-file.ts`, `server/risu-native-import.ts`, `server/risu-native-projection.ts`, `server/risu-module-file.ts`, `web/RisuNativeFields.tsx` |
+| Edited Risu format export | [Export](RISU-EXPORT.md) | `server/risu-export.ts`, `server/risu-export-codec.ts`, `core/risu-deprecated-fields.ts` |
 | RISUP prompt source and model separation | [Prompt runtime](PROMPT-RUNTIME.md), [import](RISU-IMPORT.md#risu-프리셋) | `core/risu-native-preset.ts`, `server/risu-preset-import.ts`, `server/risu-native-preset.ts`, `web/NativeRisuPresetEditor.tsx` |
 | Native prompt composition, names, defaults, CBS | [Prompt runtime](PROMPT-RUNTIME.md), [packages](PACKAGES.md) | `core/risu-prompt.ts`, `core/template-variables.ts`, `core/package-runtime.ts`, `server/risu-native-cbs.ts` |
 | Branch variables and history | [Shared variables](PROMPT-RUNTIME.md#분기-공유-변수) | `core/chat-variables.ts`, `server/chat-variables.ts`, `server/chat-variables-archive.ts`, `web/ChatVariables.tsx` |

@@ -775,7 +775,6 @@ test('native artifacts evaluate fresh copies without card callbacks, state commi
   const saved = applyRisuImport(f.store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'native-import',
   });

@@ -1,4 +1,5 @@
 import { CONTENT_ROLES, type ContentAttachment } from './risu-content.js';
+import type { ImportedMemoryOrigin } from './notes.js';
 import {
   CHAT_TITLE_MAX_CHARS,
   SOURCE_TEXT_MAX_CHARS,
@@ -12,7 +13,7 @@ import {
  * archive does not. Import reads it as authored history of a new chat.
  */
 export const CHAT_TRANSCRIPT_FORMAT = 'uimori-chat-transcript';
-export const CHAT_TRANSCRIPT_VERSION = 1;
+export const CHAT_TRANSCRIPT_VERSION = 2;
 export const CHAT_TRANSCRIPT_LIMITS = {
   entries: 5000,
   request: 20_000,
@@ -38,7 +39,10 @@ export type ChatTranscriptNote = {
   author: string;
   /** Index into `entries` the note was anchored at; null means before any entry. */
   atIndex: number | null;
-};
+} & (
+  | { kind: 'author-note'; origin?: never }
+  | { kind: 'imported-memory'; origin: ImportedMemoryOrigin }
+);
 export type ChatTranscript = {
   format: typeof CHAT_TRANSCRIPT_FORMAT;
   version: typeof CHAT_TRANSCRIPT_VERSION;
@@ -86,7 +90,8 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
     'entries',
   ]);
   if (body.format !== CHAT_TRANSCRIPT_FORMAT) fail('CHAT_TRANSCRIPT_INVALID_FORMAT');
-  if (body.version !== CHAT_TRANSCRIPT_VERSION) fail('CHAT_TRANSCRIPT_UNSUPPORTED_VERSION');
+  if (body.version !== 1 && body.version !== CHAT_TRANSCRIPT_VERSION)
+    fail('CHAT_TRANSCRIPT_UNSUPPORTED_VERSION');
   const exportedAt = string(body.exportedAt, 40, 'CHAT_TRANSCRIPT_INVALID_TIME');
   if (!Number.isFinite(Date.parse(exportedAt))) fail('CHAT_TRANSCRIPT_INVALID_TIME');
   const title = string(body.title, CHAT_TRANSCRIPT_LIMITS.title, 'CHAT_TRANSCRIPT_INVALID_TITLE');
@@ -135,17 +140,40 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
   const notes = list(body.notes, CHAT_TRANSCRIPT_LIMITS.notes, 'CHAT_TRANSCRIPT_INVALID_NOTES').map(
     (raw): ChatTranscriptNote => {
       const item = object(raw);
-      keys(item, ['text', 'author', 'atIndex']);
+      keys(
+        item,
+        body.version === 1
+          ? ['text', 'author', 'atIndex']
+          : ['text', 'author', 'atIndex', 'kind', 'origin']
+      );
       const atIndex = item.atIndex;
       if (
         atIndex !== null &&
         (!Number.isSafeInteger(atIndex) || Number(atIndex) < 0 || Number(atIndex) >= entries.length)
       )
         fail('CHAT_TRANSCRIPT_INVALID_NOTE_ANCHOR');
-      return {
+      const note = {
         text: string(item.text, CHAT_TRANSCRIPT_LIMITS.noteText, 'CHAT_TRANSCRIPT_INVALID_NOTES'),
         author: string(item.author, CHAT_TRANSCRIPT_LIMITS.author, 'CHAT_TRANSCRIPT_INVALID_NOTES'),
         atIndex: atIndex === null ? null : Number(atIndex),
+      };
+      if (body.version === 1 || item.kind === 'author-note') {
+        if (item.origin !== undefined) fail('CHAT_TRANSCRIPT_INVALID_NOTE_ORIGIN');
+        return { ...note, kind: 'author-note' };
+      }
+      if (item.kind !== 'imported-memory') fail('CHAT_TRANSCRIPT_INVALID_NOTE_KIND');
+      const origin = object(item.origin);
+      keys(origin, ['fileHash', 'entryId', 'title']);
+      const fileHash = string(origin.fileHash, 64, 'CHAT_TRANSCRIPT_INVALID_NOTE_ORIGIN');
+      if (!/^[a-f0-9]{64}$/u.test(fileHash)) fail('CHAT_TRANSCRIPT_INVALID_NOTE_ORIGIN');
+      return {
+        ...note,
+        kind: 'imported-memory',
+        origin: {
+          fileHash,
+          entryId: string(origin.entryId, 200, 'CHAT_TRANSCRIPT_INVALID_NOTE_ORIGIN'),
+          title: string(origin.title, 200, 'CHAT_TRANSCRIPT_INVALID_NOTE_ORIGIN'),
+        },
       };
     }
   );

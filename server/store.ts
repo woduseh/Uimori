@@ -34,6 +34,7 @@ import {
 import { restoreCandidateChatVariables } from './chat-variables-archive.js';
 import { resetNativeRisuCandidate } from './risu-native-archive.js';
 import { nativeRisuPending } from './risu-native-run.js';
+import { nativeRisuLegacyReceipt, nativeRisuSnapshotNeedsRefresh } from './risu-native-readonly.js';
 import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
 import { IDENTITY_PATTERN } from '../core/identity.js';
 import {
@@ -526,6 +527,11 @@ export class Store {
         throw new HttpError(
           409,
           '카드 실행 준비가 끝나지 않은 요청이에요. 현재 설정으로 다시 요청해 주세요.'
+        );
+      if (nativeRisuSnapshotNeedsRefresh(original.snapshot))
+        throw new HttpError(
+          409,
+          '이전 프롬프트 형식으로 준비한 요청이에요. 현재 설정으로 다시 요청해 주세요.'
         );
       validate?.(original.snapshot);
       if (
@@ -1138,10 +1144,14 @@ export class Store {
         .all() as Row[]) {
         const run = this.run(row.id);
         this.db
-          .prepare(
-            "UPDATE runs SET status='interrupted',error='Server stopped; generation was not automatically replayed',updated_at=? WHERE id=?"
-          )
-          .run(now(), run.id);
+          .prepare("UPDATE runs SET status='interrupted',error=?,updated_at=? WHERE id=?")
+          .run(
+            nativeRisuLegacyReceipt(run.snapshot)
+              ? '이전 프롬프트 형식의 요청은 자동 재개하지 않아요. 현재 설정으로 다시 요청해 주세요.'
+              : 'Server stopped; generation was not automatically replayed',
+            now(),
+            run.id
+          );
         this.story.finishCommandInTransaction(run.id, 'failed');
         this.event(run.chatId, 'run.interrupted', run.id);
       }

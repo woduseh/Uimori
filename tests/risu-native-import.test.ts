@@ -20,12 +20,14 @@ import {
   nativeRisuLore,
   nativeRisuRegex,
   nativeRisuTriggers,
+  normalizeRisuContentSource,
   validateRisuContentSource,
 } from '../core/risu-native.js';
 import { validateRisuContent } from '../core/risu-content.js';
 import type { Content } from '../core/product.js';
 import { EditDraftService, initEditDrafts } from '../server/edit-drafts.js';
 import { nativeRisuPreview } from '../server/risu-native-preview.js';
+import { createNativeRisuCbs } from '../server/risu-native-cbs.js';
 
 const stores: { store: Store; directory: string }[] = [];
 function database() {
@@ -51,6 +53,57 @@ afterEach(() => {
 const sourceOf = (card: unknown) => ({
   name: 'native.json',
   base64: Buffer.from(JSON.stringify(card)).toString('base64'),
+});
+
+test('retired native fields are stripped from current saves and cannot execute through historical CBS', () => {
+  const obsolete = '{{setvar::retired::executed}}retired content';
+  const native = {
+    version: 1 as const,
+    sourceHash: 'a'.repeat(64),
+    assets: [],
+    card: {
+      name: 'Policy fixture',
+      description: 'Active description',
+      mes_example: 'Active examples',
+      personality: obsolete,
+      scenario: obsolete,
+      system_prompt: obsolete,
+      nickname: 'old',
+      source: ['old'],
+      group_only_greetings: ['old'],
+      extensions: {
+        risuai: {
+          additionalText: obsolete,
+          license: 'old',
+          virtualscript: obsolete,
+          backgroundHTML: '<b>active</b>',
+          unknownActive: true,
+        },
+      },
+    },
+    module: { cjs: obsolete, trigger: [], unknownActive: true },
+  };
+  const before = structuredClone(native);
+  const normalized = normalizeRisuContentSource(native);
+  expect(normalized.card).toEqual({
+    name: 'Policy fixture',
+    description: 'Active description',
+    mes_example: 'Active examples',
+    extensions: { risuai: { backgroundHTML: '<b>active</b>', unknownActive: true } },
+  });
+  expect(normalized.module).toEqual({ trigger: [], unknownActive: true });
+  expect(validateRisuContentSource(native)).toEqual(before);
+  const variables = {};
+  const cbs = createNativeRisuCbs({
+    native,
+    variables,
+    mainPrompt: obsolete,
+    jailbreak: obsolete,
+    jailbreakToggle: true,
+  });
+  expect(cbs.parse('{{personality}}|{{scenario}}|{{mainprompt}}|{{jb}}')).toBe('|||');
+  expect(variables).toEqual({});
+  expect(native).toEqual(before);
 });
 const synthetic = () => ({
   name: 'Native pilot',
@@ -136,6 +189,60 @@ test('native edits reproject canonical source, preserve unknown fields and retai
   expect(updated.package!.nativeRisu!.card.unknown).toEqual(synthetic().unknown);
   expect(store.product.get<Content>('content', id, revision)).toEqual(saved);
   expect(() => store.product.content(request, id)).toThrow(/Revision conflict/);
+});
+
+test('new reservations reproject old library fields without rewriting their stored source', () => {
+  const store = database();
+  const saved = createNativeContent(store);
+  const historical = structuredClone(saved);
+  historical.package!.nativeRisu.card.personality = 'RETIRED_PERSONALITY';
+  historical.package!.nativeRisu.card.scenario = 'RETIRED_SCENARIO';
+  historical.package!.nativeRisu.card.system_prompt = 'RETIRED_SYSTEM';
+  historical.package!.body = `${historical.package!.body}\nRETIRED_PERSONALITY\nRETIRED_SCENARIO`;
+  historical.package!.instructions = [
+    { id: 'card-system', target: 'main', text: 'RETIRED_SYSTEM' },
+  ];
+  historical.text = historical.package!.body!;
+  store.db
+    .prepare("UPDATE versions SET body=? WHERE kind='content' AND id=? AND revision=?")
+    .run(JSON.stringify(historical), historical.id, historical.revision);
+  const chat = store.createChat('Old library new request', undefined, { botId: saved.id });
+  const profile = store.product.snapshot(chat.id);
+  const active = profile.packages!.find((item) => item.id === saved.id)!;
+  expect(active.body).toBe(saved.package!.body);
+  expect(active.instructions).toEqual([]);
+  expect(JSON.stringify(active)).not.toContain('RETIRED_');
+  expect(store.product.get<Content>('content', saved.id)).toEqual(historical);
+  const run = store.createRun(
+    chat.id,
+    {
+      request: 'Continue',
+      expectedRevision: null,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: 'supported-fields',
+    },
+    () => ({
+      chatId: chat.id,
+      parentRevision: null,
+      settingsRevision: chat.settingsRevision,
+      settings: chat.settings,
+      request: 'Continue',
+      history: [],
+      profile,
+      resources: store.product.resources(chat.id, profile),
+    })
+  ).run;
+  store.startRun(run.id);
+  store.completeRun(
+    run.id,
+    'Authored fixture response.',
+    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    chat.settings
+  );
+  const restored = database();
+  expect(() => restored.product.import(store.product.export())).not.toThrow();
+  expect(restored.product.get<Content>('content', saved.id)).toEqual(historical);
+  expect(restored.run(run.id).snapshot.profile!.packages).toEqual(profile.packages);
 });
 
 test('native draft supports large preserved documents and incomplete raw buffers without saving them', () => {
@@ -232,7 +339,6 @@ test('native card remains the exact authored document through import, original e
   const result = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: true,
     idempotencyKey: 'native',
   });
@@ -245,7 +351,6 @@ test('native card remains the exact authored document through import, original e
   const replay = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: true,
     idempotencyKey: 'native',
   });
@@ -303,7 +408,6 @@ test('a card without first_mes keeps an empty chat even when alternate greetings
   const result = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: true,
     idempotencyKey: 'no-first-message',
   });
@@ -418,8 +522,13 @@ test.runIf(Boolean(process.env.UIMORI_RISU_LOCAL_CARDS))(
       );
       const { file, preview } = analyzeNativeRisuImport(input);
       const pkg = file.contents[0].source.package!;
-      expect(pkg.nativeRisu!.card).toEqual(input.nativeCard);
-      expect(pkg.nativeRisu!.module).toEqual(input.nativeModule);
+      const supported = normalizeRisuContentSource({
+        ...pkg.nativeRisu!,
+        card: input.nativeCard!,
+        ...(input.nativeModule ? { module: input.nativeModule } : {}),
+      });
+      expect(pkg.nativeRisu!.card).toEqual(supported.card);
+      expect(pkg.nativeRisu!.module).toEqual(supported.module);
       expect(pkg.starts!.length).toBeGreaterThan(0);
       expect(pkg.nativeRisu!.assets.length).toBe(pkg.images!.length);
       if (bytes.length > 64 * 1024 * 1024) {
@@ -429,7 +538,6 @@ test.runIf(Boolean(process.env.UIMORI_RISU_LOCAL_CARDS))(
           {
             source: input.source,
             digest: preview.digest,
-            memoryIds: [],
             allowPartial: true,
             idempotencyKey: 'large-native-local',
           },

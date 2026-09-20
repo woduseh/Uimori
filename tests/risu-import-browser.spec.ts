@@ -77,7 +77,13 @@ for (const format of ['charx', 'json'] as const) {
     const imported = (await response.json()) as RisuImportResult;
     expect(imported.chat).toBeNull();
     expect(imported.receipt.items.find((item) => item.root)?.category).toBe('module');
-    expect(response.request().postDataJSON()).toMatchObject({ kind: 'module', memoryIds: [] });
+    expect(response.request().postDataJSON()).toMatchObject({ kind: 'module' });
+    expect(response.request().postDataJSON()).not.toHaveProperty('memoryIds');
+    const content = await (
+      await request.get(`/api/content/${imported.receipt.items.find((item) => item.root)!.id}`)
+    ).json();
+    expect(content.package.lore).toHaveLength(1);
+    expect(content.package.lore[0].text).toBe('The sky is green.');
     await expect(dialog.getByText('모듈을 서재에 등록했어요.', { exact: false })).toBeVisible();
     expect(await (await request.get('/api/chats')).json()).toHaveLength(before.length);
   });
@@ -118,27 +124,25 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
     buffer: charx(card(title)),
   });
   await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
-  await dialog.locator('.risu-import-memory > summary').click();
+  await dialog.getByText('로어 미리보기 (1개)', { exact: true }).click();
   await dialog.locator('.risu-import-lore-entry > summary').click();
-  await dialog.getByRole('checkbox', { name: 'World 과거 진행 기억으로 옮기기' }).check();
+  await expect(dialog.getByText('The sky is green.', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
   rejectKind = true;
   await kind.selectOption('module');
   await expect(dialog.getByRole('alert')).toContainText('자료 종류는 유지했어요');
   await expect(kind).toHaveValue('');
-  await expect(
-    dialog.getByRole('checkbox', { name: 'World 과거 진행 기억으로 옮기기' })
-  ).toBeChecked();
+  await expect(dialog.getByText('The sky is green.', { exact: true })).toBeVisible();
   rejectKind = false;
   await kind.selectOption('module');
   await expect(kind).toHaveValue('module');
   await expect(dialog.locator('.risu-import-memory')).toHaveCount(0);
   await kind.selectOption('bot');
   await expect(kind).toHaveValue('bot');
-  await dialog.locator('.risu-import-memory > summary').click();
+  await dialog.getByText('로어 미리보기 (1개)', { exact: true }).click();
   await dialog.locator('.risu-import-lore-entry > summary').click();
-  await expect(
-    dialog.getByRole('checkbox', { name: 'World 과거 진행 기억으로 옮기기' })
-  ).not.toBeChecked();
+  await expect(dialog.getByText('The sky is green.', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
   await dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true }).click();
   await expect(dialog.getByRole('button', { name: '같은 요청으로 다시 확인' })).toBeVisible();
   await expect(kind).toBeDisabled();
@@ -152,7 +156,8 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   await expect(dialog).not.toBeVisible();
   expect(submissions).toHaveLength(2);
   expect(submissions[1]).toEqual(submissions[0]);
-  expect(submissions[0]).toMatchObject({ kind: 'bot', memoryIds: [] });
+  expect(submissions[0]).toMatchObject({ kind: 'bot' });
+  expect(submissions[0]).not.toHaveProperty('memoryIds');
   expect(saved?.chat).toBeTruthy();
   const chats = (await (await request.get('/api/chats')).json()) as { id: string }[];
   expect(chats.filter((chat) => chat.id === saved?.chat?.id)).toHaveLength(1);

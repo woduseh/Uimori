@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
+import { promptControls } from '../core/risu-prompt.js';
 import type { RisuPresetImportApply } from '../core/risu-preset.js';
 import { navigationAction } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -127,18 +128,23 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await dialog.getByRole('button', { name: '작문 프롬프트로 저장', exact: true }).click();
   const saved = await savedResponse;
   expect(saved.ok(), await saved.text()).toBe(true);
-  expect((await saved.json()).preset.program.controls[0]).toMatchObject({
+  expect(promptControls((await saved.json()).preset.program)[0]).toMatchObject({
     id: 'mood',
     default: null,
   });
   await dialog.getByRole('button', { name: '가져온 프롬프트 편집', exact: true }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(title);
   const composer = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집', exact: true });
   await expect(composer).toBeVisible();
+  await expect(composer.getByRole('tab', { name: '구성', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await composer.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await expect(composer.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(title);
   await expect(composer.getByLabel('Imported Mood', { exact: true })).toHaveValue('null');
   await composer.getByLabel('Imported Mood', { exact: true }).selectOption('"1"');
-  await composer.getByText('1. plain', { exact: true }).click();
+  await composer.getByRole('tab', { name: '구성', exact: true }).click();
   await expect(composer.getByLabel('1번 프롬프트 본문')).toHaveValue(
     source.promptTemplate[0]!.text!
   );
@@ -154,22 +160,29 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
     });
     await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   }
-  await composer.getByText('정규식 스크립트', { exact: true }).click();
+  await composer.getByRole('tab', { name: '정규식', exact: true }).click();
   const regex = [{ in: '원래', out: '전송', type: 'editinput', ableFlag: true, flag: 'g' }];
-  await composer.getByLabel('Risu 정규식 원본 JSON').fill(JSON.stringify(regex));
-  await page.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  await composer.getByLabel('Risu 정규식 JSON', { exact: true }).fill(JSON.stringify(regex));
+  const savePreset = page.getByRole('button', { name: '프리셋 저장', exact: true });
+  await expect(savePreset).toBeDisabled();
+  await composer.getByRole('button', { name: '정규식 적용', exact: true }).click();
+  await expect(savePreset).toBeEnabled();
+  await savePreset.click();
   await expect(page.getByText('프롬프트를 저장했어요.', { exact: true })).toBeVisible();
-  await navigationAction(page, '프롬프트');
+  await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+  await composer.getByRole('tab', { name: '기본 옵션', exact: true }).click();
   await expect(composer.getByLabel('Imported Mood', { exact: true })).toHaveValue('"1"');
-  await composer.getByText('정규식 스크립트', { exact: true }).click();
-  await expect(composer.getByLabel('Risu 정규식 원본 JSON')).toHaveValue(
-    JSON.stringify(regex, null, 2)
-  );
+  await composer.getByRole('tab', { name: '정규식', exact: true }).click();
+  await expect
+    .poll(async () =>
+      JSON.parse(await composer.getByLabel('Risu 정규식 JSON', { exact: true }).inputValue())
+    )
+    .toEqual(regex);
   expect(await (await request.get('/api/model-workspace')).json()).toEqual(before);
 });
 
-test('RISUPRESETUI03 request projection keeps the original edit value and exposes transmission text', async ({
+test('RISUPRESETUI03 display projection keeps the original edit value and cancelling preserves it', async ({
   page,
   request,
 }) => {
@@ -201,16 +214,12 @@ test('RISUPRESETUI03 request projection keeps the original edit value and expose
       json: {
         ...result,
         request: { text: '화면 요청', applied: ['display'], changed: true },
-        inputTransform: { text: '전송 요청', applied: ['input'], changed: true },
       },
     });
   });
   await page.goto(`/?chat=${chat.id}`);
   const source = page.getByTestId('source').first();
   await expect(source.getByTestId('source-request')).toHaveText('화면 요청');
-  await source.getByText('전송 시 변환됨 · 원문과 전송문 보기', { exact: true }).click();
-  await expect(source.locator('.request-transform-details')).toContainText('원래 요청');
-  await expect(source.locator('.request-transform-details')).toContainText('전송 요청');
   await source.getByRole('button', { name: '요청 편집', exact: true }).click();
   await expect(source.getByLabel('요청 수정 내용', { exact: true })).toHaveValue('원래 요청');
   await source.getByRole('button', { name: '요청 수정 취소', exact: true }).click();

@@ -90,7 +90,6 @@ end
   const saved = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'import',
   });

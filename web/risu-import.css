@@ -1,8 +1,6 @@
 .risu-import-body,
 .risu-import-file,
 .risu-import-summary,
-.risu-import-lore,
-.risu-import-lore-content,
 .risu-import-result {
   display: grid;
   gap: 12px;
@@ -35,28 +33,13 @@
 .risu-import-findings li + li {
   margin-top: 6px;
 }
-.risu-import-lore {
-  margin: 0;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-.risu-import-memory > summary,
 .risu-import-preview > summary {
   cursor: pointer;
   min-height: 44px;
   padding-block: 10px;
 }
-.risu-import-memory > summary small,
 .risu-import-preview > summary small {
   color: var(--muted);
-}
-.risu-import-lore legend {
-  padding-inline: 4px;
-  font-weight: 600;
-}
-.risu-import-selection-count {
-  font-size: 13px;
 }
 .risu-import-lore-entry + .risu-import-lore-entry {
   border-top: 1px solid var(--line);
@@ -70,10 +53,6 @@
   display: block;
   margin-top: 4px;
   color: var(--muted);
-}
-.risu-import-lore-content {
-  gap: 8px;
-  margin-top: 8px;
 }
 .risu-import-lore-text {
   white-space: pre-wrap;

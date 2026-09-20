@@ -1,4 +1,6 @@
 {
   "mobile": 412,
-  "desktop": 2560
+  "desktop": 2560,
+  "mobileHeight": 915,
+  "desktopHeight": 1440
 }

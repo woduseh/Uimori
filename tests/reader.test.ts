@@ -369,17 +369,23 @@ test('navigation labels use bounded requests and never authored, generated, or e
   const page = readerDetail(store, chat.id, {});
   expect(page.sources).toHaveLength(5);
   expect(page.reader.navigation).toHaveLength(7);
+  expect(page.reader.navigation.map((item) => item.number)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  expect(page.reader.navigation[0].opening).toBe(true);
   expect(page.reader.navigation.map((item) => item.label)).toEqual([
-    '시작 장면',
+    '첫 메시지',
     'Request with whitespace',
     `${'🙂'.repeat(99)}…`,
-    '장면 4',
+    '장면 3',
     '🙂'.repeat(100),
     `a${'🙂'.repeat(98)}…`,
     'Synthetic request',
   ]);
   expect(
-    page.reader.navigation.every((item) => Object.keys(item).sort().join(',') === 'id,label,number')
+    page.reader.navigation.every(
+      (item, i) =>
+        Object.keys(item).sort().join(',') ===
+        (i === 0 ? 'id,label,number,opening' : 'id,label,number')
+    )
   ).toBe(true);
   const serialized = JSON.stringify(page.reader.navigation);
   for (const body of [

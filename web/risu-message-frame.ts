@@ -122,13 +122,24 @@ export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage 
       const rect=document.body.getBoundingClientRect();send('resize',{height:Math.ceil(Math.max(rect.height,rect.bottom,fixedFloor))});
     };
     const schedule=()=>{if(!queued){queued=true;requestAnimationFrame(size);}};
-    addEventListener('message',event=>{const d=event.data;if(event.source!==parent||!d||d.channel!==channel||d.token!==token||d.kind!=='disabled')return;disabled=!!d.value;document.body.dataset.risuDisabled=String(disabled);});
+    addEventListener('message',event=>{const d=event.data;if(event.source!==parent||!d||d.channel!==channel||d.token!==token)return;
+      if(d.kind==='disabled'){disabled=!!d.value;document.body.dataset.risuDisabled=String(disabled);}
+      if(d.kind==='appearance'){const root=document.documentElement;
+        if(typeof d.color==='string'&&CSS.supports('color',d.color))root.style.setProperty('--uimori-text',d.color);
+        if(Number.isFinite(d.fontSize))root.style.setProperty('--uimori-font-size',Math.max(9,Math.min(28,d.fontSize))+'px');
+        if(Number.isFinite(d.lineHeight))root.style.setProperty('--uimori-line-height',String(Math.max(1,Math.min(3,d.lineHeight))));
+        if(typeof d.fontFamily==='string'&&d.fontFamily.length<300)root.style.setProperty('--uimori-font-family',d.fontFamily);
+        root.style.colorScheme=d.colorScheme==='dark'?'dark':'light';schedule();
+      }
+    });
     document.addEventListener('click',event=>{const target=event.target instanceof Element?event.target.closest('[risu-trigger],[risu-btn]'):null;if(!target)return;event.preventDefault();event.stopPropagation();if(disabled)return;const actionKind=target.hasAttribute('risu-trigger')?'trigger':'button';const name=target.getAttribute(actionKind==='trigger'?'risu-trigger':'risu-btn');if(name&&name.length<=1000){disabled=true;send('action',{actionKind,name});}},true);
     document.addEventListener('submit',event=>event.preventDefault(),true);
     const observer=new ResizeObserver(schedule);observer.observe(document.body);addEventListener('resize',schedule);document.addEventListener('load',schedule,true);document.addEventListener('toggle',schedule,true);send('ready');schedule();
   })();`;
   const origin = location.origin.replaceAll('"', '');
   const media = `${origin}/api/package-image-blobs/ ${origin}/api/assets/ data:`;
-  const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src ${media}; media-src ${media}; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'"><style>html,body{margin:0;padding:0;min-width:0;background:transparent;color:inherit;overflow-wrap:anywhere}body{font:16px/1.6 system-ui,sans-serif;color:#24242b}img,video{max-width:100%}*,*::before,*::after{box-sizing:border-box}button{font:inherit;cursor:pointer}.risu-background{position:fixed;inset:0;background-size:cover;z-index:-1}body[data-risu-disabled="true"] [risu-trigger],body[data-risu-disabled="true"] [risu-btn]{pointer-events:none!important}@media(prefers-color-scheme:dark){body{color:#eee}}${safeCss(css)}</style></head><body data-risu-disabled="true">${template.innerHTML}<script nonce="${nonce}">${bridge}</script></body></html>`;
+  // A flow root includes the first/last paragraph margins in body's measured natural height.
+  // It preserves overflow and fixed controls while avoiding an iframe-height feedback loop.
+  const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src ${media}; media-src ${media}; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'"><style>html,body{margin:0;padding:0;min-width:0;background:transparent;color:inherit;overflow-wrap:anywhere}body{display:flow-root;font:var(--uimori-font-size,16px)/var(--uimori-line-height,1.6) var(--uimori-font-family,system-ui,sans-serif);color:var(--uimori-text,var(--uimori-fallback-text,#24242b))}img,video{max-width:100%}*,*::before,*::after{box-sizing:border-box}button{font:inherit;cursor:pointer}.risu-background{position:fixed;inset:0;background-size:cover;z-index:-1}body[data-risu-disabled="true"] [risu-trigger],body[data-risu-disabled="true"] [risu-btn]{pointer-events:none!important}@media(prefers-color-scheme:dark){body{--uimori-fallback-text:#eee}}${safeCss(css)}</style></head><body data-risu-disabled="true">${template.innerHTML}<script nonce="${nonce}">${bridge}</script></body></html>`;
   return { srcDoc, token, actions };
 }

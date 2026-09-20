@@ -94,17 +94,19 @@ export function PromptControlFields({
   program,
   values,
   controlIds,
+  definitions,
   onChange,
 }: {
   program: RisuPrompt;
   values: Record<string, PromptValue>;
   visibilityValues?: Record<string, PromptValue>;
   controlIds?: string[];
+  definitions?: PromptControl[];
   onChange: (id: string, value: PromptValue) => void;
 }) {
   let controls: PromptControl[];
   try {
-    controls = promptControls(program).filter(
+    controls = (definitions ?? promptControls(program)).filter(
       (control) => !controlIds || controlIds.includes(control.id)
     );
   } catch {

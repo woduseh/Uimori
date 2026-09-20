@@ -1,5 +1,6 @@
 import { detectRisuImageHandoff } from '../core/risu-image-handoff.js';
 import type { RisuContent } from '../core/risu-content.js';
+import { normalizeRisuContentSource } from '../core/risu-native.js';
 import type { ContentKind } from '../core/product.js';
 import { object, string, type RisuCard } from './risu-import-card.js';
 import { createRisuImportFindings, type RisuImportFindings } from './risu-import-findings.js';
@@ -14,7 +15,7 @@ export function projectNativeRisuPackage(
   kind: ContentKind,
   findings: RisuImportFindings = createRisuImportFindings()
 ) {
-  const native = base.nativeRisu!;
+  const native = normalizeRisuContentSource(base.nativeRisu);
   const module = native.module;
   const standalone = !Object.keys(native.card).length && !!module;
   const card = structuredClone(native.card) as RisuCard;
@@ -50,10 +51,7 @@ export function projectNativeRisuPackage(
     revision: base.revision,
     title,
     description: description.length > 4000 ? `${description.slice(0, 3999)}…` : description,
-    body: [card.description, card.personality, card.scenario, card.mes_example]
-      .map(string)
-      .filter(Boolean)
-      .join('\n\n'),
+    body: string(card.description),
     ...(kind === 'bot' ? { identity: { name: title, description: '' } } : {}),
     nativeRisu: native,
     ...(detectRisuImageHandoff(native, base.imageHandoff)
@@ -68,12 +66,8 @@ export function projectNativeRisuPackage(
           },
         }
       : {}),
-    instructions: [
-      { id: 'card-system', value: card.system_prompt },
-      { id: 'writing-guidance', value: card.post_history_instructions },
-    ].flatMap(({ id, value }) =>
-      string(value).trim() ? [{ id, target: 'main' as const, text: string(value) }] : []
-    ),
+    // The native preset owns global-note placement; a projection instruction would send it twice.
+    instructions: [],
     starts: [
       card.first_mes,
       ...(Array.isArray(card.alternate_greetings) ? card.alternate_greetings : []),

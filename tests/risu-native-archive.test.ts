@@ -84,7 +84,6 @@ end
   const result = applyRisuImport(store, {
     source,
     digest: preview.digest,
-    memoryIds: [],
     allowPartial: false,
     idempotencyKey: 'import',
   });
@@ -178,6 +177,49 @@ function logical(store: Store, chatId: string) {
     parentRevision: branch.headRevision,
   });
 }
+
+test('historical native candidates require a current-settings retry without changing saved history', async () => {
+  const { store, chatId } = setup();
+  const last = await turn(store, chatId);
+  const historical = store.run(last.runId).snapshot;
+  historical.nativeRisuExecution!.version = 1;
+  store.db
+    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+    .run(JSON.stringify(historical), last.runId);
+  const branches = store.product.branches(chatId);
+  const before = store.run(last.runId);
+  expect(() => store.candidate(last.runId, 'old-candidate', 'Old inputs')).toThrow(
+    /이전 프롬프트 형식.*현재 설정으로 다시 요청/
+  );
+  expect(store.product.branches(chatId)).toEqual(branches);
+  expect(store.run(last.runId)).toEqual(before);
+  expect(store.source(last.id).text).toBe(last.text);
+  const retry = store.retryRun(last.runId, 'current-settings').run;
+  expect(retry.snapshot.nativeRisuExecution).toBeUndefined();
+  expect(retry.snapshot.profile!.packages).toEqual(store.product.snapshot(chatId).packages);
+});
+
+test.each(['queued', 'running'] as const)(
+  'restart never replays a historical %s native run or edits its snapshot',
+  async (status) => {
+    const { store, chatId } = setup();
+    const last = await turn(store, chatId);
+    const candidate = store.candidate(last.runId, 'pending-old-run', 'Pending old run').run;
+    if (status === 'running') store.startRun(candidate.id);
+    const historical = store.run(candidate.id).snapshot;
+    historical.nativeRisuExecution!.version = 1;
+    store.db
+      .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+      .run(JSON.stringify(historical), candidate.id);
+    const attempts = store.db.prepare('SELECT count(*) AS n FROM attempts').get();
+    const before = store.source(last.id);
+    store.recover();
+    expect(store.run(candidate.id)).toMatchObject({ status: 'interrupted', snapshot: historical });
+    expect(store.run(candidate.id).error).toMatch(/이전 프롬프트 형식.*현재 설정으로 다시 요청/);
+    expect(store.source(last.id)).toEqual(before);
+    expect(store.db.prepare('SELECT count(*) AS n FROM attempts').get()).toEqual(attempts);
+  }
+);
 
 test('portable native receipts preserve authored text and wire proofs while remapping history on repeated restore', async () => {
   const { store, chatId } = setup();

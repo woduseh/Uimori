@@ -1003,6 +1003,10 @@ function App() {
                               key={source.id}
                               source={source}
                               index={index + (s.detail?.reader?.start ?? 0)}
+                              sceneNumber={
+                                s.detail?.reader.navigation.find((item) => item.id === source.id)
+                                  ?.number
+                              }
                               request={
                                 s.detail!.runs.find((run) => run.id === source.runId)?.request
                               }

@@ -110,7 +110,7 @@ test('transformed prose suppresses unplaceable images and identifies an authored
   };
   const normal = renderToStaticMarkup(createElement(SourceReader, props));
   expect(normal).toContain('/api/assets/asset');
-  expect(normal).toContain('작성된 도입문');
+  expect(normal).toContain('첫 메시지');
   expect(normal).not.toContain('INTERNAL_START_COMMAND');
   projection.data = {
     sourceRevision: source.id,

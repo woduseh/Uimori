@@ -142,7 +142,8 @@ export function SceneNavigator({
         />
       </label>
       <p className="muted">
-        현재 분기 · {entries.length}개 장면
+        현재 분기 · {entries.filter((entry) => !entry.opening).length}개 장면
+        {entries.some((entry) => entry.opening) ? ' · 첫 메시지 포함' : ''}
         {!compact && entries.length > capacity ? ' · 눈금에는 일부 장면을 표시해요.' : ''}
       </p>
       <ol className="scene-list" start={offset + 1} ref={list}>
@@ -151,10 +152,10 @@ export function SceneNavigator({
             <button
               type="button"
               aria-current={entry.id === active.id ? 'location' : undefined}
-              aria-label={`${entry.number}번째 장면 · ${entry.label}`}
+              aria-label={entry.opening ? '첫 메시지' : `${entry.number}번째 장면 · ${entry.label}`}
               onClick={() => select(entry.id)}
             >
-              <span>{entry.number}</span>
+              <span>{entry.opening ? '첫 메시지' : entry.number}</span>
               <span>{entry.label}</span>
               {entry.id === active.id && <small>읽는 중</small>}
             </button>
@@ -216,7 +217,9 @@ export function SceneNavigator({
         >
           <ListIcon size={18} />
           <span>
-            {active.number} / {entries.length}
+            {active.opening
+              ? '첫 메시지'
+              : `${active.number} / ${entries.filter((entry) => !entry.opening).length}`}
           </span>
         </button>
         <div
@@ -229,7 +232,9 @@ export function SceneNavigator({
             .sort((a, b) => a - b)
             .map((i) => {
               const entry = entries[i];
-              const label = `${entry.number}번째 장면 · ${entry.label}`;
+              const label = entry.opening
+                ? '첫 메시지'
+                : `${entry.number}번째 장면 · ${entry.label}`;
               return (
                 <button
                   type="button"

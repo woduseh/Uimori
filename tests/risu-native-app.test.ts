@@ -12,6 +12,7 @@ import { DEFAULT_JEV_JUDGMENT } from '../core/judgment.js';
 import { JEV_ENDPOINT } from '../server/jev-judgment.js';
 import { readChatVariables } from '../server/chat-variables.js';
 import { validateRunSnapshot } from '../server/snapshot-archive.js';
+import { nativeContent } from './fixtures/native-content.js';
 
 const owned: { app: App; path: string; close: () => Promise<void> }[] = [];
 afterEach(async () => {
@@ -170,7 +171,6 @@ function onOutput(id) setChatVar(id,'completed','yes') end
     const imported = applyRisuImport(app.store, {
       source,
       digest: preview.digest,
-      memoryIds: [],
       allowPartial: false,
       idempotencyKey: 'native',
     });
@@ -183,24 +183,18 @@ function onOutput(id) setChatVar(id,'completed','yes') end
         text: '',
         loading: 'pinned',
         relatedIds: [],
-        package: {
-          version: 1,
-          id: 'module',
-          revision: 1,
-          title: 'Module',
-          description: '',
-          instructions: [],
-          loreActivation: { mode: 'model' },
-          lore: [
-            {
-              id: 'lore-0',
-              title: 'Lore',
-              description: '',
-              text: 'Selected module lore.',
-              loading: 'discoverable',
+        package: nativeContent(
+          {
+            name: 'Module',
+            character_book: {
+              entries: [
+                { name: 'Lore', content: 'Selected module lore.', enabled: true, keys: [] },
+              ],
             },
-          ],
-        },
+          },
+          { id: 'module' },
+          'module'
+        ),
       }) as Content;
       const profile = app.store.product.profile(chat.id);
       app.store.product.updateProfile(chat.id, {

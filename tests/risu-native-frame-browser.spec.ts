@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { createServer, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
+import {
+  MOBILE_WIDTH,
+  DESKTOP_WIDTH,
+  MOBILE_HEIGHT,
+  DESKTOP_HEIGHT,
+} from './fixtures/browser-viewports.js';
 
 let server: ViteDevServer;
 let origin: string;
@@ -60,6 +66,63 @@ test('successful controls wait for a refreshed revision and natural margins fit 
         .evaluate((element) => element.getBoundingClientRect().bottom <= innerHeight)
     )
     .toBe(true);
+});
+
+test('plain paragraph margins fit without internal scrolling after reading size changes', async ({
+  page,
+}) => {
+  for (const viewport of [
+    { width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
+    { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto(origin);
+    await page.evaluate(async () => {
+      document.documentElement.style.setProperty('--reading', '18px');
+      const path = '/tests/fixtures/native-risu-frame.tsx';
+      const { mount } = await import(path);
+      mount(`<p>The first paragraph has the browser's ordinary paragraph margins.</p>
+        <p>The next paragraph keeps its natural spacing while the text wraps on a phone.</p>
+        <p>Changing the reading size must resize the message frame in both directions.</p>
+        <p id="last">The final paragraph's bottom margin belongs inside the message too.</p>`);
+    });
+    const native = page.frameLocator('iframe[title="봇 메시지"]');
+    for (const size of [18, 26, 14]) {
+      await page.evaluate((value) => {
+        document.documentElement.style.setProperty('--reading', value + 'px');
+      }, size);
+      await expect(native.locator('#last')).toHaveCSS('font-size', size + 'px');
+      await expect
+        .poll(() =>
+          native
+            .locator('html')
+            .evaluate((node) =>
+              Math.max(node.scrollHeight - node.clientHeight, node.scrollWidth - node.clientWidth)
+            )
+        )
+        .toBeLessThanOrEqual(1);
+      await expect
+        .poll(() =>
+          native
+            .locator('#last')
+            .evaluate(
+              (node) =>
+                node.getBoundingClientRect().bottom +
+                Number.parseFloat(getComputedStyle(node).marginBottom) -
+                innerHeight
+            )
+        )
+        .toBeLessThanOrEqual(1);
+      // A large fixed frame would hide the overflow symptom but break reading-size shrinkage.
+      await expect
+        .poll(() =>
+          native
+            .locator('body')
+            .evaluate((node) => Math.abs(innerHeight - node.getBoundingClientRect().bottom))
+        )
+        .toBeLessThanOrEqual(1);
+    }
+  }
 });
 
 test('authored message CSS stays scoped and cannot crop the frame through html/body layout', async ({
@@ -129,18 +192,23 @@ test('native preset editor keeps raw CBS, toggle values, and invalid regex draft
     mount();
   });
   const editor = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집' });
+  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
   await editor.getByLabel('Mood', { exact: true }).selectOption('"1"');
-  await editor.getByText('1. plain', { exact: true }).click();
+  await editor.getByRole('tab', { name: '구성', exact: true }).click();
   await expect(editor.getByLabel('1번 프롬프트 본문')).toHaveValue('{{getvar::place}}');
   await editor.getByLabel('1번 프롬프트 본문').fill('{{#when::mood::tis::1}}VIVID{{/when}}');
-  await editor.getByText('정규식 스크립트', { exact: true }).click();
-  await editor.getByLabel('Risu 정규식 원본 JSON').fill('[invalid');
+  await editor.getByRole('tab', { name: '정규식', exact: true }).click();
+  await editor.getByLabel('Risu 정규식 JSON').fill('[invalid');
   await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await editor.getByRole('tab', { name: '구성', exact: true }).click();
   await editor.getByLabel('1번 블록 이름').fill('Try another edit');
-  await expect(editor.getByLabel('Risu 정규식 원본 JSON')).toHaveValue('[invalid');
+  await editor.getByRole('tab', { name: '정규식', exact: true }).click();
+  await expect(editor.getByLabel('Risu 정규식 JSON')).toHaveValue('[invalid');
   await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
   const regex = [{ in: '(hello)', out: '$1 {{getvar::place}}', type: 'editinput' }];
-  await editor.getByLabel('Risu 정규식 원본 JSON').fill(JSON.stringify(regex));
+  await editor.getByLabel('Risu 정규식 JSON').fill(JSON.stringify(regex));
+  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await editor.getByRole('button', { name: '정규식 적용', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
   const saved = JSON.parse((await page.locator('output').textContent())!);
   expect(saved.values).toEqual({ mood: '1' });
@@ -151,6 +219,89 @@ test('native preset editor keeps raw CBS, toggle values, and invalid regex draft
   expect(saved.program.nativeRisuPreset.preset.aiModel).toBeUndefined();
   expect(saved.program.nativeRisuPreset.preset.apiKey).toBeUndefined();
 });
+
+for (const viewport of [
+  { width: MOBILE_WIDTH, height: 915 },
+  { width: DESKTOP_WIDTH, height: 1440 },
+]) {
+  test.describe(`native editor input at ${viewport.width}x${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test('native lore keywords accept sequential comma input without losing the next key', async ({
+      page,
+    }) => {
+      await page.route('**/api/library?view=summary', (route) =>
+        route.fulfill({ json: { contents: [], promptPresets: [] } })
+      );
+      await page.goto(origin);
+      await page.evaluate(async () => {
+        const path = '/tests/fixtures/native-content-editor.tsx';
+        const { mount } = await import(path);
+        mount();
+      });
+      await page.getByRole('tab', { name: '로어북', exact: true }).click();
+      const keywords = page.getByLabel('로어 키워드', { exact: true });
+      await keywords.focus();
+      await keywords.press('End');
+      await keywords.pressSequentially(',');
+      await expect(keywords).toHaveValue('forest,');
+      await keywords.pressSequentially(' river, village');
+      await expect(keywords).toHaveValue('forest, river, village');
+      const keys = () =>
+        page
+          .locator('output')
+          .textContent()
+          .then((value) => JSON.parse(value!).nativeRisu.card.character_book.entries[0].keys);
+      await expect.poll(keys).toEqual(['forest', 'river', 'village']);
+      await page.getByLabel('로어 이름', { exact: true }).click();
+      await expect(keywords).toHaveValue('forest, river, village');
+      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+    });
+
+    test('native preset block types use their own role and switch numeric chat end back to end', async ({
+      page,
+    }) => {
+      await page.goto(origin);
+      await page.evaluate(async () => {
+        const path = '/tests/fixtures/native-preset-editor.tsx';
+        const { mount } = await import(path);
+        mount();
+      });
+      const editor = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집' });
+      const role = editor.getByLabel('1번 블록 역할');
+      await role.selectOption('user');
+      await editor.locator('summary').filter({ hasText: '블록 종류' }).click();
+      const type = editor.getByLabel('1번 블록 종류');
+      await type.selectOption('description');
+      await expect(role).toHaveValue('system');
+      await role.selectOption('assistant');
+      await expect(role).toHaveValue('assistant');
+      await type.selectOption('plain');
+      await expect(role).toHaveValue('user');
+      await type.selectOption('description');
+      await expect(role).toHaveValue('assistant');
+      await type.selectOption('chat');
+      await editor.getByLabel('대화 끝 위치 유형', { exact: true }).selectOption('index');
+      await editor.getByLabel('대화 끝 위치', { exact: true }).fill('-2');
+      const block = () =>
+        page
+          .locator('output')
+          .textContent()
+          .then((value) => JSON.parse(value!).program.nativeRisuPreset.preset.promptTemplate[0]);
+      await expect.poll(block).toMatchObject({ rangeEnd: -2 });
+      await editor.getByLabel('대화 끝 위치 유형', { exact: true }).selectOption('end');
+      await expect(editor.getByLabel('대화 끝 위치', { exact: true })).toHaveCount(0);
+      await expect.poll(block).toMatchObject({
+        type: 'chat',
+        role: 'user',
+        role2: 'assistant',
+        rangeEnd: 'end',
+      });
+      await expect(editor.getByRole('alert')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+    });
+  });
+}
 
 test('native authored CSS and delegated controls work while active content and remote fetches stay isolated', async ({
   page,
@@ -246,4 +397,34 @@ test('style terminators and link payloads cannot introduce authored scripts or n
     nonceScripts: 1,
     actions: ['["button","run"]'],
   });
+});
+
+test('native message appearance follows app settings without resetting authored controls', async ({
+  page,
+}) => {
+  await page.goto(origin);
+  await page.evaluate(async () => {
+    document.documentElement.dataset.theme = 'light';
+    document.documentElement.style.setProperty('--text', '#123456');
+    document.documentElement.style.setProperty('--reading', '18px');
+    const path = '/tests/fixtures/native-risu-frame.tsx';
+    const { mount } = await import(path);
+    mount(
+      '<p id="inherited">App defaults</p><p id="authored" style="color:rgb(100,20,30);font-size:12px">Authored style</p><input aria-label="Unsaved input" />'
+    );
+  });
+  const native = page.frameLocator('iframe[title="봇 메시지"]');
+  await expect(native.locator('#inherited')).toHaveCSS('color', 'rgb(18, 52, 86)');
+  await native.getByRole('textbox', { name: 'Unsaved input' }).fill('Keep me');
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = 'dark';
+    document.documentElement.style.setProperty('--text', '#abcdef');
+    document.documentElement.style.setProperty('--reading', '24px');
+    document.documentElement.style.setProperty('--reading-line-height', '2.2');
+  });
+  await expect(native.locator('#inherited')).toHaveCSS('color', 'rgb(171, 205, 239)');
+  await expect(native.locator('#inherited')).toHaveCSS('font-size', '24px');
+  await expect(native.locator('#authored')).toHaveCSS('color', 'rgb(100, 20, 30)');
+  await expect(native.locator('#authored')).toHaveCSS('font-size', '12px');
+  await expect(native.getByRole('textbox', { name: 'Unsaved input' })).toHaveValue('Keep me');
 });

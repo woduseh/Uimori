@@ -1,4 +1,6 @@
+import { SaveIcon } from './ui-icons.js';
 import { RisuNativeFields } from './RisuNativeFields.js';
+import { RisuExportButton } from './RisuExportButton.js';
 import { IconButton } from './IconButton.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
@@ -8,6 +10,7 @@ import { RisuImport } from './RisuImport.js';
 import {
   EditorDraftProvider,
   EditorDraftStatus,
+  EditorDraftStatusButton,
   discardActiveEditor,
   useServerEditDraft,
 } from './editor-workspace-context.js';
@@ -18,7 +21,7 @@ import type { LibraryItemKey, LibraryOrganization } from '../core/library-organi
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
 import { api } from './api.js';
 import { refValue } from './content-ref.js';
-import { nativeContentDraft } from './native-content-draft.js';
+import { nativeContentDraft, withNativeContentTitle } from './native-content-draft.js';
 import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
@@ -300,7 +303,9 @@ export function LibraryPanel({
           text: full.text,
           loading: full.loading,
           relatedIds: [],
-          ...(full.package ? { package: { ...full.package, title: `${full.title} 사본` } } : {}),
+          ...(full.package
+            ? { package: withNativeContentTitle(full.package, `${full.title} 사본`) }
+            : {}),
         });
         await placeCreated(copy);
         await reload();
@@ -442,7 +447,7 @@ export function LibraryPanel({
       data-testid="library-panel"
       aria-label="서재"
     >
-      <header className="library-heading">
+      <header className="library-heading" hidden={!!editing}>
         {headerLeading}
         <h1>서재</h1>
         {library && !editing && !detail && <NativeTransfer library={library} reload={reload} />}
@@ -505,6 +510,8 @@ export function LibraryPanel({
           onDirtyChange={setDirty}
           onStartStory={onStartStory}
           onCreated={placeCreated}
+          headerLeading={headerLeading}
+          headerTrailing={headerTrailing}
         />
       ) : detail ? (
         <section className="library-detail library-preview" aria-label="자료 상세">
@@ -957,6 +964,8 @@ function ContentEditor({
   onStartStory,
   onDirtyChange,
   onCreated,
+  headerLeading,
+  headerTrailing,
 }: EditorProps & {
   initial: Content | null;
   kind: ContentKind;
@@ -965,6 +974,8 @@ function ContentEditor({
   onStartStory?: (bot: Content) => void;
   onDirtyChange: (dirty: boolean) => void;
   onCreated?: (content: Content) => Promise<void>;
+  headerLeading?: ReactNode;
+  headerTrailing?: ReactNode;
 }) {
   const formId = useId();
   const [selected, setSelected] = useState(initial);
@@ -1045,13 +1056,9 @@ function ContentEditor({
     setError('');
     try {
       const copying = !!copyKind;
-      const pkg = packageSnapshot();
-      if (copying && pkg?.nativeRisu) {
-        pkg.nativeRisu = structuredClone(pkg.nativeRisu);
-        if (!Object.keys(pkg.nativeRisu.card).length && pkg.nativeRisu.module)
-          pkg.nativeRisu.module.name = value.title + ' 사본';
-        else pkg.nativeRisu.card.name = value.title + ' 사본';
-      }
+      const pkg = copying
+        ? withNativeContentTitle(packageSnapshot(), value.title + ' 사본')
+        : packageSnapshot();
       const model: ContentDraftModel = {
         kind: copyKind ?? value.kind,
         title: copying ? value.title + ' 사본' : value.title,
@@ -1087,8 +1094,8 @@ function ContentEditor({
         aria-label="자료 상세"
         aria-busy={editorUnavailable}
       >
-        <EditorDraftStatus value={shared} />
         <div className="library-detail-heading">
+          {headerLeading}
           <IconButton
             className="secondary"
             label="서재 목록"
@@ -1098,19 +1105,40 @@ function ContentEditor({
           />
           <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
           <div className="library-detail-actions">
-            <small className="library-draft-state">
-              {dirty ? '저장본과 다른 초안' : '저장본과 같아요'}
-            </small>
+            <EditorDraftStatusButton value={shared} />
             <button
               type="submit"
               form={formId}
-              className="primary"
-              disabled={editorUnavailable || !!importedPackage || nativeDraftDirty || portraitBusy}
+              className="primary native-editor-save"
+              disabled={
+                editorUnavailable ||
+                !value.title.trim() ||
+                !!importedPackage ||
+                nativeDraftDirty ||
+                portraitBusy
+              }
             >
-              {busy ? '저장 중…' : selected ? '변경사항 저장' : '자료 등록'}
+              <SaveIcon size={18} aria-hidden="true" />
+              <span>{busy ? '저장 중…' : selected ? '변경사항 저장' : '자료 등록'}</span>
             </button>
             {selected && (
               <LibraryItemMenu title="자료 메뉴">
+                {value.kind !== 'module' && (
+                  <RisuExportButton
+                    kind="content"
+                    id={selected.id}
+                    revision={selected.revision}
+                    title={selected.title}
+                    disabled={
+                      editorUnavailable ||
+                      dirty ||
+                      nativeDraftDirty ||
+                      !!importedPackage ||
+                      portraitBusy
+                    }
+                    onError={setError}
+                  />
+                )}
                 <DeleteButton
                   path={`/content/${encodeURIComponent(selected.id)}`}
                   revision={selected.revision}
@@ -1127,6 +1155,7 @@ function ContentEditor({
               </LibraryItemMenu>
             )}
           </div>
+          {headerTrailing}
         </div>
         <form
           id={formId}
@@ -1146,7 +1175,7 @@ function ContentEditor({
               onPortraitBusy={setPortraitBusy}
             />
             <details className="library-package-tools full">
-              <summary>패키지 가져오기·내보내기와 역할 사본</summary>
+              <summary>고급 · Uimori 자료 교환과 역할 사본</summary>
               <div className="library-package-tools-body">
                 <PackageTransfer
                   getPackage={packageSnapshot}

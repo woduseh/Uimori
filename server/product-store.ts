@@ -1,5 +1,7 @@
 import { detectRisuImageHandoff, type RisuImageHandoff } from '../core/risu-image-handoff.js';
 import { validateRisuContentSource } from '../core/risu-native.js';
+import { effectiveRisuControls } from '../core/risu-effective-controls.js';
+import { stripDeprecatedRisuPresetFields } from '../core/risu-deprecated-fields.js';
 import { projectNativeRisuPackage } from './risu-native-projection.js';
 import { validateNativeScriptAttempt } from './risu-native-host.js';
 import { JEV_ENDPOINT, JEV_MODEL } from './jev-judgment.js';
@@ -821,6 +823,16 @@ export class ProductStore {
         ? { collaborationModels }
         : {}),
     };
+    // Freeze today's supported Risu fields for new work, without rewriting library versions or
+    // the source-time packages held by completed runs and backup receipts.
+    if (profile.packages)
+      profile.packages = profile.packages.map(
+        (pkg) =>
+          projectNativeRisuPackage(pkg, this.get<Content>('content', pkg.id, pkg.revision).kind).pkg
+      );
+    for (const preset of Object.values(profile.promptPresets ?? {}))
+      if (preset.program.nativeRisuPreset)
+        stripDeprecatedRisuPresetFields(preset.program.nativeRisuPreset.preset);
     const overrides = freezeChatOverrides(
       this.store,
       profile,
@@ -1737,9 +1749,21 @@ function validateArchiveProfile(
       const controls = p.promptControls?.[key];
       if (controls) {
         const checked = validateChatPromptControls(controls);
-        resolvePromptValues(program, checked.values);
-        for (const combination of checked.combinations)
-          resolvePromptValues(program, combination.values);
+        const resolveValues = (values: typeof checked.values) => {
+          if (role !== 'main') return resolvePromptValues(program, values);
+          // Older receipts contain preset-only values. Do not invalidate them because a card's
+          // newly exposed declarations now conflict; new combined values use the full contract.
+          try {
+            return resolvePromptValues(program, values);
+          } catch {
+            return resolveControlValues(
+              effectiveRisuControls(p as ProfileSnapshot, program),
+              values
+            );
+          }
+        };
+        resolveValues(checked.values);
+        for (const combination of checked.combinations) resolveValues(combination.values);
       }
     }
     if (p.promptControls) fields(record(p.promptControls), allowedKeys);
@@ -1778,8 +1802,17 @@ function validateArchiveProfile(
     !isDeepStrictEqual(packageAttachments, resolvedPackages.attachments)
   )
     throw new HttpError(400, 'Frozen module dependency mismatch');
-  if (frozen && !isDeepStrictEqual(p.packages, packages))
-    throw new HttpError(400, 'Frozen package revision mismatch');
+  if (frozen && !isDeepStrictEqual(p.packages, packages)) {
+    // Historical snapshots match their original stored projection; new reservations may carry
+    // the exact supported-field projection of that same immutable native source.
+    const projected = packages?.map(
+      (pkg) =>
+        projectNativeRisuPackage(pkg, product.get<Content>('content', pkg.id, pkg.revision).kind)
+          .pkg
+    );
+    if (!isDeepStrictEqual(p.packages, projected))
+      throw new HttpError(400, 'Frozen package revision mismatch');
+  }
   if (frozen && !isDeepStrictEqual(p.promptPresets, promptPresets))
     throw new HttpError(400, 'Frozen prompt revision mismatch');
   if (frozen && !isDeepStrictEqual(p.models, models))

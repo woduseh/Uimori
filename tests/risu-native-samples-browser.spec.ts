@@ -2,18 +2,33 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve, sep } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 import { createApp, type App } from '../server/app.js';
-import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import {
+  modelWorkspace,
+  updateModelWorkspace,
+  promptWorkspace,
+  updatePromptWorkspace,
+} from '../server/prompt-workspace.js';
+import { prepareRisuPresetImport, applyRisuPresetImport } from '../server/risu-preset-import.js';
 import { readChatVariables } from '../server/chat-variables.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { RisuImportResult } from '../core/risu-import.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { navigationAction } from './ui-navigation.js';
+import {
+  DESKTOP_WIDTH,
+  DESKTOP_HEIGHT,
+  MOBILE_WIDTH,
+  MOBILE_HEIGHT,
+} from './fixtures/browser-viewports.js';
 
 // Explicit local opt-in. Original cards stay outside the repository and are never modified.
 const sampleRoot = process.env.UIMORI_RISU_SAMPLE_ROOT;
 const diagnostic = process.env.UIMORI_RISU_SAMPLE_DIAGNOSTIC === '1';
+const presetPath = process.env.UIMORI_RISU_SAMPLE_PRESET;
+const visualReview = process.env.UIMORI_VISUAL_REVIEW === '1';
+test.use({ trace: 'off', screenshot: 'off' });
 const cases = [
   {
     id: 'RISUSAMPLE01',
@@ -30,6 +45,7 @@ const cases = [
     choices: ['greeting1', 'greeting2'],
     expected: { lang: '1', greeting: '1' },
     alternate: { lang: '1', greeting: '2' },
+    images: 2,
   },
   {
     id: 'RISUSAMPLE03',
@@ -39,6 +55,15 @@ const cases = [
     choices: ['scenario_g1', 'scenario_g2'],
     expected: { uiLang: 'en', greeting: '1' },
     alternate: { uiLang: 'en', greeting: '2' },
+    images: 1,
+  },
+  {
+    id: 'RISUSAMPLE04',
+    path: ['Project Vela — 7 Years Later.charx'],
+    language: '',
+    choices: ['', ''],
+    expected: {},
+    alternate: {},
   },
 ] as const;
 
@@ -48,12 +73,15 @@ test.describe('actual local native Risu cards', () => {
     'Set UIMORI_RISU_SAMPLE_ROOT to opt into private local sample acceptance.'
   );
   test.setTimeout(240_000);
-  test.use({ viewport: { width: 1440, height: 1000 } });
+  test.use({
+    viewport: { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
+  });
   let app: App;
   let provider: Awaited<ReturnType<typeof loopbackProvider>>;
   let request: APIRequestContext;
   let origin: string;
   let directory: string;
+  let originalPresetHash: string | undefined;
 
   test.beforeAll(async ({ playwright }) => {
     for (const sample of cases)
@@ -103,11 +131,46 @@ test.describe('actual local native Risu cards', () => {
       scriptModel: { id: models[1].id },
       translationPolicy: workspace.translationPolicy,
     });
+    if (presetPath) {
+      const bytes = readFileSync(presetPath);
+      originalPresetHash = createHash('sha256').update(bytes).digest('hex');
+      const source = { name: basename(presetPath), base64: bytes.toString('base64') };
+      const preview = prepareRisuPresetImport({ source });
+      expect(
+        preview.findings
+          .filter((finding) => finding.level === 'unsupported')
+          .map((finding) => finding.code)
+      ).toEqual([]);
+      const { preset } = applyRisuPresetImport(app.store, {
+        source,
+        digest: preview.digest,
+        allowPartial: false,
+        idempotencyKey: 'local-sample-preset',
+      });
+      const current = promptWorkspace(app.store);
+      updatePromptWorkspace(
+        app.store,
+        {
+          expectedRevision: current.revision,
+          main: {
+            title: preset.title,
+            program: preset.program,
+            values: preset.values,
+          },
+        },
+        { role: 'main', id: preset.id }
+      );
+    }
     origin = await app.listen({ port: 0, host: '127.0.0.1' });
     request = await playwright.request.newContext({ baseURL: origin });
   });
 
   test.afterAll(async () => {
+    if (presetPath && originalPresetHash)
+      expect(
+        createHash('sha256').update(readFileSync(presetPath)).digest('hex') === originalPresetHash,
+        'Original local preset remains unchanged'
+      ).toBe(true);
     await request?.dispose();
     await app?.close();
     await provider?.close();
@@ -253,7 +316,18 @@ test.describe('actual local native Risu cards', () => {
       expect(forkResponse.ok(), 'Fork before choosing').toBe(true);
       const fork = (await forkResponse.json()) as { id: string };
       await settledFrame(page);
-      await page.screenshot({ path: info.outputPath(`${sample.id}-opening.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`${sample.id}-opening.png`) });
+      await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
+      await settledFrame(page);
+      if (sample.language) await clickAuthored(page, sample.language);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+        'Mobile opening stays within the host viewport'
+      ).toBe(true);
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`${sample.id}-mobile-opening.png`) });
+      await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
 
       if (sample.id === 'RISUSAMPLE01') {
         await clickAuthored(page, sample.language);
@@ -306,7 +380,8 @@ test.describe('actual local native Risu cards', () => {
           body: JSON.stringify(await panelGeometry()),
           contentType: 'application/json',
         });
-        await page.screenshot({ path: info.outputPath(`${sample.id}-settings-panel-open.png`) });
+        if (visualReview)
+          await page.screenshot({ path: info.outputPath(`${sample.id}-settings-panel-open.png`) });
         await closePanel();
         for (const language of [
           { action: 'setLangToKorean', value: '0', title: '설정', suffix: 'ko' },
@@ -324,28 +399,27 @@ test.describe('actual local native Risu cards', () => {
           ).toHaveCSS('color', 'rgb(85, 234, 208)');
           await openPanel();
           await expect(languageButton).toHaveClass(/\bactive\b/);
-          await page.screenshot({
-            path: info.outputPath(`${sample.id}-settings-panel-${language.suffix}.png`),
-          });
+          if (visualReview)
+            await page.screenshot({
+              path: info.outputPath(`${sample.id}-settings-panel-${language.suffix}.png`),
+            });
           await closePanel();
         }
       }
 
       const choose = async (choice: string) => {
-        await clickAuthored(page, sample.language);
+        if (sample.language) await clickAuthored(page, sample.language);
         if ('setup' in sample) await clickAuthored(page, sample.setup);
-        await clickAuthored(page, choice);
+        if (choice) await clickAuthored(page, choice);
       };
       await choose(sample.choices[0]);
       expect(readChatVariables(app.store, chat.id, main.id).values).toMatchObject(sample.expected);
       await page.reload();
       await settledFrame(page);
       expect(readChatVariables(app.store, chat.id, main.id).values).toMatchObject(sample.expected);
-      if (sample.id !== 'RISUSAMPLE01') {
+      if ('images' in sample) {
         const images = page.frameLocator('iframe[title="봇 메시지"]').first().locator('img');
-        await expect
-          .poll(() => images.count())
-          .toBeGreaterThanOrEqual(sample.id === 'RISUSAMPLE02' ? 2 : 1);
+        await expect.poll(() => images.count()).toBeGreaterThanOrEqual(sample.images);
         await expect
           .poll(() =>
             images.evaluateAll((nodes) =>
@@ -358,7 +432,30 @@ test.describe('actual local native Risu cards', () => {
         await expect(page.getByText('asset:daily_annyoed.webp', { exact: true })).toHaveCount(0);
         await settledFrame(page);
       }
-      await page.screenshot({ path: info.outputPath(`${sample.id}-selected.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`${sample.id}-selected.png`) });
+      await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
+      await settledFrame(page);
+      if ('images' in sample) {
+        const images = page.frameLocator('iframe[title="봇 메시지"]').first().locator('img');
+        await expect
+          .poll(() =>
+            images.evaluateAll((nodes) =>
+              nodes.every(
+                (node) => node instanceof HTMLImageElement && node.complete && node.naturalWidth > 0
+              )
+            )
+          )
+          .toBe(true);
+      }
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+        'Mobile host page stays within the viewport'
+      ).toBe(true);
+      await expect(page.getByLabel('다음 장면 요청', { exact: true })).toBeVisible();
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`${sample.id}-mobile-selected.png`) });
+      await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
 
       await page.goto(
         `${origin}/?chat=${encodeURIComponent(chat.id)}&branch=${encodeURIComponent(fork.id)}`
@@ -414,7 +511,8 @@ test.describe('actual local native Risu cards', () => {
         .evaluate((element) => element.scrollIntoView({ block: 'end' }));
       await renderedResponse.evaluate((element) => element.scrollIntoView({ block: 'center' }));
       await expect(renderedResponse).toBeInViewport({ timeout: 10_000 });
-      await page.screenshot({ path: info.outputPath(`${sample.id}-response.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`${sample.id}-response.png`) });
       expect(readChatVariables(app.store, chat.id, fork.id).values).toMatchObject(sample.alternate);
       expect(externalRequests).toEqual([]);
       expect(hash(), 'Original local card remains unchanged').toBe(originalHash);

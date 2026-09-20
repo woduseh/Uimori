@@ -1,0 +1,75 @@
+# UI recovery v3 — representative screen review
+
+Review date: 2026-09-20. Scope: native preset editor, native bot editor, and reader first-message presentation. This is the agreed representative-screen checkpoint before extending the remaining v3 screens. It is not completion of the entire 36-screen set or human aesthetic acceptance.
+
+## Visual truth and capture conditions
+
+Source folder: `C:/Users/wodus/Downloads/Uimori_UI_Recovery_v3`.
+
+- Preset composition: `screens/03_prompt_blocks.png`, `pages/03_prompt_blocks.html`.
+- Bot basic information: `screens/12_bot_basic.png`, `pages/12_bot_basic.html`.
+- Reader: `screens/18_chat_opening.png`, `pages/18_chat_opening.html`.
+- Mobile adaptation: `screens/30_mobile_chat.png`, `screens/31_mobile_editor.png`.
+
+The separate generated mood-image folder supplies atmosphere only; its unagreed features and copy are not requirements. The app's existing logo, icon library, font stack, tokens, and saved reading preferences remain the product design system. The supplied library image is used only in the isolated visual fixture, not added as a built-in user bot.
+
+Source desktop PNGs are 2880 × 1800 pixels at 1440 × 900 CSS px, 2× density. The requested test viewport is 2560 × 1440 CSS px, with a 412 px mobile width; 915 px is the selected mobile test height. Requested-size browser evidence uses 1× density. Additional 1440 × 900 captures use 2× density, matching the source PNG dimensions exactly. Reference-size captures supplement, rather than replace, the requested dimensions.
+
+The source mobile PNGs are 1170 × 2532 at 390 × 844 CSS px (3×), as recorded in the supplied README. Mobile evidence at the user-requested 412 px width is an adaptation review; it is not a same-viewport pixel comparison. Exact density-normalized source comparisons use the desktop states described above.
+
+Implementation: `http://127.0.0.1:4317/`, isolated `output/ui-recovery-preview/preview.sqlite`. No operating database or source card is modified. Editor screenshots use saved synthetic native documents; actual private cards are covered separately. The reader fixture contains a first message only, while source screen 18 also shows a later generated scene. Compare the common first-message region; do not infer pixel equivalence from different text or scene counts.
+
+## Resolved findings and comparison history
+
+| Severity | Earlier finding | Implemented fix | Post-fix evidence |
+| --- | --- | --- | --- |
+| P1 | Library heading, editor heading, and draft strip repeated the same context above the form. | One editor header with back, title, draft status, save, more, and helper; detailed draft controls remain in a dialog. | Final bot/preset captures and browser save/export flows. |
+| P2 | The bot header was centered inside an inherited narrow container. | Full-width editor header; readable basic form width is independent. | Final desktop bot capture. |
+| P2 | Mobile header controls and negative margins caused horizontal overflow. | 44 px icon save control, accessible label, compact draft control, and explicit editor padding. | Both editor sizes assert no horizontal overflow and save remains in the viewport. |
+| P2 | A real preset's long block list made the whole page excessively tall. | Desktop list and detail scroll independently; mobile uses an item picker. | Real Phémē inspection and final preset captures. |
+| P2 | A plain native first message gained an unnecessary internal scrollbar from collapsed final-paragraph margins. | Frame body establishes a flow root and measures content with its bottom spacing. | Short-message/frame tests at both sizes, including 18 → 26 → 14 px resizing; final reader capture. |
+| P2 | Native message defaults did not track app font size and theme. | Trusted appearance updates inherit reading defaults without resetting authored controls or overriding explicit card CSS. | Appearance/browser tests and manual dark reader inspection. |
+
+## Required fidelity surfaces
+
+- Typography: preserve the existing app font stack; ordinary prose inputs use readable proportional text and raw JSON retains its code treatment. Mobile inputs are 16 px. Reader default text is 18 px with user-selected line height and width. Long titles truncate to preserve persistent actions; accessible button names remain available.
+- Spacing/layout: one header and one tab row, desktop list/detail split, compact mobile picker, limited-width bot basic form, and unboxed reader prose. Long lists and long documents scroll without hiding save/navigation controls.
+- Colors/tokens: dark olive/neutral surfaces, muted dividers, green selection/save emphasis use existing theme tokens. Light-theme regression screenshots are separate coverage, not a color match to the dark source.
+- Assets/icons: retain supplied card images and the existing product icon library. No invented raster decoration or substitute CSS artwork. Real-card CHARX export/reimport preserves all checked image hashes: Cheongwon 134, Hinano 114, Vela 3.
+- Copy/content: labels follow native Risu data. Retired personality/scenario/system-prompt fields and memory-extraction controls are absent. No invented short-introduction field is added solely to imitate the mock. First authored message is labelled separately; generated scenes start at 1.
+
+## Intentional constraints and follow-up
+
+- The source's sample documents and sidebar contents differ from real imported documents. Raw CBS, unknown fields, and authored image/control content are preserved rather than rewritten for screenshot similarity.
+- Native preset/body editors save current Risu documents and export CHARX/RISUP. Standalone RISUM export and flattening externally linked library modules into CHARX are outside the accepted implementation scope.
+- Existing composer actions and navigation remain functional. Extending every remaining v3 screen is deferred until the representative layout/density review.
+- Author-authored fixed-position mobile content is not automatically redesigned. Cheongwon's internal right icon rail overlaps some Settings labels at 412 px; this is a source-card layout limitation, distinct from host overflow checks. Vela's default greeting has no buttons; its two alternate greetings are covered by runtime tests.
+- P3: mobile portrait editing currently exposes upload, selection from existing images, and removal as separate actions. All basic fields remain accessible, but this uses more vertical space than the simplified mock. Condensing these actions is an optional density refinement.
+- P3: the mobile save control is a labelled 44 px header icon, instead of the mock's bottom text button. Additional bot tabs use horizontal scrolling, whose discoverability could be strengthened. These controls pass the interaction/visibility checks; user visual review should settle the preferred presentation before expansion.
+- P3: finer spacing/color preferences and the preferred overall editor density remain a user visual-review question. No claim is made about live-provider creative quality, physical-device IME, or every script/scenario.
+
+## Interaction and regression evidence
+
+- `npm run quality`: Biome and TypeScript passed.
+- `npm test`: 200 files passed, 2 skipped; 2062 tests passed, 8 skipped. Log: `output/ui-recovery-preview/unit.log`. Actual-data tests are opt-in and separately exercised below.
+- `npm run verify:ui-recovery`: 26/26 passed. Receipt: `output/playwright/ui-recovery-2026-09-20T01-35-48-173Z-62585201/summary.json`. Covers tabs, draft preservation, invalid inputs, save/export revision gating, downloaded CHARX/RISUP reimport, retired import UX, iframe isolation and appearance. Light-theme editor PNGs are under that run's `browser/` directory.
+- Actual-card runner: 3/3 passed for Cheongwon, Hinano, Vela with local Phémē preset at both requested widths. Receipt: `output/playwright/risu-native-samples-2026-09-20T01-36-12-345Z-5e196cf5/summary.json`. Initial controls where present, local images, selection variables, reload, branch isolation and a loopback-model next turn were tested; original SHA values were unchanged and no external requests occurred.
+- Both browser receipts identify build `3cda80f938c69b55ce12c23de2196ac257b59631080ecb77bf3a0445f20b57e5` and passed final identity checks. Later edits are documentation only.
+- Real CHARX export/reimport: `output/ui-recovery-preview/actual-roundtrip.json`; three cards passed preserved supported source fields and image hashes.
+- IAB manual preview: primary editor navigation, longer real preset, first-message rendering, settings changes and dark theme inspected. No console warning/error observed in the final inspection.
+
+## Final visual comparison
+
+Final implementation screenshot folder: `output/ui-recovery-preview/captures/`.
+
+- Requested-size dark captures: `dark-{bot,preset,chat}-2560x1440.png` and `dark-{bot,preset,chat}-412x915.png`.
+- Same-density reference captures: `dark-{bot,preset,chat}-1440x900-2x.png` (2880 × 1800 pixels).
+- Full-view comparison inputs: `compare-{bot,preset,chat}-full.png`. Each contains the source on the left and implementation on the right; both are downsampled from 2880 × 1800 to 1440 × 900 using the same procedure. Reviewed together, not inferred from separate filenames.
+- Focused typography/header/tab inputs: `compare-{bot,preset,chat}-header.png`. Source is above implementation, with identical crop and 2× → 1× normalization. These make text, icons, saved/disabled state and tab spacing readable without full-page reduction.
+- Each dark capture has a corresponding JSON containing CSS viewport, DPR, theme, horizontal overflow and save bounds. All 9 captures have zero document overflow; editor captures have zero editor overflow and save inside the viewport. The screenshot-only run passed all 3 viewport cases with no page errors.
+- Full-view and focused comparisons show the intended single-header hierarchy, native list/detail composition, readable description/first-message content and retained image subject/crop. The preset save button is disabled in its unchanged saved state; the mock shows a dirty enabled state, and the separate editor regression verifies enabled-save behavior. Sidebar contents, sample prose, omitted unsupported fields, user-configurable reader width and later-scene count are expected differences, not pixel-match assertions.
+- No actionable P0/P1/P2 remains within the representative-screen scope. The P3 density/discoverability choices above and the source-card mobile limitation remain explicit follow-up items.
+
+Implementation checklist: foundation/native cleanup complete; three representative screens implemented; desktop/mobile interactions and visual comparisons complete; user aesthetic checkpoint pending before remaining-screen expansion.
+
+final result: passed

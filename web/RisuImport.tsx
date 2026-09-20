@@ -17,13 +17,6 @@ import { IconButton } from './IconButton.js';
 import { UploadIcon } from './ui-icons.js';
 import './risu-import.css';
 
-function memorySelectionIssue(entry: RisuImportPreview['lore'][number]): string {
-  if (!entry.enabled) return '사용하지 않는 로어는 진행 기억으로 옮길 수 없어요.';
-  if (!entry.text.trim()) return '본문이 없는 항목은 진행 기억으로 옮길 수 없어요.';
-  if (entry.text.length > 32000) return '32,000자를 넘는 항목은 진행 기억으로 옮길 수 없어요.';
-  return '';
-}
-
 /** Always-on lore stays pinned; optional lore is selected by JEV. */
 function loreLoadingLabel(entry: RisuImportPreview['lore'][number]): string {
   return entry.loading === 'pinned' ? '항상 포함' : 'JEV 관련성 판단 · 필요할 때 추가 조회';
@@ -51,7 +44,6 @@ export function RisuImport({
   const [kind, setKind] = useState<RisuImportKind | ''>('');
   const [preview, setPreview] = useState<RisuImportPreview | null>(null);
   const [imageHandoffIds, setImageHandoffIds] = useState<string[]>([]);
-  const [memoryIds, setMemoryIds] = useState<string[]>([]);
   const [allowPartial, setAllowPartial] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [result, setResult] = useState<RisuImportResult | null>(null);
@@ -99,7 +91,6 @@ export function RisuImport({
           .filter((range) => range.enabled)
           .map((range) => range.id) ?? []
       );
-      setMemoryIds([]);
       setAllowPartial(false);
       setResult(null);
       submission.current = null;
@@ -135,7 +126,6 @@ export function RisuImport({
           .filter((range) => range.enabled)
           .map((range) => range.id) ?? []
       );
-      setMemoryIds([]);
       setAllowPartial(false);
       selectionChanged();
     } catch (cause) {
@@ -171,10 +161,6 @@ export function RisuImport({
       source,
       ...(kind ? { kind } : {}),
       digest: preview.digest,
-      memoryIds:
-        preview.kind === 'module'
-          ? []
-          : preview.lore.filter((entry) => memoryIds.includes(entry.id)).map((entry) => entry.id),
       allowPartial,
       imageHandoffIds,
       idempotencyKey: (requestKey.current ??= crypto.randomUUID()),
@@ -273,7 +259,9 @@ export function RisuImport({
               }}
             />
           </label>
-          <p className="muted">.risum 파일 직접 가져오기는 지원하지 않아요.</p>
+          <p className="muted">
+            .charx, .risum, 카드·모듈 JSON, 모듈 프로젝트 ZIP을 가져올 수 있어요.
+          </p>
           {preview && (
             <>
               <div className="risu-import-summary">
@@ -324,74 +312,18 @@ export function RisuImport({
                   }}
                 />
               )}
-              {preview.kind === 'module' && preview.lore.length > 0 && (
+              {preview.lore.length > 0 && (
                 <details className="risu-import-preview" key={preview.digest}>
-                  <summary>모듈 로어 미리보기 ({preview.lore.length}개)</summary>
+                  <summary>로어 미리보기 ({preview.lore.length}개)</summary>
                   {preview.lore.map((entry) => (
                     <details key={entry.id} className="risu-import-lore-entry">
                       <summary>{entry.title || '제목 없는 로어'}</summary>
+                      <small className="muted">
+                        {entry.enabled ? '사용 중' : '사용 안 함'} · {loreLoadingLabel(entry)}
+                      </small>
                       <p className="risu-import-lore-text">{entry.text || '(내용 없음)'}</p>
                     </details>
                   ))}
-                </details>
-              )}
-              {preview.kind === 'bot' && preview.lore.length > 0 && (
-                <details className="risu-import-memory" key={preview.digest}>
-                  <summary>
-                    로어북에서 과거 진행 기억 분리하기 (선택)
-                    {memoryIds.length > 0 && <small> · 선택 {memoryIds.length}개</small>}
-                  </summary>
-                  <fieldset className="risu-import-lore" disabled={locked}>
-                    <legend>분리할 항목 선택</legend>
-                    <p className="muted">
-                      배경 로어는 기본적으로 봇에 보존해요. 이전 대화의 진행 기억을 찾았다면 내용을
-                      확인하고 선택해 주세요. 선택한 항목만 봇 로어에서 분리해 새 채팅의 참고 메모로
-                      옮겨요.
-                    </p>
-                    <p className="risu-import-selection-count" role="status">
-                      봇 로어로 유지 {preview.summary.lore - memoryIds.length}개 · 진행 기억으로
-                      이동 {memoryIds.length}개
-                    </p>
-                    {preview.lore.map((entry) => (
-                      <details key={entry.id} className="risu-import-lore-entry">
-                        <summary>
-                          <strong>{entry.title || '제목 없는 로어'}</strong>
-                          <small>
-                            {memoryIds.includes(entry.id)
-                              ? '진행 기억으로 이동'
-                              : entry.memoryCandidate
-                                ? '진행 기억일 수 있어요 · 직접 확인'
-                                : '봇 로어로 유지'}
-                          </small>
-                        </summary>
-                        <div className="risu-import-lore-content">
-                          <small className="muted">
-                            {entry.enabled ? '사용 중' : '사용 안 함'} · {loreLoadingLabel(entry)}
-                          </small>
-                          <p className="risu-import-lore-text">{entry.text || '(내용 없음)'}</p>
-                          <label className="risu-import-choice">
-                            <SelectionCheckbox
-                              aria-label={`${entry.title || '제목 없는 로어'} 과거 진행 기억으로 옮기기`}
-                              checked={memoryIds.includes(entry.id)}
-                              disabled={!!memorySelectionIssue(entry)}
-                              onChange={(event) => {
-                                setMemoryIds((current) =>
-                                  event.target.checked
-                                    ? [...current, entry.id]
-                                    : current.filter((id) => id !== entry.id)
-                                );
-                                selectionChanged();
-                              }}
-                            />
-                            <span>과거 진행 기억으로 옮기기</span>
-                          </label>
-                          {memorySelectionIssue(entry) && (
-                            <small className="muted">{memorySelectionIssue(entry)}</small>
-                          )}
-                        </div>
-                      </details>
-                    ))}
-                  </fieldset>
                 </details>
               )}
               {unsupported && (

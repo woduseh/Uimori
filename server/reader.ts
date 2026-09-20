@@ -411,7 +411,8 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   const runsById = new Map(indexRows.map((run) => [run.id, run]));
   // Requests label the branch's complete index without loading off-page source bodies.
   // Authored starts have no user request; never substitute generated or hidden content.
-  const navigation = chain.map((sourceId, index) => {
+  let sceneNumber = 0;
+  const navigation = chain.map((sourceId) => {
     const run = runsById.get(byId.get(sourceId)!.runId);
     const request = String(run?.request ?? '')
       .replace(/\s+/gu, ' ')
@@ -419,13 +420,19 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     // 202 UTF-16 units suffice to decide whether there are more than 100 codepoints.
     // Avoid expanding a long request into an array only to discard all but its label.
     const characters = Array.from(request.slice(0, 202));
-    const label =
-      run?.startMode === 'authored'
-        ? '시작 장면'
-        : characters.length > 100
-          ? `${characters.slice(0, 99).join('')}…`
-          : request || `장면 ${index + 1}`;
-    return { id: sourceId, number: index + 1, label };
+    const opening = run?.startMode === 'authored';
+    if (!opening) sceneNumber++;
+    const label = opening
+      ? '첫 메시지'
+      : characters.length > 100
+        ? `${characters.slice(0, 99).join('')}…`
+        : request || `장면 ${sceneNumber}`;
+    return {
+      id: sourceId,
+      number: sceneNumber,
+      label,
+      ...(opening ? { opening: true as const } : {}),
+    };
   });
   const activeJobs = Number(
     (

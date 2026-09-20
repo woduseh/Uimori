@@ -105,7 +105,7 @@ test('ordinary Runs retain archived logical-history and compiled-prompt validati
 test('native prompt archive compilation rejects forged catalog output', async () => {
   const { store, second } = await fixture();
   const current = compileSnapshotPrompt({ ...second.run.snapshot, promptCompilation: undefined });
-  expect(current.promptCompilation!.compilerVersion).toBe('risu-native-prompt-1');
+  expect(current.promptCompilation!.compilerVersion).toBe('risu-native-prompt-2');
   expect(() => validateRunSnapshot(store, current)).not.toThrow();
   const forged = structuredClone(current);
   forged.promptCompilation!.messages.find(

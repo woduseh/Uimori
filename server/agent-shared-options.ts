@@ -1,5 +1,6 @@
 import { promptControls } from '../core/risu-prompt.js';
-import { resolvePromptValues } from '../core/risu-prompt.js';
+import { resolveControlValues } from '../core/risu-prompt.js';
+import { effectiveRisuControls } from '../core/risu-effective-controls.js';
 import type { RunSnapshot } from '../core/types.js';
 
 /** Explicitly selected controls carry their authored meaning without disclosing other options. */
@@ -8,8 +9,8 @@ export function agentSharedOptions(snapshot: RunSnapshot) {
   if (!preset?.program.collaboration?.enabled) return [];
   const values =
     snapshot.promptCompilation?.values ??
-    resolvePromptValues(
-      preset.program,
+    resolveControlValues(
+      effectiveRisuControls(snapshot.profile!, preset.program),
       snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values
     );
   return preset.program.collaboration.sharedControls.map((id) => {

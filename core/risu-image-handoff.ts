@@ -15,22 +15,34 @@ export type RisuImageHandoff = {
   tagTemplates: string[];
 };
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
-const cardFields = [
-  'description',
-  'personality',
-  'scenario',
-  'mes_example',
-  'system_prompt',
-  'post_history_instructions',
-] as const;
-export function imageHandoffSource(native: RisuContentSource, field: string): string {
-  if (
-    field.startsWith('card:') &&
-    cardFields.includes(field.slice(5) as (typeof cardFields)[number])
-  )
+const cardFields = ['description', 'mes_example', 'post_history_instructions'] as const;
+// Historical receipts can name retired fields. Reading them never makes them executable again.
+const historicalCardFields = [...cardFields, 'personality', 'scenario', 'system_prompt'];
+function recordedImageHandoffSource(native: RisuContentSource, field: string): string {
+  if (field.startsWith('card:') && historicalCardFields.includes(field.slice(5)))
     return text(native.card[field.slice(5)]);
   const match = /^lore:lore-(\d+)$/u.exec(field);
   return match ? text(nativeRisuLore(native)[Number(match[1])]?.content) : '';
+}
+const activeField = (field: string) =>
+  !field.startsWith('card:') || cardFields.includes(field.slice(5) as (typeof cardFields)[number]);
+export function imageHandoffSource(native: RisuContentSource, field: string): string {
+  return activeField(field) ? recordedImageHandoffSource(native, field) : '';
+}
+
+/** Runtime text after selected image instructions are handed to image placement. */
+export function risuImageHandoffText(pkg: RisuContent, field: string): string {
+  if (!activeField(field)) return '';
+  const source = imageHandoffSource(pkg.nativeRisu, field);
+  return (pkg.imageHandoff?.ranges ?? [])
+    .filter(
+      (range) =>
+        range.enabled &&
+        range.field === field &&
+        source.slice(range.start, range.end) === range.text
+    )
+    .sort((a, b) => b.start - a.start)
+    .reduce((value, range) => value.slice(0, range.start) + value.slice(range.end), source);
 }
 
 /** Recognize explicit image instruction headings, never narrative mentions of an image. */
@@ -143,7 +155,9 @@ export function validateRisuImageHandoff(
     )
       throw new Error('PACKAGE_IMAGE_HANDOFF_RANGE');
     ids.add(range.id);
-    if (imageHandoffSource(native, range.field).slice(range.start, range.end) !== range.text)
+    if (
+      recordedImageHandoffSource(native, range.field).slice(range.start, range.end) !== range.text
+    )
       throw new Error('PACKAGE_IMAGE_HANDOFF_STALE');
     const sameField = occupied.get(range.field) ?? [];
     if (sameField.some((previous) => range.start < previous.end && previous.start < range.end))
@@ -168,6 +182,7 @@ export function projectRisuImageHandoff(pkg: RisuContent, enabled: boolean): Ris
   const ranges = pkg.imageHandoff.ranges.filter(
     (range) =>
       range.enabled &&
+      activeField(range.field) &&
       imageHandoffSource(native, range.field).slice(range.start, range.end) === range.text
   );
   if (!ranges.length) return pkg;
@@ -176,10 +191,7 @@ export function projectRisuImageHandoff(pkg: RisuContent, enabled: boolean): Ris
       .filter((range) => range.field === field)
       .sort((a, b) => b.start - a.start)
       .reduce((value, range) => value.slice(0, range.start) + value.slice(range.end), source);
-  const body = ['description', 'personality', 'scenario', 'mes_example']
-    .map((field) => remove(`card:${field}`, text(native.card[field])))
-    .filter(Boolean)
-    .join('\n\n');
+  const body = remove('card:description', text(native.card.description));
   return {
     ...pkg,
     body,
@@ -190,15 +202,7 @@ export function projectRisuImageHandoff(pkg: RisuContent, enabled: boolean): Ris
       const next = remove(`lore:${entry.id}`, source).trim();
       return { ...entry, text: next };
     }),
-    instructions: pkg.instructions.map((entry) => ({
-      ...entry,
-      text:
-        entry.id === 'card-system'
-          ? remove('card:system_prompt', text(native.card.system_prompt))
-          : entry.id === 'writing-guidance'
-            ? remove('card:post_history_instructions', text(native.card.post_history_instructions))
-            : entry.text,
-    })),
+    instructions: [],
   };
 }
 
@@ -208,6 +212,7 @@ export function risuImageGuidance(pkg: RisuContent): string {
     .filter(
       (range) =>
         range.enabled &&
+        activeField(range.field) &&
         imageHandoffSource(pkg.nativeRisu!, range.field).slice(range.start, range.end) ===
           range.text
     )

@@ -23,8 +23,6 @@ const messages: Record<string, string> = {
   RISU_IMPORT_DRAFT_CHANGED: '확인한 파일이 달라졌어요. 파일을 다시 선택해 주세요.',
   RISU_IMPORT_PARTIAL_REQUIRED:
     '자동 이식할 수 없는 부분을 확인하고 부분 가져오기에 동의해 주세요.',
-  RISU_IMPORT_MEMORY_SELECTION:
-    '기억으로 옮길 로어를 확인해 주세요. 비어 있거나 32,000자를 넘는 항목은 옮길 수 없어요.',
   NATIVE_TRANSFER_FORMAT:
     '지원하지 않는 자료 파일 형식이나 버전이에요. Uimori의 자료 파일 내보내기로 만든 파일을 선택해 주세요.',
   NATIVE_TRANSFER_TOO_LARGE:

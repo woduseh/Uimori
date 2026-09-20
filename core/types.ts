@@ -271,7 +271,7 @@ export type ReaderActivity = {
   sourceRevision: string | null;
   generation: number;
 };
-export type ReaderNavigationItem = { id: string; number: number; label: string };
+export type ReaderNavigationItem = { id: string; number: number; label: string; opening?: true };
 
 /** Branches placed by where their source chains diverge; `branches` itself stores no parent. */
 export type BranchTreeNode = {

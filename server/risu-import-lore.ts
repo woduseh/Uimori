@@ -122,8 +122,8 @@ function convertedLorebook(book: Record<string, unknown>, entries: RisuCardLoreE
 }
 
 /**
- * Reads the card's lorebook. Every entry appears in the preview so the import screen can offer it
- * as a memory, while only the entries the package actually uses reach its lore.
+ * Reads the card's lorebook. Every entry appears in the preview, while only active entries reach
+ * the runtime projection. Import never moves card lore into a chat's user notes.
  */
 export function importRisuLore({
   card,
@@ -195,7 +195,6 @@ export function importRisuLore({
       text: content,
       enabled,
       loading,
-      memoryCandidate: false,
       ...(keys ? { keys: keys.slice(0, MAX_PREVIEW_KEY_CHARS) } : {}),
     });
     if (executable)

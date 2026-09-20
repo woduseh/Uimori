@@ -17,6 +17,10 @@ import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { builtinPromptTemplate, builtinPromptTemplates } from './builtin-prompts.js';
 import { prepareNativeRisuRun } from './risu-native-run.js';
 import { prepareNativeRisuTranslationPrompt } from './risu-native-preset.js';
+import {
+  nativeRisuSnapshotNeedsRefresh,
+  prepareNativeRisuReadOnly,
+} from './risu-native-readonly.js';
 
 /** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
 export function promptRoutes(app: FastifyInstance, store: Store) {
@@ -150,7 +154,11 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
             },
           },
         };
-        const evaluated = await prepareNativeRisuTranslationPrompt(fixed);
+        const evaluated = await prepareNativeRisuTranslationPrompt(
+          nativeRisuSnapshotNeedsRefresh(fixed)
+            ? await prepareNativeRisuReadOnly(fixed, 'auxiliary')
+            : fixed
+        );
         const input = translationInput(
           source,
           sourceTimeContext(evaluated, 'translation'),

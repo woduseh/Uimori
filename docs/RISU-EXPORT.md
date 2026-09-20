@@ -1,0 +1,24 @@
+# Risu 자료 내보내기
+
+서재에서 저장한 봇·페르소나는 `.charx`, 저장한 프리셋은 `.risup`으로 내보낼 수 있어요. 내보내기는 현재 저장된 Risu 원문과 이미지 연결을 읽으며, 최초 가져오기 파일 사본을 다시 내려주는 기능이 아니에요. 편집 중인 변경사항은 먼저 저장해야 해요.
+
+## 포함 범위
+
+- CHARX에는 현재 카드 설정, 첫 메시지와 대체 첫 메시지, 예시 대화, 글로벌노트, 로어, CBS, 정규식, Lua·트리거, 배경 HTML, 기본 변수와 알 수 없는 카드 확장 필드를 보존해요. 가져온 내장 모듈은 `module.risum`으로 다시 기록해요.
+- 이미지의 현재 blob을 넣고 기존 에셋 이름과 URI를 유지해요. 새로 추가한 이미지에는 이식 가능한 ZIP 경로를 부여하고, 대표 이미지 선택을 `icon/main`에 반영해요. 이미지 내용·스크립트를 실행하거나 외부 URL을 가져오지 않아요.
+- RISUP에는 현재 저장된 `promptTemplate`, 지원하는 `promptSettings`, 토글 정의, 기본 변수, 정규식을 기록해요. MessagePack → Risu 고정 키 AES-GCM → gzip → RPack 형식이며, 이 고정 키는 개인정보 보호용 암호화가 아니에요.
+- RisuToki와 동일한 폐기 정책을 적용해요. 카드 성격·상황·시스템 프롬프트 등 폐기 필드, 모듈 `cjs`, 프리셋의 구형 최상위 프롬프트 필드는 출력하지 않아요. 카드의 `post_history_instructions` 글로벌노트와 `promptTemplate`의 활성 블록은 유지해요.
+
+Uimori의 채팅·분기·사용자 메모·JEV 설정·이미지 위임 설정·협업 설정·현재 토글 선택은 Risu 자료 형식에 포함하지 않아요. 프리셋 가져오기에서 제외했던 모델·연결·인증정보·생성 설정도 복원하지 않아요. 이러한 Uimori 설정까지 이동하려면 자료 이동이나 백업을 사용해 주세요.
+
+에셋 편집에서 이미지를 추가하면 Risu 원문의 에셋 목록과 파일 연결도 함께 갱신해요. 기존 파일을 교체하면 에셋 이름·URI·확장자 별칭·이미지 식별자는 유지하고 이미지 바이트만 교체해요. 제거는 확인 후 해당 이미지와 원문 에셋 목록의 연결을 함께 없애지만, 본문·로어·HTML·Lua의 참조 문자열은 바꾸지 않아요. 그 참조는 작가가 직접 확인해야 해요. 아직 지원하지 않는 비이미지 에셋은 원문에서 유지하며 이미지 편집 작업으로 제거하지 않아요.
+
+독립 `.risum` 내보내기와 외부 서재 모듈이 연결된 자료의 CHARX 내보내기는 아직 지원하지 않아요. 연결 모듈을 조용히 제외한 파일을 만들지 않으며, 연결 모듈이 있는 자료는 Uimori 자료 이동을 이용해야 해요. 가져오기에서 지원되지 않아 저장하지 못한 embedded 자산은 내보내기를 차단해요. 원래 외부 HTTP(S)·data URI는 그대로 보존하지만 요청하거나 가용성을 확인하지 않아요. 원본 컨테이너의 임의 첨부 파일까지 복사하는 백업 기능은 아니에요.
+
+## API와 검증
+
+`GET /api/content/:id/risu-export?expectedRevision=N`과 `GET /api/prompt-presets/:id/risu-export?expectedRevision=N`은 attachment 응답을 반환해요. UTF-8 파일명, `Cache-Control: no-store`, `X-Uimori-Revision`을 제공해요. `expectedRevision`이 최신 저장 버전과 다르면 409로 거절하며 숨긴 자료는 404예요. 예상 버전을 생략한 API 호출은 최신 저장 버전을 읽어요.
+
+출력은 최대 64 MiB, JSON은 최대 8 MiB, 자산은 최대 2,000개로 제한해요. ZIP 경로 탈출·중복 경로에 다른 데이터·누락된 이미지 연결은 거절해요. 저장 상태나 가져오기 원본 사본은 수정하지 않아요.
+
+관련 코드는 `server/risu-export.ts`, `server/risu-export-codec.ts`, `core/risu-deprecated-fields.ts`에 있어요. 에셋 편집은 `core/risu-native-assets.ts`, `web/NativeRisuAssetsEditor.tsx`에서 관리해요. `tests/risu-export.test.ts`는 저장 후 수정한 자료를 실제 카드·프리셋 importer에 다시 넣어 첫 메시지, 내장 모듈, 이미지, CBS·Lua 원문, 폐기 정책 및 버전 충돌을 검증해요. `tests/risu-native-assets.test.ts`는 추가·교체·제거 때 식별자와 원문 보존을 검증해요. 이 검증은 실제 RisuAI 앱에서 모든 스크립트를 실행했다는 의미는 아니에요.

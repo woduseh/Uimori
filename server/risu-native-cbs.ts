@@ -4,6 +4,7 @@ import type { character, RisuModule } from '../third_party/risuai/cad8595a/types
 import {
   nativeRisuExtension,
   nativeRisuLore,
+  normalizeRisuContentSource,
   type RisuContentSource,
 } from '../core/risu-native.js';
 import { runNativeRisuWorker } from './risu-native-worker.js';
@@ -34,7 +35,8 @@ const string = (value: unknown) => (typeof value === 'string' ? value : '');
 
 /** Native CBS runs against an explicit chat view; callers decide whether its writes are committed. */
 export function createNativeRisuCbs(context: NativeRisuCbsContext) {
-  const { native, variables } = context;
+  const { variables } = context;
+  const native = normalizeRisuContentSource(context.native);
   const card = native.card;
   const extension = nativeRisuExtension(native);
   const defaults = Object.fromEntries([
@@ -56,8 +58,8 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
     name: context.charName ?? string(card.name),
     nickname: '',
     desc: string(card.description),
-    personality: string(card.personality),
-    scenario: string(card.scenario),
+    personality: '',
+    scenario: '',
     exampleMessage: string(card.mes_example),
     firstMessage: string(card.first_mes),
     alternateGreetings: Array.isArray(card.alternate_greetings) ? card.alternate_greetings : [],
@@ -77,8 +79,8 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
   } as unknown as character;
   const database: Database = {
     characters: [chara],
-    mainPrompt: context.mainPrompt ?? '',
-    jailbreak: context.jailbreak ?? '',
+    mainPrompt: '',
+    jailbreak: '',
     globalNote: context.globalNote ?? '',
     jailbreakToggle: context.jailbreakToggle ?? false,
     maxContext: context.maxContext ?? 0,
@@ -132,7 +134,7 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
   });
   return {
     issues,
-    parse(text: string): string {
+    parse(text: string, role?: 'system' | 'user' | 'assistant'): string {
       if (text.length > 2_000_000) throw new Error('RISU_NATIVE_TEXT_LIMIT');
       deadline = Date.now() + 500;
       const result = cbs.parse(stripRisuComments(text), {
@@ -143,7 +145,14 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
         rmVar: false,
         visualize: context.displaying ?? false,
         var: {},
-        cbsConditions: { firstmsg: !messages.length, chatRole: messages.at(-1)?.role ?? 'char' },
+        cbsConditions: {
+          firstmsg: !messages.length,
+          chatRole: role
+            ? role === 'assistant'
+              ? 'char'
+              : role
+            : (messages.at(-1)?.role ?? 'char'),
+        },
       });
       if (result.error) throw new Error(result.error);
       for (const name of result.unsupported) if (!issues.includes(name)) issues.push(name);
@@ -163,6 +172,7 @@ export function evaluateNativeRisuCbsInWorker(input: {
 export function evaluateNativeRisuFieldsInWorker(input: {
   native: RisuContentSource;
   fields: Record<string, string>;
+  fieldRoles?: Record<string, 'system' | 'user' | 'assistant'>;
   context: Omit<NativeRisuCbsContext, 'native'>;
 }) {
   const context = { ...input.context, native: input.native };
@@ -170,7 +180,7 @@ export function evaluateNativeRisuFieldsInWorker(input: {
   const fields: Record<string, string> = {};
   for (const [key, text] of Object.entries(input.fields))
     Object.defineProperty(fields, key, {
-      value: cbs.parse(text),
+      value: cbs.parse(text, input.fieldRoles?.[key]),
       enumerable: true,
       writable: true,
       configurable: true,
@@ -181,6 +191,7 @@ export function evaluateNativeRisuFieldsInWorker(input: {
 export function evaluateNativeRisuFields(input: {
   native: RisuContentSource;
   fields: Record<string, string>;
+  fieldRoles?: Record<string, 'system' | 'user' | 'assistant'>;
   context: Omit<NativeRisuCbsContext, 'native'>;
   timeoutMs?: number;
 }) {

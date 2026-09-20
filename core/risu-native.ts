@@ -1,3 +1,8 @@
+import {
+  stripDeprecatedRisuCardFields,
+  stripDeprecatedRisuModuleFields,
+} from './risu-deprecated-fields.js';
+
 /** Risu documents remain the authored source; package fields are UI/runtime projections. */
 export type RisuContentSource = {
   version: 1;
@@ -20,6 +25,13 @@ export type NativeRisuLorePosition = {
   role: 'system' | 'user' | 'assistant';
   order: number;
 };
+/** New saves and live runtime views omit retired fields without rewriting historical records. */
+export function normalizeRisuContentSource(native: RisuContentSource): RisuContentSource {
+  const result = structuredClone(native);
+  stripDeprecatedRisuCardFields(result.card);
+  if (result.module) stripDeprecatedRisuModuleFields(result.module);
+  return result;
+}
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)

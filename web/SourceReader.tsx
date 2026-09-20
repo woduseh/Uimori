@@ -32,6 +32,7 @@ type ReaderProps = {
   branchId?: string;
   source: Source;
   index: number;
+  sceneNumber?: number;
   jobs: Job[];
   /** Scene illustrations attached to this response; absent while the feature is unused. */
   illustrations?: Illustration[];
@@ -121,6 +122,7 @@ function latestTranslation(source: Source, jobs: Job[]) {
 function SourceReaderContent({
   source,
   index,
+  sceneNumber,
   jobs,
   illustrations = [],
   assets,
@@ -394,7 +396,13 @@ function SourceReaderContent({
         ) : null;
       });
   const showToggle = !!translation || mode === 'translation';
-  const leading = <span className="folio">장면 {index + 1}</span>;
+  const leading = (
+    <span className="folio">
+      {packageStart?.mode === 'authored'
+        ? '첫 메시지 · ' + packageStart.title
+        : '장면 ' + (sceneNumber ?? index + 1)}
+    </span>
+  );
   const badges =
     validTranslation?.manual && mode === 'translation' ? (
       <span className="scene-badge">직접 수정한 번역</span>
@@ -451,11 +459,6 @@ function SourceReaderContent({
     >
       {latest && projected?.format === 'risu-html' && (
         <RisuInteractionDialog chatId={source.chatId} branchId={branchId} onError={onError} />
-      )}
-      {packageStart?.mode === 'authored' && (
-        <p className="muted" data-testid="authored-start">
-          작성된 도입문 · {packageStart.title}
-        </p>
       )}
       {packageStart?.mode !== 'authored' && request && (
         <RequestMessage

@@ -1,4 +1,9 @@
 import { prepareNativeRisuTranslationPrompt } from './risu-native-preset.js';
+import {
+  nativeRisuSnapshotNeedsRefresh,
+  prepareNativeRisuReadOnly,
+  supportedNativeRisuSnapshot,
+} from './risu-native-readonly.js';
 import { judgeImagePlacement } from './image-judgment.js';
 import { nativeImageGuidance } from './risu-native-images.js';
 import { generationFromModel } from '../core/model-capabilities.js';
@@ -373,14 +378,25 @@ export async function runAuxiliaryJob(
   hooks: AuxiliaryJobHooks
 ): Promise<AuxiliaryOutcome | null> {
   const bundle = structuredClone(await store.load(jobId));
-  const { source, snapshot, job } = bundle;
-  let executionSnapshot = snapshot;
+  const { source, job } = bundle;
+  let snapshot = bundle.snapshot;
   if (
     job.sourceRevision !== source.id ||
     job.sourceHash !== source.hash ||
     source.chatId !== snapshot.chatId
   )
     throw new Error('SOURCE_DEPENDENCY_MISMATCH');
+  let nativePreparationError: unknown;
+  if (nativeRisuSnapshotNeedsRefresh(snapshot)) {
+    try {
+      // This is a new operation against frozen source-time inputs. The original receipt stays intact.
+      snapshot = supportedNativeRisuSnapshot(snapshot);
+      snapshot = await prepareNativeRisuReadOnly(snapshot, 'auxiliary');
+    } catch (error) {
+      nativePreparationError = error;
+    }
+  }
+  let executionSnapshot = snapshot;
   const imageSource = bundle.imageSource ?? source;
   const context = sourceTimeContext(snapshot, job.kind);
   let nativeImagePreparationError: unknown;
@@ -589,6 +605,7 @@ export async function runAuxiliaryJob(
     });
   };
   try {
+    if (nativePreparationError) throw nativePreparationError;
     if (nativeImagePreparationError) throw nativeImagePreparationError;
     if (job.kind === 'image') {
       stage = 'image';

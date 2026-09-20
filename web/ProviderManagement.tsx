@@ -328,7 +328,7 @@ export function ConnectionEditor({
       title={item.title}
       label="모델 삭제"
       iconOnly={iconOnly}
-      description="삭제하면 현재 전역 역할 선택에서 해제돼요. 해당 모델을 쓰는 작문 보조는 꺼지고 상태 계산도 새 작업 전에 모델 설정을 확인해야 해요. 과거 실행에 저장된 모델 설정은 유지돼요."
+      description="삭제하면 현재 전역 역할 선택에서 해제돼요. 해당 모델을 쓰는 작문 보조는 꺼져요. 과거 실행에 저장된 모델 설정은 유지돼요."
       disabled={busy}
       onDeleted={() => deletedModel(item)}
       onError={onError}
@@ -1661,10 +1661,7 @@ export function ConnectionEditor({
           <p>비활성 프로바이더로 등록했다면 프로바이더를 활성화한 뒤 역할에 배정해 주세요.</p>
           <ol>
             <li>설정 → 역할별 모델에서 사용할 역할을 선택하고 저장해요.</li>
-            <li>
-              모든 채팅의 이후 요청에 적용해요. 상태 계산의 독립 모델은 채팅 설정의 해당 작업
-              설정에서 선택해요.
-            </li>
+            <li>모든 채팅의 이후 요청에 적용해요.</li>
           </ol>
           <small>
             {registeredModel.enabled === false
