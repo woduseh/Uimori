@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { Library } from '../core/product.js';
 import type {
   LibraryCategory,
@@ -132,6 +132,11 @@ export function LibraryFolders({
   onError,
   presentation = 'breadcrumb',
   view = 'cards',
+  draggedItemId = null,
+  dropFolderId = null,
+  onFolderDragOver,
+  onFolderDragLeave,
+  onFolderDrop,
 }: {
   presentation?: 'cards' | 'breadcrumb';
   /** Card folders follow the list/card choice made for the items below them. */
@@ -143,6 +148,11 @@ export function LibraryFolders({
   counts: Record<string, number>;
   reload: () => Promise<void>;
   onError: (error: string) => void;
+  draggedItemId?: string | null;
+  dropFolderId?: string | null;
+  onFolderDragOver?: (folderId: string, event: DragEvent<HTMLElement>) => void;
+  onFolderDragLeave?: (folderId: string, event: DragEvent<HTMLElement>) => void;
+  onFolderDrop?: (folderId: string, event: DragEvent<HTMLElement>) => void;
 }) {
   const [edit, setEdit] = useState<{ folder: LibraryFolder | null; revision: number } | null>(null);
   const [title, setTitle] = useState('');
@@ -224,7 +234,15 @@ export function LibraryFolders({
     >
       {presentation === 'cards' ? (
         folders.map((folder) => (
-          <article className="library-folder-card" key={folder.id}>
+          <article
+            className="library-folder-card"
+            key={folder.id}
+            data-folder-id={folder.id}
+            data-drop-target={dropFolderId === folder.id ? 'true' : undefined}
+            onDragOver={(event) => onFolderDragOver?.(folder.id, event)}
+            onDragLeave={(event) => onFolderDragLeave?.(folder.id, event)}
+            onDrop={(event) => onFolderDrop?.(folder.id, event)}
+          >
             <button
               type="button"
               className="secondary library-folder-open"
@@ -235,6 +253,7 @@ export function LibraryFolders({
               <span>
                 <strong title={folder.title}>{folder.title}</strong>
                 <small>{counts[folder.id] ?? 0}개</small>
+                {draggedItemId && dropFolderId === folder.id && <small>여기로 이동</small>}
               </span>
             </button>
             <LibraryItemMenu title={`${folder.title} 폴더 메뉴`}>

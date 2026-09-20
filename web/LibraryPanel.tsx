@@ -15,7 +15,7 @@ import {
   useServerEditDraft,
 } from './editor-workspace-context.js';
 import type { ContentDraftModel } from '../core/edit-drafts.js';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
@@ -41,6 +41,8 @@ import {
   PersonaIcon,
   SearchIcon,
   SelectIcon,
+  DownIcon,
+  UpIcon,
 } from './ui-icons.js';
 import {
   LibraryFolders,
@@ -91,6 +93,7 @@ const contentGuidance: Record<PrimaryLibraryTab, { description: string; example:
   },
 };
 type ViewMode = 'cards' | 'list';
+type SortMode = 'name' | 'name-desc' | 'manual';
 type CardRatio = '1:1' | '2:3' | '3:4' | '9:16';
 const cardRatios: CardRatio[] = ['1:1', '2:3', '3:4', '9:16'];
 function savedViews(): Record<PrimaryLibraryTab, ViewMode> {
@@ -118,11 +121,45 @@ function savedCardRatios(): Record<PrimaryLibraryTab, CardRatio> {
     module: '1:1',
   };
   try {
-    const stored = JSON.parse(
-      localStorage.getItem('uimori-library-card-ratios') ?? '{}'
-    ) as Record<string, unknown>;
+    const stored = JSON.parse(localStorage.getItem('uimori-library-card-ratios') ?? '{}') as Record<
+      string,
+      unknown
+    >;
     for (const { id } of libraryTabs)
       if (cardRatios.includes(stored[id] as CardRatio)) defaults[id] = stored[id] as CardRatio;
+  } catch {
+    /* A restricted browser still has sensible defaults. */
+  }
+  return defaults;
+}
+function savedSorts(): Record<PrimaryLibraryTab, SortMode> {
+  const defaults: Record<PrimaryLibraryTab, SortMode> = {
+    bot: 'name',
+    persona: 'name',
+    module: 'name',
+  };
+  try {
+    const stored = JSON.parse(localStorage.getItem('uimori-library-sorts') ?? '{}') as Record<
+      string,
+      unknown
+    >;
+    for (const { id } of libraryTabs)
+      if (stored[id] === 'name' || stored[id] === 'name-desc' || stored[id] === 'manual')
+        defaults[id] = stored[id];
+  } catch {
+    /* A restricted browser still has sensible defaults. */
+  }
+  return defaults;
+}
+function savedManualOrders(): Record<PrimaryLibraryTab, string[]> {
+  const defaults: Record<PrimaryLibraryTab, string[]> = { bot: [], persona: [], module: [] };
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem('uimori-library-manual-orders') ?? '{}'
+    ) as Record<string, unknown>;
+    for (const { id } of libraryTabs)
+      if (Array.isArray(stored[id]))
+        defaults[id] = stored[id].filter((value): value is string => typeof value === 'string');
   } catch {
     /* A restricted browser still has sensible defaults. */
   }
@@ -166,7 +203,8 @@ export function LibraryPanel({
     closeOnly?: boolean;
   } | null>(null);
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState('name');
+  const [sortByTab, setSortByTab] = useState(savedSorts);
+  const [manualOrderByTab, setManualOrderByTab] = useState(savedManualOrders);
   const [views, setViews] = useState(savedViews);
   const [cardRatioByTab, setCardRatioByTab] = useState(savedCardRatios);
   const [folder, setFolder] = useState<FolderFilter>('all');
@@ -176,7 +214,12 @@ export function LibraryPanel({
   const [editing, setEditing] = useState<{ kind: ContentKind; item: Content | null } | null>(null);
   const [detail, setDetail] = useState<Content | null>(null);
   const [loading, setLoading] = useState(false);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ kind: 'folder' | 'item'; id: string } | null>(
+    null
+  );
   const panelRef = useRef<HTMLElement>(null);
+  const draggedItem = useRef<string | null>(null);
   const selectionExit = useRef<HTMLButtonElement>(null);
   const wasSelecting = useRef(false);
   const opening = useRef(0);
@@ -357,6 +400,8 @@ export function LibraryPanel({
       libraryFolderOf(organizedLibrary!, { kind: 'content', id: item.id }) ?? 'unclassified';
     counts[key] = (counts[key] ?? 0) + 1;
   }
+  const sort = sortByTab[tab];
+  const manualOrder = manualOrderByTab[tab];
   const filtered = categoryItems
     .filter((item) => {
       const folderId = libraryFolderOf(organizedLibrary!, { kind: 'content', id: item.id });
@@ -366,7 +411,16 @@ export function LibraryPanel({
         `${item.title} ${item.description}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())
       );
     })
-    .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, 'ko'));
+    .sort((a, b) => {
+      if (sort !== 'manual')
+        return (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, 'ko');
+      const aIndex = manualOrder.indexOf(a.id);
+      const bIndex = manualOrder.indexOf(b.id);
+      return (
+        (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
+          (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex) || a.title.localeCompare(b.title, 'ko')
+      );
+    });
   const folders = organizer.organization?.folders.filter((item) => item.category === tab) ?? [];
   const showFolders = folder === 'all' && !query.trim() && !selecting;
   function changeFolder(next: FolderFilter) {
@@ -389,6 +443,99 @@ export function LibraryPanel({
       /* Keep this session's choice. */
     }
   }
+  function setSort(mode: SortMode) {
+    const next = { ...sortByTab, [tab]: mode };
+    setSortByTab(next);
+    try {
+      localStorage.setItem('uimori-library-sorts', JSON.stringify(next));
+    } catch {
+      /* Keep this session's choice. */
+    }
+  }
+  function saveManualOrder(ids: string[]) {
+    const next = { ...manualOrderByTab, [tab]: ids };
+    setManualOrderByTab(next);
+    try {
+      localStorage.setItem('uimori-library-manual-orders', JSON.stringify(next));
+    } catch {
+      /* Keep this session's choice. */
+    }
+  }
+  function orderedCategoryIds() {
+    const ids = new Set(categoryItems.map((item) => item.id));
+    return [
+      ...manualOrder.filter((id) => ids.has(id)),
+      ...categoryItems
+        .filter((item) => !manualOrder.includes(item.id))
+        .sort((a, b) => a.title.localeCompare(b.title, 'ko'))
+        .map((item) => item.id),
+    ];
+  }
+  function moveManualItem(id: string, beforeId: string | null) {
+    const ordered = orderedCategoryIds().filter((itemId) => itemId !== id);
+    const index = beforeId === null ? ordered.length : ordered.indexOf(beforeId);
+    ordered.splice(index < 0 ? ordered.length : index, 0, id);
+    saveManualOrder(ordered);
+  }
+  function moveManualByOffset(item: Content, offset: number) {
+    const index = filtered.findIndex((entry) => entry.id === item.id);
+    const target = filtered[index + offset];
+    if (!target) return;
+    if (offset < 0) moveManualItem(item.id, target.id);
+    else moveManualItem(item.id, filtered[index + 2]?.id ?? null);
+  }
+  function startDragging(item: Content, event: DragEvent<HTMLElement>) {
+    if (selecting || organizer.busy) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', item.id);
+    draggedItem.current = item.id;
+    setDraggedItemId(item.id);
+  }
+  function clearDragging() {
+    draggedItem.current = null;
+    setDraggedItemId(null);
+    setDropTarget(null);
+  }
+  function dragOverItem(item: Content, event: DragEvent<HTMLElement>) {
+    const id = draggedItem.current;
+    if (sort !== 'manual' || !id || id === item.id) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget({ kind: 'item', id: item.id });
+  }
+  function dropOnItem(item: Content, event: DragEvent<HTMLElement>) {
+    const id = draggedItem.current;
+    if (sort !== 'manual' || !id || id === item.id) return;
+    event.preventDefault();
+    moveManualItem(id, item.id);
+    clearDragging();
+  }
+  function dragOverFolder(folderId: string, event: DragEvent<HTMLElement>) {
+    if (!draggedItem.current) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget({ kind: 'folder', id: folderId });
+  }
+  function dragLeaveFolder(folderId: string, event: DragEvent<HTMLElement>) {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setDropTarget((current) =>
+      current?.kind === 'folder' && current.id === folderId ? null : current
+    );
+  }
+  async function dropOnFolder(folderId: string, event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    const id = draggedItem.current;
+    clearDragging();
+    if (!id || libraryFolderOf(organizedLibrary!, { kind: 'content', id }) === folderId) return;
+    await organizer.mutate('/library/organization/move', {
+      items: [{ kind: 'content', id }],
+      category: tab,
+      folderId,
+    });
+  }
   function setCardRatio(ratio: CardRatio) {
     const next = { ...cardRatioByTab, [tab]: ratio };
     setCardRatioByTab(next);
@@ -399,6 +546,7 @@ export function LibraryPanel({
     }
   }
   function itemMenu(item: Content) {
+    const manualIndex = filtered.findIndex((entry) => entry.id === item.id);
     return (
       <LibraryItemMenu title={`${item.title} 메뉴`}>
         <button
@@ -419,6 +567,28 @@ export function LibraryPanel({
           <MoveIcon size={18} aria-hidden="true" />
           분류·폴더 이동
         </button>
+        {sort === 'manual' && (
+          <>
+            <button
+              type="button"
+              className="secondary"
+              disabled={manualIndex === 0}
+              onClick={() => moveManualByOffset(item, -1)}
+            >
+              <UpIcon size={18} aria-hidden="true" />
+              위로 이동
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={manualIndex === filtered.length - 1}
+              onClick={() => moveManualByOffset(item, 1)}
+            >
+              <DownIcon size={18} aria-hidden="true" />
+              아래로 이동
+            </button>
+          </>
+        )}
         <button
           type="button"
           className="secondary"
@@ -775,10 +945,11 @@ export function LibraryPanel({
                               <select
                                 aria-label="자료 정렬"
                                 value={sort}
-                                onChange={(event) => setSort(event.target.value)}
+                                onChange={(event) => setSort(event.target.value as SortMode)}
                               >
                                 <option value="name">이름순</option>
                                 <option value="name-desc">이름 역순</option>
+                                <option value="manual">수동 정렬</option>
                               </select>
                             </label>
                             <div
@@ -881,6 +1052,11 @@ export function LibraryPanel({
                     counts={counts}
                     reload={reload}
                     onError={onError}
+                    draggedItemId={draggedItemId}
+                    dropFolderId={dropTarget?.kind === 'folder' ? dropTarget.id : null}
+                    onFolderDragOver={dragOverFolder}
+                    onFolderDragLeave={dragLeaveFolder}
+                    onFolderDrop={(folderId, event) => void dropOnFolder(folderId, event)}
                   />
                 </section>
               )}
@@ -904,8 +1080,18 @@ export function LibraryPanel({
                         : 'library-list-item'
                     }
                     key={item.id}
+                    data-library-item-id={item.id}
                     data-selected={selecting && selectedIds.includes(item.id) ? 'true' : undefined}
                     data-selecting={selecting ? 'true' : undefined}
+                    data-dragging={draggedItemId === item.id ? 'true' : undefined}
+                    data-drop-target={
+                      dropTarget?.kind === 'item' && dropTarget.id === item.id ? 'true' : undefined
+                    }
+                    draggable={!selecting && !organizer.busy}
+                    onDragStart={(event) => startDragging(item, event)}
+                    onDragEnd={clearDragging}
+                    onDragOver={(event) => dragOverItem(item, event)}
+                    onDrop={(event) => dropOnItem(item, event)}
                   >
                     {selecting && (
                       <label className="library-select-check">
