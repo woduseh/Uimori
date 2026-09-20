@@ -19,6 +19,7 @@ export type Chat = {
   sortPosition?: number;
 };
 export type Resource = {
+  risuSource?: import('./risu-context-source.js').RisuContextSource;
   nativeRisuPosition?: import('./risu-native.js').NativeRisuLorePosition;
   loreContext?: import('./lore-context.js').LorePlacement;
   id: string;

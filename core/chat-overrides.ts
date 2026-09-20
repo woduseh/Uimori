@@ -257,6 +257,14 @@ export function projectChatPackageCompilation(
             : {}),
           ...(distinct
             ? {
+                ...(resource.risuSource
+                  ? {
+                      risuSource: {
+                        ...resource.risuSource,
+                        sourceScope: chatAttachmentKey(projection.scope),
+                      },
+                    }
+                  : {}),
                 title: `${resource.title} · ${projection.scope.role}/${projection.scope.modulePath.join('/') || projection.scope.id}`,
               }
             : {}),

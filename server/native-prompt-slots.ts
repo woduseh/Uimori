@@ -1,3 +1,7 @@
+import {
+  serializeRisuContextSource,
+  serializeRisuLoreSources,
+} from '../core/risu-context-source.js';
 import { buildMainInput, pinnedSlotSources } from '../core/provider.js';
 import { compiledPackages } from '../core/package-context.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -11,17 +15,15 @@ export function nativePromptSlots(
   const input = buildMainInput(snapshot, [], { compilerVersion });
   const packages = compiledPackages(snapshot, 'main');
   const body = (slot: string) =>
-    pinnedSlotSources(input, slot)
-      .map((item) => item.text)
-      .join('\n\n');
+    pinnedSlotSources(input, slot).map(serializeRisuContextSource).filter(Boolean).join('\n\n');
   const bot = packages.find((entry) => entry.attachment.role === 'bot')?.package;
   const slots: Record<string, string> = {
     char: bot?.identity?.name ?? bot?.title ?? 'Character',
     bot: body('bot'),
     description: body('bot'),
     persona: body('persona'),
-    lore: body('lore'),
-    lorebook: body('lore'),
+    lore: serializeRisuLoreSources(pinnedSlotSources(input, 'lore')),
+    lorebook: serializeRisuLoreSources(pinnedSlotSources(input, 'lore')),
     notes: input.notes ? JSON.stringify(input.notes) : '',
     outline: input.outline ? JSON.stringify(input.outline) : '',
     globalNote: '',

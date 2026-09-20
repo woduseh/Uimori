@@ -2,6 +2,7 @@
  * Host-owned dynamic data for the main request: the JSON input boundary and the synthetic user
  * message that carries it. Shared by request building and snapshot compilation.
  */
+import { RISU_SOURCE_GUIDANCE } from '../core/risu-context-source.js';
 import { buildMainInput, pinnedSlotSources, type MainInput } from '../core/provider.js';
 import type { RunSnapshot } from '../core/types.js';
 import { validateProviderPrompt } from '../core/risu-prompt.js';
@@ -22,6 +23,9 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
     controls,
     source: json({
       parentRevision: snapshot.parentRevision,
+      ...(input.pinnedSources?.some((item) => item.risuSource)
+        ? { risuSourceGuide: RISU_SOURCE_GUIDANCE }
+        : {}),
       ...(!structured && input.contextSummary ? { contextSummary: input.contextSummary } : {}),
       facts: structured || input.pinnedSources?.length ? [] : input.facts,
       pinnedSources: structured ? [] : (input.pinnedSources ?? []),

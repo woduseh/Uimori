@@ -1,3 +1,4 @@
+import { serializePositionedRisuLore, type RisuContextSource } from './risu-context-source.js';
 import {
   validateProviderPrompt,
   type PromptCompilation,
@@ -6,6 +7,7 @@ import {
 import type { NativeRisuLorePosition } from './risu-native.js';
 
 type PositionedLore = {
+  risuSource?: RisuContextSource;
   id: string;
   revision: number;
   text: string;
@@ -41,7 +43,7 @@ export function placeNativeRisuLore(
     const message: LogicalMessage = {
       id,
       role: position.role,
-      content: [{ type: 'text', text: entry.text }],
+      content: [{ type: 'text', text: serializePositionedRisuLore(entry) }],
       completion: 'complete',
       provenance: { blockId: id, origin: 'prompt' },
     };

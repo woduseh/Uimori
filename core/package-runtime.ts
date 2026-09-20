@@ -46,6 +46,12 @@ export function compileContentAttachment(
     text,
     loading,
     sourceKind,
+    risuSource: {
+      sourceRole: attachment.role,
+      sourceName: pkg.identity?.name ?? pkg.title,
+      contentId: pkg.id,
+      ...(sourceKind === 'lore' ? { entryId: key.slice('lore:'.length), title } : {}),
+    },
     kind: 'lore',
   });
   const groups = new Map<string, typeof pkg.lore>();

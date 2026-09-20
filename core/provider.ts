@@ -87,6 +87,7 @@ function collectRoleResources(snapshot: RunSnapshot, packages: readonly Resolved
 export type MainInput = ModelInput & {
   contextSummary?: string;
   pinnedSources?: {
+    risuSource?: Resource['risuSource'];
     id: string;
     revision: number;
     kind: string;
@@ -151,6 +152,7 @@ export function buildMainInput(
         revision: r.revision,
         kind: r.sourceKind ?? r.kind,
         text: r.text,
+        ...(r.risuSource ? { risuSource: structuredClone(r.risuSource) } : {}),
         ...(r.loreContext ? { loreContext: structuredClone(r.loreContext) } : {}),
         ...(r.nativeRisuPosition
           ? { nativeRisuPosition: structuredClone(r.nativeRisuPosition) }
