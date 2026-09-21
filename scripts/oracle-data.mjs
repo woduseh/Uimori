@@ -185,6 +185,127 @@ export async function snapshotDatabase(source, destination) {
   return inspectData(destination, { integrity: true });
 }
 
+function record(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function migrateJson23To24(value, counts) {
+  if (Array.isArray(value)) {
+    for (const item of value) migrateJson23To24(item, counts);
+    return;
+  }
+  if (!record(value)) return;
+
+  // Schema 24 deliberately drops authored package instructions. Match the complete
+  // package envelope so ordinary objects with a version or instructions field stay opaque.
+  if (
+    value.version === 1 &&
+    typeof value.id === 'string' &&
+    Number.isSafeInteger(value.revision) &&
+    typeof value.title === 'string' &&
+    typeof value.description === 'string' &&
+    Array.isArray(value.lore) &&
+    Array.isArray(value.instructions) &&
+    record(value.nativeRisu)
+  ) {
+    delete value.instructions;
+    value.version = 2;
+    counts.packages += 1;
+  }
+
+  // Frozen native receipts mirror package fields. Remove only the retired field
+  // namespace; body, lore, starts, variables and historical output remain intact.
+  if (
+    typeof value.inputHash === 'string' &&
+    record(value.variables) &&
+    record(value.fields) &&
+    Array.isArray(value.messages)
+  ) {
+    for (const fields of Object.values(value.fields)) {
+      if (!record(fields)) continue;
+      for (const key of Object.keys(fields)) {
+        if (!key.startsWith('instruction:')) continue;
+        delete fields[key];
+        counts.executionFields += 1;
+      }
+    }
+  }
+
+  for (const item of Object.values(value)) migrateJson23To24(item, counts);
+}
+
+/** One-shot, offline data-contract migration. The caller must operate on a copied,
+ * stopped data directory; this function never creates or replaces the source copy.
+ */
+export function migrateSchema23To24(directory) {
+  const file = join(directory, database);
+  const db = new DatabaseSync(file);
+  const counts = { packages: 0, executionFields: 0, rows: 0 };
+  try {
+    if (Number(db.prepare('PRAGMA user_version').get().user_version) !== 23)
+      throw new Error('Schema 23 source required for the 23-to-24 migration');
+    if (
+      db.prepare('PRAGMA quick_check').get().quick_check !== 'ok' ||
+      db.prepare('PRAGMA foreign_key_check').all().length
+    )
+      throw new Error('Database integrity check failed before migration');
+    const metadata = db.prepare('SELECT baseline,signature FROM schema_metadata WHERE id=1').get();
+    if (metadata?.baseline !== 'uimori-risu-native' || typeof metadata.signature !== 'string')
+      throw new Error('Schema 23 metadata is missing or incompatible');
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      for (const { name } of db
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name<>'schema_metadata'"
+        )
+        .all()) {
+        const columns = db
+          .prepare(`PRAGMA table_info(${quote(name)})`)
+          .all()
+          .filter((column) => column.type.toUpperCase() === 'TEXT');
+        for (const column of columns) {
+          const rows = db
+            .prepare(
+              `SELECT rowid AS row_id,${quote(column.name)} AS value FROM ${quote(name)} WHERE ${quote(column.name)} IS NOT NULL`
+            )
+            .all();
+          const update = db.prepare(
+            `UPDATE ${quote(name)} SET ${quote(column.name)}=? WHERE rowid=?`
+          );
+          for (const row of rows) {
+            let value;
+            try {
+              value = JSON.parse(row.value);
+            } catch {
+              continue;
+            }
+            if (!record(value) && !Array.isArray(value)) continue;
+            const before = JSON.stringify(value);
+            migrateJson23To24(value, counts);
+            const after = JSON.stringify(value);
+            if (after === before) continue;
+            update.run(after, row.row_id);
+            counts.rows += 1;
+          }
+        }
+      }
+      db.exec('PRAGMA user_version=24');
+      if (db.prepare('PRAGMA foreign_key_check').all().length)
+        throw new Error('Database foreign keys failed after migration');
+      db.exec('COMMIT');
+    } catch (error) {
+      if (db.isTransaction) db.exec('ROLLBACK');
+      throw error;
+    }
+  } finally {
+    db.close();
+  }
+  const verified = inspectData(directory, { integrity: true });
+  if (verified.schema !== 24) throw new Error('Schema 24 verification failed');
+  return { from: 23, to: 24, ...counts, integrity: verified.integrity };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const [command, source = '/data', destination = '/backup'] = process.argv.slice(2);
   const actions = {
@@ -195,8 +316,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     credentials: () => copyCredentials(source, destination),
     'credential-digest': () => credentialDigest(source),
     snapshot: () => snapshotDatabase(source, destination),
+    'migrate-23-to-24': () => migrateSchema23To24(source),
   };
   if (!actions[command])
-    throw new Error('Expected inspect, audit, backup, restore, credentials, or snapshot');
+    throw new Error(
+      'Expected inspect, audit, backup, restore, credentials, snapshot, or migrate-23-to-24'
+    );
   console.log(JSON.stringify(await actions[command]()));
 }
