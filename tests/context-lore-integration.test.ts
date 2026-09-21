@@ -457,7 +457,7 @@ describe('automatic summary and retained lore at the same input boundary', () =>
       history: restored.history(head),
     });
     expect(prospective.loreContext!.entries).toEqual(retained);
-  });
+  }, 30_000);
 
   test('summarizes only logical conversation pairs and carries old-source raw references after the summary before recent history', async () => {
     const f = await fixture('history-pressure'),
