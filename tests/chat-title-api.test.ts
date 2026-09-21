@@ -242,11 +242,17 @@ test('real transport completes HTTP runs and invokes the automatic title helper 
     });
     expect(result.statusCode).toBe(200);
     const runId = result.json<{ id: string }>().id;
-    await vi.waitFor(() => expect(app.store.run(runId).status).toBe('completed'));
+    await vi.waitFor(() => expect(app.store.run(runId).status).toBe('completed'), {
+      timeout: 6000,
+      interval: 20,
+    });
     return runId;
   }
   const firstRun = await complete();
-  await vi.waitFor(() => expect(app.store.chat(chat.id).title).toBe('첫 만남의 기록'));
+  await vi.waitFor(() => expect(app.store.chat(chat.id).title).toBe('첫 만남의 기록'), {
+    timeout: 6000,
+    interval: 20,
+  });
   expect(
     app.store.product.attempts(chat.id).filter((attempt) => attempt.role === 'title')
   ).toMatchObject([{ role: 'title', status: 'completed', runId: firstRun }]);

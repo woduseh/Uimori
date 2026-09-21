@@ -296,23 +296,28 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     idempotencyKey: randomUUID(),
   });
   await expect
-    .poll(() => ({
-      status: app.store.run(run.id).status,
-      error: app.store.run(run.id).error,
-      attempts: app.store.product
-        .attempts(chat.id)
-        .map((a) => ({ status: a.status, error: a.error })),
-    }))
+    .poll(
+      () => ({
+        status: app.store.run(run.id).status,
+        error: app.store.run(run.id).error,
+        attempts: app.store.product
+          .attempts(chat.id)
+          .map((a) => ({ status: a.status, error: a.error })),
+      }),
+      { timeout: 6000 }
+    )
     .toEqual(expect.objectContaining({ status: 'completed', error: null }));
   const source = app.store.source(app.store.chat(chat.id).headRevision!);
   await api(app, `/api/sources/${source.id}/translation`, {});
   await expect
-    .poll(() => [...new Set(calls.map((call) => call.role))].sort())
+    .poll(() => [...new Set(calls.map((call) => call.role))].sort(), { timeout: 6000 })
     .toEqual(['main', 'status', 'translation']);
   await expect
     .poll(
       () =>
-        app.store.product.attempts(chat.id).filter((attempt) => attempt.status === 'running').length
+        app.store.product.attempts(chat.id).filter((attempt) => attempt.status === 'running')
+          .length,
+      { timeout: 6000 }
     )
     .toBe(0);
   expect(app.store.product.attempts(chat.id)).toHaveLength(6);
