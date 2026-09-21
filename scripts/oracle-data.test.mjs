@@ -8,6 +8,7 @@ import {
   copyCredentials,
   copyStoppedData,
   inspectData,
+  migrateSchema23To24,
   restoreData,
   snapshotDatabase,
 } from './oracle-data.mjs';
@@ -105,6 +106,69 @@ test('fresh copies only credential directory and Codex login, never app settings
   ])
     assert.equal(existsSync(join(target, name)), false);
   assert.throws(() => copyCredentials(source, target), /empty/);
+});
+
+test('schema 23 migration rewrites only package contracts and native instruction fields', (t) => {
+  const { root, source, db } = fixture(t);
+  db.exec(`DROP TABLE future_jobs;
+    CREATE TABLE schema_metadata(id INTEGER PRIMARY KEY CHECK(id=1),baseline TEXT NOT NULL,signature TEXT NOT NULL);
+    INSERT INTO schema_metadata VALUES(1,'uimori-risu-native','fixture-signature');
+    CREATE TABLE versions(id TEXT PRIMARY KEY,body TEXT NOT NULL);
+    CREATE TABLE runs(id TEXT PRIMARY KEY,snapshot TEXT NOT NULL);
+    PRAGMA user_version=23;`);
+  const pkg = {
+    version: 1,
+    id: 'card',
+    revision: 3,
+    title: 'Card',
+    description: '',
+    lore: [],
+    instructions: [{ id: 'old', target: 'main', text: 'retired' }],
+    nativeRisu: { version: 1 },
+  };
+  db.prepare('INSERT INTO versions VALUES(?,?)').run(
+    'content',
+    JSON.stringify({ package: pkg, unrelated: { version: 1, instructions: ['keep'] } })
+  );
+  db.prepare('INSERT INTO runs VALUES(?,?)').run(
+    'run',
+    JSON.stringify({
+      profile: { packages: [pkg] },
+      nativeRisuExecution: {
+        version: 2,
+        inputHash: 'hash',
+        variables: {},
+        messages: [],
+        fields: { 'card@3:bot': { body: 'body', 'instruction:old': 'retired' } },
+      },
+    })
+  );
+  db.close();
+
+  const target = join(root, 'migrated');
+  copyStoppedData(source, target);
+  const result = migrateSchema23To24(target);
+  assert.deepEqual(result, {
+    from: 23,
+    to: 24,
+    packages: 2,
+    executionFields: 1,
+    rows: 2,
+    integrity: 'ok',
+  });
+  assert.equal(inspectData(source).schema, 23);
+  const migrated = new DatabaseSync(join(target, 'uimori.sqlite'), { readOnly: true });
+  try {
+    const content = JSON.parse(migrated.prepare('SELECT body FROM versions').get().body);
+    assert.equal(content.package.version, 2);
+    assert.equal('instructions' in content.package, false);
+    assert.deepEqual(content.unrelated.instructions, ['keep']);
+    const snapshot = JSON.parse(migrated.prepare('SELECT snapshot FROM runs').get().snapshot);
+    assert.equal('instruction:old' in snapshot.nativeRisuExecution.fields['card@3:bot'], false);
+  } finally {
+    migrated.close();
+  }
+  assert.throws(() => migrateSchema23To24(target), /Schema 23 source required/);
 });
 
 test('actual-image hash matches build runner ordering and rejects altered artifacts', async (t) => {

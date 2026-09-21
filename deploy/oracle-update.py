@@ -1,4 +1,4 @@
-"""Single-host release runner. No migration and no implicit fresh-data fallback."""
+"""Single-host release runner with one explicit 23-to-24 migration path."""
 import argparse
 import contextlib
 import hashlib
@@ -19,11 +19,14 @@ def arguments(argv=None):
         parser.add_argument("--" + name, required=True)
     parser.add_argument("--app-dir", default="/opt/uimori/app")
     parser.add_argument("--fresh", action="store_true")
+    parser.add_argument("--migrate-schema-23-to-24", action="store_true")
     parser.add_argument("--image")
     parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--expected-origin")
     parser.add_argument("--source-ref", default="main")
     args = parser.parse_args(argv)
+    if args.fresh and args.migrate_schema_23_to_24:
+        parser.error("--fresh and --migrate-schema-23-to-24 are mutually exclusive")
     for name, length in (("commit", 40), ("build_id", 64), ("dist_hash", 64)):
         if not re.fullmatch("[0-9a-f]{" + str(length) + "}", getattr(args, name)):
             parser.error("Invalid " + name)
@@ -84,6 +87,7 @@ def validate_columns(expected, actual):
 class Runner:
     def __init__(self, args):
         self.args = args
+        self.migrate = bool(getattr(args, "migrate_schema_23_to_24", False))
         self.app = Path(args.app_dir)
         self.release = Path(args.release_dir)
         self.scripts = Path(__file__).resolve().parent.parent / "scripts"
@@ -96,7 +100,8 @@ class Runner:
         self.candidate_started = False
         self.temporary_volumes = []
         self.probe_containers = []
-        self.summary = {"status": "RUNNING", "commit": args.commit, "sourceRef": args.source_ref, "buildId": args.build_id, "distHash": args.dist_hash, "mode": "fresh" if args.fresh else "update", "checkOnly": args.check_only, "stages": [], "rollback": "NOT_NEEDED"}
+        mode = "fresh" if args.fresh else "migrate-23-to-24" if self.migrate else "update"
+        self.summary = {"status": "RUNNING", "commit": args.commit, "sourceRef": args.source_ref, "buildId": args.build_id, "distHash": args.dist_hash, "mode": mode, "checkOnly": args.check_only, "stages": [], "rollback": "NOT_NEEDED"}
 
     def persist(self):
         self.summary["report"] = str(self.release / "oracle-summary.json")
@@ -264,6 +269,8 @@ class Runner:
             with self.stage("compatibility-probe"):
                 copy = self.new_volume("probe")
                 self.data("snapshot", self.old_volume, ("volume", copy))
+                if self.migrate:
+                    self.summary["migrationProbe"] = self.data("migrate-23-to-24", copy)
                 try:
                     self.summary["compatibilityProbe"] = self.probe(copy)
                     actual = self.summary["compatibilityProbe"]["database"].pop("columns")
@@ -288,11 +295,17 @@ class Runner:
                 self.summary["volume"] = self.volume_name
                 self.summary["credentials"] = self.data("credentials", self.old_volume, ("volume", self.volume_name))
             else:
-                self.volume_name = self.old_volume
                 backup = self.private / "data"
                 backup.mkdir(mode=0o700)
                 self.data("backup", self.old_volume, ("bind", str(backup)))
-                self.backed_up = True
+                if self.migrate:
+                    self.volume_name = self.new_volume("data", temporary=False)
+                    self.data("backup", self.old_volume, ("volume", self.volume_name))
+                    self.summary["migration"] = self.data("migrate-23-to-24", self.volume_name)
+                    self.summary["sourceVolumeRetained"] = self.old_volume
+                else:
+                    self.volume_name = self.old_volume
+                    self.backed_up = True
             self.summary["volume"] = self.volume_name
         with self.stage("switch"):
             self.checked_out = True

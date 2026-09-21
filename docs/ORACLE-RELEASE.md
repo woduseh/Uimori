@@ -59,14 +59,17 @@ Development checks follow [DEVELOPMENT](DEVELOPMENT.md#verification). For a rele
 | `npm run release:oracle -- --config .local/oracle-release.json --source-ref <branch> --plan` | 설정과 로컬 검증 상태만 확인해요. SSH 연결이나 서버 변경은 없어요. |
 | `npm run release:oracle -- --config .local/oracle-release.json --check-only` | 원격 전제와 이미지를 검증하고 기본 경로에서는 서버 이미지를 빌드해요. 실행 중인 앱을 중지하거나 DB를 초기화하거나 활성 앱을 바꾸지 않아요. |
 | `npm run release:oracle -- --config .local/oracle-release.json` | 현재 DB를 백업한 뒤 같은 운영 볼륨으로 업데이트하고, health와 HTTPS/API smoke까지 확인해요. |
+| `npm run release:oracle -- --config .local/oracle-release.json --migrate-schema-23-to-24` | schema 23 운영 DB를 백업하고 새 볼륨에 복사한 뒤 일회성 schema 24 데이터 계약 변환과 후보 검증을 거쳐 image·volume을 함께 전환해요. |
 | `npm run release:oracle -- --config .local/oracle-release.json --fresh` | 새 운영 볼륨으로 시작해요. 이전 볼륨은 rollback용으로 남겨요. |
 | `npm run release:oracle -- --config .local/oracle-release.json --image <전체-reference>` | 서버 build 대신 지정한 immutable image를 검사하고 사용해요. tag만으로 움직이는 reference보다 digest를 권장해요. |
 
-`--area`, `--full`, `--fresh`, `--image`, `--check-only`는 필요에 따라 함께 사용할 수 있어요. `--plan`은 서버 작업 없이 실행 계획을 확인하는 모드예요.
+`--area`, `--full`, `--image`, `--check-only`는 필요에 따라 함께 사용할 수 있어요. `--fresh`와 `--migrate-schema-23-to-24`는 서로 배타적이에요. `--plan`은 서버 작업 없이 실행 계획을 확인하는 모드예요.
 
 일반 업데이트는 앱 전환 전에 SQLite 복구본을 만들고 기존 DB를 그대로 사용해요. 기본 경로는 모든 표의 모든 행을 hash하지 않으며, backup 성공, schema/앱 호환성, 활성 작업 부재, health와 smoke를 검사해요. 선택적 행 삭제나 DB reset은 업데이트 계약에 포함하지 않아요.
 
 `--fresh`는 새 볼륨과 새 DB를 만들고 기존 볼륨을 보존해요. 기존 `<database>.vertex-credentials` 디렉터리와 `<database>.codex/auth.json`만 새 볼륨에 복사해요. Codex 세션·설정과 DB의 모델·연결 reference는 초기화되므로 새 DB에서 다시 설정해야 해요. 환경의 origin, access token과 공개 라우팅은 유지해요.
+
+`--migrate-schema-23-to-24`는 이 경계에만 쓰는 명시적 일회성 모드예요. 실행 중인 schema가 정확히 23이고 무결성 검사와 활성 작업 검사를 통과해야 해요. 중지 후 전체 데이터 디렉터리를 비공개 복구본과 새 Docker volume에 각각 복사하고, 새 volume에서만 Risu package `version: 1`을 `2`로 바꾸며 제거된 package instruction과 native 실행 receipt의 `instruction:*` field를 삭제해요. 원본 schema 23 volume은 수정하거나 삭제하지 않아요. 변환된 DB를 schema 24 후보 image로 열어 schema signature, 열 호환성, health를 확인한 뒤에만 전환하며 실패 시 이전 image와 원본 volume으로 돌아가요. 이 모드는 23 이외의 DB나 이미 변환된 24 DB를 거부해요.
 
 ## 서버 안전장치와 결과 해석
 
