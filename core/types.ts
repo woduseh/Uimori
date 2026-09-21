@@ -94,12 +94,8 @@ export type RunSnapshot = {
   nativeRisuHistoryRevision?: string;
   /** Optional, permission-bound conversation read set; never filled from today's branch on replay. */
   promptCompilation?: import('./risu-prompt.js').PromptCompilation;
-  /** Frozen evaluation of the declared Risu CBS fields; a replay projects it, never recomputes it. */
-  /** Frozen keyword scan of the packages in keyword mode; a replay projects it, never rescans. */
   /** Frozen model choice for the packages in model mode; a replay projects it, never reselects. */
   loreSelection?: import('./lore-selection.js').LoreSelectionReceipt;
-  /** Derived projection of host-owned input hooks; the reserved request stays unchanged. */
-  /** Derived projection of host-owned request hooks over the transmitted conversation copy. */
   chatId: string;
   parentRevision: string | null;
   settingsRevision: number;

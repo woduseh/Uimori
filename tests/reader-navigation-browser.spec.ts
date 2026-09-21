@@ -39,7 +39,7 @@ async function mount(page: Page) {
     mount();
   });
   await expect
-    .poll(() => page.locator('iframe').evaluate((node) => node.clientHeight))
+    .poll(() => page.locator('.risu-message-surface').evaluate((node) => node.clientHeight))
     .toBeGreaterThan(700);
 }
 const targetOffset = (page: Page) =>
@@ -76,7 +76,7 @@ test('explicit source navigation follows late geometry until wheel reading takes
     node.style.height = '360px';
   });
   await expect.poll(() => targetOffset(page)).toBe(0);
-  // Actual wheel input outside the opaque frame cancels even if no further scrolling is possible.
+  // Actual wheel input outside the native message cancels even if no further scrolling is possible.
   await page.getByRole('button', { name: 'Go to source', exact: true }).hover();
   await page.mouse.wheel(0, -80);
   const before = await page.locator('#reader').evaluate((node) => node.scrollTop);
@@ -88,25 +88,21 @@ test('explicit source navigation follows late geometry until wheel reading takes
   expect(await targetOffset(page)).toBe(400);
 });
 
-test('late native frame growth follows end navigation and trusted iframe keys release it', async ({
+test('late native message growth follows end navigation and composed keys release it', async ({
   page,
 }) => {
   await mount(page);
-  const native = page.frameLocator('iframe');
+  const native = page.locator('.risu-message-surface');
   await page.getByRole('button', { name: 'Go to end', exact: true }).click();
   await expect.poll(() => distanceToEnd(page)).toBeLessThanOrEqual(1);
-  // An unverified host message cannot release navigation ownership.
-  await page.evaluate(() =>
-    postMessage({ channel: 'uimori-risu-message-v1', token: 'wrong', kind: 'interaction' }, '*')
-  );
   await native.locator('#end').evaluate((node) => {
     node.style.marginTop = '1300px';
   });
   await expect
-    .poll(() => page.locator('iframe').evaluate((node) => node.clientHeight))
+    .poll(() => page.locator('.risu-message-surface').evaluate((node) => node.clientHeight))
     .toBeGreaterThan(1300);
   await expect.poll(() => distanceToEnd(page)).toBeLessThanOrEqual(1);
-  // Focus without pointer input or parent scrolling, then produce a real iframe key event.
+  // Focus without pointer input or parent scrolling, then produce a real composed key event.
   await native
     .locator('#native-focus-button')
     .evaluate((node) => (node as HTMLElement).focus({ preventScroll: true }));

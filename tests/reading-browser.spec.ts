@@ -153,7 +153,7 @@ test('READUI01 native source and translation keep text and copies while shared r
     await page.goto(`/?chat=${before.chat.id}`);
     const source = page.getByTestId('source');
     await source.getByRole('button', { name: '원문 보기', exact: true }).click();
-    const prose = source.getByTestId('source-text').frameLocator('iframe').locator('body');
+    const prose = source.getByTestId('source-text').locator('.risu-message-content');
     await expect(prose).toContainText('정말 괜찮아');
     const authored = prose.locator('.risu-chat-text');
     const textBefore = await authored.textContent();
@@ -182,6 +182,22 @@ test('READUI01 native source and translation keep text and copies while shared r
       )
       .toBeCloseTo(2.2);
     expect(await authored.textContent()).toBe(textBefore);
+    await expect(authored.locator('p[data-uimori-prose]').first()).toHaveCSS(
+      'margin-bottom',
+      '42px'
+    );
+    settings = await readingDialog(page);
+    await settings.getByLabel('읽기 스타일', { exact: true }).selectOption('dialogue');
+    await closeDialog(page, settings);
+    await expect(authored.locator('.reading-quote-break-before').first()).toBeAttached();
+    await expect(authored.locator('[data-quote-role="dialogue"]').first()).toHaveAttribute(
+      'data-emphasis',
+      'subtle'
+    );
+    expect(await authored.textContent()).toBe(textBefore);
+    settings = await readingDialog(page);
+    await settings.getByLabel('읽기 스타일', { exact: true }).selectOption('relaxed');
+    await closeDialog(page, settings);
 
     await page.reload();
     settings = await readingDialog(page, true);
@@ -190,10 +206,7 @@ test('READUI01 native source and translation keep text and copies while shared r
     await closeDialog(page, settings);
     await expect(prose).toHaveCSS('font-size', '28px');
     await source.getByRole('button', { name: '번역 보기', exact: true }).click();
-    const translated = source
-      .getByTestId('translation-text')
-      .frameLocator('iframe')
-      .locator('body');
+    const translated = source.getByTestId('translation-text').locator('.risu-message-content');
     await expect(translated).toContainText('번역된 장면이다.');
     await expect(translated).toHaveCSS('font-size', '28px');
     await waitForNativeLayout(source.getByTestId('translation-text'));

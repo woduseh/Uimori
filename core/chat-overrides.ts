@@ -209,7 +209,7 @@ export function buildChatOverrideSnapshot(
   };
 }
 
-/** Only lore is split when two link paths need different text. State, actions and instructions stay canonical. */
+/** Only lore is split when two link paths need different text; authored scripts stay canonical. */
 export function projectChatPackageCompilation(
   profile: ProfileSnapshot,
   attachment: ContentAttachment,
@@ -239,8 +239,6 @@ export function projectChatPackageCompilation(
         : prefix;
       const projected = compileContentAttachment(projection.package, attachment, {
         chatId: profile.chatId,
-        target: 'main',
-        resourcesOnly: true,
         ...(loreSelection ? { loreSelection } : {}),
       });
       return projected.resources

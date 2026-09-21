@@ -46,7 +46,6 @@ function fixture(): RunSnapshot {
         loreContext: { placement: 'scene', group: 'g', order: 1 },
       },
     ],
-    instructions: [],
   };
   return {
     chatId: 'chat',

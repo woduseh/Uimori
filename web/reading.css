@@ -1,7 +1,9 @@
-.reading-quote {
+@import "./reading-prose.css";
+
+:root {
   --reading-thought: #62516d;
 }
-[data-theme="dark"] .reading-quote {
+[data-theme="dark"] {
   --reading-thought: #d6c4e0;
 }
 .reading-settings {
@@ -61,42 +63,6 @@
 }
 .reading-settings-footer small {
   flex: 1 1 200px;
-}
-.reading-quote[data-emphasis="subtle"][data-quote-role="dialogue"] {
-  color: var(--accent);
-  font-weight: 500;
-}
-.reading-quote[data-emphasis="subtle"][data-quote-role="thought"] {
-  color: var(--reading-thought);
-  font-weight: 500;
-}
-.reading-quote[data-emphasis="subtle"][data-quote-role="quote"] {
-  font-weight: 500;
-}
-.reading-quote[data-emphasis="strong"][data-quote-role="dialogue"] {
-  color: var(--accent);
-  font-weight: 700;
-}
-.reading-quote[data-emphasis="strong"][data-quote-role="thought"] {
-  color: var(--reading-thought);
-  font-weight: 600;
-}
-.reading-quote[data-emphasis="strong"][data-quote-role="quote"] {
-  font-weight: 600;
-}
-.reading-quote-break {
-  display: inline;
-}
-.reading-quote-break-before::before,
-.reading-quote-break-after::after {
-  content: "";
-  display: block;
-}
-.reading-quote-break-before::before {
-  margin-block-start: 0.25em;
-}
-.reading-quote-break-after::after {
-  margin-block-end: 0.25em;
 }
 [data-reading-paragraph-spacing="custom"] .helper-prose,
 [data-reading-paragraph-spacing="custom"] .streaming-text {

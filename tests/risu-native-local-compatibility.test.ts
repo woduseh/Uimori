@@ -44,13 +44,12 @@ test.runIf(paths.length > 0 && !!presetPath)(
       const sample = readNativeRisuSample(path);
       const pkg = projectNativeRisuPackage(
         {
-          version: 1,
+          version: 2,
           id: `local-${index}`,
           revision: 1,
           title: 'Local sample',
           description: '',
           lore: [],
-          instructions: [],
           nativeRisu: sample.native,
         },
         'bot'

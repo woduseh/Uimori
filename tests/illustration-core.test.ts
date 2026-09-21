@@ -145,7 +145,6 @@ describe('prompt model output and Codex caption parsing', () => {
         negativeGuidance: 'lowres',
         bot: 'Mira has silver hair.',
         persona: null,
-        instructions: ['Always show the lantern.'],
         allowSkip: false,
       },
       { maxOutputTokens: 1024, temperature: null }
@@ -165,7 +164,6 @@ describe('prompt model output and Codex caption parsing', () => {
         styleGuidance: 'ink',
         bot: null,
         persona: null,
-        instructions: [],
         allowSkip: true,
       },
       [

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { readingPositionElements } from './reader-dom.js';
 import {
   normalizeReadability,
   READABILITY_STORAGE_KEY,
@@ -29,9 +30,7 @@ function readingPositions(): ReadingPosition[] {
     .filter((scrollport) => scrollport.getClientRects().length > 0)
     .flatMap((scrollport) => {
       const viewport = scrollport.getBoundingClientRect();
-      const element = [
-        ...scrollport.querySelectorAll<HTMLElement>('[data-block-anchor], .helper-message'),
-      ].find((candidate) => {
+      const element = readingPositionElements(scrollport).find((candidate) => {
         const rect = candidate.getBoundingClientRect();
         return rect.bottom > viewport.top && rect.top < viewport.bottom;
       });
@@ -54,6 +53,12 @@ export function useReadingPreferences(font: string, fontSize: number, width: num
   useLayoutEffect(() => {
     const root = document.documentElement;
     root.dataset.readingFont = font;
+    root.style.setProperty(
+      '--reading-font-family',
+      font === 'serif'
+        ? 'Georgia, "Batang", "Noto Serif CJK KR", serif'
+        : getComputedStyle(root).fontFamily
+    );
     root.style.setProperty('--reading', `${fontSize}px`);
     root.style.setProperty('--reading-width', `${width}px`);
     if (settings.lineHeight === null) root.style.removeProperty('--reading-line-height');

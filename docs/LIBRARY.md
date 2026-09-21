@@ -94,7 +94,7 @@ Risu 자료를 들여올 때는 서재의 봇·페르소나·모듈 탭에서 **
 
 ## 제거한 독립 자료 종류와 공통 참조
 
-현재 `ContentKind`는 `bot | persona | module`뿐이에요. 독립 `lore`, `canon`, `skill`, `glossary` 종류와 기타 자료 분류는 생성·보관 복원에서 거부해요. 세계관은 패키지 내부 `lore`, 창작·번역 지침은 `instructions`와 대상 역할로 작성해요. 패키지 내부 로어, 공통 읽기 도구와 원문·상태·메모의 출처 검증은 유지해요.
+현재 `ContentKind`는 `bot | persona | module`뿐이에요. 독립 `lore`, `canon`, `skill`, `glossary` 종류와 기타 자료 분류는 생성·보관 복원에서 거부해요. 세계관은 Risu 원문의 로어로, 창작·번역 지침은 해당 역할의 네이티브 프리셋으로 작성해요. 카드의 `post_history_instructions`는 네이티브 프리셋이 배치하며 별도 Uimori `instructions` 투영은 없어요. 패키지 내부 로어, 공통 읽기 도구와 원문·상태·메모의 출처 검증은 유지해요.
 
 보조 실행의 `SourceTimeContext`에는 구형 독립 glossary/canon 필드 대신 `references: {id, revision, text}[]`를 사용해요. 원문 Run의 `profile.contents`에서 `module`이며 `pinned`인 본문만 이 배열에 고정해요. 패키지의 대상별 지침·로어는 기존 `packages` 투영으로 제공하고, 조회 자료는 원문 시점에 허용된 자료와 읽기 도구 범위를 유지해요. 현재 서재의 편집 내용이 이미 생성한 원문의 번역·이미지·상태 문맥에 끼어들지 않아요. 사용자 메모·정정 의존성 hash, source/hash 귀속과 불확실 실행의 자동 재생 금지 규칙은 그대로예요.
 
@@ -133,3 +133,12 @@ Risu 자료를 들여올 때는 서재의 봇·페르소나·모듈 탭에서 **
 Draft confirmations use the shared `Dialog` confirmation variant and `DraftDiscardActions` across library, prompt, chat settings, and global settings flows. Discard stays separate from continue editing and save-and-leave; closing a settings panel labels the save action as save-and-close.
 
 Save-and-leave runs the editor's existing validated save operation and navigates only on success. Invalid or unapplied input, revision conflicts, and failed writes retain the draft and confirmation. Multiple edited sections save sequentially; successful sections remain saved if a later section fails. Staged backup imports, destructive confirmations, and model execution are not treated as draft saves. Reloading saved settings remains a separate discard-and-reload confirmation.
+
+
+## 저장 완료와 편집기 동기화
+
+자료 저장의 성공 여부는 서버의 저장 응답으로 확정해요. 이어지는 서재 목록 갱신은 저장 버튼을 잠그지 않으며, 목록 조회나 신규 자료의 분류 반영이 실패하더라도 이미 완료한 저장을 실패로 표시하지 않아요. 이때 저장 완료 문구에 후속 작업을 확인할 안내를 덧붙여요.
+
+편집기 갱신은 먼저 초안과 저장본의 revision만 확인하고, 달라졌을 때 기존 본문 조회·충돌 확인·rebase 경로를 사용해요. 느린 조회 중 입력한 내용, 미적용 원문, 응답을 확인하지 못한 저장은 이 경량 조회로 덮어쓰지 않아요.
+
+저장·사본 저장·되돌리기는 경량 성공 응답 하나를 사용해요. 중복 모델은 전송하지 않고 브라우저에서 현재 편집본과 저장 기준본을 별도 객체로 구성해요. 응답 표현을 선택하는 쿼리 옵션이나 구형 응답 폴백은 없어요. 클라이언트와 서버를 함께 갱신하고 열린 편집기 페이지도 새로고침해야 해요. DB operation과 백업의 저장 구조는 이번 HTTP 계약 정리의 변경 범위가 아니에요. 구체적인 경계와 검증 항목은 [저장 경로 성능](SAVE-PERFORMANCE.md)을 봐요.

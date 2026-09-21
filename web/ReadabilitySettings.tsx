@@ -1,5 +1,5 @@
 import { Switch } from './BooleanControls.js';
-import { Prose } from './Prose.js';
+import { RisuMessageSurface } from './RisuMessageSurface.js';
 import {
   DEFAULT_READABILITY,
   QUOTE_PAIRS,
@@ -11,6 +11,13 @@ import './recovery-settings.css';
 
 const previewText =
   '그녀는 문 앞에서 돌아섰다. “정말 같이 갈 거야?” 나는 고개를 끄덕였다. ‘이번에는 도망치지 않겠어.’\n\n「그럼 출발하자.」 그녀는 『별의 기록』을 가방에 넣었다.';
+const previewHtml = `<div class="risu-chat-text">${previewText
+  .split('\n\n')
+  .map(
+    (text) =>
+      `<p data-uimori-prose>${text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p>`
+  )
+  .join('')}</div>`;
 const preset = (name: string): ReadingStyle => ({
   ...DEFAULT_READABILITY,
   ...(name === 'dialogue' ? { emphasis: 'subtle', dialogueBreaks: true } : {}),
@@ -156,11 +163,18 @@ export function ReadabilitySettings({
       <div className="reading-preview" aria-label="읽기 스타일 미리보기">
         <small>미리보기</small>
         <div className="prose" data-testid="reading-preview">
-          <Prose text={previewText} reading={value} />
+          <RisuMessageSurface
+            html={previewHtml}
+            reading={value}
+            disabled
+            onAction={async () => {}}
+          />
         </div>
       </div>
       <div className="reading-settings-footer">
-        <small>이 브라우저의 본문과 도우미 내용에 적용해요.</small>
+        <small>
+          일반 본문과 도우미 내용에 적용해요. 봇이 만든 상태창·컨트롤의 스타일은 보존해요.
+        </small>
         <button type="button" className="secondary" onClick={() => onChange(DEFAULT_READABILITY)}>
           읽기 스타일 초기화
         </button>

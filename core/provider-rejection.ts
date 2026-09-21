@@ -1,6 +1,6 @@
 import type { ProviderHttpDiagnostic } from './provider-http-error.js';
 
-/** App-level option the provider rejected, derived from whitelisted wire field names only. */
+/** App-level option the provider rejected, mapped from recognised wire field names. */
 export type RejectedOption =
   | 'thinking'
   | 'temperature'
@@ -20,6 +20,9 @@ export type ProviderRejection = {
   httpStatus: number;
   providerCode?: string;
   options: RejectedOption[];
+  unmappedFields?: string[];
+  /** Owner-only detail; may include echoed request text. */
+  message?: string;
 };
 const byField: Record<string, RejectedOption> = {
   effort: 'thinking',
@@ -106,5 +109,9 @@ export function providerRejection(
       ? { providerCode: diagnostic.providerCode }
       : {}),
     options,
+    ...(diagnostic.fields?.some((field) => !optionOf(field))
+      ? { unmappedFields: diagnostic.fields.filter((field) => !optionOf(field)) }
+      : {}),
+    ...(diagnostic.message ? { message: diagnostic.message } : {}),
   };
 }

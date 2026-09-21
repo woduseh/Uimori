@@ -6,7 +6,6 @@ import {
 } from '../core/transport.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
-import { packageContext } from '../core/package-context.js';
 import type { Connection, ModelSnapshot } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
@@ -112,12 +111,6 @@ function scene(
       )?.body ?? null
     );
   };
-  let instructions: string[] = [];
-  try {
-    instructions = packageContext(snapshot, 'image')?.instructions.map((item) => item.text) ?? [];
-  } catch {
-    /* Package projection problems do not block an illustration of the saved text. */
-  }
   return {
     text: source.text,
     allowSkip,
@@ -125,7 +118,6 @@ function scene(
     negativeGuidance: input.comfyui?.negativeGuidance ?? '',
     bot: body('bot'),
     persona: body('persona'),
-    instructions,
   };
 }
 async function authorizedConnection(

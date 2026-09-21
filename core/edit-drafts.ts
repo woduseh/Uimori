@@ -1,5 +1,7 @@
 import type { Content, PromptPreset, PromptWorkspace } from './product.js';
 
+/** Lightweight change probe; a null target revision also covers a new or removed target. */
+export type DraftRevisions = { revision: number; targetRevision: number | null };
 export type EditDraftKind = 'content' | 'prompt-preset' | 'prompt-workspace';
 export type ContentDraftModel = Omit<Content, 'id' | 'revision' | 'coverImage' | 'hasPackage'>;
 export type PromptDraftModel = Pick<PromptPreset, 'title' | 'role' | 'program' | 'values'>;

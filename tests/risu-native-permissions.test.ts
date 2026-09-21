@@ -34,14 +34,13 @@ test('host-resolved bot and external module grants remain distinct after composi
     sourceHash: 'b'.repeat(64),
   };
   const packages = [bot, module].map((nativeRisu, index) => ({
-    version: 1 as const,
+    version: 2 as const,
     id: `package-${index}`,
     revision: 1,
     title: `Package ${index}`,
     description: '',
     body: '',
     lore: [],
-    instructions: [],
     nativeRisu,
   }));
   const snapshot: RunSnapshot = {

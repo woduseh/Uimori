@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it';
+import { markRisuReadingProse } from './risu-reading-markdown.js';
 import {
   nativeRisuAssetNames,
   nativeRisuBackground,
@@ -266,13 +267,14 @@ export function renderNativeRisuMessageInWorker(
   const md = new MarkdownIt({ html: true, breaks: true, linkify: false, typographer: false });
   // Risu/PocketRisu allow indented authored HTML; only fenced blocks are Markdown code.
   md.disable(['code']);
+  markRisuReadingProse(md);
   let html = md.render(text);
   html = html.replace(
     /<risu-style data-index="(\d+)"><\/risu-style>/gu,
     (_tag, index: string) =>
       `<style>${styles[Number(index)]!.replace(/<\/(?=style)/giu, '<\\/')}</style>`
   );
-  // CSS is scoped by the opaque iframe document, preserving native class/selectors and @keyframes.
+  // The message ShadowRoot contains authored selectors, IDs and @keyframes.
   html = `${background}<div class="risu-chat risu-chat-text">${html}</div>`;
   if (html.length > 4_000_000) throw new Error('RISU_NATIVE_TEXT_LIMIT');
   return {

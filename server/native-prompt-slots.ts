@@ -45,10 +45,5 @@ export function nativePromptSlots(
     catalog: JSON.stringify(input.catalog),
     source: '',
   };
-  for (const instruction of packages.flatMap((entry) => entry.instructions))
-    if (instruction.position)
-      slots[instruction.position] = [slots[instruction.position], instruction.text]
-        .filter(Boolean)
-        .join('\n\n');
   return slots;
 }

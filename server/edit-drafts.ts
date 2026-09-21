@@ -1,3 +1,5 @@
+import { encodeDraftSaveResult } from '../core/edit-draft-save-wire.js';
+import { editDraftRevisions } from './edit-draft-revisions.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
@@ -873,6 +875,9 @@ export function editDraftRoutes(app: FastifyInstance, service: EditDraftService)
   app.get<{ Params: { id: string } }>('/api/edit-drafts/:id', async (request) =>
     service.get(request.params.id)
   );
+  app.get<{ Params: { id: string } }>('/api/edit-drafts/:id/revisions', async (request) =>
+    editDraftRevisions(service.store.db, request.params.id)
+  );
   app.patch<{ Params: { id: string } }>(
     '/api/edit-drafts/:id',
     { bodyLimit: 48 * 1024 * 1024 },
@@ -892,10 +897,15 @@ export function editDraftRoutes(app: FastifyInstance, service: EditDraftService)
     app.get<{ Params: { id: string } }>(`/api/edit-drafts/:id/${action}`, async (request) =>
       service[action](request.params.id)
     );
-  for (const action of ['save', 'undo', 'rebase'] as const)
+  for (const action of ['save', 'undo'] as const)
     app.post<{ Params: { id: string } }>(`/api/edit-drafts/:id/${action}`, async (request) =>
-      service[action](request.params.id, request.body, ui(record(request.body).operationId))
+      encodeDraftSaveResult(
+        service[action](request.params.id, request.body, ui(record(request.body).operationId))
+      )
     );
+  app.post<{ Params: { id: string } }>('/api/edit-drafts/:id/rebase', async (request) =>
+    service.rebase(request.params.id, request.body, ui(record(request.body).operationId))
+  );
   app.delete<{ Params: { id: string } }>('/api/edit-drafts/:id', async (request) =>
     service.discard(request.params.id, request.body, ui(record(request.body).operationId))
   );

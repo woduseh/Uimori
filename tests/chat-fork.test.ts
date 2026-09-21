@@ -15,7 +15,10 @@ import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { imageTargetSource } from '../server/package-images.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
-import { successfulTranslation, validateTranslationArtifact } from '../server/source-editing.js';
+import {
+  successfulTranslation,
+  validateTranslationArtifact,
+} from '../server/translation-artifacts.js';
 import type { Content, PromptPreset, ChatProfile } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
@@ -524,9 +527,7 @@ describe('independent stored-story fork without generation', () => {
             store.run(newSource.runId).snapshot,
             store.job(job.id).input
           );
-          expect(() =>
-            validateTranslationArtifact(store, store.job(job.id), newSource)
-          ).not.toThrow();
+          expect(() => validateTranslationArtifact(store.job(job.id), newSource)).not.toThrow();
           if (oldJob.id === fixture.revised.id)
             expect(resolved.profile!.promptPresets!.translation!.program).toEqual(
               fixture.laterPrompt.program

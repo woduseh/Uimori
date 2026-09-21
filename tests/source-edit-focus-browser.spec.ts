@@ -9,6 +9,7 @@ import { openSourceActions } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Locator } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { waitForNativeLayout } from './fixtures/native-message.js';
 
 async function detail(request: APIRequestContext, chatId: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${chatId}`);
@@ -104,10 +105,7 @@ for (const [label, viewport] of [
     // Editing the current view starts from the footer button; the menu holds the other editor.
     const trigger = scene.getByRole('button', { name: '원문 수정', exact: true });
     const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
-    const sourceBody = scene
-      .getByTestId('source-text')
-      .frameLocator('iframe[title="봇 메시지"]')
-      .locator('body');
+    const sourceBody = scene.getByTestId('source-text').locator('.risu-message-content');
     await expect(sourceBody).toContainText('Synthetic paragraph 40.');
     await sourceBody.evaluate((body) => {
       body.dataset.editFocusProbe = 'preserved';
@@ -160,18 +158,7 @@ for (const [label, viewport] of [
     await expect(trigger).toBeFocused();
     await insideReader(trigger);
     await expect(sourceBody).toContainText('returns to the lamp.');
-    // The saved native document replaces its iframe. Its text arrives before the
-    // frame's measured height reaches the host; interact with the settled footer.
-    await expect
-      .poll(async () => {
-        const height = await sourceBody.evaluate((body) => {
-          const rect = body.getBoundingClientRect();
-          return Math.ceil(Math.max(rect.height, rect.bottom));
-        });
-        const frame = await scene.locator('iframe[title="봇 메시지"]').boundingBox();
-        return Math.abs((frame?.height ?? 0) - height);
-      })
-      .toBeLessThanOrEqual(2);
+    await waitForNativeLayout(scene.getByTestId('source-text'));
     await insideReader(trigger);
     const after = await detail(request, before.chat.id);
     expect(after.sources[0].text).toBe(edited);

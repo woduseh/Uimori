@@ -1,4 +1,5 @@
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
+import { validateTranslationArtifact } from './translation-artifacts.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { translationPolicy } from '../core/translation-settings.js';
 import { workspaceModelRef } from '../core/product.js';
@@ -15,28 +16,6 @@ export function latestTranslation(store: Store, id: string): Job | null {
     )
     .get(id) as { id: string } | undefined;
   return row ? store.job(row.id) : null;
-}
-export function successfulTranslation(store: Store, source: Source): Job | null {
-  const row = store.db
-    .prepare(
-      "SELECT j.id FROM jobs j JOIN job_results r ON r.job_id=j.id WHERE j.source_revision=? AND j.source_hash=? AND j.kind='translation' AND j.status='completed' ORDER BY j.revision DESC,j.created_at DESC,j.id DESC LIMIT 1"
-    )
-    .get(source.id, source.hash) as { id: string } | undefined;
-  return row ? store.job(row.id) : null;
-}
-export function validateTranslationArtifact(_store: Store, job: Job, source: Source): void {
-  const result = record(job.result);
-  fields(result, ['mock', 'manual', 'text', 'sourceRevision', 'sourceHash']);
-  if (
-    result.sourceRevision !== source.id ||
-    result.sourceHash !== source.hash ||
-    job.sourceHash !== source.hash ||
-    typeof result.mock !== 'boolean'
-  )
-    throw new HttpError(400, 'Translation dependency mismatch');
-  if (result.manual !== undefined && (result.manual !== true || result.mock))
-    throw new HttpError(400, 'Invalid authored marker');
-  text(result.text, 'translation', TRANSLATION_TEXT_MAX_CHARS);
 }
 /** Invalidate ownership without deleting the previous response or its execution evidence. */
 function stopTranslations(store: Store, sourceId: string) {
@@ -94,7 +73,7 @@ export function requestTranslation(
       }
       if (!force && latest.status === 'completed') {
         try {
-          validateTranslationArtifact(store, latest, source);
+          validateTranslationArtifact(latest, source);
           return latest;
         } catch {
           /* Repair only on explicit demand. */

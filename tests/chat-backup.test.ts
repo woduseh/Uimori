@@ -6,7 +6,8 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
-import { editTranslation, successfulTranslation } from '../server/source-editing.js';
+import { editTranslation } from '../server/source-editing.js';
+import { successfulTranslation } from '../server/translation-artifacts.js';
 import type { RunSnapshot } from '../core/types.js';
 import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
 

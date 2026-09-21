@@ -32,7 +32,6 @@ export function compiledPackages(snapshot: RunSnapshot, target: ContentTarget): 
       : undefined;
     const compiled = compileContentAttachment(pkg, attachment, {
       chatId: snapshot.chatId,
-      target,
       ...(chosen ? { loreSelection: chosen } : {}),
     });
     const projected = projectChatPackageCompilation(
@@ -43,7 +42,6 @@ export function compiledPackages(snapshot: RunSnapshot, target: ContentTarget): 
       () => true,
       chosen
     );
-    // Historical exclusions still validate the frozen package above.
     return [
       {
         ...projected.compiled,
@@ -55,7 +53,6 @@ export function compiledPackages(snapshot: RunSnapshot, target: ContentTarget): 
 }
 export type ContentRoleContext = {
   pinned: Resource[];
-  instructions: { id: string; revision: number; text: string }[];
 };
 export function packageContext(
   snapshot: RunSnapshot,
@@ -70,9 +67,6 @@ export function packageContextFromCompiled(
   if (!packages.length) return undefined;
   return {
     pinned: packages.flatMap((p) => p.pinned),
-    instructions: packages.flatMap((p) =>
-      p.instructions.filter((n) => !n.position).map((n) => ({ ...n, revision: p.package.revision }))
-    ),
   };
 }
 export function packageSlots(

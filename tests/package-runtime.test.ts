@@ -26,19 +26,19 @@ describe('native content resource projection', () => {
     const bot = compileContentAttachment(
       pkg,
       { id: pkg.id, revision: 1, role: 'bot' },
-      { chatId: 'chat', target: 'main' }
+      { chatId: 'chat' }
     );
     const persona = compileContentAttachment(
       pkg,
       { id: pkg.id, revision: 1, role: 'persona' },
-      { chatId: 'chat', target: 'main' }
+      { chatId: 'chat' }
     );
     expect(bot.resources.find((r) => r.id.endsWith(':body'))?.text).toBe('Authored {{char}} body');
     expect(bot.resources.every((r) => r.id.startsWith(`package:${pkg.id}:bot:`))).toBe(true);
     expect(persona.resources.every((r) => r.id.startsWith(`package:${pkg.id}:persona:`))).toBe(
       true
     );
-    expect(bot.instructions).toEqual([]);
+    expect(bot).not.toHaveProperty('instructions');
     expect(pkg.nativeRisu.card.post_history_instructions).toBe('Global note {{user}}');
     expect(JSON.stringify(bot)).not.toContain('RETIRED_SYSTEM');
     expect(bot.pinned.some((r) => r.text === 'Optional lore')).toBe(false);
@@ -49,33 +49,18 @@ describe('native content resource projection', () => {
     const result = compileContentAttachment(
       pkg,
       { id: pkg.id, revision: 1, role: 'bot' },
-      { chatId: 'chat', target: 'main', loreSelection: new Set(['lore-1']) }
+      { chatId: 'chat', loreSelection: new Set(['lore-1']) }
     );
     expect(result.pinned.some((r) => r.text === 'Optional lore')).toBe(true);
     expect(pkg).toEqual(before);
-    expect(
-      compileContentAttachment(
-        pkg,
-        { id: pkg.id, revision: 1, role: 'bot' },
-        { chatId: 'chat', target: 'main', resourcesOnly: true }
-      ).instructions
-    ).toEqual([]);
   });
   it('rejects stale revisions and absent ownership before serving resources', () => {
     const pkg = fixture();
     expect(() =>
-      compileContentAttachment(
-        pkg,
-        { id: pkg.id, revision: 2, role: 'bot' },
-        { chatId: 'chat', target: 'main' }
-      )
+      compileContentAttachment(pkg, { id: pkg.id, revision: 2, role: 'bot' }, { chatId: 'chat' })
     ).toThrow('PACKAGE_REVISION_MISMATCH');
     expect(() =>
-      compileContentAttachment(
-        pkg,
-        { id: pkg.id, revision: 1, role: 'bot' },
-        { chatId: '', target: 'main' }
-      )
+      compileContentAttachment(pkg, { id: pkg.id, revision: 1, role: 'bot' }, { chatId: '' })
     ).toThrow('PACKAGE_CHAT_REQUIRED');
   });
 });

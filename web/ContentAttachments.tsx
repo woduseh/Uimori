@@ -245,10 +245,7 @@ export function ContentAttachments({
                 </button>
               )}
             </header>
-            <small>
-              로어 {pkg?.lore.length ?? '…'}개
-              {pkg?.instructions.length ? ` · 지침 ${pkg.instructions.length}개` : ''}
-            </small>
+            <small>로어 {pkg?.lore.length ?? '…'}개</small>
             {automatic && (
               <p className="muted">
                 장착한 자료가 요구하는 모듈이에요. 연결한 자료를 해제하거나 해당 자료의 모듈 참조를
@@ -262,11 +259,6 @@ export function ContentAttachments({
                   <p key={lore.id}>
                     <strong>{lore.title}</strong> ·{' '}
                     {lore.loading === 'pinned' ? '항상 포함' : '필요할 때 읽기'}
-                  </p>
-                ))}
-                {pkg.instructions.map((instruction) => (
-                  <p key={instruction.id}>
-                    {instruction.target} · {instruction.text.slice(0, 160)}
                   </p>
                 ))}
               </details>

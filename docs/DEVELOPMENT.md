@@ -99,4 +99,4 @@ Local fixtures, browser emulation, live providers, and physical devices establis
 
 `npm run reset:dev` deletes only this checkout's default `.local/uimori.sqlite` and its SQLite sidecars. Existing backups and older database files remain untouched. Stop the server first. The command rejects an in-use database or unsafe paths and does not reset an arbitrary `UIMORI_DB`.
 
-Only empty and current schema-23 databases are admitted. Older databases are rejected before schema writes; use a separate empty path for new development. Current data formats and this boundary are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).
+Only empty and current schema-24 databases are admitted. Older databases are rejected before schema writes; use a separate empty path for new development. Current data formats and this boundary are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).

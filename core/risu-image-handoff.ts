@@ -16,19 +16,17 @@ export type RisuImageHandoff = {
 };
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const cardFields = ['description', 'mes_example', 'post_history_instructions'] as const;
-// Historical receipts can name retired fields. Reading them never makes them executable again.
-const historicalCardFields = [...cardFields, 'personality', 'scenario', 'system_prompt'];
-function recordedImageHandoffSource(native: RisuContentSource, field: string): string {
-  if (field.startsWith('card:') && historicalCardFields.includes(field.slice(5)))
+export function imageHandoffSource(native: RisuContentSource, field: string): string {
+  if (
+    field.startsWith('card:') &&
+    cardFields.includes(field.slice(5) as (typeof cardFields)[number])
+  )
     return text(native.card[field.slice(5)]);
   const match = /^lore:lore-(\d+)$/u.exec(field);
   return match ? text(nativeRisuLore(native)[Number(match[1])]?.content) : '';
 }
 const activeField = (field: string) =>
   !field.startsWith('card:') || cardFields.includes(field.slice(5) as (typeof cardFields)[number]);
-export function imageHandoffSource(native: RisuContentSource, field: string): string {
-  return activeField(field) ? recordedImageHandoffSource(native, field) : '';
-}
 
 /** Runtime text after selected image instructions are handed to image placement. */
 export function risuImageHandoffText(pkg: RisuContent, field: string): string {
@@ -155,9 +153,7 @@ export function validateRisuImageHandoff(
     )
       throw new Error('PACKAGE_IMAGE_HANDOFF_RANGE');
     ids.add(range.id);
-    if (
-      recordedImageHandoffSource(native, range.field).slice(range.start, range.end) !== range.text
-    )
+    if (imageHandoffSource(native, range.field).slice(range.start, range.end) !== range.text)
       throw new Error('PACKAGE_IMAGE_HANDOFF_STALE');
     const sameField = occupied.get(range.field) ?? [];
     if (sameField.some((previous) => range.start < previous.end && previous.start < range.end))
@@ -202,7 +198,6 @@ export function projectRisuImageHandoff(pkg: RisuContent, enabled: boolean): Ris
       const next = remove(`lore:${entry.id}`, source).trim();
       return { ...entry, text: next };
     }),
-    instructions: [],
   };
 }
 

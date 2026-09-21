@@ -175,7 +175,6 @@ test('CHARX-shaped bot, persona, and native module retain provenance through res
     };
     const resources = compileContentAttachment(pkg, attachments[index], {
       chatId: snapshot.chatId,
-      target: 'main',
     }).resources;
     expect(resources.find((item) => item.text === `${role} lore`)?.risuSource).toEqual(expected);
     expect(input.pinnedSources?.find((item) => item.text === `${role} lore`)?.risuSource).toEqual(

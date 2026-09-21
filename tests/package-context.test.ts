@@ -39,13 +39,13 @@ describe('frozen Risu resource context', () => {
     expect(result.pinned.map((r) => r.text)).toEqual(
       expect.arrayContaining(['EXACT_BODY', 'EXACT_LORE'])
     );
-    expect(result.instructions).toEqual([]);
+    expect(result).not.toHaveProperty('instructions');
     expect(s.profile!.packages![0].nativeRisu.card.post_history_instructions).toBe(
       'ACTIVE_GLOBAL_NOTE'
     );
     expect(JSON.stringify(result)).not.toContain('RETIRED_MAIN_ONLY');
     expect(packageSlots(s, 'main')).toMatchObject({ char: 'Ari', lore: 'EXACT_LORE' });
-    expect(packageContext(s, 'translation')!.instructions).toEqual([]);
+    expect(packageContext(s, 'translation')).not.toHaveProperty('instructions');
     expect(s).toEqual(before);
   });
   it('rejects incomplete snapshots before providing any package context', () => {

@@ -16,13 +16,12 @@ const bytes = (value) => Buffer.byteLength(JSON.stringify(value));
 const card = { name: 'Synthetic storage card', description: 'A synthetic guide.' };
 const pkg = projectNativeRisuPackage(
   {
-    version: 1,
+    version: 2,
     id: 'synthetic',
     revision: 1,
     title: card.name,
     description: '',
     lore: [],
-    instructions: [],
     nativeRisu: {
       version: 1,
       card,

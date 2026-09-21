@@ -1,6 +1,7 @@
+import { recordContentProfileEvents } from './content-profile-events.js';
 import { translationRecovery } from './source-editing.js';
 import { detectRisuImageHandoff, type RisuImageHandoff } from '../core/risu-image-handoff.js';
-import { validateRisuContentSource } from '../core/risu-native.js';
+import { assertRisuContentSource } from '../core/risu-native.js';
 import { effectiveRisuControls } from '../core/risu-effective-controls.js';
 import { stripDeprecatedRisuPresetFields } from '../core/risu-deprecated-fields.js';
 import { projectNativeRisuPackage } from './risu-native-projection.js';
@@ -74,7 +75,7 @@ import {
 import type { RunSnapshot, Resource } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { validateDisplayAnnotation, validatePresentation } from '../core/auxiliary.js';
-import { validateTranslationArtifact } from './source-editing.js';
+import { validateTranslationArtifact } from './translation-artifacts.js';
 import { storyTables } from './story-store.js';
 import {
   catalogTimestamp,
@@ -138,6 +139,7 @@ import {
 import { organizationTables } from './chat-organization.js';
 import { libraryOrganizationTables } from './library-organization.js';
 import {
+  assertRisuContent,
   validateRisuContent,
   validateContentAttachment,
   type ContentAttachment,
@@ -360,8 +362,7 @@ export class ProductStore {
         latest: true,
       });
     if (!prior) this.store.libraryOrganization.register(kind, result.id, result.kind);
-    if (kind === 'content' || kind === 'prompt-preset')
-      for (const chat of this.store.chats()) this.store.event(chat.id, 'profile.updated', chat.id);
+    if (kind === 'content' || kind === 'prompt-preset') recordContentProfileEvents(this.db);
     return result;
   }
   content(value: unknown, id?: string, inTransaction = false, createId?: string) {
@@ -397,14 +398,13 @@ export class ProductStore {
         extensions: { risuai: {} },
       };
       packageInput = {
-        version: 1,
+        version: 2,
         id: createId ?? id ?? randomUUID(),
         revision: 1,
         title: card.name,
         description: card.creator_notes,
         body: card.description,
         lore: [],
-        instructions: [],
         nativeRisu: {
           version: 1,
           card,
@@ -414,8 +414,9 @@ export class ProductStore {
       };
     }
     if (packageInput && record(packageInput).nativeRisu) {
-      const raw = record(packageInput),
-        native = validateRisuContentSource(raw.nativeRisu);
+      const raw = record(packageInput);
+      assertRisuContentSource(raw.nativeRisu);
+      const native = raw.nativeRisu;
       const { imageHandoff: _old, ...rest } = raw;
       const handoff = detectRisuImageHandoff(
         native,
@@ -423,24 +424,21 @@ export class ProductStore {
       );
       packageInput = { ...rest, ...(handoff ? { imageHandoff: handoff } : {}) };
     }
-    let pkg = validateRisuContent(packageInput);
-    {
-      pkg = validateRisuContent(projectNativeRisuPackage(pkg, kind).pkg);
-      b.title = pkg.title;
-      b.description = pkg.description;
-      b.text = pkg.body ?? '';
-    }
+    // Validate external input without copying it. Projection reads that input; the final
+    // save validates and detaches the projected package after assigning its identity.
+    assertRisuContent(packageInput);
+    const pkg = projectNativeRisuPackage(packageInput, kind).pkg;
     return (inTransaction ? this.saveInTransaction : this.save).call(
       this,
       'content',
       {
         kind,
-        title: text(b.title, 'title', 200),
-        description: text(b.description, 'description', b.package ? 4000 : 2000, true),
-        text: text(b.text, 'text', b.package ? 1_000_000 : 100000, !!b.package),
+        title: text(pkg.title, 'title', 200),
+        description: text(pkg.description, 'description', b.package ? 4000 : 2000, true),
+        text: text(pkg.body ?? '', 'text', b.package ? 1_000_000 : 100000, !!b.package),
         loading: choice(b.loading, ['pinned', 'discoverable'], 'loading'),
         relatedIds: [...new Set(b.relatedIds.map((x: unknown) => text(x, 'related ID', 100)))],
-        ...(pkg ? { package: pkg } : {}),
+        package: pkg,
       },
       id,
       id ? number(b.expectedRevision, 'revision') : undefined,
@@ -907,8 +905,6 @@ export class ProductStore {
         )!;
         const compiled = compileContentAttachment(pkg, ref, {
           chatId,
-          target: 'main',
-          resourcesOnly: true,
         });
         return projectChatPackageCompilation(p, ref, pkg, compiled).compiled.resources;
       }),
@@ -2117,7 +2113,7 @@ function validateArchiveGraph(product: ProductStore) {
     if (result?.manual !== undefined && (job.kind !== 'translation' || result.manual !== true))
       throw new HttpError(400, 'Invalid authored marker');
     if (job.kind === 'translation' && job.status === 'completed')
-      validateTranslationArtifact(product.store, product.store.job(job.id), source);
+      validateTranslationArtifact(product.store.job(job.id), source);
     if (result && job.kind === 'image') {
       if (!isDeepStrictEqual(result.imageTarget, jobInput?.imageTarget))
         throw new HttpError(400, 'Image result target mismatch');

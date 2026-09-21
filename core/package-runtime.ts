@@ -4,14 +4,12 @@ import {
   validateContentAttachment,
   type RisuContent,
   type ContentAttachment,
-  type ContentTarget,
 } from './risu-content.js';
 import type { Resource } from './types.js';
 
 export type CompiledContentAttachment = {
   resources: Resource[];
   pinned: Resource[];
-  instructions: { id: string; text: string; position?: string }[];
 };
 /** Host resources come from the frozen Risu projection. CBS/Lua run in the Risu runtime. */
 export function compileContentAttachment(
@@ -19,8 +17,6 @@ export function compileContentAttachment(
   ref: ContentAttachment,
   context: {
     chatId: string;
-    target: ContentTarget;
-    resourcesOnly?: boolean;
     loreSelection?: ReadonlySet<string>;
   }
 ): CompiledContentAttachment {
@@ -99,18 +95,5 @@ export function compileContentAttachment(
         attachment.role
       )
     );
-  const instructions = context.resourcesOnly
-    ? []
-    : pkg.instructions
-        .filter(
-          (item) =>
-            item.target === context.target &&
-            (!item.attachmentRoles || item.attachmentRoles.includes(attachment.role))
-        )
-        .map((item) => ({
-          id: `${prefix}:instruction:${item.id}`,
-          text: item.text,
-          ...(item.position ? { position: item.position } : {}),
-        }));
-  return { resources, pinned: resources.filter((item) => item.loading === 'pinned'), instructions };
+  return { resources, pinned: resources.filter((item) => item.loading === 'pinned') };
 }

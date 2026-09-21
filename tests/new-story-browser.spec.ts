@@ -40,14 +40,13 @@ for (const [viewportName, viewport] of [
         loading: 'pinned',
         relatedIds: [],
         package: {
-          version: 1,
+          version: 2,
           id: 'quick-start-template',
           revision: 1,
           title,
           description: '',
           body: '',
           lore: [],
-          instructions: [],
           images: [
             {
               id: 'opening-image',
@@ -124,7 +123,7 @@ for (const [viewportName, viewport] of [
     await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeInViewport({
       ratio: 1,
     });
-    await expect(dialog.locator('iframe')).toHaveCount(0);
+    await expect(dialog.locator('.risu-message-surface')).toHaveCount(0);
     await expect(dialog.getByText('Harbor greets', { exact: false })).toHaveCount(0);
     await expect(dialog.getByText('미리보기', { exact: true })).toBeVisible();
     if (viewportName === 'desktop') expect((await dialog.boundingBox())!.width).toBe(680);
@@ -164,15 +163,17 @@ for (const [viewportName, viewport] of [
       .filter({ has: page.getByText(personaTitle, { exact: true }) })
       .click();
     await dialog.getByText('미리보기', { exact: true }).click();
-    const frame = dialog.frameLocator('iframe[title="봇 메시지"]');
-    await expect(frame.locator('body')).toContainText(`Harbor greets ${personaTitle}.`);
+    const frame = dialog.locator('.risu-message-surface');
+    await expect(frame.locator('.risu-message-content')).toContainText(
+      `Harbor greets ${personaTitle}.`
+    );
     await expect(frame.locator('img')).toBeVisible();
     await dialog.getByLabel('첫 메시지 선택').selectOption('start-1');
-    await expect(dialog.locator('iframe')).toHaveCount(0);
+    await expect(dialog.locator('.risu-message-surface')).toHaveCount(0);
     await dialog.getByText('미리보기', { exact: true }).click();
-    await expect(frame.locator('body')).toContainText('Night watch begins.');
+    await expect(frame.locator('.risu-message-content')).toContainText('Night watch begins.');
     await dialog.getByLabel('첫 메시지 선택').selectOption('start-0');
-    await expect(dialog.locator('iframe')).toHaveCount(0);
+    await expect(dialog.locator('.risu-message-surface')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );
@@ -186,8 +187,10 @@ for (const [viewportName, viewport] of [
     const opening = await (await confirmed).json();
     expect(opening.run.usage.modelCalls).toBe(0);
     await expect(dialog).toBeHidden();
-    const reader = page.getByTestId('source-text').frameLocator('iframe[title="봇 메시지"]');
-    await expect(reader.locator('body')).toContainText(`Harbor greets ${personaTitle}.`);
+    const reader = page.getByTestId('source-text').locator('.risu-message-surface');
+    await expect(reader.locator('.risu-message-content')).toContainText(
+      `Harbor greets ${personaTitle}.`
+    );
     await expect(reader.locator('img')).toBeVisible();
     expect(executionRequests).toEqual([]);
     await page
@@ -246,14 +249,13 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
       loading: 'pinned',
       relatedIds: [],
       package: {
-        version: 1,
+        version: 2,
         id: 'native-editor',
         revision: 1,
         title,
         description: '',
         body: '',
         lore: [],
-        instructions: [],
         nativeRisu: { version: 1, card, assets: [], sourceHash: 'a'.repeat(64) },
       },
     },
@@ -302,20 +304,23 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
   await expect(dialog.getByLabel('첫 메시지 선택')).toHaveValue('start-0');
   await dialog.getByText('미리보기', { exact: true }).click();
-  const frame = dialog.frameLocator('iframe[title="봇 메시지"]');
+  const frame = dialog.locator('.risu-message-surface');
   await expect(frame.getByRole('button', { name: `${title} route`, exact: true })).toBeVisible();
-  await expect(frame.locator('body')).toHaveAttribute('data-risu-disabled', 'true');
+  await expect(frame.locator('.risu-message-content')).toHaveAttribute(
+    'data-risu-disabled',
+    'true'
+  );
   await expect(frame.getByRole('button', { name: `${title} route`, exact: true })).toHaveCSS(
     'pointer-events',
     'none'
   );
-  await expect(frame.locator('body')).toContainText('Edited');
+  await expect(frame.locator('.risu-message-content')).toContainText('Edited');
   await page.screenshot({ path: info.outputPath('native-default-preview.png') });
   await dialog.getByLabel('첫 메시지 선택').selectOption('start-1');
-  await expect(dialog.locator('iframe')).toHaveCount(0);
+  await expect(dialog.locator('.risu-message-surface')).toHaveCount(0);
   await dialog.getByText('미리보기', { exact: true }).click();
   await expect(dialog.getByLabel('첫 메시지 선택')).toHaveValue('start-1');
-  await expect(dialog.frameLocator('iframe[title="봇 메시지"]').locator('body')).toContainText(
+  await expect(dialog.locator('.risu-message-surface .risu-message-content')).toContainText(
     'Other greeting'
   );
   await dialog.getByLabel('첫 메시지 선택').selectOption('');

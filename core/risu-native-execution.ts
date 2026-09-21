@@ -49,10 +49,6 @@ export function projectNativeRisuFields(
     ...pkg,
     body: fields.body ?? pkg.body,
     lore: pkg.lore.map((entry) => ({ ...entry, text: fields[`lore:${entry.id}`] ?? entry.text })),
-    instructions: pkg.instructions.map((entry) => ({
-      ...entry,
-      text: fields[`instruction:${entry.id}`] ?? entry.text,
-    })),
     starts: pkg.starts?.map((entry) => ({
       ...entry,
       text: fields[`start:${entry.id}`] ?? entry.text,

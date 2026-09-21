@@ -1,48 +1,39 @@
-/** HTTP error diagnostics deliberately exclude messages, echoed input and arbitrary metadata. */
+/** Owner-facing diagnostics may contain echoed input. Shared reports must project safe fields only. */
 export type ProviderHttpDiagnostic = {
   httpStatus: number;
   providerCode?: string | number;
   providerStatus?: string;
   requestId?: string;
   fields?: string[];
+  message?: string;
   bodyState: 'parsed' | 'invalid' | 'too-large' | 'empty' | 'unavailable';
 };
 
 export const PROVIDER_ERROR_BODY_LIMIT = 16_384;
-const codes = new Set([
-  'invalid_request_error',
-  'invalid_request',
-  'invalid_argument',
-  'unsupported_parameter',
-  'unsupported_value',
-  'model_not_found',
-  'context_length_exceeded',
-  'rate_limit_exceeded',
-  'insufficient_quota',
-  'authentication_error',
-  'permission_error',
-  'not_found_error',
-  'rate_limit_error',
-  'api_error',
-  'overloaded_error',
-  'server_error',
-  'invalid_api_key',
-]);
-const statuses = new Set([
-  'INVALID_ARGUMENT',
-  'UNAUTHENTICATED',
-  'PERMISSION_DENIED',
-  'NOT_FOUND',
-  'RESOURCE_EXHAUSTED',
-  'FAILED_PRECONDITION',
-  'INTERNAL',
-  'UNAVAILABLE',
-  'DEADLINE_EXCEEDED',
-  'CANCELLED',
-  'OUT_OF_RANGE',
-  'UNIMPLEMENTED',
-  'UNKNOWN',
-]);
+export const PROVIDER_ERROR_MESSAGE_LIMIT = 4000;
+const diagnosticIdentifier = (value: unknown): value is string =>
+  typeof value === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$/u.test(value);
+const withoutControlCharacters = (value: string) =>
+  [...value]
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return code === 9 || code === 10 || code === 13 || (code >= 32 && code !== 127);
+    })
+    .join('');
+// Exact request credentials are removed before truncation so a cut cannot expose a key prefix.
+function diagnosticMessage(value: unknown, secret?: string): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const redacted = withoutControlCharacters(
+    (secret ? value.replaceAll(secret, '[REDACTED]') : value).replace(
+      /\b(Bearer|Basic)\s+[^\s"'<>]+/giu,
+      '$1 [REDACTED]'
+    )
+  ).trim();
+  if (!redacted) return undefined;
+  return redacted.length > PROVIDER_ERROR_MESSAGE_LIMIT
+    ? redacted.slice(0, PROVIDER_ERROR_MESSAGE_LIMIT - 1) + '…'
+    : redacted;
+}
 const fieldParts = new Set([
   'model',
   'messages',
@@ -143,19 +134,32 @@ export async function readProviderHttpDiagnostic(
       bytes.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    let root: Record<string, unknown> | undefined;
+    let decoded: string;
     try {
-      root = object(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)));
+      decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
     } catch {
       diagnostic.bodyState = 'invalid';
+      return diagnostic;
+    }
+    let root: Record<string, unknown> | undefined;
+    try {
+      root = object(JSON.parse(decoded));
+    } catch {
+      diagnostic.bodyState = 'invalid';
+      const message = diagnosticMessage(decoded, secret);
+      if (message) diagnostic.message = message;
       return diagnostic;
     }
     const error = object(root?.error);
     if (!error) {
       diagnostic.bodyState = 'invalid';
+      const message = diagnosticMessage(root?.message ?? root?.error, secret);
+      if (message) diagnostic.message = message;
       return diagnostic;
     }
     diagnostic.bodyState = 'parsed';
+    const message = diagnosticMessage(error.message, secret);
+    if (message) diagnostic.message = message;
     if (
       typeof error.code === 'number' &&
       Number.isInteger(error.code) &&
@@ -163,35 +167,41 @@ export async function readProviderHttpDiagnostic(
       error.code <= 599
     )
       diagnostic.providerCode = error.code;
-    else if (typeof error.code === 'string' && codes.has(error.code) && safe(error.code))
+    else if (diagnosticIdentifier(error.code) && safe(error.code))
       diagnostic.providerCode = error.code;
-    else if (typeof error.type === 'string' && codes.has(error.type) && safe(error.type))
+    else if (diagnosticIdentifier(error.type) && safe(error.type))
       diagnostic.providerCode = error.type;
-    if (typeof error.status === 'string' && statuses.has(error.status) && safe(error.status))
+    if (diagnosticIdentifier(error.status) && safe(error.status))
       diagnostic.providerStatus = error.status;
     const fields: string[] = [];
     const addField = (value: unknown) => {
       if (fields.length >= 8 || typeof value !== 'string' || value.length > 128 || !safe(value))
         return;
-      if (!/^[a-zA-Z_]+(?:\[\d{1,4}\])?(?:\.[a-zA-Z_]+(?:\[\d{1,4}\])?)*$/u.test(value)) return;
+      if (
+        !/^[A-Za-z_][A-Za-z0-9_-]*(?:\[\d{1,4}\])?(?:\.[A-Za-z_][A-Za-z0-9_-]*(?:\[\d{1,4}\])?)*$/u.test(
+          value
+        )
+      )
+        return;
+      if (!fields.includes(value)) fields.push(value);
+    };
+    addField(error.param);
+    // Explicit field paths may be new provider options. In prose, only known paths are
+    // inferred: quoted allowed values such as 'low' must not be mistaken for field names.
+    const inferField = (value: string) => {
       if (
         value
           .replace(/\[\d+\]/gu, '')
           .split('.')
-          .every((part) => fieldParts.has(part)) &&
-        !fields.includes(value)
+          .every((part) => fieldParts.has(part))
       )
-        fields.push(value);
+        addField(value);
     };
-    addField(error.param);
-    // Messages are never stored; only a leading `path:` or a quoted identifier that is entirely
-    // whitelisted field names is kept, so a provider that names the rejected field in prose still
-    // yields a field.
     if (typeof error.message === 'string' && error.message.length <= 4000) {
       const leading = /^\s*([A-Za-z_][A-Za-z0-9_.[\]]{0,127})\s*:/u.exec(error.message);
-      if (leading) addField(leading[1]);
+      if (leading) inferField(leading[1]);
       for (const quoted of error.message.matchAll(/['"`]([A-Za-z_][A-Za-z0-9_.[\]]{0,127})['"`]/gu))
-        addField(quoted[1]);
+        inferField(quoted[1]);
     }
     if (Array.isArray(error.details))
       for (const detail of error.details.slice(0, 8)) {

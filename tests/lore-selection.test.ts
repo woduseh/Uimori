@@ -30,13 +30,12 @@ function lore(
 
 function pkg(partial: Partial<RisuContent> = {}): RisuContent {
   return {
-    version: 1,
+    version: 2,
     id: 'card',
     revision: 1,
     title: 'Aria',
     description: '',
     lore: [],
-    instructions: [],
     nativeRisu: { version: 1, card: {}, assets: [], sourceHash: 'a'.repeat(64) },
     ...partial,
   };

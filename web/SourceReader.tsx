@@ -13,7 +13,8 @@ import { api, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
-import { RisuMessageFrame } from './RisuMessageFrame.js';
+import { selectedReaderText } from './reader-dom.js';
+import { RisuMessageSurface } from './RisuMessageSurface.js';
 import { retainReaderNavigation } from './reader-navigation-scroll.js';
 import { RisuInteractionDialog } from './RisuInteractionDialog.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
@@ -527,8 +528,11 @@ function SourceReaderContent({
         ) : projected?.format === 'risu-html' &&
           (mode === 'original' ||
             (validTranslation && projected.translation?.html !== undefined)) ? (
-          <div data-testid={mode === 'original' ? 'source-text' : 'translation-text'}>
-            <RisuMessageFrame
+          <div
+            data-testid={mode === 'original' ? 'source-text' : 'translation-text'}
+            data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
+          >
+            <RisuMessageSurface
               html={
                 (mode === 'original' ? projected.original.html : projected.translation?.html) ?? ''
               }
@@ -698,14 +702,7 @@ function SourceReaderContent({
               type="button"
               className="secondary"
               onClick={() => {
-                const selection = window.getSelection();
-                const selected =
-                  selection?.anchorNode &&
-                  container.current?.contains(selection.anchorNode) &&
-                  selection.focusNode &&
-                  container.current?.contains(selection.focusNode)
-                    ? selection.toString().trim()
-                    : '';
+                const selected = selectedReaderText(container.current);
                 onAskHelper(source.id, selected || source.text);
               }}
             >

@@ -7,8 +7,7 @@ import { assertRisuContentSource, type RisuContentSource } from './risu-native.j
 
 export const CONTENT_ROLES = ['bot', 'persona', 'module'] as const;
 export type ContentRole = (typeof CONTENT_ROLES)[number];
-export const CONTENT_TARGETS = ['main', 'translation', 'state', 'status', 'image'] as const;
-export type ContentTarget = (typeof CONTENT_TARGETS)[number];
+export type ContentTarget = 'main' | 'translation' | 'state' | 'status' | 'image';
 export type ContentAttachment = { id: string; revision: number; role: ContentRole };
 /** Chat-local package values are keyed by the exact attachment identity; a new revision starts fresh. */
 export const contentAttachmentKey = (r: ContentAttachment) => `${r.id}@${r.revision}:${r.role}`;
@@ -25,16 +24,9 @@ export type RisuLoreProjection = {
   loreContext?: import('./lore-context.js').LorePlacement;
   nativeRisuPosition?: import('./risu-native.js').NativeRisuLorePosition;
 };
-export type RisuInstructionProjection = {
-  id: string;
-  target: ContentTarget;
-  attachmentRoles?: ContentRole[];
-  position?: string;
-  text: string;
-};
 /** The attachment chooses a role. Identity is optional, including for a package used as a bot. */
 export type RisuContent = {
-  version: 1;
+  version: 2;
   id: string;
   revision: number;
   title: string;
@@ -48,7 +40,6 @@ export type RisuContent = {
   modules?: PackageModuleRef[];
   lore: RisuLoreProjection[];
   loreFolders?: RisuLoreFolder[];
-  instructions: RisuInstructionProjection[];
   /** Optional lore is selected by JEV or left discoverable through the writer's tools. */
   loreActivation?: { mode: 'discoverable' | 'model' };
   nativeRisu: RisuContentSource;
@@ -122,12 +113,11 @@ export function assertRisuContent(value: unknown): asserts value is RisuContent 
     'modules',
     'lore',
     'loreFolders',
-    'instructions',
     'loreActivation',
     'nativeRisu',
     'imageHandoff',
   ]);
-  if (p.version !== 1) fail('PACKAGE_VERSION_UNSUPPORTED');
+  if (p.version !== 2) fail('PACKAGE_VERSION_UNSUPPORTED');
   id(p.id);
   if (!Number.isSafeInteger(p.revision) || Number(p.revision) < 1) fail('PACKAGE_INVALID_REVISION');
   string(p.title, 200);
@@ -224,31 +214,6 @@ export function assertRisuContent(value: unknown): asserts value is RisuContent 
     const l = raw as RisuLoreProjection;
     if (l.relatedIds?.some((ref) => !loreIds.includes(ref))) fail('PACKAGE_LORE_REFERENCE', l.id);
   }
-  list(p.instructions, 150);
-  const instructionIds: string[] = [];
-  for (const raw of p.instructions) {
-    const n = object(raw, ['id', 'target', 'attachmentRoles', 'position', 'text']);
-    id(n.id);
-    if (n.id === '__package_current__') fail('PACKAGE_RESERVED_ID', n.id);
-    instructionIds.push(n.id);
-    string(n.text, 200_000);
-    if (n.position !== undefined) {
-      id(n.position);
-      if (n.target !== 'main') fail('PACKAGE_POSITION_TARGET', n.id);
-    }
-    if (!CONTENT_TARGETS.includes(n.target as ContentTarget))
-      fail('PACKAGE_INSTRUCTION_TARGET', n.id);
-    if (n.attachmentRoles !== undefined) {
-      list(n.attachmentRoles, 3);
-      if (
-        !n.attachmentRoles.length ||
-        n.attachmentRoles.some((role) => !CONTENT_ROLES.includes(role as ContentRole))
-      )
-        fail('PACKAGE_INSTRUCTION_ROLE', n.id);
-      unique(n.attachmentRoles as string[]);
-    }
-  }
-  unique(instructionIds);
   try {
     {
       assertRisuContentSource(p.nativeRisu);

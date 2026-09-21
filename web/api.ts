@@ -10,6 +10,12 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
+/** A timeout does not establish whether the server admitted a mutation. */
+export function definiteRejection(error: unknown): boolean {
+  return (
+    error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408
+  );
+}
 export const sessionRequiredEvent = 'uimori-session-required';
 export const maintenanceChangedEvent = 'uimori-maintenance-changed';
 export type MaintenanceStatus = {

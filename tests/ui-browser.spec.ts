@@ -411,7 +411,7 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
     const top = await reader.evaluate((element) => element.scrollTop);
     const before = await data(request, chat.id);
     const original = nativeProse(page.getByTestId('source-text'));
-    const originalBody = page.getByTestId('source-text').frameLocator('iframe').locator('body');
+    const originalBody = page.getByTestId('source-text').locator('.risu-message-content');
     await original.evaluate((node) => {
       node.setAttribute('data-presentation-probe', 'original-kept');
     });

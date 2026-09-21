@@ -1,3 +1,4 @@
+import { assertPackageImageReferences } from './package-image-references.js';
 import { HttpError, fields, isSha256Hex, record, text } from './request-validation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -8,7 +9,7 @@ import type { ImageTarget, RunSnapshot } from '../core/types.js';
 import { splitSource, type AssetEntry } from '../core/auxiliary.js';
 import type { ProductStore } from './product-store.js';
 import type { Store, Job, Source } from './store.js';
-import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
+import { successfulTranslation, validateTranslationArtifact } from './translation-artifacts.js';
 import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 
 export type PackageImageBlob = {
@@ -103,11 +104,7 @@ export function putValidatedImageBlob(
   return blob;
 }
 export function assertPackageImages(product: ProductStore, pkg: RisuContent) {
-  for (const image of pkg.images ?? []) {
-    const blob = product.get<PackageImageBlob>('package-image', image.blobHash, 1);
-    if (blob.hash !== image.blobHash || blob.mime !== image.mime)
-      throw new HttpError(400, 'Package image reference mismatch');
-  }
+  assertPackageImageReferences(product.db, pkg.images ?? []);
 }
 export function assetEntry(asset: Asset): AssetEntry {
   return {
@@ -299,7 +296,7 @@ export function imageTargetSource(
   }
   if (target.mode !== 'translation') throw new HttpError(400, 'Invalid image target');
   const translation = store.job(target.translationJobId);
-  validateTranslationArtifact(store, translation, source);
+  validateTranslationArtifact(translation, source);
   const body = (translation.result as { text: string }).text;
   if (
     translation.sourceRevision !== source.id ||
@@ -441,7 +438,7 @@ export function requestImages(store: Store, sourceId: string, value: unknown) {
         translation.revision !== request.expectedTranslationRevision
       )
         throw new HttpError(409, 'Translation image target changed');
-      validateTranslationArtifact(store, translation, source);
+      validateTranslationArtifact(translation, source);
       target = {
         mode,
         translationJobId: translation.id,

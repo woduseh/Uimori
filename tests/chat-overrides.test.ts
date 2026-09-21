@@ -204,7 +204,7 @@ test('shared module lore with different link overrides keeps distinct request so
     },
     attachment,
     pkg,
-    compileContentAttachment(pkg, attachment, { chatId: chat.id, target: 'main' })
+    compileContentAttachment(pkg, attachment, { chatId: chat.id })
   );
   const lore = projected.compiled.pinned.filter((item) => item.sourceKind === 'lore');
   expect(lore).toHaveLength(2);
