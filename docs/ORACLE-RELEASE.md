@@ -69,7 +69,7 @@ Development checks follow [DEVELOPMENT](DEVELOPMENT.md#verification). For a rele
 
 `--fresh`는 새 볼륨과 새 DB를 만들고 기존 볼륨을 보존해요. 기존 `<database>.vertex-credentials` 디렉터리와 `<database>.codex/auth.json`만 새 볼륨에 복사해요. Codex 세션·설정과 DB의 모델·연결 reference는 초기화되므로 새 DB에서 다시 설정해야 해요. 환경의 origin, access token과 공개 라우팅은 유지해요.
 
-`--migrate-schema-23-to-24`는 이 경계에만 쓰는 명시적 일회성 모드예요. 실행 중인 schema가 정확히 23이고 무결성 검사와 활성 작업 검사를 통과해야 해요. 중지 후 전체 데이터 디렉터리를 비공개 복구본과 새 Docker volume에 각각 복사하고, 새 volume에서만 프로세스 수명 mutex인 `<database>.owner.sqlite*`를 재생성 대상으로 비운 뒤 Risu package `version: 1`을 `2`로 바꾸며 제거된 package instruction과 native 실행 receipt의 `instruction:*` field를 삭제해요. 원본 schema 23 volume은 수정하거나 삭제하지 않아요. 변환된 DB를 schema 24 후보 image로 열어 schema signature, 열 호환성, health를 확인한 뒤에만 전환하며 실패 시 이전 image와 원본 volume으로 돌아가요. 이 모드는 23 이외의 DB나 이미 변환된 24 DB를 거부해요.
+`--migrate-schema-23-to-24`는 이 경계에만 쓰는 명시적 일회성 모드예요. 실행 중인 schema가 정확히 23이고 무결성 검사와 활성 작업 검사를 통과해야 해요. 중지 후 전체 데이터 디렉터리를 비공개 복구본과 새 Docker volume에 각각 복사하고, 새 volume에서만 프로세스 수명 mutex인 `<database>.owner.sqlite*`를 비운 뒤 volume root를 runtime 사용자 소유로 맞춰 mutex를 재생성할 수 있게 해요. 이어서 Risu package `version: 1`을 `2`로 바꾸며 제거된 package instruction과 native 실행 receipt의 `instruction:*` field를 삭제해요. 원본 schema 23 volume은 수정하거나 삭제하지 않아요. 변환된 DB를 schema 24 후보 image로 열어 schema signature, 열 호환성, health를 확인한 뒤에만 전환하며 실패 시 이전 image와 원본 volume으로 돌아가요. 이 모드는 23 이외의 DB나 이미 변환된 24 DB를 거부해요.
 
 ## 서버 안전장치와 결과 해석
 
