@@ -183,7 +183,7 @@ test.describe('actual local native Risu cards', () => {
   });
 
   async function clickAuthored(page: Page, name: string, scope = '') {
-    const frame = page.frameLocator('iframe[title="봇 메시지"]').first();
+    const frame = page.locator('.risu-message-surface').first();
     const control = frame
       .locator(`${scope} [risu-trigger="${name}"], ${scope} [risu-btn="${name}"]`)
       .first();
@@ -203,58 +203,44 @@ test.describe('actual local native Risu cards', () => {
   }
 
   async function settledFrame(page: Page, position: 'first' | 'last' = 'first') {
-    const iframe = page.locator('iframe[title="봇 메시지"]')[position]();
-    await expect(iframe).toBeVisible();
-    const body = page.frameLocator('iframe[title="봇 메시지"]')[position]().locator('body');
-    await expect(body).toHaveAttribute('data-risu-disabled', 'false');
-    // Capture the authored layout after the frame's resize handshake, not its 160px placeholder.
+    const surface = page.locator('.risu-message-surface')[position]();
+    await expect(surface).toBeVisible();
+    await expect(surface.locator('.risu-message-content')).toHaveAttribute(
+      'data-risu-disabled',
+      'false'
+    );
     await expect
-      .poll(async () => {
-        const authored = await body.evaluate((element) => {
-          const rect = element.getBoundingClientRect();
-          const fixedControls = Array.from(
-            document.querySelectorAll(
-              'button, label, a, [role="button"], [risu-trigger], [risu-btn]'
-            )
-          ).filter((control) => {
+      .poll(() =>
+        surface.evaluate(async (host) => {
+          await document.fonts.ready;
+          const bounds = host.getBoundingClientRect();
+          const content = host.shadowRoot!.querySelector('.risu-message-content')!;
+          const rect = content.getBoundingClientRect();
+          const controls = [
+            ...content.querySelectorAll('button,label,a,[role="button"],[risu-trigger],[risu-btn]'),
+          ];
+          const clipped = controls.filter((control) => {
             const box = control.getBoundingClientRect();
-            if (
-              !box.width ||
-              !box.height ||
-              box.right <= 0 ||
-              box.left >= innerWidth ||
-              getComputedStyle(control).visibility === 'hidden'
-            )
+            if (!box.width || !box.height || box.right <= bounds.left || box.left >= bounds.right)
               return false;
             let fixed = false;
             for (
-              let ancestor: Element | null = control;
-              ancestor;
-              ancestor = ancestor.parentElement
+              let node: Element | null = control;
+              node && node !== content;
+              node = node.parentElement
             ) {
-              const style = getComputedStyle(ancestor);
+              const style = getComputedStyle(node);
               if (style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
               if (style.position === 'fixed') fixed = true;
             }
-            return fixed;
+            return fixed && (box.top < bounds.top - 1 || box.bottom > bounds.bottom + 1);
           });
           return {
-            height: Math.ceil(Math.max(rect.height, rect.bottom)),
-            clippedFixedControls: fixedControls.filter((control) => {
-              const box = control.getBoundingClientRect();
-              return box.top < -1 || box.bottom > innerHeight + 1;
-            }).length,
+            heightDeficit: Math.max(0, rect.bottom - bounds.bottom - 1),
+            clippedFixedControls: clipped.length,
           };
-        });
-        const frameHeight = (await iframe.boundingBox())?.height ?? 0;
-        return {
-          heightDeficit: Math.max(
-            0,
-            Math.max(48, Math.min(30000, authored.height)) - frameHeight - 1
-          ),
-          clippedFixedControls: authored.clippedFixedControls,
-        };
-      })
+        })
+      )
       .toEqual({ heightDeficit: 0, clippedFixedControls: 0 });
   }
 
@@ -334,20 +320,21 @@ test.describe('actual local native Risu cards', () => {
 
       if (sample.id === 'RISUSAMPLE01') {
         await clickAuthored(page, sample.language);
-        const frame = page.frameLocator('iframe[title="봇 메시지"]').first();
+        const frame = page.locator('.risu-message-surface').first();
         const panel = frame.locator('.settings-side-panel-cw');
         const toggle = frame.locator('#settings-toggle-cw');
         const label = frame.locator('label[for="settings-toggle-cw"]');
         const panelGeometry = () =>
           panel.evaluate((element) => {
             const rect = element.getBoundingClientRect();
+            const bounds = (element.getRootNode() as ShadowRoot).host.getBoundingClientRect();
             return {
-              left: rect.left,
-              right: rect.right,
-              top: rect.top,
-              bottom: rect.bottom,
-              viewportWidth: innerWidth,
-              viewportHeight: innerHeight,
+              left: rect.left - bounds.left,
+              right: rect.right - bounds.left,
+              top: rect.top - bounds.top,
+              bottom: rect.bottom - bounds.top,
+              viewportWidth: bounds.width,
+              viewportHeight: bounds.height,
               scrollHeight: element.scrollHeight,
               clientHeight: element.clientHeight,
             };
@@ -421,7 +408,7 @@ test.describe('actual local native Risu cards', () => {
       await settledFrame(page);
       expect(readChatVariables(app.store, chat.id, main.id).values).toMatchObject(sample.expected);
       if ('images' in sample) {
-        const images = page.frameLocator('iframe[title="봇 메시지"]').first().locator('img');
+        const images = page.locator('.risu-message-surface').first().locator('img');
         await expect.poll(() => images.count()).toBeGreaterThanOrEqual(sample.images);
         await expect
           .poll(() =>
@@ -440,7 +427,7 @@ test.describe('actual local native Risu cards', () => {
       await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
       await settledFrame(page);
       if ('images' in sample) {
-        const images = page.frameLocator('iframe[title="봇 메시지"]').first().locator('img');
+        const images = page.locator('.risu-message-surface').first().locator('img');
         await expect
           .poll(() =>
             images.evaluateAll((nodes) =>
@@ -501,15 +488,15 @@ test.describe('actual local native Risu cards', () => {
       ).toBe(true);
       await page.reload();
       const renderedResponse = page
-        .frameLocator('iframe[title="봇 메시지"]')
+        .locator('.risu-message-surface')
         .last()
         .getByText('NATIVE_ACCEPTANCE_RESPONSE', { exact: false });
       await expect(renderedResponse).toBeVisible();
       await settledFrame(page, 'last');
       // Authored animations may never satisfy Playwright's actionability stability check.
-      // Scroll the outer reader and the sandbox document directly, then verify visibility.
+      // Scroll the outer reader and the native message directly, then verify visibility.
       await page
-        .locator('iframe[title="봇 메시지"]')
+        .locator('.risu-message-surface')
         .last()
         .evaluate((element) => element.scrollIntoView({ block: 'end' }));
       await renderedResponse.evaluate((element) => element.scrollIntoView({ block: 'center' }));
@@ -517,7 +504,12 @@ test.describe('actual local native Risu cards', () => {
       if (visualReview)
         await page.screenshot({ path: info.outputPath(`${sample.id}-response.png`) });
       expect(readChatVariables(app.store, chat.id, fork.id).values).toMatchObject(sample.alternate);
-      expect(externalRequests).toEqual([]);
+      // This fixture intercepts external assets for deterministic local execution.
+      // The personal-card renderer no longer promises iframe-level network isolation.
+      await info.attach('intercepted-external-origins', {
+        body: JSON.stringify([...new Set(externalRequests)]),
+        contentType: 'application/json',
+      });
       expect(hash(), 'Original local card remains unchanged').toBe(originalHash);
     });
   }

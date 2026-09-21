@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Content } from '../core/product.js';
 import { api } from './api.js';
-import { RisuMessageFrame } from './RisuMessageFrame.js';
+import { RisuMessageSurface } from './RisuMessageSurface.js';
 
 export function RisuStartPreview({
   content,
@@ -42,7 +42,12 @@ export function RisuStartPreview({
   if (!preview) return <p role="status">시작 화면을 불러오는 중이에요…</p>;
   return (
     <>
-      <RisuMessageFrame html={preview.html} css={preview.css} disabled onAction={async () => {}} />
+      <RisuMessageSurface
+        html={preview.html}
+        css={preview.css}
+        disabled
+        onAction={async () => {}}
+      />
       {preview.issues.length > 0 && (
         <details>
           <summary>미리보기에서 확인이 필요한 항목 ({preview.issues.length})</summary>

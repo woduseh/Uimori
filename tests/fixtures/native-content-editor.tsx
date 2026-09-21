@@ -6,13 +6,12 @@ import { RisuNativeFields } from '../../web/RisuNativeFields.js';
 export function mount() {
   function Harness() {
     const [value, setValue] = useState<RisuContent>({
-      version: 1,
+      version: 2,
       id: 'native-editor-fixture',
       revision: 1,
       title: 'Synthetic',
       description: '',
       lore: [],
-      instructions: [],
       nativeRisu: {
         version: 1,
         sourceHash: '0'.repeat(64),

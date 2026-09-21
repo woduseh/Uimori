@@ -15,7 +15,7 @@ import {
   useServerEditDraft,
 } from './editor-workspace-context.js';
 import type { ContentDraftModel } from '../core/edit-drafts.js';
-import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
@@ -630,7 +630,6 @@ export function LibraryPanel({
   const detailCounts = detail?.package
     ? [
         ['로어', detail.package.lore.length],
-        ['지침', detail.package.instructions.length],
         ['이미지', detail.package.images?.length ?? 0],
       ]
         .filter(([, count]) => (count as number) > 0)
@@ -1237,15 +1236,25 @@ function ContentEditor({
   const [nativeDraftDirty, setNativeDraftDirty] = useState(false);
   const [portraitBusy, setPortraitBusy] = useState(false);
   const hasShownEditor = useRef(false);
-  const editableModel: ContentDraftModel = {
-    kind: value.kind,
-    title: value.title,
-    description: value.description,
-    text: value.text,
-    loading: value.loading,
-    relatedIds: value.relatedIds,
-    package: value.package,
-  };
+  const saveVersion = useRef(0);
+  useEffect(
+    () => () => {
+      saveVersion.current++;
+    },
+    []
+  );
+  const editableModel = useMemo<ContentDraftModel>(
+    () => ({
+      kind: value.kind,
+      title: value.title,
+      description: value.description,
+      text: value.text,
+      loading: value.loading,
+      relatedIds: value.relatedIds,
+      package: value.package,
+    }),
+    [value]
+  );
   const shared = useServerEditDraft({
     editorKey: selected ? `content:${selected.id}` : `new:content:${kind}`,
     kind: 'content',
@@ -1269,7 +1278,7 @@ function ContentEditor({
   });
   if (shared.state.ready) hasShownEditor.current = true;
   const editorUnavailable = busy || !shared.state.ready;
-  const dirty = JSON.stringify(value) !== baseline;
+  const dirty = useMemo(() => JSON.stringify(value) !== baseline, [value, baseline]);
   useEffect(() => {
     onDirtyChange(dirty || nativeDraftDirty || portraitBusy);
   }, [dirty, nativeDraftDirty, portraitBusy, onDirtyChange]);
@@ -1287,6 +1296,7 @@ function ContentEditor({
       return false;
     }
     setBusy(true);
+    const version = ++saveVersion.current;
     onError('');
     setSaved('');
     setError('');
@@ -1312,8 +1322,21 @@ function ContentEditor({
       setValue(item);
       setBaseline(JSON.stringify(item));
       setSaved(item.title + ' 저장됨 · 다음 실행부터 사용해요.');
-      if (!selected || copying) await onCreated?.(item);
-      await reload();
+      if (!selected || copying) {
+        try {
+          await onCreated?.(item);
+        } catch {
+          setSaved(item.title + ' 저장됨 · 서재의 분류 반영을 확인해 주세요.');
+        }
+      }
+      // The durable save is complete. A list refresh must not keep the editor locked
+      // or turn an acknowledged save into an apparent failed/retryable write.
+      void Promise.resolve()
+        .then(reload)
+        .catch(() => {
+          if (saveVersion.current === version)
+            setSaved(item.title + ' 저장됨 · 서재 목록을 갱신하지 못했어요.');
+        });
       return true;
     } catch (caught) {
       const message = (caught as Error).message;

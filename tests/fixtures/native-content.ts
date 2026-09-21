@@ -15,13 +15,12 @@ export function nativeContent(
   const source = { name: 'Synthetic Risu card', description: '', creator_notes: '', ...card };
   return projectNativeRisuPackage(
     {
-      version: 1,
+      version: 2,
       id: metadata.id ?? 'synthetic-risu',
       revision: metadata.revision ?? 1,
       title: String(source.name),
       description: '',
       lore: [],
-      instructions: [],
       ...metadata,
       nativeRisu: {
         version: 1,

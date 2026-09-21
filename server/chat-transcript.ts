@@ -10,7 +10,7 @@ import type { Content, ContentRef } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { CHAT_TITLE_MAX_CHARS } from '../core/content-limits.js';
 import { HttpError, fields, record, text } from './request-validation.js';
-import { successfulTranslation } from './source-editing.js';
+import { successfulTranslation } from './translation-artifacts.js';
 import type { Chat, Store } from './store.js';
 
 const IMPORT_EVENT = 'chat.transcript-imported';

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { ReaderDetail } from '../../core/types.js';
 import { SceneNavigator } from '../../web/SceneNavigator.js';
 import { createRoot } from 'react-dom/client';
-import { RisuMessageFrame } from '../../web/RisuMessageFrame.js';
+import { RisuMessageSurface } from '../../web/RisuMessageSurface.js';
 import { retainReaderNavigation } from '../../web/reader-navigation-scroll.js';
 
 export function mount() {
@@ -32,7 +32,7 @@ export function mount() {
             Previous source
           </div>
           <article id="target" data-source-id="target">
-            <RisuMessageFrame
+            <RisuMessageSurface
               html={
                 '<p>Native beginning</p><p id="end" style="margin-top:700px">Native end</p><button id="native-focus-button">Native focus</button>'
               }

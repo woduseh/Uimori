@@ -18,14 +18,13 @@ const snapshot = (): RunSnapshot => ({
     packageAttachments: [{ id: 'card', revision: 1, role: 'bot' }],
     packages: [
       {
-        version: 1,
+        version: 2,
         id: 'card',
         revision: 1,
         title: 'Card',
         description: '',
         nativeRisu: { version: 1, card: {}, assets: [], sourceHash: 'a'.repeat(64) },
         loreActivation: { mode: 'model' },
-        instructions: [],
         lore: [
           {
             id: 'harbor',

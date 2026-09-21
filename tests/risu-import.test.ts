@@ -268,7 +268,7 @@ test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
     expect(content.package!.nativeRisu!.card.post_history_instructions).toBe(globalNote);
     for (const key of ['personality', 'scenario', 'system_prompt'])
       expect(content.package!.nativeRisu!.card).not.toHaveProperty(key);
-    expect(content.package!.instructions).toEqual([]);
+    expect(content.package).not.toHaveProperty('instructions');
     expect(delivered).not.toContain('EXCLUDED_');
     expect(modelWorkspace(store)).toEqual(before);
     expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
@@ -337,7 +337,6 @@ test('module JSON registers a reusable module without a bot, chat or memory', as
     { id: pkg.id, revision: pkg.revision, role: 'module' },
     {
       chatId: 'synthetic',
-      target: 'main',
     }
   );
   expect(compiled.resources.find((item) => item.id.endsWith(':lore:lore-0'))?.text).toBe(

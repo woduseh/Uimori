@@ -29,6 +29,7 @@ describe('Risu content storage contract', () => {
     const { nativeRisu: _, ...missing } = pkg;
     expect(() => validateRisuContent(missing)).toThrow();
     for (const field of [
+      'instructions',
       'controls',
       'transforms',
       'bodyTemplate',
@@ -38,7 +39,7 @@ describe('Risu content storage contract', () => {
       'sourceSegments',
     ])
       expect(() => validateRisuContent({ ...pkg, [field]: [] })).toThrow();
-    expect(() => validateRisuContent({ ...pkg, version: 2 })).toThrow(
+    expect(() => validateRisuContent({ ...pkg, version: 1 })).toThrow(
       'PACKAGE_VERSION_UNSUPPORTED'
     );
     expect(() =>

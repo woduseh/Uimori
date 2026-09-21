@@ -1,3 +1,5 @@
+import { encodeDraftSaveResult } from '../core/edit-draft-save-wire.js';
+import { editDraftRevisions } from '../server/edit-draft-revisions.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -58,7 +60,10 @@ beforeEach(() => {
       else if (path === '/edit-drafts') result = service.create(input, authority);
       else {
         const [, , id, action] = path.split('/');
-        if (action === 'save') result = service.save(id, input, authority);
+        if (action === 'save') result = encodeDraftSaveResult(service.save(id, input, authority));
+        else if (action === 'undo')
+          result = encodeDraftSaveResult(service.undo(id, input, authority));
+        else if (action === 'revisions') result = editDraftRevisions(store.db, id);
         else if (action === 'saved-target') result = service.savedTarget(id);
         else if (action === 'rebase') {
           if (holdRebase) await holdRebase();
@@ -406,4 +411,79 @@ test('typing during automatic saved-target rebase requires comparison with the n
     newer.title
   );
   expect(store.product.get<Content>('content', content.id)).toEqual(newer);
+});
+
+test('unchanged saved content refreshes only revision metadata', async () => {
+  const content = store.product.content(fixtureBotInput('Probe target', 'Body')) as Content;
+  const editor = contentEditor(content);
+  await editor.open();
+  const requests = vi.spyOn(globalThis, 'fetch');
+  requests.mockClear();
+  await editor.refresh();
+  await editor.refresh();
+  expect(requests.mock.calls.map(([url]) => String(url))).toEqual([
+    `/api/edit-drafts/${editor.snapshot().draft!.id}/revisions`,
+    `/api/edit-drafts/${editor.snapshot().draft!.id}/revisions`,
+  ]);
+});
+
+test('a delayed revision probe cannot replace newer local typing', async () => {
+  const content = store.product.content(fixtureBotInput('Probe race', 'Body')) as Content;
+  const editor = contentEditor(content);
+  await editor.open();
+  updateContent(content, 'Changed on another device');
+  const entered = latch(),
+    release = latch();
+  const originalFetch = globalThis.fetch;
+  vi.stubGlobal('fetch', async (url: string, options?: RequestInit) => {
+    const response = await originalFetch(url, options);
+    if (String(url).endsWith('/revisions')) {
+      entered.resolve();
+      await release.promise;
+    }
+    return response;
+  });
+  const refreshing = editor.refresh();
+  await entered.promise;
+  title(editor, 'My local typing');
+  release.resolve();
+  await refreshing;
+  expect((editor.snapshot().local.model as ContentDraftModel).title).toBe('My local typing');
+  expect(editor.snapshot().draft!.baseRevision).toBe(content.revision);
+});
+
+test('copy uses the single save contract and replays a lost receipt without another item', async () => {
+  const editor = session();
+  await editor.open();
+  const original = structuredClone(editor.snapshot().local.model);
+  const copiedModel = nativeDraftTitle(original, 'Copied once');
+  failResponse = 'save';
+  await expect(editor.copy('content', copiedModel)).rejects.toThrow(/response lost/);
+  expect(store.product.all('content')).toHaveLength(1);
+  const requests = vi.spyOn(globalThis, 'fetch');
+  requests.mockClear();
+  const result = await editor.copy('content', copiedModel);
+  expect(store.product.all('content')).toHaveLength(1);
+  expect(result.draft.model).toEqual(result.draft.baseModel);
+  expect(result.draft.model).not.toBe(result.draft.baseModel);
+  expect((result.saved as Content).title).toBe('Copied once');
+  expect(editor.snapshot().local.model).toEqual(original);
+  expect(requests.mock.calls.map(([url]) => String(url))).toEqual([
+    `/api/edit-drafts/${result.draft.id}/save`,
+  ]);
+});
+
+test('undo decodes the single save contract before adopting editable and baseline models', async () => {
+  const content = store.product.content(fixtureBotInput('Before undo', 'Body')) as Content;
+  const editor = contentEditor(content);
+  await editor.open();
+  title(editor, 'Changed before undo');
+  const saved = await editor.save();
+  await editor.undo(saved.operationId);
+  const restored = editor.snapshot();
+  expect((restored.local.model as ContentDraftModel).title).toBe(content.title);
+  expect(restored.draft!.model).toEqual(restored.draft!.baseModel);
+  expect(restored.draft!.model).not.toBe(restored.draft!.baseModel);
+  expect(restored.dirty).toBe(false);
+  expect(store.product.get<Content>('content', content.id).revision).toBe(content.revision + 2);
 });

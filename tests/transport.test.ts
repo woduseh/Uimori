@@ -1,6 +1,5 @@
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { packageContext } from '../core/package-context.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
@@ -479,30 +478,11 @@ describe('server main runner through the actual loopback adapter', () => {
     expect(server.requests).toHaveLength(1);
   });
 
-  test('P01 P03 separates package translation instructions from main and keeps empty profiles free of synthetic facts', () => {
+  test('P01 P03 keeps an empty native profile free of synthetic facts', () => {
     const snapshot = routedSnapshot('http://127.0.0.1:49999/turn');
-    snapshot.resources = snapshot.resources.filter((item) => item.id !== 'glossary-1');
-    snapshot.profile!.packageAttachments = [
-      { id: 'translation-guidance', revision: 1, role: 'module' },
-    ];
-    snapshot.profile!.packages = [
-      {
-        version: 1,
-        id: 'translation-guidance',
-        revision: 1,
-        title: 'Translation guidance',
-        description: '',
-        lore: [],
-        nativeRisu: nativeContent({ name: 'Translation guidance' }).nativeRisu,
-        instructions: [
-          { id: 'terms', target: 'translation', text: 'AUXILIARY_ONLY_TRANSLATION_PROCEDURE' },
-        ],
-      },
-    ];
-    expect(packageContext(snapshot, 'translation')!.instructions).toMatchObject([
-      { text: 'AUXILIARY_ONLY_TRANSLATION_PROCEDURE', revision: 1 },
-    ]);
-    expect(packageContext(snapshot, 'main')!.instructions).toEqual([]);
+    snapshot.profile!.packages = [];
+    snapshot.profile!.packageAttachments = [];
+    snapshot.resources = [];
     expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('AUXILIARY_ONLY');
     expect(
       compileSnapshotPrompt(snapshot).promptCompilation!.messages[0].content[0].text

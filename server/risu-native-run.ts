@@ -174,7 +174,6 @@ export function validateNativeRisuExecution(snapshot: RunSnapshot): void {
         ? Object.keys(exampleFields(snapshot, pkg))
         : []),
       ...pkg.lore.map((item) => `lore:${item.id}`),
-      ...pkg.instructions.map((item) => `instruction:${item.id}`),
     ].sort();
     if (
       !fields ||
@@ -254,9 +253,6 @@ export async function prepareNativeRisuRun(
       body: projected.body ?? '',
       ...(attachment.role === 'bot' ? exampleFields(snapshot, projected) : {}),
       ...Object.fromEntries(projected.lore.map((entry) => [`lore:${entry.id}`, entry.text])),
-      ...Object.fromEntries(
-        projected.instructions.map((entry) => [`instruction:${entry.id}`, entry.text])
-      ),
     };
     fieldPlan.push({ key: nativeRisuFieldKey(attachment), fields: authored });
   }

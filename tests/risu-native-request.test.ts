@@ -21,14 +21,13 @@ async function prepared(code?: string, providerPrefill = false) {
     promptSettings: { assistantPrefill: 'Continue: ' },
   }).program;
   const pkg: RisuContent = {
-    version: 1,
+    version: 2,
     id: 'bot',
     revision: 1,
     title: 'Bot',
     description: '',
     body: 'Bot',
     lore: [],
-    instructions: [],
     nativeRisu: {
       version: 1,
       sourceHash: 'a'.repeat(64),

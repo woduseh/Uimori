@@ -29,14 +29,13 @@ const requests = [
 ];
 
 const packageOf = (id, title, body) => ({
-  version: 1,
+  version: 2,
   id,
   revision: 1,
   title,
   description: '합성 갤러리 자료',
   body,
   lore: [],
-  instructions: [],
   controls: [],
   transforms: [],
 });

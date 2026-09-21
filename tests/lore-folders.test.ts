@@ -1,6 +1,6 @@
 import { nativeContent } from './fixtures/native-content.js';
 import { describe, expect, it } from 'vitest';
-import { CONTENT_TARGETS, validateRisuContent, type RisuContent } from '../core/risu-content.js';
+import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 import { compileContentAttachment } from '../core/package-runtime.js';
 
 function fixture(): RisuContent {
@@ -27,7 +27,6 @@ function fixture(): RisuContent {
         loading: 'discoverable',
       },
     ],
-    instructions: [{ id: 'main', target: 'main', text: 'Write a scene.' }],
   };
 }
 
@@ -100,23 +99,18 @@ describe('package lore organization', () => {
     expect(() => validateRisuContent(pkg)).toThrow('PACKAGE_LIST_LIMIT');
   });
 
-  it('keeps resources, instructions, order and loading identical across folder moves and renames for every target', () => {
+  it('keeps resources, order and loading identical across folder moves and renames', () => {
     const bare = fixture(),
       organized = structuredClone(bare);
     organized.loreFolders = [{ id: 'private-folder-id', name: 'AUTHORING_ONLY_FOLDER' }];
     organized.lore[0].folderId = 'private-folder-id';
-    for (const target of CONTENT_TARGETS) {
-      const ref = { id: bare.id, revision: bare.revision, role: 'module' as const };
-      const context = { chatId: 'chat', target };
-      const baseline = compileContentAttachment(bare, ref, context);
-      expect(compileContentAttachment(organized, ref, context)).toEqual(baseline);
-      organized.loreFolders[0].name = 'RENAMED_AUTHORING_FOLDER';
-      delete organized.lore[0].folderId;
-      organized.lore[1].folderId = 'private-folder-id';
-      expect(compileContentAttachment(organized, ref, context)).toEqual(baseline);
-      expect(compileContentAttachment(organized, ref, { ...context, resourcesOnly: true })).toEqual(
-        compileContentAttachment(bare, ref, { ...context, resourcesOnly: true })
-      );
-    }
+    const ref = { id: bare.id, revision: bare.revision, role: 'module' as const };
+    const context = { chatId: 'chat' };
+    const baseline = compileContentAttachment(bare, ref, context);
+    expect(compileContentAttachment(organized, ref, context)).toEqual(baseline);
+    organized.loreFolders[0].name = 'RENAMED_AUTHORING_FOLDER';
+    delete organized.lore[0].folderId;
+    organized.lore[1].folderId = 'private-folder-id';
+    expect(compileContentAttachment(organized, ref, context)).toEqual(baseline);
   });
 });

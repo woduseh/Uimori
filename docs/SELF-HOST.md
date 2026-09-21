@@ -90,7 +90,7 @@ docker compose --env-file .env.self-host exec proxy nginx -t
 docker compose --env-file .env.self-host restart proxy
 ```
 
-데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 데이터 전환과 복구에서는 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 빈 DB와 현재 schema 23 DB만 열어요. 구형 DB를 올리는 migration이나 구형 archive 복원은 제공하지 않아요. 기존 volume은 보관하고, 이 구조로 새로 시작할 때는 별도의 빈 volume을 지정해요. 현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 운영자용 update controller는 아래 [한 번의 업데이트](#한-번의-업데이트)에 있어요. 앱 안의 Update 버튼과 일반 사용자를 위한 자동 복구 흐름은 아직 베타 준비 중이에요.
+데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 데이터 전환과 복구에서는 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 빈 DB와 현재 schema 24 DB만 열어요. 구형 DB를 올리는 migration이나 구형 archive 복원은 제공하지 않아요. 기존 volume은 보관하고, 이 구조로 새로 시작할 때는 별도의 빈 volume을 지정해요. 현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 운영자용 update controller는 아래 [한 번의 업데이트](#한-번의-업데이트)에 있어요. 앱 안의 Update 버튼과 일반 사용자를 위한 자동 복구 흐름은 아직 베타 준비 중이에요.
 
 프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
 

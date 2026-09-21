@@ -19,7 +19,15 @@ export function resolvePackageModules(
 ): { attachments: ContentAttachment[]; packages: RisuContent[] } {
   const { attachments, packages } = resolvePackageGraph(
     {
-      latestRevision: (id) => product.get<Content>('content', id).revision,
+      latestRevision: (id) => {
+        const row = product.db
+          .prepare(
+            "SELECT revision FROM versions WHERE kind='content' AND id=? ORDER BY revision DESC LIMIT 1"
+          )
+          .get(id) as { revision: number } | undefined;
+        if (!row) throw new HttpError(404, 'content revision not found');
+        return row.revision;
+      },
       read: (ref) => {
         const pkg = product.get<Content>('content', ref.id, ref.revision).package;
         if (!pkg) throw new HttpError(400, 'Required module is not a package');

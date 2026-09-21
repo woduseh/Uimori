@@ -48,14 +48,13 @@ function fixture(
     nativeRisuPreset: { version: 1, preset: { promptTemplate: blocks, ...preset } },
   });
   const pkg: RisuContent = {
-    version: 1,
+    version: 2,
     id: 'bot',
     revision: 1,
     title: 'Bot',
     description: '',
     body: 'Description',
     lore: [],
-    instructions: [],
     nativeRisu: {
       version: 1,
       sourceHash: 'a'.repeat(64),

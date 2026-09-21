@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { RisuMessageFrame } from '../../web/RisuMessageFrame.js';
+import { RisuMessageSurface } from '../../web/RisuMessageSurface.js';
 
 export function mount(authoredHtml?: string) {
   function Harness() {
@@ -10,7 +10,7 @@ export function mount(authoredHtml?: string) {
       <>
         <output>{calls}</output>
         <button onClick={() => setRevision((value) => value + 1)}>Render new revision</button>
-        <RisuMessageFrame
+        <RisuMessageSurface
           revisionKey={String(revision)}
           html={
             authoredHtml ??

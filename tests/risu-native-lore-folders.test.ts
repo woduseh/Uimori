@@ -47,12 +47,11 @@ test.each(['card', 'module'] as const)(
     const before = structuredClone(native);
     const result = projectNativeRisuPackage(
       {
-        version: 1,
+        version: 2,
         id: 'folder-test',
         revision: 1,
         title: 'Folder test',
         description: '',
-        instructions: [],
         lore: [],
         nativeRisu: native,
       },

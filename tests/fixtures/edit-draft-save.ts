@@ -1,3 +1,4 @@
+import { decodeDraftSaveResult, type DraftSaveWire } from '../../core/edit-draft-save-wire.js';
 import { expect, type Page, type Request } from '@playwright/test';
 import type { DraftSaveResult, EditDraftKind } from '../../core/edit-drafts.js';
 import type { Content } from '../../core/product.js';
@@ -16,7 +17,7 @@ export async function waitForEditDraftSave(
 ): Promise<DraftSaveResult> {
   const response = await page.waitForResponse((value) => isEditDraftSaveRequest(value.request()));
   expect(response.ok(), await response.text()).toBe(true);
-  const result = (await response.json()) as DraftSaveResult;
+  const result = decodeDraftSaveResult((await response.json()) as DraftSaveWire);
   expect(result.status).toBe('saved');
   expect(result.draft.kind).toBe(kind);
   expect(result.draft.targetId).toBe('id' in result.saved ? result.saved.id : 'current');

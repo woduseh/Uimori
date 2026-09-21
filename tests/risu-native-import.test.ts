@@ -287,58 +287,20 @@ test('native edits reproject canonical source, preserve unknown fields and retai
   expect(() => store.product.content(request, id)).toThrow(/Revision conflict/);
 });
 
-test('new reservations reproject old library fields without rewriting their stored source', () => {
+test('content saves reject retired Uimori instructions without modifying the current record', () => {
   const store = database();
   const saved = createNativeContent(store);
-  const historical = structuredClone(saved);
-  historical.package!.nativeRisu.card.personality = 'RETIRED_PERSONALITY';
-  historical.package!.nativeRisu.card.scenario = 'RETIRED_SCENARIO';
-  historical.package!.nativeRisu.card.system_prompt = 'RETIRED_SYSTEM';
-  historical.package!.body = `${historical.package!.body}\nRETIRED_PERSONALITY\nRETIRED_SCENARIO`;
-  historical.package!.instructions = [
-    { id: 'card-system', target: 'main', text: 'RETIRED_SYSTEM' },
-  ];
-  historical.text = historical.package!.body!;
-  store.db
-    .prepare("UPDATE versions SET body=? WHERE kind='content' AND id=? AND revision=?")
-    .run(JSON.stringify(historical), historical.id, historical.revision);
-  const chat = store.createChat('Old library new request', undefined, { botId: saved.id });
-  const profile = store.product.snapshot(chat.id);
-  const active = profile.packages!.find((item) => item.id === saved.id)!;
-  expect(active.body).toBe(saved.package!.body);
-  expect(active.instructions).toEqual([]);
-  expect(JSON.stringify(active)).not.toContain('RETIRED_');
-  expect(store.product.get<Content>('content', saved.id)).toEqual(historical);
-  const run = store.createRun(
-    chat.id,
-    {
-      request: 'Continue',
-      expectedRevision: null,
-      expectedSettingsRevision: chat.settingsRevision,
-      idempotencyKey: 'supported-fields',
+  const { id, revision, ...body } = structuredClone(saved);
+  const request = {
+    ...body,
+    expectedRevision: revision,
+    package: {
+      ...body.package,
+      instructions: [{ id: 'card-system', target: 'main', text: 'RETIRED_SYSTEM' }],
     },
-    () => ({
-      chatId: chat.id,
-      parentRevision: null,
-      settingsRevision: chat.settingsRevision,
-      settings: chat.settings,
-      request: 'Continue',
-      history: [],
-      profile,
-      resources: store.product.resources(chat.id, profile),
-    })
-  ).run;
-  store.startRun(run.id);
-  store.completeRun(
-    run.id,
-    'Authored fixture response.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    chat.settings
-  );
-  const restored = database();
-  expect(() => restored.product.import(store.product.export())).not.toThrow();
-  expect(restored.product.get<Content>('content', saved.id)).toEqual(historical);
-  expect(restored.run(run.id).snapshot.profile!.packages).toEqual(profile.packages);
+  };
+  expect(() => store.product.content(request, id)).toThrow('PACKAGE_INVALID_FIELDS');
+  expect(store.product.get<Content>('content', id)).toEqual(saved);
 });
 
 test('native draft supports large preserved documents and incomplete raw buffers without saving them', () => {

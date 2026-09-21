@@ -1,0 +1,56 @@
+@import "./reading-prose.css";
+
+@layer uimori-message-base {
+  :host {
+    display: block;
+    min-width: 0;
+    contain: layout;
+    isolation: isolate;
+  }
+  .risu-message-content {
+    display: flow-root;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--text, #24242b);
+    font:
+      var(--reading, 18px) / var(--reading-line-height, 1.9)
+      var(--reading-font-family, system-ui, sans-serif);
+  }
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  img,
+  video {
+    max-width: 100%;
+  }
+  button {
+    font: inherit;
+    cursor: pointer;
+  }
+  .risu-background {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-size: cover;
+    pointer-events: none;
+  }
+}
+[data-risu-disabled="true"] [risu-trigger],
+[data-risu-disabled="true"] [risu-btn] {
+  pointer-events: none !important;
+}
+/* Only app-marked prose wins over author-wide p/heading typography rules. */
+[data-uimori-prose] {
+  font-family: var(--reading-font-family, system-ui, sans-serif) !important;
+  line-height: var(--reading-line-height, 1.9) !important;
+}
+p[data-uimori-prose],
+li[data-uimori-prose] {
+  font-size: var(--reading, 18px) !important;
+}
+[data-uimori-spacing="custom"] p[data-uimori-prose],
+[data-uimori-spacing="custom"] li[data-uimori-prose] {
+  margin-block: 0 var(--reading-paragraph-gap) !important;
+}

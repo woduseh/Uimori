@@ -1,148 +1,276 @@
-import { afterEach, expect, test, vi } from 'vitest';
+import assert from 'node:assert/strict';
+import { test } from 'vitest';
 import {
-  readProviderHttpDiagnostic,
   PROVIDER_ERROR_BODY_LIMIT,
+  PROVIDER_ERROR_MESSAGE_LIMIT,
+  readProviderHttpDiagnostic,
 } from '../core/provider-http-error.js';
-import {
-  executeProvider,
-  type ProviderConnection,
-  type ProviderRequest,
-} from '../core/transport.js';
 
-afterEach(() => vi.unstubAllGlobals());
-const secret = 'synthetic-secret-value';
-const body = {
-  error: {
-    code: 'unsupported_value',
-    status: 'INVALID_ARGUMENT',
-    param: 'messages[2].role',
-    message: `Echoed prompt ${secret}`,
-    authorization: secret,
-    details: [
-      { fieldViolations: [{ field: 'generationConfig.responseSchema', description: secret }] },
-    ],
-  },
-};
-test('only explicit diagnostic fields survive, never provider messages or unknown fields', async () => {
-  const response = new Response(JSON.stringify(body), {
-    status: 400,
-    headers: { 'x-request-id': 'req_123', authorization: secret },
-  });
-  expect(await readProviderHttpDiagnostic(response, new AbortController().signal, secret)).toEqual({
+const signal = () => new AbortController().signal;
+const errorResponse = (error: unknown, status = 400, headers?: HeadersInit) =>
+  new Response(JSON.stringify({ error }), { status, headers });
+
+test('keeps useful owner-facing explanations and removes the request credential', async () => {
+  const key = 'sk-private-test-key';
+  const result = await readProviderHttpDiagnostic(
+    errorResponse(
+      {
+        code: 'unsupported_value',
+        status: 'INVALID_ARGUMENT',
+        param: 'reasoning.effort',
+        message: `reasoning.effort must be low, medium or high; got xhigh. Credential ${key}`,
+        authorization: key,
+        debug: { request: 'not part of the diagnostic' },
+      },
+      400,
+      { 'x-request-id': 'request_123' }
+    ),
+    signal(),
+    key
+  );
+  assert.deepEqual(result, {
     httpStatus: 400,
+    bodyState: 'parsed',
+    requestId: 'request_123',
     providerCode: 'unsupported_value',
     providerStatus: 'INVALID_ARGUMENT',
-    requestId: 'req_123',
-    fields: ['messages[2].role', 'generationConfig.responseSchema'],
-    bodyState: 'parsed',
+    fields: ['reasoning.effort'],
+    message: 'reasoning.effort must be low, medium or high; got xhigh. Credential [REDACTED]',
   });
-  const hostile = new Response(
-    JSON.stringify({
-      error: {
-        code: secret,
-        status: secret,
-        param: secret,
-        type: 'arbitrary_token',
-        message: secret,
-      },
+  assert.ok(!JSON.stringify(result).includes(key));
+  assert.ok(!JSON.stringify(result).includes('not part of the diagnostic'));
+});
+
+test('keeps bounded unknown provider codes, statuses and explicit parameter names', async () => {
+  const result = await readProviderHttpDiagnostic(
+    errorResponse({
+      code: 'custom_backend_error',
+      status: 'CUSTOM_REJECTION',
+      param: 'sampling.min_p',
+      message: 'min_p is not supported by this model.',
     }),
-    { status: 400, headers: { 'x-request-id': secret } }
+    signal()
   );
-  expect(await readProviderHttpDiagnostic(hostile, new AbortController().signal, secret)).toEqual({
-    httpStatus: 400,
-    bodyState: 'parsed',
-  });
+  assert.equal(result.providerCode, 'custom_backend_error');
+  assert.equal(result.providerStatus, 'CUSTOM_REJECTION');
+  assert.deepEqual(result.fields, ['sampling.min_p']);
+  assert.equal(result.message, 'min_p is not supported by this model.');
 });
 
-test.each(['not JSON', '[{}]', '{"error":null}'])(
-  'invalid bodies preserve status without excerpts: %s',
-  async (value) => {
-    expect(
-      await readProviderHttpDiagnostic(
-        new Response(value, { status: 502 }),
-        new AbortController().signal
-      )
-    ).toEqual({ httpStatus: 502, bodyState: 'invalid' });
-  }
-);
-
-test('byte cap cancels body and never extracts from an oversized prefix', async () => {
-  const cancel = vi.fn();
-  const response = new Response(
-    new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(JSON.stringify(body)));
-        controller.enqueue(new Uint8Array(PROVIDER_ERROR_BODY_LIMIT));
+test('does not expose credentials through metadata or request IDs', async () => {
+  const key = 'private-test-key';
+  const result = await readProviderHttpDiagnostic(
+    errorResponse(
+      {
+        code: key,
+        status: key,
+        param: key,
+        message: `Key: ${key}`,
       },
-      cancel,
+      400,
+      { 'x-request-id': key }
+    ),
+    signal(),
+    key
+  );
+  assert.equal(result.providerCode, undefined);
+  assert.equal(result.providerStatus, undefined);
+  assert.equal(result.requestId, undefined);
+  assert.equal(result.fields, undefined);
+  assert.equal(result.message, 'Key: [REDACTED]');
+});
+
+test('infers known fields from prose without interpreting quoted values as field paths', async () => {
+  const result = await readProviderHttpDiagnostic(
+    errorResponse({
+      message: "'reasoning.effort' must be one of 'low', 'medium', 'high'; got 'xhigh'.",
     }),
-    { status: 400 }
+    signal()
   );
-  expect(await readProviderHttpDiagnostic(response, new AbortController().signal)).toEqual({
-    httpStatus: 400,
-    bodyState: 'too-large',
-  });
-  expect(cancel).toHaveBeenCalledOnce();
+  assert.deepEqual(result.fields, ['reasoning.effort']);
+  assert.ok(result.message?.includes("'low', 'medium', 'high'"));
 });
 
-const variants: ProviderConnection[] = [
-  {
-    id: 'compatible',
-    protocol: 'openai-chat-v1',
-    endpoint: 'https://synthetic.invalid/v1',
-    credentialEnv: 'SYNTHETIC_KEY',
-  },
-  {
-    id: 'vertex',
-    protocol: 'vertex-gemini-v1',
-    endpoint:
-      'https://aiplatform.googleapis.com/v1/projects/synthetic/locations/global/publishers/google/models',
-    credentialEnv: 'SYNTHETIC_KEY',
-  },
-];
-const request: ProviderRequest = {
-  role: 'translation',
-  modelId: 'gemini-3.8-flash',
-  stable: { contract: 'Synthetic translation', tools: [] },
-  input: { task: 'Translate synthetic text', controls: {} },
-};
-test.each(variants)('$protocol retains safe HTTP diagnostics without retry', async (connection) => {
-  const fetch = vi.fn(async () => new Response(JSON.stringify(body), { status: 400 }));
-  vi.stubGlobal('fetch', fetch);
-  const result = await executeProvider(connection, request, {
-    signal: new AbortController().signal,
-    resolveCredential: () => secret,
-    approvedOrigins: ['https://synthetic.invalid'],
-  });
-  expect(result).toMatchObject({
-    status: 'error',
-    error: { code: 'HTTP_400', diagnostic: { httpStatus: 400, providerCode: 'unsupported_value' } },
-  });
-  expect(JSON.stringify(result)).not.toContain(secret);
-  expect(fetch).toHaveBeenCalledOnce();
+test('collects explicit nested field violations, preserves indices and removes duplicates', async () => {
+  const result = await readProviderHttpDiagnostic(
+    errorResponse({
+      param: 'messages[2].role',
+      details: [
+        {
+          fieldViolations: [
+            { field: 'messages[2].role', description: 'not copied' },
+            { field: 'generationConfig.custom_option2' },
+          ],
+        },
+      ],
+    }),
+    signal()
+  );
+  assert.deepEqual(result.fields, ['messages[2].role', 'generationConfig.custom_option2']);
+  assert.ok(!JSON.stringify(result).includes('not copied'));
 });
 
-test.each(
-  variants.flatMap((connection) => ['cancel', 'timeout'].map((mode) => ({ connection, mode })))
-)('$connection.protocol pending HTTP error body honors $mode', async ({ connection, mode }) => {
-  const cancel = vi.fn();
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => new Response(new ReadableStream<Uint8Array>({ cancel }), { status: 400 }))
+test('limits field paths and rejects malformed metadata', async () => {
+  const result = await readProviderHttpDiagnostic(
+    errorResponse({
+      code: '<html>bad</html>',
+      type: 'compatible_error',
+      status: 'a'.repeat(129),
+      param: 'not a field',
+      details: [
+        { fieldViolations: Array.from({ length: 12 }, (_, n) => ({ field: `custom${n}` })) },
+      ],
+    }),
+    signal()
   );
+  assert.equal(result.providerCode, 'compatible_error');
+  assert.equal(result.providerStatus, undefined);
+  assert.equal(result.fields?.length, 8);
+});
+
+test('preserves numeric HTTP-like error codes', async () => {
+  const result = await readProviderHttpDiagnostic(errorResponse({ code: 503 }, 503), signal());
+  assert.equal(result.providerCode, 503);
+});
+
+test('non-JSON proxy errors remain available as plain text, not HTML', async () => {
+  const result = await readProviderHttpDiagnostic(
+    new Response('<h1>upstream connection refused</h1>', { status: 502 }),
+    signal()
+  );
+  assert.equal(result.bodyState, 'invalid');
+  assert.equal(result.message, '<h1>upstream connection refused</h1>');
+});
+
+test('accepts a bounded top-level message without copying arbitrary JSON', async () => {
+  const result = await readProviderHttpDiagnostic(
+    new Response(JSON.stringify({ message: 'Proxy unavailable', debug: 'private request' }), {
+      status: 502,
+    }),
+    signal()
+  );
+  assert.equal(result.message, 'Proxy unavailable');
+  assert.ok(!JSON.stringify(result).includes('private request'));
+});
+
+for (const body of ['[{}]', '{"error":null}', '{}']) {
+  test(`does not turn a JSON document without an error message into freeform detail: ${body}`, async () => {
+    assert.deepEqual(
+      await readProviderHttpDiagnostic(new Response(body, { status: 400 }), signal()),
+      {
+        httpStatus: 400,
+        bodyState: 'invalid',
+      }
+    );
+  });
+}
+
+test('keeps empty responses empty', async () => {
+  assert.deepEqual(
+    await readProviderHttpDiagnostic(new Response(null, { status: 503 }), signal()),
+    {
+      httpStatus: 503,
+      bodyState: 'empty',
+    }
+  );
+});
+
+test('rejects invalid UTF-8 without manufacturing replacement text', async () => {
+  const result = await readProviderHttpDiagnostic(
+    new Response(new Uint8Array([0xff, 0xfe]), { status: 400 }),
+    signal()
+  );
+  assert.deepEqual(result, { httpStatus: 400, bodyState: 'invalid' });
+});
+
+test('removes credentials before clipping the displayed message', async () => {
+  const key = 'secret-that-crosses-the-display-cut';
+  const result = await readProviderHttpDiagnostic(
+    errorResponse({
+      message: 'a'.repeat(PROVIDER_ERROR_MESSAGE_LIMIT - 3) + key + ' trailing text',
+    }),
+    signal(),
+    key
+  );
+  assert.equal(result.message?.length, PROVIDER_ERROR_MESSAGE_LIMIT);
+  assert.ok(result.message?.endsWith('…'));
+  assert.ok(!result.message?.includes('secret'));
+  assert.ok(!result.message?.includes(key));
+});
+
+test('masks authorization-shaped values and strips control characters', async () => {
+  const result = await readProviderHttpDiagnostic(
+    errorResponse({
+      message: 'Authorization: Bearer another-secret\ninvalid\u0000 option',
+    }),
+    signal()
+  );
+  assert.equal(result.message, 'Authorization: Bearer [REDACTED]\ninvalid option');
+});
+
+test('does not return any partial body when the byte limit is exceeded', async () => {
+  let cancelled = 0;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(PROVIDER_ERROR_BODY_LIMIT + 1));
+    },
+    cancel() {
+      cancelled++;
+    },
+  });
+  const result = await readProviderHttpDiagnostic(new Response(body, { status: 400 }), signal());
+  assert.deepEqual(result, { httpStatus: 400, bodyState: 'too-large' });
+  assert.equal(cancelled, 1);
+});
+
+test('the byte limit includes all chunks, not only a content-length header', async () => {
+  const bytes = new TextEncoder().encode(JSON.stringify({ error: { message: 'too big' } }));
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.enqueue(new Uint8Array(PROVIDER_ERROR_BODY_LIMIT));
+    },
+  });
+  const result = await readProviderHttpDiagnostic(
+    new Response(body, { status: 400, headers: { 'content-length': '1' } }),
+    signal()
+  );
+  assert.equal(result.bodyState, 'too-large');
+  assert.equal(result.message, undefined);
+});
+
+test('honors an already aborted signal', async () => {
   const controller = new AbortController();
-  const pending = executeProvider(connection, request, {
-    signal: controller.signal,
-    timeoutMs: mode === 'timeout' ? 20 : 1000,
-    resolveCredential: () => secret,
-    approvedOrigins: ['https://synthetic.invalid'],
+  const reason = new Error('cancel test');
+  controller.abort(reason);
+  await assert.rejects(
+    readProviderHttpDiagnostic(errorResponse({ message: 'ignored' }), controller.signal),
+    (error) => error === reason
+  );
+});
+
+test('cancellation terminates a pending body read without waiting for the producer', async () => {
+  const controller = new AbortController();
+  const reason = new Error('cancel pending');
+  const body = new ReadableStream<Uint8Array>({
+    cancel() {
+      return new Promise<void>(() => {});
+    },
   });
-  if (mode === 'cancel') setTimeout(() => controller.abort(), 20);
-  const result = await pending;
-  expect(result).toMatchObject({
-    status: mode === 'cancel' ? 'cancelled' : 'error',
-    error: { code: mode === 'cancel' ? 'CANCELLED' : 'TIMEOUT' },
+  const pending = readProviderHttpDiagnostic(
+    new Response(body, { status: 400 }),
+    controller.signal
+  );
+  controller.abort(reason);
+  await assert.rejects(pending, (error) => error === reason);
+});
+
+test('body read errors are unavailable rather than successful diagnostics', async () => {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.error(new Error('stream failed'));
+    },
   });
-  expect(cancel).toHaveBeenCalledOnce();
-  expect(fetch).toHaveBeenCalledOnce();
+  const result = await readProviderHttpDiagnostic(new Response(body, { status: 500 }), signal());
+  assert.deepEqual(result, { httpStatus: 500, bodyState: 'unavailable' });
 });

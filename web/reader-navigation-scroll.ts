@@ -1,6 +1,3 @@
-/** Sent by a token-checked native frame when the user begins interacting inside it. */
-export const READER_INTERACTION_EVENT = 'uimori-reader-interaction';
-
 export type ReaderNavigationPosition =
   | { kind: 'end' }
   | { kind: 'source'; element: HTMLElement; offset?: number };
@@ -31,7 +28,6 @@ export function retainReaderNavigation(
     resize.disconnect();
     mutations.disconnect();
     node.removeEventListener('scroll', onScroll);
-    node.removeEventListener(READER_INTERACTION_EVENT, stop);
     document.removeEventListener('wheel', stop, true);
     document.removeEventListener('touchstart', stop, true);
     document.removeEventListener('pointerdown', stop, true);
@@ -82,7 +78,6 @@ export function retainReaderNavigation(
   const mutations = new MutationObserver(observe);
   mutations.observe(node, { childList: true, subtree: true });
   node.addEventListener('scroll', onScroll, { passive: true });
-  node.addEventListener(READER_INTERACTION_EVENT, stop);
   document.addEventListener('wheel', stop, { capture: true, passive: true });
   document.addEventListener('touchstart', stop, { capture: true, passive: true });
   document.addEventListener('pointerdown', stop, { capture: true, passive: true });

@@ -1,5 +1,5 @@
 import { HttpError } from './request-validation.js';
-import { validateTranslationArtifact } from './source-editing.js';
+import { validateTranslationArtifact } from './translation-artifacts.js';
 import type { Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
 import { illustrationsForSources } from './illustrations.js';
@@ -263,7 +263,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         if (job.kind !== 'translation') return true;
         if (job.status === 'completed') {
           try {
-            validateTranslationArtifact(store, job, source);
+            validateTranslationArtifact(job, source);
           } catch {
             return false;
           }

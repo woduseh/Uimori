@@ -1,3 +1,4 @@
+import { decodeDraftSaveResult, type DraftSaveWire } from '../core/edit-draft-save-wire.js';
 import {
   createContext,
   useCallback,
@@ -17,6 +18,7 @@ import type {
   DraftPatchResult,
   DraftSavedOperation,
   DraftSaveResult,
+  DraftRevisions,
   EditDraft,
   EditDraftKind,
   EditDraftModel,
@@ -254,9 +256,10 @@ export class EditorDraftSession {
     return this.opening;
   }
   private update(local: Buffer) {
-    if (!this.state.ready || this.stopped || serialize(local) === serialize(this.state.local))
-      return;
-    const dirty = serialize(local) !== this.acknowledged;
+    if (!this.state.ready || this.stopped) return;
+    const signature = serialize(local);
+    if (signature === serialize(this.state.local)) return;
+    const dirty = signature !== this.acknowledged;
     this.emit({ local, dirty });
     this.cache();
     clearTimeout(this.timer);
@@ -355,7 +358,7 @@ export class EditorDraftSession {
       !this.stopped
     );
   }
-  private async refreshPristineTarget() {
+  private async refreshPristineTarget(knownTargetRevision?: number | null) {
     const before = this.state.draft;
     if (
       !this.canRefresh() ||
@@ -367,6 +370,16 @@ export class EditorDraftSession {
     )
       return;
     try {
+      const targetRevision =
+        knownTargetRevision === undefined
+          ? (await api<DraftRevisions>(`/edit-drafts/${before.id}/revisions`)).targetRevision
+          : knownTargetRevision;
+      if (
+        targetRevision === before.baseRevision ||
+        !this.canRefresh() ||
+        this.state.draft !== before
+      )
+        return;
       const target = await api<{ revision: number } | null>(
         `/edit-drafts/${before.id}/saved-target`
       );
@@ -412,8 +425,14 @@ export class EditorDraftSession {
     await this.open();
     if (!this.canRefresh()) return;
     const before = this.state.draft!;
+    const revisions = await api<DraftRevisions>(`/edit-drafts/${before.id}/revisions`);
+    // A delayed probe, like a delayed body read, must never overwrite new local input.
+    if (!this.canRefresh() || this.state.draft !== before) return;
+    if (revisions.revision === before.revision) {
+      await this.refreshPristineTarget(revisions.targetRevision);
+      return;
+    }
     const draft = await api<EditDraft>(`/edit-drafts/${before.id}`);
-    // A delayed read must not replace input or a newer acknowledgement received while it waited.
     if (!this.canRefresh() || this.state.draft !== before) return;
     if (draft.revision !== before.revision) {
       if (draft.status === 'discarded')
@@ -424,6 +443,7 @@ export class EditorDraftSession {
         });
       else this.adopt(draft);
     }
+    // The full read may describe a newer target than the earlier probe did.
     await this.refreshPristineTarget();
   }
   async reapply() {
@@ -473,10 +493,12 @@ export class EditorDraftSession {
     this.pendingSave = pending;
     this.cache();
     try {
-      const result = await api<DraftSaveResult>(`/edit-drafts/${draft.id}/save`, {
-        expectedRevision: pending.expectedRevision,
-        operationId: pending.operationId,
-      });
+      const result = decodeDraftSaveResult(
+        await api<DraftSaveWire>(`/edit-drafts/${draft.id}/save`, {
+          expectedRevision: pending.expectedRevision,
+          operationId: pending.operationId,
+        })
+      );
       this.pendingSave = null;
       if (serialize(this.state.local) === serialize(pending.sent)) this.adopt(result.draft);
       else {
@@ -492,7 +514,7 @@ export class EditorDraftSession {
       } catch {
         /* Saved. */
       }
-      dispatchEvent(new Event('prompt-workspace-changed'));
+      if (draft.kind !== 'content') dispatchEvent(new Event('prompt-workspace-changed'));
       return result;
     } catch (error) {
       if (error instanceof ApiError && error.status < 500) this.pendingSave = null;
@@ -520,10 +542,12 @@ export class EditorDraftSession {
       operationId: pending.createId,
     });
     this.cache();
-    const result = await api<DraftSaveResult>(`/edit-drafts/${pending.draft.id}/save`, {
-      expectedRevision: pending.draft.revision,
-      operationId: pending.saveId,
-    });
+    const result = decodeDraftSaveResult(
+      await api<DraftSaveWire>(`/edit-drafts/${pending.draft.id}/save`, {
+        expectedRevision: pending.draft.revision,
+        operationId: pending.saveId,
+      })
+    );
     this.pendingCopy = null;
     this.cache();
     try {
@@ -536,11 +560,13 @@ export class EditorDraftSession {
   async undo(savedOperationId: string) {
     await this.flush();
     const draft = this.state.draft!;
-    const result = await api<DraftSaveResult>(`/edit-drafts/${draft.id}/undo`, {
-      savedOperationId,
-      expectedRevision: draft.revision,
-      operationId: crypto.randomUUID(),
-    });
+    const result = decodeDraftSaveResult(
+      await api<DraftSaveWire>(`/edit-drafts/${draft.id}/undo`, {
+        savedOperationId,
+        expectedRevision: draft.revision,
+        operationId: crypto.randomUUID(),
+      })
+    );
     this.adopt(result.draft);
     try {
       localStorage.setItem(libraryChangedKey, `${Date.now()}:${crypto.randomUUID()}`);
@@ -598,7 +624,8 @@ export function useServerEditDraft(options: SessionOptions) {
   );
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const token = useMemo(() => Symbol(options.editorKey), [options.editorKey]);
-  const observed = useRef(serialize(options.model));
+  const signature = useMemo(() => serialize(options.model), [options.model]);
+  const observed = useRef(signature);
   const observedRestore = useRef(0);
   useEffect(() => {
     if (options.enabled === false) return;
@@ -635,7 +662,6 @@ export function useServerEditDraft(options: SessionOptions) {
     }
   }, [session, state.restoreVersion]);
   useEffect(() => {
-    const signature = serialize(options.model);
     if (observedRestore.current !== state.restoreVersion) {
       observedRestore.current = state.restoreVersion;
       return;
@@ -644,7 +670,7 @@ export function useServerEditDraft(options: SessionOptions) {
       observed.current = signature;
       session.setModel(options.model);
     }
-  }, [session, options.model, state.ready, state.restoreVersion]);
+  }, [session, options.model, signature, state.ready, state.restoreVersion]);
   const activate = useCallback(() => {
     focused = token;
     changed();

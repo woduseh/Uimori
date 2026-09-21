@@ -12,7 +12,8 @@ import {
   CHAT_TRANSCRIPT_LIMITS,
   validateChatTranscript,
 } from '../core/chat-transcript.js';
-import { editTranslation, successfulTranslation } from '../server/source-editing.js';
+import { editTranslation } from '../server/source-editing.js';
+import { successfulTranslation } from '../server/translation-artifacts.js';
 import { forkChat } from '../server/chat-fork.js';
 import { createApp } from '../server/app.js';
 import type { Content } from '../core/product.js';

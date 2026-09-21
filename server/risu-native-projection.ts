@@ -45,8 +45,9 @@ export function projectNativeRisuPackage(
     findings: loreFindings,
   });
   findings.append(loreFindings.list);
+  const imageHandoff = detectRisuImageHandoff(native, base.imageHandoff);
   const pkg: RisuContent = {
-    version: 1,
+    version: 2,
     id: base.id,
     revision: base.revision,
     title,
@@ -54,9 +55,7 @@ export function projectNativeRisuPackage(
     body: string(card.description),
     ...(kind === 'bot' ? { identity: { name: title, description: '' } } : {}),
     nativeRisu: native,
-    ...(detectRisuImageHandoff(native, base.imageHandoff)
-      ? { imageHandoff: detectRisuImageHandoff(native, base.imageHandoff) }
-      : {}),
+    ...(imageHandoff ? { imageHandoff } : {}),
     lore: lore.lore,
     ...(lore.loreActivation
       ? {
@@ -66,8 +65,6 @@ export function projectNativeRisuPackage(
           },
         }
       : {}),
-    // The native preset owns global-note placement; a projection instruction would send it twice.
-    instructions: [],
     starts: [
       card.first_mes,
       ...(Array.isArray(card.alternate_greetings) ? card.alternate_greetings : []),

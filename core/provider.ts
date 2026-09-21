@@ -159,7 +159,6 @@ export function buildMainInput(
           ? { nativeRisuPosition: structuredClone(r.nativeRisuPosition) }
           : {}),
       })),
-      ...packageData.instructions.map((n) => ({ ...n, kind: 'instruction' })),
     ].map((r) => ({ ...r, hash: hash(r.text) }));
     input.pinnedSources = [...(input.pinnedSources ?? []), ...pinned];
     input.facts.push(...pinned.map((r) => r.text));

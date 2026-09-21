@@ -9,7 +9,6 @@ import { sourceFiles, sourceImports } from './fixtures/source-imports.js';
 // Static `import`/`export ... from` statements only; `import type` and inline `type` specifiers
 // are erased at runtime and are not edges here.
 const root = fileURLToPath(new URL('../', import.meta.url));
-const KNOWN_CYCLES = [['server/package-images.ts', 'server/source-editing.ts']];
 function valueImports(file: string): string[] {
   return sourceImports(readFileSync(join(root, file), 'utf8'), file)
     .filter((item) => item.runtime && item.eager && item.specifier.startsWith('.'))
@@ -54,12 +53,8 @@ function stronglyConnected(graph: Map<string, string[]>): string[][] {
   return result.sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-test('core and server modules have no value-import cycles beyond the known list', () => {
+test('core and server modules have no value-import cycles', () => {
   const files = ['core', 'server'].flatMap((dir) => sourceFiles(root, dir));
   const graph = new Map(files.map((file) => [file, valueImports(file)]));
-  for (const cycle of stronglyConnected(graph))
-    expect(
-      KNOWN_CYCLES.some((known) => cycle.every((file) => known.includes(file))),
-      `New module cycle: ${cycle.join(', ')}`
-    ).toBe(true);
+  expect(stronglyConnected(graph)).toEqual([]);
 });

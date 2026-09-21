@@ -1,7 +1,7 @@
 import { HttpError } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
-import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
+import { successfulTranslation, validateTranslationArtifact } from './translation-artifacts.js';
 import { buildPackagePresentation } from './package-presentation.js';
 import { nativeSourceSnapshot } from './risu-native-actions.js';
 import { nativeImageDisplayText } from './risu-native-images.js';
@@ -21,7 +21,7 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
       const job = successfulTranslation(store, source);
       let translation: { text: string; sourceRevision: string; sourceHash: string } | undefined;
       if (job?.status === 'completed' && job.sourceHash === source.hash) {
-        validateTranslationArtifact(store, job, source);
+        validateTranslationArtifact(job, source);
         translation = {
           text: job.result!.text ?? '',
           sourceRevision: source.id,

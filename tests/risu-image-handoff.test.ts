@@ -48,16 +48,13 @@ const source = (): RisuContentSource => ({
   },
 });
 const pkg = (native = source()): RisuContent => ({
-  version: 1,
+  version: 2,
   id: 'native',
   revision: 1,
   title: 'Native',
   description: '',
   body: String(native.card.description),
   nativeRisu: native,
-  instructions: [
-    { id: 'writing-guidance', target: 'main', text: String(native.card.post_history_instructions) },
-  ],
   lore: [
     {
       id: 'lore-0',
@@ -80,7 +77,7 @@ test('image handoff moves exact explicit instruction ranges only when automatic 
   expect(projectRisuImageHandoff(original, false)).toBe(original);
   const projected = projectRisuImageHandoff(original, true);
   expect(projected.body).toBe('Keep story configuration.');
-  expect(projected.instructions).toEqual([]);
+  expect(projected).not.toHaveProperty('instructions');
   expect(risuImageHandoffText(original, 'card:post_history_instructions')).toBe(
     'A. Narrative\nKeep this.\nD. Outfit\nKeep this too.'
   );
@@ -133,7 +130,7 @@ test('disabled lore and folders do not become image instructions', () => {
   ).toBe(true);
 });
 
-test('retired image instruction fields remain readable in historical receipts but never execute', () => {
+test('retired image instruction receipts are rejected instead of kept readable', () => {
   const native = source();
   const retired = 'C. Image Tag Insertion\nUse <img="retired"> {{setvar::retired::1}}';
   native.card.scenario = retired;
@@ -154,7 +151,7 @@ test('retired image instruction fields remain readable in historical receipts bu
     ],
     tagTemplates: ['<img="{asset}">'],
   };
-  expect(validateRisuImageHandoff(historical, native)).toEqual(historical);
+  expect(() => validateRisuImageHandoff(historical, native)).toThrow('PACKAGE_IMAGE_HANDOFF_STALE');
   expect(detectRisuImageHandoff(native)?.ranges).toEqual([]);
   const value = { ...pkg(native), imageHandoff: historical };
   expect(imageHandoffSource(native, 'card:scenario')).toBe('');

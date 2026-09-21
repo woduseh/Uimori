@@ -48,7 +48,7 @@ const snapshot = (): RunSnapshot => ({
     packageAttachments: [{ id: 'bot', revision: 1, role: 'bot' }],
     packages: [
       {
-        version: 1,
+        version: 2,
         id: 'bot',
         revision: 1,
         title: 'Test',
@@ -78,7 +78,6 @@ const snapshot = (): RunSnapshot => ({
             loading: 'pinned',
           },
         ],
-        instructions: [],
         nativeRisu: { version: 1, card: {}, assets: [], sourceHash: 'a'.repeat(64) },
       },
     ],

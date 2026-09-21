@@ -7,7 +7,7 @@ import { compileContentAttachment } from '../core/package-runtime.js';
 function content(): RisuContent {
   const card = { name: 'Validation fixture', description: 'Body' };
   return {
-    version: 1,
+    version: 2,
     id: 'fixture',
     revision: 1,
     title: card.name,
@@ -39,11 +39,10 @@ function content(): RisuContent {
         loreContext: { placement: 'scene', group: 'one', order: 1 },
       },
     ],
-    instructions: [{ id: 'instruction', target: 'main', text: 'Keep the voice.' }],
   };
 }
 const attachment = { id: 'fixture', revision: 1, role: 'bot' as const };
-const context = { chatId: 'chat', target: 'main' as const };
+const context = { chatId: 'chat' };
 function freeze(value: unknown): void {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return;
   Object.freeze(value);
@@ -72,7 +71,7 @@ test('the existing validator still returns a detached editable copy', () => {
   expect(input.nativeRisu.card.description).toBe('Body');
 });
 
-test('compilation is read-only and preserves grouping, ordering and role filtering', () => {
+test('compilation is read-only and preserves resource grouping and ordering', () => {
   const input = content();
   freeze(input);
   const result = compileContentAttachment(input, attachment, context);
@@ -81,15 +80,7 @@ test('compilation is read-only and preserves grouping, ordering and role filteri
     'package:fixture:bot:lore:first',
     'package:fixture:bot:lore:later',
   ]);
-  expect(result.instructions).toEqual([
-    { id: 'package:fixture:bot:instruction:instruction', text: 'Keep the voice.' },
-  ]);
-  expect(
-    compileContentAttachment(input, attachment, { ...context, target: 'translation' }).instructions
-  ).toEqual([]);
-  expect(
-    compileContentAttachment(input, attachment, { ...context, resourcesOnly: true }).instructions
-  ).toEqual([]);
+  expect(result).not.toHaveProperty('instructions');
   expect(input.lore.map((item) => item.id)).toEqual(['later', 'first']);
 });
 
@@ -104,7 +95,6 @@ test('mutating compiled nested metadata cannot change its source or another comp
   resource.loreContext!.group = 'Changed';
   resource.nativeRisuPosition!.depth = 9;
   resource.risuSource!.sourceName = 'Changed';
-  first.instructions[0].text = 'Changed';
   expect(input).toEqual(before);
   expect(compileContentAttachment(input, attachment, context)).toEqual(second);
 });
@@ -123,7 +113,7 @@ test('a selected optional lore is pinned without mutating its saved loading mode
 test('assertion, copying validation and compilation reject the same malformed content', () => {
   const invalid = [
     { ...content(), extra: true },
-    { ...content(), version: 2 },
+    { ...content(), version: 1 },
     { ...content(), revision: 0 },
     { ...content(), id: 'invalid id' },
     { ...content(), title: 'x'.repeat(201) },

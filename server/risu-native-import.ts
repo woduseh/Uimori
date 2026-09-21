@@ -48,7 +48,7 @@ export function analyzeNativeRisuImport(input: RisuCardInput) {
   };
   const { pkg, lore } = projectNativeRisuPackage(
     {
-      version: 1,
+      version: 2,
       id: `card-${input.hash.slice(0, 32)}`,
       revision: 1,
       title,
@@ -56,7 +56,6 @@ export function analyzeNativeRisuImport(input: RisuCardInput) {
       body: '',
       nativeRisu: native,
       lore: [],
-      instructions: [],
       images: assets.packageImages,
       ...(assets.portraitImageId ? { portraitImageId: assets.portraitImageId } : {}),
     } satisfies RisuContent,

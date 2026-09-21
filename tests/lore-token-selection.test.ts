@@ -36,12 +36,11 @@ async function selectedSnapshot(attachments = 1) {
         role: index === 0 ? ('bot' as const) : ('module' as const),
       })),
       packages: Array.from({ length: attachments }, (_, index) => ({
-        version: 1,
+        version: 2,
         id: `package-${index}`,
         revision: 1,
         title: `Package ${index}`,
         description: '',
-        instructions: [],
         loreActivation: { mode: 'model' },
         nativeRisu: { version: 1, card: {}, assets: [], sourceHash: 'a'.repeat(64) },
         lore: [{ id: 'harbor', title: 'Harbor', description: '', text, loading: 'discoverable' }],

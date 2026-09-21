@@ -17,8 +17,8 @@ import {
   requestTranslation,
   requestStatus,
   latestTranslation,
-  validateTranslationArtifact,
 } from './source-editing.js';
+import { validateTranslationArtifact } from './translation-artifacts.js';
 import { ProductStore } from './product-store.js';
 import { promptWorkspace } from './prompt-workspace.js';
 import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
@@ -973,7 +973,7 @@ export class Store {
             if (!previous) return {};
             const saved = this.job(previous.id);
             try {
-              validateTranslationArtifact(this, saved, this.source(row.source_revision));
+              validateTranslationArtifact(saved, this.source(row.source_revision));
             } catch {
               return {};
             }
@@ -1234,7 +1234,7 @@ export class Store {
           if (latestTranslation(this, source.id)?.id !== job.id) return false;
           if (job.status === 'completed') {
             try {
-              validateTranslationArtifact(this, job, source);
+              validateTranslationArtifact(job, source);
             } catch {
               return false;
             }

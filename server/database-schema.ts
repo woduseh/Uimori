@@ -5,7 +5,7 @@ import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 
-export const DATABASE_SCHEMA_VERSION = 23;
+export const DATABASE_SCHEMA_VERSION = 24;
 const BASELINE = 'uimori-risu-native';
 const METADATA_SCHEMA =
   'CREATE TABLE schema_metadata(id INTEGER PRIMARY KEY CHECK(id=1),baseline TEXT NOT NULL,signature TEXT NOT NULL)';

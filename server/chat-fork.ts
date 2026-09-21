@@ -5,7 +5,7 @@ import { copyIllustrationsForFork } from './illustrations.js';
 import { splitSource } from '../core/auxiliary.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
 import type { Store, Chat, Source } from './store.js';
-import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
+import { successfulTranslation, validateTranslationArtifact } from './translation-artifacts.js';
 import { mapForkSnapshot, validateRunSnapshot } from './snapshot-archive.js';
 import { contextDependencyKey, measureMainContext } from './context-planning.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
@@ -324,7 +324,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         if (job.source_hash !== original.hash) continue;
         if (job.kind === 'translation') {
           if (successfulTranslation(store, original)?.id !== job.id) continue;
-          validateTranslationArtifact(store, store.job(job.id), original);
+          validateTranslationArtifact(store.job(job.id), original);
         }
         const jobId = translationIds.get(job.id) ?? randomUUID();
         const oldInput = parse(job.input);

@@ -13,10 +13,11 @@ import {
 } from './story-storage.js';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { subscribeAppHistory } from './app-history.js';
-import type { Chat, ReaderDetail, Run, Source } from '../core/types.js';
+import type { Chat, ReaderDetail, Run } from '../core/types.js';
 import type { Content, CurrentPrompt, Library } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
-import { api, ApiError, libraryChangedKey } from './api.js';
+import { api, ApiError, definiteRejection, libraryChangedKey } from './api.js';
+import { requestChatFork } from './fork-request.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { refValue } from './content-ref.js';
@@ -44,19 +45,6 @@ function initialView(restore = false) {
     destination:
       chat && params.get('workspace') !== 'library' ? ('story' as const) : ('library' as const),
   };
-}
-function ancestry(sources: Source[], head: string | null) {
-  const byId = new Map(sources.map((source) => [source.id, source]));
-  const seen = new Set<string>();
-  const result: Source[] = [];
-  while (head && !seen.has(head)) {
-    seen.add(head);
-    const source = byId.get(head);
-    if (!source) break;
-    result.unshift(source);
-    head = source.parentRevision;
-  }
-  return result;
 }
 type RunPayload = {
   retryOf?: string;
@@ -119,11 +107,6 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
 }
 function clearCommand(key: string, id: string) {
   if (readCommand(key)?.record.id === id) sessionStorage.removeItem(key);
-}
-function definiteRejection(error: unknown): boolean {
-  return (
-    error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408
-  );
 }
 
 type Position = ReadingPosition;
@@ -599,17 +582,7 @@ export function useStory() {
   const branch =
     detail?.branches?.find((item) => item.id === activeBranchId) ??
     detail?.branches?.find((item) => item.default);
-  const sources = useMemo(
-    () =>
-      detail
-        ? detail.reader
-          ? detail.sources
-          : branch
-            ? ancestry(detail.sources, branch.headRevision)
-            : detail.sources
-        : [],
-    [detail, branch]
-  );
+  const sources = useMemo(() => detail?.sources ?? [], [detail]);
   const visibleRuns =
     detail?.runs.filter(
       (run) =>
@@ -914,20 +887,13 @@ export function useStory() {
     const chatId = selected;
     const epoch = navigation.current.epoch;
     const lock = `${chatId}:${sourceId}`;
-    const key = `fork-command:${lock}`;
     // The reader contains only the current page; the server verifies source ownership and ancestry.
     if (!detail || detail.chat.id !== chatId || !sourceId || forkLocks.current.has(lock)) return;
     forkLocks.current.add(lock);
     setForking([...forkLocks.current]);
-    const idempotencyKey = sessionStorage.getItem(key) || crypto.randomUUID();
-    sessionStorage.setItem(key, idempotencyKey);
     setError('');
     try {
-      const next = await api<Chat>(`/chats/${chatId}/fork`, {
-        fromRevision: sourceId,
-        idempotencyKey,
-      });
-      if (sessionStorage.getItem(key) === idempotencyKey) sessionStorage.removeItem(key);
+      const next = await requestChatFork(chatId, sourceId);
       setChats((current) => [next, ...current.filter((chat) => chat.id !== next.id)]);
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch) {
         setForkOrigin({
@@ -938,8 +904,6 @@ export function useStory() {
         select(next.id);
       }
     } catch (error) {
-      if (definiteRejection(error) && sessionStorage.getItem(key) === idempotencyKey)
-        sessionStorage.removeItem(key);
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
         setError(
           error instanceof Error

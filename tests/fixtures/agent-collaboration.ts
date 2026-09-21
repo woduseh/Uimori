@@ -300,7 +300,7 @@ export async function fixture(
   const foreignResource = compileContentAttachment(
     foreign.package,
     { ...ref(foreign), role: 'module' },
-    { chatId: chat.id, target: 'main', resourcesOnly: true }
+    { chatId: chat.id }
   ).resources.find((resource) => resource.sourceKind === 'lore')!;
   expect(loreResource).toBeDefined();
   expect(foreignResource).toBeDefined();
