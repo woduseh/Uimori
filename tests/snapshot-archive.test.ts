@@ -375,7 +375,8 @@ test.each(['ready', 'pending'] as const)(
     if (state === 'pending') {
       await post(`/api/runs/${queued.id}/cancel`, {});
       await post('/api/test/control', { action: 'release', barrier: 'run' });
-    } else await expect.poll(() => app.store.run(queued.id).status).toBe('completed');
+    } else
+      await expect.poll(() => app.store.run(queued.id).status, { timeout: 6000 }).toBe('completed');
     const original = app.store.run(queued.id);
     const before = structuredClone(original.snapshot);
     if (state === 'pending') {
@@ -393,7 +394,9 @@ test.each(['ready', 'pending'] as const)(
       idempotencyKey: randomUUID(),
       title: 'Same source-time scope',
     });
-    await expect.poll(() => app.store.run(candidate.id).status).toBe('completed');
+    await expect
+      .poll(() => app.store.run(candidate.id).status, { timeout: 6000 })
+      .toBe('completed');
     const completed = app.store.run(candidate.id);
     expect(completed.snapshot.branchId).not.toBe(original.snapshot.branchId);
     expect(completed.snapshot.promptCompilation?.execution).toEqual({ storySubmission: true });

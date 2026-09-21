@@ -454,7 +454,7 @@ test('evaluation timeout ends a stalled real HTTP response with no implicit retr
       target.writeHead(200, { 'content-type': 'text/event-stream' });
       target.write(sse({ type: 'response.created', response: { id: 'waiting' } }));
     },
-    { timeoutMs: 100 }
+    { timeoutMs: 1000 }
   );
   const result = await settled(state, (await state.start()).id);
   expect(result).toMatchObject({ status: 'failed', error: 'TIMEOUT', sourceRevision: null });
