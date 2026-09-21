@@ -323,6 +323,9 @@ export function migrateSchema23To24(directory) {
     rmSync(ownerFile);
     ownerFilesReset += 1;
   }
+  // Docker creates an empty named-volume root as root. The runtime user must be
+  // able to recreate the intentionally discarded process-lifetime mutex.
+  if (process.getuid?.() === 0) chownSync(directory, 1000, 1000);
   const db = new DatabaseSync(file);
   const counts = { packages: 0, executionFields: 0, rows: 0 };
   try {
