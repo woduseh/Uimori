@@ -156,6 +156,8 @@ test('schema 23 migration rewrites only package contracts and native instruction
   };
   db.prepare('INSERT INTO runs VALUES(?,?)').run('run', JSON.stringify(snapshot));
   db.close();
+  writeFileSync(join(source, 'uimori.sqlite.owner.sqlite'), 'ephemeral owner');
+  writeFileSync(join(source, 'uimori.sqlite.owner.sqlite-shm'), 'ephemeral shared memory');
 
   const target = join(root, 'migrated');
   copyStoppedData(source, target);
@@ -166,8 +168,12 @@ test('schema 23 migration rewrites only package contracts and native instruction
     packages: 2,
     executionFields: 1,
     rows: 2,
+    ownerFilesReset: 2,
     integrity: 'ok',
   });
+  assert.equal(existsSync(join(target, 'uimori.sqlite.owner.sqlite')), false);
+  assert.equal(existsSync(join(target, 'uimori.sqlite.owner.sqlite-shm')), false);
+  assert.equal(existsSync(join(source, 'uimori.sqlite.owner.sqlite')), true);
   assert.equal(inspectData(source).schema, 23);
   const migrated = new DatabaseSync(join(target, 'uimori.sqlite'), { readOnly: true });
   try {

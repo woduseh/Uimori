@@ -309,6 +309,20 @@ function migrateJson23To24(value, counts) {
  */
 export function migrateSchema23To24(directory) {
   const file = join(directory, database);
+  let ownerFilesReset = 0;
+  for (const suffix of [
+    '.owner.sqlite',
+    '.owner.sqlite-wal',
+    '.owner.sqlite-shm',
+    '.owner.sqlite-journal',
+  ]) {
+    const ownerFile = join(directory, database + suffix);
+    if (!existsSync(ownerFile)) continue;
+    const stat = lstatSync(ownerFile);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Invalid server owner file');
+    rmSync(ownerFile);
+    ownerFilesReset += 1;
+  }
   const db = new DatabaseSync(file);
   const counts = { packages: 0, executionFields: 0, rows: 0 };
   try {
@@ -374,7 +388,7 @@ export function migrateSchema23To24(directory) {
   }
   const verified = inspectData(directory, { integrity: true });
   if (verified.schema !== 24) throw new Error('Schema 24 verification failed');
-  return { from: 23, to: 24, ...counts, integrity: verified.integrity };
+  return { from: 23, to: 24, ...counts, ownerFilesReset, integrity: verified.integrity };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
