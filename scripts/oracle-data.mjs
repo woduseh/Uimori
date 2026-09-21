@@ -189,6 +189,76 @@ function record(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+const snapshotRefsKey = '__snapshot_texts_v1';
+const snapshotDigest = (body) => createHash('sha256').update(body).digest('hex');
+
+function readSnapshotText(db, hash) {
+  const row = db.prepare('SELECT body FROM snapshot_texts WHERE hash=?').get(hash);
+  if (!row || typeof row.body !== 'string' || snapshotDigest(row.body) !== hash)
+    throw new Error('Snapshot text integrity failed during migration');
+  const value = JSON.parse(row.body);
+  if (typeof value !== 'string') throw new Error('Snapshot text is not a string');
+  return value;
+}
+
+function expandSnapshot(db, value) {
+  if (!record(value) || !Object.hasOwn(value, snapshotRefsKey)) return value;
+  const refs = value[snapshotRefsKey];
+  if (!record(refs)) throw new Error('Snapshot references are invalid');
+  const cache = new Map();
+  for (const [path, hash] of Object.entries(refs)) {
+    const keys = JSON.parse(path);
+    if (
+      typeof hash !== 'string' ||
+      !/^[a-f0-9]{64}$/u.test(hash) ||
+      !Array.isArray(keys) ||
+      !keys.length ||
+      keys.some((key) => typeof key !== 'string')
+    )
+      throw new Error('Snapshot references are invalid');
+    let node = value;
+    for (const key of keys.slice(0, -1)) {
+      if (!record(node) && !Array.isArray(node)) throw new Error('Snapshot path is invalid');
+      node = node[key];
+    }
+    const key = keys.at(-1);
+    if ((!record(node) && !Array.isArray(node)) || node[key] !== '')
+      throw new Error('Snapshot path is invalid');
+    if (!cache.has(hash)) cache.set(hash, readSnapshotText(db, hash));
+    node[key] = cache.get(hash);
+  }
+  delete value[snapshotRefsKey];
+  return value;
+}
+
+function installSnapshotPack(db) {
+  db.function('snapshot_pack', (input) => {
+    const snapshot = JSON.parse(String(input));
+    const refs = {};
+    const insert = db.prepare('INSERT OR IGNORE INTO snapshot_texts(hash,body) VALUES(?,?)');
+    const seen = new Map();
+    const visit = (node, path) => {
+      if (!record(node) && !Array.isArray(node)) return;
+      for (const [key, child] of Object.entries(node)) {
+        if (typeof child === 'string' && child.length >= 256) {
+          let hash = seen.get(child);
+          if (!hash) {
+            const body = JSON.stringify(child);
+            hash = snapshotDigest(body);
+            insert.run(hash, body);
+            seen.set(child, hash);
+          }
+          refs[JSON.stringify([...path, key])] = hash;
+          node[key] = '';
+        } else if (record(child) || Array.isArray(child)) visit(child, [...path, key]);
+      }
+    };
+    visit(snapshot, []);
+    snapshot[snapshotRefsKey] = refs;
+    return JSON.stringify(snapshot);
+  });
+}
+
 function migrateJson23To24(value, counts) {
   if (Array.isArray(value)) {
     for (const item of value) migrateJson23To24(item, counts);
@@ -252,6 +322,7 @@ export function migrateSchema23To24(directory) {
     const metadata = db.prepare('SELECT baseline,signature FROM schema_metadata WHERE id=1').get();
     if (metadata?.baseline !== 'uimori-risu-native' || typeof metadata.signature !== 'string')
       throw new Error('Schema 23 metadata is missing or incompatible');
+    installSnapshotPack(db);
 
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -281,11 +352,11 @@ export function migrateSchema23To24(directory) {
               continue;
             }
             if (!record(value) && !Array.isArray(value)) continue;
-            const before = JSON.stringify(value);
+            const before = counts.packages + counts.executionFields;
+            if (column.name === 'snapshot') value = expandSnapshot(db, value);
             migrateJson23To24(value, counts);
-            const after = JSON.stringify(value);
-            if (after === before) continue;
-            update.run(after, row.row_id);
+            if (counts.packages + counts.executionFields === before) continue;
+            update.run(JSON.stringify(value), row.row_id);
             counts.rows += 1;
           }
         }

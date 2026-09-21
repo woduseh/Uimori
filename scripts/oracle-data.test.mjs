@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -115,6 +116,10 @@ test('schema 23 migration rewrites only package contracts and native instruction
     INSERT INTO schema_metadata VALUES(1,'uimori-risu-native','fixture-signature');
     CREATE TABLE versions(id TEXT PRIMARY KEY,body TEXT NOT NULL);
     CREATE TABLE runs(id TEXT PRIMARY KEY,snapshot TEXT NOT NULL);
+    CREATE TABLE snapshot_texts(hash TEXT PRIMARY KEY,body TEXT NOT NULL);
+    CREATE TRIGGER runs_snapshot_update AFTER UPDATE OF snapshot ON runs
+      WHEN json_type(NEW.snapshot,'$.__snapshot_texts_v1') IS NULL
+      BEGIN UPDATE runs SET snapshot=snapshot_pack(NEW.snapshot) WHERE rowid=NEW.rowid; END;
     PRAGMA user_version=23;`);
   const pkg = {
     version: 1,
@@ -130,19 +135,26 @@ test('schema 23 migration rewrites only package contracts and native instruction
     'content',
     JSON.stringify({ package: pkg, unrelated: { version: 1, instructions: ['keep'] } })
   );
-  db.prepare('INSERT INTO runs VALUES(?,?)').run(
-    'run',
-    JSON.stringify({
-      profile: { packages: [pkg] },
-      nativeRisuExecution: {
-        version: 2,
-        inputHash: 'hash',
-        variables: {},
-        messages: [],
-        fields: { 'card@3:bot': { body: 'body', 'instruction:old': 'retired' } },
-      },
-    })
-  );
+  const retired = 'retired '.repeat(80);
+  const retiredBody = JSON.stringify(retired);
+  const retiredHash = createHash('sha256').update(retiredBody).digest('hex');
+  db.prepare('INSERT INTO snapshot_texts VALUES(?,?)').run(retiredHash, retiredBody);
+  const snapshot = {
+    profile: { packages: [structuredClone(pkg)] },
+    nativeRisuExecution: {
+      version: 2,
+      inputHash: 'hash',
+      variables: {},
+      messages: [],
+      fields: { 'card@3:bot': { body: 'body', 'instruction:old': '' } },
+    },
+  };
+  snapshot.profile.packages[0].instructions[0].text = '';
+  snapshot.__snapshot_texts_v1 = {
+    '["profile","packages","0","instructions","0","text"]': retiredHash,
+    '["nativeRisuExecution","fields","card@3:bot","instruction:old"]': retiredHash,
+  };
+  db.prepare('INSERT INTO runs VALUES(?,?)').run('run', JSON.stringify(snapshot));
   db.close();
 
   const target = join(root, 'migrated');
@@ -164,6 +176,7 @@ test('schema 23 migration rewrites only package contracts and native instruction
     assert.equal('instructions' in content.package, false);
     assert.deepEqual(content.unrelated.instructions, ['keep']);
     const snapshot = JSON.parse(migrated.prepare('SELECT snapshot FROM runs').get().snapshot);
+    assert.deepEqual(snapshot.__snapshot_texts_v1, {});
     assert.equal('instruction:old' in snapshot.nativeRisuExecution.fields['card@3:bot'], false);
   } finally {
     migrated.close();
