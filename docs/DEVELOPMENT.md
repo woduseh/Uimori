@@ -30,7 +30,7 @@ Choose checks that can expose failures caused by the change. Completing a featur
 
 Use the smallest existing tests that exercise the affected behavior and plausible failures. Add tests for gaps that matter, rather than mirroring implementation. Once the relevant checks pass, finish. Rerun or expand only for a subsequent change, failure, or unresolved risk.
 
-`quality` runs Biome and TypeScript without starting the app or a browser; `check` runs TypeScript alone. `quality:full` runs `quality`, `test:tooling`, a fresh build, then the complete Vitest suite. The build precedes Vitest because some tests restart the compiled server.
+`quality` runs Biome and TypeScript without starting the app or a browser; `check` runs TypeScript alone. `test:tooling` creates a fresh build before running build, verification and release-tooling tests, so it also works from a clean checkout. `quality:full` runs `quality`, that build-backed tooling suite, then the complete Vitest suite. The build precedes Vitest because some tests restart the compiled server.
 
 ## Verification runners
 
@@ -39,7 +39,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | Command | Purpose |
 | --- | --- |
 | `npm run quality:full` | Formatting, lint, types, tooling tests, fresh build and complete Vitest suite. |
-| `npm run test:tooling` | Build, verification and release-tooling tests, including failure detection. |
+| `npm run test:tooling` | Fresh build plus build, verification and release-tooling tests, including failure detection. |
 | `npm run verify:browser-smoke` | Small browser suite for chat and global prompt settings. |
 | `npm run verify:ui` | Reader layout, editing and reading preferences; accepts `--grep` and `--visual`. Renderer unit tests run separately with `npm test -- tests/prose.test.ts`. |
 | Feature-specific `verify:*` scripts | Suites such as `verify:packages`, `verify:providers`, `verify:library`, and `verify:navigation`; see [package scripts](../package.json). |
