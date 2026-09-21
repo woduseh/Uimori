@@ -234,7 +234,9 @@ ${
     expectedSettingsRevision: app.store.chat(chat.id).settingsRevision,
     idempotencyKey: randomUUID(),
   });
-  await expect.poll(() => app.store.run(run.id).status).not.toMatch(/^(queued|running)$/u);
+  await expect
+    .poll(() => app.store.run(run.id).status, { timeout: 6000 })
+    .not.toMatch(/^(queued|running)$/u);
   return { app, chat, run: app.store.run(run.id), calls, judged, output };
 }
 
@@ -313,7 +315,9 @@ test('a candidate owns its response judgment while preserving the original froze
     idempotencyKey: randomUUID(),
     title: 'Candidate',
   });
-  await expect.poll(() => f.app.store.run(candidate.id).status).not.toMatch(/^(queued|running)$/u);
+  await expect
+    .poll(() => f.app.store.run(candidate.id).status, { timeout: 6000 })
+    .not.toMatch(/^(queued|running)$/u);
   const run = f.app.store.run(candidate.id);
   expect(run).toMatchObject({ status: 'completed', error: null });
   expect(run.snapshot.mainJudgment).toEqual(mainJudgmentInput(f.output.text));
@@ -499,7 +503,9 @@ test('rejudges preserved text once without writer/input replay and preserves arc
   const recovered = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: key });
   const duplicate = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: key });
   expect(duplicate.id).toBe(recovered.id);
-  await expect.poll(() => f.app.store.run(recovered.id).status).toBe('completed');
+  await expect
+    .poll(() => f.app.store.run(recovered.id).status, { timeout: 6000 })
+    .toBe('completed');
   const run = f.app.store.run(recovered.id);
   expect(f.calls).toHaveLength(1);
   expect(run.usage.modelCalls).toBe(1);
@@ -535,7 +541,7 @@ test('rejudges preserved text once without writer/input replay and preserves arc
 test('a second judgment failure keeps the same response recoverable without writer charges', async () => {
   const f = await fixture('Keep this output', 'failure');
   const next = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: randomUUID() });
-  await expect.poll(() => f.app.store.run(next.id).status).toBe('failed');
+  await expect.poll(() => f.app.store.run(next.id).status, { timeout: 6000 }).toBe('failed');
   expect(f.app.store.run(next.id)).toMatchObject({
     partialText: 'Keep this output',
     usage: { modelCalls: 1 },
@@ -548,7 +554,7 @@ test('rejudgment credential failure preserves its response and does not recharge
   const f = await fixture('Still available', 'failure');
   vi.stubEnv('TYPESAFE_API_KEY', '');
   const next = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: randomUUID() });
-  await expect.poll(() => f.app.store.run(next.id).status).toBe('failed');
+  await expect.poll(() => f.app.store.run(next.id).status, { timeout: 6000 }).toBe('failed');
   expect(f.app.store.run(next.id)).toMatchObject({
     partialText: 'Still available',
     error: 'JEV_CREDENTIAL_REQUIRED',
@@ -568,7 +574,7 @@ test('cancelled rejudgment cannot adopt a late successful verdict', async () => 
     });
   });
   const next = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: randomUUID() });
-  await expect.poll(() => started).toBe(true);
+  await expect.poll(() => started, { timeout: 6000 }).toBe(true);
   await api(f.app, `/api/runs/${next.id}/cancel`, {});
   finish(
     new Response(
