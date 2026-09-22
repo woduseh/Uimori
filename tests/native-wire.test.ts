@@ -282,35 +282,32 @@ describe('native provider wire (synthetic, no live calls)', () => {
       expect(() => planNativeMessages(r, protocol)).toThrow('PROMPT_CACHE_UNSUPPORTED');
     }
   });
-  test('rejects prefill and unsupported mid-system instead of flattening the prompt', () => {
+  test('rejects prefill while Anthropic accepts mid-system for any model ID', () => {
     for (const [encoder, model] of [
       [encodeResponses, 'gpt-5.6'],
       [encodeChat, 'gpt-5.6'],
-      [encodeAnthropic, 'claude-opus-5'],
+      [encodeAnthropic, 'claude-opus-5-5'],
       [encodeVertex, VERTEX_GEMINI_MODEL_ID],
     ] as const) {
       const r = request(model);
       r.prompt!.messages.at(-1)!.completion = 'prefill';
       expect(() => encoder(r)).toThrow('PROMPT_PREFILL_UNSUPPORTED');
     }
-    const r = request('unverified-claude');
+    const r = request('claude-opus-5-5');
     r.prompt!.messages.splice(2, 0, message('middle', 'system', 'MIDDLE_RULE'));
-    expect(() => encodeAnthropic(r)).toThrow('PROMPT_MID_SYSTEM_MODEL_UNSUPPORTED');
-    expect(() => planNativeMessages(r, 'vertex-gemini-v1')).toThrow(
-      'PROMPT_MID_SYSTEM_UNSUPPORTED'
-    );
-    const supported = wire(encodeAnthropic({ ...r, modelId: 'claude-opus-5' }).body);
+    const supported = wire(encodeAnthropic(r).body);
     expect(supported.messages.map((m: any) => m.role)).toEqual([
       'user',
       'system',
       'assistant',
       'user',
     ]);
+    expect(() => planNativeMessages(r, 'vertex-gemini-v1')).toThrow(
+      'PROMPT_MID_SYSTEM_UNSUPPORTED'
+    );
     r.prompt!.messages.splice(2, 1);
     r.prompt!.messages.splice(3, 0, message('bad-placement', 'system', 'MIDDLE_RULE'));
-    expect(() => encodeAnthropic({ ...r, modelId: 'claude-opus-5' })).toThrow(
-      'PROMPT_MID_SYSTEM_PLACEMENT_UNSUPPORTED'
-    );
+    expect(() => encodeAnthropic(r)).toThrow('PROMPT_MID_SYSTEM_PLACEMENT_UNSUPPORTED');
   });
   test.each([
     'gemini-3.8-flash',

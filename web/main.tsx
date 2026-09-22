@@ -3,6 +3,7 @@ import { promptControls } from '../core/risu-prompt.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { BotChatImportDialog } from './BotChatImportDialog.js';
 import { ReadabilitySettings } from './ReadabilitySettings.js';
+import { Switch } from './BooleanControls.js';
 import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
 import { useReadingPreferences } from './useReadingPreferences.js';
 import { RequestMessage } from './RequestMessage.js';
@@ -282,6 +283,24 @@ function App() {
   }, [errorScope, s.setError]);
   const [newKey, setNewKey] = useState(0);
   const [focus, setFocus] = useState(false);
+  const [sceneNavigatorEnabled, setSceneNavigatorEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('uimori:scene-navigator') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const showSceneNavigator = sceneNavigatorEnabled && !focus;
+  useEffect(() => {
+    if (!showSceneNavigator) setSceneList(false);
+  }, [showSceneNavigator]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('uimori:scene-navigator', String(sceneNavigatorEnabled));
+    } catch {
+      /* The current reading session still keeps the chosen visibility. */
+    }
+  }, [sceneNavigatorEnabled]);
   const [inspectedRun, setInspectedRun] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
@@ -660,6 +679,16 @@ function App() {
           </select>
         </label>
         <small>한 줄이 짧을수록 눈이 다음 줄을 찾기 쉬워요. 이 기기에만 적용해요.</small>
+        <div className="reading-toggles">
+          <label className="check">
+            <Switch
+              checked={sceneNavigatorEnabled}
+              onChange={(event) => setSceneNavigatorEnabled(event.target.checked)}
+            />
+            채팅 네비게이터 표시
+          </label>
+        </div>
+        <small>장면 이동 컨트롤을 표시해요. 집중 읽기에서는 이 설정과 관계없이 숨겨요.</small>
         <ReadabilitySettings value={reading.settings} onChange={reading.update} />
         {onStartFocus && (
           <button className="secondary" onClick={onStartFocus}>
@@ -690,7 +719,7 @@ function App() {
             <div className="header-title">
               <h1>
                 {s.detail?.chat.title || 'Uimori'}
-                {compact && sceneCount > 0 && (
+                {compact && showSceneNavigator && sceneCount > 0 && (
                   <ChevronDown size={14} aria-hidden="true" className="header-title-caret" />
                 )}
               </h1>
@@ -701,7 +730,7 @@ function App() {
                     ? '채팅을 이어가는 중'
                     : '나의 채팅'}
               </small>
-              {compact && s.selected && sceneCount > 0 && (
+              {compact && showSceneNavigator && s.selected && sceneCount > 0 && (
                 <button
                   type="button"
                   className="header-title-hit"
@@ -927,7 +956,7 @@ function App() {
         ) : (
           <>
             <div
-              className={`reader-stage ${s.detail?.reader.navigation.length ? 'has-scenes' : ''}`}
+              className={`reader-stage ${showSceneNavigator && s.detail?.reader.navigation.length ? 'has-scenes' : ''}`}
             >
               {s.detail?.chat.id === s.selected && s.attachmentsReady && s.bot && (
                 <ReaderGallery key={`gallery:${s.viewKey}`} bot={s.bot} persona={s.persona} />
@@ -1196,7 +1225,7 @@ function App() {
                   )}
                 </section>
               </div>
-              {s.detail && (
+              {s.detail && showSceneNavigator && (
                 <SceneNavigator
                   key={s.viewKey}
                   detail={s.detail}
