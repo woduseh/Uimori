@@ -73,6 +73,15 @@ type Options = {
   enabled?: boolean;
   onRestore: (document: EditorDocument) => void;
 };
+const sameModel = (left: ResourceModel, right: ResourceModel) => {
+  const entries = Object.entries(left);
+  return (
+    entries.length === Object.keys(right).length &&
+    entries.every(([key, value]) =>
+      Object.is(value, (right as unknown as Record<string, unknown>)[key])
+    )
+  );
+};
 export function useResourceEditor(options: Options) {
   const latest = useRef(options);
   latest.current = options;
@@ -90,6 +99,7 @@ export function useResourceEditor(options: Options) {
   const token = useMemo(() => Symbol(options.editorKey), [options.editorKey]);
   const observed = useRef(options.model);
   const observedRestore = useRef(0);
+  const pendingRestore = useRef<{ version: number; model: ResourceModel } | null>(null);
   useEffect(() => {
     if (options.enabled === false) return;
     sessions.set(token, session);
@@ -114,6 +124,10 @@ export function useResourceEditor(options: Options) {
     const restored = session.snapshot();
     if (restored.ready && restored.restoreVersion === state.restoreVersion) {
       observed.current = restored.local.model;
+      pendingRestore.current = {
+        version: restored.restoreVersion,
+        model: restored.local.model,
+      };
       latest.current.onRestore({ ...restored.document, ...restored.local });
     }
   }, [session, state.restoreVersion]);
@@ -122,7 +136,18 @@ export function useResourceEditor(options: Options) {
       observedRestore.current = state.restoreVersion;
       return;
     }
-    if (state.ready && observed.current !== options.model) {
+    if (!state.ready) return;
+    const pending = pendingRestore.current;
+    if (pending?.version === state.restoreVersion) {
+      // Resource adoption can render before the parent has reflected onRestore. Do not feed
+      // the stale parent model back into the freshly adopted session during that gap.
+      if (sameModel(pending.model, options.model)) {
+        observed.current = options.model;
+        pendingRestore.current = null;
+      }
+      return;
+    }
+    if (observed.current !== options.model) {
       observed.current = options.model;
       session.setModel(options.model);
     }
