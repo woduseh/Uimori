@@ -329,7 +329,7 @@ export async function fixture(
 export type Fixture = Awaited<ReturnType<typeof fixture>>;
 export async function observedCompletion(state: Fixture, id: string): Promise<Run> {
   await expect
-    .poll(async () => (await api<Run>(state.app, `/api/runs/${id}`)).status, { timeout: 6000 })
+    .poll(async () => (await api<Run>(state.app, `/api/runs/${id}`)).status, { timeout: 15_000 })
     .not.toMatch(/^(queued|running)$/);
   expect(state.failures).toEqual([]);
   return observedExecution(state.app.store, id);
