@@ -475,6 +475,7 @@ export class ProductStore {
       'temperature',
       ...modelOptionKeys,
       'enabled',
+      'displayOrder',
       'pricing',
       'expectedRevision',
     ]);
@@ -506,6 +507,9 @@ export class ProductStore {
         ? { providerOptions: structuredClone(b.providerOptions) }
         : {}),
       ...(b.enabled !== undefined ? { enabled: boolean(b.enabled) } : {}),
+      ...(b.displayOrder !== undefined
+        ? { displayOrder: number(b.displayOrder, 'model display order', 0, 1_000_000_000) }
+        : {}),
       ...(b.pricing !== undefined ? { pricing: modelPricing(b.pricing) } : {}),
       source: {
         kind: connection.catalog.some((item) => item.id === modelId) ? 'catalog' : 'manual',

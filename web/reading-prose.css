@@ -29,8 +29,8 @@
   display: block;
 }
 .reading-quote-break-before::before {
-  margin-block-start: 0.25em;
+  margin-block-start: var(--reading-paragraph-gap, 1.35em);
 }
 .reading-quote-break-after::after {
-  margin-block-end: 0.25em;
+  margin-block-end: var(--reading-paragraph-gap, 1.35em);
 }

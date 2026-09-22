@@ -83,7 +83,7 @@ export function LoreContextDefaultsEditor({
       <p className="muted">
         새 채팅을 만들 때 이 값을 복사해요. 이미 만든 채팅의 정책과 과거 실행은 바뀌지 않아요.
       </p>
-      <fieldset disabled={busy}>
+      <fieldset disabled={busy} className="control-grid lore-context-settings-card">
         <LoreContextPolicyEditor
           value={policyOf(draft)}
           onChange={(policy) => {
@@ -95,7 +95,7 @@ export function LoreContextDefaultsEditor({
           resetLabel="초기값 적용"
           profileRevision={draft.revision}
         />
-        <div className="form-actions settings-save-actions">
+        <div className="form-actions settings-save-actions full">
           <SaveButton
             type="button"
             label="로어 문맥 기본값 저장"

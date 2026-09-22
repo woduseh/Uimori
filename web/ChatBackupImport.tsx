@@ -117,11 +117,15 @@ export function ChatBackupImport({
     }
   }
   return (
-    <section className="chat-backup-import" aria-label="채팅 백업 가져오기">
-      <h3>채팅 백업 가져오기</h3>
-      <p className="muted" id={`${id}-help`}>
-        각 분기를 독립적인 새 채팅으로 복원해요. 같은 파일을 다시 가져와도 기존 채팅은 유지돼요.
-      </p>
+    <section className="chat-backup-import archive-management-card" aria-label="채팅 가져오기">
+      <div className="archive-card-heading">
+        <div>
+          <h3>채팅 가져오기</h3>
+          <p className="muted" id={`${id}-help`}>
+            채팅 백업 파일을 새 채팅으로 복원해 이어서 사용할 수 있어요.
+          </p>
+        </div>
+      </div>
       <div className="archive-file-field">
         <label>
           채팅 백업 파일 선택
@@ -175,10 +179,10 @@ export function ChatBackupImport({
         </p>
       )}
       {message && <p role="status">{message}</p>}
-      <p className="muted">
-        전역 프롬프트·역할 모델은 현재 작업공간의 설정을 사용해요. 실행 기록과 도우미 내부 작업은
-        복원하지 않아요. 중단된 외부 요청은 다시 전송하지 않아요.
-      </p>
+      <small className="muted archive-import-note">
+        전역 프롬프트·역할 모델은 현재 작업실 설정을 사용하며 실행 기록과 도우미 내부 작업은
+        가져오지 않아요.
+      </small>
     </section>
   );
 }

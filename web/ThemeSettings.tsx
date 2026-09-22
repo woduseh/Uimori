@@ -193,7 +193,7 @@ export function ThemeSettings({
           <p>테마는 작업실에 저장돼요. 본문과 봇의 동작은 그대로 유지해요.</p>
         </div>
       </div>
-      <div className="theme-toolbar">
+      <div className="theme-toolbar theme-control-bar">
         <label>
           화면 모드
           <select
@@ -217,6 +217,17 @@ export function ThemeSettings({
             <option value="global">작업실 기본</option>
             {state.scope.botId && <option value="bot">현재 봇의 기본</option>}
             {state.scope.chatId && <option value="chat">현재 채팅만</option>}
+          </select>
+        </label>
+        <label>
+          미리보기 색상
+          <select
+            aria-label="테마 색상 보기"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as typeof mode)}
+          >
+            <option value="light">밝은 색</option>
+            <option value="dark">어두운 색</option>
           </select>
         </label>
         {scope !== 'global' && (
@@ -279,7 +290,7 @@ export function ThemeSettings({
             </button>
             <div className="theme-card-actions">
               <button disabled={busy} onClick={() => edit(theme)}>
-                {theme.id.startsWith('builtin:') ? '복제·꾸미기' : '편집'}
+                {theme.id.startsWith('builtin:') ? '복제해서 꾸미기' : '편집'}
               </button>
               {!theme.id.startsWith('builtin:') && (
                 <button
@@ -317,37 +328,32 @@ export function ThemeSettings({
           </article>
         ))}
       </div>
-      <div className="theme-toolbar">
-        <button disabled={busy} onClick={() => edit()}>
-          <Plus size={16} /> 새 커스텀 테마
-        </button>
-        <button disabled={busy} onClick={() => input.current?.click()}>
-          <Upload size={16} /> 테마 가져오기
-        </button>
-        <input
-          ref={input}
-          type="file"
-          accept=".json"
-          hidden
-          aria-label="테마 파일"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = '';
-            if (f) void importFile(f);
-          }}
-        />
-        <label>
-          색상 보기
-          <select
-            aria-label="테마 색상 보기"
-            value={mode}
-            onChange={(e) => setMode(e.target.value as typeof mode)}
-          >
-            <option value="light">밝은 색</option>
-            <option value="dark">어두운 색</option>
-          </select>
-        </label>
-      </div>
+      <section className="theme-library-tools" aria-label="테마 관리">
+        <div className="theme-library-copy">
+          <h4>테마 관리</h4>
+          <p>커스텀 테마를 만들거나 파일에서 가져와 라이브러리에 추가해요.</p>
+        </div>
+        <div className="theme-library-actions">
+          <button className="primary" disabled={busy} onClick={() => edit()}>
+            <Plus size={16} /> 새 커스텀 테마
+          </button>
+          <button className="secondary" disabled={busy} onClick={() => input.current?.click()}>
+            <Upload size={16} /> 테마 가져오기
+          </button>
+          <input
+            ref={input}
+            type="file"
+            accept=".json"
+            hidden
+            aria-label="테마 파일"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) void importFile(f);
+            }}
+          />
+        </div>
+      </section>
       {draft && (
         <section className="theme-editor" aria-label="커스텀 테마 편집기">
           <div className="theme-editor-heading">

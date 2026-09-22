@@ -18,12 +18,45 @@ function reject(code: string): never {
   throw new OpenAIProtocolError(code);
 }
 
+function vercelProviderOptions(request: ProviderRequest): Json | undefined {
+  const generation = request.generation;
+  const base = request.providerOptions
+    ? (copy(request.providerOptions, 'PROVIDER_OPTIONS_JSON') as Record<string, Json>)
+    : {};
+  const mergeNamespace = (name: string, automatic: Record<string, Json>) => {
+    if (!Object.keys(automatic).length) return;
+    const current = object(base[name]) ? (base[name] as Record<string, Json>) : undefined;
+    // Explicit JSON stays authoritative over profile-derived defaults.
+    base[name] = current ? { ...automatic, ...current } : automatic;
+  };
+  if (generation?.modelFamily === 'openai') {
+    mergeNamespace('openai', {
+      ...(generation.verbosity !== undefined ? { textVerbosity: generation.verbosity } : {}),
+    });
+  } else if (generation?.modelFamily === 'anthropic') {
+    mergeNamespace('anthropic', {
+      ...(generation.outputEffort !== undefined ? { effort: generation.outputEffort } : {}),
+      ...(generation.thinkingMode !== undefined
+        ? { thinking: { type: generation.thinkingMode } }
+        : {}),
+    });
+  } else if (generation?.modelFamily === 'google') {
+    mergeNamespace('google', {
+      ...(generation.thinkingLevel !== undefined
+        ? { thinkingConfig: { thinkingLevel: generation.thinkingLevel.toLowerCase() } }
+        : {}),
+    });
+  }
+  return Object.keys(base).length ? base : undefined;
+}
+
 /** OpenAI's Chat Completions shape. Compatible servers choose their own model/capabilities. */
 export function encodeChat(
   request: ProviderRequest,
   protocol: 'openai-chat-v1' | 'vercel-chat-v1' | 'deepseek-chat-v1' = 'openai-chat-v1'
 ): { body: Json; context: OpenAITurn } {
   const prepared = prepare(request, 'openai-chat-turn-v1', protocol);
+  const gatewayOptions = protocol === 'vercel-chat-v1' ? vercelProviderOptions(request) : undefined;
   const deepseek = protocol === 'deepseek-chat-v1';
   const { generation, aliases, schema, previous, fresh, plan, bootstrap } = prepared;
   const bootstrapMessages: Json[] = [];
@@ -92,13 +125,13 @@ export function encodeChat(
     stream: true,
     stream_options: { include_usage: true },
     ...plan?.options,
-    ...(protocol === 'vercel-chat-v1' && request.providerOptions !== undefined
-      ? { providerOptions: copy(request.providerOptions, 'PROVIDER_OPTIONS_JSON') }
-      : {}),
+    ...(gatewayOptions !== undefined ? { providerOptions: gatewayOptions } : {}),
     ...(generation
       ? {
           [deepseek ? 'max_tokens' : 'max_completion_tokens']: generation.maxOutputTokens,
           ...(generation.temperature !== null ? { temperature: generation.temperature } : {}),
+          ...(generation.topP !== undefined ? { top_p: generation.topP } : {}),
+          ...(generation.stopSequences !== undefined ? { stop: generation.stopSequences } : {}),
           ...(deepseek
             ? {
                 thinking: { type: generation.reasoningEffort === 'none' ? 'disabled' : 'enabled' },

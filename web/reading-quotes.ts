@@ -34,10 +34,16 @@ const openPairs = new Map<string, (typeof QUOTE_PAIRS)[number]>(
 const word = /[\p{Script=Latin}\p{N}_]/u;
 
 function needsBoundary(text: string, offset: number, direction: -1 | 1): boolean {
+  let newlines = 0;
   while (offset >= 0 && offset < text.length) {
     const char = text[offset];
-    if (char === '\r' || char === '\n') return false;
-    if (char !== ' ' && char !== '\t') return true;
+    if (char === '\n') {
+      newlines++;
+      // A real blank line already gives the quote its own paragraph. A single line break does not.
+      if (newlines >= 2) return false;
+    } else if (char !== '\r' && char !== ' ' && char !== '\t') {
+      return true;
+    }
     offset += direction;
   }
   return false;
@@ -84,7 +90,7 @@ export function scanReadingQuotes(text: string, settings: ReadabilitySettings): 
         if (
           previous?.breakAfter &&
           quote.breakBefore &&
-          /^[\t ]*$/u.test(text.slice(previous.end, quote.start))
+          /^[\t ]*(?:\r?\n[\t ]*)?$/u.test(text.slice(previous.end, quote.start))
         )
           quote.breakBefore = false;
         quotes.push(quote);

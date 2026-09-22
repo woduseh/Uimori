@@ -211,10 +211,18 @@ describe('provider settings, catalogs and archive contracts', () => {
     const model = await request<ModelPreset>(
       app,
       '/model-presets',
-      modelBody(connection, { modelId: 'openai/gpt-5.6-sol', providerOptions })
+      modelBody(connection, {
+        modelId: 'openai/gpt-5.6-sol',
+        modelFamily: 'openai',
+        displayOrder: 200,
+        providerOptions,
+      })
     );
-    expect(model.providerOptions).toEqual(providerOptions);
-    expect(app.store.product.modelSnapshot(model.id).providerOptions).toEqual(providerOptions);
+    expect(model).toMatchObject({ modelFamily: 'openai', displayOrder: 200, providerOptions });
+    expect(app.store.product.modelSnapshot(model.id)).toMatchObject({
+      modelFamily: 'openai',
+      providerOptions,
+    });
     await request(
       app,
       '/model-presets',

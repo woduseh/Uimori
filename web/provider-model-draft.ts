@@ -1,4 +1,9 @@
-import type { Connection, ModelPreset, VertexRequestTier } from '../core/product.js';
+import type { Connection, ModelFamily, ModelPreset, VertexRequestTier } from '../core/product.js';
+import {
+  defaultModelFamily,
+  effectiveModelFamily,
+  inferModelFamily,
+} from '../core/model-family.js';
 import type { ModelPricing, TokenRates } from '../core/pricing-types.js';
 import { validateModelPricing } from '../core/model-pricing.js';
 import {
@@ -69,6 +74,8 @@ export type ModelDraft = {
   title: string;
   connectionRef: string;
   modelId: string;
+  modelFamily: ModelFamily | '';
+  displayOrder?: number;
   maxOutputTokens: string;
   inputTokenLimit: string;
   temperature: string;
@@ -97,6 +104,8 @@ export const initialModel = (): ModelDraft => ({
   title: '',
   connectionRef: '',
   modelId: '',
+  modelFamily: '',
+  displayOrder: undefined,
   maxOutputTokens: '8192',
   inputTokenLimit: '',
   temperature: '',
@@ -129,6 +138,8 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     title: value.title,
     connectionRef: value.connectionId,
     modelId: value.modelId,
+    modelFamily: value.modelFamily ?? '',
+    displayOrder: value.displayOrder,
     maxOutputTokens: String(value.maxOutputTokens),
     inputTokenLimit: value.inputTokenLimit === undefined ? '' : String(value.inputTokenLimit),
     temperature: value.temperature === null ? '' : String(value.temperature),
@@ -162,18 +173,58 @@ export function modelDraft(value: ModelPreset): ModelDraft {
   };
 }
 export function selectModelConnection(draft: ModelDraft, connection: Connection): ModelDraft {
-  // Switching a connection does not silently rewrite the user's generation choices.
-  return { ...draft, connectionRef: connection.id, modelId: '' };
+  // A direct provider supplies the natural family default. Gateways wait for the model ID or user choice.
+  return {
+    ...draft,
+    connectionRef: connection.id,
+    modelId: '',
+    modelFamily: defaultModelFamily(connection.protocol) ?? '',
+    thinkingLevel: '',
+    reasoningEffort: '',
+    outputEffort: '',
+    thinkingMode: '',
+    verbosity: '',
+  };
+}
+export function selectModelFamily(draft: ModelDraft, modelFamily: ModelFamily): ModelDraft {
+  if (draft.modelFamily === modelFamily) return draft;
+  return {
+    ...draft,
+    modelFamily,
+    thinkingLevel: '',
+    reasoningEffort: '',
+    outputEffort: '',
+    thinkingMode: '',
+    verbosity: '',
+  };
+}
+export function updateModelId(
+  draft: ModelDraft,
+  connection: Connection | undefined,
+  modelId: string
+): ModelDraft {
+  if (!connection) return { ...draft, modelId };
+  const before = inferModelFamily(connection.protocol, draft.modelId);
+  const after = inferModelFamily(connection.protocol, modelId);
+  const shouldFollowInference = !draft.modelFamily || draft.modelFamily === before;
+  return {
+    ...draft,
+    modelId,
+    ...(shouldFollowInference && after ? { modelFamily: after } : {}),
+  };
 }
 export function modelPayload(draft: ModelDraft, connection: Connection) {
   const providerOptions =
     connection.protocol === 'vercel-chat-v1'
       ? parseProviderOptionsText(draft.providerOptions)
       : undefined;
+  const modelFamily = effectiveModelFamily(connection.protocol, draft.modelId, draft.modelFamily);
   return {
     title: draft.title,
     connectionId: connection.id,
     modelId: draft.modelId,
+    ...(modelFamily ? { modelFamily } : {}),
+    ...(draft.displayOrder !== undefined ? { displayOrder: draft.displayOrder } : {}),
     maxOutputTokens: Number(draft.maxOutputTokens),
     ...(draft.inputTokenLimit !== '' ? { inputTokenLimit: Number(draft.inputTokenLimit) } : {}),
     temperature: draft.temperature === '' ? null : Number(draft.temperature),
@@ -248,6 +299,11 @@ export function modelDraftError(
 ): string {
   const providerError = providerOptionsDraftError(draft, connection);
   if (providerError) return providerError;
+  if (
+    connection.protocol !== 'fixture-sse-v1' &&
+    !effectiveModelFamily(connection.protocol, draft.modelId, draft.modelFamily)
+  )
+    return '모델 계열을 선택해 주세요.';
   try {
     validateModelPricing(pricingPayload(draft.pricing));
     if (!draft.maxOutputTokens.trim()) return '최대 출력 토큰을 입력해 주세요.';

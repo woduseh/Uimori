@@ -3,7 +3,12 @@ import { ToggleRow } from './ToggleRow.js';
 import { ModelPricingEditor } from './ModelPricingEditor.js';
 import { AddIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef } from 'react';
-import type { Connection, VertexRequestTier } from '../core/product.js';
+import type { Connection, ModelGeneration, VertexRequestTier } from '../core/product.js';
+import {
+  MODEL_FAMILY_CHOICES,
+  effectiveModelFamily,
+  modelFamilyProfile,
+} from '../core/model-family.js';
 import {
   PROTOCOL_OPTION_VALUES,
   protocolCacheTtls,
@@ -18,6 +23,8 @@ import {
   forcedServiceTierError,
   modelDraftError,
   providerOptionsDraftError,
+  selectModelFamily,
+  updateModelId,
   type ModelDraft,
 } from './provider-model-draft.js';
 export {
@@ -26,6 +33,8 @@ export {
   modelDraftError,
   modelPayload,
   selectModelConnection,
+  selectModelFamily,
+  updateModelId,
   type ModelDraft,
 } from './provider-model-draft.js';
 
@@ -296,8 +305,13 @@ export function ProviderModelFields({
     fixture = protocol === 'fixture-sse-v1',
     codex = protocol === 'codex-app-server-v1';
   const keys = protocol ? protocolOptionKeys(protocol) : [];
-  const sends = (key: string) => keys.includes(key);
-  const hints = connection ? modelHints(connection, value.modelId) : undefined;
+  const family = connection
+    ? effectiveModelFamily(connection.protocol, value.modelId, value.modelFamily)
+    : undefined;
+  const profile = family ? modelFamilyProfile(family) : undefined;
+  const sends = (key: string) =>
+    keys.includes(key) && (!profile || profile.optionKeys.includes(key as keyof ModelGeneration));
+  const hints = connection ? modelHints(connection, value.modelId, value.modelFamily) : undefined;
   const capability = hints?.capability;
   const cacheTtlAvailable = value.cacheMode === 'explicit' || value.cacheMode === 'automatic';
   const optionsError =
@@ -335,7 +349,7 @@ export function ProviderModelFields({
             list="available-models"
             required
             value={value.modelId}
-            onChange={(event) => update({ modelId: event.target.value })}
+            onChange={(event) => onChange(updateModelId(value, connection, event.target.value))}
           />
           <datalist id="available-models">
             {modelChoices.map((item) => (
@@ -346,6 +360,35 @@ export function ProviderModelFields({
           </datalist>
           <small>목록에서 고르거나 모델 ID를 직접 입력하세요.</small>
         </label>
+        {connection && protocol !== 'fixture-sse-v1' && (
+          <label className="full">
+            모델 계열
+            <select
+              aria-label="모델 계열"
+              required
+              value={family ?? ''}
+              onChange={(event) =>
+                onChange(
+                  selectModelFamily(
+                    value,
+                    event.target.value as (typeof MODEL_FAMILY_CHOICES)[number]['id']
+                  )
+                )
+              }
+            >
+              {!family && <option value="">모델 계열을 선택하세요</option>}
+              {MODEL_FAMILY_CHOICES.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <small>
+              모델 이름과 별개로 생성 옵션의 종류를 정해요. 게이트웨이의 새 모델도 계열만 맞추면
+              같은 옵션을 사용할 수 있어요.
+            </small>
+          </label>
+        )}
         <ToggleRow
           label="새 모델 선택에 표시"
           description="끄면 목록에서 숨기고 새 실행을 차단해요."
@@ -445,8 +488,9 @@ export function ProviderModelFields({
               placeholder={'{\n  "gateway": {\n    "only": ["openai"]\n  }\n}'}
             />
             <small>
-              Vercel AI Gateway에 전달할 JSON 객체예요. 예를 들어 gateway.only로 공급자를 제한할 수
-              있어요. API 키·토큰은 넣지 말고 서버 환경변수 인증을 사용하세요.
+              Vercel AI Gateway에 추가로 전달할 JSON 객체예요. 모델 계열의 표준 옵션은 위 설정에서
+              자동 변환하고, 여기서는 gateway.only 같은 라우팅 옵션이나 새 공급자 옵션을 직접
+              지정해요. 같은 값을 직접 적으면 이 JSON이 우선해요.
             </small>
           </label>
         )}
@@ -492,7 +536,10 @@ export function ProviderModelFields({
           label="Temperature"
           value={value.temperature}
           sendable={sends('temperature')}
-          documented={capability?.temperature}
+          documented={
+            capability?.temperature ??
+            (profile?.optionKeys.includes('temperature') ? undefined : false)
+          }
           min={0}
           max={2}
           onChange={(temperature) => update({ temperature })}
@@ -501,7 +548,9 @@ export function ProviderModelFields({
           label="Top P"
           value={value.topP}
           sendable={sends('topP')}
-          documented={capability?.topP}
+          documented={
+            capability?.topP ?? (profile?.optionKeys.includes('topP') ? undefined : false)
+          }
           min={0}
           max={1}
           onChange={(topP) => update({ topP })}

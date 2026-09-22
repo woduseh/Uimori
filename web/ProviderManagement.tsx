@@ -22,6 +22,8 @@ import {
   PowerIcon,
   RefreshIcon,
   SearchIcon,
+  UpIcon,
+  DownIcon,
 } from './ui-icons.js';
 import { VertexCredentialUpload } from './VertexCredentialUpload.js';
 import { ProviderCatalogPicker } from './ProviderCatalogPicker.js';
@@ -46,6 +48,7 @@ import {
   modelPayload,
   ProviderModelFields,
   selectModelConnection,
+  updateModelId,
 } from './ProviderModelFields.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ProviderReadiness } from './ProviderReadiness.js';
@@ -135,6 +138,7 @@ export function ConnectionEditor({
     [connectionStarted, setConnectionStarted] = useState(false),
     [modelStarted, setModelStarted] = useState(false);
   const [modelSection, setModelSection] = useState<'basic' | 'advanced'>('basic');
+  const [collapsedModelGroups, setCollapsedModelGroups] = useState<Set<string>>(() => new Set());
   const heading = useRef<HTMLDivElement>(null);
   const returnItem = useRef<{ screen: 'models' | 'connections'; id: string } | undefined>(
     undefined
@@ -261,6 +265,21 @@ export function ConnectionEditor({
       library.connections.find((c) => c.id === item.connectionId)?.title
     )
   );
+  const compareModelOrder = (a: ModelPreset, b: ModelPreset) =>
+    (a.displayOrder ?? Number.MAX_SAFE_INTEGER) - (b.displayOrder ?? Number.MAX_SAFE_INTEGER) ||
+    a.title.localeCompare(b.title, 'ko') ||
+    a.id.localeCompare(b.id);
+  const orderedModels = [...models].sort(compareModelOrder);
+  const modelGroups: { connection?: Connection; models: ModelPreset[] }[] = library.connections
+    .map((connection) => ({
+      connection,
+      models: orderedModels.filter((item) => item.connectionId === connection.id),
+    }))
+    .filter((group) => group.models.length > 0);
+  const orphanedModels = orderedModels.filter(
+    (item) => !library.connections.some((connection) => connection.id === item.connectionId)
+  );
+  if (orphanedModels.length) modelGroups.push({ models: orphanedModels });
 
   async function deletedConnection(item: Connection) {
     if (editingConnection?.id === item.id) {
@@ -384,7 +403,10 @@ export function ConnectionEditor({
       });
       return;
     }
-    const next = { ...modelDraft(item), ...(copy ? { title: item.title + ' 복사' } : {}) };
+    const next = {
+      ...modelDraft(item),
+      ...(copy ? { title: item.title + ' 복사', displayOrder: undefined } : {}),
+    };
     setModel(next);
     setModelBaseline(JSON.stringify(next));
     setEditingModel(copy ? undefined : structuredClone(item));
@@ -473,10 +495,35 @@ export function ConnectionEditor({
     };
     void perform(() => saveConnection(body, item.id, false));
   }
+  function editableModelBody(item: ModelPreset, changes: Record<string, unknown> = {}) {
+    const { id: _id, revision, source: _source, capabilityProtocol: _protocol, ...body } = item;
+    return { ...body, ...changes, expectedRevision: revision };
+  }
   function statusModel(item: ModelPreset) {
-    const { id, revision, source: _, capabilityProtocol: _protocol, ...body } = item;
-    const updated = { ...body, enabled: item.enabled === false, expectedRevision: revision };
-    void perform(() => saveModel(updated, id, false));
+    void perform(() =>
+      saveModel(editableModelBody(item, { enabled: item.enabled === false }), item.id, false)
+    );
+  }
+  function reorderModel(item: ModelPreset, direction: -1 | 1) {
+    const group = library.models
+      .filter((candidate) => candidate.connectionId === item.connectionId)
+      .sort(compareModelOrder);
+    const index = group.findIndex((candidate) => candidate.id === item.id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= group.length) return;
+    [group[index], group[target]] = [group[target]!, group[index]!];
+    void perform(async () => {
+      for (const [order, candidate] of group.entries()) {
+        const displayOrder = order * 100;
+        if (candidate.displayOrder === displayOrder) continue;
+        await api<ModelPreset>(
+          `/model-presets/${candidate.id}`,
+          editableModelBody(candidate, { displayOrder }),
+          'PUT'
+        );
+      }
+      setMessage('모델 표시 순서를 저장했어요.');
+    });
   }
   async function latest(kind: 'connection' | 'model') {
     if (kind === 'connection' && editingConnection) {
@@ -592,8 +639,14 @@ export function ConnectionEditor({
       );
       return false;
     }
+    const siblingOrder = library.models
+      .filter((item) => item.connectionId === chosen.id && item.id !== editingModel?.id)
+      .map((item, index) => item.displayOrder ?? index * 100);
     const body = {
       ...modelPayload(model, chosen),
+      ...(!editingModel && model.displayOrder === undefined
+        ? { displayOrder: (siblingOrder.length ? Math.max(...siblingOrder) : -100) + 100 }
+        : {}),
       ...(editingModel ? { expectedRevision: editingModel.revision } : {}),
     };
     return perform(() => saveModel(body, editingModel?.id, true, leave), 'model');
@@ -1091,76 +1144,120 @@ export function ConnectionEditor({
               </section>
             </article>
           )}
-          {models.map((item) => (
-            <article
-              className="provider-saved-item"
-              key={versionRef(item)}
-              aria-label={item.title + ' 모델'}
-            >
-              <div className="provider-item-heading">
-                <button
-                  type="button"
-                  className="provider-item-open secondary"
-                  disabled={busy}
-                  aria-label={item.title + ' 모델 수정'}
-                  data-provider-id={item.id}
-                  onClick={() => {
-                    void perform(() => showModel(item), 'model');
-                  }}
-                >
-                  <strong>{item.title}</strong>
-                  <span className="provider-item-subtitle">
-                    {library.connections.find((c) => c.id === item.connectionId)?.title ??
-                      '프로바이더 확인 필요'}
-                    {item.enabled === false
-                      ? ' · 비활성'
-                      : library.connections.find((c) => c.id === item.connectionId)?.enabled ===
-                          false
-                        ? ' · 프로바이더 비활성'
-                        : ''}
+          {modelGroups.map((group) => {
+            const groupKey = group.connection?.id ?? 'missing-provider';
+            return (
+              <details
+                className="provider-model-group"
+                key={groupKey}
+                open={!!filter || !collapsedModelGroups.has(groupKey)}
+                onToggle={(event) => {
+                  if (filter) return;
+                  const open = event.currentTarget.open;
+                  setCollapsedModelGroups((current) => {
+                    const next = new Set(current);
+                    if (open) next.delete(groupKey);
+                    else next.add(groupKey);
+                    return next;
+                  });
+                }}
+              >
+                <summary>
+                  <span>
+                    <strong>{group.connection?.title ?? '프로바이더 확인 필요'}</strong>
+                    <small>{group.models.length}개 모델</small>
                   </span>
-                </button>
-                <ActionMenu label={item.title + ' 모델 메뉴'}>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    aria-label={item.title + ' 모델 복제'}
-                    onClick={() => {
-                      void perform(() => showModel(item, true), 'model');
-                    }}
-                  >
-                    <CopyIcon size={18} aria-hidden="true" /> 복제
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    aria-label={
-                      item.title + ' 모델 ' + (item.enabled === false ? '활성화' : '비활성')
-                    }
-                    onClick={() => statusModel(item)}
-                  >
-                    <PowerIcon size={18} aria-hidden="true" />{' '}
-                    {item.enabled === false ? '활성화' : '비활성'}
-                  </button>
-                  {deleteModel(item)}
-                </ActionMenu>
-              </div>
-              <ProviderModelTest
-                model={item}
-                record={modelTests.records[versionRef(item)]}
-                available={
-                  item.enabled !== false &&
-                  library.connections.some(
-                    (connection) => connection.id === item.connectionId && connection.enabled
-                  )
-                }
-                busy={busy}
-                onStart={modelTests.start}
-              />
-            </article>
-          ))}
+                </summary>
+                <div className="provider-model-group-list">
+                  {group.models.map((item, index) => (
+                    <article
+                      className="provider-saved-item"
+                      key={versionRef(item)}
+                      aria-label={item.title + ' 모델'}
+                    >
+                      <div className="provider-item-heading">
+                        <button
+                          type="button"
+                          className="provider-item-open secondary"
+                          disabled={busy}
+                          aria-label={item.title + ' 모델 수정'}
+                          data-provider-id={item.id}
+                          onClick={() => {
+                            void perform(() => showModel(item), 'model');
+                          }}
+                        >
+                          <strong>{item.title}</strong>
+                          <span className="provider-item-subtitle">
+                            {item.modelId}
+                            {item.enabled === false
+                              ? ' · 비활성'
+                              : group.connection?.enabled === false
+                                ? ' · 프로바이더 비활성'
+                                : ''}
+                          </span>
+                        </button>
+                        <div className="provider-model-row-actions">
+                          <IconButton
+                            icon={UpIcon}
+                            label={item.title + ' 모델 위로 이동'}
+                            disabled={busy || !!filter || index === 0}
+                            onClick={() => reorderModel(item, -1)}
+                          />
+                          <IconButton
+                            icon={DownIcon}
+                            label={item.title + ' 모델 아래로 이동'}
+                            disabled={busy || !!filter || index === group.models.length - 1}
+                            onClick={() => reorderModel(item, 1)}
+                          />
+                          <ActionMenu label={item.title + ' 모델 메뉴'}>
+                            <button
+                              type="button"
+                              className="secondary"
+                              disabled={busy}
+                              aria-label={item.title + ' 모델 복제'}
+                              onClick={() => {
+                                void perform(() => showModel(item, true), 'model');
+                              }}
+                            >
+                              <CopyIcon size={18} aria-hidden="true" /> 복제
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary"
+                              disabled={busy}
+                              aria-label={
+                                item.title +
+                                ' 모델 ' +
+                                (item.enabled === false ? '활성화' : '비활성')
+                              }
+                              onClick={() => statusModel(item)}
+                            >
+                              <PowerIcon size={18} aria-hidden="true" />{' '}
+                              {item.enabled === false ? '활성화' : '비활성'}
+                            </button>
+                            {deleteModel(item)}
+                          </ActionMenu>
+                        </div>
+                      </div>
+                      <ProviderModelTest
+                        model={item}
+                        record={modelTests.records[versionRef(item)]}
+                        available={
+                          item.enabled !== false &&
+                          library.connections.some(
+                            (connection) =>
+                              connection.id === item.connectionId && connection.enabled
+                          )
+                        }
+                        busy={busy}
+                        onStart={modelTests.start}
+                      />
+                    </article>
+                  ))}
+                </div>
+              </details>
+            );
+          })}
           {models.length === 0 && !jevMatches && (library.models.length > 0 || hasJev) && (
             <div className="provider-empty" role="status">
               <p>검색 조건에 맞는 모델이 없어요.</p>
@@ -1546,10 +1643,12 @@ export function ConnectionEditor({
               onChoose={(item) =>
                 setModel((current) => {
                   // Picking from the list is an explicit choice: published limits prefill and stay editable.
-                  const hints = chosen ? modelHints(chosen, item.id) : undefined;
+                  const selected = updateModelId(current, chosen, item.id);
+                  const hints = chosen
+                    ? modelHints(chosen, item.id, selected.modelFamily)
+                    : undefined;
                   return {
-                    ...current,
-                    modelId: item.id,
+                    ...selected,
                     title:
                       !current.title ||
                       current.title === current.modelId ||

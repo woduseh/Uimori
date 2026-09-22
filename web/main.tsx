@@ -622,76 +622,94 @@ function App() {
   );
   function renderReadingSettings(onStartFocus?: () => void) {
     return (
-      <div className="settings-stack">
-        <label>
-          새 원고의 기본 보기
-          <select
-            aria-label="새 원고의 기본 보기"
-            value={readingLanguage}
-            onChange={(event) => setReadingLanguage(event.target.value)}
-          >
-            <option value="translation">한국어 번역</option>
-            <option value="original">원문</option>
-          </select>
-        </label>
-        <small>
-          번역이 없으면 원문을 먼저 보여 줘요. 번역 보기를 눌러 번역을 시작하고, 이미 저장된 번역은
-          다시 호출하지 않아요.
-        </small>
-        <label>
-          본문 글꼴
-          <select
-            aria-label="본문 글꼴"
-            value={font}
-            onChange={(event) => reading.changeLayout(() => setFont(event.target.value))}
-          >
-            <option value="sans">기본 고딕</option>
-            <option value="serif">명조</option>
-          </select>
-        </label>
-        <label>
-          본문 크기
-          <input
-            aria-label="본문 크기"
-            type="range"
-            min={9}
-            max={28}
-            step={1}
-            value={fontSize}
-            onChange={(event) =>
-              reading.changeLayout(() => setFontSize(Number(event.target.value)))
-            }
-          />
-          <span>{fontSize}px</span>
-        </label>
-        <label>
-          본문 폭
-          <select
-            aria-label="본문 폭"
-            value={readingWidth}
-            onChange={(event) =>
-              reading.changeLayout(() => setReadingWidth(Number(event.target.value)))
-            }
-          >
-            <option value={760}>좁게</option>
-            <option value={880}>기본</option>
-            <option value={1040}>넓게</option>
-          </select>
-        </label>
-        <small>한 줄이 짧을수록 눈이 다음 줄을 찾기 쉬워요. 이 기기에만 적용해요.</small>
-        <div className="reading-toggles">
-          <label className="check">
-            <Switch
-              checked={sceneNavigatorEnabled}
-              onChange={(event) => setSceneNavigatorEnabled(event.target.checked)}
-            />
-            채팅 네비게이터 표시
+      <div className="settings-stack reading-preferences">
+        <section className="reading-base-group" aria-labelledby="reading-basic-heading">
+          <header className="reading-settings-group-heading">
+            <h4 id="reading-basic-heading">기본 보기</h4>
+            <p>본문의 글꼴과 크기, 폭을 이 기기에 맞춰 조절해요.</p>
+          </header>
+          <label>
+            본문 글꼴
+            <select
+              aria-label="본문 글꼴"
+              value={font}
+              onChange={(event) => reading.changeLayout(() => setFont(event.target.value))}
+            >
+              <option value="sans">기본 고딕</option>
+              <option value="serif">명조</option>
+            </select>
           </label>
-        </div>
-        <small>장면 이동 컨트롤을 표시해요. 집중 읽기에서는 이 설정과 관계없이 숨겨요.</small>
+          <label>
+            본문 크기
+            <span className="reading-range-control">
+              <input
+                aria-label="본문 크기"
+                type="range"
+                min={9}
+                max={28}
+                step={1}
+                value={fontSize}
+                onChange={(event) =>
+                  reading.changeLayout(() => setFontSize(Number(event.target.value)))
+                }
+              />
+              <output>{fontSize}px</output>
+            </span>
+          </label>
+          <label>
+            본문 폭
+            <select
+              aria-label="본문 폭"
+              value={readingWidth}
+              onChange={(event) =>
+                reading.changeLayout(() => setReadingWidth(Number(event.target.value)))
+              }
+            >
+              <option value={760}>좁게</option>
+              <option value={880}>기본</option>
+              <option value={1040}>넓게</option>
+            </select>
+          </label>
+          <div className="reading-option-toggle">
+            <div>
+              <strong>채팅 네비게이터</strong>
+              <small>장면 이동 컨트롤을 표시해요. 집중 읽기에서는 항상 숨겨요.</small>
+            </div>
+            <label className="check">
+              <Switch
+                aria-label="채팅 네비게이터 표시"
+                checked={sceneNavigatorEnabled}
+                onChange={(event) => setSceneNavigatorEnabled(event.target.checked)}
+              />
+              표시
+            </label>
+          </div>
+        </section>
+
+        <section className="reading-base-group" aria-labelledby="reading-translation-heading">
+          <header className="reading-settings-group-heading">
+            <h4 id="reading-translation-heading">번역</h4>
+            <p>새 원고를 처음 열 때 보여 줄 본문을 정해요.</p>
+          </header>
+          <label>
+            새 원고의 기본 보기
+            <select
+              aria-label="새 원고의 기본 보기"
+              value={readingLanguage}
+              onChange={(event) => setReadingLanguage(event.target.value)}
+            >
+              <option value="translation">한국어 번역</option>
+              <option value="original">원문</option>
+            </select>
+          </label>
+          <small className="reading-group-note">
+            번역이 없으면 원문을 먼저 보여 줘요. 저장된 번역은 다시 호출하지 않아요.
+          </small>
+        </section>
+
         <ReadabilitySettings value={reading.settings} onChange={reading.update} />
         {onStartFocus && (
-          <button className="secondary" onClick={onStartFocus}>
+          <button className="secondary reading-focus-start" onClick={onStartFocus}>
             집중 읽기 시작
           </button>
         )}

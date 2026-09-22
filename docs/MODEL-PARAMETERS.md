@@ -4,7 +4,9 @@
 
 2026-09-09 기준 구현 계약이에요. 모델별 옵션 힌트와 프로토콜 단위 검증은 `core/model-capabilities.ts`, 요청 변환은 각 공급자 encoder가 관리해요. 실제 공급자 요청·캐시 hit·청구액은 합성 검사만으로 확인하지 않아요.
 
-모델 ID는 실행 조건이 아니에요. 앱의 힌트 표는 검토한 모델의 옵션 목록과 한도를 먼저 보여주는 용도이며, 표에 없는 ID나 값도 그대로 공급자에 보내요. 저장 검증은 프로토콜의 encoder가 보낼 수 있는 옵션과 값 어휘만 확인해요. 모델별 지원 여부는 공급자의 응답이 판정하고, 4xx 거절이 가리킨 옵션은 실패 턴 카드·보조 작업 카드·응답 테스트 결과에 이름으로 표시해요. 공급자 메시지 원문은 저장하거나 보여주지 않아요.
+모델 ID는 실행 조건이 아니에요. 앱의 힌트 표는 검토한 모델의 옵션 목록과 한도를 먼저 보여주는 용도이며, 표에 없는 ID도 저장·실행할 수 있어요. **모델 계열**(OpenAI/Anthropic/Google/DeepSeek/xAI)은 모델 ID와 별도로 생성 옵션의 형태를 정해요. 공식/직접 프로바이더는 계열 기본값을 채우고, Vercel AI Gateway는 알려진 `provider/model` prefix를 추정하며 사용자가 언제든 명시적으로 바꿀 수 있어요. 알 수 없는 Gateway 모델은 계열만 고르면 기존 모델 표에 이름을 추가하지 않아도 해당 제조사 옵션을 사용할 수 있어요.
+
+저장 검증은 프로토콜 encoder가 실제로 표현할 수 있는 옵션과 선택한 계열의 옵션을 함께 확인해요. 비워 둔 선택 옵션은 요청에 넣지 않고, 모델별 지원 여부는 최종적으로 공급자의 응답이 판정해요. 4xx 거절이 가리킨 옵션은 실패 턴 카드·보조 작업 카드·응답 테스트 결과에 이름으로 표시하며 공급자 메시지 원문은 저장하거나 보여주지 않아요.
 
 모델·프로바이더 편집은 최신 설정 한 벌을 갱신해요. 사용자가 고르는 버전이나 과거 설정 목록은 없어요. 내부 revision은 동시 편집 충돌을 막는 CAS 토큰이며, 새 생성·번역 예약·상태 재구축·문맥 정리은 모델 ID로 최신 설정을 읽어요. 진행 중인 작업과 과거 Run은 자기 모델·프로바이더 snapshot을 유지해요. 프로바이더의 프로토콜을 바꾸면 모델 설정을 다시 검토·저장하기 전까지 새 실행을 차단해요.
 
@@ -20,7 +22,7 @@
 | OpenAI Responses | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.6`, `gpt-6-astra` | Reasoning Effort/Mode/Context, Verbosity, Service Tier(Flex 포함) |
 | Anthropic Messages | `claude-opus-5`, `claude-fable-5-1` | Output Effort, Thinking, Service Tier, 정지 문자열 |
 | OpenAI Chat | 위의 등록된 GPT ID | Reasoning Effort와 Service Tier(Flex 포함). Responses 전용 제어와 캐시 설정은 제공하지 않음 |
-| Vercel AI Gateway | `spacexai/grok-4.6`, `openai/gpt-5.6-sol` | Grok low/medium/high/xhigh, Sol none/low/medium/high/xhigh 및 Service Tier default/flex. 출력 한도 500,000/128,000 |
+| Vercel AI Gateway | `provider/model` 및 수동 ID | 모델 계열에 따라 OpenAI/Anthropic/Google/DeepSeek/xAI 생성 옵션을 표시. 알려진 prefix는 자동 추정하고 미지 ID는 사용자가 계열 선택. 공통 Chat 옵션과 providerOptions 확장 지원 |
 | DeepSeek · OpenAI 호환 Chat | `deepseek-v4-pro`, `deepseek-v4-flash` | none(추론 끄기)/low/high/max, 기본 high. 출력 한도 384,000. temperature는 none에서만 제공 |
 | 표에 없는 모델 | 수동 모델 ID 또는 목록의 ID | 해당 프로토콜이 보낼 수 있는 옵션 전체. 지원 여부는 공급자 응답으로 확인 |
 
@@ -52,7 +54,7 @@ Fable 5.1은 Adaptive Thinking이 항상 켜져 있어요. 강제 도구 호출�
 - **Claude**: 5분(`5m`) 또는 60분(`1h`). 유지 시간을 생략하면 공급자 기본 5분이에요. 60분은 캐시 쓰기 비용이 더 높아요. 모든 기준점과 자동 캐시에는 같은 시간을 적용해요.
 - **GPT-5.6 이후 Responses**: 현재 확인한 TTL은 30분(`30m`)뿐이에요. 선택한 mode는 `prompt_cache_options.mode`, 기준점은 `prompt_cache_breakpoint`로 전달해요.
 - TTL을 명시하려면 명시/자동 모드를 선택해요. 캐시 OFF 또는 모드 미지정에 TTL만 남은 조합은 수정 전 저장하지 않아요.
-- **Gemini**: 기존 암묵적 캐시는 공급자가 처리해요. 이번 앱에는 `cachedContents` 생성·갱신·삭제 기능이나 프로젝트 전체 암묵적 캐시 제어가 없으므로 OFF·TTL 선택을 제공하지 않아요. Chat/Vercel/호환 프로바이더에도 지원을 추정하지 않아요.
+- **Gemini**: 기존 암묵적 캐시는 공급자가 처리해요. 이번 앱에는 `cachedContents` 생성·갱신·삭제 기능이나 프로젝트 전체 암묵적 캐시 제어가 없으므로 OFF·TTL 선택을 제공하지 않아요. Chat/Vercel/호환 프로바이더에도 캐시 지원을 추정하지 않아요.
 
 캐시 포인트는 API 요청상의 경계예요. 최소 길이, 같은 prefix, 공급자 가용성 등의 조건에 따라 실제 재사용 여부가 달라져요. Inspector는 공급자가 보고한 읽기/쓰기 토큰과 Claude의 5분/60분 쓰기 항목을 표시해요. 누락된 usage는 `미확인`이고 설정값에서 hit·절감액을 계산하지 않아요.
 

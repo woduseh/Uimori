@@ -30,43 +30,51 @@ export function ArchivePanel({
       aria-label="백업과 가져오기"
     >
       {!expanded && <summary>내보내기와 복원</summary>}
-      <section aria-label="데이터베이스 백업">
-        <h3>작업실 전체 백업</h3>
-        <p>
-          DB 스냅샷에는 자료·대화·이미지와 앱에 등록한 API 키가 들어 있어요. 개인 보관용 파일이에요.
-        </p>
-        <button
-          type="button"
-          className="secondary"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            setError('');
-            onError('');
-            try {
-              const response = await fetch('/api/backup');
-              if (!response.ok) throw new Error(`백업을 만들지 못했어요. (${response.status})`);
-              const url = URL.createObjectURL(await response.blob());
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = 'uimori-backup.sqlite';
-              link.click();
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
-            } catch (caught) {
-              setError((caught as Error).message);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <DownloadIcon size={18} aria-hidden="true" />
-          {busy ? '백업 준비 중…' : 'DB 스냅샷 다운로드'}
-        </button>
-        <details>
-          <summary>DB 스냅샷으로 복원하기</summary>
-          <p>
-            서버를 종료하고 백업 파일을 새 경로에 놓은 뒤 UIMORI_DB로 그 경로를 지정해 시작해요.
-            확인이 끝날 때까지 기존 DB는 별도로 보관해요.
+      <section className="archive-management-card" aria-label="백업과 복원">
+        <div className="archive-card-heading">
+          <div>
+            <h3>백업 · 복원</h3>
+            <p className="muted">작업실 전체 상태를 저장하거나 이전 백업으로 되돌려요.</p>
+          </div>
+        </div>
+        <div className="archive-action-row">
+          <div>
+            <strong>작업실 전체 백업</strong>
+            <p className="muted">자료·대화·이미지와 등록된 API 키를 DB 스냅샷으로 저장해요.</p>
+          </div>
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setError('');
+              onError('');
+              try {
+                const response = await fetch('/api/backup');
+                if (!response.ok) throw new Error(`백업을 만들지 못했어요. (${response.status})`);
+                const url = URL.createObjectURL(await response.blob());
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'uimori-backup.sqlite';
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              } catch (caught) {
+                setError((caught as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <DownloadIcon size={18} aria-hidden="true" />
+            {busy ? '백업 준비 중…' : 'DB 스냅샷 다운로드'}
+          </button>
+        </div>
+        <details className="archive-restore-details">
+          <summary>작업실 전체 복원</summary>
+          <p className="muted">
+            백업 DB를 UIMORI_DB 경로로 지정해 작업실 전체 상태를 복원해요. 확인 전까지 기존 DB는
+            보관해 주세요.
           </p>
         </details>
         {error && (
@@ -76,14 +84,7 @@ export function ArchivePanel({
         )}
       </section>
       <ResourceBundleImport onImported={onImported} onDirtyChange={setResourceDirty} />
-      <section>
-        <h3>이어 쓸 채팅 가져오기</h3>
-        <p>
-          메시지·번역·이미지·메모·변수와 연결 자료를 새 채팅으로 복원해요. 분기는 각각 독립 사본이
-          돼요.
-        </p>
-        <ChatBackupImport onImported={onImported} onDirtyChange={setChatDirty} disabled={busy} />
-      </section>
+      <ChatBackupImport onImported={onImported} onDirtyChange={setChatDirty} disabled={busy} />
     </Container>
   );
 }

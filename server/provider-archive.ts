@@ -78,6 +78,8 @@ export function modelPricing(value: unknown) {
 
 export function validateModelMetadata(value: Row) {
   if (value.enabled !== undefined) boolean(value.enabled);
+  if (value.displayOrder !== undefined)
+    number(value.displayOrder, 'model display order', 0, 1_000_000_000);
   if (value.pricing !== undefined) modelPricing(value.pricing);
   if (value.source !== undefined) {
     const source = record(value.source);
@@ -240,6 +242,7 @@ export function validateProviderSettingVersion(row: Row): void {
       'temperature',
       ...modelOptionKeys,
       'enabled',
+      'displayOrder',
       'pricing',
       'source',
       'capabilityProtocol',
