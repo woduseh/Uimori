@@ -1,4 +1,9 @@
-import type { Connection, ProviderProtocol } from './product.js';
+import type { Connection, ModelFamily, ProviderProtocol } from './product.js';
+import {
+  effectiveModelFamily,
+  modelFamilyProfile,
+  type ModelFamilyProfile,
+} from './model-family.js';
 import {
   modelCapability,
   PROTOCOL_OPTION_VALUES,
@@ -27,6 +32,8 @@ export type ModelHints = {
     all: readonly string[];
   };
   thinkingModes?: { known?: readonly string[]; all: readonly string[] };
+  family?: ModelFamily;
+  profile?: ModelFamilyProfile;
 };
 export function thinkingField(protocol: ProviderProtocol): ThinkingField | undefined {
   const keys = protocolOptionKeys(protocol);
@@ -63,12 +70,16 @@ export function thinkingWireField(protocol: ProviderProtocol): string | undefine
 /** Provider list metadata first, the reviewed table second, protocol vocabulary always. */
 export function modelHints(
   connection: Pick<Connection, 'protocol' | 'catalog'>,
-  modelId: string
+  modelId: string,
+  selectedFamily?: ModelFamily | ''
 ): ModelHints {
+  const family = effectiveModelFamily(connection.protocol, modelId, selectedFamily);
+  const profile = family ? modelFamilyProfile(family) : undefined;
   const capability = modelCapability(connection.protocol, modelId);
   const listed = connection.catalog.find((item) => item.id === modelId);
   const fromList = listed?.limits !== undefined || listed?.options !== undefined;
-  const field = thinkingField(connection.protocol);
+  const protocolField = thinkingField(connection.protocol);
+  const field = connection.protocol === 'vercel-chat-v1' ? profile?.thinking?.field : protocolField;
   const reviewedThinking =
     field === 'thinkingLevel'
       ? capability?.thinkingLevels
@@ -87,20 +98,36 @@ export function modelHints(
       ? {
           thinking: {
             field,
-            wire: thinkingWireField(connection.protocol) ?? field,
+            wire:
+              connection.protocol === 'vercel-chat-v1'
+                ? family === 'anthropic'
+                  ? 'providerOptions.anthropic.effort'
+                  : family === 'google'
+                    ? 'providerOptions.google.thinkingConfig.thinkingLevel'
+                    : 'reasoning_effort'
+                : (thinkingWireField(connection.protocol) ?? field),
             gateway: ['vercel-chat-v1', 'openai-chat-v1'].includes(connection.protocol),
-            known: listed?.options?.thinking ?? reviewedThinking,
-            all: PROTOCOL_OPTION_VALUES[field],
+            known:
+              connection.protocol === 'vercel-chat-v1'
+                ? (reviewedThinking ?? profile?.thinking?.values)
+                : (listed?.options?.thinking ?? reviewedThinking),
+            all: (profile?.thinking?.values ?? PROTOCOL_OPTION_VALUES[field]) as readonly string[],
           },
         }
       : {}),
-    ...(protocolOptionKeys(connection.protocol).includes('thinkingMode')
+    ...(protocolOptionKeys(connection.protocol).includes('thinkingMode') &&
+    (connection.protocol !== 'vercel-chat-v1' || profile?.thinkingModes)
       ? {
           thinkingModes: {
-            known: listed?.options?.thinkingModes ?? capability?.thinkingModes,
-            all: PROTOCOL_OPTION_VALUES.thinkingMode,
+            known:
+              connection.protocol === 'vercel-chat-v1'
+                ? profile?.thinkingModes
+                : (listed?.options?.thinkingModes ?? capability?.thinkingModes),
+            all: profile?.thinkingModes ?? PROTOCOL_OPTION_VALUES.thinkingMode,
           },
         }
       : {}),
+    ...(family ? { family } : {}),
+    ...(profile ? { profile } : {}),
   };
 }

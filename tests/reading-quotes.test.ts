@@ -120,13 +120,13 @@ describe('reading quotation pairing', () => {
     expect(scanReadingQuotes(`“완료” ${nested}`, reading())).toHaveLength(1);
   });
 
-  test('existing line boundaries need no new breaks and adjacent quotes share one break', () => {
+  test('single line boundaries still isolate quotes, while blank lines and adjacent quotes avoid duplicate gaps', () => {
     const existing = scanReadingQuotes('“첫째 줄”\n“둘째 줄”\n마지막 줄.', reading());
     expect(
       existing.map(({ separate, breakBefore, breakAfter }) => [separate, breakBefore, breakAfter])
     ).toEqual([
-      [true, false, false],
-      [true, false, false],
+      [true, false, true],
+      [true, false, true],
     ]);
     const adjacent = scanReadingQuotes('“첫 대사”  「둘째 대사」', reading());
     expect(adjacent.map(({ breakBefore, breakAfter }) => [breakBefore, breakAfter])).toEqual([
@@ -134,7 +134,9 @@ describe('reading quotation pairing', () => {
       [false, false],
     ]);
     const mixed = scanReadingQuotes('서술 “대사”\n다음 서술', reading());
-    expect(mixed[0]).toMatchObject({ breakBefore: true, breakAfter: false });
+    expect(mixed[0]).toMatchObject({ breakBefore: true, breakAfter: true });
+    const blank = scanReadingQuotes('서술\n\n“대사”\n\n다음 서술', reading());
+    expect(blank[0]).toMatchObject({ breakBefore: false, breakAfter: false });
   });
 });
 
@@ -225,21 +227,21 @@ describe('render-only reading styles', () => {
     expect(renderedText(html)).toBe(text);
   });
 
-  test('existing Prose br and PlainProse newlines remain without extra visual breaks', () => {
-    for (const text of ['“첫째 줄”\n“둘째 줄”\n마지막 줄.', '서술\n“대사”\n다음 서술']) {
+  test('single authored newlines gain visual quote spacing without rewriting source text', () => {
+    const consecutive = '“첫째 줄”\n“둘째 줄”\n마지막 줄.';
+    const surrounded = '서술\n“대사”\n다음 서술';
+    for (const text of [consecutive, surrounded]) {
       const prose = render(text);
       const plain = renderPlain(text);
       expect(prose.match(/<br\/>/gu)).toHaveLength(2);
-      for (const html of [prose, plain]) {
-        expect(html).toContain('reading-quote-break');
-        expect(html).not.toContain('reading-quote-break-before');
-        expect(html).not.toContain('reading-quote-break-after');
-      }
+      for (const html of [prose, plain]) expect(html).toContain('reading-quote-break-after');
       expect(renderedText(prose)).toBe(renderedText(render(text, DEFAULT_READABILITY)));
       expect(renderedText(plain)).toBe(text);
     }
-    expect(render('서술\n“대사” 다음 서술')).toContain('reading-quote-break-after');
-    expect(render('서술\n“대사” 다음 서술')).not.toContain('reading-quote-break-before');
+    expect(render(surrounded)).toContain('reading-quote-break-before');
+    const alreadySeparated = render('서술\n\n“대사”\n\n다음 서술');
+    expect(alreadySeparated).not.toContain('reading-quote-break-before');
+    expect(alreadySeparated).not.toContain('reading-quote-break-after');
   });
 
   test('PlainProse bounds repeated unfinished ruby, templates, tags and backtick runs', () => {

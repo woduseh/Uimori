@@ -200,10 +200,14 @@ test('hints prefer list metadata, fall back to the reviewed table, and always ca
     known: undefined,
     all: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
   });
-  // Gateways receive their own field and map it onto the model provider's parameter.
+  // Gateways infer the model maker and expose that family's native controls.
   expect(
     modelHints(connection('vercel-chat-v1'), 'anthropic/claude-opus-5').thinking
-  ).toMatchObject({ field: 'reasoningEffort', wire: 'reasoning_effort', gateway: true });
+  ).toMatchObject({
+    field: 'outputEffort',
+    wire: 'providerOptions.anthropic.effort',
+    gateway: true,
+  });
   expect(thinkingWireField('anthropic-messages-v1')).toBe('output_config.effort');
   expect(thinkingWireField('vertex-gemini-v1')).toBe(
     'generationConfig.thinkingConfig.thinkingLevel'

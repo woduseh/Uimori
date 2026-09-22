@@ -205,7 +205,7 @@ export function LoreContextPolicyEditor({
     }
   }
   return (
-    <section className="lore-context-panel" aria-label="로어 문맥 정책">
+    <section className="lore-context-panel full" aria-label="로어 문맥 정책">
       <h3>로어 사용</h3>
       <p className="muted">
         모델이 실제로 읽은 구간을 다음 생성에 이어 사용해요. 처음 읽은 이력 위치에 두며, 예산이 차면

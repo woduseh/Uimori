@@ -1597,3 +1597,64 @@ test('PMLEAVE provider draft switch saves before replacement and applies reversi
   expect(saved.revision).toBe(a.revision + 1);
   expect(saved.enabled).toBe(false);
 });
+
+test('PMUI model presets group by provider, collapse independently and persist manual order', async ({
+  page,
+  request,
+}) => {
+  const suffix = Date.now().toString();
+  const firstConnection = await api<Connection>(request, '/connections', {
+    ...connectionInput(`PMUI group A ${suffix}`),
+  });
+  const secondConnection = await api<Connection>(request, '/connections', {
+    ...connectionInput(`PMUI group B ${suffix}`),
+  });
+  const alpha = await api<ModelPreset>(request, '/model-presets', {
+    ...modelInput(firstConnection, `Alpha ${suffix}`),
+    modelId: `gpt-alpha-${suffix}`,
+    modelFamily: 'openai',
+    displayOrder: 0,
+  });
+  const beta = await api<ModelPreset>(request, '/model-presets', {
+    ...modelInput(firstConnection, `Beta ${suffix}`),
+    modelId: `gpt-beta-${suffix}`,
+    modelFamily: 'openai',
+    displayOrder: 100,
+  });
+  await api<ModelPreset>(request, '/model-presets', {
+    ...modelInput(secondConnection, `Gamma ${suffix}`),
+    modelId: `gpt-gamma-${suffix}`,
+    modelFamily: 'openai',
+    displayOrder: 0,
+  });
+
+  await settings(page);
+  const list = page.getByRole('region', { name: '저장한 모델 프리셋' });
+  const firstGroup = list
+    .locator('.provider-model-group')
+    .filter({ hasText: firstConnection.title });
+  const secondGroup = list
+    .locator('.provider-model-group')
+    .filter({ hasText: secondConnection.title });
+  await expect(firstGroup.getByText('2개 모델', { exact: true })).toBeVisible();
+  await expect(secondGroup.getByText('1개 모델', { exact: true })).toBeVisible();
+
+  await firstGroup
+    .getByRole('button', { name: `${beta.title} 모델 위로 이동`, exact: true })
+    .click();
+  await expect(
+    page.getByRole('status').filter({ hasText: '모델 표시 순서를 저장했어요.' })
+  ).toBeVisible();
+  const after = await library(request);
+  expect(after.models.find((item) => item.id === beta.id)?.displayOrder).toBe(0);
+  expect(after.models.find((item) => item.id === alpha.id)?.displayOrder).toBe(100);
+
+  await firstGroup.locator('summary').click();
+  await expect(
+    firstGroup.getByRole('button', { name: `${beta.title} 모델 수정`, exact: true })
+  ).toBeHidden();
+  await page.getByLabel('프로바이더·모델 검색').fill(beta.title);
+  await expect(
+    firstGroup.getByRole('button', { name: `${beta.title} 모델 수정`, exact: true })
+  ).toBeVisible();
+});

@@ -32,11 +32,15 @@ export function ResourceBundleImport({
     []
   );
   return (
-    <section aria-label="개별 자료 가져오기">
-      <h3>봇·페르소나·모듈·프리셋 가져오기</h3>
-      <p className="muted">
-        Uimori 자료 백업과 연결된 이미지·모듈을 새 사본으로 추가해요. 기존 자료를 덮어쓰지 않아요.
-      </p>
+    <section className="archive-management-card" aria-label="자료 가져오기">
+      <div className="archive-card-heading">
+        <div>
+          <h3>자료 가져오기</h3>
+          <p className="muted">
+            봇·페르소나·모듈·프리셋을 현재 작업실에 추가해요. 기존 자료는 유지돼요.
+          </p>
+        </div>
+      </div>
       <input
         type="file"
         aria-label="Uimori 자료 백업 파일"

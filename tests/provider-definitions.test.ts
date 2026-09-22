@@ -54,7 +54,7 @@ describe('local provider definitions (no network or provider capability inferenc
       PROVIDER_DEFINITIONS.filter((item) => item.catalog === 'local-support').map((item) => item.id)
     ).toEqual(['vertex-gemini-v1']);
   });
-  test('does not advertise provider-specific model options on incompatible adapters', () => {
+  test('keeps direct adapters provider-specific while the Vercel gateway advertises selectable family options', () => {
     expect(providerDefinition('vertex-gemini-v1').optionKeys).toEqual([
       'maxOutputTokens',
       'temperature',
@@ -70,12 +70,18 @@ describe('local provider definitions (no network or provider capability inferenc
       expect(item.optionKeys).not.toContain('evaluationTools');
       for (const settingField of ['connectionRevision', 'revision', 'expectedRevision'])
         expect(item.optionKeys).not.toContain(settingField);
-      expect(item.optionKeys.includes('thinkingMode')).toBe(item.id === 'anthropic-messages-v1');
+      expect(item.optionKeys.includes('thinkingMode')).toBe(
+        item.id === 'anthropic-messages-v1' || item.id === 'vercel-chat-v1'
+      );
       expect(item.optionKeys).not.toContain('thinkingBudgetTokens');
-      if (!['vertex-gemini-v1', 'fixture-sse-v1'].includes(item.id))
+      if (!['vertex-gemini-v1', 'fixture-sse-v1', 'vercel-chat-v1'].includes(item.id))
         expect(item.optionKeys).not.toContain('thinkingLevel');
       if (['vertex-gemini-v1', 'fixture-sse-v1'].includes(item.id))
         expect(item.optionKeys).not.toContain('reasoningEffort');
+      if (item.id !== 'anthropic-messages-v1' && item.id !== 'vercel-chat-v1')
+        expect(item.optionKeys).not.toContain('outputEffort');
+      if (item.id !== 'openai-responses-v1' && item.id !== 'vercel-chat-v1')
+        expect(item.optionKeys).not.toContain('verbosity');
     }
     expect(providerDefinition('anthropic-messages-v1').auth).toBe('api-key');
     expect(providerDefinition('vertex-gemini-v1').auth).toBe('adc-or-bearer');

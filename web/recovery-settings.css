@@ -7,23 +7,13 @@
   max-width: none;
 }
 .settings-page[data-settings-section="general"] .settings-section > label:not(.check),
-.settings-page[data-settings-section="general"] .settings-stack > label,
-.reading-settings > label,
-.reading-spacing > label {
+.settings-page[data-settings-section="general"] .settings-stack > label {
   display: grid;
   grid-template-columns: minmax(130px, 1fr) minmax(140px, 44%);
   align-items: center;
   gap: 16px;
   padding-block: 14px;
   border-bottom: 1px solid var(--line);
-}
-.reading-spacing {
-  display: block;
-}
-.reading-settings > label select,
-.reading-spacing > label select {
-  width: 100%;
-  min-width: 0;
 }
 .settings-page[data-settings-section="general"] .settings-stack > small {
   display: block;
@@ -167,11 +157,72 @@
   .archive-settings .archive-backup-option > button {
     align-self: flex-start;
   }
-  .reading-settings > label,
-  .reading-spacing > label,
   .settings-page[data-settings-section="general"] .settings-section > label:not(.check),
   .settings-page[data-settings-section="general"] .settings-stack > label {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
+  }
+}
+
+/* Shared settings cards keep management screens visually consistent. */
+.archive-settings {
+  display: grid;
+  gap: 16px;
+}
+.archive-settings > .archive-management-card {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.archive-card-heading h3,
+.archive-card-heading p,
+.archive-action-row p {
+  margin: 0;
+}
+.archive-card-heading p,
+.archive-action-row p {
+  margin-top: 5px;
+}
+.archive-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 4px;
+}
+.archive-action-row > div {
+  min-width: 0;
+}
+.archive-action-row > button {
+  flex: none;
+}
+.archive-restore-details {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.archive-restore-details > summary {
+  min-height: var(--control-h);
+  padding-block: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.archive-import-note {
+  display: block;
+  line-height: 1.55;
+}
+@media (max-width: 560px) {
+  .archive-settings > .archive-management-card {
+    padding: 14px;
+  }
+  .archive-action-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .archive-action-row > button {
+    align-self: flex-start;
   }
 }

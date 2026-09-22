@@ -5,6 +5,9 @@ import {
   modelDraft,
   modelDraftError,
   modelPayload,
+  selectModelConnection,
+  selectModelFamily,
+  updateModelId,
 } from '../web/provider-model-draft.js';
 
 const connection: Connection = {
@@ -59,6 +62,34 @@ describe('model numeric drafts', () => {
       expect(modelDraftError(draft, connection)).not.toBe('');
     }
   );
+
+  test('defaults direct providers and follows Vercel model-family prefixes without overriding a manual choice', () => {
+    const openai = {
+      ...connection,
+      id: 'openai',
+      protocol: 'openai-responses-v1' as const,
+      endpoint: 'https://api.openai.com/v1',
+    };
+    expect(selectModelConnection(initialModel(), openai).modelFamily).toBe('openai');
+
+    const gateway = selectModelConnection(initialModel(), vercelConnection);
+    expect(gateway.modelFamily).toBe('');
+    const inferred = updateModelId(gateway, vercelConnection, 'anthropic/claude-opus-5.5');
+    expect(inferred.modelFamily).toBe('anthropic');
+    const manual = selectModelFamily(inferred, 'google');
+    expect(updateModelId(manual, vercelConnection, 'openai/gpt-6-sol').modelFamily).toBe('google');
+  });
+
+  test('requires a family for an unknown gateway model and persists an explicit family and display order', () => {
+    const unknown = { ...initialModel(), modelId: 'future-lab/model-1' };
+    expect(modelDraftError(unknown, vercelConnection)).toBe('모델 계열을 선택해 주세요.');
+    const configured = { ...unknown, modelFamily: 'xai' as const, displayOrder: 200 };
+    expect(modelDraftError(configured, vercelConnection)).toBe('');
+    expect(modelPayload(configured, vercelConnection)).toMatchObject({
+      modelFamily: 'xai',
+      displayOrder: 200,
+    });
+  });
 
   test('keeps Vercel providerOptions as JSON and leaves it out of other protocols', () => {
     const draft = {

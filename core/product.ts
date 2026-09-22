@@ -12,8 +12,12 @@ export const PROVIDER_PROTOCOLS = [
   'codex-app-server-v1',
 ] as const;
 export type ProviderProtocol = (typeof PROVIDER_PROTOCOLS)[number];
+export const MODEL_FAMILIES = ['openai', 'anthropic', 'google', 'deepseek', 'xai'] as const;
+export type ModelFamily = (typeof MODEL_FAMILIES)[number];
 export type VertexRequestTier = 'standard' | 'flex';
 export type ModelGeneration = {
+  /** Model-maker profile used to expose and adapt generation options. It is host metadata, not a wire field by itself. */
+  modelFamily?: ModelFamily;
   maxOutputTokens: number;
   temperature: number | null;
   thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
@@ -194,6 +198,8 @@ export type ModelPreset = ContentRef &
     capabilityProtocol?: ProviderProtocol;
     timeoutMs?: number;
     enabled?: boolean;
+    /** User-controlled display order inside a provider group. */
+    displayOrder?: number;
     evaluationTools?: EvaluationToolOptions;
     /** Opt-in main-role context tools: model-written working summary, window switch and story.list. */
     contextTools?: boolean;

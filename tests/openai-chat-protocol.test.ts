@@ -153,6 +153,58 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     delete input.generation!.serviceTier;
     expect(record(encodeChat(input, 'vercel-chat-v1').body)).not.toHaveProperty('service_tier');
   });
+  test('Vercel maps model-family generation options while explicit providerOptions stay authoritative', () => {
+    const anthropic = request();
+    anthropic.modelId = 'anthropic/claude-opus-5.5';
+    anthropic.generation = {
+      modelFamily: 'anthropic',
+      maxOutputTokens: 4096,
+      temperature: 0.4,
+      outputEffort: 'high',
+      thinkingMode: 'adaptive',
+      topP: 0.9,
+      stopSequences: ['END'],
+    };
+    expect(record(encodeChat(anthropic, 'vercel-chat-v1').body)).toMatchObject({
+      top_p: 0.9,
+      stop: ['END'],
+      providerOptions: { anthropic: { effort: 'high', thinking: { type: 'adaptive' } } },
+    });
+
+    anthropic.providerOptions = {
+      anthropic: { effort: 'low', thinking: { type: 'disabled' } },
+    };
+    expect(record(encodeChat(anthropic, 'vercel-chat-v1').body).providerOptions).toEqual(
+      anthropic.providerOptions
+    );
+
+    const google = request();
+    google.modelId = 'google/gemini-3.1-pro';
+    google.generation = {
+      modelFamily: 'google',
+      maxOutputTokens: 4096,
+      temperature: 0.2,
+      thinkingLevel: 'HIGH',
+    };
+    expect(record(encodeChat(google, 'vercel-chat-v1').body).providerOptions).toEqual({
+      google: { thinkingConfig: { thinkingLevel: 'high' } },
+    });
+
+    const openai = request();
+    openai.modelId = 'openai/gpt-6-sol';
+    openai.generation = {
+      modelFamily: 'openai',
+      maxOutputTokens: 4096,
+      temperature: null,
+      reasoningEffort: 'high',
+      verbosity: 'low',
+    };
+    expect(record(encodeChat(openai, 'vercel-chat-v1').body)).toMatchObject({
+      reasoning_effort: 'high',
+      providerOptions: { openai: { textVerbosity: 'low' } },
+    });
+  });
+
   test('Vercel forwards providerOptions and binds it across tool continuation', () => {
     const input = request();
     input.modelId = 'openai/gpt-5.6-sol';

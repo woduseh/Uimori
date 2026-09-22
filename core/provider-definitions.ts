@@ -161,12 +161,21 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     credentialRefDefault: 'VERCEL_API_KEY',
     auth: 'bearer',
     catalog: 'remote',
-    optionKeys: [...responsesOptions, 'serviceTier'],
+    optionKeys: [
+      ...responsesOptions,
+      'serviceTier',
+      'topP',
+      'stopSequences',
+      'outputEffort',
+      'thinkingMode',
+      'thinkingLevel',
+      'verbosity',
+    ],
     reference: 'core/openai-chat-protocol.ts#encodeChat',
     limitations: [
       'Vercel의 공식 API 기본 주소에서 Chat Completions 형식을 사용해요.',
       '번역 구조화 출력을 켜면 source-bound JSON Schema를 response_format으로 보내요. 기본값은 자유 텍스트예요. 모델별 옵션·도구 지원은 미확인이에요.',
-      '고급 설정의 providerOptions는 JSON 객체로 Vercel AI Gateway 요청에 전달해요. gateway.only 같은 라우팅 제한을 지정할 수 있지만 인증정보는 넣을 수 없어요.',
+      '모델 계열을 선택하면 OpenAI·Anthropic·Google·DeepSeek·xAI 계열의 생성 옵션을 같은 게이트웨이에서 사용할 수 있어요. providerOptions는 추가 라우팅이나 새 공급자 옵션용이에요.',
     ],
   }),
   definition({
