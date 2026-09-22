@@ -11,6 +11,7 @@ const send = (value) => process.stdout.write(JSON.stringify(value) + '\n');
 const mode = process.env.UIMORI_CODEX_FIXTURE_MODE ?? 'normal';
 const input = createInterface({ input: process.stdin });
 let initialized = false;
+let clientInfo;
 let nextThread = 0;
 let nextTurn = 0;
 let loggedOut = mode === 'logged-out';
@@ -28,6 +29,7 @@ input.on('line', (line) => {
     return;
   }
   if (method === 'initialize') {
+    clientInfo = params.clientInfo;
     if (mode === 'init-timeout') return;
     send({
       id,
@@ -37,6 +39,10 @@ input.on('line', (line) => {
   }
   if (!initialized) {
     send({ id, error: { code: -1, message: 'not initialized' } });
+    return;
+  }
+  if (method === 'fixture/clientInfo') {
+    send({ id, result: clientInfo });
     return;
   }
   if (method === 'fixture/hang') return;

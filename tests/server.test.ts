@@ -1,3 +1,4 @@
+import packageJson from '../package.json' with { type: 'json' };
 import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { injectWithFixtureBot, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -112,6 +113,14 @@ const completed = (url: string, id: string) =>
   );
 
 describe('file SQLite HTTP runtime', () => {
+  it('reports the package version independently of the build fingerprint', async () => {
+    const { url } = await setup();
+    expect(await api(url, '/api/health')).toMatchObject({
+      ready: true,
+      version: packageJson.version,
+      buildId: 'unit-integration',
+    });
+  });
   it('F02 fixes snapshots, rejects stale revisions, and deduplicates a logical command', async () => {
     const { app, url, chat } = await setup();
     const other = await api<Chat>(url, '/api/chats', { title: '별도의 도시', preset: 'vivid' });
@@ -446,6 +455,10 @@ async function startChild(directory: string) {
       clearTimeout(timer);
       reject(new Error(`Child exited ${code}: ${stderr}`));
     });
+  });
+  expect(await api(ready.url, '/api/health')).toMatchObject({
+    ready: true,
+    version: packageJson.version,
   });
   return { child, url: ready.url, entry };
 }

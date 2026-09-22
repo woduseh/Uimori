@@ -1,3 +1,4 @@
+import packageJson from '../package.json' with { type: 'json' };
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { test, expect } from '@playwright/test';
@@ -15,6 +16,7 @@ test('SCUI04 recovery settings expose real build information and grouped data at
   request,
 }, info) => {
   const health = await (await request.get('/api/health')).json();
+  expect(health.version).toBe(packageJson.version);
   await page.route('**/api/agent-runtimes/codex', (route) =>
     route.fulfill({
       json: {
@@ -63,6 +65,7 @@ test('SCUI04 recovery settings expose real build information and grouped data at
         ).toHaveCount(0);
         await expect(pane.locator('.provider-actions')).toBeHidden();
       } else {
+        await expect(pane.getByTestId('app-version')).toHaveText(`v${packageJson.version}`);
         await expect(pane.getByTestId('app-build-id')).toHaveText(health.buildId);
         await pane.getByText('라이선스 전문', { exact: true }).click();
         await expect(pane.locator('.app-about-document').first()).toContainText(
@@ -86,6 +89,25 @@ test('SCUI04 recovery settings expose real build information and grouped data at
     }
     await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
   }
+});
+
+test('SCUIVERSION app version lookup reports a failure and recovers on retry', async ({ page }) => {
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  let failed = false;
+  await page.route('**/api/health', (route) => {
+    if (failed) return route.continue();
+    failed = true;
+    return route.fulfill({ status: 503, json: { error: 'Synthetic health failure' } });
+  });
+  await selectSettingsSection(page, '앱 정보·라이선스');
+  const about = page.getByRole('region', { name: 'Uimori 앱 정보', exact: true });
+  await expect(about.getByTestId('app-version')).toHaveText('확인 실패');
+  await expect(about.getByTestId('app-build-id')).toHaveText('확인 실패');
+  await about.getByRole('button', { name: '다시 확인', exact: true }).click();
+  await expect(about.getByTestId('app-version')).toHaveText(`v${packageJson.version}`);
+  await expect(about.getByTestId('app-build-id')).toHaveText(/^[a-f0-9]{64}$/);
+  await expect(about.getByRole('alert')).toBeHidden();
 });
 
 test('SCUI03 multi-entry browser back keeps the address and chat consistent with clean and dirty settings', async ({
