@@ -31,3 +31,5 @@
 같은 통신 요청을 재전송하면 같은 결과를 반환해 중복 생성을 막아요. 새 재작성 요청은 새로운 실행이며, 외부 공급자에게 이미 전송한 불확실한 요청을 서버 재시작만으로 다시 보내지 않아요.
 
 구현 진입점은 `server/model-runner.ts`, `server/run-retry.ts`, `server/main-judgment.ts`, `server/product-auxiliary.ts`, `server/source-editing.ts`예요. 합성 테스트는 데이터 흐름과 저장 동작을 확인하지만 실제 모델의 창작·번역·판정 품질을 보장하지 않아요.
+
+번역 요청 시 [봇별 번역 지침](TRANSLATION-GUIDES.md)을 현재 저장본에서 읽어 해당 작업에 고정해요. 기존 번역은 자동 교정하지 않으며, 새 번역·재번역에만 새 지침을 사용해요. 판정만 재시도할 때는 기존 후보와 지침을 유지해요.

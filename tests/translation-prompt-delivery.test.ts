@@ -1,3 +1,5 @@
+import { nativePrompt } from './fixtures/native-prompt.js';
+import { builtinPromptTemplate } from '../server/builtin-prompts.js';
 import { createHash } from 'node:crypto';
 import { expect, test } from 'vitest';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
@@ -153,3 +155,65 @@ test('default translation uses slot data once and still receives frozen author n
   expect(occurrences(request, 'SOURCE_ONCE')).toBe(1);
   expect(occurrences(request, 'Mira has not learned the keeper identity.')).toBe(1);
 });
+
+const explicitBotGuide = {
+  botId: 'bot',
+  botTitle: 'Mira',
+  botRevision: 2,
+  instructions:
+    'BOT_GUIDE_ONCE: {{setvar::unwanted::1}} stays literal. Preserve deliberate register changes.',
+  terms: [
+    { source: 'Rose', target: '로즈', note: 'BOT_TERM_ONCE: Only the character, not the flower.' },
+  ],
+};
+for (const variant of ['default', 'hermeneia', 'no-context-slot'] as const) {
+  test.each<ProviderProtocol>([
+    'openai-responses-v1',
+    'openai-chat-v1',
+    'anthropic-messages-v1',
+    'vertex-gemini-v1',
+    'codex-app-server-v1',
+  ])(
+    `bot translation guide is literal and delivered once (${variant}) through %s`,
+    async (protocol) => {
+      const program =
+        variant === 'default'
+          ? undefined
+          : variant === 'hermeneia'
+            ? builtinPromptTemplate('hermeneia')!.program
+            : nativePrompt(
+                'Translate.',
+                {
+                  promptTemplate: [
+                    { type: 'plain', role: 'system', text: 'Translate the supplied source.' },
+                    {
+                      type: 'plain',
+                      role: 'user',
+                      text: 'Translate the source in the host payload.',
+                    },
+                  ],
+                },
+                'translation'
+              );
+      const value = seed(program);
+      value.snapshot.translationGuide = structuredClone(explicitBotGuide);
+      const request = await capture(value);
+      const model = structuredClone(value.snapshot.profile!.models.translation!);
+      model.connection.protocol = protocol;
+      model.connection.endpoint =
+        protocol === 'codex-app-server-v1' ? 'codex://local' : 'https://synthetic.invalid';
+      model.modelId =
+        protocol === 'anthropic-messages-v1'
+          ? 'claude-opus-5'
+          : protocol === 'vertex-gemini-v1'
+            ? 'gemini-3.8-flash'
+            : 'gpt-6-astra';
+      const wire = encodeMainPreview({ ...request, modelId: model.modelId }, model);
+      expect(occurrences(wire.body, 'BOT_GUIDE_ONCE')).toBe(1);
+      expect(occurrences(wire.body, 'BOT_TERM_ONCE')).toBe(1);
+      expect(JSON.stringify(wire.body)).toContain('{{setvar::unwanted::1}}');
+      expect(occurrences(wire.body, 'SOURCE_ONCE')).toBe(1);
+      expect(JSON.stringify(wire.body)).not.toContain('EXCLUDED_OTHER_CHAT');
+    }
+  );
+}

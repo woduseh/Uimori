@@ -1,3 +1,4 @@
+import { currentBotTranslationGuide } from './translation-guide.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import { defaultProfile } from '../core/product.js';
@@ -114,6 +115,8 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
             sourceHash: string;
           }
         | undefined;
+      const translationGuide =
+        role === 'translation' ? currentBotTranslationGuide(store, chat.id) : undefined;
       let compilation: ReturnType<typeof compileRisuPrompt>;
       if (role === 'translation') {
         // Existing originals use their frozen source-time context, exactly as a job does.
@@ -139,6 +142,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         };
         const fixed = {
           ...frozen,
+          translationGuide,
           profile: {
             ...(frozen.profile ?? { ...defaultProfile(chat.id), models: {} }),
             promptPresets: { ...frozen.profile?.promptPresets, translation: preset },
@@ -234,6 +238,8 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
       return {
         compilation,
         provider,
+        // Custom presets may omit the context slot; the real request includes its fallback.
+        ...(translationGuide !== undefined ? { translationGuide } : {}),
         ...(snapshot.loreContext ? { loreContext: snapshot.loreContext } : {}),
         ...(previewSource ? { previewSource } : {}),
         ...(error ? { error } : {}),

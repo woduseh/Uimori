@@ -1434,6 +1434,7 @@ function ContentEditor({
         >
           <fieldset className="editor-fields full" disabled={editorUnavailable}>
             <RisuNativeFields
+              kind={value.kind}
               value={value.package}
               onChange={(pkg) =>
                 setValue((current) => ({ ...current, title: pkg.title, package: pkg }))

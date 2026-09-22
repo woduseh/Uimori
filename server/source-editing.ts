@@ -1,3 +1,4 @@
+import { currentBotTranslationGuide } from './translation-guide.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
 import { validateTranslationArtifact } from './translation-artifacts.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
@@ -92,6 +93,7 @@ export function requestTranslation(
       : undefined;
     const input = {
       ...(selection ? { translationImageSelection: selection } : {}),
+      translationGuide: currentBotTranslationGuide(store, source.chatId),
       translationPrompt: structuredClone(workspace.translation),
       promptWorkspaceRevision: workspace.revision,
       translationModelSelection: selected,

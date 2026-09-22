@@ -1,3 +1,4 @@
+import { translationGuideValue, validateTranslationGuide } from './translation-guide.js';
 import {
   stripDeprecatedRisuCardFields,
   stripDeprecatedRisuModuleFields,
@@ -108,6 +109,11 @@ export function assertRisuContentSource(value: unknown): asserts value is RisuCo
     source.assets.length > 2000
   )
     throw new Error('PACKAGE_NATIVE_RISU_INVALID');
+  for (const document of [source.card, source.module]) {
+    if (!document) continue;
+    const guide = translationGuideValue(document as Record<string, unknown>);
+    if (guide !== undefined) validateTranslationGuide(guide);
+  }
   for (const asset of source.assets) {
     const a = object(asset);
     if (
