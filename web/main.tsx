@@ -53,6 +53,7 @@ import { refValue } from './content-ref.js';
 import { deferredPanel } from './deferredPanel.js';
 import { ContentPicker } from './ContentPicker.js';
 import { ContentAvatar } from './ContentAvatar.js';
+import { ReaderGallery } from './ReaderGallery.js';
 import type { ContentRole } from '../core/risu-content.js';
 import { SourceReader } from './SourceReader.js';
 import { TurnActivity } from './TurnActivity.js';
@@ -928,6 +929,9 @@ function App() {
             <div
               className={`reader-stage ${s.detail?.reader.navigation.length ? 'has-scenes' : ''}`}
             >
+              {s.detail?.chat.id === s.selected && s.attachmentsReady && s.bot && (
+                <ReaderGallery key={`gallery:${s.viewKey}`} bot={s.bot} persona={s.persona} />
+              )}
               <div
                 ref={s.reader}
                 className="reader-scrollport"
