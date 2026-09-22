@@ -4,7 +4,7 @@ import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 
-export const DATABASE_SCHEMA_VERSION = 2;
+export const DATABASE_SCHEMA_VERSION = 3;
 const FORMAT = 'uimori-personal-v1';
 
 export class DatabaseSchemaError extends Error {
@@ -63,7 +63,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
       CREATE TABLE maintenance(id INTEGER PRIMARY KEY CHECK(id=1),epoch INTEGER NOT NULL,status TEXT NOT NULL CHECK(status IN ('open','closed')),reason TEXT,updated_at TEXT NOT NULL);
     `);
       db.prepare('INSERT INTO app_metadata VALUES(?,?)').run('format', FORMAT);
-    } else {
+    } else if (previous === 1) {
       // Retired UI grants are not user-authored prose or option values.
       db.exec(`DROP TABLE IF EXISTS helper_delegations;
         DELETE FROM chat_option_pending WHERE json_extract(body,'$.kind')='delegated';
@@ -71,6 +71,38 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
         UPDATE chat_option_operations SET result=json_remove(result,'$.delegations');
         UPDATE runs SET snapshot=json_remove(snapshot,'$.profile.chatOptions.delegatedValues','$.profile.chatOptions.delegationIds')
           WHERE json_type(snapshot,'$.profile.chatOptions')='object';`);
+    }
+    if (previous > 0 && previous < 3) {
+      // One-time conversion of execution metadata, not ongoing legacy shape support.
+      db.exec(`
+        CREATE TABLE option_operations_next(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+          request_id TEXT NOT NULL,command_hash TEXT NOT NULL,revision INTEGER NOT NULL,created_at TEXT NOT NULL);
+        INSERT INTO option_operations_next SELECT id,chat_id,request_id,command_hash,
+          COALESCE(json_extract(result,'$.revision'),0),created_at FROM chat_option_operations;
+        DROP TABLE chat_option_operations;
+        ALTER TABLE option_operations_next RENAME TO chat_option_operations;
+        ALTER TABLE chat_override_operations DROP COLUMN intent;
+        DELETE FROM chat_option_pending WHERE json_extract(body,'$.status')!='pending';
+        DELETE FROM chat_option_pending WHERE rowid NOT IN (
+          SELECT MAX(rowid) FROM chat_option_pending GROUP BY chat_id,branch_id);
+        UPDATE chat_option_pending SET body=json_remove(body,'$.headRevision','$.headHash','$.status',
+          '$.kind','$.runId','$.definitions','$.origin');
+        CREATE UNIQUE INDEX chat_option_pending_current ON chat_option_pending(chat_id,branch_id);
+        UPDATE helper_operations SET result=json_object('artifactRef',json_object(
+          'id',json_extract(result,'$.id'),'revision',json_extract(result,'$.revision')))
+          WHERE EXISTS(SELECT 1 FROM helper_artifacts a WHERE a.id=json_extract(result,'$.id')
+            AND a.revision=json_extract(result,'$.revision') AND a.task_id=helper_operations.task_id);
+        ALTER TABLE helper_artifacts DROP COLUMN snapshot;
+        UPDATE context_checkpoints SET snapshot=json_remove(snapshot,'$.eventRefs')
+          WHERE json_extract(snapshot,'$.kind')='helper';
+        UPDATE helper_artifact_jobs SET snapshot='{}' WHERE status='completed';
+        UPDATE helper_events SET data=json_object('name',json_extract(data,'$.name'),
+          'denied',json(CASE WHEN json_extract(data,'$.denied') THEN 'true' ELSE 'false' END),'errorKind',json_extract(data,'$.errorKind'),'detailsOmitted',json('true'))
+          WHERE kind='tool.finished' AND task_id IN (SELECT id FROM helper_tasks WHERE status='completed');
+        UPDATE helper_operations SET result=json_object('detailsOmitted',json('true'))
+          WHERE json_type(result,'$.artifactRef') IS NULL AND task_id IN
+          (SELECT id FROM helper_tasks WHERE status='completed');
+      `);
     }
     initDatabaseReadIndexes(db);
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}`);

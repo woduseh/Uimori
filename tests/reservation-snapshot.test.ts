@@ -252,7 +252,7 @@ test('helper callers apply fixed options before resources and preserve pending o
   });
   const chat = createFixtureChat(store, 'Read-only helper reservation'),
     service = new ChatOptionsStore(store),
-    authority = { requestId: 'direct-ui', assert: () => {} },
+    requestId = 'direct-ui',
     initial = service.get(chat.id);
   service.fixed(
     chat.id,
@@ -263,7 +263,7 @@ test('helper callers apply fixed options before resources and preserve pending o
       values: { tone: 'bold' },
       operationId: randomUUID(),
     },
-    authority
+    requestId
   );
   const fixed = service.get(chat.id);
   service.stage(
@@ -271,12 +271,11 @@ test('helper callers apply fixed options before resources and preserve pending o
     {
       branchId: fixed.branchId,
       expectedRevision: fixed.revision,
-      expectedHeadRevision: fixed.headRevision,
       binding: fixed.binding,
       values: { tone: 'warm' },
       operationId: randomUUID(),
     },
-    authority
+    requestId
   );
   const pending = service.get(chat.id).pending,
     before = store.db.prepare('SELECT total_changes() AS n').get(),

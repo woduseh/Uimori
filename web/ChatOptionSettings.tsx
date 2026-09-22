@@ -97,7 +97,6 @@ export function ChatOptionSettings(props: Props) {
         } else if (
           state.revision !== draft.base.revision ||
           state.workspaceRevision !== draft.base.workspaceRevision ||
-          state.headRevision !== draft.base.headRevision ||
           state.binding.owner !== draft.base.binding.owner ||
           state.binding.definitionHash !== draft.base.binding.definitionHash
         ) {
@@ -279,7 +278,6 @@ export function ChatOptionSettings(props: Props) {
                 submit('oneoff', 'oneoff', {
                   binding: base.binding,
                   values: oneoff,
-                  expectedHeadRevision: base.headRevision,
                 })
               }
             >
@@ -287,30 +285,26 @@ export function ChatOptionSettings(props: Props) {
             </button>
           </fieldset>
         </details>
-        {displayState.pending.filter((item) => item.status === 'pending').length > 0 && (
+        {displayState.pending.length > 0 && (
           <section aria-label="다음 생성 옵션 예약" className="chat-options-pending">
             <h3>다음 생성 옵션 예약</h3>
-            {displayState.pending
-              .filter((item) => item.status === 'pending')
-              .map((item) => (
-                <div key={item.id} className="chat-option-record">
-                  <strong>1회 옵션</strong>
-                  <OptionValues
-                    values={item.values}
-                    fieldLabel={fieldLabel}
-                    controls={displayState.controls ?? promptControls(displayState.program)}
-                  />
-                  <button
-                    type="button"
-                    disabled={blocked}
-                    onClick={() =>
-                      submit('cancel', `pending/${encodeURIComponent(item.id)}/cancel`)
-                    }
-                  >
-                    예약 취소
-                  </button>
-                </div>
-              ))}
+            {displayState.pending.map((item) => (
+              <div key={item.id} className="chat-option-record">
+                <strong>1회 옵션</strong>
+                <OptionValues
+                  values={item.values}
+                  fieldLabel={fieldLabel}
+                  controls={displayState.controls ?? promptControls(displayState.program)}
+                />
+                <button
+                  type="button"
+                  disabled={blocked}
+                  onClick={() => submit('cancel', `pending/${encodeURIComponent(item.id)}/cancel`)}
+                >
+                  예약 취소
+                </button>
+              </div>
+            ))}
           </section>
         )}
         {displayState.conflicts.map((item) => (

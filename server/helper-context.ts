@@ -99,9 +99,6 @@ export function publishHelperContext(
     const prefix = all.slice(0, all.findIndex((message) => message.id === user.id) + 1);
     if (!isDeepStrictEqual(prefix.slice(0, -1), task.snapshot.history))
       throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
-    const eventRows = store.db
-      .prepare('SELECT seq,kind,data FROM helper_events WHERE task_id=? AND kind=? ORDER BY seq')
-      .all(task.id, 'tool.finished') as Row[];
     const scopeKey = `helper:${task.conversationId}`,
       revision = base.activeRevision + 1;
     const plan: ContextPlan = {
@@ -132,10 +129,6 @@ export function publishHelperContext(
       taskId: task.id,
       segment,
       messageRefs: plan.compacted,
-      eventRefs: eventRows.map((row) => ({
-        seq: row.seq,
-        hash: hash([row.kind, JSON.parse(row.data)]),
-      })),
       base,
     };
     const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;

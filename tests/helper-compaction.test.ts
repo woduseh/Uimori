@@ -376,6 +376,10 @@ test('helper compaction resumes completed library reads and exact writes within 
     expect(events(request)).toEqual([]);
     expect(request).not.toHaveProperty('opaqueState');
     expect(f.workspace.task(f.currentTaskId).snapshot).toEqual(originalSnapshot);
+    const savedReceipt = f.store.db
+      .prepare('SELECT result FROM helper_operations WHERE task_id=?')
+      .get(f.currentTaskId)!;
+    expect(carried(request)[0].result).toEqual(JSON.parse(String(savedReceipt.result)));
     return structuredClone(success);
   });
   const task = await f.run();
@@ -404,7 +408,7 @@ test('helper compaction resumes completed library reads and exact writes within 
   const receipt = f.store.db
     .prepare('SELECT result FROM helper_operations WHERE task_id=?')
     .get(task.id)!;
-  expect(carried(resumed)[0].result).toEqual(JSON.parse(String(receipt.result)));
+  expect(JSON.parse(String(receipt.result))).toEqual({ detailsOmitted: true });
   const fixedRequest = structuredClone(resumed);
   const source = fixedRequest.input.source as Record<string, transport.Json>;
   (source.summary as Record<string, transport.Json>).text = '';
@@ -855,7 +859,8 @@ test.each([3, 12])(
         result: f.readValue,
         denied: false,
       };
-      expect(original.data).toMatchObject({ result: f.readValue });
+      expect(original.data).toMatchObject({ name: 'resource.read', detailsOmitted: true });
+      expect(original.data).not.toHaveProperty('result');
       expect(parts.join('')).toBe(JSON.stringify({ history: [], results: [event] }));
     }
     expect(task.usage.modelCalls).toBe(log.requests.length);

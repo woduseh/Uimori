@@ -10,10 +10,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     const { snapshot, ...view } = task;
     return { ...view, modelTitle: snapshot.model.title };
   };
-  const publicArtifact = (artifact: ReturnType<typeof store.artifact>) => {
-    const { snapshot: _snapshot, ...view } = artifact;
-    return view;
-  };
+  const publicArtifact = (artifact: ReturnType<typeof store.artifact>) => artifact;
   app.get<{ Querystring: { kind?: string; chatId?: string; branchId?: string } }>(
     '/api/helper/conversations',
     (request) => {
@@ -172,7 +169,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     (request) => {
       const after = request.query.after === undefined ? 0 : Number(request.query.after);
       number(after, 'event cursor', 0, Number.MAX_SAFE_INTEGER);
-      return store.events(request.params.id, after);
+      return store.events(request.params.id, after, 'updates');
     }
   );
   app.get<{ Params: { id: string }; Querystring: { revision?: string } }>(

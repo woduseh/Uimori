@@ -365,15 +365,15 @@ test('unsupported future database refuses startup without rewriting translation 
   item.store = undefined;
   const path = join(item.dir, 'test.sqlite');
   const db = new DatabaseSync(path);
-  db.exec('PRAGMA user_version=3;');
+  db.exec('PRAGMA user_version=4;');
   db.close();
-  expect(() => new Store(path)).toThrow('Database version 3 is not the personal-v1 format');
+  expect(() => new Store(path)).toThrow('Database version 4 is not the personal-v1 format');
   const original = new DatabaseSync(path, { readOnly: true });
   try {
     expect(original.prepare('SELECT status FROM jobs WHERE id=?').get(job.id)).toEqual({
       status: 'queued',
     });
-    expect(original.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 });
+    expect(original.prepare('PRAGMA user_version').get()).toEqual({ user_version: 4 });
   } finally {
     original.close();
   }

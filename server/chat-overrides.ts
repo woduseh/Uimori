@@ -20,25 +20,12 @@ import type { Store } from './store.js';
 
 type Row = Record<string, string | number | null>;
 
-export type ChatOverrideIntent = {
-  action: 'patch' | 'remove';
-  chatId: string;
-  branchId: string;
-  selector: ChatLoreSelector;
-  expectedRevision: number;
-  sourceRevision: string | null;
-};
-/** The route/helper host constructs this callback from the actual UI/task grant, never from a model argument. */
-export type ChatOverrideAuthority = {
-  requestId: string;
-  assert: (intent: ChatOverrideIntent) => void;
-};
 export type ChatOverrideResult = { revision: number; entry: ChatLoreOverride };
 export function initChatOverrides(store: Store): void {
   store.db.exec(`
     CREATE TABLE IF NOT EXISTS chat_lore_overrides(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),revision INTEGER NOT NULL,body TEXT NOT NULL,UNIQUE(chat_id,revision));
     CREATE TABLE IF NOT EXISTS chat_override_heads(chat_id TEXT PRIMARY KEY REFERENCES chats(id),revision INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS chat_override_operations(operation_id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),request_id TEXT NOT NULL,command_hash TEXT NOT NULL,intent TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS chat_override_operations(operation_id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),request_id TEXT NOT NULL,command_hash TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
   `);
 }
 const json = JSON.stringify;
@@ -129,17 +116,17 @@ export class ChatOverridesStore {
       conflicts: [...snapshot.conflicts, ...scoped.conflicts],
     };
   }
-  patch(chatId: string, value: unknown, authority: ChatOverrideAuthority): ChatOverrideResult {
-    return this.write('patch', chatId, value, authority);
+  patch(chatId: string, value: unknown, requestId: string): ChatOverrideResult {
+    return this.write('patch', chatId, value, requestId);
   }
-  remove(chatId: string, value: unknown, authority: ChatOverrideAuthority): ChatOverrideResult {
-    return this.write('remove', chatId, value, authority);
+  remove(chatId: string, value: unknown, requestId: string): ChatOverrideResult {
+    return this.write('remove', chatId, value, requestId);
   }
   private write(
     action: 'patch' | 'remove',
     chatId: string,
     value: unknown,
-    authority: ChatOverrideAuthority
+    requestId: string
   ): ChatOverrideResult {
     const body = record(value);
     fields(body, [
@@ -156,19 +143,16 @@ export class ChatOverridesStore {
       expectedRevision = number(body.expectedRevision, 'override revision', 0);
     const expectedHead = sourceId(body.expectedHeadRevision),
       operationId = text(body.operationId, 'override operation ID', 160);
-    if (!authority || typeof authority.assert !== 'function')
-      throw new HttpError(403, 'Override authority required');
-    text(authority.requestId, 'override request ID', 200);
+    text(requestId, 'override request ID', 200);
     const inputHash = hash({ action, chatId, ...body });
     return this.store.transaction(() => {
       const receipt = this.store.db
         .prepare('SELECT * FROM chat_override_operations WHERE operation_id=?')
         .get(operationId) as Row | undefined;
       if (receipt) {
-        authority.assert(JSON.parse(String(receipt.intent)) as ChatOverrideIntent);
         if (
           receipt.chat_id !== chatId ||
-          receipt.request_id !== authority.requestId ||
+          receipt.request_id !== requestId ||
           receipt.command_hash !== inputHash
         )
           throw new HttpError(409, 'Override operation ID reused');
@@ -178,15 +162,6 @@ export class ChatOverridesStore {
         chatId,
         body.branchId === undefined ? undefined : text(body.branchId, 'branch ID', 100)
       );
-      const intent: ChatOverrideIntent = {
-        action,
-        chatId,
-        branchId: branch.id,
-        selector,
-        expectedRevision,
-        sourceRevision: expectedHead,
-      };
-      authority.assert(intent);
       if (this.revision(chatId) !== expectedRevision)
         throw new HttpError(409, '채팅 전용 로어가 바뀌었어요. 최신 변경을 확인해 주세요.');
       if (branch.headRevision !== expectedHead)
@@ -267,16 +242,8 @@ export class ChatOverridesStore {
         )
         .run(chatId, entry.revision);
       this.store.db
-        .prepare('INSERT INTO chat_override_operations VALUES(?,?,?,?,?,?,?)')
-        .run(
-          operationId,
-          chatId,
-          authority.requestId,
-          inputHash,
-          json(intent),
-          json(result),
-          entry.createdAt
-        );
+        .prepare('INSERT INTO chat_override_operations VALUES(?,?,?,?,?,?)')
+        .run(operationId, chatId, requestId, inputHash, json(result), entry.createdAt);
       this.store.event(chatId, 'chat.lore.override', entry.id);
       return result;
     });
@@ -329,10 +296,7 @@ export function chatOverrideRoutes(
   const mutate =
     (action: 'patch' | 'remove') => async (request: { params: { id: string }; body: unknown }) => {
       const operationId = text(record(request.body).operationId, 'override operation ID', 160);
-      const result = service[action](request.params.id, request.body, {
-        requestId: `user-ui:${operationId}`,
-        assert: () => {},
-      });
+      const result = service[action](request.params.id, request.body, `user-ui:${operationId}`);
       publish(request.params.id);
       return result;
     };

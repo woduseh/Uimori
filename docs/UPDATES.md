@@ -36,7 +36,7 @@ npm run update -- cancel --config .local/update.json --key update-2026-09-19
 
 ## Transition and recovery
 
-Empty and personal-v1 databases are supported. Opening a personal schema-1 copy upgrades it transactionally to schema 2; preserve its backup before starting the candidate. Other legacy formats still require the separate schema-24-to-personal-v1 transfer tool and a verified new database. The controller does not infer or reset unrelated formats. See [data formats](DATA-MIGRATIONS.md).
+Empty and personal-v1 databases are supported. Opening a personal schema-1 or schema-2 copy upgrades it transactionally to schema 3; preserve its backup before starting the candidate. Other legacy formats still require the separate schema-24-to-personal-v1 transfer tool and a verified new database. The controller does not infer or reset unrelated formats. See [data formats](DATA-MIGRATIONS.md).
 
 The controller prepares the image, closes maintenance, waits for `activeWork` to reach zero, and stops the app. It archives the entire data volume, restores it into a new volume, and starts the candidate with `UIMORI_MAINTENANCE=1`. The candidate command checks for the app's ready event. It then changes `UIMORI_IMAGE` and `UIMORI_DATA_VOLUME` in the environment file, starts the Compose app service, checks `/api/session`, and reopens maintenance. Other environment settings, the previous volume, and the backup remain in place.
 

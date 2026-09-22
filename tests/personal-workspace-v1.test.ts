@@ -41,7 +41,7 @@ function database() {
 
 test('fresh schema is personal v1; adding an index does not block reopening', () => {
   const store = database();
-  expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(2);
+  expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(3);
   store.db.exec('CREATE INDEX extra_user_index ON sources(created_at)');
   const path = store.path;
   store.close();

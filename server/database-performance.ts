@@ -11,6 +11,8 @@ export function initDatabaseReadIndexes(db: DatabaseSync): void {
     ['runs_retry', "runs(chat_id,json_extract(command,'$.retryOf'),created_at DESC,id DESC)"],
     ['events_kind', 'events(chat_id,kind,seq)'],
     ['jobs_chat_status', 'jobs(chat_id,status)'],
+    ['helper_events_task', 'helper_events(task_id,kind,seq)'],
+    ['helper_operations_task', 'helper_operations(task_id)'],
   ])
     db.exec(`CREATE INDEX IF NOT EXISTS ${name} ON ${columns}`);
 }

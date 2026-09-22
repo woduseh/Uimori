@@ -3,7 +3,6 @@ import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { deleteChatOverrideSourcesInTransaction } from './chat-overrides.js';
-import { deleteChatOptionSourcesInTransaction } from './chat-options.js';
 import { deleteIllustrationsForSources } from './illustrations.js';
 
 type Row = Record<string, any>;
@@ -274,7 +273,6 @@ export function deleteBranch(store: Store, chatId: string, branchId: string, val
     removeBranchHelpers(store, chatId, branchId);
     removeRunArtifacts(store, runIds, sourceIds, jobIds);
     deleteChatOverrideSourcesInTransaction(store, chatId, sourceSet);
-    deleteChatOptionSourcesInTransaction(store, chatId, sourceSet, runSet);
     store.db
       .prepare(
         "DELETE FROM chat_option_operations WHERE chat_id=? AND json_extract(intent,'$.branchId')=?"
