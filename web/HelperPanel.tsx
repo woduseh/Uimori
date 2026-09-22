@@ -493,8 +493,8 @@ export function HelperPanel(props: Props) {
       >
         <p>모델 · {task.modelTitle}</p>
         <p>
-          모델 호출 {task.usage.modelCalls}회 · 입력 {task.usage.inputTokens ?? '미확인'} / 출력{' '}
-          {task.usage.outputTokens ?? '미확인'} 토큰
+          모델 호출 {task.usage.modelCalls}회 · 누적 입력 {task.usage.inputTokens ?? '미확인'} /
+          출력 {task.usage.outputTokens ?? '미확인'} 토큰
         </p>
         {task.error && <p className="error">{task.error}</p>}
         {task.completedEffects && <p>저장한 작업 · {task.completedEffects.labels.join(' · ')}</p>}

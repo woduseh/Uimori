@@ -1,3 +1,4 @@
+import { describeHelperTools } from '../server/helper-app-tools.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -270,7 +271,7 @@ test('helper searches metadata then reads the discovered item without changing e
     const round = calls++;
     if (round === 0) {
       expect(
-        request.stable.tools.find((tool) => tool.name === 'library.search')?.inputSchema
+        describeHelperTools({ names: ['library.search'] }).tools[0]?.inputSchema
       ).toMatchObject({
         required: ['query'],
         properties: {

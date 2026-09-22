@@ -1,3 +1,4 @@
+import { describeHelperTools } from '../server/helper-app-tools.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -161,7 +162,8 @@ async function submit(f: Awaited<ReturnType<typeof fixture>>, request: string) {
   return completed;
 }
 function definition(request: transport.ProviderRequest, name: string) {
-  const tool = request.stable.tools.find((item) => item.name === name);
+  expect(request.stable.tools.some((tool) => tool.name === 'app.tools')).toBe(true);
+  const tool = describeHelperTools({ names: [name] }).tools[0];
   expect(tool).toBeDefined();
   return tool!.inputSchema;
 }

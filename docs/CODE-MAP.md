@@ -3,7 +3,8 @@
 | Responsibility | Entry points | Current contract |
 | --- | --- | --- |
 | Resource editing and local recovery | `web/resource-editor-session.ts`, `web/resource-editor.tsx`, `server/resource-service.ts`, `server/resource-routes.ts` | [Editing](EDITING.md) |
-| Helper app tools | `server/helper-runtime.ts`, `server/helper-resource-tools.ts`, `server/helper-workspace.ts` | [Usage](USAGE.md) |
+| Helper execution and app operations | `server/helper-runtime.ts`, `server/helper-app-tools.ts`, `server/helper-resource-tools.ts`, `server/helper-workspace.ts` | [Helper tools](HELPER-TOOLS.md) |
+| Helper grep, partial reads and SQL | `server/helper-data-tools.ts`, `server/helper-data-worker.ts` | [Helper tools](HELPER-TOOLS.md) |
 | Provider/key configuration | `server/provider-connections.ts`, `server/credentials.ts`, `server/jev-credentials.ts`, `server/vertex-credentials.ts` | [Providers](PROVIDERS.md) |
 | Image conversion/storage/metadata | `server/image-processing.ts`, `server/image-storage.ts`, `server/asset-metadata.ts`, `web/ImageMetadataFields.tsx` | [Library](LIBRARY.md) |
 | Independent copies and retries | `server/chat-copy.ts`, `server/chat-fork.ts`, `server/run-retry.ts`, `server/chat-media.ts` | [Chat backup](CHAT-BACKUP.md) |
