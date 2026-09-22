@@ -682,7 +682,7 @@ function runDataOperation(input: DataOperation): unknown {
       return search(db, snapshot, { ...input.args, scope: scopes[0] });
     if (input.args.refs === undefined) return read(db, snapshot, input.args);
     only(input.args, ['refs', 'offset', 'limit']);
-    if (!Array.isArray(input.args.refs) || !input.args.refs.length || input.args.refs.length > 4)
+    if (!Array.isArray(input.args.refs) || !input.args.refs.length || input.args.refs.length > 16)
       throw new Error('DATA_LIST_INVALID');
     const items: unknown[] = [];
     let size = 0;
