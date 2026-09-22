@@ -1,8 +1,9 @@
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { Store, HttpError } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
@@ -154,36 +155,6 @@ describe('chat transcript export and import', () => {
     ).toThrow();
   });
 
-  test('v1 authored notes remain readable and v2 requires their explicit kind', async () => {
-    const store = await database();
-    const { chat } = authoredChat(store);
-    const current = exportChatTranscript(store, chat.id);
-    const legacy = {
-      ...current,
-      version: 1,
-      notes: current.notes.map(({ text, author, atIndex }) => ({ text, author, atIndex })),
-    };
-    expect(validateChatTranscript(legacy).notes).toEqual(current.notes);
-    const imported = importChatTranscript(store, { transcript: legacy, idempotencyKey: 'v1-note' });
-    expect(exportChatTranscript(store, imported.chat.id).notes).toEqual(current.notes);
-    const receipt = store.db
-      .prepare(
-        "SELECT entity_id FROM events WHERE kind='chat.transcript-import-receipt' AND chat_id=?"
-      )
-      .get(imported.chat.id) as { entity_id: string };
-    expect(JSON.parse(receipt.entity_id).digest).toBe(
-      createHash('sha256')
-        .update(JSON.stringify({ ...legacy, exportedAt: undefined }))
-        .digest('hex')
-    );
-    expect(
-      importChatTranscript(store, { transcript: legacy, idempotencyKey: 'v1-note' }).created
-    ).toBe(false);
-    expect(() => validateChatTranscript({ ...legacy, version: 2 })).toThrow(
-      'CHAT_TRANSCRIPT_INVALID_NOTE_KIND'
-    );
-  });
-
   test('a transcript carries authored history only and imports as a new chat with the same reading', async () => {
     const store = await database();
     const { chat, first } = authoredChat(store);
@@ -214,7 +185,7 @@ describe('chat transcript export and import', () => {
       expect(run.status).toBe('completed');
       expect(run.usage.modelCalls).toBe(0);
       expect(run.snapshot.transcriptImport).toEqual({ index, storage: 'source-only-v1' });
-      expect(run.snapshot.history).toEqual([]);
+      expect(readStoredRunSnapshot(store, run.id).history).toEqual([]);
       expect(run.snapshot.promptCompilation).toBeUndefined();
     }
     expect(store.validateHistory(history, store.chat(id).headRevision)).toBe(true);
@@ -291,7 +262,7 @@ describe('chat transcript export and import', () => {
     const withoutBot = { ...transcript, packageAttachments: [] };
     expect(() =>
       importChatTranscript(store, { transcript: withoutBot, idempotencyKey: 'no-bot' })
-    ).toThrow(new HttpError(400, 'CHAT_TRANSCRIPT_BOT_REQUIRED'));
+    ).toThrow('채팅을 이어 쓸 봇이 필요해요.');
   });
 
   test('chat backup restores transcript receipts as history without claiming destination keys', async () => {

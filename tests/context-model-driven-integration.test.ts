@@ -1,3 +1,4 @@
+import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
@@ -91,6 +92,7 @@ async function setup(options: { count?: number; contextTools?: boolean } = {}) {
     buildId: 'synthetic-context-model-test',
   }));
   await app.ready();
+  observeExecutions(app.store);
   let chat = createFixtureChat(app.store, '합성 모델 주도 문맥 대화');
   chat = app.store.settings(chat.id, chat.settingsRevision, {
     ...chat.settings,
@@ -182,7 +184,7 @@ async function terminal(app: App, id: string) {
   let run!: Run;
   await vi.waitFor(
     () => {
-      run = app.store.run(id);
+      run = observedExecution(app.store, id);
       expect(['queued', 'running']).not.toContain(run.status);
     },
     { timeout: 10_000, interval: 20 }
@@ -224,14 +226,7 @@ async function contextApi(
   expect(result.statusCode, result.body).toBe(status);
   return result.json();
 }
-const toolEvents = (app: App, runId: string) =>
-  (
-    app.store.db
-      .prepare('SELECT event FROM tool_events WHERE run_id=? ORDER BY seq')
-      .all(runId) as {
-      event: string;
-    }[]
-  ).map((row) => JSON.parse(row.event) as ToolEvent);
+const toolEvents = (app: App, runId: string) => observedExecution(app.store, runId).toolEvents;
 
 describe('model-written summary and window switch through the real App and file SQLite', () => {
   test('a user summary edit during the run wins CAS: the late model write stays an inactive candidate', async () => {

@@ -1,3 +1,4 @@
+import { observedAttempts } from './fixtures/execution-observer.js';
 import { expect, test } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { Json } from '../core/transport.js';
@@ -18,7 +19,7 @@ import {
   packet,
   rawCall,
   send,
-  settled,
+  observedCompletion,
   toolName,
 } from './fixtures/agent-collaboration.js';
 import { sse } from './fixtures/loopback-provider.js';
@@ -46,7 +47,7 @@ test('absent and disabled collaboration preserve one writing call plus JEV judgm
       },
       { collaboration: config }
     );
-    const run = await settled(state, (await state.start()).id);
+    const run = await observedCompletion(state, (await state.start()).id);
     expect(run).toMatchObject({
       status: 'completed',
       usage: { modelCalls: 2, inputTokens: 14, outputTokens: 6, costUsd: null },
@@ -128,7 +129,7 @@ test('before advisors run in order with scoped reads, selected models and explic
       }),
     }
   );
-  const run = await settled(state, (await state.start()).id);
+  const run = await observedCompletion(state, (await state.start()).id);
   expect(run.status).toBe('completed');
   expect(state.observed.map((wire) => wire.agentId ?? 'main')).toEqual([
     'advisor',
@@ -228,7 +229,7 @@ test('on-demand main -> advisor read loop -> main persists attempts before HTTP 
       await send(target, [message('Final main scene, with one grounded detail.')]);
     }
   });
-  const run = await settled(state, (await state.start()).id);
+  const run = await observedCompletion(state, (await state.start()).id);
   expect(run.status).toBe('completed');
   expect(state.observed.map((wire) => wire.agentId ?? 'main')).toEqual([
     'main',
@@ -315,7 +316,7 @@ test('different follow-up questions receive prior advice and share the per-advis
     },
     { collaboration: collaboration({ agents: [agent('advisor', { maxCalls: 2 })] }) }
   );
-  const run = await settled(state, (await state.start()).id);
+  const run = await observedCompletion(state, (await state.start()).id);
   expect(run.status).toBe('completed');
   expect(state.observed.map((wire) => wire.agentId ?? 'main')).toEqual([
     'main',
@@ -399,7 +400,7 @@ test('host, collaboration and per-advisor budgets bound real requests while rese
         }),
       }
     );
-    const run = await settled(state, (await state.start()).id);
+    const run = await observedCompletion(state, (await state.start()).id);
     expect(run.status, scenario.label).toBe('completed');
     expect(state.provider.requests, scenario.label).toHaveLength(scenario.calls);
     expect(run.usage.modelCalls).toBe(scenario.calls + 1);
@@ -456,7 +457,7 @@ test('advisor recursive consult, state writes, final submission and ungranted re
       },
       { collaboration: collaboration({ agents: [agent('advisor', { trigger: 'before' })] }) }
     );
-    const run = await settled(state, (await state.start()).id);
+    const run = await observedCompletion(state, (await state.start()).id);
     expect(run.status, forbidden).toBe('completed');
     expect(advisorRequests).toBe(forbidden === 'foreign-resource' ? 3 : 1);
     expect(state.provider.requests).toHaveLength(forbidden === 'foreign-resource' ? 4 : 2);
@@ -512,7 +513,7 @@ test('HTTP failure, partial output and uncertain disconnect become cached unavai
         }
       }
     });
-    const run = await settled(state, (await state.start()).id);
+    const run = await observedCompletion(state, (await state.start()).id);
     expect(run.status, failure).toBe('completed');
     expect(advisorRequests).toBe(1);
     expect(state.provider.requests).toHaveLength(4);
@@ -531,7 +532,7 @@ test('HTTP failure, partial output and uncertain disconnect become cached unavai
     ]);
     expect(detail.attempts).toHaveLength(5);
     expect(
-      detail.attempts!.filter(
+      observedAttempts(state.app.store, run.id).filter(
         (attempt) => (attempt.request as { agentId?: string }).agentId === 'advisor'
       )
     ).toHaveLength(1);
@@ -561,7 +562,7 @@ test('cancelling a live advisor closes its HTTP stream, preserves completed usag
   const started = await state.start();
   await received.promise;
   await api(state.app, `/api/runs/${started.id}/cancel`, {});
-  expect((await settled(state, started.id)).status).toBe('cancelled');
+  expect((await observedCompletion(state, started.id)).status).toBe('cancelled');
   await closed.promise;
   await expect
     .poll(
@@ -655,7 +656,7 @@ test('model and prompt changes after reservation cannot replace frozen advisor c
   );
   expect(updatedModel.revision).toBeGreaterThan(state.advisorModel.revision);
   gate.release();
-  const run = await settled(state, started.id);
+  const run = await observedCompletion(state, started.id);
   expect(run.status).toBe('completed');
   expect(run.snapshot.profile).toEqual(before.profile);
   expect(run.snapshot.profile?.collaborationModels?.advisor).toMatchObject({
@@ -709,7 +710,7 @@ test('current advisor connection authorization is checked again between read rou
     'PUT'
   );
   gate.release();
-  const run = await settled(state, started.id);
+  const run = await observedCompletion(state, started.id);
   expect(run.status).toBe('completed');
   expect(run.usage).toEqual({ modelCalls: 3, inputTokens: 21, outputTokens: 9, costUsd: null });
   expect(state.observed.map((wire) => wire.agentId ?? 'main')).toEqual(['advisor', 'main']);
@@ -740,7 +741,7 @@ test('advisor can correct invalid search arguments while only successful reads b
     },
     { collaboration: collaboration({ agents: [agent('advisor', { trigger: 'before' })] }) }
   );
-  const run = await settled(state, (await state.start()).id);
+  const run = await observedCompletion(state, (await state.start()).id);
   expect(run.status).toBe('completed');
   expect(advisorRequests).toBe(3);
   const reads = run.toolEvents.filter((event) => event.name === 'agents.read');

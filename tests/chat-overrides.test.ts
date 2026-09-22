@@ -1,3 +1,4 @@
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -230,8 +231,7 @@ test('the same package in bot and persona roles receives an override only on the
     chat = store.createChat('Role scope', 'calm', { botId: bot.id });
   profile(store, chat.id, [ref(bot, 'bot'), ref(bot, 'persona')]);
   patch(store, chat.id, selector(bot), 'Bot-only local lore');
-  const value = run(store, chat.id),
-    original = structuredClone(value.snapshot);
+  const value = run(store, chat.id);
   const compiled = compiledPackages(value.snapshot, 'main');
   expect(
     compiled
@@ -248,6 +248,7 @@ test('the same package in bot and persona roles receives an override only on the
   ).toBe(true);
   expect(store.product.get<Content>('content', bot.id)).toEqual(bot);
   complete(store, value);
+  const original = readStoredRunSnapshot(store, value.id);
   const changed = save(
     store,
     'Shared identity revised',
@@ -279,7 +280,7 @@ test('the same package in bot and persona roles receives an override only on the
     conflict.chatOverrides!.projections.find((item) => item.scope.role === 'bot')!.package.lore[0]
       .text
   ).toBe('Bot-only local lore');
-  expect(store.run(value.id).snapshot).toEqual(original);
+  expect(readStoredRunSnapshot(store, value.id)).toEqual(original);
 });
 
 test('authority, source scope, root/package revisions and text-only selectors reject forged or stale changes atomically', () => {

@@ -30,7 +30,6 @@ openssl rand -hex 32
 | `UIMORI_ACCESS_TOKEN` | 공백 없는 무작위 접속 토큰 32–1000자. 위 명령은 64자리 hex를 생성해요. |
 | `UIMORI_TLS_DIR` | 두 TLS 파일이 있는 서버의 절대 디렉터리. |
 | `UIMORI_HTTPS_PORT` | 기본 `443`. `8443`이면 public origin에도 `:8443`을 넣어요. |
-| `UIMORI_PROVIDER_ORIGINS` | 공식 공급자 주소는 기본 허용해요. 사용자 지정 API의 추가 허용 origin을 쉼표로 나열해요. public origin과 별도이며 공식 프로바이더만 쓰면 비워둬요. |
 
 4. 설정을 확인하고 시작해요. 아래 명령은 저장소 루트에서 실행해요. `config --quiet`는 비밀 값을 출력하지 않고 Compose 설정을 검사해요. 보간에 필요한 값이 없으면 시작 전에 오류를 반환해요. [Compose 환경 파일](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/), [필수 값 보간](https://docs.docker.com/reference/compose-file/interpolation/)
 
@@ -43,7 +42,7 @@ docker compose --env-file .env.self-host logs --tail=100 app proxy
 
 PC·휴대폰에서 설정한 HTTPS 주소로 접속하고 토큰을 입력해요. 각 브라우저는 별도 로그인 세션을 가져요. 앱 자체의 시간 만료는 없으며 서버 재시작 후에도 로그인을 유지해요. 브라우저 쿠키 삭제·명시적인 로그아웃·접속 토큰 변경은 로그인을 해제해요. 저장한 자료·채팅은 공유하지만 미전송 초안 같은 브라우저 저장 정보는 기기별이에요.
 
-세션은 최대 32개이며 초과하면 가장 오래 발급된 세션부터 해제해요. 잘못된 토큰으로 10번 접속하면 첫 실패부터 15분이 지날 때까지 새 로그인을 제한해요. 개인 작업실 전체에 적용하고 이미 로그인한 기기의 사용은 유지해요. 서버는 토큰을 생성·보관해주지 않으므로 설정한 값을 따로 관리하세요.
+잘못된 토큰으로 10번 접속하면 첫 실패부터 15분이 지날 때까지 새 로그인을 제한해요. 개인 작업실 전체에 적용하고 이미 로그인한 기기의 사용은 유지해요. 서버는 토큰을 생성·보관해주지 않으므로 설정한 값을 따로 관리하세요.
 
 ## 모델 API 키
 
@@ -97,7 +96,6 @@ curl -sS -X POST https://story.example.com/api/maintenance \
 
 기본 [Compose](../compose.yaml)는 프록시의 HTTPS 포트만 호스트에 공개해요. 앱의 `4310`은 Docker 네트워크 안에 두고, `UIMORI_HOST=0.0.0.0`은 컨테이너 내부 수신에만 사용해요. 앱 포트를 호스트에 추가 공개하지 마세요. 원격 모드의 HTTPS는 이 TLS 종료·네트워크 구성으로 보장하며 앱은 전달된 `X-Forwarded-*`를 HTTPS나 인증의 증거로 신뢰하지 않아요.
 
-개인 서버 모드는 `UIMORI_TEST_MODE`와 함께 시작할 수 없어요. 저장·로그인·로그아웃 같은 변경 요청은 정확한 `Origin` 헤더가 필요하며 브라우저는 이를 자동으로 보내요. 별도 HTTP 클라이언트를 사용할 때에도 `Origin: https://설정한-주소`를 전달해야 해요. `UIMORI_PROVIDER_ORIGINS`는 모델 호출 허용 목록이라 브라우저 주소 허용 설정으로 사용하지 않아요.
 
 [Nginx 설정](../deploy/nginx.conf)은 요청의 원래 `Host`와 `Origin`을 그대로 전달해 앱이 `UIMORI_PUBLIC_ORIGIN`과 비교하게 해요. 임의 Host를 허용된 Host로 덮어쓰면 이 검사가 약해져요. SSE용 응답 버퍼링·캐시는 끄고 응답 읽기 간격 제한을 3600초로 설정했어요. Docker DNS를 다시 조회하므로 앱 컨테이너 교체 후 새 주소를 사용해요. [Nginx Host 전달·버퍼링·timeout](https://nginx.org/en/docs/http/ngx_http_proxy_module.html), [DNS resolver](https://nginx.org/en/docs/http/ngx_http_core_module.html#resolver)
 

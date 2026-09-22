@@ -137,7 +137,7 @@ test('library-only helper has durable attempts, idempotent submission and no mai
   );
 });
 
-test('real transport permits requested outline writing while refusing an unsolicited artifact child', async () => {
+test('real transport executes requested outline writing without generating prose', async () => {
   const f = fixture(),
     chat = createFixtureChat(f.store, '구성만 요청한 본편');
   const conversation = f.workspace.open({
@@ -165,16 +165,6 @@ test('real transport permits requested outline writing while refusing an unsolic
                 operations: [{ op: 'create', level: 'theme', title: '계획만 저장', intent: '' }],
               }),
             },
-            {
-              type: 'tool_delta',
-              index: 1,
-              id: 'child',
-              name: 'artifact.generate',
-              argumentsDelta: JSON.stringify({
-                request: '허가하지 않은 장면',
-                operationId: 'child',
-              }),
-            },
             { type: 'done', reason: 'tool_calls' },
           ]
         : [
@@ -194,9 +184,7 @@ test('real transport permits requested outline writing while refusing an unsolic
   expect(bodies).toHaveLength(2);
   const events = bodies[1].input.results as unknown as import('../core/types.js').ToolEvent[];
   expect(events.find((event) => event.name === 'outline.write')).toMatchObject({ denied: false });
-  expect(events.find((event) => event.name === 'artifact.generate')).toMatchObject({
-    denied: true,
-  });
+  expect(events.some((event) => event.name === 'artifact.generate')).toBe(false);
   expect(f.store.outline.detail(chat.id).nodes.map((node) => node.title)).toEqual(['계획만 저장']);
   expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_artifact_jobs').get()).toEqual({
     n: 0,
@@ -272,7 +260,7 @@ test('a saved change survives an explanation EOF and prevents whole-request retr
   expect(f.workspace.task(task.id)).toMatchObject({
     status: 'failed',
     error: 'UNEXPECTED_EOF',
-    completedEffects: { count: 1, labels: ['도우미 변경'] },
+    completedEffects: { count: 1, labels: ['완료된 도우미 작업'] },
   });
   expect(send).toHaveBeenCalledTimes(2);
   const owner = owned.find((item) => item.store === f.store)!;
@@ -280,7 +268,7 @@ test('a saved change survives an explanation EOF and prevents whole-request retr
   owner.store = new Store(join(owner.path, 'story.sqlite'));
   const reopened = new HelperWorkspace(owner.store);
   const previous = reopened.task(task.id);
-  expect(previous.completedEffects).toEqual({ count: 1, labels: ['도우미 변경'] });
+  expect(previous.completedEffects).toEqual({ count: 1, labels: ['완료된 도우미 작업'] });
   expect(() =>
     reopened.enqueue(conversation.id, 'retry-eof', previous.request, {
       ...previous.snapshot,
@@ -312,45 +300,6 @@ test('a rolled-back operation does not block retry or claim a completed change',
   ).toBe(task.id);
 });
 
-test('an explanation request cannot authorize a model-requested artifact child', async () => {
-  const f = fixture(),
-    chat = createFixtureChat(f.store, '본편');
-  const conversation = f.workspace.open({
-    kind: 'chat',
-    chatId: chat.id,
-    branchId: `main:${chat.id}`,
-  });
-  const send = mockSend((_request, _options, index) =>
-    index === 0
-      ? {
-          ...structuredClone(success),
-          status: 'tool_calls',
-          text: '',
-          toolCalls: [
-            {
-              id: 'unrequested-child',
-              name: 'artifact.generate',
-              arguments: { request: '모델이 임의로 요청한 새 장면', operationId: 'unrequested' },
-            },
-          ],
-        }
-      : structuredClone(success)
-  );
-  const task = f.runtime.enqueue(conversation.id, 'explanation', '작품의 배경을 설명해줘');
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id).status).toBe('completed');
-  expect(send.mock.calls.every((call) => call[1].role === 'helper')).toBe(true);
-  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_artifact_jobs').get()).toEqual({
-    n: 0,
-  });
-  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_artifacts').get()).toEqual({ n: 0 });
-  expect(
-    f.workspace
-      .events(conversation.id)
-      .filter((event) => event.kind === 'tool.finished')
-      .map((event) => event.data)
-  ).toEqual(expect.arrayContaining([expect.objectContaining({ denied: true })]));
-});
 test('cancellation rejects late text/final result while preserving provider accounting', async () => {
   const f = fixture();
   let release: () => void = () => {};

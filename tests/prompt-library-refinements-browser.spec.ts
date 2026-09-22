@@ -84,8 +84,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     await editor.getByLabel('프롬프트 이름', { exact: true }).fill(title);
     const savedResponse = page.waitForResponse(
       (response) =>
-        /\/api\/edit-drafts\/[^/]+\/save$/.test(response.url()) &&
-        response.request().method() === 'POST'
+        /\/api\/resources\/save$/.test(response.url()) && response.request().method() === 'POST'
     );
     await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
     const response = await savedResponse;

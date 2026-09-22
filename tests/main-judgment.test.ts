@@ -1,3 +1,8 @@
+import {
+  observeExecutions,
+  observedExecution,
+  observedAttempts,
+} from './fixtures/execution-observer.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -138,6 +143,7 @@ async function fixture(
     codexRuntime: runtime,
   });
   owner.app = app;
+  observeExecutions(app.store);
   if (key) app.store.credentials.set('jev', 'synthetic-jev-key');
   {
     const workspace = modelWorkspace(app.store);
@@ -236,7 +242,7 @@ ${
   await expect
     .poll(() => app.store.run(run.id).status, { timeout: 6000 })
     .not.toMatch(/^(queued|running)$/u);
-  return { app, chat, run: app.store.run(run.id), calls, judged, output };
+  return { app, chat, run: observedExecution(app.store, run.id), calls, judged, output };
 }
 
 test.each([
@@ -313,10 +319,9 @@ test.each([
     expect(() =>
       validateMainJudgmentWire(
         { ...f.run.snapshot.mainJudgment!, threshold: threshold === 0.7 ? 0.8 : 0.7 },
-        f.app.store.product
-          .attempts(f.chat.id)
-          .find((item) => (item.request as WireRecord).judgment?.kind === 'main-refusal')!
-          .request as WireRecord
+        observedAttempts(f.app.store, f.run.id).find(
+          (item) => (item.request as WireRecord).judgment?.kind === 'main-refusal'
+        )!.request as WireRecord
       )
     ).toThrow('MAIN_JUDGMENT_ATTEMPT_MISMATCH');
   }
@@ -356,17 +361,18 @@ test('disabled main judgment accepts refusal text without a JEV key, receipt, or
     expectedRevision: workspace.revision,
     mainJudgmentEnabled: true,
   });
-  f.output.text = 'A candidate using the frozen disabled judgment setting.';
+  f.output.text = 'A new copy uses the current judgment setting.';
   const candidateRun = await api(f.app, `/api/runs/${f.run.id}/candidate`, {
     idempotencyKey: randomUUID(),
-    title: 'Frozen disabled setting',
+    title: 'Current setting on independent copy',
   });
   await expect
     .poll(() => f.app.store.run(candidateRun.id).status)
     .not.toMatch(/^(queued|running)$/u);
   expect(f.app.store.run(candidateRun.id)).toMatchObject({
-    status: 'completed',
-    snapshot: { mainJudgmentEnabled: false },
+    status: 'failed',
+    error: 'JEV_CREDENTIAL_REQUIRED',
+    snapshot: { mainJudgmentEnabled: true },
   });
   expect(f.judged).toHaveLength(0);
 });
@@ -392,7 +398,7 @@ test('a second judgment failure keeps the same response recoverable without writ
 
 test('rejudgment credential failure preserves its response and does not recharge the writer', async () => {
   const f = await fixture('Still available', 'failure');
-  vi.stubEnv('TYPESAFE_API_KEY', '');
+  f.app.store.credentials.set('jev', null);
   const next = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: randomUUID() });
   await expect.poll(() => f.app.store.run(next.id).status, { timeout: 6000 }).toBe('failed');
   expect(f.app.store.run(next.id)).toMatchObject({

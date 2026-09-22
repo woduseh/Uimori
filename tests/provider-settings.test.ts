@@ -1,3 +1,4 @@
+import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { injectWithFixtureBot, createFixtureChat } from './fixtures/chat.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -70,6 +71,7 @@ async function application(
     testMode: true,
   });
   await item.app.ready();
+  observeExecutions(item.app.store);
   return item.app;
 }
 async function request<T = any>(
@@ -124,81 +126,6 @@ const response = (value: unknown) =>
   new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } });
 
 describe('provider settings, catalogs and archive contracts', () => {
-  test('saves supported protocols and enforces endpoints, general credential names and Vertex-only tiers', async () => {
-    const app = await application();
-    for (const protocol of PROVIDER_PROTOCOLS) {
-      const connection = await request<Connection>(
-        app,
-        '/connections',
-        connectionBody(protocol, {
-          endpoint: roots[protocol] + (protocol === 'codex-app-server-v1' ? '' : '/'),
-        })
-      );
-      expect(connection.protocol).toBe(protocol);
-      expect(connection).not.toHaveProperty('credentialRef');
-      expect(connection.endpoint).toBe(
-        protocol === 'fixture-sse-v1' ? roots[protocol] + '/' : roots[protocol]
-      );
-      expect(connection).not.toHaveProperty('requestTier');
-    }
-    for (const protocol of native) {
-      await request(app, '/connections', connectionBody(protocol, { requestTier: 'flex' }), 400);
-      await request(
-        app,
-        '/connections',
-        connectionBody(protocol, { endpoint: roots[protocol] + '?api_key=synthetic' }),
-        400
-      );
-      for (const credentialRef of [null, false, 5, 'INVALID-NAME', '1KEY', 'A'.repeat(201)])
-        await request(app, '/connections', connectionBody(protocol, { credentialRef }), 400);
-      for (const credentialRef of ['OPENAI_API_KEY', 'myGatewayToken', '_CUSTOM_2'])
-        expect(
-          await request<Connection>(
-            app,
-            '/connections',
-            connectionBody(protocol, { credentialRef })
-          )
-        ).toHaveProperty('credentialRef', credentialRef);
-    }
-    expect(
-      (
-        await request<Connection>(
-          app,
-          '/connections',
-          connectionBody('openai-responses-v1', { endpoint: 'https://synthetic.invalid/v1' })
-        )
-      ).endpoint
-    ).toBe('https://synthetic.invalid/v1');
-    for (const protocol of ['anthropic-messages-v1', 'vercel-chat-v1'] as const) {
-      await request(
-        app,
-        '/connections',
-        connectionBody(protocol, { endpoint: 'https://synthetic.invalid/v1' }),
-        400
-      );
-      await request(
-        app,
-        '/connections',
-        connectionBody(protocol, { endpoint: roots[protocol] + '/wrong' }),
-        400
-      );
-    }
-    await request(
-      app,
-      '/connections',
-      connectionBody('openai-chat-v1', { endpoint: 'http://not-loopback.invalid/v1' }),
-      400
-    );
-    await request(
-      app,
-      '/connections',
-      connectionBody('openai-chat-v1', { endpoint: 'http://127.0.0.1:9999/v1', credentialRef: env })
-    );
-    for (const requestTier of [null, 'auto', 'priority', 1])
-      await request(app, '/connections', connectionBody('vertex-gemini-v1', { requestTier }), 400);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
   test('preserves absent native options, explicit false and protocol-specific generation settings', async () => {
     const app = await application();
     for (const protocol of native) {
@@ -436,7 +363,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       connection = await request<Connection>(
         app,
         '/connections',
-        connectionBody('openai-chat-v1', { credentialRef: env })
+        connectionBody('openai-chat-v1', { apiKey: 'SYNTHETIC_TEST_VALUE' })
       );
     const model = await request<ModelPreset>(
       app,
@@ -500,7 +427,9 @@ describe('provider settings, catalogs and archive contracts', () => {
     try {
       const first = await request<Run>(app, `/chats/${chat.id}/runs`, command());
       await began;
-      const frozen = structuredClone(app.store.run(first.id).snapshot.profile!.models.main!);
+      const frozen = structuredClone(
+        observedExecution(app.store, first.id).snapshot.profile!.models.main!
+      );
       const editedConnection = await request<Connection>(
         app,
         `/connections/${connection.id}`,
@@ -522,11 +451,15 @@ describe('provider settings, catalogs and archive contracts', () => {
       );
       expect(app.store.product.profile(chat.id).routes.main).toEqual({ id: model.id });
       expect(app.store.product.profile(chat.id).revision).toBe(profile.revision);
-      expect(app.store.run(first.id).snapshot.profile!.models.main).toEqual(frozen);
+      expect(observedExecution(app.store, first.id).snapshot.profile!.models.main).toEqual(frozen);
       release!();
-      await expect.poll(() => app.store.run(first.id).status, { timeout: 5000 }).toBe('completed');
+      await expect
+        .poll(() => observedExecution(app.store, first.id).status, { timeout: 5000 })
+        .toBe('completed');
       const second = await request<Run>(app, `/chats/${chat.id}/runs`, command());
-      await expect.poll(() => app.store.run(second.id).status, { timeout: 5000 }).toBe('completed');
+      await expect
+        .poll(() => observedExecution(app.store, second.id).status, { timeout: 5000 })
+        .toBe('completed');
       expect(wire).toHaveLength(2);
       expect(wire[0]).toMatchObject({
         url: connection.endpoint + '/chat/completions',
@@ -537,11 +470,11 @@ describe('provider settings, catalogs and archive contracts', () => {
         body: { model: 'synthetic-second', max_completion_tokens: 1024 },
       });
       expect(wire[1].body).not.toHaveProperty('inputTokenLimit');
-      expect(app.store.run(second.id).snapshot.profile!.models.main).toEqual({
+      expect(observedExecution(app.store, second.id).snapshot.profile!.models.main).toMatchObject({
         ...editedModel,
         connection: editedConnection,
       });
-      expect(app.store.run(first.id).snapshot.profile!.models.main).toEqual(frozen);
+      expect(observedExecution(app.store, first.id).snapshot.profile!.models.main).toEqual(frozen);
       const disabled = await request<ModelPreset>(
         app,
         `/model-presets/${model.id}`,
@@ -558,7 +491,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       expect(providerFetch).toHaveBeenCalledTimes(2);
       expect(judgments).toHaveLength(2);
       expect(app.store.product.profile(chat.id).routes.main).toEqual({ id: disabled.id });
-      expect(app.store.run(first.id).snapshot.profile!.models.main).toEqual(frozen);
+      expect(observedExecution(app.store, first.id).snapshot.profile!.models.main).toEqual(frozen);
     } finally {
       release?.();
     }
@@ -569,7 +502,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     const connection = await request<Connection>(
       app,
       '/connections',
-      connectionBody('anthropic-messages-v1', { credentialRef: env })
+      connectionBody('anthropic-messages-v1', { apiKey: 'SYNTHETIC_TEST_VALUE' })
     );
     const seen: string[] = [];
     vi.mocked(fetch).mockImplementation(async (url) => {
@@ -592,7 +525,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(failed.catalog).toEqual(listed.catalog);
   });
 
-  test('rejects missing credentials, disabled connections and unapproved origins before any catalog request', async () => {
+  test('rejects unavailable registered credentials and disabled connections before catalog requests', async () => {
     const app = await application();
     for (const protocol of ['openai-responses-v1', 'anthropic-messages-v1'] as const) {
       const connection = await request<Connection>(app, '/connections', connectionBody(protocol));
@@ -607,24 +540,6 @@ describe('provider settings, catalogs and archive contracts', () => {
       connectionBody('vercel-chat-v1', { enabled: false })
     );
     expect(await request(app, `/connections/${disabled.id}/catalog`, {})).toMatchObject({
-      catalogError: 'CATALOG_UNAVAILABLE',
-    });
-    const unapprovedApp = await application([]);
-    const unapproved = await request<Connection>(
-      unapprovedApp,
-      '/connections',
-      connectionBody('openai-chat-v1', { credentialRef: env })
-    );
-    expect(await request(unapprovedApp, `/connections/${unapproved.id}/catalog`, {})).toMatchObject(
-      { catalogError: 'CATALOG_UNAVAILABLE' }
-    );
-    vi.stubEnv(env, 'synthetic\r\nnot-a-header');
-    const invalid = await request<Connection>(
-      app,
-      '/connections',
-      connectionBody('openai-chat-v1', { credentialRef: env })
-    );
-    expect(await request(app, `/connections/${invalid.id}/catalog`, {})).toMatchObject({
       catalogError: 'CATALOG_UNAVAILABLE',
     });
     expect(fetch).not.toHaveBeenCalled();

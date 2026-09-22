@@ -65,12 +65,12 @@ API는 기존 `POST/PUT /api/prompt-presets`의 `program`을 사용하며 수정
 
 ## 진단과 보관
 
-Run의 `agents.consult` tool event에 의견·상태·호출량·질문·출처·명시 문맥 해시를 남겨요. `agents.read`에는 실제 읽기 결과를 남기고, 모델 입력은 `agentId`로 구분하며 `consultationContext`에 실제 전달한 의견·근거·초안을 기록해요. 이 필드는 과거 전송 영수증이므로 채팅 전체 백업의 새 ID 복원에서도 원래 ID·내용·해시를 함께 보존해요. 복원 목적지의 현재 데이터 참조로 사용하지 않아요. 원문에는 메인의 최종 응답만 저장해요. 보조가 읽은 본문을 다음 Run의 유지 로어로 자동 승격하지 않아요.
+Run의 `agents.consult` tool event에 의견·상태·호출량·질문·출처·명시 문맥 해시를 남겨요. `agents.read`에는 실제 읽기 결과를 남기고, 모델 입력은 `agentId`로 구분하며 `consultationContext`에 실제 전달한 의견·근거·초안을 기록해요. 이 정보는 실행 중 상담에 사용하고 완료 후 영구 아카이브로 보존하지 않아요. 독립 채팅 백업에는 최종 원문과 이어쓰기 자료만 담아요. 원문에는 메인의 최종 응답만 저장해요. 보조가 읽은 본문을 다음 Run의 유지 로어로 자동 승격하지 않아요.
 
 협업 설정은 기존 JSON 필드에 보관하고 협업 전용 DB 테이블은 없어요. DB 버전·지원 이관은 [데이터 형식](DATA-MIGRATIONS.md)을 따라요. 복원은 에이전트 모델 귀속을 검사하고 메인·보조 snapshot의 인증 참조를 제거하며 프로바이더를 비활성화해요. 모델·프로바이더 삭제는 새 선택과 전송 권한에 적용하며 과거 실행 snapshot은 보존해요. 현재 작업본의 전용 보조 모델이 삭제되면 협업을 끄고 모델 선택을 해제해요. 자세한 처리는 [항목 삭제](DELETION.md)를 참고해요.
 
 ## 검증 범위
 
-설정·보관 검사는 `tests/agent-collaboration-config.test.ts`, `tests/agent-collaboration-store.test.ts`예요. `tests/agent-collaboration-runtime.test.ts`는 실제 loopback Responses 서버와 새 SQLite DB로 순서·추가 조회·권한·호출량·중복·취소·설정 변경을 검사해요. `tests/agent-collaboration-context.test.ts`는 선택 문맥·초안·구성·문맥별 캐시와 호출 예산, 새 문맥 창 뒤 참조, 수정 가능한 오류를 확인하고 `tests/agent-context-backup.test.ts`는 전체 채팅 백업의 반복 복원에서 전송 영수증을 확인해요. 브라우저는 `tests/agent-collaboration-browser.spec.ts`의 AGENTUI01/02에서 모바일·데스크톱 편집과 실제 저장/미리보기 API를 확인해요.
+설정·보관 검사는 `tests/agent-collaboration-config.test.ts`, `tests/agent-collaboration-store.test.ts`예요. `tests/agent-collaboration-runtime.test.ts`는 실제 loopback Responses 서버와 새 SQLite DB로 순서·추가 조회·권한·호출량·중복·취소·설정 변경을 검사해요. `tests/agent-collaboration-context.test.ts`는 선택 문맥·초안·구성·문맥별 캐시와 호출 예산, 새 문맥 창 뒤 참조, 수정 가능한 오류를 확인하고 실행 입력은 테스트에서 실행 시점에 관찰하며, 실제 DB의 완료 후 정리도 별도로 검사해요. 브라우저는 `tests/agent-collaboration-browser.spec.ts`의 AGENTUI01/02에서 모바일·데스크톱 편집과 실제 저장/미리보기 API를 확인해요.
 
 합성 검사는 구현 계약의 증거예요. 실제 모델의 창작 품질 향상, 비용 대비 효과, 실제 공급자 응답 지연은 평가하지 않았어요.

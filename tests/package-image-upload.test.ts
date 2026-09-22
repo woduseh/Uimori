@@ -6,7 +6,7 @@ afterEach(() => vi.unstubAllGlobals());
 test('profile and inline authoring share upload validation and preserve the requested use', async () => {
   const fetch = vi
     .fn()
-    .mockResolvedValue(new Response(JSON.stringify({ hash: 'a'.repeat(64), mime: 'image/png' })));
+    .mockResolvedValue(new Response(JSON.stringify({ hash: 'a'.repeat(64), mime: 'image/webp' })));
   vi.stubGlobal('fetch', fetch);
   const file = new File([new Uint8Array([137, 80, 78, 71])], '  portrait.png', {
     type: 'image/png',
@@ -14,7 +14,7 @@ test('profile and inline authoring share upload validation and preserve the requ
   const image = await uploadPackageImage(file, new AbortController().signal, 'profile');
   expect(image).toMatchObject({
     title: 'portrait',
-    mime: 'image/png',
+    mime: 'image/webp',
     blobHash: 'a'.repeat(64),
     allowedUse: 'profile',
   });
@@ -24,10 +24,10 @@ test('profile and inline authoring share upload validation and preserve the requ
   for (const invalid of [
     new File([], 'empty.png', { type: 'image/png' }),
     new File(['text'], 'fake.svg', { type: 'image/svg+xml' }),
-    new File([new Uint8Array(2_000_001)], 'large.png', { type: 'image/png' }),
+    new File([new Uint8Array(64 * 1024 * 1024 + 1)], 'large.png', { type: 'image/png' }),
   ])
     await expect(uploadPackageImage(invalid, new AbortController().signal, 'both')).rejects.toThrow(
-      '2MB'
+      '64MiB'
     );
   expect(fetch).toHaveBeenCalledTimes(1);
 });

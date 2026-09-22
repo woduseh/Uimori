@@ -1,3 +1,4 @@
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { readerConversation } from '../core/reader-conversation.js';
 import type { ReaderRun } from '../core/types.js';
 import { readerDetail } from '../server/reader.js';
@@ -66,13 +67,13 @@ function complete(store: Store, chatId: string, text: string) {
   );
   return { run: store.run(run.id), source };
 }
-test('successful request repeats with current settings in a new branch and idempotency reuses the original retry snapshot', () => {
+test('successful request repeats with current settings in an independent chat and idempotency reuses the original retry snapshot', () => {
   const store = database(),
     chat = createFixtureChat(store, 'Retry current settings');
   const first = complete(store, chat.id, 'First ancestor'),
     selected = complete(store, chat.id, 'Original selected response'),
     later = complete(store, chat.id, 'Later default response');
-  const saved = structuredClone(selected.run),
+  const saved = readStoredRunSnapshot(store, selected.run.id),
     oldChat = store.chat(chat.id);
   store.settings(chat.id, oldChat.settingsRevision, { ...oldChat.settings, maxCalls: 12 });
   const program = createDefaultRisuPrompt('Current main instructions');
@@ -105,10 +106,11 @@ test('successful request repeats with current settings in a new branch and idemp
   expect(retry.created).toBe(true);
   expect(retry.run.id).not.toBe(selected.run.id);
   expect(retry.run.request).toBe(selected.run.request);
-  expect(retry.run.parentRevision).toBe(first.source.id);
+  expect(retry.run.chatId).not.toBe(chat.id);
+  expect(store.source(retry.run.parentRevision!).text).toBe(first.source.text);
   expect(retry.run.snapshot.branchId).toBeTypeOf('string');
   expect(retry.run.snapshot.branchId).not.toBe(selected.run.snapshot.branchId);
-  expect(store.product.branches(chat.id)).toHaveLength(branches + 1);
+  expect(store.product.branches(chat.id)).toHaveLength(branches);
   expect(retry.run.snapshot).toMatchObject({
     settings: { maxCalls: 12 },
     profile: {
@@ -119,7 +121,7 @@ test('successful request repeats with current settings in a new branch and idemp
   });
   expect(retry.run.snapshot.history.map((item) => item.text)).toEqual([first.source.text]);
   expect(store.chat(chat.id).headRevision).toBe(later.source.id);
-  expect(store.run(selected.run.id)).toEqual(saved);
+  expect(readStoredRunSnapshot(store, selected.run.id)).toEqual(saved);
   updatePromptWorkspace(store, {
     expectedRevision: promptWorkspace(store).revision,
     main: {
@@ -132,8 +134,8 @@ test('successful request repeats with current settings in a new branch and idemp
     created: false,
     run: retry.run,
   });
-  expect(store.product.branches(chat.id)).toHaveLength(branches + 1);
-  expect(() => store.retryRun(first.run.id, 'repeat-once')).toThrow('Idempotency');
+  expect(store.product.branches(chat.id)).toHaveLength(branches);
+  expect(store.retryRun(first.run.id, 'repeat-once').run.id).not.toBe(retry.run.id);
 });
 
 test('failed retry after the original head advances branches at its original parent', () => {

@@ -404,7 +404,7 @@ test('current connection enabled flag and credential availability are rechecked 
         },
         'PUT'
       );
-    else vi.stubEnv(credentialRef, '');
+    else state.app.store.credentials.set(state.connection.credentialRef!, null);
     gate.release();
     const result = await settled(state, run.id);
     expect(result.status).toBe('failed');

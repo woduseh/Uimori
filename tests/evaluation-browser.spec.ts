@@ -53,7 +53,7 @@ async function register(
       gateway === 'vercel' ? 'https://ai-gateway.vercel.sh/v1' : 'https://api.llmgateway.io/v1'
     );
   await page.getByLabel('프로바이더 이름', { exact: true }).fill(title);
-  await page.getByLabel('서버 환경변수 이름').fill('Evaluation_Browser_Key');
+  await page.getByLabel('API 키').fill('Evaluation_Browser_Key');
   await page.getByLabel('이 프로바이더 사용').check();
   await page.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
   await expect(
@@ -62,7 +62,6 @@ async function register(
   const connection = (await library(request)).connections.find((item) => item.title === title)!;
   expect(connection).toMatchObject({
     protocol: 'openai-responses-v1',
-    credentialRef: 'Evaluation_Browser_Key',
     enabled: true,
   });
   await page.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
@@ -183,7 +182,7 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await settings(page);
   await expect(page.getByLabel('API 기본 주소')).toBeEditable();
   await page.getByLabel('API 기본 주소').fill('http://127.0.0.1:8080/v1');
-  await page.getByLabel('서버 환경변수 이름').scrollIntoViewIfNeeded();
+  await page.getByLabel('API 키').scrollIntoViewIfNeeded();
   if (visualReview)
     await page.screenshot({ path: info.outputPath('evaluation-mobile-connection.png') });
   const connection = await register(page, request, title, 'vercel');

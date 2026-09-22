@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { afterEach, describe, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
@@ -141,8 +142,12 @@ describe('illustration API in test mode with the synthetic generator', () => {
     expect(done.images).toHaveLength(1);
     const image = await app.inject({ url: done.images[0].url });
     expect(image.statusCode).toBe(200);
-    expect(image.headers['content-type']).toContain('image/png');
-    expect(Buffer.from(image.rawPayload).equals(Buffer.from(PNG_BASE64, 'base64'))).toBe(true);
+    expect(image.headers['content-type']).toContain('image/webp');
+    expect(await sharp(image.rawPayload).metadata()).toMatchObject({
+      format: 'webp',
+      width: 1,
+      height: 1,
+    });
     const reader = await api<ReaderDetail>(`/api/chats/${chat.id}/reader`);
     expect(reader.illustrations?.map((item) => item.id)).toEqual([done.id]);
     expect(
@@ -309,7 +314,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
         ref: asset.id,
         title: 'Style sheet',
         url: `/api/assets/${asset.id}`,
-        mime: 'image/png',
+        mime: 'image/webp',
         role: 'style',
       },
     ]);

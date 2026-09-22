@@ -205,7 +205,7 @@ test('PWS03 failed autosaves preserve consecutive local changes and protect exte
     saveStarted = resolve;
   });
   await page.route(
-    '**/api/edit-drafts/*/save',
+    '**/api/resources/save',
     async (route) => {
       const response = await route.fetch();
       saveStarted();
@@ -227,7 +227,7 @@ test('PWS03 failed autosaves preserve consecutive local changes and protect exte
     .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.values)
     .toEqual({ tone: '첫 변경', detail: '연속 변경' });
   let fail = true;
-  await page.route('**/api/edit-drafts/*/save', async (route) => {
+  await page.route('**/api/resources/save', async (route) => {
     if (fail)
       await route.fulfill({
         status: 503,

@@ -1,3 +1,4 @@
+import { ChatTranscriptError } from '../core/chat-transcript.js';
 import { resourceRoutes } from './resource-routes.js';
 import { rejudgeTranslation } from './source-editing.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
@@ -1074,7 +1075,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           : 500;
     void reply.code(code).send({
       error:
-        error instanceof HttpError || transferCode
+        error instanceof HttpError || error instanceof ChatTranscriptError || transferCode
           ? error.message
           : code === 400
             ? 'Invalid request'

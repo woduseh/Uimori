@@ -1,3 +1,4 @@
+import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,6 +26,7 @@ const owned: { path: string; store: Store }[] = [];
 function database() {
   const path = mkdtempSync(join(tmpdir(), 'uimori-model-workspace-'));
   const store = new Store(join(path, 'story.sqlite'));
+  observeExecutions(store);
   owned.push({ path, store });
   return store;
 }
@@ -93,7 +95,7 @@ function complete(store: Store, chatId: string) {
     { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
     run.snapshot.settings
   );
-  return { run: store.run(run.id), source };
+  return { run: observedExecution(store, run.id), source };
 }
 
 test('optional title model is independent of task routes, strict, CAS protected and preserved by omitted updates', () => {
@@ -177,7 +179,7 @@ test('current global selection is shared, CAS protected and frozen in prior Runs
       translationPolicy: firstSettings.translationPolicy,
     })
   ).toThrow(/새로고침/);
-  expect(store.run(first.run.id)).toEqual(first.run);
+  expect(observedExecution(store, first.run.id)).toEqual(first.run);
   expect(store.job(translation.id)).toEqual(frozen);
   expect(store.requestTranslation(first.source.id).id).toBe(translation.id);
   expect(store.product.snapshot(chat.id).models.main?.id).toBe(b.id);
@@ -368,7 +370,7 @@ test('chat pins follow the latest selected IDs while other chats and auxiliary m
   expect(store.product.snapshot(other.id).promptPresets?.main?.program).toEqual(
     promptWorkspace(store).main.program
   );
-  expect(store.run(first.run.id)).toEqual(first.run);
+  expect(observedExecution(store, first.run.id)).toEqual(first.run);
   expect(pin(store, chat.id, undefined).pinned).toEqual(pinned);
   const cleared = pin(store, chat.id, {});
   expect(cleared.pinned).toBeUndefined();
@@ -455,7 +457,7 @@ test('deleted or disabled pins block new main work while profile repair and glob
   deleteLibraryItem(store, 'model', local.id, { expectedRevision: local.revision });
   pin(store, chat.id, { mainModel: { id: local.id } });
   expect(() => store.product.snapshot(chat.id)).toThrow(/MODEL_UNAVAILABLE:main/);
-  expect(store.run(first.run.id)).toEqual(first.run);
+  expect(observedExecution(store, first.run.id)).toEqual(first.run);
   pin(store, chat.id, {});
   expect(store.product.snapshot(chat.id).models.main?.id).toBe(global.id);
 });

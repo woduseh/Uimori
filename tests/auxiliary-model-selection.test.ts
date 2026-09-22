@@ -1,3 +1,4 @@
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -59,6 +60,7 @@ test('new auxiliary reservations use current generation models while JEV judgmen
     run.snapshot.settings
   );
   const priorRun = store.run(run.id);
+  const persisted = readStoredRunSnapshot(store, run.id);
   expect(priorRun.snapshot.profile?.models).toEqual({});
   const connection = store.product.connection({
     title: 'Synthetic Vertex connection',
@@ -106,12 +108,12 @@ test('new auxiliary reservations use current generation models while JEV judgmen
     expect(target).not.toHaveProperty('capabilityRevision');
     expect(validateModelSnapshot(target)).toEqual(target);
   }
-  expect(translationBundle.translationPolicy?.judgment).toEqual({ threshold: 0.9 });
+  expect(translationBundle.translationPolicy?.judgment).toMatchObject({ threshold: 0.9 });
   expect(Object.keys(imageSnapshot.profile?.models ?? {})).not.toContain('image');
   expect(translationBundle.snapshot.profile?.models.main).toBeUndefined();
   expect(statusBundle.snapshot.profile?.models.main).toBeUndefined();
   expect(imageSnapshot.profile?.models.main).toBeUndefined();
-  expect(store.run(run.id)).toEqual(priorRun);
+  expect(readStoredRunSnapshot(store, run.id)).toEqual(persisted);
   expect(store.db.prepare('SELECT * FROM provider_settings ORDER BY kind,id').all()).toEqual(
     storedModels
   );

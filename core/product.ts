@@ -146,7 +146,7 @@ export type Connection = ContentRef & {
   endpoint: string;
   credentialRef?: string;
   /**
-   * Gemini connections only: server environment variable holding a Gemini Developer API key used
+   * Gemini connections only: reference to the database API key used
    * solely to list Gemini models and limits. Never used for generation requests.
    */
   catalogCredentialRef?: string;

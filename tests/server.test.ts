@@ -1,3 +1,4 @@
+import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { injectWithFixtureBot, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -76,6 +77,7 @@ async function setup(testMode = true) {
     testMode,
   });
   owned.push({ app, directory });
+  observeExecutions(app.store);
   const url = await app.listen({ port: 0, host: '127.0.0.1' });
   const bot = fixtureBotInput('Synthetic M0 owner');
   bot.package.nativeRisu.card.character_book = {
@@ -136,11 +138,13 @@ describe('file SQLite HTTP runtime', () => {
     expect((await api<Run>(url, `/api/runs/${run.id}`)).snapshot.settings.preset).toBe('calm');
     const independent = await api<Run>(url, `/api/chats/${other.id}/runs`, command(other));
     await control(url, { action: 'release', barrier: 'run' });
-    const finished = await completed(url, run.id);
+    await completed(url, run.id);
+    const finished = observedExecution(app.store, run.id);
     await completed(url, independent.id);
     expect(finished.inputs[0].preset).toBe('calm');
     expect(finished.snapshot.resources.every((resource) => resource.chatId === chat.id)).toBe(true);
-    expect((await detail(url, other)).runs[0].inputs[0].preset).toBe('vivid');
+    expect(observedExecution(app.store, independent.id).inputs[0].preset).toBe('vivid');
+    expect((await detail(url, other)).runs[0].inputs).toEqual([]);
     await api(url, `/api/chats/${chat.id}/runs`, command(changed), 'POST', 409);
     expect(app.store.db.prepare('SELECT count(*) AS n FROM runs').get()).toEqual({ n: 2 });
     expect(app.store.db.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
@@ -293,7 +297,7 @@ describe('file SQLite HTTP runtime', () => {
     };
     expect(app.store.completeJob(failed.id, 2, ownership.owner, retried.result)).toBe(false);
     expect(app.store.db.prepare('SELECT count(*) AS n FROM job_results').get()).toEqual({ n: 4 });
-    expect(all.runs.map((value) => value.inputs.length)).toEqual([1, 1]);
+    expect(all.runs.map((value) => value.inputs.length)).toEqual([0, 0]);
   });
 
   it('F01 refuses another owner before recovery; F06 disables controls and prevents cross-origin writes', async () => {
@@ -357,7 +361,8 @@ describe('file SQLite HTTP runtime', () => {
     const resourceRows = app.store.product.resources(chat.id, app.store.product.snapshot(chat.id));
     expect(resourceRows).toHaveLength(3);
     const run = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(configured));
-    const result = await completed(url, run.id);
+    await completed(url, run.id);
+    const result = observedExecution(app.store, run.id);
     expect(result.inputs).toHaveLength(3);
     expect(result.usage.modelCalls).toBe(3);
     expect(result.inputs[0].prefetch).toEqual([]);
@@ -512,7 +517,7 @@ describe('built server process boundary', () => {
     );
     expect(recovered.runs).toHaveLength(1);
     expect(recovered.runs[0].id).toBe(run.id);
-    expect(recovered.runs[0].inputs).toHaveLength(1);
+    expect(recovered.runs[0].inputs).toHaveLength(0);
     expect(recovered.sources).toHaveLength(1);
     expect({ text: recovered.sources[0].text, hash: recovered.sources[0].hash }).toEqual(
       originalText

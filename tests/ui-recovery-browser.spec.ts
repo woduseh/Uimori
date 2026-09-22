@@ -94,7 +94,7 @@ async function openMenu(editor: Locator, label: string) {
 function nextSave(page: Page) {
   return page.waitForResponse(
     (response) =>
-      /\/api\/edit-drafts\/[^/]+\/save$/.test(new URL(response.url()).pathname) &&
+      /\/api\/resources\/save$/.test(new URL(response.url()).pathname) &&
       response.request().method() === 'POST'
   );
 }

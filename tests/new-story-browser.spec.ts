@@ -278,19 +278,14 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   await library.getByRole('button', { name: '원문', exact: true }).click();
   await library.getByLabel('Risu 원문 JSON').fill('[{"unfinished":');
   const save = library.getByRole('button', { name: '변경사항 저장', exact: true });
-  await expect(save).toBeDisabled();
-  await expect
-    .poll(async () => {
-      const drafts = await (
-        await request.get(`/api/edit-drafts?editorKey=content:${saved.id}`)
-      ).json();
-      return drafts[0]?.unappliedFields;
-    })
-    .toContain('package.native.source');
+  await expect(save).toBeEnabled();
+  await save.click();
+  expect((await (await request.get(`/api/content/${saved.id}`)).json()).revision).toBe(
+    saved.revision
+  );
   await library
     .getByLabel('Risu 원문 JSON')
     .fill('[{"name":"New lore","content":"Lore {{char}}","constant":true,"custom":42}]');
-  await library.getByRole('button', { name: 'JSON 적용', exact: true }).click();
   await save.click();
   await expect
     .poll(async () => (await (await request.get(`/api/content/${saved.id}`)).json()).revision)

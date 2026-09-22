@@ -1,3 +1,4 @@
+import { backup } from 'node:sqlite';
 import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -156,7 +157,7 @@ test('runtime HTTP routes enforce authentication and Origin and redact failures 
   }
 });
 
-test('app routes every agent role through Codex and persists RPC attempts, proposals and archive contracts', async () => {
+test('app routes every agent role through Codex and keeps source results and recovers metadata through an SQLite snapshot', async () => {
   vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('External calls forbidden'));
   const calls: ProviderRequest[] = [];
   const status = async () => ({
@@ -337,18 +338,24 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     (attempt) =>
       (attempt.request as { protocol?: string } | null)?.protocol === 'codex-app-server-v1'
   )) {
-    expect(attempt.request).toMatchObject({
-      method: 'RPC',
-      url: 'codex://local',
-      body: { method: 'turn/start' },
-    });
+    if ((attempt.request as { detailsOmitted?: boolean }).detailsOmitted)
+      expect(attempt.request).toMatchObject({
+        protocol: 'codex-app-server-v1',
+        detailsOmitted: true,
+      });
+    else
+      expect(attempt.request).toMatchObject({
+        method: 'RPC',
+        url: 'codex://local',
+        body: { method: 'turn/start' },
+      });
     expect(attempt.costUsd).toBeNull();
   }
-  const archive = await api(app, '/api/export');
   const restoredItem = {
     directory: await mkdtemp(join(tmpdir(), 'uimori-codex-integration-')),
   } as (typeof owned)[number];
   owned.push(restoredItem);
+  await backup(app.store.db, join(restoredItem.directory, 'restore.sqlite'));
   const restored = await createApp({
     dbPath: join(restoredItem.directory, 'restore.sqlite'),
     buildId: 'codex-restore',
@@ -358,7 +365,8 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
   });
   restoredItem.app = restored;
   await restored.ready();
-  await api(restored, '/api/import', { archive });
-  expect(JSON.stringify(archive)).toContain('codex://local');
+  expect(restored.store.source(app.store.chat(chat.id).headRevision!).text).toBe(
+    'The keeper opened the gate.'
+  );
   expect(restored.store.product.attempts(chat.id)).toEqual(app.store.product.attempts(chat.id));
 });

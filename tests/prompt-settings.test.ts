@@ -1,3 +1,4 @@
+import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { prepareNativeFixtureRun } from './fixtures/native-run.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
@@ -232,6 +233,7 @@ async function application() {
     testMode: true,
   });
   await item.app.ready();
+  observeExecutions(item.app.store);
   return item.app;
 }
 async function request<T = any>(
@@ -451,7 +453,10 @@ describe('global working prompts and independent library copies', () => {
       400,
       'PUT'
     );
-    expect(await read(app, `/revisions/prompt-preset/${first.id}/1`)).toEqual(first);
+    expect(
+      (await app.inject({ method: 'GET', url: `/api/revisions/prompt-preset/${first.id}/1` }))
+        .statusCode
+    ).toBe(404);
     const library = await read(app, '/library');
     expect(library.promptPresets).toHaveLength(3);
     expect(library.promptPresets.find((item: PromptPreset) => item.id === first.id)).toEqual(next);
@@ -563,7 +568,9 @@ describe('global working prompts and independent library copies', () => {
     });
     expect(response.statusCode, response.body).toBe(200);
     expect(await workspace(app)).toEqual(applied);
-    expect(app.store.product.get('prompt-preset', preset.id, 1)).toEqual(preset);
+    expect(() => app.store.product.get('prompt-preset', preset.id, 1)).toThrow(
+      'revision not found'
+    );
   });
 
   test('option presets copy only values into the current role and never retarget a saved prompt', async () => {
@@ -604,7 +611,7 @@ describe('global working prompts and independent library copies', () => {
     );
   });
 
-  test('new scenes capture current working copies while prior source and candidate keep their frozen prompt', async () => {
+  test('new scenes capture current working copies while past output remains and independent rewrites use current prompts', async () => {
     const app = await application();
     const chat = createFixtureChat(app.store, 'Frozen prompts');
     const first = await request<PromptPreset>(
@@ -623,11 +630,12 @@ describe('global working prompts and independent library copies', () => {
     );
     await apply(app, nextPreset);
     const candidate = app.store.candidate(run.id, randomUUID(), 'Synthetic candidate').run;
-    expect(candidate.snapshot.profile).toEqual(frozen.profile);
+    expect(candidate.chatId).not.toBe(chat.id);
+    expect(candidate.snapshot.profile!.promptPresets!.main!.program).toEqual(nextPreset.program);
     app.store.finishRun(candidate.id, 'cancelled', 'Synthetic');
     const next = capture(app, chat.id);
     expect(next.snapshot.profile!.promptPresets!.main!.program).toEqual(nextPreset.program);
-    expect(app.store.run(run.id).snapshot).toEqual(frozen);
+    expect(observedExecution(app.store, run.id).snapshot).toEqual(frozen);
   });
 
   test('translation reservations copy the current translation and a later retry keeps earlier jobs intact', async () => {
@@ -660,9 +668,9 @@ describe('global working prompts and independent library copies', () => {
       app.store.product.resolveJobPrompt(run.snapshot, retried.input).profile!.promptPresets!
         .translation!.program
     ).toEqual(next.program);
-    expect(app.store.run(run.id).snapshot.profile!.promptPresets!.translation!.program).toEqual(
-      first.program
-    );
+    expect(
+      observedExecution(app.store, run.id).snapshot.profile!.promptPresets!.translation!.program
+    ).toEqual(first.program);
   });
 
   test('an unavailable optional translation connection does not block a main snapshot', async () => {
@@ -702,36 +710,6 @@ describe('global working prompts and independent library copies', () => {
 });
 
 describe('translation prompt preview uses the job compiler without writes', () => {
-  test('historical source previews use supported fields while retaining the original run', async () => {
-    const app = await application();
-    const chat = createFixtureChat(app.store, 'Historical translation preview');
-    const run = await prepareNativeFixtureRun(app.store, capture(app, chat.id));
-    const source = complete(app, run);
-    const snapshot = structuredClone(run.snapshot);
-    const pkg = snapshot.profile!.packages![0];
-    pkg.nativeRisu.card.personality = 'RETIRED_PERSONALITY';
-    pkg.body += '\nRETIRED_PERSONALITY';
-    snapshot.nativeRisuExecution!.version = 1;
-    for (const fields of Object.values(snapshot.nativeRisuExecution!.fields))
-      fields.body += '\nRETIRED_PERSONALITY';
-    app.store.db
-      .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-      .run(JSON.stringify(snapshot), run.id);
-    const before = app.store.db.prepare('SELECT total_changes() AS n').get();
-    const preview = await request(app, `/chats/${chat.id}/prompt-preview`, {
-      role: 'translation',
-      request: 'New preview request',
-    });
-    expect(preview.previewSource).toMatchObject({
-      sourceRevision: source.id,
-      sourceHash: source.hash,
-    });
-    expect(JSON.stringify(preview)).not.toContain('RETIRED_PERSONALITY');
-    expect(JSON.stringify(preview)).toContain(source.text);
-    expect(app.store.run(run.id).snapshot).toEqual(snapshot);
-    expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
-    expect(fetch).not.toHaveBeenCalled();
-  });
   test.each([false, true])('default translation preview with stored source=%s', async (stored) => {
     const app = await application(),
       chat = createFixtureChat(app.store, 'Translation preview');

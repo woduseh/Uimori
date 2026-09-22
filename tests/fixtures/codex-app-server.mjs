@@ -262,7 +262,7 @@ input.on('line', (line) => {
       if (mode.startsWith('image')) {
         const png =
           process.env.UIMORI_CODEX_FIXTURE_IMAGE ??
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG1sAAAAASUVORK5CYII=';
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==';
         const itemId = 'fixture-image-' + turnId;
         send({
           method: 'item/started',

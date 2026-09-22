@@ -35,20 +35,6 @@ function analyze(value: unknown) {
     contents: [],
     prompts: [{ key: 'prompt', source: preset, combinations: [] }],
     images: [],
-    sourceFiles: [
-      {
-        entryKey: 'prompt',
-        name: input.source.name,
-        mediaType:
-          input.format === 'risu-preset-json'
-            ? 'application/json'
-            : input.format === 'risu-preset-project-zip'
-              ? 'application/zip'
-              : 'application/octet-stream',
-        hash: input.hash,
-        base64: input.source.base64,
-      },
-    ],
   };
   const transfer = prepareNativeTransfer({ file });
   const preview: RisuPresetImportPreview = {

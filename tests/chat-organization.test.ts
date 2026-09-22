@@ -200,7 +200,7 @@ test('fork inherits original owner/folder/profile without reapplying changed def
     defaultPersona: ref(nextPersona),
   });
   const fork = forkChat(store, chat.id, { fromRevision: source.id, idempotencyKey: 'fork' });
-  expect(fork).toMatchObject({ botId: bot.id, folderId: folder.id, organizationRevision: 1 });
+  expect(fork).toMatchObject({ botId: bot.id, folderId: folder.id, organizationRevision: 2 });
   expect(store.product.profile(fork.id).packageAttachments).toEqual([
     { ...ref(bot), role: 'bot' },
     { ...ref(persona), role: 'persona' },

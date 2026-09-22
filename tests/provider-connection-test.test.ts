@@ -57,7 +57,7 @@ async function setup(options: { accessToken?: string; credentialRef?: string } =
     protocol: 'fixture-sse-v1',
     endpoint,
     enabled: true,
-    ...(options.credentialRef ? { credentialRef: options.credentialRef } : {}),
+    ...(options.credentialRef ? { apiKey: 'synthetic-connection-test-key' } : {}),
   }) as Connection;
   const model = app.store.product.model({
     title: 'Synthetic model',
@@ -127,15 +127,10 @@ const modelUpdate = (model: ModelPreset, overrides: Record<string, unknown> = {}
 });
 
 describe('one-call provider connection diagnostics', () => {
-  test('rejects stale or disabled models, disabled connections, unapproved origins, and user-supplied prompt fields', async () => {
+  test('rejects stale or disabled models, disabled connections and user-supplied prompt fields', async () => {
     const { app, model, connection } = await setup({});
     await post(app, { ...model, revision: 2 }, randomUUID(), 409);
     await post(app, model, randomUUID(), 400, { prompt: 'Unrequested extra content' });
-    const attempt = await post(app, model);
-    expect(await terminal(app, attempt.id)).toMatchObject({
-      status: 'error',
-      error: 'ENDPOINT_NOT_APPROVED',
-    });
     const disabled = app.store.product.model(
       modelUpdate(model, { enabled: false }),
       model.id

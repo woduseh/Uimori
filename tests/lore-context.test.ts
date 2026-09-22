@@ -230,7 +230,11 @@ test('new-scene reset is part of idempotency, clears inherited lore once, and pe
   read(f, b.run, 10, 4);
   complete(f, b.run);
   expect((await queue(f)).run.snapshot.loreContext!.entries.map((e) => e.start)).toEqual([10]);
-  expect(f.store.run(b.run.id).snapshot).toEqual(before);
+  const saved = JSON.parse(
+    String(f.store.db.prepare('SELECT snapshot FROM runs WHERE id=?').get(b.run.id)!.snapshot)
+  );
+  expect(saved).toMatchObject({ settled: true, history: [], resources: [] });
+  expect(f.store.run(b.run.id).inputs).toEqual([]);
 });
 test.each(['source', 'ancestor'] as const)(
   '%s edits invalidate inherited context and original read receipts',
@@ -242,14 +246,16 @@ test.each(['source', 'ancestor'] as const)(
     const b = (await queue(f)).run;
     read(f, b, 10, 4);
     const sb = complete(f, b);
-    const frozen = structuredClone(f.store.run(b.id).snapshot);
+    const frozen = f.store.db.prepare('SELECT snapshot FROM runs WHERE id=?').get(b.id)!.snapshot;
     f.store.editSource(kind === 'source' ? sb.id : sa.id, {
       text: 'Edited synthetic source.',
       expectedRevision: 0,
     });
     expect(verifiedRunLoreReads(f.store, f.store.run(b.id))).toEqual([]);
     expect((await queue(f)).run.snapshot.loreContext!.entries).toEqual([]);
-    expect(f.store.run(b.id).snapshot).toEqual(frozen);
+    expect(f.store.db.prepare('SELECT snapshot FROM runs WHERE id=?').get(b.id)!.snapshot).toBe(
+      frozen
+    );
   }
 );
 

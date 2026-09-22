@@ -34,10 +34,10 @@ afterEach(() => {
   }
 });
 
-test('independent judgment settings persist and missing values remain enabled without migration', () => {
+test('independent judgment settings persist and new workspaces default main judgment off independently of translation', () => {
   const store = setup();
   const original = store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get();
-  expect(modelWorkspace(store).mainJudgmentEnabled).toBe(true);
+  expect(modelWorkspace(store).mainJudgmentEnabled).toBe(false);
   expect(modelWorkspace(store).mainJudgmentThreshold).toBe(0.9);
   expect(store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get()).toEqual(original);
   const current = modelWorkspace(store);
@@ -76,7 +76,7 @@ test('judgment flags reject non-boolean settings', () => {
   }
 });
 
-test('main judgment is frozen at reservation and archived flags are validated', () => {
+test('main judgment settings remain fixed for an in-flight request', () => {
   const store = setup();
   const chat = createFixtureChat(store, 'Judgment snapshot');
   const current = modelWorkspace(store);

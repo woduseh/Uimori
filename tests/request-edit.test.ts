@@ -57,7 +57,7 @@ function complete(store: Store, chatId: string, sourceText: string) {
   return { run: store.run(run.id), source };
 }
 
-test('edited request branches before the response using current settings and preserves later conversation', () => {
+test('edited request copies history before the response using current settings and preserves later conversation', () => {
   const { store, chat } = setup();
   const ancestor = complete(store, chat.id, 'Ancestor');
   const original = complete(store, chat.id, 'Original answer');
@@ -69,7 +69,8 @@ test('edited request branches before the response using current settings and pre
   expect(edited.created).toBe(true);
   expect(edited.run.request).toBe('  Revised request\n');
   expect(edited.run.snapshot.request).toBe(edited.run.request);
-  expect(edited.run.parentRevision).toBe(ancestor.source.id);
+  expect(edited.run.chatId).not.toBe(chat.id);
+  expect(store.source(edited.run.parentRevision!).text).toBe(ancestor.source.text);
   expect(edited.run.snapshot.settings.maxCalls).toBe(12);
   expect(edited.run.snapshot.history.map((entry) => entry.text)).toEqual(['Ancestor']);
   expect(edited.run.snapshot.branchId).not.toBe(original.run.snapshot.branchId);
