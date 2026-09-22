@@ -73,7 +73,8 @@ for (const width of [1440, 412]) {
     // The regular resource recovery buffer must preserve unfinished term rows, not discard them.
     await page.getByRole('button', { name: '표기 추가', exact: true }).click();
     await page.getByLabel('표기 2 원문', { exact: true }).fill('Mira');
-    await expect(page.getByText('이 기기에 복구용 입력 보관됨', { exact: true })).toBeVisible();
+    // The compact header hides this secondary hint; persistence is verified by reload below.
+    await expect(page.getByText('이 기기에 복구용 입력 보관됨', { exact: true })).toBeAttached();
     await open(page, title);
     await expect(page.getByLabel('표기 2 원문', { exact: true })).toHaveValue('Mira');
     await expect(page.getByLabel('표기 2 번역', { exact: true })).toHaveValue('');

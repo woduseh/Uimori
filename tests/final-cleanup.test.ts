@@ -1,3 +1,4 @@
+import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -358,7 +359,7 @@ test('real previous schema 3 converts shared branches once while preserving inde
   const owner = { path, store: new Store(join(path, 'app.sqlite')) };
   owners.push(owner);
   const store = owner.store;
-  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(4);
+  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(DATABASE_SCHEMA_VERSION);
   expect(() => store.chat(originalId)).toThrow('Chat not found');
   expect(store.chat(standaloneId).title).toBe('Standalone unchanged');
   expect(store.context.current(standaloneId)).toMatchObject({

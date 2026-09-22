@@ -285,7 +285,6 @@ try {
     UIMORI_TEST_MODE: '',
     UIMORI_PUBLIC_ORIGIN: proxy.origin,
     UIMORI_ACCESS_TOKEN: randomBytes(32).toString('hex'),
-    UIMORI_PROVIDER_ORIGINS: providerFixture.origin,
     UIMORI_PROVIDER_FIXTURE_URL: providerFixture.url,
     UIMORI_ARTIFACT_DIR: directory,
     UIMORI_BROWSER_OUTPUT: path.join(directory, 'browser'),

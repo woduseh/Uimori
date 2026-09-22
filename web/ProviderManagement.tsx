@@ -97,13 +97,6 @@ function connectionPayload(value: ConnectionDraft) {
     enabled: value.enabled,
   };
 }
-type Confirmation = {
-  kind: 'connection' | 'model';
-  id: string;
-  title: string;
-  body: Record<string, unknown>;
-  fromForm: boolean;
-};
 const matches = (query: string, ...values: (string | undefined)[]) =>
   !query || values.some((value) => value?.toLocaleLowerCase().includes(query));
 
@@ -147,7 +140,6 @@ export function ConnectionEditor({
     undefined
   );
   function navigate(next: typeof screen) {
-    setConfirmation(undefined);
     setDiscard(undefined);
     setScreen(next);
     requestAnimationFrame(() => {
@@ -229,17 +221,12 @@ export function ConnectionEditor({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   const setBusy = setOperationBusy;
-  const [conflict, setConflict] = useState<'connection' | 'model' | 'status' | null>(null),
-    [confirmation, setConfirmation] = useState<Confirmation>();
+  const [conflict, setConflict] = useState<'connection' | 'model' | null>(null);
   const [registeredModel, setRegisteredModel] = useState<ModelPreset>();
   const operationLock = useRef(false);
   const jevSave = useRef<(() => Promise<boolean>) | null>(null);
   const connectionForm = useRef<HTMLFormElement>(null);
-  const modelForm = useRef<HTMLFormElement>(null),
-    confirmationPanel = useRef<HTMLElement>(null);
-  useEffect(() => {
-    if (confirmation) confirmationPanel.current?.scrollIntoView({ block: 'nearest' });
-  }, [confirmation]);
+  const modelForm = useRef<HTMLFormElement>(null);
   const chosen = library.connections.find((item) => item.id === model.connectionRef);
   const modelConnections = library.connections;
   const codex = connection.protocol === 'codex-app-server-v1',
@@ -289,7 +276,6 @@ export function ConnectionEditor({
       setModel((current) => ({ ...current, connectionRef: '' }));
       setModelBaseline((current) => JSON.stringify({ ...JSON.parse(current), connectionRef: '' }));
     }
-    setConfirmation(undefined);
     setConflict(null);
     setError('');
     onError('');
@@ -307,7 +293,7 @@ export function ConnectionEditor({
       if (screen === 'model') navigate('models');
     }
     if (registeredModel?.id === item.id) setRegisteredModel(undefined);
-    setConfirmation(undefined);
+
     setConflict(null);
     setError('');
     onError('');
@@ -358,7 +344,8 @@ export function ConnectionEditor({
       const detail = caught instanceof Error ? caught.message : '작업을 완료하지 못했어요.';
       setError(detail);
       onError(detail);
-      if (caught instanceof ApiError && caught.status === 409) setConflict(scope);
+      if (caught instanceof ApiError && caught.status === 409 && scope !== 'status')
+        setConflict(scope);
       await reload().catch(() => undefined);
       return false;
     } finally {
@@ -380,7 +367,6 @@ export function ConnectionEditor({
     setEditingConnection(copy ? undefined : structuredClone(item));
     setConnectionCopy(copy);
     setConflict(null);
-    setConfirmation(undefined);
     setError('');
     onError('');
     setConnectionStarted(true);
@@ -404,7 +390,6 @@ export function ConnectionEditor({
     setEditingModel(copy ? undefined : structuredClone(item));
     setModelCopy(copy);
     setConflict(null);
-    setConfirmation(undefined);
     setModelStarted(true);
     setModelSection('basic');
     returnItem.current = { screen: 'models', id: item.id };
@@ -444,7 +429,6 @@ export function ConnectionEditor({
         replaceDraft('model', () => startModelFor(saved));
       }
     }
-    setConfirmation(undefined);
     setMessage(saved.title + (id ? ' 프로바이더 변경 저장됨' : ' 프로바이더 등록됨'));
   }
   async function saveModel(
@@ -469,7 +453,6 @@ export function ConnectionEditor({
       setSetup(false);
       if (!leave) navigate('models');
     }
-    setConfirmation(undefined);
     setMessage(saved.title + (id ? ' 모델 변경 저장됨' : ' 모델 프리셋 등록됨'));
   }
   async function catalog(item: Connection) {
@@ -488,22 +471,12 @@ export function ConnectionEditor({
       enabled: !item.enabled,
       expectedRevision: item.revision,
     };
-    if (item.enabled)
-      setConfirmation({
-        kind: 'connection',
-        id: item.id,
-        title: item.title,
-        body,
-        fromForm: false,
-      });
-    else void perform(() => saveConnection(body, item.id, false));
+    void perform(() => saveConnection(body, item.id, false));
   }
   function statusModel(item: ModelPreset) {
     const { id, revision, source: _, capabilityProtocol: _protocol, ...body } = item;
     const updated = { ...body, enabled: item.enabled === false, expectedRevision: revision };
-    if (item.enabled !== false)
-      setConfirmation({ kind: 'model', id, title: item.title, body: updated, fromForm: false });
-    else void perform(() => saveModel(updated, id, false));
+    void perform(() => saveModel(updated, id, false));
   }
   async function latest(kind: 'connection' | 'model') {
     if (kind === 'connection' && editingConnection) {
@@ -582,16 +555,6 @@ export function ConnectionEditor({
       ...connectionPayload(connection),
       ...(editingConnection ? { expectedRevision: editingConnection.revision } : {}),
     };
-    if (editingConnection?.enabled && !connection.enabled) {
-      setConfirmation({
-        kind: 'connection',
-        id: editingConnection.id,
-        title: connection.title,
-        body,
-        fromForm: true,
-      });
-      return false;
-    }
     return perform(() => saveConnection(body, editingConnection?.id, true, leave), 'connection');
   }
   async function submitModel(leave = false): Promise<boolean> {
@@ -633,16 +596,6 @@ export function ConnectionEditor({
       ...modelPayload(model, chosen),
       ...(editingModel ? { expectedRevision: editingModel.revision } : {}),
     };
-    if (editingModel && editingModel.enabled !== false && !model.enabled) {
-      setConfirmation({
-        kind: 'model',
-        id: editingModel.id,
-        title: model.title,
-        body,
-        fromForm: true,
-      });
-      return false;
-    }
     return perform(() => saveModel(body, editingModel?.id, true, leave), 'model');
   }
   const savePending = async (): Promise<boolean> => {
@@ -1218,59 +1171,6 @@ export function ConnectionEditor({
           )}
         </div>
       </section>
-      {confirmation && (
-        <section ref={confirmationPanel} className="provider-impact" aria-label="비활성 영향 확인">
-          <strong>{confirmation.title} · 비활성으로 바꿀까요?</strong>
-          <p>
-            {confirmation.kind === 'connection'
-              ? '이 프로바이더를 사용하는 이후 호출이 차단돼요. 저장된 원고와 전역 역할의 모델 선택은 유지돼요.'
-              : '새 모델 선택과 이 모델을 사용하는 이후 실행이 차단돼요. 전역 역할의 모델 선택은 유지돼요.'}
-          </p>
-          <p>이미 저장된 원문·번역과 과거 실행 기록은 바꾸지 않아요.</p>
-          <div className="provider-actions">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                void perform(
-                  () =>
-                    confirmation.kind === 'connection'
-                      ? saveConnection(confirmation.body, confirmation.id, confirmation.fromForm)
-                      : saveModel(confirmation.body, confirmation.id, confirmation.fromForm),
-                  confirmation.fromForm ? confirmation.kind : 'status'
-                );
-              }}
-            >
-              {confirmation.kind === 'connection' ? '프로바이더' : '모델'} 비활성 확인
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy}
-              onClick={() => setConfirmation(undefined)}
-            >
-              비활성 취소
-            </button>
-          </div>
-          {conflict === 'status' && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy}
-              onClick={() => {
-                void perform(async () => {
-                  await reload();
-                  setConfirmation(undefined);
-                  setConflict(null);
-                  setMessage('최신 목록에서 대상을 다시 선택해 주세요.');
-                });
-              }}
-            >
-              최신 목록 다시 불러오기
-            </button>
-          )}
-        </section>
-      )}
       <form
         hidden={screen !== 'connection'}
         ref={connectionForm}
@@ -1320,10 +1220,7 @@ export function ConnectionEditor({
             다른 곳에서 프로바이더가 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.
           </p>
         )}
-        <fieldset
-          className="editor-fields full provider-connection-fields"
-          disabled={busy || !!confirmation}
-        >
+        <fieldset className="editor-fields full provider-connection-fields" disabled={busy}>
           <label>
             프로바이더 종류
             <select
@@ -1516,7 +1413,7 @@ export function ConnectionEditor({
           >
             프로바이더 편집 끝내기
           </button>
-          <button className="primary" disabled={busy || !!confirmation}>
+          <button className="primary" disabled={busy}>
             {editingConnection ? '프로바이더 변경 저장' : '프로바이더 등록'}
           </button>
         </div>
@@ -1581,7 +1478,7 @@ export function ConnectionEditor({
             </button>
           ))}
         </div>
-        <fieldset className="editor-fields full" disabled={busy || !!confirmation}>
+        <fieldset className="editor-fields full" disabled={busy}>
           <div className="provider-model-section full" hidden={modelSection !== 'basic'}>
             <h4 className="provider-field-heading full">모델 선택</h4>
             <label className="full">
@@ -1695,13 +1592,9 @@ export function ConnectionEditor({
             onClick={() => navigate('models')}
           />
           {editingModel ? (
-            <SaveButton
-              label="모델 변경 저장"
-              disabled={busy || !!confirmation || !chosen}
-              aria-busy={busy}
-            />
+            <SaveButton label="모델 변경 저장" disabled={busy || !chosen} aria-busy={busy} />
           ) : (
-            <button className="primary" disabled={busy || !!confirmation || !chosen}>
+            <button className="primary" disabled={busy || !chosen}>
               모델 프리셋 등록
             </button>
           )}

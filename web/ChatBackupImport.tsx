@@ -176,8 +176,8 @@ export function ChatBackupImport({
       )}
       {message && <p role="status">{message}</p>}
       <p className="muted">
-        전역 프롬프트·역할 모델은 현재 작업공간의 설정을 사용해요. 원래 설정은 복원 기록에 보관돼요.
-        중단된 외부 요청은 다시 전송하지 않아요.
+        전역 프롬프트·역할 모델은 현재 작업공간의 설정을 사용해요. 실행 기록과 도우미 내부 작업은
+        복원하지 않아요. 중단된 외부 요청은 다시 전송하지 않아요.
       </p>
     </section>
   );

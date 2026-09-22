@@ -1,3 +1,4 @@
+import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -41,7 +42,7 @@ function database() {
 
 test('fresh schema is personal v1; adding an index does not block reopening', () => {
   const store = database();
-  expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(4);
+  expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(DATABASE_SCHEMA_VERSION);
   store.db.exec('CREATE INDEX extra_user_index ON sources(created_at)');
   const path = store.path;
   store.close();

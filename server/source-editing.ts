@@ -1,3 +1,4 @@
+import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
 import { currentBotTranslationGuide } from './translation-guide.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
 import { validateTranslationArtifact } from './translation-artifacts.js';
@@ -18,7 +19,7 @@ export function latestTranslation(store: Store, id: string): Job | null {
     .get(id) as { id: string } | undefined;
   return row ? store.job(row.id) : null;
 }
-/** Invalidate ownership without deleting the previous response or its execution evidence. */
+/** Revoke in-flight ownership; retention separately keeps the previous usable response. */
 function stopTranslations(store: Store, sourceId: string) {
   store.db
     .prepare(
@@ -44,16 +45,13 @@ export function editSource(store: Store, id: string, value: unknown): Source {
         createHash('sha256').update(content).digest('hex'),
         new Date().toISOString()
       );
-    const jobs = store.db.prepare('SELECT id FROM jobs WHERE source_revision=?').all(id) as {
-      id: string;
-    }[];
-    for (const job of jobs) {
-      store.db
-        .prepare(
-          "UPDATE jobs SET status='stale',generation=generation+1,owner=NULL,error=NULL,updated_at=? WHERE id=?"
-        )
-        .run(new Date().toISOString(), job.id);
-    }
+    store.db
+      .prepare(
+        "UPDATE jobs SET status='stale',generation=generation+1,owner=NULL,error=NULL,updated_at=? WHERE source_revision=? AND status!='stale'"
+      )
+      .run(new Date().toISOString(), id);
+    pruneSourceEdits(store.db, id);
+    pruneTranslationHistory(store.db, id);
     store.event(source.chatId, 'source.edited', id);
     return store.source(id);
   });
@@ -259,6 +257,7 @@ export function editTranslation(store: Store, id: string, value: unknown): Job {
     store.db
       .prepare('INSERT INTO job_results VALUES(?,?,?,?)')
       .run(jobId, store.job(jobId).generation, JSON.stringify(result), time);
+    pruneTranslationHistory(store.db, id);
     store.event(source.chatId, 'job.completed', jobId);
     return store.job(jobId);
   });

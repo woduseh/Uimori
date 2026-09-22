@@ -187,7 +187,7 @@ async function harness(page: Page, seedCount = 0) {
       return route.fulfill({ json: view.conversation });
     }
     const conversationMatch =
-      /^\/api\/helper\/conversations\/([^/]+)(?:\/(messages|tasks|events))?$/u.exec(path);
+      /^\/api\/helper\/conversations\/([^/]+)(?:\/(view|messages|tasks|events))?$/u.exec(path);
     if (conversationMatch) {
       const view = views.get(conversationMatch[1]);
       if (!view)
@@ -204,6 +204,15 @@ async function harness(page: Page, seedCount = 0) {
         return route.fulfill({ json: view.conversation });
       }
       if (!kind) return route.fulfill({ json: view.conversation });
+      if (kind === 'view')
+        return route.fulfill({
+          json: {
+            conversation: view.conversation,
+            messages: view.messages.slice(-100),
+            tasks: view.tasks.slice(0, 50),
+            eventCursor: view.events.at(-1)?.seq ?? 0,
+          },
+        });
       if (kind === 'events') {
         eventReads++;
         return route.fulfill({

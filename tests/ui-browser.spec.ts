@@ -1226,68 +1226,6 @@ test('UI02 UI04 UI12 sending a long request collapses the empty composer and pre
   expect((await data(request, chat.id)).runs).toHaveLength(1);
 });
 
-test('UI07 UI09 legacy branches use one mobile selection and preserve reading without generation', async ({
-  page,
-  request,
-}, info) => {
-  const chat = await seed(
-    request,
-    `UI legacy branch reader ${Date.now()}`,
-    '(OOC: 비가 그친 항구에서 마지막 배를 기다리는 미라의 장면.)'
-  );
-  const original = (await data(request, chat.id)).runs[0];
-  const candidates: Run[] = [];
-  for (let index = 0; index < 2; index++) {
-    const result = await request.post(`/api/runs/${original.id}/candidate`, {
-      data: { idempotencyKey: `ui-legacy-${chat.id}-${index}` },
-    });
-    expect(result.ok()).toBeTruthy();
-    const run = (await result.json()) as Run;
-    candidates.push(run);
-    await expect
-      .poll(
-        async () => (await data(request, chat.id)).runs.find((item) => item.id === run.id)?.status
-      )
-      .toBe('completed');
-  }
-  await expect
-    .poll(async () =>
-      (await data(request, chat.id)).jobs.every((job) => job.status === 'completed')
-    )
-    .toBe(true);
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  await page.goto(`/?chat=${chat.id}`);
-  await openChatMenu(page);
-  await page.getByRole('button', { name: '보관된 분기', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '보관된 분기', exact: true });
-  await expect
-    .poll(() => dialog.locator('.branch-choice strong').allTextContents())
-    .toEqual(expect.arrayContaining(['기본 분기', '다른 응답 1', '다른 응답 2']));
-  await expect(dialog.locator('.branch-preview')).toHaveCount(3);
-  await expect(dialog.locator('select, input')).toHaveCount(0);
-  expect(
-    await dialog
-      .locator(':scope > .dialog-body')
-      .evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
-  ).toBe(true);
-  if (visualReview) await page.screenshot({ path: info.outputPath('legacy-branches-mobile.png') });
-  const before = await data(request, chat.id);
-  await dialog
-    .locator('.branch-choice')
-    .filter({ has: page.locator('strong', { hasText: '다른 응답 1' }) })
-    .click();
-  await expect(dialog).not.toBeVisible();
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get('branch'))
-    .toBe(candidates[0].snapshot.branchId!);
-  await expect(page.getByTestId('source')).toHaveAttribute(
-    'data-source-id',
-    before.sources.find((source) => source.runId === candidates[0].id)!.id
-  );
-  await expect(page.getByRole('button', { name: '다른 응답', exact: true })).toHaveCount(0);
-  expect(await data(request, chat.id)).toEqual(before);
-});
-
 test('UI17 prompts use latest settings and concurrent edits preserve unsaved text', async ({
   page,
   request,
@@ -1469,7 +1407,7 @@ test('UI18 translation is requested only by first view click, never by restore, 
   expect(after.attempts).toEqual(completed.attempts);
 });
 
-test('UI18 source and translation edits preserve past snapshots and feed only future generation with one latest translation', async ({
+test('UI18 source and translation edits keep the current manuscript and feed future generation with one displayed translation', async ({
   page,
   request,
 }, info) => {
@@ -1505,7 +1443,7 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
   await expect(nativeProse(scene.getByTestId('source-text'))).toContainText(
     'SYNTHETIC_EDITED_SOURCE'
   );
-  expect(changed.runs).toEqual(original.runs);
+  expect(changed.runs.map((run) => run.id)).toEqual(original.runs.map((run) => run.id));
   expect(changed.attempts).toEqual(original.attempts);
   expect(
     changed.jobs.filter((job) => job.kind === 'translation' && job.sourceRevision === source.id)
@@ -1556,11 +1494,14 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
   const next = future.runs.find(
     (run) => !original.runs.some((previous) => previous.id === run.id)
   )!;
-  expect(next.snapshot.history.find((item) => item.revision === source.id)?.text).toBe(finalText);
+  expect(next.snapshot.history.find((item) => item.revision === source.id)?.contentHash).toBe(
+    createHash('sha256').update(finalText).digest('hex')
+  );
   expect(
-    future.runs.filter((run) => original.runs.some((previous) => previous.id === run.id))
-  ).toEqual(original.runs);
-  expect(original.runs[1].snapshot.history[0].text).toBe(source.text);
+    future.runs
+      .filter((run) => original.runs.some((previous) => previous.id === run.id))
+      .map((run) => run.id)
+  ).toEqual(original.runs.map((run) => run.id));
 });
 
 // Without a translation the pencil in the scene tool row already edits the source; the ⋯ menu
@@ -1726,14 +1667,16 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
       .getByLabel('프로바이더 이름', { exact: true })
       .fill('SYNTHETIC unsaved connection');
     await selectSettingsSection(page, '데이터 관리');
-    await expect(dialog.getByRole('button', { name: 'JSON 내보내기', exact: true })).toBeVisible();
+    await expect(
+      dialog.getByRole('button', { name: 'DB 스냅샷 다운로드', exact: true })
+    ).toBeVisible();
     await expect(dialog.getByLabel('프로바이더 이름', { exact: true })).not.toBeVisible();
-    await selectSettingsSection(page, '접근 보안');
-    await expect(dialog.getByRole('button', { name: '접속 해제', exact: true })).toBeVisible();
+    await selectSettingsSection(page, '앱 정보·라이선스');
+    await expect(dialog.getByTestId('app-build-id')).toBeVisible();
     if (viewport.width === DESKTOP_WIDTH) {
       await tabs.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
       await expect(tabs.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
-      for (const section of ['역할별 모델', '현재 프롬프트', '프로바이더·모델']) {
+      for (const section of ['테마·색상', '역할별 모델', '현재 프롬프트', '프로바이더·모델']) {
         await page.keyboard.press('ArrowDown');
         await expect(tabs.getByRole('tab', { name: section, exact: true })).toBeFocused();
       }
@@ -1936,6 +1879,7 @@ test('UI whole-source translation retains completed results across retry and can
     await page.screenshot({
       path: info.outputPath(`translation-previous-cancelled-${MOBILE_WIDTH}.png`),
     });
+  let previousSuccess = first;
   for (const terminal of ['cancelled', 'failed'] as const) {
     if (terminal === 'failed') {
       expect(
@@ -1970,9 +1914,10 @@ test('UI whole-source translation retains completed results across retry and can
     const retried = await latest();
     expect(retried.sourceHash).toBe(first.sourceHash);
     expect((await data(request, chat.id)).sources[0].text).toBe(original);
-    expect((await (await request.get(`/api/jobs/${first.id}`)).json()).result).toEqual(
-      first.result
+    expect((await (await request.get(`/api/jobs/${previousSuccess.id}`)).json()).result).toEqual(
+      previousSuccess.result
     );
+    previousSuccess = retried;
     if (visualReview)
       await page.screenshot({
         path: info.outputPath(`translation-whole-source-${terminal}-retry-${MOBILE_WIDTH}.png`),

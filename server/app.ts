@@ -1,3 +1,4 @@
+import { flushPendingImageCleanup } from './unused-data.js';
 import { themeRoutes } from './themes.js';
 import { inputTranslationRoutes } from './input-translation.js';
 import { ChatTranscriptError } from '../core/chat-transcript.js';
@@ -268,18 +269,25 @@ export async function createApp(options: AppOptions): Promise<App> {
   };
   const track = (promise: Promise<void>) => {
     work.add(promise);
-    void promise.then(
-      () => work.delete(promise),
-      () => {
-        work.delete(promise);
-        // A storage/finalization failure can escape a worker's own handler. Observe
-        // it without creating an unhandled child rejection or logging manuscript data.
-        app.log.error(
-          { code: 'BACKGROUND_TASK_FAILED' },
-          'Background task did not settle normally'
-        );
+    const settled = () => {
+      work.delete(promise);
+      if (!work.size) {
+        try {
+          flushPendingImageCleanup(store.db);
+        } catch {
+          app.log.error(
+            { code: 'IMAGE_CLEANUP_DEFERRED' },
+            'Image cleanup will retry on restart or the next settled task'
+          );
+        }
       }
-    );
+    };
+    void promise.then(settled, () => {
+      settled();
+      // A storage/finalization failure can escape a worker's own handler. Observe
+      // it without creating an unhandled child rejection or logging manuscript data.
+      app.log.error({ code: 'BACKGROUND_TASK_FAILED' }, 'Background task did not settle normally');
+    });
   };
   const streams = new ResponseStreamStore(store);
   const helper: HelperRuntime = new HelperRuntime(store, {
@@ -1524,7 +1532,8 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.get<{ Params: { id: string } }>('/api/chats/:id/events', async (request, reply) => {
     store.chat(request.params.id);
     const rawCursor = request.headers['last-event-id'];
-    const cursor = rawCursor === undefined ? 0 : Number(rawCursor);
+    const cursor =
+      rawCursor === undefined ? store.latestEventSequence(request.params.id) : Number(rawCursor);
     if (!Number.isSafeInteger(cursor) || cursor < 0)
       throw new HttpError(400, 'Invalid event cursor');
     reply.hijack();
@@ -1539,7 +1548,9 @@ export async function createApp(options: AppOptions): Promise<App> {
     subscribers.set(request.params.id, listeners);
     listeners.set(reply.raw, cursor);
     streamAuthority.set(reply.raw, () => session.authenticated(request.headers.cookie));
-    reply.raw.write(`data: ${JSON.stringify({ kind: 'snapshot', chatId: request.params.id })}\n\n`);
+    reply.raw.write(
+      `id: ${cursor}\ndata: ${JSON.stringify({ kind: 'snapshot', chatId: request.params.id, seq: cursor })}\n\n`
+    );
     publish(request.params.id);
     const heartbeat = setInterval(() => {
       if (!session.authenticated(request.headers.cookie)) reply.raw.end();
@@ -1614,6 +1625,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     store.recover();
     helper.workspace.interrupt();
     streams.recover();
+    flushPendingImageCleanup(store.db);
   }
   app.addHook('onListen', async () => {
     pumpJobs();

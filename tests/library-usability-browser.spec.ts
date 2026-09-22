@@ -78,7 +78,7 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     await expect(
       panel.getByRole('region', { name: '대표 이미지 설정', exact: true })
     ).toBeVisible();
-    await expect(panel.getByText('시작문·로어·스크립트 원문 편집', { exact: true })).toBeVisible();
+    await expect(panel.getByRole('tab', { name: '로어북', exact: true })).toBeVisible();
     await noHorizontalOverflow(page);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-create-${width}.png`) });
@@ -95,9 +95,8 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     await expect(start).toBeEnabled();
     await start.scrollIntoViewIfNeeded();
     await expect(start).toBeInViewport();
-    await expect(
-      panel.getByRole('status').filter({ hasText: '저장됨 · 다음 실행부터 사용해요.' })
-    ).toContainText(`${createdTitle} 저장됨 · 다음 실행부터 사용해요.`);
+    await expect(panel.getByRole('heading', { name: createdTitle, exact: true })).toBeVisible();
+    await expect(panel.locator('.resource-editor-status').getByRole('status')).toHaveText('저장됨');
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-saved-${width}.png`) });
     await start.click();
@@ -165,7 +164,6 @@ test('LUSE03 empty persona and module folders explain their roles and offer the 
     ).toBeVisible();
     await panel.getByRole('button', { name: `${name} 만들기`, exact: true }).click();
     await expect(panel.getByRole('heading', { name: `새 ${name}`, exact: true })).toBeVisible();
-    await expect(panel.locator('.library-editor-guide')).toContainText(meaning);
     await expect(panel.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
     await noHorizontalOverflow(page);
     if (visualReview)

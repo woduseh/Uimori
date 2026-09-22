@@ -392,12 +392,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   });
   await openProviderMenu(page, '모델', changed.title);
   await page.getByRole('button', { name: changed.title + ' 모델 비활성', exact: true }).click();
-  const confirmation = page.getByRole('region', { name: '비활성 영향 확인' });
-  await expect(confirmation).toContainText('이 모델을 사용하는 이후 실행이 차단');
-  expect((await library(request)).models.find((item) => item.id === original.id)?.enabled).toBe(
-    true
-  );
-  await confirmation.getByRole('button', { name: '모델 비활성 확인', exact: true }).click();
+  await expect(page.getByRole('region', { name: '비활성 영향 확인' })).toHaveCount(0);
   await expect
     .poll(
       async () => (await library(request)).models.find((item) => item.id === original.id)?.enabled
@@ -408,11 +403,22 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await page
     .getByRole('button', { name: title + ' 연결 최신판 프로바이더 비활성', exact: true })
     .click();
-  await expect(confirmation).toContainText('이 프로바이더를 사용하는 이후 호출이 차단');
-  await confirmation.getByRole('button', { name: '비활성 취소', exact: true }).click();
-  expect(
-    (await library(request)).connections.find((item) => item.id === connection.id)?.enabled
-  ).toBe(true);
+  await expect
+    .poll(
+      async () =>
+        (await library(request)).connections.find((item) => item.id === connection.id)?.enabled
+    )
+    .toBe(false);
+  await openProviderMenu(page, '프로바이더', title + ' 연결 최신판');
+  await page
+    .getByRole('button', { name: title + ' 연결 최신판 프로바이더 활성화', exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await library(request)).connections.find((item) => item.id === connection.id)?.enabled
+    )
+    .toBe(true);
   await page.keyboard.press('Escape');
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(changed.title);
@@ -731,7 +737,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   expect(observed.legacyReads).toEqual([]);
 });
 
-test('PMUI09 invalid hidden model fields receive focus and old deactivation confirmation cannot follow another draft', async ({
+test('PMUI09 invalid hidden model fields receive focus and a reversible disable finishes before another draft', async ({
   page,
   request,
 }) => {
@@ -813,21 +819,15 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
   await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByRole('switch', { name: '새 모델 선택에 표시' }).uncheck();
   await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
-  const confirmation = page.getByRole('region', { name: '비활성 영향 확인' });
-  await expect(confirmation).toContainText(a.title);
-  await expect(form.getByLabel('최대 출력 토큰')).toBeDisabled();
+  await expect
+    .poll(async () => (await library(request)).models.find((item) => item.id === a.id)?.enabled)
+    .toBe(false);
   await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
-  await expect(confirmation).toHaveCount(0);
   await page.getByRole('button', { name: b.title + ' 모델 수정', exact: true }).click();
-  const discard = page.getByRole('alertdialog', { name: '편집 중인 초안 확인' });
-  await expect(discard).toBeVisible();
-  await discard.getByRole('button', { name: '초안 버리고 계속', exact: true }).click();
   await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(b.title);
   await form.getByLabel('모델 프리셋 이름').fill(b.title + ' 내 초안');
-  await expect(confirmation).toHaveCount(0);
-  expect((await library(request)).models.find((item) => item.id === a.id)).toEqual(a);
   expect((await library(request)).models.find((item) => item.id === b.id)).toEqual(b);
-  expect(modelWrites).toBe(0);
+  expect(modelWrites).toBe(1);
 });
 
 const providerOptionCases = [
@@ -1563,7 +1563,7 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
 
 preservePromptWorkspace();
 
-test('PMLEAVE provider draft switch saves before replacement and preserves validation and disable confirmation', async ({
+test('PMLEAVE provider draft switch saves before replacement and applies reversible disable without another confirmation', async ({
   page,
   request,
 }) => {
@@ -1590,19 +1590,10 @@ test('PMLEAVE provider draft switch saves before replacement and preserves valid
   await form.getByLabel('이 프로바이더 사용').uncheck();
   await switchToB();
   await discard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
-  await expect(discard.getByRole('alert')).toBeVisible();
-  expect((await library(request)).connections.find((item) => item.id === a.id)).toEqual(a);
-  await discard.getByRole('button', { name: '계속 편집', exact: true }).click();
-  const impact = page.getByRole('region', { name: '비활성 영향 확인' });
-  await expect(impact).toBeVisible();
-  await impact.getByRole('button', { name: '비활성 취소', exact: true }).click();
-  await form.getByLabel('이 프로바이더 사용').check();
-  await switchToB();
-  await discard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
   await expect(discard).toBeHidden();
   await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(b.title);
   const saved = (await library(request)).connections.find((item) => item.id === a.id)!;
   expect(saved.title).toBe(title + ' saved');
   expect(saved.revision).toBe(a.revision + 1);
-  expect(saved.enabled).toBe(true);
+  expect(saved.enabled).toBe(false);
 });

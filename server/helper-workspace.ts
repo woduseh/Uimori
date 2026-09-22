@@ -257,6 +257,13 @@ export class HelperWorkspace {
         this.store.event(scope.chatId, `helper.${kind}`, taskId ?? conversationId);
     }
   }
+  latestEventSequence(id: string): number {
+    return Number(
+      this.store.db
+        .prepare('SELECT COALESCE(MAX(seq),0) AS seq FROM helper_events WHERE conversation_id=?')
+        .get(id)!.seq
+    );
+  }
   events(id: string, after = 0, view: 'full' | 'updates' = 'full'): HelperEvent[] {
     this.conversation(id);
     return (

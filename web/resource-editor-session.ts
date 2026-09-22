@@ -171,19 +171,20 @@ export class ResourceEditorSession {
     const previous = this.state.local.model;
     if (
       Object.keys(model).length === Object.keys(previous).length &&
-      Object.entries(model).every(([key, value]) =>
+      (Object.entries(model).every(([key, value]) =>
         Object.is(value, (previous as unknown as Record<string, unknown>)[key])
-      )
+      ) ||
+        JSON.stringify(model) === JSON.stringify(previous))
     )
       return;
     this.change({ ...this.state.local, model });
   }
-  setField(path: string, value: string) {
+  setField(path: string, value: string | undefined) {
     if (this.state.local.rawFields[path] === value) return;
-    this.change({
-      ...this.state.local,
-      rawFields: { ...this.state.local.rawFields, [path]: value },
-    });
+    const rawFields = { ...this.state.local.rawFields };
+    if (value === undefined) delete rawFields[path];
+    else rawFields[path] = value;
+    this.change({ ...this.state.local, rawFields });
   }
   pendingField(path: string, pending: boolean) {
     if (this.state.local.unappliedFields.includes(path) === pending) return;

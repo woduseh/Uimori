@@ -13,7 +13,6 @@
 ```dotenv
 UIMORI_PUBLIC_ORIGIN=https://machine.tail-example.ts.net
 UIMORI_ACCESS_TOKEN=replace-with-output-from-openssl-rand-hex-32
-UIMORI_PROVIDER_ORIGINS=
 # Optional: use the deployed Git commit as the image tag.
 UIMORI_IMAGE_TAG=local
 ```

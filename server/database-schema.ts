@@ -1,3 +1,4 @@
+import { pruneSavedTextHistory } from './text-retention.js';
 import { migrateContextStorage } from './migrate-context-storage.js';
 import { pruneContextHistory } from './context-retention.js';
 import type { DatabaseSync } from 'node:sqlite';
@@ -6,7 +7,7 @@ import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 
-export const DATABASE_SCHEMA_VERSION = 4;
+export const DATABASE_SCHEMA_VERSION = 5;
 const FORMAT = 'uimori-personal-v1';
 
 export class DatabaseSchemaError extends Error {
@@ -49,7 +50,10 @@ export function initializeDatabaseSchema(
   migrateUserData: () => void = () => {}
 ): void {
   const previous = databaseSchemaVersion(db);
-  if (previous === DATABASE_SCHEMA_VERSION) return;
+  if (previous === DATABASE_SCHEMA_VERSION) {
+    initDatabaseReadIndexes(db);
+    return;
+  }
   db.exec('BEGIN IMMEDIATE; PRAGMA defer_foreign_keys=ON');
   try {
     if (previous === 0) {
@@ -78,6 +82,7 @@ export function initializeDatabaseSchema(
         UPDATE runs SET snapshot=json_remove(snapshot,'$.profile.chatOptions.delegatedValues','$.profile.chatOptions.delegationIds')
           WHERE json_type(snapshot,'$.profile.chatOptions')='object';`);
     }
+    db.exec('CREATE TABLE IF NOT EXISTS image_cleanup_candidates(hash TEXT PRIMARY KEY)');
     if (previous > 0 && previous < 3) {
       // One-time conversion of execution metadata, not ongoing legacy shape support.
       db.exec(`
@@ -115,6 +120,7 @@ export function initializeDatabaseSchema(
       migrateUserData();
       pruneContextHistory(db);
     }
+    pruneSavedTextHistory(db);
     initDatabaseReadIndexes(db);
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}`);
     db.exec('COMMIT');

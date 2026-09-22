@@ -18,12 +18,13 @@ const otherPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWPY3RH6HwAGMgKYxcNPSgAAAABJRU5ErkJggg==',
   'base64'
 );
-async function blob(request: APIRequestContext, bytes = png): Promise<string> {
+type UploadedImage = { hash: string; mime: NonNullable<RisuContent['images']>[number]['mime'] };
+async function blob(request: APIRequestContext, bytes = png): Promise<UploadedImage> {
   const response = await request.post('/api/package-image-blobs', {
     data: { mime: 'image/png', base64: bytes.toString('base64') },
   });
   expect(response.ok(), await response.text()).toBe(true);
-  return (await response.json()).hash;
+  return response.json();
 }
 async function seed(
   request: APIRequestContext,
@@ -83,14 +84,14 @@ async function save(page: Page, library: Locator, content: Content): Promise<Con
   await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
   return pending;
 }
-const portraitPart = (hash: string, id = 'portrait'): Partial<RisuContent> => ({
+const portraitPart = (image: UploadedImage, id = 'portrait'): Partial<RisuContent> => ({
   images: [
     {
       id,
       title: '합성 대표 이미지',
       description: '',
-      blobHash: hash,
-      mime: 'image/png',
+      blobHash: image.hash,
+      mime: image.mime,
       allowedUse: 'profile',
     },
   ],
@@ -112,8 +113,8 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
             id: 'inline',
             title: '다른 본문 그림',
             description: '',
-            blobHash: secondHash,
-            mime: 'image/png',
+            blobHash: secondHash.hash,
+            mime: secondHash.mime,
             allowedUse: 'inline',
           },
         ],
@@ -128,11 +129,11 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
       await portrait.getByRole('button', { name: '기존 이미지에서 선택', exact: true }).click();
       await expect(first.locator('img')).toHaveAttribute(
         'src',
-        `/api/package-image-blobs/${firstHash}`
+        `/api/package-image-blobs/${firstHash.hash}`
       );
       await expect(second.locator('img')).toHaveAttribute(
         'src',
-        `/api/package-image-blobs/${secondHash}`
+        `/api/package-image-blobs/${secondHash.hash}`
       );
     };
     await checkCandidates();
@@ -141,7 +142,7 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await expect(picker).not.toBeVisible();
     await expect(portrait.locator('.package-portrait-avatar img')).toHaveAttribute(
       'src',
-      `/api/package-image-blobs/${secondHash}`
+      `/api/package-image-blobs/${secondHash.hash}`
     );
     const saved = await save(page, library, original);
     expect(saved.package!.portraitImageId).toBe('inline');
@@ -155,7 +156,7 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
   });
 }
 
-test('LIMG01 representative image upload, unset and existing inline selection preserve immutable revisions', async ({
+test('LIMG01 representative image upload, unset and existing inline selection preserve current content and its one undo', async ({
   page,
   request,
 }, info) => {
@@ -167,8 +168,8 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
           id: 'inline',
           title: '본문 그림',
           description: '',
-          blobHash: originalHash,
-          mime: 'image/png',
+          blobHash: originalHash.hash,
+          mime: originalHash.mime,
           allowedUse: 'inline',
         },
       ],
@@ -184,7 +185,7 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
       (image) => image.id === uploaded.package!.portraitImageId
     )!;
   expect(profile.allowedUse).toBe('profile');
-  expect(profile.blobHash).not.toBe(originalHash);
+  expect(profile.blobHash).not.toBe(originalHash.hash);
   expect(uploaded.package!.images).toHaveLength(2);
   await expect(portrait.locator('img')).toHaveAttribute(
     'src',
@@ -217,24 +218,23 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   const reused = await save(page, library, unset);
   expect(reused.package!.portraitImageId).toBe('inline');
   expect(reused.package!.images![0].allowedUse).toBe('both');
-  await selectPackageSection(page, '이미지');
-  const images = library.getByRole('region', { name: '자료 이미지', exact: true });
-  await images
-    .getByRole('listitem')
-    .filter({ has: page.locator(`img[src="/api/package-image-blobs/${profile.blobHash}"]`) })
+  await selectPackageSection(page, '에셋');
+  await library
+    .getByLabel('Risu 이미지 목록', { exact: true })
     .getByRole('button')
+    .filter({ has: page.locator(`img[src="/api/package-image-blobs/${profile.blobHash}"]`) })
     .click();
-  await images.getByRole('button', { name: '이 자료에서 이미지 제거', exact: true }).click();
-  await images.getByRole('button', { name: '이미지 참조 제거', exact: true }).click();
+  await library.getByRole('button', { name: '선택한 에셋 제거', exact: true }).click();
+  await page
+    .getByRole('alertdialog', { name: '이 에셋을 자료에서 제거할까요?', exact: true })
+    .getByRole('button', { name: '에셋 제거', exact: true })
+    .click();
   const removed = await save(page, library, reused);
   expect(removed.package!.images).toHaveLength(1);
   expect(removed.package!.portraitImageId).toBe('inline');
-  for (const previous of [original, uploaded, unset, reused]) {
-    const old: Content = await (
-      await request.get(`/api/revisions/content/${previous.id}/${previous.revision}`)
-    ).json();
-    expect(old.package).toEqual(previous.package);
-  }
+  // Only the current resource and its one-level undo are retained.
+  const current = await (await request.get(`/api/content/${removed.id}`)).json();
+  expect(current.package).toEqual(removed.package);
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await selectPackageSection(page, '기본 정보');
   await portrait.scrollIntoViewIfNeeded();
@@ -325,7 +325,10 @@ test('LIMG02 persona folder picker supports keyboard selection and nested Escape
   await picker.getByRole('searchbox').fill(module.title);
   await expect(picker.getByText(module.title, { exact: true })).toHaveCount(0);
   await picker.getByRole('searchbox').fill(persona.title);
-  await expect(choice.locator('img')).toHaveAttribute('src', `/api/package-image-blobs/${hash}`);
+  await expect(choice.locator('img')).toHaveAttribute(
+    'src',
+    `/api/package-image-blobs/${hash.hash}`
+  );
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   expect(await picker.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true
@@ -396,7 +399,7 @@ test('LIMG03 cancelled and failed portrait uploads cannot change a saved draft o
   expect(after.package?.portraitImageId).toBeUndefined();
 });
 
-test('LIMG04 shared module references show current names and portraits while preserving archived evidence', async ({
+test('LIMG04 shared module references show current names and portraits while keeping its previous undo version', async ({
   page,
   request,
 }) => {
@@ -406,33 +409,45 @@ test('LIMG04 shared module references show current names and portraits while pre
     parent = await seed(request, 'bot', `고정 연결 봇 ${Date.now()}`, {
       modules: [{ id: child.id, revision: child.revision }],
     });
-  const changed = await request.put(`/api/content/${child.id}`, {
+  const changed = await request.post('/api/resources/save', {
     data: {
-      kind: child.kind,
-      title: `${child.title} 새 이름`,
-      description: child.description,
-      text: child.text,
-      loading: child.loading,
-      relatedIds: [],
-      package: { ...child.package!, title: `${child.title} 새 이름`, ...portraitPart(newHash) },
+      kind: 'content',
+      id: child.id,
       expectedRevision: child.revision,
+      model: {
+        kind: child.kind,
+        title: `${child.title} 새 이름`,
+        description: child.description,
+        text: child.text,
+        loading: child.loading,
+        relatedIds: [],
+        package: nativeContent(
+          { ...child.package!.nativeRisu.card, name: `${child.title} 새 이름` },
+          { ...child.package!, ...portraitPart(newHash) },
+          child.kind
+        ),
+      },
     },
   });
   expect(changed.ok(), await changed.text()).toBe(true);
   const library = await edit(page, parent);
-  await selectPackageSection(page, '연결과 기능');
+  await selectPackageSection(page, '고급 설정');
+  await library.getByRole('button', { name: /연결 모듈/, exact: false }).click();
   const features = library.getByLabel('패키지 모듈과 기능 편집', { exact: true });
   const current = features.getByRole('group', { name: `${child.title} 새 이름`, exact: true });
   await expect(current).toBeVisible();
   await expect(current.locator('img')).toHaveAttribute(
     'src',
-    `/api/package-image-blobs/${newHash}`
+    `/api/package-image-blobs/${newHash.hash}`
   );
   await expect(features.getByText(child.title, { exact: true })).toHaveCount(0);
-  const original: Content = await (
-    await request.get(`/api/revisions/content/${child.id}/${child.revision}`)
-  ).json();
-  expect(original.package).toEqual(child.package);
+  const restored = await request.post(`/api/resources/content/${child.id}/undo`, {
+    data: { expectedRevision: child.revision + 1 },
+  });
+  expect(restored.ok(), await restored.text()).toBe(true);
+  const original = (await restored.json()).saved as Content;
+  expect(original.title).toBe(child.title);
+  expect(original.package.images).toEqual(child.package.images);
 });
 
 test('LIMG05 quick persona selection shows one current selection after its image changes', async ({
@@ -475,7 +490,11 @@ test('LIMG05 quick persona selection shows one current selection after its image
       text: persona.text,
       loading: persona.loading,
       relatedIds: [],
-      package: { ...persona.package!, title: `${persona.title} 최신`, ...portraitPart(newHash) },
+      package: nativeContent(
+        { ...persona.package!.nativeRisu.card, name: `${persona.title} 최신` },
+        { ...persona.package!, ...portraitPart(newHash) },
+        persona.kind
+      ),
       expectedRevision: persona.revision,
     },
   });
@@ -487,7 +506,7 @@ test('LIMG05 quick persona selection shows one current selection after its image
   await expect(trigger).toContainText(persona.title);
   await expect(trigger.locator('img')).toHaveAttribute(
     'src',
-    `/api/package-image-blobs/${newHash}`
+    `/api/package-image-blobs/${newHash.hash}`
   );
   await trigger.click();
   const picker = page.getByRole('dialog', { name: '빠른 페르소나', exact: true });
@@ -499,7 +518,7 @@ test('LIMG05 quick persona selection shows one current selection after its image
   await expect(current).toHaveAttribute('aria-pressed', 'true');
   await expect(current.locator('img')).toHaveAttribute(
     'src',
-    `/api/package-image-blobs/${newHash}`
+    `/api/package-image-blobs/${newHash.hash}`
   );
   await expect(picker.getByText(persona.title, { exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');

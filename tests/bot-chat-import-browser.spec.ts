@@ -102,10 +102,11 @@ for (const viewport of [
     await expect(dialog.getByRole('status')).toContainText('새 채팅으로 가져왔어요');
     const imported = await (await request.get(`/api/chats/${result.chat.id}`)).json();
     expect(imported.sources.map((item: { text: string }) => item.text)).toEqual(['원본 장면']);
-    // The backup branch uses its unchanged restore request, never the preselected bot.
+    // A backup restores its own independent bot copy, never the preselected bot.
     await dialog.getByRole('button', { name: '가져오기 방식 변경' }).click();
     await dialog.getByRole('button', { name: /채팅 백업 복원/ }).click();
     const backupRequests: unknown[] = [];
+    let restoredBotId = '';
     await page.route('**/api/chats/import-backup', async (route) => {
       backupRequests.push(route.request().postDataJSON());
       if (backupRequests.length === 1) {
@@ -113,7 +114,7 @@ for (const viewport of [
         expect(committed.ok(), await committed.text()).toBe(true);
         const first = await committed.json();
         expect(first.created).toBe(true);
-        expect(first.chat.botId).toBe(original.bot.id);
+        restoredBotId = first.chat.botId;
         await route.abort('failed');
       } else await route.continue();
     });
@@ -143,7 +144,10 @@ for (const viewport of [
     await dialog.getByRole('button', { name: '같은 요청 확인', exact: true }).click();
     const restored = await (await backupEvent).json();
     expect(restored.created).toBe(false);
-    expect(restored.chat.botId).toBe(original.bot.id);
+    expect(restored.chat.botId).toBe(restoredBotId);
+    expect(restored.chat.botId).not.toBe(original.bot.id);
+    const copiedBot = await (await request.get(`/api/content/${restored.chat.botId}`)).json();
+    expect(copiedBot.title).toBe(original.bot.title);
     expect(backupRequests).toHaveLength(2);
     expect(backupRequests[1]).toEqual(backupRequests[0]);
     await expect(dialog.getByRole('status')).toContainText('복원했어요');

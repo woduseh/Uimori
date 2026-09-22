@@ -71,7 +71,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     try {
       const next = await api<ThemeCatalog>('/themes');
       if (alive.current && current === epoch.current) {
-        setCatalog(next);
+        setCatalog((previous) => {
+          const known = new Map(previous.themes.map((theme) => [theme.id, theme]));
+          const themes = next.themes.map((theme) => {
+            const old = known.get(theme.id);
+            return old?.revision === theme.revision ? old : theme;
+          });
+          const preferences =
+            previous.preferences.revision === next.preferences.revision
+              ? previous.preferences
+              : next.preferences;
+          return preferences === previous.preferences &&
+            themes.length === previous.themes.length &&
+            themes.every((theme, i) => theme === previous.themes[i])
+            ? previous
+            : { themes, preferences };
+        });
         setError('');
       }
       if (notify) {
@@ -99,17 +114,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     window.addEventListener('focus', focus);
     window.addEventListener('storage', storage);
     window.addEventListener('uimori-themes-changed', focus);
-    const helperUpdated = () => {
-      void refresh(true);
-    };
-    window.addEventListener('uimori-helper-updated', helperUpdated);
     return () => {
       alive.current = false;
       epoch.current++;
       window.removeEventListener('focus', focus);
       window.removeEventListener('storage', storage);
       window.removeEventListener('uimori-themes-changed', focus);
-      window.removeEventListener('uimori-helper-updated', helperUpdated);
     };
   }, [refresh]);
   const setDisabled = useCallback((value: boolean) => {

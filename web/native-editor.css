@@ -514,7 +514,20 @@
     flex: none;
   }
   .library-page-editing .library-detail-actions {
-    flex: none;
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+  .library-page-editing .library-detail-actions .resource-editor-actions {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+  .library-page-editing .library-detail-actions .resource-editor-status {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  /* The recovery success hint duplicates the saved/unsaved state; errors stay visible. */
+  .library-page-editing .library-detail-actions .resource-editor-status small:not([role="alert"]) {
+    display: none;
   }
 }
 /* Editor defaults remain prose-friendly; raw JSON opts in to monospace. */

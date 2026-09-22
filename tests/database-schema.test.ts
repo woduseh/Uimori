@@ -4,7 +4,11 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../server/store.js';
-import { databaseSchemaVersion, initializeDatabaseSchema } from '../server/database-schema.js';
+import {
+  DATABASE_SCHEMA_VERSION,
+  databaseSchemaVersion,
+  initializeDatabaseSchema,
+} from '../server/database-schema.js';
 
 const paths: string[] = [];
 afterEach(() => {
@@ -19,28 +23,31 @@ function file() {
 test('personal current schema initializes and remains readable after an extra query index', () => {
   const path = file();
   const first = new Store(path);
-  expect(databaseSchemaVersion(first.db)).toBe(4);
+  expect(databaseSchemaVersion(first.db)).toBe(DATABASE_SCHEMA_VERSION);
   first.db.exec('CREATE INDEX optional_user_index ON sources(created_at)');
   first.close();
   const next = new Store(path);
-  expect(databaseSchemaVersion(next.db)).toBe(4);
+  expect(databaseSchemaVersion(next.db)).toBe(DATABASE_SCHEMA_VERSION);
   expect(
     next.db.prepare("SELECT name FROM sqlite_schema WHERE name='optional_user_index'").get()
   ).toBeTruthy();
   next.close();
 });
 
-test.each([5, 23, 24])('opening another schema %s leaves its bytes untouched', (version) => {
-  const path = file(),
-    db = new DatabaseSync(path);
-  db.exec(
-    `CREATE TABLE retained(text TEXT); INSERT INTO retained VALUES('original'); PRAGMA user_version=${version}`
-  );
-  db.close();
-  const before = readFileSync(path);
-  expect(() => new Store(path)).toThrow(/transfer user data/);
-  expect(readFileSync(path)).toEqual(before);
-});
+test.each([DATABASE_SCHEMA_VERSION + 1, 23, 24])(
+  'opening another schema %s leaves its bytes untouched',
+  (version) => {
+    const path = file(),
+      db = new DatabaseSync(path);
+    db.exec(
+      `CREATE TABLE retained(text TEXT); INSERT INTO retained VALUES('original'); PRAGMA user_version=${version}`
+    );
+    db.close();
+    const before = readFileSync(path);
+    expect(() => new Store(path)).toThrow(/transfer user data/);
+    expect(readFileSync(path)).toEqual(before);
+  }
+);
 
 test('an old database that also used numeric version 1 is not mistaken for personal v1', () => {
   const path = file(),

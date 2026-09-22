@@ -10,8 +10,6 @@ import { listenAddress, networkPolicy } from '../server/network-policy.js';
 vi.mock('../scripts/lib.mjs', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   assertBuild: vi.fn(),
-  fingerprint: vi.fn(),
-  buildFingerprint: vi.fn(),
   browserPath: vi.fn(),
   startServer: vi.fn(),
   command: vi.fn(),
@@ -56,8 +54,6 @@ beforeEach(() => {
   report = browserReport();
   commandFailure = { code: 0, timedOut: false };
   lib.assertBuild.mockResolvedValue(identity);
-  lib.fingerprint.mockResolvedValue({ hash: identity.sourceHash });
-  lib.buildFingerprint.mockResolvedValue({ hash: identity.sourceHash });
   vi.stubEnv('UIMORI_VISUAL_REVIEW', '0');
   lib.browserPath.mockReturnValue(process.execPath);
   lib.killOwned.mockResolvedValue({ exited: true });
@@ -102,19 +98,18 @@ async function run(options: Record<string, unknown> = {}) {
   return result;
 }
 
-test('browser harness preserves selected commands, verified identity and DB evidence with a cleanup-compatible owner', async () => {
+test('browser harness records its build and selected commands without retaining successful databases', async () => {
   const { directory, summary } = await run({
     files: ['tests/fixture-browser.spec.ts'],
     grep: 'CASE01',
     timeout: 4321,
   });
   expect(summary.status).toBe('PASS');
-  expect(summary.identityVerifiedAt).toEqual(expect.any(String));
+  expect(summary.identity).toEqual(identity);
   expect(summary.cleanup).toMatchObject({ status: 'PASS', runtimeRemoved: true });
-  expect(summary.artifactScan.status).toBe('PASS');
-  expect(await readFile(path.join(directory, 'evidence-db', 'app.sqlite'), 'utf8')).toBe(
-    'synthetic DB evidence'
-  );
+  expect(lib.assertBuild).toHaveBeenCalledTimes(1);
+  expect(lib.artifactScan).not.toHaveBeenCalled();
+  expect(existsSync(path.join(directory, 'evidence-db'))).toBe(false);
   expect(lib.command).toHaveBeenCalledWith(
     [
       'node_modules/@playwright/test/cli.js',
@@ -122,9 +117,9 @@ test('browser harness preserves selected commands, verified identity and DB evid
       'tests/fixture-browser.spec.ts',
       '--grep',
       'CASE01',
-      '--reporter=json',
+      '--reporter=list,json',
     ],
-    expect.objectContaining({ timeout: 4321 })
+    expect.objectContaining({ timeout: 4321, echo: true })
   );
   const owner = JSON.parse(await readFile(path.join(directory, 'ownership.json'), 'utf8'));
   expect(owner).toMatchObject({
@@ -141,8 +136,8 @@ test('browser harness preserves selected commands, verified identity and DB evid
     timeout: 10000,
   });
   expect(cleanup.status, cleanup.stderr).toBe(0);
-  expect(JSON.parse(cleanup.stdout)).toMatchObject({ status: 'PASS', evidencePreserved: true });
-  expect(existsSync(path.join(directory, 'evidence-db', 'app.sqlite'))).toBe(true);
+  expect(JSON.parse(cleanup.stdout)).toMatchObject({ status: 'PASS', evidencePreserved: false });
+  expect(existsSync(directory)).toBe(false);
 });
 
 test.each([false, true])(
@@ -152,7 +147,6 @@ test.each([false, true])(
     vi.stubEnv('UIMORI_HOST', '0.0.0.0');
     vi.stubEnv('UIMORI_PORT', '4310');
     vi.stubEnv('UIMORI_ACCESS_TOKEN', 'synthetic-parent-token-for-harness-only');
-    vi.stubEnv('UIMORI_PROVIDER_ORIGINS', 'https://synthetic-provider.example');
     vi.stubEnv('UIMORI_CODEX_ENABLED', '1');
     vi.stubEnv('UIMORI_CODEX_EXECUTABLE', 'synthetic-parent-codex.exe');
     await run({ providerFixture });
@@ -171,7 +165,6 @@ test.each([false, true])(
           UIMORI_PORT: process.env.UIMORI_PORT,
           UIMORI_TEST_MODE: process.env.UIMORI_TEST_MODE,
           UIMORI_ACCESS_TOKEN: process.env.UIMORI_ACCESS_TOKEN,
-          UIMORI_PROVIDER_ORIGINS: process.env.UIMORI_PROVIDER_ORIGINS,
           UIMORI_CODEX_ENABLED: process.env.UIMORI_CODEX_ENABLED,
         },
       }));`,
@@ -187,7 +180,6 @@ test.each([false, true])(
       UIMORI_PORT: '0',
       UIMORI_TEST_MODE: '1',
       UIMORI_ACCESS_TOKEN: '',
-      UIMORI_PROVIDER_ORIGINS: providerOrigins,
       UIMORI_CODEX_ENABLED: '0',
     });
     const policy = networkPolicy({
@@ -220,60 +212,29 @@ test.each(['missing', 'zero', 'skipped', 'retried', 'global'])(
     expect(summary.status).toBe('FAIL');
     expect(summary.failures.length).toBeGreaterThan(0);
     expect(summary.cleanup.status).toBe('PASS');
-    expect(summary.evidenceIdentity).toBe('NOT_CONFIRMED_AT_END');
+    expect(existsSync(path.join('runtime'))).toBe(false);
     expect(process.exitCode).toBe(1);
   }
 );
 
-test.each(['command', 'timeout', 'build', 'tests'])(
-  'passing assertions cannot hide a %s failure',
-  async (fault) => {
-    if (fault === 'command') commandFailure.code = 1;
-    if (fault === 'timeout') commandFailure.timedOut = true;
-    if (fault === 'build')
-      lib.assertBuild
-        .mockResolvedValueOnce(identity)
-        .mockRejectedValueOnce(new Error('stale build'));
-    if (fault === 'tests')
-      lib.fingerprint
-        .mockResolvedValueOnce({ hash: 'before' })
-        .mockResolvedValueOnce({ hash: 'after' });
-    const { summary } = await run();
-    expect(summary.report.passed).toBe(1);
-    expect(summary.status).toBe('FAIL');
-    expect(summary.cleanup.status).toBe('PASS');
-    expect(summary.identityVerifiedAt).toBeUndefined();
-  }
-);
-
-test('functional mode records separate verification identity', async () => {
-  lib.fingerprint.mockResolvedValue({ hash: 'test-only-change' });
-  const { summary } = await run();
-  expect(summary.status).toBe('PASS');
-  expect(summary.visualReview).toBe(false);
-  expect(summary.identity.sourceHash).toBe(identity.sourceHash);
-  expect(summary.verificationIdentity.hash).toBe('test-only-change');
+test.each(['command', 'timeout'])('passing assertions cannot hide a %s failure', async (fault) => {
+  if (fault === 'command') commandFailure.code = 1;
+  else commandFailure.timedOut = true;
+  const { directory, summary } = await run();
+  expect(summary.report.passed).toBe(1);
+  expect(summary.status).toBe('FAIL');
+  expect(summary.cleanup.status).toBe('PASS');
+  expect(await readFile(path.join(directory, 'evidence-db', 'app.sqlite'), 'utf8')).toBe(
+    'synthetic DB evidence'
+  );
 });
 
-test('an unrelated source edit preserves executed results but cannot certify the current source', async () => {
-  let observations = 0;
-  lib.fingerprint.mockImplementation(
-    async (_root: string, options?: { verificationOnly?: boolean }) => ({
-      hash: options?.verificationOnly
-        ? 'same-tests'
-        : ++observations === 1
-          ? 'old-source'
-          : 'new-source',
-    })
-  );
+test('a stale build fails before launching any browser or server', async () => {
+  lib.assertBuild.mockRejectedValue(new Error('stale build'));
   const { summary } = await run();
-  expect(summary.status).toBe('PASS');
-  expect(summary.reusableForCurrentSource).toBe(false);
-  expect(summary.identityVerifiedAt).toBeUndefined();
-  expect(summary.evidenceIdentity).toBe('RECORDED_BUILD_ONLY');
-  expect(summary.verificationIdentity.hash).toBe('old-source');
-  expect(summary.finalSourceHash).toBe('new-source');
-  expect(lib.assertBuild).toHaveBeenLastCalledWith({ checkSource: false });
+  expect(summary.status).toBe('FAIL');
+  expect(lib.startServer).not.toHaveBeenCalled();
+  expect(lib.command).not.toHaveBeenCalled();
 });
 
 test('focused visual checks narrow the existing selection and record their actual scope', async () => {
@@ -402,7 +363,8 @@ test('passing browser assertions cannot hide errors from the actual loopback pro
   expect(process.exitCode).toBe(1);
 });
 
-test('cancellation during final evidence scanning fails the run and settles its cleanup', async () => {
+test('cancellation during failure artifact scanning settles cleanup', async () => {
+  commandFailure.code = 1;
   lib.artifactScan.mockImplementation(async (directory: string) => {
     process.emit('SIGINT');
     return realLib.artifactScan(directory);

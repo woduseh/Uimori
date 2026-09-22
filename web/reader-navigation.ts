@@ -12,7 +12,6 @@ export type ReaderNavigationAction =
   | { kind: 'library' }
   | { kind: 'restore'; view: ReaderView }
   | { kind: 'chat-deleted' }
-  | { kind: 'branch-deleted' }
   | { kind: 'bind-default'; branch: string }
   | { kind: 'rebase-source'; source: string };
 
@@ -37,8 +36,6 @@ export function transitionReaderNavigation(
       return { ...action.view, epoch };
     case 'chat-deleted':
       return { chat: '', branch: '', source: '', destination: 'library', epoch };
-    case 'branch-deleted':
-      return { ...current, branch: '', source: '', epoch };
     case 'bind-default':
       // A late reconciliation cannot replace an explicitly selected branch.
       return current.branch ? current : { ...current, branch: action.branch };

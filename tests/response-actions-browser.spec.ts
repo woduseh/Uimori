@@ -217,10 +217,11 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
       '번역',
       '장면 해설',
       '이미지 배치',
-      '서사 상태',
+      '카드 스크립트',
       '문맥 압축',
       '도우미',
       '채팅 제목',
+      '삽화',
     ]);
     await expect(usage.getByRole('rowheader', { name: '채팅 제목', exact: true })).toBeVisible();
     await expect(usage.getByText(new RegExp(`^전송 시도 ${attempts.length}회`))).toBeVisible();

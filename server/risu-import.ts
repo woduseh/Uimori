@@ -1,3 +1,5 @@
+import { readImportReceipt, saveImportReceipt } from './import-operations.js';
+import { bundleDigest } from './resource-bundle.js';
 import { normalizeTransferImages } from './transfer-images.js';
 import type { FastifyInstance } from 'fastify';
 import {
@@ -40,6 +42,26 @@ export async function applyRisuImport(
   const body = record(value);
   fields(body, ['source', 'kind', 'digest', 'imageHandoffIds', 'allowPartial', 'idempotencyKey']);
   const requestKey = text(body.idempotencyKey, 'request key', 100);
+  // A response-loss retry must not touch the already-consumed staged upload.
+  const operationKey = `risu-result:${requestKey}`;
+  const commandDigest = bundleDigest({
+    digest: text(body.digest, 'import digest', 100),
+    kind: body.kind ?? null,
+    allowPartial: body.allowPartial,
+    imageHandoffIds: body.imageHandoffIds ?? null,
+  });
+  const previous = () => {
+    const result = readImportReceipt<RisuImportResult>(store, operationKey, commandDigest);
+    if (!result) return undefined;
+    const exists =
+      result.chat && store.db.prepare('SELECT id FROM chats WHERE id=?').get(result.chat.id);
+    return {
+      receipt: { ...result.receipt, created: false },
+      chat: exists ? store.chat(result.chat!.id) : null,
+    };
+  };
+  const prior = previous();
+  if (prior) return prior;
   const { file: originalFile, preview } = analyze(
     body.source,
     body.kind as RisuImportKind | undefined,
@@ -68,16 +90,22 @@ export async function applyRisuImport(
   const file = await normalizeTransferImages(originalFile);
   const prepared = prepareNativeTransfer({ file });
   return store.transaction(() => {
+    const concurrent = previous();
+    if (concurrent) return concurrent;
+    const finish = (result: RisuImportResult) => {
+      saveImportReceipt(store, operationKey, commandDigest, result);
+      return result;
+    };
     const receipt = applyNativeTransfer(store, {
       file,
       digest: prepared.digest,
       modelBindings: [],
       idempotencyKey: `risu:${requestKey}`,
     });
-    if (preview.kind !== 'bot') return { receipt, chat: null };
+    if (preview.kind !== 'bot') return finish({ receipt, chat: null });
     if (!receipt.created) {
       const exists = store.db.prepare('SELECT id FROM chats WHERE id=?').get(receipt.id);
-      return { receipt, chat: exists ? store.chat(receipt.id) : null };
+      return finish({ receipt, chat: exists ? store.chat(receipt.id) : null });
     }
     const botId = receipt.items.find((item) => item.key === 'bot')!.id;
     const chat = store.createChat(preview.title, undefined, { botId }, receipt.id);
@@ -96,7 +124,7 @@ export async function applyRisuImport(
         expectedProfileRevision: store.product.profile(chat.id).revision,
         idempotencyKey: `risu-start:${requestKey}`,
       });
-    return { receipt, chat: store.chat(chat.id) };
+    return finish({ receipt, chat: store.chat(chat.id) });
   });
 }
 

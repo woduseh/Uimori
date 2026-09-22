@@ -18,3 +18,5 @@
 | Bot translation guides | `core/translation-guide.ts`, `server/translation-guide.ts`, `web/TranslationGuideEditor.tsx` | [Translation guides](TRANSLATION-GUIDES.md) |
 
 Theme resources and selection: `core/themes.ts`, `server/themes.ts`, `web/ThemeContext.tsx`, `web/ThemeSettings.tsx`, `web/ThemeFrame.tsx`. [Authoring and usage](THEME-AUTHORING.md).
+
+Saved-text lifetime is implemented in `server/text-retention.ts`; pending image reclamation uses `server/unused-data.ts`. Import retry receipts are shared in `server/import-operations.ts`. See [DATA-MIGRATIONS](DATA-MIGRATIONS.md) for the current storage contract, not historical execution-replay assumptions.

@@ -356,6 +356,8 @@ async function helperFixture(page: Page, before: ChatDetail) {
         });
       if (path === `/api/helper/conversations/${conversation.id}`)
         return route.fulfill({ json: conversation });
+      if (path === `/api/helper/conversations/${conversation.id}/view`)
+        return route.fulfill({ json: { conversation, messages, tasks, eventCursor: 0 } });
       if (path === `/api/helper/conversations/${conversation.id}/messages`)
         return route.fulfill({ json: messages });
       if (path === `/api/helper/conversations/${conversation.id}/tasks`)
