@@ -13,9 +13,7 @@ export function prepareConnection(product: ProductStore, value: unknown, id?: st
     'protocol',
     'endpoint',
     'credentialRef',
-    'catalogCredentialRef',
     'apiKey',
-    'catalogApiKey',
     'enabled',
     'expectedRevision',
   ]);
@@ -32,10 +30,7 @@ export function prepareConnection(product: ProductStore, value: unknown, id?: st
   const expectedRevision = id ? number(body.expectedRevision, 'revision') : undefined;
   if (prior && prior.revision !== expectedRevision) throw new HttpError(409, 'Revision conflict');
   const writes: { reference: string; value: string }[] = [];
-  const keyReference = (
-    field: 'apiKey' | 'catalogApiKey',
-    previous: unknown
-  ): string | undefined => {
+  const keyReference = (field: 'apiKey', previous: unknown): string | undefined => {
     if (Object.hasOwn(body, field) && body[field] !== '') {
       const value = apiKey(body[field]);
       if (value === null) return undefined;
@@ -59,10 +54,6 @@ export function prepareConnection(product: ProductStore, value: unknown, id?: st
     protocol === 'codex-app-server-v1'
       ? undefined
       : keyReference('apiKey', body.credentialRef ?? prior?.credentialRef);
-  const catalogCredentialRef =
-    protocol === 'vertex-gemini-v1'
-      ? keyReference('catalogApiKey', body.catalogCredentialRef ?? prior?.catalogCredentialRef)
-      : undefined;
   const sameConnection =
     prior?.protocol === protocol &&
     prior.endpoint === endpoint &&
@@ -72,7 +63,6 @@ export function prepareConnection(product: ProductStore, value: unknown, id?: st
     protocol,
     endpoint,
     ...(credentialRef ? { credentialRef } : {}),
-    ...(catalogCredentialRef ? { catalogCredentialRef } : {}),
     enabled: body.enabled === undefined ? true : boolean(body.enabled),
     catalog: sameConnection ? prior.catalog : [],
     catalogError: sameConnection ? prior.catalogError : null,
@@ -94,12 +84,15 @@ export function saveConnection(product: ProductStore, value: unknown, id?: strin
     for (const write of prepared.writes)
       product.store.credentials.set(write.reference, write.value);
     // A removed connection key must not survive as an orphan secret in DB backups.
-    for (const reference of new Set([previous?.credentialRef, previous?.catalogCredentialRef])) {
+    const legacyCatalogCredential = (
+      previous as (Connection & { catalogCredentialRef?: string }) | undefined
+    )?.catalogCredentialRef;
+    for (const reference of new Set([previous?.credentialRef, legacyCatalogCredential])) {
       if (!reference?.startsWith('API_')) continue;
       const referenced = product.db
         .prepare(`SELECT 1 FROM provider_settings WHERE kind='connection'
-        AND (json_extract(body,'$.credentialRef')=? OR json_extract(body,'$.catalogCredentialRef')=?)`)
-        .get(reference, reference);
+        AND json_extract(body,'$.credentialRef')=?`)
+        .get(reference);
       if (!referenced) product.store.credentials.set(reference, null);
     }
     return saved;

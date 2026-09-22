@@ -149,11 +149,6 @@ export type Connection = ContentRef & {
   protocol: ProviderProtocol;
   endpoint: string;
   credentialRef?: string;
-  /**
-   * Gemini connections only: reference to the database API key used
-   * solely to list Gemini models and limits. Never used for generation requests.
-   */
-  catalogCredentialRef?: string;
   enabled: boolean;
   catalog: {
     id: string;
@@ -187,7 +182,7 @@ export type Connection = ContentRef & {
  * snapshots drop exactly these so a restored copy cannot name the origin's secrets. Keep in step
  * with the Connection type above; archive validation rejects any other connection field.
  */
-export const CONNECTION_CREDENTIAL_FIELDS = ['credentialRef', 'catalogCredentialRef'] as const;
+export const CONNECTION_CREDENTIAL_FIELDS = ['credentialRef'] as const;
 
 export type ModelPreset = ContentRef &
   ModelGeneration & {

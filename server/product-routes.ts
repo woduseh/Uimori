@@ -5,8 +5,7 @@ import { nativeRisuPreview } from './risu-native-preview.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { chatDeletionRoutes } from './chat-deletion.js';
 import { assetDeletionRoutes } from './asset-deletion.js';
-import { supportedModels } from '../core/model-capabilities.js';
-import { catalogEntryMetadata, geminiListEntry } from '../core/provider-catalog.js';
+import { catalogEntryMetadata, vertexPublisherModelEntry } from '../core/provider-catalog.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
@@ -17,7 +16,7 @@ import { CHAT_BACKUP_MAX_BYTES } from '../core/chat-backup.js';
 import { validateVertexEndpoint, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
 import { promptRoutes } from './prompt-routes.js';
-import { readiness, managementImpact } from './provider-management.js';
+import { managementImpact } from './provider-management.js';
 import { PROVIDER_DEFINITIONS } from '../core/provider-definitions.js';
 import { chatOrganizationRoutes } from './chat-organization.js';
 import { libraryOrganizationRoutes } from './library-organization.js';
@@ -149,17 +148,6 @@ export function productRoutes(
       return options.credentials.upload(b.serviceAccount);
     }
   );
-  app.get<{ Params: { id: string } }>(
-    '/api/provider-management/connections/:id/readiness',
-    async (request, reply) => {
-      reply.header('Cache-Control', 'no-store');
-      assertLibraryVisible(store, 'connection', request.params.id);
-      const connection = product.get<Connection>('connection', request.params.id);
-      const agent =
-        connection.protocol === 'codex-app-server-v1' ? await options.codex?.status() : undefined;
-      return readiness(product, connection, options.credentials, agent);
-    }
-  );
   app.get<{ Params: { kind: string; id: string } }>(
     '/api/provider-management/:kind/:id/impact',
     async (request) => {
@@ -249,36 +237,39 @@ export function productRoutes(
         if (!options.codex) throw new Error('Codex unavailable');
         catalog = await options.codex.catalog();
         product.authorize(previous);
-      } else if (previous.protocol === 'vertex-gemini-v1' && previous.catalogCredentialRef) {
-        // Agent Platform has no parameter-bearing list API; the Gemini Developer API key lists
-        // Gemini models and limits only. It never authorizes generation requests.
+      } else if (previous.protocol === 'vertex-gemini-v1') {
         validateVertexEndpoint(previous.endpoint);
-        const key = store.credentials.get(previous.catalogCredentialRef);
-        if (!key || /[\r\n]/u.test(key)) throw new Error('Credential unavailable');
+        product.authorize(previous);
+        if (!options.credentials) throw new Error('Vertex credential service unavailable');
         const signal = AbortSignal.timeout(5000);
+        const token = await options.credentials.accessToken(previous, signal);
         const collected: Connection['catalog'] = [];
         const ids = new Set<string>();
         let pageToken: string | undefined;
         for (let page = 0; page < 5; page++) {
-          const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
+          product.authorize(previous);
+          const url = new URL('https://aiplatform.googleapis.com/v1beta1/publishers/google/models');
           url.searchParams.set('pageSize', '1000');
           if (pageToken) url.searchParams.set('pageToken', pageToken);
           const response = await fetch(url, {
             method: 'GET',
             signal,
             redirect: 'error',
-            headers: { Accept: 'application/json', 'x-goog-api-key': key },
+            headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
           });
           if (!response.ok) throw new Error('Catalog unavailable');
           const raw = await response.text();
-          if (raw.length > 1000000) throw new Error('Catalog too large');
+          if (raw.length > 1_000_000) throw new Error('Catalog too large');
           const payload = record(JSON.parse(raw));
-          if (!Array.isArray(payload.models) || collected.length + payload.models.length > 5000)
+          if (
+            !Array.isArray(payload.publisherModels) ||
+            collected.length + payload.publisherModels.length > 5000
+          )
             throw new Error('Invalid model catalog');
-          for (const item of payload.models) {
-            const entry = geminiListEntry(record(item));
+          for (const item of payload.publisherModels) {
+            const entry = vertexPublisherModelEntry(record(item));
             if (!entry) continue;
-            if (ids.has(entry.id)) throw new Error('Duplicate model ID');
+            if (ids.has(entry.id)) continue;
             ids.add(entry.id);
             collected.push(entry);
           }
@@ -286,16 +277,8 @@ export function productRoutes(
           if (page === 4) throw new Error('Incomplete model catalog');
           pageToken = text(payload.nextPageToken, 'model cursor', 2000);
         }
+        product.authorize(previous);
         catalog = collected;
-      } else if (previous.protocol === 'vertex-gemini-v1') {
-        // This is the adapter's local support list, not a provider availability probe.
-        validateVertexEndpoint(previous.endpoint);
-        catalog = supportedModels('vertex-gemini-v1').map((model) => ({
-          id: model.id,
-          name: model.name,
-          capabilities: { tools: true, structuredOutput: null },
-          priceRevision: null,
-        }));
       } else {
         product.authorize(previous);
         const c = validateConnection({

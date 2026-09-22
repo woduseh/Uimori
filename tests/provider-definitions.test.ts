@@ -50,9 +50,10 @@ describe('local provider definitions (no network or provider capability inferenc
       expect(item.limitations.length).toBeGreaterThan(0);
       expect(new Set(item.optionKeys).size).toBe(item.optionKeys.length);
     }
+    expect(providerDefinition('vertex-gemini-v1').catalog).toBe('remote');
     expect(
-      PROVIDER_DEFINITIONS.filter((item) => item.catalog === 'local-support').map((item) => item.id)
-    ).toEqual(['vertex-gemini-v1']);
+      PROVIDER_DEFINITIONS.every((item) => ['remote', 'agent-runtime'].includes(item.catalog))
+    ).toBe(true);
   });
   test('keeps direct adapters provider-specific while the Vercel gateway advertises selectable family options', () => {
     expect(providerDefinition('vertex-gemini-v1').optionKeys).toEqual([

@@ -1,5 +1,9 @@
 import { expect, test } from 'vitest';
-import { catalogEntryMetadata, catalogPricing, geminiListEntry } from '../core/provider-catalog.js';
+import {
+  catalogEntryMetadata,
+  catalogPricing,
+  vertexPublisherModelEntry,
+} from '../core/provider-catalog.js';
 import { modelHints, thinkingField, thinkingWireField } from '../core/model-hints.js';
 import type { Connection } from '../core/product.js';
 
@@ -218,40 +222,29 @@ test('hints prefer list metadata, fall back to the reviewed table, and always ca
   );
 });
 
-test('Gemini Developer API list entries keep generation models only, drop the models/ prefix and carry both limits', () => {
+test('Vertex Model Garden publisher entries keep Gemini model IDs only', () => {
   expect(
-    geminiListEntry({
-      name: 'models/gemini-3.8-flash',
-      displayName: 'Gemini 3.8 Flash',
-      inputTokenLimit: 1048576,
-      outputTokenLimit: 65536,
-      supportedGenerationMethods: ['generateContent', 'countTokens'],
+    vertexPublisherModelEntry({
+      name: 'publishers/google/models/gemini-3.8-flash',
+      versionId: '1',
     })
   ).toEqual({
     id: 'gemini-3.8-flash',
-    name: 'Gemini 3.8 Flash',
+    name: 'gemini-3.8-flash',
     capabilities: { tools: null, structuredOutput: null },
     priceRevision: null,
-    limits: { maxOutputTokens: 65536, inputTokenLimit: 1048576 },
   });
   expect(
-    geminiListEntry({
-      name: 'models/gemini-3.9-pro',
-      supportedGenerationMethods: ['generateContent'],
-    })
-  ).toEqual({
-    id: 'gemini-3.9-pro',
-    name: 'gemini-3.9-pro',
-    capabilities: { tools: null, structuredOutput: null },
-    priceRevision: null,
-  });
+    vertexPublisherModelEntry({ name: 'publishers/google/models/gemini-4-pro-preview' })
+  ).toMatchObject({ id: 'gemini-4-pro-preview' });
   for (const raw of [
-    { name: 'models/embedding-001', supportedGenerationMethods: ['embedContent'] },
-    { name: 'models/gemini-image', supportedGenerationMethods: ['predict'] },
-    { name: 'tunedModels/gemini-x', supportedGenerationMethods: ['generateContent'] },
-    { displayName: 'no name' },
+    { name: 'publishers/google/models/embedding-001' },
+    { name: 'publishers/anthropic/models/claude-opus' },
+    { name: 'projects/p/locations/global/publishers/google/models/gemini-x' },
+    { name: 'publishers/google/models/gemini/invalid' },
+    {},
   ])
-    expect(geminiListEntry(raw)).toBeUndefined();
+    expect(vertexPublisherModelEntry(raw)).toBeUndefined();
 });
 
 test('unknown family templates do not fabricate verified values or narrow Grok reasoning vocabulary', () => {

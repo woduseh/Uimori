@@ -1,65 +1,6 @@
 import { promptWorkspace } from './prompt-workspace.js';
-import {
-  workspaceModelRef,
-  type Connection,
-  type ModelRef,
-  type ModelPreset,
-} from '../core/product.js';
+import { workspaceModelRef, type ModelRef, type ModelPreset } from '../core/product.js';
 import type { ProductStore } from './product-store.js';
-import { isVertexFileReference, validCredentialRef } from '../core/credential-reference.js';
-import type { VertexCredentialStore } from './vertex-credentials.js';
-import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
-import { validateProviderEndpoint } from '../core/product.js';
-
-export type ProviderReadiness = {
-  enabled: boolean;
-  originApproved: boolean;
-  credentialStatus: 'configured' | 'missing' | 'not-required' | 'adc-configured' | 'adc-unchecked';
-  catalogKind: 'remote' | 'local-support' | 'agent-runtime';
-};
-
-/** Configuration presence only. This performs no authentication or provider request. */
-export function readiness(
-  _store: ProductStore,
-  connection: Connection,
-  credentials?: VertexCredentialStore,
-  agent?: CodexRuntimeStatus
-): ProviderReadiness {
-  if (connection.protocol === 'codex-app-server-v1')
-    return {
-      enabled: connection.enabled,
-      originApproved: connection.endpoint === 'codex://local' && agent?.available === true,
-      credentialStatus: agent?.authenticated ? 'configured' : 'missing',
-      catalogKind: 'agent-runtime',
-    };
-  let originApproved = false;
-  try {
-    validateProviderEndpoint(connection.protocol, connection.endpoint);
-    originApproved = true;
-  } catch {
-    /* Invalid URL. */
-  }
-  let credentialStatus: ProviderReadiness['credentialStatus'];
-  if (connection.credentialRef) {
-    const reference = connection.credentialRef;
-    const configured = isVertexFileReference(reference)
-      ? credentials?.configured(connection) === true
-      : validCredentialRef(reference) && _store.store.credentials.status(reference).configured;
-    credentialStatus = configured ? 'configured' : 'missing';
-  } else
-    credentialStatus = ['fixture-sse-v1', 'openai-chat-v1'].includes(connection.protocol)
-      ? 'not-required'
-      : 'missing';
-  return {
-    enabled: connection.enabled,
-    originApproved,
-    credentialStatus,
-    catalogKind:
-      connection.protocol === 'vertex-gemini-v1' && !connection.catalogCredentialRef
-        ? 'local-support'
-        : 'remote',
-  };
-}
 
 type ReferencingProfile = { chatId: string; title: string; roles: string[] };
 export type ManagementImpact = {

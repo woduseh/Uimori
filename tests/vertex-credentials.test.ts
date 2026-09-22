@@ -68,10 +68,10 @@ test('uploaded service account lives in SQLite and survives reopening without ne
   await app.close();
   app = await createApp({ dbPath: join(path, 'app.sqlite'), buildId: 'test', testMode: true });
   entry.app = app;
-  expect(
-    (await app.inject(`/api/provider-management/connections/${saved.json().id}/readiness`)).json()
-      .credentialStatus
-  ).toBe('configured');
+  const reopened = (await app.inject('/api/library'))
+    .json()
+    .connections.find((item: { id: string }) => item.id === saved.json().id);
+  expect(reopened.credentialRef).toBe(reference);
   expect(network).not.toHaveBeenCalled();
 });
 test('OAuth uses the registered account and validates its project', async () => {
@@ -87,7 +87,7 @@ test('OAuth uses the registered account and validates its project', async () => 
   const token = vi
     .spyOn(GoogleAuth.prototype, 'getAccessToken')
     .mockResolvedValue('synthetic-token');
-  expect(await keys.resolve(ref, connection, new AbortController().signal)).toBe('synthetic-token');
+  expect(await keys.accessToken(connection, new AbortController().signal)).toBe('synthetic-token');
   await expect(
     keys.resolve(
       ref,

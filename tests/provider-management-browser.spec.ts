@@ -113,10 +113,6 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   const connection = (await library(request)).connections.find((item) => item.title === title)!;
   expect(connection).toBeTruthy();
   await expect(modelForm.getByLabel('프로바이더', { exact: true })).toHaveValue(`${connection.id}`);
-  await modelForm.getByText('프로바이더 준비 상태와 목록 새로고침', { exact: true }).click();
-  await expect(
-    modelForm.getByRole('region', { name: '선택한 프로바이더 준비 상태' })
-  ).toContainText('서버 설정 준비됨');
   // Only the UI's error handling is mocked; no outbound catalog request is sent.
   await page.route(`**/api/connections/${connection.id}/catalog`, (route) =>
     route.fulfill({
@@ -469,67 +465,33 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   expect(observed.legacyReads).toEqual([]);
 });
 
-test('PMUI04 a delayed readiness response cannot replace the currently selected connection status', async ({
+test('PMUI04 model catalog refresh is separate from provider selection', async ({
   page,
   request,
-}, info) => {
-  const title = 'PMUI04 ' + Date.now(),
-    first = await api<Connection>(request, '/connections', connectionInput(title + ' 먼저')),
-    second = await api<Connection>(request, '/connections', connectionInput(title + ' 나중'));
-  let release!: () => Promise<void>, seen!: () => void;
-  const firstRequested = new Promise<void>((resolve) => {
-    seen = resolve;
+}) => {
+  const title = 'PMUI04 ' + Date.now();
+  const connection = await api<Connection>(request, '/connections', connectionInput(title));
+  const requests: string[] = [];
+  page.on('request', (value) => {
+    const path = new URL(value.url()).pathname;
+    if (path.includes('/catalog') || path.includes('/readiness')) requests.push(path);
   });
-  await page.route(
-    `**/api/provider-management/connections/${first.id}/readiness`,
-    async (route) => {
-      seen();
-      await new Promise<void>((resolve) => {
-        release = async () => {
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              enabled: false,
-              originApproved: false,
-              credentialStatus: 'missing',
-              catalogKind: 'remote',
-            }),
-          });
-          resolve();
-        };
-      });
-    }
-  );
-  await page.route(`**/api/provider-management/connections/${second.id}/readiness`, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        enabled: true,
-        originApproved: true,
-        credentialStatus: 'configured',
-        catalogKind: 'remote',
-      }),
-    })
-  );
+
   await settings(page);
   await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
   const form = page.getByRole('form', { name: '모델 편집 양식' });
-  await form.getByLabel('프로바이더', { exact: true }).selectOption(`${first.id}`);
-  await firstRequested;
-  await form.getByText('프로바이더 준비 상태와 목록 새로고침', { exact: true }).click();
-  await form.getByLabel('프로바이더', { exact: true }).selectOption(`${second.id}`);
-  const readiness = form.getByRole('region', { name: '선택한 프로바이더 준비 상태' });
-  await expect(readiness).toContainText(second.title);
-  await expect(readiness).toContainText('서버 설정 준비됨');
-  await release();
-  await expect(readiness).toContainText(second.title);
-  await expect(readiness).not.toContainText('인증 참조 설정 필요');
-  if (visualReview)
-    await readiness.screenshot({
-      path: info.outputPath('provider-management-current-readiness.png'),
-    });
+  await form.getByLabel('프로바이더', { exact: true }).selectOption(connection.id);
+  await expect(form.getByText('프로바이더 준비 상태와 목록 새로고침')).toHaveCount(0);
+  await expect(form.getByRole('button', { name: '모델 목록 새로고침', exact: true })).toBeVisible();
+  expect(requests).toEqual([]);
+
+  await form.getByRole('button', { name: '모델 목록 새로고침', exact: true }).click();
+  await expect
+    .poll(
+      () => requests.filter((path) => path.endsWith(`/connections/${connection.id}/catalog`)).length
+    )
+    .toBe(1);
+  expect(requests.some((path) => path.includes('/readiness'))).toBe(false);
 });
 
 test('PMUI07 quick setup selects a cached catalog model and keeps drafts across workspace pages', async ({
@@ -605,11 +567,10 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
         body: JSON.stringify({ ...connection, ...snapshot }),
       });
     });
-    await modelForm.getByText('프로바이더 준비 상태와 목록 새로고침', { exact: true }).click();
     await modelForm.getByRole('button', { name: '모델 목록 새로고침', exact: true }).click();
     await modelForm.getByLabel('모델 목록 검색').fill('catalog-beta');
     const picker = modelForm.getByRole('region', { name: '저장된 모델 목록에서 선택' });
-    await expect(picker.getByRole('button')).toHaveCount(1);
+    await expect(picker.locator('.provider-catalog-choice')).toHaveCount(1);
     await picker.getByRole('button', { name: new RegExp(title + ' Beta') }).click();
     await expect(modelForm.getByLabel('모델 프리셋 이름')).toHaveValue(title + ' Beta');
     await expect(modelForm.getByLabel('모델 ID', { exact: true })).toHaveValue(
@@ -693,6 +654,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title);
     await expect(form.getByLabel('Google Agent Platform endpoint')).toHaveValue(originalEndpoint);
     await expect(form.getByLabel('API 키', { exact: true })).toHaveCount(0);
+    await expect(form.getByLabel('모델 목록 API 키', { exact: true })).toHaveCount(0);
     expect(uploads).toBe(0);
   }
   // Fresh synthetic RSA material exercises real isolated database storage; no OAuth or Vertex call is needed.
@@ -727,6 +689,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   expect(uploads).toBe(1);
   expect(uploadBody).toEqual({ serviceAccount });
   await expect(form.getByLabel('API 키', { exact: true })).toHaveCount(0);
+  await expect(form.getByLabel('모델 목록 API 키', { exact: true })).toHaveCount(0);
   await expect(upload.getByRole('status')).toContainText(projectId);
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models`;
   await expect(form.getByLabel('Google Agent Platform endpoint')).toHaveValue(endpoint);

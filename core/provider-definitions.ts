@@ -11,7 +11,7 @@ export type ProviderDefinition = Readonly<{
   /** An environment-variable name only; never a credential value. */
   credentialRefDefault: string;
   auth: 'none' | 'bearer' | 'api-key' | 'adc-or-bearer' | 'codex-login';
-  catalog: 'remote' | 'local-support' | 'agent-runtime';
+  catalog: 'remote' | 'agent-runtime';
   /** Top-level model-preset options accepted by the local adapter. Model support is unknown. */
   optionKeys: readonly string[];
   source: Readonly<{ kind: 'adapter'; reference: string; checkedAt: '2026-09-07' }>;
@@ -88,7 +88,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     endpointDefault: '',
     credentialRefDefault: '',
     auth: 'adc-or-bearer',
-    catalog: 'local-support',
+    catalog: 'remote',
     optionKeys: [
       'maxOutputTokens',
       'temperature',
@@ -101,7 +101,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/vertex.ts#executeVertexProvider',
     limitations: [
       'Gemini 모델 연결 · Gemini Enterprise Agent Platform의 global 프로젝트 endpoint를 사용해요.',
-      '모델별 지원 명세에 있는 Gemini를 실행해요. 로컬 지원 목록은 계정의 원격 가용성을 보장하지 않아요.',
+      '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회할 수 있어요. 목록과 실제 모델 사용 권한은 Google Cloud 설정을 따라요.',
       'ADC는 서버의 GOOGLE_APPLICATION_CREDENTIALS 파일을 사용해요. Flex는 모델의 Service Tier에서 선택해요. 실제 청구액은 미확인이에요.',
     ],
   }),

@@ -10,11 +10,13 @@ export function ProviderCatalogPicker({
   selectedId,
   busy,
   onChoose,
+  onRefresh,
 }: {
   connection: Connection | undefined;
   selectedId: string;
   busy: boolean;
   onChoose: (model: CatalogModel) => void;
+  onRefresh: (connection: Connection) => void;
 }) {
   const [query, setQuery] = useState(''),
     [limit, setLimit] = useState(24);
@@ -35,8 +37,28 @@ export function ProviderCatalogPicker({
   return (
     <section className="provider-catalog full" aria-label="저장된 모델 목록에서 선택">
       <div className="provider-section-heading">
-        <h4>모델 목록에서 선택</h4>
+        <div>
+          <h4>모델 목록에서 선택</h4>
+          <small>
+            {connection.protocol === 'vertex-gemini-v1'
+              ? '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회해요.'
+              : connection.protocol === 'codex-app-server-v1'
+                ? '로그인한 Codex 실행기의 모델 목록을 조회해요.'
+                : '저장한 프로바이더에서 모델 목록을 조회해요.'}
+          </small>
+        </div>
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy}
+          onClick={() => onRefresh(connection)}
+        >
+          모델 목록 새로고침
+        </button>
       </div>
+      {connection.catalogError && (
+        <p className="error">모델 목록 조회에 실패했어요. 마지막 저장 목록은 유지돼요.</p>
+      )}
       {catalog.length > 0 ? (
         <>
           <label className="provider-search">

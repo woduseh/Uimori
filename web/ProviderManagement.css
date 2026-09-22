@@ -105,7 +105,6 @@
   color: var(--muted);
 }
 .provider-draft-note,
-.provider-readiness,
 .provider-impact,
 .provider-next-step {
   border: 1px solid var(--line);
@@ -117,15 +116,9 @@
   min-width: 0;
 }
 .provider-draft-note p,
-.provider-readiness p,
 .provider-impact p,
 .provider-next-step p {
   margin: 0;
-}
-.provider-readiness ul {
-  margin: 0;
-  padding-left: 20px;
-  line-height: 1.8;
 }
 .provider-definition {
   font-size: 12px;
@@ -187,9 +180,6 @@
   }
   .provider-actions button {
     flex: 1 1 110px;
-  }
-  .provider-readiness .provider-section-heading {
-    align-items: stretch;
   }
   .provider-definition dl {
     grid-template-columns: minmax(0, 1fr);
@@ -422,6 +412,15 @@
 .provider-catalog h4 {
   margin: 0;
   font-size: 14px;
+}
+.provider-catalog .provider-section-heading > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.provider-catalog .provider-section-heading small {
+  color: var(--muted);
+  line-height: 1.5;
 }
 .provider-catalog .provider-search {
   margin: 12px 0;
