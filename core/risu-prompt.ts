@@ -289,7 +289,7 @@ export function validateControlValue(control: PromptControl, value: PromptValue)
   )
     fail('PROMPT_INVALID_CONTROL_VALUE', control.id);
 }
-/** Validate frozen native-toggle UI metadata used by option delegation receipts. */
+/** Validate frozen native-toggle UI metadata used by portable option definitions. */
 export function validateControlDefinitions(value: unknown): PromptControl[] {
   inspectPromptData(value, 200_000);
   if (!Array.isArray(value) || value.length > 150) fail('PROMPT_INVALID_CONTROLS');

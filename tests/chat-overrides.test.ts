@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import { ChatOverridesStore, type ChatOverrideAuthority } from '../server/chat-overrides.js';
+import { ChatOverridesStore } from '../server/chat-overrides.js';
 import {
   chatOverrideHash,
   projectChatPackageCompilation,
@@ -40,7 +40,7 @@ function database() {
   owned.push({ store, dir });
   return store;
 }
-const authority: ChatOverrideAuthority = { requestId: 'explicit-chat-lore-edit', assert: () => {} };
+const requestId = 'explicit-chat-lore-edit';
 function save(
   store: Store,
   title: string,
@@ -112,7 +112,7 @@ function patch(
     expectedFieldHash: chatOverrideHash(field),
     operationId: randomUUID(),
   };
-  return { service, input, result: service.patch(chatId, input, authority) };
+  return { service, input, result: service.patch(chatId, input, requestId) };
 }
 function run(store: Store, chatId: string, branchId?: string) {
   const chat = store.chat(chatId),
@@ -283,21 +283,14 @@ test('the same package in bot and persona roles receives an override only on the
   expect(readStoredRunSnapshot(store, value.id)).toEqual(original);
 });
 
-test('authority, source scope, root/package revisions and text-only selectors reject forged or stale changes atomically', () => {
+test('source scope, root/package revisions and text-only selectors reject forged or stale changes atomically', () => {
   const store = database(),
     bot = save(store, 'Scoped bot'),
     unrelated = save(store, 'Unrelated module');
   const chat = store.createChat('Mutation guards', 'calm', { botId: bot.id });
   const { service, input, result } = patch(store, chat.id, selector(bot), 'Local');
-  expect(service.patch(chat.id, input, authority)).toEqual(result);
-  const denied: ChatOverrideAuthority = {
-    requestId: authority.requestId,
-    assert: () => {
-      throw new Error('Task grant denies this attachment');
-    },
-  };
-  expect(() => service.patch(chat.id, input, denied)).toThrow(/grant denies/);
-  expect(() => service.patch(chat.id, { ...input, value: 'Changed replay' }, authority)).toThrow(
+  expect(service.patch(chat.id, input, requestId)).toEqual(result);
+  expect(() => service.patch(chat.id, { ...input, value: 'Changed replay' }, requestId)).toThrow(
     /reused/
   );
   const next = { ...input, operationId: randomUUID(), expectedRevision: result.revision };
@@ -305,27 +298,27 @@ test('authority, source scope, root/package revisions and text-only selectors re
     service.patch(
       chat.id,
       { ...next, selector: { ...input.selector, field: 'behavior' } },
-      authority
+      requestId
     )
   ).toThrow(/TEXT_FIELD/);
   expect(() =>
     service.patch(
       chat.id,
       { ...next, selector: { ...input.selector, modulePath: [unrelated.id] } },
-      authority
+      requestId
     )
   ).toThrow(/연결 경로/);
   expect(() =>
-    service.patch(chat.id, { ...next, expectedFieldHash: '0'.repeat(64) }, authority)
+    service.patch(chat.id, { ...next, expectedFieldHash: '0'.repeat(64) }, requestId)
   ).toThrow(/필드/);
   expect(() =>
-    service.patch(chat.id, { ...next, expectedHeadRevision: randomUUID() }, authority)
+    service.patch(chat.id, { ...next, expectedHeadRevision: randomUUID() }, requestId)
   ).toThrow(/원문/);
   expect(() =>
     service.patch(
       chat.id,
       { ...next, expectedProfileRevision: input.expectedProfileRevision + 1 },
-      authority
+      requestId
     )
   ).toThrow(/자료 연결/);
   expect(service.revision(chat.id)).toBe(result.revision);

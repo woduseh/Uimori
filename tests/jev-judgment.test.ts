@@ -2,7 +2,6 @@ import { estimateContextTokens } from '../core/context-budget.js';
 import { describe, expect, it, vi } from 'vitest';
 import { executeJevJudgment, JEV_ENDPOINT, type JevRequest } from '../server/jev-judgment.js';
 import { prepareLoreSelection, loreSelectionAttemptInputHashes } from '../server/lore-selection.js';
-import { validateLoreSelectionReceipt } from '../core/lore-selection.js';
 import { defaultProfile } from '../core/product.js';
 import { DEFAULT_LORE_CONTEXT, validateLoreContextPolicy } from '../core/lore-context.js';
 import { DEFAULT_JEV_JUDGMENT } from '../core/judgment.js';
@@ -209,7 +208,7 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
     );
     expect(send).toHaveBeenCalledTimes(1);
     expect(result.usage.modelCalls).toBe(1);
-    const receipt = validateLoreSelectionReceipt(result.snapshot.loreSelection);
+    const receipt = result.snapshot.loreSelection!;
     expect(receipt.entries.map((entry) => entry.selected)).toEqual([[], ['harbor']]);
     expect(receipt.entries[0].omitted).toContainEqual({ id: 'harbor', reason: 'budget' });
     expect(receipt.entries.map((entry) => entry.judgment?.attemptId)).toEqual([

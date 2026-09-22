@@ -88,7 +88,7 @@ test('independent chat copies and portable restores keep authored plans and scop
       expectedFieldHash: chatOverrideHash(lore.text),
       operationId: randomUUID(),
     },
-    { requestId: randomUUID(), assert: () => {} }
+    randomUUID()
   );
   const copy = forkChat(store, chat.id, {
     fromRevision: chat.headRevision,

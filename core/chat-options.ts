@@ -10,16 +10,9 @@ export type PendingChatOptions = {
   id: string;
   chatId: string;
   branchId: string;
-  kind: 'oneoff';
   binding: OptionBinding;
   values: OptionValues;
-  headRevision: string | null;
-  headHash: string | null;
-  status: 'pending' | 'consumed' | 'cancelled' | 'superseded';
-  runId: string | null;
   createdAt: string;
-  definitions: PromptControl[];
-  origin?: { pendingId: string; chatId: string; branchId: string; runId: string };
 };
 export type ChatOptionState = {
   chatId: string;
@@ -34,7 +27,6 @@ export type ChatOptionState = {
   fixedValues: OptionValues;
   pending: PendingChatOptions[];
   conflicts: string[];
-  headRevision: string | null;
 };
 /** Self-contained resolution evidence. Later defaults never reinterpret it. */
 export type ChatOptionResolution = {

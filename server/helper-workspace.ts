@@ -12,7 +12,7 @@ import type {
   HelperTaskSnapshot,
   HelperStatus,
 } from '../core/helper.js';
-import type { RunSnapshot, Usage } from '../core/types.js';
+import type { Usage } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
@@ -34,7 +34,7 @@ export function initHelperWorkspace(store: Store) {
     CREATE TABLE helper_operations(id TEXT PRIMARY KEY,task_id TEXT NOT NULL REFERENCES helper_tasks(id) ON DELETE CASCADE,request_hash TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
     CREATE TABLE helper_artifact_jobs(id TEXT PRIMARY KEY,task_id TEXT NOT NULL REFERENCES helper_tasks(id) ON DELETE CASCADE,operation_id TEXT NOT NULL UNIQUE,snapshot TEXT NOT NULL,status TEXT NOT NULL,artifact_id TEXT,artifact_revision INTEGER,error TEXT,created_at TEXT NOT NULL);
     CREATE TABLE helper_task_attempts(task_id TEXT NOT NULL REFERENCES helper_tasks(id) ON DELETE CASCADE,attempt_id TEXT PRIMARY KEY REFERENCES attempts(id) ON DELETE CASCADE,purpose TEXT NOT NULL,segment INTEGER NOT NULL,artifact_job_id TEXT REFERENCES helper_artifact_jobs(id) ON DELETE CASCADE);
-    CREATE TABLE helper_artifacts(id TEXT NOT NULL,revision INTEGER NOT NULL,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,task_id TEXT NOT NULL REFERENCES helper_tasks(id) ON DELETE CASCADE,request TEXT NOT NULL,text TEXT NOT NULL,snapshot TEXT NOT NULL,usage TEXT NOT NULL,created_at TEXT NOT NULL,origin TEXT NOT NULL,PRIMARY KEY(id,revision));
+    CREATE TABLE helper_artifacts(id TEXT NOT NULL,revision INTEGER NOT NULL,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,task_id TEXT NOT NULL REFERENCES helper_tasks(id) ON DELETE CASCADE,request TEXT NOT NULL,text TEXT NOT NULL,usage TEXT NOT NULL,created_at TEXT NOT NULL,origin TEXT NOT NULL,PRIMARY KEY(id,revision));
   `);
 }
 
@@ -257,12 +257,12 @@ export class HelperWorkspace {
         this.store.event(scope.chatId, `helper.${kind}`, taskId ?? conversationId);
     }
   }
-  events(id: string, after = 0): HelperEvent[] {
+  events(id: string, after = 0, view: 'full' | 'updates' = 'full'): HelperEvent[] {
     this.conversation(id);
     return (
       this.store.db
         .prepare(
-          'SELECT * FROM helper_events WHERE conversation_id=? AND seq>? ORDER BY seq LIMIT 500'
+          `SELECT seq,conversation_id,task_id,kind,${view === 'updates' ? 'NULL' : 'data'} AS data FROM helper_events WHERE conversation_id=? AND seq>? ORDER BY seq LIMIT 500`
         )
         .all(id, after) as Row[]
     ).map((r) => ({
@@ -430,7 +430,9 @@ export class HelperWorkspace {
       if (prior) {
         if (prior.task_id !== taskId || prior.request_hash !== hash)
           throw new HttpError(409, 'OPERATION_ID_CONFLICT');
-        return JSON.parse(prior.result) as T;
+        const result = JSON.parse(prior.result);
+        if (result?.detailsOmitted) throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
+        return result as T;
       }
       if (this.task(taskId).status !== 'running')
         throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
@@ -449,7 +451,9 @@ export class HelperWorkspace {
     const hash = createHash('sha256').update(json(input)).digest('hex');
     if (row.task_id !== taskId || row.request_hash !== hash)
       throw new HttpError(409, 'OPERATION_ID_CONFLICT');
-    return JSON.parse(row.result) as T;
+    const result = JSON.parse(row.result);
+    if (result?.detailsOmitted) throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
+    return result as T;
   }
   startAttempt(
     taskId: string,
@@ -583,7 +587,6 @@ export class HelperWorkspace {
       taskId: row.task_id,
       request: row.request,
       text: row.text,
-      snapshot: JSON.parse(row.snapshot),
       usage: JSON.parse(row.usage),
       createdAt: row.created_at,
     };
@@ -593,11 +596,10 @@ export class HelperWorkspace {
     operationId: string,
     request: string,
     text: string,
-    snapshot: RunSnapshot,
     usage: Usage,
     previous?: { id: string; revision: number }
   ) {
-    return this.operation(
+    const receipt = this.operation(
       taskId,
       operationId,
       { kind: 'artifact', request, previous: previous ?? null },
@@ -614,7 +616,7 @@ export class HelperWorkspace {
         }
         const revision = (previous?.revision ?? 0) + 1;
         this.store.db
-          .prepare('INSERT INTO helper_artifacts VALUES(?,?,?,?,?,?,?,?,?,?)')
+          .prepare('INSERT INTO helper_artifacts VALUES(?,?,?,?,?,?,?,?,?)')
           .run(
             id,
             revision,
@@ -622,23 +624,27 @@ export class HelperWorkspace {
             taskId,
             request,
             text,
-            json(snapshot),
             json(usage),
             now(),
             'model'
           );
         this.event(task.conversationId, taskId, 'artifact.saved', { id, revision });
-        return this.artifact(id, revision);
+        return { artifactRef: { id, revision } };
       }
     );
+    return this.artifact(receipt.artifactRef.id, receipt.artifactRef.revision);
   }
   editArtifact(id: string, revision: number, body: string, requestKey: string) {
     return this.store.transaction(() => {
       const previous = this.artifact(id),
         operationId = `artifact-edit:${id}:${requestKey}`;
       const input = { kind: 'artifact.edit', id, revision, text: body };
-      const old = this.operationResult<HelperArtifact>(previous.taskId, operationId, input);
-      if (old) return old;
+      const old = this.operationResult<{ artifactRef: { id: string; revision: number } }>(
+        previous.taskId,
+        operationId,
+        input
+      );
+      if (old) return this.artifact(old.artifactRef.id, old.artifactRef.revision);
       if (previous.revision !== revision)
         throw new HttpError(409, '가정 장면이 다른 곳에서 수정됐어요. 최신 개정을 확인해 주세요.');
       const updated = {
@@ -649,7 +655,7 @@ export class HelperWorkspace {
         createdAt: now(),
       };
       this.store.db
-        .prepare('INSERT INTO helper_artifacts VALUES(?,?,?,?,?,?,?,?,?,?)')
+        .prepare('INSERT INTO helper_artifacts VALUES(?,?,?,?,?,?,?,?,?)')
         .run(
           id,
           updated.revision,
@@ -657,7 +663,6 @@ export class HelperWorkspace {
           previous.taskId,
           previous.request,
           body,
-          json(previous.snapshot),
           json(previous.usage),
           updated.createdAt,
           'edit'
@@ -668,7 +673,7 @@ export class HelperWorkspace {
           operationId,
           previous.taskId,
           createHash('sha256').update(json(input)).digest('hex'),
-          json(updated),
+          json({ artifactRef: { id, revision: updated.revision } }),
           updated.createdAt
         );
       this.event(previous.conversationId, previous.taskId, 'artifact.saved', {

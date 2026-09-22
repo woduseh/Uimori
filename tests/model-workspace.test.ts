@@ -479,14 +479,13 @@ test('changing a pin invalidates pending options and preserves the pending draft
       binding: state.binding,
       values: { detail: '1' },
       operationId: randomUUID(),
-      expectedHeadRevision: state.headRevision,
     },
-    { requestId: 'pin-test', assert: () => {} }
+    'pin-test'
   );
   pin(store, chat.id, { mainPromptPresetId: presetB.id });
   expect(options.get(chat.id).binding.owner).toBe(`preset:${presetB.id}`);
   expect(options.get(chat.id).conflicts.join(' ')).toMatch(/다음 요청 옵션/);
-  expect(() => complete(store, chat.id)).toThrow(/프롬프트가 바뀌었어요/);
+  expect(() => complete(store, chat.id)).toThrow(/프롬프트 정의가 바뀌었어요/);
   expect(options.get(chat.id).pending).toHaveLength(1);
   expect(store.db.prepare('SELECT count(*) AS count FROM runs').get()?.count).toBe(0);
   pin(store, chat.id, { mainPromptPresetId: presetA.id });

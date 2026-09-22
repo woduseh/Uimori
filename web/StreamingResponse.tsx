@@ -55,8 +55,9 @@ export function StreamingResponse({
         cursor = chunk.seq;
         added.push(chunk);
       }
-      if (page.status === 'completed') setChunks([]);
-      else if (added.length) setChunks((old) => [...old, ...added]);
+      // The parent replaces this view when its canonical message arrives. A completed
+      // stream can arrive first; keep already displayed text during that handoff.
+      if (added.length) setChunks((old) => [...old, ...added]);
       setStatus(page.status);
       setDisconnected(false);
       failures = 0;

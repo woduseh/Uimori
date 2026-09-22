@@ -28,18 +28,11 @@ const now = () => new Date().toISOString();
 export function initChatOptions(store: Store): void {
   store.db.exec(`
     CREATE TABLE chat_prompt_options(chat_id TEXT PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,revision INTEGER NOT NULL,body TEXT NOT NULL);
-    CREATE TABLE chat_option_pending(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,body TEXT NOT NULL);
-    CREATE TABLE chat_option_operations(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,request_id TEXT NOT NULL,command_hash TEXT NOT NULL,command TEXT NOT NULL,intent TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
+    CREATE TABLE chat_option_pending(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,body TEXT NOT NULL,UNIQUE(chat_id,branch_id));
+    CREATE TABLE chat_option_operations(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,request_id TEXT NOT NULL,command_hash TEXT NOT NULL,revision INTEGER NOT NULL,created_at TEXT NOT NULL);
   `);
 }
-export type ChatOptionIntent = {
-  action: 'fixed' | 'oneoff' | 'cancel';
-  chatId: string;
-  branchId: string;
-  fields: string[];
-};
-/** Identifies a write and checks that its owning helper task is still active. */
-export type ChatOptionAuthority = { requestId: string; assert: (intent: ChatOptionIntent) => void };
+
 export function optionBinding(
   prompt: Pick<CurrentPrompt, 'presetId' | 'program'>,
   controls = promptControls(prompt.program)
@@ -80,13 +73,7 @@ function valuesFor(program: RisuPrompt | PromptControl[], value: unknown): Optio
   );
   return Object.fromEntries(Object.keys(input).map((id) => [id, resolved[id]]));
 }
-function headHash(store: Store, revision: string | null): string | null {
-  if (!revision) return null;
-  return (
-    store.history(revision).at(-1)?.contentHash ??
-    createHash('sha256').update(store.source(revision).text).digest('hex')
-  );
-}
+
 const conflict = (message: string): never => {
   throw new HttpError(409, message);
 };
@@ -147,7 +134,7 @@ export class ChatOptionsStore {
       binding = optionBinding(workspace.main, controls),
       saved = this.saved(chatId);
     const compatible = !saved.binding || isDeepStrictEqual(saved.binding, binding);
-    const pending = this.pending(chatId, branch.id).filter((item) => item.status === 'pending');
+    const pending = this.pending(chatId, branch.id);
     const conflicts: string[] = [];
     if (!compatible && Object.keys(saved.values).length)
       conflicts.push(
@@ -157,13 +144,6 @@ export class ChatOptionsStore {
       if (!isDeepStrictEqual(item.binding, binding))
         conflicts.push(
           '다음 요청 옵션의 프롬프트 정의가 바뀌었어요. 선택을 취소하고 다시 지정해 주세요.'
-        );
-      else if (
-        item.headRevision !== branch.headRevision ||
-        item.headHash !== headHash(this.store, branch.headRevision)
-      )
-        conflicts.push(
-          '다음 요청 옵션을 선택한 뒤 본편이 바뀌었어요. 선택을 취소하고 다시 지정해 주세요.'
         );
     }
     return {
@@ -178,43 +158,29 @@ export class ChatOptionsStore {
       fixedValues: compatible ? valuesFor(controls, saved.values) : {},
       pending,
       conflicts,
-      headRevision: branch.headRevision,
     };
   }
   private write(
     chatId: string,
     value: unknown,
-    action: ChatOptionIntent['action'],
-    authority: ChatOptionAuthority,
+    action: 'fixed' | 'oneoff' | 'cancel',
+    requestId: string,
     allowed: string[],
-    apply: (b: Record<string, unknown>, state: ChatOptionState) => unknown
+    apply: (body: Record<string, unknown>, state: ChatOptionState) => void
   ): ChatOptionState {
-    const b = record(value);
-    fields(b, ['branchId', 'expectedRevision', 'operationId', ...allowed]);
-    const operationId = text(b.operationId, 'operation ID', 100),
-      requestId = text(authority.requestId, 'request ID', 200);
-    const revision = number(b.expectedRevision, 'options revision', 0, Number.MAX_SAFE_INTEGER);
+    const body = record(value);
+    fields(body, ['branchId', 'expectedRevision', 'operationId', ...allowed]);
+    const operationId = text(body.operationId, 'operation ID', 100);
+    text(requestId, 'request ID', 200);
+    const revision = number(body.expectedRevision, 'options revision', 0, Number.MAX_SAFE_INTEGER);
     const branch = this.store.product.branch(
       chatId,
-      b.branchId === undefined ? undefined : text(b.branchId, 'branch ID', 100)
+      body.branchId === undefined ? undefined : text(body.branchId, 'branch ID', 100)
     );
-    const selectedFields = b.values
-      ? Object.keys(record(b.values))
-      : Array.isArray(b.fields)
-        ? b.fields.map((v) => text(v, 'option field', 1500))
-        : [];
-    const intent: ChatOptionIntent = {
-      action,
-      chatId,
-      branchId: branch.id,
-      fields: selectedFields,
-    };
-    const command = { action, chatId, body: b },
-      commandHash = hash(command);
+    const commandHash = hash({ action, chatId, body });
     return this.store.transaction(() => {
-      authority.assert(intent);
       const prior = this.store.db
-        .prepare('SELECT * FROM chat_option_operations WHERE id=?')
+        .prepare('SELECT chat_id,request_id,command_hash FROM chat_option_operations WHERE id=?')
         .get(operationId) as Row | undefined;
       if (prior) {
         if (
@@ -223,30 +189,22 @@ export class ChatOptionsStore {
           prior.chat_id !== chatId
         )
           conflict('옵션 요청 키가 다른 작업에 사용됐어요.');
-        return JSON.parse(String(prior.result)) as ChatOptionState;
+        // A retry acknowledges the earlier write without reapplying it or showing stale settings.
+        return this.get(chatId, branch.id);
       }
       const state = this.get(chatId, branch.id);
       if (state.revision !== revision)
         conflict('채팅 옵션이 변경됐어요. 입력은 유지하고 최신 설정을 확인해 주세요.');
-      apply(b, state);
+      apply(body, state);
       const result = this.get(chatId, branch.id);
       this.store.db
-        .prepare('INSERT INTO chat_option_operations VALUES(?,?,?,?,?,?,?,?)')
-        .run(
-          operationId,
-          chatId,
-          requestId,
-          commandHash,
-          json(command),
-          json(intent),
-          json(result),
-          now()
-        );
+        .prepare('INSERT INTO chat_option_operations VALUES(?,?,?,?,?,?)')
+        .run(operationId, chatId, requestId, commandHash, result.revision, now());
       return result;
     });
   }
-  fixed(chatId: string, value: unknown, authority: ChatOptionAuthority): ChatOptionState {
-    return this.write(chatId, value, 'fixed', authority, ['binding', 'values'], (b, state) => {
+  fixed(chatId: string, value: unknown, requestId: string): ChatOptionState {
+    return this.write(chatId, value, 'fixed', requestId, ['binding', 'values'], (b, state) => {
       this.assertBinding(b.binding, state);
       this.bump(chatId, {
         binding: state.binding,
@@ -259,64 +217,41 @@ export class ChatOptionsStore {
     if (!isDeepStrictEqual(readBinding(value), state.binding))
       conflict('프롬프트 소속이나 옵션 정의가 바뀌었어요.');
   }
-  stage(chatId: string, value: unknown, authority: ChatOptionAuthority): ChatOptionState {
-    return this.write(
-      chatId,
-      value,
-      'oneoff',
-      authority,
-      ['binding', 'values', 'expectedHeadRevision'],
-      (body, state) => {
-        this.assertBinding(body.binding, state);
-        if (body.expectedHeadRevision !== state.headRevision)
-          conflict('옵션을 선택하는 동안 본편이 변경됐어요.');
-        const values = valuesFor(state.controls ?? state.program, body.values);
-        if (!Object.keys(values).length)
-          throw new HttpError(400, '한 개 이상의 옵션을 선택해 주세요.');
-        for (const pending of state.pending)
-          this.updatePending({ ...pending, status: 'superseded' });
-        const pending: PendingChatOptions = {
-          id: randomUUID(),
-          chatId,
-          branchId: state.branchId,
-          kind: 'oneoff',
-          binding: state.binding,
-          definitions: state.controls ?? promptControls(state.program),
-          values,
-          headRevision: state.headRevision,
-          headHash: headHash(this.store, state.headRevision),
-          status: 'pending',
-          runId: null,
-          createdAt: now(),
-        };
-        this.store.db
-          .prepare('INSERT INTO chat_option_pending VALUES(?,?,?,?)')
-          .run(pending.id, chatId, state.branchId, json(pending));
-        this.bump(chatId);
-      }
-    );
+  stage(chatId: string, value: unknown, requestId: string): ChatOptionState {
+    return this.write(chatId, value, 'oneoff', requestId, ['binding', 'values'], (body, state) => {
+      this.assertBinding(body.binding, state);
+      const values = valuesFor(state.controls ?? state.program, body.values);
+      if (!Object.keys(values).length)
+        throw new HttpError(400, '한 개 이상의 옵션을 선택해 주세요.');
+      this.store.db
+        .prepare('DELETE FROM chat_option_pending WHERE chat_id=? AND branch_id=?')
+        .run(chatId, state.branchId);
+      const pending: PendingChatOptions = {
+        id: randomUUID(),
+        chatId,
+        branchId: state.branchId,
+        binding: state.binding,
+        values,
+        createdAt: now(),
+      };
+      this.store.db
+        .prepare('INSERT INTO chat_option_pending VALUES(?,?,?,?)')
+        .run(pending.id, chatId, state.branchId, json(pending));
+      this.bump(chatId);
+    });
   }
-  private updatePending(item: PendingChatOptions): void {
-    this.store.db
-      .prepare('UPDATE chat_option_pending SET body=? WHERE id=?')
-      .run(json(item), item.id);
-  }
-  cancel(
-    chatId: string,
-    pendingId: string,
-    value: unknown,
-    authority: ChatOptionAuthority
-  ): ChatOptionState {
+
+  cancel(chatId: string, pendingId: string, value: unknown, requestId: string): ChatOptionState {
     return this.write(
       chatId,
       { ...record(value), pendingId },
       'cancel',
-      authority,
+      requestId,
       ['pendingId'],
       (_b, state) => {
         const pending = state.pending.find((item) => item.id === pendingId);
         if (!pending) conflict('취소할 다음 요청 옵션이 변경됐어요.');
-        this.updatePending({ ...pending!, status: 'cancelled' });
+        this.store.db.prepare('DELETE FROM chat_option_pending WHERE id=?').run(pendingId);
         this.bump(chatId);
       }
     );
@@ -343,17 +278,13 @@ export class ChatOptionsStore {
       pendingIds: string[] = [];
     if (runId)
       for (const pending of state.pending) {
-        if (
-          !isDeepStrictEqual(pending.binding, state.binding) ||
-          pending.headRevision !== state.headRevision ||
-          pending.headHash !== headHash(this.store, state.headRevision)
-        )
+        if (!isDeepStrictEqual(pending.binding, state.binding))
           conflict(
-            '다음 요청 옵션의 본편이나 프롬프트가 바뀌었어요. 창작 옵션에서 선택을 다시 지정해 주세요.'
+            '다음 요청 옵션의 프롬프트 정의가 바뀌었어요. 창작 옵션에서 선택을 다시 지정해 주세요.'
           );
         Object.assign(oneoffValues, pending.values);
         pendingIds.push(pending.id);
-        this.updatePending({ ...pending, status: 'consumed', runId });
+        this.store.db.prepare('DELETE FROM chat_option_pending WHERE id=?').run(pending.id);
       }
     const values = resolveControlValues(controls, {
       ...globalValues,
@@ -407,10 +338,9 @@ export const helperOptionTools: ProviderTool[] = [
           additionalProperties: false,
         },
         values: { type: 'object' },
-        expectedHeadRevision: { type: ['string', 'null'] },
         operationId: str,
       },
-      ['expectedRevision', 'binding', 'values', 'expectedHeadRevision', 'operationId']
+      ['expectedRevision', 'binding', 'values', 'operationId']
     ),
   },
 ];
@@ -430,32 +360,22 @@ export function invokeHelperOptions(
   if (name !== 'options.oneoff') throw new HttpError(400, 'Unknown option tool');
   new HelperWorkspace(store).assertRunning(task.id);
   return helperOptionState(
-    service.stage(
-      scope.chatId,
-      { ...record(value), branchId: scope.branchId },
-      {
-        requestId: task.id,
-        assert: () => new HelperWorkspace(store).assertRunning(task.id),
-      }
-    )
+    service.stage(scope.chatId, { ...record(value), branchId: scope.branchId }, task.id)
   );
 }
 
 export function chatOptionRoutes(app: FastifyInstance, store: Store): void {
   const service = new ChatOptionsStore(store);
-  const authority = (body: unknown): ChatOptionAuthority => ({
-    requestId: 'ui:' + text(record(body).operationId, 'operation ID', 100),
-    assert: () => {},
-  });
+  const requestId = (body: unknown) => 'ui:' + text(record(body).operationId, 'operation ID', 100);
   app.get<{ Params: { id: string }; Querystring: { branchId?: string } }>(
     '/api/chats/:id/options',
     (request) => service.get(request.params.id, request.query.branchId)
   );
   app.post<{ Params: { id: string } }>('/api/chats/:id/options/fixed', (request) =>
-    service.fixed(request.params.id, request.body, authority(request.body))
+    service.fixed(request.params.id, request.body, requestId(request.body))
   );
   app.post<{ Params: { id: string } }>('/api/chats/:id/options/oneoff', (request) =>
-    service.stage(request.params.id, request.body, authority(request.body))
+    service.stage(request.params.id, request.body, requestId(request.body))
   );
   app.post<{ Params: { id: string; pendingId: string } }>(
     '/api/chats/:id/options/pending/:pendingId/cancel',
@@ -464,7 +384,7 @@ export function chatOptionRoutes(app: FastifyInstance, store: Store): void {
         request.params.id,
         request.params.pendingId,
         request.body,
-        authority(request.body)
+        requestId(request.body)
       )
   );
 }
@@ -507,22 +427,4 @@ export function validateChatOptionSnapshot(profile: ProfileSnapshot): void {
       new Set(list).size !== list.length
     )
       throw new HttpError(400, 'Invalid option snapshot provenance');
-}
-
-export function deleteChatOptionSourcesInTransaction(
-  store: Store,
-  chatId: string,
-  sources: Set<string>,
-  runs: Set<string>
-): void {
-  for (const row of store.db
-    .prepare('SELECT body FROM chat_option_pending WHERE chat_id=?')
-    .all(chatId) as Row[]) {
-    const item = JSON.parse(String(row.body)) as PendingChatOptions;
-    if (
-      (item.headRevision && sources.has(item.headRevision)) ||
-      (item.runId && runs.has(item.runId))
-    )
-      store.db.prepare('DELETE FROM chat_option_pending WHERE id=?').run(item.id);
-  }
 }

@@ -1,3 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import { ChatOptionsStore } from '../server/chat-options.js';
+import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -204,35 +209,212 @@ test('successful helper messages replace cumulative inputs; failed tasks retain 
   }
 });
 
-test('schema 1 upgrades once, removes grants, and preserves manuscripts and ordinary pending options', () => {
-  const { owner, store, chat, branch, sources } = fixture();
-  const original = sources.map((source) => source.text);
-  store.db.exec(
-    "CREATE TABLE helper_delegations(id TEXT); INSERT INTO helper_delegations VALUES('retired'); PRAGMA user_version=1"
-  );
-  const insert = store.db.prepare('INSERT INTO chat_option_pending VALUES(?,?,?,?)');
-  insert.run('retired', chat.id, branch.id, JSON.stringify({ kind: 'delegated' }));
-  insert.run(
-    'kept',
+function optionsFor(store: Store, chatId: string) {
+  const prior = promptWorkspace(store);
+  updatePromptWorkspace(store, {
+    expectedRevision: prior.revision,
+    main: {
+      ...prior.main,
+      program: nativePrompt('Synthetic prompt. '.repeat(4096), {
+        customPromptTemplateToggle: 'tone=Tone=text',
+      }),
+      values: { tone: 'calm' },
+    },
+  });
+  const options = new ChatOptionsStore(store);
+  const body = (values: Record<string, string>) => {
+    const state = options.get(chatId);
+    return {
+      branchId: state.branchId,
+      expectedRevision: state.revision,
+      binding: state.binding,
+      values,
+      operationId: randomUUID(),
+    };
+  };
+  return { options, body };
+}
+
+test('oneoff settings survive source edits and consume once without reading manuscript history', () => {
+  const { store, chat, branch } = fixture();
+  const { options, body } = optionsFor(store, chat.id);
+  const history = vi.spyOn(store, 'history');
+  const requested = body({ tone: 'warm' });
+  options.stage(chat.id, requested, 'user');
+  expect(history).not.toHaveBeenCalled();
+  const source = store.source(branch.headRevision!);
+  store.editSource(source.id, {
+    text: source.text + ' A correction.',
+    expectedRevision: source.editRevision ?? 0,
+  });
+  expect(options.get(chat.id).conflicts).toEqual([]);
+  const command = {
+    request: 'Continue',
+    expectedRevision: branch.headRevision,
+    expectedSettingsRevision: chat.settingsRevision,
+    branchId: branch.id,
+    idempotencyKey: randomUUID(),
+  };
+  const run = store.createRun(chat.id, command, (c) => ({
+    chatId: c.id,
+    parentRevision: branch.headRevision,
+    request: command.request,
+    settingsRevision: c.settingsRevision,
+    settings: c.settings,
+    history: store.history(branch.headRevision),
+    resources: [],
+    profile: store.product.snapshot(c.id),
+  }));
+  expect(run.run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'warm' });
+  expect(options.get(chat.id).pending).toEqual([]);
+  expect(options.stage(chat.id, requested, 'user').pending).toEqual([]);
+  expect(store.db.prepare('SELECT count(*) AS n FROM chat_option_pending').get()?.n).toBe(0);
+});
+
+test('option receipts contain no prompt copies and only the current oneoff is stored', () => {
+  const { store, chat } = fixture();
+  const { options, body } = optionsFor(store, chat.id);
+  const first = body({ tone: 'warm' });
+  options.fixed(chat.id, first, 'user');
+  for (let i = 0; i < 20; i++) options.fixed(chat.id, body({ tone: String(i) }), 'user');
+  expect(options.fixed(chat.id, first, 'user').fixedValues).toEqual({ tone: '19' });
+  const columns = store.db
+    .prepare('PRAGMA table_info(chat_option_operations)')
+    .all()
+    .map((r) => r.name);
+  expect(columns).not.toEqual(expect.arrayContaining(['command', 'intent', 'result']));
+  expect(columns).toContain('revision');
+  const receipts = store.db.prepare('SELECT * FROM chat_option_operations').all();
+  expect(Buffer.byteLength(JSON.stringify(receipts))).toBeLessThan(12000);
+  for (let i = 0; i < 20; i++) options.stage(chat.id, body({ tone: String(i) }), 'user');
+  const state = options.get(chat.id);
+  expect(state.pending).toHaveLength(1);
+  expect(store.db.prepare('SELECT count(*) AS n FROM chat_option_pending').get()?.n).toBe(1);
+  options.cancel(
     chat.id,
-    branch.id,
-    JSON.stringify({ kind: 'oneoff', values: { tone: 'calm' } })
+    state.pending[0]!.id,
+    { branchId: state.branchId, expectedRevision: state.revision, operationId: randomUUID() },
+    'user'
   );
+  expect(store.db.prepare('SELECT count(*) AS n FROM chat_option_pending').get()?.n).toBe(0);
+});
+
+test('helper events and artifact revisions do not duplicate large read results or generation context', () => {
+  const { store } = fixture();
+  const workspace = new HelperWorkspace(store),
+    conversation = workspace.open({ kind: 'library', workId: 'retention' });
+  const connection = store.product.connection({
+    title: 'Fixture',
+    protocol: 'fixture-sse-v1',
+    endpoint: 'http://127.0.0.1:9',
+    enabled: true,
+  });
+  const model = store.product.model({
+    title: 'Fixture',
+    connectionId: connection.id,
+    modelId: 'fixture',
+    temperature: null,
+    maxOutputTokens: 1024,
+  });
+  const task = workspace.enqueue(conversation.id, randomUUID(), 'Review', {
+    scope: conversation.scope,
+    model: store.product.modelSnapshot(model.id),
+    history: [{ id: 'prior', role: 'assistant', text: 'x'.repeat(1024 * 1024) }],
+    persona: '',
+    limits: { totalCalls: 8, helperCalls: 8, artifacts: 1 },
+  });
+  workspace.start(task.id, 'owner');
+  const result = { text: 'r'.repeat(256 * 1024) };
+  for (let i = 0; i < 5; i++)
+    workspace.event(conversation.id, task.id, 'tool.finished', {
+      name: 'resource.read',
+      denied: false,
+      result,
+    });
+  const updates = workspace.events(conversation.id, 0, 'updates');
+  expect(updates.every((e) => e.data === null)).toBe(true);
+  expect(Buffer.byteLength(JSON.stringify(updates))).toBeLessThan(4000);
+  workspace.operation(task.id, 'read-receipt', {}, () => result);
+  const usage = { modelCalls: 1, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+  const artifact = workspace.saveArtifact(task.id, 'artifact', 'Draft', 'A short draft.', usage);
+  workspace.finish(task.id, 'owner', 1, 'completed', 'Done', null, [
+    { id: artifact.id, revision: artifact.revision },
+  ]);
+  const edited = workspace.editArtifact(artifact.id, 1, 'Edit 1', 'edit-1');
+  workspace.editArtifact(artifact.id, 2, 'Edit 2', 'edit-2');
+  expect(workspace.editArtifact(artifact.id, 1, 'Edit 1', 'edit-1')).toEqual(edited);
+  expect(workspace.artifact(artifact.id).text).toBe('Edit 2');
+  expect(
+    store.db
+      .prepare('PRAGMA table_info(helper_artifacts)')
+      .all()
+      .map((r) => r.name)
+  ).not.toContain('snapshot');
+  expect(
+    workspace
+      .events(conversation.id)
+      .filter((e) => e.kind === 'tool.finished')
+      .every((e) => (e.data as { detailsOmitted?: boolean }).detailsOmitted)
+  ).toBe(true);
+  expect(Buffer.byteLength(JSON.stringify(workspace.events(conversation.id)))).toBeLessThan(6000);
+  expect(
+    Buffer.byteLength(
+      JSON.stringify(store.db.prepare('SELECT result FROM helper_operations').all())
+    )
+  ).toBeLessThan(1000);
+  expect(() => workspace.operation(task.id, 'read-receipt', {}, () => result)).toThrow(
+    'HELPER_TASK_NO_LONGER_ACTIVE'
+  );
+});
+
+test('real prior schema-1 output upgrades with original text, translation and oneoff semantics intact', () => {
+  const path = mkdtempSync(join(tmpdir(), 'uimori-real-migration-'));
+  const db = new DatabaseSync(join(path, 'app.sqlite'));
+  db.exec('PRAGMA foreign_keys=OFF');
+  db.exec(readFileSync(new URL('./fixtures/personal-schema-1.sql', import.meta.url), 'utf8'));
+  expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  expect(db.prepare('PRAGMA user_version').get()?.user_version).toBe(1);
+  expect(db.prepare('SELECT count(*) AS n FROM helper_delegations').get()?.n).toBe(1);
+  const original = db.prepare('SELECT id,text FROM sources ORDER BY id').all();
+  const translations = db.prepare('SELECT job_id,result FROM job_results ORDER BY job_id').all();
+  db.close();
+  const owner = { store: new Store(join(path, 'app.sqlite')), path };
+  owned.push(owner);
+  const store = owner.store,
+    chat = store.chats()[0]!;
+  const options = new ChatOptionsStore(store),
+    state = options.get(chat.id);
+  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(DATABASE_SCHEMA_VERSION);
+  expect(store.db.prepare('SELECT id,text FROM sources ORDER BY id').all()).toEqual(original);
+  expect(store.db.prepare('SELECT job_id,result FROM job_results ORDER BY job_id').all()).toEqual(
+    translations
+  );
+  expect(state.fixedValues).toEqual({ tone: 'bold' });
+  expect(state.pending.map((p) => p.values)).toEqual([{ tone: 'warm' }]);
+  expect(state.pending[0]).not.toHaveProperty('headHash');
+  const request = {
+    request: 'Continue',
+    expectedRevision: chat.headRevision,
+    expectedSettingsRevision: chat.settingsRevision,
+    branchId: state.branchId,
+    idempotencyKey: randomUUID(),
+  };
+  const run = store.createRun(chat.id, request, (c) => ({
+    chatId: c.id,
+    parentRevision: c.headRevision,
+    settings: c.settings,
+    settingsRevision: c.settingsRevision,
+    request: request.request,
+    history: store.history(c.headRevision),
+    resources: [],
+    profile: store.product.snapshot(c.id),
+  }));
+  expect(run.run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'warm' });
+  expect(options.get(chat.id).pending).toEqual([]);
+  expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   store.close();
-  owner.store = new Store(join(owner.path, 'app.sqlite'));
-  const reopened = owner.store;
-  expect(reopened.db.prepare('PRAGMA user_version').get()?.user_version).toBe(
+  owner.store = new Store(join(path, 'app.sqlite'));
+  expect(owner.store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(
     DATABASE_SCHEMA_VERSION
   );
-  expect(
-    reopened.db.prepare("SELECT name FROM sqlite_schema WHERE name='helper_delegations'").get()
-  ).toBeUndefined();
-  expect(
-    reopened.db
-      .prepare('SELECT id FROM chat_option_pending')
-      .all()
-      .map((row) => row.id)
-  ).toEqual(['kept']);
-  expect(reopened.history(chat.headRevision).map((item) => item.text)).toEqual(original);
-  expect(reopened.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 });

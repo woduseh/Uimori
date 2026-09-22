@@ -5,11 +5,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import {
-  ChatOptionsStore,
-  optionBinding,
-  type ChatOptionAuthority,
-} from '../server/chat-options.js';
+import { ChatOptionsStore, optionBinding } from '../server/chat-options.js';
 import {
   defaultPromptWorkspace,
   freezeCurrentPrompts,
@@ -31,7 +27,7 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true });
   }
 });
-const authority: ChatOptionAuthority = { requestId: 'direct-ui-action', assert: () => {} };
+const requestId = 'direct-ui-action';
 function database() {
   const path = mkdtempSync(join(tmpdir(), 'uimori-chat-options-')),
     store = new Store(join(path, 'test.sqlite'));
@@ -70,9 +66,8 @@ function stage(f: ReturnType<typeof fixture>, values: OptionValues) {
     f.chat.id,
     {
       ...input(f, values),
-      expectedHeadRevision: f.service.get(f.chat.id).headRevision,
     },
-    authority
+    requestId
   );
 }
 
@@ -113,7 +108,7 @@ function complete(f: ReturnType<typeof fixture>, id: string) {
 }
 test('global, chat fixed and oneoff values resolve once in the reservation transaction', () => {
   const f = fixture();
-  f.service.fixed(f.chat.id, input(f, { tone: 'bold' }), authority);
+  f.service.fixed(f.chat.id, input(f, { tone: 'bold' }), requestId);
   stage(f, { detail: '4' });
   stage(f, { tone: 'warm', detail: '7' });
   const cmd = command(f),
@@ -155,21 +150,13 @@ test('failed reservation rolls back oneoff consumption and changed global values
   expect(value.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'warm', detail: '5' });
   expect(f.service.get(f.chat.id).pending).toEqual([]);
 });
-test('inactive tasks, stale revisions and changed definitions cannot overwrite options', () => {
+test('stale revisions and changed definitions cannot overwrite options', () => {
   const f = fixture(),
     initial = input(f, { tone: 'bold' });
+  const accepted = f.service.fixed(f.chat.id, initial, requestId);
+  expect(f.service.fixed(f.chat.id, initial, requestId)).toEqual(accepted);
   expect(() =>
-    f.service.fixed(f.chat.id, initial, {
-      ...authority,
-      assert: () => {
-        throw new Error('denied');
-      },
-    })
-  ).toThrow('denied');
-  const accepted = f.service.fixed(f.chat.id, initial, authority);
-  expect(f.service.fixed(f.chat.id, initial, authority)).toEqual(accepted);
-  expect(() =>
-    f.service.fixed(f.chat.id, { ...initial, operationId: randomUUID() }, authority)
+    f.service.fixed(f.chat.id, { ...initial, operationId: randomUUID() }, requestId)
   ).toThrow(/변경/);
   expect(() =>
     f.service.fixed(
@@ -178,16 +165,16 @@ test('inactive tasks, stale revisions and changed definitions cannot overwrite o
         ...input(f, { tone: 'bold' }),
         binding: { ...accepted.binding, owner: 'preset:unrelated' },
       },
-      authority
+      requestId
     )
   ).toThrow(/소속/);
   expect(() =>
-    f.service.fixed(f.chat.id, input(f, { modelId: 'foreign-model' }), authority)
+    f.service.fixed(f.chat.id, input(f, { modelId: 'foreign-model' }), requestId)
   ).toThrow();
 });
 test('definition changes block pending choices and never silently apply old fixed or oneoff fields', () => {
   const f = fixture();
-  f.service.fixed(f.chat.id, input(f, { tone: 'bold' }), authority);
+  f.service.fixed(f.chat.id, input(f, { tone: 'bold' }), requestId);
   stage(f, { detail: '4' });
   const current = promptWorkspace(f.store);
   updatePromptWorkspace(f.store, {
@@ -207,7 +194,7 @@ test('definition changes block pending choices and never silently apply old fixe
     f.chat.id,
     state.pending[0].id,
     { expectedRevision: state.revision, branchId: state.branchId, operationId: randomUUID() },
-    authority
+    requestId
   );
   expect(run(f).run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'calm', detail: '1' });
 });

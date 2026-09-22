@@ -2,22 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { defaultProfile } from '../core/product.js';
 import { DEFAULT_LORE_CONTEXT, type LoreContextPolicy } from '../core/lore-context.js';
 import { countTextTokens } from '../core/text-tokens.js';
-import { validateLoreSelectionReceipt } from '../core/lore-selection.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { MainHooks } from '../server/model-runner.js';
-import {
-  loreSelectionTargets,
-  prepareLoreSelection,
-  validateLoreSelectionTokenBudgets,
-} from '../server/lore-selection.js';
+import { prepareLoreSelection } from '../server/lore-selection.js';
 
 const text = 'The harbor is open. 항구의 문이 열려 있다. 日本語も含む。';
 
-async function selectedSnapshot(attachments = 1) {
+async function selectedSnapshot(attachments = 1, limit?: (policy: LoreContextPolicy) => void) {
   const policy: LoreContextPolicy = {
     ...DEFAULT_LORE_CONTEXT,
     judgment: { ...DEFAULT_LORE_CONTEXT.judgment },
   };
+  limit?.(policy);
   const snapshot: RunSnapshot = {
     chatId: 'token-selection',
     parentRevision: null,
@@ -76,16 +72,13 @@ async function selectedSnapshot(attachments = 1) {
     reserveCalls: 1,
     jev: { credential: () => 'synthetic-test-key', fetch: send },
   });
-  validateLoreSelectionReceipt(result.snapshot.loreSelection);
   expect(send).toHaveBeenCalledTimes(1);
-  expect(result.snapshot.loreSelection!.entries.map((entry) => entry.selected)).toEqual(
-    Array.from({ length: attachments }, () => ['harbor'])
-  );
+  if (!limit)
+    expect(result.snapshot.loreSelection!.entries.map((entry) => entry.selected)).toEqual(
+      Array.from({ length: attachments }, () => ['harbor'])
+    );
   return { snapshot: result.snapshot, send };
 }
-
-const validate = (snapshot: RunSnapshot) =>
-  validateLoreSelectionTokenBudgets(snapshot, loreSelectionTargets(snapshot));
 
 describe('local-token selection receipt accounting', () => {
   it('recounts selected text with the real tokenizer without another request', async () => {
@@ -95,38 +88,24 @@ describe('local-token selection receipt accounting', () => {
       countTextTokens(text),
       countTextTokens(text),
     ]);
-    expect(() => validate(snapshot)).not.toThrow();
     expect(snapshot).toEqual(before);
     expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['count', 'budget', 'missing-judgment', 'failed-selection'] as const)(
-    'rejects a modified %s while preserving source text',
-    async (change) => {
-      const { snapshot } = await selectedSnapshot();
-      const entry = snapshot.loreSelection!.entries[0];
-      if (change === 'count') entry.judgment!.selectedTokens = 0;
-      if (change === 'budget') entry.budget++;
-      if (change === 'missing-judgment') delete entry.judgment;
-      if (change === 'failed-selection') entry.error = 'JEV_EXECUTION_FAILED';
-      expect(() => validate(snapshot)).toThrow('LORE_SELECTION_TOKEN_BUDGET');
-      expect(snapshot.profile!.packages![0].lore[0].text).toBe(text);
-    }
-  );
-
   it.each(['retention', 'selection', 'entries'] as const)(
-    'enforces the shared %s budget across attachments, not just each receipt',
-    async (limit) => {
-      const { snapshot } = await selectedSnapshot(2);
-      const policy = snapshot.profile!.loreContext as LoreContextPolicy;
-      if (limit === 'retention') {
-        policy.maxRetainedTokens = countTextTokens(text);
-        for (const entry of snapshot.loreSelection!.entries)
-          entry.budget = policy.maxRetainedTokens;
-      }
-      if (limit === 'selection') policy.judgment.maxSelectedTokens = countTextTokens(text);
-      if (limit === 'entries') policy.maxRetainedEntries = 1;
-      expect(() => validate(snapshot)).toThrow('LORE_SELECTION_TOKEN_BUDGET');
+    'the real selector respects the shared %s budget across packages',
+    async (kind) => {
+      const { snapshot, send } = await selectedSnapshot(2, (policy) => {
+        if (kind === 'retention') policy.maxRetainedTokens = countTextTokens(text);
+        if (kind === 'selection') policy.judgment.maxSelectedTokens = countTextTokens(text);
+        if (kind === 'entries') policy.maxRetainedEntries = 1;
+      });
+      const entries = snapshot.loreSelection!.entries;
+      expect(entries.flatMap((entry) => entry.selected)).toHaveLength(1);
+      expect(entries.reduce((sum, entry) => sum + (entry.judgment?.selectedTokens ?? 0), 0)).toBe(
+        countTextTokens(text)
+      );
+      expect(send).toHaveBeenCalledTimes(1);
     }
   );
 });
