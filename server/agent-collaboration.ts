@@ -1,5 +1,13 @@
 import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
-import type { AgentDefinition, AgentConsultationContext } from '../core/agent-collaboration.js';
+import type {
+  AgentDefinition,
+  AgentConsultationContext,
+  AgentAdvice,
+} from '../core/agent-collaboration.js';
+import {
+  CONTEXT_DERIVED_GUIDANCE,
+  CONTEXT_RETRIEVAL_GUIDANCE,
+} from '../core/context-summary-policy.js';
 import type { Connection, ModelSnapshot } from '../core/product.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
@@ -16,7 +24,7 @@ import type { RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import type { MainHooks } from './model-runner.js';
 import { MAIN_READ_TOOLS } from './main-request.js';
 import { agentSharedOptions } from './agent-shared-options.js';
-import { AgentContextError, resolveAgentContext } from './agent-context.js';
+import { AgentContextError, resolveAgentContext, adviceOrigins } from './agent-context.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
@@ -30,7 +38,7 @@ export function buildAgentProviderRequest(
   question: string,
   results: readonly ToolEvent[] = [],
   opaqueState?: Json,
-  previousConsultations: readonly ToolEvent[] = [],
+  previousConsultations: readonly AgentAdvice[] = [],
   consultationContext?: AgentConsultationContext
 ): ProviderRequest {
   const input = buildMainInput(snapshot, [], {
@@ -51,7 +59,7 @@ export function buildAgentProviderRequest(
       ? { providerOptions: structuredClone(target.providerOptions) }
       : {}),
     stable: {
-      contract: `${CONTRACT}\n${AUTHOR_NOTE_GUIDANCE}${input.outline ? `\nFor advice about the planned writing unit: ${OUTLINE_CONTRACT}` : ''}\nKeep the final advice within ${agent.maxOutputChars} characters.\n\nShared instructions:\n${collaboration.sharedInstructions}\n\nAdvisor instructions:\n${agent.instructions}`,
+      contract: `${CONTRACT}\n${CONTEXT_DERIVED_GUIDANCE}\n${CONTEXT_RETRIEVAL_GUIDANCE}\n${AUTHOR_NOTE_GUIDANCE}${input.outline ? `\nFor advice about the planned writing unit: ${OUTLINE_CONTRACT}` : ''}\nKeep the final advice within ${agent.maxOutputChars} characters.\n\nShared instructions:\n${collaboration.sharedInstructions}\n\nAdvisor instructions:\n${agent.instructions}`,
       tools: structuredClone(tools),
     },
     generation: generationFromModel(target),
@@ -71,16 +79,7 @@ export function buildAgentProviderRequest(
         sharedOptions,
         ...(previousConsultations.length
           ? {
-              previousConsultations: previousConsultations.map((event) => {
-                const result = event.result as Record<string, unknown>;
-                return {
-                  question: result.question,
-                  status: result.status,
-                  text: result.text,
-                  truncated: result.truncated,
-                  ...(result.contextHash ? { contextHash: result.contextHash } : {}),
-                };
-              }),
+              previousConsultations,
             }
           : {}),
       }),
@@ -100,9 +99,9 @@ export function createAgentCollaboration(
 ) {
   const config = snapshot.profile?.promptPresets?.main?.program.collaboration;
   if (!config?.enabled) return undefined;
-  const cached = new Map<string, ToolEvent>();
+  const cached = new Map<string, ToolEvent & { result: AgentAdvice }>();
   const spentByAgent = new Map<string, number>();
-  const previousByAgent = new Map<string, ToolEvent[]>();
+  const previousByAgent = new Map<string, AgentAdvice[]>();
   let spentCalls = 0;
   const bootstrap: ToolEvent[] = [];
 
@@ -154,20 +153,23 @@ export function createAgentCollaboration(
         ...structuredClone(previous),
         callId,
         args: structuredClone(args),
-        result: { ...(previous.result as Record<string, unknown>), cached: true },
+        result: { ...structuredClone(previous.result), cached: true },
       };
     const usage = emptyUsage();
-    const evidence: unknown[] = [];
-    const finish = (status: string, error: string | null, text = ''): ToolEvent => {
+    const evidence: AgentAdvice['evidence'] = [];
+    const finish = (status: AgentAdvice['status'], error: string | null, text = ''): ToolEvent => {
       const truncated = text.length > agent.maxOutputChars;
       let bounded = text.slice(0, agent.maxOutputChars);
       if (truncated && /[\uD800-\uDBFF]$/u.test(bounded)) bounded = bounded.slice(0, -1);
-      const event: ToolEvent = {
+      const event: ToolEvent & { result: AgentAdvice } = {
         callId,
         name: 'agents.consult',
         args: { ...structuredClone(args), agentId: agent.id, question },
         denied: false,
         result: {
+          kind: 'advice',
+          consultationId: callId,
+          basedOn: adviceOrigins(consultationContext),
           agentId: agent.id,
           title: agent.title,
           question,
@@ -180,6 +182,7 @@ export function createAgentCollaboration(
           evidence,
           source: {
             chatId: snapshot.chatId,
+            ...(snapshot.branchId ? { branchId: snapshot.branchId } : {}),
             parentRevision: snapshot.parentRevision,
             prompt: {
               id: snapshot.profile!.promptPresets!.main!.id,
@@ -190,7 +193,7 @@ export function createAgentCollaboration(
       };
       cached.set(requestKey, structuredClone(event));
       const previousConsultations = previousByAgent.get(agent.id) ?? [];
-      previousConsultations.push(structuredClone(event));
+      previousConsultations.push(structuredClone(event.result));
       previousByAgent.set(agent.id, previousConsultations);
       return event;
     };
@@ -308,8 +311,12 @@ export function createAgentCollaboration(
           tool: event.name,
           args: event.args,
           reference: source?.reference ?? null,
+          ...(source ? { source } : {}),
+          ...(read?.range ? { range: read.range } : {}),
+          ...(read?.truncated !== undefined ? { truncated: read.truncated } : {}),
+          ...(read?.continuation ? { continuation: read.continuation } : {}),
           ...(event.name === 'story.read'
-            ? { source, keptRanges: read?.keptRanges, excludedRanges: read?.excludedRanges }
+            ? { keptRanges: read?.keptRanges, excludedRanges: read?.excludedRanges }
             : {}),
           ...(event.name === 'notes.read'
             ? {

@@ -1,6 +1,7 @@
 import type { Json, ProviderRequest, ProviderResult } from './transport.js';
 import { ProviderContractError } from './provider-errors.js';
 import { validateProviderPrompt } from './risu-prompt.js';
+import { NATIVE_HOST_CONTEXT_ID, nativeHostContextText } from './provider-messages.js';
 
 export const CODEX_ENDPOINT = 'codex://local';
 /** Native tools that do not require access to the Uimori host filesystem or credentials. */
@@ -60,7 +61,16 @@ export function buildCodexTurn(request: ProviderRequest): {
         : {}),
       ...(prompt
         ? {
-            orderedMessages: prompt.messages,
+            orderedMessages: prompt.messages.filter(
+              (message) =>
+                !(
+                  message.id === NATIVE_HOST_CONTEXT_ID &&
+                  message.provenance.blockId === NATIVE_HOST_CONTEXT_ID &&
+                  message.role === 'user' &&
+                  message.content.length === 1 &&
+                  message.content[0].text === nativeHostContextText(request)
+                )
+            ),
             cacheDiagnostics: prompt.cachePlan.map((anchor) => ({
               ...anchor,
               status: 'not-applied',

@@ -1,5 +1,5 @@
 /** Data-only collaboration settings. Read scopes never grant mutation or execution tools. */
-import type { ToolEvent } from './types.js';
+import type { ToolEvent, Usage } from './types.js';
 
 export const AGENT_CONTEXT_REFS_MAX = 8;
 export const AGENT_DRAFT_CHARS_MAX = 12_000;
@@ -8,6 +8,29 @@ export type AgentConsultationContext = {
   hash: string;
   references: (ToolEvent & { kind: 'advice' | 'read-result' })[];
   draft?: { status: 'uncommitted'; text: string };
+};
+
+export type AdviceOrigin = { agentId: string; consultationId: string };
+/** Host attribution and read receipts, not a model-asserted verdict that the advice is true. */
+export type AgentAdvice = AdviceOrigin & {
+  kind: 'advice';
+  title: string;
+  question: string;
+  status: 'completed' | 'unavailable' | 'cancelled';
+  error: string | null;
+  text: string;
+  truncated: boolean;
+  contextHash?: string;
+  cached?: true;
+  usage: Usage;
+  evidence: Record<string, unknown>[];
+  basedOn: AdviceOrigin[];
+  source: {
+    chatId: string;
+    branchId?: string;
+    parentRevision: string | null;
+    prompt: { id: string; revision: number };
+  };
 };
 
 export type AgentReadScope = 'knowledge' | 'skills' | 'notes' | 'story';

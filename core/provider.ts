@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { conversationSummary } from './context-projection.js';
 import type { ModelInput, Resource, RunSnapshot, ToolEvent, Usage } from './types.js';
 import { executeStoryRead, STORY_READ_NAMES } from './story-context.js';
 import { validateSourceHistory } from './source-history.js';
@@ -86,7 +87,7 @@ function collectRoleResources(snapshot: RunSnapshot, packages: readonly Resolved
   return resources;
 }
 export type MainInput = ModelInput & {
-  contextSummary?: string;
+  contextSummary?: NonNullable<ReturnType<typeof conversationSummary>>;
   pinnedSources?: {
     risuSource?: Resource['risuSource'];
     id: string;
@@ -199,7 +200,7 @@ export function buildMainInput(
     input.history = structuredClone(
       validateSourceHistory(snapshot).filter((entry) => kept.has(entry.revision))
     );
-    if (snapshot.contextPlan.summary) input.contextSummary = snapshot.contextPlan.summary;
+    input.contextSummary = conversationSummary(snapshot);
     for (const tool of STORY_READ_NAMES) if (!input.tools.includes(tool)) input.tools.push(tool);
   }
   if (snapshot.outline) {

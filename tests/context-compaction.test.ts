@@ -423,7 +423,7 @@ describe('input context projection and durable summary calls', () => {
         .join('\n');
     expect(rendered).toContain(fixedPrompt);
     expect(rendered).toContain(currentRequest);
-    expect(rendered).toContain(plan.summary);
+    expect(rendered).toContain(`"text":${JSON.stringify(plan.summary)}`);
     for (const ref of plan.compacted)
       expect(rendered).not.toContain(
         original.history.find((item) => item.revision === ref.revision)!.text

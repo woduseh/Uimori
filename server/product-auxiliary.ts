@@ -8,6 +8,7 @@ import { judgeImagePlacement } from './image-judgment.js';
 import { nativeImageGuidance } from './risu-native-images.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
+import { withNativeHostContext } from '../core/provider-messages.js';
 import {
   compileTranslationPrompt,
   displayInput,
@@ -293,7 +294,7 @@ function providerInput(
       message.content.some((part) => part.text.includes(value))
     );
   const notes = input.role === 'translation' ? snapshot.story?.notes : undefined;
-  return {
+  return withNativeHostContext({
     role: input.role,
     modelId,
     stable: {
@@ -368,7 +369,7 @@ function providerInput(
       results: json(input.results),
     },
     ...(opaqueState !== undefined ? { opaqueState } : {}),
-  };
+  });
 }
 
 /** Server job execution is separate from SQLite claim/finish transactions. */

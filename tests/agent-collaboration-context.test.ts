@@ -331,3 +331,123 @@ test('oversized serialized references and drafts can be corrected without spendi
       result: { code: 'ADVISOR_CONTEXT_TOO_LARGE' },
     });
 });
+
+test('cached and forwarded advice retains original identity, read ranges and flat upstream attribution', async () => {
+  let mainCalls = 0,
+    aCalls = 0;
+  const firstQuestion = 'What can the source establish about the keeper?';
+  const state = await fixture(
+    async (body, target, _number, wire) => {
+      if (wire.agentId === 'a') {
+        if (++aCalls === 1) {
+          await send(target, [
+            call(body, 'knowledge.read', { id: state.lore.id, offset: 3, limit: 42 }, 'a-read'),
+          ]);
+        } else
+          await send(target, [
+            message('A_INTERPRETATION: the keeper may be hesitant; not established fact.'),
+          ]);
+        return;
+      }
+      if (wire.agentId === 'b') {
+        const ref = packet(body).source.consultationContext.references[0];
+        expect(ref).toMatchObject({
+          callId: 'a-cached',
+          kind: 'advice',
+          result: {
+            kind: 'advice',
+            agentId: 'a',
+            consultationId: 'a-original',
+            cached: true,
+            evidence: [
+              {
+                tool: 'knowledge.read',
+                args: { id: state.lore.id, offset: 3, limit: 42 },
+                source: {
+                  id: state.lore.id,
+                  revision: state.lore.revision,
+                  hash: expect.any(String),
+                },
+                range: { start: 3, end: 45 },
+                truncated: true,
+              },
+            ],
+          },
+        });
+        await send(target, [
+          message('B_INTERPRETATION: A suggested hesitation; this remains uncertain.'),
+        ]);
+        return;
+      }
+      if (wire.agentId === 'c') {
+        const ref = packet(body).source.consultationContext.references[0];
+        expect(ref.result).toMatchObject({
+          agentId: 'b',
+          consultationId: 'b-original',
+          basedOn: [{ agentId: 'a', consultationId: 'a-original' }],
+        });
+        await send(target, [
+          message('C_PROPOSAL: let the keeper pause; no new event has occurred.'),
+        ]);
+        return;
+      }
+      switch (++mainCalls) {
+        case 1:
+          await send(target, [
+            call(body, 'agents.consult', { agentId: 'a', question: firstQuestion }, 'a-original'),
+          ]);
+          break;
+        case 2:
+          await send(target, [
+            call(body, 'agents.consult', { agentId: 'a', question: firstQuestion }, 'a-cached'),
+            call(
+              body,
+              'agents.consult',
+              { agentId: 'b', question: 'Assess that interpretation.', contextRefs: ['a-cached'] },
+              'b-original'
+            ),
+          ]);
+          break;
+        case 3:
+          await send(target, [
+            call(
+              body,
+              'agents.consult',
+              {
+                agentId: 'c',
+                question: 'Offer a possibility, not history.',
+                contextRefs: ['b-original'],
+              },
+              'c-original'
+            ),
+          ]);
+          break;
+        default:
+          expect(mainCalls).toBe(4);
+          await send(target, [message(finalText)]);
+      }
+    },
+    {
+      maxCalls: 12,
+      collaboration: collaboration({
+        maxCalls: 6,
+        agents: [agent('a', { maxCalls: 2 }), agent('b'), agent('c')],
+      }),
+    }
+  );
+  const run = await observedCompletion(state, (await state.start()).id);
+  expect(run.status).toBe('completed');
+  expect(aCalls).toBe(2); // The repeated question reuses the original opinion, not another model call.
+  const results = consults(run).map((event) => event.result);
+  expect(results.map((result) => result.consultationId)).toEqual([
+    'a-original',
+    'a-original',
+    'b-original',
+    'c-original',
+  ]);
+  expect(results.at(-1).basedOn).toEqual([
+    { agentId: 'b', consultationId: 'b-original' },
+    { agentId: 'a', consultationId: 'a-original' },
+  ]);
+  expect((await state.detail()).sources.map((source) => source.text)).toEqual([finalText]);
+});
