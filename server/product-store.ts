@@ -836,61 +836,7 @@ export class ProductStore {
     if (!b) throw new HttpError(404, 'Branch not found');
     return b;
   }
-  renameBranch(chatId: string, branchId: string, value: unknown): Branch {
-    const body = record(value);
-    fields(body, ['title', 'expectedRevision']);
-    const title = text(body.title, 'branch title', 200);
-    const expected = number(body.expectedRevision, 'branch revision');
-    return this.store.transaction(() => {
-      this.store.chat(chatId);
-      const branch = this.branch(chatId, branchId);
-      if (branch.revision !== expected)
-        throw new HttpError(
-          409,
-          '분기 이름이 다른 곳에서 변경됐어요. 최신 이름을 확인한 뒤 다시 저장해 주세요.'
-        );
-      this.db
-        .prepare('UPDATE branches SET title=?,revision=revision+1 WHERE id=?')
-        .run(title, branchId);
-      // Saving the same text still records intent so an automatic summary never overwrites it.
-      this.store.event(chatId, 'branch.title.manual', branchId);
-      this.store.event(chatId, 'branch.renamed', branchId);
-      return this.branch(chatId, branchId);
-    });
-  }
-  setDefaultBranch(chatId: string, branchId: string, value: unknown): Branch {
-    const body = record(value);
-    fields(body, ['expectedRevision', 'expectedDefaultBranchId', 'expectedDefaultBranchRevision']);
-    const expected = number(body.expectedRevision, 'branch revision');
-    const expectedDefaultId = text(body.expectedDefaultBranchId, 'default branch ID', 100);
-    const expectedDefaultRevision = number(
-      body.expectedDefaultBranchRevision,
-      'default branch revision'
-    );
-    return this.store.transaction(() => {
-      this.store.chat(chatId);
-      const current = this.branch(chatId);
-      const target = this.branch(chatId, branchId);
-      if (
-        target.revision !== expected ||
-        current.id !== expectedDefaultId ||
-        current.revision !== expectedDefaultRevision
-      )
-        throw new HttpError(409, '분기가 변경됐어요. 목록을 새로 확인하고 다시 선택해 주세요.');
-      if (target.default) return target;
-      this.db
-        .prepare('UPDATE branches SET is_default=0,revision=revision+1 WHERE id=?')
-        .run(current.id);
-      this.db
-        .prepare('UPDATE branches SET is_default=1,revision=revision+1 WHERE id=?')
-        .run(target.id);
-      this.db
-        .prepare('UPDATE chats SET head_revision=? WHERE id=?')
-        .run(target.headRevision, chatId);
-      this.store.event(chatId, 'branch.default.changed', target.id);
-      return this.branch(chatId, target.id);
-    });
-  }
+
   startAttempt(
     chatId: string | null,
     runId: string | null,
@@ -1078,7 +1024,7 @@ export class ProductStore {
     return {
       ...(summary ? { contentBodiesOmitted: true, assetsOmitted: true } : {}),
       organization: this.store.libraryOrganization.snapshot(),
-      promptPresets: this.all('prompt-preset'),
+      promptPresets: summary ? this.libraryMetadata().prompts : this.all('prompt-preset'),
       promptCombinations: this.all('prompt-combination'),
       contents,
       connections: this.all('connection'),

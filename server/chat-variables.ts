@@ -76,13 +76,13 @@ function applyChatVariablesInTransaction(
   const payloadHash = jsonPayloadHash(command);
   const receipt = store.db
     .prepare(
-      'SELECT payload_hash,result FROM chat_variable_journal WHERE chat_id=? AND branch_id=? AND request_key=?'
+      'SELECT payload_hash FROM chat_variable_journal WHERE chat_id=? AND branch_id=? AND request_key=?'
     )
     .get(chatId, branchId, command.idempotencyKey);
   if (receipt) {
     if (receipt.payload_hash !== payloadHash)
       throw new HttpError(409, 'CHAT_VARIABLE_IDEMPOTENCY_CONFLICT');
-    return validateChatVariableState(JSON.parse(String(receipt.result)));
+    return readChatVariables(store, chatId, branchId);
   }
   if (checkActivity && chatVariablesPending(store, chatId, branchId))
     throw new HttpError(409, 'CHAT_VARIABLE_BRANCH_BUSY');
@@ -101,15 +101,14 @@ function applyChatVariablesInTransaction(
     .run(chatId, branchId, result.revision, JSON.stringify(result.values));
   store.db
     .prepare(
-      'INSERT INTO chat_variable_journal(chat_id,branch_id,request_key,payload_hash,payload,result,created_at) VALUES(?,?,?,?,?,?,?)'
+      'INSERT INTO chat_variable_journal(chat_id,branch_id,request_key,payload_hash,revision,created_at) VALUES(?,?,?,?,?,?)'
     )
     .run(
       chatId,
       branchId,
       command.idempotencyKey,
       payloadHash,
-      JSON.stringify(command),
-      JSON.stringify(result),
+      result.revision,
       new Date().toISOString()
     );
   store.event(chatId, 'chat.variables.changed', branchId);

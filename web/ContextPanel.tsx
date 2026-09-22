@@ -1,11 +1,7 @@
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { CheckIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
-import type {
-  ContextDetail,
-  ContextCheckpointRef as CheckpointRef,
-  ContextJob as StoredContextJob,
-} from '../core/context-plan.js';
+import type { ContextDetail, ContextJob as StoredContextJob } from '../core/context-plan.js';
 import type { AuthorNote } from '../core/notes.js';
 import { AuthorNotesEditor } from './AuthorNotesEditor.js';
 import { api, ApiError } from './api.js';
@@ -21,8 +17,6 @@ const origins = {
   edit: '직접 편집',
   model: '모델 작성',
 };
-const checkpointKey = (checkpoint?: CheckpointRef | null) =>
-  checkpoint ? `${checkpoint.id}/${checkpoint.revision}/${checkpoint.hash}` : '';
 
 /** Mounted across scope refreshes so a new source or event never discards a local editor. */
 export function ContextPanel({
@@ -85,10 +79,6 @@ export function ContextPanel({
       detail &&
       (draft.revision !== detail.activeRevision || draft.headRevision !== headRevision)
   );
-  const previous =
-    detail?.checkpoints.filter(
-      (entry) => checkpointKey(entry) !== checkpointKey(detail.checkpoint)
-    ) ?? [];
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -390,46 +380,6 @@ export function ContextPanel({
                 </button>
               </div>
             </form>
-          )}
-          {previous.length > 0 && (
-            <details className="context-history">
-              <summary>이전 요약과 미적용 결과 {previous.length}개</summary>
-              <ul className="story-records">
-                {previous.map((entry) => (
-                  <li key={checkpointKey(entry)}>
-                    <small>
-                      {origins[entry.origin]} · {new Date(entry.createdAt).toLocaleString()} ·{' '}
-                      {entry.activated ? '사용한 요약' : '미적용 결과'}
-                    </small>
-                    <p className="context-text">{entry.plan.summary}</p>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={
-                        busy || Boolean(draft) || notesDirty || !current || !entry.plan.summary
-                      }
-                      onClick={() =>
-                        void write(
-                          `${base}/summary`,
-                          keyed({
-                            ...command(),
-                            restoreCheckpoint: {
-                              id: entry.id,
-                              revision: entry.revision,
-                              hash: entry.hash,
-                            },
-                          }),
-                          'PUT',
-                          '선택한 요약으로 되돌렸어요. 이전 실행 기록은 그대로 유지해요.'
-                        )
-                      }
-                    >
-                      이 요약으로 되돌리기
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </details>
           )}
         </>
       )}

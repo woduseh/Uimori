@@ -170,38 +170,6 @@ export class LibraryOrganizationStore {
       for (const item of items) move.run(destination, folderId, item.kind, item.id);
     });
   }
-  validateArchive() {
-    const snapshot = this.snapshot();
-    number(snapshot.revision, 'library organization revision');
-    for (const folder of snapshot.folders) {
-      text(folder.id, 'library folder ID', 100);
-      text(folder.title, 'library folder title', 200);
-      category(folder.category);
-      number(folder.sortPosition, 'library folder order', 0);
-    }
-    for (const kind of categories) {
-      const orders = snapshot.folders
-        .filter((folder) => folder.category === kind)
-        .map((folder) => folder.sortPosition);
-      if (orders.some((position, index) => position !== index))
-        throw new HttpError(400, 'Invalid library folder order');
-    }
-    const stored = new Set(snapshot.items.map(libraryItemKey));
-    for (const item of snapshot.items) {
-      itemKey({ kind: item.kind, id: item.id });
-      category(item.category);
-      this.store.product.get(item.kind, item.id);
-      if (
-        (item.kind === 'prompt-preset') !== (item.category === 'prompts') ||
-        (item.folderId !== null && this.folder(item.folderId).category !== item.category)
-      )
-        throw new HttpError(400, 'Invalid library placement category');
-    }
-    for (const kind of ['content', 'prompt-preset'] as const)
-      for (const item of this.store.product.all(kind))
-        if (!stored.has(libraryItemKey({ kind, id: item.id })))
-          throw new HttpError(400, 'Missing library placement');
-  }
 }
 
 export function libraryOrganizationRoutes(app: FastifyInstance, store: Store) {

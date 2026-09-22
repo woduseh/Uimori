@@ -80,7 +80,6 @@ export function helperContext(
 export function publishHelperContext(
   store: Store,
   task: HelperTask,
-  segment: number,
   summary: string,
   usage: Usage,
   estimatedInputTokens: number,
@@ -123,17 +122,9 @@ export function publishHelperContext(
     const activated =
       current.activeRevision === base.activeRevision &&
       isDeepStrictEqual(current.checkpoint, base.checkpoint);
-    const snapshot = {
-      kind: 'helper',
-      conversationId: task.conversationId,
-      taskId: task.id,
-      segment,
-      messageRefs: plan.compacted,
-      base,
-    };
     const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
     store.db
-      .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?,?)')
+      .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?)')
       .run(
         checkpoint.id,
         scopeKey,
@@ -142,7 +133,6 @@ export function publishHelperContext(
         checkpoint.hash,
         'automatic',
         JSON.stringify(plan),
-        JSON.stringify(snapshot),
         new Date().toISOString(),
         Number(activated)
       );

@@ -1,3 +1,4 @@
+import { pruneContextHistory } from './context-retention.js';
 import type { DatabaseSync } from 'node:sqlite';
 
 /** Keep billing and error summaries, not a second copy of every model conversation. */
@@ -23,6 +24,7 @@ export function releaseCompletedRunInputs(db: DatabaseSync, runId: string): void
   db.prepare('DELETE FROM model_inputs WHERE run_id=?').run(runId);
   db.prepare('DELETE FROM tool_events WHERE run_id=?').run(runId);
   releaseAttemptBodies(db, 'run', runId);
+  pruneContextHistory(db);
 }
 
 /** Retain image catalogs/targets and translation settings used by display and dependent jobs. */
@@ -48,4 +50,5 @@ export function releaseCompletedHelperInputs(db: DatabaseSync, taskId: string): 
     "UPDATE helper_artifact_jobs SET snapshot='{}' WHERE task_id=? AND status='completed'"
   ).run(taskId);
   releaseAttemptBodies(db, 'helper', taskId);
+  pruneContextHistory(db);
 }

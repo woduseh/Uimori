@@ -63,24 +63,25 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
   test.setTimeout(60000);
   await page.goto('/');
   await navigationAction(page, '프롬프트');
-  await page
-    .getByTestId('prompt-library')
-    .getByRole('button', { name: '새 프롬프트', exact: true })
-    .first()
-    .click();
   const editor = page.getByTestId('prompt-editor');
   const native = editor.getByRole('region', { name: 'Risu 프롬프트 원본 편집' });
   const selection = editor.getByLabel('불러올 프롬프트', { exact: true });
-  await expect(selection.locator('option[value="builtin"], option[value="new"]')).toHaveCount(0);
-  await expect(editor.getByTestId('prompt-composer')).toHaveCount(0);
   for (const [role, text] of [
     ['main', DEFAULT_MAIN_PROMPT],
     ['translation', DEFAULT_TRANSLATION_PROMPT],
   ] as const) {
+    await page
+      .getByTestId('prompt-library')
+      .getByRole('button', { name: '새 프롬프트', exact: true })
+      .first()
+      .click();
+    await expect(selection.locator('option[value="builtin"], option[value="new"]')).toHaveCount(0);
+    await native.getByRole('tab', { name: '기본 옵션', exact: true }).click();
     await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption(role);
-    await native.locator('details').first().locator('summary').click();
+    await native.getByRole('tab', { name: '구성', exact: true }).click();
     await expect(native.getByLabel('1번 프롬프트 본문', { exact: true })).toHaveValue(text);
     const title = `PLR 기본 ${role} ${crypto.randomUUID()}`;
+    await native.getByRole('tab', { name: '기본 옵션', exact: true }).click();
     await editor.getByLabel('프롬프트 이름', { exact: true }).fill(title);
     const savedResponse = page.waitForResponse(
       (response) =>
@@ -95,9 +96,12 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     );
     expect(persisted.ok()).toBe(true);
     expect((await persisted.json()).program).toEqual(createDefaultRisuPrompt(text, role));
+    if (role === 'main')
+      await editor.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   }
-  await native.getByText('정규식 스크립트', { exact: true }).click();
-  const regex = native.getByLabel('Risu 정규식 원본 JSON');
+  await native.getByRole('tab', { name: '정규식', exact: true }).click();
+  await native.getByText('고급 JSON 편집', { exact: true }).click();
+  const regex = native.getByLabel('Risu 정규식 JSON', { exact: true });
   await regex.fill('[{"unfinished":');
   await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
   await expect(regex).toHaveValue('[{"unfinished":');

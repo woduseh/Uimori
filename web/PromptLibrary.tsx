@@ -14,7 +14,7 @@ import {
   SelectIcon,
   SettingsIcon,
 } from './ui-icons.js';
-import type { Library, PromptPreset, PromptRole } from '../core/product.js';
+import type { Library, PromptPreset, PromptPresetSummary, PromptRole } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryFolderOf } from '../core/library-organization.js';
 import { api } from './api.js';
@@ -74,9 +74,22 @@ export function PromptLibrary({
     if (!library || handledPreset.current === initialPresetId) return;
     handledPreset.current = initialPresetId;
     const preset = library.promptPresets?.find((item) => item.id === initialPresetId);
-    if (preset) setEditing({ preset, role: preset.role });
-    else onError('선택한 프롬프트를 찾을 수 없어요.');
-    onInitialPresetHandled?.();
+    if (preset)
+      void api<PromptPreset>(`/prompt-presets/${encodeURIComponent(preset.id)}`)
+        .then((full) => {
+          if (handledPreset.current === initialPresetId) {
+            setEditing({ preset: full, role: full.role });
+            onInitialPresetHandled?.();
+          }
+        })
+        .catch((cause) => {
+          onError((cause as Error).message);
+          onInitialPresetHandled?.();
+        });
+    else {
+      onError('선택한 프롬프트를 찾을 수 없어요.');
+      onInitialPresetHandled?.();
+    }
   }, [initialPresetId, library, onError, onInitialPresetHandled]);
 
   const [dirty, setDirty] = useState(false);
@@ -156,6 +169,20 @@ export function PromptLibrary({
     organizer.organization?.folders.filter((item) => item.category === 'prompts') ?? [];
   const showFolders = folder === 'all' && !query.trim() && !selecting;
   const categoryEmpty = !!library && presets.length === 0 && !query;
+  async function editPreset(item: PromptPresetSummary) {
+    if (mutation.current) return;
+    mutation.current = true;
+    setBusy(true);
+    try {
+      const preset = await api<PromptPreset>(`/prompt-presets/${encodeURIComponent(item.id)}`);
+      changeEditing({ preset, role: preset.role });
+    } catch (cause) {
+      onError((cause as Error).message);
+    } finally {
+      mutation.current = false;
+      setBusy(false);
+    }
+  }
   function changeEditing(next: typeof editing) {
     pendingEditing.current = next;
     if (dirty) setDiscard(true);
@@ -181,7 +208,7 @@ export function PromptLibrary({
       current.revision
     );
   }
-  async function clone(item: PromptPreset) {
+  async function clone(item: PromptPresetSummary) {
     if (mutation.current) return;
     mutation.current = true;
     setBusy(true);
@@ -542,7 +569,7 @@ export function PromptLibrary({
                     type="button"
                     className="library-open-content"
                     aria-label={`${item.title} 프롬프트 편집`}
-                    onClick={() => changeEditing({ preset: item, role: item.role })}
+                    onClick={() => void editPreset(item)}
                   >
                     <span className="library-prompt-icon" aria-hidden="true">
                       <PromptIcon size={20} />
@@ -556,7 +583,7 @@ export function PromptLibrary({
                     <button
                       type="button"
                       className="secondary"
-                      onClick={() => changeEditing({ preset: item, role: item.role })}
+                      onClick={() => void editPreset(item)}
                     >
                       <EditIcon size={18} aria-hidden="true" /> 편집
                     </button>

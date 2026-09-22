@@ -1,8 +1,7 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { arch, cpus, platform, release, tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { performance } from 'node:perf_hooks';
 import { afterEach, expect, test, vi } from 'vitest';
 import { Store } from '../server/store.js';
 import { readHelperChatContext } from '../server/helper-context.js';
@@ -17,12 +16,12 @@ import {
 import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { store: Store; directory: string }[] = [];
-const benchmark = process.env.UIMORI_CONTEXT_READ_BENCHMARK === '1';
+
 // Correctness checks growth at two useful scales without making hosted CI a timing gate.
 // The opt-in benchmark retains the original 100/50 records with 32 KiB payloads.
-const historicalCandidates = benchmark ? 100 : 40;
-const cancelledJobs = benchmark ? 50 : 20;
-const largeChars = benchmark ? 32768 : 8192;
+const historicalCandidates = 40;
+const cancelledJobs = 20;
+const largeChars = 8192;
 afterEach(() => {
   vi.restoreAllMocks();
   for (const { store, directory } of owned.splice(0)) {
@@ -177,101 +176,7 @@ function decodedRead(store: Store, read: () => ReturnType<typeof readHelperChatC
   }
 }
 
-/** Reproduce the previous detail-then-project path using the same DB, validators and projection. */
-function legacyRead<T>(store: Store, action: () => T): T {
-  const current = store.context.current;
-  store.context.current = (chatId, branchId) => store.context.detail(chatId, branchId);
-  try {
-    return action();
-  } finally {
-    store.context.current = current;
-  }
-}
-
-function measureReads(f: Awaited<ReturnType<typeof fixture>>, before: unknown, after: unknown) {
-  const warmupRounds = 3,
-    sampleCount = 9,
-    readsPerSample = 10;
-  const samples = { before: [] as number[], after: [] as number[] };
-  const sample = () => {
-    const started = performance.now();
-    for (let index = 0; index < readsPerSample; index++) f.read();
-    return (performance.now() - started) / readsPerSample;
-  };
-  for (let index = 0; index < warmupRounds + sampleCount; index++) {
-    const oldFirst = index % 2 === 0;
-    let old: number, current: number;
-    if (oldFirst) {
-      old = legacyRead(f.store, sample);
-      current = sample();
-    } else {
-      current = sample();
-      old = legacyRead(f.store, sample);
-    }
-    if (index >= warmupRounds) {
-      samples.before.push(old);
-      samples.after.push(current);
-    }
-  }
-  const summarize = (values: number[]) => {
-    const sorted = [...values].sort((a, b) => a - b);
-    return { medianMs: sorted[Math.floor(sorted.length / 2)], samplesMs: values };
-  };
-  const directory = resolve(
-    'output',
-    'benchmarks',
-    `context-read-${new Date().toISOString().replaceAll(':', '-')}`
-  );
-  mkdirSync(directory, { recursive: true });
-  const measured = {
-    schema: 1,
-    kind: 'helper-active-context-read',
-    measuredAt: new Date().toISOString(),
-    environment: {
-      node: process.version,
-      platform: platform(),
-      arch: arch(),
-      os: release(),
-      cpu: cpus()[0]?.model,
-    },
-    fixture: {
-      activeCheckpoints: 1,
-      historicalCandidates,
-      cancelledJobs,
-      historicalTextChars: largeChars,
-      sources: 4,
-    },
-    method: {
-      warmupRounds,
-      sampleCount,
-      readsPerSample,
-      order: 'alternating before/after, same initialized SQLite DB',
-      before: 'UI detail read followed by the unchanged helper projection',
-      after: 'active-only read followed by the unchanged helper projection',
-      timing: 'synchronous full helper read, without JSON instrumentation or output serialization',
-      bytes:
-        'separate call counts UTF-8 JSON bytes of decoded checkpoint plans and job snapshots; excludes source/profile reads and raw database row bytes',
-    },
-    before: { timing: summarize(samples.before), decoded: before },
-    after: { timing: summarize(samples.after), decoded: after },
-    modelResultJsonBytes: Buffer.byteLength(JSON.stringify(f.read())),
-    sourceHashes: Object.fromEntries(
-      [
-        'server/context-store.ts',
-        'server/helper-context.ts',
-        'tests/helper-context-read.test.ts',
-      ].map((path) => [path, createHash('sha256').update(readFileSync(path)).digest('hex')])
-    ),
-    limitations: [
-      'Synthetic local SQLite fixture; no provider calls.',
-      'Warm-cache measurements are diagnostic and are not a timing test gate.',
-    ],
-  };
-  writeFileSync(join(directory, 'context-read.json'), `${JSON.stringify(measured, null, 2)}\n`);
-  console.log(`Context read measurements: ${join(directory, 'context-read.json')}`);
-}
-
-test('helper reads decode one active checkpoint as large history grows while UI detail retains history and jobs', async () => {
+test('helper reads decode one active checkpoint as large history grows while the UI also reads only current summary and small job status', async () => {
   const f = await fixture(),
     baseline = decodedRead(f.store, f.read);
   expect(baseline.result.usable).toBe(true);
@@ -284,21 +189,10 @@ test('helper reads decode one active checkpoint as large history grows while UI 
     const current = decodedRead(f.store, f.read);
     expect(current).toEqual(baseline);
   }
-  const { checkpoints, jobs, ...metadata } = f.store.context.detail(f.chatId, f.branchId);
-  const visibleCheckpointCount = Math.min(historicalCandidates + 1, 100);
-  expect(checkpoints).toHaveLength(visibleCheckpointCount);
-  expect(jobs).toHaveLength(cancelledJobs);
+  const { jobs, ...metadata } = f.store.context.detail(f.chatId, f.branchId);
+  expect(jobs).toHaveLength(Math.min(cancelledJobs, 10));
+  expect(jobs.every((job) => !('snapshot' in job))).toBe(true);
   expect(f.store.context.current(f.chatId, f.branchId)).toEqual(metadata);
-  const old = legacyRead(f.store, () => decodedRead(f.store, f.read));
-  expect(old.result).toEqual(baseline.result);
-  expect(old.decoded).toMatchObject({
-    checkpointPlans: visibleCheckpointCount + 1,
-    jobSnapshots: cancelledJobs,
-  });
-  expect(old.decoded.jsonBytes).toBeGreaterThan(
-    largeChars * (historicalCandidates + cancelledJobs)
-  );
-  if (benchmark) measureReads(f, old.decoded, baseline.decoded);
 });
 
 test('active-only reads recheck current notes and preserve active checkpoint hash validation', async () => {
@@ -313,11 +207,7 @@ test('active-only reads recheck current notes and preserve active checkpoint has
     text: 'The old derived promise was corrected by the user.',
   });
   const after = f.read(),
-    {
-      checkpoints: _checkpoints,
-      jobs: _jobs,
-      ...metadata
-    } = f.store.context.detail(f.chatId, f.branchId);
+    { jobs: _jobs, ...metadata } = f.store.context.detail(f.chatId, f.branchId);
   expect(after.checkpoint).toEqual(before.checkpoint);
   expect(after).toMatchObject({
     activeRevision: before.activeRevision,

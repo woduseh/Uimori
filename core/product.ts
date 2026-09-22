@@ -293,11 +293,12 @@ export type Attempt = {
 };
 // Summary lists preserve content references and metadata; their text is a placeholder.
 // Fetch current content before opening an editor; revisions still protect concurrent saves.
+export type PromptPresetSummary = Pick<PromptPreset, 'id' | 'revision' | 'title' | 'role'>;
 export type Library = {
   organization?: import('./library-organization.js').LibraryOrganization;
   contentBodiesOmitted?: boolean;
   assetsOmitted?: boolean;
-  promptPresets?: PromptPreset[];
+  promptPresets?: PromptPresetSummary[];
   promptCombinations?: SavedPromptCombination[];
   contents: Content[];
   connections: Connection[];

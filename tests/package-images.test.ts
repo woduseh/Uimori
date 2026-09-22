@@ -152,21 +152,25 @@ function completeImage(store: Store, source: ReturnType<typeof finish>) {
     asset = entries.find((entry) => entry.ref.startsWith('package:'))!;
   const claimed = store.claimJob(job.id, 'worker', {})!;
   expect(
-    store.completeJob(job.id, claimed.generation, 'worker', {
-      mock: true,
-      sourceRevision: source.id,
-      sourceHash: source.hash,
-      imageTarget: job.imageTarget,
-      annotations: [
-        {
-          blockAnchor: splitSource(source)[0].anchor,
-          assetRef: asset.ref,
-          assetRevision: asset.revision,
-          assetHash: asset.hash,
-          presentationIntent: 'inline',
-          caption: asset.caption,
-        },
-      ],
+    store.finishAuxiliary(job.id, claimed.generation, 'worker', {
+      status: 'completed',
+      result: {
+        mock: true,
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        imageTarget: job.imageTarget,
+        annotations: [
+          {
+            blockAnchor: splitSource(source)[0].anchor,
+            assetRef: asset.ref,
+            assetRevision: asset.revision,
+            assetHash: asset.hash,
+            presentationIntent: 'inline',
+            caption: asset.caption,
+          },
+        ],
+      },
+      error: null,
     })
   ).toBe(true);
   return store.job(job.id);
@@ -348,12 +352,16 @@ test('Reader and detail expose each explicitly selected fixture module, chat and
   }));
   const claimed = store.claimJob(job.id, 'projection-worker', {})!;
   expect(
-    store.completeJob(job.id, claimed.generation, 'projection-worker', {
-      mock: true,
-      sourceRevision: source.id,
-      sourceHash: source.hash,
-      imageTarget: job.imageTarget,
-      annotations,
+    store.finishAuxiliary(job.id, claimed.generation, 'projection-worker', {
+      status: 'completed',
+      result: {
+        mock: true,
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        imageTarget: job.imageTarget,
+        annotations,
+      },
+      error: null,
     })
   ).toBe(true);
   for (const assets of [store.detail(chat.id).assets!, readerDetail(store, chat.id, {}).assets!]) {

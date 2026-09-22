@@ -261,7 +261,9 @@ test('PWS03 failed autosaves preserve consecutive local changes and protect exte
   fail = false;
   await editor.getByRole('button', { name: '다시 저장', exact: true }).click();
   await expect(tone).toHaveValue('충돌 초안');
-  await expect(editor.getByRole('alert')).toContainText('다른 곳에서');
+  await expect(editor.getByRole('alert').filter({ hasText: '다른 곳에서' })).toContainText(
+    '다른 곳에서'
+  );
   expect((await (await request.get('/api/prompt-workspace')).json()).main.values.tone).toBe(
     '다른 창 변경'
   );
