@@ -8,6 +8,7 @@ Read only the references needed for the task:
 
 - [README](README.md): product overview and usage.
 - [CODE-MAP](docs/CODE-MAP.md): feature contracts and entry points.
+- [THEME-AUTHORING](docs/THEME-AUTHORING.md): read when creating or changing themes and their public styling contract.
 - [DEVELOPMENT](docs/DEVELOPMENT.md): setup, check selection, commands, and troubleshooting.
 
 Update the owning document when behavior changes. Keep plans and execution history out of standing instructions.

@@ -1,3 +1,5 @@
+import { ThemeSettings } from './ThemeSettings.js';
+import { Palette } from 'lucide-react';
 import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
 import type { ReactNode } from 'react';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
@@ -458,7 +460,14 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
   );
 }
 
-const appSaveSections = ['connection', 'model', 'prompt', 'lore', 'illustration'] as const;
+const appSaveSections = [
+  'connection',
+  'model',
+  'prompt',
+  'lore',
+  'illustration',
+  'themes',
+] as const;
 
 export function AppSettingsPanel({
   initialTab = 'general',
@@ -494,6 +503,7 @@ export function AppSettingsPanel({
   const [modelDirty, setModelDirty] = useState(false);
   const [promptDirty, setPromptDirty] = useState(false);
   const [archiveDirty, setArchiveDirty] = useState(false);
+  const [themeDirty, setThemeDirty] = useState(false);
   const [illustrationDirty, setIllustrationDirty] = useState(false);
   const [loreDirty, setLoreDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
@@ -502,12 +512,19 @@ export function AppSettingsPanel({
   const saveGroup = useSettingsSaveGroup(appSaveSections);
   const [discardError, setDiscardError] = useState('');
   const dirty =
-    connectionDirty || archiveDirty || modelDirty || promptDirty || loreDirty || illustrationDirty;
+    connectionDirty ||
+    archiveDirty ||
+    modelDirty ||
+    promptDirty ||
+    loreDirty ||
+    illustrationDirty ||
+    themeDirty;
   const root = useRef<HTMLElement>(null);
   const wasCompact = useRef(compact);
   const id = useId();
   const categories = [
     { key: 'general', label: '일반', icon: SettingsIcon },
+    { key: 'themes', label: '테마·색상', icon: Palette },
     { key: 'models', label: '역할별 모델', icon: ModelIcon },
     { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon },
     { key: 'connections', label: '프로바이더·모델', icon: ConnectionIcon },
@@ -646,6 +663,15 @@ export function AppSettingsPanel({
               {visited.includes(key) && (
                 <>
                   {!compact && <h3 className="settings-page-title">{label}</h3>}
+                  {key === 'themes' && (
+                    <ThemeSettings
+                      appearanceMode={theme}
+                      onAppearanceModeChange={setTheme}
+                      active={active === 'themes' && showingDetail}
+                      onDirtyChange={setThemeDirty}
+                      onSaveHandlerChange={saveGroup.registrations.themes}
+                    />
+                  )}
                   {key === 'about' && <AppAbout />}
                   {key === 'general' && (
                     <section className="settings-section">
@@ -853,6 +879,7 @@ export function AppSettingsPanel({
                 prompt: promptDirty,
                 lore: loreDirty,
                 illustration: illustrationDirty,
+                themes: themeDirty,
               }))
             )
               return false;

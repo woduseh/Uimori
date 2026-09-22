@@ -4,7 +4,7 @@ import type { ResourceKind, ResourceModel } from '../core/resource-editing.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { readResource, saveResource, undoResource } from './resource-service.js';
 
-const kinds = ['content', 'prompt-preset', 'prompt-workspace'];
+const kinds = ['content', 'prompt-preset', 'prompt-workspace', 'theme'];
 export function resourceKind(value: unknown): ResourceKind {
   if (!kinds.includes(String(value))) throw new HttpError(400, '자료 종류를 확인해 주세요.');
   return value as ResourceKind;

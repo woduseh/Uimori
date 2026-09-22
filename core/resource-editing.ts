@@ -1,11 +1,16 @@
+import type { Theme, ThemeDefinition } from './themes.js';
 import type { Content, PromptPreset, PromptWorkspace } from './product.js';
 
-export type ResourceKind = 'content' | 'prompt-preset' | 'prompt-workspace';
+export type ResourceKind = 'content' | 'prompt-preset' | 'prompt-workspace' | 'theme';
 export type ContentEditModel = Omit<Content, 'id' | 'revision' | 'coverImage' | 'hasPackage'>;
 export type PromptEditModel = Pick<PromptPreset, 'title' | 'role' | 'program' | 'values'>;
 export type WorkspaceEditModel = Pick<PromptWorkspace, 'main' | 'translation'>;
-export type ResourceModel = ContentEditModel | PromptEditModel | WorkspaceEditModel;
-export type SavedResource = Content | PromptPreset | PromptWorkspace;
+export type ResourceModel =
+  | ContentEditModel
+  | PromptEditModel
+  | WorkspaceEditModel
+  | ThemeDefinition;
+export type SavedResource = Content | PromptPreset | PromptWorkspace | Theme;
 export type EditorContext = {
   kind: ResourceKind;
   targetId: string | null;
@@ -16,6 +21,10 @@ export type EditorContext = {
 };
 export type ResourceSaveResult = { saved: SavedResource; created: boolean };
 export function editableResource(kind: ResourceKind, resource: SavedResource): ResourceModel {
+  if (kind === 'theme') {
+    const { id: _id, revision: _revision, ...model } = resource as Theme;
+    return model;
+  }
   if (kind === 'prompt-workspace') {
     const workspace = resource as PromptWorkspace;
     return { main: workspace.main, translation: workspace.translation };

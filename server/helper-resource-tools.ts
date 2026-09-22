@@ -1,3 +1,5 @@
+import { themeCatalog, deleteTheme } from './themes.js';
+import { THEME_COLOR_KEYS, THEME_SLOTS, BUILTIN_THEMES, themeDefinition } from '../core/themes.js';
 import type { ProviderTool } from '../core/transport.js';
 import type { ResourceKind, ResourceModel } from '../core/resource-editing.js';
 import { editableResource } from '../core/resource-editing.js';
@@ -7,10 +9,22 @@ import { readResource, saveResource, undoResource } from './resource-service.js'
 import { deleteLibraryItem } from './library-deletion.js';
 import { record, number, text, HttpError } from './request-validation.js';
 
-const kind = { type: 'string', enum: ['content', 'prompt-preset', 'prompt-workspace'] };
+const kind = { type: 'string', enum: ['content', 'prompt-preset', 'prompt-workspace', 'theme'] };
 const string = { type: 'string' };
 const revision = { type: 'integer', minimum: 1 };
 export const RESOURCE_TOOLS: ProviderTool[] = [
+  {
+    name: 'theme.list',
+    description:
+      'List saved and built-in presentation themes with current selections. Themes do not affect model inputs.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'theme.guide',
+    description:
+      'Read the theme authoring contract and example before editing. Save with resource.save kind=theme; selecting it is separate.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
   {
     name: 'resource.read',
     description:
@@ -50,7 +64,7 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: ['content', 'prompt-preset'] },
+        kind: { type: 'string', enum: ['content', 'prompt-preset', 'theme'] },
         id: string,
         expectedRevision: revision,
       },
@@ -89,6 +103,15 @@ export function invokeResourceTool(
   name: string,
   args: Record<string, unknown>
 ): unknown {
+  if (name === 'theme.list') return themeCatalog(store);
+  if (name === 'theme.guide')
+    return {
+      colors: THEME_COLOR_KEYS,
+      slots: THEME_SLOTS,
+      example: themeDefinition(BUILTIN_THEMES[1]),
+      contract:
+        'Save with resource.save kind=theme. title required. colors.light/dark map the documented names without -- to hex colors. appCss styles the app; messageCss is a low-priority layer in each Risu message ShadowRoot. templateHtml needs exactly one native slot for each name: request, heading, body, actions; templateCss styles that layout ShadowRoot. Empty HTML uses the default. No JavaScript or CBS in themes. Preserve reading preferences and bot HTML. Use responsive CSS. Stable data-uimori-part hooks: scene, scene-frame, request, heading, body, actions, composer-input. External images remain URL references; data URLs travel with JSON. Saving does not select. Full guide: docs/THEME-AUTHORING.md.',
+    };
   if (name === 'image.update-metadata') {
     const id = text(args.contentId, 'content ID', 100);
     const content = readResource(store, 'content', id) as Content;
@@ -114,7 +137,7 @@ export function invokeResourceTool(
       })
     );
   }
-  if (!['content', 'prompt-preset', 'prompt-workspace'].includes(String(args.kind)))
+  if (!['content', 'prompt-preset', 'prompt-workspace', 'theme'].includes(String(args.kind)))
     throw new HttpError(400, '자료 종류를 확인해 주세요.');
   const kind = args.kind as ResourceKind;
   const id = args.id == null ? null : text(args.id, 'resource ID', 100);
@@ -133,7 +156,9 @@ export function invokeResourceTool(
   if (!id || expectedRevision === undefined)
     throw new HttpError(400, '자료 ID와 개정 번호가 필요해요.');
   if (name === 'resource.undo') return summary(undoResource(store, kind, id, expectedRevision));
-  if (name === 'resource.delete' && kind !== 'prompt-workspace')
+  if (name === 'resource.delete' && kind === 'theme')
+    return deleteTheme(store, id, expectedRevision);
+  if (name === 'resource.delete' && (kind === 'content' || kind === 'prompt-preset'))
     return deleteLibraryItem(store, kind, id, { expectedRevision });
   throw new HttpError(400, '지원하지 않는 자료 작업이에요.');
 }

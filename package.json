@@ -54,7 +54,8 @@
     "verify:selfhost": "node scripts/verify-self-host.mjs",
     "transfer:personal": "node scripts/transfer-personal-v1.mjs",
     "test:personal": "vitest run tests/personal-workspace-v1.test.ts tests/personal-workspace-flow.test.ts tests/database-schema.test.ts tests/access-session.test.ts",
-    "verify:personal": "node scripts/verify-personal.mjs"
+    "verify:personal": "node scripts/verify-personal.mjs",
+    "verify:themes": "node scripts/verify-themes.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.3",

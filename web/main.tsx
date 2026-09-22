@@ -1,3 +1,4 @@
+import { ThemeProvider, useThemes } from './ThemeContext.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { BotChatImportDialog } from './BotChatImportDialog.js';
@@ -155,6 +156,14 @@ const runFailed = (status: string) =>
   ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(status);
 function App() {
   const s = useStory();
+  const { setScope: setThemeScope } = useThemes();
+  const themeChatId = s.destination === 'story' ? s.selected : undefined;
+  const themeBotId = themeChatId
+    ? s.chats.find((chat) => chat.id === themeChatId)?.botId
+    : undefined;
+  useEffect(() => {
+    setThemeScope({ chatId: themeChatId || undefined, botId: themeBotId });
+  }, [themeChatId, themeBotId, setThemeScope]);
   const [nativeNotices, setNativeNotices] = useState<string[]>([]);
   const testMode = useTestMode();
   const compact = useCompactLayout();
@@ -249,6 +258,7 @@ function App() {
     ];
     const appSections = [
       'general',
+      'themes',
       'models',
       'prompts',
       'connections',
@@ -1332,6 +1342,7 @@ function App() {
                   <ComposerInput
                     inputRef={s.input}
                     id="request"
+                    data-uimori-part="composer-input"
                     maxLength={4000}
                     value={s.draft}
                     enterSend={enterSend}
@@ -1767,6 +1778,8 @@ function App() {
 createRoot(document.getElementById('root')!).render(
   <SessionGate>
     <MaintenanceBanner />
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </SessionGate>
 );

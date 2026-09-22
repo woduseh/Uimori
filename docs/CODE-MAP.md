@@ -14,3 +14,5 @@
 | Provider protocols | `core/provider-request.ts`, `core/provider-http.ts`, `core/*-protocol.ts` | [Providers](PROVIDERS.md) |
 | Reader and application | `web/useStory.ts`, `web/SourceReader.tsx`, `server/reader.ts`, `server/app.ts` | [Usage](USAGE.md) |
 | Tests and local verification | `tests/personal-workspace-*.test.ts`, `scripts/transfer-personal-v1.test.mjs`, `tests/` | [Development](DEVELOPMENT.md) |
+
+Theme resources and selection: `core/themes.ts`, `server/themes.ts`, `web/ThemeContext.tsx`, `web/ThemeSettings.tsx`, `web/ThemeFrame.tsx`. [Authoring and usage](THEME-AUTHORING.md).

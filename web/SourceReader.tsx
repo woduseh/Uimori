@@ -1,3 +1,4 @@
+import { ThemeFrame } from './ThemeFrame.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
 import { displayTranslationJob } from './translation-display.js';
 import { resolveInlineImage, IMAGE_POSITION_UNAVAILABLE } from './image-placement.js';
@@ -476,425 +477,439 @@ function SourceReaderContent({
       id={`source-${source.id}`}
       data-testid="source"
       data-source-id={source.id}
+      data-uimori-part="scene"
     >
       {latest && projected?.format === 'risu-html' && (
         <RisuInteractionDialog chatId={source.chatId} branchId={branchId} onError={onError} />
       )}
-      {packageStart?.mode !== 'authored' && request && (
-        <RequestMessage
-          runId={source.runId}
-          request={request}
-          displayText={presentation?.data?.request?.text}
-          compactActions={latest ? 'always' : 'tap'}
-          onSubmit={onEditRequest}
-          onConfirm={onCheckRequest}
-          disabled={retryDisabled}
-          onEditingChange={onRequestEditing}
-        />
-      )}
-      <div className="scene-header">
-        {activityNode ?? (
-          <div className="scene-header-lead">
-            {leading}
-            {badges}
-          </div>
-        )}
-        <div className="scene-header-tools">{trailing}</div>
-      </div>
-      {!activityNode && <ContextSummaryStatus summary={contextSummary} />}
-
-      {editor && (
-        <TextEditor
-          key={editor}
-          role={editor}
-          source={source}
-          translation={translation}
-          onCancel={closeEditor}
-          onSaved={async () => {
-            await refresh();
-            if (mounted.current) {
-              closeEditor();
-              if (editor === 'translation') switchMode('translation');
-            }
-          }}
-        />
-      )}
-      <div hidden={!!editor} className="source-reading-content">
-        {validTranslation && translation?.status !== 'completed' && mode === 'translation' && (
-          <p role="status">이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.</p>
-        )}
-        {hasPackages && !presentation ? (
-          <p role="status">봇 화면을 준비하고 있어요.</p>
-        ) : projected?.format === 'risu-html' &&
-          (mode === 'original' ||
-            (validTranslation && projected.translation?.html !== undefined)) ? (
-          <div
-            data-testid={mode === 'original' ? 'source-text' : 'translation-text'}
-            data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
-          >
-            <RisuMessageSurface
-              html={
-                (mode === 'original' ? projected.original.html : projected.translation?.html) ?? ''
-              }
-              css={mode === 'original' ? projected.original.css : projected.translation?.css}
-              onAction={nativeAction}
-              disabled={presentation?.pending}
-              revisionKey={`${source.id}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
+      <ThemeFrame>
+        <div slot="request" data-uimori-part="request">
+          {packageStart?.mode !== 'authored' && request && (
+            <RequestMessage
+              runId={source.runId}
+              request={request}
+              displayText={presentation?.data?.request?.text}
+              compactActions={latest ? 'always' : 'tap'}
+              onSubmit={onEditRequest}
+              onConfirm={onCheckRequest}
+              disabled={retryDisabled}
+              onEditingChange={onRequestEditing}
             />
-          </div>
-        ) : mode === 'original' && projected?.original.changed ? (
-          <div className="prose" data-testid="source-text">
-            <div
-              className="source-block"
-              data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
-            >
-              <Prose text={projected.original.text} allowedImageUrls={projected.inlineImageUrls} />
-            </div>
-            {annotations.length > 0 && (
-              <p className="muted" role="status">
-                {IMAGE_POSITION_UNAVAILABLE}
-              </p>
+          )}
+        </div>
+        <div slot="heading" data-uimori-part="heading">
+          <div className="scene-header">
+            {activityNode ?? (
+              <div className="scene-header-lead">
+                {leading}
+                {badges}
+              </div>
             )}
+            <div className="scene-header-tools">{trailing}</div>
           </div>
-        ) : mode === 'translation' && validTranslation && projected?.translation?.changed ? (
-          <div className="prose translated" data-testid="translation-text">
-            <div className="source-block">
-              <Prose
-                text={projected.translation.text}
-                allowedImageUrls={projected.inlineImageUrls}
-              />
-            </div>
-            {annotations.length > 0 && (
-              <p className="muted" role="status">
-                {IMAGE_POSITION_UNAVAILABLE}
-              </p>
+          {!activityNode && <ContextSummaryStatus summary={contextSummary} />}
+        </div>
+        <div slot="body" data-uimori-part="body">
+          {editor && (
+            <TextEditor
+              key={editor}
+              role={editor}
+              source={source}
+              translation={translation}
+              onCancel={closeEditor}
+              onSaved={async () => {
+                await refresh();
+                if (mounted.current) {
+                  closeEditor();
+                  if (editor === 'translation') switchMode('translation');
+                }
+              }}
+            />
+          )}
+          <div hidden={!!editor} className="source-reading-content">
+            {validTranslation && translation?.status !== 'completed' && mode === 'translation' && (
+              <p role="status">이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.</p>
             )}
-          </div>
-        ) : mode === 'original' ? (
-          <div className="prose" data-testid="source-text">
-            {source.text.slice(0, blocks[0].start)}
-            {blocks.map((block, position) => (
-              <Fragment key={block.anchor}>
+            {hasPackages && !presentation ? (
+              <p role="status">봇 화면을 준비하고 있어요.</p>
+            ) : projected?.format === 'risu-html' &&
+              (mode === 'original' ||
+                (validTranslation && projected.translation?.html !== undefined)) ? (
+              <div
+                data-testid={mode === 'original' ? 'source-text' : 'translation-text'}
+                data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
+              >
+                <RisuMessageSurface
+                  html={
+                    (mode === 'original' ? projected.original.html : projected.translation?.html) ??
+                    ''
+                  }
+                  css={mode === 'original' ? projected.original.css : projected.translation?.css}
+                  onAction={nativeAction}
+                  disabled={presentation?.pending}
+                  revisionKey={`${source.id}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
+                />
+              </div>
+            ) : mode === 'original' && projected?.original.changed ? (
+              <div className="prose" data-testid="source-text">
                 <div
                   className="source-block"
-                  data-block-anchor={block.anchor}
-                  id={`block-${source.id}-${block.anchor}`}
+                  data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
                 >
                   <Prose
-                    allowedImageUrls={projected?.inlineImageUrls}
-                    text={source.text.slice(
-                      block.start,
-                      blocks[position + 1]?.start ?? source.text.length
-                    )}
+                    text={projected.original.text}
+                    allowedImageUrls={projected.inlineImageUrls}
                   />
                 </div>
-                {inline(block.anchor)}
-              </Fragment>
-            ))}
-          </div>
-        ) : validTranslation ? (
-          <div className="prose translated" data-testid="translation-text">
-            {translationBlocks.length ? (
-              <>
-                {translationText.slice(0, translationBlocks[0].start)}
-                {translationBlocks.map((block, position) => (
+                {annotations.length > 0 && (
+                  <p className="muted" role="status">
+                    {IMAGE_POSITION_UNAVAILABLE}
+                  </p>
+                )}
+              </div>
+            ) : mode === 'translation' && validTranslation && projected?.translation?.changed ? (
+              <div className="prose translated" data-testid="translation-text">
+                <div className="source-block">
+                  <Prose
+                    text={projected.translation.text}
+                    allowedImageUrls={projected.inlineImageUrls}
+                  />
+                </div>
+                {annotations.length > 0 && (
+                  <p className="muted" role="status">
+                    {IMAGE_POSITION_UNAVAILABLE}
+                  </p>
+                )}
+              </div>
+            ) : mode === 'original' ? (
+              <div className="prose" data-testid="source-text">
+                {source.text.slice(0, blocks[0].start)}
+                {blocks.map((block, position) => (
                   <Fragment key={block.anchor}>
-                    <div className="source-block" data-block-anchor={block.anchor}>
+                    <div
+                      className="source-block"
+                      data-block-anchor={block.anchor}
+                      id={`block-${source.id}-${block.anchor}`}
+                    >
                       <Prose
                         allowedImageUrls={projected?.inlineImageUrls}
-                        text={
-                          block.text +
-                          translationText.slice(
-                            block.end,
-                            translationBlocks[position + 1]?.start ?? translationText.length
-                          )
-                        }
+                        text={source.text.slice(
+                          block.start,
+                          blocks[position + 1]?.start ?? source.text.length
+                        )}
                       />
                     </div>
                     {inline(block.anchor)}
                   </Fragment>
                 ))}
-              </>
+              </div>
+            ) : validTranslation ? (
+              <div className="prose translated" data-testid="translation-text">
+                {translationBlocks.length ? (
+                  <>
+                    {translationText.slice(0, translationBlocks[0].start)}
+                    {translationBlocks.map((block, position) => (
+                      <Fragment key={block.anchor}>
+                        <div className="source-block" data-block-anchor={block.anchor}>
+                          <Prose
+                            allowedImageUrls={projected?.inlineImageUrls}
+                            text={
+                              block.text +
+                              translationText.slice(
+                                block.end,
+                                translationBlocks[position + 1]?.start ?? translationText.length
+                              )
+                            }
+                          />
+                        </div>
+                        {inline(block.anchor)}
+                      </Fragment>
+                    ))}
+                  </>
+                ) : (
+                  <div className="source-block">
+                    <Prose text={translationText} allowedImageUrls={projected?.inlineImageUrls} />
+                  </div>
+                )}
+              </div>
             ) : (
-              <div className="source-block">
-                <Prose text={translationText} allowedImageUrls={projected?.inlineImageUrls} />
+              <div className="translation-placeholder" role="status">
+                <p>
+                  {translation
+                    ? activeJob(translation)
+                      ? '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.'
+                      : '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.'
+                    : '이 장면에는 아직 한국어 번역이 없어요.'}
+                </p>
+                <button type="button" className="secondary" onClick={() => switchMode('original')}>
+                  원문부터 읽기
+                </button>
               </div>
             )}
           </div>
-        ) : (
-          <div className="translation-placeholder" role="status">
-            <p>
-              {translation
-                ? activeJob(translation)
-                  ? '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.'
-                  : '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.'
-                : '이 장면에는 아직 한국어 번역이 없어요.'}
+          <IllustrationStrip
+            sourceId={source.id}
+            sourceHash={source.hash}
+            illustrations={illustrations}
+            refresh={refresh}
+            onError={setActionError}
+          />
+          {presentation?.error && (
+            <p className="error" role="alert">
+              {presentation.error}
             </p>
-            <button type="button" className="secondary" onClick={() => switchMode('original')}>
-              원문부터 읽기
-            </button>
-          </div>
-        )}
-      </div>
-      <IllustrationStrip
-        sourceId={source.id}
-        sourceHash={source.hash}
-        illustrations={illustrations}
-        refresh={refresh}
-        onError={setActionError}
-      />
-      {presentation?.error && (
-        <p className="error" role="alert">
-          {presentation.error}
-        </p>
-      )}
-      <PackagePresentationIssues data={presentation?.data} />
-      {sceneStatus && (
-        <aside className="scene-status" aria-label="현재 장면의 해설">
-          <small>장면 해설</small>
-          <span>{sceneStatus}</span>
-        </aside>
-      )}
-      {!activityNode && (
-        <div className="derived-summary" aria-label="이 장면의 후속 작업">
-          {attentionJobs.length
-            ? attentionJobs.map((job) => (
-                <div
-                  className={retryable(job.status) ? 'job-summary has-error' : 'job-summary'}
-                  key={job.id}
-                  data-job-id={job.id}
-                >
-                  <span>
-                    {jobTitle(job)} · {labels[job.status]}
-                    {retryable(job.status) ? ' · 원문 보존됨' : ''}
-                  </span>
-                  {job.error && <AuxiliaryError error={job.error} />}
-                  <JobActions job={job} refresh={refresh} onError={setActionError} compact />
-                </div>
-              ))
-            : jobs.length > 0 && (
-                <p className="muted">
-                  {displayJobs.map((job) => `${jobTitle(job)} ${labels[job.status]}`).join(' · ')}
-                </p>
-              )}
+          )}
+          <PackagePresentationIssues data={presentation?.data} />
+          {sceneStatus && (
+            <aside className="scene-status" aria-label="현재 장면의 해설">
+              <small>장면 해설</small>
+              <span>{sceneStatus}</span>
+            </aside>
+          )}
+          {!activityNode && (
+            <div className="derived-summary" aria-label="이 장면의 후속 작업">
+              {attentionJobs.length
+                ? attentionJobs.map((job) => (
+                    <div
+                      className={retryable(job.status) ? 'job-summary has-error' : 'job-summary'}
+                      key={job.id}
+                      data-job-id={job.id}
+                    >
+                      <span>
+                        {jobTitle(job)} · {labels[job.status]}
+                        {retryable(job.status) ? ' · 원문 보존됨' : ''}
+                      </span>
+                      {job.error && <AuxiliaryError error={job.error} />}
+                      <JobActions job={job} refresh={refresh} onError={setActionError} compact />
+                    </div>
+                  ))
+                : jobs.length > 0 && (
+                    <p className="muted">
+                      {displayJobs
+                        .map((job) => `${jobTitle(job)} ${labels[job.status]}`)
+                        .join(' · ')}
+                    </p>
+                  )}
+            </div>
+          )}
         </div>
-      )}
-      <div className="source-actions">
-        <IconButton
-          label="본문 복사"
-          icon={CopyIcon}
-          size={18}
-          className="scene-action"
-          disabled={!!editor || !!pending}
-          onClick={copyCurrent}
-        />
-        <IconButton
-          label={editorLabel(mode)}
-          icon={EditIcon}
-          size={18}
-          className="scene-action"
-          disabled={!!editor || !!pending}
-          onClick={(event) => openEditor(mode, event.currentTarget)}
-        />
-        <ActionMenu label="장면 작업 메뉴" placement="top">
-          {onAskHelper && (
+        <div slot="actions" data-uimori-part="actions" className="source-actions">
+          <IconButton
+            label="본문 복사"
+            icon={CopyIcon}
+            size={18}
+            className="scene-action"
+            disabled={!!editor || !!pending}
+            onClick={copyCurrent}
+          />
+          <IconButton
+            label={editorLabel(mode)}
+            icon={EditIcon}
+            size={18}
+            className="scene-action"
+            disabled={!!editor || !!pending}
+            onClick={(event) => openEditor(mode, event.currentTarget)}
+          />
+          <ActionMenu label="장면 작업 메뉴" placement="top">
+            {onAskHelper && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  const selected = selectedReaderText(container.current);
+                  onAskHelper(source.id, selected || source.text);
+                }}
+              >
+                <MessageCircleQuestion size={18} aria-hidden="true" />
+                도우미에게 물어보기
+              </button>
+            )}
+            {onRetry && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={!!editor || !!pending || retryDisabled}
+                onClick={() => void action('retry', onRetry)}
+              >
+                <RefreshIcon size={18} aria-hidden="true" />
+                현재 설정으로 다시 요청
+              </button>
+            )}
+            {canRetranslate && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={!!pending || !!editor}
+                onClick={retranslate}
+              >
+                <RefreshIcon size={18} aria-hidden="true" />
+                현재 설정으로 새 번역
+              </button>
+            )}
             <button
               type="button"
               className="secondary"
+              disabled={!!editor || !!pending}
               onClick={() => {
-                const selected = selectedReaderText(container.current);
-                onAskHelper(source.id, selected || source.text);
+                void action('fork', () => onFork(source.id));
               }}
             >
-              <MessageCircleQuestion size={18} aria-hidden="true" />
-              도우미에게 물어보기
+              <GitFork size={18} aria-hidden="true" />
+              {pending === 'fork' ? '채팅 복사 중…' : '이 장면까지 새 채팅으로 복사'}
             </button>
-          )}
-          {onRetry && (
             <button
               type="button"
               className="secondary"
-              disabled={!!editor || !!pending || retryDisabled}
-              onClick={() => void action('retry', onRetry)}
+              disabled={!!editor || !!pending}
+              onClick={(event) => openEditor(otherEditor, event.currentTarget)}
             >
-              <RefreshIcon size={18} aria-hidden="true" />
-              현재 설정으로 다시 요청
+              <EditIcon size={18} aria-hidden="true" />
+              {editorLabel(otherEditor)}
             </button>
-          )}
-          {canRetranslate && (
             <button
               type="button"
               className="secondary"
-              disabled={!!pending || !!editor}
-              onClick={retranslate}
+              disabled={!!editor || !!pending || !imageTarget || (!!image && activeJob(image))}
+              onClick={() =>
+                void action('images', async () => {
+                  await api(`/sources/${source.id}/images`, {
+                    target: mode,
+                    expectedSourceHash: source.hash,
+                    expectedRevision: latestImageJob?.revision ?? 0,
+                    ...(imageTarget?.mode === 'translation'
+                      ? {
+                          expectedTranslationJobId: imageTarget.translationJobId,
+                          expectedTranslationRevision: imageTarget.translationRevision,
+                        }
+                      : {}),
+                  });
+                  await refresh();
+                })
+              }
             >
-              <RefreshIcon size={18} aria-hidden="true" />
-              현재 설정으로 새 번역
+              <ImagesIcon size={18} aria-hidden="true" />
+              {pending === 'images' || (image && activeJob(image))
+                ? '이미지를 배치하는 중…'
+                : image?.status === 'completed'
+                  ? '이미지 다시 배치'
+                  : '이미지 자동 배치'}
             </button>
-          )}
-          <button
-            type="button"
-            className="secondary"
-            disabled={!!editor || !!pending}
-            onClick={() => {
-              void action('fork', () => onFork(source.id));
-            }}
-          >
-            <GitFork size={18} aria-hidden="true" />
-            {pending === 'fork' ? '채팅 복사 중…' : '이 장면까지 새 채팅으로 복사'}
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            disabled={!!editor || !!pending}
-            onClick={(event) => openEditor(otherEditor, event.currentTarget)}
-          >
-            <EditIcon size={18} aria-hidden="true" />
-            {editorLabel(otherEditor)}
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            disabled={!!editor || !!pending || !imageTarget || (!!image && activeJob(image))}
-            onClick={() =>
-              void action('images', async () => {
-                await api(`/sources/${source.id}/images`, {
-                  target: mode,
-                  expectedSourceHash: source.hash,
-                  expectedRevision: latestImageJob?.revision ?? 0,
-                  ...(imageTarget?.mode === 'translation'
-                    ? {
-                        expectedTranslationJobId: imageTarget.translationJobId,
-                        expectedTranslationRevision: imageTarget.translationRevision,
-                      }
-                    : {}),
-                });
-                await refresh();
-              })
-            }
-          >
-            <ImagesIcon size={18} aria-hidden="true" />
-            {pending === 'images' || (image && activeJob(image))
-              ? '이미지를 배치하는 중…'
-              : image?.status === 'completed'
-                ? '이미지 다시 배치'
-                : '이미지 자동 배치'}
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            data-testid="illustrate"
-            disabled={!!editor || !!pending || illustrations.some(illustrationActive)}
-            onClick={() =>
-              void action('illustrate', async () => {
-                await api(`/sources/${source.id}/illustrations`, {
-                  expectedSourceHash: source.hash,
-                });
-                await refresh();
-              })
-            }
-          >
-            <IllustrationIcon size={18} aria-hidden="true" />
-            {pending === 'illustrate' || illustrations.some(illustrationActive)
-              ? '삽화를 만드는 중…'
-              : illustrations.some((item) => item.status === 'completed')
-                ? '새 삽화 생성'
-                : '삽화 생성'}
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            onClick={(event) => openInfo(event.currentTarget, 'details')}
-          >
-            <Info size={18} aria-hidden="true" />
-            {activityNode ? '원문 연결 정보' : '작업 상세'}
-          </button>
-          {estimatedCost && estimatedCost.attemptCount > 0 && (
             <button
               type="button"
               className="secondary"
-              onClick={(event) => openInfo(event.currentTarget, 'cost')}
+              data-testid="illustrate"
+              disabled={!!editor || !!pending || illustrations.some(illustrationActive)}
+              onClick={() =>
+                void action('illustrate', async () => {
+                  await api(`/sources/${source.id}/illustrations`, {
+                    expectedSourceHash: source.hash,
+                  });
+                  await refresh();
+                })
+              }
             >
-              <ReceiptText size={18} aria-hidden="true" />
-              본문 추정 비용
+              <IllustrationIcon size={18} aria-hidden="true" />
+              {pending === 'illustrate' || illustrations.some(illustrationActive)
+                ? '삽화를 만드는 중…'
+                : illustrations.some((item) => item.status === 'completed')
+                  ? '새 삽화 생성'
+                  : '삽화 생성'}
             </button>
-          )}
-        </ActionMenu>
-        <Dialog
-          open={detailsOpen}
-          onClose={() => setDetailsOpen(false)}
-          title={activityNode ? '원문 연결 정보' : '작업 상세'}
-          className="source-info-dialog"
-        >
-          {detailsOpen && (
-            <>
-              {!activityNode && (
-                <div className="derived">
-                  {displayJobs.map((job) => (
-                    <JobCard
-                      key={job.id}
-                      job={job}
-                      refresh={refresh}
-                      onError={setActionError}
-                      hideText={job.kind === 'translation'}
-                    />
-                  ))}
+            <button
+              type="button"
+              className="secondary"
+              onClick={(event) => openInfo(event.currentTarget, 'details')}
+            >
+              <Info size={18} aria-hidden="true" />
+              {activityNode ? '원문 연결 정보' : '작업 상세'}
+            </button>
+            {estimatedCost && estimatedCost.attemptCount > 0 && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={(event) => openInfo(event.currentTarget, 'cost')}
+              >
+                <ReceiptText size={18} aria-hidden="true" />
+                본문 추정 비용
+              </button>
+            )}
+          </ActionMenu>
+          <Dialog
+            open={detailsOpen}
+            onClose={() => setDetailsOpen(false)}
+            title={activityNode ? '원문 연결 정보' : '작업 상세'}
+            className="source-info-dialog"
+          >
+            {detailsOpen && (
+              <>
+                {!activityNode && (
+                  <div className="derived">
+                    {displayJobs.map((job) => (
+                      <JobCard
+                        key={job.id}
+                        job={job}
+                        refresh={refresh}
+                        onError={setActionError}
+                        hideText={job.kind === 'translation'}
+                      />
+                    ))}
+                  </div>
+                )}
+                <div className="inspector">
+                  <dl>
+                    <dt>source revision</dt>
+                    <dd>{source.id}</dd>
+                    <dt>parent revision</dt>
+                    <dd>{source.parentRevision || '시작'}</dd>
+                    <dt>SHA-256</dt>
+                    <dd>{source.hash}</dd>
+                  </dl>
+                  <details>
+                    <summary>현재 원문</summary>
+                    <pre data-testid="source-raw">{source.text}</pre>
+                  </details>
+                  <p>
+                    제목·강조·목록·인용·링크·코드를 표시해요. 속성 없는 ruby의 본문과 rt만 읽기
+                    표기로 표시하고, 나머지 HTML과 Markdown 이미지는 문자로 남겨요.
+                  </p>
                 </div>
-              )}
-              <div className="inspector">
-                <dl>
-                  <dt>source revision</dt>
-                  <dd>{source.id}</dd>
-                  <dt>parent revision</dt>
-                  <dd>{source.parentRevision || '시작'}</dd>
-                  <dt>SHA-256</dt>
-                  <dd>{source.hash}</dd>
-                </dl>
-                <details>
-                  <summary>현재 원문</summary>
-                  <pre data-testid="source-raw">{source.text}</pre>
-                </details>
-                <p>
-                  제목·강조·목록·인용·링크·코드를 표시해요. 속성 없는 ruby의 본문과 rt만 읽기 표기로
-                  표시하고, 나머지 HTML과 Markdown 이미지는 문자로 남겨요.
-                </p>
-              </div>
-            </>
-          )}
-        </Dialog>
-      </div>
-      {estimatedCost && estimatedCost.attemptCount > 0 && (
-        <Dialog
-          open={costOpen}
-          onClose={() => setCostOpen(false)}
-          title="본문 추정 비용"
-          className="source-info-dialog"
-        >
-          <p className="source-cost-value">
-            {estimatedCost.usd !== null && estimatedCost.unknownCount === 0
-              ? formatUsd(estimatedCost.usd)
-              : `· 확인분 부분합 ${estimatedCost.subtotalUsd === 0 && estimatedCost.unknownCount === estimatedCost.attemptCount ? '미확인' : formatUsd(estimatedCost.subtotalUsd)} · 미확인 ${estimatedCost.unknownCount}회 포함`}
+              </>
+            )}
+          </Dialog>
+        </div>
+        {estimatedCost && estimatedCost.attemptCount > 0 && (
+          <Dialog
+            open={costOpen}
+            onClose={() => setCostOpen(false)}
+            title="본문 추정 비용"
+            className="source-info-dialog"
+          >
+            <p className="source-cost-value">
+              {estimatedCost.usd !== null && estimatedCost.unknownCount === 0
+                ? formatUsd(estimatedCost.usd)
+                : `· 확인분 부분합 ${estimatedCost.subtotalUsd === 0 && estimatedCost.unknownCount === estimatedCost.attemptCount ? '미확인' : formatUsd(estimatedCost.subtotalUsd)} · 미확인 ${estimatedCost.unknownCount}회 포함`}
+            </p>
+            <p>
+              호출 후 공급자가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정 금액이며
+              실제 청구액과 다를 수 있어요.
+            </p>
+            <p>본문과 작문 보조 호출 기준 · 번역·제목 등 후속 작업은 작업 현황에서 확인해요.</p>
+            {estimatedCost.unknownCount > 0 && (
+              <p>부분합은 확인된 금액만 더한 값이며 전체 추정 비용은 아직 미확인이에요.</p>
+            )}
+          </Dialog>
+        )}
+        {actionError && (
+          <p className="error source-action-error" role="alert">
+            {actionError}
+            {onModelSettings && (
+              <button type="button" className="secondary" onClick={onModelSettings}>
+                전역 모델 설정
+              </button>
+            )}
           </p>
-          <p>
-            호출 후 공급자가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정 금액이며
-            실제 청구액과 다를 수 있어요.
-          </p>
-          <p>본문과 작문 보조 호출 기준 · 번역·제목 등 후속 작업은 작업 현황에서 확인해요.</p>
-          {estimatedCost.unknownCount > 0 && (
-            <p>부분합은 확인된 금액만 더한 값이며 전체 추정 비용은 아직 미확인이에요.</p>
-          )}
-        </Dialog>
-      )}
-      {actionError && (
-        <p className="error source-action-error" role="alert">
-          {actionError}
-          {onModelSettings && (
-            <button type="button" className="secondary" onClick={onModelSettings}>
-              전역 모델 설정
-            </button>
-          )}
-        </p>
-      )}
+        )}
+      </ThemeFrame>
     </article>
   );
 }
