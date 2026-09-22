@@ -257,6 +257,9 @@ for (const width of [1440, 412]) {
         name: '린 메이화 대표 이미지 확대',
         exact: true,
       });
+      const portraitTarget = await enlarge.boundingBox();
+      expect(portraitTarget!.width).toBeGreaterThanOrEqual(44);
+      expect(portraitTarget!.height).toBeGreaterThanOrEqual(44);
       await enlarge.click();
       const dialog = page.getByRole('dialog', { name: '린 메이화 대표 이미지', exact: true });
       await expect(dialog).toBeVisible();
@@ -290,6 +293,10 @@ for (const width of [1440, 412]) {
       await copy.click();
       await expect.poll(() => clipboard.length).toBe(1);
       expect(clipboard[0]).toContain('마지막 문장.');
+      // A compact director memo keeps its real copy action reachable at desktop and phone widths.
+      await scene.getByTestId('source-request').click();
+      await scene.getByRole('button', { name: '요청 복사', exact: true }).click();
+      await expect.poll(() => clipboard.at(-1)).toBe(requestText);
       await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
       const editor = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
       await expect(editor).toBeFocused();
@@ -360,6 +367,15 @@ test('GALLERY square bot, tall persona, focus reading and failed image fallback'
   await expect(gallery).toBeHidden();
   await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();
   await expect(gallery).toBeVisible();
+  // Intermediate sizes must collapse the gallery before squeezing the manuscript.
+  for (const width of [768, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(async () => (await gallery.boundingBox())!.height).toBeLessThan(100);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const src = await bot.getAttribute('src');
   await page.route(`**${src}`, (route) =>
     route.fulfill({ status: 404, body: 'Unavailable test image' })

@@ -87,7 +87,9 @@ export const liquidGallery: ThemeDefinition = {
   padding: 32px 32px 72px;
 }
 .source + .source { margin-top: 48px; padding-top: 34px; }
-.reader .request-message-wrap { margin-bottom: 26px; }
+.reader .request-message-wrap { position: relative; margin-bottom: 24px; }
+/* Keep memo controls beside the label instead of reserving an empty row below short input. */
+.reader .request-message-actions { position: absolute; top: 10px; right: 10px; }
 .reader .request-message {
   max-width: 100%; width: 100%; margin: 0;
   padding: 15px 20px; border: 1px solid var(--line);
@@ -96,6 +98,7 @@ export const liquidGallery: ThemeDefinition = {
 }
 .reader .request-message:not(.request-message-editor)::before {
   content: '연출 메모'; display: block; margin-bottom: 7px;
+  min-height: 28px; line-height: 28px; padding-right: 96px;
   color: var(--accent); font-size: 11px; font-weight: 650; letter-spacing: .04em;
 }
 .reader .source-actions {
@@ -144,9 +147,9 @@ export const liquidGallery: ThemeDefinition = {
 .reader-gallery-card {
   display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
 }
-.reader-gallery .reader-portrait-button { width: 38px; flex: 0 0 38px; border-radius: 8px; }
-.reader-gallery .reader-portrait-button img { width: 100%; height: 44px; object-fit: contain; }
-.reader-gallery .reader-portrait-empty { min-height: 44px; font-size: 20px; }
+.reader-gallery .reader-portrait-button { width: 44px; flex: 0 0 44px; min-height: 48px; border-radius: 8px; }
+.reader-gallery .reader-portrait-button img { width: 100%; height: 48px; object-fit: contain; }
+.reader-gallery .reader-portrait-empty { min-height: 48px; font-size: 20px; }
 .reader-gallery figcaption { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .reader-gallery figcaption small { color: var(--muted); font-size: 10px; letter-spacing: .04em; }
 .reader-gallery figcaption strong {
@@ -196,7 +199,9 @@ export const liquidGallery: ThemeDefinition = {
     display: block; margin: auto 0 0; padding-top: 24px;
     color: var(--faint); font-size: 11px; text-align: center;
   }
-  .composer-dock { width: calc(100% - 246px); align-self: flex-start; }
+  .app-shell:not(.focus-reading) .story-workspace:has(.reader-gallery) .composer-dock {
+    width: calc(100% - 246px); align-self: flex-start;
+  }
 }
 .focus-reading .reader-gallery { display: none; }
 .focus-reading .composer-dock { width: 100%; }
