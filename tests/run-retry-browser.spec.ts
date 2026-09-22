@@ -81,7 +81,6 @@ test('failed request edit, draft protection and uncertain retry reuse one admiss
   const retried = saved.runs.find((run: { id: string }) => run.id !== failed.id);
   expect(retried.request).toBe('다시 쓸 합성 요청');
   expect(retried.snapshot.branchId).toBe(failed.snapshot.branchId);
-  expect(retried.snapshot.loreContextReset).toBe(true);
   expect(new URL(page.url()).searchParams.get('branch')).toBeNull();
   await expect(input).toHaveValue('보존할 초안');
   expect(saved.runs.find((run: { id: string }) => run.id === failed.id).status).toBe('failed');

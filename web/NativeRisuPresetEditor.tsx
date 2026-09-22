@@ -205,7 +205,7 @@ export function NativeRisuPresetEditor({
       )}
       {pending && (
         <p className="native-editor-notice" role="status">
-          변수·토글 또는 정규식에 미적용 입력이 있어요. 해당 영역에서 확인해 주세요.
+          직접 편집 중인 원문이 있어요. 저장할 때 함께 반영해요.
         </p>
       )}
       <div {...panel('blocks')} className="native-editor-split">

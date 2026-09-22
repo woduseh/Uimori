@@ -130,8 +130,8 @@ npm run verify:themes
 
 전체 SQLite 백업에는 테마와 선택도 들어가요. 개별 테마 JSON은 독립 교환용이고, 기존 봇/채팅 백업·독립 채팅 사본에는 별도 테마 자료와 선택을 자동 묶지 않아요. 다른 작업실로 옮길 때 테마도 따로 내보내고 적용해 주세요. 테마 삭제/편집은 원문이나 모델 입력을 변경하지 않아요. 표정 패널·BGM·TTS·입력 번역은 이번 기능의 범위가 아니에요.
 
-## Template support and updates
+## 템플릿 지원 범위와 갱신
 
-Templates support ordinary presentation HTML, native slots, inline `style` elements and non-submitting input/select/textarea controls. They do not run JavaScript or CBS, submit forms, or embed iframe/object documents. Unsupported executable or document-level markup is reported visibly and the default layout is used; it is not silently saved as an apparently working layout. Put app-wide styles in `appCss`, message styles in `messageCss`, and scoped layout styles in `templateCss`.
+일반적인 표시용 HTML, 기본 슬롯, 인라인 `style` 요소와 제출하지 않는 input·select·textarea 컨트롤을 지원해요. JavaScript·CBS 실행, 폼 제출, iframe·object 문서 삽입은 지원하지 않아요. 실행 가능한 속성이나 문서 수준의 지원하지 않는 마크업이 있으면 이유를 화면에 표시하고 기본 레이아웃을 사용해요. 저장한 내용이 정상 표시되는 것처럼 일부를 조용히 제거하지 않아요. 앱 전체 스타일은 `appCss`, 메시지 스타일은 `messageCss`, 레이아웃 내부 스타일은 `templateCss`에 작성해 주세요.
 
-An unchanged theme revision retains its applied DOM/CSS. The catalog supports conditional HTTP revalidation; helper activity only invalidates themes after an actual theme write.
+같은 테마 개정은 적용된 DOM·CSS를 유지해요. 테마 목록은 조건부 HTTP 재검증을 지원하며 도우미의 일반 활동이 아니라 실제 테마 변경이 있을 때 테마를 갱신해요.

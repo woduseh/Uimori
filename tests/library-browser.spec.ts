@@ -239,6 +239,7 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   page,
   request,
 }, info) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const prefix = `LIBUI03 ${Date.now()}`;
   const prompt = await (
     await request.post('/api/prompt-presets', {
@@ -289,6 +290,7 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   expect((await organization(request)).items.find((item) => item.id === prompt.id)?.folderId).toBe(
     folder.id
   );
+  await panel.getByRole('tab', { name: '기본 옵션', exact: true }).click();
   await panel.getByLabel('프롬프트 이름', { exact: true }).fill(`${prefix} Discard this draft`);
   await navigationAction(page, '서재');
   await expect(guard).toBeVisible();

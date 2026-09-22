@@ -823,7 +823,6 @@ test('PMUI09 invalid hidden model fields receive focus and a reversible disable 
     .poll(async () => (await library(request)).models.find((item) => item.id === a.id)?.enabled)
     .toBe(false);
   await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
-  await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
   await page.getByRole('button', { name: b.title + ' 모델 수정', exact: true }).click();
   await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(b.title);
   await form.getByLabel('모델 프리셋 이름').fill(b.title + ' 내 초안');

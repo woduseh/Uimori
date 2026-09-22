@@ -398,7 +398,13 @@ for (const viewport of viewports) {
       let variableKey = definitions.getByLabel('변수 키', { exact: true });
       await variableKey.fill('');
       await expect(variableKey).toHaveValue('');
-      await expect(save).toBeDisabled();
+      await expect(variableKey).toHaveAttribute('aria-invalid', 'true');
+      await save.click();
+      await expect(
+        editor
+          .getByRole('alert')
+          .filter({ hasText: '잘못 입력된 토글 또는 변수 값을 확인해 주세요.' })
+      ).toBeVisible();
       await editor.getByRole('tab', { name: '구성', exact: true }).click();
       await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
       variableKey = definitions.getByLabel('변수 키', { exact: true });
@@ -431,13 +437,13 @@ for (const viewport of viewports) {
         path: info.outputPath(`native-toggle-editor-${viewport.name}.png`),
       });
 
-      // Independent raw drafts survive tab switches and keep persistence blocked until both apply.
+      // Both valid raw documents survive tab switches and are included in the ordinary save.
       await rawView.click();
       raw = definitions.getByLabel('토글 정의 원문', { exact: true });
       const editedSource = await raw.inputValue();
       const withPendingSource = `${editedSource}\nsecond unknown line`;
       await raw.fill(withPendingSource);
-      await expect(save).toBeDisabled();
+      await expect(save).toBeEnabled();
       await editor.getByRole('tab', { name: '구성', exact: true }).click();
       await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
       await rawView.click();
@@ -447,13 +453,10 @@ for (const viewport of viewports) {
       const rawDefaults = definitions.getByLabel('Risu 기본 변수', { exact: true });
       const withPendingDefaults = `${guiDefaultVariables}\nleadingZero=0007`;
       await rawDefaults.fill(withPendingDefaults);
-      await expect(save).toBeDisabled();
-      await definitions.getByRole('button', { name: '원문 적용', exact: true }).click();
+      await expect(save).toBeEnabled();
       await definitions.getByRole('button', { name: '토글 구성', exact: true }).click();
       raw = definitions.getByLabel('토글 정의 원문', { exact: true });
       await expect(raw).toHaveValue(withPendingSource);
-      await expect(save).toBeDisabled();
-      await definitions.getByRole('button', { name: '원문 적용', exact: true }).click();
       const responsePromise = nextSave(page);
       await save.click();
       const response = await responsePromise;
@@ -632,7 +635,11 @@ for (const viewport of viewports) {
       const triggerRaw = editor.getByLabel('트리거 원문 JSON', { exact: true });
       const pendingTriggerRaw = '{"unfinished":';
       await triggerRaw.fill(pendingTriggerRaw);
-      await expect(save).toBeDisabled();
+      await save.click();
+      await expect(page.getByRole('alert').filter({ hasText: /JSON/ }).first()).toBeVisible();
+      expect((await (await request.get(`/api/content/${bot.id}`)).json()).revision).toBe(
+        bot.revision
+      );
       await advancedNav.getByRole('button', { name: '표시', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
       await advancedNav.getByRole('button', { name: '스크립트', exact: true }).click();
@@ -653,7 +660,11 @@ for (const viewport of viewports) {
       const raw = editor.getByLabel('Risu 원문 JSON', { exact: true });
       const pendingRaw = '{"unfinished":';
       await raw.fill(pendingRaw);
-      await expect(save).toBeDisabled();
+      await save.click();
+      await expect(page.getByRole('alert').first()).toBeVisible();
+      expect((await (await request.get(`/api/content/${bot.id}`)).json()).revision).toBe(
+        bot.revision
+      );
       await advancedNav.getByRole('button', { name: '표시', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
       await advancedNav.getByRole('button', { name: '원문', exact: true }).click();
@@ -669,7 +680,9 @@ for (const viewport of viewports) {
       expect(saved.id).toBe(bot.id);
       expect(saved.revision).toBe(bot.revision + 1);
       expect(saved.package.nativeRisu.card).toMatchObject({ name: editedName, first_mes: opening });
-      await expect(editor.getByRole('status').filter({ hasText: '저장됨' })).toBeVisible();
+      await expect(editor.locator('.resource-editor-status').getByRole('status')).toHaveText(
+        '저장됨'
+      );
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`bot-saved-${viewport.name}.png`) });
 
