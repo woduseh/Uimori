@@ -12,7 +12,6 @@ import { matchesPromptCombination } from './prompt-combinations.js';
 import {
   NATIVE_TRANSFER_FORMAT,
   NATIVE_TRANSFER_VERSION,
-  NATIVE_TRANSFER_MAX_BYTES,
   type NativeTransferFile,
   type NativeTransferPrepare,
 } from './native-transfer.js';
@@ -81,15 +80,7 @@ export type ValidatedNativeTransfer = {
 
 /** Structural, metadata and graph validation only. No destination lookup, evaluation or writes. */
 export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer {
-  const raw = object(value, [
-    'format',
-    'version',
-    'roots',
-    'contents',
-    'prompts',
-    'images',
-    'sourceFiles',
-  ]);
+  const raw = object(value, ['format', 'version', 'roots', 'contents', 'prompts', 'images']);
   if (raw.format !== NATIVE_TRANSFER_FORMAT || raw.version !== NATIVE_TRANSFER_VERSION)
     fail('FORMAT');
   const contents = list(raw.contents, 1000),
@@ -182,28 +173,6 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
     }
   }
   unique([...contents, ...prompts].map((entry) => entry.key));
-  if (raw.sourceFiles !== undefined) {
-    const entryKeys = new Set([...contents, ...prompts].map((entry) => entry.key));
-    const attached = list(raw.sourceFiles, 1000);
-    for (const item of attached) {
-      object(item, ['entryKey', 'name', 'mediaType', 'hash', 'base64']);
-      identity(item.entryKey);
-      text(item.name, 255);
-      text(item.mediaType, 200);
-      if (
-        !entryKeys.has(item.entryKey) ||
-        /[/\\]/u.test(item.name) ||
-        [...item.name].some((character) => character.charCodeAt(0) < 32) ||
-        ['.', '..'].includes(item.name) ||
-        !/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/u.test(item.mediaType) ||
-        typeof item.hash !== 'string' ||
-        !/^[a-f0-9]{64}$/u.test(item.hash)
-      )
-        fail('SOURCE_FILE');
-      text(item.base64, NATIVE_TRANSFER_MAX_BYTES, true);
-    }
-    unique(attached.map((item) => JSON.stringify([item.entryKey, item.name])));
-  }
   unique(contents.map((entry) => entry.source.id));
   unique(prompts.map((entry) => entry.source.id));
   unique(prompts.flatMap((entry) => entry.combinations.map((item: any) => item.id)));

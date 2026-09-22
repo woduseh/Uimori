@@ -10,7 +10,7 @@ import {
   outputs,
   packet,
   send,
-  settled,
+  observedCompletion,
 } from './fixtures/agent-collaboration.js';
 
 const _selectedRead = 'SELECTED_MAIN_READ: the copper door is locked.';
@@ -125,7 +125,7 @@ test('identical explicit context caches failures; a changed reference or draft s
       collaboration: collaboration({ maxCalls: 3, agents: [agent('advisor', { maxCalls: 3 })] }),
     }
   );
-  const run = await settled(state, (await state.start()).id);
+  const run = await observedCompletion(state, (await state.start()).id);
   expect(run.status).toBe('completed');
   expect(run.usage.modelCalls).toBe(8);
   expect(new Set(contextHashes).size).toBe(3);
@@ -240,7 +240,7 @@ test('future, missing and private advisor references are recoverable and correct
       }),
     }
   );
-  const run = await settled(state, (await state.start()).id);
+  const run = await observedCompletion(state, (await state.start()).id);
   expect(run.status).toBe('completed');
   expect(bCalls).toBe(1);
   expect(state.provider.requests).toHaveLength(6);
@@ -320,7 +320,7 @@ test('oversized serialized references and drafts can be corrected without spendi
       collaboration: collaboration({ agents: [agent('advisor', { tools: [] })] }),
     }
   );
-  const run = await settled(state, (await state.start()).id);
+  const run = await observedCompletion(state, (await state.start()).id);
   expect(run.status).toBe('completed');
   expect(advisorCalls).toBe(1);
   expect(state.provider.requests).toHaveLength(5);

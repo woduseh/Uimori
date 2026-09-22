@@ -155,7 +155,7 @@ test('module JSON registers a reusable module without a bot, chat or memory', as
       assets: [
         [
           'green',
-          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNI293xHwAF3QKpuamA4gAAAABJRU5ErkJggg==',
           'source-hash',
         ],
       ],
@@ -282,9 +282,9 @@ test('module scripts remain native source and module import cannot create memory
     store.product.get<Content>('content', saved.receipt.items[0].id).package!.nativeRisu!.module!
       .trigger
   ).toEqual([{ type: 'output', effect: [{ type: 'triggerlua', code: 'return "not executed"' }] }]);
-  expect(
-    async () => await applyRisuImport(store, { ...body, allowPartial: true, memoryIds: ['lore-0'] })
-  ).toThrow('Unknown request field');
+  await expect(
+    applyRisuImport(store, { ...body, allowPartial: true, memoryIds: ['lore-0'] })
+  ).rejects.toThrow('Unknown request field');
   expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
   expect(() =>
     prepareRisuImport({
@@ -401,7 +401,7 @@ test('card imports preserve all lore and cannot move it into the first chat note
     expect(store.story.notes.revision(result.chat.id)).toBe(0);
     expect(JSON.stringify(bot)).not.toContain(source.base64);
     const selectedBody = { ...body, idempotencyKey: 'with-memory', memoryIds: ['lore-1'] };
-    expect(async () => await applyRisuImport(store, selectedBody)).toThrow('Unknown request field');
+    await expect(applyRisuImport(store, selectedBody)).rejects.toThrow('Unknown request field');
     expect(
       (
         bot.package!.nativeRisu.card.character_book as { entries: { enabled: boolean }[] }
@@ -530,7 +530,7 @@ test('module envelopes retain their explicit kind and malformed embedded section
 test('module project ZIP reads ordered asset files within one project folder without RPack', async () => {
   const store = database();
   const png = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNI293xHwAF3QKpuamA4gAAAABJRU5ErkJggg==',
     'base64'
   );
   const document = {
@@ -620,7 +620,7 @@ test('module project refuses paths outside its folder and multiple module defini
 test('charx keeps card-owned images while reading its embedded module; corrupt files never register', async () => {
   const store = database();
   const png = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNI293xHwAF3QKpuamA4gAAAABJRU5ErkJggg==',
     'base64'
   );
   const value = card();
@@ -907,7 +907,7 @@ const SURFACE_CODES = [
 test('card metadata and typed assets remain in native source without conversion findings', async () => {
   const store = database();
   const png = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNI293xHwAF3QKpuamA4gAAAABJRU5ErkJggg==',
     'base64'
   );
   const value = card();

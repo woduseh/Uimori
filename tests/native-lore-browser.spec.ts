@@ -21,7 +21,7 @@ async function post<T>(request: APIRequestContext, path: string, data: unknown):
 function nextSave(page: Page) {
   return page.waitForResponse(
     (response) =>
-      /\/api\/edit-drafts\/[^/]+\/save$/.test(new URL(response.url()).pathname) &&
+      /\/api\/resources\/save$/.test(new URL(response.url()).pathname) &&
       response.request().method() === 'POST'
   );
 }

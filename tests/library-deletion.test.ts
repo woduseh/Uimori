@@ -47,7 +47,7 @@ const content = (title = 'Synthetic', relatedIds: string[] = []) => ({
   relatedIds,
 });
 
-test('removes library visibility while preserving every revision and enforcing CAS', () => {
+test('removes library visibility while preserving the latest stored resource and enforcing CAS', () => {
   const s = database(),
     a = s.product.content(content()),
     b = s.product.content(content('Keep'));
@@ -60,9 +60,10 @@ test('removes library visibility while preserving every revision and enforcing C
     deleted: true,
     id: a.id,
   });
-  expect(s.db.prepare('SELECT * FROM versions WHERE id=?').all(a.id)).toHaveLength(2);
+  expect(s.db.prepare('SELECT * FROM versions WHERE id=?').all(a.id)).toHaveLength(1);
   expect(s.product.all('content').some((item) => item.id === a.id)).toBe(false);
-  expect(s.product.get('content', a.id, 1)).toEqual(a);
+  expect(() => s.product.get('content', a.id, 1)).toThrow('content revision not found');
+  expect(s.product.get('content', a.id)).toEqual(changed);
   expect(s.product.get('content', b.id)).toEqual(b);
   expect(() => deleteLibraryItem(s, 'content', a.id, { expectedRevision: 2 })).toThrow('not found');
 });
@@ -79,7 +80,7 @@ test('historical and current content references do not block removing a library 
   });
   deleteLibraryItem(s, 'content', module.id, { expectedRevision: 1 });
   expect(s.db.prepare('SELECT * FROM versions ORDER BY kind,id,revision').all()).toEqual(history);
-  expect(s.product.get('content', owner.id, 1)).toEqual(owner);
+  expect(s.product.get<{ revision: number }>('content', owner.id).revision).toBe(2);
 });
 
 test('prompt copies and chat contents survive preset deletion', () => {

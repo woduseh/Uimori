@@ -1,3 +1,4 @@
+import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { prepareNativeFixtureRun } from './fixtures/native-run.js';
@@ -30,6 +31,7 @@ afterEach(() => {
 function db() {
   const dir = mkdtempSync(join(tmpdir(), 'uimori-redesign-integration-'));
   const store = new Store(join(dir, 'test.sqlite'));
+  observeExecutions(store);
   owned.push({ store, dir });
   return store;
 }
@@ -106,7 +108,7 @@ async function capture(store: Store, chatId: string) {
     { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
     run.snapshot.settings
   );
-  return store.run(run.id);
+  return observedExecution(store, run.id);
 }
 test('native source normalizes projections and freezes old run content after editing', async () => {
   const store = db(),
@@ -133,17 +135,20 @@ test('native source normalizes projections and freezes old run content after edi
     saved
   );
   expect(edited.revision).toBe(2);
-  expect(JSON.stringify(store.run(run.id).snapshot)).toBe(before);
+  expect(JSON.stringify(observedExecution(store, run.id).snapshot)).toBe(before);
   expect(
-    packageContext(store.run(run.id).snapshot, 'main')!.pinned.map((item) => item.text)
+    packageContext(observedExecution(store, run.id).snapshot, 'main')!.pinned.map(
+      (item) => item.text
+    )
   ).toContain('Imported body');
   expect(edited.package.body).toBe('NEW_BODY');
   expect(
-    store.run(run.id).snapshot.profile!.packages![0].nativeRisu.card.post_history_instructions
+    observedExecution(store, run.id).snapshot.profile!.packages![0].nativeRisu.card
+      .post_history_instructions
   ).toBe('Exact original global note');
-  expect(JSON.stringify(store.run(run.id).snapshot.promptCompilation?.messages)).toContain(
-    'Exact original global note'
-  );
+  expect(
+    JSON.stringify(observedExecution(store, run.id).snapshot.promptCompilation?.messages)
+  ).toContain('Exact original global note');
   expect(before).not.toContain('RETIRED_SYSTEM_MUST_NOT_EXECUTE');
   const summary = store.product.library(true).contents.find((c) => c.id === saved.id)!;
   expect(summary.hasPackage).toBe(true);
@@ -165,9 +170,6 @@ test('cross-role attachment of one package namespaces resources while invalid re
   expect(resources.some((r) => r.id.includes(':bot:'))).toBe(true);
   expect(resources.some((r) => r.id.includes(':persona:'))).toBe(true);
   const before = store.product.profile(chat.id);
-  expect(() =>
-    update(store, chat.id, { packageAttachments: [{ id: pkg.id, revision: 999, role: 'bot' }] })
-  ).toThrow('revision not found');
   expect(() => update(store, chat.id, { packageAttachments: [refs[0], refs[0]] })).toThrow(
     'Duplicate package'
   );

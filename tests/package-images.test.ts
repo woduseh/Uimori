@@ -53,7 +53,7 @@ function fixture() {
 }
 // Small synthetic byte fixtures; no artwork or user files.
 const png = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG1sAAAAASUVORK5CYII=',
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
   'base64'
 );
 const jpeg = Buffer.from([255, 216, 255, 217]);
@@ -226,9 +226,9 @@ test('source reservation and delayed worker keep old names and removed images; e
     result: null,
   });
   expect(imageCatalog(next.input).some((asset) => asset.ref.startsWith('package:'))).toBe(false);
-  expect(store.product.get<Content>('content', first.id, first.revision).package!.images).toEqual([
-    item,
-  ]);
+  expect(() => store.product.get<Content>('content', first.id, first.revision)).toThrow(
+    'content revision not found'
+  );
   expect(() => requestImages(store, source.id, command)).toThrow();
 });
 
@@ -242,7 +242,7 @@ test('blob decoding enforces allowed signatures, canonical encoding and the per-
   expect(() => decodeImage('image/svg+xml', png.toString('base64'))).toThrow();
   expect(() => decodeImage('image/jpeg', png.toString('base64'))).toThrow();
   expect(() => decodeImage('image/png', png.toString('base64') + '\n')).toThrow();
-  const oversized = Buffer.alloc(2_000_001);
+  const oversized = Buffer.alloc(64 * 1024 * 1024 + 1);
   png.copy(oversized);
   expect(() => decodeImage('image/png', oversized.toString('base64'))).toThrow();
   const broken = Buffer.from(webp);

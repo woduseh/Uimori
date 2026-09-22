@@ -1,3 +1,4 @@
+import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { prepareNativeRisuReadOnly } from '../server/risu-native-readonly.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -37,6 +38,7 @@ afterEach(async () => {
 async function database() {
   const directory = await mkdtemp(join(tmpdir(), 'Uimori outline tests '));
   const store = new Store(join(directory, 'story.sqlite'));
+  observeExecutions(store);
   owned.push({ directory, store });
   return store;
 }
@@ -189,7 +191,7 @@ function write(store: Store, chatId: string, commandId: string, text: string) {
     { modelCalls: 1, inputTokens: 10, outputTokens: 20, costUsd: null },
     run.snapshot.settings
   );
-  return { run: store.run(run.id), source };
+  return { run: observedExecution(store, run.id), source };
 }
 
 describe('hierarchical composition', () => {
@@ -228,7 +230,7 @@ describe('hierarchical composition', () => {
       run.snapshot.settings
     );
     // No composition exists, so nothing is frozen and no composition input is required.
-    expect(store.run(run.id).snapshot.outline).toBeUndefined();
+    expect(observedExecution(store, run.id).snapshot.outline).toBeUndefined();
     expect(store.product.branch(chat.id).headRevision).toBe(source.id);
     expect(store.outline.detail(chat.id).nodes).toEqual([]);
   });
@@ -591,7 +593,9 @@ describe('hierarchical composition', () => {
       { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
       run.snapshot.settings
     );
-    expect(replay().run.snapshot.outline).toEqual(run.snapshot.outline);
+    expect(replay().run.id).toBe(run.id);
+    expect(observedExecution(store, run.id).snapshot.outline).toEqual(run.snapshot.outline);
+    expect(store.run(run.id).inputs).toEqual([]);
     expect(store.outline.sceneCommand(episode.id, { idempotencyKey: commandKey }).runId).toBe(
       run.id
     );

@@ -7,7 +7,7 @@ import { createApp } from '../server/app.js';
 import type { Content, Library } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';
 
-test('library summary omits bodies and unrelated assets; exact revision editing and historical reads remain intact', async () => {
+test('library summary omits bodies and unrelated assets; current editing rejects stale revisions without retaining old bodies', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'uimori-library-loading-'));
   const target = resolve(directory);
   const inside = relative(resolve(tmpdir()), target);
@@ -46,7 +46,7 @@ test('library summary omits bodies and unrelated assets; exact revision editing 
         title: `Synthetic image ${i}`,
         mime: 'image/png',
         base64:
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=',
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWPY3RH6HwAGMgKYxcNPSgAAAABJRU5ErkJggg==',
         description: 'Synthetic metadata only',
         actor: '',
         outfit: '',
@@ -99,7 +99,8 @@ test('library summary omits bodies and unrelated assets; exact revision editing 
       method: 'GET',
       url: `/api/revisions/content/${id}/${revision}`,
     });
-    expect(oldResponse.json()).toEqual(original);
+    expect(oldResponse.statusCode).toBe(404);
+    expect(oldResponse.json()).toEqual({ error: 'content revision not found' });
     expect(changed.text).toBe('Changed exact revision');
     expect(product.library(true).contents.find((item) => item.id === id)?.revision).toBe(
       changed.revision

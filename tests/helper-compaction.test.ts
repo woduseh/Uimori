@@ -90,7 +90,7 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
     endpoint: options.vertex
       ? `${vertexOrigin}/v1/projects/synthetic-project/locations/global/publishers/google/models`
       : origin,
-    ...(options.vertex ? { credentialRef: 'UIMORI_PROVIDER_VERTEX_TEST' } : {}),
+    ...(options.vertex ? { apiKey: 'SYNTHETIC_VERTEX_TOKEN' } : {}),
     enabled: true,
   });
   const contextConnection = store.product.connection({

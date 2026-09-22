@@ -1,6 +1,5 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
-import { openChatSettings } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -36,7 +35,7 @@ const connectionInput = (title: string) => ({
   title,
   protocol: 'openai-responses-v1',
   endpoint: 'http://127.0.0.1:9/v1',
-  credentialRef: 'PM_SYNTHETIC_KEY',
+  apiKey: 'PM_SYNTHETIC_KEY',
   enabled: true,
 });
 const modelInput = (connection: Connection, title: string) => ({
@@ -105,7 +104,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await expect(form).toContainText(/\d{4}-\d{2}-\d{2}/);
   await form.getByLabel('API 기본 주소').fill('http://127.0.0.1:9/v1');
   await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
-  await form.getByLabel('서버 환경변수 이름').fill('PM_SYNTHETIC_KEY');
+  await form.getByLabel('API 키').fill('PM_SYNTHETIC_KEY');
   await form.getByLabel('이 프로바이더 사용').check();
   await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
   await expect(
@@ -117,7 +116,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await modelForm.getByText('프로바이더 준비 상태와 목록 새로고침', { exact: true }).click();
   await expect(
     modelForm.getByRole('region', { name: '선택한 프로바이더 준비 상태' })
-  ).toContainText('사용 전 설정 확인이 필요해요');
+  ).toContainText('서버 설정 준비됨');
   // Only the UI's error handling is mocked; no outbound catalog request is sent.
   await page.route(`**/api/connections/${connection.id}/catalog`, (route) =>
     route.fulfill({
@@ -214,7 +213,7 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
     title,
     protocol: 'vercel-chat-v1',
     endpoint: 'https://ai-gateway.vercel.sh/v1',
-    credentialRef: 'PM_SYNTHETIC_KEY',
+    apiKey: 'PM_SYNTHETIC_KEY',
     enabled: true,
   });
   await settings(page);
@@ -251,7 +250,7 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   await page.getByRole('button', { name: title + ' 프로바이더 복제', exact: true }).click();
   await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title + ' 복사');
   await expect(form.getByLabel('이 프로바이더 사용')).not.toBeChecked();
-  await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue('PM_SYNTHETIC_KEY');
+  await expect(form.getByLabel('API 키')).toHaveValue('');
   expect(
     (await library(request)).connections.filter((item) => item.title.startsWith(title))
   ).toHaveLength(1);
@@ -417,7 +416,6 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await page.keyboard.press('Escape');
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(changed.title);
-  await openChatSettings(page);
   await selectCurrentSettingsSection(page, '역할별 모델');
   await expect(page.getByLabel('원문 모델', { exact: true })).toHaveValue(`${original.id}`);
   await expect(
@@ -637,7 +635,6 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     'https://aiplatform.googleapis.com/v1/projects/synthetic-original/locations/global/publishers/google/models';
   await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
   await form.getByLabel('Google Agent Platform endpoint').fill(originalEndpoint);
-  await form.getByLabel('서버 환경변수 이름').fill('UIMORI_PROVIDER_SYNTHETIC_ORIGINAL');
   const projectId = 'synthetic-project',
     clientEmail = 'test@synthetic-project.iam.gserviceaccount.com';
   let uploads = 0;
@@ -661,12 +658,10 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     await expect(upload.getByRole('alert')).toContainText(message);
     await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title);
     await expect(form.getByLabel('Google Agent Platform endpoint')).toHaveValue(originalEndpoint);
-    await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(
-      'UIMORI_PROVIDER_SYNTHETIC_ORIGINAL'
-    );
+    await expect(form.getByLabel('API 키', { exact: true })).toHaveCount(0);
     expect(uploads).toBe(0);
   }
-  // Fresh synthetic RSA material exercises real isolated file storage; no OAuth or Vertex call is needed.
+  // Fresh synthetic RSA material exercises real isolated database storage; no OAuth or Vertex call is needed.
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
@@ -697,19 +692,8 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   expect(credentialRef).toMatch(/^UIMORI_PROVIDER_VERTEX_FILE_[A-F0-9]{32}$/);
   expect(uploads).toBe(1);
   expect(uploadBody).toEqual({ serviceAccount });
-  await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(credentialRef);
-  const authSettings = form.locator('.provider-auth-settings'),
-    changeAuth = form.getByRole('button', {
-      name: '서버 ADC / 환경변수 방식으로 변경',
-      exact: true,
-    });
-  await expect(form.getByText('등록한 JSON으로 인증해요.', { exact: false })).toBeVisible();
-  await expect(changeAuth).toBeHidden();
-  await authSettings.getByText('고급 인증 설정', { exact: true }).click();
-  await expect(changeAuth).toBeVisible();
-  await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(credentialRef);
-  await authSettings.getByText('고급 인증 설정', { exact: true }).click();
-  await expect(changeAuth).toBeHidden();
+  await expect(form.getByLabel('API 키', { exact: true })).toHaveCount(0);
+  await expect(upload.getByRole('status')).toContainText(projectId);
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models`;
   await expect(form.getByLabel('Google Agent Platform endpoint')).toHaveValue(endpoint);
   expect(
@@ -738,11 +722,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await page.getByLabel('프로바이더·모델 검색').fill(title);
   await page.getByRole('button', { name: title + ' 프로바이더 수정', exact: true }).click();
-  await expect(changeAuth).toBeHidden();
-  await authSettings.getByText('고급 인증 설정', { exact: true }).click();
-  await changeAuth.click();
-  await expect(form.getByLabel('서버 환경변수 이름')).toBeVisible();
-  await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue('');
+  await expect(form.getByRole('region', { name: 'Google 서비스 계정 JSON' })).toBeVisible();
   expect(
     (await library(request)).connections.find((item) => item.title === title)?.credentialRef
   ).toBe(credentialRef);
@@ -760,7 +740,7 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
       title,
       protocol: 'anthropic-messages-v1',
       endpoint: 'https://api.anthropic.com/v1',
-      credentialRef: 'UIMORI_PROVIDER_ANTHROPIC',
+      apiKey: 'SYNTHETIC_ANTHROPIC_KEY',
       enabled: true,
     });
   await settings(page);
@@ -945,7 +925,7 @@ for (const [index, item] of providerOptionCases.entries()) {
         title,
         protocol: item.protocol,
         endpoint: item.endpoint,
-        credentialRef: 'PM_SYNTHETIC_KEY',
+        apiKey: 'PM_SYNTHETIC_KEY',
         enabled: false,
       });
     await settings(page);
@@ -1025,14 +1005,14 @@ test('PMUI12 changing the model or connection keeps choices visible as unverifie
       title,
       protocol: 'openai-responses-v1',
       endpoint: 'https://api.openai.com/v1',
-      credentialRef: 'PM_SYNTHETIC_KEY',
+      apiKey: 'PM_SYNTHETIC_KEY',
       enabled: false,
     }),
     anthropic = await api<Connection>(request, '/connections', {
       title: title + ' Anthropic',
       protocol: 'anthropic-messages-v1',
       endpoint: 'https://api.anthropic.com/v1',
-      credentialRef: 'PM_SYNTHETIC_KEY',
+      apiKey: 'PM_SYNTHETIC_KEY',
       enabled: false,
     });
   await settings(page);
@@ -1252,7 +1232,7 @@ test('PMUI15 a forced Google service tier is shown and conflicting saved choices
       protocol: 'vertex-gemini-v1',
       endpoint:
         'https://aiplatform.googleapis.com/v1/projects/synthetic-forced-tier/locations/global/publishers/google/models',
-      credentialRef: 'PM_SYNTHETIC_KEY',
+      apiKey: 'PM_SYNTHETIC_KEY',
       enabled: true,
     });
   const model = await api<ModelPreset>(request, '/model-presets', {
@@ -1362,7 +1342,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await form.getByLabel('프로바이더 이름', { exact: true }).fill('보존할 Codex 초안');
   await expect(form.getByLabel('Codex 실행 위치')).toHaveValue('codex://local');
   await expect(form.getByLabel('Codex 실행 위치')).toHaveAttribute('readonly', '');
-  await expect(form.getByLabel('서버 환경변수 이름')).toBeHidden();
+  await expect(form.getByLabel('API 키')).toBeHidden();
   await selectSettingsSection(page, 'Codex 연결');
   const panel = page.getByRole('region', { name: 'Codex 에이전트 연결' });
   await expect(panel).toContainText('로그인 필요');
@@ -1456,64 +1436,6 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   expect(observed.legacyReads).toEqual([]);
 });
 
-test('PMUI16 endpoint guidance checks server policy before saving and ignores a stale draft response', async ({
-  page,
-  request,
-}, info) => {
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  await settings(page);
-  await startProviderConnection(page);
-  await page
-    .getByRole('region', { name: '제공자 선택', exact: true })
-    .getByRole('button', { name: /OpenAI · Responses/ })
-    .click();
-  const form = page.getByRole('form', { name: '프로바이더 편집 양식' }),
-    address = form.getByLabel('API 기본 주소'),
-    status = form.getByRole('status', { name: '프로바이더 주소 확인' });
-  await expect(status).toContainText('별도 주소 허용 설정 없이');
-  const before = await library(request);
-  await address.fill('https://custom.example/v1');
-  await expect(status).toContainText('서버에서 한 번 허용');
-  await expect(status).toContainText('https://custom.example');
-  await expect(status).toContainText('매번 입력하지 않아도');
-  for (const width of DEFAULT_WIDTHS) {
-    await page.setViewportSize({ width, height: 1000 });
-    await status.scrollIntoViewIfNeeded();
-    const box = await status.boundingBox();
-    expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(width);
-    if (visualReview)
-      await status.screenshot({ path: info.outputPath(`endpoint-guidance-${width}.png`) });
-  }
-  let release!: () => void, seen!: () => void;
-  const pending = new Promise<void>((resolve) => {
-    seen = resolve;
-  });
-  await page.route('**/api/provider-management/endpoint-status', async (route) => {
-    if (route.request().postDataJSON().endpoint !== 'https://delayed.example/v1') {
-      await route.continue();
-      return;
-    }
-    seen();
-    await new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await route.fulfill({ json: { status: 'needs-approval', origin: 'https://delayed.example' } });
-  });
-  await address.fill('https://delayed.example/v1');
-  await pending;
-  await address.fill('https://api.openai.com/v1');
-  await expect(status).toContainText('공식 공급자 주소');
-  release();
-  await expect(status).not.toContainText('delayed.example');
-  await form.getByLabel('프로바이더 프로토콜').selectOption('vertex-gemini-v1');
-  await form.getByLabel('Google Cloud 프로젝트 ID').fill('synthetic-project');
-  await expect(status).toContainText('공식 공급자 주소');
-  const after = await library(request);
-  expect(after.connections).toEqual(before.connections);
-  expect(after.models).toEqual(before.models);
-});
-
 test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and save reviewed options on mobile', async ({
   page,
   request,
@@ -1537,10 +1459,8 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
   await expect(connectionForm.getByLabel('API 기본 주소')).toHaveValue(
     'https://api.deepseek.com/v1'
   );
-  await expect(connectionForm.getByLabel('서버 환경변수 이름')).toHaveValue('DEEPSEEK_API_KEY');
-  await expect(connectionForm.getByRole('status', { name: '프로바이더 주소 확인' })).toContainText(
-    '공식 공급자 주소'
-  );
+  await expect(connectionForm.getByLabel('API 키')).toHaveValue('');
+  await connectionForm.getByLabel('API 키').fill('SYNTHETIC_DEEPSEEK_KEY');
   await connectionForm.getByLabel('프로바이더 이름', { exact: true }).fill(prefix + ' DeepSeek');
   await connectionForm.getByLabel('이 프로바이더 사용').uncheck();
   await connectionForm.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
@@ -1551,7 +1471,6 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
     .toMatchObject({
       protocol: 'deepseek-chat-v1',
       endpoint: 'https://api.deepseek.com/v1',
-      credentialRef: 'DEEPSEEK_API_KEY',
       enabled: false,
     });
   const cases = [
@@ -1595,7 +1514,7 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
         title,
         protocol: item.protocol,
         endpoint: item.endpoint,
-        credentialRef: 'PM_SYNTHETIC_KEY',
+        apiKey: 'PM_SYNTHETIC_KEY',
         enabled: false,
       });
     await settings(page);

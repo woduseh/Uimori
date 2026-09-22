@@ -44,10 +44,12 @@ export function executionSnapshot(store: Store, snapshot: RunSnapshot): RunSnaps
   if (!snapshot.settled) return snapshot;
   const { settled: _settled, ...saved } = snapshot;
   const profile = store.product.snapshot(snapshot.chatId, 'inspect', snapshot.parentRevision);
-  return {
+  const restored = {
     ...saved,
     profile,
     history: store.history(snapshot.parentRevision),
     resources: store.product.resources(snapshot.chatId, profile),
   };
+  const story = store.story.prepare(restored);
+  return story ? { ...restored, story } : restored;
 }

@@ -66,21 +66,13 @@ export async function selectChatSettingsSection(page: Page, name: string) {
   else await navigation.getByRole('button', { name, exact: true }).click();
 }
 export async function selectPackageSection(page: Page, name: string) {
-  const fields = page.getByTestId('package-fields');
-  await expect(fields).toBeVisible();
-  // The list/detail split follows a media query, so right after a resize the previous layout is
-  // still mounted. Reading the back button then races React and clicks an element about to go.
-  await expect(fields.locator('.package-editor-layout')).toHaveAttribute(
-    'data-compact',
-    String((page.viewportSize()?.width ?? 0) <= 760)
-  );
-  const back = fields.getByRole('button', { name: '패키지 분야 목록', exact: true });
-  if (await back.isVisible()) await back.click();
-  const tab = fields.getByRole('tab', { name, exact: true });
+  const navigation = page.getByLabel('자료 편집 영역', { exact: true });
+  await expect(navigation).toBeVisible();
+  const tab = navigation.getByRole('tab', { name, exact: true });
   if (await tab.isVisible()) await tab.click();
-  else await fields.getByRole('button', { name, exact: true }).click();
+  else await navigation.getByRole('button', { name, exact: true }).click();
 }
-/** Opens the chat header's ⋯ menu (fork, reading settings, tasks, archived branches). */
+
 export async function openChatMenu(page: Page) {
   const menu = page.locator('.chat-menu');
   if ((await menu.getAttribute('open')) === null) await menu.getByLabel('채팅 메뉴').click();

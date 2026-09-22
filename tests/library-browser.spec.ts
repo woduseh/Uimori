@@ -293,9 +293,9 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await expect(guard).toBeVisible();
   await guard.getByRole('button', { name: '초안 버리고 이동', exact: true }).click();
   await expect(page.getByTestId('library-panel')).toBeVisible();
-  expect(
-    await (await request.get(`/api/edit-drafts?editorKey=prompt-preset:${prompt.id}`)).json()
-  ).toEqual([]);
+  expect((await (await request.get(`/api/prompt-presets/${prompt.id}`)).json()).title).toBe(
+    `${prefix} Unsaved`
+  );
   await navigationAction(page, '프롬프트');
   await panel.getByRole('button', { name: `${prefix} Unsaved 프롬프트 편집`, exact: true }).click();
   await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(`${prefix} Unsaved`);

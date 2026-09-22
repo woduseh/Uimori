@@ -106,7 +106,6 @@ function success(init?: RequestInit, score = 0.95) {
 
 describe('JEV connection settings and explicit diagnostics', () => {
   test.each([
-    ['empty', ''],
     ['whitespace', '   '],
     ['header injection', 'secret\r\nheader:value'],
     ['oversized', 'x'.repeat(4097)],
@@ -118,13 +117,13 @@ describe('JEV connection settings and explicit diagnostics', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('saved credentials take precedence and removal falls back to the environment', async () => {
+  test('JEV reads only the DB and deletion does not fall back to environment keys', async () => {
     vi.stubEnv('TYPESAFE_API_KEY', envKey);
     const { app } = await setup();
     const initial = await status(app);
     expect(initial).toMatchObject({
-      configured: true,
-      credentialSource: 'environment',
+      configured: false,
+      credentialSource: 'missing',
       hasSavedKey: false,
     });
     vi.mocked(fetch).mockImplementation(async (_url, init) => success(init));
@@ -147,17 +146,14 @@ describe('JEV connection settings and explicit diagnostics', () => {
     expect(deleted.statusCode, deleted.body).toBe(200);
     const fallback = deleted.json() as Status;
     expect(fallback).toMatchObject({
-      configured: true,
-      credentialSource: 'environment',
+      configured: false,
+      credentialSource: 'missing',
       hasSavedKey: false,
     });
     expect(fallback.revision).toBeGreaterThan(saved.revision);
-    await terminal(app, (await start(app, fallback.revision)).id);
-    expect(new Headers(vi.mocked(fetch).mock.calls[1][1]?.headers).get('authorization')).toBe(
-      `Bearer ${envKey}`
-    );
+    await start(app, fallback.revision, randomUUID(), 400);
     expect(JSON.stringify(await status(app))).not.toContain(envKey);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   test('runs one tiny fixed judgment, deduplicates pending and completed requests, and retains only safe diagnostics', async () => {

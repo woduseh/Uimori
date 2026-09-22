@@ -177,7 +177,7 @@ function finishOther(store: Store, revision: Source, assetId: string) {
   }
 }
 const pixel =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=';
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWPY3RH6HwAGMgKYxcNPSgAAAABJRU5ErkJggg==';
 async function _rich(app: App) {
   const store = app.store;
   const chat = createFixtureChat(store, 'Synthetic original');
@@ -290,7 +290,7 @@ async function _rich(app: App) {
 }
 
 describe('independent stored-story fork without generation', () => {
-  test('makes repeated keys durable, uses distinct automatic titles and rejects conflicting selections', async () => {
+  test('makes repeated keys durable, uses independent IDs even with identical automatic titles and rejects conflicting selections', async () => {
     const store = await database();
     const chat = createFixtureChat(store, 'Names');
     const first = source(store, chat.id, 'First scene.');
@@ -298,13 +298,13 @@ describe('independent stored-story fork without generation', () => {
     const body = { fromRevision: first.id, idempotencyKey: 'stable-command' };
     const a = forkChat(store, chat.id, body);
     const b = forkChat(store, chat.id, { ...body, idempotencyKey: 'second-command' });
-    expect([a.title, b.title]).toEqual(['Names · 포크 1', 'Names · 포크 2']);
+    expect([a.title, b.title]).toEqual(['Names (사본)', 'Names (사본)']);
     expect(forkChat(store, chat.id, body)).toEqual(a);
     expect(() => forkChat(store, chat.id, { ...body, fromRevision: second.id })).toThrow(
-      'Fork idempotency key reused'
+      '다른 채팅에 같은 가져오기 ID'
     );
     expect(() => forkChat(store, chat.id, { ...body, title: 'Different title' })).toThrow(
-      'Fork idempotency key reused'
+      '다른 채팅에 같은 가져오기 ID'
     );
     const item = owned.find((item) => item.store === store)!;
     store.close();

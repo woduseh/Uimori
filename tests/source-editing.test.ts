@@ -1,3 +1,4 @@
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { rejudgeTranslation } from '../server/source-editing.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { DatabaseSync } from 'node:sqlite';
@@ -97,7 +98,7 @@ test('new translation freezes the current prompt and retry policy while pending 
   const store = database();
   const chat = createFixtureChat(store, 'current translation');
   const original = source(store, chat.id, 'A'.repeat(60000));
-  const originalSnapshot = store.run(original.runId).snapshot;
+  const originalSnapshot = readStoredRunSnapshot(store, original.runId);
   const firstSettings = promptSetting(store, 'First translation instructions');
   const reserved = store.requestTranslation(original.id);
   expect(reserved.input).toMatchObject({
@@ -123,7 +124,7 @@ test('new translation freezes the current prompt and retry policy while pending 
   await translateFixture(store, next.id);
   expect(store.job(reserved.id).result?.text).toBe(original.text);
   expect(store.job(next.id).previousResult).toBeUndefined();
-  expect(store.run(original.runId).snapshot).toEqual(originalSnapshot);
+  expect(readStoredRunSnapshot(store, original.runId)).toEqual(originalSnapshot);
   expect(
     store.db.prepare("SELECT name FROM sqlite_master WHERE name='job_chunks'").get()
   ).toBeUndefined();
@@ -180,7 +181,7 @@ test('explicit retry creates a new current-policy job and preserves failed candi
 test('failure diagnostics persist only for the current owner and generation without changing frozen inputs', () => {
   const store = database();
   const original = source(store);
-  const originalSnapshot = structuredClone(store.run(original.runId).snapshot);
+  const originalSnapshot = structuredClone(readStoredRunSnapshot(store, original.runId));
   promptSetting(store, 'Frozen translation instructions');
   const job = store.requestTranslation(original.id);
   const active = store.claimJob(job.id, 'diagnostic-owner', {})!;
@@ -221,7 +222,7 @@ test('failure diagnostics persist only for the current owner and generation with
   expect(store.source(original.id)).toEqual(reservedSource);
   expect(reservedSource.text).toBe(original.text);
   expect(reservedSource.hash).toBe(original.hash);
-  expect(store.run(original.runId).snapshot).toEqual(originalSnapshot);
+  expect(readStoredRunSnapshot(store, original.runId)).toEqual(originalSnapshot);
   const completed = structuredClone(store.job(job.id));
   expect(
     store.finishAuxiliary(job.id, active.generation, 'diagnostic-owner', {
@@ -366,7 +367,7 @@ test('unsupported v2 database refuses startup without rewriting translation rese
   const db = new DatabaseSync(path);
   db.exec('PRAGMA user_version=2;');
   db.close();
-  expect(() => new Store(path)).toThrow('Unsupported database schema version 2');
+  expect(() => new Store(path)).toThrow('Database version 2 is not the personal-v1 format');
   const original = new DatabaseSync(path, { readOnly: true });
   try {
     expect(original.prepare('SELECT status FROM jobs WHERE id=?').get(job.id)).toEqual({

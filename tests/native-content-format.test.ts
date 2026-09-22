@@ -55,7 +55,7 @@ test('old content versions and even empty retired instruction arrays are rejecte
 });
 
 test('schema-23 admission refuses before rewriting the database or supplying a migration', () => {
-  expect(DATABASE_SCHEMA_VERSION).toBe(24);
+  expect(DATABASE_SCHEMA_VERSION).toBe(1);
   const directory = mkdtempSync(join(tmpdir(), 'uimori-format-boundary-'));
   const file = join(directory, 'old.sqlite');
   let db: DatabaseSync | undefined;
@@ -68,7 +68,9 @@ test('schema-23 admission refuses before rewriting the database or supplying a m
     db = undefined;
     const before = readFileSync(file);
     db = new DatabaseSync(file);
-    expect(() => databaseSchemaVersion(db!)).toThrow('Unsupported database schema version 23');
+    expect(() => databaseSchemaVersion(db!)).toThrow(
+      'Database version 23 is not the personal-v1 format'
+    );
     expect(db.prepare('PRAGMA user_version').get()?.user_version).toBe(23);
     expect(db.prepare('SELECT body FROM saved_text').get()?.body).toBe('preserve');
     db.close();

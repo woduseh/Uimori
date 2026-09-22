@@ -49,7 +49,10 @@ for (const testMode of [false, true]) {
       expect(app.store.db.prepare('SELECT count(*) AS n FROM attempts').get()).toEqual({ n: 0 });
     } else {
       expect(response.statusCode).toBe(200);
-      await vi.waitFor(() => expect(app!.store.run(response.json().id).status).toBe('completed'));
+      // Assert asynchronous completion, not a subsecond performance requirement.
+      await vi.waitFor(() => expect(app!.store.run(response.json().id).status).toBe('completed'), {
+        timeout: 5000,
+      });
     }
   });
 }

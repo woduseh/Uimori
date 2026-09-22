@@ -78,7 +78,7 @@ const modelBody = (connection: Connection, changes: Record<string, unknown> = {}
 const _ref = ({ id }: { id: string }) => ({ id });
 
 describe('Vertex connection and model settings with file SQLite', () => {
-  test('accepts ADC and named Bearer references, normalizes the global base path and rejects unsupported authority', async () => {
+  test('accepts ADC and app-entered Bearer keys, normalizes the global base path and rejects unsupported authority', async () => {
     const app = await application();
     const adc = await request<Connection>(
       app,
@@ -95,9 +95,9 @@ describe('Vertex connection and model settings with file SQLite', () => {
     const bearer = await request<Connection>(
       app,
       '/connections',
-      vertexConnection({ credentialRef: 'UIMORI_PROVIDER_VERTEX_TEST' })
+      vertexConnection({ apiKey: 'synthetic-vertex-token' })
     );
-    expect(bearer.credentialRef).toBe('UIMORI_PROVIDER_VERTEX_TEST');
+    expect(app.store.credentials.get(bearer.credentialRef!)).toBe('synthetic-vertex-token');
     for (const invalid of [
       endpoint.replace('https:', 'http:'),
       endpoint.replace('aiplatform.googleapis.com', 'example.invalid'),
@@ -110,21 +110,9 @@ describe('Vertex connection and model settings with file SQLite', () => {
       endpoint.replace('https://', 'https://synthetic@'),
     ])
       await request(app, '/connections', vertexConnection({ endpoint: invalid }), 400);
-    const generic = await request<Connection>(
-      app,
-      '/connections',
-      vertexConnection({ credentialRef: 'GOOGLE_APPLICATION_CREDENTIALS' })
-    );
-    expect(generic.credentialRef).toBe('GOOGLE_APPLICATION_CREDENTIALS');
-    for (const credentialRef of [null, false, 0])
-      await request(app, '/connections', vertexConnection({ credentialRef }), 400);
-    await request(
-      app,
-      '/connections',
-      vertexConnection({ apiKey: 'SYNTHETIC_NOT_A_CREDENTIAL' }),
-      400
-    );
-    expect(app.store.product.all('connection')).toHaveLength(3);
+    for (const apiKey of [false, 0, 'line\nbreak'])
+      await request(app, '/connections', vertexConnection({ apiKey }), 400);
+    expect(app.store.product.all('connection')).toHaveLength(2);
   });
 
   test('stores the selected model defaults and bounds while keeping fixture rows unchanged', async () => {
@@ -204,14 +192,13 @@ describe('Vertex connection and model settings with file SQLite', () => {
     const connection = await request<Connection>(
       app,
       '/connections',
-      vertexConnection({ enabled: false, credentialRef: 'UIMORI_PROVIDER_VERTEX_TEST' })
+      vertexConnection({ enabled: false })
     );
     const catalog = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
     expect(catalog).toMatchObject({
       id: connection.id,
       revision: 2,
       enabled: false,
-      credentialRef: connection.credentialRef,
       catalogError: null,
     });
     expect(catalog.catalog).toEqual([

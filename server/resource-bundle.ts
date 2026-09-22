@@ -107,13 +107,43 @@ export function importResourceBundle(store: Store, value: unknown): NativeTransf
   const prepared = inspectBundle(checked.file);
   if (body.digest !== prepared.digest)
     throw new HttpError(409, '가져올 자료가 변경됐어요. 다시 확인해 주세요.');
+  const supplied = body.modelBindings ?? [];
+  if (!Array.isArray(supplied)) throw new HttpError(400, '모델 연결 목록을 확인해 주세요.');
+  const requirements = new Set(checked.modelRequirements.map((item) => item.key));
+  const mapped = new Map<
+    string,
+    { requirementKey: string; mode: 'local' | 'inherit-main'; model?: { id: string } }
+  >();
+  for (const value of supplied) {
+    const binding = record(value);
+    fields(binding, ['requirementKey', 'mode', 'model']);
+    const requirementKey = text(binding.requirementKey, 'model requirement', 300);
+    if (!requirements.has(requirementKey) || mapped.has(requirementKey))
+      throw new HttpError(400, '잘못되거나 중복된 모델 연결이에요.');
+    if (binding.mode === 'inherit-main')
+      mapped.set(requirementKey, { requirementKey, mode: 'inherit-main' });
+    else if (binding.mode === 'local')
+      mapped.set(requirementKey, {
+        requirementKey,
+        mode: 'local',
+        model: { id: text(record(binding.model).id, 'model ID', 100) },
+      });
+    else throw new HttpError(400, '모델 연결 방식을 확인해 주세요.');
+  }
+  const bindings = [...requirements]
+    .sort()
+    .map(
+      (requirementKey) =>
+        mapped.get(requirementKey) ?? { requirementKey, mode: 'inherit-main' as const }
+    );
+  const commandDigest = bundleDigest({ file: prepared.digest, bindings });
   const key = text(body.idempotencyKey, 'import request', 200);
   return store.transaction(() => {
     const prior = store.db
       .prepare('SELECT digest,result FROM import_operations WHERE key=?')
       .get(key);
     if (prior) {
-      if (prior.digest !== prepared.digest)
+      if (prior.digest !== commandDigest)
         throw new HttpError(409, '다른 가져오기 요청에 같은 ID가 사용됐어요.');
       return { ...JSON.parse(String(prior.result)), created: false };
     }
@@ -135,10 +165,8 @@ export function importResourceBundle(store: Store, value: unknown): NativeTransf
     for (const entry of checked.file.prompts) {
       const { id: _id, revision: _revision, ...source } = structuredClone(entry.source);
       for (const agent of source.program.collaboration?.agents ?? []) {
-        const binding = Array.isArray(body.modelBindings)
-          ? body.modelBindings.find((item) => item.requirementKey === `${entry.key}/${agent.id}`)
-          : undefined;
-        agent.model = binding?.mode === 'local' ? binding.model : null;
+        const binding = mapped.get(`${entry.key}/${agent.id}`);
+        agent.model = binding?.mode === 'local' ? binding.model! : null;
       }
       const saved = store.product.promptPreset(source, undefined, true, ids.get(entry.key)!);
       for (const combination of entry.combinations) {
@@ -159,7 +187,7 @@ export function importResourceBundle(store: Store, value: unknown): NativeTransf
     };
     store.db
       .prepare('INSERT INTO import_operations VALUES(?,?,?)')
-      .run(key, prepared.digest, JSON.stringify(receipt));
+      .run(key, commandDigest, JSON.stringify(receipt));
     store.db
       .prepare(
         'DELETE FROM import_operations WHERE rowid NOT IN (SELECT rowid FROM import_operations ORDER BY rowid DESC LIMIT 256)'

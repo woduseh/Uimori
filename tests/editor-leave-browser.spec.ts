@@ -142,7 +142,7 @@ for (const viewport of viewports) {
       await expect(raw).toHaveValue('[{"unfinished":');
       await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
 
-      const savePattern = '**/api/edit-drafts/*/save';
+      const savePattern = '**/api/resources/save';
       await page.route(savePattern, (route) =>
         route.fulfill({ status: 500, json: { error: 'Synthetic save failure' } })
       );

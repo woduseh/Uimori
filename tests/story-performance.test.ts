@@ -58,7 +58,7 @@ const dimensions: { dimension: Dimension; larger: number }[] = [
   { dimension: 'assetCount', larger: 1000 },
 ];
 const pixel =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=';
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWPY3RH6HwAGMgKYxcNPSgAAAABJRU5ErkJggg==';
 const manuscript = (length: number) =>
   `old-source-begin\n${'Synthetic scene. '.repeat(Math.ceil(length / 17))}`.slice(0, length - 17) +
   '\nold-source-end!!';

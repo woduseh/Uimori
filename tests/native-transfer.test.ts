@@ -12,7 +12,7 @@ import {
   prepareNativeTransfer,
 } from '../server/native-transfer.js';
 import { validateNativeTransfer } from '../core/native-transfer-validation.js';
-import { NATIVE_TRANSFER_MAX_BYTES, type NativeTransferFile } from '../core/native-transfer.js';
+import { type NativeTransferFile } from '../core/native-transfer.js';
 import type {
   Content,
   ModelPreset,
@@ -108,7 +108,7 @@ function sourceFixture() {
   const image = putImageBlob(store.product, {
     mime: 'image/png',
     base64:
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG1sAAAAASUVORK5CYII=',
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
   });
   const shared = save(store, 'module', 'Same name', {
     images: [
@@ -197,20 +197,6 @@ function snapshot(store: Store) {
   );
 }
 
-test('NATIVE16 source bytes share the existing whole-file size limit', () => {
-  const { file } = sourceFixture();
-  file.sourceFiles = [
-    {
-      entryKey: file.contents[0].key,
-      name: 'large.bin',
-      mediaType: 'application/octet-stream',
-      hash: '0'.repeat(64),
-      base64: 'A'.repeat(NATIVE_TRANSFER_MAX_BYTES),
-    },
-  ];
-  expect(() => prepareNativeTransfer({ file })).toThrow('NATIVE_TRANSFER_TOO_LARGE');
-});
-
 test('NATIVE01 captures nested shared modules at their effective revision and preserves authored source refs', () => {
   const f = sourceFixture();
   const prepared = prepareNativeTransfer({ file: f.file });
@@ -221,7 +207,7 @@ test('NATIVE01 captures nested shared modules at their effective revision and pr
   expect(prepared.warnings).toMatchObject([{ code: 'COMBINATION_INACTIVE' }]);
   const bot = f.file.contents.find((entry) => entry.source.id === f.bot.id)!;
   const shared = f.file.contents.find((entry) => entry.source.id === f.shared.id)!;
-  expect(bot.source.package!.modules![1].revision).toBe(1);
+  expect(bot.source.package!.modules![1].revision).toBe(2);
   expect(shared.source.revision).toBe(2);
   expect(bot.modules[1]).toBe(shared.key);
   expect(f.store.product.get<Content>('content', f.bot.id).package!.modules![1].revision).toBe(1);
@@ -280,7 +266,7 @@ test('NATIVE02 prepare writes nothing; apply creates one identity graph without 
   );
 
   const original = String(
-    target.store.db.prepare('SELECT original FROM native_transfer_receipts').get()!.original
+    target.store.db.prepare('SELECT result FROM import_operations').get()!.result
   );
   expect(original).not.toContain('SYNTHETIC_BODY');
   expect(original).not.toContain('SYNTHETIC_PROMPT_BODY');
@@ -296,8 +282,8 @@ test('NATIVE03 same installation IDs and duplicate names are copied; durable key
   expect(
     first.items.some((item) => f.file.contents.some((source) => source.source.id === item.id))
   ).toBe(false);
-  expect(f.store.product.get('content', f.bot.id)).toEqual(
-    f.file.contents.find((item) => item.source.id === f.bot.id)!.source
+  expect(f.store.db.prepare('SELECT * FROM versions WHERE id=?').all(f.bot.id)).toEqual(
+    (before.versions as any[]).filter((row) => row.id === f.bot.id)
   );
   const applied = snapshot(f.store);
   const owner = owned.find((item) => item.store === f.store)!;
@@ -319,9 +305,13 @@ test('NATIVE04 mapping is explicit and revalidated; unavailable local model and 
     { store } = database();
   const body = request(source.file),
     before = snapshot(store);
-  expect(() => applyNativeTransfer(store, { ...body, modelBindings: [] })).toThrow(
-    'MODEL_BINDINGS_REQUIRED'
-  );
+  const fallback = database().store;
+  const imported = applyNativeTransfer(fallback, { ...body, modelBindings: [] });
+  const prompt = imported.items.find((item) => item.kind === 'prompt-preset')!;
+  expect(
+    fallback.product.get<PromptPreset>('prompt-preset', prompt.id).program.collaboration!.agents[0]
+      .model
+  ).toBeNull();
   expect(() =>
     applyNativeTransfer(store, {
       ...body,
@@ -351,10 +341,10 @@ test('NATIVE04 mapping is explicit and revalidated; unavailable local model and 
     ).program.collaboration!.agents[0].model
   ).toEqual({ id: local.id });
   const after = snapshot(store);
-  expect(() => applyNativeTransfer(store, body)).toThrow('IMPORT_CONFLICT');
+  expect(() => applyNativeTransfer(store, body)).toThrow('다른 가져오기 요청에 같은 ID');
   expect(() =>
     applyNativeTransfer(store, { ...body, digest: '0'.repeat(64), idempotencyKey: 'new-key' })
-  ).toThrow('DRAFT_CHANGED');
+  ).toThrow('가져올 자료가 변경됐어요');
   expect(snapshot(store)).toEqual(after);
   store.db.prepare("INSERT INTO library_hidden VALUES('model',?)").run(local.id);
   const hidden = snapshot(store);
@@ -488,24 +478,4 @@ test('NATIVE12 the native file uses the existing module depth limit before persi
     }),
   };
   expect(() => prepareNativeTransfer({ file })).toThrow('Package module dependency limit');
-});
-
-test('NATIVE13 export enforces SQLite byte lengths before loading an oversized dependency body', () => {
-  const f = sourceFixture(),
-    before = snapshot(f.store);
-  const read = vi.spyOn(f.store.product, 'get');
-  const prepare = f.store.db.prepare.bind(f.store.db);
-  vi.spyOn(f.store.db, 'prepare').mockImplementation((sql) => {
-    const statement = prepare(sql);
-    if (!sql.startsWith('SELECT length(CAST(body AS BLOB))')) return statement;
-    return {
-      get: (...args: any[]) =>
-        args[1] === f.shared.id ? { bytes: NATIVE_TRANSFER_MAX_BYTES + 1 } : statement.get(...args),
-    } as ReturnType<typeof prepare>;
-  });
-  expect(() =>
-    exportNativeTransfer(f.store, { items: [{ kind: 'content', id: f.bot.id }] })
-  ).toThrow('NATIVE_TRANSFER_TOO_LARGE');
-  expect(read.mock.calls.some((args) => args[1] === f.shared.id)).toBe(false);
-  expect(snapshot(f.store)).toEqual(before);
 });

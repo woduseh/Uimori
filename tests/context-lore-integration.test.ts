@@ -1,3 +1,4 @@
+import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { nativeContent } from './fixtures/native-content.js';
@@ -203,6 +204,7 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
       buildId: 'synthetic-context-lore-test',
     }));
   await app.ready();
+  observeExecutions(app.store);
   // Reference pressure is measured against the same short synthetic instructions.
   updatePromptWorkspace(app.store, {
     expectedRevision: modelWorkspace(app.store).revision,
@@ -363,7 +365,7 @@ async function terminal(app: App, id: string) {
   let run!: Run;
   await vi.waitFor(
     () => {
-      run = app.store.run(id);
+      run = observedExecution(app.store, id);
       expect(['queued', 'running']).not.toContain(run.status);
     },
     { timeout: 10_000, interval: 20 }

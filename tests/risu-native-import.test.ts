@@ -180,7 +180,7 @@ test.each(['json', 'charx'])(
       receipt: { created: false },
     });
     expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
-    expect(async () => await applyRisuImport(store, { ...request, kind: 'bot' })).toThrow(
+    await expect(applyRisuImport(store, { ...request, kind: 'bot' })).rejects.toThrow(
       'RISU_IMPORT_DRAFT_CHANGED'
     );
 
@@ -274,7 +274,9 @@ test('native edits reproject canonical source, preserve unknown fields and retai
   expect(updated.package!.lore[0].text).toBe('NEW RAW {{char}}');
   expect(updated.package!.loreActivation!.mode).toBe('discoverable');
   expect(updated.package!.nativeRisu!.card.unknown).toEqual(synthetic().unknown);
-  expect(store.product.get<Content>('content', id, revision)).toEqual(saved);
+  expect(() => store.product.get<Content>('content', id, revision)).toThrow(
+    'content revision not found'
+  );
   expect(() => store.product.content(request, id)).toThrow(/Revision conflict/);
 });
 
@@ -370,7 +372,7 @@ test('standalone risum retains source scripts and maps ordered embedded image by
     assets: [{ name: 'main', imageId: 'image-0' }],
   });
   expect(file.images[0].base64).toBe(png.toString('base64'));
-  expect(file.sourceFiles![0].base64).toBe(bytes.toString('base64'));
+  expect(file).not.toHaveProperty('sourceFiles');
   expect(() =>
     readCharacterCard({ name: 'native.risum', base64: bytes.toString('base64') }, 'bot')
   ).toThrow('RISU_IMPORT_KIND');

@@ -62,8 +62,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   await collaboration.locator('.ac-limits > summary').click();
   await collaboration.getByLabel('전체 추가 호출 한도', { exact: true }).fill('4');
   const updated = page.waitForResponse(
-    (item) =>
-      /\/api\/edit-drafts\/[^/]+\/save$/.test(item.url()) && item.request().method() === 'POST'
+    (item) => /\/api\/resources\/save$/.test(item.url()) && item.request().method() === 'POST'
   );
   await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   const saved = (await (await updated).json()).saved as PromptPreset;

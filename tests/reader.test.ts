@@ -196,7 +196,6 @@ test('100-source HTTP reader pages retain order while execution snapshot and ful
     sources.slice(0, -1).map((item) => ({
       revision: item.id,
       text: item.text,
-      contentHash: item.hash,
     }))
   );
 });

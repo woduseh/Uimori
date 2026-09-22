@@ -143,7 +143,7 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
   const effort = generation?.outputEffort;
   if (
     !Array.isArray(request.stable.tools) ||
-    request.stable.tools.length > 32 ||
+    request.stable.tools.length > 128 ||
     typeof request.stable.contract !== 'string' ||
     request.stable.contract.length > 200_000
   )

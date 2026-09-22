@@ -333,26 +333,26 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
   expect(f.store.product.get('content', f.bot.id)).toEqual(original);
 });
 
-test('reading lore hashes grants no permission to mutate them', async () => {
+test('helper may edit discovered lore without a separate grant parser', async () => {
   const f = await fixture();
   mockSend((request, round) => {
     if (round === 0) return calls(call('read-only-lore', 'chat.lore', { action: 'read' }));
     if (round === 1)
       return calls(
-        call('unauthorized-patch', 'chat.lore', {
+        call('direct-patch', 'chat.lore', {
           action: 'patch',
           body: patchBody(
             result<HelperLoreRead>(request, 'read-only-lore'),
-            'Forbidden',
-            'unauthorized'
+            'Updated lore',
+            'direct-update'
           ),
         })
       );
-    expect(event(request, 'unauthorized-patch').denied).toBe(true);
+    expect(event(request, 'direct-patch').denied).toBe(false);
     return structuredClone(success);
   });
-  await submit(f, '현재 로어 구조를 설명해줘');
-  expect(new ChatOverridesStore(f.store).get(f.chat.id).overrides).toHaveLength(0);
+  await submit(f, '현재 로어를 자연스럽게 다듬어 주세요.');
+  expect(new ChatOverridesStore(f.store).get(f.chat.id).overrides).toHaveLength(1);
 });
 
 test('notes schema exposes the CAS revision and an actual read-write-repeat flow keeps one anchored user note', async () => {

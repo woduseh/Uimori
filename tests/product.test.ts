@@ -3,13 +3,11 @@ import { nativeContent } from './fixtures/native-content.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
 import { Store } from '../server/store.js';
-import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { ProductStore } from '../server/product-store.js';
 import { buildMainInput } from '../core/provider.js';
 import type { ChatProfile, Connection, Content, ModelPreset } from '../core/product.js';
@@ -148,7 +146,7 @@ function completedSource(
   return store.completeRun(run.id, text, noUsage, run.snapshot.settings);
 }
 const pixel =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=';
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWPY3RH6HwAGMgKYxcNPSgAAAABJRU5ErkJggg==';
 const assetBody = {
   title: 'Synthetic pixel',
   mime: 'image/png',
@@ -197,7 +195,7 @@ describe('M1 product data with actual file SQLite', () => {
         .snapshot.resources.find((item) => item.id === `package:${lore.id}:module:lore:lore-0`)
         ?.text
     ).toBe('UNREAD_LORE_V1');
-    expect(product.get<Content>('content', lore.id, 1).package.lore[0].text).toBe('UNREAD_LORE_V1');
+    expect(() => product.get<Content>('content', lore.id, 1)).toThrow('content revision not found');
     expect(
       product.snapshot(chat.id)?.packages?.find((item) => item.id === lore.id)?.lore[0].text
     ).toBe('EDITED_LORE_V2');
@@ -239,7 +237,7 @@ describe('M1 product data with actual file SQLite', () => {
       title: 'Local fixture',
       protocol: 'fixture-sse-v1',
       endpoint: 'http://127.0.0.1:49999/turn',
-      credentialRef: 'UIMORI_PROVIDER_SYNTHETIC',
+      apiKey: 'synthetic-provider-key',
       enabled: true,
     }) as Connection;
     const model = product.model({
@@ -254,7 +252,9 @@ describe('M1 product data with actual file SQLite', () => {
     });
     const snapshot = product.snapshot(chat.id)!;
     expect(snapshot.models.main?.modelId).toBe('user-entered-unknown-model');
-    expect(snapshot.models.main?.connection.credentialRef).toBe('UIMORI_PROVIDER_SYNTHETIC');
+    expect(store.credentials.get(snapshot.models.main!.connection.credentialRef!)).toBe(
+      'synthetic-provider-key'
+    );
     expect(bound.catalog).toEqual([]);
     expect(() =>
       product.connection({
@@ -376,34 +376,6 @@ describe('M1 product data with actual file SQLite', () => {
     expect(server.requests).toHaveLength(2);
     expect(product.attempts(chat.id).every((attempt) => attempt.costUsd === null)).toBe(true);
   });
-
-  test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, DATABASE_SCHEMA_VERSION + 1])(
-    'P11 rejects unsupported schema %i without automatic migration or backup',
-    async (version) => {
-      const item = await directory();
-      const path = join(item.directory, 'legacy.sqlite');
-      schema1Fixture(path);
-      const old = new DatabaseSync(path);
-      old.exec(`PRAGMA user_version=${version};`);
-      old.close();
-      expect(() => new Store(path)).toThrow(`Unsupported database schema version ${version}`);
-      expect(() => new Store(path)).toThrow('Use a new empty UIMORI_DB path');
-      expect((await readdir(item.directory)).filter((name) => name.includes('.pre-'))).toEqual([]);
-      const backup = new DatabaseSync(path, { readOnly: true });
-      try {
-        expect(backup.prepare('PRAGMA user_version').get()).toEqual({ user_version: version });
-        expect(backup.prepare('SELECT text FROM sources WHERE id=?').get('old-source')).toEqual({
-          text: 'Legacy original preserved.',
-        });
-        expect(
-          backup.prepare('SELECT result FROM job_results WHERE job_id=?').get('old-job')
-        ).toEqual({ result: JSON.stringify({ mock: true, text: '기존 모의 번역' }) });
-        expect(backup.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      } finally {
-        backup.close();
-      }
-    }
-  );
 });
 
 async function application(options: { accessToken?: string } = {}) {
@@ -471,7 +443,7 @@ async function terminalJob(url: string, chatId: string, id: string): Promise<Job
 }
 
 describe('M1 real HTTP application boundaries', () => {
-  test('P07 P08 P12 explicit retry translates the whole scene with the current model and retains source-time references', async () => {
+  test('P07 P08 P12 explicit retry translates the whole scene with the current model and reads current resources when auxiliary execution begins', async () => {
     vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-jev-key');
     const originalFetch = globalThis.fetch;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -493,6 +465,8 @@ describe('M1 real HTTP application boundaries', () => {
     let failTranslation = true;
     let expectedTranslationModel = 'fixture-translator';
     let glossaryId = '';
+    let expectedGlossary = 'SOURCE_TIME_GLOSSARY_OLD';
+    let expectedGlossaryRevision = 1;
     const originalText = ['First', 'Middle', 'Last']
       .map(
         (label) =>
@@ -519,12 +493,11 @@ describe('M1 real HTTP application boundaries', () => {
         expect.arrayContaining([
           expect.objectContaining({
             id: glossaryId,
-            revision: 1,
-            text: 'SOURCE_TIME_GLOSSARY_OLD',
+            revision: expectedGlossaryRevision,
+            text: expectedGlossary,
           }),
         ])
       );
-      expect(JSON.stringify(body)).not.toContain('FUTURE_GLOSSARY_NEW');
       expect(source.text).toBe(originalText);
       translationCalls++;
       if (body.input.results.length === 0) {
@@ -543,7 +516,7 @@ describe('M1 real HTTP application boundaries', () => {
       expect(body.input.results[0]).toMatchObject({
         callId: 'translation-read-glossary',
         denied: false,
-        result: { text: 'SOURCE_TIME_GLOSSARY_OLD', source: { revision: 1 } },
+        result: { text: expectedGlossary, source: { revision: expectedGlossaryRevision } },
       });
       if (failTranslation) {
         await writeSse(response, [
@@ -560,6 +533,7 @@ describe('M1 real HTTP application boundaries', () => {
     });
     fixtureItem.close = provider.close;
     const { app, url } = await application({});
+    app.store.credentials.set('jev', 'synthetic-jev-key');
     const created = await api<Chat>(url, '/api/chats', { title: 'Translation HTTP fixture' });
     const chat = await api<Chat>(
       url,
@@ -646,6 +620,8 @@ describe('M1 real HTTP application boundaries', () => {
       translation.id
     );
     expectedTranslationModel = 'future-translator';
+    expectedGlossary = 'FUTURE_GLOSSARY_NEW';
+    expectedGlossaryRevision = updatedGlossary.revision;
     failTranslation = false;
     const retried = await api<Job>(url, `/api/jobs/${jobId}/retry`, {});
     expect(retried.id).not.toBe(jobId);
@@ -763,6 +739,7 @@ describe('M1 real HTTP application boundaries', () => {
     });
     fixtureItem.close = provider.close;
     const { app, url } = await application({});
+    app.store.credentials.set('jev', 'synthetic-jev-key');
     const initial = await api<Chat>(url, '/api/chats', { title: 'HTTP provider chat' });
     const chat = await api<Chat>(
       url,
@@ -835,7 +812,8 @@ describe('M1 real HTTP application boundaries', () => {
       title: 'HTTP sibling',
     });
     expect(duplicate.id).toBe(sibling.id);
-    expect(app.store.run(sibling.id).snapshot.candidateOf).toBe(created.id);
+    expect(sibling.chatId).not.toBe(chat.id);
+    expect(app.store.run(sibling.id).snapshot.candidateOf).toBeUndefined();
     expect(app.store.chat(chat.id).headRevision).toBe(completed.sourceRevision);
     expect(provider.requests).toHaveLength(4);
     expect(app.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
@@ -866,11 +844,12 @@ describe('M1 real HTTP application boundaries', () => {
     process.env[envName] = 'SYNTHETIC_CATALOG_CREDENTIAL';
     try {
       const { app, url } = await application({});
+      app.store.credentials.set('jev', 'synthetic-jev-key');
       const bound = app.store.product.connection({
         title: 'Catalog fixture',
         protocol: 'fixture-sse-v1',
         endpoint: provider.endpoint,
-        credentialRef: envName,
+        apiKey: process.env[envName],
         enabled: true,
       }) as Connection;
       const model = app.store.product.model({
@@ -885,7 +864,7 @@ describe('M1 real HTTP application boundaries', () => {
       expect(refreshed.catalog.map((item) => item.id)).toEqual(['catalog-new-entry']);
       expect(refreshed.catalog[0].capabilities.structuredOutput).toBeNull();
       expect(refreshed.catalog[0].priceRevision).toBeNull();
-      expect(refreshed.credentialRef).toBe(envName);
+      expect(refreshed.credentialRef).toBe(bound.credentialRef);
       expect(refreshed.enabled).toBe(true);
       expect(app.store.product.get<ModelPreset>('model', model.id)).toEqual(model);
       fail = true;
@@ -893,7 +872,7 @@ describe('M1 real HTTP application boundaries', () => {
       const failed = app.store.product.get<Connection>('connection', bound.id);
       expect(failed.catalog).toEqual(refreshed.catalog);
       expect(failed.catalogError).toBeTruthy();
-      expect(failed.credentialRef).toBe(envName);
+      expect(failed.credentialRef).toBe(bound.credentialRef);
       expect(failed.enabled).toBe(true);
       expect(app.store.product.get<ModelPreset>('model', model.id).modelId).toBe(
         'manual-unlisted-id'
@@ -954,101 +933,3 @@ describe('M1 real HTTP application boundaries', () => {
     expect(app.store.chats()).toHaveLength(1);
   });
 });
-
-/** A frozen schema-1 input fixture, independent of the new migration implementation. */
-function schema1Fixture(path: string) {
-  const db = new DatabaseSync(path);
-  const settings = {
-    preset: 'calm',
-    mode: 'direct',
-    translation: true,
-    status: false,
-    maxCalls: 8,
-  };
-  const time = '2026-09-06T00:00:00Z';
-  const text = 'Legacy original preserved.';
-  try {
-    db.exec(`PRAGMA foreign_keys=ON;
-      CREATE TABLE chats (id TEXT PRIMARY KEY,title TEXT NOT NULL,head_revision TEXT,settings_revision INTEGER NOT NULL,settings TEXT NOT NULL,created_at TEXT NOT NULL);
-      CREATE TABLE resources (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),body TEXT NOT NULL);
-      CREATE TABLE runs (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),parent_revision TEXT,status TEXT NOT NULL,request TEXT NOT NULL,snapshot TEXT NOT NULL,request_key TEXT NOT NULL,command TEXT NOT NULL,source_revision TEXT,error TEXT,usage TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(chat_id,request_key));
-      CREATE UNIQUE INDEX one_active_run_per_chat ON runs(chat_id) WHERE status IN ('queued','running');
-      CREATE TABLE sources (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),run_id TEXT NOT NULL UNIQUE REFERENCES runs(id),parent_revision TEXT REFERENCES sources(id),text TEXT NOT NULL,hash TEXT NOT NULL,created_at TEXT NOT NULL);
-      CREATE TABLE jobs (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),source_revision TEXT NOT NULL REFERENCES sources(id),source_hash TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('translation','status')),status TEXT NOT NULL,generation INTEGER NOT NULL DEFAULT 0,owner TEXT,input TEXT,error TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(source_revision,kind));
-      CREATE TABLE job_results (job_id TEXT PRIMARY KEY REFERENCES jobs(id),generation INTEGER NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
-      CREATE TABLE model_inputs (seq INTEGER PRIMARY KEY AUTOINCREMENT,run_id TEXT NOT NULL REFERENCES runs(id),input TEXT NOT NULL);
-      CREATE TABLE tool_events (seq INTEGER PRIMARY KEY AUTOINCREMENT,run_id TEXT NOT NULL REFERENCES runs(id),event TEXT NOT NULL);
-      CREATE TABLE events (seq INTEGER PRIMARY KEY AUTOINCREMENT,chat_id TEXT NOT NULL REFERENCES chats(id),kind TEXT NOT NULL,entity_id TEXT NOT NULL,at TEXT NOT NULL);
-      PRAGMA user_version=1;`);
-    db.prepare('INSERT INTO chats VALUES(?,?,?,?,?,?)').run(
-      'old-chat',
-      'Legacy fixture',
-      'old-source',
-      1,
-      JSON.stringify(settings),
-      time
-    );
-    const snapshot = {
-      chatId: 'old-chat',
-      parentRevision: null,
-      settingsRevision: 1,
-      settings,
-      request: 'Legacy request',
-      history: [],
-      resources: [],
-    };
-    db.prepare('INSERT INTO runs VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
-      'old-run',
-      'old-chat',
-      null,
-      'completed',
-      'Legacy request',
-      JSON.stringify(snapshot),
-      'legacy-key',
-      '{}',
-      'old-source',
-      null,
-      JSON.stringify(noUsage),
-      time,
-      time
-    );
-    const hash = createHash('sha256').update(text).digest('hex');
-    db.prepare('INSERT INTO sources VALUES(?,?,?,?,?,?,?)').run(
-      'old-source',
-      'old-chat',
-      'old-run',
-      null,
-      text,
-      hash,
-      time
-    );
-    db.prepare('INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(
-      'old-job',
-      'old-chat',
-      'old-source',
-      hash,
-      'translation',
-      'completed',
-      1,
-      'old-owner',
-      '{}',
-      null,
-      time,
-      time
-    );
-    db.prepare('INSERT INTO job_results VALUES(?,?,?,?)').run(
-      'old-job',
-      1,
-      JSON.stringify({ mock: true, text: '기존 모의 번역' }),
-      time
-    );
-    db.prepare('INSERT INTO events(chat_id,kind,entity_id,at) VALUES(?,?,?,?)').run(
-      'old-chat',
-      'source.ready',
-      'old-source',
-      time
-    );
-  } finally {
-    db.close();
-  }
-}

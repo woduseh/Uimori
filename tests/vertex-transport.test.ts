@@ -391,7 +391,7 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
       request(),
       options({ resolveCredential, onWire })
     );
-    expect(wrongOrigin.error?.code).toBe('ENDPOINT_NOT_APPROVED');
+    expect(wrongOrigin.error?.code).toBe('INVALID_VERTEX_ENDPOINT');
     expect(resolveCredential).not.toHaveBeenCalled();
     expect(onWire).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledTimes(1);

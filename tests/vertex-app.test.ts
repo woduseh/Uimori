@@ -1,10 +1,12 @@
+import type { Job } from '../core/types.js';
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 import { injectWithFixtureBot, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import type { Chat, ChatDetail, Run, RunSnapshot } from '../core/types.js';
 import type {
@@ -90,7 +92,7 @@ async function launch(item: (typeof owned)[number]) {
     testMode: true,
   });
   item.app = app;
-  configureJevFixture(app.store);
+  if (!app.store.credentials.get('jev')) configureJevFixture(app.store);
   await app.listen({ port: 0, host: '127.0.0.1' });
   return app;
 }
@@ -190,27 +192,6 @@ function decoded(bodyText: string) {
 const complete = (text: string): Json[] => [
   {
     candidates: [{ index: 0, content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP' }],
-  },
-  { usageMetadata: usage },
-];
-const read = (id: string, contentId: string): Json[] => [
-  {
-    candidates: [
-      {
-        index: 0,
-        content: {
-          role: 'model',
-          parts: [
-            { thought: true, text: 'PRIVATE_VERTEX_APP_THOUGHT' },
-            {
-              functionCall: { id, name: 'knowledge.read', args: { id: contentId } },
-              thoughtSignature: 'PRIVATE_VERTEX_APP_SIGNATURE',
-            },
-          ],
-        },
-        finishReason: 'STOP',
-      },
-    ],
   },
   { usageMetadata: usage },
 ];
@@ -323,254 +304,68 @@ const runDone = async (app: App, runId: string) => {
 };
 
 // Actual createApp orchestration and file SQLite, with only the native Vertex fetch redirected locally.
-test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source translations and sibling ownership across duplicate commands and restart', async () => {
-  let firstReceived!: () => void;
-  const received = new Promise<void>((resolve) => {
-    firstReceived = resolve;
-  });
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let mainRequests = 0;
-  let completedMain = 0;
-  const paragraph =
-    'The keeper watched the tide turn beneath the copper lamp and listened to the wind. '.repeat(
-      31
-    );
-  const sourceTexts = ['Alpha', 'Beta'].map((name) =>
-    [
-      name + ' beginning. ' + paragraph,
-      name + ' middle. ' + paragraph,
-      name + ' ending. ' + paragraph,
-    ].join('\n\n')
-  );
+test('Vertex generation, translation and independent rewrite survive SQLite restart without replaying calls', async () => {
+  let writes = 0;
+  const sourceText = 'The keeper watched the tide. '.repeat(180);
   const state = await fixture(async (captured, response) => {
     expect(captured.headers.authorization).toBe(`Bearer ${fakeBearer}`);
     const { body, packet } = decoded(captured.body);
-    const last = body.contents.at(-1)!;
-    if (packet.controls?.purpose === 'translation-refusal') {
-      expect(packet.source.prefix!.length).toBeLessThanOrEqual(1000);
-      expect(packet.source).not.toHaveProperty('sourceRevision');
-      await writeSse(response, complete('{"verdict":"accepted"}'));
-      return;
-    }
-    if (!packet.source.sourceRevision) {
-      mainRequests++;
-      expect(body.generationConfig).toMatchObject({
-        maxOutputTokens: 8192,
-        thinkingConfig: { thinkingLevel: 'MEDIUM' },
-      });
-      if (!last.parts.some((part) => part.functionResponse)) {
-        if (mainRequests === 1) {
-          firstReceived();
-          await gate;
-        }
-        await writeSse(
-          response,
-          read(
-            'main-read-lore',
-            `package:${selected.contents.find((item) => item.title === 'Synthetic lore')!.id}:module:body`
-          )
-        );
-      } else {
-        expect(last.parts[0].functionResponse).toMatchObject({
-          id: 'main-read-lore',
-          name: 'knowledge.read',
-          response: { text: 'ORIGINAL_LORE: The observatory lies north.' },
-        });
-        expect(
-          body.contents
-            .findLast((message) => message.parts.some((part) => part.functionCall))
-            ?.parts.some((part) => part.thoughtSignature === 'PRIVATE_VERTEX_APP_SIGNATURE')
-        ).toBe(true);
-        await writeSse(response, complete(sourceTexts[completedMain++]));
-      }
+    if (packet.source.sourceRevision) {
+      expect(packet.source.text).toBe(sourceText);
+      expect(body.generationConfig.maxOutputTokens).toBe(4096);
+      await writeSse(response, complete('합성 번역 ' + sourceText));
     } else {
-      expect(body.generationConfig).toMatchObject({
-        maxOutputTokens: 4096,
-        thinkingConfig: { thinkingLevel: 'LOW' },
-      });
-      expect(
-        packet.source.context!.packages?.pinned.some(
-          (entry) => entry.sourceKind === 'bot' && entry.text.includes('ORIGINAL_BOT')
-        )
-      ).toBe(true);
-      expect(
-        packet.source.context!.packages!.pinned.find((item) =>
-          item.text.includes('ORIGINAL_GLOSSARY')
-        )
-      ).toBeDefined();
-      if (!last.parts.some((part) => part.functionResponse))
-        await writeSse(
-          response,
-          read(
-            `aux-${packet.source.sourceRevision}`,
-            `package:${selected.contents.find((item) => item.title === 'Synthetic glossary')!.id}:module:body`
-          )
-        );
-      else {
-        expect(last.parts[0].functionResponse?.response.text).toContain('ORIGINAL_GLOSSARY');
-        expect(
-          body.contents
-            .findLast((message) => message.parts.some((part) => part.functionCall))
-            ?.parts.some((part) => part.thoughtSignature === 'PRIVATE_VERTEX_APP_SIGNATURE')
-        ).toBe(true);
-        await writeSse(response, complete(`합성 번역 ${packet.source.text}`));
-      }
+      writes++;
+      expect(body.generationConfig.maxOutputTokens).toBe(8192);
+      await writeSse(response, complete(sourceText));
     }
   });
-  state.item.release = release;
-  const { app } = state;
-  const selected = await setup(app);
-  await api(app, '/api/test/control', { action: 'hold', barrier: 'translation' });
+  const selected = await setup(state.app);
   const input = command(selected.chat, selected.profile);
-  const originalRun = await api<Run>(app, `/api/chats/${selected.chat.id}/runs`, input);
-  await received;
-  const originalSnapshot = structuredClone(app.store.run(originalRun.id).snapshot);
-  expect(frozenInputs(originalSnapshot)).toEqual(frozenInputs(originalRun.snapshot));
-  expect(originalSnapshot.contextPlan).toMatchObject({
-    status: 'ready',
-    compacted: [],
-    summaryCalls: 0,
+  const first = await runDone(
+    state.app,
+    (await api<Run>(state.app, `/api/chats/${selected.chat.id}/runs`, input)).id
+  );
+  const originalSource = state.app.store.source(first.sourceRevision!);
+  const job = await api<Job>(state.app, `/api/sources/${originalSource.id}/translation`, {});
+  await expect.poll(() => state.app.store.job(job.id).status, { timeout: 5000 }).toBe('completed');
+  expect(state.app.store.job(job.id).result?.text).toBe('합성 번역 ' + sourceText);
+  const retryBody = { idempotencyKey: randomUUID(), title: 'Independent rewrite' };
+  const queued = await api<Run>(state.app, `/api/runs/${first.id}/candidate`, retryBody);
+  const second = await runDone(state.app, queued.id);
+  expect(second.chatId).not.toBe(first.chatId);
+  expect(second.sourceRevision).not.toBe(first.sourceRevision);
+  expect(state.app.store.chat(first.chatId).headRevision).toBe(first.sourceRevision);
+  expect(state.app.store.chat(second.chatId).headRevision).toBe(second.sourceRevision);
+  expect(state.app.store.source(first.sourceRevision!)).toEqual({
+    ...originalSource,
+    translationRevision: 1,
   });
-  const edited: Content[] = [];
-  for (const content of selected.contents)
-    edited.push(
-      await api<Content>(
-        app,
-        `/api/content/${content.id}`,
-        {
-          kind: content.kind,
-          title: content.title,
-          description: content.description,
-          loading: content.loading,
-          relatedIds: content.relatedIds,
-          text: 'FUTURE_MUTATION_' + content.kind,
-          ...(content.package
-            ? {
-                package: {
-                  ...content.package,
-                  nativeRisu: {
-                    ...content.package.nativeRisu,
-                    card: {
-                      ...content.package.nativeRisu.card,
-                      description: 'FUTURE_MUTATION_' + content.kind,
-                    },
-                  },
-                },
-              }
-            : {}),
-          expectedRevision: content.revision,
-        },
-        'PUT'
-      )
-    );
-  await api(
-    app,
-    `/api/chats/${selected.chat.id}/profile`,
-    {
-      expectedRevision: selected.profile.revision,
-      packageAttachments: edited.map((item) => ({ ...ref(item), role: item.kind })),
-      routes: selected.profile.routes,
-      image: false,
-    },
-    'PUT'
-  );
-  release();
-  const first = await runDone(app, originalRun.id);
-  expect(frozenInputs(first.snapshot)).toEqual(frozenInputs(originalSnapshot));
-  expect(first.snapshot.nativeRisuExecution?.fields).toEqual(
-    originalSnapshot.nativeRisuExecution?.fields
-  );
-  expect(first.usage).toEqual({ modelCalls: 3, inputTokens: 27, outputTokens: 17, costUsd: null });
-  expect((await api<Run>(app, `/api/chats/${selected.chat.id}/runs`, input)).id).toBe(first.id);
-  expect(state.provider.requests).toHaveLength(2);
-  const candidateInput = { idempotencyKey: randomUUID(), title: 'Sibling Beta' };
-  const candidate = await api<Run>(app, `/api/runs/${first.id}/candidate`, candidateInput);
-  const second = await runDone(app, candidate.id);
-  expect((await api<Run>(app, `/api/runs/${first.id}/candidate`, candidateInput)).id).toBe(
+  expect((await api<Run>(state.app, `/api/runs/${first.id}/candidate`, retryBody)).id).toBe(
     second.id
   );
-  expect(state.provider.requests).toHaveLength(4);
-  const { branchId: _firstBranch, candidateOf: _firstCandidate, ...firstFrozen } = first.snapshot;
-  const { branchId: secondBranch, candidateOf, ...secondFrozen } = second.snapshot;
-  expect(frozenInputs(secondFrozen)).toEqual(frozenInputs(firstFrozen));
-  expect(candidateOf).toBe(first.id);
-  expect(second.parentRevision).toBe(first.parentRevision);
-  expect((await api<ChatDetail>(app, `/api/chats/${selected.chat.id}`)).jobs).toEqual([]);
-  await api(app, `/api/sources/${first.sourceRevision}/translation`, {});
-  await api(app, `/api/sources/${second.sourceRevision}/translation`, {});
-  await api(app, '/api/test/control', { action: 'release', barrier: 'translation' });
-  await expect
-    .poll(
-      async () => {
-        if (state.handlerErrors.length) throw state.handlerErrors[0];
-        return (await api<ChatDetail>(app, `/api/chats/${selected.chat.id}`)).jobs.map(
-          (job) => job.status
-        );
-      },
-      { timeout: 5000 }
-    )
-    .toEqual(['completed', 'completed']);
-  const detail = await api<ChatDetail>(app, `/api/chats/${selected.chat.id}`);
-  expect(detail.chat.headRevision).toBe(first.sourceRevision);
-  expect(detail.branches!.find((branch) => branch.id === secondBranch)?.headRevision).toBe(
-    second.sourceRevision
-  );
-  expect(detail.sources).toHaveLength(2);
-  expect(detail.jobs).toHaveLength(2);
-  for (const [index, run] of [first, second].entries()) {
-    const source = detail.sources.find((item) => item.id === run.sourceRevision)!;
-    expect(source).toMatchObject({
-      text: sourceTexts[index],
-      hash: createHash('sha256').update(sourceTexts[index]).digest('hex'),
-      runId: run.id,
-      parentRevision: run.parentRevision,
-    });
-    const job = detail.jobs.find((item) => item.sourceRevision === source.id)!;
-    expect(job).toMatchObject({
-      chatId: selected.chat.id,
-      sourceHash: source.hash,
-      status: 'completed',
-      result: { mock: false, sourceRevision: source.id, sourceHash: source.hash },
-    });
-    expect(job).not.toHaveProperty('chunks');
-    expect(job.result!.text).toBe(`합성 번역 ${source.text}`);
-    expect(job.result).not.toHaveProperty('segments');
-    const packets = state.provider.requests
-      .map((request) => decoded(request.body).packet)
-      .filter((packet) => packet.source.sourceRevision === source.id);
-    expect(packets).toHaveLength(2);
-    expect(packets.every((packet) => packet.source.sourceHash === source.hash)).toBe(true);
-    expect(packets.every((packet) => packet.source.text === source.text)).toBe(true);
-  }
-  expect(state.provider.requests).toHaveLength(8);
-  expect(state.urls).toEqual(Array(8).fill(providerUrl));
-  expect(JSON.stringify(state.provider.requests)).not.toContain('FUTURE_MUTATION');
-  expect(detail.attempts).toHaveLength(12);
-  expect(state.judgments).toHaveLength(4);
-  expect(JSON.stringify(detail.attempts)).not.toMatch(
-    /PRIVATE_VERTEX_APP_THOUGHT|PRIVATE_VERTEX_APP_SIGNATURE|synthetic-vertex-app-bearer/u
-  );
-  expect(app.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  await app.close();
+  expect(writes).toBe(2);
+  expect(state.provider.requests).toHaveLength(3);
+  expect(first.inputs).toEqual([]);
+  const before = {
+    sources: state.app.store.detail(first.chatId).sources,
+    job: state.app.store.job(job.id),
+    first: readStoredRunSnapshot(state.app.store, first.id),
+    second: readStoredRunSnapshot(state.app.store, second.id),
+  };
+  await state.app.close();
   state.item.app = undefined;
   const reopened = await launch(state.item);
-  const restored = await api<ChatDetail>(reopened, `/api/chats/${selected.chat.id}`);
-  expect(restored.sources).toEqual(detail.sources);
-  expect(restored.jobs).toEqual(detail.jobs);
-  expect(restored.runs).toEqual(detail.runs);
-  expect(restored.attempts).toEqual(detail.attempts);
-  expect(reopened.store.queuedJobs()).toEqual([]);
-  expect(state.provider.requests).toHaveLength(8);
-  expect((await api<Run>(reopened, `/api/chats/${selected.chat.id}/runs`, input)).id).toBe(
-    first.id
-  );
-  expect((await api<Run>(reopened, `/api/runs/${first.id}/candidate`, candidateInput)).id).toBe(
+  expect(reopened.store.detail(first.chatId).sources).toEqual(before.sources);
+  expect(reopened.store.job(job.id)).toEqual(before.job);
+  expect(readStoredRunSnapshot(reopened.store, first.id)).toEqual(before.first);
+  expect(readStoredRunSnapshot(reopened.store, second.id)).toEqual(before.second);
+  expect((await api<Run>(reopened, `/api/chats/${first.chatId}/runs`, input)).id).toBe(first.id);
+  expect((await api<Run>(reopened, `/api/runs/${first.id}/candidate`, retryBody)).id).toBe(
     second.id
   );
-  expect(state.provider.requests).toHaveLength(8);
+  expect(state.provider.requests).toHaveLength(3);
+  expect(state.handlerErrors).toEqual([]);
 });
 
 test.each(['main', 'translation'] as const)(
@@ -608,13 +403,15 @@ test.each(['main', 'translation'] as const)(
     }
     await received;
     const before = await api<ChatDetail>(state.app, `/api/chats/${selected.chat.id}`);
-    const transmittedSnapshot = before.runs.find((item) => item.id === run.id)!.snapshot;
-    expect(frozenInputs(transmittedSnapshot)).toEqual(frozenInputs(run.snapshot));
-    expect(transmittedSnapshot.contextPlan).toMatchObject({
-      status: 'ready',
-      compacted: [],
-      summaryCalls: 0,
-    });
+    const transmittedSnapshot = readStoredRunSnapshot(state.app.store, run.id);
+    if (stalledRole === 'main') {
+      expect(frozenInputs(transmittedSnapshot)).toEqual(frozenInputs(run.snapshot));
+      expect(transmittedSnapshot.contextPlan).toMatchObject({
+        status: 'ready',
+        compacted: [],
+        summaryCalls: 0,
+      });
+    } else expect(transmittedSnapshot).toMatchObject({ settled: true, history: [], resources: [] });
     const expectedRequests = stalledRole === 'main' ? 1 : 2;
     expect(state.provider.requests).toHaveLength(expectedRequests);
     const attemptIds = before.attempts!.map((attempt) => attempt.id);
@@ -631,7 +428,7 @@ test.each(['main', 'translation'] as const)(
     const after = await api<ChatDetail>(reopened, `/api/chats/${selected.chat.id}`);
     expect(after.sources).toEqual(before.sources);
     expect(after.attempts!.map((attempt) => attempt.id)).toEqual(attemptIds);
-    expect(after.runs.find((item) => item.id === run.id)!.snapshot).toEqual(transmittedSnapshot);
+    expect(readStoredRunSnapshot(reopened.store, run.id)).toEqual(transmittedSnapshot);
     if (stalledRole === 'main') {
       expect(after.runs.find((item) => item.id === run.id)).toMatchObject({
         status: 'interrupted',

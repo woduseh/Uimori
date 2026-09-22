@@ -1,3 +1,4 @@
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -95,7 +96,7 @@ test('disabled models retain assigned IDs but block new assignments and new snap
     { modelCalls: 1, inputTokens: null, outputTokens: null, costUsd: null },
     run.snapshot.settings
   );
-  const snapshot = s.run(run.id).snapshot,
+  const snapshot = readStoredRunSnapshot(s, run.id),
     original = s.source(source.id);
   const disabled = s.product.model(
     modelBody(c, { expectedRevision: m.revision, enabled: false }),
@@ -106,7 +107,7 @@ test('disabled models retain assigned IDs but block new assignments and new snap
   expect(() => s.product.snapshot(chat.id)).toThrow('Model disabled');
   expect(assign(s, chat.id, { main: ref(m) }).routes.main).toEqual(ref(m));
   expect(s.source(source.id)).toEqual(original);
-  expect(s.run(run.id).snapshot).toEqual(snapshot);
+  expect(readStoredRunSnapshot(s, run.id)).toEqual(snapshot);
   expect(s.product.get('model', m.id)).toEqual(disabled);
   expect(() => s.product.get('model', m.id, m.revision)).toThrow('Setting not found');
   s.product.model(modelBody(c, { expectedRevision: disabled.revision }), m.id);

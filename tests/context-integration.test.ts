@@ -1,3 +1,4 @@
+import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import {
   modelWorkspace,
   updateModelWorkspace,
@@ -88,6 +89,7 @@ async function setup(options: { evaluated?: boolean; count?: number; short?: boo
     buildId: 'synthetic-context-test',
   }));
   await app.ready();
+  observeExecutions(app.store);
   // Keep these compression boundaries on the same short synthetic instructions.
   updatePromptWorkspace(app.store, {
     expectedRevision: modelWorkspace(app.store).revision,
@@ -194,7 +196,7 @@ async function terminal(app: App, id: string) {
   let run!: Run;
   await vi.waitFor(
     () => {
-      run = app.store.run(id);
+      run = observedExecution(app.store, id);
       expect(['queued', 'running']).not.toContain(run.status);
     },
     { timeout: 10_000, interval: 20 }
@@ -331,7 +333,7 @@ describe('automatic input summaries through real App and file SQLite', () => {
     expect(
       next.snapshot.contextPlan!.compacted.find((ref) => ref.revision === changedId)?.hash
     ).toBe(changed.hash);
-    expect(app.store.run(first.id).snapshot).toEqual(oldSnapshot);
+    expect(observedExecution(app.store, first.id).snapshot).toEqual(oldSnapshot);
     expect(app.store.sourceOriginal(changedId).text).toBe(
       sources.find((source) => source.id === changedId)!.text
     );

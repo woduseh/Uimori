@@ -1,3 +1,4 @@
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { writeNote } from './fixtures/notes.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
@@ -81,6 +82,15 @@ function source(
   );
 }
 function configure(store: Store, chatId: string, endpoint: string) {
+  const settings = modelWorkspace(store);
+  updateModelWorkspace(store, {
+    expectedRevision: settings.revision,
+    routes: settings.routes,
+    translationPolicy: {
+      ...settings.translationPolicy,
+      judgment: { ...settings.translationPolicy.judgment, enabled: false },
+    },
+  });
   const connection = store.product.connection({
     title: 'Synthetic loopback',
     protocol: 'fixture-sse-v1',
@@ -269,7 +279,7 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
   const started = performance.now();
   const outcome = await execute(store, job.id, server.origin, events);
   const elapsedMs = performance.now() - started;
-  expect(outcome?.status).toBe('completed');
+  expect(outcome?.status, JSON.stringify({ outcome, events })).toBe('completed');
   expect(server.requests).toHaveLength(3);
   expect(events).toHaveLength(6);
   expect(store.product.attempts(chat.id)).toHaveLength(3);

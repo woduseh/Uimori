@@ -33,10 +33,9 @@
 - 상태는 `queued → running → completed | failed | cancelled | interrupted`예요. 취소는 `generation`을 올려 늦게 도착한 결과를 버리고, 서버 재시작은 `running`을 `interrupted`로 바꾸며 자동 재생하지 않아요(`queued`는 다시 실행해요).
 - 이미지 bytes는 SQLite `illustration_images`에 PNG·JPEG·WebP 16MB 이하로 저장하고 `/api/illustration-images/:id`로 읽어요. 캡션·프롬프트·Codex의 revised prompt는 함께 저장해요. 자동 생략은 이미지 없는 `completed`이며 `diagnostic.skipped`에 이유를 남겨요.
 - Reader(`GET /api/chats/:id/reader`)는 페이지 안 장면의 `illustrations`를 돌려 주고, SSE 이벤트 `illustration.*`는 해당 장면만 갱신해요. 작업 현황(`reader.activity`)에는 `kind: 'illustration'`으로 나타나며 `activeJobs` 계산에는 넣지 않아 본문 진행 표시를 막지 않아요.
-- 포크는 복사한 원문의 **완료된** 삽화만 함께 복사하고, 채팅·분기 삭제는 삽화 표도 함께 지워요. 현재 JSON archive는 네 표를 포함하며 누락된 표를 자동으로 보충하지 않아요. 복원 시 고정된 모델 프로바이더는 다른 snapshot처럼 비활성화·비밀키 참조 제거 처리를 해요.
+- 독립 채팅 복사와 개별 백업은 완료된 삽화만 가져와요. 진행 중인 생성·실패 작업·모델 호출 기록을 재생하지 않아요. 새 사본의 이미지 참조는 원본 채팅 삭제와 독립적이에요.
 - 참조 이미지는 예약 시 `{ref, role, title, mime, hash, url}`로 고정하고 실행 시 hash가 같은 bytes만 보내요. 사이에 삭제된 이미지는 빠지고 작업은 계속돼요.
-- JSON 복원은 전역 자동 생성을 끄고 생성기를 미지정으로 바꾸며 ComfyUI 인증 환경변수 참조도 제거해요. 과거 ComfyUI 입력은 비활성화되어 재전송·결과 회수를 하지 않아요. 원격 연결을 다시 설정한 뒤 새 요청으로 사용해요. 완료 이미지와 실제 attempt의 사용량·비용은 보존하고, 포크는 실행 attempt 소유권을 복제하지 않아요.
-- 이미지 저장과 archive 복원은 PNG·JPEG·WebP의 MIME과 실제 파일 서명, 16MB 한도, hash와 채팅 귀속을 확인해요. 완전한 이미지 디코더로 손상 여부까지 검사하는 계약은 아니에요.
+- 생성 이미지도 실제 디코더로 읽고 고품질 WebP로 변환해 공통 BLOB 저장소에 보관해요. 이름·설명은 이미지 바이트와 분리해요. 입력 파일·픽셀·프레임 한도는 공통 이미지 처리 경계가 관리해요.
 
 ## Codex 경로
 
@@ -78,3 +77,7 @@
 `tests/illustration-*.test.ts`는 저장·실행·API 계약을, `tests/comfyui-client.test.ts`와 `tests/codex-image.test.ts`는 합성 공급자 응답을 확인해요. `npm run verify:illustration`은 생성·재요청·삭제·설정 충돌과 새로고침 후 표시를 검사해요. 검사 선택은 [DEVELOPMENT](DEVELOPMENT.md#verification)를 따라요.
 
 합성 검사는 실제 Codex 구독 사용량이나 ComfyUI 설치·워크플로 호환성을 입증하지 않아요. 실제 서비스 검증에서는 연결·이미지 저장·참조 반영·오류 표시를 확인하고, 유료 호출 여부와 사용한 모델·워크플로를 결과에 구분해요.
+
+## 이미지 저장과 복원
+
+모든 생성 결과는 업로드와 같은 WebP 처리 경계를 거쳐 공통 BLOB 저장소에 들어가요. 원본을 함께 이중 보관하지 않아요. 개별 채팅 백업에는 완료된 이미지만 포함하고 생성 작업·실행 attempt를 재생하지 않아요. 전체 DB 복구와 키의 보관 범위는 [데이터 형식](DATA-MIGRATIONS.md)을 참고해요.

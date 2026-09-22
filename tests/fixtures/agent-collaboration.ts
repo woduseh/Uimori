@@ -1,3 +1,4 @@
+import { observeExecutions, observedExecution } from './execution-observer.js';
 import { afterEach, expect, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -169,6 +170,7 @@ export async function fixture(
     testMode: true,
   });
   owner.app = app;
+  observeExecutions(app.store);
   configureJevFixture(app.store);
   await app.listen({ port: 0, host: '127.0.0.1' });
   chat = await api<Chat>(app, '/api/chats', { title: 'Synthetic advisor story' });
@@ -325,12 +327,12 @@ export async function fixture(
   };
 }
 export type Fixture = Awaited<ReturnType<typeof fixture>>;
-export async function settled(state: Fixture, id: string): Promise<Run> {
+export async function observedCompletion(state: Fixture, id: string): Promise<Run> {
   await expect
     .poll(async () => (await api<Run>(state.app, `/api/runs/${id}`)).status, { timeout: 6000 })
     .not.toMatch(/^(queued|running)$/);
   expect(state.failures).toEqual([]);
-  return api<Run>(state.app, `/api/runs/${id}`);
+  return observedExecution(state.app.store, id);
 }
 export function packet(body: Body): any {
   for (const text of [

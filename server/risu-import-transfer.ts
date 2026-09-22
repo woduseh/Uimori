@@ -34,7 +34,7 @@ export function buildRisuTransfer({
   lore: RisuImportPreview['lore'];
   findings: RisuImportFindings;
 }): { file: NativeTransferFile; preview: RisuImportPreview } {
-  const { hash, source, kind } = input;
+  const { kind } = input;
   const file: NativeTransferFile = {
     format: NATIVE_TRANSFER_FORMAT,
     version: NATIVE_TRANSFER_VERSION,
@@ -59,25 +59,6 @@ export function buildRisuTransfer({
     ],
     prompts: [],
     images,
-    // A staged container stays outside the receipt; its identity is reported instead of copied.
-    ...(source.base64 === undefined
-      ? {}
-      : {
-          sourceFiles: [
-            {
-              entryKey: kind,
-              name: source.name,
-              mediaType:
-                input.format === 'charx' || input.format === 'risu-module-project-zip'
-                  ? 'application/zip'
-                  : input.format === 'risu-module-binary'
-                    ? 'application/octet-stream'
-                    : 'application/json',
-              hash,
-              base64: source.base64,
-            },
-          ],
-        }),
   };
   const transfer = prepareNativeTransfer({ file });
   const digest = createHash('sha256')

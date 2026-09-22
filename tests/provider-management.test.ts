@@ -98,7 +98,7 @@ test('prepare is read only and create/update enforce the same CAS contract', () 
 test('catalog/error retention uses credential authority and old connection execution is revoked', () => {
   const s = database();
   const p = s.product;
-  const c = p.connection(connectionBody({ credentialRef: 'UIMORI_PROVIDER_TEST_A' })) as Connection;
+  const c = p.connection(connectionBody({ apiKey: 'synthetic-test-key-a' })) as Connection;
   const cached = p.save(
     'connection',
     {
@@ -119,7 +119,7 @@ test('catalog/error retention uses credential authority and old connection execu
     catalogError: 'CATALOG_FAILED',
   });
   const changed = p.connection(
-    editConnection(rename, { credentialRef: 'UIMORI_PROVIDER_TEST_B' }),
+    editConnection(rename, { apiKey: 'synthetic-test-key-b' }),
     c.id
   ) as Connection;
   expect(changed).toMatchObject({ catalog: [], catalogUpdatedAt: null, catalogError: null });
@@ -128,7 +128,7 @@ test('catalog/error retention uses credential authority and old connection execu
   expect(() => p.get('connection', cached.id, cached.revision)).toThrow('Setting not found');
   expect(cached).toMatchObject({
     catalog: rename.catalog,
-    credentialRef: 'UIMORI_PROVIDER_TEST_A',
+    credentialRef: c.credentialRef,
   });
   const disabled = p.connection(editConnection(changed, { enabled: false }), c.id) as Connection;
   expect(() => p.authorize(changed)).toThrow('disabled');

@@ -68,7 +68,7 @@ function fixture() {
 }
 const noUsage = { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null };
 
-test('historical snapshots omit overrides and their candidates do not borrow later values', async () => {
+test('independent rewrites start from the copied checkpoint rather than later variables', async () => {
   const f = fixture();
   const old = await f.reserve();
   expect(old.snapshot.profile).not.toHaveProperty('variableState');
@@ -86,7 +86,7 @@ test('historical snapshots omit overrides and their candidates do not borrow lat
   });
   const candidate = f.store.candidate(old.id, randomUUID(), 'Historical inputs').run;
   expect(candidate.snapshot.profile).not.toHaveProperty('variableState');
-  expect(readChatVariables(f.store, f.chat.id, candidate.snapshot.branchId!)).toEqual({
+  expect(readChatVariables(f.store, candidate.chatId, candidate.snapshot.branchId!)).toEqual({
     revision: 0,
     values: {},
   });

@@ -214,7 +214,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'outline.write',
     description:
-      "Apply composition changes the user requested: create, update, move or remove items. One call may build a whole tree by giving each new item a ref and naming its parent with parentRef; create a parent before the items that name it. This writes composition only, never story prose, and never marks anything as written. Update, move and remove need the item's exact current revision. A pinned item or one that is already written is reported as a conflict instead of being changed.",
+      "Apply composition changes the user requested: create, update, move or remove items. One call may build a whole tree by giving each new item a ref and naming its parent with parentRef; create a parent before the items that name it. This writes composition only, never story prose, and never marks anything as written. Update, move and remove need the item's exact current revision. User-requested edits may change pinned or written plans; active generation must finish before its plan is edited.",
     inputSchema: schema(
       {
         operations: {
@@ -237,6 +237,7 @@ const TOOLS: ProviderTool[] = [
               position: { type: 'integer', minimum: 0 },
               id: str,
               expectedRevision: { type: 'integer', minimum: 1 },
+              fixed: { type: 'boolean' },
             },
             required: ['op'],
             additionalProperties: false,
@@ -1299,7 +1300,7 @@ export class HelperRuntime {
             operations: args.operations,
             idempotencyKey: `helper:${task.id}:${operationId}`,
           },
-          'model'
+          'user'
         )
       );
     }

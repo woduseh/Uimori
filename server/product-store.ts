@@ -637,10 +637,22 @@ export class ProductStore {
   ): ProfileSnapshot {
     const { optionAdjustments: _notices, ...p } = this.profile(chatId);
     // Auxiliary jobs keep their global prompt; an unavailable main pin must not prevent translation.
-    const workspace =
-      requiredRole === 'main' || requiredRole === 'inspect'
-        ? chatPromptWorkspace(this.store, p.pinned)
-        : chatPromptWorkspace(this.store, { mainModel: p.pinned?.mainModel });
+    const workspace = (() => {
+      if (requiredRole !== 'main' && requiredRole !== 'inspect')
+        return chatPromptWorkspace(this.store, { mainModel: p.pinned?.mainModel });
+      try {
+        return chatPromptWorkspace(this.store, p.pinned);
+      } catch (error) {
+        // An unavailable writing preset blocks new writing, not existing prose or translation.
+        if (
+          requiredRole !== 'inspect' ||
+          !(error instanceof HttpError) ||
+          !error.message.startsWith('PINNED_PROMPT_UNAVAILABLE')
+        )
+          throw error;
+        return chatPromptWorkspace(this.store, { mainModel: p.pinned?.mainModel });
+      }
+    })();
     const models: ProfileSnapshot['models'] = {};
     const routes = { ...p.routes };
     for (const role of ['main', 'translation', 'status'] as const) {
