@@ -46,11 +46,19 @@ export function SceneNavigator({
     let frame = 0;
     const update = () => {
       frame = 0;
-      setAwayFromBottom(node.scrollHeight - node.clientHeight - node.scrollTop > 48);
+      const distance = node.scrollHeight - node.clientHeight - node.scrollTop;
+      // Keep the mobile jump control quiet near the end. Small font/layout changes
+      // should not make it linger when the reader is effectively at the latest text.
+      setAwayFromBottom(distance > Math.max(120, node.clientHeight * 0.14));
       const top = node.getBoundingClientRect().top + 32;
       const sources = [...node.querySelectorAll<HTMLElement>('[data-testid="source"]')];
+      // At the physical end, the last source is the scene being read even when the
+      // taller floating-control layout leaves a sliver of the previous source visible.
       const visible =
-        sources.find((source) => source.getBoundingClientRect().bottom > top) ?? sources.at(-1);
+        distance <= 2
+          ? sources.at(-1)
+          : (sources.find((source) => source.getBoundingClientRect().bottom > top) ??
+            sources.at(-1));
       if (visible?.dataset.sourceId) setCurrent(visible.dataset.sourceId);
     };
     const schedule = () => {

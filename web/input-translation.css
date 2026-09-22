@@ -15,11 +15,70 @@
   background: transparent;
   color: var(--muted);
 }
-.quick-controls .input-translation-controls select {
+.input-translation-language-desktop {
+  min-width: 0;
+  max-width: none;
+}
+.quick-controls .input-translation-language-desktop select {
   width: 88px;
   max-width: 88px;
   padding: 5px 18px 5px 4px;
   font-size: 12px;
+}
+.input-translation-language-mobile {
+  display: none;
+  position: relative;
+  flex: none;
+}
+.input-translation-language-mobile > summary {
+  display: grid;
+  place-items: center;
+  min-width: 42px;
+  min-height: var(--control-h);
+  padding: 0 6px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  list-style: none;
+}
+.input-translation-language-mobile > summary::-webkit-details-marker {
+  display: none;
+}
+.input-translation-language-mobile[open] > summary,
+.input-translation-language-mobile > summary:focus-visible {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+.input-translation-language-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 24;
+  display: grid;
+  min-width: 132px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px var(--shade);
+}
+.input-translation-language-menu > button {
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 13px;
+}
+.input-translation-language-menu > button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .input-translation-feedback {
   margin: 6px 6px 0;
@@ -63,8 +122,18 @@
   gap: 12px;
   margin-top: 6px;
 }
+@media (hover: hover) {
+  .input-translation-language-mobile > summary:hover,
+  .input-translation-language-menu > button:hover {
+    background: var(--accent-soft);
+  }
+}
 @media (max-width: 600px) {
-  .input-translation-button > span {
+  .input-translation-button > span,
+  .input-translation-language-desktop {
     display: none;
+  }
+  .input-translation-language-mobile {
+    display: block;
   }
 }

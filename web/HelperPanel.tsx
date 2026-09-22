@@ -20,7 +20,7 @@ import { TurnStatus, type StatusTone } from './TurnStatus.js';
 import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { IconButton } from './IconButton.js';
 import { StreamingResponse } from './StreamingResponse.js';
-import { PlainProse } from './Prose.js';
+import { Prose } from './Prose.js';
 import { HelperArtifactCard } from './HelperArtifactCard.js';
 import { useHelperConversation, type HelperTaskView } from './useHelperConversation.js';
 import { interceptAppHistory } from './app-history.js';
@@ -840,7 +840,7 @@ export function HelperPanel(props: Props) {
                 />
               ) : (
                 <div className="helper-prose">
-                  <PlainProse text={message.text} />
+                  <Prose text={message.text} />
                 </div>
               )}
               {message.artifacts.map((artifact) => (

@@ -185,8 +185,10 @@ test('CHATREC03 mobile mini navigator follows source IDs and keeps the opening o
   await expect(selected).toHaveText('source:nonsequential:z');
   await expect(list).toHaveText('2 / 2');
   await expect(next).toBeDisabled();
+  await expect(page.getByRole('button', { name: '본문 맨 아래로', exact: true })).toBeHidden();
   await previous.click();
   await expect(list).toHaveText('1 / 2');
+  await expect(page.getByRole('button', { name: '본문 맨 아래로', exact: true })).toBeVisible();
   const before = await page.locator('.reader-scrollport').evaluate((node) => node.scrollTop);
   await page.getByRole('button', { name: 'Append scene', exact: true }).click();
   await expect(list).toHaveText('1 / 3');
@@ -198,7 +200,9 @@ test('CHATREC03 mobile mini navigator follows source IDs and keeps the opening o
   await expect(previous).toBeDisabled();
   const reader = await page.locator('.reader-scrollport').boundingBox();
   const bar = await nav.boundingBox();
-  expect(bar!.y).toBeGreaterThanOrEqual(reader!.y + reader!.height - 1);
+  // Mobile navigation floats over the lower edge instead of reserving a permanent row.
+  expect(bar!.y).toBeGreaterThan(reader!.y + reader!.height - 80);
+  expect(bar!.y + bar!.height).toBeLessThanOrEqual(reader!.y + reader!.height + 1);
 });
 
 // One JS task reproduces A -> B -> A before React can commit a different query.
