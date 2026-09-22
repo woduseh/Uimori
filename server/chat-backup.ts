@@ -1,3 +1,4 @@
+import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import { remapChatAuthoring } from './chat-copy-authoring.js';
 import { copiedMessageTexts, mapCopiedMessageTexts } from './chat-copy-messages.js';
 import { transcriptImages, rewriteTranscriptMedia } from './chat-media.js';
@@ -115,14 +116,10 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
   const key = `chat:${text(body.idempotencyKey, 'import request', 100)}`;
   const original = checkedBackup(body.backup);
   const digest = bundleDigest(original);
-  const prior = store.db
-    .prepare('SELECT digest,result FROM import_operations WHERE key=?')
-    .get(key);
-  if (prior) {
-    if (prior.digest !== digest)
-      throw new HttpError(409, '다른 백업에 같은 가져오기 ID가 사용됐어요.');
-    const saved = JSON.parse(String(prior.result));
-    const chats = (saved.chatIds as string[]).map((id) => store.chat(id));
+  const previous = (): ChatBackupImport | undefined => {
+    const saved = readImportReceipt<{ chatIds: string[]; sources: number }>(store, key, digest);
+    if (!saved) return undefined;
+    const chats = saved.chatIds.map((id) => store.chat(id));
     return {
       chat: chats[0]!,
       chats,
@@ -131,7 +128,9 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
       sources: saved.sources,
       notices: original.notices,
     };
-  }
+  };
+  const prior = previous();
+  if (prior) return prior;
   const convertedResources = await convertTransferImages(original.resources);
   const file = convertedResources.file;
   const copies: ChatCopy[] = [];
@@ -161,6 +160,9 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
     copies.push(copy);
   }
   return store.transaction(() => {
+    // Image conversion yields; another request may have finished while it was running.
+    const concurrent = previous();
+    if (concurrent) return concurrent;
     const receipt = importResourceBundle(store, {
       file,
       digest: inspectBundle(file).digest,
@@ -186,9 +188,7 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
       return restoreChatCopy(store, copy, `restore:${key}:${index}`);
     });
     const sources = copies.reduce((sum, copy) => sum + copy.transcript.entries.length, 0);
-    store.db
-      .prepare('INSERT INTO import_operations VALUES(?,?,?)')
-      .run(key, digest, JSON.stringify({ chatIds: chats.map((chat) => chat.id), sources }));
+    saveImportReceipt(store, key, digest, { chatIds: chats.map((chat) => chat.id), sources });
     return {
       chat: chats[0]!,
       chats,

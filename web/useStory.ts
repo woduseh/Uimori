@@ -335,18 +335,31 @@ export function useStory() {
     }
   }, [navigate]);
   const libraryRequest = useRef(0);
-  const loadLibrary = useCallback(async () => {
+  const libraryFlight = useRef<Promise<void> | null>(null);
+  const libraryDirty = useRef(false);
+  const loadLibrary = useCallback((): Promise<void> => {
+    libraryDirty.current = true;
+    if (libraryFlight.current) return libraryFlight.current;
     const request = ++libraryRequest.current;
-    try {
-      const value = await api<Library>('/library?view=summary');
-      if (libraryRequest.current === request) {
-        setLibrary(value);
-        setLibraryError('');
-      }
-    } catch (caught) {
-      if (libraryRequest.current === request) setLibraryError((caught as Error).message);
-      throw caught;
-    }
+    const work = async () => {
+      do {
+        libraryDirty.current = false;
+        try {
+          const value = await api<Library>('/library?view=summary');
+          if (libraryRequest.current === request) {
+            setLibrary(value);
+            setLibraryError('');
+          }
+        } catch (caught) {
+          if (libraryRequest.current === request) setLibraryError((caught as Error).message);
+          throw caught;
+        }
+      } while (libraryDirty.current && libraryRequest.current === request);
+    };
+    libraryFlight.current = work().finally(() => {
+      libraryFlight.current = null;
+    });
+    return libraryFlight.current;
   }, []);
   useEffect(() => {
     const refreshLibrary = () => {
@@ -376,8 +389,6 @@ export function useStory() {
     setArchivedContents([]);
     if (!selected) return;
     let alive = true;
-    let firstSnapshot = true;
-    let reconnect = false;
     const sync = createReaderSync({
       refresh: (incremental) => refresh(selected, incremental),
       cursor: () => readerCache.current?.detail.reader.cursor ?? -1,
@@ -408,28 +419,9 @@ export function useStory() {
           void loadLibrary().catch((e) => {
             if (alive) setError(e.message);
           });
-        const currentBranch =
-          navigation.current.branch ||
-          (defaultView.current?.chatId === selected ? defaultView.current.branchId : '');
-        if (message.kind === 'branch.deleted' && currentBranch === message.entityId) {
-          navigate({ kind: 'branch-deleted' });
-          readerCache.current = null;
-          sessionStorage.removeItem(`branch:${selected}`);
-          const url = new URL(location.href);
-          url.searchParams.delete('branch');
-          url.searchParams.delete('source');
-          history.replaceState(null, '', url);
-          return;
-        }
-        if (message.kind === 'snapshot') {
-          if (firstSnapshot) {
-            firstSnapshot = false;
-            if (!reconnect) return;
-          }
-          reconnect = true;
-        }
-        sync.request(message.seq ?? 0, reconnect);
-        reconnect = false;
+        // Initial/reconnected streams carry a current cursor, not the entire event log.
+        // Refresh after subscribing so writes between the initial HTTP read and SSE cannot be missed.
+        sync.request(message.seq ?? 0, message.kind === 'snapshot');
       };
       return stream;
     };
@@ -441,7 +433,6 @@ export function useStory() {
     const online = () => {
       if (alive) {
         stream?.close();
-        reconnect = true;
         stream = openStream();
       }
     };
@@ -454,7 +445,7 @@ export function useStory() {
       removeEventListener('offline', offline);
       removeEventListener('online', online);
     };
-  }, [selected, refresh, loadChats, loadLibrary, navigate]);
+  }, [selected, refresh, loadChats, loadLibrary]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Address changes and committed navigation intents reload the query held by refresh's stable refs.
   useEffect(() => {
     let alive = true;
@@ -527,7 +518,7 @@ export function useStory() {
     const node = reader.current;
     if (!node || restoredView.current !== viewKey || !selected) return;
     const box = node.getBoundingClientRect();
-    const blocks = node.querySelectorAll<HTMLElement>('.prose [data-block-anchor]');
+    const blocks = node.querySelectorAll<HTMLElement>('[data-block-anchor]');
     let low = 0,
       high = blocks.length;
     while (low < high) {
@@ -658,19 +649,17 @@ export function useStory() {
       } else if (sourceTarget && node.contains(sourceTarget)) {
         holdNavigationPosition(node, { kind: 'source', element: sourceTarget });
       } else {
-        // Ordinary opening/restoration does not turn reading into a pinned navigation target.
-        const block = saved?.anchor
-          ? [...node.querySelectorAll<HTMLElement>('[data-block-anchor]')].find(
-              (item) =>
-                item.offsetParent !== null &&
-                item.closest('[data-source-id]')?.getAttribute('data-source-id') === saved.source &&
-                item.dataset.blockAnchor?.split(' ').includes(saved.anchor)
-            )
-          : null;
-        if (block && saved)
-          node.scrollTop +=
-            block.getBoundingClientRect().top - node.getBoundingClientRect().top - saved.offset;
-        else node.scrollTop = saved?.top || 0;
+        const article = saved?.source ? document.getElementById(`source-${saved.source}`) : null;
+        if (saved?.anchor && article && node.contains(article)) {
+          // Reuse the existing navigation owner while async native presentations acquire height.
+          // Any user scroll/input immediately releases it, just like an explicit scene jump.
+          holdNavigationPosition(node, {
+            kind: 'source',
+            element: article,
+            anchor: saved.anchor,
+            offset: saved.offset,
+          });
+        } else node.scrollTop = saved?.top || 0;
       }
       restoredView.current = viewKey;
     });

@@ -29,3 +29,7 @@ Codex는 API 키를 입력하는 연결이 아니라 전용 실행기의 로그�
 ## 구현 경계
 
 `server/provider-connections.ts`는 연결 입력·키 저장을, `server/credentials.ts`는 DB 키 읽기/쓰기를 맡아요. 프로토콜별 encoder와 transport는 모델 요청 형식과 응답 파싱을 맡아요. 자료 편집과 과거 백업 검증이 공급자 전송 경로에 개입하지 않아요. 실제 지원 옵션과 응답 품질은 해당 서비스에서 확인해야 해요.
+
+## Reversible settings and concurrent edits
+
+Enabling/disabling a provider or model applies immediately; it does not delete resources and does not require a separate impact-confirmation panel. Unsaved form text is still protected when switching editors. A conflicting save keeps the draft and its original revision until the user loads the latest settings; the provider/model detail GET endpoints return the current editable resource, never the stored API key itself.

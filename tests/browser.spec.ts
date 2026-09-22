@@ -189,10 +189,13 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     const bDone = await detail(request, b.id);
     expect(aDone.sources).toHaveLength(1);
     expect(bDone.sources).toHaveLength(1);
-    expect(aDone.runs[0].inputs[0].task).toContain('SYNTHETIC_A');
-    expect(bDone.runs[0].inputs[0].task).toContain('SYNTHETIC_B');
-    expect(JSON.stringify(aDone.runs[0].inputs)).not.toContain('SYNTHETIC_B');
-    expect(JSON.stringify(bDone.runs[0].inputs)).not.toContain('SYNTHETIC_A');
+    // Completed requests keep their authored command, not an archive of compiled model input.
+    expect(aDone.runs[0].snapshot.request).toContain('SYNTHETIC_A');
+    expect(bDone.runs[0].snapshot.request).toContain('SYNTHETIC_B');
+    expect(aDone.runs[0].snapshot.request).not.toContain('SYNTHETIC_B');
+    expect(bDone.runs[0].snapshot.request).not.toContain('SYNTHETIC_A');
+    expect(aDone.runs[0].inputs).toEqual([]);
+    expect(bDone.runs[0].inputs).toEqual([]);
     const aSource = aDone.sources[0];
     expect(
       aDone.jobs.every((j) => j.sourceRevision === aSource.id && j.status !== 'completed')
@@ -368,15 +371,8 @@ test('F05 failed auxiliary result retries independently while a later source is 
     db.close();
   }
   expect(after.jobs.filter((j) => j.sourceRevision === source.id)).toHaveLength(2);
-  expect(after.runs.find((r) => r.sourceRevision === later.id)?.inputs[0].history).toEqual([
-    {
-      revision: source.id,
-      text: source.text,
-      contentHash: source.hash,
-      requestRanges: [{ start: 0, end: source.text.length }],
-      excludedRanges: [],
-    },
-  ]);
+  expect(after.runs.find((r) => r.sourceRevision === later.id)?.inputs).toEqual([]);
+  expect(after.sources.map((item) => item.id)).toContain(source.id);
 });
 
 test('F03 F05 an older real HTTP response cannot hide a newly committed source', async ({

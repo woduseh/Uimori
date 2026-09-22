@@ -266,7 +266,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   expect(after).toMatchObject({
     endpoint: connection.endpoint,
     enabled: false,
-    credentialRef: 'UIMORI_PROVIDER_SYNTHETIC',
+    credentialRef: connection.credentialRef,
   });
   expect((await request.get(`/api/revisions/connection/${connection.id}/1`)).ok()).toBe(false);
   await openDetails(page, 'profile-editor');
@@ -355,7 +355,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   await page.locator('.chat-settings-image-management > summary').click();
   await expect(imagePanel.getByLabel('PNG 또는 JPEG 이미지', { exact: true })).toBeVisible();
   const png = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9n8AAAAASUVORK5CYII=',
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEUlEQVQImWMQCej5D8IMMAYAP7QHvSBXvZYAAAAASUVORK5CYII=',
     'base64'
   );
   await page
@@ -372,9 +372,13 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
       response.request().method() === 'POST'
   );
   await page.getByRole('button', { name: '이미지 등록', exact: true }).click();
-  const uploaded = (await (await upload).json()) as Asset;
+  const acceptedUpload = await upload;
+  expect(acceptedUpload.ok(), await acceptedUpload.text()).toBe(true);
+  const uploaded = (await acceptedUpload.json()) as Asset;
   await expect(imagePanel.getByRole('status')).toContainText('이미지를 등록했어요');
-  expect(uploaded.hash).toBe(createHash('sha256').update(png).digest('hex'));
+  expect(uploaded.mime).toBe('image/webp');
+  const savedBytes = await (await request.get(uploaded.url)).body();
+  expect(uploaded.hash).toBe(createHash('sha256').update(savedBytes).digest('hex'));
   const endpoint = process.env.UIMORI_PROVIDER_FIXTURE_URL;
   if (!endpoint) throw new Error('Dedicated image-selection loopback fixture is required');
   const connectionReply = await request.post('/api/connections', {

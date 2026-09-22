@@ -9,24 +9,15 @@ export function themeTemplate(html: string): DocumentFragment {
   template.innerHTML = DOMPurify.sanitize(html || DEFAULT_THEME_TEMPLATE, {
     // Names live inside this ShadowRoot, not in document named properties.
     SANITIZE_DOM: false,
-    ADD_TAGS: ['slot'],
+    ADD_TAGS: ['slot', 'style'],
     ADD_ATTR: ['name'],
     ALLOW_DATA_ATTR: true,
-    FORBID_TAGS: [
-      'script',
-      'style',
-      'iframe',
-      'object',
-      'embed',
-      'link',
-      'base',
-      'meta',
-      'form',
-      'input',
-      'textarea',
-      'select',
-    ],
+    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'link', 'base', 'meta', 'form'],
   });
+  if (DOMPurify.removed.length)
+    throw new Error(
+      '레이아웃에 지원하지 않는 HTML이 있어요. 스크립트·이벤트 속성·iframe·form 대신 슬롯과 CSS를 사용해 주세요.'
+    );
   const slots = [...template.content.querySelectorAll('slot')];
   for (const name of THEME_SLOTS) {
     if (slots.filter((slot) => slot.name === name).length !== 1)
@@ -64,7 +55,7 @@ export function ThemeFrame({ children }: { children: ReactNode }) {
       root.replaceChildren(style, themeTemplate(''));
       setError((cause as Error).message);
     }
-    return () => root.replaceChildren();
+    // React removes the host. Do not collapse live content between layout replacements.
   }, [html, css]);
   return (
     <>

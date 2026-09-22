@@ -12,7 +12,34 @@ export function imageDataHashes(value: unknown): string[] {
   return text?.match(/[a-f0-9]{64}/gu) ?? [];
 }
 
+export function queueImageCleanup(db: DatabaseSync, candidates: Iterable<string>): void {
+  const insert = db.prepare(
+    'INSERT OR IGNORE INTO image_cleanup_candidates(hash) SELECT hash FROM image_blobs WHERE hash=?'
+  );
+  for (const hash of candidates) insert.run(hash);
+}
+
+/** Worker completion/restart only revisits work explicitly deferred by a deletion or edit. */
+export function flushPendingImageCleanup(db: DatabaseSync): void {
+  if (
+    db.prepare('SELECT 1 FROM image_cleanup_candidates LIMIT 1').get() ||
+    db.prepare("SELECT 1 FROM app_metadata WHERE key='image-cleanup-needed'").get()
+  )
+    pruneUnusedData(db);
+}
+
 export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> | null = []): void {
+  if (candidates === null)
+    db.exec('INSERT OR IGNORE INTO image_cleanup_candidates SELECT hash FROM image_blobs');
+  else queueImageCleanup(db, candidates);
+  const pending = db.prepare('SELECT hash FROM image_cleanup_candidates').all();
+  const hasHidden = !!db.prepare('SELECT 1 FROM library_hidden LIMIT 1').get();
+  if (!pending.length && !hasHidden) {
+    db.prepare("DELETE FROM app_metadata WHERE key='image-cleanup-needed'").run();
+    return;
+  }
+  // Persist the intent before any busy check: a restart or a later ordinary flush must not lose it.
+  db.prepare("INSERT OR REPLACE INTO app_metadata VALUES('image-cleanup-needed','1')").run();
   // A provider or image conversion may hold an in-memory selection not yet persisted.
   for (const table of [
     'runs',
@@ -26,7 +53,7 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
   ])
     if (db.prepare(`SELECT 1 FROM ${table} WHERE status IN ('queued','running') LIMIT 1`).get())
       return;
-  const removedImages = new Set(candidates ?? []);
+  const removedImages = new Set(pending.map((row) => String(row.hash)));
   const hidden = new Set(
     db
       .prepare('SELECT kind,id FROM library_hidden')
@@ -158,14 +185,10 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
     db.prepare('DELETE FROM resource_undo WHERE kind=? AND id=?').run(kind, id);
     db.prepare('DELETE FROM library_hidden WHERE kind=? AND id=?').run(kind, id);
   }
-  const selected =
-    candidates === null
-      ? db
-          .prepare('SELECT hash FROM image_blobs')
-          .all()
-          .map((row) => String(row.hash))
-      : [...removedImages];
+  const selected = [...removedImages];
   db.prepare('DELETE FROM image_blobs WHERE hash IN (SELECT value FROM json_each(?))').run(
     JSON.stringify(selected.filter((hash) => !hashes.has(hash)))
   );
+  db.exec('DELETE FROM image_cleanup_candidates');
+  db.prepare("DELETE FROM app_metadata WHERE key='image-cleanup-needed'").run();
 }

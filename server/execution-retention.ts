@@ -1,3 +1,4 @@
+import { pruneSourceEdits } from './text-retention.js';
 import { pruneContextHistory } from './context-retention.js';
 import type { DatabaseSync } from 'node:sqlite';
 
@@ -25,6 +26,7 @@ export function releaseCompletedRunInputs(db: DatabaseSync, runId: string): void
   db.prepare('DELETE FROM tool_events WHERE run_id=?').run(runId);
   releaseAttemptBodies(db, 'run', runId);
   pruneContextHistory(db);
+  pruneSourceEdits(db);
 }
 
 /** Retain image catalogs/targets and translation settings used by display and dependent jobs. */
@@ -51,4 +53,5 @@ export function releaseCompletedHelperInputs(db: DatabaseSync, taskId: string): 
   ).run(taskId);
   releaseAttemptBodies(db, 'helper', taskId);
   pruneContextHistory(db);
+  pruneSourceEdits(db);
 }

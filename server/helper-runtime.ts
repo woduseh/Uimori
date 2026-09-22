@@ -1197,8 +1197,15 @@ export class HelperRuntime {
       name.startsWith('resource.') ||
       name.startsWith('theme.') ||
       name === 'image.update-metadata'
-    )
-      return invokeResourceTool(this.store, name, args);
+    ) {
+      const result = invokeResourceTool(this.store, name, args);
+      if (
+        args.kind === 'theme' &&
+        ['resource.save', 'resource.undo', 'resource.delete'].includes(name)
+      )
+        this.workspace.event(task.conversationId, task.id, 'theme.updated');
+      return result;
+    }
     const scope = task.snapshot.scope;
     if (name === 'chat.read') {
       if (scope.kind !== 'chat')

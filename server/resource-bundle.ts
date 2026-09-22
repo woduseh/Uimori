@@ -1,3 +1,4 @@
+import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Store } from './store.js';
 import type { Content, PromptPreset, SavedPromptCombination } from '../core/product.js';
@@ -139,14 +140,8 @@ export function importResourceBundle(store: Store, value: unknown): NativeTransf
   const commandDigest = bundleDigest({ file: prepared.digest, bindings });
   const key = text(body.idempotencyKey, 'import request', 200);
   return store.transaction(() => {
-    const prior = store.db
-      .prepare('SELECT digest,result FROM import_operations WHERE key=?')
-      .get(key);
-    if (prior) {
-      if (prior.digest !== commandDigest)
-        throw new HttpError(409, '다른 가져오기 요청에 같은 ID가 사용됐어요.');
-      return { ...JSON.parse(String(prior.result)), created: false };
-    }
+    const prior = readImportReceipt<NativeTransferReceipt>(store, key, commandDigest);
+    if (prior) return { ...prior, created: false };
     const ids = new Map(checked.entries.map((entry) => [entry.key, randomUUID()]));
     const contentIds = new Map(
       checked.file.contents.map((entry) => [entry.source.id, ids.get(entry.key)!])
@@ -185,14 +180,7 @@ export function importResourceBundle(store: Store, value: unknown): NativeTransf
       summary: prepared.summary,
       items: checked.entries.map((entry) => ({ ...entry, id: ids.get(entry.key)!, revision: 1 })),
     };
-    store.db
-      .prepare('INSERT INTO import_operations VALUES(?,?,?)')
-      .run(key, commandDigest, JSON.stringify(receipt));
-    store.db
-      .prepare(
-        'DELETE FROM import_operations WHERE rowid NOT IN (SELECT rowid FROM import_operations ORDER BY rowid DESC LIMIT 256)'
-      )
-      .run();
+    saveImportReceipt(store, key, commandDigest, receipt);
     return receipt;
   });
 }
