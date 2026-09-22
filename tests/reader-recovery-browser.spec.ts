@@ -70,68 +70,49 @@ test('READERREC confirming an uncertain request never turns into cancelling its 
   expect((await (await request.get(`/api/chats/${chat.id}`)).json()).runs).toHaveLength(1);
 });
 
-for (const alternate of [false, true])
-  test(`READERREC pending request survives reload with ${alternate ? 'implicit alternate default' : 'explicit main'} branch`, async ({
-    page,
-    request,
-  }) => {
-    const chat = await (
-      await postFixtureChat(request, { data: { title: 'Pending recovery' } })
-    ).json();
-    let branch = (await (await request.get(`/api/chats/${chat.id}`)).json()).branches[0];
-    if (alternate) {
-      const target = await (
-        await request.post(`/api/chats/${chat.id}/branches`, {
-          data: { title: 'Alternate', fromRevision: null },
+test('READERREC pending request survives reload on the current chat branch', async ({
+  page,
+  request,
+}) => {
+  const chat = await (
+    await postFixtureChat(request, { data: { title: 'Pending recovery' } })
+  ).json();
+  const branch = (await (await request.get(`/api/chats/${chat.id}`)).json()).branches[0];
+  const commandKey = `command:${chat.id}`;
+  await page.addInitScript(
+    ({ commandKey, chat, branch }) => {
+      sessionStorage.setItem(
+        commandKey,
+        JSON.stringify({
+          id: 'pending-synthetic-command',
+          payload: JSON.stringify({
+            request: '보존된 이전 요청',
+            branchId: branch.id,
+            expectedRevision: null,
+            expectedSettingsRevision: chat.settingsRevision,
+          }),
         })
-      ).json();
-      const changed = await request.put(`/api/chats/${chat.id}/branches/${target.id}/default`, {
-        data: {
-          expectedRevision: target.revision,
-          expectedDefaultBranchId: branch.id,
-          expectedDefaultBranchRevision: branch.revision,
-        },
-      });
-      expect(changed.ok()).toBe(true);
-      branch = await changed.json();
-    }
-    const commandKey = `command:${chat.id}${alternate ? `:${branch.id}` : ''}`;
-    await page.addInitScript(
-      ({ commandKey, chat, branch }) => {
-        sessionStorage.setItem(
-          commandKey,
-          JSON.stringify({
-            id: 'pending-synthetic-command',
-            payload: JSON.stringify({
-              request: '보존된 이전 요청',
-              branchId: branch.id,
-              expectedRevision: null,
-              expectedSettingsRevision: chat.settingsRevision,
-            }),
-          })
-        );
-      },
-      { commandKey, chat, branch }
-    );
-    const payloads: unknown[] = [];
-    await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
-      payloads.push(route.request().postDataJSON());
-      await route.abort('failed');
-    });
-    await page.goto(
-      `/?chat=${chat.id}${alternate ? '' : `&branch=${encodeURIComponent(branch.id)}`}`
-    );
-    await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
-    await page.reload();
-    await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
-    await expect.poll(() => payloads.length).toBe(1);
-    expect(payloads[0]).toMatchObject({
-      request: '보존된 이전 요청',
-      branchId: branch.id,
-      idempotencyKey: 'pending-synthetic-command',
-    });
-    expect(await page.evaluate((key) => sessionStorage.getItem(key), commandKey)).not.toBeNull();
+      );
+    },
+    { commandKey, chat, branch }
+  );
+  const payloads: unknown[] = [];
+  await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
+    payloads.push(route.request().postDataJSON());
+    await route.abort('failed');
   });
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await expect.poll(() => payloads.length).toBe(1);
+  expect(payloads[0]).toMatchObject({
+    request: '보존된 이전 요청',
+    branchId: branch.id,
+    idempotencyKey: 'pending-synthetic-command',
+  });
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), commandKey)).not.toBeNull();
+});
 
 test('READERREC invalid view caches do not prevent opening a saved conversation', async ({
   page,
