@@ -278,12 +278,17 @@ export async function prepareInputContext(
     const logical = structuredClone(
       fixed.nativeRisuExecution?.history ?? fixed.logicalHistory ?? []
     );
+    const messagesBySource = new Map<string, PromptHistoryMessage[]>();
+    for (const message of logical) {
+      if (message.current || !message.sourceRevision) continue;
+      const group = messagesBySource.get(message.sourceRevision) ?? [];
+      group.push(message);
+      messagesBySource.set(message.sourceRevision, group);
+    }
     const units = allRefs.map((ref, index) => ({
       ref,
       sourceSceneNumber: index + 1,
-      messages: logical.filter(
-        (message) => !message.current && message.sourceRevision === ref.revision
-      ),
+      messages: messagesBySource.get(ref.revision) ?? [],
     }));
     const check = async (): Promise<Connection> => {
       if (hooks.signal.aborted) fail('CANCELLED');
@@ -429,22 +434,37 @@ export async function prepareInputContext(
       // Prefer keeping two complete exchanges; include one of them only if earlier exchanges cannot make the input fit.
       const candidates = remaining.slice(0, Math.max(1, remaining.length - 2));
       const batch: SourceUnit[] = [];
-      for (const unit of candidates) {
-        validateUnit(unit);
-        if (!fits(plan.summary, wholeFragments([...batch, unit]))) break;
-        batch.push(unit);
-        const projectedEstimate = measureInput(
-          withContextProjection(
-            fixed,
-            [...plan.compacted, ...batch.map((item) => item.ref)],
-            plan.summary
+      if (hooks.reason === 'manual') {
+        // Manual scope already fixes the prefix. Fit the summary batch once instead of
+        // re-rendering the full writing prompt for every candidate source.
+        let low = 0,
+          high = candidates.length;
+        if (fits(plan.summary, wholeFragments(candidates))) low = high;
+        while (low < high) {
+          const middle = Math.ceil((low + high) / 2);
+          if (fits(plan.summary, wholeFragments(candidates.slice(0, middle)))) low = middle;
+          else high = middle - 1;
+        }
+        batch.push(...candidates.slice(0, low));
+        for (const unit of batch) validateUnit(unit);
+      } else {
+        for (const unit of candidates) {
+          validateUnit(unit);
+          if (!fits(plan.summary, wholeFragments([...batch, unit]))) break;
+          batch.push(unit);
+          const projectedEstimate = measureInput(
+            withContextProjection(
+              fixed,
+              [...plan.compacted, ...batch.map((item) => item.ref)],
+              plan.summary
+            )
+          ).estimatedInputTokens;
+          if (
+            projectedEstimate <= limit * TARGET_RATIO &&
+            plan.compacted.length + batch.length >= manualTarget
           )
-        ).estimatedInputTokens;
-        if (
-          projectedEstimate <= limit * TARGET_RATIO &&
-          plan.compacted.length + batch.length >= manualTarget
-        )
-          break;
+            break;
+        }
       }
       let nextSummary: string;
       if (batch.length) nextSummary = await summarize(plan.summary, wholeFragments(batch));
