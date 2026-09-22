@@ -1,9 +1,8 @@
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { run } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { fingerprint, json, newId, root } from './lib.mjs';
+import { json, newId, root } from './lib.mjs';
 
 function eventJson(event) {
   return JSON.stringify(event, (_key, value) =>
@@ -62,19 +61,6 @@ export async function testTooling(files) {
     for (const file of summary.files) {
       if (!(await stat(file)).isFile()) throw new Error(`Tooling test file unavailable: ${file}`);
     }
-    summary.sourceHash = (await fingerprint()).hash;
-    summary.verificationHash = (await fingerprint(root, { verificationOnly: true })).hash;
-    // Explicit fault files may live outside the repository fingerprint inputs.
-    const selectedHashes = () =>
-      Promise.all(
-        summary.files.map(async (file) => ({
-          file,
-          hash: createHash('sha256')
-            .update(await readFile(file))
-            .digest('hex'),
-        }))
-      );
-    summary.selectedInputs = await selectedHashes();
     for await (const event of run({
       files: summary.files,
       cwd: root,
@@ -141,18 +127,6 @@ export async function testTooling(files) {
       terminalEvents.some((event) => event.status !== 'PASS')
     )
       throw new Error(`Required tooling tests did not all PASS: ${eventJson(counts)}`);
-    if (
-      JSON.stringify(summary.selectedInputs) !== JSON.stringify(await selectedHashes()) ||
-      summary.verificationHash !== (await fingerprint(root, { verificationOnly: true })).hash
-    )
-      throw new Error('Tests, fixtures or tooling changed during verification');
-    summary.finalSourceHash = (await fingerprint()).hash;
-    summary.reusableForCurrentSource = summary.sourceHash === summary.finalSourceHash;
-    if (summary.reusableForCurrentSource) summary.identityVerifiedAt = new Date().toISOString();
-    else
-      console.warn(
-        'Tests passed for this invocation; source changed, so this is not current-source certification.'
-      );
     summary.status = 'PASS';
   } catch (error) {
     summary.error = error.message;

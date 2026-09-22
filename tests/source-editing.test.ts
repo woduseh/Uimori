@@ -1,3 +1,4 @@
+import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { rejudgeTranslation } from '../server/source-editing.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -377,15 +378,19 @@ test('unsupported future database refuses startup without rewriting translation 
   item.store = undefined;
   const path = join(item.dir, 'test.sqlite');
   const db = new DatabaseSync(path);
-  db.exec('PRAGMA user_version=5;');
+  db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION + 1};`);
   db.close();
-  expect(() => new Store(path)).toThrow('Database version 5 is not the personal-v1 format');
+  expect(() => new Store(path)).toThrow(
+    `Database version ${DATABASE_SCHEMA_VERSION + 1} is not the personal-v1 format`
+  );
   const original = new DatabaseSync(path, { readOnly: true });
   try {
     expect(original.prepare('SELECT status FROM jobs WHERE id=?').get(job.id)).toEqual({
       status: 'queued',
     });
-    expect(original.prepare('PRAGMA user_version').get()).toEqual({ user_version: 5 });
+    expect(original.prepare('PRAGMA user_version').get()).toEqual({
+      user_version: DATABASE_SCHEMA_VERSION + 1,
+    });
   } finally {
     original.close();
   }

@@ -6,7 +6,7 @@
 
 채팅·분기·원문·화면 종류는 `web/reader-navigation.ts`의 하나의 이동 상태로 관리해요. 사용자 이동은 주소가 다시 같아지는 A→B→A나 같은 원문 재선택도 새 의도로 취급하므로, 이전 조회나 재시도 완료가 새 화면을 덮어쓰거나 다른 분기로 옮기지 않아요. 주소가 같아도 새 이동에 맞춰 조회를 시작하므로, 첫 조회 도중 같은 채팅을 다시 선택해도 읽기를 이어가요. 이미 표시 중인 같은 페이지는 새 조회가 끝날 때까지 유지해요. 기본 분기 주소의 고정과 native 원문 교체에 따른 주소 보정은 새 사용자 이동으로 취급하지 않아요. 전송한 요청의 복구 키와 초안 저장 주소는 그대로 유지해요. 관련 검사는 `tests/reader-navigation.test.ts`, `tests/reader-navigation-browser.spec.ts`와 기존 Reader 복구 검사에 있어요.
 
-Reader는 SSE의 목표 cursor까지 조회를 이어가며, 일시적인 조회 실패는 새 이벤트 없이도 최대 5초 간격의 백오프로 재시도해요. 전체 재동기화는 응답이 실제 적용된 뒤에만 완료로 처리하고 채팅을 떠나면 재시도를 취소해요. 손상된 읽기 위치·커서 캐시는 무시하지만 원문과 입력 초안은 유지해요. 생성 요청 복구 키는 실제 분기 ID를 사용하고 최초 main 분기는 기존 저장 주소를 유지하므로 기본 분기 변경이나 명시적 main URL에도 같은 요청을 복구해요. 요청 기록 저장에 실패하면 생성 요청을 보내지 않아요.
+Reader는 SSE의 목표 cursor까지 조회를 이어가며, 일시적인 조회 실패는 새 이벤트 없이도 최대 5초 간격의 백오프로 재시도해요. 전체 재동기화는 응답이 실제 적용된 뒤에만 완료로 처리하고 채팅을 떠나면 재시도를 취소해요. 손상된 읽기 위치·커서 캐시는 무시하지만 원문과 입력 초안은 유지해요. 생성 요청 복구 키는 실제 분기 ID를 사용하고 최초 main 분기는 기존 저장 주소를 유지하므로 명시적 내부 main URL에도 같은 요청을 복구해요. 요청 기록 저장에 실패하면 생성 요청을 보내지 않아요.
 
 서버에 실행 중인 요청이 보이더라도 수락 여부가 불확실한 로컬 기록이 있으면 전송 버튼은 ‘이전 요청 확인’을 유지해요. 저장된 동일 요청 키로 수락을 확인한 뒤 실행 취소 버튼을 보여주므로, 확인 도중 상태 갱신이 클릭을 취소 동작으로 바꾸지 않아요.
 
@@ -61,8 +61,10 @@ Risu 메시지의 기본 글자색·글자 크기·글꼴·줄간격은 상속�
 
 봇 자체의 고정 폭·고정 위치 UI를 모바일용으로 자동 재배치하지는 않아요. 따라서 앱의 탐색·입력창이 정상이어도 원본 카드 내부의 버튼이나 문구가 좁은 화면에서 겹칠 수 있어요.
 
-## Helper sessions and branches
+## Helper sessions
 
-A chat branch can have multiple helper sessions, selected in one panel. Conversation history, drafts, and context belong to the session; tools follow the current user request without per-action grants. The list includes sessions from other branches: users can select their context or explicitly target another chat through helper tools. Moving between branches restores that branch's session selection; switching sessions or closing the panel does not cancel work. Sessions use the global helper model.
+Each independent chat can have multiple helper sessions. A session owns its conversation, draft and context; closing the panel or selecting another session does not cancel its work. Tools can explicitly target another chat when requested. Copying a chat produces an independent chat, not a shared branch with a mutable default.
 
-Setting a branch as the default changes which branch opens when entering the chat. It does not merge or copy content, move running requests, or redirect an already open reader. A chat has one default branch; choose another before deleting it.
+Opening the reader or helper takes a current view and event cursor, then follows newer changes; historical notifications are not replayed just to rebuild the screen. Message content updates preserve the reading position, and both native HTML and ordinary prose use the same outer block anchors.
+
+Direct source edits retain the immutable authored original, the newest two edited versions and versions still captured by unfinished work. Translation history retains current/previous successful text and any active image target; billing summaries do not require an archive of every full translation.

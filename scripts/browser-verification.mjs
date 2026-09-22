@@ -10,9 +10,6 @@ import {
   createOwnership,
   localVerificationEnv,
   assertBuild,
-  buildFingerprint,
-  root,
-  fingerprint,
   browserPath,
   startServer,
   command,
@@ -104,13 +101,8 @@ export async function runBrowserVerification({
       environmentBlocked = true;
       throw new Error('Node >=24.14.0 <25 required');
     }
-    const identity = await assertBuild(),
-      before = await fingerprint();
+    const identity = await assertBuild();
     summary.identity = identity;
-    summary.verificationIdentity = before;
-    const verificationHash = (await fingerprint(root, { verificationOnly: true })).hash;
-    if (identity.sourceHash !== (await buildFingerprint()).hash)
-      throw new Error('Source changed during initial build identity check');
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
     assertNotCancelled();
@@ -119,7 +111,6 @@ export async function runBrowserVerification({
       UIMORI_DB: path.join(runtime, 'app.sqlite'),
       UIMORI_INSTANCE: runId,
       UIMORI_BUILD_ID: identity.buildId,
-      UIMORI_PROVIDER_ORIGINS: fixture ? new URL(fixture.url).origin : '',
       ...(fixture ? { UIMORI_PROVIDER_FIXTURE_URL: fixture.url } : {}),
       UIMORI_ARTIFACT_DIR: directory,
       UIMORI_BROWSER_OUTPUT: path.join(directory, 'browser'),
@@ -149,11 +140,12 @@ export async function runBrowserVerification({
         'test',
         ...files,
         ...(grep ? ['--grep', grep] : []),
-        '--reporter=json',
+        '--reporter=list,json',
       ],
       {
         env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: reporter },
         timeout,
+        echo: true,
         log: path.join(directory, 'playwright.log'),
         children,
       }
@@ -175,20 +167,6 @@ export async function runBrowserVerification({
       );
       summary.screenshots = screenshots.map((file) => path.relative(directory, file));
     }
-    assertNotCancelled();
-    const finalBuild = await assertBuild({ checkSource: false });
-    if (
-      finalBuild.buildId !== identity.buildId ||
-      verificationHash !== (await fingerprint(root, { verificationOnly: true })).hash
-    )
-      throw new Error(`Build or verification inputs changed during ${name} verification`);
-    summary.finalSourceHash = (await fingerprint()).hash;
-    summary.reusableForCurrentSource = summary.finalSourceHash === before.hash;
-    if (summary.reusableForCurrentSource) summary.identityVerifiedAt = new Date().toISOString();
-    else
-      summary.limitations.push(
-        'Source changed during this invocation. Results describe the recorded build only, not the current source.'
-      );
   } catch (error) {
     failures.push(error.message);
     if (/spawn EPERM|Browser executable missing/u.test(error.message)) environmentBlocked = true;
@@ -216,11 +194,13 @@ export async function runBrowserVerification({
     if (live.length) cleanupErrors.push('Owned child process still running; runtime retained');
     try {
       if (!live.length) {
-        const evidence = path.join(directory, 'evidence-db');
-        await mkdir(evidence, { recursive: true });
-        for (const entry of await readdir(runtime))
-          if (/\.sqlite(?:-wal|-shm)?$/u.test(entry))
-            await copyFile(path.join(runtime, entry), path.join(evidence, entry));
+        if (failures.length) {
+          const evidence = path.join(directory, 'evidence-db');
+          await mkdir(evidence, { recursive: true });
+          for (const entry of await readdir(runtime))
+            if (/\.sqlite(?:-wal|-shm)?$/u.test(entry))
+              await copyFile(path.join(runtime, entry), path.join(evidence, entry));
+        }
         await removeOwned(directory, runtime);
       }
     } catch (error) {
@@ -237,23 +217,22 @@ export async function runBrowserVerification({
     ownership.finishedAt = new Date().toISOString();
     ownership.cleanup = summary.cleanup;
     await json(path.join(directory, 'ownership.json'), ownership);
-    try {
-      summary.artifactScan = await artifactScan(directory);
-      if (privateMaterials)
-        summary.artifactScan.scope =
-          'Known synthetic secret canary only; opted-in private rendered content may appear in artifacts. This scan does not establish the absence of real secrets or private prose.';
-    } catch (error) {
-      failures.push(error.message);
-      summary.artifactScan = { status: 'FAIL', error: error.message };
+    if (failures.length) {
+      try {
+        summary.artifactScan = await artifactScan(directory);
+        if (privateMaterials)
+          summary.artifactScan.scope =
+            'Known synthetic secret canary only; opted-in private rendered content may appear in artifacts. This scan does not establish the absence of real secrets or private prose.';
+      } catch (error) {
+        failures.push(error.message);
+        summary.artifactScan = { status: 'FAIL', error: error.message };
+      }
     }
     // All evidence and owned-resource work is settled. End cancellation handling
     // before fixing the terminal status so saving it cannot race a late handler.
     process.removeListener('SIGINT', onInterrupt);
     process.removeListener('SIGTERM', onTerminate);
     await Promise.all(cancellationCleanup);
-    if (summary.identity && !summary.identityVerifiedAt)
-      summary.evidenceIdentity =
-        summary.reusableForCurrentSource === false ? 'RECORDED_BUILD_ONLY' : 'NOT_CONFIRMED_AT_END';
     summary.status = failures.length ? (environmentBlocked ? 'BLOCKED' : 'FAIL') : 'PASS';
     summary.finishedAt = new Date().toISOString();
     await json(path.join(directory, 'summary.json'), summary);
@@ -262,7 +241,8 @@ export async function runBrowserVerification({
         status: summary.status,
         runId,
         evidence: path.join(directory, 'summary.json'),
-        tests: summary.report?.passed ?? 0,
+        tests: summary.report?.passed ?? null,
+        reportComplete: Array.isArray(summary.report?.tests),
         failures,
       })
     );

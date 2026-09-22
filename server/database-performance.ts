@@ -13,6 +13,10 @@ export function initDatabaseReadIndexes(db: DatabaseSync): void {
     ['jobs_chat_status', 'jobs(chat_id,status)'],
     ['helper_events_task', 'helper_events(task_id,kind,seq)'],
     ['helper_operations_task', 'helper_operations(task_id)'],
+    [
+      'helper_request_group',
+      "helper_tasks(conversation_id,COALESCE(json_extract(snapshot,'$.requestGroupId'),id))",
+    ],
   ])
     db.exec(`CREATE INDEX IF NOT EXISTS ${name} ON ${columns}`);
 }

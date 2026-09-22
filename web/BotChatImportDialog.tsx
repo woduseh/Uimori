@@ -139,11 +139,11 @@ export function BotChatImportDialog({
             <Database size={20} />
             <span>
               <strong>채팅 백업 복원</strong>
-              <small>분기·상태·도우미·실행 기록까지 복원해요.</small>
+              <small>본문·번역·메모·변수와 사용 자료를 새 채팅으로 복원해요.</small>
             </span>
             <ChevronRight size={18} />
           </button>
-          <p className="muted">전체 채팅 백업은 파일에 담긴 봇 소속을 유지해요.</p>
+          <p className="muted">채팅 백업의 봇과 자료도 독립 사본으로 가져와요.</p>
         </div>
       ) : (
         <>
@@ -191,7 +191,7 @@ export function BotChatImportDialog({
                   </button>
                 </div>
               )}
-              {busy && !selection && <p role="status">파일을 읽고 있어요…</p>}
+              {busy && !selection && !message && <p role="status">파일을 읽고 있어요…</p>}
               {message && <p role="status">{message}</p>}
               {error && (
                 <p role="alert" className="error">

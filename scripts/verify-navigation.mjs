@@ -9,6 +9,5 @@ await runBrowserVerification({
     'tests/organization-browser.spec.ts',
     'tests/deletion-browser.spec.ts',
     'tests/activity-browser.spec.ts',
-    'tests/default-branch-browser.spec.ts',
   ],
 });

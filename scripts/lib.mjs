@@ -19,7 +19,6 @@ export function localVerificationEnv(variables = {}) {
     // Undefined removes inherited configuration at spawn; an empty origin is invalid.
     UIMORI_PUBLIC_ORIGIN: undefined,
     UIMORI_ACCESS_TOKEN: '',
-    UIMORI_PROVIDER_ORIGINS: variables.UIMORI_PROVIDER_ORIGINS ?? '',
     UIMORI_CODEX_ENABLED: '0',
     UIMORI_CODEX_EXECUTABLE: undefined,
   };
@@ -173,7 +172,7 @@ export async function killOwned(child) {
 }
 export async function command(
   args,
-  { cwd = root, env = {}, timeout = 120000, log, children } = {}
+  { cwd = root, env = {}, timeout = 120000, log, children, echo = false } = {}
 ) {
   const started = Date.now();
   const child = spawn(process.execPath, args, {
@@ -186,9 +185,11 @@ export async function command(
   let output = '';
   let timedOut = false;
   child.stdout.on('data', (value) => {
+    if (echo) process.stdout.write(value);
     output += value;
   });
   child.stderr.on('data', (value) => {
+    if (echo) process.stderr.write(value);
     output += value;
   });
   let timer;

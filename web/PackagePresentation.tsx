@@ -25,8 +25,8 @@ export function usePackagePresentation(
   refreshKey: string,
   branchId?: string
 ) {
-  const sourceIdentity = `${source.chatId}:${branchId ?? ''}:${source.id}:${source.hash}`;
-  const identity = `${sourceIdentity}:${translation?.id ?? ''}:${translation?.revision ?? 0}:${translation?.status ?? ''}`;
+  const sourceIdentity = `${source.chatId}:${branchId ?? ''}:${source.id}`;
+  const identity = `${sourceIdentity}:${source.hash}:${translation?.id ?? ''}:${translation?.revision ?? 0}:${translation?.status ?? ''}`;
   const key = `${identity}:${refreshKey}`;
   const sequence = useRef(0);
   const [result, setResult] = useState<{
@@ -92,8 +92,9 @@ export function usePackagePresentation(
   ]);
   if (!enabled || result?.sourceIdentity !== sourceIdentity) return;
   if (result.identity === identity) return { ...result, pending: result.key !== key };
-  // A translation refresh must not unmount the unchanged original and collapse its scroll area.
-  // Keep only the matching source; stale translations and native actions remain unavailable.
+  // Keep the last rendered original for this same message while its new projection loads.
+  // A hash/translation change must not replace a long reading surface with a short spinner.
+  // Native actions stay disabled until the new source projection has been validated.
   return {
     ...result,
     pending: true,

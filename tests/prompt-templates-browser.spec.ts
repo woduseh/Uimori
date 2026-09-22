@@ -1,3 +1,4 @@
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { expect, test } from '@playwright/test';
 import type { LibraryOrganization } from '../core/library-organization.js';
@@ -21,11 +22,7 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
     data: {
       title: `BPTUI01 existing ${crypto.randomUUID()}`,
       role: 'main',
-      program: {
-        version: 1,
-        controls: [],
-        blocks: [{ id: 'current', title: '현재 요청', kind: 'current' }],
-      },
+      program: nativePrompt('Synthetic current prompt.'),
       values: {},
     },
   });
@@ -93,6 +90,7 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
     });
     await expect(dialog).toBeHidden();
     const editor = page.getByTestId('prompt-editor');
+    await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
     await expect(editor.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(title);
     await expect(editor.getByLabel('프롬프트 역할', { exact: true })).toHaveValue(role);
     const placed = (await (

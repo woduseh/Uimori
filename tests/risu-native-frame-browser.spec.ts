@@ -157,7 +157,7 @@ test('native preset editor keeps raw CBS, toggle values, and invalid regex draft
   const regex = [{ in: '(hello)', out: '$1 {{getvar::place}}', type: 'editinput' }];
   await editor.getByLabel('Risu 정규식 JSON').fill(JSON.stringify(regex));
   await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
-  await editor.getByRole('button', { name: '정규식 적용', exact: true }).click();
+  await editor.getByRole('button', { name: '폼에 반영', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
   const saved = JSON.parse((await page.locator('output').textContent())!);
   expect(saved.values).toEqual({ mood: '1' });
@@ -338,7 +338,7 @@ for (const viewport of [
       await page.getByRole('button', { name: '다른 탭', exact: true }).click();
       await page.getByRole('button', { name: '다른 탭', exact: true }).click();
       await expect(page.getByLabel('Risu 정규식 JSON', { exact: true })).toHaveValue('[invalid');
-      await page.getByRole('button', { name: '정규식 적용', exact: true }).click();
+      await page.getByRole('button', { name: '폼에 반영', exact: true }).click();
       await expect(page.getByRole('alert')).toBeVisible();
       await page.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
@@ -375,6 +375,7 @@ for (const viewport of [
         mount();
       });
       await page.getByRole('tab', { name: '로어북', exact: true }).click();
+      await page.getByText('조건·배치·원문 설정', { exact: true }).click();
       const keywords = page.getByLabel('로어 키워드', { exact: true });
       await keywords.focus();
       await keywords.press('End');
@@ -429,7 +430,7 @@ for (const viewport of [
       await expect.poll(block).toMatchObject({
         type: 'chat',
         role: 'user',
-        role2: 'assistant',
+        role2: 'bot',
         rangeEnd: 'end',
       });
       await expect(editor.getByRole('alert')).toHaveCount(0);

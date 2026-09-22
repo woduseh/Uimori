@@ -92,7 +92,6 @@ export async function bootProbe(app = '/app', data = '/data') {
       UIMORI_PORT: '4310',
       UIMORI_PUBLIC_ORIGIN: 'https://oracle-probe.invalid',
       UIMORI_ACCESS_TOKEN: 'isolated-oracle-image-probe-token-0000',
-      UIMORI_PROVIDER_ORIGINS: '',
       UIMORI_CODEX_ENABLED: '0',
       UIMORI_BUILD_ID: identity.buildId,
     },

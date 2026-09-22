@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
-import { artifactRoot, ownedPath, removeOwned, json } from './lib.mjs';
+import { artifactRoot, ownedPath, removeOwned } from './lib.mjs';
 
 try {
   const args = process.argv.slice(2);
@@ -24,7 +24,7 @@ try {
       JSON.stringify(
         {
           usage:
-            'npm run cleanup -- --run <run-id>; removes only inactive run runtime, preserves evidence. Active old PIDs require inspection (never killed automatically).',
+            'npm run cleanup -- --run <run-id>; removes an inactive run including its logs and failure artifacts. Active old PIDs require inspection (never killed automatically).',
           runs,
         },
         null,
@@ -42,17 +42,15 @@ try {
       );
     if (owner.directory !== directory || owner.runId !== args[1])
       throw new Error('Ownership manifest mismatch');
-    const runtime = path.join(directory, 'runtime');
-    await removeOwned(directory, runtime);
+    await removeOwned(artifactRoot, directory);
     const cleanup = {
       status: 'PASS',
       runId: args[1],
-      removed: runtime,
-      evidencePreserved: true,
+      removed: directory,
+      evidencePreserved: false,
       noProcessKilled: true,
       at: new Date().toISOString(),
     };
-    await json(path.join(directory, 'manual-cleanup.json'), cleanup);
     console.log(JSON.stringify(cleanup, null, 2));
   }
 } catch (error) {

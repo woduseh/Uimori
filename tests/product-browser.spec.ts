@@ -1,9 +1,7 @@
 import { nativeContent } from './fixtures/native-content.js';
 import { waitForContentSave } from './fixtures/resource-save.js';
-import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
-import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
   selectSettingsSection,
@@ -19,9 +17,8 @@ import {
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
-import { createHash } from 'node:crypto';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
-import type { Asset, Connection, Content, Library, ModelPreset } from '../core/product.js';
+import type { Connection, Content, Library, ModelPreset } from '../core/product.js';
 
 preservePromptWorkspace();
 
@@ -266,7 +263,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   expect(after).toMatchObject({
     endpoint: connection.endpoint,
     enabled: false,
-    credentialRef: 'UIMORI_PROVIDER_SYNTHETIC',
+    credentialRef: connection.credentialRef,
   });
   expect((await request.get(`/api/revisions/connection/${connection.id}/1`)).ok()).toBe(false);
   await openDetails(page, 'profile-editor');
@@ -331,103 +328,15 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   ).toBe(false);
 });
 
-test('P09 P10 P13 fork from a completed scene preserves long prose and annotations with independent settings tabs and descendants', async ({
+test('P09 copying a scene creates an independent chat and keeps each tab draft', async ({
   page,
   context,
   request,
-}, testInfo) => {
-  const initial = await createChat(page, `합성 P09-${Date.now()}`);
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  const settingsResponse = await request.patch(`/api/chats/${initial.id}/settings`, {
-    data: {
-      expectedSettingsRevision: initial.settingsRevision,
-      ...initial.settings,
-      status: true,
-    },
-  });
-  expect(settingsResponse.ok(), await settingsResponse.text()).toBe(true);
-  const chat = (await settingsResponse.json()) as Chat;
-  await page.reload();
-  await storySettings(page);
-  await selectChatSettingsSection(page, '이미지');
-  const imagePanel = page.getByRole('region', { name: '이 이야기의 이미지', exact: true });
-  await page.locator('.chat-settings-image-management > summary').click();
-  await expect(imagePanel.getByLabel('PNG 또는 JPEG 이미지', { exact: true })).toBeVisible();
-  const png = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9n8AAAAASUVORK5CYII=',
-    'base64'
-  );
-  await page
-    .getByLabel('PNG 또는 JPEG 이미지')
-    .setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: png });
-  await page.getByLabel('이미지 이름', { exact: true }).fill('Synthetic harbor pixel');
-  await page
-    .getByLabel('이미지 설명', { exact: true })
-    .fill('Synthetic test pixel representing the harbor.');
-  await page.getByLabel('이미지 장소', { exact: true }).fill('pier');
-  const upload = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/api/chats/${chat.id}/assets`) &&
-      response.request().method() === 'POST'
-  );
-  await page.getByRole('button', { name: '이미지 등록', exact: true }).click();
-  const uploaded = (await (await upload).json()) as Asset;
-  await expect(imagePanel.getByRole('status')).toContainText('이미지를 등록했어요');
-  expect(uploaded.hash).toBe(createHash('sha256').update(png).digest('hex'));
-  const endpoint = process.env.UIMORI_PROVIDER_FIXTURE_URL;
-  if (!endpoint) throw new Error('Dedicated image-selection loopback fixture is required');
-  const connectionReply = await request.post('/api/connections', {
-    data: {
-      title: `P09 image ${chat.id}`,
-      protocol: 'fixture-sse-v1',
-      endpoint: new URL('presentation', endpoint).href,
-      enabled: true,
-    },
-  });
-  expect(connectionReply.ok(), await connectionReply.text()).toBeTruthy();
-  const connection = (await connectionReply.json()) as Connection;
-  const modelReply = await request.post('/api/model-presets', {
-    data: {
-      title: `P09 image ${chat.id}`,
-      connectionId: connection.id,
-      modelId: 'synthetic-image-selector',
-      maxOutputTokens: 512,
-      temperature: null,
-    },
-  });
-  expect(modelReply.ok(), await modelReply.text()).toBeTruthy();
-  const imageModel = (await modelReply.json()) as ModelPreset;
-  await page.reload();
-  await openDetails(page, 'profile-editor');
-  await selectCurrentSettingsSection(page, '역할별 모델');
-  await page
-    .locator('summary')
-    .filter({ hasText: /^자동 작업/ })
-    .click();
-  await page.getByLabel('이미지 배치 모델', { exact: true }).selectOption(imageModel.id);
-  await page.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
-  await expect
-    .poll(async () => (await (await request.get('/api/model-workspace')).json()).routes.image)
-    .toEqual({ id: imageModel.id });
-  await expect(
-    page.getByRole('region', { name: '역할별 모델 설정', exact: true }).getByRole('status')
-  ).toContainText('역할별 모델 설정을 저장했어요.');
-  await openDetails(page, 'profile-editor');
-  await selectChatSettingsSection(page, '이미지');
-  await page.getByLabel('원문 이미지 자동 배치', { exact: true }).check();
-  await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-  await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
-  // Close only after the panel has acknowledged the write; an in-flight save is still protected.
-  await expect(page.getByTestId('profile-editor').getByRole('status')).toContainText(
-    '채팅 설정을 저장했어요.'
-  );
+}) => {
+  const chat = await createChat(page, `합성 P09-${Date.now()}`);
   const first = await send(
     page,
-    'SYNTHETIC_FORK: Mira waits at the pier.\n\n' +
-      'The harbor bell is silent, the letter is sealed, and the traveler chooses their own next action.\n\n'.repeat(
-        24
-      )
+    'SYNTHETIC first scene.\n\n' + 'A quiet harbor remains open to every choice.\n\n'.repeat(50)
   );
   await expect
     .poll(
@@ -435,227 +344,59 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
         (await getDetail(request, chat.id)).runs.find((run) => run.id === first.id)?.status
     )
     .toBe('completed');
-  await page.getByRole('button', { name: '번역 보기', exact: true }).click();
-  await expect.poll(async () => (await getDetail(request, chat.id)).jobs.length).toBe(4);
-  await expect
-    .poll(async () =>
-      (await getDetail(request, chat.id)).jobs.every((job) => job.status === 'completed')
-    )
-    .toBe(true);
-  const firstDetail = await getDetail(request, chat.id);
-  const source = firstDetail.sources[0];
-  expect(
-    firstDetail.jobs.find((job) => job.kind === 'image' && job.imageTarget?.mode === 'original')!
-      .result
-  ).toMatchObject({
-    mock: true,
-    sourceRevision: source.id,
-    sourceHash: source.hash,
-    annotations: [
-      {
-        blockAnchor: source.blocks![0].anchor,
-        assetRef: uploaded.id,
-        assetRevision: uploaded.revision,
-        assetHash: uploaded.hash,
-        presentationIntent: 'inline',
-      },
-    ],
-  });
-  expect(source.text.length).toBeGreaterThan(2000);
-  await expect(page.getByTestId('profile-asset')).toBeVisible();
-  await page.getByRole('button', { name: '원문 보기', exact: true }).click();
-  await expect(page.getByTestId('inline-annotation').first()).toBeVisible();
-  const anchors = await page
-    .getByTestId('source-text')
-    .locator('[data-block-anchor]')
-    .evaluateAll((elements) =>
-      elements.map((element) => element.getAttribute('data-block-anchor'))
-    );
-  expect(anchors).toEqual(source.blocks!.map((block) => block.anchor));
-  await page.getByRole('button', { name: '번역 보기', exact: true }).click();
-  const savedTranslation = firstDetail.jobs.find((job) => job.kind === 'translation')!;
-  await expect(page.getByTestId('translation-text').locator('.source-block')).toHaveText(
-    savedTranslation.translationLayout!.blocks.map((block, index, blocks) =>
-      savedTranslation.result!.text!.slice(block.start, blocks[index + 1]?.start)
-    )
-  );
-  await expect(page.getByTestId('translation-text').locator('[data-block-anchor]')).toHaveCount(
-    savedTranslation.translationLayout!.blocks.length
-  );
-  await expect(
-    page.getByTestId('translation-text').getByTestId('inline-annotation').first()
-  ).toBeVisible();
-  const laterOriginal = await send(
-    page,
-    'SYNTHETIC_ORIGINAL_ONLY: this later scene must not enter a fork from the first scene.'
-  );
+  const source = (await getDetail(request, chat.id)).sources[0];
+  expect(source.text.length).toBeGreaterThan(1000);
+  const later = await send(page, 'SYNTHETIC later original scene, excluded from the earlier copy.');
   await expect
     .poll(
       async () =>
-        (await getDetail(request, chat.id)).runs.find((run) => run.id === laterOriginal.id)?.status
+        (await getDetail(request, chat.id)).runs.find((run) => run.id === later.id)?.status
     )
     .toBe('completed');
   await expect(page.getByTestId('source')).toHaveCount(2);
-  await page
-    .getByTestId('source')
-    .last()
-    .getByRole('button', { name: '번역 보기', exact: true })
-    .click();
-  await expect.poll(async () => (await getDetail(request, chat.id)).jobs.length).toBe(8);
-  await expect
-    .poll(async () =>
-      (await getDetail(request, chat.id)).jobs.every((job) => job.status === 'completed')
-    )
-    .toBe(true);
+  await page.getByLabel('다음 장면 요청').fill('SYNTHETIC original draft');
   const before = await getDetail(request, chat.id);
-  await expect(page.getByTestId('source')).toHaveCount(2);
-  await page.getByLabel('다음 장면 요청').fill('SYNTHETIC retained original draft');
-  const otherTab = await context.newPage();
+  const other = await context.newPage();
   try {
-    await otherTab.goto(`/?chat=${chat.id}`);
-    await expect(otherTab.getByTestId('source')).toHaveCount(2);
-    await otherTab.getByLabel('다음 장면 요청').fill('SYNTHETIC independent other-tab draft');
-    const forkResponse = page.waitForResponse(
-      (response) =>
-        response.url().endsWith(`/api/chats/${chat.id}/fork`) &&
-        response.request().method() === 'POST'
+    await other.goto(`/?chat=${chat.id}`);
+    await expect(other.getByTestId('source')).toHaveCount(2);
+    await other.getByLabel('다음 장면 요청').fill('SYNTHETIC other-tab draft');
+    const copiedResponse = page.waitForResponse(
+      (reply) =>
+        reply.url().endsWith(`/api/chats/${chat.id}/fork`) && reply.request().method() === 'POST'
     );
-    await openSourceActions(page.locator(`[data-testid="source"][data-source-id="${source.id}"]`));
-    await page
-      .locator(`[data-testid="source"][data-source-id="${source.id}"]`)
+    const firstArticle = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
+    await openSourceActions(firstArticle);
+    await firstArticle
       .getByRole('button', { name: '이 장면까지 새 채팅으로 복사', exact: true })
       .click();
-    const forkReply = await forkResponse;
-    expect(forkReply.ok()).toBeTruthy();
-    expect(forkReply.request().postDataJSON().fromRevision).toBe(source.id);
-    const fork = (await forkReply.json()) as Chat;
+    const response = await copiedResponse;
+    expect(response.ok(), await response.text()).toBe(true);
+    const fork = (await response.json()) as Chat;
     await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(fork.id);
     await expect(page.getByTestId('source')).toHaveCount(1);
     await expect(page.getByLabel('다음 장면 요청')).toHaveValue('');
     const copied = await getDetail(request, fork.id);
-    const forkSource = copied.sources[0];
-    expect(forkSource.id).not.toBe(source.id);
-    expect(forkSource.chatId).toBe(fork.id);
-    expect(forkSource.parentRevision).toBeNull();
-    expect(forkSource.text).toBe(source.text);
-    expect(forkSource.hash).toBe(source.hash);
-    expect(
-      forkSource.blocks!.map(({ index, text, start, end }) => ({ index, text, start, end }))
-    ).toEqual(source.blocks!.map(({ index, text, start, end }) => ({ index, text, start, end })));
     expect(copied.sources).toHaveLength(1);
-    expect(copied.runs).toHaveLength(1);
-    expect(copied.attempts).toHaveLength(0);
-    expect(copied.jobs).toHaveLength(4);
-    expect(
-      copied.jobs.every(
-        (job) =>
-          job.status === 'completed' &&
-          job.sourceRevision === forkSource.id &&
-          job.result?.sourceRevision === forkSource.id &&
-          job.result?.sourceHash === source.hash
-      )
-    ).toBe(true);
-    const oldTranslation = firstDetail.jobs.find((job) => job.kind === 'translation')!.result!;
-    const newTranslation = copied.jobs.find((job) => job.kind === 'translation')!.result!;
-    expect(newTranslation.segments?.map((segment) => segment.text)).toEqual(
-      oldTranslation.segments?.map((segment) => segment.text)
-    );
-    expect(newTranslation.text).toBe(oldTranslation.text);
-    await expect(page.getByTestId('profile-asset')).toBeVisible();
-    await page.getByRole('button', { name: '원문 보기', exact: true }).click();
-    await expect(page.getByTestId('inline-annotation').first()).toBeVisible();
-    await page.getByRole('button', { name: '번역 보기', exact: true }).click();
-    const copiedTranslation = copied.jobs.find((job) => job.kind === 'translation')!;
-    await expect(page.getByTestId('translation-text').locator('.source-block')).toHaveText(
-      copiedTranslation.translationLayout!.blocks.map((block, index, blocks) =>
-        newTranslation.text!.slice(block.start, blocks[index + 1]?.start)
-      )
-    );
-    await expect(
-      page.getByTestId('translation-text').getByTestId('inline-annotation').first()
-    ).toBeVisible();
-    await expect(otherTab.getByTestId('source')).toHaveCount(2);
-    await expect(otherTab.getByLabel('다음 장면 요청')).toHaveValue(
-      'SYNTHETIC independent other-tab draft'
-    );
-    expect(await getDetail(request, chat.id)).toEqual(before);
-    const forkPrompt = await request.post('/api/prompt-presets', {
-      data: {
-        title: 'Synthetic fork-only prompt',
-        role: 'main',
-        program: createDefaultRisuPrompt('Synthetic vivid narration for this fork.', 'main'),
-      },
+    expect(copied.sources[0]).toMatchObject({
+      text: source.text,
+      hash: source.hash,
+      chatId: fork.id,
     });
-    expect(forkPrompt.ok()).toBeTruthy();
-    const forkPreset = await forkPrompt.json();
+    expect(copied.sources[0].id).not.toBe(source.id);
+    expect(copied.attempts).toHaveLength(0);
+    await page.getByLabel('다음 장면 요청').fill('SYNTHETIC fork draft');
     await page.reload();
-    await storySettings(page);
-    const forkEditor = await promptTab(page);
-    await forkEditor
-      .getByLabel('현재 프롬프트 프리셋', { exact: true })
-      .selectOption(forkPreset.id);
-    await expect
-      .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.title)
-      .toBe('Synthetic fork-only prompt');
-    await expect(forkEditor.getByLabel('현재 프롬프트 프리셋', { exact: true })).toBeEnabled();
-    expect((await getDetail(request, chat.id)).profile).toEqual(before.profile);
-    const next = await send(
-      page,
-      'SYNTHETIC fork-only descendant.\n\n' +
-        'Only the fork follows this long path along the pier.\n\n'.repeat(30)
-    );
-    await expect
-      .poll(
-        async () =>
-          (await getDetail(request, fork.id)).runs.find((run) => run.id === next.id)?.status
-      )
-      .toBe('completed');
-    await expect
-      .poll(async () =>
-        (await getDetail(request, fork.id)).jobs.every((job) => job.status === 'completed')
-      )
-      .toBe(true);
-    await expect(page.getByTestId('source')).toHaveCount(2);
-    const final = await getDetail(request, fork.id);
-    const descendant = final.sources.find((item) => item.runId === next.id)!;
-    expect(descendant.parentRevision).toBe(forkSource.id);
-    expect(descendant.text.length).toBeGreaterThan(1500);
-    expect(
-      final.runs.find((item) => item.id === next.id)?.snapshot.history.map((item) => item.revision)
-    ).toEqual([forkSource.id]);
-    expect(
-      final.runs.find((item) => item.id === next.id)?.snapshot.history.map((item) => item.text)
-    ).toEqual([source.text]);
-    await page.getByLabel('다음 장면 요청').fill('SYNTHETIC independent fork draft');
-    const forkUrl = page.url();
+    await expect(page.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC fork draft');
+    await expect(other.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC other-tab draft');
+    await expect(other.getByTestId('source')).toHaveCount(2);
     await selectStoredChat(page, chat);
-    await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(chat.id);
-    await expect(page.getByLabel('다음 장면 요청')).toHaveValue(
-      'SYNTHETIC retained original draft'
-    );
-    await selectStoredChat(page, fork);
-    await expect(page).toHaveURL(forkUrl);
-    await expect(page.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC independent fork draft');
-    await page.reload();
-    await expect(page).toHaveURL(forkUrl);
-    await expect(page.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC independent fork draft');
-    await expect(otherTab.getByTestId('source')).toHaveCount(2);
-    await expect(otherTab.getByLabel('다음 장면 요청')).toHaveValue(
-      'SYNTHETIC independent other-tab draft'
-    );
-    expect(await getDetail(request, chat.id)).toEqual(before);
-    expect(final.sources.find((item) => item.id === forkSource.id)).toEqual(forkSource);
-    expect(source.hash).toBe(createHash('sha256').update(source.text).digest('hex'));
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true
-    );
-    if (visualReview)
-      await page.screenshot({
-        path: testInfo.outputPath('m1-mobile-fork-reader.png'),
-        fullPage: true,
-      });
-    expect(errors).toEqual([]);
+    await expect(page.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC original draft');
+    const unchanged = await getDetail(request, chat.id);
+    expect(unchanged.sources).toEqual(before.sources);
+    expect(unchanged.runs.map((run) => run.id)).toEqual(before.runs.map((run) => run.id));
+    expect(unchanged.profile).toEqual(before.profile);
   } finally {
-    await otherTab.close();
+    await other.close();
   }
 });

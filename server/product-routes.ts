@@ -198,6 +198,14 @@ export function productRoutes(
   app.put<{ Params: { id: string } }>('/api/prompt-presets/:id', async (request) =>
     product.promptPreset(request.body, request.params.id)
   );
+  app.get<{ Params: { id: string } }>('/api/connections/:id', (request) => {
+    assertLibraryVisible(store, 'connection', request.params.id);
+    return product.get('connection', request.params.id);
+  });
+  app.get<{ Params: { id: string } }>('/api/model-presets/:id', (request) => {
+    assertLibraryVisible(store, 'model', request.params.id);
+    return product.get('model', request.params.id);
+  });
   app.post('/api/connections', async (request) => {
     const prepared = product.prepareConnection(request.body);
     options.credentials?.validate(prepared.value);

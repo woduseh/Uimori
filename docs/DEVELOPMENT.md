@@ -70,7 +70,7 @@ After a matching build, `node --expose-gc scripts/benchmark-native-preparation.m
 
 Reuse results while their source, environment, and test assumptions remain applicable. After a follow-up edit, run affected checks and distinguish them from an earlier full run. Documentation and test-only changes do not invalidate compiled app inputs.
 
-Local tooling and browser reports record the executed source/build identity. Tests, scripts, fixtures or compiled artifacts changing during a run invalidate it. Product-source drift alone records `reusableForCurrentSource: false`; that result describes the recorded build, not the new source. Release receipts still require unchanged full source identity. Runtime vendor inputs in `third_party` participate in build and verification hashes.
+Browser reports record the build identity checked before launch; tooling reports record selected files and actual Node test results. Local runners do not issue a second source/test certification or rehash the same inputs at the end. Finish edits and rebuild before final verification; after a later change, rerun the affected checks. Release receipts separately require unchanged full source identity. Runtime vendor inputs in `third_party` participate in the build identity.
 
 Actual local Risu materials are excluded from ordinary browser discovery. Set `UIMORI_RISU_SAMPLE_ROOT` for `node scripts/verify-risu-native-samples.mjs`, optionally `UIMORI_RISU_SAMPLE_PRESET` for an external `.risup`, and use `--grep` to focus cases. Source materials remain read-only; private rendered artifacts stay in ignored output directories. These loopback fixture checks do not establish live-provider quality or universal script compatibility.
 
@@ -92,21 +92,25 @@ Browser reports, screenshots, traces, and `summary.json` are under `output/playw
 
 - **Child-process or browser failure:** `spawn EPERM` or a missing browser is an environment blocker. Diagnose with `doctor` and rerun in an environment that can execute the required process.
 - **Stale build:** Rebuild when app inputs changed. The runners check build identity separately from test inputs.
-- **Unexpected shared settings:** Inspect the preserved SQLite at `output/playwright/<run-id>/evidence-db/app.sqlite` before replaying a long browser suite.
+- **Unexpected shared settings in a failed run:** Inspect the preserved SQLite at `output/playwright/<run-id>/evidence-db/app.sqlite` before replaying a long browser suite.
 - **Loopback hangs behind a proxy:** Browser launch options include `--no-proxy-server` for local traffic.
 
 Local fixtures, browser emulation, live providers, and physical devices establish different evidence. Report which one actually ran.
 
 ## Reset and cleanup
 
-`npm run cleanup -- --run <run-id>` cleans up resources owned by that run. Reports and evidence are separate from live process cleanup.
+`npm run cleanup -- --run <run-id>` removes the entire inactive owned run, including logs and diagnostic artifacts. It never stops unrelated processes. Successful browser runs remove their temporary DB; failed runs retain a copy under `evidence-db`.
 
 `npm run reset:dev` deletes only this checkout's default `.local/uimori.sqlite` and its SQLite sidecars. Existing backups and older database files remain untouched. Stop the server first. The command rejects an in-use database or unsafe paths and does not reset an arbitrary `UIMORI_DB`.
 
-Empty and personal-v1 databases are admitted. Personal schemas 1, 2 and 3 upgrade once to schema 4; unrelated legacy formats are rejected before schema writes. Use disposable databases for development. Current data formats and this boundary are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).
+Empty and personal-v1 databases are admitted. Personal schemas 1 through 4 upgrade once to schema 5; unrelated legacy formats are rejected before schema writes. Use disposable databases for development. Current data formats and this boundary are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).
 
 Manual storage measurements use `scripts/synthetic-story.mjs` and current transcript-v2 import, not obsolete package shapes or cumulative completed snapshots. After building, run `node --expose-gc scripts/measure-context-storage.mjs` or `node scripts/measure-transcript-import.mjs --counts=10,100`. These are synthetic measurements, not CI timing gates.
 
 `tests/fixtures/personal-schema-1.sql` is synthetic output from the previous product build (`9a14ac4`, same application source as `bf7de22`), including real native resources, translation, fixed values and oneoff/delegation rows. The migration test loads that prior schema rather than relabeling a newly created database.
 
 `tests/fixtures/personal-schema-3.sql` is synthetic output from the real `7cac3f7` runtime. Its intentionally added legacy branch exercises conversion into independent chats. `tests/final-cleanup.test.ts` checks message/translation/helper/variable retention and restart idempotence without a live provider. The ordinary branch ID remains an internal execution scope, not a public shared-branch management API.
+
+### Interrupted browser runs
+
+Browser checks use Playwright's live list reporter and a JSON report. If a run is interrupted before the JSON report completes, its test count is unknown rather than zero; consult the live log and individual failure traces. Do not label a partially executed suite as passing or make it pass by restoring a retired product contract.

@@ -99,8 +99,7 @@ export function mountRisuMessageSurface(
       generation++;
       releaseLayout();
       root.removeEventListener('click', click, true);
-      root.replaceChildren();
-      root.adoptedStyleSheets = [];
+      // The host owns the DOM lifetime; a content refresh replaces it atomically.
     },
   };
 }

@@ -180,9 +180,9 @@ test.each(['json', 'charx'])(
       receipt: { created: false },
     });
     expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
-    await expect(applyRisuImport(store, { ...request, kind: 'bot' })).rejects.toThrow(
-      'RISU_IMPORT_DRAFT_CHANGED'
-    );
+    await expect(applyRisuImport(store, { ...request, kind: 'bot' })).rejects.toMatchObject({
+      statusCode: 409,
+    });
 
     const bot = createNativeContent(store);
     const chat = store.createChat('Persona snapshot', undefined, { botId: bot.id });

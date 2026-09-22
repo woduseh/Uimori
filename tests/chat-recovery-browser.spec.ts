@@ -61,7 +61,7 @@ for (const viewport of [
       if (viewport.width === DESKTOP_WIDTH)
         expect(Math.abs(thresholdBox!.y - budgetBox!.y)).toBeLessThanOrEqual(1);
 
-      await dialog.getByLabel('조회 로어 문자 한도', { exact: true }).fill('');
+      await dialog.getByLabel('조회 로어 토큰 한도', { exact: true }).fill('');
       await selectChatSettingsSection(page, '이미지');
       const manager = dialog.locator('.chat-settings-image-management');
       await expect(manager).not.toHaveAttribute('open');
@@ -89,9 +89,9 @@ for (const viewport of [
         dialog.getByRole('combobox', { name: '이 채팅의 작문 프롬프트', exact: true })
       ).toBeVisible();
       await selectChatSettingsSection(page, '기억·로어');
-      await expect(dialog.getByLabel('조회 로어 문자 한도', { exact: true })).toHaveValue('');
+      await expect(dialog.getByLabel('조회 로어 토큰 한도', { exact: true })).toHaveValue('');
       await expect(dialog.getByLabel('Jev 관련성 기준', { exact: true })).toHaveValue('0.7');
-      await dialog.getByLabel('조회 로어 문자 한도', { exact: true }).fill('48000');
+      await dialog.getByLabel('조회 로어 토큰 한도', { exact: true }).fill('12000');
       await page.screenshot({ path: info.outputPath(`chat-memory-${viewport.width}.png`) });
       const saved = page.waitForResponse(
         (response) =>
@@ -156,7 +156,8 @@ for (const viewport of [
         },
       });
       expect(concurrent.ok(), await concurrent.text()).toBe(true);
-      await dialog.getByRole('button', { name: '공유 변수 저장', exact: true }).click();
+      // The refresh reports the conflict before a stale write is allowed; do not click a disabled save.
+      await dialog.getByRole('button', { name: /새로고침/, exact: false }).click();
       await expect(
         dialog.getByText(
           '서버의 변수 개정이나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 보존했어요.',

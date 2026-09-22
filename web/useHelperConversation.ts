@@ -38,16 +38,24 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
     if (alive.current) setViews((old) => ({ ...old, [key]: value }));
   }, []);
   const refresh = useCallback(
-    async (conversation: HelperConversation) => {
+    async (conversation: Pick<HelperConversation, 'id'>) => {
       const key = conversation.id;
       const version = (versions.current.get(key) ?? 0) + 1;
       versions.current.set(key, version);
-      const [messages, tasks, latestConversation] = await Promise.all([
-        api<HelperMessage[]>(`/helper/conversations/${id(conversation.id)}/messages`),
-        api<HelperTaskView[]>(`/helper/conversations/${id(conversation.id)}/tasks`),
-        api<HelperConversation>(`/helper/conversations/${id(conversation.id)}`),
-      ]);
+      const {
+        messages,
+        tasks,
+        conversation: latestConversation,
+        eventCursor,
+      } = await api<{
+        messages: HelperMessage[];
+        tasks: HelperTaskView[];
+        conversation: HelperConversation;
+        eventCursor: number;
+      }>(`/helper/conversations/${id(conversation.id)}/view`);
       if (!alive.current || versions.current.get(key) !== version) return;
+      // The first view starts at now. Later views must not skip effects arriving between polls.
+      if (!cursors.current.has(key)) cursors.current.set(key, eventCursor);
       const previous = cache.current.get(key);
       const messageIds = new Set(messages.map((message) => message.id));
       const latestGroups = new Map(
@@ -82,36 +90,37 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
     let disposed = false,
       polling = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let conversation: HelperConversation | undefined;
     let initialized = false,
       needsRefresh = true;
     const report = (cause: unknown) => {
       if (!disposed && selectedScope.current === scopeKey)
         setError(cause instanceof Error ? cause.message : '도우미 대화를 불러오지 못했어요.');
     };
-    const events = async (initial = false) => {
-      if (!conversation) return false;
-      const known = cursors.current.has(conversation.id);
-      let cursor = cursors.current.get(conversation.id) ?? 0;
+    const events = async () => {
+      let cursor = cursors.current.get(conversationId) ?? 0;
       let changed = false,
         notify = false;
       for (;;) {
         const page = await api<HelperEvent[]>(
-          `/helper/conversations/${id(conversation.id)}/events?after=${cursor}`
+          `/helper/conversations/${id(conversationId)}/events?after=${cursor}`
         );
         if (disposed) return false;
         for (const event of page) {
           if (event.seq <= cursor) continue;
+          if (event.kind === 'theme.updated')
+            window.dispatchEvent(new Event('uimori-themes-changed'));
           cursor = event.seq;
           changed = true;
           if (
-            (!initial || known) &&
-            (/^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
-              event.kind === 'artifact.saved')
+            /^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
+            event.kind === 'artifact.saved'
           )
             notify = true;
         }
-        cursors.current.set(conversation.id, cursor);
+        cursors.current.set(
+          conversationId,
+          Math.max(cursors.current.get(conversationId) ?? 0, cursor)
+        );
         if (page.length < 500) break;
       }
       if (notify) window.dispatchEvent(new Event('uimori-helper-updated'));
@@ -122,16 +131,18 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
       polling = true;
       try {
         if (!document.hidden) {
-          conversation ??= await api<HelperConversation>(
-            `/helper/conversations/${id(conversationId)}`
-          );
-          if (disposed) return;
-          needsRefresh = (await events(!initialized)) || needsRefresh;
-          if (needsRefresh) {
-            await refresh(conversation);
+          // Opening/reopening uses one current view instead of draining old event pages.
+          if (!initialized) {
+            await refresh({ id: conversationId });
+            initialized = true;
             needsRefresh = false;
+          } else {
+            needsRefresh = (await events()) || needsRefresh;
+            if (needsRefresh) {
+              await refresh({ id: conversationId });
+              needsRefresh = false;
+            }
           }
-          initialized = true;
           if (!disposed && selectedScope.current === scopeKey) setError('');
         }
       } catch (cause) {

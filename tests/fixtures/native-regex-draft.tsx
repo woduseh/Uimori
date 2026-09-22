@@ -23,6 +23,7 @@ export function mount() {
             current[path] === text ? current : { ...current, [path]: text }
           ),
         pendingField: () => {},
+        prepareOnSave: () => () => {},
       },
       activate: () => {},
     } as unknown as ComponentProps<typeof ResourceEditorProvider>['value'];
