@@ -1,4 +1,3 @@
-import { isDeepStrictEqual } from 'node:util';
 import { IDENTITY_PATTERN } from '../core/identity.js';
 
 export class HttpError extends Error {
@@ -61,12 +60,7 @@ export const archiveRejector =
   (reason: string) => {
     throw new HttpError(400, `${label}: ${reason}`);
   };
-/** Builds the deep-equality guard that refuses through one archive's own rejector. */
-export const archiveComparer =
-  (reject: ArchiveReject) =>
-  (a: unknown, b: unknown, reason: string): void => {
-    if (!isDeepStrictEqual(a, b)) reject(reason);
-  };
+
 /** Archives record every hash as a lowercase sha256 digest. */
 export const isSha256Hex = (value: unknown): value is string =>
   typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);

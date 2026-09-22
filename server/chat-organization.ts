@@ -5,7 +5,6 @@ import { defaultProfile, type Content, type ContentRef, type ChatFolder } from '
 import type { Store } from './store.js';
 import { loreContextDefaults } from './lore-context-defaults.js';
 
-export const organizationTables = ['chat_folders', 'chat_organization'];
 export type { ChatFolder } from '../core/product.js';
 export type ChatOrganization = {
   botId: string;

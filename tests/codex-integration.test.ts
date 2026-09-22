@@ -1,3 +1,4 @@
+import { setFixtureModelRoutes } from './fixtures/chat.js';
 import { backup } from 'node:sqlite';
 import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
@@ -269,13 +270,17 @@ test('app routes every agent role through Codex and keeps source results and rec
     'PATCH'
   );
   const profile = await api(app, `/api/chats/${chat.id}/profile`);
+  await setFixtureModelRoutes(app, {
+    main: ref(model),
+    translation: ref(model),
+    status: ref(model),
+  });
   await api(
     app,
     `/api/chats/${chat.id}/profile`,
     {
       expectedRevision: profile.revision,
 
-      routes: { main: ref(model), translation: ref(model), status: ref(model) },
       image: true,
       imageTranslation: false,
     },

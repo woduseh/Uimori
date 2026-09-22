@@ -93,7 +93,7 @@ test('themes, choices and undo persist across SQLite restart without a schema mi
     revision: 3,
   });
   selectTheme(store, { scope: 'global', themeId: b.id, expectedRevision: 0 });
-  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(1);
+  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(3);
   store.close();
   const reopened = new Store(store.path);
   owned.at(-1)!.store = reopened;

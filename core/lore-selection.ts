@@ -7,9 +7,8 @@ import {
 
 /**
  * The frozen answer of one auxiliary model call that read a package's discoverable lore catalog and
- * named the entries this turn needs. The host asks once, after reservation; every later compilation -
- * a candidate, a fork, a chat-backup restore, an archive replay - projects this receipt instead of
- * asking again, so the lore a run pinned stays the lore a replay reconstructs.
+ * named the entries this turn needs. The host asks once after reservation and the current
+ * execution projects that decision without an additional model call.
  */
 export type LoreSelectionEntry = {
   key: string;
@@ -19,8 +18,7 @@ export type LoreSelectionEntry = {
   /** Lore ids the model chose, in its own order, after the budget trim. */
   selected: string[];
   /**
-   * `budget` names a candidate the trim dropped. `unknown` names an id the answer invented, which is
-   * deliberately not a candidate of this attachment and decides nothing.
+   * Candidates omitted for the token budget or judged irrelevant to this request.
    */
   omitted: { id: string; reason: 'budget' | 'irrelevant' }[];
   judgment?: import('./judgment.js').JevJudgmentReceipt;
@@ -39,17 +37,6 @@ export const LORE_SELECTION_LIMITS = {
   historyMessages: 12,
   messageChars: 1_000,
   requestChars: 4_000,
-};
-
-export class LoreSelectionError extends Error {
-  readonly statusCode = 400;
-  constructor(readonly code: string) {
-    super(code);
-    this.name = 'LoreSelectionError';
-  }
-}
-const fail = (code: string): never => {
-  throw new LoreSelectionError(code);
 };
 
 /** One attached revision. A package's whole lorebook is offered at once, so there is no field part. */
@@ -79,108 +66,4 @@ export function projectLoreSelectionReceipt(
   const entry = receipt.entries.find((item) => item.key === key);
   if (!entry || entry.error !== undefined) return undefined;
   return new Set(entry.selected);
-}
-
-const REASONS = ['budget', 'irrelevant'];
-function record(value: unknown, keys: string[]): Record<string, unknown> {
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    Array.isArray(value) ||
-    Object.keys(value).some((key) => !keys.includes(key))
-  )
-    fail('LORE_SELECTION_INVALID_FIELDS');
-  return value as Record<string, unknown>;
-}
-function text(value: unknown, max: number): asserts value is string {
-  if (typeof value !== 'string' || value.length > max) fail('LORE_SELECTION_INVALID_STRING');
-}
-
-/** Data-only validation. An archived receipt is read back through exactly this contract. */
-export function validateLoreSelectionReceipt(value: unknown): LoreSelectionReceipt {
-  const receipt = record(value, ['version', 'entries']);
-  if (receipt.version !== 1) fail('LORE_SELECTION_VERSION_UNSUPPORTED');
-  if (!Array.isArray(receipt.entries) || receipt.entries.length > LORE_SELECTION_LIMITS.entries)
-    fail('LORE_SELECTION_ENTRY_LIMIT');
-  const keys: string[] = [];
-  for (const raw of receipt.entries as unknown[]) {
-    const entry = record(raw, [
-      'key',
-      'inputHash',
-      'budget',
-      'selected',
-      'omitted',
-      'model',
-      'partial',
-      'error',
-      'judgment',
-    ]);
-    text(entry.key, 400);
-    keys.push(entry.key);
-    if (typeof entry.inputHash !== 'string' || !/^[a-f0-9]{64}$/u.test(entry.inputHash))
-      fail('LORE_SELECTION_INPUT_HASH');
-    if (!Number.isSafeInteger(entry.budget) || Number(entry.budget) < 0)
-      fail('LORE_SELECTION_BUDGET');
-    if (!Array.isArray(entry.selected) || entry.selected.length > LORE_SELECTION_LIMITS.ids)
-      fail('LORE_SELECTION_ID_LIMIT');
-    if (!Array.isArray(entry.omitted) || entry.omitted.length > LORE_SELECTION_LIMITS.ids)
-      fail('LORE_SELECTION_ID_LIMIT');
-    const ids: string[] = [];
-    for (const id of entry.selected as unknown[]) {
-      text(id, 200);
-      ids.push(id);
-    }
-    for (const raw of entry.omitted as unknown[]) {
-      const omitted = record(raw, ['id', 'reason']);
-      text(omitted.id, 200);
-      ids.push(omitted.id);
-      if (!REASONS.includes(omitted.reason as string)) fail('LORE_SELECTION_REASON');
-    }
-    // One entry decides each lore once: an id cannot be both selected and omitted, or listed twice.
-    if (new Set(ids).size !== ids.length) fail('LORE_SELECTION_DUPLICATE_LORE');
-    if (entry.model !== undefined) text(entry.model, 400);
-    if (entry.partial !== undefined && entry.partial !== 'catalog') fail('LORE_SELECTION_PARTIAL');
-    if (entry.error !== undefined) text(entry.error, 400);
-    if (entry.judgment !== undefined) {
-      const judgment = record(entry.judgment, [
-        'threshold',
-        'maxSelectedTokens',
-        'selectedTokens',
-        'scores',
-        'attemptId',
-      ]);
-      if (
-        typeof judgment.threshold !== 'number' ||
-        !Number.isFinite(judgment.threshold) ||
-        judgment.threshold < 0 ||
-        judgment.threshold > 1 ||
-        !Number.isSafeInteger(judgment.maxSelectedTokens) ||
-        Number(judgment.maxSelectedTokens) < 0 ||
-        Number(judgment.maxSelectedTokens) > 100_000 ||
-        !Number.isSafeInteger(judgment.selectedTokens) ||
-        Number(judgment.selectedTokens) < 0 ||
-        Number(judgment.selectedTokens) > Number(judgment.maxSelectedTokens) ||
-        !Array.isArray(judgment.scores) ||
-        judgment.scores.length > LORE_SELECTION_LIMITS.ids
-      )
-        fail('LORE_SELECTION_JUDGMENT');
-      const scoreIds = new Set<string>();
-      for (const rawScore of judgment.scores as unknown[]) {
-        const score = record(rawScore, ['id', 'probability']);
-        text(score.id, 200);
-        if (
-          scoreIds.has(score.id) ||
-          typeof score.probability !== 'number' ||
-          !Number.isFinite(score.probability) ||
-          score.probability < 0 ||
-          score.probability > 1
-        )
-          fail('LORE_SELECTION_JUDGMENT');
-        scoreIds.add(score.id);
-      }
-      if (judgment.attemptId !== undefined) text(judgment.attemptId, 200);
-    }
-  }
-  if (new Set(keys).size !== keys.length) fail('LORE_SELECTION_DUPLICATE_KEY');
-  return structuredClone(value) as LoreSelectionReceipt;
 }

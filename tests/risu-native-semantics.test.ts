@@ -27,7 +27,7 @@ test('frozen option definitions preserve native input metadata for transfer and 
   expect(() => validateControlDefinitions([{ ...controls[2], input: 'textarea' }])).toThrow();
 });
 import { importRisuPresetProgram } from '../server/risu-preset-program.js';
-import { prepareNativeRisuRun, validateNativeRisuExecution } from '../server/risu-native-run.js';
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import {
   prepareNativeRisuPreset,
@@ -222,7 +222,6 @@ test('example dialogue uses separate message roles at the beginning of native ch
   ]);
   expect(result.nativeRisuExecution!.history).toEqual([]);
   expect(result.nativeRisuExecution!.variables).not.toHaveProperty('should_not_run');
-  expect(() => validateNativeRisuExecution(result)).not.toThrow();
 });
 
 test('native ChatML and history preserve roles and text despite retired settings', () => {
@@ -256,7 +255,7 @@ test('native ChatML and history preserve roles and text despite retired settings
   ]);
 });
 
-test.each(['risu-native-prompt-1', 'risu-native-prompt-2'] as const)(
+test.each(['risu-native-prompt-2'] as const)(
   '%s suppresses retired blocks and settings in historical presets',
   (compilerVersion) => {
     const input = fixture(
@@ -287,7 +286,7 @@ test.each(['risu-native-prompt-1', 'risu-native-prompt-2'] as const)(
     });
     expect(result.compilerVersion).toBe(compilerVersion);
     expect(result.messages.map((message) => message.content[0].text)).toEqual([
-      compilerVersion === 'risu-native-prompt-1' ? 'Saved note' : '{{slot}}',
+      '{{slot}}',
       'Saved post',
       'Go',
     ]);

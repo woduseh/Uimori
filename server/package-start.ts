@@ -1,5 +1,4 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
-import { isDeepStrictEqual } from 'node:util';
 import type { Content, ProfileSnapshot } from '../core/product.js';
 import type { Run, RunSnapshot } from '../core/types.js';
 import {
@@ -42,57 +41,6 @@ export function validatePackageStartCommand(value: unknown): PackageStartCommand
 
 function startText(snapshot: RunSnapshot): string {
   return snapshot.packageStart!.text;
-}
-
-/** Check authorship against immutable package/source records, never the current edited source. */
-export function validateArchivedPackageStart(store: Store, run: Run, snapshot: RunSnapshot): void {
-  const row = store.db.prepare('SELECT command FROM runs WHERE id=?').get(run.id) as {
-    command: string;
-  };
-  const command = record(JSON.parse(row.command));
-  if (snapshot.packageStart === undefined) {
-    if (command.packageStart !== undefined)
-      throw new HttpError(400, 'PACKAGE_START_ARCHIVE_MARKER_MISSING');
-    return;
-  }
-  const marker = record(snapshot.packageStart);
-  const ref = validatePackageStartRef({
-    packageId: marker.packageId,
-    packageRevision: marker.packageRevision,
-    startId: marker.startId,
-  });
-  const profile = snapshot.profile;
-  const attachment = profile?.packageAttachments?.find(
-    (item) =>
-      item.role === 'bot' && item.id === ref.packageId && item.revision === ref.packageRevision
-  );
-  if (
-    !attachment ||
-    !profile ||
-    run.parentRevision !== null ||
-    store.chat(run.chatId).botId !== ref.packageId
-  )
-    throw new HttpError(400, 'PACKAGE_START_ARCHIVE_OWNER_MISMATCH');
-  const content = store.product.get<Content>('content', ref.packageId, ref.packageRevision);
-  if (!content.package) throw new HttpError(400, 'PACKAGE_START_REQUIRES_PACKAGE');
-  const expected = resolvePackageStart(content.package, ref.startId);
-  if (!isDeepStrictEqual(marker, expected))
-    throw new HttpError(400, 'PACKAGE_START_ARCHIVE_SELECTION_MISMATCH');
-  if (command.packageStart !== undefined && !isDeepStrictEqual(command.packageStart, ref))
-    throw new HttpError(400, 'PACKAGE_START_ARCHIVE_COMMAND_MISMATCH');
-  const request = `[작성된 도입문] ${expected.title}`;
-  if (run.request !== request) throw new HttpError(400, 'PACKAGE_START_ARCHIVE_REQUEST_MISMATCH');
-  if (expected.mode === 'authored') {
-    if (run.status !== 'completed' || !run.sourceRevision || snapshot.candidateOf)
-      throw new HttpError(400, 'PACKAGE_START_ARCHIVE_AUTHORSHIP_MISMATCH');
-    const original = store.sourceOriginal(run.sourceRevision);
-    if (
-      original.chatId !== run.chatId ||
-      original.runId !== run.id ||
-      original.text !== startText(snapshot)
-    )
-      throw new HttpError(400, 'PACKAGE_START_ARCHIVE_SOURCE_MISMATCH');
-  }
 }
 
 /** Confirm a Risu greeting atomically without making a model request. */

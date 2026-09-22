@@ -88,7 +88,6 @@ export type HelperArtifact = {
   taskId: string;
   request: string;
   text: string;
-  snapshot: RunSnapshot;
   usage: Usage;
   createdAt: string;
 };

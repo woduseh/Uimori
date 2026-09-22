@@ -12,11 +12,6 @@ import type {
 import { libraryItemKey } from '../core/library-organization.js';
 import type { Store } from './store.js';
 
-export const libraryOrganizationTables = [
-  'library_organization_state',
-  'library_folders',
-  'library_placements',
-];
 const categories = ['bot', 'persona', 'module', 'prompts'];
 function category(value: unknown): LibraryCategory {
   if (typeof value !== 'string' || !categories.includes(value))

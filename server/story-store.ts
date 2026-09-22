@@ -14,12 +14,7 @@ export const lineageHash = (history: RunSnapshot['history']) =>
       )
     )
     .digest('hex');
-export const storyTables = [
-  'author_notes',
-  'author_note_heads',
-  'author_note_commands',
-  'scene_commands',
-];
+
 /** User notes and explicit scene commands; authored card variables belong to the Risu runtime. */
 export class StoryStore {
   readonly notes: StoryNotes;

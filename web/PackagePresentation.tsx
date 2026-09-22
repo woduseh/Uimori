@@ -11,8 +11,6 @@ export type PackagePresentation = {
     expectedHeadHash: string;
     expectedVariableRevision: number;
   };
-  /** Registered inline images from this source's frozen packages only. */
-  inlineImageUrls?: string[];
   original: { text: string; changed: boolean; applied: string[]; html?: string; css?: string };
   request?: { text: string; changed: boolean; applied: string[] };
   translation?: { text: string; changed: boolean; applied: string[]; html?: string; css?: string };

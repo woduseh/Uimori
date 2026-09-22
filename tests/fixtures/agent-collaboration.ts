@@ -1,3 +1,4 @@
+import { setFixtureModelRoutes } from './chat.js';
 import { observeExecutions, observedExecution } from './execution-observer.js';
 import { afterEach, expect, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -264,13 +265,14 @@ export async function fixture(
     program,
   });
   const prior = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`);
+  await setFixtureModelRoutes(app, { main: { id: mainModel.id }, translation: null, status: null });
   const profile = await api<ChatProfile>(
     app,
     `/api/chats/${chat.id}/profile`,
     {
       expectedRevision: prior.revision,
       packageAttachments: [...prior.packageAttachments!, { ...ref(lore), role: 'module' }],
-      routes: { main: { id: mainModel.id }, translation: null, status: null },
+
       image: false,
     },
     'PUT'

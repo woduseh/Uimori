@@ -174,51 +174,6 @@ export function loreSelectionInputHash(target: LoreSelectionTarget): string {
   return selectionInputs(target).inputHash;
 }
 
-/**
- * Stored counts are claims, not evidence:
- * recount rendered selected bodies and check the shared budget across attachments.
- * The caller validates receipt shape, scope, hashes and scores separately.
- */
-export function validateLoreSelectionTokenBudgets(
-  snapshot: RunSnapshot,
-  targets: readonly LoreSelectionTarget[]
-): void {
-  const policy = validateLoreContextPolicy(snapshot.profile?.loreContext);
-  if (!snapshot.loreSelection) return;
-  const fail = (): never => {
-    throw new Error('LORE_SELECTION_TOKEN_BUDGET');
-  };
-  let totalTokens = 0,
-    totalEntries = 0;
-  for (const target of targets) {
-    const entry = snapshot.loreSelection.entries.find(
-      (item) => item.key === loreSelectionKey(target.attachment)
-    );
-    if (!entry || entry.budget !== policy.maxRetainedTokens) fail();
-    const selected = entry!;
-    if (selected.error !== undefined || !selected.judgment) {
-      if (selected.selected.length || selected.judgment) fail();
-      continue;
-    }
-    const catalog = new Map(candidateCatalog(target).catalog.map((item) => [item.id, item]));
-    let tokens = 0;
-    for (const id of selected.selected) {
-      const item = catalog.get(id);
-      if (!item) fail();
-      tokens += countTextTokens(item!.text ?? item!.summary);
-    }
-    if (tokens !== selected.judgment.selectedTokens) fail();
-    totalTokens += tokens;
-    totalEntries += selected.selected.length;
-  }
-  if (
-    totalTokens > policy.maxRetainedTokens ||
-    totalTokens > policy.judgment.maxSelectedTokens ||
-    totalEntries > policy.maxRetainedEntries
-  )
-    fail();
-}
-
 /** One JEV request shares the conversation across all attached catalogs. */
 function jevBatchInputs(targets: LoreSelectionTarget[]) {
   const originals = targets.map(selectionInputs);

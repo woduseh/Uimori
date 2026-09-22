@@ -596,7 +596,6 @@ export class HelperRuntime {
           409,
           '진행 중인 작업을 중지하고 공급자 요청이 종료된 뒤 삭제해 주세요.'
         );
-      new ChatOptionsStore(this.store).detachConversation(id);
       return this.workspace.delete(id, expected);
     });
   }
@@ -869,15 +868,19 @@ export class HelperRuntime {
                       id: text(args.artifactId, 'artifact ID', 100),
                       revision: number(args.expectedRevision, 'artifact revision'),
                     };
-              output = this.workspace.operationResult(
-                task.id,
-                `${task.id}:${text(args.operationId, 'operation ID', 100)}`,
-                {
-                  kind: 'artifact',
-                  request: text(args.request, 'artifact request', 100_000),
-                  previous,
-                }
-              );
+              const savedArtifact = this.workspace.operationResult<{
+                artifactRef: { id: string; revision: number };
+              }>(task.id, `${task.id}:${text(args.operationId, 'operation ID', 100)}`, {
+                kind: 'artifact',
+                request: text(args.request, 'artifact request', 100_000),
+                previous,
+              });
+              output = savedArtifact
+                ? this.workspace.artifact(
+                    savedArtifact.artifactRef.id,
+                    savedArtifact.artifactRef.revision
+                  )
+                : undefined;
               if (output === undefined) {
                 if (artifactJobs >= task.snapshot.limits.artifacts)
                   throw new HttpError(409, 'ARTIFACT_JOB_LIMIT');
@@ -1232,17 +1235,10 @@ export class HelperRuntime {
       }
       if (args.action !== 'patch' && args.action !== 'remove')
         throw new HttpError(400, 'INVALID_LORE_ACTION');
-      const authority = {
-        requestId: task.id,
-        assert: () => this.workspace.assertRunning(task.id),
-      };
+      this.workspace.assertRunning(task.id);
       return args.action === 'patch'
-        ? service.patch(scope.chatId, { ...record(args.body), branchId: scope.branchId }, authority)
-        : service.remove(
-            scope.chatId,
-            { ...record(args.body), branchId: scope.branchId },
-            authority
-          );
+        ? service.patch(scope.chatId, { ...record(args.body), branchId: scope.branchId }, task.id)
+        : service.remove(scope.chatId, { ...record(args.body), branchId: scope.branchId }, task.id);
     }
     if (name === 'workspace.read') {
       if (args.kind === 'editor') return task.snapshot.editor ?? null;
@@ -1358,7 +1354,7 @@ export class HelperRuntime {
       const artifact = this.workspace.artifact(previous.id, previous.revision);
       if (artifact.conversationId !== task.conversationId)
         throw new HttpError(403, 'ARTIFACT_OUTSIDE_SCOPE');
-      snapshot = structuredClone(artifact.snapshot);
+      if (!snapshot) throw new HttpError(409, 'MODEL_REQUIRED:main');
       snapshot.request = `${request}\n\n수정할 독립 가정 장면 (본편에서 일어난 사건이 아님):\n${artifact.text}`;
     } else if (snapshot) snapshot.request = request;
     if (!snapshot?.profile?.models.main) throw new HttpError(409, 'MODEL_REQUIRED:main');
@@ -1413,12 +1409,10 @@ export class HelperRuntime {
         ...snapshot.settings,
         maxCalls: Math.min(snapshot.settings.maxCalls, remaining),
       };
-      const retainedPlan = previous ? snapshot.contextPlan : undefined;
       snapshot = await prepareNativeRisuReadOnly(snapshot, 'artifact');
       delete snapshot.promptCompilation;
       snapshot = seedContextPlan(snapshot);
-      const prior =
-        retainedPlan?.status === 'ready' ? retainedPlan : previousContextPlan(this.store, snapshot);
+      const prior = previousContextPlan(this.store, snapshot);
       const prepared = await prepareInputContext(
         snapshot,
         {
@@ -1451,13 +1445,12 @@ export class HelperRuntime {
           `${task.id}:${operationId}`,
           request,
           result.text,
-          compiled,
           result.usage,
           previous
         );
         this.store.db
           .prepare(
-            "UPDATE helper_artifact_jobs SET status='completed',artifact_id=?,artifact_revision=? WHERE id=? AND status='running'"
+            "UPDATE helper_artifact_jobs SET status='completed',snapshot='{}',artifact_id=?,artifact_revision=? WHERE id=? AND status='running'"
           )
           .run(artifact.id, artifact.revision, childId);
         return artifact;

@@ -9,11 +9,7 @@ import { readRisuPresetFile } from '../server/risu-preset-file.js';
 import { importRisuPresetProgram } from '../server/risu-preset-program.js';
 import { projectNativeRisuPackage } from '../server/risu-native-projection.js';
 import { renderNativeRisuMessage } from '../server/risu-native-render.js';
-import {
-  prepareNativeRisuRun,
-  prepareNativeRisuOutput,
-  validateNativeRisuExecution,
-} from '../server/risu-native-run.js';
+import { prepareNativeRisuRun, prepareNativeRisuOutput } from '../server/risu-native-run.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import {
   disposeAllNativeRisuSessions,
@@ -173,12 +169,10 @@ test.runIf(paths.length > 0 && !!presetPath)(
           message.content.some((part) => part.text.includes('LOCAL_COMPATIBILITY_CONTINUE'))
         )
       ).toBe(true);
-      validateNativeRisuExecution(prepared);
       const output = await prepareNativeRisuOutput(prepared, 'LOCAL_COMPATIBILITY_RESPONSE', {
         host,
       });
       expect(typeof output.nativeRisuExecution?.output?.text).toBe('string');
-      validateNativeRisuExecution(output);
       expect(hash(path) === before, `sample ${index + 1}: original bytes unchanged`).toBe(true);
     }
     expect(hash(presetPath!) === presetHash, 'original preset bytes unchanged').toBe(true);

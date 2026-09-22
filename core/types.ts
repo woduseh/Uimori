@@ -302,7 +302,7 @@ export type BranchTreeNode = {
   totalScenes: number;
 };
 export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
-  /** Current page, all active Runs and source-less responses; full task history is fetched separately. */
+  /** Current page, active runs and latest visible source-less responses; full task history is fetched separately. */
   runs: ReaderRun[];
   /** Scene illustrations for the returned sources; older pages keep their cached entries. */
   illustrations?: import('./illustration.js').Illustration[];
@@ -317,6 +317,7 @@ export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
     branchTree?: BranchTreeNode[];
     activity?: ReaderActivity[];
     responseActivity?: ReaderActivity[];
+    presentationRevisions: Record<string, string>;
     headSourceHash?: string | null;
     activeJobs: number;
     cursor: number;

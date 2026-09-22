@@ -740,3 +740,79 @@ test('HELPUI07 switching sessions isolates late responses and retains the backgr
     release();
   }
 });
+
+test('HELPUI07 keeps the displayed response until the delayed final message arrives', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  await panel.getByLabel('도우미에게 요청').fill('완료 화면 연결 검사');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect(panel.getByText('완료 화면 연결 검사', { exact: true }).first()).toBeVisible();
+  const task = state.current().tasks[0];
+  const text = '이미 화면에 표시된 응답 내용이에요.';
+  state.progress(task, text, text.length);
+  await expect(panel.locator('.streaming-text')).toHaveText(text);
+  let release = () => {};
+  const delayed = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = false,
+    completedSeen = false;
+  await page.route('**/api/helper/**', async (route) => {
+    if (
+      route.request().method() === 'GET' &&
+      /\/(events|messages)(?:\?|$)/u.test(route.request().url())
+    ) {
+      held = true;
+      await delayed;
+    }
+    await route.fallback();
+  });
+  await page.route(`**/api/response-streams/helper/${task.id}?*`, async (route) => {
+    completedSeen = true;
+    await route.fulfill({
+      json: {
+        taskKind: 'helper',
+        taskId: task.id,
+        status: 'completed',
+        chunks: [],
+        cursor: Number(new URL(route.request().url()).searchParams.get('after') ?? 0),
+        hasMore: false,
+      },
+    });
+  });
+  state.complete(task);
+  try {
+    await expect.poll(() => held && completedSeen).toBe(true);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
+    );
+    await expect(panel.locator('.streaming-text')).toHaveText(text);
+    await expect(panel.getByText('합성 완료 응답', { exact: true })).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath('continuous-response-before-final.png') });
+    await info.attach('continuous-response-handoff', {
+      body: JSON.stringify(
+        {
+          alreadyDisplayedResponsePreserved: true,
+          canonicalResponseNotYetAvailable: true,
+          scenario:
+            'Completed stream status arrives before delayed helper events/messages request. No server data loss.',
+        },
+        null,
+        2
+      ),
+      contentType: 'application/json',
+    });
+  } finally {
+    release();
+  }
+  await expect(panel.getByText('합성 완료 응답', { exact: true })).toBeVisible();
+  await expect(panel.locator('.streaming-text')).toHaveCount(0);
+});

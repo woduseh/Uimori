@@ -184,11 +184,7 @@ export type Connection = ContentRef & {
  * with the Connection type above; archive validation rejects any other connection field.
  */
 export const CONNECTION_CREDENTIAL_FIELDS = ['credentialRef', 'catalogCredentialRef'] as const;
-/** Strips credential references from an archived connection copy and disables it. */
-export function disableArchivedConnection(connection: Record<string, unknown>): void {
-  for (const key of CONNECTION_CREDENTIAL_FIELDS) delete connection[key];
-  connection.enabled = false;
-}
+
 export type ModelPreset = ContentRef &
   ModelGeneration & {
     title: string;
