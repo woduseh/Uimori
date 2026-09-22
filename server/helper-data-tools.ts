@@ -50,16 +50,15 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
   {
     name: 'data.read',
     description:
-      'Read one ref or batch up to 16 refs from search. Copy references unchanged. Batches return independent results/errors; follow nextIndex for unread refs. Empty field gives a paged field directory; choose a returned ref for exact text. Text offset/limit are UTF-16 units; directory offset/limit count fields. Changed revision/hash requires searching again. Full edit models remain available through app.call resource.read or workspace.read(editor).',
+      'Read one to 16 refs from search. Always pass refs, including a one-item array for a single read. Copy references unchanged. Each item returns its own result/error; follow nextIndex for unread refs. Empty field gives a paged field directory; choose a returned ref for exact text. Text offset/limit are UTF-16 units; directory offset/limit count fields. Changed revision/hash requires searching again. Full edit models remain available through app.call resource.read or workspace.read(editor).',
     inputSchema: {
       type: 'object',
       properties: {
-        ref: reference,
         refs: { type: 'array', minItems: 1, maxItems: 16, items: reference },
         offset: { type: 'integer', minimum: 0 },
         limit: { type: 'integer', minimum: 1, maximum: 10000 },
       },
-      oneOf: [{ required: ['ref'] }, { required: ['refs'] }],
+      required: ['refs'],
       additionalProperties: false,
     },
   },

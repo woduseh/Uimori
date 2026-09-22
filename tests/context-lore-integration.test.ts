@@ -144,10 +144,10 @@ async function seed(
     const event = executeTool(run.snapshot, {
       name: 'knowledge.read',
       callId: randomUUID(),
-      args: { id: lore.id, offset: 0, limit: lore.text.length },
+      args: { ids: [lore.id], offset: 0, limit: Math.min(lore.text.length, 4096) },
     });
     expect(event.denied).toBe(false);
-    expect((event.result as { text: string }).text).toBe(lore.text);
+    expect((event.result as any).items[0].read.text).toBe(lore.text.slice(0, 4096));
     store.tool(run.id, event);
   }
   return store.completeRun(

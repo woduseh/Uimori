@@ -277,7 +277,7 @@ describe('public response progress through real decoders and synthetic HTTP', ()
       candidates: [
         {
           content: {
-            parts: [{ functionCall: { name: 'knowledge.read', args: { id: privateText } } }],
+            parts: [{ functionCall: { name: 'knowledge.read', args: { ids: [privateText] } } }],
           },
         },
       ],

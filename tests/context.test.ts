@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
-import { executeMain, executeTool } from '../core/provider.js';
+import { executeMain, executeTool, knowledgeReadResults } from '../core/provider.js';
 import { syntheticResources } from './fixtures/resources.js';
 import type { ModelInput, RunSnapshot, ToolEvent } from '../core/types.js';
 
@@ -87,12 +87,7 @@ describe('F04 actual role context and scoped read loop', () => {
     for (let index = 0; index < observed.events.length; index++) {
       expect(observed.inputs[index + 1].results).toEqual(observed.events.slice(0, index + 1));
     }
-    const read = observed.events[1].result as {
-      text: string;
-      source: { id: string; hash: string; revision: number };
-      range: { start: number; end: number };
-      truncated: boolean;
-    };
+    const read = knowledgeReadResults(observed.events[1])[0];
     expect(read.text).toBe(run.resources[0].text);
     expect(read.source).toMatchObject({
       id: run.resources[0].id,
@@ -100,7 +95,7 @@ describe('F04 actual role context and scoped read loop', () => {
       hash: createHash('sha256').update(run.resources[0].text).digest('hex'),
     });
     expect(read.range).toMatchObject({ start: 0, end: run.resources[0].text.length });
-    expect(read.truncated).toBe(false);
+    expect(read.nextOffset).toBeNull();
     expect(result.text).toContain(run.resources[0].text);
     expect(JSON.stringify(observed)).not.toContain('EXCLUDED_CORPUS_CANARY');
   });
@@ -126,41 +121,37 @@ describe('F04 actual role context and scoped read loop', () => {
     const page = search.result as {
       total: number;
       items: { id: string }[];
-      continuation: { offset: number; limit: number };
+      nextOffset: number;
     };
     expect(page.total).toBe(25);
     expect(page.items).toHaveLength(20);
     const next = executeTool(run, {
       callId: 's2',
       name: 'knowledge.search',
-      args: { query: 'moon', ...page.continuation },
-    }).result as { items: { id: string }[]; continuation: null };
+      args: { query: 'moon', offset: page.nextOffset, limit: 20 },
+    }).result as { items: { id: string }[]; nextOffset: null };
     expect(next.items).toHaveLength(5);
-    expect(next.continuation).toBeNull();
+    expect(next.nextOffset).toBeNull();
     const resource = appended[24];
     expect(next.items[4].id).toBe(resource.id);
-    const read = executeTool(run, {
+    const firstRead = executeTool(run, {
       callId: 'r',
       name: 'knowledge.read',
-      args: { id: resource.id, limit: 12 },
-    }).result as {
-      text: string;
-      truncated: boolean;
-      continuation: { id: string; offset: number; limit: number };
-      source: { revision: number; reference: string };
-    };
+      args: { ids: [resource.id], limit: 12 },
+    });
+    const read = knowledgeReadResults(firstRead)[0];
     expect(read.text).toBe(resource.text.slice(0, 12));
-    expect(read.truncated).toBe(true);
+    expect(read.nextOffset).toBe(12);
     expect(read.source.revision).toBe(7);
-    expect(read.source.reference).toContain('#chars=0-12');
-    const remainder = executeTool(run, {
+    expect((read.source as { reference?: string }).reference).toContain('#chars=0-12');
+    const secondRead = executeTool(run, {
       callId: 'r2',
       name: 'knowledge.read',
-      args: { ...read.continuation, limit: 100 },
-    }).result as { text: string; truncated: boolean; continuation: null };
+      args: { ids: [resource.id], offset: read.nextOffset!, limit: 100 },
+    });
+    const remainder = knowledgeReadResults(secondRead)[0];
     expect(read.text + remainder.text).toBe(resource.text);
-    expect(remainder.truncated).toBe(false);
-    expect(remainder.continuation).toBeNull();
+    expect(remainder.nextOffset).toBeNull();
   });
 
   test('F04 excluded resources are absent from counts/search/read and malicious skill text cannot grant tools', () => {
@@ -185,23 +176,26 @@ describe('F04 actual role context and scoped read loop', () => {
       name: 'knowledge.search',
       args: { query: 'EXCLUDED_CORPUS_CANARY' },
     });
-    expect(absent.result).toEqual({ items: [], total: 0, continuation: null });
+    expect(absent.result).toEqual({ items: [], total: 0, nextOffset: null });
     const all = executeTool(run, { callId: 'all', name: 'knowledge.search', args: {} }).result as {
       total: number;
     };
     expect(all.total).toBe(3);
     const privateRead = executeTool(run, {
-      callId: 'r',
+      callId: 'r-private',
       name: 'knowledge.read',
-      args: { id: 'private-resource' },
+      args: { ids: ['private-resource'] },
     });
     const missingRead = executeTool(run, {
-      callId: 'r',
+      callId: 'r-missing',
       name: 'knowledge.read',
-      args: { id: 'missing' },
+      args: { ids: ['missing'] },
     });
-    expect(privateRead).toEqual(missingRead);
-    expect(privateRead).toMatchObject({ denied: true, result: { code: 'RESOURCE_UNAVAILABLE' } });
+    for (const event of [privateRead, missingRead])
+      expect(event).toMatchObject({
+        denied: false,
+        result: { items: [{ denied: true, error: { code: 'RESOURCE_UNAVAILABLE' } }] },
+      });
     expect(
       executeTool(run, { callId: 'm', name: 'skills.load', args: { id: run.resources[0].id } })
         .denied

@@ -1,3 +1,5 @@
+import { editableResource } from '../core/resource-editing.js';
+import { nativeDraftTitle } from './fixtures/native-content.js';
 import { describeHelperTools } from '../server/helper-app-tools.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -143,7 +145,11 @@ function result<T>(request: transport.ProviderRequest, id: string): T {
   expect(found.denied).toBe(false);
   return found.result as T;
 }
-async function submit(f: Awaited<ReturnType<typeof fixture>>, request: string) {
+async function submit(
+  f: Awaited<ReturnType<typeof fixture>>,
+  request: string,
+  expectedStatus: HelperTask['status'] = 'completed'
+) {
   const response = await f.app.inject({
     method: 'POST',
     url: '/api/helper/conversations/' + f.conversation.id + '/messages',
@@ -158,7 +164,7 @@ async function submit(f: Awaited<ReturnType<typeof fixture>>, request: string) {
     }
   );
   const completed = f.workspace.task(task.id);
-  expect(completed.status, completed.error ?? 'helper task failed').toBe('completed');
+  expect(completed.status, completed.error ?? 'helper task failed').toBe(expectedStatus);
   return completed;
 }
 function definition(request: transport.ProviderRequest, name: string) {
@@ -168,15 +174,15 @@ function definition(request: transport.ProviderRequest, name: string) {
   return tool!.inputSchema;
 }
 
-test('helper read events retain recoverable argument errors and non-recoverable masked source failures', async () => {
+test('helper read events retain recoverable argument and missing-scene errors', async () => {
   const f = await fixture();
   mockSend((request, round) => {
     if (round === 0)
       return calls(
-        call('valid-list', 'story.list', {}),
-        call('bad-args', 'story.read', { id: 'undiscovered', offset: -1 }),
-        call('outside-source', 'story.read', { id: 'undiscovered' }),
-        call('missing-reference', 'knowledge.read', { id: 'undiscovered' })
+        call('valid-list', 'story.search', {}),
+        call('bad-args', 'story.read', { sceneNumber: 1, offset: -1 }),
+        call('outside-source', 'story.read', { sceneNumber: 999 }),
+        call('missing-reference', 'knowledge.read', { ids: [] })
       );
     expect(event(request, 'valid-list')).toMatchObject({ denied: false });
     expect(event(request, 'bad-args')).toMatchObject({
@@ -188,11 +194,11 @@ test('helper read events retain recoverable argument errors and non-recoverable 
       denied: true,
       result: { code: 'RESOURCE_UNAVAILABLE' },
     });
-    expect(event(request, 'outside-source')).not.toHaveProperty('errorKind');
+    expect(event(request, 'outside-source').errorKind).toBe('recoverable');
     expect(event(request, 'missing-reference')).toMatchObject({
       denied: true,
       errorKind: 'recoverable',
-      result: { code: 'RESOURCE_UNAVAILABLE' },
+      result: { code: 'INVALID_ARGUMENTS' },
     });
     // The fixture protocol has no Anthropic continuation. Its supported bootstrap
     // envelope still checks that these exact host events carry the native error flag.
@@ -239,7 +245,7 @@ type HelperLoreRead = Omit<LoreRead, 'attachments'> & {
     })[];
   })[];
 };
-function patchBody(read: HelperLoreRead, value: string, operationId: string) {
+function patchBody(read: HelperLoreRead, value: string) {
   const attachment = read.attachments[0],
     lore = attachment.lore[0];
   return {
@@ -250,7 +256,6 @@ function patchBody(read: HelperLoreRead, value: string, operationId: string) {
     expectedPackageRevision: attachment.packageRevision,
     expectedFieldHash: lore.fieldHashes.text,
     value,
-    operationId,
   };
 }
 test('helper discovers original lore hashes, uses them for consecutive chat patches and rejects a fabricated hash', async () => {
@@ -262,7 +267,7 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
       expect(definition(request, 'chat.lore')).toMatchObject({
         properties: {
           body: {
-            required: ['selector', 'expectedRevision', 'expectedHeadRevision', 'operationId'],
+            required: ['selector', 'expectedRevision', 'expectedHeadRevision'],
             properties: {
               expectedRevision: { minimum: 0 },
               expectedFieldHash: { pattern: '^[a-f0-9]{64}$' },
@@ -284,7 +289,7 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
       return calls(
         call('patch-first', 'chat.lore', {
           action: 'patch',
-          body: patchBody(first, 'Chat override one', 'patch-one'),
+          body: patchBody(first, 'Chat override one'),
         })
       );
     }
@@ -301,7 +306,7 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
       return calls(
         call('patch-second', 'chat.lore', {
           action: 'patch',
-          body: patchBody(latest, 'Chat override two', 'patch-two'),
+          body: patchBody(latest, 'Chat override two'),
         })
       );
     }
@@ -312,7 +317,7 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
         call('bad-hash', 'chat.lore', {
           action: 'patch',
           body: {
-            ...patchBody(latest, 'Must never be applied', 'bad-hash'),
+            ...patchBody(latest, 'Must never be applied'),
             expectedFieldHash: '0'.repeat(64),
           },
         })
@@ -343,11 +348,7 @@ test('helper may edit discovered lore without a separate grant parser', async ()
       return calls(
         call('direct-patch', 'chat.lore', {
           action: 'patch',
-          body: patchBody(
-            result<HelperLoreRead>(request, 'read-only-lore'),
-            'Updated lore',
-            'direct-update'
-          ),
+          body: patchBody(result<HelperLoreRead>(request, 'read-only-lore'), 'Updated lore'),
         })
       );
     expect(event(request, 'direct-patch').denied).toBe(false);
@@ -357,42 +358,36 @@ test('helper may edit discovered lore without a separate grant parser', async ()
   expect(new ChatOverridesStore(f.store).get(f.chat.id).overrides).toHaveLength(1);
 });
 
-test('notes schema exposes the CAS revision and an actual read-write-repeat flow keeps one anchored user note', async () => {
+test('notes schema exposes CAS but keeps mutation identity host-owned', async () => {
   const f = await fixture();
-  let expectedRevision = 0,
-    savedId = '';
+  let expectedRevision = 0;
   mockSend((request, round) => {
     if (round === 0) {
-      expect(definition(request, 'notes.write')).toMatchObject({
+      const schema = definition(request, 'notes.write') as Record<string, any>;
+      expect(schema).toMatchObject({
+        required: ['body'],
         properties: {
           body: {
             required: ['expectedRevision'],
             additionalProperties: false,
             properties: { expectedRevision: { minimum: 0 }, text: { maxLength: 32000 } },
           },
-          operationId: { maxLength: 64 },
         },
       });
+      expect(schema.properties).not.toHaveProperty('operationId');
       return calls(call('notes-context', 'context.read', {}));
     }
-    if (round === 1 || round === 2) {
-      if (round === 1)
-        expectedRevision = result<{ notesRevision: number }>(
-          request,
-          'notes-context'
-        ).notesRevision;
-      else savedId = result<{ note: { id: string } }>(request, 'note-create').note.id;
+    if (round === 1) {
+      expectedRevision = result<{ notesRevision: number }>(request, 'notes-context').notesRevision;
       return calls(
-        call(round === 1 ? 'note-create' : 'note-repeat', 'notes.write', {
+        call('note-create', 'notes.write', {
           body: { expectedRevision, text: 'USER_CORRECTION: witness=Mira; code=Q7x-α9.' },
-          operationId: 'one-note',
         })
       );
     }
-    expect(result(request, 'note-repeat')).toMatchObject({
+    expect(result(request, 'note-create')).toMatchObject({
       revision: expectedRevision + 1,
       note: {
-        id: savedId,
         atRevision: null,
         atHash: null,
         declaration: { author: '사용자 도우미 요청' },
@@ -408,7 +403,8 @@ test('library schema exposes folder CAS and item identity for a discovered read-
   const f = await fixture('library');
   mockSend((request, round) => {
     if (round === 0) {
-      expect(definition(request, 'library.organize')).toMatchObject({
+      const organizationSchema = definition(request, 'library.organize') as Record<string, any>;
+      expect(organizationSchema).toMatchObject({
         properties: {
           body: {
             required: ['expectedRevision', 'category'],
@@ -420,6 +416,7 @@ test('library schema exposes folder CAS and item identity for a discovered read-
           },
         },
       });
+      expect(organizationSchema.properties).not.toHaveProperty('operationId');
       return calls(call('organization', 'library.organize', { action: 'read' }));
     }
     if (round === 1) {
@@ -427,7 +424,6 @@ test('library schema exposes folder CAS and item identity for a discovered read-
       return calls(
         call('create-folder', 'library.organize', {
           action: 'create-folder',
-          operationId: 'one-folder',
           body: { expectedRevision: organization.revision, category: 'bot', title: '검토 중' },
         })
       );
@@ -439,7 +435,6 @@ test('library schema exposes folder CAS and item identity for a discovered read-
       return calls(
         call('move-item', 'library.organize', {
           action: 'move',
-          operationId: 'one-move',
           body: {
             expectedRevision: organization.revision,
             category: 'bot',
@@ -457,4 +452,78 @@ test('library schema exposes folder CAS and item identity for a discovered read-
   });
   await submit(f, '서재에 폴더를 만들어줘. 그 폴더로 자료를 이동해줘');
   expect(f.store.libraryOrganization.snapshot().folders).toHaveLength(1);
+});
+
+test('app.call supplies distinct host identities without polluting model arguments', async () => {
+  const f = await fixture();
+  const writes = vi.spyOn(f.store.story.notes, 'write');
+  const firstArgs = {
+    name: 'notes.write',
+    arguments: { body: { expectedRevision: 0, text: 'First note.' } },
+  };
+  mockSend((request, round) => {
+    if (round === 0) return calls(call('note-first', 'app.call', firstArgs));
+    const first = result<{ revision: number }>(request, 'note-first');
+    expect(event(request, 'note-first').args).toEqual(firstArgs);
+    if (round === 1)
+      return calls(
+        call('note-second', 'app.call', {
+          name: 'notes.write',
+          arguments: { body: { expectedRevision: first.revision, text: 'Second note.' } },
+        })
+      );
+    expect(result<{ revision: number }>(request, 'note-second').revision).toBe(first.revision + 1);
+    expect(JSON.stringify(request.input.results)).not.toContain('operationId');
+    return structuredClone(success);
+  });
+  const task = await submit(f, '서로 다른 메모 두 개를 저장해줘');
+  expect(writes).toHaveBeenCalledTimes(2);
+  const keys = writes.mock.calls.map(
+    ([, body]) => (body as { idempotencyKey: string }).idempotencyKey
+  );
+  expect(new Set(keys).size).toBe(2);
+  for (const key of keys) expect(key).toContain(task.id);
+  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM author_notes').get()).toEqual({ n: 2 });
+});
+
+test('resource saves leave real receipts so a later failure cannot offer a duplicate retry', async () => {
+  const f = await fixture('library');
+  const title = 'Saved before provider failure';
+  const model = nativeDraftTitle(editableResource('content', f.bot), title);
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('save-real', 'app.call', {
+          name: 'resource.save',
+          arguments: { kind: 'content', id: f.bot.id, expectedRevision: f.bot.revision, model },
+        })
+      );
+    expect(result(request, 'save-real')).toMatchObject({
+      id: f.bot.id,
+      revision: f.bot.revision + 1,
+    });
+    return {
+      ...structuredClone(success),
+      status: 'error',
+      text: '',
+      error: { code: 'UNEXPECTED_EOF' },
+    };
+  });
+  const request = '자료 이름을 바꾸고 저장해줘';
+  const task = await submit(f, request, 'failed');
+  expect(task.completedEffects?.count).toBe(1);
+  expect(f.store.product.get<Content>('content', f.bot.id)).toMatchObject({
+    title,
+    revision: f.bot.revision + 1,
+  });
+  expect(
+    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 1 });
+  const retry = await f.app.inject({
+    method: 'POST',
+    url: '/api/helper/conversations/' + f.conversation.id + '/messages',
+    payload: { requestKey: randomUUID(), text: request, retryOf: task.id },
+  });
+  expect(retry.statusCode).toBe(409);
+  expect(retry.body).toContain('HELPER_EFFECTS_ALREADY_COMMITTED');
 });

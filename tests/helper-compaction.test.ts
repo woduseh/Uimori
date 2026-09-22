@@ -188,29 +188,18 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
   };
   vi.spyOn(resourceTools, 'invokeResourceTool').mockImplementation((_store, name, args) => {
     if (name === 'resource.read') return structuredClone(f.readValue);
-    const task = workspace.task(f.currentTaskId);
-    return workspace.operation(
-      task.id,
-      `${task.id}:${String(args.operationId)}`,
-      { name, args },
-      () => {
-        f.mutations++;
-        const current = store.product.content(
-          {
-            ...fixtureBotInput('Saved exactly once'),
-            expectedRevision: saved.revision,
-          },
-          saved.id
-        ) as Content;
-        return {
-          status: 'saved',
-          id: current.id,
-          revision: current.revision,
-          operationId: args.operationId,
-          payload: f.receiptPadding,
-        };
-      }
-    );
+    // Match resource.save's revision check; do not invent a model-owned idempotency API.
+    const current = store.product.content(
+      { ...fixtureBotInput('Saved exactly once'), expectedRevision: args.expectedRevision },
+      saved.id
+    ) as Content;
+    f.mutations++;
+    return {
+      status: 'saved',
+      id: current.id,
+      revision: current.revision,
+      payload: f.receiptPadding,
+    };
   });
   if (options.fixed !== false) {
     // Calibrate from the real request builder. No tokenizer mock or provider call is used.
@@ -323,7 +312,7 @@ test('helper compaction resumes completed library reads and exact writes within 
       originalSnapshot = structuredClone(f.workspace.task(f.currentTaskId).snapshot);
       expect(continuation(request)).toBeUndefined();
       return tools(
-        tool('saved', 'resource.save', { expectedRevision: 1, operationId: 'one-save' }),
+        tool('saved', 'resource.save', { expectedRevision: 1 }),
         tool('library-metadata', 'workspace.read', { kind: 'library' }),
         tool('found', 'library.search', { query: library.title })
       );
@@ -367,7 +356,7 @@ test('helper compaction resumes completed library reads and exact writes within 
         callId: 'saved',
         name: 'resource.save',
         denied: false,
-        result: { operationId: 'one-save' },
+        result: { id: f.saved.id, revision: 2 },
       },
       { callId: 'missing', name: 'library.read', denied: true },
     ]);
@@ -536,9 +525,7 @@ test('small helper compaction stays above 85%, preserves exact writes, and waits
     if (helperCalls === 2) {
       expect(events(request)).toEqual([]);
       expect(request).not.toHaveProperty('opaqueState');
-      return tools(
-        tool('write-once', 'resource.save', { expectedRevision: 1, operationId: 'logical-save' })
-      );
+      return tools(tool('write-once', 'resource.save', { expectedRevision: 1 }));
     }
     if (helperCalls === 3)
       return tools(
@@ -552,26 +539,28 @@ test('small helper compaction stays above 85%, preserves exact writes, and waits
       expect.objectContaining({
         callId: 'write-once',
         name: 'resource.save',
-        args: { expectedRevision: 1, operationId: 'logical-save' },
+        args: { expectedRevision: 1 },
         result: {
           status: 'saved',
           id: f.saved.id,
           revision: 2,
-          operationId: 'logical-save',
           payload: '',
         },
         denied: false,
       }),
     ]);
-    // A new provider call ID still uses the same durable logical operation.
+    // A new call ID is a new operation; an old revision cannot overwrite the saved resource.
     if (helperCalls === 5)
       return tools(
-        tool('repeat-logical-save', 'resource.save', {
+        tool('stale-save', 'resource.save', {
           expectedRevision: 1,
-          operationId: 'logical-save',
         })
       );
-    expect(events(request).at(-1)?.result).toEqual(carried(request)[0].result);
+    expect(events(request).at(-1)).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: { error: expect.any(String) },
+    });
     return structuredClone(success);
   });
   const task = await f.run();
@@ -646,7 +635,7 @@ test('unhelpful helper compaction preserves actual Vertex signatures, results an
             functionCall: {
               id: 'write',
               name: 'resource.save',
-              args: { expectedRevision: 1, operationId: 'signed-save' },
+              args: { expectedRevision: 1 },
             },
             thoughtSignature: 'WRITE_SIGNATURE',
           },
@@ -703,7 +692,6 @@ test('a hard crossing retries the same material but never sends an oversized ori
     return tools(
       tool('saved-before-hard-crossing', 'resource.save', {
         expectedRevision: 1,
-        operationId: 'hard-crossing-save',
       })
     );
   });
@@ -742,9 +730,7 @@ test('a reused call ID cannot execute again after the helper segment is compacte
     if (request.role === 'context') return summarized();
     if (++helperCalls === 1)
       return tools(tool('read-id', 'resource.read', { kind: 'content', id: 'read-evidence' }));
-    return tools(
-      tool('read-id', 'resource.save', { expectedRevision: 1, operationId: 'not-authorized-by-id' })
-    );
+    return tools(tool('read-id', 'resource.save', { expectedRevision: 1 }));
   });
   const task = await f.run();
   expect(task).toMatchObject({
@@ -784,10 +770,7 @@ test.each(['eof', 'cancelled', 'connection-revoked'] as const)(
           );
         return summarized();
       }
-      if (++helperCalls === 1)
-        return tools(
-          tool('save', 'resource.save', { expectedRevision: 1, operationId: 'save-before-failure' })
-        );
+      if (++helperCalls === 1) return tools(tool('save', 'resource.save', { expectedRevision: 1 }));
       return tools(tool('read', 'resource.read', { kind: 'content', id: 'read-evidence' }));
     });
     const task = await f.run();

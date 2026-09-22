@@ -15,7 +15,7 @@ import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { translationReferences } from '../server/translation-context.js';
 import { translationReader } from '../core/translation-context.js';
-import { executeTool } from '../core/provider.js';
+import { executeTool, knowledgeReadResults } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
@@ -176,12 +176,19 @@ test('SQLite scopes prior wording to frozen ancestry/hash and excludes future, s
     expect(read(call('translation.read', { id })).denied).toBe(true);
   store.editSource(first.id, { text: 'Changed facts.', expectedRevision: 0 });
   expect(translationReferences(store, snapshot)).toEqual([]);
+  const firstSceneNumber = snapshot.history.findIndex((item) => item.revision === first.id) + 1;
+  expect(firstSceneNumber).toBeGreaterThan(0);
   expect(
-    executeTool(snapshot, call('story.read', { id: first.id }), undefined, 'translation').result
+    executeTool(
+      snapshot,
+      call('story.read', { sceneNumber: firstSceneNumber }),
+      undefined,
+      'translation'
+    ).result
   ).toMatchObject({ text: first.text, source: { hash: first.hash } });
 });
 
-test('HTTP tool discovery/read reaches older-than-two source, typed authored memory and previous wording; SQLite attempts remain explicit', async () => {
+test('HTTP retrieval reaches older sources and previous wording while authored notes arrive directly in source-time context', async () => {
   const store = database();
   const chat = createFixtureChat(store, 'synthetic');
   const first = source(store, chat.id, 'Captain Arlen asked Mira to use his title.');
@@ -203,7 +210,9 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
     if (results.length === 0) {
       const context = JSON.parse(translationFixtureSlot(wire, 'context'));
       expect(context.previousSources.map((s: any) => s.revision)).not.toContain(first.id);
+      expect(JSON.stringify(wire)).toContain(canon.text);
       expect(JSON.stringify(wire)).not.toContain('앨런 선장이라고 불러 줘.');
+      expect(wire.stable.tools.map((tool: any) => tool.name)).not.toContain('notes.read');
       await writeSse(res, [
         {
           type: 'tool_delta',
@@ -215,13 +224,6 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
         {
           type: 'tool_delta',
           index: 1,
-          id: 'm',
-          name: 'notes.list',
-          argumentsDelta: JSON.stringify({ query: 'Captain' }),
-        },
-        {
-          type: 'tool_delta',
-          index: 2,
           id: 't',
           name: 'translation.search',
           argumentsDelta: JSON.stringify({ query: 'Captain' }),
@@ -230,28 +232,22 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
       ]);
       return;
     }
-    if (results.length === 3) {
+    if (results.length === 2) {
       expect(results[0].result.results[0].source.revision).toBe(first.id);
-      expect(results[1].result.results[0].kind).toBe('author-note');
-      expect(results[2].result.items[0].id).toBe(wording.id);
+      expect(results[1].result.items[0].id).toBe(wording.id);
       await writeSse(res, [
         {
           type: 'tool_delta',
           index: 0,
           id: 'sr',
           name: 'story.read',
-          argumentsDelta: JSON.stringify({ id: first.id }),
+          argumentsDelta: JSON.stringify({
+            sceneNumber: results[0].result.results[0].sceneNumber,
+          }),
         },
         {
           type: 'tool_delta',
           index: 1,
-          id: 'mr',
-          name: 'notes.read',
-          argumentsDelta: JSON.stringify({ id: canon.id }),
-        },
-        {
-          type: 'tool_delta',
-          index: 2,
           id: 'tr',
           name: 'translation.read',
           argumentsDelta: JSON.stringify({ id: wording.id }),
@@ -260,8 +256,7 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
       ]);
       return;
     }
-    expect(results[5].result.text).toBe('앨런 선장이라고 불러 줘.');
-    expect(results[4].result.kind).toBe('author-note');
+    expect(results[3].result.text).toBe('앨런 선장이라고 불러 줘.');
     await writeSse(res, [
       { type: 'text_delta', delta: '앨런 선장, 잠깐 기다려.' },
       { type: 'done', reason: 'stop' },
@@ -281,7 +276,7 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
   const elapsedMs = performance.now() - started;
   expect(outcome?.status, JSON.stringify({ outcome, events })).toBe('completed');
   expect(server.requests).toHaveLength(3);
-  expect(events).toHaveLength(6);
+  expect(events).toHaveLength(4);
   expect(store.product.attempts(chat.id)).toHaveLength(3);
   expect(store.job(job.id).result?.text).toBe('앨런 선장, 잠깐 기다려.');
   expect(store.requestTranslation(target.id).status).toBe('completed');
@@ -294,7 +289,7 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
         synthetic: true,
         externalCalls: 0,
         requests: 3,
-        toolEvents: 6,
+        toolEvents: 4,
         resultBytes: events.reduce((n, e) => n + Buffer.byteLength(JSON.stringify(e)), 0),
         elapsedMs,
         qualityEvaluated: false,
@@ -322,14 +317,14 @@ test('translation tools support empty memory with disabled indexing, bounded pag
       .denied
   ).toBe(false);
   expect(
-    executeTool(snapshot, call('notes.list', { query: 'absent' }), undefined, 'translation').result
-  ).toMatchObject({ total: 0 });
+    executeTool(snapshot, call('story.search', {}), undefined, 'translation').result
+  ).toMatchObject({ total: 1, results: [{ sceneNumber: 1, revision: 'a' }] });
   expect(
-    executeTool(snapshot, call('story.read', { id: 'future' }), undefined, 'translation').denied
+    executeTool(snapshot, call('story.read', { sceneNumber: 2 }), undefined, 'translation').denied
   ).toBe(true);
-  expect(executeTool(snapshot, call('story.read', { id: 'a' }), undefined, 'image').denied).toBe(
-    true
-  );
+  expect(
+    executeTool(snapshot, call('story.read', { sceneNumber: 1 }), undefined, 'image').denied
+  ).toBe(true);
   const store = database();
   const chat = createFixtureChat(store, 'paging');
   const first = source(store, chat.id);
@@ -368,12 +363,12 @@ test('translation tools support empty memory with disabled indexing, bounded pag
   expect(read(call('shell', {}))).not.toHaveProperty('errorKind');
 });
 
-test.each(['denied', 'budget', 'empty'] as const)(
+test.each(['missing-scene', 'budget', 'empty'] as const)(
   'HTTP %s tool result preserves bounded execution and durable job status',
   async (mode) => {
     const store = database();
     const chat = createFixtureChat(store, mode);
-    const first = source(store, chat.id, 'A'.repeat(16000));
+    source(store, chat.id, 'A'.repeat(16000));
     let count = 0;
     const server = await loopbackProvider(async (req, res) => {
       count++;
@@ -386,7 +381,7 @@ test.each(['denied', 'budget', 'empty'] as const)(
                 index: i,
                 id: `r${i}`,
                 name: 'story.read',
-                argumentsDelta: JSON.stringify({ id: first.id, limit: 16000 }),
+                argumentsDelta: JSON.stringify({ sceneNumber: 1, limit: 16000 }),
               }))
             : [
                 {
@@ -395,14 +390,20 @@ test.each(['denied', 'budget', 'empty'] as const)(
                   id: 'r',
                   name: mode === 'empty' ? 'translation.search' : 'story.read',
                   argumentsDelta: JSON.stringify(
-                    mode === 'empty' ? { query: 'absent' } : { id: 'foreign' }
+                    mode === 'empty' ? { query: 'absent' } : { sceneNumber: 999 }
                   ),
                 },
               ];
         await writeSse(res, [...actions, { type: 'done', reason: 'tool_calls' }]);
         return;
       }
-      expect(wire.input.results[0].result.total).toBe(0);
+      if (mode === 'empty') expect(wire.input.results[0].result.total).toBe(0);
+      else
+        expect(wire.input.results[0]).toMatchObject({
+          denied: true,
+          errorKind: 'recoverable',
+          result: { code: 'RESOURCE_UNAVAILABLE' },
+        });
       await writeSse(res, [
         {
           type: 'text_delta',
@@ -416,9 +417,9 @@ test.each(['denied', 'budget', 'empty'] as const)(
     const target = source(store, chat.id);
     const job = store.requestTranslation(target.id);
     const outcome = await execute(store, job.id, server.origin);
-    expect(outcome?.status).toBe(mode === 'empty' ? 'completed' : 'failed');
-    expect(count).toBe(mode === 'empty' ? 2 : 1);
-    expect(store.job(job.id).result?.text).toBe(mode === 'empty' ? '조용히 기다렸다.' : undefined);
+    expect(outcome?.status).toBe(mode === 'budget' ? 'failed' : 'completed');
+    expect(count).toBe(mode === 'budget' ? 1 : 2);
+    expect(store.job(job.id).result?.text).toBe(mode === 'budget' ? undefined : '조용히 기다렸다.');
     if (mode === 'budget') expect(outcome?.error).toBe('TOOL_CONTEXT_BUDGET_EXHAUSTED');
   }
 );
@@ -478,12 +479,12 @@ test('translation searches and reads frozen bot/persona/modules even when absent
     const resourceId = `package:${entry.id}:${['bot', 'persona', 'module', 'module'][i]}:body`;
     const event = executeTool(
       fixed,
-      call('knowledge.read', { id: resourceId }),
+      call('knowledge.read', { ids: [resourceId] }),
       undefined,
       'translation'
     );
     expect(event.denied).toBe(false);
-    expect(event.result).toMatchObject({
+    expect(knowledgeReadResults(event)[0]).toMatchObject({
       source: {
         id: resourceId,
         revision: 1,
@@ -497,7 +498,7 @@ test('translation searches and reads frozen bot/persona/modules even when absent
   expect(
     executeTool(
       fixed,
-      call('knowledge.read', { id: `package:${contents[1].id}:persona:body` }),
+      call('knowledge.read', { ids: [`package:${contents[1].id}:persona:body`] }),
       undefined,
       'main'
     ).denied
