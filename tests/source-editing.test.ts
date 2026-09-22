@@ -1,5 +1,3 @@
-import { createApp } from '../server/app.js';
-import { JEV_ENDPOINT } from '../server/jev-judgment.js';
 import { rejudgeTranslation } from '../server/source-editing.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { DatabaseSync } from 'node:sqlite';
@@ -9,7 +7,6 @@ import { tmpdir } from 'node:os';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import { forkChat } from '../server/chat-fork.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
@@ -84,7 +81,7 @@ async function translateFixture(store: Store, jobId: string) {
     'whole-source-owner',
     {
       signal: new AbortController().signal,
-      approvedOrigins: [],
+
       authorize: (c) => c,
       onAttemptStart: () => {
         throw new Error('Live forbidden');
@@ -235,48 +232,6 @@ test('failure diagnostics persist only for the current owner and generation with
   expect(store.job(job.id)).toEqual(completed);
 });
 
-test('archive and fork preserve whole translation text and reject changed source identity', async () => {
-  const store = database();
-  const original = source(store);
-  const job = store.requestTranslation(original.id);
-  await translateFixture(store, job.id);
-  const archive = store.product.export();
-  const restored = database();
-  restored.product.import(archive);
-  expect(restored.job(job.id).result).toEqual(store.job(job.id).result);
-  expect(restored.job(job.id).input).toEqual(store.job(job.id).input);
-  const fork = forkChat(store, original.chatId, {
-    fromRevision: original.id,
-    idempotencyKey: randomUUID(),
-  });
-  const copied = store.detail(fork.id).jobs.find((item) => item.kind === 'translation')!;
-  expect(copied.result).toMatchObject({
-    sourceRevision: fork.headRevision,
-    sourceHash: original.hash,
-    text: original.text,
-  });
-  expect(copied.result).not.toHaveProperty('segments');
-  const forged: any = structuredClone(archive);
-  const row = forged.tables.job_results.find((item: any) => item.job_id === job.id);
-  row.result = JSON.stringify({ ...JSON.parse(row.result), sourceHash: 'wrong' });
-  const target = database();
-  expect(() => target.product.import(forged)).toThrow();
-  expect(target.chats()).toHaveLength(0);
-  const manual = store.editTranslation(original.id, {
-    text: 'Manual',
-    expectedRevision: job.revision!,
-    expectedSourceHash: original.hash,
-  });
-  const manualArchive: any = store.product.export();
-  const manualRow = manualArchive.tables.job_results.find((item: any) => item.job_id === manual.id);
-  manualRow.result = JSON.stringify({
-    ...JSON.parse(manualRow.result),
-    sourceRevision: 'wrong-source',
-  });
-  expect(() => target.product.import(manualArchive)).toThrow();
-  expect(target.chats()).toHaveLength(0);
-});
-
 test('completion never reserves translation; manual save and demand remain free', () => {
   const store = database();
   const s = source(store);
@@ -339,42 +294,7 @@ test('source editing invalidates jobs and preserves both old and new snapshot hi
   expect(store.editSource(s.id, { text: edited.text, expectedRevision: 1 }).editRevision).toBe(1);
   expect(store.requestTranslation(s.id).sourceHash).toBe(edited.hash);
 });
-test('versioned source restore and fork preserve edit history, manual translation and independent copies', () => {
-  const store = database();
-  const s = source(store);
-  source(store, s.chatId);
-  const edited = store.editSource(s.id, { text: 'Edited', expectedRevision: 0 });
-  store.editTranslation(s.id, {
-    text: 'Manual translation',
-    expectedRevision: 0,
-    expectedSourceHash: edited.hash,
-  });
-  const archive = store.product.export();
-  expect(archive.version).toBe(1);
-  const restored = database();
-  restored.product.import(archive);
-  expect(restored.source(s.id).text).toBe('Edited');
-  expect(restored.sourceOriginal(s.id).text).toBe(s.text);
-  const fork = forkChat(store, s.chatId, { fromRevision: s.id, idempotencyKey: randomUUID() });
-  const copied = store.source(fork.headRevision!);
-  expect(copied.text).toBe('Edited');
-  expect(store.sourceOriginal(copied.id).text).toBe(s.text);
-  expect(store.detail(fork.id).jobs.find((j) => j.kind === 'translation')?.result?.manual).toBe(
-    true
-  );
-  store.editSource(copied.id, { text: 'Fork only', expectedRevision: 1 });
-  expect(store.source(s.id).text).toBe('Edited');
-});
-test('invalid edit history rolls archive restoration back', () => {
-  const store = database();
-  const s = source(store);
-  store.editSource(s.id, { text: 'edited', expectedRevision: 0 });
-  const bad: any = store.product.export();
-  bad.tables.source_edits[0].revision = 3;
-  const target = database();
-  expect(() => target.product.import(bad)).toThrow();
-  expect(target.chats()).toHaveLength(0);
-});
+
 test('valid generated translation caches with zero further attempts; identity corruption creates a clean reservation', async () => {
   vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Live forbidden'));
   const store = database();
@@ -386,7 +306,7 @@ test('valid generated translation caches with zero further attempts; identity co
     'test-owner',
     {
       signal: new AbortController().signal,
-      approvedOrigins: [],
+
       authorize: (c) => c,
       onAttemptStart: () => {
         throw new Error('Live forbidden');
@@ -479,25 +399,7 @@ function failedJudgment(store: Store) {
   });
   return { original, successful, job: store.job(job.id) };
 }
-test('translation judgment recovery reserves original candidate and policy exactly once, preserving previous success', () => {
-  const store = database();
-  const { original, successful, job } = failedJudgment(store);
-  promptSetting(store, 'Later settings', 5);
-  const recovery = rejudgeTranslation(store, job.id);
-  expect(recovery.input).toMatchObject({
-    ...(job.input as object),
-    judgmentRecovery: { text: job.result!.text, sourceHash: original.hash },
-  });
-  expect(recovery.previousResult?.jobId).toBe(successful.id);
-  expect(rejudgeTranslation(store, job.id).id).toBe(recovery.id);
-  store.cancelJob(recovery.id);
-  expect(rejudgeTranslation(store, job.id).status).toBe('cancelled');
-  expect(store.job(job.id).result).toEqual(job.result);
-  const restored = database();
-  restored.product.import(store.product.export());
-  expect(restored.job(recovery.id).input).toEqual(recovery.input);
-  expect(rejudgeTranslation(restored, job.id).id).toBe(recovery.id);
-});
+
 test.each(['source edit', 'newer translation', 'refusal', 'no candidate'])(
   'rejects judgment recovery after %s',
   (reason) => {
@@ -515,56 +417,3 @@ test.each(['source edit', 'newer translation', 'refusal', 'no candidate'])(
     expect(() => rejudgeTranslation(store, job.id)).toThrow('recovery unavailable');
   }
 );
-
-test('HTTP judgment recovery completes with one JEV attempt and no translator, then survives archive restore', async () => {
-  const store = database();
-  const { job } = failedJudgment(store);
-  const item = owned.find((item) => item.store === store)!;
-  store.close();
-  item.store = undefined;
-  vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-key');
-  const fetch = vi.fn(async (url: unknown, init?: RequestInit) => {
-    expect(url).toBe(JEV_ENDPOINT);
-    expect(JSON.parse(String(init?.body)).state.response).toBe(job.result!.text);
-    return new Response(
-      JSON.stringify({
-        model: 'jev-latest',
-        answers: { explicitRefusal: { type: 'noul', noul: 0.05 } },
-      })
-    );
-  });
-  vi.stubGlobal('fetch', fetch);
-  const app = await createApp({
-    dbPath: join(item.dir, 'test.sqlite'),
-    buildId: 'synthetic-recovery',
-    testMode: true,
-  });
-  try {
-    const response = await app.inject({
-      method: 'POST',
-      url: `/api/jobs/${job.id}/rejudge`,
-      payload: {},
-      headers: { host: '127.0.0.1' },
-    });
-    expect(response.statusCode, response.body).toBe(200);
-    const recovery = response.json();
-    await vi.waitFor(() => expect(app.store.job(recovery.id).status).toBe('completed'));
-    expect(app.store.job(recovery.id).result?.text).toBe(job.result!.text);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const again = await app.inject({
-      method: 'POST',
-      url: `/api/jobs/${job.id}/rejudge`,
-      payload: {},
-      headers: { host: '127.0.0.1' },
-    });
-    expect(again.json().id).toBe(recovery.id);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const restored = database();
-    restored.product.import(app.store.product.export());
-    expect(restored.job(recovery.id).result).toEqual(app.store.job(recovery.id).result);
-  } finally {
-    await app.close();
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  }
-});

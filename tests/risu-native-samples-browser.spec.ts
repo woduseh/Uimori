@@ -105,7 +105,7 @@ test.describe('actual local native Risu cards', () => {
       instanceId: 'native-samples-browser',
       testMode: true,
       webRoot: resolve('dist/web'),
-      approvedOrigins: [provider.origin],
+
       codex: { enabled: false },
     });
     const connection = app.store.product.connection({

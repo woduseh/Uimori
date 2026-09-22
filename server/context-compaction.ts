@@ -299,7 +299,7 @@ export async function prepareInputContext(
         connection.id !== target.connectionId ||
         connection.protocol !== target.connection.protocol ||
         connection.endpoint !== target.connection.endpoint ||
-        connection.credentialEnv !== target.connection.credentialEnv
+        connection.credentialRef !== target.connection.credentialRef
       )
         fail('CONNECTION_NOT_AUTHORIZED');
       return connection;
@@ -324,7 +324,6 @@ export async function prepareInputContext(
             fixed.story?.notes ?? []
           ),
           {
-            approvedOrigins: hooks.approvedOrigins,
             signal: hooks.signal,
             resolveCredential: hooks.resolveCredential,
             executeCodex: hooks.executeCodex,

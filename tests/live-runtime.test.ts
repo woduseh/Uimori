@@ -81,7 +81,6 @@ for (const observed of [
       dbPath: join(item.directory, 'story.sqlite'),
       instanceId: randomUUID(),
       buildId: 'cancelled-usage-fixture',
-      approvedOrigins: [provider.origin],
     });
     item.app = app;
     const url = await app.listen({ port: 0, host: '127.0.0.1' });

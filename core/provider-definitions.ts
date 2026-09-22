@@ -9,7 +9,7 @@ export type ProviderDefinition = Readonly<{
   /** Empty means the user must supply the existing adapter's endpoint. */
   endpointDefault: string;
   /** An environment-variable name only; never a credential value. */
-  credentialEnvDefault: string;
+  credentialRefDefault: string;
   auth: 'none' | 'bearer' | 'api-key' | 'adc-or-bearer' | 'codex-login';
   catalog: 'remote' | 'local-support' | 'agent-runtime';
   /** Top-level model-preset options accepted by the local adapter. Model support is unknown. */
@@ -25,7 +25,7 @@ type DefinitionInput = Pick<
   | 'id'
   | 'label'
   | 'endpointDefault'
-  | 'credentialEnvDefault'
+  | 'credentialRefDefault'
   | 'auth'
   | 'catalog'
   | 'optionKeys'
@@ -55,7 +55,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     id: 'codex-app-server-v1',
     label: 'Codex · ChatGPT 구독',
     endpointDefault: 'codex://local',
-    credentialEnvDefault: '',
+    credentialRefDefault: '',
     auth: 'codex-login',
     catalog: 'agent-runtime',
     optionKeys: ['maxOutputTokens', 'timeoutMs', 'reasoningEffort'],
@@ -71,7 +71,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     id: 'fixture-sse-v1',
     label: '로컬 fixture · 검사용',
     endpointDefault: '',
-    credentialEnvDefault: '',
+    credentialRefDefault: '',
     auth: 'none',
     catalog: 'remote',
     optionKeys: ['maxOutputTokens', 'temperature', 'timeoutMs', 'thinkingLevel'],
@@ -86,7 +86,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     id: 'vertex-gemini-v1',
     label: 'Google Agent Platform',
     endpointDefault: '',
-    credentialEnvDefault: '',
+    credentialRefDefault: '',
     auth: 'adc-or-bearer',
     catalog: 'local-support',
     optionKeys: [
@@ -109,7 +109,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     id: 'openai-responses-v1',
     label: 'OpenAI · Responses',
     endpointDefault: 'https://api.openai.com/v1',
-    credentialEnvDefault: 'OPENAI_API_KEY',
+    credentialRefDefault: 'OPENAI_API_KEY',
     auth: 'bearer',
     catalog: 'remote',
     optionKeys: [
@@ -132,7 +132,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     id: 'anthropic-messages-v1',
     label: 'Anthropic · Messages',
     endpointDefault: 'https://api.anthropic.com/v1',
-    credentialEnvDefault: 'ANTHROPIC_API_KEY',
+    credentialRefDefault: 'ANTHROPIC_API_KEY',
     auth: 'api-key',
     catalog: 'remote',
     optionKeys: [
@@ -158,7 +158,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     id: 'vercel-chat-v1',
     label: 'Vercel AI Gateway',
     endpointDefault: 'https://ai-gateway.vercel.sh/v1',
-    credentialEnvDefault: 'VERCEL_API_KEY',
+    credentialRefDefault: 'VERCEL_API_KEY',
     auth: 'bearer',
     catalog: 'remote',
     optionKeys: [...responsesOptions, 'serviceTier'],
@@ -173,7 +173,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     id: 'deepseek-chat-v1',
     label: 'DeepSeek · OpenAI 호환',
     endpointDefault: 'https://api.deepseek.com/v1',
-    credentialEnvDefault: 'DEEPSEEK_API_KEY',
+    credentialRefDefault: 'DEEPSEEK_API_KEY',
     auth: 'bearer',
     catalog: 'remote',
     optionKeys: ['maxOutputTokens', 'temperature', 'timeoutMs', 'reasoningEffort', 'serviceTier'],
@@ -188,7 +188,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     id: 'openai-chat-v1',
     label: 'OpenAI 호환 · 별도 공급자',
     endpointDefault: '',
-    credentialEnvDefault: 'PROVIDER_API_KEY',
+    credentialRefDefault: 'PROVIDER_API_KEY',
     auth: 'bearer',
     catalog: 'remote',
     optionKeys: [...responsesOptions, 'serviceTier'],

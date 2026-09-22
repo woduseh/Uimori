@@ -10,7 +10,7 @@ import {
   validateGenerationShape,
   validateModelOptions,
 } from '../core/model-capabilities.js';
-import { validCredentialEnv } from '../core/credential-reference.js';
+import { validCredentialRef } from '../core/credential-reference.js';
 import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { ProviderOptionsError, validateProviderOptions } from '../core/provider-options.js';
 import {
@@ -139,8 +139,8 @@ export function validateProviderSettingVersion(row: Row): void {
       'title',
       'protocol',
       'endpoint',
-      'credentialEnv',
-      'catalogCredentialEnv',
+      'credentialRef',
+      'catalogCredentialRef',
       'enabled',
       'catalog',
       'catalogError',
@@ -148,19 +148,19 @@ export function validateProviderSettingVersion(row: Row): void {
     ]);
     const protocol = choice(body.protocol, [...PROVIDER_PROTOCOLS], 'protocol');
     if (
-      body.catalogCredentialEnv !== undefined &&
+      body.catalogCredentialRef !== undefined &&
       (protocol !== 'vertex-gemini-v1' ||
-        !validCredentialEnv(text(body.catalogCredentialEnv, 'catalog credential reference', 200)))
+        !validCredentialRef(text(body.catalogCredentialRef, 'catalog credential reference', 200)))
     )
       throw new HttpError(400, 'Invalid catalog credential reference');
     if (body.catalogUpdatedAt !== undefined) catalogTimestamp(body.catalogUpdatedAt);
     connectionEndpoint(body.endpoint, protocol);
-    if (protocol === 'codex-app-server-v1' && body.credentialEnv !== undefined)
+    if (protocol === 'codex-app-server-v1' && body.credentialRef !== undefined)
       throw new HttpError(400, 'Invalid Codex authority');
     boolean(body.enabled);
     if (
-      body.credentialEnv !== undefined &&
-      !validCredentialEnv(text(body.credentialEnv, 'credential reference', 200))
+      body.credentialRef !== undefined &&
+      !validCredentialRef(text(body.credentialRef, 'credential reference', 200))
     )
       throw new HttpError(400, 'Invalid credential reference');
     archiveList(body.catalog, 5000).forEach((raw) => {

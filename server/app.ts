@@ -1,3 +1,4 @@
+import { resourceRoutes } from './resource-routes.js';
 import { rejudgeTranslation } from './source-editing.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
@@ -15,7 +16,6 @@ import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
 import { readHelperChatContext } from './helper-context.js';
 import { helperRoutes } from './helper-routes.js';
 import { contextRoutes } from './context-routes.js';
-import { EditDraftService, editDraftRoutes } from './edit-drafts.js';
 import { ChatOverridesStore, chatOverrideRoutes } from './chat-overrides.js';
 import { chatOptionRoutes } from './chat-options.js';
 import { chatVariableRoutes } from './chat-variable-routes.js';
@@ -30,7 +30,6 @@ import {
   previousContextPlan,
   contextSourceRefs,
   validateContextPlan,
-  candidateCompilationSnapshot,
   persistedContextSnapshot,
 } from './context-planning.js';
 import { prepareNativeRisuRun, prepareNativeRisuOutput } from './risu-native-run.js';
@@ -98,7 +97,7 @@ export type AppOptions = {
   instanceId?: string;
   testMode?: boolean;
   webRoot?: string;
-  approvedOrigins?: string[];
+
   accessToken?: string;
   publicOrigin?: string;
   vertexRequestTier?: 'standard' | 'flex';
@@ -145,8 +144,8 @@ export async function createApp(options: AppOptions): Promise<App> {
     const snapshot = store.product.resolveJobPrompt(store.run(source.runId).snapshot, job.input);
     if (job.kind !== 'image') requireModel(snapshot.profile?.models[job.kind], job.kind);
   };
-  const credentials = new VertexCredentialStore(options.dbPath);
-  const jevCredentials = new JevCredentialStore(options.dbPath);
+  const credentials = new VertexCredentialStore(store.db);
+  const jevCredentials = new JevCredentialStore(store.db);
   const codex = options.codexRuntime ?? new CodexRuntime(options.dbPath, options.codex);
   const executeCodex: NonNullable<ProviderExecutionOptions['executeCodex']> = (
     connection,
@@ -159,7 +158,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         !current.enabled ||
         current.protocol !== connection.protocol ||
         current.endpoint !== connection.endpoint ||
-        current.credentialEnv !== connection.credentialEnv
+        current.credentialRef !== connection.credentialRef
       )
         throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
     };
@@ -193,7 +192,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         !current.enabled ||
         current.protocol !== connection.protocol ||
         current.endpoint !== connection.endpoint ||
-        current.credentialEnv !== connection.credentialEnv
+        current.credentialRef !== connection.credentialRef
       )
         throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
     };
@@ -203,11 +202,10 @@ export async function createApp(options: AppOptions): Promise<App> {
         id: connection.id,
         protocol: connection.protocol,
         endpoint: connection.endpoint,
-        ...(connection.credentialEnv ? { credentialEnv: connection.credentialEnv } : {}),
+        ...(connection.credentialRef ? { credentialRef: connection.credentialRef } : {}),
       },
       request,
       {
-        approvedOrigins: options.approvedOrigins ?? [],
         signal: execution.signal,
         timeoutMs: execution.timeoutMs,
         beforeTurn: authorize,
@@ -231,7 +229,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         !current.enabled ||
         current.protocol !== connection.protocol ||
         current.endpoint !== connection.endpoint ||
-        current.credentialEnv !== reference
+        current.credentialRef !== reference
       )
         throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     };
@@ -252,7 +250,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   const jobControllers = new Map<string, AbortController>();
   const illustrations = new Set<string>();
   const illustrationControllers = new Map<string, AbortController>();
-  const approvedOrigins = options.approvedOrigins ?? [];
+
   const stopping = new AbortController();
   const publish = (chatId: string) => {
     for (const [response, cursor] of subscribers.get(chatId) ?? []) {
@@ -282,10 +280,9 @@ export async function createApp(options: AppOptions): Promise<App> {
     );
   };
   const streams = new ResponseStreamStore(store);
-  const drafts = new EditDraftService(store);
   const helper: HelperRuntime = new HelperRuntime(store, {
     owner: instanceId,
-    approvedOrigins,
+
     resolveCredential,
     executeCodex,
     vertexRequestTier: options.vertexRequestTier,
@@ -293,39 +290,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     track,
     streams,
     services: {
-      readDraft: (editor) => {
-        const draft = drafts.get(editor.draftId);
-        if (draft.status !== 'active') throw new HttpError(409, '편집 초안이 폐기됐어요.');
-        return draft;
-      },
-      changeDraft: (task, name, args) => {
-        const draftId = args.draftId ?? task.snapshot.editor?.draftId;
-        const operationId = `${task.id}:${text(args.operationId, 'operation ID', 100)}`;
-        const authority = {
-          requestId: task.id,
-          assert: (intent: { action: string; draftId: string | null }) => {
-            if (name === 'draft.create' && intent.action === 'create') return;
-            if (intent.draftId !== draftId) throw new HttpError(403, 'DRAFT_OUTSIDE_SCOPE');
-            helper.workspace.authorize(task.id, draftId, `draft.${intent.action}`);
-          },
-        };
-        if (name === 'draft.create')
-          return drafts.create(
-            {
-              kind: args.kind,
-              targetId: null,
-              editorKey: `helper:${task.conversationId}:${args.operationId}`,
-              model: args.model,
-              operationId,
-            },
-            authority
-          );
-        const { draftId: _draft, ...inputArgs } = args;
-        const input = { ...inputArgs, operationId };
-        return name === 'draft.patch'
-          ? drafts.patch(draftId, input, authority)
-          : drafts.save(draftId, input, authority);
-      },
       context: async (task, name, args, hooks) => {
         const scope = task.snapshot.scope;
         if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
@@ -406,7 +370,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     },
   });
   const titles = new ChatTitleService(store, {
-    approvedOrigins,
     resolveCredential,
     executeCodex,
     vertexRequestTier: options.vertexRequestTier,
@@ -415,7 +378,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     publish,
   });
   const branchTitles = new BranchTitleService(store, {
-    approvedOrigins,
     resolveCredential,
     executeCodex,
     vertexRequestTier: options.vertexRequestTier,
@@ -462,7 +424,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             await runAuxiliaryJob(auxiliaryBridge(store, controls, signal), id, instanceId, {
               jev: { credential: jevCredentials.resolve },
               signal,
-              approvedOrigins,
+
               resolveCredential,
               executeCodex,
               authorize: (connection) => store.product.authorize(connection),
@@ -544,7 +506,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             attempt = queued.attempt;
             const outcome = await runIllustrationJob(store, id, instanceId, {
               signal,
-              approvedOrigins,
+
               resolveCredential,
               resolveComfyCredential: (name) => process.env[name],
               cancelRemoteOnAbort: () => controller.signal.aborted && !stopping.signal.aborted,
@@ -600,7 +562,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       (async () => {
         const run = store.run(id);
         const judgeResponse =
-          run.snapshot.mainJudgmentEnabled !== false &&
+          run.snapshot.mainJudgmentEnabled === true &&
           !!run.snapshot.profile?.models.main &&
           run.snapshot.profile.models.main.connection.protocol !== 'fixture-sse-v1';
         let response: ReturnType<ResponseStreamStore['createWriter']> | undefined;
@@ -647,7 +609,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 store.transaction(() => {
                   assertCurrent();
                   store.db
-                    .prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?')
+                    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
                     .run(JSON.stringify(prepared.snapshot), id);
                 });
                 executionSnapshot.nativeRisuExecution = prepared.snapshot.nativeRisuExecution;
@@ -664,7 +626,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             onToolEvent: (event) => store.tool(id, event),
             persistContext: (prepared, own) =>
               store.transaction(() => {
-                if (controller.signal.aborted || store.run(id).status !== 'running')
+                if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
                   throw new Error('Run cancelled');
                 const published = store.context.publishPrepared(
                   store.context.rebase(prepared, own),
@@ -676,13 +638,13 @@ export async function createApp(options: AppOptions): Promise<App> {
                   activated: checkpoint ? store.context.checkpoint(checkpoint).activated : false,
                 };
               }),
-            approvedOrigins,
+
             resolveCredential,
             executeCodex,
             authorize: (connection) => store.product.authorize(connection),
             vertexRequestTier: options.vertexRequestTier,
             onAttemptStart: (wire) => {
-              if (controller.signal.aborted || store.run(id).status !== 'running')
+              if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
                 throw new Error('Run cancelled');
               if (wire.judgment) {
                 const current = store.run(id).snapshot;
@@ -724,7 +686,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             onAttemptFinish: (attempt, result) => store.product.finishAttempt(attempt, result),
           };
           const assertCurrent = () => {
-            if (controller.signal.aborted || store.run(id).status !== 'running')
+            if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
               throw new Error('CONTEXT_CANCELLED');
             if (
               store.product.branch(run.chatId, run.snapshot.branchId).headRevision !==
@@ -748,7 +710,6 @@ export async function createApp(options: AppOptions): Promise<App> {
           let executionSnapshot = run.snapshot;
           let result: Awaited<ReturnType<typeof runMain>>;
           if (run.snapshot.judgmentRecovery) {
-            candidateCompilationSnapshot(store, run.snapshot, id);
             const preserved = run.snapshot.mainJudgment!;
             result = {
               status: 'completed',
@@ -757,11 +718,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               error: null,
             };
           } else {
-            const reservedCompilationSnapshot = candidateCompilationSnapshot(
-              store,
-              run.snapshot,
-              id
-            );
+            const reservedCompilationSnapshot = run.snapshot;
             let compilationSnapshot = reservedCompilationSnapshot;
             executionSnapshot = await prepareNativeRisuRun(executionSnapshot, {
               signal: controller.signal,
@@ -788,7 +745,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               store.transaction(() => {
                 assertCurrent();
                 store.db
-                  .prepare('UPDATE runs SET snapshot=snapshot_pack(?),updated_at=? WHERE id=?')
+                  .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
                   .run(
                     JSON.stringify(
                       persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
@@ -814,7 +771,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               store.transaction(() => {
                 assertCurrent();
                 store.db
-                  .prepare('UPDATE runs SET snapshot=snapshot_pack(?),updated_at=? WHERE id=?')
+                  .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
                   .run(
                     JSON.stringify(
                       persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
@@ -870,20 +827,16 @@ export async function createApp(options: AppOptions): Promise<App> {
                       store.transaction(() => {
                         assertCurrent();
                         const current = store.run(id);
-                        store.db
-                          .prepare(
-                            'UPDATE runs SET snapshot=snapshot_pack(?),updated_at=? WHERE id=?'
-                          )
-                          .run(
-                            JSON.stringify(
-                              persistedContextSnapshot(current.snapshot, {
-                                ...executionSnapshot,
-                                contextPlan: plan,
-                              })
-                            ),
-                            new Date().toISOString(),
-                            id
-                          );
+                        store.db.prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?').run(
+                          JSON.stringify(
+                            persistedContextSnapshot(current.snapshot, {
+                              ...executionSnapshot,
+                              contextPlan: plan,
+                            })
+                          ),
+                          new Date().toISOString(),
+                          id
+                        );
                         store.event(run.chatId, 'run.context.updated', id);
                       });
                       publish(run.chatId);
@@ -901,7 +854,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                   });
                   validateContextPlan(prepared.snapshot);
                   store.db
-                    .prepare('UPDATE runs SET snapshot=snapshot_pack(?),updated_at=? WHERE id=?')
+                    .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
                     .run(
                       JSON.stringify(
                         persistedContextSnapshot(store.run(id).snapshot, prepared.snapshot)
@@ -924,7 +877,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               store.transaction(() => {
                 assertCurrent();
                 store.db
-                  .prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?')
+                  .prepare('UPDATE runs SET snapshot=? WHERE id=?')
                   .run(
                     JSON.stringify(
                       persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
@@ -964,7 +917,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             store.transaction(() => {
               assertCurrent();
               store.db
-                .prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?')
+                .prepare('UPDATE runs SET snapshot=? WHERE id=?')
                 .run(JSON.stringify({ ...store.run(id).snapshot, mainJudgment: input }), id);
             });
             const judgment = await judgeMainRefusal(input, {
@@ -1005,7 +958,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           store.transaction(() => {
             assertCurrent();
             if (nativeOutput.nativeRisuExecution)
-              store.db.prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?').run(
+              store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
                 JSON.stringify({
                   ...store.run(id).snapshot,
                   nativeRisuExecution: nativeOutput.nativeRisuExecution,
@@ -1036,7 +989,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 const current = store.run(id);
                 if (current.status === 'running')
                   store.db
-                    .prepare('UPDATE runs SET snapshot=snapshot_pack(?) WHERE id=?')
+                    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
                     .run(JSON.stringify({ ...current.snapshot, contextPlan: error.plan }), id);
               });
               store.finishRun(
@@ -1085,7 +1038,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             publish(run.chatId);
           }
         } finally {
-          const status = store.run(id).status;
+          const status = readRunStatus(store, id);
           if (status !== 'completed') disposeNativeRisuSession(nativeRisuSessionKey(run.snapshot));
           response?.finish(status === 'queued' || status === 'running' ? 'interrupted' : status);
           runs.delete(id);
@@ -1132,7 +1085,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     maintenance: () => maintenanceStatus(store, forcedClosed),
     credentials,
     codex,
-    approvedOrigins,
+
     accessToken: options.accessToken,
     publicOrigin: network.publicOrigin,
     publish,
@@ -1164,7 +1117,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     execute: async (job, signal) => {
       const hooks: MainHooks = {
         signal: AbortSignal.any([signal, stopping.signal]),
-        approvedOrigins,
+
         resolveCredential,
         executeCodex,
         vertexRequestTier: options.vertexRequestTier,
@@ -1196,11 +1149,10 @@ export async function createApp(options: AppOptions): Promise<App> {
       return prepared.snapshot;
     },
   });
-  editDraftRoutes(app, drafts);
+  resourceRoutes(app, store);
   chatOverrideRoutes(app, new ChatOverridesStore(store), publish);
   responseStreamRoutes(app, streams, { authenticated: session.authenticated });
   providerConnectionTestRoutes(app, store, {
-    approvedOrigins,
     resolveCredential,
     executeCodex,
     signal: stopping.signal,
@@ -1263,7 +1215,6 @@ export async function createApp(options: AppOptions): Promise<App> {
                 snapshot,
                 usage,
                 {
-                  approvedOrigins,
                   resolveCredential,
                   executeCodex,
                   vertexRequestTier: options.vertexRequestTier,

@@ -175,7 +175,7 @@ async function fixedHeavySnapshot(vertex = false): Promise<RunSnapshot> {
       protocol: 'vertex-gemini-v1',
       endpoint:
         'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
-      credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST',
+      credentialRef: 'UIMORI_PROVIDER_VERTEX_TEST',
     };
   }
   await refreshNativeSnapshot(fixed);
@@ -265,7 +265,7 @@ function hooks(persist?: ContextPersistence) {
   const events: ToolEvent[] = [];
   const value: MainHooks = {
     signal: new AbortController().signal,
-    approvedOrigins: [origin],
+
     authorize: (connection) => connection,
     onInput: () => {},
     onToolEvent: (event) => {
@@ -766,7 +766,7 @@ describe('model-driven working summary and window switch inside one main run', (
         protocol: 'vertex-gemini-v1',
         endpoint:
           'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
-        credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST',
+        credentialRef: 'UIMORI_PROVIDER_VERTEX_TEST',
       };
       const original = structuredClone(fixed);
       log.value.resolveCredential = () => 'SYNTHETIC_VERTEX_TOKEN';

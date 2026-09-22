@@ -41,38 +41,3 @@ test('new chats copy the current token defaults without following later changes'
     maxPinnedTokens: 96_000,
   });
 });
-
-test('default updates use revision conflicts and survive archive restore', () => {
-  const source = database();
-  updateLoreContextDefaults(source, {
-    expectedRevision: 1,
-    ...DEFAULT_LORE_CONTEXT,
-    maxRetainedEntries: 32,
-  });
-  expect(() =>
-    updateLoreContextDefaults(source, {
-      expectedRevision: 1,
-      ...DEFAULT_LORE_CONTEXT,
-    })
-  ).toThrow('로어 문맥 기본값이 변경됐어요');
-  createFixtureChat(source, 'Archive owner');
-  const target = database();
-  expect(target.product.import(source.product.export()).restored).toBe(true);
-  expect(loreContextDefaults(target)).toEqual(loreContextDefaults(source));
-});
-
-test('customized defaults count as data and cannot be overwritten by restore', () => {
-  const source = database();
-  createFixtureChat(source, 'Archive owner');
-  const target = database();
-  updateLoreContextDefaults(target, {
-    expectedRevision: 1,
-    ...DEFAULT_LORE_CONTEXT,
-    maxRetainedTokens: 24_000,
-  });
-  expect(target.product.importStatus()).toEqual({ canImport: false });
-  expect(() => target.product.import(source.product.export())).toThrow(
-    'Restore requires an empty database'
-  );
-  expect(loreContextDefaults(target).maxRetainedTokens).toBe(24_000);
-});

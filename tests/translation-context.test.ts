@@ -102,11 +102,11 @@ function configure(store: Store, chatId: string, endpoint: string) {
     image: false,
   });
 }
-async function execute(store: Store, id: string, origin: string, events: ToolEvent[] = []) {
+async function execute(store: Store, id: string, _origin: string, events: ToolEvent[] = []) {
   const signal = new AbortController().signal;
   return runAuxiliaryJob(auxiliaryBridge(store, new Controls(), signal), id, 'context-owner', {
     signal,
-    approvedOrigins: [origin],
+
     authorize: (c) => store.product.authorize(c),
     onAttemptStart: (w) => store.product.startAttempt(store.job(id).chatId, null, id, w),
     onAttemptFinish: (id, r) => store.product.finishAttempt(id, r),

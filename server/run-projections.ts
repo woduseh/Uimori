@@ -1,3 +1,4 @@
+import { executionSnapshot } from './execution-snapshot.js';
 import type { Run, RunSnapshot } from '../core/types.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
@@ -11,11 +12,16 @@ export function readRunStatus(store: Pick<Store, 'db'>, id: string): Run['status
   return row.status;
 }
 
-/** Keep SnapshotDatabase's expansion/integrity checks; each call returns a detached value. */
-export function readRunSnapshot(store: Pick<Store, 'db'>, id: string): RunSnapshot {
+/** Explicitly decode a run snapshot. Ordinary SQL reads have no hidden transformations. */
+export function readStoredRunSnapshot(store: Pick<Store, 'db'>, id: string): RunSnapshot {
   const row = store.db.prepare('SELECT snapshot FROM runs WHERE id=?').get(id) as
     | { snapshot: string }
     | undefined;
   if (!row) throw new HttpError(404, 'Run not found');
-  return JSON.parse(row.snapshot);
+  return JSON.parse(row.snapshot) as RunSnapshot;
+}
+
+/** Rebuild full current context only when explicitly requested. */
+export function readRunSnapshot(store: Store, id: string): RunSnapshot {
+  return executionSnapshot(store, readStoredRunSnapshot(store, id));
 }

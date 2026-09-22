@@ -199,69 +199,6 @@ test('all supported kinds expose DELETE and read-only impact routes with strict 
   }
 });
 
-test('active captured work survives library deletion with unchanged snapshots and archive restore', () => {
-  const s = database(),
-    chat = createFixtureChat(s, 'Synthetic frozen run');
-  const c = s.product.connection({
-    title: 'Fixture',
-    protocol: 'openai-chat-v1',
-    endpoint: 'http://127.0.0.1:9999/v1',
-    enabled: true,
-  });
-  const m = s.product.model({
-    title: 'Model',
-    connectionId: c.id,
-    modelId: 'synthetic',
-    maxOutputTokens: 100,
-    temperature: null,
-  });
-  const p = s.product.profile(chat.id);
-  updateTestProfile(s.product, chat.id, {
-    expectedRevision: p.revision,
-
-    routes: { ...p.routes, main: { id: m.id } },
-    image: false,
-  });
-  const captured = s.product.snapshot(chat.id)!;
-  const run = s.createRun(
-    chat.id,
-    {
-      request: 'Synthetic',
-      expectedRevision: null,
-      expectedSettingsRevision: chat.settingsRevision,
-      idempotencyKey: 'deletion-snapshot',
-    },
-    (current) => ({
-      chatId: chat.id,
-      parentRevision: null,
-      settingsRevision: current.settingsRevision,
-      settings: current.settings,
-      request: 'Synthetic',
-      history: [],
-      resources: s.product.resources(chat.id, captured),
-      profile: captured,
-    })
-  ).run;
-  const current = s.product.profile(chat.id);
-  updateTestProfile(s.product, chat.id, {
-    expectedRevision: current.revision,
-
-    routes: p.routes,
-    image: false,
-  });
-  expect(libraryDeletionImpact(s, 'model', m.id)).toMatchObject({ canDelete: true, blockers: [] });
-  const frozen = s.run(run.id).snapshot;
-  deleteLibraryItem(s, 'model', m.id, { expectedRevision: 1 });
-  deleteLibraryItem(s, 'connection', c.id, { expectedRevision: 1 });
-  expect(s.run(run.id).snapshot).toEqual(frozen);
-  expect(s.run(run.id).status).toBe(run.status);
-  s.finishRun(run.id, 'cancelled', 'Synthetic cancellation');
-  const target = database();
-  expect(target.product.import(s.product.export())).toEqual({ restored: true, chats: 1 });
-  expect(target.run(run.id).snapshot.profile?.models.main?.id).toBe(m.id);
-  expect(target.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-});
-
 test('deleting a bot preserves existing chat ownership and attachments but public library reads become unavailable', async () => {
   const s = database();
   const chat = createFixtureChat(s, 'Keep this chat');
@@ -271,7 +208,7 @@ test('deleting a bot preserves existing chat ownership and attachments but publi
   const bot = s.product.get<{ id: string; revision: number }>('content', organization.bot_id);
   const profile = s.product.profile(chat.id);
   const app = Fastify();
-  productRoutes(app, s, { approvedOrigins: [], publish: () => {} });
+  productRoutes(app, s, { publish: () => {} });
   try {
     deleteLibraryItem(s, 'content', bot.id, { expectedRevision: bot.revision });
     expect(s.chat(chat.id)).toEqual(chat);

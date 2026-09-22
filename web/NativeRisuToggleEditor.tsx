@@ -1,10 +1,15 @@
+import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useRef, useState, type ReactNode, type ChangeEvent } from 'react';
 import type { PromptValue, RisuPrompt } from '../core/risu-prompt.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { PromptControlFields } from './PromptControlFields.js';
-import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
+import {
+  useBufferedEditorState,
+  useUnappliedEditorField,
+  useEditorSavePreparation,
+} from './resource-editor.js';
 import {
   addToggleGroup,
   renameToggleGroup,
@@ -63,6 +68,7 @@ export function NativeRisuToggleEditor({
   onChange,
   draftPath = 'prompt.native.toggles',
   onPendingChange,
+  prepareSave,
   disabled = false,
 }: {
   value: string;
@@ -72,6 +78,7 @@ export function NativeRisuToggleEditor({
   draftPath?: string;
   onPendingChange?: (pending: boolean) => void;
   disabled?: boolean;
+  prepareSave?: (model: ResourceModel, values: Snapshot) => ResourceModel;
 }) {
   const [raw, setRaw] = useBufferedEditorState(draftPath, value, { syncPristineInitial: true });
   const [rawVariables, setRawVariables] = useBufferedEditorState(
@@ -101,6 +108,12 @@ export function NativeRisuToggleEditor({
   const sourcePending = raw !== value || rawVariables !== variables;
   const pending = sourcePending || invalidPending;
   useUnappliedEditorField(draftPath, pending);
+  useEditorSavePreparation(draftPath, (model) => {
+    if (invalidPending) throw new Error('잘못 입력된 토글 또는 변수 값을 확인해 주세요.');
+    if (!sourcePending) return model;
+    if (!prepareSave) throw new Error('변수·토글 원문을 폼에 반영해 주세요.');
+    return prepareSave(model, { toggles: raw, variables: rawVariables });
+  });
   useEffect(() => {
     onPendingChange?.(pending);
   }, [pending, onPendingChange]);

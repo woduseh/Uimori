@@ -98,7 +98,7 @@ export async function executeNativeProvider(
     return result;
   };
   try {
-    const connection = validateConnection(connectionValue, options.approvedOrigins);
+    const connection = validateConnection(connectionValue);
     const request = validateRequest(requestValue);
     const progress = createPublicTextProgress(request, connection.protocol, { ...options, signal });
     if (request.generation) validateModelOptions(request.generation, connection.protocol);
@@ -132,15 +132,15 @@ export async function executeNativeProvider(
     } else throw new ProviderContractError('UNSUPPORTED_PROTOCOL');
     if (signal.aborted) return failure('CANCELLED');
     assertContextBudget(bodyValue, request.contextBudget);
-    const secret = connection.credentialEnv
+    const secret = connection.credentialRef
       ? await (options.resolveCredential ?? ((name) => process.env[name]))(
-          connection.credentialEnv,
+          connection.credentialRef,
           connection,
           signal
         )
       : undefined;
     if (
-      (connection.credentialEnv || connection.protocol !== 'openai-chat-v1') &&
+      (connection.credentialRef || connection.protocol !== 'openai-chat-v1') &&
       (!secret || /[\r\n]/u.test(secret))
     )
       throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');

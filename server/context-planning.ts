@@ -1,8 +1,5 @@
 import { countTextTokens } from '../core/text-tokens.js';
-import { canRecoverMainJudgment } from '../core/main-judgment-recovery.js';
-import { HttpError } from './request-validation.js';
 import { createHash } from 'node:crypto';
-import { isDeepStrictEqual } from 'node:util';
 import type { ContextPlan } from '../core/context-plan.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
@@ -13,94 +10,6 @@ import {
 import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
 import type { Store } from './store.js';
 import type { ModelSnapshot } from '../core/product.js';
-
-/** Candidate output belongs to its new branch; prompt expressions still use the original input scope. */
-export function candidateCompilationSnapshot(
-  store: Store,
-  snapshot: RunSnapshot,
-  runId?: string
-): RunSnapshot {
-  const reject = (detail: string): never => {
-    throw new HttpError(400, `CANDIDATE_INPUT_MISMATCH (${detail})`);
-  };
-  const frozenInput = ({
-    branchId: _branch,
-    candidateOf: _candidate,
-    promptCompilation: _compiled,
-    contextPlan: _plan,
-    loreContext: _lore,
-    mainJudgment: _judgment,
-    judgmentRecovery: _recovery,
-    ...input
-  }: RunSnapshot) => {
-    if (!input.nativeRisuExecution) return input;
-    // Each candidate shares prepared inputs but owns fresh request/output callback results.
-    const {
-      variables: _variables,
-      messages: _messages,
-      output: _output,
-      requestEdits: _requestEdits,
-      issues: _issues,
-      historyRevision: _historyRevision,
-      ...prepared
-    } = input.nativeRisuExecution;
-    return { ...input, nativeRisuExecution: prepared };
-  };
-  let original = snapshot;
-  let owner = runId;
-  const seen = new Set<string>(owner ? [owner] : []);
-  while (original.candidateOf !== undefined) {
-    const originId = original.candidateOf;
-    if (typeof originId !== 'string' || !originId || seen.has(originId))
-      reject('origin cycle or identity');
-    seen.add(originId);
-    if (owner) {
-      const row = store.db.prepare('SELECT command FROM runs WHERE id=?').get(owner);
-      if (
-        !row ||
-        JSON.parse(String(row.command)).candidateOf !== originId ||
-        !!original.judgmentRecovery !== !!JSON.parse(String(row.command)).judgmentRecovery
-      )
-        reject('command origin');
-    }
-    let source: ReturnType<Store['run']> | undefined;
-    try {
-      source = store.run(originId);
-    } catch {
-      reject('origin missing');
-    }
-    if (
-      !source ||
-      source.chatId !== original.chatId ||
-      source.parentRevision !== original.parentRevision ||
-      source.request !== original.request ||
-      ['queued', 'running'].includes(source.status)
-    )
-      reject('origin scope');
-    if (
-      original.judgmentRecovery &&
-      (!canRecoverMainJudgment(source!) ||
-        !isDeepStrictEqual(original.mainJudgment, source!.snapshot.mainJudgment))
-    )
-      reject('judgment recovery input');
-    const prior = source!.snapshot;
-    if (
-      prior.branchId === original.branchId ||
-      !isDeepStrictEqual(frozenInput(original), frozenInput(prior))
-    )
-      reject('frozen source input');
-    if (prior.promptCompilation && (!prior.contextPlan || prior.contextPlan.status === 'ready')) {
-      if (
-        !isDeepStrictEqual(original.promptCompilation, prior.promptCompilation) ||
-        !isDeepStrictEqual(original.loreContext, prior.loreContext)
-      )
-        reject('frozen compilation');
-    }
-    original = prior;
-    owner = source!.id;
-  }
-  return original === snapshot ? snapshot : { ...snapshot, branchId: original.branchId };
-}
 
 /** Persist context work without replacing the immutable behavior reservation with its runtime view. */
 export function persistedContextSnapshot(

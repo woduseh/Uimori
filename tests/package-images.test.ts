@@ -1,6 +1,6 @@
 import { nativeContent } from './fixtures/native-content.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
-import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
+import { createFixtureChat } from './fixtures/chat.js';
 import { resolveInlineImage } from '../web/image-placement.js';
 import { afterEach, expect, test } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -11,7 +11,6 @@ import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
-import { forkChat } from '../server/chat-fork.js';
 import {
   readerImageAssets,
   decodeImage,
@@ -256,105 +255,6 @@ test('blob decoding enforces allowed signatures, canonical encoding and the per-
   expect(
     putImageBlob(store.product, { mime: 'image/png', base64: png.toString('base64') })
   ).toEqual(blob);
-});
-
-test('bundle prepare validates every reference and rolls back inserted blobs on a later mismatch', async () => {
-  const original = fixture(),
-    content = save(original.store, [image(original.store)]);
-  const exported = await injectWithFixtureBot(original.app, {
-    method: 'POST',
-    url: '/api/package-bundles/export',
-    payload: { package: content.package },
-  });
-  expect(exported.statusCode).toBe(200);
-  const bundle = exported.json(),
-    target = fixture();
-  for (const forge of [
-    (b: any) => {
-      b.images = [];
-    },
-    (b: any) => {
-      b.images[0].hash = '0'.repeat(64);
-    },
-    (b: any) => {
-      b.images[0].revision = 2;
-    },
-    (b: any) => {
-      b.package.images[0].mime = 'image/jpeg';
-    },
-  ]) {
-    const corrupted = structuredClone(bundle);
-    forge(corrupted);
-    const before = target.store.product.export().tables;
-    const response = await injectWithFixtureBot(target.app, {
-      method: 'POST',
-      url: '/api/package-bundles/prepare',
-      payload: corrupted,
-    });
-    expect(response.statusCode).toBeGreaterThanOrEqual(400);
-    expect(target.store.product.export().tables).toEqual(before);
-  }
-  const prepared = await injectWithFixtureBot(target.app, {
-    method: 'POST',
-    url: '/api/package-bundles/prepare',
-    payload: bundle,
-  });
-  expect(prepared.statusCode).toBe(200);
-  expect(prepared.json().package).toEqual(content.package);
-  expect(() => save(fixture().store, content.package!.images!)).toThrow();
-});
-
-test('completed package images survive fork and archive, and forged or missing blob records roll back', () => {
-  const { store } = fixture(),
-    item = image(store),
-    content = save(store, [item]),
-    chat = createFixtureChat(store, 'Synthetic', 'calm', { botId: content.id });
-  attach(store, chat.id, content);
-  const source = finish(store, begin(store, chat.id));
-  const before = completeImage(store, source);
-  const copied = forkChat(store, chat.id, {
-    fromRevision: source.id,
-    idempotencyKey: 'image-fork',
-  });
-  const detail = store.detail(copied.id),
-    copiedSource = detail.sources[0],
-    copiedJob = detail.jobs.find((job) => job.kind === 'image')!;
-  expect(copiedJob.result?.annotations?.[0]).toMatchObject({
-    assetRef: before.result!.annotations![0].assetRef,
-    assetHash: item.blobHash,
-    blockAnchor: splitSource(copiedSource)[0].anchor,
-  });
-  expect(
-    readerImageAssets(store, copied.id, [copiedSource.id]).find(
-      (asset) => asset.id === before.result!.annotations![0].assetRef
-    )
-  ).toMatchObject({ chatId: copied.id, hash: item.blobHash, revision: content.revision });
-  const archive = store.product.export(),
-    restored = fixture();
-  expect(restored.store.product.import(archive)).toEqual({ restored: true, chats: 2 });
-  expect(restored.store.detail(copied.id)).toEqual(detail);
-  for (const forge of [
-    (a: any) => {
-      a.tables.versions = a.tables.versions.filter((row: any) => row.kind !== 'package-image');
-    },
-    (a: any) => {
-      const row = a.tables.versions.find((r: any) => r.kind === 'package-image');
-      const body = JSON.parse(row.body);
-      body.hash = '0'.repeat(64);
-      row.body = JSON.stringify(body);
-    },
-    (a: any) => {
-      const row = a.tables.versions.find((r: any) => r.kind === 'package-image');
-      row.revision = 2;
-    },
-  ]) {
-    const target = fixture(),
-      corrupted = structuredClone(archive);
-    forge(corrupted);
-    const baseline = target.store.product.export().tables;
-    expect(() => target.store.product.import(corrupted)).toThrow();
-    expect(target.store.product.export().tables).toEqual(baseline);
-  }
 });
 
 test('one Reader page retains different revisions of the same package image ref and resolves exact hashes', () => {

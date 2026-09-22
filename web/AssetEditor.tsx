@@ -1,3 +1,5 @@
+import { AssetMetadataEditor } from './AssetMetadataEditor.js';
+import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useRef, useState } from 'react';
 import { ImageAddIcon } from './ui-icons.js';
@@ -66,8 +68,11 @@ export function AssetEditor({
     setMessage('');
     onError('');
     try {
-      if (!['image/png', 'image/jpeg'].includes(file.type) || file.size > 2_000_000)
-        throw new Error('2MB 이하 PNG 또는 JPEG를 선택해 주세요.');
+      if (
+        !PACKAGE_IMAGE_MIMES.includes(file.type as (typeof PACKAGE_IMAGE_MIMES)[number]) ||
+        file.size > 64 * 1024 * 1024
+      )
+        throw new Error('64MiB 이하 이미지 파일을 선택해 주세요. 저장할 때 WebP로 변환해요.');
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result).split(',')[1]);
@@ -107,6 +112,7 @@ export function AssetEditor({
             <figure key={asset.id}>
               <img src={asset.url} alt={asset.description || asset.title} loading="lazy" />
               <figcaption>
+                {!asset.packageOwner && <AssetMetadataEditor asset={asset} onSaved={refresh} />}
                 {asset.title}
                 <small>
                   {[asset.actor, asset.outfit, asset.location].filter(Boolean).join(' · ')} ·{' '}
@@ -164,7 +170,7 @@ export function AssetEditor({
               ref={fileInput}
               aria-label="PNG 또는 JPEG 이미지"
               type="file"
-              accept="image/png,image/jpeg"
+              accept="image/png,image/jpeg,image/webp,image/avif,image/gif"
               required
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />

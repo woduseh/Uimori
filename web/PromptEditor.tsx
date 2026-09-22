@@ -17,13 +17,13 @@ import {
 import { AgentCollaborationEditor, agentCollaborationIssue } from './AgentCollaborationEditor.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import {
-  EditorDraftProvider,
-  EditorDraftStatus,
-  EditorDraftStatusButton,
-  useServerEditDraft,
+  ResourceEditorProvider,
+  ResourceEditorStatus,
+  ResourceEditorActions,
+  useResourceEditor,
   useEditorSaveCommand,
-} from './editor-workspace-context.js';
-import type { PromptDraftModel } from '../core/edit-drafts.js';
+} from './resource-editor.js';
+import type { PromptEditModel } from '../core/resource-editing.js';
 import './prompt-editor.css';
 
 const labels: Record<PromptRole, string> = { main: '작문', translation: '번역' };
@@ -132,14 +132,14 @@ export function PromptEditor({
     });
   }, [library.promptPresets, localPresets, composerDirty]);
   const draft = drafts[role];
-  const model: PromptDraftModel = {
+  const model: PromptEditModel = {
     title: draft.title,
     role,
     program: draft.program,
     values:
       controlDraftCache.current[`${role}:${draft.source}`]?.values ?? draft.base?.values ?? {},
   };
-  const shared = useServerEditDraft({
+  const shared = useResourceEditor({
     editorKey: draft.base
       ? `prompt-preset:${draft.base.id}`
       : `new:prompt-preset:${role}:${draft.source}`,
@@ -147,10 +147,10 @@ export function PromptEditor({
     targetId: draft.base?.id ?? null,
     model,
     onRestore: (restored) => {
-      const restoredModel = restored.model as PromptDraftModel;
+      const restoredModel = restored.model as PromptEditModel;
       const base = restored.targetId
         ? {
-            ...(restored.baseModel as PromptDraftModel),
+            ...(restored.baseModel as PromptEditModel),
             id: restored.targetId,
             revision: restored.baseRevision!,
           }
@@ -209,7 +209,6 @@ export function PromptEditor({
     if (
       busy ||
       !shared.state.ready ||
-      pendingTemplate ||
       collaborationIssue ||
       !draft.title.trim() ||
       (update && !draft.base)
@@ -219,7 +218,7 @@ export function PromptEditor({
     setError('');
     setStatus('');
     try {
-      const saveModel: PromptDraftModel = {
+      const saveModel: PromptEditModel = {
         title: draft.title.trim(),
         role,
         program: validateRisuPrompt(draft.program),
@@ -271,7 +270,7 @@ export function PromptEditor({
     return save(!!draft.base);
   });
   const pendingSavedText = draft.source !== 'builtin' && draft.source !== 'new' && !draft.base;
-  if (!shared.state.ready) return <EditorDraftStatus value={shared} />;
+  if (!shared.state.ready) return <ResourceEditorStatus value={shared} />;
   const saveActions = (
     <div className="prompt-save-actions">
       <div className="prompt-save-buttons">
@@ -280,7 +279,6 @@ export function PromptEditor({
           disabled={
             busy ||
             pendingSavedText ||
-            pendingTemplate ||
             !!collaborationIssue ||
             !draft.title.trim() ||
             (!!draft.base && !draft.dirty)
@@ -304,9 +302,7 @@ export function PromptEditor({
               <button
                 type="button"
                 className="secondary"
-                disabled={
-                  pendingSavedText || pendingTemplate || !!collaborationIssue || !draft.title.trim()
-                }
+                disabled={pendingSavedText || !!collaborationIssue || !draft.title.trim()}
                 onClick={() => void save(false)}
               >
                 <CopyIcon size={18} aria-hidden="true" /> 복사본으로 저장
@@ -420,7 +416,7 @@ export function PromptEditor({
     </div>
   );
   return (
-    <EditorDraftProvider value={shared}>
+    <ResourceEditorProvider value={shared}>
       <section
         className="prompt-editor"
         data-testid="prompt-editor"
@@ -428,7 +424,7 @@ export function PromptEditor({
       >
         <div className="prompt-editor-heading">
           {heading ?? <h2>{draft.title || '프롬프트 편집'}</h2>}
-          <EditorDraftStatusButton value={shared} />
+          <ResourceEditorActions value={shared} />
           {saveActions}
           {headingTrailing}
         </div>
@@ -497,6 +493,6 @@ export function PromptEditor({
           onDismiss={() => setError('')}
         />
       </section>
-    </EditorDraftProvider>
+    </ResourceEditorProvider>
   );
 }

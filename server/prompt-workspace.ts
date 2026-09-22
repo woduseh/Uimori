@@ -204,7 +204,7 @@ function validateModelRoutes(value: unknown): ModelWorkspace['routes'] {
 export function modelWorkspace(store: Store): ModelWorkspace {
   const current = promptWorkspace(store);
   return {
-    mainJudgmentEnabled: current.mainJudgmentEnabled !== false,
+    mainJudgmentEnabled: current.mainJudgmentEnabled === true,
     mainJudgmentThreshold: mainJudgmentThreshold(current.mainJudgmentThreshold),
     revision: current.revision,
     titleModel: workspaceModelRef(current, 'title'),

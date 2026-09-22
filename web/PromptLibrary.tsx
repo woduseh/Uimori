@@ -23,7 +23,7 @@ import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
 import { RisuPresetImport } from './RisuPresetImport.js';
 import { PromptTemplatesDialog, type PromptTemplate } from './PromptTemplatesDialog.js';
-import { discardActiveEditor, saveActiveEditor } from './editor-workspace-context.js';
+import { discardActiveEditor, saveActiveEditor } from './resource-editor.js';
 import {
   LibraryFolders,
   LibraryItemMenu,

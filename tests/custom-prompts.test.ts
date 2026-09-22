@@ -246,11 +246,11 @@ describe('custom prompt native request/response through actual loopback HTTP, no
       ] as const) {
         const value = request(role, contract, variant.protocol);
         const result = await executeProvider(
-          { id: 'custom-native', ...variant, credentialEnv: 'UIMORI_PROVIDER_CUSTOM_TEST' },
+          { id: 'custom-native', ...variant, credentialRef: 'UIMORI_PROVIDER_CUSTOM_TEST' },
           value,
           {
             signal: new AbortController().signal,
-            approvedOrigins: [new URL(variant.endpoint).origin],
+
             resolveCredential: () => 'synthetic-custom-prompt-token',
             onWire: (wire) => {
               wires.push(wire);

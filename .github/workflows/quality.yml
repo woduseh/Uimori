@@ -62,7 +62,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run build
       - name: Server persistence, restart and backup recovery
-        run: npm test -- tests/server.test.ts tests/chat-backup.test.ts
+        run: npm test -- tests/server.test.ts tests/personal-workspace-flow.test.ts
       - name: Install Chromium for Reader recovery
         run: |
           npx playwright install --with-deps chromium

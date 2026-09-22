@@ -162,13 +162,13 @@ function routedSnapshot(endpoint: string): RunSnapshot {
     },
   };
 }
-function runnerHooks(origin: string, extra: Partial<MainHooks> = {}) {
+function runnerHooks(_origin: string, extra: Partial<MainHooks> = {}) {
   const inputs: ModelInput[] = [];
   const tools: ToolEvent[] = [];
   const attempts: { id: string; request: WireRecord; result?: unknown }[] = [];
   const hooks: MainHooks = {
     signal: new AbortController().signal,
-    approvedOrigins: [origin],
+
     authorize: (value) => value,
     onInput: (value) => {
       inputs.push(value);
@@ -494,8 +494,7 @@ describe('server main runner through the actual loopback adapter', () => {
     expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('Mira');
   });
 });
-const options = (origin: string, extra: Partial<Parameters<typeof executeProvider>[2]> = {}) => ({
-  approvedOrigins: [origin],
+const options = (_origin: string, extra: Partial<Parameters<typeof executeProvider>[2]> = {}) => ({
   signal: new AbortController().signal,
   ...extra,
 });
@@ -645,7 +644,7 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     expect(() =>
       parseCatalog({
         models: [],
-        credentialEnv: 'UIMORI_PROVIDER_OTHER',
+        credentialRef: 'UIMORI_PROVIDER_OTHER',
         preset: 'override',
       })
     ).toThrow('UNSUPPORTED_OPTIONS');
@@ -659,7 +658,7 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     ).toThrow('INVALID_USAGE');
   });
 
-  test('P12 P04 refuses unapproved origins, redirects and connection options; credentials stay server-side and redacted', async () => {
+  test('P12 P04 rejects implicit redirects and malformed connection options; credentials stay server-side and redacted', async () => {
     const target = await fixture((_req, response) => {
       response.end('must not follow');
     });
@@ -676,7 +675,7 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     });
     const secret = 'SYNTHETIC_TEST_CREDENTIAL_DO_NOT_LOG';
     const records: WireRecord[] = [];
-    const bound = { ...connection(server.endpoint), credentialEnv: 'UIMORI_PROVIDER_FIXTURE' };
+    const bound = { ...connection(server.endpoint), credentialRef: 'UIMORI_PROVIDER_FIXTURE' };
     const input = request();
     input.input.source = { secret, text: `accidental ${secret} inside content` };
     const outcome = await executeProvider(
@@ -698,9 +697,8 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     expect(records[0].headers.authorization).toBe('[REDACTED]');
     expect(JSON.stringify(bound)).not.toContain(secret);
     expect(
-      (await executeProvider(connection(server.endpoint), request(), options(target.origin))).error
-        ?.code
-    ).toBe('ENDPOINT_NOT_APPROVED');
+      (await executeProvider(connection(server.endpoint), request(), options(target.origin))).status
+    ).toBe('completed');
     const redirect = await executeProvider(
       connection(`${server.origin}/redirect`),
       request(),
@@ -714,47 +712,45 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
       `${server.endpoint}?api_key=secret`,
       `${server.endpoint}#fragment`,
     ]) {
-      expect(() => validateConnection(connection(endpoint), [server.origin])).toThrow(
-        'ENDPOINT_NOT_APPROVED'
-      );
+      expect(() => validateConnection(connection(endpoint))).toThrow('INVALID_ENDPOINT');
     }
+    expect(() => validateConnection({ ...bound, headers: { authorization: 'escape' } })).toThrow(
+      'UNSUPPORTED_OPTIONS'
+    );
     expect(() =>
-      validateConnection({ ...bound, headers: { authorization: 'escape' } }, [server.origin])
-    ).toThrow('UNSUPPORTED_OPTIONS');
-    expect(() =>
-      validateConnection({ ...bound, credentialEnv: 'INVALID-NAME' }, [server.origin])
+      validateConnection({ ...bound, credentialRef: 'invalid reference with spaces' })
     ).toThrow('INVALID_CREDENTIAL_REFERENCE');
-    expect(() =>
-      validateConnection(connection('https://example.com/turn'), ['https://example.com'])
-    ).toThrow('FIXTURE_REQUIRES_LOOPBACK');
+    expect(() => validateConnection(connection('https://example.com/turn'))).toThrow(
+      'FIXTURE_REQUIRES_LOOPBACK'
+    );
   });
 
   test('stored connection settings reach the transport only through the narrowing helper', () => {
-    const origins = ['http://127.0.0.1:9'];
+    const _origins = ['http://127.0.0.1:9'];
     const stored: Connection = {
       id: 'local-fixture',
       revision: 3,
       title: 'Fixture connection',
       protocol: 'fixture-sse-v1',
       endpoint: 'http://127.0.0.1:9/turn',
-      credentialEnv: 'UIMORI_PROVIDER_FIXTURE',
+      credentialRef: 'UIMORI_PROVIDER_FIXTURE',
       enabled: true,
       catalog: [],
       catalogError: null,
       catalogUpdatedAt: null,
     };
     // Management fields make an otherwise valid stored setting unusable at the transport boundary.
-    expect(() => validateConnection(stored, origins)).toThrow('UNSUPPORTED_OPTIONS');
+    expect(() => validateConnection(stored)).toThrow('UNSUPPORTED_OPTIONS');
     const narrowed = transportConnection(stored);
     expect(narrowed).toEqual({
       id: stored.id,
       protocol: stored.protocol,
       endpoint: stored.endpoint,
-      credentialEnv: stored.credentialEnv,
+      credentialRef: stored.credentialRef,
     });
-    expect(validateConnection(narrowed, origins)).toEqual(narrowed);
-    const { credentialEnv: _anonymous, ...withoutCredential } = stored;
-    expect(transportConnection(withoutCredential)).not.toHaveProperty('credentialEnv');
+    expect(validateConnection(narrowed)).toEqual(narrowed);
+    const { credentialRef: _anonymous, ...withoutCredential } = stored;
+    expect(transportConnection(withoutCredential)).not.toHaveProperty('credentialRef');
   });
 
   test('P05 P06 keeps refusal, trailing usage, partial output and remote errors distinct without retry', async () => {

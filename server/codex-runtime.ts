@@ -1129,7 +1129,7 @@ function assertCodexConnection(connection: ProviderConnection): void {
   if (
     connection.protocol !== 'codex-app-server-v1' ||
     connection.endpoint !== CODEX_ENDPOINT ||
-    connection.credentialEnv
+    connection.credentialRef
   )
     error('CODEX_INVALID_CONNECTION');
 }

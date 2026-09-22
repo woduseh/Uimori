@@ -127,12 +127,17 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     let editor: HelperEditor | undefined;
     if (body.editor !== undefined) {
       const input = record(body.editor);
-      fields(input, ['draftId', 'revision', 'title', 'kind']);
+      fields(input, ['targetId', 'revision', 'title', 'kind', 'model']);
+      if (!['content', 'prompt-preset', 'prompt-workspace'].includes(input.kind))
+        throw new HttpError(400, 'Invalid editor kind');
       editor = {
-        draftId: text(input.draftId, 'draft ID', 100),
-        revision: number(input.revision, 'draft revision'),
+        targetId: input.targetId === null ? null : text(input.targetId, 'resource ID', 100),
+        revision: input.revision === null ? null : number(input.revision, 'revision'),
         title: text(input.title, 'editor title', 200, true),
-        kind: text(input.kind, 'editor kind', 100),
+        kind: input.kind,
+        ...(input.model === undefined
+          ? {}
+          : { model: record(input.model) as import('../core/resource-editing.js').ResourceModel }),
       };
     }
     return publicTask(

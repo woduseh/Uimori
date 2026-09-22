@@ -12,8 +12,8 @@ import {
   type ModelPreset,
   type ProviderProtocol,
 } from '../core/product.js';
-import type { Run, RunSnapshot } from '../core/types.js';
-import { installJevFixture } from './fixtures/jev.js';
+import type { Run } from '../core/types.js';
+import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 
 const roots: Record<ProviderProtocol, string> = {
   'fixture-sse-v1': 'http://127.0.0.1:9/turn',
@@ -58,7 +58,7 @@ afterEach(async () => {
   }
 });
 async function application(
-  approvedOrigins = [...new Set(Object.values(roots).map((value) => new URL(value).origin))]
+  _approvedOrigins = [...new Set(Object.values(roots).map((value) => new URL(value).origin))]
 ) {
   const directory = await mkdtemp(join(tmpdir(), 'Uimori provider settings '));
   const item: (typeof owned)[number] = { directory };
@@ -68,7 +68,6 @@ async function application(
     buildId: 'provider-settings-synthetic',
     instanceId: randomUUID(),
     testMode: true,
-    approvedOrigins,
   });
   await item.app.ready();
   return item.app;
@@ -116,7 +115,7 @@ const saved = (value: Connection, changes: Record<string, unknown> = {}) =>
   connectionBody(value.protocol, {
     title: value.title,
     endpoint: value.endpoint,
-    ...(value.credentialEnv ? { credentialEnv: value.credentialEnv } : {}),
+    ...(value.credentialRef ? { credentialRef: value.credentialRef } : {}),
     enabled: value.enabled,
     expectedRevision: value.revision,
     ...changes,
@@ -136,7 +135,7 @@ describe('provider settings, catalogs and archive contracts', () => {
         })
       );
       expect(connection.protocol).toBe(protocol);
-      expect(connection).not.toHaveProperty('credentialEnv');
+      expect(connection).not.toHaveProperty('credentialRef');
       expect(connection.endpoint).toBe(
         protocol === 'fixture-sse-v1' ? roots[protocol] + '/' : roots[protocol]
       );
@@ -150,16 +149,16 @@ describe('provider settings, catalogs and archive contracts', () => {
         connectionBody(protocol, { endpoint: roots[protocol] + '?api_key=synthetic' }),
         400
       );
-      for (const credentialEnv of [null, false, 5, 'INVALID-NAME', '1KEY', 'A'.repeat(201)])
-        await request(app, '/connections', connectionBody(protocol, { credentialEnv }), 400);
-      for (const credentialEnv of ['OPENAI_API_KEY', 'myGatewayToken', '_CUSTOM_2'])
+      for (const credentialRef of [null, false, 5, 'INVALID-NAME', '1KEY', 'A'.repeat(201)])
+        await request(app, '/connections', connectionBody(protocol, { credentialRef }), 400);
+      for (const credentialRef of ['OPENAI_API_KEY', 'myGatewayToken', '_CUSTOM_2'])
         expect(
           await request<Connection>(
             app,
             '/connections',
-            connectionBody(protocol, { credentialEnv })
+            connectionBody(protocol, { credentialRef })
           )
-        ).toHaveProperty('credentialEnv', credentialEnv);
+        ).toHaveProperty('credentialRef', credentialRef);
     }
     expect(
       (
@@ -193,7 +192,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     await request(
       app,
       '/connections',
-      connectionBody('openai-chat-v1', { endpoint: 'http://127.0.0.1:9999/v1', credentialEnv: env })
+      connectionBody('openai-chat-v1', { endpoint: 'http://127.0.0.1:9999/v1', credentialRef: env })
     );
     for (const requestTier of [null, 'auto', 'priority', 1])
       await request(app, '/connections', connectionBody('vertex-gemini-v1', { requestTier }), 400);
@@ -437,7 +436,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       connection = await request<Connection>(
         app,
         '/connections',
-        connectionBody('openai-chat-v1', { credentialEnv: env })
+        connectionBody('openai-chat-v1', { credentialRef: env })
       );
     const model = await request<ModelPreset>(
       app,
@@ -497,6 +496,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       return stream('The current configuration writes the next synthetic sentence.');
     });
     const judgments = installJevFixture();
+    configureJevFixture(app.store);
     try {
       const first = await request<Run>(app, `/chats/${chat.id}/runs`, command());
       await began;
@@ -564,165 +564,12 @@ describe('provider settings, catalogs and archive contracts', () => {
     }
   });
 
-  test('archives a model against its saved capability protocol even after its current connection protocol changes', async () => {
-    const source = await application(),
-      connection = await request<Connection>(
-        source,
-        '/connections',
-        connectionBody('openai-responses-v1')
-      );
-    const model = await request<ModelPreset>(
-      source,
-      '/model-presets',
-      modelBody(connection, { reasoningEffort: 'high', inputTokenLimit: 272000 })
-    );
-    const changed = await request<Connection>(
-      source,
-      `/connections/${connection.id}`,
-      connectionBody('anthropic-messages-v1', { expectedRevision: connection.revision }),
-      200,
-      'PUT'
-    );
-    expect(model.capabilityProtocol).toBe('openai-responses-v1');
-    expect(() => source.store.product.modelSnapshot(model.id)).toThrow(
-      'Connection protocol changed'
-    );
-    const archive = source.store.product.export(),
-      target = await application();
-    expect(target.store.product.import(archive)).toMatchObject({ restored: true });
-    expect(target.store.product.get('model', model.id)).toEqual(model);
-    const restored = target.store.product.get<Connection>('connection', changed.id);
-    expect(restored).toMatchObject({ protocol: 'anthropic-messages-v1', enabled: false });
-    const enabled = await request<Connection>(
-      target,
-      `/connections/${restored.id}`,
-      saved(restored, { enabled: true }),
-      200,
-      'PUT'
-    );
-    expect(() => target.store.product.modelSnapshot(model.id)).toThrow(
-      'Connection protocol changed'
-    );
-    const reviewed = await request<ModelPreset>(
-      target,
-      `/model-presets/${model.id}`,
-      modelBody(enabled, { expectedRevision: model.revision, outputEffort: 'high' }),
-      200,
-      'PUT'
-    );
-    expect(reviewed).toMatchObject({
-      id: model.id,
-      capabilityProtocol: 'anthropic-messages-v1',
-      modelId: 'claude-opus-5',
-    });
-    expect(target.store.product.modelSnapshot(model.id)).toEqual({
-      ...reviewed,
-      connection: enabled,
-      pricingSnapshot: expect.objectContaining({
-        protocol: 'anthropic-messages-v1',
-        modelId: reviewed.modelId,
-        source: 'official',
-      }),
-    });
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('reads native catalogs using their exact base path and auth headers and keeps only published limits and option values', async () => {
-    const app = await application();
-    for (const protocol of native) {
-      const credentialEnv =
-        protocol === 'vercel-chat-v1' || protocol === 'openai-chat-v1' ? undefined : env;
-      const connection = await request<Connection>(
-        app,
-        '/connections',
-        connectionBody(protocol, { credentialEnv })
-      );
-      // One entry carries every provider's published shape; each protocol keeps only its own fields.
-      vi.mocked(fetch).mockResolvedValueOnce(
-        response({
-          data: [
-            {
-              id: 'synthetic-model',
-              display_name: 'Synthetic label',
-              capabilities: {
-                tools: true,
-                effort: {
-                  supported: true,
-                  low: { supported: true },
-                  medium: { supported: true },
-                  high: { supported: true },
-                  xhigh: { supported: false },
-                  max: { supported: true },
-                },
-                thinking: { supported: true, types: { adaptive: { supported: true } } },
-                structured_outputs: { supported: true },
-              },
-              max_tokens: 128000,
-              max_input_tokens: 0,
-              context_window: 400000,
-              tags: ['reasoning', 'tool-use'],
-              reasoning_options: [{ type: 'effort', values: ['low', 'high', 'ultra'] }],
-              pricing: { input: '0.1' },
-            },
-          ],
-          has_more: false,
-        })
-      );
-      const result = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
-      expect(result.catalogError).toBeNull();
-      expect(result.catalog).toEqual([
-        {
-          id: 'synthetic-model',
-          name: 'Synthetic label',
-          priceRevision: null,
-          ...(protocol === 'anthropic-messages-v1'
-            ? {
-                capabilities: { tools: null, structuredOutput: true },
-                limits: { maxOutputTokens: 128000 },
-                options: {
-                  thinking: ['low', 'medium', 'high', 'max'],
-                  thinkingModes: ['adaptive'],
-                },
-              }
-            : protocol === 'vercel-chat-v1'
-              ? {
-                  capabilities: { tools: true, structuredOutput: null },
-                  limits: { maxOutputTokens: 128000, inputTokenLimit: 400000 },
-                  options: { thinking: ['low', 'high'] },
-                }
-              : { capabilities: { tools: null, structuredOutput: null } }),
-        },
-      ]);
-      const exported = app.store.product.export();
-      const restored = await application();
-      expect(restored.store.product.import(exported)).toMatchObject({ restored: true });
-      expect(restored.store.product.get<Connection>('connection', connection.id).catalog).toEqual(
-        result.catalog
-      );
-      const [url, init] = vi.mocked(fetch).mock.calls.at(-1)!;
-      const address = new URL(String(url));
-      expect(address.origin + address.pathname).toBe(roots[protocol] + '/models');
-      expect(init).toMatchObject({ method: 'GET', redirect: 'error' });
-      const headers = new Headers(init?.headers);
-      if (protocol === 'anthropic-messages-v1') {
-        expect(headers.get('x-api-key')).toBe('SYNTHETIC_TEST_VALUE');
-        expect(headers.get('anthropic-version')).toBe('2023-06-01');
-        expect(address.searchParams.get('limit')).toBe('1000');
-        expect(headers.has('authorization')).toBe(false);
-      } else
-        expect(headers.get('authorization')).toBe(
-          credentialEnv ? 'Bearer SYNTHETIC_TEST_VALUE' : null
-        );
-      expect(JSON.stringify(result)).not.toContain('SYNTHETIC_TEST_VALUE');
-    }
-  });
-
   test('collects bounded Anthropic pages in order without exposing partial or malformed pagination', async () => {
     const app = await application();
     const connection = await request<Connection>(
       app,
       '/connections',
-      connectionBody('anthropic-messages-v1', { credentialEnv: env })
+      connectionBody('anthropic-messages-v1', { credentialRef: env })
     );
     const seen: string[] = [];
     vi.mocked(fetch).mockImplementation(async (url) => {
@@ -766,7 +613,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     const unapproved = await request<Connection>(
       unapprovedApp,
       '/connections',
-      connectionBody('openai-chat-v1', { credentialEnv: env })
+      connectionBody('openai-chat-v1', { credentialRef: env })
     );
     expect(await request(unapprovedApp, `/connections/${unapproved.id}/catalog`, {})).toMatchObject(
       { catalogError: 'CATALOG_UNAVAILABLE' }
@@ -775,7 +622,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     const invalid = await request<Connection>(
       app,
       '/connections',
-      connectionBody('openai-chat-v1', { credentialEnv: env })
+      connectionBody('openai-chat-v1', { credentialRef: env })
     );
     expect(await request(app, `/connections/${invalid.id}/catalog`, {})).toMatchObject({
       catalogError: 'CATALOG_UNAVAILABLE',
@@ -837,231 +684,5 @@ describe('provider settings, catalogs and archive contracts', () => {
     accept(response({ data: [{ id: 'late-model' }] }));
     await refresh;
     expect(app.store.product.get('connection', connection.id)).toEqual(edited);
-  });
-
-  test('restores current native settings independently from frozen run settings while removing credentials and disabling connections', async () => {
-    const source = await application();
-    const product = source.store.product;
-    const models: ModelPreset[] = [];
-    const connections: Connection[] = [];
-    for (const protocol of native) {
-      const connection = await request<Connection>(
-        source,
-        '/connections',
-        connectionBody(protocol, { credentialEnv: env })
-      );
-      connections.push(connection);
-      models.push(
-        await request<ModelPreset>(
-          source,
-          '/model-presets',
-          modelBody(connection, {
-            structuredOutput: false,
-            timeoutMs: 1800000,
-            ...(protocol === 'anthropic-messages-v1'
-              ? { outputEffort: 'high', thinkingMode: 'adaptive', serviceTier: 'auto' }
-              : {
-                  reasoningEffort: 'high',
-                  ...(protocol === 'openai-responses-v1'
-                    ? {
-                        serviceTier: 'flex',
-                        verbosity: 'low',
-                        reasoningMode: 'pro',
-                        reasoningContext: 'all_turns',
-                      }
-                    : {}),
-                }),
-          })
-        )
-      );
-    }
-    const vertex = await request<Connection>(
-      source,
-      '/connections',
-      connectionBody('vertex-gemini-v1', { credentialEnv: env })
-    );
-    const chat = createFixtureChat(source.store, 'Synthetic provider snapshot');
-    const initial = product.profile(chat.id);
-    const profile = updateTestProfile(product, chat.id, {
-      expectedRevision: initial.revision,
-      packageAttachments: initial.packageAttachments,
-
-      routes: {
-        main: ref(models[0]),
-        translation: ref(models[1]),
-        status: ref(models[2]),
-      },
-      image: false,
-    });
-    const captured = product.snapshot(chat.id)!;
-    const prompt = 'Synthetic snapshot without provider execution';
-    const run = source.store.createRun(
-      chat.id,
-      {
-        request: prompt,
-        expectedRevision: null,
-        expectedSettingsRevision: chat.settingsRevision,
-        expectedProfileRevision: profile.revision,
-        idempotencyKey: randomUUID(),
-      },
-      (current) =>
-        ({
-          chatId: chat.id,
-          parentRevision: null,
-          settingsRevision: current.settingsRevision,
-          settings: current.settings,
-          request: prompt,
-          history: [],
-          resources: product.resources(chat.id, captured),
-          profile: captured,
-        }) satisfies RunSnapshot
-    ).run;
-    await request(
-      source,
-      '/model-presets/' + models[0].id,
-      {
-        ...modelBody(connections[0], {
-          structuredOutput: true,
-          reasoningEffort: 'low',
-          timeoutMs: 1,
-        }),
-        expectedRevision: models[0].revision,
-      },
-      200,
-      'PUT'
-    );
-    const archive = product.export();
-    const original = JSON.stringify(archive);
-    const target = await application();
-    expect(target.store.product.import(archive)).toMatchObject({ restored: true, chats: 1 });
-    expect(JSON.stringify(archive)).toBe(original);
-    for (const model of models)
-      expect(target.store.product.get('model', model.id)).toEqual(product.get('model', model.id));
-    expect(() => target.store.product.get('model', models[0].id, models[0].revision)).toThrow(
-      'Setting not found'
-    );
-    expect(
-      target.store.db
-        .prepare("SELECT COUNT(*) AS count FROM provider_settings WHERE kind='model'")
-        .get()?.count
-    ).toBe(models.length);
-    const frozen = target.store.run(run.id).snapshot.profile!;
-    expect(frozen.models.main).toMatchObject({
-      structuredOutput: false,
-      reasoningEffort: 'high',
-      timeoutMs: 1800000,
-    });
-    expect(frozen.models.translation).toMatchObject({
-      thinkingMode: 'adaptive',
-      outputEffort: 'high',
-      serviceTier: 'auto',
-    });
-    for (const model of Object.values(frozen.models)) {
-      expect(model!.connection.enabled).toBe(false);
-      expect(model!.connection).not.toHaveProperty('credentialEnv');
-    }
-    expect(target.store.product.get<Connection>('connection', vertex.id)).toMatchObject({
-      enabled: false,
-    });
-    expect(target.store.product.get('model', models[0].id)).toMatchObject({
-      revision: 2,
-      structuredOutput: true,
-      reasoningEffort: 'low',
-      timeoutMs: 1,
-    });
-    expect(target.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('validates archived current provider settings against their connection protocol and rolls back forged archives', async () => {
-    for (const protocol of native) {
-      const source = await application();
-      const connection = await request<Connection>(
-        source,
-        '/connections',
-        connectionBody(protocol)
-      );
-      await request(source, '/model-presets', modelBody(connection));
-      const archive = source.store.product.export();
-      for (const kind of ['model', 'connection']) {
-        const forged = structuredClone(archive);
-        const row = forged.tables.provider_settings.find((row) => row.kind === kind)!;
-        row.body = JSON.stringify({
-          ...JSON.parse(row.body),
-          ...(kind === 'model' ? { thinkingLevel: 'HIGH' } : { requestTier: 'flex' }),
-        });
-        const original = JSON.stringify(forged);
-        const target = await application();
-        expect(() => target.store.product.import(forged)).toThrow();
-        expect(JSON.stringify(forged)).toBe(original);
-        expect(target.store.product.library()).toMatchObject({
-          connections: [],
-          models: [],
-        });
-        expect(target.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      }
-    }
-  });
-
-  test('saves Fable, cache modes and unlisted IDs while rejecting protocol-level invalid combinations', async () => {
-    const app = await application(),
-      connection = await request<Connection>(
-        app,
-        '/connections',
-        connectionBody('anthropic-messages-v1')
-      );
-    const body = modelBody(connection, {
-      modelId: 'claude-fable-5-1',
-      outputEffort: 'max',
-      thinkingMode: 'adaptive',
-      cacheMode: 'automatic',
-      cacheTtl: '1h',
-    });
-    const model = await request<ModelPreset>(app, '/model-presets', body);
-    expect(model).toMatchObject({
-      outputEffort: 'max',
-      thinkingMode: 'adaptive',
-      cacheMode: 'automatic',
-      cacheTtl: '1h',
-    });
-    expect(model).not.toHaveProperty('capabilityRevision');
-    for (const change of [
-      { reasoningEffort: 'high' },
-      { cacheMode: 'disabled' },
-      {
-        evaluationTools: {
-          contextMode: 'preloaded',
-          approvalReasoningMode: 'configured',
-          maximumToolRounds: 8,
-          terminalLateCorrections: false,
-          outputRecovery: true,
-        },
-      },
-    ])
-      await request(app, '/model-presets', { ...body, ...change }, 400);
-    const pending = await request<ModelPreset>(
-      app,
-      '/model-presets',
-      modelBody(connection, { modelId: 'unreviewed-new-model' })
-    );
-    expect(pending).toMatchObject({ modelId: 'unreviewed-new-model' });
-    const archive = app.store.product.export();
-    // The retired per-model revision stamp is an unknown archive field, not a silently ignored one.
-    {
-      const forged = structuredClone(archive),
-        row = forged.tables.provider_settings.find(
-          (row) => row.kind === 'model' && row.id === model.id
-        )!;
-      row.body = JSON.stringify({ ...JSON.parse(row.body), capabilityRevision: 'legacy' });
-      const stale = await application(),
-        before = JSON.stringify(forged);
-      expect(() => stale.store.product.import(forged)).toThrow();
-      expect(JSON.stringify(forged)).toBe(before);
-      expect(stale.store.product.all('model')).toEqual([]);
-    }
-    const target = await application();
-    expect(target.store.product.import(archive)).toMatchObject({ restored: true });
-    expect(target.store.product.get('model', model.id)).toEqual(model);
-    expect(fetch).not.toHaveBeenCalled();
   });
 });

@@ -126,7 +126,6 @@ export function remoteCommand({
   origin,
   sourceRef = 'main',
   fresh,
-  migrateSchema23To24,
   image,
   checkOnly,
 }) {
@@ -160,7 +159,6 @@ export function remoteCommand({
     '--expected-origin',
     origin,
     ...(fresh ? ['--fresh'] : []),
-    ...(migrateSchema23To24 ? ['--migrate-schema-23-to-24'] : []),
     ...(image ? ['--image', image] : []),
     ...(checkOnly ? ['--check-only'] : []),
   ];
@@ -177,8 +175,6 @@ export function parseRemoteSummary(output) {
 }
 
 export async function releaseOracle(options, dependencies = {}) {
-  if (options.fresh && options['migrate-schema-23-to-24'])
-    throw new Error('--fresh and --migrate-schema-23-to-24 are mutually exclusive');
   const execute = dependencies.execute ?? runExternal;
   const check = dependencies.check ?? runReleaseChecks;
   const smoke = dependencies.smoke ?? runOracleSmoke;
@@ -218,11 +214,7 @@ export async function releaseOracle(options, dependencies = {}) {
     status: 'FAIL',
     commit,
     sourceRef,
-    mode: options.fresh
-      ? 'fresh'
-      : options['migrate-schema-23-to-24']
-        ? 'migrate-23-to-24'
-        : 'update',
+    mode: options.fresh ? 'fresh' : 'update',
     imageSource: options.image ?? 'remote-build',
     host: config.host,
     publicOrigin: access.origin,
@@ -295,7 +287,6 @@ export async function releaseOracle(options, dependencies = {}) {
       releaseDirectory,
       origin: access.origin,
       fresh: options.fresh,
-      migrateSchema23To24: options['migrate-schema-23-to-24'],
       image: options.image,
       checkOnly: options['check-only'],
     });
@@ -399,11 +390,11 @@ if (isMain(import.meta.url)) {
   try {
     const options = parseOptions(process.argv.slice(2), {
       values: ['config', 'area', 'image', 'source-ref'],
-      flags: ['full', 'fresh', 'migrate-schema-23-to-24', 'check-only', 'plan', 'help'],
+      flags: ['full', 'fresh', 'check-only', 'plan', 'help'],
     });
     if (options.help)
       console.log(
-        'npm run release:oracle -- [--config .local/oracle-release.json] [--source-ref branch] [--area verify:browser-smoke] [--full] [--fresh | --migrate-schema-23-to-24] [--image reference] [--check-only | --plan]'
+        'npm run release:oracle -- [--config .local/oracle-release.json] [--source-ref branch] [--area verify:browser-smoke] [--full] [--fresh] [--image reference] [--check-only | --plan]'
       );
     else {
       const controller = new AbortController();

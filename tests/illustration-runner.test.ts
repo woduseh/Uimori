@@ -93,7 +93,7 @@ function hooks(store: Store, extra: Partial<IllustrationRunnerHooks> = {}) {
   let progress = 0;
   const options: IllustrationRunnerHooks = {
     signal: new AbortController().signal,
-    approvedOrigins: [],
+
     authorize: (connection) => store.product.authorize(connection),
     onAttemptStart: (wire) => {
       wires.push(structuredClone(wire));
@@ -437,7 +437,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
       }),
     });
     expect(job.input.comfyui?.promptModel.modelId).toBe('fixture-prompt-writer');
-    const observed = hooks(store, { approvedOrigins: [provider.origin] });
+    const observed = hooks(store, {});
     expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
       status: 'completed',
       code: null,
@@ -477,7 +477,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
     const store = databases.create();
     const { source } = chatWithSource(store);
     let reply = JSON.stringify({ prompt: 'a lantern' });
-    const { provider, model } = await promptModel(store, () => reply);
+    const { model } = await promptModel(store, () => reply);
     const rejecting = await comfyUIFixture({ behavior: 'reject' });
     cleanups.push(rejecting.close);
     const base = (baseUrl: string) =>
@@ -493,7 +493,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
           pollIntervalMs: 20,
         },
       });
-    const observed = hooks(store, { approvedOrigins: [provider.origin] });
+    const observed = hooks(store, {});
     const rejected = reserveIllustration(store, source, 'manual', {
       settings: base(rejecting.origin),
     });
@@ -571,7 +571,6 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
       }),
     });
     const observed = hooks(store, {
-      approvedOrigins: [provider.origin],
       resolveCredential: () => 'Bearer callback-only',
       resolveComfyCredential: () => 'Bearer callback-only',
     });
@@ -612,7 +611,7 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
       },
     });
     const automatic = reserveIllustration(store, source, 'automatic', { settings });
-    const observed = hooks(store, { approvedOrigins: [provider.origin] });
+    const observed = hooks(store, {});
     expect(await runIllustrationJob(store, automatic.id, 'worker', observed.options)).toEqual({
       status: 'skipped',
       code: null,
@@ -672,7 +671,7 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
   test('a ComfyUI timeout keeps the prompt_id, never re-renders, and reconcile stores the late result', async () => {
     const store = databases.create();
     const { source } = chatWithSource(store);
-    const { provider, model } = await promptModel(store, () =>
+    const { model } = await promptModel(store, () =>
       JSON.stringify({ prompt: 'slow lantern', caption: '늦게 도착한 등불' })
     );
     const comfy = await comfyUIFixture({ delayPolls: 3 });
@@ -690,7 +689,7 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
         },
       }),
     });
-    const observed = hooks(store, { approvedOrigins: [provider.origin] });
+    const observed = hooks(store, {});
     expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
       status: 'failed',
       code: 'COMFYUI_TIMEOUT',

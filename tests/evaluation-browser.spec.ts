@@ -62,7 +62,7 @@ async function register(
   const connection = (await library(request)).connections.find((item) => item.title === title)!;
   expect(connection).toMatchObject({
     protocol: 'openai-responses-v1',
-    credentialEnv: 'Evaluation_Browser_Key',
+    credentialRef: 'Evaluation_Browser_Key',
     enabled: true,
   });
   await page.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);

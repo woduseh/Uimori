@@ -1,25 +1,15 @@
-# 실행 입력의 고정과 네이티브 실행
+# 실행 입력의 수명
 
-server/reservation-snapshot.ts는 채팅의 콘텐츠 개정, 변수, 고정 옵션, 대화 원문, 모델·프롬프트와 요약의 출처를 고정해요. 데이터베이스 트랜잭션 안에서는 외부 모델이나 카드 코드를 실행하지 않아요.
+요청이 시작되면 필요한 현재 자료와 설정을 읽어 그 실행의 입력을 구성해요. 진행 중인 요청에 다른 편집을 섞지 않으며 DB 트랜잭션 안에서 외부 모델이나 카드 코드를 실행하지 않아요. 네이티브 Risu CBS·Lua·정규식 준비는 기존 실행 경계를 사용해요.
 
-일반 요청은 예약 후 worker에서 원본 Risu 입력 콜백·CBS·정규식과 RISUP를 준비하고, JEV 로어 선별과 이야기 문맥 압축을 마친 뒤 실제 모델 요청을 구성해요. 필요한 준비가 남으면 미완성 입력으로 모델을 호출하지 않아요. 네이티브 출력 콜백과 변수 변경은 해당 결과의 출처에 연결해 저장해요.
+작업이 완료되면 메시지·변수 결과·사용량과 필요한 화면 메타데이터가 영구 결과예요. 전체 모델 입력과 도구 이벤트는 완료된 실행의 필수 기록이 아니므로 정리해요. 요청·응답 진단도 완료 후 큰 본문 대신 모델·상태·사용량·오류 정보를 남겨요. 실패한 JEV 판정을 다시 수행하는 데 필요한 후보 본문은 별도로 유지해요.
 
-작성된 first_mes와 버튼 응답에는 작성 출처를 남겨요. 이를 일반 사용자 요청이나 생성 응답으로 위장하지 않으며 작문 모델 호출을 요구하지 않아요. 미리보기와 도우미 문맥은 상태를 변경하는 카드 콜백을 다시 실행하지 않고 원본의 사본을 평가해요.
+`server/execution-snapshot.ts`가 완료 상태를 작은 표현으로 바꾸고, 필요한 새 작업에서는 현재 자료와 실제 메시지에서 실행 문맥을 다시 구성해요. SQL 컬럼 이름에 따라 JSON이 자동으로 펼쳐지는 DatabaseSync 하위 클래스나 텍스트 공유 트리거는 사용하지 않아요.
 
-## 저장된 실행 결과
+상태 확인은 `server/run-projections.ts`의 경량 조회를 사용해요. 원문 전체를 읽어야 하는 요청에서만 본문을 가져와요. 재작성·분기는 [독립 채팅 사본](CHAT-BACKUP.md)이며 과거 전체 실행의 결정적 재생을 제공하지 않아요.
 
-CBS의 사용자 이름과 페르소나 본문은 예약된 프로필과 채팅별 편집에서 함께 구성해 카드·로어·RISUP에 전달해요. 현재 라이브러리를 다시 조회하지 않아요. 입력 콜백 이후의 카드 필드·시작문·과거 메시지는 하나의 격리 Worker에서 원래 순서대로 평가하며 앞 평가의 변수 변경을 다음 평가에 전달해요. 전체 일괄 평가는 15초 제한과 취소 신호를 사용하고 실패 시 부분 결과를 채택하지 않아요. 입력·출력 콜백과 프리셋 평가는 각자의 실행 경계를 유지해요.
+## 이어 쓰기에 필요한 결과
 
-- nativeRisuExecution: 입력·출력 텍스트, 대화와 카드 필드 평가, 변수, 요청 편집 결과를 고정해요.
-- nativeRisuPresetProgram: RISUP의 CBS 평가 결과와 원본 hash를 보관해요.
-- loreSelection: JEV 선별의 후보·결과·예산·입력 hash를 보관해요. 생성형 판단 모델로 대체하지 않아요.
-- promptCompilation: 현재 네이티브 컴파일러 판과 전송 메시지를 기록해요.
-- contextBase와 contextPlan: 요약이 어느 원문·메모·분기에 근거하는지 기록해요.
+Lua가 추가·수정·이동한 메시지는 `messageChanges` 변경분으로 남겨요. 사용자 원문 수정과 충돌하면 당시 source hash를 비교해 새 사용자 수정을 보존해요. 채팅 복사와 휴대용 복원에서는 이 메시지의 식별자도 새 자료에 맞게 연결해요.
 
-재접속·포크·현재 형식 백업 복원은 이 결과와 출처를 검사하고 다시 귀속해요. 카드 코드와 외부 호출을 복원 중 재실행하지 않아요. 후보 응답은 고정된 준비 입력을 공유하지만 후보 자신의 요청 편집·출력 콜백과 변수를 갖습니다. 구형 컴파일러·변환 영수증의 호환 경로는 제공하지 않아요.
-
-## 검증
-
-예약·동시 저장·도우미의 읽기 전용 경계는 reservation-snapshot, chat-options, chat-variables-flow 테스트가 확인해요. 네이티브 준비·원문 귀속·포크·복원은 risu-native-*, source-history-storage, snapshot-archive, chat-backup-* 테스트에서 확인해요. 실제 모델 품질은 이러한 합성 회귀와 별도로 확인해야 해요.
-
-Native preparation retains distinct reserved history, logical history, processed history/messages and pre-request state. They can contain equal text, but callbacks can make them diverge. The native storage measurement in [DEVELOPMENT](DEVELOPMENT.md) quantifies duplicate text; it does not justify dropping one of these execution stages. Replacing repeated bodies with immutable content references requires archive/fork/remapping compatibility and a separate persisted-format change.
+로어 유지 상태는 `chat_lore_state`에 채팅 분기별 한 개를 저장해요. 읽은 구간과 현재 문맥만 이어가고 매 턴의 전체 모델 입력을 다시 보관하지 않아요. 원문이나 메모를 수정하면 이 상태의 출처를 확인해 무효화해요.

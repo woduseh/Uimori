@@ -1,3 +1,4 @@
+import { storeImage } from './image-storage.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
@@ -52,7 +53,7 @@ export function initIllustrations(db: DatabaseSync) {
     CREATE TABLE IF NOT EXISTS illustration_jobs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), source_revision TEXT NOT NULL REFERENCES sources(id), source_hash TEXT NOT NULL, origin TEXT NOT NULL CHECK(origin IN ('automatic','manual')), status TEXT NOT NULL, generation INTEGER NOT NULL DEFAULT 0, owner TEXT, attempt INTEGER NOT NULL DEFAULT 1, input TEXT NOT NULL, diagnostic TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS illustration_jobs_source ON illustration_jobs(source_revision,created_at);
     CREATE INDEX IF NOT EXISTS illustration_jobs_chat ON illustration_jobs(chat_id,created_at);
-    CREATE TABLE IF NOT EXISTS illustration_images (id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES illustration_jobs(id), chat_id TEXT NOT NULL REFERENCES chats(id), position INTEGER NOT NULL, mime TEXT NOT NULL, hash TEXT NOT NULL, body TEXT NOT NULL, bytes BLOB NOT NULL, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS illustration_images (id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES illustration_jobs(id), chat_id TEXT NOT NULL REFERENCES chats(id), position INTEGER NOT NULL, mime TEXT NOT NULL, hash TEXT NOT NULL REFERENCES image_blobs(hash), body TEXT NOT NULL, created_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS illustration_images_job ON illustration_images(job_id,position);
   `);
   db.prepare('INSERT OR IGNORE INTO illustration_settings(id,body) VALUES(1,?)').run(
@@ -601,9 +602,11 @@ export function completeIllustration(
       throw new IllustrationError('ILLUSTRATION_IMAGE_INVALID');
     const time = now();
     generated.forEach((image, position) => {
+      const hash = createHash('sha256').update(image.bytes).digest('hex');
+      storeImage(store.db, { hash, mime: image.mime, bytes: Buffer.from(image.bytes) });
       store.db
         .prepare(
-          'INSERT INTO illustration_images(id,job_id,chat_id,position,mime,hash,body,bytes,created_at) VALUES(?,?,?,?,?,?,?,?,?)'
+          'INSERT INTO illustration_images(id,job_id,chat_id,position,mime,hash,body,created_at) VALUES(?,?,?,?,?,?,?,?)'
         )
         .run(
           randomUUID(),
@@ -611,13 +614,12 @@ export function completeIllustration(
           row.chat_id,
           position,
           image.mime,
-          createHash('sha256').update(image.bytes).digest('hex'),
+          hash,
           json({
             caption: image.caption,
             ...(image.prompt ? { prompt: image.prompt } : {}),
             ...(image.revisedPrompt ? { revisedPrompt: image.revisedPrompt } : {}),
           }),
-          image.bytes,
           time
         );
     });
@@ -875,7 +877,7 @@ export function copyIllustrationsForFork(
         .all(job.id) as Row[])
         store.db
           .prepare(
-            'INSERT INTO illustration_images(id,job_id,chat_id,position,mime,hash,body,bytes,created_at) VALUES(?,?,?,?,?,?,?,?,?)'
+            'INSERT INTO illustration_images(id,job_id,chat_id,position,mime,hash,body,created_at) VALUES(?,?,?,?,?,?,?,?)'
           )
           .run(
             randomUUID(),
@@ -885,7 +887,6 @@ export function copyIllustrationsForFork(
             image.mime,
             image.hash,
             image.body,
-            image.bytes,
             image.created_at
           );
     }
@@ -1023,7 +1024,9 @@ export function illustrationRoutes(
   });
   app.get<{ Params: { id: string } }>('/api/illustration-images/:id', async (request, reply) => {
     const row = store.db
-      .prepare('SELECT mime,bytes FROM illustration_images WHERE id=?')
+      .prepare(
+        'SELECT b.mime,b.bytes FROM illustration_images i JOIN image_blobs b ON b.hash=i.hash WHERE i.id=?'
+      )
       .get(request.params.id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Illustration image not found');
     return reply

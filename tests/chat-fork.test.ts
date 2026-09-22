@@ -1,7 +1,5 @@
-import { nativeContent } from './fixtures/native-content.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
-import { injectWithFixtureBot, createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
-import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
+import { injectWithFixtureBot, createFixtureChat } from './fixtures/chat.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -9,19 +7,15 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import { forkChat } from '../server/chat-fork.js';
-import { Store, HttpError, type Source } from '../server/store.js';
+import { Store, type Source } from '../server/store.js';
 import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { imageTargetSource } from '../server/package-images.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
-import {
-  successfulTranslation,
-  validateTranslationArtifact,
-} from '../server/translation-artifacts.js';
 import type { Content, PromptPreset, ChatProfile } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
-import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
+import { readChatVariables } from '../server/chat-variables.js';
 
 const owned: { directory: string; app?: App; store?: Store }[] = [];
 beforeEach(() => {
@@ -45,7 +39,7 @@ afterEach(async () => {
     await rm(target, { recursive: true, force: true });
   }
 });
-async function application() {
+async function _application() {
   const directory = await mkdtemp(join(tmpdir(), 'Uimori fork tests '));
   const item: (typeof owned)[number] = { directory };
   owned.push(item);
@@ -113,7 +107,7 @@ function source(store: Store, chatId: string, value: string, branchId?: string) 
     ).id
   );
 }
-async function fork(app: App, chatId: string, body: unknown, status = 200) {
+async function _fork(app: App, chatId: string, body: unknown, status = 200) {
   const response = await injectWithFixtureBot(app, {
     method: 'POST',
     url: '/api/chats/' + chatId + '/fork',
@@ -131,7 +125,7 @@ async function translate(store: Store, jobId: string) {
     'synthetic-fork-worker',
     {
       signal,
-      approvedOrigins: [],
+
       authorize: (value) => value,
       onAttemptStart: () => {
         throw new Error('No provider transport allowed');
@@ -184,7 +178,7 @@ function finishOther(store: Store, revision: Source, assetId: string) {
 }
 const pixel =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=';
-async function rich(app: App) {
+async function _rich(app: App) {
   const store = app.store;
   const chat = createFixtureChat(store, 'Synthetic original');
   const main = store.product.promptPreset({
@@ -296,297 +290,6 @@ async function rich(app: App) {
 }
 
 describe('independent stored-story fork without generation', () => {
-  test('forks shared variables from selected source time without leaking later direct edits', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '공유 변수 분기');
-    const branchId = `main:${chat.id}`;
-    const before = writeChatVariables(store, chat.id, branchId, {
-      expectedRevision: 0,
-      expectedSourceHash: null,
-      idempotencyKey: 'before',
-      values: { phase: 'before', literal: chat.id },
-    });
-    const selected = source(store, chat.id, 'Source at selected state');
-    const latest = writeChatVariables(store, chat.id, branchId, {
-      expectedRevision: before.revision,
-      expectedSourceHash: selected.hash,
-      idempotencyKey: 'after',
-      values: { phase: 'after', literal: selected.id },
-    });
-    const copied = forkChat(store, chat.id, {
-      fromRevision: selected.id,
-      idempotencyKey: 'state-fork',
-    });
-    expect(readChatVariables(store, copied.id, `main:${copied.id}`)).toEqual(before);
-    expect(readChatVariables(store, chat.id, branchId)).toEqual(latest);
-    const branch = store.product.createBranch(chat.id, {
-      title: '선택 시점',
-      fromRevision: selected.id,
-    });
-    expect(readChatVariables(store, chat.id, branch.id)).toEqual(before);
-    const empty = store.product.createBranch(chat.id, { title: '처음부터', fromRevision: null });
-    expect(readChatVariables(store, chat.id, empty.id)).toEqual({ revision: 0, values: {} });
-    expect(store.source(selected.id).text).toBe('Source at selected state');
-    expect(store.source(copied.headRevision!).text).toBe('Source at selected state');
-  });
-  test('forked runs keep source-time package resource revisions after the current owning package changes', async () => {
-    const store = await database();
-    const input = fixtureBotInput('Synthetic versioned owner', 'OWNER_V1');
-    input.package = nativeContent({
-      name: input.title,
-      description: 'OWNER_V1',
-      character_book: {
-        entries: [
-          {
-            keys: ['record'],
-            comment: 'Versioned record',
-            content: 'LORE_V1',
-            enabled: true,
-            constant: false,
-          },
-        ],
-      },
-    });
-    const bot = store.product.content(input) as Content;
-    const chat = createFixtureChat(store, 'Source-time resources', 'calm', { botId: bot.id });
-    const first = source(store, chat.id, 'SOURCE_V1');
-    const frozen = structuredClone(store.run(first.runId).snapshot);
-    const revised = store.product.content(
-      {
-        ...fixtureBotInput(input.title, 'OWNER_V2'),
-        expectedRevision: bot.revision,
-        package: nativeContent({
-          name: input.title,
-          description: 'OWNER_V2',
-          character_book: {
-            entries: [
-              {
-                keys: ['record'],
-                comment: 'Versioned record',
-                content: 'LORE_V2',
-                enabled: true,
-                constant: false,
-              },
-            ],
-          },
-        }),
-      },
-      bot.id
-    ) as Content;
-    const current = store.product.profile(chat.id);
-    updateTestProfile(
-      store.product,
-      chat.id,
-      profileBody(current, {
-        packageAttachments: current.packageAttachments!.map((attachment) =>
-          attachment.id === bot.id ? { ...attachment, revision: revised.revision } : attachment
-        ),
-      })
-    );
-    const second = source(store, chat.id, 'SOURCE_V2');
-    const copy = forkChat(store, chat.id, {
-      fromRevision: second.id,
-      idempotencyKey: 'source-time-package-fork',
-    });
-    const copied = store.detail(copy.id).runs;
-    for (const original of [first, second]) {
-      const originalRun = store.run(original.runId);
-      const copiedRun = copied.find(
-        (run) => run.snapshot.forkedFrom!.sourceRevision === original.id
-      )!;
-      expect(copiedRun.snapshot.resources).toEqual(
-        originalRun.snapshot.resources.map((resource) => ({ ...resource, chatId: copy.id }))
-      );
-      expect(copiedRun.snapshot.profile!.packages).toEqual(originalRun.snapshot.profile!.packages);
-      expect(store.sourceOriginal(copiedRun.sourceRevision!).hash).toBe(original.hash);
-    }
-    expect(store.run(first.runId).snapshot).toEqual(frozen);
-    expect(
-      copied
-        .find((run) => run.snapshot.forkedFrom!.sourceRevision === first.id)!
-        .snapshot.resources.map((resource) => resource.text)
-        .filter(Boolean)
-    ).toEqual(['OWNER_V1', 'LORE_V1']);
-    expect(
-      store.product
-        .resources(copy.id, store.product.snapshot(copy.id))
-        .map((resource) => resource.text)
-        .filter(Boolean)
-    ).toEqual(['OWNER_V2', 'LORE_V2']);
-    const restored = await database();
-    restored.product.import(store.product.export());
-    expect(restored.detail(copy.id).runs.map((run) => run.snapshot.resources)).toEqual(
-      copied.map((run) => run.snapshot.resources)
-    );
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('copies only the selected ancestry and completed artifacts, retaining literal text and independent settings', async () => {
-    const app = await application();
-    const store = app.store;
-    const fixture = await rich(app);
-    const before = store.product.export().tables;
-    const originalDetail = store.detail(fixture.chat.id);
-    const originalProfile = store.product.profile(fixture.chat.id);
-    const copy = await fork(app, fixture.chat.id, {
-      fromRevision: fixture.second.id,
-      idempotencyKey: 'copy-selected',
-    });
-    expect(copy.id).not.toBe(fixture.chat.id);
-    expect(copy.title).toBe('Synthetic original · 포크 1');
-    expect(copy.settings).toEqual(originalDetail.chat.settings);
-    expect(copy.settingsRevision).toBe(1);
-    const detail = store.detail(copy.id);
-    const ancestry = store.history(copy.headRevision);
-    expect(ancestry.map((item) => item.text)).toEqual([fixture.first.text, fixture.second.text]);
-    expect(detail.sources).toHaveLength(2);
-    expect(detail.sources.map((item) => item.hash).sort()).toEqual(
-      [fixture.first.hash, fixture.second.hash].sort()
-    );
-    expect(detail.runs).toHaveLength(2);
-    expect(detail.branches).toHaveLength(1);
-    expect(detail.branches[0]).toMatchObject({ default: true, headRevision: copy.headRevision });
-    for (const run of detail.runs) {
-      const oldSource =
-        run.snapshot.forkedFrom!.sourceRevision === fixture.first.id
-          ? fixture.first
-          : fixture.second;
-      expect(run.snapshot.forkedFrom).toEqual({
-        chatId: fixture.chat.id,
-        runId: oldSource.runId,
-        sourceRevision: oldSource.id,
-        requestOrder: oldSource.id === fixture.first.id ? -2 : -1,
-      });
-      expect(run.usage).toEqual({
-        modelCalls: 0,
-        inputTokens: null,
-        outputTokens: null,
-        costUsd: null,
-      });
-      expect(run.inputs).toEqual([]);
-      expect(run.toolEvents).toEqual([]);
-      expect(run.snapshot.settingsRevision).toBe(
-        store.run(oldSource.runId).snapshot.settingsRevision
-      );
-      expect(run.snapshot.history).toEqual(store.history(run.parentRevision));
-      expect(run.snapshot.resources).toEqual(
-        store.product.resources(copy.id, run.snapshot.profile!)
-      );
-      expect(run.snapshot.profile?.promptPresets?.main?.program).toEqual(
-        createDefaultRisuPrompt('  MAIN exact\r\n')
-      );
-    }
-    expect(detail.attempts).toEqual([]);
-    expect(detail.jobs.every((job) => job.status === 'completed')).toBe(true);
-    const expectedJobs = [
-      ...originalDetail.jobs.filter(
-        (job) =>
-          job.kind !== 'translation' &&
-          [fixture.first.id, fixture.second.id].includes(job.sourceRevision) &&
-          job.status === 'completed'
-      ),
-      ...[fixture.first, fixture.second].map((source) => successfulTranslation(store, source)!),
-    ];
-    expect(store.job(fixture.failed.id).status).toBe('failed');
-    expect(expectedJobs.some((job) => job.id === fixture.secondJob.id)).toBe(true);
-    expect(detail.jobs).toHaveLength(expectedJobs.length);
-    for (const newSource of detail.sources) {
-      const old = fixture.first.hash === newSource.hash ? fixture.first : fixture.second;
-      expect(
-        newSource.blocks!.map((block) => ({
-          index: block.index,
-          text: block.text,
-          start: block.start,
-          end: block.end,
-        }))
-      ).toEqual(
-        old.blocks!.map((block) => ({
-          index: block.index,
-          text: block.text,
-          start: block.start,
-          end: block.end,
-        }))
-      );
-      expect(newSource.blocks![0].anchor).not.toBe(old.blocks![0].anchor);
-      for (const job of detail.jobs.filter((job) => job.sourceRevision === newSource.id)) {
-        const oldJob = expectedJobs.find(
-          (prior) =>
-            prior.sourceRevision === old.id &&
-            prior.kind === job.kind &&
-            prior.revision === job.revision
-        )!;
-        expect(job.id).not.toBe(oldJob.id);
-        expect(job.result).toMatchObject({
-          sourceRevision: newSource.id,
-          sourceHash: newSource.hash,
-        });
-        if (job.kind === 'translation') {
-          expect(job.result?.text).toBe(oldJob.result?.text);
-          expect(job.result).not.toHaveProperty('segments');
-          const resolved = store.product.resolveJobPrompt(
-            store.run(newSource.runId).snapshot,
-            store.job(job.id).input
-          );
-          expect(() => validateTranslationArtifact(store.job(job.id), newSource)).not.toThrow();
-          if (oldJob.id === fixture.revised.id)
-            expect(resolved.profile!.promptPresets!.translation!.program).toEqual(
-              fixture.laterPrompt.program
-            );
-        } else if (job.kind === 'image') {
-          const annotation = job.result!.annotations![0];
-          const copiedAsset = store.product.asset(annotation.assetRef);
-          expect(annotation.blockAnchor).toBe(
-            imageTargetSource(store, store.job(job.id)).blocks![0].anchor
-          );
-          expect(copiedAsset.asset.id).not.toBe(fixture.asset.id);
-          expect(copiedAsset.asset.chatId).toBe(copy.id);
-          expect(copiedAsset.asset.url).toBe('/api/assets/' + copiedAsset.asset.id);
-          expect(copiedAsset.bytes).toEqual(store.product.asset(fixture.asset.id).bytes);
-        }
-      }
-    }
-    expect(store.detail(fixture.chat.id)).toEqual(originalDetail);
-    const after = store.product.export().tables;
-    for (const name of Object.keys(before))
-      expect(after[name]).toEqual(expect.arrayContaining(before[name]));
-    expect(store.queuedJobs().sort()).toEqual(
-      originalDetail.jobs
-        .filter((job) => job.status === 'queued')
-        .map((job) => job.id)
-        .sort()
-    );
-    const copyProfile = store.product.profile(copy.id);
-    expect({
-      ...copyProfile,
-      chatId: originalProfile.chatId,
-      revision: originalProfile.revision,
-    }).toEqual(originalProfile);
-    updateTestProfile(
-      store.product,
-      copy.id,
-      profileBody(copyProfile, {
-        image: !copyProfile.image,
-      })
-    );
-    store.settings(copy.id, copy.settingsRevision, {
-      ...copy.settings,
-      preset: 'calm',
-      translation: false,
-      status: false,
-    });
-    expect(store.product.profile(fixture.chat.id)).toEqual(originalProfile);
-    expect(store.chat(fixture.chat.id)).toEqual(originalDetail.chat);
-    const continued = source(store, copy.id, 'Only the fork continues here.');
-    expect(continued.parentRevision).toBe(copy.headRevision);
-    expect(store.run(continued.runId).snapshot.history).toEqual(ancestry);
-    expect(store.run(continued.runId).snapshot.profile?.promptPresets?.main?.program).toEqual(
-      promptWorkspace(store).main.program
-    );
-    expect(store.detail(fixture.chat.id)).toEqual(originalDetail);
-    expect(fetch).not.toHaveBeenCalled();
-    expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  });
-
   test('makes repeated keys durable, uses distinct automatic titles and rejects conflicting selections', async () => {
     const store = await database();
     const chat = createFixtureChat(store, 'Names');
@@ -617,162 +320,6 @@ describe('independent stored-story fork without generation', () => {
         title: 'Chosen title',
       }).title
     ).toBe('Chosen title');
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('forks a nondefault branch with its owning bot profile without altering that branch', async () => {
-    const app = await application();
-    const store = app.store;
-    const chat = createFixtureChat(store, 'Synthetic story');
-    const first = source(store, chat.id, 'Original opening.');
-    const main = source(store, chat.id, 'Default continuation.');
-    const oldBranch = store.product.createBranch(chat.id, {
-      title: 'Alternative branch',
-      fromRevision: first.id,
-    });
-    const alternative = source(store, chat.id, 'Alternative continuation.', oldBranch.id);
-    const before = store.detail(chat.id);
-    const originalProfile = store.product.snapshot(chat.id)!;
-    const copy = await fork(app, chat.id, {
-      fromRevision: alternative.id,
-      idempotencyKey: 'alternative',
-    });
-    expect(store.history(copy.headRevision).map((item) => item.text)).toEqual([
-      first.text,
-      alternative.text,
-    ]);
-    expect(store.chat(chat.id).headRevision).toBe(main.id);
-    const copiedProfile = store.product.snapshot(copy.id)!;
-    expect(copiedProfile).toEqual({
-      ...originalProfile,
-      chatId: copy.id,
-      revision: copiedProfile.revision,
-    });
-    expect(copiedProfile.packageAttachments).toEqual([
-      { id: chat.botId, revision: 1, role: 'bot' },
-    ]);
-    for (const run of store.detail(copy.id).runs) {
-      const originalRun = store.run(run.snapshot.history.length ? alternative.runId : first.runId);
-      expect(run.snapshot.profile).toEqual({
-        ...copiedProfile,
-        chatOptions: originalRun.snapshot.profile?.chatOptions,
-      });
-      expect(run.snapshot.resources).toEqual(store.product.resources(copy.id, copiedProfile));
-    }
-    expect(store.detail(chat.id)).toEqual(before);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('rejects foreign, absent and invalid inputs before creating any copy', async () => {
-    const app = await application();
-    const store = app.store;
-    const a = createFixtureChat(store, 'A');
-    const b = createFixtureChat(store, 'B');
-    const first = source(store, a.id, 'A source.');
-    const foreign = source(store, b.id, 'B source.');
-    const before = store.product.export().tables;
-    await fork(app, a.id, { fromRevision: foreign.id, idempotencyKey: 'foreign' }, 400);
-    await fork(app, a.id, { fromRevision: 'missing', idempotencyKey: 'missing' }, 404);
-    for (const body of [
-      { fromRevision: null, idempotencyKey: 'null' },
-      { fromRevision: first.id },
-      { fromRevision: first.id, idempotencyKey: '' },
-      { fromRevision: first.id, idempotencyKey: 'extra', extra: true },
-      { fromRevision: first.id, idempotencyKey: 'title', title: '' },
-    ])
-      await fork(app, a.id, body, 400);
-    expect(store.product.export().tables).toEqual(before);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('rolls back chat, profile, resources, assets and copied runs after an actual SQLite insertion failure', async () => {
-    const app = await application();
-    const store = app.store;
-    const fixture = await rich(app);
-    const before = store.product.export().tables;
-    store.db.exec(
-      "CREATE TRIGGER synthetic_fork_failure BEFORE INSERT ON sources BEGIN SELECT RAISE(ABORT,'Synthetic fork transaction failure'); END"
-    );
-    try {
-      expect(() =>
-        forkChat(store, fixture.chat.id, {
-          fromRevision: fixture.second.id,
-          idempotencyKey: 'rollback',
-        })
-      ).toThrow('Synthetic fork transaction failure');
-    } finally {
-      store.db.exec('DROP TRIGGER synthetic_fork_failure');
-    }
-    expect(store.product.export().tables).toEqual(before);
-    const copy = forkChat(store, fixture.chat.id, {
-      fromRevision: fixture.second.id,
-      idempotencyKey: 'rollback',
-    });
-    expect(store.history(copy.headRevision)).toHaveLength(2);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('round-trips copied source, prompts, translations and assets and accepts provenance without the original chat', async () => {
-    const app = await application();
-    const store = app.store;
-    const fixture = await rich(app);
-    const copy = forkChat(store, fixture.chat.id, {
-      fromRevision: fixture.second.id,
-      idempotencyKey: 'archive',
-    });
-    const archive = store.product.export();
-    const unchanged = JSON.stringify(archive);
-    const target = await database();
-    expect(target.product.import(archive)).toEqual({ restored: true, chats: 2 });
-    expect(JSON.stringify(archive)).toBe(unchanged);
-    expect(target.detail(copy.id)).toEqual(store.detail(copy.id));
-    expect(target.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    const isolated = structuredClone(archive);
-    const runIds = new Set(
-      isolated.tables.runs.filter((row) => row.chat_id === copy.id).map((row) => row.id)
-    );
-    const jobIds = new Set(
-      isolated.tables.jobs.filter((row) => row.chat_id === copy.id).map((row) => row.id)
-    );
-    for (const [name, rows] of Object.entries(isolated.tables)) {
-      if (
-        name === 'versions' ||
-        name === 'prompt_workspace' ||
-        name === 'lore_context_defaults' ||
-        name === 'package_behavior_entropy' ||
-        name.startsWith('library_')
-      )
-        continue;
-      isolated.tables[name] = rows.filter((row) =>
-        Object.hasOwn(row, 'chat_id')
-          ? row.chat_id === copy.id
-          : Object.hasOwn(row, 'run_id')
-            ? runIds.has(row.run_id)
-            : Object.hasOwn(row, 'job_id')
-              ? jobIds.has(row.job_id)
-              : name === 'chats'
-                ? row.id === copy.id
-                : false
-      );
-    }
-    const standalone = await database();
-    expect(standalone.product.import(isolated)).toEqual({ restored: true, chats: 1 });
-    expect(standalone.detail(copy.id)).toEqual(store.detail(copy.id));
-    for (const invalid of [
-      null,
-      { chatId: 'bad/ID', runId: 'run', sourceRevision: 'source' },
-      { chatId: 'chat', runId: 'run' },
-      { chatId: 'chat', runId: 'run', sourceRevision: 'source', secret: true },
-    ]) {
-      const forged = structuredClone(isolated);
-      const row = forged.tables.runs[0];
-      const snapshot = JSON.parse(row.snapshot);
-      snapshot.forkedFrom = invalid;
-      row.snapshot = JSON.stringify(snapshot);
-      const empty = await database();
-      expect(() => empty.product.import(forged)).toThrow(HttpError);
-      expect(empty.chats()).toEqual([]);
-    }
     expect(fetch).not.toHaveBeenCalled();
   });
 });

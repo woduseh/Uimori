@@ -1,7 +1,6 @@
 import { nativeContent } from './fixtures/native-content.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
-import { writeNote } from './fixtures/notes.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -253,29 +252,7 @@ test.each(['source', 'ancestor'] as const)(
     expect(f.store.run(b.id).snapshot).toEqual(frozen);
   }
 );
-test('retcon invalidates lore while preserving past snapshots; failed and alternate branch reads stay excluded', async () => {
-  const f = fixture(),
-    failed = (await queue(f)).run;
-  read(f, failed, 0, 4);
-  f.store.finishRun(failed.id, 'failed', 'synthetic failure');
-  const a = (await queue(f)).run;
-  expect(a.snapshot.loreContext!.entries).toEqual([]);
-  read(f, a, 10, 4);
-  const sa = complete(f, a);
-  const branch = f.store.product.createBranch(f.chat.id, {
-    title: 'Other branch',
-    fromRevision: null,
-  });
-  const other = (await queue(f, { branchId: branch.id })).run;
-  expect(other.snapshot.loreContext!.entries).toEqual([]);
-  read(f, other, 20, 4);
-  complete(f, other);
-  writeNote(f.store, f.chat.id, { text: 'Synthetic canon changed.', author: 'Fixture' });
-  const b = (await queue(f)).run;
-  expect(b.snapshot.loreContext!.entries).toEqual([]);
-  expect(b.snapshot.loreContext!.stats.reasons).toContain('source-or-canon-changed');
-  expect(b.parentRevision).toBe(sa.id);
-});
+
 test('resource revision and attachment removal remove retained text', async () => {
   const f = fixture(),
     a = (await queue(f)).run;

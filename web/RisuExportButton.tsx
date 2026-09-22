@@ -1,3 +1,4 @@
+import { ResourceExportButton } from './ResourceExportButton.js';
 import { useEffect, useRef, useState } from 'react';
 import { DownloadIcon } from './ui-icons.js';
 import { sessionRequiredEvent } from './api.js';
@@ -38,58 +39,67 @@ export function RisuExportButton({
   useEffect(() => () => controller.current?.abort(), []);
   const format = kind === 'content' ? (requestedFormat ?? 'CHARX') : 'RISUP';
   return (
-    <button
-      type="button"
-      className="secondary"
-      disabled={disabled || busy}
-      title={
-        disabled
-          ? '편집 내용을 저장한 뒤 내보내 주세요.'
-          : '현재 저장본을 ' + format + ' 파일로 내보내기'
-      }
-      onClick={async () => {
-        if (controller.current) return;
-        const request = new AbortController();
-        controller.current = request;
-        setBusy(true);
-        try {
-          const response = await fetch(
-            '/api/' +
-              kind +
-              '/' +
-              encodeURIComponent(id) +
-              '/risu-export?expectedRevision=' +
-              revision,
-            { signal: request.signal }
-          );
-          if (!response.ok) {
-            if (response.status === 401) window.dispatchEvent(new Event(sessionRequiredEvent));
-            const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-            throw new Error(
-              messages[payload?.error ?? ''] ??
-                '파일을 내보내지 못했어요. 저장본을 확인한 뒤 다시 시도해 주세요.'
-            );
-          }
-          const blob = await response.blob();
-          request.signal.throwIfAborted();
-          const header = response.headers.get('Content-Disposition') ?? '';
-          const name = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = name ? decodeURIComponent(name) : title + '.' + format.toLowerCase();
-          link.click();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-        } catch (caught) {
-          if (!request.signal.aborted) onError((caught as Error).message);
-        } finally {
-          if (!request.signal.aborted) setBusy(false);
-          controller.current = null;
+    <>
+      <ResourceExportButton
+        kind={kind === 'content' ? 'content' : 'prompt-preset'}
+        id={id}
+        disabled={disabled || busy}
+      />
+      <button
+        type="button"
+        className="secondary"
+        disabled={disabled || busy}
+        title={
+          disabled
+            ? '편집 내용을 저장한 뒤 내보내 주세요.'
+            : '현재 저장본을 ' + format + ' 파일로 내보내기'
         }
-      }}
-    >
-      <DownloadIcon size={18} aria-hidden="true" />
-      {busy ? '내보내는 중…' : format + ' 내보내기'}
-    </button>
+        onClick={async () => {
+          if (controller.current) return;
+          const request = new AbortController();
+          controller.current = request;
+          setBusy(true);
+          try {
+            const response = await fetch(
+              '/api/' +
+                kind +
+                '/' +
+                encodeURIComponent(id) +
+                '/risu-export?expectedRevision=' +
+                revision,
+              { signal: request.signal }
+            );
+            if (!response.ok) {
+              if (response.status === 401) window.dispatchEvent(new Event(sessionRequiredEvent));
+              const payload = (await response.json().catch(() => null)) as {
+                error?: string;
+              } | null;
+              throw new Error(
+                messages[payload?.error ?? ''] ??
+                  '파일을 내보내지 못했어요. 저장본을 확인한 뒤 다시 시도해 주세요.'
+              );
+            }
+            const blob = await response.blob();
+            request.signal.throwIfAborted();
+            const header = response.headers.get('Content-Disposition') ?? '';
+            const name = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = name ? decodeURIComponent(name) : title + '.' + format.toLowerCase();
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } catch (caught) {
+            if (!request.signal.aborted) onError((caught as Error).message);
+          } finally {
+            if (!request.signal.aborted) setBusy(false);
+            controller.current = null;
+          }
+        }}
+      >
+        <DownloadIcon size={18} aria-hidden="true" />
+        {busy ? '내보내는 중…' : format + ' 내보내기'}
+      </button>
+    </>
   );
 }

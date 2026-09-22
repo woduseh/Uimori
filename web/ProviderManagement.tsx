@@ -38,7 +38,6 @@ import {
   PROVIDER_CHOICES,
   providerDefinition,
 } from '../core/provider-definitions.js';
-import { CREDENTIAL_ENV_PATTERN } from '../core/credential-reference.js';
 import { api, ApiError } from './api.js';
 import {
   initialModel,
@@ -48,7 +47,6 @@ import {
   ProviderModelFields,
   selectModelConnection,
 } from './ProviderModelFields.js';
-import { ProviderEndpointStatus } from './ProviderEndpointStatus.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ProviderReadiness } from './ProviderReadiness.js';
 import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js';
@@ -61,24 +59,26 @@ type ConnectionDraft = {
   title: string;
   protocol: ProviderProtocol;
   endpoint: string;
-  credentialEnv: string;
-  catalogCredentialEnv: string;
+  credentialRef: string;
+  catalogCredentialRef: string;
+  apiKey?: string | null;
+  catalogApiKey?: string | null;
   enabled: boolean;
 };
 const initialConnection = (): ConnectionDraft => ({
   title: '',
   protocol: 'fixture-sse-v1',
   endpoint: '',
-  credentialEnv: '',
-  catalogCredentialEnv: '',
+  credentialRef: '',
+  catalogCredentialRef: '',
   enabled: false,
 });
 const connectionDraft = (item: Connection): ConnectionDraft => ({
   title: item.title,
   protocol: item.protocol,
   endpoint: item.endpoint,
-  credentialEnv: item.credentialEnv ?? '',
-  catalogCredentialEnv: item.catalogCredentialEnv ?? '',
+  credentialRef: item.credentialRef ?? '',
+  catalogCredentialRef: item.catalogCredentialRef ?? '',
   enabled: item.enabled,
 });
 function connectionPayload(value: ConnectionDraft) {
@@ -86,12 +86,14 @@ function connectionPayload(value: ConnectionDraft) {
     title: value.title,
     protocol: value.protocol,
     endpoint: value.protocol === 'codex-app-server-v1' ? 'codex://local' : value.endpoint,
-    ...(value.protocol !== 'codex-app-server-v1' && value.credentialEnv.trim()
-      ? { credentialEnv: value.credentialEnv.trim() }
+    ...(value.protocol !== 'codex-app-server-v1' && value.credentialRef.trim()
+      ? { credentialRef: value.credentialRef.trim() }
       : {}),
-    ...(value.protocol === 'vertex-gemini-v1' && value.catalogCredentialEnv.trim()
-      ? { catalogCredentialEnv: value.catalogCredentialEnv.trim() }
+    ...(value.protocol === 'vertex-gemini-v1' && value.catalogCredentialRef.trim()
+      ? { catalogCredentialRef: value.catalogCredentialRef.trim() }
       : {}),
+    ...(value.apiKey !== undefined ? { apiKey: value.apiKey } : {}),
+    ...(value.catalogApiKey !== undefined ? { catalogApiKey: value.catalogApiKey } : {}),
     enabled: value.enabled,
   };
 }
@@ -243,9 +245,7 @@ export function ConnectionEditor({
   const codex = connection.protocol === 'codex-app-server-v1',
     definition = providerDefinition(connection.protocol),
     vertex = connection.protocol === 'vertex-gemini-v1';
-  const official = ['anthropic-messages-v1', 'vercel-chat-v1', 'deepseek-chat-v1'].includes(
-    connection.protocol
-  );
+
   const endpointLabel = codex
     ? 'Codex 실행 위치'
     : vertex
@@ -477,7 +477,7 @@ export function ConnectionEditor({
     if (result.catalogError)
       throw new Error('모델 목록을 확인하지 못했어요. 마지막 저장 목록과 수동 모델 ID를 유지해요.');
     setMessage(
-      result.protocol === 'vertex-gemini-v1' && !result.catalogCredentialEnv
+      result.protocol === 'vertex-gemini-v1' && !result.catalogCredentialRef
         ? '로컬 지원 모델 목록 확인 완료 · 공급자 조회 없음'
         : '모델 목록 조회 완료'
     );
@@ -534,7 +534,7 @@ export function ConnectionEditor({
       protocol,
       title: protocol === 'fixture-sse-v1' ? '' : template.label,
       endpoint: template.endpointDefault,
-      credentialEnv: template.credentialEnvDefault,
+      credentialRef: '',
       enabled: protocol !== 'fixture-sse-v1',
     };
     setConnection(next);
@@ -970,8 +970,7 @@ export function ConnectionEditor({
                 >
                   <strong>TypeSafe AI</strong>
                   <span className="provider-item-subtitle">
-                    JEV · 판단 전용 ·{' '}
-                    {jevStatus?.credentialSource === 'saved' ? '저장한 API 키' : '서버 환경변수'}
+                    JEV · 판단 전용 · {jevStatus?.configured ? '등록한 API 키' : 'API 키 없음'}
                   </span>
                 </button>
                 <ActionMenu label="TypeSafe AI 프로바이더 메뉴">
@@ -1314,8 +1313,7 @@ export function ConnectionEditor({
         )}
         {connectionCopy && (
           <p className="provider-draft-note full">
-            새 ID로 복제해요. 사용 허용은 꺼져 있으며, 아래에 복사된 서버 환경변수 이름을 확인한 뒤
-            등록하세요.
+            새 프로바이더로 복사해요. 주소와 키를 확인하고 저장해 주세요.
           </p>
         )}
         {conflict === 'connection' && (
@@ -1339,7 +1337,9 @@ export function ConnectionEditor({
                   ...connection,
                   protocol,
                   endpoint: definition.endpointDefault,
-                  credentialEnv: definition.credentialEnvDefault,
+                  credentialRef: '',
+                  apiKey: undefined,
+                  catalogApiKey: undefined,
                 });
               }}
             >
@@ -1362,13 +1362,13 @@ export function ConnectionEditor({
           </label>
           {vertex && (
             <VertexCredentialUpload
-              credentialEnv={connection.credentialEnv}
+              credentialRef={connection.credentialRef}
               disabled={operationBusy}
               onBusy={setUploadingCredential}
               onRegistered={(value) =>
                 setConnection((current) => ({
                   ...current,
-                  credentialEnv: value.credentialEnv,
+                  credentialRef: value.credentialRef,
                   endpoint: `https://aiplatform.googleapis.com/v1/projects/${value.projectId}/locations/global/publishers/google/models`,
                 }))
               }
@@ -1401,7 +1401,7 @@ export function ConnectionEditor({
               aria-label={endpointLabel}
               type="url"
               required
-              readOnly={official || codex}
+              readOnly={codex}
               placeholder={
                 vertex
                   ? 'https://aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/global/publishers/google/models'
@@ -1413,45 +1413,47 @@ export function ConnectionEditor({
               onChange={(event) => setConnection({ ...connection, endpoint: event.target.value })}
             />
           </label>
-          <ProviderEndpointStatus protocol={connection.protocol} endpoint={connection.endpoint} />
-          <label
-            className="full"
-            hidden={
-              codex ||
-              (vertex && connection.credentialEnv.startsWith('UIMORI_PROVIDER_VERTEX_FILE_'))
-            }
-          >
-            서버 환경변수 이름
-            <input
-              aria-label="서버 환경변수 이름"
-              autoComplete="off"
-              required={official}
-              pattern={CREDENTIAL_ENV_PATTERN}
-              placeholder={vertex ? '비우면 서버 ADC 사용' : 'OPENAI_API_KEY'}
-              value={connection.credentialEnv}
-              onChange={(event) =>
-                setConnection({ ...connection, credentialEnv: event.target.value })
-              }
-            />
-          </label>
+          {!codex && !vertex && (
+            <label className="full">
+              API 키
+              <input
+                aria-label="API 키"
+                type="password"
+                autoComplete="new-password"
+                placeholder={
+                  connection.credentialRef
+                    ? '등록됨 · 변경할 때 입력'
+                    : 'API 키 입력 · 인증 없는 서버는 생략'
+                }
+                value={connection.apiKey ?? ''}
+                onChange={(event) => setConnection({ ...connection, apiKey: event.target.value })}
+              />
+              {connection.credentialRef && (
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setConnection({ ...connection, apiKey: null, credentialRef: '' })}
+                >
+                  등록한 키 삭제
+                </button>
+              )}
+            </label>
+          )}
           {vertex && (
             <label className="full">
-              Gemini 목록용 API 키 환경변수 이름 (선택)
+              모델 목록용 Gemini API 키 · 선택
               <input
-                aria-label="Gemini 목록용 API 키 환경변수 이름"
-                autoComplete="off"
-                pattern={CREDENTIAL_ENV_PATTERN}
-                placeholder="GEMINI_API_KEY"
-                value={connection.catalogCredentialEnv}
+                aria-label="모델 목록 API 키"
+                type="password"
+                autoComplete="new-password"
+                placeholder={
+                  connection.catalogCredentialRef ? '등록됨 · 변경할 때 입력' : '목록 조회용 키'
+                }
+                value={connection.catalogApiKey ?? ''}
                 onChange={(event) =>
-                  setConnection({ ...connection, catalogCredentialEnv: event.target.value })
+                  setConnection({ ...connection, catalogApiKey: event.target.value })
                 }
               />
-              <small>
-                비우면 앱 힌트 표만 목록으로 써요. 서버 환경변수 이름을 넣으면 모델 목록 새로고침이
-                Gemini Developer API로 Gemini 모델과 토큰 한도를 받아와요. Agent Platform 실행
-                인증과 별개인 API 키이며 생성 요청에는 쓰지 않아요.
-              </small>
             </label>
           )}
           <label className="check">
@@ -1463,37 +1465,11 @@ export function ConnectionEditor({
           </label>
           <small className="full">
             {codex
-              ? '설정 → 에이전트에서 Uimori 전용 Codex 로그인을 준비해 주세요. 서버의 공식 Codex로 실행하며 API 키 방식으로 자동 전환하지 않아요.'
-              : vertex && connection.credentialEnv.startsWith('UIMORI_PROVIDER_VERTEX_FILE_')
-                ? '등록한 JSON으로 인증해요. 프로젝트 ID는 키 파일의 프로젝트와 같아야 해요.'
-                : vertex
-                  ? '환경변수 이름을 비우면 서버의 GOOGLE_APPLICATION_CREDENTIALS 파일로 인증해요. global에서 Gemini 모델에 연결해요.'
-                  : connection.protocol === 'openai-chat-v1'
-                    ? '기본 주소 뒤에 /chat/completions를 붙여요. 인증 없는 로컬 서버는 환경변수 이름을 비워 두세요.'
-                    : '인증 키 값은 입력하지 마세요. 서버 환경변수에 인증 키를 설정하면 사용할 수 있어요. 주소 허용 상태는 위에서 확인해요.'}
+              ? '에이전트 설정에서 Codex에 로그인해 주세요.'
+              : vertex
+                ? '서비스 계정 JSON을 등록하면 사용할 수 있어요.'
+                : 'API 키는 서버 DB에 저장돼요. 키를 저장하면 재시작 없이 사용할 수 있어요.'}
           </small>
-          {vertex && connection.credentialEnv.startsWith('UIMORI_PROVIDER_VERTEX_FILE_') && (
-            <details className="provider-auth-settings full">
-              <summary>고급 인증 설정</summary>
-              <div className="provider-auth-settings-body">
-                <small>
-                  서버에 설정된 인증을 사용할 때 변경해 주세요. 프로바이더 변경을 저장하면 적용돼요.
-                </small>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => setConnection({ ...connection, credentialEnv: '' })}
-                >
-                  서버 ADC / 환경변수 방식으로 변경
-                </button>
-              </div>
-            </details>
-          )}
-          {connection.protocol === 'vercel-chat-v1' && (
-            <small className="full">
-              Vercel AI Gateway key를 환경변수에 넣고 모델 ID는 공급자/모델 형식으로 지정해요.
-            </small>
-          )}
           <details className="provider-definition full">
             <summary>프로바이더 템플릿 정보</summary>
             <dl>

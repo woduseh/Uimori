@@ -80,7 +80,7 @@ export function importRisuAssets({
       findings.add(
         'asset-invalid',
         'unsupported',
-        '형식이 맞지 않거나 2 MB를 넘는 이미지는 제외해요. 원본 파일에는 보존해요.'
+        '읽을 수 없거나 처리 범위를 넘는 이미지는 제외해요.'
       );
       continue;
     }

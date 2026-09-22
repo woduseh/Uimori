@@ -53,8 +53,11 @@ export type ChatTranscript = {
   entries: ChatTranscriptEntry[];
 };
 
+export class ChatTranscriptError extends Error {
+  readonly statusCode = 400;
+}
 const fail = (code: string): never => {
-  throw new Error(code);
+  throw new ChatTranscriptError(code);
 };
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -90,8 +93,7 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
     'entries',
   ]);
   if (body.format !== CHAT_TRANSCRIPT_FORMAT) fail('CHAT_TRANSCRIPT_INVALID_FORMAT');
-  if (body.version !== 1 && body.version !== CHAT_TRANSCRIPT_VERSION)
-    fail('CHAT_TRANSCRIPT_UNSUPPORTED_VERSION');
+  if (body.version !== CHAT_TRANSCRIPT_VERSION) fail('CHAT_TRANSCRIPT_UNSUPPORTED_VERSION');
   const exportedAt = string(body.exportedAt, 40, 'CHAT_TRANSCRIPT_INVALID_TIME');
   if (!Number.isFinite(Date.parse(exportedAt))) fail('CHAT_TRANSCRIPT_INVALID_TIME');
   const title = string(body.title, CHAT_TRANSCRIPT_LIMITS.title, 'CHAT_TRANSCRIPT_INVALID_TITLE');

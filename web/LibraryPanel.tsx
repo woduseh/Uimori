@@ -6,15 +6,15 @@ import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { RisuImport } from './RisuImport.js';
 import {
-  EditorDraftProvider,
-  EditorDraftStatus,
-  EditorDraftStatusButton,
+  ResourceEditorProvider,
+  ResourceEditorStatus,
+  ResourceEditorActions,
   discardActiveEditor,
   saveActiveEditor,
   useEditorSaveCommand,
-  useServerEditDraft,
-} from './editor-workspace-context.js';
-import type { ContentDraftModel } from '../core/edit-drafts.js';
+  useResourceEditor,
+} from './resource-editor.js';
+import type { ContentEditModel } from '../core/resource-editing.js';
 import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
@@ -1243,7 +1243,7 @@ function ContentEditor({
     },
     []
   );
-  const editableModel = useMemo<ContentDraftModel>(
+  const editableModel = useMemo<ContentEditModel>(
     () => ({
       kind: value.kind,
       title: value.title,
@@ -1255,20 +1255,20 @@ function ContentEditor({
     }),
     [value]
   );
-  const shared = useServerEditDraft({
+  const shared = useResourceEditor({
     editorKey: selected ? `content:${selected.id}` : `new:content:${kind}`,
     kind: 'content',
     targetId: selected?.id ?? null,
     model: editableModel,
     onRestore: (draft) => {
-      const model = draft.model as ContentDraftModel;
+      const model = draft.model as ContentEditModel;
       setSaved('');
       setValue(model);
       setBaseline(JSON.stringify(draft.baseModel));
       setSelected(
         draft.targetId
           ? {
-              ...(draft.baseModel as ContentDraftModel),
+              ...(draft.baseModel as ContentEditModel),
               id: draft.targetId,
               revision: draft.baseRevision!,
             }
@@ -1291,10 +1291,6 @@ function ContentEditor({
     });
   async function saveContent(copyKind?: 'bot' | 'persona' | 'module') {
     if (editorUnavailable || portraitBusy || !value.title.trim()) return false;
-    if (nativeDraftDirty) {
-      setError('패키지의 초안을 먼저 검증하고 적용해 주세요.');
-      return false;
-    }
     setBusy(true);
     const version = ++saveVersion.current;
     onError('');
@@ -1305,7 +1301,7 @@ function ContentEditor({
       const pkg = copying
         ? withNativeContentTitle(packageSnapshot(), value.title + ' 사본')
         : packageSnapshot();
-      const model: ContentDraftModel = {
+      const model: ContentEditModel = {
         kind: copyKind ?? value.kind,
         title: copying ? value.title + ' 사본' : value.title,
         description: value.description,
@@ -1348,9 +1344,9 @@ function ContentEditor({
     }
   }
   useEditorSaveCommand(shared.session, () => saveContent());
-  if (!hasShownEditor.current) return <EditorDraftStatus value={shared} />;
+  if (!hasShownEditor.current) return <ResourceEditorStatus value={shared} />;
   return (
-    <EditorDraftProvider value={shared}>
+    <ResourceEditorProvider value={shared}>
       <section
         className="library-detail library-content-editor"
         aria-label="자료 상세"
@@ -1367,14 +1363,12 @@ function ContentEditor({
           />
           <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
           <div className="library-detail-actions">
-            <EditorDraftStatusButton value={shared} />
+            <ResourceEditorActions value={shared} />
             <button
               type="submit"
               form={formId}
               className="primary native-editor-save"
-              disabled={
-                editorUnavailable || !value.title.trim() || nativeDraftDirty || portraitBusy
-              }
+              disabled={editorUnavailable || !value.title.trim() || portraitBusy}
             >
               <SaveIcon size={18} aria-hidden="true" />
               <span>{busy ? '저장 중…' : selected ? '변경사항 저장' : '자료 등록'}</span>
@@ -1454,9 +1448,7 @@ function ContentEditor({
             </p>
           )}
           {nativeDraftDirty && (
-            <p className="full muted">
-              패키지에 미적용 초안이 있어요. 검증 후 적용하면 자료를 저장할 수 있어요.
-            </p>
+            <p className="full muted">원문 편집 중이에요. 저장할 때 함께 확인하고 반영해요.</p>
           )}
           <div className="library-savebar form-actions full">
             {selected && (selected.kind === 'bot' || selected.package) && onStartStory && (
@@ -1473,6 +1465,6 @@ function ContentEditor({
           </div>
         </form>
       </section>
-    </EditorDraftProvider>
+    </ResourceEditorProvider>
   );
 }

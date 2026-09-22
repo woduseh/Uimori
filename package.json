@@ -51,7 +51,10 @@
     "verify:native-transfer": "node scripts/verify-native-transfer.mjs",
     "verify:visual": "node scripts/verify-visual.mjs",
     "verify:gallery": "node scripts/verify-gallery.mjs",
-    "verify:selfhost": "node scripts/verify-self-host.mjs"
+    "verify:selfhost": "node scripts/verify-self-host.mjs",
+    "transfer:personal": "node scripts/transfer-personal-v1.mjs",
+    "test:personal": "vitest run tests/personal-workspace-v1.test.ts tests/personal-workspace-flow.test.ts tests/database-schema.test.ts tests/access-session.test.ts",
+    "verify:personal": "node scripts/verify-personal.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.3",
@@ -63,6 +66,7 @@
     "msgpackr": "1.11.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "sharp": "0.35.4",
     "tiktoken": "1.0.22",
     "undici": "7.29.1",
     "wasmoon": "1.16.0"

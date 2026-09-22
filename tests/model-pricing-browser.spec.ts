@@ -33,7 +33,7 @@ for (const width of DEFAULT_WIDTHS) {
         title,
         protocol: 'openai-responses-v1',
         endpoint: 'https://api.openai.com/v1',
-        credentialEnv: 'PM_SYNTHETIC_KEY',
+        credentialRef: 'PM_SYNTHETIC_KEY',
         enabled: false,
       },
     });

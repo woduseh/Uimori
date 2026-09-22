@@ -41,36 +41,15 @@ docker compose --env-file .env.self-host ps
 docker compose --env-file .env.self-host logs --tail=100 app proxy
 ```
 
-PC·휴대폰에서 설정한 HTTPS 주소로 접속하고 토큰을 입력해요. 각 브라우저는 별도 로그인 세션을 가져요. 세션은 최대 12시간이며 서버를 재시작하면 다시 로그인해야 해요. 저장한 자료·채팅은 공유하지만 미전송 초안 같은 브라우저 저장 정보는 기기별이에요.
+PC·휴대폰에서 설정한 HTTPS 주소로 접속하고 토큰을 입력해요. 각 브라우저는 별도 로그인 세션을 가져요. 앱 자체의 시간 만료는 없으며 서버 재시작 후에도 로그인을 유지해요. 브라우저 쿠키 삭제·명시적인 로그아웃·접속 토큰 변경은 로그인을 해제해요. 저장한 자료·채팅은 공유하지만 미전송 초안 같은 브라우저 저장 정보는 기기별이에요.
 
 세션은 최대 32개이며 초과하면 가장 오래 발급된 세션부터 해제해요. 잘못된 토큰으로 10번 접속하면 첫 실패부터 15분이 지날 때까지 새 로그인을 제한해요. 개인 작업실 전체에 적용하고 이미 로그인한 기기의 사용은 유지해요. 서버는 토큰을 생성·보관해주지 않으므로 설정한 값을 따로 관리하세요.
 
 ## 모델 API 키
 
-JEV는 앱의 **프로바이더·모델 → 프로바이더 추가 → TypeSafe AI** 화면에서 키를 저장하고 바로 테스트할 수 있어요. 저장 키는 DB 옆의 `.jev-credentials` 디렉터리에 보관하며 JSON/SQLite 내보내기에 포함되지 않아요. 기존 `TYPESAFE_API_KEY` 환경변수도 저장 키가 없을 때 계속 사용할 수 있어요. 자세한 연결·보관 방식은 [JEV 안내](PROVIDERS.md#typesafe--jev-연결과-테스트)를 확인하세요.
+API 키는 앱의 프로바이더 설정에서 직접 입력해요. JEV와 서비스 계정 JSON도 DB에 보관해요. 환경변수로 모델 키를 등록하거나 별도의 origin 승인 목록을 설정할 필요는 없어요. 주소·키를 저장하면 다음 요청부터 사용해요. [프로바이더 안내](PROVIDERS.md)
 
-`.env.self-host`는 앱 컨테이너의 서버 환경변수로도 전달돼요. 사용할 공급자의 키를 추가한 뒤 컨테이너를 갱신하세요. 키에 `$`나 `#`가 있으면 값을 작은따옴표로 감싸서 Compose 보간·주석 처리를 피하세요.
-
-```dotenv
-UIMORI_PROVIDER_ORIGINS=https://api.openai.com
-OPENAI_API_KEY='실제-서버-키'
-```
-
-```sh
-docker compose --env-file .env.self-host up -d
-```
-
-앱의 프로바이더 설정에는 키 값 대신 `OPENAI_API_KEY`라는 참조 이름을 넣어요. 접속 토큰은 작업실 로그인용이고 `OPENAI_API_KEY` 같은 인증 환경변수는 외부 모델 호출용이에요. 이름은 영문 대소문자 또는 밑줄로 시작하고 이후 숫자를 포함할 수 있으며 최대 200자예요. 특정 접두사는 요구하지 않아요. 모델별 설정과 현재 검증 범위는 [공급자 안내](PROVIDERS.md)를 확인하세요.
-
-Google Agent Platform의 서비스 계정 파일을 쓰는 경우 `deploy/compose.vertex.example.yaml`을 함께 사용해요. `.env.self-host`에 `UIMORI_SECRETS_DIR=/srv/uimori/secrets`를 설정하고 그 디렉터리에 `service-account.json`을 둬요. 파일은 앱의 UID 1000 사용자가 읽을 수 있어야 해요. 이 overlay는 서버 안의 `/run/uimori-secrets/service-account.json`을 읽기 전용으로 연결하고 Gemini 요청을 Flex로 고정해요. [Compose 읽기 전용 bind mount](https://docs.docker.com/reference/compose-file/services/#volumes)
-
-```sh
-docker compose --env-file .env.self-host -f compose.yaml -f deploy/compose.vertex.example.yaml up --build -d
-```
-
-이 구성을 선택했으면 이후 `up`, `down`, `logs`에도 같은 두 `-f` 옵션을 사용해요. 서버의 누적 호출 수·금액 제한은 없으며 작업별 호출·시간·출력 한도는 유지해요. 실제 청구 금액은 추정하지 않아요.
-
-컨테이너 안의 `127.0.0.1`은 그 컨테이너 자신이에요. PC나 Docker 호스트에 있는 호환 API를 이 주소로 설정하면 연결되지 않아요. 현재 공급자 정책은 비-loopback HTTP를 허용하지 않으므로, 별도 서버는 접근 가능한 HTTPS 주소와 outbound origin 허용 설정을 사용하세요.
+다른 PC의 모델에는 해당 PC의 접근 가능한 주소를 사용해요. 컨테이너의 localhost는 컨테이너 자신이에요. LAN HTTP도 사용할 수 있지만 외부 인터넷 구간에는 HTTPS 주소를 권장해요.
 
 ## 저장과 운영
 
@@ -90,7 +69,7 @@ docker compose --env-file .env.self-host exec proxy nginx -t
 docker compose --env-file .env.self-host restart proxy
 ```
 
-데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 데이터 전환과 복구에서는 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 빈 DB와 현재 schema 24 DB만 열어요. 구형 DB를 올리는 migration이나 구형 archive 복원은 제공하지 않아요. 기존 volume은 보관하고, 이 구조로 새로 시작할 때는 별도의 빈 volume을 지정해요. 현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 운영자용 update controller는 아래 [한 번의 업데이트](#한-번의-업데이트)에 있어요. 앱 안의 Update 버튼과 일반 사용자를 위한 자동 복구 흐름은 아직 베타 준비 중이에요.
+데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 데이터 전환과 복구에서는 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 빈 DB와 개인 작업실 schema 1 DB만 열어요. schema 24 자료는 별도 일회성 변환으로 새 DB에 옮겨요. 기존 volume은 보관하고, 이 구조로 새로 시작할 때는 별도의 빈 volume을 지정해요. 현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 운영자용 update controller는 아래 [한 번의 업데이트](#한-번의-업데이트)에 있어요. 앱 안의 Update 버튼과 일반 사용자를 위한 자동 복구 흐름은 아직 베타 준비 중이에요.
 
 프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
 

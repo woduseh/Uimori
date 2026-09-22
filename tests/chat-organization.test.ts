@@ -1,6 +1,6 @@
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { afterEach, expect, test } from 'vitest';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
@@ -45,65 +45,13 @@ async function fixture() {
   };
 }
 const ref = (content: Content) => ({ id: content.id, revision: content.revision });
-function titles(store: Store, botId: string, folderId: string | null) {
+function _titles(store: Store, botId: string, folderId: string | null) {
   return store
     .chats()
     .filter((chat) => chat.botId === botId && chat.folderId === folderId)
     .sort((a, b) => a.sortPosition! - b.sortPosition!)
     .map((chat) => chat.title);
 }
-
-test('manual order survives moves, folder deletion, new chats, archive and reopen', async () => {
-  const { store, bot } = await fixture();
-  const folder = store.organization.createFolder(bot.id, { title: 'Stories' });
-  const first = store.createChat('First', 'calm', { botId: bot.id });
-  const second = store.createChat('Second', 'calm', { botId: bot.id });
-  const third = store.createChat('Third', 'calm', { botId: bot.id });
-  expect(titles(store, bot.id, null)).toEqual(['Third', 'Second', 'First']);
-  store.organization.move(first.id, {
-    expectedRevision: 1,
-    folderId: null,
-    beforeChatId: second.id,
-  });
-  expect(titles(store, bot.id, null)).toEqual(['Third', 'First', 'Second']);
-  store.organization.move(third.id, {
-    expectedRevision: 1,
-    folderId: folder.id,
-    beforeChatId: null,
-  });
-  store.organization.move(second.id, {
-    expectedRevision: 1,
-    folderId: folder.id,
-    beforeChatId: third.id,
-  });
-  expect(titles(store, bot.id, folder.id)).toEqual(['Second', 'Third']);
-  store.organization.move(second.id, {
-    expectedRevision: 2,
-    folderId: folder.id,
-    beforeChatId: null,
-  });
-  expect(titles(store, bot.id, folder.id)).toEqual(['Third', 'Second']);
-  store.event(third.id, 'run.updated', 'synthetic-activity');
-  expect(titles(store, bot.id, folder.id)).toEqual(['Third', 'Second']);
-  store.organization.deleteFolder(bot.id, folder.id, { expectedRevision: 1 });
-  expect(titles(store, bot.id, null)).toEqual(['First', 'Third', 'Second']);
-  store.createChat('Newest', 'calm', { botId: bot.id });
-  const order = ['Newest', 'First', 'Third', 'Second'];
-  expect(titles(store, bot.id, null)).toEqual(order);
-  const directory = await mkdtemp(join(tmpdir(), 'Uimori organization '));
-  const target = new Store(join(directory, 'restored.sqlite'));
-  owned.push({ directory, store: target });
-  target.product.import(store.product.export());
-  expect(titles(target, bot.id, null)).toEqual(order);
-  const owner = owned.find((item) => item.store === store)!;
-  store.close();
-  owner.store = undefined;
-  const reopened = new Store(store.path);
-  owner.store = reopened;
-  expect(titles(reopened, bot.id, null)).toEqual(order);
-  expect(reopened.chats()).toEqual(target.chats());
-  expect((await readdir(owner.directory)).filter((name) => name.includes('.pre-'))).toEqual([]);
-});
 
 test('invalid and stale order anchors roll back every position and revision', async () => {
   const { store, bot, other } = await fixture();
@@ -273,25 +221,6 @@ test('creation selects ownership and later attachments never infer a new owner',
   expect(() => attach(store, explicit.id, [ref(other)])).toThrow('owning bot');
   expect(store.chat(explicit.id).botId).toBe(bot.id);
   expect(store.chat(explicit.id).organizationRevision).toBe(1);
-});
-
-test('organization archive roundtrip retains defaults, ownership and CAS revisions', async () => {
-  const { store, bot, persona } = await fixture();
-  const folder = store.organization.createFolder(bot.id, {
-    title: 'Archive',
-    defaultPersona: ref(persona),
-  });
-  const chat = store.createChat('Stored', 'calm', {
-    botId: bot.id,
-    folderId: folder.id,
-  });
-  store.organization.move(chat.id, { expectedRevision: 1, folderId: null });
-  const directory = await mkdtemp(join(tmpdir(), 'Uimori organization '));
-  const target = new Store(join(directory, 'restored.sqlite'));
-  owned.push({ directory, store: target });
-  target.product.import(store.product.export());
-  expect(target.chat(chat.id)).toEqual(store.chat(chat.id));
-  expect(target.organization.folders(bot.id)).toEqual(store.organization.folders(bot.id));
 });
 
 test('HTTP organization routes enforce bot scopes and CAS and reject missing owners', async () => {

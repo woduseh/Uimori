@@ -1,3 +1,6 @@
+import { updateAssetMetadata } from './asset-metadata.js';
+import { processImageUpload } from './image-processing.js';
+import { databaseBackupStream } from './database-backup.js';
 import { nativeRisuPreview } from './risu-native-preview.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { chatDeletionRoutes } from './chat-deletion.js';
@@ -21,12 +24,6 @@ import { libraryOrganizationRoutes } from './library-organization.js';
 import { packagePresentationRoutes } from './package-presentation-routes.js';
 import type { VertexCredentialStore } from './vertex-credentials.js';
 import type { CodexRuntimeService } from './codex-runtime.js';
-import {
-  PROVIDER_PROTOCOLS,
-  validateProviderEndpoint,
-  type ProviderProtocol,
-} from '../core/product.js';
-import { providerOriginApproval } from '../core/provider-origin-policy.js';
 import { assertLibraryVisible, libraryDeletionRoutes } from './library-deletion.js';
 import type { MaintenanceStatus } from './maintenance.js';
 
@@ -38,7 +35,7 @@ export function productRoutes(
     codex?: CodexRuntimeService;
     accessToken?: string;
     publicOrigin?: string;
-    approvedOrigins: readonly string[];
+
     publish: (chatId: string) => void;
     onAuthChanged?: () => void;
     onChatDeleted?: (chatId: string) => void;
@@ -78,12 +75,12 @@ export function productRoutes(
     '/api/chats/import-backup',
     { bodyLimit: CHAT_BACKUP_MAX_BYTES + 1024 },
     async (request) => {
-      const result = importChatBackup(store, request.body);
+      const result = await importChatBackup(store, request.body);
       if (result.created) options.publish(result.chat.id);
       return result;
     }
   );
-  const sessions = new AccessSessions(options);
+  const sessions = new AccessSessions(store.db, options);
   const authenticated = (cookie?: string) => sessions.authenticated(cookie);
   app.addHook('onRequest', async (request) => {
     // Fastify resolves percent-encoded paths before hooks, while request.url stays raw.
@@ -97,13 +94,15 @@ export function productRoutes(
     )
       throw new HttpError(401, 'Authentication required');
   });
-  app.get('/api/session', async (request, reply) =>
-    reply.header('Cache-Control', 'no-store').send({
+  app.get('/api/session', async (request, reply) => {
+    const renewal = sessions.renew(request.headers.cookie);
+    if (renewal) reply.header('Set-Cookie', renewal);
+    return reply.header('Cache-Control', 'no-store').send({
       required: sessions.required,
       authenticated: authenticated(request.headers.cookie),
       ...(options.maintenance ? { maintenance: options.maintenance() } : {}),
-    })
-  );
+    });
+  });
   app.post('/api/session', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     try {
@@ -137,29 +136,6 @@ export function productRoutes(
     return product.library(request.query.view === 'summary');
   });
   app.get('/api/provider-management/definitions', async () => PROVIDER_DEFINITIONS);
-  app.post('/api/provider-management/endpoint-status', async (request, reply) => {
-    reply.header('Cache-Control', 'no-store');
-    const b = record(request.body);
-    fields(b, ['protocol', 'endpoint']);
-    if (!PROVIDER_PROTOCOLS.includes(b.protocol as ProviderProtocol))
-      throw new HttpError(400, 'Unsupported protocol');
-    const protocol = b.protocol as ProviderProtocol,
-      endpoint = text(b.endpoint, 'endpoint', 2048);
-    try {
-      validateProviderEndpoint(protocol, endpoint);
-      const url = new URL(endpoint);
-      if (url.username || url.password || url.search || url.hash)
-        return { status: 'invalid', origin: null };
-      if (protocol === 'codex-app-server-v1') return { status: 'local', origin: null };
-      return {
-        status:
-          providerOriginApproval(protocol, endpoint, options.approvedOrigins) ?? 'needs-approval',
-        origin: url.origin,
-      };
-    } catch {
-      return { status: 'invalid', origin: null };
-    }
-  });
   app.post(
     '/api/provider-management/vertex-credentials',
     { bodyLimit: 70 * 1024 },
@@ -181,7 +157,7 @@ export function productRoutes(
       const connection = product.get<Connection>('connection', request.params.id);
       const agent =
         connection.protocol === 'codex-app-server-v1' ? await options.codex?.status() : undefined;
-      return readiness(product, connection, options.approvedOrigins, options.credentials, agent);
+      return readiness(product, connection, options.credentials, agent);
     }
   );
   app.get<{ Params: { kind: string; id: string } }>(
@@ -262,11 +238,11 @@ export function productRoutes(
         if (!options.codex) throw new Error('Codex unavailable');
         catalog = await options.codex.catalog();
         product.authorize(previous);
-      } else if (previous.protocol === 'vertex-gemini-v1' && previous.catalogCredentialEnv) {
+      } else if (previous.protocol === 'vertex-gemini-v1' && previous.catalogCredentialRef) {
         // Agent Platform has no parameter-bearing list API; the Gemini Developer API key lists
         // Gemini models and limits only. It never authorizes generation requests.
         validateVertexEndpoint(previous.endpoint);
-        const key = process.env[previous.catalogCredentialEnv];
+        const key = store.credentials.get(previous.catalogCredentialRef);
         if (!key || /[\r\n]/u.test(key)) throw new Error('Credential unavailable');
         const signal = AbortSignal.timeout(5000);
         const collected: Connection['catalog'] = [];
@@ -311,18 +287,15 @@ export function productRoutes(
         }));
       } else {
         product.authorize(previous);
-        const c = validateConnection(
-          {
-            id: previous.id,
-            protocol: previous.protocol,
-            endpoint: previous.endpoint,
-            ...(previous.credentialEnv ? { credentialEnv: previous.credentialEnv } : {}),
-          },
-          options.approvedOrigins
-        );
-        const credential = c.credentialEnv ? process.env[c.credentialEnv] : undefined;
+        const c = validateConnection({
+          id: previous.id,
+          protocol: previous.protocol,
+          endpoint: previous.endpoint,
+          ...(previous.credentialRef ? { credentialRef: previous.credentialRef } : {}),
+        });
+        const credential = c.credentialRef ? store.credentials.get(c.credentialRef) : undefined;
         if (
-          (c.credentialEnv ||
+          (c.credentialRef ||
             ['openai-responses-v1', 'anthropic-messages-v1'].includes(c.protocol)) &&
           (!credential || /[\r\n]/.test(credential))
         )
@@ -433,11 +406,6 @@ export function productRoutes(
     options.publish(p.chatId);
     return p;
   });
-  app.post<{ Params: { id: string } }>('/api/chats/:id/branches', async (request) => {
-    const branch = product.createBranch(request.params.id, request.body);
-    options.publish(branch.chatId);
-    return branch;
-  });
   app.patch<{ Params: { id: string; branchId: string } }>(
     '/api/chats/:id/branches/:branchId',
     async (request) => {
@@ -458,12 +426,31 @@ export function productRoutes(
       return branch;
     }
   );
-  app.post<{ Params: { id: string } }>('/api/chats/:id/assets', async (request) => {
-    const asset = product.createAsset(request.params.id, request.body);
-    store.event(asset.chatId, 'asset.created', asset.id);
-    options.publish(asset.chatId);
-    return asset;
-  });
+  app.post<{ Params: { id: string } }>(
+    '/api/chats/:id/assets',
+    { bodyLimit: 90 * 1024 * 1024 },
+    async (request) => {
+      const body = record(request.body);
+      const image = await processImageUpload({ base64: body.base64 });
+      const asset = product.createAsset(request.params.id, { ...body, ...image });
+      store.event(asset.chatId, 'asset.created', asset.id);
+      options.publish(asset.chatId);
+      return asset;
+    }
+  );
+  app.patch<{ Params: { id: string; assetId: string } }>(
+    '/api/chats/:id/assets/:assetId',
+    (request) => {
+      const asset = updateAssetMetadata(
+        store,
+        request.params.id,
+        request.params.assetId,
+        request.body
+      );
+      options.publish?.(request.params.id);
+      return asset;
+    }
+  );
   app.get<{ Params: { id: string } }>('/api/assets/:id', async (request, reply) => {
     const a = product.asset(request.params.id);
     return reply
@@ -472,24 +459,11 @@ export function productRoutes(
       .type(a.asset.mime)
       .send(a.bytes);
   });
-  app.get('/api/export', async (_request, reply) =>
-    reply
-      .header('Content-Disposition', 'attachment; filename="uimori-archive.json"')
-      .send(product.export())
-  );
   app.get('/api/backup', async (_request, reply) =>
     reply
       .header('Content-Disposition', 'attachment; filename="uimori-backup.sqlite"')
       .type('application/vnd.sqlite3')
-      .send(product.backup())
+      .send(await databaseBackupStream(store))
   );
-  app.get('/api/import/status', async (_request, reply) =>
-    reply.header('Cache-Control', 'no-store').send(product.importStatus())
-  );
-  app.post('/api/import', { bodyLimit: 256 * 1024 * 1024 + 1024 }, async (request) => {
-    const b = record(request.body);
-    fields(b, ['archive']);
-    return product.import(b.archive);
-  });
   return { authenticated };
 }

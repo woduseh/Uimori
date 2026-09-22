@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { CredentialFileIcon, UploadIcon } from './ui-icons.js';
 import { api, ApiError } from './api.js';
 
-type RegisteredCredential = { credentialEnv: string; projectId: string; clientEmail: string };
+type RegisteredCredential = { credentialRef: string; projectId: string; clientEmail: string };
 export function VertexCredentialUpload({
-  credentialEnv,
+  credentialRef,
   disabled,
   onRegistered,
   onBusy,
 }: {
-  credentialEnv: string;
+  credentialRef: string;
   disabled: boolean;
   onRegistered: (credential: RegisteredCredential) => void;
   onBusy: (value: boolean) => void;
@@ -24,7 +24,7 @@ export function VertexCredentialUpload({
     },
     []
   );
-  const stored = credentialEnv.startsWith('UIMORI_PROVIDER_VERTEX_FILE_');
+  const stored = credentialRef.startsWith('UIMORI_PROVIDER_VERTEX_FILE_');
   return (
     <section className="vertex-credential-upload full" aria-label="Google 서비스 계정 JSON">
       <div className="provider-section-heading">
@@ -107,7 +107,7 @@ export function VertexCredentialUpload({
           }}
         />
       </label>
-      {stored && registered?.credentialEnv === credentialEnv && (
+      {stored && registered?.credentialRef === credentialRef && (
         <p role="status">
           등록됨 · {registered.projectId}
           <br />

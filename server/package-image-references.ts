@@ -5,9 +5,7 @@ import { HttpError } from './request-validation.js';
 /** Reference checks do not need image bytes. Upload/import still validates those bytes. */
 export function assertPackageImageReferences(db: DatabaseSync, images: readonly PackageImage[]) {
   if (!images.length) return;
-  const read = db.prepare(`SELECT json_extract(body,'$.hash') AS hash,
-    json_extract(body,'$.mime') AS mime FROM versions
-    WHERE kind='package-image' AND id=? AND revision=1`);
+  const read = db.prepare('SELECT hash,mime FROM image_blobs WHERE hash=?');
   const checked = new Map<string, { hash: string; mime: string }>();
   for (const image of images) {
     let blob = checked.get(image.blobHash);

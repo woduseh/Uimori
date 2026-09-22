@@ -67,12 +67,7 @@ export function ChatBackupImport({
         throw new Error(
           '이 버전의 채팅 백업은 지원하지 않아요. 파일을 만든 버전에 맞는 앱에서 확인해 주세요.'
         );
-      if (
-        !Array.isArray(backup.records?.chat) ||
-        backup.records.chat.length !== 1 ||
-        !Array.isArray(backup.records.branches) ||
-        !Array.isArray(backup.records.sources)
-      )
+      if (!Array.isArray(backup.chats) || !backup.chats.length || !backup.resources)
         throw new Error('채팅 백업의 필수 정보가 없어요.');
       setSelection({ backup, requestKey: crypto.randomUUID() });
     } catch (caught) {
@@ -125,7 +120,7 @@ export function ChatBackupImport({
     <section className="chat-backup-import" aria-label="채팅 백업 가져오기">
       <h3>채팅 백업 가져오기</h3>
       <p className="muted" id={`${id}-help`}>
-        모든 분기와 기록을 새 채팅으로 복원해요. 같은 파일을 다시 가져와도 기존 채팅은 유지돼요.
+        각 분기를 독립적인 새 채팅으로 복원해요. 같은 파일을 다시 가져와도 기존 채팅은 유지돼요.
       </p>
       <div className="archive-file-field">
         <label>
@@ -147,9 +142,9 @@ export function ChatBackupImport({
       {selection && (
         <div className="archive-file-summary">
           <p>
-            {String(selection.backup.records.chat[0].title)} · 분기{' '}
-            {selection.backup.records.branches.length}개 · 본문{' '}
-            {selection.backup.records.sources.length}개
+            {selection.backup.title} · 분기 {selection.backup.chats.length}개 · 본문{' '}
+            {selection.backup.chats.reduce((sum, chat) => sum + chat.transcript.entries.length, 0)}
+            개
           </p>
           <div className="archive-import-actions">
             <button type="button" disabled={disabled || busy} onClick={() => void restore()}>

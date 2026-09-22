@@ -7,13 +7,14 @@ import { Store } from '../server/store.js';
 import { prepareRisuImport, applyRisuImport } from '../server/risu-import.js';
 import { createPackageStart } from '../server/package-start.js';
 import { applyNativeRisuAction, nativeSourceSnapshot } from '../server/risu-native-actions.js';
+import { forkChat } from '../server/chat-fork.js';
+import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 import { readChatVariables } from '../server/chat-variables.js';
 import { packagePresentationRoutes } from '../server/package-presentation-routes.js';
-import { buildPackagePresentation } from '../server/package-presentation.js';
-import { captureLogicalHistory, compileSnapshotPrompt } from '../server/prompt-snapshot.js';
+import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { prepareNativeRisuRun, prepareNativeRisuOutput } from '../server/risu-native-run.js';
 import { disposeAllNativeRisuSessions } from '../server/risu-native-runtime.js';
-import { validateRunSnapshot } from '../server/snapshot-archive.js';
+
 import {
   nativeInteractionRoutes,
   requestNativeInteraction,
@@ -27,7 +28,7 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true });
   }
 });
-function setup(extraOutput = false, historyEdit = '') {
+async function setup(extraOutput = false, historyEdit = '') {
   const path = mkdtempSync(join(tmpdir(), 'uimori-native-host-'));
   const store = new Store(join(path, 'test.sqlite'));
   owned.push({ path, store });
@@ -88,7 +89,7 @@ end
     ).toString('base64'),
   };
   const preview = prepareRisuImport({ source });
-  const saved = applyRisuImport(store, {
+  const saved = await applyRisuImport(store, {
     source,
     digest: preview.digest,
     allowPartial: false,
@@ -160,7 +161,7 @@ async function appendNativeSource(store: Store, chatId: string, text: string) {
 }
 
 test('later native output preserves Lua history edits until a newer user source edit replaces them', async () => {
-  const { store, chatId } = setup(
+  const { store, chatId } = await setup(
     false,
     "if getChatLength(id) > 2 then setChat(id, 0, 'Lua revised first request'); setChat(id, 1, 'Lua revised first source') end"
   );
@@ -186,7 +187,7 @@ test('later native output preserves Lua history edits until a newer user source 
 });
 
 test('a new Lua edit can revise source text after the user edit enters its input', async () => {
-  const { store, chatId } = setup(
+  const { store, chatId } = await setup(
     false,
     "if getChatLength(id) > 2 then setChat(id, 1, getChat(id, 1).data .. ' LUA') end"
   );
@@ -195,11 +196,9 @@ test('a new Lua edit can revise source text after the user edit enters its input
   const second = await appendNativeSource(store, chatId, 'Second');
   const saved = store.run(second.runId).snapshot;
   expect(
-    saved.logicalHistory!.find((message) => message.id === `source:${first.id}`)
-  ).toMatchObject({
-    text: edited.text,
-    sourceHash: edited.hash,
-  });
+    saved.messageChanges!.updated.find((change) => change.message.id === `source:${first.id}`)
+  ).toMatchObject({ message: { text: `${edited.text} LUA` }, expectedSourceHash: edited.hash });
+  expect(saved.logicalHistory).toBeUndefined();
   expect(
     nativeSourceSnapshot(store, chatId, second.id).snapshot.logicalHistory!.find(
       (message) => message.id === `source:${first.id}`
@@ -209,7 +208,7 @@ test('a new Lua edit can revise source text after the user edit enters its input
 });
 
 test('user edits to an authored native char survive older output receipts', async () => {
-  const { store, chatId } = setup(false, "setChat(id, 0, 'Lua revised authored source')");
+  const { store, chatId } = await setup(false, "setChat(id, 0, 'Lua revised authored source')");
   const head = store.source(store.chat(chatId).headRevision!);
   await applyNativeRisuAction(store, chatId, head.id, actionBody(store, chatId, 'start', 'start'));
   const authored = store.source(store.chat(chatId).headRevision!);
@@ -225,45 +224,8 @@ test('user edits to an authored native char survive older output receipts', asyn
   ).toMatchObject({ text: edited.text, sourceHash: edited.hash });
 });
 
-test('source edits enter the next native prompt while archived snapshots reproduce their captured versions', async () => {
-  const { store, chatId } = setup();
-  const first = await appendNativeSource(store, chatId, 'First');
-  const second = await appendNativeSource(store, chatId, 'Second');
-  const historical = store.run(second.runId).snapshot;
-  const edited = store.editSource(first.id, {
-    expectedRevision: 0,
-    text: 'User corrected first source',
-  });
-  const third = await appendNativeSource(store, chatId, 'Third');
-  const captured = store.run(third.runId).snapshot;
-  expect(captured.logicalHistory!.find((entry) => entry.id === `source:${first.id}`)).toMatchObject(
-    {
-      text: edited.text,
-      sourceHash: edited.hash,
-    }
-  );
-  expect(JSON.stringify(captured.promptCompilation!.messages)).toContain(edited.text);
-  expect(captureLogicalHistory(store, historical)).toEqual(historical.logicalHistory);
-  validateRunSnapshot(store, historical, second.runId);
-  store.editSource(first.id, { expectedRevision: 1, text: 'An even later user edit' });
-  expect(captureLogicalHistory(store, captured)).toEqual(captured.logicalHistory);
-  validateRunSnapshot(store, captured, third.runId);
-  const restored = new Store(join(owned.at(-1)!.path, 'restored.sqlite'));
-  try {
-    restored.product.import(store.product.export());
-    for (const source of [second, third]) {
-      const saved = store.run(source.runId).snapshot;
-      expect(restored.run(source.runId).snapshot).toEqual(saved);
-      expect(captureLogicalHistory(restored, saved)).toEqual(saved.logicalHistory);
-      validateRunSnapshot(restored, saved, source.runId);
-    }
-  } finally {
-    restored.close();
-  }
-});
-
 test('native first-message button renders, checkpoints state, and survives source refresh', async () => {
-  const { store, chatId } = setup();
+  const { store, chatId } = await setup();
   const app = Fastify();
   packagePresentationRoutes(app, store);
   try {
@@ -282,18 +244,13 @@ test('native first-message button renders, checkpoints state, and survives sourc
     const replay = await applyNativeRisuAction(store, chatId, first, body);
     expect(replay.created).toBe(false);
     expect(store.chat(chatId).headRevision).toBe(head);
-    validateRunSnapshot(
-      store,
-      store.run(store.source(head).runId).snapshot,
-      store.source(head).runId
-    );
   } finally {
     await app.close();
   }
 });
 
 test('native choices feed the next prompt and output variables commit with the source', async () => {
-  const { store, chatId } = setup();
+  const { store, chatId } = await setup();
   const first = store.chat(chatId).headRevision!;
   await applyNativeRisuAction(
     store,
@@ -343,142 +300,10 @@ test('native choices feed the next prompt and output variables commit with the s
   expect(saved.text).toBe('Story OUTPUT');
   expect(readChatVariables(store, chatId, branch.id).values.finished).toBe('yes');
   expect(await prepareNativeRisuRun(output)).toBe(output);
-  validateRunSnapshot(store, output, created.run.id);
 });
 
-test('native message replacement copies the branch suffix and never edits another branch', async () => {
-  const { store, chatId } = setup();
-  let head = store.chat(chatId).headRevision!;
-  await applyNativeRisuAction(store, chatId, head, actionBody(store, chatId, 'start', 'start'));
-  head = store.chat(chatId).headRevision!;
-  expect(store.source(head).text).toBe('Chosen opening');
-  const other = store.product.createBranch(chatId, { title: 'Original', fromRevision: head });
-  await applyNativeRisuAction(store, chatId, head, actionBody(store, chatId, 'replace', 'replace'));
-  const next = store.chat(chatId).headRevision!;
-  expect(store.source(next).text).toBe('Changed opening');
-  expect(store.product.branch(chatId, other.id).headRevision).toBe(head);
-  expect(store.source(head).text).toBe('Chosen opening');
-  const captured = nativeSourceSnapshot(store, chatId, next);
-  expect(captureLogicalHistory(store, captured.snapshot).map((entry) => entry.text)).toEqual([
-    '<selector>',
-    'Changed opening',
-  ]);
-  await expect(
-    applyNativeRisuAction(store, chatId, head, actionBody(store, chatId, 'choose', 'outside'))
-  ).rejects.toThrow('RISU_NATIVE_SOURCE_OUTSIDE_BRANCH');
-});
-
-test('actions preserve all logical messages when output callbacks add messages within one source', async () => {
-  const { store, chatId } = setup(true);
-  const chat = store.chat(chatId),
-    branch = store.product.branch(chatId);
-  const created = store.createRun(
-    chatId,
-    {
-      request: 'Continue',
-      expectedRevision: branch.headRevision,
-      expectedSettingsRevision: chat.settingsRevision,
-      branchId: branch.id,
-      idempotencyKey: 'expanded',
-    },
-    () => ({
-      chatId,
-      branchId: branch.id,
-      parentRevision: branch.headRevision,
-      request: 'Continue',
-      settingsRevision: chat.settingsRevision,
-      settings: chat.settings,
-      history: store.history(branch.headRevision),
-      profile: store.product.snapshot(chatId),
-      resources: [],
-    })
-  );
-  store.startRun(created.run.id);
-  const prepared = await prepareNativeRisuRun(created.run.snapshot);
-  const output = await prepareNativeRisuOutput(compileSnapshotPrompt(prepared), 'Story');
-  store.db
-    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-    .run(JSON.stringify(output), created.run.id);
-  const source = store.completeRun(
-    created.run.id,
-    output.nativeRisuExecution!.output!.text,
-    { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-    chat.settings
-  );
-  const app = Fastify();
-  packagePresentationRoutes(app, store);
-  try {
-    const storedBefore = store.source(source.id);
-    const shown = await app.inject(`/api/chats/${chatId}/sources/${source.id}/presentation`);
-    expect(shown.statusCode, shown.body).toBe(200);
-    const presentation = shown.json();
-    expect(presentation.sourceHash).toBe(source.hash);
-    expect(presentation.request.text).toBe('Continue');
-    expect(presentation.original.html).toContain('[1]Story OUTPUT');
-    expect(presentation.original.html).toContain('[2]Script postscript');
-    expect(presentation.original.html).toContain('[3]Script user reply');
-    expect(presentation.original.html).toContain('[4]Script followup');
-    expect(presentation.original.html).not.toContain('Continue');
-    expect(presentation.original.html.match(/data-risu-message-index=/gu)).toHaveLength(4);
-    expect(presentation.original.html).toContain('data-risu-message-role="user"');
-    expect(store.source(source.id)).toEqual(storedBefore);
-    const snapshot = nativeSourceSnapshot(store, chatId, source.id).snapshot;
-    const translated = await buildPackagePresentation(
-      snapshot,
-      {
-        ...source,
-        translation: {
-          text: 'Translated body',
-          sourceRevision: source.id,
-          sourceHash: source.hash,
-        },
-      },
-      undefined,
-      {
-        nativeMessages: [
-          { index: 1, role: 'assistant', primary: true, text: 'Story OUTPUT' },
-          { index: 2, role: 'assistant', primary: false, text: 'Script postscript' },
-        ],
-      }
-    );
-    if (translated.format !== 'risu-html') throw new Error('Expected native HTML presentation');
-    expect(translated.translation!.html).toContain('[1]Translated body');
-    expect(translated.translation!.html).toContain('[2]Script postscript');
-    expect(translated.translation!.html).not.toContain('Story OUTPUT');
-  } finally {
-    await app.close();
-  }
-  const other = store.product.createBranch(chatId, { title: 'Original', fromRevision: source.id });
-  const before = nativeSourceSnapshot(store, chatId, source.id).snapshot.logicalHistory!.map(
-    ({ role, text }) => ({ role, text })
-  );
-  await applyNativeRisuAction(
-    store,
-    chatId,
-    source.id,
-    actionBody(store, chatId, 'choose', 'expanded-choose')
-  );
-  const head = store.chat(chatId).headRevision!;
-  expect(
-    nativeSourceSnapshot(store, chatId, head).snapshot.logicalHistory!.map(({ role, text }) => ({
-      role,
-      text,
-    }))
-  ).toEqual(before);
-  expect(before.map(({ text }) => text)).toEqual([
-    '<selector>',
-    'Continue INPUT',
-    'Story OUTPUT',
-    'Script postscript',
-    'Script user reply',
-    'Script followup',
-  ]);
-  expect(store.product.branch(chatId, other.id).headRevision).toBe(source.id);
-  expect(store.product.export().tables.sources.length).toBeGreaterThan(2);
-});
-
-test('unprepared failed native runs require a fresh retry instead of an unrepeatable candidate', () => {
-  const { store, chatId } = setup();
+test('unprepared failed native runs require a fresh retry instead of an unrepeatable candidate', async () => {
+  const { store, chatId } = await setup();
   const chat = store.chat(chatId),
     branch = store.product.branch(chatId);
   const created = store.createRun(
@@ -504,14 +329,14 @@ test('unprepared failed native runs require a fresh retry instead of an unrepeat
   );
   store.startRun(created.run.id);
   store.finishRun(created.run.id, 'failed', 'Interrupted before native preparation');
-  expect(() => store.candidate(created.run.id, 'candidate', 'Candidate')).toThrow(
-    '현재 설정으로 다시 요청'
-  );
+  const fresh = store.candidate(created.run.id, 'candidate', 'Candidate');
+  expect(fresh.run.chatId).not.toBe(chatId);
+  expect(fresh.run.snapshot.nativeRisuExecution).toBeUndefined();
   expect(store.retryRun(created.run.id, 'retry').created).toBe(true);
 });
 
 test('native input dialog resumes the suspended invocation and rejects duplicate replies', async () => {
-  const { store, chatId } = setup(),
+  const { store, chatId } = await setup(),
     app = Fastify();
   nativeInteractionRoutes(app, store);
   const first = store.chat(chatId).headRevision!;
@@ -563,4 +388,39 @@ test('native input dialog resumes the suspended invocation and rejects duplicate
   } finally {
     await app.close();
   }
+});
+
+test('Lua-authored extra messages survive independent copy and portable restore without input snapshots', async () => {
+  const { store, chatId } = await setup(true);
+  const source = await appendNativeSource(store, chatId, 'Native story');
+  const view = (database: Store, id: string, head: string) =>
+    nativeSourceSnapshot(database, id, head).snapshot.logicalHistory!.map(({ role, text }) => ({
+      role,
+      text,
+    }));
+  const expected = view(store, chatId, source.id);
+  expect(expected.some((message) => message.text === 'Script postscript')).toBe(true);
+  expect(
+    expected.some((message) => message.role === 'user' && message.text === 'Script user reply')
+  ).toBe(true);
+  const copied = forkChat(store, chatId, {
+    fromRevision: source.id,
+    idempotencyKey: 'native-copy',
+  });
+  expect(view(store, copied.id, copied.headRevision!)).toEqual(expected);
+  const path = mkdtempSync(join(tmpdir(), 'uimori-native-copy-'));
+  const target = new Store(join(path, 'app.sqlite'));
+  owned.push({ path, store: target });
+  const restored = await importChatBackup(target, {
+    backup: exportChatBackup(store, chatId),
+    idempotencyKey: 'native-restore',
+  });
+  expect(view(target, restored.chat.id, restored.chat.headRevision!)).toEqual(expected);
+  const snapshots = target.detail(restored.chat.id).runs.map((run) => run.snapshot);
+  expect(
+    snapshots.every(
+      (snapshot) =>
+        !snapshot.nativeRisuExecution && !snapshot.logicalHistory && !snapshot.promptCompilation
+    )
+  ).toBe(true);
 });

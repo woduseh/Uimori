@@ -1,6 +1,5 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { expect, test } from '@playwright/test';
-import type { EditDraft, DraftPatchResult } from '../core/edit-drafts.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
 import type { PromptPreset } from '../core/product.js';
 import { navigationAction } from './ui-navigation.js';
@@ -32,27 +31,6 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
   });
   expect(originalResponse.ok(), await originalResponse.text()).toBe(true);
   const original = (await originalResponse.json()) as PromptPreset;
-  const draftResponse = await request.post('/api/edit-drafts', {
-    data: {
-      editorKey: `prompt-preset:${original.id}`,
-      kind: 'prompt-preset',
-      targetId: original.id,
-      operationId: crypto.randomUUID(),
-    },
-  });
-  expect(draftResponse.ok(), await draftResponse.text()).toBe(true);
-  const draft = (await draftResponse.json()) as EditDraft;
-  const patchedResponse = await request.patch(`/api/edit-drafts/${draft.id}`, {
-    data: {
-      expectedRevision: draft.revision,
-      operationId: crypto.randomUUID(),
-      model: { ...draft.model, title: 'Preserve this unsaved title' },
-      rawFields: { program: '{ unfinished JSON' },
-      unappliedFields: ['program'],
-    },
-  });
-  expect(patchedResponse.ok(), await patchedResponse.text()).toBe(true);
-  const preservedDraft = ((await patchedResponse.json()) as DraftPatchResult).draft;
   const organization = (await (
     await request.get('/api/library/organization')
   ).json()) as LibraryOrganization;
@@ -150,7 +128,6 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
   }
   expect(await (await request.get('/api/prompt-workspace')).json()).toEqual(before);
   expect(await (await request.get(`/api/prompt-presets/${original.id}`)).json()).toEqual(original);
-  expect(await (await request.get(`/api/edit-drafts/${draft.id}`)).json()).toEqual(preservedDraft);
   expect(workspaceWrites).toEqual([]);
   expect(errors).toEqual([]);
 });

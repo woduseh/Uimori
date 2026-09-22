@@ -105,8 +105,16 @@ function candidateCatalog(target: LoreSelectionTarget): {
     })
     .filter((item) => !target.package.nativeRisu || item.chars > 0);
   let cut = false;
-  while (catalog.length && JSON.stringify(catalog).length > LORE_SELECTION_LIMITS.catalogChars) {
-    catalog.pop();
+  let length = 2;
+  let keep = 0;
+  for (const item of catalog) {
+    const size = JSON.stringify(item).length + Number(keep > 0);
+    if (length + size > LORE_SELECTION_LIMITS.catalogChars) break;
+    length += size;
+    keep++;
+  }
+  if (keep < catalog.length) {
+    catalog.length = keep;
     cut = true;
   }
   return { catalog, ...(cut ? { partial: 'catalog' as const } : {}) };

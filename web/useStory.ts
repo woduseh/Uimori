@@ -851,8 +851,12 @@ export function useStory() {
         admitted.snapshot.branchId !== branch?.id &&
         currentView.current === sentView &&
         navigation.current.epoch === sentEpoch
-      )
-        chooseBranch(admitted.snapshot.branchId);
+      ) {
+        if (admitted.chatId !== chat.id) {
+          await loadChats();
+          select(admitted.chatId);
+        } else chooseBranch(admitted.snapshot.branchId);
+      }
     } catch (error) {
       track(definiteRejection(error) ? 'failed' : 'uncertain');
       if (

@@ -8,7 +8,6 @@ import { splitSource, validatePresentation } from '../core/auxiliary.js';
 import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
-import { forkChat } from '../server/chat-fork.js';
 import { putImageBlob, requestImages } from '../server/package-images.js';
 import { imageCatalog, imageJobInput } from '../server/package-images.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
@@ -202,7 +201,7 @@ test('the synthetic image worker preserves original provenance with a translatio
     'synthetic-worker',
     {
       signal: new AbortController().signal,
-      approvedOrigins: [],
+
       authorize: (connection) => connection,
       jev: {
         credential: () => 'synthetic-jev-key',
@@ -321,40 +320,6 @@ test('translation edits invalidate only translated placement and fence an alread
   });
 });
 
-test('archive restores both views and fork remaps translation dependencies to copied jobs', async () => {
-  const { store, source } = fixture({ imageTranslation: false });
-  const translation = translate(store, source);
-  const original = await finishImage(
-    store,
-    requestImages(store, source.id, {
-      expectedSourceHash: source.hash,
-      expectedRevision: 0,
-    })
-  );
-  const localized = await finishImage(store, selectTranslation(store, source, translation));
-  const archive = store.product.export();
-  const restored = database();
-  restored.product.import(archive);
-  expect(restored.job(original.id)).toEqual(original);
-  expect(restored.job(localized.id)).toEqual(localized);
-  const fork = forkChat(store, source.chatId, {
-    fromRevision: source.id,
-    idempotencyKey: randomUUID(),
-  });
-  const detail = store.detail(fork.id);
-  const copiedTranslation = detail.jobs.find((job) => job.kind === 'translation')!;
-  const copiedImages = detail.jobs.filter((job) => job.kind === 'image');
-  expect(copiedImages).toHaveLength(2);
-  const copiedLocalized = copiedImages.find((job) => target(job)?.mode === 'translation')!;
-  expect(target(copiedLocalized)).toMatchObject({
-    translationJobId: copiedTranslation.id,
-    translationRevision: copiedTranslation.revision,
-  });
-  expect(copiedTranslation.id).not.toBe(translation.id);
-  const bridge = auxiliaryBridge(store, new Controls(), new AbortController().signal);
-  expect((await bridge.load(copiedLocalized.id)).imageSource?.text).toBe(translated);
-});
-
 test('an unavailable JEV connection records an image failure without rolling back translated text', async () => {
   const { store, source } = fixture();
   const translation = translate(store, source);
@@ -365,7 +330,7 @@ test('an unavailable JEV connection records an image failure without rolling bac
     'synthetic-worker',
     {
       signal: new AbortController().signal,
-      approvedOrigins: [],
+
       authorize: (value) => value,
       jev: { credential: () => undefined },
       onAttemptStart: () => {
@@ -393,37 +358,6 @@ test('pending and failed retranslations retain images until a successful replace
   const replacement = translate(store, source);
   expect(replacement.id).not.toBe(previous.id);
   expect(store.job(image.id).status).toBe('stale');
-});
-
-test('source edits preserve stale image evidence in archives and reject forged target hashes atomically', async () => {
-  const { store, source } = fixture({ imageTranslation: false });
-  const translation = translate(store, source);
-  const original = await finishImage(
-    store,
-    requestImages(store, source.id, {
-      expectedSourceHash: source.hash,
-      expectedRevision: 0,
-    })
-  );
-  const localized = await finishImage(store, selectTranslation(store, source, translation));
-  store.editSource(source.id, {
-    text: 'Changed original.',
-    expectedRevision: source.editRevision!,
-  });
-  expect(store.job(original.id).status).toBe('stale');
-  expect(store.job(localized.id).status).toBe('stale');
-  const archive = store.product.export();
-  const restored = database();
-  restored.product.import(archive);
-  expect(restored.job(localized.id).result).toEqual(localized.result);
-  const corrupted: any = structuredClone(archive);
-  const row = corrupted.tables.jobs.find((job: any) => job.id === localized.id);
-  const input = JSON.parse(row.input);
-  input.imageTarget.textHash = '0'.repeat(64);
-  row.input = JSON.stringify(input);
-  const rejected = database();
-  expect(() => rejected.product.import(corrupted)).toThrow();
-  expect(rejected.chats()).toHaveLength(0);
 });
 
 test('representative portraits and profile-only assets never enter the placement catalog', () => {

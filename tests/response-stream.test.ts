@@ -342,7 +342,6 @@ describe('durable public response batches', () => {
           input: { task: 'Answer.', controls: {} },
         },
         {
-          approvedOrigins: [provider.origin],
           signal: state.signal.signal,
           onProgress: (progress) =>
             writer.progress({ ...progress, attemptId: 'attempt-1', segment: 0 }),

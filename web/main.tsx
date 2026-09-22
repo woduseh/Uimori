@@ -21,7 +21,7 @@ import { HelperPanel } from './HelperPanel.js';
 import { selectedHelperSession } from './useHelperSessions.js';
 import type { HelperScope } from '../core/helper.js';
 import { StreamingResponse } from './StreamingResponse.js';
-import { discardActiveEditor, saveActiveEditor } from './editor-workspace-context.js';
+import { discardActiveEditor, saveActiveEditor } from './resource-editor.js';
 import type { Section as ChatSettingsSection } from './ChatSettingsPanel.js';
 import { ReaderPages } from './ReaderPages.js';
 import { SceneNavigator } from './SceneNavigator.js';

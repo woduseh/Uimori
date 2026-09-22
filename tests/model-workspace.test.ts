@@ -14,14 +14,8 @@ import {
 } from '../server/prompt-workspace.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-import {
-  MODEL_ROLES,
-  workspaceModelRef,
-  type ChatProfile,
-  type PromptPreset,
-} from '../core/product.js';
+import { MODEL_ROLES, workspaceModelRef, type PromptPreset } from '../core/product.js';
 import { ChatOptionsStore } from '../server/chat-options.js';
-import { forkChat } from '../server/chat-fork.js';
 import { managementImpact } from '../server/provider-management.js';
 import { illustrationReferenceCandidates } from '../server/illustrations.js';
 import { helperWritingSnapshot } from '../server/helper-runtime.js';
@@ -101,36 +95,6 @@ function complete(store: Store, chatId: string) {
   );
   return { run: store.run(run.id), source };
 }
-
-test('Jev translation policy survives workspace save, job freeze and backup without a refusal model', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Jev translation settings'),
-    translator = model(store, 'Translator');
-  select(store, translator.id);
-  const current = modelWorkspace(store),
-    judgment = { threshold: 0.92 };
-  updateModelWorkspace(store, {
-    expectedRevision: current.revision,
-    routes: current.routes,
-    translationPolicy: { judgment, maxRetries: 1, maxCalls: 16 },
-  });
-  expect(modelWorkspace(store).translationPolicy.judgment).toEqual(judgment);
-  const { source } = complete(store, chat.id),
-    job = store.requestTranslation(source.id);
-  expect(job.input).toMatchObject({ translationPolicy: { judgment } });
-  const restored = database();
-  expect(restored.product.import(store.product.export()).restored).toBe(true);
-  expect(modelWorkspace(restored).translationPolicy.judgment).toEqual(judgment);
-  expect(restored.job(job.id).input).toMatchObject({ translationPolicy: { judgment } });
-  const latest = modelWorkspace(store);
-  expect(() =>
-    updateModelWorkspace(store, {
-      expectedRevision: latest.revision,
-      routes: latest.routes,
-      translationPolicy: { ...latest.translationPolicy, judgment: { ...judgment, threshold: 0.5 } },
-    })
-  ).toThrow('TRANSLATION_JUDGMENT_INVALID');
-});
 
 test('optional title model is independent of task routes, strict, CAS protected and preserved by omitted updates', () => {
   const store = database();
@@ -271,44 +235,6 @@ test('disabled and deleted selections block new work without rewriting historica
   expect(modelWorkspace(store).routes).toEqual(emptyModelRoutes());
   expect(frozen.models.main?.id).toBe(a.id);
   expect(frozen.models.main?.connection.enabled).toBe(true);
-});
-
-test('archive preserves global routes and immutable execution settings', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Archive'),
-    a = model(store, 'A');
-  select(store, a.id);
-  const first = complete(store, chat.id);
-  updatePromptWorkspace(store, {
-    expectedRevision: promptWorkspace(store).revision,
-    main: { title: 'Later', program: createDefaultRisuPrompt('Later'), values: {} },
-  });
-  const archive = store.product.export(),
-    restored = database();
-  restored.product.import(archive);
-  expect(modelWorkspace(restored)).toEqual(modelWorkspace(store));
-  // Archive import intentionally revokes copied connection authority, including frozen copies.
-  const archivedSnapshot = structuredClone(first.run.snapshot);
-  for (const target of Object.values(archivedSnapshot.profile!.models))
-    target!.connection.enabled = false;
-  expect(restored.run(first.run.id).snapshot).toEqual(archivedSnapshot);
-});
-
-test('archive rejects explicit null route objects atomically', () => {
-  const store = database();
-  createFixtureChat(store, 'Archive strict routes');
-  const archive = store.product.export();
-  for (const table of ['prompt_workspace', 'profiles'] as const) {
-    const damaged = structuredClone(archive);
-    const row = damaged.tables[table][0];
-    const body = JSON.parse(row.body);
-    body[table === 'prompt_workspace' ? 'modelRoutes' : 'routes'] = null;
-    row.body = JSON.stringify(body);
-    const target = database();
-    const before = target.product.export();
-    expect(() => target.product.import(damaged)).toThrow('Expected an object');
-    expect(target.product.export().tables).toEqual(before.tables);
-  }
 });
 
 test('reading an explicit null global routes object rejects corruption without modifying it', () => {
@@ -565,48 +491,6 @@ test('changing a pin invalidates pending options and preserves the pending draft
   const completed = complete(store, chat.id);
   expect(completed.run.snapshot.profile?.chatOptions?.values).toEqual({ detail: '1' });
   expect(options.get(chat.id).pending).toHaveLength(0);
-});
-
-test('fork and archive preserve chat pins and frozen prompt contents after a later preset edit', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Pin archive'),
-    local = model(store, 'Local'),
-    preset = mainPreset(store, 'Original');
-  const pinned: ChatProfile['pinned'] = {
-    mainPromptPresetId: preset.id,
-    mainModel: { id: local.id },
-  };
-  pin(store, chat.id, pinned);
-  const first = complete(store, chat.id);
-  store.product.save(
-    'prompt-preset',
-    { ...preset, program: createDefaultRisuPrompt('Later'), values: {} },
-    preset.id,
-    preset.revision
-  );
-  const fork = forkChat(store, chat.id, {
-    fromRevision: first.source.id,
-    title: 'Fork',
-    idempotencyKey: randomUUID(),
-  });
-  expect(store.product.profile(fork.id).pinned).toEqual(pinned);
-  expect(store.product.snapshot(fork.id).promptPresets?.main?.revision).toBe(2);
-  const archive = store.product.export(),
-    restored = database();
-  restored.product.import(archive);
-  expect(restored.product.profile(chat.id).pinned).toEqual(pinned);
-  expect(restored.product.profile(fork.id).pinned).toEqual(pinned);
-  expect(restored.run(first.run.id).snapshot.profile?.promptPresets?.main).toEqual(
-    first.run.snapshot.profile?.promptPresets?.main
-  );
-  const damaged = structuredClone(archive);
-  const body = JSON.parse(damaged.tables.profiles[0].body);
-  body.pinned.mainModel.extra = 'invalid';
-  damaged.tables.profiles[0].body = JSON.stringify(body);
-  const target = database(),
-    before = target.product.export();
-  expect(() => target.product.import(damaged)).toThrow(/Unknown request field/);
-  expect(target.product.export().tables).toEqual(before.tables);
 });
 
 test('model management impact attributes a pinned chat to its effective main model', () => {

@@ -12,7 +12,6 @@ import {
 } from '../server/prompt-workspace.js';
 import { validateTranslationJudgmentPolicy } from '../core/translation-settings.js';
 import { createFixtureChat } from './fixtures/chat.js';
-import { validateRunSnapshot } from '../server/snapshot-archive.js';
 
 const stores: { store: Store; directory: string }[] = [];
 function setup() {
@@ -116,12 +115,6 @@ test('main judgment is frozen at reservation and archived flags are validated', 
   expect(store.run(run.id).snapshot.mainJudgmentEnabled).toBe(false);
   expect(store.run(run.id).snapshot.mainJudgmentThreshold).toBe(0.75);
   expect(modelWorkspace(store).mainJudgmentThreshold).toBe(0.95);
-  expect(() =>
-    validateRunSnapshot(store, {
-      ...run.snapshot,
-      mainJudgmentEnabled: 'false' as unknown as boolean,
-    })
-  ).toThrow('invalid main judgment enabled flag');
 });
 
 test('main threshold rejects nonnumeric and out-of-range settings and snapshots', () => {

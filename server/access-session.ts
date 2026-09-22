@@ -1,111 +1,94 @@
 import { HttpError, isSha256Hex } from './request-validation.js';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import type { DatabaseSync } from 'node:sqlite';
 
-const SESSION_LIFETIME_MS = 12 * 60 * 60 * 1000;
-const MAX_SESSIONS = 32;
-const LOGIN_WINDOW_MS = 15 * 60 * 1000;
-const MAX_LOGIN_FAILURES = 10;
 const digest = (value: string) => createHash('sha256').update(value).digest();
-
+const COOKIE_AGE_SECONDS = 400 * 24 * 60 * 60;
 export class AccessSessionRateLimitError extends HttpError {
   constructor(readonly retryAfterSeconds: number) {
-    super(429, 'Too many login attempts. Try again later.');
+    super(429, '잠시 후 다시 로그인해 주세요.');
   }
 }
 
-/** In-memory personal-workspace sessions; a server restart revokes every session. */
+/** No server-side expiry. Restart retains sessions; logout or an access-token change revokes them. */
 export class AccessSessions {
   readonly required: boolean;
+  private readonly authority: Buffer;
   private readonly secure: boolean;
-  private readonly tokenDigest: Buffer | undefined;
+  private failures = 0;
+  private blockedUntil = 0;
   private readonly now: () => number;
-  private readonly sessions = new Map<string, number>();
-  // A single bounded limiter deliberately ignores untrusted forwarded client IPs.
-  private loginFailures = 0;
-  private loginWindowEnd = 0;
 
-  constructor(options: { accessToken?: string; publicOrigin?: string; now?: () => number }) {
-    this.secure = !!options.publicOrigin;
-    if (
-      this.secure &&
-      (!options.accessToken ||
-        options.accessToken.length < 32 ||
-        /[\r\n]/u.test(options.accessToken))
-    ) {
-      throw new Error(
-        'Remote access requires an access token of at least 32 characters without line breaks'
-      );
-    }
+  constructor(
+    private readonly db: DatabaseSync,
+    options: { accessToken?: string; publicOrigin?: string; now?: () => number }
+  ) {
     this.required = !!options.accessToken;
-    this.tokenDigest = options.accessToken ? digest(options.accessToken) : undefined;
+    this.authority = digest(options.accessToken ?? '');
+    this.secure = !!options.publicOrigin;
     this.now = options.now ?? Date.now;
+    this.db
+      .prepare('DELETE FROM access_sessions WHERE authority_hash!=?')
+      .run(this.authority.toString('hex'));
   }
 
-  private sessionKey(cookie?: string): string | undefined {
-    const values = cookie
+  private token(cookie?: string): string | undefined {
+    const value = cookie
       ?.split(';')
-      .map((value) => value.trim())
-      .filter((value) => value.startsWith('uimori_session='));
-    if (values?.length !== 1) return undefined;
-    const token = values[0].slice('uimori_session='.length);
-    return isSha256Hex(token) ? digest(token).toString('hex') : undefined;
-  }
-
-  private discardExpired(now: number): void {
-    for (const [key, expiresAt] of this.sessions) if (expiresAt <= now) this.sessions.delete(key);
+      .map((part) => part.trim())
+      .find((part) => part.startsWith('uimori_session='))
+      ?.slice('uimori_session='.length);
+    return value && isSha256Hex(value) ? value : undefined;
   }
 
   authenticated(cookie?: string): boolean {
     if (!this.required) return true;
-    this.discardExpired(this.now());
-    const key = this.sessionKey(cookie);
-    return key !== undefined && this.sessions.has(key);
+    const token = this.token(cookie);
+    return (
+      !!token &&
+      !!this.db
+        .prepare('SELECT 1 FROM access_sessions WHERE token_hash=? AND authority_hash=?')
+        .get(digest(token).toString('hex'), this.authority.toString('hex'))
+    );
   }
 
   checkLoginAllowed(): void {
-    if (!this.secure) return;
-    const now = this.now();
-    if (now >= this.loginWindowEnd) {
-      this.loginFailures = 0;
-      this.loginWindowEnd = 0;
-    }
-    if (this.loginFailures >= MAX_LOGIN_FAILURES)
-      throw new AccessSessionRateLimitError(
-        Math.max(1, Math.ceil((this.loginWindowEnd - now) / 1000))
-      );
+    if (this.now() < this.blockedUntil)
+      throw new AccessSessionRateLimitError(Math.ceil((this.blockedUntil - this.now()) / 1000));
   }
 
-  private cookie(value: string, maxAge: number): string {
-    return `uimori_session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${this.secure ? '; Secure' : ''}`;
+  private cookie(value: string, age = COOKIE_AGE_SECONDS): string {
+    return `uimori_session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${this.secure ? '; Secure' : ''}`;
+  }
+
+  renew(cookie?: string): string | undefined {
+    const token = this.token(cookie);
+    return token && this.authenticated(cookie) ? this.cookie(token) : undefined;
   }
 
   login(value: string): { cookie: string; revoked: boolean } {
     this.checkLoginAllowed();
-    const now = this.now();
-    this.discardExpired(now);
-    if (this.tokenDigest && !timingSafeEqual(digest(value), this.tokenDigest)) {
-      if (this.secure) {
-        if (this.loginFailures === 0) this.loginWindowEnd = now + LOGIN_WINDOW_MS;
-        this.loginFailures++;
+    if (this.required && !timingSafeEqual(digest(value), this.authority)) {
+      if (++this.failures >= 10) {
+        this.blockedUntil = this.now() + 60_000;
+        this.failures = 0;
       }
-      throw new HttpError(401, 'Invalid access token');
+      throw new HttpError(401, '접속 토큰을 확인해 주세요.');
     }
-    this.loginFailures = 0;
-    this.loginWindowEnd = 0;
-    let revoked = false;
-    while (this.sessions.size >= MAX_SESSIONS) {
-      this.sessions.delete(this.sessions.keys().next().value!);
-      revoked = true;
-    }
+    this.failures = 0;
     const token = randomBytes(32).toString('hex');
-    this.sessions.set(digest(token).toString('hex'), now + SESSION_LIFETIME_MS);
-    return { cookie: this.cookie(token, SESSION_LIFETIME_MS / 1000), revoked };
+    this.db
+      .prepare('INSERT INTO access_sessions VALUES(?,?)')
+      .run(digest(token).toString('hex'), this.authority.toString('hex'));
+    return { cookie: this.cookie(token), revoked: false };
   }
 
   logout(cookie?: string): string {
-    this.discardExpired(this.now());
-    const key = this.sessionKey(cookie);
-    if (key !== undefined) this.sessions.delete(key);
+    const token = this.token(cookie);
+    if (token)
+      this.db
+        .prepare('DELETE FROM access_sessions WHERE token_hash=?')
+        .run(digest(token).toString('hex'));
     return this.cookie('', 0);
   }
 }

@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'react';
+import type { ResourceModel } from '../core/resource-editing.js';
+import { useEffect, useMemo, useState } from 'react';
 import { NativeCollectionEditor } from './NativeCollectionEditor.js';
-import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
+import {
+  useBufferedEditorState,
+  useUnappliedEditorField,
+  useEditorSavePreparation,
+} from './resource-editor.js';
 import {
   parseNativeRegexJson,
   patchNativeRegex,
@@ -40,6 +45,7 @@ export function NativeRisuRegexEditor({
   onChange,
   draftPath,
   onPendingChange,
+  prepareSave,
   disabled = false,
 }: {
   value: unknown[];
@@ -47,19 +53,21 @@ export function NativeRisuRegexEditor({
   draftPath: string;
   onPendingChange?: (pending: boolean) => void;
   disabled?: boolean;
+  prepareSave?: (model: ResourceModel, entries: unknown[]) => ResourceModel;
 }) {
   // Retain the existing preset raw-field key so unfinished JSON survives this UI upgrade.
-  const [raw, setRaw] = useBufferedEditorState(draftPath, JSON.stringify(value, null, 2), {
+  const formatted = useMemo(() => JSON.stringify(value, null, 2), [value]);
+  const [raw, setRaw] = useBufferedEditorState(draftPath, formatted, {
     syncPristineInitial: true,
   });
   const [error, setError] = useState('');
-  let pending = true;
-  try {
-    pending = JSON.stringify(JSON.parse(raw)) !== JSON.stringify(value);
-  } catch {
-    /* Invalid JSON remains a recoverable draft. */
-  }
+  const pending = raw !== formatted;
   useUnappliedEditorField(draftPath, pending);
+  useEditorSavePreparation(draftPath, (model) => {
+    if (!pending) return model;
+    if (!prepareSave) throw new Error('정규식 JSON을 폼에 반영해 주세요.');
+    return prepareSave(model, parseNativeRegexJson(raw));
+  });
   useEffect(() => {
     onPendingChange?.(pending);
   }, [pending, onPendingChange]);
@@ -288,7 +296,7 @@ export function NativeRisuRegexEditor({
         </label>
         {pending && (
           <p className="muted">
-            JSON 입력을 적용하거나 되돌리면 폼 편집과 저장을 계속할 수 있어요.
+            저장을 누르면 JSON도 함께 저장해요. 폼을 계속 편집하려면 먼저 폼에 반영해 주세요.
           </p>
         )}
         <div className="form-actions">
@@ -303,7 +311,7 @@ export function NativeRisuRegexEditor({
               }
             }}
           >
-            정규식 적용
+            폼에 반영
           </button>
           <button
             type="button"

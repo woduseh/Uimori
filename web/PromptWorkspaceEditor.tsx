@@ -3,7 +3,7 @@ import { promptControls } from '../core/risu-prompt.js';
 import { ExpandIcon, ExternalLinkIcon, ResetIcon, SaveIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
-import type { WorkspaceDraftModel } from '../core/edit-drafts.js';
+import type { WorkspaceEditModel } from '../core/resource-editing.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { resolvePromptValues } from '../core/risu-prompt.js';
@@ -16,10 +16,10 @@ import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import {
-  EditorDraftProvider,
-  EditorDraftStatus,
-  useServerEditDraft,
-} from './editor-workspace-context.js';
+  ResourceEditorProvider,
+  ResourceEditorStatus,
+  useResourceEditor,
+} from './resource-editor.js';
 import './prompt-editor.css';
 import './prompt-composer.css';
 import './toggle-row.css';
@@ -59,11 +59,11 @@ export function PromptWorkspaceEditor({
   const [manageCombinations, setManageCombinations] = useState(false);
   const [comboError, setComboError] = useState('');
   const [selectedCombo, setSelectedCombo] = useState('');
-  const [emptyModel] = useState<WorkspaceDraftModel>(() => ({
+  const [emptyModel] = useState<WorkspaceEditModel>(() => ({
     main: { title: '', program: createDefaultRisuPrompt('', 'main'), values: {} },
     translation: { title: '', program: createDefaultRisuPrompt('', 'translation'), values: {} },
   }));
-  const shared = useServerEditDraft({
+  const shared = useResourceEditor({
     editorKey: 'prompt-workspace:current',
     kind: 'prompt-workspace',
     targetId: 'current',
@@ -73,7 +73,7 @@ export function PromptWorkspaceEditor({
       if (lock.current) return;
       const base = workspace ?? currentDraft.current;
       if (!base) return;
-      const model = restored.model as WorkspaceDraftModel;
+      const model = restored.model as WorkspaceEditModel;
       const next = { ...base, ...model, revision: restored.baseRevision! };
       currentDraft.current = next;
       setDraft(next);
@@ -171,10 +171,10 @@ export function PromptWorkspaceEditor({
         presetId,
       });
       await shared.session.reloadSaved();
-      const restored = shared.session.snapshot().draft!;
+      const restored = shared.session.snapshot().document;
       const reloaded = {
         ...accepted,
-        ...(restored.model as WorkspaceDraftModel),
+        ...(restored.model as WorkspaceEditModel),
         revision: restored.baseRevision!,
       };
       currentDraft.current = reloaded;
@@ -221,10 +221,10 @@ export function PromptWorkspaceEditor({
   const showRecovery =
     shared.state.conflict || !!saveError || (dirty && generation <= acknowledged.current);
   return (
-    <EditorDraftProvider value={shared}>
+    <ResourceEditorProvider value={shared}>
       <section aria-label="현재 프롬프트 설정" className="prompt-editor prompt-current-settings">
         <p className="muted">변경사항은 자동 저장하며 모든 채팅의 다음 요청부터 사용해요.</p>
-        {showRecovery && <EditorDraftStatus value={shared} hideSyncError />}
+        {showRecovery && <ResourceEditorStatus value={shared} hideSyncError />}
         <div className="prompt-editor-fields">
           <label>
             역할
@@ -422,7 +422,7 @@ export function PromptWorkspaceEditor({
             다시 저장
           </button>
         )}
-        {conflict && !showRecovery && <EditorDraftStatus value={shared} hideSyncError />}
+        {conflict && !showRecovery && <ResourceEditorStatus value={shared} hideSyncError />}
         <p role="status" className="muted">
           {busy || (dirty && !showRecovery) ? '저장 중…' : message || error}
         </p>
@@ -503,6 +503,6 @@ export function PromptWorkspaceEditor({
           </div>
         </Dialog>
       </section>
-    </EditorDraftProvider>
+    </ResourceEditorProvider>
   );
 }

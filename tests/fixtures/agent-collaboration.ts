@@ -18,13 +18,13 @@ import { createDefaultRisuPrompt } from '../../core/prompt-defaults.js';
 import { createApp, type App } from '../../server/app.js';
 import { injectWithFixtureBot } from './chat.js';
 import { loopbackProvider, writeSse } from './loopback-provider.js';
-import { installJevFixture } from './jev.js';
+import { installJevFixture, configureJevFixture } from './jev.js';
 import { nativeContent } from './native-content.js';
 import { compileContentAttachment } from '../../core/package-runtime.js';
 
 export const MAIN_ONLY = 'MAIN_AUTHOR_INSTRUCTIONS_DO_NOT_COPY_TO_ADVISORS';
 export const SHARED = 'SHARED_CREATIVE_CONTRACT_SYNTHETIC';
-export const credentialEnv = 'Agent_Collaboration_Runtime_Key';
+export const credentialRef = 'Agent_Collaboration_Runtime_Key';
 const bearer = 'synthetic-agent-collaboration-key';
 export type Body = {
   model: string;
@@ -128,7 +128,7 @@ export async function fixture(
     contextTools?: boolean;
   } = {}
 ) {
-  vi.stubEnv(credentialEnv, bearer);
+  vi.stubEnv(credentialRef, bearer);
   const owner: Owner = {
     directory: await mkdtemp(join(tmpdir(), 'uimori-agent-collaboration-')),
     releases: [],
@@ -167,9 +167,9 @@ export async function fixture(
     buildId: 'agent-collaboration-synthetic',
     instanceId: randomUUID(),
     testMode: true,
-    approvedOrigins: [provider.origin],
   });
   owner.app = app;
+  configureJevFixture(app.store);
   await app.listen({ port: 0, host: '127.0.0.1' });
   chat = await api<Chat>(app, '/api/chats', { title: 'Synthetic advisor story' });
   chat = await api<Chat>(
@@ -220,14 +220,14 @@ export async function fixture(
     title: 'Loopback Responses only',
     protocol: 'openai-responses-v1',
     endpoint: `${provider.origin}/v1`,
-    credentialEnv,
+    apiKey: bearer,
     enabled: true,
   });
   const advisorConnection = await api<Connection>(app, '/api/connections', {
     title: 'Independent advisor authorization',
     protocol: 'openai-responses-v1',
     endpoint: `${provider.origin}/v1`,
-    credentialEnv,
+    apiKey: bearer,
     enabled: true,
   });
   const mainModel = await api<ModelPreset>(app, '/api/model-presets', {

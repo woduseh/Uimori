@@ -49,7 +49,6 @@ function setup() {
   const work: Promise<void>[] = [];
   const publish = vi.fn();
   const options = {
-    approvedOrigins: ['http://127.0.0.1:9'],
     signal: new AbortController().signal,
     track: (p: Promise<void>) => {
       work.push(p);
@@ -102,7 +101,7 @@ function mockSend(before?: () => void, result = success, finish?: () => Promise<
     .mockImplementation(async (connection, request, options) => {
       before?.();
       // The mock stands in for the wire, not for the transport boundary contract.
-      transport.validateConnection(connection, options.approvedOrigins);
+      transport.validateConnection(connection);
       options.beforeTurn?.();
       await options.onWire?.({
         connectionId: connection.id,

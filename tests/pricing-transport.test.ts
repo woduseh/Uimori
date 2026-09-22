@@ -77,7 +77,7 @@ test.each(['usage', 'earlier-content'] as const)(
     const started = Date.now();
     const result = await executeProvider(connection, request(snapshot), {
       signal: new AbortController().signal,
-      approvedOrigins: [local.origin],
+
       onWire: (wire) => {
         wires.push(wire);
       },
@@ -125,7 +125,7 @@ test.each(['known', 'unknown'] as const)(
       protocol: 'vertex-gemini-v1',
       endpoint:
         'https://aiplatform.googleapis.com/v1/projects/synthetic/locations/global/publishers/google/models',
-      credentialEnv: 'SYNTHETIC_VERTEX_TOKEN',
+      credentialRef: 'SYNTHETIC_VERTEX_TOKEN',
     };
     const nativeFetch = globalThis.fetch;
     vi.stubGlobal(
@@ -147,7 +147,7 @@ test.each(['known', 'unknown'] as const)(
     const wires: WireRecord[] = [];
     const result = await executeProvider(connection, request(snapshot), {
       signal: new AbortController().signal,
-      approvedOrigins: [],
+
       resolveCredential: () => 'synthetic-key',
       vertexRequestTier: 'flex',
       onWire: (wire) => {

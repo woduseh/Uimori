@@ -89,37 +89,3 @@ test('edited request branches before the response using current settings and pre
   );
   expect(() => store.retryRun(original.run.id, 'edited')).toThrow('Idempotency');
 });
-
-test('same text still distinguishes edit from retry and rejects invalid edits without creating a branch', () => {
-  const { store, chat } = setup();
-  const original = complete(store, chat.id, 'Answer');
-  store.retryRun(original.run.id, 'repeat');
-  expect(() => store.retryRun(original.run.id, 'repeat', undefined, original.run.request)).toThrow(
-    'Idempotency'
-  );
-  const before = store.product.export().tables;
-  for (const request of ['', '   ', 'a'.repeat(4001)]) {
-    expect(() => store.retryRun(original.run.id, randomUUID(), undefined, request)).toThrow(
-      'Invalid request'
-    );
-  }
-  expect(() =>
-    store.retryRun(
-      original.run.id,
-      'invalid-model',
-      () => {
-        throw new Error('Current model unavailable');
-      },
-      'Edited'
-    )
-  ).toThrow('Current model unavailable');
-  expect(store.product.export().tables).toEqual(before);
-});
-
-test('editing an active request is rejected before mutation', () => {
-  const { store, chat } = setup();
-  const run = queued(store, chat.id);
-  const before = store.product.export().tables;
-  expect(() => store.retryRun(run.id, 'active-edit', undefined, 'Edited')).toThrow('still active');
-  expect(store.product.export().tables).toEqual(before);
-});

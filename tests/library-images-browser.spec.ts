@@ -1,7 +1,7 @@
 import { nativeContent } from './fixtures/native-content.js';
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { navigationAction } from './ui-navigation.js';
-import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
+import { waitForContentSave } from './fixtures/resource-save.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { RisuContent } from '../core/risu-content.js';
@@ -79,7 +79,7 @@ async function edit(page: Page, content: Content) {
   return library;
 }
 async function save(page: Page, library: Locator, content: Content): Promise<Content> {
-  const pending = waitForContentDraftSave(page, content.id);
+  const pending = waitForContentSave(page, content.id);
   await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
   return pending;
 }

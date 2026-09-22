@@ -1,5 +1,10 @@
+import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useState } from 'react';
-import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
+import {
+  useBufferedEditorState,
+  useUnappliedEditorField,
+  useEditorSavePreparation,
+} from './resource-editor.js';
 import { AddIcon } from './ui-icons.js';
 import './native-risu-trigger.css';
 
@@ -12,6 +17,7 @@ export function NativeRisuTriggerEditor({
   onChange,
   draftPath,
   onPendingChange,
+  prepareSave,
   disabled = false,
 }: {
   value: unknown[];
@@ -19,6 +25,7 @@ export function NativeRisuTriggerEditor({
   draftPath: string;
   onPendingChange?: (pending: boolean) => void;
   disabled?: boolean;
+  prepareSave?: (model: ResourceModel, entries: unknown[]) => ResourceModel;
 }) {
   const [selected, setSelected] = useState(0);
   const [draft, setDraft] = useBufferedEditorState<{ index: number; text: string } | null>(
@@ -37,6 +44,17 @@ export function NativeRisuTriggerEditor({
     );
   const raw = draft?.text ?? JSON.stringify(entry, null, 2) ?? '';
   useUnappliedEditorField(draftPath, pending);
+  useEditorSavePreparation(draftPath, (model) => {
+    if (!draft) return model;
+    const parsed: unknown = JSON.parse(draft.text);
+    if (!record(parsed) || draft.index >= value.length)
+      throw new Error('트리거 JSON 객체를 확인해 주세요.');
+    if (!prepareSave) throw new Error('트리거 JSON을 폼에 반영해 주세요.');
+    return prepareSave(
+      model,
+      value.map((item, i) => (i === draft.index ? parsed : item))
+    );
+  });
   useEffect(() => {
     onPendingChange?.(pending);
   }, [pending, onPendingChange]);
@@ -69,7 +87,9 @@ export function NativeRisuTriggerEditor({
         />
       </label>
       {pending && (
-        <p className="muted">JSON을 적용하거나 되돌리면 항목 전환과 저장을 계속할 수 있어요.</p>
+        <p className="muted">
+          저장을 누르면 JSON도 함께 저장해요. 다른 항목을 편집하려면 먼저 폼에 반영해 주세요.
+        </p>
       )}
       <div className="form-actions">
         <button
@@ -91,7 +111,7 @@ export function NativeRisuTriggerEditor({
             }
           }}
         >
-          트리거 적용
+          폼에 반영
         </button>
         <button
           type="button"

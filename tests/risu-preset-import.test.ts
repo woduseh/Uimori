@@ -9,12 +9,8 @@ import {
   applyRisuPresetImport,
   risuPresetImportRoutes,
 } from '../server/risu-preset-import.js';
-import { nativeTransferOriginal } from '../server/native-transfer.js';
-import {
-  modelWorkspace,
-  promptWorkspace,
-  promptWorkspaceRoutes,
-} from '../server/prompt-workspace.js';
+
+import { promptWorkspace, promptWorkspaceRoutes } from '../server/prompt-workspace.js';
 import { promptRoutes } from '../server/prompt-routes.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
@@ -65,36 +61,6 @@ const sourceOf = (value: unknown) => ({
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
 });
 
-test('review is read-only; explicit import, reuse, source preservation and archive share native transfer', () => {
-  const { store } = fixture();
-  const source = sourceOf(document());
-  const before = store.product.export().tables;
-  const preview = prepareRisuPresetImport({ source });
-  expect(preview.summary).toEqual({ blocks: 2, controls: 1, regex: 0 });
-  expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(false);
-  expect(store.product.export().tables).toEqual(before);
-  const models = modelWorkspace(store),
-    workspace = promptWorkspace(store);
-  const command = { source, digest: preview.digest, allowPartial: false, idempotencyKey: 'same' };
-  const first = applyRisuPresetImport(store, command);
-  const second = applyRisuPresetImport(store, command);
-  expect(second.receipt).toEqual({ ...first.receipt, created: false });
-  expect(modelWorkspace(store)).toEqual(models);
-  expect(promptWorkspace(store)).toEqual(workspace);
-  expect(nativeTransferOriginal(store, first.receipt.id).sourceFiles![0].base64).toBe(
-    source.base64
-  );
-  const { store: restored } = fixture();
-  restored.product.import(store.product.export());
-  expect(nativeTransferOriginal(restored, first.receipt.id).sourceFiles).toEqual(
-    nativeTransferOriginal(store, first.receipt.id).sourceFiles
-  );
-  const different = sourceOf({ ...document(), name: 'Different title' });
-  expect(() => applyRisuPresetImport(store, { ...command, source: different })).toThrow(
-    'RISU_IMPORT_DRAFT_CHANGED'
-  );
-});
-
 test('native variable writes and output regex import without conversion or loss', () => {
   const { store } = fixture();
   const source = sourceOf({
@@ -114,9 +80,6 @@ test('native variable writes and output regex import without conversion or loss'
   expect(result.preset.program.nativeRisuPreset?.preset.regex).toEqual([
     { type: 'editoutput', in: 'x', out: 'y' },
   ]);
-  expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0].base64).toBe(
-    source.base64
-  );
 });
 
 test('supported preset text stages import without partial consent and preserve original bytes', () => {
@@ -143,9 +106,6 @@ test('supported preset text stages import without partial consent and preserve o
   expect(imported.preset.program).not.toHaveProperty('transforms');
   expect(imported.preset.program.nativeRisuPreset?.preset.regex).toEqual(
     JSON.parse(Buffer.from(source.base64, 'base64').toString()).regex
-  );
-  expect(nativeTransferOriginal(store, imported.receipt.id).sourceFiles![0].base64).toBe(
-    source.base64
   );
 });
 

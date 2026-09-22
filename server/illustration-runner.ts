@@ -1,3 +1,4 @@
+import { processImage } from './image-processing.js';
 import {
   executeProvider,
   type ProviderResult,
@@ -48,7 +49,7 @@ import type { Source, Store } from './store.js';
 type MaybePromise<T> = T | Promise<T>;
 export type IllustrationRunnerHooks = {
   signal: AbortSignal;
-  approvedOrigins: readonly string[];
+
   resolveCredential?: Parameters<typeof executeProvider>[2]['resolveCredential'];
   resolveComfyCredential?: ComfyUIRequestOptions['resolveCredential'];
   cancelRemoteOnAbort?: () => boolean;
@@ -321,7 +322,6 @@ export async function runIllustrationJob(
               contextBudget: contextBudgetForModel(model),
             },
             {
-              approvedOrigins: hooks.approvedOrigins,
               signal: hooks.signal,
               resolveCredential: hooks.resolveCredential,
               executeCodex: hooks.executeCodex,
@@ -380,6 +380,12 @@ export async function runIllustrationJob(
         }));
       }
     } else throw new IllustrationError('ILLUSTRATION_GENERATOR_UNCONFIGURED');
+    generated = await Promise.all(
+      generated.map(async (image) => ({
+        ...image,
+        ...(await processImage(Buffer.from(image.bytes))),
+      }))
+    );
     diagnostic.stage = 'store';
     if (hooks.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
     const stored = completeIllustration(store, jobId, generation, owner, generated, diagnostic);
@@ -484,12 +490,13 @@ export async function reconcileIllustrationJob(
         jobId,
         generation,
         owner,
-        result.images.map((image) => ({
-          mime: image.mime,
-          bytes: image.bytes,
-          caption,
-          ...(diagnostic.prompt ? { prompt: diagnostic.prompt.prompt } : {}),
-        })),
+        await Promise.all(
+          result.images.map(async (image) => ({
+            caption,
+            ...(diagnostic.prompt ? { prompt: diagnostic.prompt.prompt } : {}),
+            ...(await processImage(Buffer.from(image.bytes))),
+          }))
+        ),
         { ...clean, stage: 'store', comfyui: { ...clean.comfyui, submission: 'finished' } }
       );
     }

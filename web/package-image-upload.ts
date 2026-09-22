@@ -11,10 +11,10 @@ export async function uploadPackageImage(
 ): Promise<PackageImage> {
   if (
     !PACKAGE_IMAGE_MIMES.includes(file.type as PackageImage['mime']) ||
-    file.size > 2_000_000 ||
+    file.size > 64 * 1024 * 1024 ||
     file.size === 0
   )
-    throw new Error('2MB 이하 PNG, JPEG, WebP, AVIF 또는 GIF가 필요해요.');
+    throw new Error('64MiB 이하 PNG, JPEG, WebP, AVIF 또는 GIF가 필요해요.');
   signal.throwIfAborted();
   const bytes = new Uint8Array(await file.arrayBuffer());
   signal.throwIfAborted();
@@ -32,7 +32,7 @@ export async function uploadPackageImage(
   if (!response.ok) throw new Error(`이미지를 업로드하지 못했어요. (${response.status})`);
   const result: { hash: string; mime: PackageImage['mime'] } = await response.json();
   signal.throwIfAborted();
-  if (!/^[a-f0-9]{64}$/u.test(result.hash) || result.mime !== file.type)
+  if (!/^[a-f0-9]{64}$/u.test(result.hash) || result.mime !== 'image/webp')
     throw new Error('이미지 응답을 확인할 수 없어요.');
   return {
     id: crypto.randomUUID(),

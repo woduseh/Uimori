@@ -1,23 +1,16 @@
 # Code map
 
-Entry points by feature. Paths are relative to the repository root; linked documents describe current behavior and supported scope.
-
-| Area | Contracts | Entry points |
+| Responsibility | Entry points | Current contract |
 | --- | --- | --- |
-| Risu native import and editing | [Import](RISU-IMPORT.md) | `core/risu-native.ts`, `server/character-card-file.ts`, `server/risu-native-import.ts`, `server/risu-native-projection.ts`, `server/risu-module-file.ts`, `web/RisuNativeFields.tsx` |
-| Edited Risu format export | [Export](RISU-EXPORT.md) | `server/risu-export.ts`, `server/risu-export-codec.ts`, `core/risu-deprecated-fields.ts` |
-| RISUP prompt source and model separation | [Prompt runtime](PROMPT-RUNTIME.md), [import](RISU-IMPORT.md#risu-프리셋) | `core/risu-native-preset.ts`, `server/risu-preset-import.ts`, `server/risu-native-preset.ts`, `web/NativeRisuPresetEditor.tsx` |
-| Native prompt composition, names, defaults, CBS | [Prompt runtime](PROMPT-RUNTIME.md), [packages](PACKAGES.md) | `core/risu-prompt.ts`, `core/template-variables.ts`, `core/package-runtime.ts`, `server/risu-native-cbs.ts` |
-| Branch variables and history | [Card variables and memory](PROMPT-RUNTIME.md#카드-변수와-기억) | `core/chat-variables.ts`, `server/chat-variables.ts`, `server/chat-variables-archive.ts`, `web/ChatVariables.tsx` |
-| Packages, lore, opening scenes, images | [Packages](PACKAGES.md), [lore context](LORE-CONTEXT.md) | `core/risu-content.ts`, `server/product-store.ts`, `server/package-start.ts`, `server/package-images.ts`, `server/lore-selection.ts` |
-| Risu native triggers, Lua, and authored actions | [Native import](RISU-IMPORT.md) | `server/risu-native-runtime.ts`, `server/risu-native-lua.ts`, `server/risu-native-lua-session.ts`, `server/risu-native-run.ts`, `server/risu-native-actions.ts`, `server/risu-native-host.ts` |
-| Native message surfaces and reading | [Native import](RISU-IMPORT.md), [reading](READING.md) | `server/risu-native-render.ts`, `server/risu-native-worker.ts`, `server/risu-native-preview.ts`, `web/RisuMessageSurface.tsx`, `web/risu-message-surface.ts`, `web/risu-message.ts`, `web/reading-dom.ts`, `server/risu-reading-markdown.ts` |
-| Reservations, model requests, recovery | [Snapshots](RESERVATION-SNAPSHOTS.md), [generation and translation](GENERATION.md) | `server/reservation-snapshot.ts`, `server/prompt-snapshot.ts`, `server/main-request.ts`, `server/model-runner.ts`, `server/snapshot-archive.ts` |
-| Database, transfer, backup, source editing | [Migrations](DATA-MIGRATIONS.md), [transfer](NATIVE-TRANSFER.md), [backup](CHAT-BACKUP.md), [transcripts](CHAT-TRANSCRIPT.md) | `server/database-schema.ts`, `server/snapshot-database.ts`, `server/native-transfer.ts`, `server/chat-backup.ts`, `server/risu-native-archive.ts`, `server/chat-transcript.ts`, `server/source-editing.ts` |
-| Prompts, model roles, providers | [Global models](GLOBAL-MODELS.md), [providers](PROVIDERS.md), [error details](PROVIDER-ERROR-DETAILS.md), [parameters](MODEL-PARAMETERS.md), [pricing](MODEL-PRICING.md) | `server/prompt-workspace.ts`, `server/provider-management.ts`, `server/provider-connection-test.ts`, `server/jev-provider.ts`, `server/jev-credentials.ts`, `core/model-capabilities.ts`, `core/provider-catalog.ts` |
-| Context, summaries and narrative notes | [Context limits](CONTEXT-LIMITS.md) | `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-store.ts`, `server/story-notes.ts`, `core/context-budget.ts` |
-| Helper, drafts, collaboration | [Helper](USAGE.md#도우미와-독립-가정-장면), [context](CONTEXT-LIMITS.md), [collaboration](AGENT-COLLABORATION.md) | `server/helper-runtime.ts`, `server/helper-workspace.ts`, `server/edit-drafts.ts`, `server/agent-collaboration.ts` |
-| Outlines and illustrations | [Outlines](OUTLINE.md), [illustrations](ILLUSTRATIONS.md) | `server/outline-store.ts`, `server/illustrations.ts`, `server/illustration-runner.ts`, `server/comfyui-client.ts`, `server/codex-runtime.ts` |
-| Library, Reader, UI | [UI principles](UI-PRINCIPLES.md), [library](LIBRARY.md), [reading](READING.md) | `server/reader.ts`, `server/library-organization.ts`, `web/useStory.ts`, `web/SourceReader.tsx`, `web/Prose.tsx` |
-| Diagnostics, installation, updates, releases | [Diagnostics](DIAGNOSTICS.md), [self-hosting](SELF-HOST.md), [updates](UPDATES.md), [Oracle release](ORACLE-RELEASE.md) | `server/diagnostic-report.ts`, `server/maintenance.ts`, `compose.yaml`, `deploy/nginx.conf`, `scripts/release-oracle.mjs`, `scripts/update-controller.mjs` |
-| Tests and development environment | [Development](DEVELOPMENT.md) | `package.json`, `tests/`, `scripts/browser-verification.mjs`, `scripts/lib.mjs` |
+| Resource editing and local recovery | `web/resource-editor-session.ts`, `web/resource-editor.tsx`, `server/resource-service.ts`, `server/resource-routes.ts` | [Editing](SAVE-PERFORMANCE.md) |
+| Helper app tools | `server/helper-runtime.ts`, `server/helper-resource-tools.ts`, `server/helper-workspace.ts` | [Usage](USAGE.md) |
+| Provider/key configuration | `server/provider-connections.ts`, `server/credentials.ts`, `server/jev-credentials.ts`, `server/vertex-credentials.ts` | [Providers](PROVIDERS.md) |
+| Image conversion/storage/metadata | `server/image-processing.ts`, `server/image-storage.ts`, `server/asset-metadata.ts`, `web/ImageMetadataFields.tsx` | [Library](LIBRARY.md) |
+| Independent copies and retries | `server/chat-copy.ts`, `server/chat-fork.ts`, `server/run-retry.ts`, `server/chat-media.ts` | [Chat backup](CHAT-BACKUP.md) |
+| Portable user resources | `server/resource-bundle.ts`, `server/transfer-images.ts`, `core/native-transfer-validation.ts` | [Transfer](NATIVE-TRANSFER.md) |
+| DB schema, snapshot, one-time transfer | `server/database-schema.ts`, `server/database-backup.ts`, `scripts/transfer-personal-v1.mjs`, `scripts/legacy24-source.mjs` | [Data](DATA-MIGRATIONS.md) |
+| Execution, context and notes | `server/store.ts`, `server/execution-snapshot.ts`, `server/execution-retention.ts`, `server/context-planning.ts`, `server/story-notes.ts` | [Execution inputs](RESERVATION-SNAPSHOTS.md) |
+| Native Risu execution | `server/risu-native-runtime.ts`, `server/risu-native-lua-session.ts`, `server/risu-native-render.ts`, `server/risu-native-projection.ts` | [Risu import](RISU-IMPORT.md) |
+| Provider protocols | `core/provider-request.ts`, `core/provider-http.ts`, `core/*-protocol.ts` | [Providers](PROVIDERS.md) |
+| Reader and application | `web/useStory.ts`, `web/SourceReader.tsx`, `server/reader.ts`, `server/app.ts` | [Usage](USAGE.md) |
+| Tests and local verification | `tests/personal-workspace-*.test.ts`, `scripts/transfer-personal-v1.test.mjs`, `tests/` | [Development](DEVELOPMENT.md) |

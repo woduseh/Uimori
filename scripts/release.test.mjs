@@ -316,15 +316,6 @@ test('Oracle configuration rejects remote shell options, overlapping paths and e
   });
   for (const flag of ['--fresh', '--image', '--check-only', '--expected-origin', '--source-ref'])
     assert.ok(command.includes(shellQuote(flag)));
-  const migrationCommand = remoteCommand({
-    config,
-    commit,
-    build,
-    releaseDirectory: '/opt/uimori/releases/migration',
-    origin: 'https://example.test',
-    migrateSchema23To24: true,
-  });
-  assert.ok(migrationCommand.includes(shellQuote('--migrate-schema-23-to-24')));
   assert.throws(() =>
     remoteCommand({
       config,

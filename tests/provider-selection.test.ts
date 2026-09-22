@@ -117,7 +117,7 @@ test('ID-based selections follow current connections while protocol changes requ
   for (const change of [
     { title: 'Renamed' },
     { endpoint: 'http://127.0.0.1:9998/v1' },
-    { credentialEnv: 'UIMORI_PROVIDER_DIFFERENT' },
+    { credentialRef: 'UIMORI_PROVIDER_DIFFERENT' },
     { protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:9999/v1' },
   ]) {
     const { s, chat, c, m } = setup();

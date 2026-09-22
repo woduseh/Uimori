@@ -1,252 +1,201 @@
-import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { basename, isAbsolute, join, relative, resolve } from 'node:path';
-import { isDeepStrictEqual } from 'node:util';
+import { remapChatAuthoring } from './chat-copy-authoring.js';
+import { copiedMessageTexts, mapCopiedMessageTexts } from './chat-copy-messages.js';
+import { transcriptImages, rewriteTranscriptMedia } from './chat-media.js';
+import type { Store } from './store.js';
 import {
   CHAT_BACKUP_FORMAT,
-  CHAT_BACKUP_MAX_BYTES,
   CHAT_BACKUP_VERSION,
+  CHAT_BACKUP_MAX_BYTES,
   type ChatBackup,
   type ChatBackupImport,
+  type ChatCopy,
 } from '../core/chat-backup.js';
+import { captureChatCopy, restoreChatCopy } from './chat-copy.js';
 import {
-  BACKUP_COLLECTIONS,
-  decodeChatBackup,
-  encodeBackupTables,
-  type BackupTables,
-} from './chat-backup-codec.js';
-import { chatBackupTables } from './chat-backup-scope.js';
-import { createBackupRemap, type BackupRow } from './chat-backup-remap.js';
-import { remapBackupRecords, finishBackupSnapshots } from './chat-backup-records.js';
-import { remapBackupContext } from './chat-backup-context.js';
-import { remapChatBackupHelper } from './chat-backup-helper.js';
+  exportResourceBundle,
+  importResourceBundle,
+  inspectBundle,
+  bundleDigest,
+} from './resource-bundle.js';
+import { convertTransferImages } from './transfer-images.js';
+import { processImage } from './image-processing.js';
+import { validateChatTranscript } from '../core/chat-transcript.js';
+import { validateChatVariableState } from '../core/chat-variables.js';
 import { fields, HttpError, record, text } from './request-validation.js';
-import { CONNECTION_CREDENTIAL_FIELDS } from '../core/product.js';
-import { Store } from './store.js';
 
-const receiptKind = 'chat.backup-imported';
-const GLOBAL = new Set([
-  'prompt_workspace',
-  'lore_context_defaults',
-  'illustration_settings',
-  'library_organization_state',
-]);
-const SHARED = new Set([
-  'versions',
-  'provider_settings',
-  'library_hidden',
-  'library_folders',
-  'library_placements',
-]);
-const archive = (tables: BackupTables) => ({
-  format: 'uimori-archive',
-  version: 1,
-  createdAt: new Date().toISOString(),
-  // Library import receipts are workspace records, not part of a portable chat.
-  tables: { native_transfer_receipts: [], ...tables },
-});
-
-/** Passive evidence of original choices, never applied to destination execution settings. */
-function recordedEnvironment(tables: BackupTables): string {
-  return JSON.stringify({
-    version: 1,
-    promptWorkspace: JSON.parse(tables.prompt_workspace[0].body),
-    loreContextDefaults: {
-      revision: tables.lore_context_defaults[0].revision,
-      ...JSON.parse(tables.lore_context_defaults[0].body),
-    },
-    illustrationSettings: tables.illustration_settings.map((row) => {
-      const settings = JSON.parse(row.body);
-      settings.comfyui.authorizationEnv = '';
-      return settings;
-    }),
-    providerDefinitions: tables.provider_settings.map((row) => {
-      const definition = JSON.parse(row.body);
-      if (row.kind === 'connection')
-        for (const key of CONNECTION_CREDENTIAL_FIELDS) delete definition[key];
-      return definition;
-    }),
-    libraryOrganization: {
-      hidden: tables.library_hidden,
-      folders: tables.library_folders,
-      placements: tables.library_placements,
-    },
-  });
-}
-
-function withTemporaryStores<T>(work: (source: Store, copy: Store) => T): T {
-  const directory = mkdtempSync(join(tmpdir(), 'uimori-chat-backup-'));
-  const target = resolve(directory),
-    within = relative(resolve(tmpdir()), target);
-  if (
-    isAbsolute(within) ||
-    within.startsWith('..') ||
-    !basename(target).startsWith('uimori-chat-backup-')
-  )
-    throw new Error('Unsafe chat backup temporary directory');
-  let source: Store | undefined, copy: Store | undefined;
-  try {
-    source = new Store(join(directory, 'source.sqlite'));
-    copy = new Store(join(directory, 'copy.sqlite'));
-    return work(source, copy);
-  } finally {
-    copy?.close();
-    source?.close();
-    rmSync(target, { recursive: true, force: true });
-  }
-}
-
-/** A portable, self-contained chat, all branches and immutable receipts included. */
+/** Export each branch as an independent continuing conversation, with its resource dependencies. */
 export function exportChatBackup(store: Store, chatId: string): ChatBackup {
-  const tables = store.transaction(() => chatBackupTables(store, chatId));
-  // The same validators and secret/unfinished-work normalization apply to files and restored data.
-  // A failed export is explicit; there is no fallback to a partial transcript.
-  const normalized = withTemporaryStores((source) => {
-    source.product.import(archive(tables));
-    const environment = recordedEnvironment(tables);
-    if (
-      !tables.events.some(
-        (row) => row.kind === 'chat.backup-environment' && row.entity_id === environment
-      )
-    )
-      source.event(chatId, 'chat.backup-environment', environment);
-    return source.product.export().tables;
-  });
-  const result: ChatBackup = {
-    format: CHAT_BACKUP_FORMAT,
-    version: CHAT_BACKUP_VERSION,
-    createdAt: new Date().toISOString(),
-    chatId,
-    records: encodeBackupTables(normalized),
-  };
-  if (Buffer.byteLength(JSON.stringify(result)) > CHAT_BACKUP_MAX_BYTES)
-    throw new HttpError(413, 'CHAT_BACKUP_TOO_LARGE');
-  return result;
-}
-
-function priorImport(
-  store: Store,
-  requestKey: string,
-  digest: string
-): ChatBackupImport | undefined {
-  const rows = store.db
-    .prepare('SELECT chat_id,entity_id FROM events WHERE kind=?')
-    .all(receiptKind) as BackupRow[];
-  for (const row of rows) {
-    const receipt = JSON.parse(row.entity_id);
-    if (receipt.requestKey !== requestKey) continue;
-    if (receipt.digest !== digest) throw new HttpError(409, 'CHAT_BACKUP_IMPORT_CONFLICT');
-    return {
-      chat: store.chat(row.chat_id),
-      created: false,
-      branches: Number(
-        store.db.prepare('SELECT COUNT(*) n FROM branches WHERE chat_id=?').get(row.chat_id)!.n
-      ),
-      sources: Number(
-        store.db.prepare('SELECT COUNT(*) n FROM sources WHERE chat_id=?').get(row.chat_id)!.n
-      ),
+  return store.transaction(() => {
+    const chat = store.chat(chatId);
+    const branches = store.product
+      .branches(chatId)
+      .sort((a, b) => Number(b.default) - Number(a.default));
+    const chats = branches.map((branch) => {
+      const copy = captureChatCopy(store, chatId, branch.id);
+      if (!branch.default) copy.transcript.title += ` — ${branch.title}`;
+      if (copy.state.profile.pinned) delete copy.state.profile.pinned.mainModel;
+      return copy;
+    });
+    const selected = new Map<string, { kind: 'content' | 'prompt-preset'; id: string }>();
+    for (const copy of chats) {
+      for (const ref of copy.transcript.packageAttachments)
+        selected.set(`content:${ref.id}`, { kind: 'content', id: ref.id });
+      const prompt = copy.state.profile.pinned?.mainPromptPresetId;
+      if (prompt) selected.set(`prompt:${prompt}`, { kind: 'prompt-preset', id: prompt });
+    }
+    const resources = exportResourceBundle(store, [...selected.values()]);
+    resources.images = [
+      ...new Map(
+        [
+          ...resources.images,
+          ...transcriptImages(
+            store,
+            chats.map((copy) => ({
+              ...copy.transcript,
+              entries: [
+                ...copy.transcript.entries,
+                ...copiedMessageTexts(copy.state.messages ?? []).map((text) => ({
+                  request: '',
+                  text,
+                  translation: null,
+                })),
+              ],
+            }))
+          ),
+        ].map((image) => [image.hash, image])
+      ).values(),
+    ];
+    const result: ChatBackup = {
+      format: CHAT_BACKUP_FORMAT,
+      version: CHAT_BACKUP_VERSION,
+      createdAt: new Date().toISOString(),
+      title: chat.title,
+      resources,
+      chats,
+      notices: [
+        '모델 연결과 API 키는 가져오지 않아요. 대상 작업실의 모델을 사용해요.',
+        '실행 기록·도우미 내부 작업·자동 요약 체크포인트·일회성 옵션은 복원하지 않아요. 원문과 메모로 다시 이어가요.',
+      ],
     };
-  }
+    if (Buffer.byteLength(JSON.stringify(result)) > CHAT_BACKUP_MAX_BYTES)
+      throw new HttpError(413, '채팅 백업이 256MiB를 넘어요.');
+    return result;
+  });
 }
 
-/** Validate in isolation, then atomically attach a new identity graph to the existing workspace. */
-export function importChatBackup(store: Store, value: unknown): ChatBackupImport {
+function checkedBackup(value: unknown): ChatBackup {
+  const body = record(value);
+  fields(body, ['format', 'version', 'createdAt', 'title', 'resources', 'chats', 'notices']);
+  if (
+    body.format !== CHAT_BACKUP_FORMAT ||
+    body.version !== CHAT_BACKUP_VERSION ||
+    !Array.isArray(body.chats) ||
+    !body.chats.length ||
+    body.chats.length > 1000
+  )
+    throw new HttpError(400, '개인 채팅 백업 파일을 확인해 주세요.');
+  for (const raw of body.chats) {
+    const copy = record(raw);
+    validateChatTranscript(copy.transcript);
+    const state = record(copy.state);
+    validateChatVariableState(state.variables);
+    if (!Array.isArray(state.checkpoints) || !Array.isArray(copy.illustrations))
+      throw new HttpError(400, '채팅 상태가 올바르지 않아요.');
+    state.checkpoints.forEach((checkpoint) => {
+      if (checkpoint !== null) validateChatVariableState(checkpoint);
+    });
+  }
+  inspectBundle(body.resources);
+  return body as ChatBackup;
+}
+
+export async function importChatBackup(store: Store, value: unknown): Promise<ChatBackupImport> {
   const body = record(value);
   fields(body, ['backup', 'idempotencyKey']);
-  const requestKey = text(body.idempotencyKey, 'request key', 120);
-  const serialized = JSON.stringify(body.backup);
-  if (Buffer.byteLength(serialized) > CHAT_BACKUP_MAX_BYTES)
-    throw new HttpError(413, 'CHAT_BACKUP_TOO_LARGE');
-  const digest = createHash('sha256').update(serialized).digest('hex');
-  const prior = priorImport(store, requestKey, digest);
-  if (prior) return prior;
-  const { tables } = decodeChatBackup(body.backup);
-  return withTemporaryStores((source, copy) => {
-    source.product.import(archive(tables));
-    const normalized = source.product.export().tables;
-    const offsets: Record<string, number> = {};
-    for (const { table, fields } of BACKUP_COLLECTIONS)
-      if (fields.some((field) => field.column === 'seq'))
-        offsets[table] = Number(
-          store.db.prepare(`SELECT COALESCE(MAX(seq),0) n FROM ${table}`).get()!.n
-        );
-    const ctx = createBackupRemap(normalized, offsets);
-    remapChatBackupHelper(ctx);
-    remapBackupRecords(ctx);
-    remapBackupContext(ctx);
-    finishBackupSnapshots(ctx);
-    copy.product.import(archive(ctx.tables));
-    const ready = copy.product.export().tables;
-    return store.transaction(() => {
-      const duplicate = priorImport(store, requestKey, digest);
-      if (duplicate) return duplicate;
-      store.db.exec('PRAGMA defer_foreign_keys=ON');
-      const reusedItems = new Set(
-        (
-          store.db
-            .prepare('SELECT kind,id FROM versions UNION SELECT kind,id FROM provider_settings')
-            .all() as BackupRow[]
-        ).map((row) => `${row.kind}:${row.id}`)
-      );
-      for (const { table, fields: columns } of BACKUP_COLLECTIONS) {
-        if (GLOBAL.has(table)) continue;
-        const primary = (store.db.prepare(`PRAGMA table_info(${table})`).all() as BackupRow[])
-          .filter((field) => field.pk > 0)
-          .sort((a, b) => a.pk - b.pk)
-          .map((field) => field.name as string);
-        for (const row of ready[table]) {
-          // Reusing content must not hide or move an existing destination library item.
-          if (
-            ['library_hidden', 'library_placements'].includes(table) &&
-            reusedItems.has(`${row.kind}:${row.id}`)
-          )
-            continue;
-          if (SHARED.has(table)) {
-            const existing = store.db
-              .prepare(
-                `SELECT * FROM ${table} WHERE ${primary.map((column) => `${column}=?`).join(' AND ')}`
-              )
-              .get(...primary.map((column) => row[column])) as BackupRow | undefined;
-            if (existing) {
-              // Current role selections and workspace organization remain owned by the destination.
-              // Immutable content with the same identity must still be byte-for-byte the same version.
-              if (table === 'versions' && !isDeepStrictEqual({ ...existing }, { ...row }))
-                throw new HttpError(409, 'CHAT_BACKUP_LIBRARY_CONFLICT');
-              continue;
-            }
-          }
-          store.db
-            .prepare(
-              `INSERT INTO ${table}(${columns.map((field) => field.column).join(',')}) VALUES(${columns.map((field) => (field.column === 'snapshot' ? 'snapshot_pack(?)' : '?')).join(',')})`
-            )
-            .run(
-              ...columns.map((field) =>
-                field.binary ? Buffer.from(row[field.column], 'base64') : row[field.column]
-              )
-            );
-        }
-      }
-      if (store.db.prepare('PRAGMA foreign_key_check').all().length)
-        throw new HttpError(400, 'CHAT_BACKUP_INVALID_GRAPH');
-      const environment = recordedEnvironment(normalized);
-      if (
-        !ready.events.some(
-          (row) => row.kind === 'chat.backup-environment' && row.entity_id === environment
-        )
-      )
-        store.event(ctx.chatId, 'chat.backup-environment', environment);
-      store.event(
-        ctx.chatId,
-        receiptKind,
-        JSON.stringify({ requestKey, digest, originChatId: tables.chats[0].id })
-      );
-      return {
-        chat: store.chat(ctx.chatId),
-        created: true,
-        branches: ready.branches.length,
-        sources: ready.sources.length,
-      };
+  const key = `chat:${text(body.idempotencyKey, 'import request', 100)}`;
+  const original = checkedBackup(body.backup);
+  const digest = bundleDigest(original);
+  const prior = store.db
+    .prepare('SELECT digest,result FROM import_operations WHERE key=?')
+    .get(key);
+  if (prior) {
+    if (prior.digest !== digest)
+      throw new HttpError(409, '다른 백업에 같은 가져오기 ID가 사용됐어요.');
+    const saved = JSON.parse(String(prior.result));
+    const chats = (saved.chatIds as string[]).map((id) => store.chat(id));
+    return {
+      chat: chats[0]!,
+      chats,
+      created: false,
+      branches: chats.length,
+      sources: saved.sources,
+      notices: original.notices,
+    };
+  }
+  const convertedResources = await convertTransferImages(original.resources);
+  const file = convertedResources.file;
+  const copies: ChatCopy[] = [];
+  for (const originalCopy of original.chats) {
+    const copy = structuredClone(originalCopy);
+    copy.transcript = rewriteTranscriptMedia(copy.transcript, (kind, hash) => {
+      const image =
+        kind === 'package-image-blobs' && convertedResources.imagesBySourceHash.get(hash);
+      return image ? `/api/package-image-blobs/${image.hash}` : undefined;
     });
+    if (copy.state.messages)
+      mapCopiedMessageTexts(copy.state.messages, (text) =>
+        text.replace(/\/api\/package-image-blobs\/([a-f0-9]{64})/gu, (url, hash) => {
+          const image = convertedResources.imagesBySourceHash.get(hash);
+          return image ? `/api/package-image-blobs/${image.hash}` : url;
+        })
+      );
+    copy.illustrations = [];
+    for (const image of originalCopy.illustrations) {
+      const converted = await processImage(Buffer.from(image.base64, 'base64'));
+      copy.illustrations.push({
+        ...image,
+        mime: converted.mime,
+        base64: converted.bytes.toString('base64'),
+      });
+    }
+    copies.push(copy);
+  }
+  return store.transaction(() => {
+    const receipt = importResourceBundle(store, {
+      file,
+      digest: inspectBundle(file).digest,
+      idempotencyKey: `resources:${key}`,
+      modelBindings: [],
+    });
+    const remap = new Map(
+      [...file.contents, ...file.prompts].map((entry) => [
+        entry.source.id,
+        receipt.items.find((item) => item.key === entry.key)!.id,
+      ])
+    );
+    const chats = copies.map((copy, index) => {
+      copy.transcript.packageAttachments = copy.transcript.packageAttachments.map((ref) => ({
+        ...ref,
+        id: remap.get(ref.id)!,
+        revision: 1,
+      }));
+      const prompt = copy.state.profile.pinned?.mainPromptPresetId;
+      copy.state.profile.pinned =
+        prompt && remap.has(prompt) ? { mainPromptPresetId: remap.get(prompt)! } : undefined;
+      if (copy.state.authoring) remapChatAuthoring(copy.state.authoring, remap);
+      return restoreChatCopy(store, copy, `restore:${key}:${index}`);
+    });
+    const sources = copies.reduce((sum, copy) => sum + copy.transcript.entries.length, 0);
+    store.db
+      .prepare('INSERT INTO import_operations VALUES(?,?,?)')
+      .run(key, digest, JSON.stringify({ chatIds: chats.map((chat) => chat.id), sources }));
+    return {
+      chat: chats[0]!,
+      chats,
+      created: true,
+      branches: chats.length,
+      sources,
+      notices: original.notices,
+    };
   });
 }

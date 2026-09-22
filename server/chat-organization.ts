@@ -101,7 +101,7 @@ export class ChatOrganizationStore {
       id: text(b.id, 'persona ID', 100),
       revision: number(b.revision, 'persona revision'),
     };
-    const content = this.store.product.get<Content>('content', ref.id, ref.revision);
+    const content = this.store.product.get<Content>('content', ref.id);
     if (content.kind !== 'persona' && !content.package)
       throw new HttpError(400, 'Folder default must be a persona or package');
     return ref;

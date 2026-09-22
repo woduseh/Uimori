@@ -40,7 +40,7 @@ const variants: ProviderConnection[] = [
     endpoint:
       'https://aiplatform.googleapis.com/v1/projects/synthetic/locations/global/publishers/google/models',
   },
-].map((value) => ({ ...value, credentialEnv: 'SYNTHETIC_STREAM_TOKEN' })) as ProviderConnection[];
+].map((value) => ({ ...value, credentialRef: 'SYNTHETIC_STREAM_TOKEN' })) as ProviderConnection[];
 const publicText = '등대 🌊';
 const privateText = 'PRIVATE_REASONING_SIGNATURE_OPAQUE';
 const message = (text: string): Json => ({
@@ -217,7 +217,6 @@ describe('public response progress through real decoders and synthetic HTTP', ()
       let wireRecorded = false;
       let completed = false;
       const resultPromise = executeProvider(connection, request(), {
-        approvedOrigins: [new URL(connection.endpoint).origin],
         signal: new AbortController().signal,
         resolveCredential: () => 'synthetic-only',
         onWire: () => {

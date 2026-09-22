@@ -42,7 +42,7 @@ export function resolvePackageModules(
 export function assertPackageReferences(product: ProductStore, pkg: RisuContent) {
   assertPackageImages(product, pkg);
   for (const module of pkg.modules ?? [])
-    if (!product.get<Content>('content', module.id, module.revision).package)
+    if (!product.get<Content>('content', module.id).package)
       throw new HttpError(400, 'Required module is not a package');
 }
 export function resolvePackageProfile(

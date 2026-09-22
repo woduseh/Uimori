@@ -1,12 +1,9 @@
 import { visualReview } from './fixtures/visual-review.js';
-import { isolatePromptDrafts } from './fixtures/prompt-workspace.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Content } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { navigationAction } from './ui-navigation.js';
-
-isolatePromptDrafts();
 
 async function seed(request: APIRequestContext, kind: Content['kind'], title: string) {
   const response = await request.post('/api/content', {

@@ -82,7 +82,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
       connection,
       request([{ mime: 'image/png', base64: PNG_BASE64 }]),
       {
-        approvedOrigins: [],
         signal: new AbortController().signal,
         onWire: (wire) => {
           wires.push(structuredClone(wire));
@@ -122,7 +121,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
   it('reads a saved file from the dedicated Codex home when the result is not inline and removes it', async () => {
     const { runtime, dir } = setup('image-saved-path');
     const result = await runtime.generateImage(connection, request(), {
-      approvedOrigins: [],
       signal: new AbortController().signal,
     });
     expect(result.status).toBe('completed');
@@ -138,7 +136,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
   it('reports usage limits and missing images as distinct failure codes with usage retained', async () => {
     const limited = setup('image-usage-limit');
     const limit = await limited.runtime.generateImage(connection, request(), {
-      approvedOrigins: [],
       signal: new AbortController().signal,
     });
     expect(limit.status).toBe('error');
@@ -150,7 +147,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     expect(limit.usage.inputTokens).toBe(100);
     const none = setup('image-none');
     const missing = await none.runtime.generateImage(connection, request(), {
-      approvedOrigins: [],
       signal: new AbortController().signal,
     });
     expect(missing.status).toBe('error');
@@ -173,7 +169,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
       input: { task: 'Synthetic request', controls: {} },
     };
     const result = await runtime.execute(connection, text, {
-      approvedOrigins: [],
       signal: new AbortController().signal,
     });
     expect(result.status).toBe('error');
@@ -186,19 +181,18 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     const wrong = await runtime.generateImage(
       { ...connection, protocol: 'openai-chat-v1' },
       request(),
-      { approvedOrigins: [], signal: new AbortController().signal }
+      { signal: new AbortController().signal }
     );
     expect(wrong.error?.code).toBe('CODEX_INVALID_CONNECTION');
     const many = await runtime.generateImage(
       connection,
       request(Array.from({ length: 9 }, () => ({ mime: 'image/png', base64: PNG_BASE64 }))),
-      { approvedOrigins: [], signal: new AbortController().signal }
+      { signal: new AbortController().signal }
     );
     expect(many.error?.code).toBe('CODEX_IMAGE_TOO_MANY_REFERENCES');
     const controller = new AbortController();
     controller.abort();
     const cancelled = await runtime.generateImage(connection, request(), {
-      approvedOrigins: [],
       signal: controller.signal,
     });
     expect(cancelled.status).toBe('cancelled');
@@ -226,7 +220,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
             ? 'image/jpeg'
             : 'image/png';
       const result = await runtime.generateImage(connection, request([{ mime, base64 }]), {
-        approvedOrigins: [],
         signal: new AbortController().signal,
       });
       expect(result.error?.code).toBe('CODEX_IMAGE_INVALID_REFERENCE');
@@ -252,7 +245,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
         return { UIMORI_CODEX_FIXTURE_SAVED_PATH: join(link, 'external.png') };
       });
       const result = await runtime.generateImage(connection, request(), {
-        approvedOrigins: [],
         signal: new AbortController().signal,
       });
       expect(result.error?.code).toBe('CODEX_IMAGE_NOT_GENERATED');
@@ -275,7 +267,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
       return { UIMORI_CODEX_FIXTURE_SAVED_PATH: saved };
     });
     const result = await runtime.generateImage(connection, request(), {
-      approvedOrigins: [],
       signal: new AbortController().signal,
     });
     expect(result.error?.code).toBe('CODEX_IMAGE_NOT_GENERATED');
@@ -294,7 +285,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
       return { UIMORI_CODEX_FIXTURE_SAVED_PATH: saved };
     });
     const result = await runtime.generateImage(connection, request(), {
-      approvedOrigins: [],
       signal: new AbortController().signal,
     });
     expect(result.status).toBe('completed');
@@ -307,7 +297,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
       UIMORI_CODEX_FIXTURE_IMAGE: `data:image/jpeg;base64,${PNG_BASE64}`,
     });
     const result = await runtime.generateImage(connection, request(), {
-      approvedOrigins: [],
       signal: new AbortController().signal,
     });
     expect(result.error?.code).toBe('CODEX_IMAGE_NOT_GENERATED');

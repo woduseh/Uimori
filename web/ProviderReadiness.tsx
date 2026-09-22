@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Connection } from '../core/product.js';
 import { api } from './api.js';
-import { ProviderEndpointStatus } from './ProviderEndpointStatus.js';
 
 type Readiness = {
   enabled: boolean;
@@ -10,9 +9,9 @@ type Readiness = {
   catalogKind: 'remote' | 'local-support';
 };
 const credentials: Record<Readiness['credentialStatus'], string> = {
-  configured: '인증 참조 설정됨',
-  missing: '인증 참조 설정 필요',
-  'not-required': '인증 참조 불필요',
+  configured: 'API 키 등록됨',
+  missing: 'API 키 등록 필요',
+  'not-required': 'API 키 불필요',
   'adc-configured': 'ADC 파일 설정됨',
   'adc-unchecked': '서버 ADC 설정 확인 필요',
 };
@@ -60,7 +59,7 @@ export function ProviderReadiness({
       <section className="provider-readiness full" aria-label="선택한 프로바이더 준비 상태">
         <strong>{connection.title} · Codex 프로바이더</strong>
         <p>
-          {connection.enabled ? '프로바이더 사용 허용' : '프로바이더 비활성'} · Uimori 서버에서
+          {connection.enabled ? '프로바이더 사용 중' : '프로바이더 비활성'} · Uimori 서버에서
           실행해요.
         </p>
         <p>
@@ -108,13 +107,10 @@ export function ProviderReadiness({
         <>
           <p>{prepared ? '서버 설정 준비됨' : '사용 전 설정 확인이 필요해요'}</p>
           <ul>
-            <li>{value.enabled ? '프로바이더 사용 허용' : '프로바이더 비활성'}</li>
-            <li>{value.originApproved ? '서버에서 주소 허용됨' : '요청 주소 설정 확인 필요'}</li>
+            <li>{value.enabled ? '프로바이더 사용 중' : '프로바이더 비활성'}</li>
+            <li>{value.originApproved ? 'API 주소 설정됨' : '요청 주소 설정 확인 필요'}</li>
             <li>{credentials[value.credentialStatus]}</li>
           </ul>
-          {!value.originApproved && (
-            <ProviderEndpointStatus protocol={connection.protocol} endpoint={connection.endpoint} />
-          )}
           <small>
             현재 서버 설정을 확인했어요. 실제 공급자 인증과 모델 응답은 응답 테스트로 확인해 주세요.
           </small>

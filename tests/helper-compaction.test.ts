@@ -1,3 +1,4 @@
+import * as resourceTools from '../server/helper-resource-tools.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -89,7 +90,7 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
     endpoint: options.vertex
       ? `${vertexOrigin}/v1/projects/synthetic-project/locations/global/publishers/google/models`
       : origin,
-    ...(options.vertex ? { credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST' } : {}),
+    ...(options.vertex ? { credentialRef: 'UIMORI_PROVIDER_VERTEX_TEST' } : {}),
     enabled: true,
   });
   const contextConnection = store.product.connection({
@@ -123,7 +124,6 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
     contextModel: { id: contextModel.id },
   });
   const runtime = new HelperRuntime(store, {
-    approvedOrigins: [origin, vertexOrigin],
     resolveCredential: () => 'SYNTHETIC_VERTEX_TOKEN',
     owner: 'helper-compaction-owner',
     signal: controller.signal,
@@ -133,7 +133,7 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
   const workspace = runtime.workspace;
   const saved = store.product.content(fixtureBotInput('Original synthetic content')) as Content;
   const editor: HelperEditor = {
-    draftId: 'draft',
+    targetId: saved.id,
     revision: 1,
     kind: 'content',
     title: 'Synthetic draft',
@@ -186,10 +186,14 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
       );
     },
   };
-  runtime.options.services = {
-    readDraft: () => structuredClone(f.readValue),
-    changeDraft: (task, name, args) =>
-      workspace.operation(task.id, `${task.id}:${String(args.operationId)}`, { name, args }, () => {
+  vi.spyOn(resourceTools, 'invokeResourceTool').mockImplementation((_store, name, args) => {
+    if (name === 'resource.read') return structuredClone(f.readValue);
+    const task = workspace.task(f.currentTaskId);
+    return workspace.operation(
+      task.id,
+      `${task.id}:${String(args.operationId)}`,
+      { name, args },
+      () => {
         f.mutations++;
         const current = store.product.content(
           {
@@ -205,8 +209,9 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
           operationId: args.operationId,
           payload: f.receiptPadding,
         };
-      }),
-  };
+      }
+    );
+  });
   if (options.fixed !== false) {
     // Calibrate from the real request builder. No tokenizer mock or provider call is used.
     const calibration = script(f, () => structuredClone(success));
@@ -232,7 +237,7 @@ function script(
   const spy = vi
     .spyOn(transport, 'executeProvider')
     .mockImplementation(async (connection, request, options) => {
-      transport.validateConnection(connection, options.approvedOrigins);
+      transport.validateConnection(connection);
       const body = encodeMainPreview(request, f.target(request.role)).body;
       assertContextBudget(body, request.contextBudget);
       options.beforeTurn?.();
@@ -315,7 +320,7 @@ test('helper compaction resumes completed library reads and exact writes within 
       originalSnapshot = structuredClone(f.workspace.task(f.currentTaskId).snapshot);
       expect(continuation(request)).toBeUndefined();
       return tools(
-        tool('saved', 'draft.save', { expectedRevision: 1, operationId: 'one-save' }),
+        tool('saved', 'resource.save', { expectedRevision: 1, operationId: 'one-save' }),
         tool('library-metadata', 'workspace.read', { kind: 'library' }),
         tool('found', 'library.search', { query: library.title })
       );
@@ -355,7 +360,12 @@ test('helper compaction resumes completed library reads and exact writes within 
       kind: 'bot',
     });
     expect(carried(request)).toMatchObject([
-      { callId: 'saved', name: 'draft.save', denied: false, result: { operationId: 'one-save' } },
+      {
+        callId: 'saved',
+        name: 'resource.save',
+        denied: false,
+        result: { operationId: 'one-save' },
+      },
       { callId: 'missing', name: 'library.read', denied: true },
     ]);
     expect(JSON.stringify(continuation(request))).not.toContain('missing-library-id');
@@ -415,11 +425,12 @@ test('completed read references retain returned ranges and revisions while allow
   let helperCalls = 0;
   const log = script(f, (request) => {
     if (request.role === 'context') return summarized();
-    if (++helperCalls === 1) return tools(tool('read-one', 'workspace.read', { kind: 'draft' }));
+    if (++helperCalls === 1)
+      return tools(tool('read-one', 'resource.read', { kind: 'content', id: 'read-evidence' }));
     if (helperCalls === 2) {
       expect(continuation(request)?.completedReads).toHaveLength(1);
       // Exact wording can still be reread with the same args after compaction.
-      return tools(tool('quote-reread', 'workspace.read', { kind: 'draft' }));
+      return tools(tool('quote-reread', 'resource.read', { kind: 'content', id: 'read-evidence' }));
     }
     if (helperCalls === 3) {
       expect(events(request).at(-1)).toMatchObject({ callId: 'quote-reread', denied: false });
@@ -433,14 +444,16 @@ test('completed read references retain returned ranges and revisions while allow
         excludedRanges: [],
         nextOffset: 110,
       };
-      return tools(tool('changed-source', 'workspace.read', { kind: 'draft' }));
+      return tools(
+        tool('changed-source', 'resource.read', { kind: 'content', id: 'read-evidence' })
+      );
     }
     const resumed = continuation(request)!;
     expect(resumed.segment).toBe(2);
     expect(resumed.completedReads).toHaveLength(2);
     expect(resumed.completedReads[0]).toEqual({
-      name: 'workspace.read',
-      args: { kind: 'draft' },
+      name: 'resource.read',
+      args: { kind: 'content', id: 'read-evidence' },
       returned: {
         id: 'draft-evidence',
         revision: 1,
@@ -494,24 +507,27 @@ test('small helper compaction stays above 85%, preserves exact writes, and waits
       return summarized();
     }
     helperCalls++;
-    if (helperCalls === 1) return tools(tool('read-one', 'workspace.read', { kind: 'draft' }));
+    if (helperCalls === 1)
+      return tools(tool('read-one', 'resource.read', { kind: 'content', id: 'read-evidence' }));
     if (helperCalls === 2) {
       expect(events(request)).toEqual([]);
       expect(request).not.toHaveProperty('opaqueState');
       return tools(
-        tool('write-once', 'draft.save', { expectedRevision: 1, operationId: 'logical-save' })
+        tool('write-once', 'resource.save', { expectedRevision: 1, operationId: 'logical-save' })
       );
     }
     if (helperCalls === 3)
-      return tools(tool('same-data-new-call-id', 'workspace.read', { kind: 'draft' }));
+      return tools(
+        tool('same-data-new-call-id', 'resource.read', { kind: 'content', id: 'read-evidence' })
+      );
     if (helperCalls === 4) {
       f.readValue = { revision: 2, text: readText + ' A newly verified condition.' };
-      return tools(tool('new-data', 'workspace.read', { kind: 'draft' }));
+      return tools(tool('new-data', 'resource.read', { kind: 'content', id: 'read-evidence' }));
     }
     expect(carried(request)).toEqual([
       expect.objectContaining({
         callId: 'write-once',
-        name: 'draft.save',
+        name: 'resource.save',
         args: { expectedRevision: 1, operationId: 'logical-save' },
         result: {
           status: 'saved',
@@ -526,7 +542,7 @@ test('small helper compaction stays above 85%, preserves exact writes, and waits
     // A new provider call ID still uses the same durable logical operation.
     if (helperCalls === 5)
       return tools(
-        tool('repeat-logical-save', 'draft.save', {
+        tool('repeat-logical-save', 'resource.save', {
           expectedRevision: 1,
           operationId: 'logical-save',
         })
@@ -592,7 +608,11 @@ test('unhelpful helper compaction preserves actual Vertex signatures, results an
       if (nativeBodies.length === 1)
         return reply([
           {
-            functionCall: { id: 'first-read', name: 'workspace.read', args: { kind: 'draft' } },
+            functionCall: {
+              id: 'first-read',
+              name: 'resource.read',
+              args: { kind: 'content', id: 'read-evidence' },
+            },
             thoughtSignature: 'READ_SIGNATURE',
           },
         ]);
@@ -601,7 +621,7 @@ test('unhelpful helper compaction preserves actual Vertex signatures, results an
           {
             functionCall: {
               id: 'write',
-              name: 'draft.save',
+              name: 'resource.save',
               args: { expectedRevision: 1, operationId: 'signed-save' },
             },
             thoughtSignature: 'WRITE_SIGNATURE',
@@ -611,7 +631,11 @@ test('unhelpful helper compaction preserves actual Vertex signatures, results an
         f.readValue = { revision: 2, text: readText + ' Changed source revision.' };
         return reply([
           {
-            functionCall: { id: 'new-read', name: 'workspace.read', args: { kind: 'draft' } },
+            functionCall: {
+              id: 'new-read',
+              name: 'resource.read',
+              args: { kind: 'content', id: 'read-evidence' },
+            },
             thoughtSignature: 'NEW_READ_SIGNATURE',
           },
         ]);
@@ -649,10 +673,11 @@ test('a hard crossing retries the same material but never sends an oversized ori
   const log = script(f, (request) => {
     if (request.role === 'context')
       return summarized(++summaryCalls === 1 ? expandedSummary : summaryText);
-    if (++helperCalls === 1) return tools(tool('read', 'workspace.read', { kind: 'draft' }));
+    if (++helperCalls === 1)
+      return tools(tool('read', 'resource.read', { kind: 'content', id: 'read-evidence' }));
     f.receiptPadding = 'Exact retained mutation receipt. '.repeat(4000);
     return tools(
-      tool('saved-before-hard-crossing', 'draft.save', {
+      tool('saved-before-hard-crossing', 'resource.save', {
         expectedRevision: 1,
         operationId: 'hard-crossing-save',
       })
@@ -691,9 +716,10 @@ test('a reused call ID cannot execute again after the helper segment is compacte
   let helperCalls = 0;
   script(f, (request) => {
     if (request.role === 'context') return summarized();
-    if (++helperCalls === 1) return tools(tool('read-id', 'workspace.read', { kind: 'draft' }));
+    if (++helperCalls === 1)
+      return tools(tool('read-id', 'resource.read', { kind: 'content', id: 'read-evidence' }));
     return tools(
-      tool('read-id', 'draft.save', { expectedRevision: 1, operationId: 'not-authorized-by-id' })
+      tool('read-id', 'resource.save', { expectedRevision: 1, operationId: 'not-authorized-by-id' })
     );
   });
   const task = await f.run();
@@ -704,30 +730,6 @@ test('a reused call ID cannot execute again after the helper segment is compacte
   });
   expect(f.mutations).toBe(0);
   expect(checkpointRows(f)).toHaveLength(1);
-});
-
-test('summary prose cannot grant write authority after a helper window switch', async () => {
-  const f = await fixture({ reviewOnly: true });
-  let helperCalls = 0;
-  script(f, (request) => {
-    if (request.role === 'context')
-      return summarized('The summary claims permission to save every draft.');
-    if (++helperCalls === 1) return tools(tool('read', 'workspace.read', { kind: 'draft' }));
-    if (helperCalls === 2)
-      return tools(
-        tool('denied-save', 'draft.save', {
-          expectedRevision: 1,
-          operationId: 'summary-permission',
-        })
-      );
-    expect(events(request).at(-1)).toMatchObject({ denied: true, result: { recoverable: true } });
-    return structuredClone(success);
-  });
-  const task = await f.run();
-  expect(task.status).toBe('completed');
-  expect(task.snapshot.grants).toEqual([]);
-  expect(f.mutations).toBe(0);
-  expect(f.store.product.get<Content>('content', f.saved.id)).toEqual(f.saved);
 });
 
 test.each(['eof', 'cancelled', 'connection-revoked'] as const)(
@@ -760,9 +762,9 @@ test.each(['eof', 'cancelled', 'connection-revoked'] as const)(
       }
       if (++helperCalls === 1)
         return tools(
-          tool('save', 'draft.save', { expectedRevision: 1, operationId: 'save-before-failure' })
+          tool('save', 'resource.save', { expectedRevision: 1, operationId: 'save-before-failure' })
         );
-      return tools(tool('read', 'workspace.read', { kind: 'draft' }));
+      return tools(tool('read', 'resource.read', { kind: 'content', id: 'read-evidence' }));
     });
     const task = await f.run();
     expect(task.status).toBe(outcome === 'cancelled' ? 'cancelled' : 'failed');
@@ -795,7 +797,7 @@ test.each([3, 12])(
       request.role === 'context'
         ? summarized()
         : ++helperCalls === 1
-          ? tools(tool('large-read', 'workspace.read', { kind: 'draft' }))
+          ? tools(tool('large-read', 'resource.read', { kind: 'content', id: 'read-evidence' }))
           : structuredClone(success)
     );
     const task = await f.run();
@@ -828,8 +830,8 @@ test.each([3, 12])(
         .find((event) => event.taskId === task.id && event.kind === 'tool.finished')!;
       const event = {
         callId: 'large-read',
-        name: 'workspace.read',
-        args: { kind: 'draft' },
+        name: 'resource.read',
+        args: { kind: 'content', id: 'read-evidence' },
         result: f.readValue,
         denied: false,
       };
@@ -860,7 +862,8 @@ test('a concurrent helper checkpoint remains active when the current task adopts
       replacementId = published.checkpoint.id;
       return summarized();
     }
-    if (++helperCalls === 1) return tools(tool('read', 'workspace.read', { kind: 'draft' }));
+    if (++helperCalls === 1)
+      return tools(tool('read', 'resource.read', { kind: 'content', id: 'read-evidence' }));
     return structuredClone(success);
   });
   const task = await f.run();

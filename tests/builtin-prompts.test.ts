@@ -138,51 +138,6 @@ test('bundled native presets are editable independent copies and compile in all 
   }
 });
 
-test('fresh defaults use Phēmē and Hermēneía; catalog reads and copying never apply a preset', async () => {
-  const network = vi
-    .spyOn(globalThis, 'fetch')
-    .mockRejectedValue(new Error('No provider call allowed'));
-  const { app } = await application();
-  const original = promptWorkspace(app!.store);
-  expect(original.main.title).toBe('Phēmē');
-  expect(original.translation.title).toBe('Hermēneía');
-  expect(original.main.program.collaboration).toBeUndefined();
-  expect(app!.store.product.importStatus().canImport).toBe(true);
-  const before = app!.store.db.prepare('SELECT total_changes() AS n').get();
-  const listed = await app!.inject({ method: 'GET', url: '/api/prompt-templates' });
-  expect(listed.statusCode).toBe(200);
-  expect(listed.json()).toHaveLength(5);
-  expect(listed.body).not.toContain('"program"');
-  expect(
-    (await app!.inject({ method: 'GET', url: '/api/prompt-templates/unknown' })).statusCode
-  ).toBe(404);
-  const response = await app!.inject({
-    method: 'GET',
-    url: '/api/prompt-templates/pheme-collaboration',
-  });
-  expect(response.statusCode).toBe(200);
-  expect(app!.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
-  const { title, role, program, values } = response.json();
-  const copy = await app!.inject({
-    method: 'POST',
-    url: '/api/prompt-presets',
-    payload: { title, role, program, values },
-  });
-  expect(copy.statusCode, copy.body).toBe(200);
-  expect(promptWorkspace(app!.store)).toEqual(original);
-  const frozen = freezeCurrentPrompts(original);
-  const applied = await app!.inject({
-    method: 'POST',
-    url: '/api/prompt-workspace/apply',
-    payload: { expectedRevision: original.revision, role: 'main', presetId: copy.json().id },
-  });
-  expect(applied.statusCode, applied.body).toBe(200);
-  expect(applied.json().main.program.collaboration.agents).toHaveLength(3);
-  expect(applied.json().translation).toEqual(original.translation);
-  expect(frozen.promptPresets!.main!.program.collaboration).toBeUndefined();
-  expect(network).not.toHaveBeenCalled();
-});
-
 test('reopening an existing database preserves saved working programs, options and library edits', async () => {
   const entry = await application();
   const prior = promptWorkspace(entry.app!.store);

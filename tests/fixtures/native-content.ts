@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { RisuContent } from '../../core/risu-content.js';
 import type { ContentKind } from '../../core/product.js';
-import type { ContentDraftModel, EditDraftModel } from '../../core/edit-drafts.js';
+import type { ContentEditModel, ResourceModel } from '../../core/resource-editing.js';
 import { projectNativeRisuPackage } from '../../server/risu-native-projection.js';
 
 /** Synthetic Risu authorship: the same projection used by actual card imports. */
@@ -34,8 +34,8 @@ export function nativeContent(
 }
 
 /** Edit the authored card name, then derive the list/editor projection from it. */
-export function nativeDraftTitle(model: EditDraftModel, title: string): ContentDraftModel {
-  const content = model as ContentDraftModel;
+export function nativeDraftTitle(model: ResourceModel, title: string): ContentEditModel {
+  const content = model as ContentEditModel;
   const pkg = nativeContent(
     { ...content.package.nativeRisu.card, name: title },
     content.package,

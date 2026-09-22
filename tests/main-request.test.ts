@@ -97,13 +97,13 @@ async function snapshot(
     profile,
   });
 }
-function hooks(origin: string) {
+function hooks(_origin: string) {
   const events: ToolEvent[] = [],
     attempts: WireRecord[] = [],
     finished: ProviderResult[] = [];
   const value: MainHooks = {
     signal: new AbortController().signal,
-    approvedOrigins: [origin],
+
     authorize: (connection) => connection,
     onInput: () => {},
     onToolEvent: (event) => {
@@ -517,7 +517,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       const work = await snapshot('https://api.anthropic.com/v1'),
         target = work.profile!.models.main!;
       target.connection.protocol = 'anthropic-messages-v1';
-      target.connection.credentialEnv = 'UIMORI_PROVIDER_NATIVE_TEST';
+      target.connection.credentialRef = 'UIMORI_PROVIDER_NATIVE_TEST';
       target.modelId = 'claude-opus-5';
       target.stopSequences = ['END_SCENE'];
       const nativeFetch = globalThis.fetch;

@@ -10,9 +10,7 @@ import { exportJson, writeEmbeddedRisuModule, writeRisuZip } from '../server/ris
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
 import { cardZip, readCharacterCard } from '../server/character-card-file.js';
 import { readRisuPresetFile } from '../server/risu-preset-file.js';
-import { prepareRisuPresetImport, applyRisuPresetImport } from '../server/risu-preset-import.js';
 import { putImageBlob, putValidatedImageBlob } from '../server/package-images.js';
-import { nativeRisuLore, nativeRisuRegex, nativeRisuTriggers } from '../core/risu-native.js';
 import { decodeRPack, encodeRPack } from '../server/compat/risu/rpack.js';
 import {
   addNativeRisuImage,
@@ -103,67 +101,6 @@ function imported(store: Store, data = card(), module?: Record<string, unknown>)
   const { id: _id, revision: _revision, ...body } = result.file.contents[0].source;
   return store.product.content(body) as Content;
 }
-
-test('edited CHARX reimports current card, canonical embedded module, image bytes and unknown authored fields', () => {
-  const { store } = fixture();
-  const module = {
-    name: 'embedded',
-    lorebook: [{ key: 'room', content: 'Room', alwaysActive: true }],
-    regex: [{ in: 'OLD', out: 'NEW', type: 'editdisplay', ableFlag: true, flag: 'g', custom: 9 }],
-    trigger: [
-      { type: 'start', effect: [{ type: 'triggerlua', code: 'error("never execute on export")' }] },
-    ],
-    assets: [['scene', 'original-device-path', 'png']],
-    cjs: 'obsolete',
-    active: { enabled: true },
-  };
-  const saved = imported(store, card(), module);
-  const edit = structuredClone(saved);
-  edit.package.nativeRisu.card.name = '편집한 카드';
-  edit.package.nativeRisu.card.first_mes = '<b>Edited {{char}}</b>';
-  edit.package.nativeRisu.card.description = 'Edited description';
-  edit.package.nativeRisu.module!.lorebook = [
-    { key: 'room', content: 'Edited lore', alwaysActive: true },
-  ];
-  const replacement = putImageBlob(store.product, {
-    mime: 'image/png',
-    base64: Buffer.concat([png, Buffer.from('edited')]).toString('base64'),
-  });
-  edit.package.images![1].blobHash = replacement.hash;
-  const { id: _id, revision: _revision, ...editedBody } = edit;
-  const updated = store.product.content(
-    { ...editedBody, expectedRevision: saved.revision },
-    saved.id
-  ) as Content;
-  const before = store.product.export().tables;
-  const output = exportRisuContent(store.product, updated);
-  const read = readCharacterCard(source(output.bytes));
-  expect(read.nativeCard).toMatchObject({
-    name: '편집한 카드',
-    description: 'Edited description',
-    first_mes: '<b>Edited {{char}}</b>',
-    unknown_active: card().unknown_active,
-    post_history_instructions: 'Global {{original}}',
-  });
-  expect(read.nativeCard).not.toHaveProperty('personality');
-  expect(read.nativeCard).not.toHaveProperty('scenario');
-  expect(read.nativeCard).not.toHaveProperty('system_prompt');
-  expect(read.nativeModule).not.toHaveProperty('cjs');
-  const { cjs: _cjs, ...activeModule } = module;
-  expect(read.nativeModule).toMatchObject({
-    ...activeModule,
-    lorebook: edit.package.nativeRisu.module!.lorebook,
-  });
-  const reimport = analyzeNativeRisuImport(read).file.contents[0].source.package!;
-  expect(nativeRisuLore(reimport.nativeRisu)[0].content).toBe('Edited lore');
-  expect(nativeRisuRegex(reimport.nativeRisu)).toEqual(module.regex);
-  expect(nativeRisuTriggers(reimport.nativeRisu)[0]).toMatchObject(module.trigger[0]);
-  const image = analyzeNativeRisuImport(read).file.images.find(
-    (entry) => entry.hash === replacement.hash
-  );
-  expect(image?.base64).toBe(replacement.base64);
-  expect(store.product.export().tables).toEqual(before);
-});
 
 test('new saved image and changed representative image export with portable asset names', () => {
   const { store } = fixture(),
@@ -279,54 +216,6 @@ test('standalone RISUM preserves authored fields, scripts and asset bytes throug
   expect(saved).toEqual(before);
 });
 
-test('linked nested modules export latest declaration-order scripts, converted lore and portable card assets without writes', () => {
-  const { store } = fixture(),
-    saved = imported(store);
-  const child = importedModule(store, 'child', {
-    lorebook: [{ key: 'child', content: 'nested', alwaysActive: true }],
-    trigger: [{ type: 'start', effect: [{ type: 'triggerlua', code: 'return' }] }],
-    lowLevelAccess: true,
-    assets: [['scene', '', 'png']],
-  });
-  const parent = importedModule(store, 'parent', {
-    regex: [{ in: 'old', out: 'new', type: 'editdisplay' }],
-  });
-  const { id, revision, ...body } = parent;
-  const latest = store.product.content(
-    {
-      ...body,
-      expectedRevision: revision,
-      package: { ...body.package, modules: [{ id: child.id, revision: child.revision }] },
-    },
-    id
-  ) as Content;
-  saved.package.modules = [{ id, revision }];
-  const original = structuredClone(saved);
-  const before = store.product.export().tables;
-  const read = readCharacterCard(source(exportRisuContent(store.product, saved).bytes));
-  const module = read.nativeModule!;
-  expect(module.regex).toEqual(latest.package.nativeRisu.module!.regex);
-  expect(module.lorebook).toMatchObject([
-    { alwaysActive: true, content: 'stale inline' },
-    { key: 'child', content: 'nested' },
-  ]);
-  expect((read.nativeCard as Record<string, any>).extensions.risuai.defaultVariables).toBe(
-    'stage=first'
-  );
-  expect((read.nativeCard as Record<string, any>).extensions.risuai.lowLevelAccess).toBe(true);
-  expect(
-    (read.nativeCard as Record<string, any>).assets.some(
-      (asset: { name: string }) => asset.name === 'scene'
-    )
-  ).toBe(true);
-  const restored = analyzeNativeRisuImport(read);
-  expect(
-    nativeRisuTriggers(restored.file.contents[0].source.package!.nativeRisu)[0].lowLevelAccess
-  ).toBe(true);
-  expect(store.product.export().tables).toEqual(before);
-  expect(saved).toEqual(original);
-});
-
 test('linked modules reject mixed permissions, scoped metadata, missing payload and asset name conflicts', () => {
   const { store } = fixture();
   for (const extra of [
@@ -350,54 +239,6 @@ test('linked modules reject mixed permissions, scoped metadata, missing payload 
   const empty = structuredClone(dependency);
   delete empty.package.nativeRisu.module;
   expect(() => exportRisuContent(store.product, empty)).toThrow('RISU_EXPORT_MODULE_UNSUPPORTED');
-});
-
-test('saved edited RISUP uses the real binary importer and preserves authored blocks, CBS, settings and regex', () => {
-  const { store } = fixture();
-  const document = {
-    name: 'Original',
-    promptTemplate: [{ type: 'plain', role: 'system', text: 'Original' }, { type: 'chat' }],
-    regex: [{ in: 'x', out: '{{getvar::x}}', type: 'editprocess' }],
-    customPromptTemplateToggle: 'style=Style=select=Calm,Bold',
-    templateDefaultVariables: 'x=1',
-    promptSettings: { utilOverride: false },
-    openAIKey: 'do-not-export',
-    aiModel: 'not-a-prompt',
-  };
-  const input = source(exportJson(document), 'source.json');
-  const preview = prepareRisuPresetImport({ source: input });
-  const saved = applyRisuPresetImport(store, {
-    source: input,
-    digest: preview.digest,
-    allowPartial: true,
-    idempotencyKey: 'export-preset',
-  }).preset;
-  saved.title = '편집한 프리셋';
-  (saved.program.nativeRisuPreset.preset.promptTemplate as Record<string, unknown>[])[0].text =
-    'Edited {{getvar::x}}';
-  const { id: _id, revision: _revision, ...editedBody } = saved;
-  const updated = store.product.promptPreset(
-    { ...editedBody, expectedRevision: saved.revision },
-    saved.id
-  ) as PromptPreset;
-  const before = store.product.export().tables,
-    output = exportRisuPrompt(updated);
-  const decoded = readRisuPresetFile(source(output.bytes, output.filename)).preset;
-  expect(decoded).toMatchObject({
-    name: '편집한 프리셋',
-    regex: document.regex,
-    promptSettings: document.promptSettings,
-    templateDefaultVariables: 'x=1',
-  });
-  expect((decoded.promptTemplate as Record<string, unknown>[])[0].text).toBe(
-    'Edited {{getvar::x}}'
-  );
-  expect(decoded).not.toHaveProperty('openAIKey');
-  expect(decoded).not.toHaveProperty('aiModel');
-  expect(
-    prepareRisuPresetImport({ source: source(output.bytes, output.filename) }).summary.blocks
-  ).toBe(2);
-  expect(store.product.export().tables).toEqual(before);
 });
 
 test('saving and exporting a historical RISUP silently removes retired execution data without changing its input', () => {
@@ -444,27 +285,6 @@ test('saving and exporting a historical RISUP silently removes retired execution
   });
   expect(historical.program.nativeRisuPreset.preset).toEqual(preset);
   expect(body).toEqual(before);
-});
-
-test('download routes guard revision and hidden items and return a Unicode attachment without modifying data', async () => {
-  const { store, app } = fixture(),
-    saved = imported(store);
-  const before = store.product.export().tables;
-  const response = await app.inject(
-    `/api/content/${saved.id}/risu-export?expectedRevision=${saved.revision}`
-  );
-  expect(response.statusCode).toBe(200);
-  expect(response.headers['content-disposition']).toContain("filename*=UTF-8''");
-  expect(response.headers['cache-control']).toBe('no-store');
-  expect(
-    (readCharacterCard(source(response.rawPayload)).nativeCard as Record<string, unknown>).name
-  ).toBe(saved.title);
-  expect(
-    (await app.inject(`/api/content/${saved.id}/risu-export?expectedRevision=999`)).statusCode
-  ).toBe(409);
-  expect(store.product.export().tables).toEqual(before);
-  store.db.prepare('INSERT INTO library_hidden(kind,id) VALUES(?,?)').run('content', saved.id);
-  expect((await app.inject(`/api/content/${saved.id}/risu-export`)).statusCode).toBe(404);
 });
 
 test('encoder is the inverse of the pinned Risu RPack codec for every byte', () => {

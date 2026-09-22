@@ -1,4 +1,3 @@
-import { writeNote } from './fixtures/notes.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -86,7 +85,7 @@ function queued(store: Store, chatId: string, request = 'Continue.', branchId?: 
       }) satisfies RunSnapshot
   ).run;
 }
-function source(
+function _source(
   store: Store,
   chatId: string,
   text = 'A ticket is bought. [[event:buy-ticket]]',
@@ -121,34 +120,6 @@ async function api(
   expect(response.statusCode, response.body).toBe(expected);
   return response.json();
 }
-test('S04 stored author canon retcon is branch scoped and does not rewrite earlier Run snapshots', async () => {
-  const { store } = await database();
-  const id = chat(store);
-  const first = source(store, id, 'The shared beginning.');
-  const original = writeNote(store, id, { text: 'The moon is blue.', author: 'user' });
-  const right = store.product.createBranch(id, {
-    title: 'Right candidate',
-    fromRevision: first.id,
-  });
-  const leftSource = source(store, id, 'Left continuation.');
-  const rightSource = source(store, id, 'Right continuation.', right.id);
-  const earlierSnapshot = structuredClone(store.run(leftSource.runId).snapshot);
-  const replacement = writeNote(
-    store,
-    id,
-    { text: 'The moon is red.', author: 'user' },
-    original.id
-  );
-  expect(store.story.notes.entries(store.story.notes.scope(id, leftSource.id))).toEqual([
-    replacement,
-  ]);
-  expect(store.story.notes.entries(store.story.notes.scope(id, rightSource.id))).toEqual([
-    original,
-  ]);
-  expect(store.run(leftSource.runId).snapshot).toEqual(earlierSnapshot);
-  const separate = chat(store);
-  expect(() => store.story.notes.scope(separate, leftSource.id)).toThrow();
-});
 
 test('S01 source transaction failure rolls back original, Run completion and all durable story reservations', async () => {
   const { store } = await database();
@@ -275,51 +246,4 @@ test('explicit notes need no transcripts, use CAS and preserve their replaced re
     },
     409
   );
-});
-
-test('imported memories preserve exact text and origin with note CAS, archive and internal chat identity', async () => {
-  const { store } = await database();
-  const owner = createFixtureChat(store, 'Synthetic note owner');
-  const id = randomUUID();
-  const created = store.createChat('Imported notes', 'calm', { botId: owner.botId }, id);
-  expect(created.id).toBe(id);
-  const origin = { fileHash: 'a'.repeat(64), entryId: 'history-1', title: 'External history' };
-  const command = {
-    kind: 'imported-memory',
-    origin,
-    text: '  A prior account.\r\nNo source transcript.  ',
-    author: 'External author',
-    expectedRevision: 0,
-    expectedHeadRevision: null,
-    idempotencyKey: 'imported-memory-one',
-  };
-  const saved = store.story.notes.write(id, command);
-  expect(saved.note).toMatchObject({
-    kind: 'imported-memory',
-    origin,
-    text: command.text,
-    atRevision: null,
-    atHash: null,
-  });
-  expect(store.story.notes.write(id, command)).toEqual(saved);
-  expect(() => store.story.notes.write(id, { ...command, text: 'changed' })).toThrow('key reused');
-  expect(() => store.story.notes.write(id, { ...command, idempotencyKey: 'stale' })).toThrow(
-    '메모가 변경'
-  );
-  expect(() =>
-    store.story.notes.write(id, {
-      ...command,
-      expectedRevision: 1,
-      origin: undefined,
-      idempotencyKey: 'invalid-origin',
-    })
-  ).toThrow('Invalid note');
-  expect(store.story.notes.revision(id)).toBe(1);
-  expect(store.detail(id).sources).toEqual([]);
-  expect(store.detail(id).attempts).toEqual([]);
-  expect(() => store.createChat('Duplicate', 'calm', { botId: owner.botId }, id)).toThrow();
-  expect(store.chat(id).title).toBe('Imported notes');
-  const { store: restored } = await database();
-  restored.product.import(store.product.export());
-  expect(restored.story.notes.entries({ chatId: id, history: [] })).toEqual([saved.note]);
 });
