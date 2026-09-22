@@ -29,7 +29,8 @@ const sourceText =
 const translatedText =
   '번역된 장면이다. “함께 걸어가자.” 그는 고개를 들었다. ‘아직 늦지 않았어.’\n\n' +
   '「도착했어.」 문 앞에 『여행의 끝』이 놓여 있었다.';
-const helperAnswer = '“문을 열어 주세요.”\n“다시 한 번 확인해요.”\n‘마음속 약속’도 있어요.';
+const helperAnswer = '**“문을 열어 주세요.”**\n“다시 한 번 확인해요.”\n‘마음속 약속’도 있어요.';
+const helperAnswerText = '“문을 열어 주세요.”\n“다시 한 번 확인해요.”\n‘마음속 약속’도 있어요.';
 const artifactText = '그녀가 돌아섰다. 「다시 만나요.」 그는 ‘꼭 돌아오겠어.’라고 생각했다.';
 const streamText = '장면을 살펴보고 있어요. “이 장면의 선택”을 설명할게요.';
 const helperRequest = '“이 요청은 그대로” 읽으며 확인해 주세요.';
@@ -395,7 +396,8 @@ test('READUI02 helper answers, independent scenes and public streams share readi
       const answer = panel.locator('.helper-message.assistant > .helper-prose');
       const card = panel.getByRole('region', { name: '독립 가정 장면', exact: true });
       const stream = panel.locator('.streaming-text');
-      await expect(answer).toHaveText(helperAnswer);
+      await expect(answer).toHaveText(helperAnswerText);
+      await expect(answer.locator('strong')).toHaveText('“문을 열어 주세요.”');
       const answerHeight = (await answer.boundingBox())!.height;
       await expect(card.locator('.helper-prose')).toHaveText(artifactText);
       await expect(stream).toHaveText(streamText);
@@ -412,7 +414,7 @@ test('READUI02 helper answers, independent scenes and public streams share readi
         await expect(quotes(text, 'dialogue').first()).toHaveClass(/reading-quote-break/u);
         await expect(quotes(text, 'dialogue').first()).toHaveAttribute('data-emphasis', 'subtle');
       }
-      expect(await answer.textContent()).toBe(helperAnswer);
+      expect((await answer.textContent())?.trimEnd()).toBe(helperAnswerText);
       expect(Math.abs((await answer.boundingBox())!.height - answerHeight)).toBeLessThan(1);
       expect(await card.locator('.helper-prose').textContent()).toBe(artifactText);
       expect(await stream.textContent()).toBe(streamText);
@@ -451,7 +453,7 @@ test('READUI02 helper answers, independent scenes and public streams share readi
       await closeDialog(page, settings);
       await openHelper(page);
       await expect(panel.locator('.reading-quote-break')).toHaveCount(0);
-      await expect(answer).toHaveText(helperAnswer);
+      await expect(answer).toHaveText(helperAnswerText);
       await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
     }
     const after = await detail(request, before.chat.id);

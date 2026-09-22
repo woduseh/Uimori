@@ -29,7 +29,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
 async function open(page: Page, chatId: string) {
   await page.goto(`/?chat=${chatId}`);
   await expect(composer(page)).toBeVisible();
-  await expect(page.getByRole('combobox', { name: '입력 번역 언어', exact: true })).toBeEnabled();
 }
 async function answer(route: Route, text = translated) {
   await route.fulfill({
@@ -80,23 +79,43 @@ for (const width of [360, 412, 1440]) {
     });
     await open(page, chat.id);
     const language = page.getByRole('combobox', { name: '입력 번역 언어', exact: true });
-    await expect(language).toHaveValue('en');
+    const mobileLanguage = page.locator('.input-translation-language-mobile');
+    const mobileSummary = mobileLanguage.locator('summary');
+    const setLanguage = async (code: 'en' | 'es' | 'ja', label: string) => {
+      if (width <= 600) {
+        await mobileSummary.click();
+        await mobileLanguage.getByRole('button', { name: label, exact: true }).click();
+        await expect(mobileSummary).toHaveText(code.toUpperCase());
+      } else {
+        await language.selectOption(code);
+        await expect(language).toHaveValue(code);
+      }
+    };
+    if (width <= 600) {
+      await expect(language).toBeHidden();
+      await expect(mobileSummary).toHaveText('EN');
+    } else {
+      await expect(language).toHaveValue('en');
+      await expect(mobileLanguage).toBeHidden();
+    }
     await composer(page).fill('짧은 요청');
-    expect((await composer(page).boundingBox())!.width).toBeGreaterThan(100);
-    await language.selectOption('es');
-    // Long labels need room for both text and the native dropdown indicator.
-    const labelFits = await language.evaluate((node) => {
-      const select = node as HTMLSelectElement;
-      const style = getComputedStyle(select);
-      const drawing = document.createElement('canvas').getContext('2d')!;
-      drawing.font = style.font;
-      return (
-        drawing.measureText(select.selectedOptions[0].text).width <=
-        select.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - 16
-      );
-    });
-    expect(labelFits).toBe(true);
-    await language.selectOption('en');
+    expect((await composer(page).boundingBox())!.width).toBeGreaterThan(width <= 600 ? 150 : 100);
+    await setLanguage('es', '스페인어');
+    if (width > 600) {
+      // Long labels need room for both text and the native dropdown indicator.
+      const labelFits = await language.evaluate((node) => {
+        const select = node as HTMLSelectElement;
+        const style = getComputedStyle(select);
+        const drawing = document.createElement('canvas').getContext('2d')!;
+        drawing.font = style.font;
+        return (
+          drawing.measureText(select.selectedOptions[0].text).width <=
+          select.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - 16
+        );
+      });
+      expect(labelFits).toBe(true);
+    }
+    await setLanguage('en', '영어');
     await composer(page).fill(original);
     await translate(page).click();
     await expect(composer(page)).toHaveValue(translated);
@@ -113,10 +132,11 @@ for (const width of [360, 412, 1440]) {
     await expect(page.getByText('번역 전 원문 보기', { exact: true })).toHaveCount(0);
     await translate(page).click();
     await expect(composer(page)).toHaveValue(translated);
-    await language.selectOption('ja');
+    await setLanguage('ja', '일본어');
     await page.reload();
     await expect(composer(page)).toHaveValue(translated);
-    await expect(language).toHaveValue('ja');
+    if (width <= 600) await expect(mobileSummary).toHaveText('JA');
+    else await expect(language).toHaveValue('ja');
     await expect(page.getByText('번역 전 원문 보기', { exact: true })).toBeVisible();
     const finalText = `${translated}\n  Keep the ending unresolved.  `;
     await composer(page).fill(finalText);

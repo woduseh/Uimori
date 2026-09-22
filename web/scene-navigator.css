@@ -229,27 +229,39 @@
     flex-direction: column;
   }
   .scene-mini-navigator {
-    flex: none;
+    position: absolute;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    z-index: 5;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
-    min-height: 48px;
-    border-top: 1px solid var(--line);
-    background: var(--bg);
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    box-shadow: 0 4px 14px var(--shade);
   }
   .scene-mini-navigator button {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: 38px;
+    min-height: 38px;
+    padding: 6px 8px;
     color: var(--muted);
+    border: 0;
+    background: transparent;
   }
   .scene-mini-current {
     display: inline-flex;
-    gap: 10px;
+    gap: 7px;
     align-items: center;
     font-variant-numeric: tabular-nums;
   }
   .reader-stage .scene-latest-floating {
-    bottom: 60px;
+    left: auto;
+    right: 14px;
+    bottom: 14px;
+    transform: none;
   }
 }

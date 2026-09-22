@@ -9,6 +9,9 @@ export function InputTranslationControls({
   disabled,
   empty,
 }: Props & { empty: boolean }) {
+  const current =
+    INPUT_TRANSLATION_LANGUAGES.find((language) => language.code === translation.language) ??
+    INPUT_TRANSLATION_LANGUAGES[0];
   return (
     <div className="input-translation-controls" role="group" aria-label="입력 번역 도구">
       <button
@@ -29,18 +32,49 @@ export function InputTranslationControls({
         )}
         <span>{translation.busy ? '취소' : '번역'}</span>
       </button>
-      <select
-        aria-label="입력 번역 언어"
-        value={translation.language}
-        disabled={disabled}
-        onChange={(event) => translation.changeLanguage(event.target.value)}
-      >
-        {INPUT_TRANSLATION_LANGUAGES.map((language) => (
-          <option key={language.code} value={language.code}>
-            {language.label}
-          </option>
-        ))}
-      </select>
+      <label className="input-translation-language-desktop">
+        <span className="sr-only">입력 번역 언어</span>
+        <select
+          aria-label="입력 번역 언어"
+          value={translation.language}
+          disabled={disabled}
+          onChange={(event) => translation.changeLanguage(event.target.value)}
+        >
+          {INPUT_TRANSLATION_LANGUAGES.map((language) => (
+            <option key={language.code} value={language.code}>
+              {language.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <details className="input-translation-language-mobile">
+        <summary
+          aria-label={`입력 번역 언어 · ${current.label}`}
+          title={`입력 번역 언어 · ${current.label}`}
+        >
+          {current.code.toUpperCase()}
+        </summary>
+        <div
+          className="input-translation-language-menu"
+          role="group"
+          aria-label="입력 번역 언어 선택"
+        >
+          {INPUT_TRANSLATION_LANGUAGES.map((language) => (
+            <button
+              key={language.code}
+              type="button"
+              aria-pressed={translation.language === language.code}
+              disabled={disabled}
+              onClick={(event) => {
+                translation.changeLanguage(language.code);
+                event.currentTarget.closest('details')?.removeAttribute('open');
+              }}
+            >
+              {language.label}
+            </button>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }

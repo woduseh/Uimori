@@ -71,25 +71,46 @@
   color: var(--error);
   overflow-wrap: anywhere;
 }
-/* Compact widths keep the list's own search and create first; these are occasional entry points. */
-@media (max-width: 600px) {
-  .library-page .library-toolbar > .prompt-library-actions {
-    order: 3;
-    flex-basis: 100%;
+
+@media (max-width: 760px) {
+  /* Match the rest of the mobile app: this is a full-screen detail surface, not a narrow drawer. */
+  .app-dialog.prompt-templates-dialog {
+    inset: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: var(--app-height, 100dvh);
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  /* Keep prompt controls on the same two-row rhythm as the normal library. */
+  .prompt-library .library-toolbar > .prompt-library-actions {
+    order: 0;
+    flex: none;
+    flex-basis: auto;
+    flex-wrap: nowrap;
+    gap: 2px;
+    margin-inline-start: auto;
+  }
+  .prompt-library .prompt-library-actions > button,
+  .prompt-library .library-toolbar > .library-create {
+    width: var(--control-h);
+    min-width: var(--control-h);
+    height: var(--control-h);
+    min-height: var(--control-h);
+    padding: 0;
+  }
+  .prompt-library .library-toolbar > .library-create {
     margin-inline-start: 0;
   }
+  .prompt-library .library-toolbar > .library-create > span {
+    display: none;
+  }
 }
+
 @media (max-width: 520px) {
-  .prompt-library-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    flex-basis: 100%;
-  }
-  .prompt-library-actions > button {
-    gap: 6px;
-    padding-inline: 8px;
-    font-size: 12px;
-  }
   .prompt-template-row {
     gap: 12px;
   }

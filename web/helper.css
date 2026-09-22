@@ -22,8 +22,7 @@
   align-items: center;
   gap: 8px;
   min-height: var(--header-h);
-  padding: 6px 16px;
-  border-bottom: 1px solid var(--line);
+  padding: 8px 14px;
 }
 .helper-header > div {
   flex: 1;
@@ -46,10 +45,10 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 16px;
+  padding: 12px 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 24px;
 }
 .helper-message {
   min-width: 0;
@@ -59,14 +58,15 @@
   font-size: 12px;
   color: var(--muted);
 }
-.helper-prose,
+.helper-prose {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  line-height: var(--reading-line-height, 1.7);
+}
 .streaming-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: var(--reading-line-height, 1.7);
-}
-.helper-prose {
-  margin-top: 6px;
 }
 .helper-empty {
   color: var(--muted);
@@ -100,8 +100,7 @@
 }
 .helper-composer {
   flex-shrink: 0;
-  border-top: 1px solid var(--line);
-  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  padding: 8px 14px max(14px, env(safe-area-inset-bottom));
 }
 .helper-editor {
   display: flex;
@@ -131,10 +130,12 @@
   margin: 0 0 6px;
 }
 .helper-settings {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--line);
+  margin: 0 12px 8px;
+  padding: 12px 14px;
   max-height: 35dvh;
   overflow: auto;
+  border-radius: 12px;
+  background: var(--panel);
 }
 .helper-settings textarea {
   min-height: 70px;
@@ -176,6 +177,8 @@
 .helper-work-selector select {
   min-width: 0;
   width: 100%;
+  border-color: transparent;
+  background: var(--panel);
   font-size: 14px;
 }
 .helper-settings > label,
@@ -328,8 +331,7 @@
 }
 
 .helper-session-block {
-  padding: 10px 16px 9px;
-  border-bottom: 1px solid var(--line);
+  padding: 8px 14px 6px;
 }
 .helper-session-meta {
   display: flex;
@@ -338,6 +340,7 @@
   gap: 10px;
   min-height: 18px;
   margin-top: 6px;
+  padding-inline: 2px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -356,4 +359,66 @@
 }
 .helper-notice .helper-notice-lead {
   margin-right: auto;
+}
+
+/* The docked helper reads as one conversation surface instead of stacked boxes. */
+.helper-prose > :first-child {
+  margin-top: 0;
+}
+.helper-prose > :last-child {
+  margin-bottom: 0;
+}
+.helper-prose p,
+.helper-prose ul,
+.helper-prose ol,
+.helper-prose blockquote,
+.helper-prose pre {
+  margin: 0 0 0.9em;
+}
+.helper-prose h1,
+.helper-prose h2,
+.helper-prose h3,
+.helper-prose h4,
+.helper-prose h5,
+.helper-prose h6 {
+  margin: 1.05em 0 0.45em;
+  line-height: 1.35;
+}
+.helper-prose h1 {
+  font-size: 1.2em;
+}
+.helper-prose h2 {
+  font-size: 1.15em;
+}
+.helper-prose h3 {
+  font-size: 1.08em;
+}
+.helper-prose ul,
+.helper-prose ol {
+  padding-inline-start: 1.45em;
+}
+.helper-prose blockquote {
+  padding-inline-start: 12px;
+  border-inline-start: 2px solid var(--line);
+  color: var(--muted);
+}
+.helper-prose pre {
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--panel);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.helper-prose code {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  font-size: 0.92em;
+}
+@media (max-width: 760px) {
+  .helper-messages {
+    padding: 10px 16px 18px;
+  }
+  .helper-composer {
+    padding-inline: 12px;
+  }
 }

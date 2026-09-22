@@ -510,12 +510,14 @@ export function PromptLibrary({
                 <button
                   type="button"
                   className={`library-create${categoryEmpty ? ' secondary' : ' primary'}`}
+                  aria-label="새 프롬프트"
+                  title="새 프롬프트"
                   disabled={!library}
                   onClick={() =>
                     changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
                   }
                 >
-                  <AddIcon size={18} aria-hidden="true" /> 새 프롬프트
+                  <AddIcon size={18} aria-hidden="true" /> <span>새 프롬프트</span>
                 </button>
               )}
             </div>

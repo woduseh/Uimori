@@ -587,7 +587,7 @@ function App() {
       />
     </>
   );
-  const destinationHelperControl = s.destination !== 'story' && (
+  const destinationHelperControl = s.destination !== 'story' && !helperOpen && (
     <IconButton
       className="destination-helper"
       label="도우미 열기"
@@ -714,15 +714,15 @@ function App() {
               {s.selected && s.destination === 'story' && (
                 <>
                   {mainModelChip}
-                  {!compact && (
+                  {!compact && !helperOpen && (
                     <IconButton
                       label="도우미 열기"
                       icon={MessageCircle}
-                      aria-expanded={helperOpen}
+                      aria-expanded={false}
                       aria-controls="helper-panel"
                       onClick={() => {
                         setOptionsOpen(false);
-                        setHelperOpen((value) => !value);
+                        setHelperOpen(true);
                       }}
                     />
                   )}
