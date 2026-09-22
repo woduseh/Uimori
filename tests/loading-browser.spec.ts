@@ -126,7 +126,11 @@ test('LOADUI08 task history loads on demand and preserves off-page reading, insp
   expect((await detail(request, forked.id)).sources).toHaveLength(8);
   const after = await detail(request, seeded.chat.id);
   expect(after.sources).toEqual(seeded.sources);
-  expect(after.runs).toEqual(seeded.runs);
+  expect(
+    after.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  ).toEqual(
+    seeded.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  );
   expect(after.attempts).toEqual(seeded.attempts);
 });
 
@@ -246,7 +250,11 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
   await expect(latest).toHaveCount(0);
   const after = await detail(request, seeded.chat.id);
   expect(after.sources).toEqual(seeded.sources);
-  expect(after.runs).toEqual(seeded.runs);
+  expect(
+    after.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  ).toEqual(
+    seeded.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  );
   expect(after.attempts).toEqual(seeded.attempts);
   expect(writes).toHaveLength(0);
 });
@@ -338,7 +346,11 @@ test('LOADUI10 reader refresh preserves the upper reading position when latest t
       .toBeLessThanOrEqual(2);
   }
   const after = await detail(request, seeded.chat.id);
-  expect(after.runs).toEqual(seeded.runs);
+  expect(
+    after.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  ).toEqual(
+    seeded.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  );
   expect(after.attempts).toEqual(seeded.attempts);
 });
 
@@ -413,7 +425,11 @@ test('LOADUI01 bounded pages, previous/next, deep links and reload preserve read
   expect(requests.some((url) => /\/api\/chats\/[^/?]+(?:\?|$)/.test(url))).toBe(false);
   expect(requests.some((url) => url.includes('/reader?'))).toBe(true);
   const after = await detail(request, seeded.chat.id);
-  expect(after.runs).toEqual(seeded.runs);
+  expect(
+    after.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  ).toEqual(
+    seeded.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  );
   expect(after.attempts).toEqual(seeded.attempts);
   await deep.close();
 });
@@ -462,7 +478,11 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   const after = await detail(request, seeded.chat.id);
   expect(after.sources[0].editRevision).toBe(1);
   expect(after.sources[0].text).toBe('Accepted source revision from first tab.');
-  expect(after.runs).toEqual(seeded.runs);
+  expect(
+    after.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  ).toEqual(
+    seeded.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  );
   expect(after.attempts).toEqual(seeded.attempts);
   if (visualReview) await second.screenshot({ path: info.outputPath('loading-cas.png') });
   await second.close();
@@ -604,7 +624,11 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
     'Source changed while browser was offline.'
   );
   const after = await detail(request, seeded.chat.id);
-  expect(after.runs).toEqual(seeded.runs);
+  expect(
+    after.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  ).toEqual(
+    seeded.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  );
   expect(after.attempts).toEqual(seeded.attempts);
   expect(generated).toHaveLength(0);
   if (visualReview) await page.screenshot({ path: info.outputPath('loading-reconnected.png') });
@@ -723,7 +747,11 @@ test('LOADUI05 context summary status fits mobile reader and run details without
   await expect(article(page, source.id).getByTestId('source-text')).toBeAttached();
   const after = await detail(request, seeded.chat.id);
   expect(after.sources).toEqual(seeded.sources);
-  expect(after.runs).toEqual(seeded.runs);
+  expect(
+    after.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  ).toEqual(
+    seeded.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  );
   expect(after.attempts).toEqual(seeded.attempts);
   expect(writes).toHaveLength(0);
 });
@@ -797,6 +825,10 @@ test('LOADUI07 synthetic navigation metadata covers long-list paging, search and
   await expect(articles(page)).toHaveCount(2);
   const after = await detail(request, seeded.chat.id);
   expect(after.sources).toEqual(seeded.sources);
-  expect(after.runs).toEqual(seeded.runs);
+  expect(
+    after.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  ).toEqual(
+    seeded.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
+  );
   expect(after.attempts).toEqual(seeded.attempts);
 });

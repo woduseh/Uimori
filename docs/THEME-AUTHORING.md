@@ -129,3 +129,9 @@ npm run verify:themes
 `verify:themes`는 테마 화면과 기존 Risu 메시지 표면 회귀 검사를 격리된 합성 서버에서 수행해요. 결과와 화면은 `output/playwright/themes-*/`에 남아요. 테스트에서 캡처한 이미지를 실제로 열어 확인하세요. 캡처 성공만으로 미적 품질이나 물리 기기 동작이 보장되지는 않아요.
 
 전체 SQLite 백업에는 테마와 선택도 들어가요. 개별 테마 JSON은 독립 교환용이고, 기존 봇/채팅 백업·독립 채팅 사본에는 별도 테마 자료와 선택을 자동 묶지 않아요. 다른 작업실로 옮길 때 테마도 따로 내보내고 적용해 주세요. 테마 삭제/편집은 원문이나 모델 입력을 변경하지 않아요. 표정 패널·BGM·TTS·입력 번역은 이번 기능의 범위가 아니에요.
+
+## Template support and updates
+
+Templates support ordinary presentation HTML, native slots, inline `style` elements and non-submitting input/select/textarea controls. They do not run JavaScript or CBS, submit forms, or embed iframe/object documents. Unsupported executable or document-level markup is reported visibly and the default layout is used; it is not silently saved as an apparently working layout. Put app-wide styles in `appCss`, message styles in `messageCss`, and scoped layout styles in `templateCss`.
+
+An unchanged theme revision retains its applied DOM/CSS. The catalog supports conditional HTTP revalidation; helper activity only invalidates themes after an actual theme write.

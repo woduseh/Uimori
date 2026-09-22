@@ -176,8 +176,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   const regex = [{ in: '원래', out: '전송', type: 'editinput', ableFlag: true, flag: 'g' }];
   await composer.getByLabel('Risu 정규식 JSON', { exact: true }).fill(JSON.stringify(regex));
   const savePreset = page.getByRole('button', { name: '프리셋 저장', exact: true });
-  await expect(savePreset).toBeDisabled();
-  await composer.getByRole('button', { name: '정규식 적용', exact: true }).click();
+  // Valid raw JSON is included in the ordinary save; no extra apply stage is required.
   await expect(savePreset).toBeEnabled();
   await savePreset.click();
   await expect(page.getByText('프롬프트를 저장했어요.', { exact: true })).toBeVisible();

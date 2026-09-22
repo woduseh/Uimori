@@ -1008,3 +1008,51 @@ test('creator notes beyond the description limit are cut with an ellipsis and a 
   expect(bot.description.endsWith('A…')).toBe(true);
   expect(bot.package!.description).toBe(bot.description);
 });
+
+test('a consumed staged upload retries through its small receipt before reading deleted bytes', async () => {
+  const store = database();
+  const app = Fastify();
+  uploadRoutes(app, store.path);
+  risuImportRoutes(app, store);
+  try {
+    const uploaded = await app.inject({
+      method: 'POST',
+      url: '/api/uploads',
+      headers: { 'content-type': 'application/octet-stream' },
+      payload: Buffer.from(JSON.stringify(card())),
+    });
+    expect(uploaded.statusCode).toBe(200);
+    const source = { name: 'synthetic.json', uploadId: uploaded.json().uploadId };
+    const prepared = await app.inject({
+      method: 'POST',
+      url: '/api/risu-imports/prepare',
+      payload: { source },
+    });
+    expect(prepared.statusCode).toBe(200);
+    const payload = {
+      source,
+      digest: prepared.json().digest,
+      allowPartial: false,
+      idempotencyKey: 'lost-upload-response',
+    };
+    const first = await app.inject({ method: 'POST', url: '/api/risu-imports/apply', payload });
+    expect(first.statusCode).toBe(201);
+    expect(existsSync(join(uploadDirectory(store.path), `${source.uploadId}.bin`))).toBe(false);
+    const retry = await app.inject({ method: 'POST', url: '/api/risu-imports/apply', payload });
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json().receipt.created).toBe(false);
+    expect(retry.json().chat.id).toBe(first.json().chat.id);
+    expect(store.chats()).toHaveLength(1);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/risu-imports/apply',
+          payload: { ...payload, digest: 'different-input' },
+        })
+      ).statusCode
+    ).toBe(409);
+  } finally {
+    await app.close();
+  }
+});

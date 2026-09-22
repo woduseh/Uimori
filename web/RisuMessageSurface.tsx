@@ -27,24 +27,36 @@ export function RisuMessageSurface({
   const settings = reading ?? inheritedReading;
   const prepared = useMemo(() => prepareRisuMessage(html, css), [html, css]);
   const host = useRef<HTMLDivElement>(null);
-  const surface = useRef<ReturnType<typeof mountRisuMessageSurface> | null>(null);
+  const mounted = useRef<{
+    prepared: ReturnType<typeof prepareRisuMessage>;
+    view: ReturnType<typeof mountRisuMessageSurface>;
+    reading?: ReadabilitySettings;
+  } | null>(null);
   const [state, setState] = useState<RisuActionState>({ busy: false, issue: '' });
   useLayoutEffect(() => {
     if (!host.current) return;
-    const current = mountRisuMessageSurface(host.current, prepared, setState);
-    surface.current = current;
-    setState({ busy: false, issue: '' });
-    return () => {
-      current.destroy();
-      surface.current = null;
-    };
-  }, [prepared]);
-  useLayoutEffect(() => {
-    surface.current?.updateAction({ action: onAction, disabled, revision: revisionKey });
-  }, [onAction, disabled, revisionKey]);
-  useLayoutEffect(() => {
-    surface.current?.updateReading(settings);
-  }, [settings]);
+    if (mounted.current?.prepared !== prepared) {
+      mounted.current?.view.destroy();
+      mounted.current = {
+        prepared,
+        view: mountRisuMessageSurface(host.current, prepared, setState),
+      };
+      setState({ busy: false, issue: '' });
+    }
+    const current = mounted.current;
+    current.view.updateAction({ action: onAction, disabled, revision: revisionKey });
+    if (current.reading !== settings) {
+      current.view.updateReading(settings);
+      current.reading = settings;
+    }
+  }, [prepared, onAction, disabled, revisionKey, settings]);
+  useLayoutEffect(
+    () => () => {
+      mounted.current?.view.destroy();
+      mounted.current = null;
+    },
+    []
+  );
   return (
     <div className="risu-message" aria-busy={state.busy}>
       {state.issue && <p role="alert">{state.issue}</p>}

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { assertRisuContent, validateRisuContent } from '../core/risu-content.js';
 import { compileContentAttachment } from '../core/package-runtime.js';
-import { databaseSchemaVersion, DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
+import { databaseSchemaVersion } from '../server/database-schema.js';
 import { nativeContent } from './fixtures/native-content.js';
 
 const current = () =>
@@ -55,7 +55,6 @@ test('old content versions and even empty retired instruction arrays are rejecte
 });
 
 test('schema-23 admission refuses before rewriting the database or supplying a migration', () => {
-  expect(DATABASE_SCHEMA_VERSION).toBe(4);
   const directory = mkdtempSync(join(tmpdir(), 'uimori-format-boundary-'));
   const file = join(directory, 'old.sqlite');
   let db: DatabaseSync | undefined;

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
@@ -95,7 +96,19 @@ export function deleteTheme(store: Store, id: string, expectedRevision: number) 
   });
 }
 export function themeRoutes(app: FastifyInstance, store: Store) {
-  app.get('/api/themes', () => themeCatalog(store));
+  const builtinVersion = createHash('sha256').update(JSON.stringify(BUILTIN_THEMES)).digest('hex');
+  app.get('/api/themes', (request, reply) => {
+    const versions = store.db
+      .prepare("SELECT id,revision FROM versions WHERE kind='theme' ORDER BY id")
+      .all();
+    const version = createHash('sha256')
+      .update(JSON.stringify([builtinVersion, versions, themePreferences(store).revision]))
+      .digest('hex');
+    const etag = `"${version}"`;
+    reply.header('ETag', etag).header('Cache-Control', 'private, no-cache');
+    if (request.headers['if-none-match'] === etag) return reply.code(304).send();
+    return themeCatalog(store);
+  });
   app.post('/api/themes/selection', (request) => selectTheme(store, request.body));
   app.get<{ Params: { id: string } }>('/api/themes/:id/export', (request) =>
     themeFile(readTheme(store, request.params.id))

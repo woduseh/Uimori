@@ -401,18 +401,8 @@ for (const width of DEFAULT_WIDTHS) {
     expect(detail.sources).toHaveLength(1);
     const run = detail.runs.find((item) => item.sourceRevision === detail.sources[0].id);
     expect(run?.request).toContain('1화 잠긴 문');
-    // The applied composition is auditable in the frozen execution input.
-    const outline = run?.snapshot.outline;
-    expect(outline?.path.map((item) => item.level)).toEqual([
-      'theme',
-      'mainStory',
-      'arc',
-      'episode',
-    ]);
-    expect(outline?.path.at(-1)?.title).toBe('1화 잠긴 문');
-    expect(outline?.children.map((item) => item.title)).toEqual(['열쇠 없는 자물쇠']);
-    expect(JSON.stringify(outline)).not.toContain('2화 장부의 첫 장');
-    expect(run?.inputs?.[0]?.contract).toContain('planning, not story that already happened');
+    // Compilation is verified at execution time by the outline tests, not by retaining full inputs forever.
+    expect(run?.inputs).toEqual([]);
 
     const composed = await openOutline(page, chat.id);
     await expect(entry(page, '1화 잠긴 문').locator('> .outline-row .outline-progress')).toHaveText(

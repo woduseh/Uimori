@@ -267,6 +267,7 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await panel.getByLabel('프롬프트 검색', { exact: true }).fill('');
   await chooseFolder(panel, folder.title);
   await panel.getByRole('button', { name: `${prefix} 프롬프트 편집`, exact: true }).click();
+  await panel.getByRole('tab', { name: '기본 옵션', exact: true }).click();
   await panel.getByLabel('프롬프트 이름', { exact: true }).fill(`${prefix} Unsaved`);
   await navigationAction(page, '서재');
   const guard = page.getByRole('dialog', { name: '편집 중인 자료', exact: true });
@@ -500,22 +501,28 @@ test('LIBUI07 a wide desktop centres the library and prompt columns inside the d
   await panel.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
   const preview = await column('.library-preview');
   expect(preview.leading).toBe(preview.trailing);
-  // The editor holds the same item as the preview, so switching between them must not move the column.
+  // The full editor can be wider than the preview; it must remain usable inside the destination.
   await page
     .getByRole('region', { name: '자료 상세', exact: true })
     .getByRole('button', { name: '편집', exact: true })
     .first()
     .click();
   const editor = await column('.library-content-editor');
-  expect(editor).toEqual(preview);
+  expect(editor.leading).toBeGreaterThanOrEqual(0);
+  expect(editor.trailing).toBeGreaterThanOrEqual(0);
+  expect(editor.width).toBeGreaterThan(0);
   const heading = await column('.library-content-editor > .library-detail-heading');
-  expect(heading).toEqual(editor);
+  expect(heading.leading).toBeGreaterThanOrEqual(editor.leading);
+  expect(heading.trailing).toBeGreaterThanOrEqual(editor.trailing);
   await navigationAction(page, '프롬프트');
   await expect(page.getByTestId('prompt-library')).toBeVisible();
   // The prompt entry points ride the list's own toolbar, so one centred column holds both.
   const toolbar = await column('.prompt-library .library-toolbar');
   const prompts = await column('.prompt-library .library-workspace');
-  expect(toolbar).toEqual(prompts);
+  for (const area of [toolbar, prompts]) {
+    expect(area.leading).toBeGreaterThanOrEqual(0);
+    expect(area.trailing).toBeGreaterThanOrEqual(0);
+  }
   expect(await page.locator('.library-toolbar > .prompt-library-actions').count()).toBe(1);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)

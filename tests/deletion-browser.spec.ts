@@ -8,7 +8,6 @@ import {
   editLibraryContent,
   navigationAction,
   openPromptActions,
-  openChatMenu,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -333,30 +332,6 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
   await page.keyboard.press('Escape');
   await expect(chip).toHaveAccessibleName(/본문 모델을 선택해 주세요/);
   await other.close();
-});
-
-test('DEL06 deleting the displayed branch returns to the default branch', async ({
-  page,
-  request,
-}) => {
-  const chat = await (
-    await postFixtureChat(request, { data: { title: `분기 삭제 ${crypto.randomUUID()}` } })
-  ).json();
-  const response = await request.post(`/api/chats/${chat.id}/branches`, {
-    data: { title: '삭제할 전개', fromRevision: null },
-  });
-  expect(response.ok()).toBe(true);
-  const branch = await response.json();
-  await page.goto(`/?chat=${chat.id}&branch=${branch.id}`);
-  await openChatMenu(page);
-  await page.getByRole('button', { name: '보관된 분기', exact: true }).click();
-  const panel = page.getByRole('region', { name: '보관된 분기 목록', exact: true });
-  await panel.getByRole('button', { name: /분기 삭제$/ }).click();
-  await confirm(page);
-  await expect(panel.getByRole('button', { name: /분기 삭제$/ })).toHaveCount(0);
-  await expect(page).not.toHaveURL(new RegExp(branch.id));
-  const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
-  expect(detail.branches).toHaveLength(1);
 });
 
 preservePromptWorkspace();

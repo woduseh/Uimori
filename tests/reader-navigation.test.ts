@@ -64,15 +64,6 @@ test('deleting a chat releases its whole address', () => {
   });
 });
 
-test('deleting a branch returns to the current chat default', () => {
-  expect(move(original, { kind: 'branch-deleted' })).toEqual({
-    ...original,
-    branch: '',
-    source: '',
-    epoch: 5,
-  });
-});
-
 test('binding the opened default is address reconciliation, not a new navigation', () => {
   const implicit = { ...original, branch: '' };
   expect(move(implicit, { kind: 'bind-default', branch: 'opened' })).toEqual({

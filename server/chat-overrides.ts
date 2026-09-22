@@ -262,28 +262,6 @@ export function freezeChatOverrides(
     : undefined;
 }
 
-export const forkChatOverrideId = (chatId: string, id: string) =>
-  chatOverrideHash(json(['chat-override-fork', chatId, id])).slice(0, 40);
-
-/** Remove branch-owned evidence only when its exact source IDs are being removed by the guarded deletion service. */
-export function deleteChatOverrideSourcesInTransaction(
-  store: Store,
-  chatId: string,
-  sources: ReadonlySet<string>
-): void {
-  const remove = (
-    store.db.prepare('SELECT id,body FROM chat_lore_overrides WHERE chat_id=?').all(chatId) as Row[]
-  ).filter((row) => sources.has((JSON.parse(String(row.body)) as ChatLoreOverride).atSource ?? ''));
-  for (const row of remove) {
-    store.db
-      .prepare(
-        "DELETE FROM chat_override_operations WHERE chat_id=? AND json_extract(result,'$.entry.id')=?"
-      )
-      .run(chatId, row.id);
-    store.db.prepare('DELETE FROM chat_lore_overrides WHERE id=?').run(row.id);
-  }
-  // Keep the global head monotonic after branch cleanup; reusing an old revision would permit ABA writes.
-}
 export function chatOverrideRoutes(
   app: FastifyInstance,
   service: ChatOverridesStore,

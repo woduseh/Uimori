@@ -1,3 +1,4 @@
+import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
 import { migrateIndependentChats } from './migrate-independent-chats.js';
 import { pruneUnusedData } from './unused-data.js';
 import { retainCompletedLore } from './lore-retention-state.js';
@@ -191,6 +192,12 @@ export class Store {
     this.db
       .prepare('INSERT INTO events(chat_id,kind,entity_id,at) VALUES(?,?,?,?)')
       .run(chatId, kind, entityId, now());
+  }
+  latestEventSequence(chatId: string): number {
+    return Number(
+      this.db.prepare('SELECT COALESCE(MAX(seq),0) AS seq FROM events WHERE chat_id=?').get(chatId)!
+        .seq
+    );
   }
   events(chatId: string, after: number) {
     return this.db
@@ -1001,7 +1008,11 @@ export class Store {
         .run(value.status, value.error, now(), id);
       if (row.kind === 'translation' && value.status === 'completed')
         scheduleTranslationImages(this, this.job(id));
-      if (value.status === 'completed') releaseCompletedJobInputs(this.db, id);
+      if (value.status === 'completed') {
+        releaseCompletedJobInputs(this.db, id);
+        if (row.kind === 'translation') pruneTranslationHistory(this.db, row.source_revision);
+        pruneSourceEdits(this.db, row.source_revision);
+      }
       this.event(row.chat_id, `job.${value.status}`, id);
       return true;
     });

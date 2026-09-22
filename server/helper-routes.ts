@@ -66,6 +66,17 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   app.get<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) =>
     store.conversation(request.params.id)
   );
+  app.get<{ Params: { id: string } }>('/api/helper/conversations/:id/view', (request) => {
+    const id = request.params.id;
+    // Capture the cursor before reading: a concurrent external write is replayed, never skipped.
+    const eventCursor = store.latestEventSequence(id);
+    return {
+      eventCursor,
+      conversation: store.conversation(id),
+      messages: store.messages(id),
+      tasks: store.tasks(id).map(publicTask),
+    };
+  });
   app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) => {
     const body = record(request.body);
     fields(body, ['expectedRevision', 'title', 'persona', 'limits']);
