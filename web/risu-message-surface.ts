@@ -1,3 +1,4 @@
+import { themeMessageSheet } from './theme-message-style.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
 import { createReadingDecorator } from './reading-dom.js';
 import { risuActionKey, type PreparedRisuMessage } from './risu-message.js';
@@ -21,7 +22,7 @@ export function mountRisuMessageSurface(
     sheet.replaceSync(surfaceCss);
     styles.set(host.ownerDocument, sheet);
   }
-  root.adoptedStyleSheets = [sheet];
+  root.adoptedStyleSheets = [sheet, themeMessageSheet(host.ownerDocument)];
   const authorStyle = document.createElement('style');
   authorStyle.textContent = prepared.css;
   const content = document.createElement('div');

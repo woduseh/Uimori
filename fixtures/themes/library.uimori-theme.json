@@ -1,0 +1,48 @@
+{
+  "format": "uimori-theme",
+  "version": 1,
+  "theme": {
+    "title": "서재",
+    "description": "따뜻한 종이와 잉크의 온기",
+    "colors": {
+      "light": {
+        "bg": "#f6f1e7",
+        "nav": "#eee5d5",
+        "panel": "#fffaf1",
+        "surface": "#eadecc",
+        "surface-raised": "#fffaf1",
+        "hover": "#eadecc",
+        "line": "#d2c3ad",
+        "input-border": "#736453",
+        "text": "#382e24",
+        "muted": "#736453",
+        "faint": "#736453",
+        "accent": "#785137",
+        "accent-ink": "#ffffff",
+        "accent-soft": "#eadecc",
+        "user": "#eadecc"
+      },
+      "dark": {
+        "bg": "#211d19",
+        "nav": "#191613",
+        "panel": "#2b2520",
+        "surface": "#393026",
+        "surface-raised": "#2b2520",
+        "hover": "#393026",
+        "line": "#524638",
+        "input-border": "#bdae98",
+        "text": "#ede1cf",
+        "muted": "#bdae98",
+        "faint": "#bdae98",
+        "accent": "#dcb98b",
+        "accent-ink": "#2b2015",
+        "accent-soft": "#393026",
+        "user": "#393026"
+      }
+    },
+    "appCss": "",
+    "messageCss": "",
+    "templateHtml": "<slot name=\"request\"></slot><section class=\"paper\"><header><slot name=\"heading\"></slot></header><slot name=\"body\"></slot><footer><slot name=\"actions\"></slot></footer></section>",
+    "templateCss": ".paper { border: 1px solid var(--line); border-radius: 14px; padding: clamp(14px, 3vw, 30px); background: var(--panel); } header { border-bottom: 1px solid var(--line); margin-bottom: 20px; } footer { margin-top: 16px; }"
+  }
+}

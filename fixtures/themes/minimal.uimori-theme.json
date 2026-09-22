@@ -1,0 +1,20 @@
+{
+  "format": "uimori-theme",
+  "version": 1,
+  "theme": {
+    "title": "단정한 보랏빛",
+    "description": "",
+    "colors": {
+      "light": {
+        "accent": "#67458c"
+      },
+      "dark": {
+        "accent": "#d2b2ef"
+      }
+    },
+    "appCss": "",
+    "messageCss": "",
+    "templateHtml": "",
+    "templateCss": ""
+  }
+}

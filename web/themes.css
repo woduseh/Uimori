@@ -1,0 +1,244 @@
+.theme-settings {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.theme-settings h3,
+.theme-settings p {
+  margin-bottom: 0;
+}
+.theme-intro {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding-block: 4px 8px;
+}
+.theme-intro > svg {
+  flex: none;
+  margin-top: 4px;
+  color: var(--accent);
+}
+.theme-intro p {
+  color: var(--muted);
+  margin-top: 6px;
+}
+.theme-toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.theme-toolbar > label {
+  display: grid;
+  gap: 5px;
+}
+.theme-toolbar button,
+.theme-card-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.theme-current {
+  margin-left: auto;
+  color: var(--muted);
+  padding-block: 10px;
+}
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 14px;
+}
+.theme-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--panel);
+  min-width: 0;
+}
+.theme-card.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.theme-card-apply {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+  background: transparent;
+}
+.theme-card-apply small {
+  color: var(--muted);
+  min-height: 2.8em;
+  font-size: 12px;
+}
+.theme-swatch {
+  width: 100%;
+  height: 100px;
+  display: flex;
+  gap: 14px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+}
+.theme-swatch-nav {
+  width: 22%;
+}
+.theme-swatch-page {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  width: 60%;
+}
+.theme-swatch-page > span {
+  font:
+    24px Georgia,
+    serif;
+}
+.theme-swatch-page i {
+  display: block;
+  height: 3px;
+  width: 90%;
+  background: currentColor;
+  opacity: 0.25;
+}
+.theme-swatch-page i + i {
+  width: 65%;
+}
+.theme-swatch-page b {
+  width: 24px;
+  height: 6px;
+  margin-top: 3px;
+  border-radius: 4px;
+}
+.theme-card-actions {
+  display: flex;
+  gap: 2px;
+  padding: 0 8px 8px;
+}
+.theme-card-actions button {
+  background: transparent;
+  border-color: transparent;
+  padding: 8px;
+  min-width: 40px;
+}
+.theme-card-actions button:first-child {
+  margin-right: auto;
+}
+.theme-editor {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: clamp(14px, 3vw, 24px);
+  display: grid;
+  gap: 18px;
+  background: var(--panel);
+}
+.theme-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.theme-editor fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+.theme-editor fieldset > label,
+.theme-code label {
+  display: grid;
+  gap: 6px;
+}
+.theme-colors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+  gap: 12px;
+}
+.theme-colors label {
+  min-width: 0;
+  font-size: 12px;
+  display: grid;
+  gap: 4px;
+}
+.theme-colors label > div {
+  display: flex;
+  gap: 4px;
+}
+.theme-colors input[type="color"] {
+  width: 55px;
+  min-height: 44px;
+  padding: 4px;
+}
+.theme-colors button {
+  padding: 8px;
+}
+.theme-code {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.theme-code summary,
+.theme-sample summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding-block: 8px;
+}
+.theme-code label {
+  margin-top: 14px;
+}
+.theme-code textarea {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+.theme-sample {
+  border-block: 1px solid var(--line);
+  padding-block: 10px;
+}
+.theme-sample .theme-frame {
+  padding-block: 12px;
+}
+.theme-help {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.theme-recovery {
+  background: var(--accent-soft);
+  padding: 12px;
+  border-radius: 8px;
+}
+@media (max-width: 600px) {
+  .theme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .theme-current {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  .theme-card-actions {
+    flex-wrap: wrap;
+  }
+  .theme-card-actions button {
+    min-width: 44px;
+  }
+  .theme-card-actions:has(button:nth-child(4)) button:first-child {
+    width: 100%;
+  }
+}
+
+.theme-sample .scene-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}

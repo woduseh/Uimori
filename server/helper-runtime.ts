@@ -334,6 +334,8 @@ const HELPER_READ_NAMES = new Set([
   'library.search',
   'library.read',
   'resource.read',
+  'theme.list',
+  'theme.guide',
   'chat.list',
   'chat.read',
   'context.read',
@@ -1189,7 +1191,11 @@ export class HelperRuntime {
   ): Promise<unknown> {
     this.workspace.assertRunning(task.id);
     if (name === 'chat.list') return this.store.chats();
-    if (name.startsWith('resource.') || name === 'image.update-metadata')
+    if (
+      name.startsWith('resource.') ||
+      name.startsWith('theme.') ||
+      name === 'image.update-metadata'
+    )
       return invokeResourceTool(this.store, name, args);
     const scope = task.snapshot.scope;
     if (name === 'chat.read') {
