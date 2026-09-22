@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
-import { readiness, managementImpact } from '../server/provider-management.js';
+import { managementImpact } from '../server/provider-management.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 
 const owned: { directory: string; store: Store }[] = [];
@@ -212,26 +212,6 @@ test('model metadata is server sourced and disabling blocks new selection while 
     expect(() => p.model(modelBody(cached, { pricing }))).toThrow();
   expect(() => p.model(modelBody(cached, { source: m.source }))).toThrow('Unknown request field');
   expect(() => p.model(modelBody(cached, { enabled: null }))).toThrow('Invalid boolean');
-});
-
-test('readiness reports configured URL and stored-key presence without contacting providers', () => {
-  const store = database();
-  const network = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden'));
-  const connection = store.product.connection({
-    ...connectionBody(),
-    endpoint: 'http://192.168.1.2:8080/v1',
-    apiKey: 'test-only-secret',
-  }) as Connection;
-  expect(readiness(store.product, connection)).toEqual({
-    enabled: true,
-    originApproved: true,
-    credentialStatus: 'configured',
-    catalogKind: 'remote',
-  });
-  expect(JSON.stringify(readiness(store.product, connection))).not.toContain('test-only-secret');
-  store.credentials.set(connection.credentialRef!, null);
-  expect(readiness(store.product, connection).credentialStatus).toBe('missing');
-  expect(network).not.toHaveBeenCalled();
 });
 
 test('impact counts current profile model IDs after settings edits and exposes metadata only', () => {

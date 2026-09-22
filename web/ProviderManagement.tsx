@@ -52,7 +52,6 @@ import {
   updateModelId,
 } from './ProviderModelFields.js';
 import { DeleteButton } from './DeleteButton.js';
-import { ProviderReadiness } from './ProviderReadiness.js';
 import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js';
 import { JevProviderSettings } from './JevProviderSettings.js';
 import './ProviderManagement.css';
@@ -64,9 +63,7 @@ type ConnectionDraft = {
   protocol: ProviderProtocol;
   endpoint: string;
   credentialRef: string;
-  catalogCredentialRef: string;
   apiKey?: string | null;
-  catalogApiKey?: string | null;
   enabled: boolean;
 };
 const initialConnection = (): ConnectionDraft => ({
@@ -74,7 +71,6 @@ const initialConnection = (): ConnectionDraft => ({
   protocol: 'fixture-sse-v1',
   endpoint: '',
   credentialRef: '',
-  catalogCredentialRef: '',
   enabled: false,
 });
 const connectionDraft = (item: Connection): ConnectionDraft => ({
@@ -82,7 +78,6 @@ const connectionDraft = (item: Connection): ConnectionDraft => ({
   protocol: item.protocol,
   endpoint: item.endpoint,
   credentialRef: item.credentialRef ?? '',
-  catalogCredentialRef: item.catalogCredentialRef ?? '',
   enabled: item.enabled,
 });
 function connectionPayload(value: ConnectionDraft) {
@@ -93,11 +88,7 @@ function connectionPayload(value: ConnectionDraft) {
     ...(value.protocol !== 'codex-app-server-v1' && value.credentialRef.trim()
       ? { credentialRef: value.credentialRef.trim() }
       : {}),
-    ...(value.protocol === 'vertex-gemini-v1' && value.catalogCredentialRef.trim()
-      ? { catalogCredentialRef: value.catalogCredentialRef.trim() }
-      : {}),
     ...(value.apiKey !== undefined ? { apiKey: value.apiKey } : {}),
-    ...(value.catalogApiKey !== undefined ? { catalogApiKey: value.catalogApiKey } : {}),
     enabled: value.enabled,
   };
 }
@@ -478,11 +469,7 @@ export function ConnectionEditor({
     const result = await api<Connection>(`/connections/${item.id}/catalog`, {});
     if (result.catalogError)
       throw new Error('모델 목록을 확인하지 못했어요. 마지막 저장 목록과 수동 모델 ID를 유지해요.');
-    setMessage(
-      result.protocol === 'vertex-gemini-v1' && !result.catalogCredentialRef
-        ? '로컬 지원 모델 목록 확인 완료 · 공급자 조회 없음'
-        : '모델 목록 조회 완료'
-    );
+    setMessage('모델 목록 조회 완료');
   }
   function statusConnection(item: Connection) {
     const body = {
@@ -1024,21 +1011,13 @@ export function ConnectionEditor({
                     type="button"
                     className="secondary"
                     disabled={busy}
-                    aria-label={
-                      item.title +
-                      ' ' +
-                      (item.protocol === 'vertex-gemini-v1'
-                        ? '로컬 지원 모델 확인'
-                        : '모델 목록 새로고침')
-                    }
+                    aria-label={item.title + ' 모델 목록 새로고침'}
                     onClick={() => {
                       void perform(() => catalog(item));
                     }}
                   >
                     <RefreshIcon size={18} aria-hidden="true" />
-                    {item.protocol === 'vertex-gemini-v1'
-                      ? '로컬 지원 모델 확인'
-                      : '모델 목록 새로고침'}
+                    모델 목록 새로고침
                   </button>
                   {deleteConnection(item)}
                 </ActionMenu>
@@ -1309,7 +1288,6 @@ export function ConnectionEditor({
                   endpoint: definition.endpointDefault,
                   credentialRef: '',
                   apiKey: undefined,
-                  catalogApiKey: undefined,
                 });
               }}
             >
@@ -1407,23 +1385,6 @@ export function ConnectionEditor({
                   등록한 키 삭제
                 </button>
               )}
-            </label>
-          )}
-          {vertex && (
-            <label className="full">
-              모델 목록용 Gemini API 키 · 선택
-              <input
-                aria-label="모델 목록 API 키"
-                type="password"
-                autoComplete="new-password"
-                placeholder={
-                  connection.catalogCredentialRef ? '등록됨 · 변경할 때 입력' : '목록 조회용 키'
-                }
-                value={connection.catalogApiKey ?? ''}
-                onChange={(event) =>
-                  setConnection({ ...connection, catalogApiKey: event.target.value })
-                }
-              />
             </label>
           )}
           <label className="check">
@@ -1591,32 +1552,20 @@ export function ConnectionEditor({
                 ))}
               </select>
             </label>
-            {chosen && (
-              <>
-                {!chosen.enabled && (
-                  <p className="provider-draft-note full">
-                    비활성 프로바이더를 사용하는 모델은 새로 실행할 수 없어요. 프로바이더를
-                    활성화하면 다시 사용할 수 있어요.
-                  </p>
-                )}
-                <details className="provider-readiness-details full">
-                  <summary>프로바이더 준비 상태와 목록 새로고침</summary>
-                  <ProviderReadiness
-                    key={versionRef(chosen)}
-                    connection={chosen}
-                    busy={busy}
-                    onCatalog={(item) => {
-                      void perform(() => catalog(item));
-                    }}
-                  />
-                </details>
-              </>
+            {chosen && !chosen.enabled && (
+              <p className="provider-draft-note full">
+                비활성 프로바이더를 사용하는 모델은 새로 실행할 수 없어요. 프로바이더를 활성화하면
+                다시 사용할 수 있어요.
+              </p>
             )}
             <ProviderCatalogPicker
               key={chosen?.id}
               connection={chosen}
               selectedId={model.modelId}
               busy={busy}
+              onRefresh={(item) => {
+                void perform(() => catalog(item));
+              }}
               onChoose={(item) =>
                 setModel((current) => {
                   // Picking from the list is an explicit choice: published limits prefill and stay editable.

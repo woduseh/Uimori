@@ -8,7 +8,12 @@ import {
   type ProviderExecutionOptions,
   type ProviderConnection,
 } from '../core/transport.js';
-import { isVertexFileReference, VERTEX_FILE_PREFIX } from '../core/credential-reference.js';
+import {
+  isVertexAdcReference,
+  isVertexFileReference,
+  VERTEX_FILE_PREFIX,
+} from '../core/credential-reference.js';
+import { vertexAccessToken } from '../core/vertex-auth.js';
 import { validateVertexEndpoint } from '../core/product.js';
 
 type ServiceAccount = {
@@ -83,6 +88,16 @@ export class VertexCredentialStore {
     } catch {
       return false;
     }
+  }
+
+  /** Use the same Vertex credential as generation for non-generating metadata requests. */
+  async accessToken(connection: ProviderConnection, signal: AbortSignal): Promise<string> {
+    if (isVertexAdcReference(connection.credentialRef)) return vertexAccessToken(signal);
+    const reference = connection.credentialRef;
+    if (!reference) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
+    const token = await this.resolve(reference, connection, signal);
+    if (!token || /[\r\n]/u.test(token)) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
+    return token;
   }
 
   resolve: NonNullable<ProviderExecutionOptions['resolveCredential']> = async (

@@ -142,19 +142,12 @@ export function validateProviderSettingVersion(row: Row): void {
       'protocol',
       'endpoint',
       'credentialRef',
-      'catalogCredentialRef',
       'enabled',
       'catalog',
       'catalogError',
       'catalogUpdatedAt',
     ]);
     const protocol = choice(body.protocol, [...PROVIDER_PROTOCOLS], 'protocol');
-    if (
-      body.catalogCredentialRef !== undefined &&
-      (protocol !== 'vertex-gemini-v1' ||
-        !validCredentialRef(text(body.catalogCredentialRef, 'catalog credential reference', 200)))
-    )
-      throw new HttpError(400, 'Invalid catalog credential reference');
     if (body.catalogUpdatedAt !== undefined) catalogTimestamp(body.catalogUpdatedAt);
     connectionEndpoint(body.endpoint, protocol);
     if (protocol === 'codex-app-server-v1' && body.credentialRef !== undefined)

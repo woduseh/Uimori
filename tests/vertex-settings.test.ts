@@ -183,56 +183,50 @@ describe('Vertex connection and model settings with file SQLite', () => {
     expect(app.store.product.all('model')).toHaveLength(4);
   });
 
-  test('returns only the local Vertex support manifest without fetching or requiring credentials', async () => {
+  test('refreshes Gemini models from Vertex Model Garden with the registered Vertex credential', async () => {
     const app = await application();
-    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      throw new Error('No network expected for local support manifest');
+    const seen: { url: string; authorization: string | null }[] = [];
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      seen.push({
+        url: String(input),
+        authorization: new Headers(init?.headers).get('authorization'),
+      });
+      return new Response(
+        JSON.stringify({
+          publisherModels: [
+            { name: 'publishers/google/models/gemini-3.8-flash' },
+            { name: 'publishers/google/models/gemini-4-pro-preview' },
+            { name: 'publishers/google/models/embedding-001' },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
     });
-    vi.stubEnv('UIMORI_PROVIDER_VERTEX_TEST', '');
     const connection = await request<Connection>(
       app,
       '/connections',
-      vertexConnection({ enabled: false })
+      vertexConnection({ apiKey: 'synthetic-vertex-token' })
     );
     const catalog = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
-    expect(catalog).toMatchObject({
-      id: connection.id,
-      revision: 2,
-      enabled: false,
-      catalogError: null,
-    });
-    expect(catalog.catalog).toEqual([
-      {
-        id: 'gemini-3.5-flash-lite',
-        name: 'Gemini 3.5 Flash-Lite',
-        capabilities: { tools: true, structuredOutput: null },
-        priceRevision: null,
-      },
-      {
-        id: VERTEX_GEMINI_MODEL_ID,
-        name: 'Gemini 3.8 Flash',
-        capabilities: { tools: true, structuredOutput: null },
-        priceRevision: null,
-      },
-      {
-        id: 'gemini-3.1-pro-preview',
-        name: 'Gemini 3.1 Pro (Preview)',
-        capabilities: { tools: true, structuredOutput: null },
-        priceRevision: null,
-      },
+    expect(catalog.catalog.map((item) => item.id)).toEqual([
+      'gemini-3.8-flash',
+      'gemini-4-pro-preview',
     ]);
-    const fixture = await request<Connection>(app, '/connections', {
-      title: 'Disabled fixture',
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:9/turn',
-      enabled: false,
-    });
-    const denied = await request<Connection>(app, `/connections/${fixture.id}/catalog`, {});
-    expect(denied).toMatchObject({
-      catalog: [],
-      catalogError: 'CATALOG_UNAVAILABLE',
-      enabled: false,
-    });
+    expect(catalog.catalogError).toBeNull();
+    expect(seen).toHaveLength(1);
+    expect(seen[0].url).toContain('/v1beta1/publishers/google/models');
+    expect(seen[0].authorization).toBe('Bearer synthetic-vertex-token');
+    expect(JSON.stringify(catalog)).not.toContain('synthetic-vertex-token');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('Vertex model refresh fails closed without a generation credential and keeps cached data', async () => {
+    const app = await application();
+    const fetch = vi.spyOn(globalThis, 'fetch');
+    const connection = await request<Connection>(app, '/connections', vertexConnection());
+    const listed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
+    expect(listed.catalog).toEqual([]);
+    expect(listed.catalogError).toBe('CATALOG_UNAVAILABLE');
     expect(fetch).not.toHaveBeenCalled();
   });
 });

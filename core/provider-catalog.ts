@@ -183,28 +183,17 @@ export function catalogEntryMetadata(
   return none;
 }
 
-/**
- * One Gemini Developer API `models.list` entry as a catalog row. Only Gemini generation models
- * are kept; the `models/` prefix is dropped so the ID matches Agent Platform's model ID.
- */
-export function geminiListEntry(raw: Record<string, unknown>): CatalogEntry | undefined {
+/** One Google Model Garden publisher entry, reduced to a Gemini model ID usable by Vertex. */
+export function vertexPublisherModelEntry(raw: Record<string, unknown>): CatalogEntry | undefined {
   const name = typeof raw.name === 'string' ? raw.name : '';
-  const methods = Array.isArray(raw.supportedGenerationMethods)
-    ? raw.supportedGenerationMethods
-    : [];
-  if (!name.startsWith('models/gemini') || !methods.includes('generateContent')) return undefined;
-  const id = name.slice('models/'.length);
-  if (!id || id.length > 300) return undefined;
-  const displayName = typeof raw.displayName === 'string' && raw.displayName ? raw.displayName : id;
-  const limits = {
-    ...(limit(raw.outputTokenLimit) ? { maxOutputTokens: limit(raw.outputTokenLimit) } : {}),
-    ...(limit(raw.inputTokenLimit) ? { inputTokenLimit: limit(raw.inputTokenLimit) } : {}),
-  };
+  const prefix = 'publishers/google/models/';
+  if (!name.startsWith(prefix)) return undefined;
+  const id = name.slice(prefix.length);
+  if (!/^gemini-[a-z0-9][a-z0-9.-]{0,299}$/u.test(id)) return undefined;
   return {
     id,
-    name: displayName.slice(0, 400),
+    name: id,
     capabilities: { tools: null, structuredOutput: null },
     priceRevision: null,
-    ...(Object.keys(limits).length ? { limits } : {}),
   };
 }
