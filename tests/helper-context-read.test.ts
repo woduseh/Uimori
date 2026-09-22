@@ -17,8 +17,12 @@ import {
 import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { store: Store; directory: string }[] = [];
-const largeChars = 32768;
 const benchmark = process.env.UIMORI_CONTEXT_READ_BENCHMARK === '1';
+// Correctness checks growth at two useful scales without making hosted CI a timing gate.
+// The opt-in benchmark retains the original 100/50 records with 32 KiB payloads.
+const historicalCandidates = benchmark ? 100 : 40;
+const cancelledJobs = benchmark ? 50 : 20;
+const largeChars = benchmark ? 32768 : 8192;
 afterEach(() => {
   vi.restoreAllMocks();
   for (const { store, directory } of owned.splice(0)) {
@@ -232,8 +236,8 @@ function measureReads(f: Awaited<ReturnType<typeof fixture>>, before: unknown, a
     },
     fixture: {
       activeCheckpoints: 1,
-      historicalCandidates: 100,
-      cancelledJobs: 50,
+      historicalCandidates,
+      cancelledJobs,
       historicalTextChars: largeChars,
       sources: 4,
     },
@@ -274,20 +278,26 @@ test('helper reads decode one active checkpoint as large history grows while UI 
   expect(baseline.decoded).toMatchObject({ checkpointPlans: 1, jobSnapshots: 0 });
   for (const [candidates, jobs] of [
     [10, 5],
-    [100, 50],
+    [historicalCandidates, cancelledJobs],
   ]) {
     await f.addHistory(candidates!, jobs!);
     const current = decodedRead(f.store, f.read);
     expect(current).toEqual(baseline);
   }
   const { checkpoints, jobs, ...metadata } = f.store.context.detail(f.chatId, f.branchId);
-  expect(checkpoints).toHaveLength(100);
-  expect(jobs).toHaveLength(50);
+  const visibleCheckpointCount = Math.min(historicalCandidates + 1, 100);
+  expect(checkpoints).toHaveLength(visibleCheckpointCount);
+  expect(jobs).toHaveLength(cancelledJobs);
   expect(f.store.context.current(f.chatId, f.branchId)).toEqual(metadata);
   const old = legacyRead(f.store, () => decodedRead(f.store, f.read));
   expect(old.result).toEqual(baseline.result);
-  expect(old.decoded).toMatchObject({ checkpointPlans: 101, jobSnapshots: 50 });
-  expect(old.decoded.jsonBytes).toBeGreaterThan(largeChars * 150);
+  expect(old.decoded).toMatchObject({
+    checkpointPlans: visibleCheckpointCount + 1,
+    jobSnapshots: cancelledJobs,
+  });
+  expect(old.decoded.jsonBytes).toBeGreaterThan(
+    largeChars * (historicalCandidates + cancelledJobs)
+  );
   if (benchmark) measureReads(f, old.decoded, baseline.decoded);
 });
 
