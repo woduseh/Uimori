@@ -1029,7 +1029,9 @@ function App() {
                               hasPackages={
                                 !!s.detail!.runs.find((run) => run.id === source.runId)?.hasPackages
                               }
-                              presentationRefreshKey={s.detail!.reader.cursor}
+                              presentationRefreshKey={
+                                s.detail!.reader.presentationRevisions[source.id]
+                              }
                               key={source.id}
                               source={source}
                               index={index + (s.detail?.reader?.start ?? 0)}

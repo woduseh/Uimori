@@ -5,7 +5,7 @@ import { mergedReaderAssets } from './package-images.js';
 import { illustrationsForSources } from './illustrations.js';
 import type { ReaderActivity } from '../core/types.js';
 import { branchTree } from '../core/reader-branch-tree.js';
-import { changedReaderSources, readerJobIds } from './reader-data.js';
+import { changedReaderSources, readerJobIds, readerPresentationRevisions } from './reader-data.js';
 import { providerRejection } from '../core/provider-rejection.js';
 import { readerRequestOrder } from '../core/reader-conversation.js';
 
@@ -257,7 +257,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   const jobs = sources.flatMap((source) => {
     const ids = readerJobIds(store, source.id, source.hash);
     return ids
-      .map((row) => store.job(row.id))
+      .map((row) => store.job(row.id, 'reader'))
       .filter((job) => {
         if (job.sourceHash !== source.hash && job.kind !== 'image') return false;
         if (job.kind !== 'translation') return true;
@@ -299,7 +299,14 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     startMode: string | null;
   }[];
   const requestRows = new Map(indexRows.map((run) => [run.id, run]));
-  const requestOrder = (id: string) => readerRequestOrder(requestRows, id);
+  const orderCache = new Map<string, number>();
+  const requestOrder = (id: string) => readerRequestOrder(requestRows, id, orderCache);
+  const superseded = new Set(indexRows.flatMap((run) => (run.retryOf ? [run.retryOf] : [])));
+  const previousOrder = start > 0 ? requestOrder(byId.get(chain[start - 1])!.runId) : -Infinity;
+  const finalOrder =
+    start + order.length < chain.length
+      ? requestOrder(byId.get(order[order.length - 1])!.runId)
+      : Infinity;
   // The complete task panel loads readerRuns independently when opened.
   const pageIds = new Set(order);
   const runs = readerRuns(
@@ -308,18 +315,17 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     indexRows
       .filter(
         (run) =>
-          run.sourceRevision === null ||
-          pageIds.has(run.sourceRevision) ||
+          (run.sourceRevision === null &&
+            !superseded.has(run.id) &&
+            (run.branchId ? run.branchId === branch.id : branch.default) &&
+            requestOrder(run.id) > previousOrder &&
+            requestOrder(run.id) <= finalOrder) ||
+          (run.sourceRevision !== null && pageIds.has(run.sourceRevision)) ||
           ['queued', 'running'].includes(run.status)
       )
       .map((run) => run.id)
   );
   for (const run of runs) Object.assign(run, { requestOrder: requestOrder(run.id) });
-  const previousOrder = start > 0 ? requestOrder(byId.get(chain[start - 1])!.runId) : -Infinity;
-  const finalOrder =
-    start + order.length < chain.length
-      ? requestOrder(byId.get(order[order.length - 1])!.runId)
-      : Infinity;
   const pendingRunIds = runs
     .filter((run) => {
       if (
@@ -393,6 +399,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     ...(assetsChanged ? { assets: mergedReaderAssets(store, id, order) } : {}),
     reader: {
       navigation,
+      presentationRevisions: readerPresentationRevisions(store, id, branch.id, order),
       pendingRunIds,
       branchTree: branchTree(branches, new Map(rows.map((row) => [row.id, row.parentRevision]))),
       latestBranchRuns: Object.fromEntries(

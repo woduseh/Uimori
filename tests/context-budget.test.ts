@@ -362,7 +362,7 @@ describe('final wire body budget before credentials and transmission', () => {
       const input = request(variant);
       input.input.history = [{ text: large }];
       input.prompt = {
-        compilerVersion: 'risu-native-prompt-1',
+        compilerVersion: 'risu-native-prompt-2',
         values: {},
         cachePlan: [],
         messages: [

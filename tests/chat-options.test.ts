@@ -5,11 +5,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import {
-  ChatOptionsStore,
-  optionBinding,
-  type ChatOptionAuthority,
-} from '../server/chat-options.js';
+import { ChatOptionsStore, optionBinding } from '../server/chat-options.js';
 import {
   defaultPromptWorkspace,
   freezeCurrentPrompts,
@@ -31,7 +27,7 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true });
   }
 });
-const authority: ChatOptionAuthority = { requestId: 'direct-ui-action', assert: () => {} };
+const requestId = 'direct-ui-action';
 function database() {
   const path = mkdtempSync(join(tmpdir(), 'uimori-chat-options-')),
     store = new Store(join(path, 'test.sqlite'));
@@ -65,35 +61,16 @@ function input(f: ReturnType<typeof fixture>, values: OptionValues, branchId?: s
     operationId: randomUUID(),
   };
 }
-function stage(f: ReturnType<typeof fixture>, values: OptionValues, delegationId?: string) {
-  const state = f.service.get(f.chat.id);
+function stage(f: ReturnType<typeof fixture>, values: OptionValues) {
   return f.service.stage(
     f.chat.id,
     {
       ...input(f, values),
-      expectedHeadRevision: state.headRevision,
-      ...(delegationId ? { delegationId } : {}),
     },
-    authority,
-    !!delegationId
+    requestId
   );
 }
-function delegate(f: ReturnType<typeof fixture>, fields = ['detail']) {
-  const state = f.service.get(f.chat.id);
-  return f.service
-    .delegate(
-      f.chat.id,
-      {
-        branchId: state.branchId,
-        expectedRevision: state.revision,
-        binding: state.binding,
-        fields,
-        operationId: randomUUID(),
-      },
-      authority
-    )
-    .delegations.at(-1)!;
-}
+
 function command(f: ReturnType<typeof fixture>) {
   const chat = f.store.chat(f.chat.id),
     branch = f.store.product.branch(chat.id);
@@ -129,11 +106,10 @@ function complete(f: ReturnType<typeof fixture>, id: string) {
     { ...f.store.run(id).snapshot.settings, status: false }
   );
 }
-test('global, chat fixed, delegated unfixed and explicit oneoff resolve once in the reservation transaction', () => {
+test('global, chat fixed and oneoff values resolve once in the reservation transaction', () => {
   const f = fixture();
-  f.service.fixed(f.chat.id, input(f, { tone: 'bold' }), authority);
-  const grant = delegate(f);
-  stage(f, { detail: '4' }, grant.id);
+  f.service.fixed(f.chat.id, input(f, { tone: 'bold' }), requestId);
+  stage(f, { detail: '4' });
   stage(f, { tone: 'warm', detail: '7' });
   const cmd = command(f),
     first = run(f, cmd);
@@ -141,11 +117,10 @@ test('global, chat fixed, delegated unfixed and explicit oneoff resolve once in 
   expect(resolution).toMatchObject({
     globalValues: { tone: 'calm', detail: '1' },
     fixedValues: { tone: 'bold' },
-    delegatedValues: { detail: '4' },
     oneoffValues: { tone: 'warm', detail: '7' },
     values: { tone: 'warm', detail: '7' },
   });
-  expect(resolution.pendingIds).toHaveLength(2);
+  expect(resolution.pendingIds).toHaveLength(1);
   expect(f.service.get(f.chat.id).pending).toEqual([]);
   expect(run(f, cmd)).toEqual({ run: first.run, created: false });
   expect(promptWorkspace(f.store).main.values).toEqual({ tone: 'calm', detail: '1' });
@@ -175,21 +150,13 @@ test('failed reservation rolls back oneoff consumption and changed global values
   expect(value.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'warm', detail: '5' });
   expect(f.service.get(f.chat.id).pending).toEqual([]);
 });
-test('explicit UI capabilities, definition owner, CAS, fixed fields and revocation bound delegated choices', () => {
+test('stale revisions and changed definitions cannot overwrite options', () => {
   const f = fixture(),
     initial = input(f, { tone: 'bold' });
+  const accepted = f.service.fixed(f.chat.id, initial, requestId);
+  expect(f.service.fixed(f.chat.id, initial, requestId)).toEqual(accepted);
   expect(() =>
-    f.service.fixed(f.chat.id, initial, {
-      ...authority,
-      assert: () => {
-        throw new Error('denied');
-      },
-    })
-  ).toThrow('denied');
-  const accepted = f.service.fixed(f.chat.id, initial, authority);
-  expect(f.service.fixed(f.chat.id, initial, authority)).toEqual(accepted);
-  expect(() =>
-    f.service.fixed(f.chat.id, { ...initial, operationId: randomUUID() }, authority)
+    f.service.fixed(f.chat.id, { ...initial, operationId: randomUUID() }, requestId)
   ).toThrow(/변경/);
   expect(() =>
     f.service.fixed(
@@ -198,46 +165,16 @@ test('explicit UI capabilities, definition owner, CAS, fixed fields and revocati
         ...input(f, { tone: 'bold' }),
         binding: { ...accepted.binding, owner: 'preset:unrelated' },
       },
-      authority
+      requestId
     )
   ).toThrow(/소속/);
-  const grant = delegate(f, ['tone', 'detail']);
-  expect(() => stage(f, { tone: 'warm' }, grant.id)).toThrow(/고정/);
-  stage(f, { detail: '4' }, grant.id);
-  const state = f.service.get(f.chat.id);
-  f.service.revoke(
-    f.chat.id,
-    grant.id,
-    { branchId: state.branchId, expectedRevision: state.revision, operationId: randomUUID() },
-    authority
-  );
-  expect(f.service.get(f.chat.id).delegations[0]).toMatchObject({
-    revision: 2,
-    fields: ['tone', 'detail'],
-    revokedAt: expect.any(String),
-  });
-  expect(f.service.get(f.chat.id).pending).toEqual([]);
-  expect(() => stage(f, { detail: '4' }, grant.id)).toThrow(/위임/);
   expect(() =>
-    f.service.fixed(f.chat.id, input(f, { modelId: 'foreign-model' }), authority)
+    f.service.fixed(f.chat.id, input(f, { modelId: 'foreign-model' }), requestId)
   ).toThrow();
-  expect(() =>
-    f.service.delegate(
-      f.chat.id,
-      {
-        branchId: state.branchId,
-        expectedRevision: f.service.get(f.chat.id).revision,
-        binding: state.binding,
-        fields: ['modelId'],
-        operationId: randomUUID(),
-      },
-      authority
-    )
-  ).toThrow(/실제/);
 });
-test('definition changes block pending choices and never silently apply old fixed or delegated fields', () => {
+test('definition changes block pending choices and never silently apply old fixed or oneoff fields', () => {
   const f = fixture();
-  f.service.fixed(f.chat.id, input(f, { tone: 'bold' }), authority);
+  f.service.fixed(f.chat.id, input(f, { tone: 'bold' }), requestId);
   stage(f, { detail: '4' });
   const current = promptWorkspace(f.store);
   updatePromptWorkspace(f.store, {
@@ -257,7 +194,7 @@ test('definition changes block pending choices and never silently apply old fixe
     f.chat.id,
     state.pending[0].id,
     { expectedRevision: state.revision, branchId: state.branchId, operationId: randomUUID() },
-    authority
+    requestId
   );
   expect(run(f).run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'calm', detail: '1' });
 });

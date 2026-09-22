@@ -4,7 +4,7 @@ import { nativeChatMlMessages } from './risu-native-messages.js';
 
 export type NativeRisuPreset = { version: 1; preset: Record<string, unknown> };
 export type NativeRisuPresetExecution = {
-  version: 1 | 2;
+  version: 2;
   contextHash?: string;
   sourceHash: string;
   fields: Record<string, string>;
@@ -179,7 +179,6 @@ export function nativeRisuBlockEnabled(type: unknown): boolean {
 export type NativePresetFieldContext = {
   slots?: Record<string, string>;
   globalNoteReplacement?: string;
-  legacy?: boolean;
 };
 export function nativeRisuPresetFields(
   source: NativeRisuPreset,
@@ -190,11 +189,6 @@ export function nativeRisuPresetFields(
     source.preset.promptTemplate as Record<string, unknown>[]
   ).entries()) {
     if (!nativeRisuBlockEnabled(raw.type)) continue;
-    if (context.legacy) {
-      for (const key of ['text', 'innerFormat', 'defaultText'])
-        if (typeof raw[key] === 'string') result[`block:${index}:${key}`] = raw[key];
-      continue;
-    }
     if (raw.type === 'chatML') {
       result[`block:${index}:text`] = nativeChatMlMessages(string(raw.text))
         .map((message) => `<|im_start|>${message.role}<|im_sep|>${message.text}<|im_end|>`)

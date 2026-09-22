@@ -4,7 +4,7 @@ import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 
-export const DATABASE_SCHEMA_VERSION = 1;
+export const DATABASE_SCHEMA_VERSION = 3;
 const FORMAT = 'uimori-personal-v1';
 
 export class DatabaseSchemaError extends Error {
@@ -25,7 +25,7 @@ export function databaseSchemaVersion(db: DatabaseSync): number {
       throw new Error('This is not an empty Uimori database. Choose a new DB path.');
     return 0;
   }
-  if (version !== DATABASE_SCHEMA_VERSION)
+  if (version < 1 || version > DATABASE_SCHEMA_VERSION)
     throw new Error(
       `Database version ${version} is not the personal-v1 format. Keep the original file and transfer user data to a new database.`
     );
@@ -42,14 +42,16 @@ export function databaseSchemaVersion(db: DatabaseSync): number {
 
 /** A new baseline; future migrations run once in order rather than supporting old shapes at runtime. */
 export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () => void): void {
-  if (databaseSchemaVersion(db) === DATABASE_SCHEMA_VERSION) return;
+  const previous = databaseSchemaVersion(db);
+  if (previous === DATABASE_SCHEMA_VERSION) return;
   db.exec('BEGIN IMMEDIATE');
   try {
-    initializeFresh();
-    initIllustrations(db);
-    initOutline(db);
-    initLoreContextDefaults(db);
-    db.exec(`
+    if (previous === 0) {
+      initializeFresh();
+      initIllustrations(db);
+      initOutline(db);
+      initLoreContextDefaults(db);
+      db.exec(`
       CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
       CREATE TABLE resource_undo(kind TEXT NOT NULL,id TEXT NOT NULL,saved_revision INTEGER NOT NULL,model TEXT NOT NULL,PRIMARY KEY(kind,id));
       CREATE TABLE image_blobs(hash TEXT PRIMARY KEY,mime TEXT NOT NULL,bytes BLOB NOT NULL);
@@ -60,8 +62,49 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
       CREATE TABLE chat_variable_outputs(source_id TEXT PRIMARY KEY,body TEXT NOT NULL);
       CREATE TABLE maintenance(id INTEGER PRIMARY KEY CHECK(id=1),epoch INTEGER NOT NULL,status TEXT NOT NULL CHECK(status IN ('open','closed')),reason TEXT,updated_at TEXT NOT NULL);
     `);
+      db.prepare('INSERT INTO app_metadata VALUES(?,?)').run('format', FORMAT);
+    } else if (previous === 1) {
+      // Retired UI grants are not user-authored prose or option values.
+      db.exec(`DROP TABLE IF EXISTS helper_delegations;
+        DELETE FROM chat_option_pending WHERE json_extract(body,'$.kind')='delegated';
+        DELETE FROM chat_option_operations WHERE json_extract(intent,'$.action') IN ('delegate','revoke','choose');
+        UPDATE chat_option_operations SET result=json_remove(result,'$.delegations');
+        UPDATE runs SET snapshot=json_remove(snapshot,'$.profile.chatOptions.delegatedValues','$.profile.chatOptions.delegationIds')
+          WHERE json_type(snapshot,'$.profile.chatOptions')='object';`);
+    }
+    if (previous > 0 && previous < 3) {
+      // One-time conversion of execution metadata, not ongoing legacy shape support.
+      db.exec(`
+        CREATE TABLE option_operations_next(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+          request_id TEXT NOT NULL,command_hash TEXT NOT NULL,revision INTEGER NOT NULL,created_at TEXT NOT NULL);
+        INSERT INTO option_operations_next SELECT id,chat_id,request_id,command_hash,
+          COALESCE(json_extract(result,'$.revision'),0),created_at FROM chat_option_operations;
+        DROP TABLE chat_option_operations;
+        ALTER TABLE option_operations_next RENAME TO chat_option_operations;
+        ALTER TABLE chat_override_operations DROP COLUMN intent;
+        DELETE FROM chat_option_pending WHERE json_extract(body,'$.status')!='pending';
+        DELETE FROM chat_option_pending WHERE rowid NOT IN (
+          SELECT MAX(rowid) FROM chat_option_pending GROUP BY chat_id,branch_id);
+        UPDATE chat_option_pending SET body=json_remove(body,'$.headRevision','$.headHash','$.status',
+          '$.kind','$.runId','$.definitions','$.origin');
+        CREATE UNIQUE INDEX chat_option_pending_current ON chat_option_pending(chat_id,branch_id);
+        UPDATE helper_operations SET result=json_object('artifactRef',json_object(
+          'id',json_extract(result,'$.id'),'revision',json_extract(result,'$.revision')))
+          WHERE EXISTS(SELECT 1 FROM helper_artifacts a WHERE a.id=json_extract(result,'$.id')
+            AND a.revision=json_extract(result,'$.revision') AND a.task_id=helper_operations.task_id);
+        ALTER TABLE helper_artifacts DROP COLUMN snapshot;
+        UPDATE context_checkpoints SET snapshot=json_remove(snapshot,'$.eventRefs')
+          WHERE json_extract(snapshot,'$.kind')='helper';
+        UPDATE helper_artifact_jobs SET snapshot='{}' WHERE status='completed';
+        UPDATE helper_events SET data=json_object('name',json_extract(data,'$.name'),
+          'denied',json(CASE WHEN json_extract(data,'$.denied') THEN 'true' ELSE 'false' END),'errorKind',json_extract(data,'$.errorKind'),'detailsOmitted',json('true'))
+          WHERE kind='tool.finished' AND task_id IN (SELECT id FROM helper_tasks WHERE status='completed');
+        UPDATE helper_operations SET result=json_object('detailsOmitted',json('true'))
+          WHERE json_type(result,'$.artifactRef') IS NULL AND task_id IN
+          (SELECT id FROM helper_tasks WHERE status='completed');
+      `);
+    }
     initDatabaseReadIndexes(db);
-    db.prepare('INSERT INTO app_metadata VALUES(?,?)').run('format', FORMAT);
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}`);
     db.exec('COMMIT');
   } catch (error) {

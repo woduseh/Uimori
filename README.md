@@ -44,7 +44,7 @@ npm run dev
 
 ## 데이터와 접속
 
-- 기본 DB는 `.local/uimori.sqlite`예요. 빈 DB와 현재 지원하는 DB만 열어요. 구체적인 기준 버전은 [현재 데이터 형식](docs/DATA-MIGRATIONS.md#현재-버전)을 확인해요. 기존 파일은 자동으로 변경하지 않아요. schema 24 사용자 자료는 별도 일회성 도구로 새 schema 1 DB에 옮길 수 있어요. [DB와 자료 교환 형식](docs/DATA-MIGRATIONS.md) 테스트용 개발 DB를 초기화하려면 서버 종료 후 `npm run reset:dev`를 실행해요.
+- 기본 DB는 `.local/uimori.sqlite`예요. 빈 DB와 현재 지원하는 DB만 열어요. 구체적인 기준 버전은 [현재 데이터 형식](docs/DATA-MIGRATIONS.md#현재-버전)을 확인해요. 개인 작업실 schema 1·2는 백업 후 현재 schema 3로 갱신하며 다른 형식은 자동 변환하지 않아요. schema 34 사용자 자료는 별도 일회성 도구로 새 DB에 옮길 수 있어요. [DB와 자료 교환 형식](docs/DATA-MIGRATIONS.md) 테스트용 개발 DB를 초기화하려면 서버 종료 후 `npm run reset:dev`를 실행해요.
 - **설정 → 데이터 관리 → 내보내기와 복원**에서 SQLite 백업을 저장해요. 개별 자료와 채팅은 새 사본으로 가져올 수 있어요. [백업·격리 DB 사용법](docs/USAGE.md)
 - 기본은 `127.0.0.1` 로컬 모드이며 `UIMORI_ACCESS_TOKEN` 인증을 선택할 수 있어요. 개인 서버 모드는 `UIMORI_PUBLIC_ORIGIN`에 HTTPS 주소 하나를 지정하고 32자 이상 접속 토큰을 필수로 사용해요. `UIMORI_HOST`로 수신 주소를 정하며 외부 수신은 개인 서버 모드에서만 허용해요. [접속 조건](docs/SELF-HOST.md#프록시와-접속-조건)
 - 프로바이더 API 키와 JEV 키는 앱에서 입력하고 DB에 저장해요. 전체 SQLite 백업에는 키와 이미지가 포함돼요. 사용자 DB와 실행 산출물은 Git에서 제외해요.

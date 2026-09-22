@@ -261,6 +261,18 @@ function compactLayout(page: Page) {
 }
 /** The helper: a header button on wide widths, a chat ⋯ item on compact widths. */
 export async function openHelper(page: Page) {
+  // After reload, wait for the actual entry point before choosing the compact/header path.
+  // A count() while the chat header is still loading would select a nonexistent desktop button.
+  await expect
+    .poll(
+      async () =>
+        (await page.locator('.workspace-header .chat-menu').count()) +
+        (await page
+          .locator('.workspace-header, .library-heading')
+          .getByRole('button', { name: '도우미 열기', exact: true })
+          .count())
+    )
+    .toBeGreaterThan(0);
   // Compact chat screens keep the helper in the chat ⋯ menu; every other screen has the header icon.
   if (compactLayout(page) && (await page.locator('.workspace-header .chat-menu').count())) {
     const menu = await openChatMenu(page);

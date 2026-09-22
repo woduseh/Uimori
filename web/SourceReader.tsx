@@ -181,7 +181,7 @@ function SourceReaderContent({
     source,
     displayTranslation,
     hasPackages === true,
-    `${presentationRefreshKey ?? ''}:${jobs.map((job) => `${job.id}:${job.status}`).join(',')}`,
+    String(presentationRefreshKey ?? ''),
     branchId
   );
   const projected = presentation?.data;
@@ -556,10 +556,7 @@ function SourceReaderContent({
                   className="source-block"
                   data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
                 >
-                  <Prose
-                    text={projected.original.text}
-                    allowedImageUrls={projected.inlineImageUrls}
-                  />
+                  <Prose text={projected.original.text} />
                 </div>
                 {annotations.length > 0 && (
                   <p className="muted" role="status">
@@ -570,10 +567,7 @@ function SourceReaderContent({
             ) : mode === 'translation' && validTranslation && projected?.translation?.changed ? (
               <div className="prose translated" data-testid="translation-text">
                 <div className="source-block">
-                  <Prose
-                    text={projected.translation.text}
-                    allowedImageUrls={projected.inlineImageUrls}
-                  />
+                  <Prose text={projected.translation.text} />
                 </div>
                 {annotations.length > 0 && (
                   <p className="muted" role="status">
@@ -592,7 +586,6 @@ function SourceReaderContent({
                       id={`block-${source.id}-${block.anchor}`}
                     >
                       <Prose
-                        allowedImageUrls={projected?.inlineImageUrls}
                         text={source.text.slice(
                           block.start,
                           blocks[position + 1]?.start ?? source.text.length
@@ -612,7 +605,6 @@ function SourceReaderContent({
                       <Fragment key={block.anchor}>
                         <div className="source-block" data-block-anchor={block.anchor}>
                           <Prose
-                            allowedImageUrls={projected?.inlineImageUrls}
                             text={
                               block.text +
                               translationText.slice(
@@ -628,7 +620,7 @@ function SourceReaderContent({
                   </>
                 ) : (
                   <div className="source-block">
-                    <Prose text={translationText} allowedImageUrls={projected?.inlineImageUrls} />
+                    <Prose text={translationText} />
                   </div>
                 )}
               </div>

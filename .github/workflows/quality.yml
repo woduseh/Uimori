@@ -19,11 +19,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
-    runs-on: windows-latest
-    timeout-minutes: 30
+  changes:
+    runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.changes.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: changes
+        run: node scripts/ci-changes.mjs
+        env:
+          UIMORI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+
+  quality:
+    needs: changes
+    runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -33,22 +46,18 @@ jobs:
         with:
           node-version: '24.14.0'
           cache: npm
-      - id: changes
-        run: node scripts/ci-changes.mjs
-        env:
-          UIMORI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-      - if: steps.changes.outputs.docs_only != 'true'
+      - if: needs.changes.outputs.docs_only != 'true'
         run: npm ci --no-audit --no-fund
-      - if: steps.changes.outputs.docs_only != 'true'
+      - if: needs.changes.outputs.docs_only != 'true'
         run: npm run quality:full
-      - if: steps.changes.outputs.docs_only == 'true'
+      - if: needs.changes.outputs.docs_only == 'true'
         run: git diff --check $env:UIMORI_DIFF_BASE HEAD
         env:
           UIMORI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
 
   linux-core:
-    needs: quality
-    if: needs.quality.outputs.docs_only != 'true'
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

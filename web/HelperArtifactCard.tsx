@@ -6,7 +6,7 @@ import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
 import { PlainProse } from './Prose.js';
 
-export type HelperArtifactView = Omit<HelperArtifact, 'snapshot'>;
+export type HelperArtifactView = HelperArtifact;
 type Draft = { revision: number; text: string; requestKey?: string };
 function storedDraft(key: string): Draft | null {
   try {

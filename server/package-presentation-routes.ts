@@ -64,7 +64,6 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
         const presentation = await buildPackagePresentation(
           live.snapshot,
           { ...source, ...(translation ? { translation } : {}) },
-          undefined,
           {
             nativeMessages: messages,
             ...(imageTranslation?.text ? { nativeTranslationText: imageTranslation.text } : {}),

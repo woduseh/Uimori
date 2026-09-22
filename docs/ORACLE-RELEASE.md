@@ -33,7 +33,7 @@ SSH 키, `known_hosts`, 운영 접속 설정은 Git에 넣지 않고 `.local/ora
 
 ## 검증과 배포
 
-기본 릴리스 검사는 `quality:full`과 선택한 기능 영역을 실행해 내용 지문이 포함된 영수증을 남겨요. 기본 영역은 `verify:browser-smoke`예요.
+기본 릴리스 검사는 `quality`, 현재 소스의 `build`, 선택한 기능 영역을 실행해 내용 지문이 포함된 영수증을 남겨요. 기본 영역은 `verify:browser-smoke`예요.
 
 ```powershell
 npm run release:check -- --area verify:browser-smoke
@@ -48,7 +48,7 @@ npm run release:oracle -- --config .local/oracle-release.json --source-ref codex
 
 `release:oracle`도 같은 검증을 요구해요. 현재 source와 실행 환경·검사 계약 지문이 모두 같은 성공 영수증은 검사별로 재사용해요. 성공 검사의 빌드만 없거나 stale이면 검사를 반복하지 않고 build만 복구한 뒤 현재 source와 artifact 일치를 다시 확인해요. source나 실행 환경·검사 계약이 달라졌으면 stale로 판정해 다시 실행해요. 같은 source에 실패 기록이 있으면 `--area`를 줄이거나 `--full`을 빼서 우회할 수 없어요. 실패 원인을 해결하고 그 범위를 다시 통과해야 해요. 커밋 때문에 내용이 바뀌지 않았다면 커밋 전 성공한 영수증도 clean HEAD가 된 뒤 재사용할 수 있어요.
 
-`--area`는 변경 영역의 기존 `verify:*` npm script를 선택하며 기본값은 `verify:browser-smoke`예요. `--full`은 기본 smoke 대신 `verify:browser`를 실행하며, 명시한 기능 영역은 함께 검사해요. 추가 범위는 [DEVELOPMENT](DEVELOPMENT.md#verification)에 따라 선택해요.
+`--area`는 변경 영역의 기존 `verify:*` npm script를 선택하며 기본값은 `verify:browser-smoke`예요. `--full`은 `quality:full`과 기본 smoke 대신 `verify:browser`를 실행하며, 명시한 기능 영역은 함께 검사해요. 추가 범위는 [DEVELOPMENT](DEVELOPMENT.md#verification)에 따라 선택해요.
 
 Development checks follow [DEVELOPMENT](DEVELOPMENT.md#verification). For a release involving deployment tooling, select `verify:selfhost`; changes to the broader browser connection flow may also need `verify:browser-smoke`. The release runner applies the receipt checks described above.
 
@@ -63,7 +63,7 @@ Development checks follow [DEVELOPMENT](DEVELOPMENT.md#verification). For a rele
 | `npm run release:oracle -- --config .local/oracle-release.json --image <전체-reference>` | 서버 build 대신 지정한 immutable image를 검사하고 사용해요. tag만으로 움직이는 reference보다 digest를 권장해요. |
 
 
-일반 업데이트는 앱 전환 전에 SQLite 복구본을 만들고 기존 DB를 그대로 사용해요. 기본 경로는 모든 표의 모든 행을 hash하지 않으며, backup 성공, schema/앱 호환성, 활성 작업 부재, health와 smoke를 검사해요. 선택적 행 삭제나 DB reset은 업데이트 계약에 포함하지 않아요.
+일반 업데이트는 앱 전환 전에 SQLite 복구본을 만들고 기존 DB를 그대로 사용해요. 기본 경로는 모든 표의 모든 행을 hash하지 않으며, backup 성공, schema/앱 호환성, 활성 작업 부재, health와 smoke를 검사해요. 사용자 원문 삭제나 DB reset은 업데이트 계약에 포함하지 않아요. 앱의 명시적인 forward migration은 폐기된 내부 메타데이터를 정리할 수 있으므로 [변경 내용](DATA-MIGRATIONS.md)을 확인해요.
 
 `--fresh`는 새 볼륨과 새 DB를 만들고 기존 볼륨을 보존해요. 기존 `<database>.vertex-credentials` 디렉터리와 `<database>.codex/auth.json`만 새 볼륨에 복사해요. Codex 세션·설정과 DB의 모델·연결 reference는 초기화되므로 새 DB에서 다시 설정해야 해요. 환경의 origin, access token과 공개 라우팅은 유지해요.
 

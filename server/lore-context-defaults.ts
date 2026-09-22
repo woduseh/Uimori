@@ -59,16 +59,6 @@ export function updateLoreContextDefaults(store: Store, value: unknown): LoreCon
   });
 }
 
-export function validateLoreContextDefaultsRow(row: Record<string, unknown>): void {
-  if (row.id !== 1) throw new HttpError(400, 'Invalid lore context defaults row');
-  number(row.revision, 'lore context defaults revision', 1);
-  try {
-    validateLoreContextPolicy(JSON.parse(String(row.body)));
-  } catch {
-    throw new HttpError(400, 'Invalid lore context defaults');
-  }
-}
-
 export function loreContextDefaultRoutes(app: FastifyInstance, store: Store) {
   app.get('/api/lore-context-defaults', async (_request, reply) =>
     reply.header('Cache-Control', 'no-store').send(loreContextDefaults(store))

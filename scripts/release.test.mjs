@@ -37,6 +37,8 @@ const commit = 'e'.repeat(40);
 const scripts = Object.fromEntries(
   [
     'quality:full',
+    'quality',
+    'build',
     'verify:ui',
     'verify:browser-smoke',
     'verify:selfhost',
@@ -122,10 +124,11 @@ test('release options reject ambiguity and remote arguments are POSIX quoted', (
     'verify:browser',
   ]);
   assert.deepEqual(requiredChecks('verify:browser-smoke', false, scripts), [
-    'quality:full',
+    'quality',
+    'build',
     'verify:browser-smoke',
   ]);
-  assert.deepEqual(requiredChecks('verify:ui', false, scripts), ['quality:full', 'verify:ui']);
+  assert.deepEqual(requiredChecks('verify:ui', false, scripts), ['quality', 'build', 'verify:ui']);
   for (const name of [
     'verify:visual',
     'verify:unknown',
@@ -160,13 +163,13 @@ test('unchanged release reuses successful evidence and refreshes only a missing 
   const fixture = await checksFixture(t);
   const first = await fixture.run();
   assert.equal(first.status, 'PASS');
-  assert.deepEqual(fixture.calls, ['quality:full', 'verify:browser-smoke']);
+  assert.deepEqual(fixture.calls, ['quality', 'build', 'verify:browser-smoke']);
   const second = await fixture.run();
   assert.equal(second.status, 'PASS');
-  assert.equal(fixture.calls.length, 2);
+  assert.equal(fixture.calls.length, 3);
   fixture.removeBuild();
   assert.equal((await fixture.run()).status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(2), ['build']);
+  assert.deepEqual(fixture.calls.slice(3), ['build']);
 });
 
 test('failed later check preserves earlier passes but cannot be bypassed by a narrower scope', async (t) => {
@@ -200,9 +203,9 @@ test('unstarted optional checks remain recorded without blocking a narrower requ
       /unavailable/
     );
   }
-  assert.equal(fixture.calls.length, 2);
+  assert.equal(fixture.calls.length, 3);
   assert.equal((await fixture.run({ full: true })).status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(2), ['verify:browser']);
+  assert.deepEqual(fixture.calls.slice(3), ['quality:full', 'verify:browser']);
 });
 
 test('an interrupted started check still blocks narrowing until it is rerun', async (t) => {
@@ -217,9 +220,9 @@ test('an interrupted started check still blocks narrowing until it is rerun', as
   const narrower = await fixture.run();
   assert.equal(narrower.status, 'FAIL');
   assert.match(narrower.error, /recorded failures/);
-  assert.equal(fixture.calls.length, 2);
+  assert.equal(fixture.calls.length, 3);
   assert.equal((await fixture.run({ full: true })).status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(2), ['verify:browser']);
+  assert.deepEqual(fixture.calls.slice(3), ['quality:full', 'verify:browser']);
 });
 
 test('failed termination without a close event still produces a bounded timeout result', async () => {
@@ -244,14 +247,14 @@ test('changed source invalidates cache and mid-run source changes remain failure
   await fixture.run();
   fixture.setSource({ ...identity, sourceHash: 'f'.repeat(64) });
   assert.equal((await fixture.run()).status, 'PASS');
-  assert.equal(fixture.calls.length, 4);
+  assert.equal(fixture.calls.length, 6);
   fixture.setSource({ ...identity, sourceHash: '1'.repeat(64) });
   fixture.setFailure(() => {
     fixture.setSource({ ...identity, sourceHash: '2'.repeat(64) });
     return {};
   });
   assert.equal((await fixture.run()).status, 'FAIL');
-  assert.equal(fixture.calls.length, 5);
+  assert.equal(fixture.calls.length, 7);
 });
 
 test('timeout, cancellation, missing logs and swapped commands cannot certify a release', async (t) => {
@@ -259,23 +262,19 @@ test('timeout, cancellation, missing logs and swapped commands cannot certify a 
   const receipt = await fixture.run();
   await verifyReleaseReceipt(receipt, identity, requiredChecks(undefined, false, scripts));
   await assert.rejects(
-    () =>
-      verifyReleaseReceipt(receipt, { ...identity, sourceHash: '9'.repeat(64) }, ['quality:full']),
+    () => verifyReleaseReceipt(receipt, { ...identity, sourceHash: '9'.repeat(64) }, ['quality']),
     /stale/
   );
   await assert.rejects(
     () => verifyReleaseReceipt(receipt, identity, ['verify:browser']),
     /unavailable/
   );
-  const quality = receipt.checks['quality:full'];
-  assert.equal(await cachedCheckPassed({ ...quality, timedOut: true }, 'quality:full'), false);
-  assert.equal(await cachedCheckPassed({ ...quality, cancelled: true }, 'quality:full'), false);
-  assert.equal(
-    await cachedCheckPassed({ ...quality, command: 'verify:ui' }, 'quality:full'),
-    false
-  );
+  const quality = receipt.checks['quality'];
+  assert.equal(await cachedCheckPassed({ ...quality, timedOut: true }, 'quality'), false);
+  assert.equal(await cachedCheckPassed({ ...quality, cancelled: true }, 'quality'), false);
+  assert.equal(await cachedCheckPassed({ ...quality, command: 'verify:ui' }, 'quality'), false);
   await writeFile(quality.log, 'changed log');
-  assert.equal(await cachedCheckPassed(quality, 'quality:full'), false);
+  assert.equal(await cachedCheckPassed(quality, 'quality'), false);
   fixture.setFailure(() => ({ code: 0, timedOut: true }));
   assert.equal((await fixture.run()).status, 'FAIL');
 });

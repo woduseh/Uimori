@@ -415,15 +415,6 @@ export async function createApp(options: AppOptions): Promise<App> {
               !(queued.kind === 'translation' && record(queued.input).judgmentRecovery)
             )
               requireModel(snapshot.profile?.models[queued.kind], queued.kind);
-            const log = (kind: 'inputs' | 'toolEvents', value: unknown) => {
-              const current = store.job(id);
-              if (current.status !== 'running') return;
-              const input = current.input as Record<string, unknown>;
-              const prior = Array.isArray(input[kind]) ? input[kind] : [];
-              store.db
-                .prepare('UPDATE jobs SET input=? WHERE id=?')
-                .run(JSON.stringify({ ...input, [kind]: [...prior, value] }), id);
-            };
             await runAuxiliaryJob(auxiliaryBridge(store, controls, signal), id, instanceId, {
               jev: { credential: jevCredentials.resolve },
               signal,
@@ -456,11 +447,9 @@ export async function createApp(options: AppOptions): Promise<App> {
               },
               onAttemptFinish: (attempt, result) => store.product.finishAttempt(attempt, result),
               onInput: (_id, input) => {
-                log('inputs', input);
                 if (queued.kind !== 'image' && !snapshot.profile?.models[queued.kind])
                   store.product.mockAttempt(chatId, null, id, queued.kind, input);
               },
-              onToolEvent: (_id, event) => log('toolEvents', event),
               onProgress: () => publish(chatId),
               cancellationStatus: 'interrupted',
             });

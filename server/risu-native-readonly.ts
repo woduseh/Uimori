@@ -7,16 +7,9 @@ import { nativeRisuPackages } from './risu-native-context.js';
 import { prepareNativeRisuRun } from './risu-native-run.js';
 import { projectNativeRisuPackage } from './risu-native-projection.js';
 
-/** Historical receipts remain readable, but must not supply evaluated retired input to new work. */
-export const nativeRisuLegacyReceipt = (snapshot: RunSnapshot): boolean =>
-  snapshot.nativeRisuExecution?.version === 1 ||
-  snapshot.nativeRisuPresetProgram?.version === 1 ||
-  snapshot.promptCompilation?.compilerVersion === 'risu-native-prompt-1';
-
 export function nativeRisuSnapshotNeedsRefresh(snapshot: RunSnapshot): boolean {
   const packages = nativeRisuPackages(snapshot);
-  if (nativeRisuLegacyReceipt(snapshot) || (packages.length > 0 && !snapshot.nativeRisuExecution))
-    return true;
+  if (packages.length > 0 && !snapshot.nativeRisuExecution) return true;
   if (packages.some(({ native }) => !isDeepStrictEqual(native, normalizeRisuContentSource(native))))
     return true;
   return Object.values(snapshot.profile?.promptPresets ?? {}).some(({ program }) => {
