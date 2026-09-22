@@ -57,7 +57,8 @@
     "verify:personal": "node scripts/verify-personal.mjs",
     "verify:themes": "node scripts/verify-themes.mjs",
     "verify:translation-guides": "node scripts/verify-translation-guides.mjs",
-    "verify:input-translation": "node scripts/verify-input-translation.mjs"
+    "verify:input-translation": "node scripts/verify-input-translation.mjs",
+    "verify:liquid-gallery": "node scripts/verify-liquid-gallery.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.3",
