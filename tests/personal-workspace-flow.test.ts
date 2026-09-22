@@ -331,7 +331,8 @@ test('library helper can directly edit an unselected resource and rename another
   };
   let round = 0;
   vi.spyOn(transport, 'executeProvider').mockImplementation(async (_connection, request) => {
-    expect(request.stable.tools.some((tool) => tool.name === 'chat.read')).toBe(true);
+    expect(request.stable.tools.some((tool) => tool.name === 'app.tools')).toBe(true);
+    expect(request.stable.tools.some((tool) => tool.name === 'app.call')).toBe(true);
     if (round++ === 0)
       return {
         ...success,
@@ -340,39 +341,48 @@ test('library helper can directly edit an unselected resource and rename another
         toolCalls: [
           {
             id: 'edit',
-            name: 'resource.save',
+            name: 'app.call',
             arguments: {
-              kind: 'content',
-              id: bot.id,
-              expectedRevision: bot.revision,
-              model: nativeDraftTitle(
-                editableResource('content', bot),
-                'Helper changed'
-              ) as unknown as transport.Json,
+              name: 'resource.save',
+              arguments: {
+                kind: 'content',
+                id: bot.id,
+                expectedRevision: bot.revision,
+                model: nativeDraftTitle(
+                  editableResource('content', bot),
+                  'Helper changed'
+                ) as unknown as transport.Json,
+              },
             },
           },
           {
             id: 'rename',
-            name: 'chat.rename',
+            name: 'app.call',
             arguments: {
-              chatId: chat.id,
-              title: 'Changed from library',
-              expectedRevision: chat.titleRevision ?? 0,
-              operationId: 'rename-once',
+              name: 'chat.rename',
+              arguments: {
+                chatId: chat.id,
+                title: 'Changed from library',
+                expectedRevision: chat.titleRevision ?? 0,
+                operationId: 'rename-once',
+              },
             },
           },
-        ],
+        ] as transport.ProviderToolCall[],
       };
     const events = request.input.results as unknown as {
       denied?: boolean;
       name: string;
+      args: { name?: string };
       result: unknown;
     }[];
-    expect(
-      events
-        .filter((event) => event.name === 'resource.save' || event.name === 'chat.rename')
-        .every((event) => !event.denied)
-    ).toBe(true);
+    const mutations = events.filter(
+      (event) =>
+        event.name === 'app.call' &&
+        (event.args.name === 'resource.save' || event.args.name === 'chat.rename')
+    );
+    expect(mutations).toHaveLength(2);
+    expect(mutations.every((event) => !event.denied)).toBe(true);
     return success;
   });
   const conversation = await api(app, '/api/helper/conversations', {

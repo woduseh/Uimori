@@ -49,7 +49,6 @@ export type ModelCapability = Readonly<{
   defaultThinkingLevel?: string;
   defaultReasoningEffort?: string;
   defaultOutputEffort?: string;
-  midSystem?: boolean;
   sources: readonly string[];
 }>;
 const openai = (id: string, name: string, astra = false): ModelCapability => ({
@@ -191,7 +190,6 @@ const capabilities: readonly ModelCapability[] = [
     serviceTiers: ['auto', 'standard_only'],
     cacheModes: ['disabled', 'explicit', 'automatic'],
     cacheTtls: ['5m', '1h'],
-    midSystem: true,
     forcedTools: false,
     sources: [
       'https://platform.claude.com/docs/en/models/fable-5-1/overview',
@@ -212,7 +210,6 @@ const capabilities: readonly ModelCapability[] = [
     serviceTiers: ['auto', 'standard_only'],
     cacheModes: ['disabled', 'explicit', 'automatic'],
     cacheTtls: ['5m', '1h'],
-    midSystem: true,
     sources: [
       'https://platform.claude.com/docs/en/models/opus-5/whats-new-opus-5',
       'https://platform.claude.com/docs/en/api/http/messages/create',

@@ -427,7 +427,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     expect(work.promptCompilation).toEqual(before);
   });
 
-  test('NMR08 unreviewed model aliases do not inherit explicit cache or mid-system capabilities', async () => {
+  test('NMR08 unreviewed model aliases do not inherit explicit cache capabilities', async () => {
     const work = compileSnapshotPrompt(await snapshot()),
       target = work.profile!.models.main!;
     target.connection.protocol = 'openai-responses-v1';

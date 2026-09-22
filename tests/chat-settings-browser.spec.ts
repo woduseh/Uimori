@@ -292,20 +292,32 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   const reading = page.getByRole('dialog', { name: '읽기 설정', exact: true });
   await reading.getByLabel('새 원고의 기본 보기', { exact: true }).selectOption('original');
   await reading.getByLabel('본문 글꼴', { exact: true }).selectOption('serif');
+  const navigatorToggle = reading.getByRole('switch', {
+    name: '채팅 네비게이터 표시',
+    exact: true,
+  });
+  await expect(navigatorToggle).toBeChecked();
+  await navigatorToggle.click();
+  await expect(navigatorToggle).not.toBeChecked();
   await expect(reading.getByLabel('화면 테마', { exact: true })).toHaveCount(0);
   await expect
     .poll(() =>
-      page.evaluate(() =>
-        ['reading-language', 'font'].map((key) => localStorage.getItem(`uimori:${key}`))
-      )
+      page.evaluate(() => [
+        localStorage.getItem('uimori:reading-language'),
+        localStorage.getItem('uimori:font'),
+        localStorage.getItem('uimori:scene-navigator'),
+      ])
     )
-    .toEqual(['original', 'serif']);
+    .toEqual(['original', 'serif', 'false']);
   await page.keyboard.press('Escape');
   await expect(reading).toBeHidden();
   await openChatMenu(page);
   await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
   await expect(reading.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveValue('original');
   await expect(reading.getByLabel('본문 글꼴', { exact: true })).toHaveValue('serif');
+  await expect(
+    reading.getByRole('switch', { name: '채팅 네비게이터 표시', exact: true })
+  ).not.toBeChecked();
   await page.keyboard.press('Escape');
   await expect(reading).toBeHidden();
   await expectUnchanged(request, before, writes, errors);

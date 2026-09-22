@@ -1,4 +1,3 @@
-import { modelCapability } from './model-capabilities.js';
 import type { ProviderProtocol } from './product.js';
 import { validateProviderPrompt, type LogicalMessage } from './risu-prompt.js';
 import type { Json, ProviderRequest } from './transport.js';
@@ -55,7 +54,6 @@ export function planNativeMessages(
   const responses = protocol === 'openai-responses-v1';
   const anthropic = protocol === 'anthropic-messages-v1';
   const vertex = protocol === 'vertex-gemini-v1';
-  const midSystem = anthropic && modelCapability(protocol, request.modelId)?.midSystem === true;
   // Temporary Gemini workaround, including namespaced IDs used by compatible gateways.
   // Revisit per-model wire capabilities when a new Gemini model supports mid-system;
   // remove this fallback for verified models without changing authored prompts.
@@ -78,7 +76,6 @@ export function planNativeMessages(
     if (vertex && role === 'system' && !wasLeading)
       reject('PROMPT_MID_SYSTEM_UNSUPPORTED', message, index);
     if (anthropic && role === 'system' && !wasLeading) {
-      if (!midSystem) reject('PROMPT_MID_SYSTEM_MODEL_UNSUPPORTED', message, index);
       const before = prompt.messages.slice(0, index).findLast((m) => m.role !== 'system');
       const after = prompt.messages.slice(index + 1).find((m) => m.role !== 'system');
       if (before?.role !== 'user' || (after && after.role !== 'assistant'))

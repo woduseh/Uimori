@@ -145,7 +145,7 @@ async function openActivity(container: Locator) {
   return activity;
 }
 
-test('LOADUI06 scene navigator jumps across bounded pages and remains usable in focus and mobile reading', async ({
+test('LOADUI06 scene navigator respects focus and visibility settings across desktop and mobile', async ({
   page,
   request,
 }, info) => {
@@ -193,19 +193,38 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
 
   await openChatMenu(page);
   await page.getByRole('button', { name: '집중 읽기', exact: true }).click();
+  await expect(navigator).toHaveCount(0);
+  await expect(page.locator('.reader-stage')).not.toHaveClass(/has-scenes/);
+  await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();
   await expect(navigator).toBeVisible();
   await expect(currentMark).toBeVisible();
-  await navigator.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
-  await expect(list).toBeVisible();
+
+  await openChatMenu(page);
+  await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
+  const reading = page.getByRole('dialog', { name: '읽기 설정', exact: true });
+  const navigatorToggle = reading.getByRole('switch', {
+    name: '채팅 네비게이터 표시',
+    exact: true,
+  });
+  await expect(navigatorToggle).toBeChecked();
+  await navigatorToggle.click();
+  await expect(navigator).toHaveCount(0);
+  await expect(page.locator('.reader-stage')).not.toHaveClass(/has-scenes/);
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('uimori:scene-navigator')))
+    .toBe('false');
+  await navigatorToggle.click();
+  await expect(navigator).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(list).toHaveCount(0);
-  await expect(
-    navigator.getByRole('button', { name: '장면 목록 열기', exact: true })
-  ).toBeFocused();
-  await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();
 
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   // Compact widths retain previous/current/next navigation; the header also opens the list.
+  await expect(navigator).toBeVisible();
+  await openChatMenu(page);
+  await page.getByRole('button', { name: '집중 읽기', exact: true }).click();
+  await expect(navigator).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '장면 목록 열기', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();
   await expect(navigator).toBeVisible();
   const opener = navigator.getByRole('button', { name: '장면 목록 열기', exact: true });
   await expect(opener).toBeVisible();
