@@ -4,7 +4,7 @@ import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Switch } from './BooleanControls.js';
 import { ModelWorkspaceEditor } from './ModelWorkspaceEditor.js';
 import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
-import { discardActiveEditor } from './editor-workspace-context.js';
+import { discardActiveEditor } from './resource-editor.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActivityDetails } from './ActivityStatus.js';
 import { CodexAgentSettings } from './CodexAgentSettings.js';

@@ -11,7 +11,7 @@ import { createAgentCollaboration, createAgentDefinition } from '../core/agent-c
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import type { ChatProfile, Connection, ModelPreset, PromptPreset } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
-import { deleteLibraryItem, libraryDeletionImpact } from '../server/library-deletion.js';
+import { libraryDeletionImpact } from '../server/library-deletion.js';
 import { buildAgentProviderRequest } from '../server/agent-collaboration.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
@@ -58,7 +58,7 @@ function fixture() {
     protocol: 'fixture-sse-v1',
     endpoint: 'http://127.0.0.1:9/turn',
     enabled: true,
-    credentialEnv: 'Advisor_Test_Key',
+    credentialRef: 'Advisor_Test_Key',
   }) as Connection;
   const body = {
     title: 'Synthetic model',
@@ -199,51 +199,6 @@ test('advisors share explicit instructions and selected options without copying 
   expect(main.stable.tools.some((tool) => tool.name === 'agents.consult')).toBe(true);
 });
 
-test('archive restore keeps frozen advisor evidence while revoking both inherited and separate connections', () => {
-  const f = fixture(),
-    run = f.capture();
-  const archive = f.product.export(),
-    original = JSON.stringify(archive),
-    target = database();
-  expect(target.product.import(archive)).toMatchObject({ restored: true });
-  expect(JSON.stringify(archive)).toBe(original);
-  const restored = target.run(run.id);
-  expect(restored.status).toBe('interrupted');
-  for (const model of Object.values(restored.snapshot.profile!.collaborationModels!)) {
-    expect(model.connection.enabled).toBe(false);
-    expect(model.connection).not.toHaveProperty('credentialEnv');
-  }
-  expect(restored.snapshot.profile!.promptPresets!.main!.program.collaboration).toEqual(
-    f.program.collaboration
-  );
-});
-
-test('forged or missing advisor snapshot models roll archive restoration back', () => {
-  const f = fixture(),
-    run = f.capture(),
-    archive = f.product.export();
-  for (const forge of [
-    (p: Record<string, any>) => {
-      p.collaborationModels.actor.id = 'not-selected';
-    },
-    (p: Record<string, any>) => {
-      delete p.collaborationModels.lore;
-    },
-    (p: Record<string, any>) => {
-      p.collaborationModels.extra = p.collaborationModels.actor;
-    },
-  ]) {
-    const damaged = structuredClone(archive),
-      row = damaged.tables.runs.find((item) => item.id === run.id)!;
-    const snapshot = JSON.parse(row.snapshot);
-    forge(snapshot.profile);
-    row.snapshot = JSON.stringify(snapshot);
-    const target = database();
-    expect(() => target.product.import(damaged)).toThrow();
-    expect(target.chats()).toHaveLength(0);
-  }
-});
-
 test('disabled collaboration and switching the main prompt restore the ordinary execution path', async () => {
   const f = fixture();
   const disabled = { ...f.program, collaboration: { ...f.program.collaboration!, enabled: false } };
@@ -294,31 +249,4 @@ test('model references, prompt role and CAS are checked before storing collabora
     )
   ).toThrow('Revision');
   expect(f.product.get<PromptPreset>('prompt-preset', f.preset.id)).toEqual(f.preset);
-});
-
-test('advisor model deletion preserves its historical Run independently of current library references', () => {
-  const f = fixture(),
-    run = f.capture();
-  f.product.promptPreset(
-    {
-      title: f.preset.title,
-      role: 'main',
-      text: 'The main writes alone now.',
-      expectedRevision: 1,
-    },
-    f.preset.id
-  );
-  expect(libraryDeletionImpact(f.store, 'model', f.advisor.id).canDelete).toBe(true);
-  f.store.startRun(run.id);
-  f.store.completeRun(
-    run.id,
-    'A completed historical scene.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
-  expect(libraryDeletionImpact(f.store, 'model', f.advisor.id).canDelete).toBe(true);
-  deleteLibraryItem(f.store, 'model', f.advisor.id, { expectedRevision: f.advisor.revision });
-  const restored = database();
-  expect(restored.product.import(f.product.export())).toMatchObject({ restored: true });
-  expect(restored.run(run.id).snapshot.profile!.collaborationModels!.actor.id).toBe(f.advisor.id);
 });

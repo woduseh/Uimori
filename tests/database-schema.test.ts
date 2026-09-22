@@ -1,129 +1,81 @@
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, expect, test } from 'vitest';
+import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, isAbsolute, join, relative, resolve } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { join } from 'node:path';
 import { Store } from '../server/store.js';
-import {
-  DATABASE_SCHEMA_VERSION,
-  DatabaseSchemaError,
-  initializeDatabaseSchema,
-} from '../server/database-schema.js';
+import { databaseSchemaVersion, initializeDatabaseSchema } from '../server/database-schema.js';
 
-const owned: { directory: string; databases: (DatabaseSync | Store)[] }[] = [];
+const paths: string[] = [];
 afterEach(() => {
-  vi.restoreAllMocks();
-  for (const item of owned.splice(0).reverse()) {
-    for (const database of item.databases.reverse()) {
-      try {
-        database.close();
-      } catch {
-        // Individual tests close their owned database before reopening it.
-      }
-    }
-    const directory = resolve(item.directory);
-    const within = relative(resolve(tmpdir()), directory);
-    if (
-      isAbsolute(within) ||
-      within.startsWith('..') ||
-      !basename(directory).startsWith('uimori-schema-')
-    )
-      throw new Error('Unsafe schema fixture cleanup');
-    rmSync(directory, { recursive: true, force: true });
-  }
+  for (const path of paths.splice(0)) rmSync(path, { recursive: true, force: true });
 });
-
-function fixture() {
-  const directory = mkdtempSync(join(tmpdir(), 'uimori-schema-'));
-  const item = { directory, databases: [] as (DatabaseSync | Store)[] };
-  owned.push(item);
-  const path = join(directory, 'synthetic.sqlite');
-  return {
-    path,
-    raw: () => {
-      const database = new DatabaseSync(path);
-      item.databases.push(database);
-      return database;
-    },
-    open: () => {
-      const store = new Store(path);
-      item.databases.push(store);
-      return store;
-    },
-  };
+function file() {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-schema-v1-'));
+  paths.push(directory);
+  return join(directory, 'app.sqlite');
 }
 
-test.each([1, 14, 15, 16, 17, 18, 19, 20, 21, 22, DATABASE_SCHEMA_VERSION + 1])(
-  'unsupported schema %i is rejected before modifying any database bytes',
-  (version) => {
-    const f = fixture();
-    const raw = f.raw();
-    raw.exec(
-      `CREATE TABLE private_fixture(value TEXT); INSERT INTO private_fixture VALUES('unchanged'); PRAGMA user_version=${version}`
-    );
-    raw.close();
-    const before = readFileSync(f.path);
-    expect(() => f.open()).toThrow(`Unsupported database schema version ${version}`);
-    expect(readFileSync(f.path)).toEqual(before);
-    // A rejected open also releases the ownership lock.
-    expect(() => f.open()).toThrow(`Unsupported database schema version ${version}`);
+test('personal schema 1 initializes and remains readable after an extra query index', () => {
+  const path = file();
+  const first = new Store(path);
+  expect(databaseSchemaVersion(first.db)).toBe(1);
+  first.db.exec('CREATE INDEX optional_user_index ON sources(created_at)');
+  first.close();
+  const next = new Store(path);
+  expect(databaseSchemaVersion(next.db)).toBe(1);
+  expect(
+    next.db.prepare("SELECT name FROM sqlite_schema WHERE name='optional_user_index'").get()
+  ).toBeTruthy();
+  next.close();
+});
+
+test.each([2, 23, 24])('opening another schema %s leaves its bytes untouched', (version) => {
+  const path = file(),
+    db = new DatabaseSync(path);
+  db.exec(
+    `CREATE TABLE retained(text TEXT); INSERT INTO retained VALUES('original'); PRAGMA user_version=${version}`
+  );
+  db.close();
+  const before = readFileSync(path);
+  expect(() => new Store(path)).toThrow(/transfer user data/);
+  expect(readFileSync(path)).toEqual(before);
+});
+
+test('an old database that also used numeric version 1 is not mistaken for personal v1', () => {
+  const path = file(),
+    db = new DatabaseSync(path);
+  db.exec('CREATE TABLE unrelated(id TEXT); PRAGMA user_version=1');
+  db.close();
+  const before = readFileSync(path);
+  expect(() => new Store(path)).toThrow('DATABASE_FORMAT_MISMATCH:1');
+  expect(readFileSync(path)).toEqual(before);
+});
+
+test('unversioned nonempty databases are not inferred or overwritten', () => {
+  const db = new DatabaseSync(file());
+  try {
+    db.exec('CREATE TABLE another_application(id TEXT)');
+    expect(() => databaseSchemaVersion(db)).toThrow(/not an empty/);
+  } finally {
+    db.close();
   }
-);
-
-test('current schema metadata, tables and indices must remain intact on reopen', () => {
-  const f = fixture();
-  const store = f.open();
-  expect(store.db.prepare('PRAGMA user_version').get()).toEqual({
-    user_version: DATABASE_SCHEMA_VERSION,
-  });
-  expect(
-    store.db.prepare("SELECT name FROM sqlite_schema WHERE name='schema_migrations'").get()
-  ).toBeUndefined();
-  const before = store.db.prepare('SELECT * FROM schema_metadata').all();
-  store.close();
-  const reopened = f.open();
-  expect(reopened.db.prepare('SELECT * FROM schema_metadata').all()).toEqual(before);
-  expect(reopened.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  reopened.close();
-  const raw = f.raw();
-  raw.exec('DROP INDEX one_active_run_per_branch');
-  raw.close();
-  const bytes = readFileSync(f.path);
-  expect(() => f.open()).toThrow('DATABASE_SCHEMA_MISMATCH');
-  expect(readFileSync(f.path)).toEqual(bytes);
 });
 
-test.each([
-  'DROP TABLE schema_metadata',
-  'DELETE FROM schema_metadata',
-  "UPDATE schema_metadata SET baseline='unknown'",
-  "UPDATE schema_metadata SET signature='invalid'",
-  'DROP TABLE maintenance',
-])('current schema refuses structural corruption without repairing it: %s', (sql) => {
-  const f = fixture();
-  const store = f.open();
-  store.db.exec(sql);
-  store.close();
-  const bytes = readFileSync(f.path);
-  expect(() => f.open()).toThrow(DatabaseSchemaError);
-  expect(readFileSync(f.path)).toEqual(bytes);
-});
-
-test('failed fresh initialization rolls back its DDL, version and metadata', () => {
-  const f = fixture();
-  const raw = f.raw();
-  expect(() =>
-    initializeDatabaseSchema(raw, () => {
-      raw.exec('CREATE TABLE partial_fixture(value TEXT)');
-      throw new Error('synthetic failure');
-    })
-  ).toThrow('DATABASE_INITIALIZATION_FAILED');
-  expect(raw.prepare('PRAGMA user_version').get()).toEqual({ user_version: 0 });
-  expect(
-    raw.prepare("SELECT name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'").all()
-  ).toEqual([]);
-  raw.close();
-  expect(f.open().db.prepare('PRAGMA user_version').get()).toEqual({
-    user_version: DATABASE_SCHEMA_VERSION,
-  });
+test('failed fresh initialization rolls back its tables and version', () => {
+  const db = new DatabaseSync(file());
+  try {
+    expect(() =>
+      initializeDatabaseSchema(db, () => {
+        db.exec('CREATE TABLE temporary_data(id TEXT)');
+        throw new Error('synthetic failure');
+      })
+    ).toThrow('synthetic failure');
+    expect(databaseSchemaVersion(db)).toBe(0);
+    expect(
+      db.prepare("SELECT 1 FROM sqlite_schema WHERE name='temporary_data'").get()
+    ).toBeUndefined();
+  } finally {
+    db.close();
+  }
 });

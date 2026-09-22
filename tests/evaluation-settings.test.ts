@@ -41,7 +41,7 @@ const connection = (store: Store, protocol: Connection['protocol'] = 'openai-res
         ? 'https://api.anthropic.com/v1'
         : 'https://api.openai.com/v1',
     enabled: true,
-    credentialEnv: 'My_Gateway_Key',
+    credentialRef: 'My_Gateway_Key',
   }) as Connection;
 const modelBody = (c: Connection, extra: Record<string, unknown> = {}) => ({
   title: 'Synthetic',
@@ -138,27 +138,5 @@ test('only selected model presets persist evaluation tools and captured runs ret
         .get(selected.id)
     ).toEqual({ n: 1 });
     expect(() => store.product.model(modelBody(c, { sol: {} }))).toThrow();
-  }
-});
-
-test('archive preserves current tool settings and rejects malformed tool settings atomically', () => {
-  const source = database(),
-    c = connection(source);
-  const m = source.product.model(
-    modelBody(c, { evaluationTools: defaultEvaluationToolOptions() })
-  ) as ModelPreset;
-  const archive = source.product.export(),
-    target = database();
-  expect(target.product.import(archive)).toMatchObject({ restored: true });
-  expect(target.product.get('model', m.id)).toEqual(m);
-  for (const attack of [{ maximumToolRounds: -1 }, { hiddenRetry: true }]) {
-    const bad = structuredClone(archive);
-    const row = bad.tables.provider_settings.find((row) => row.kind === 'model')!;
-    const body = JSON.parse(row.body);
-    Object.assign(body.evaluationTools, attack);
-    row.body = JSON.stringify(body);
-    const empty = database();
-    expect(() => empty.product.import(bad)).toThrow();
-    expect(empty.product.all('model')).toEqual([]);
   }
 });

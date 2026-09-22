@@ -142,7 +142,7 @@ function observed(overrides: Partial<ContextCompactionHooks> = {}) {
     events: string[] = [];
   const hooks: ContextCompactionHooks = {
     signal: new AbortController().signal,
-    approvedOrigins: [origin],
+
     onInput: () => {},
     onToolEvent: () => {},
     authorize: (connection) => connection,

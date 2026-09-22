@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Content, PromptPreset } from '../core/product.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
-import { isEditDraftSaveRequest, waitForEditDraftSave } from './fixtures/edit-draft-save.js';
+import { isResourceSaveRequest, waitForResourceSave } from './fixtures/resource-save.js';
 import { editLibraryContent, navigationAction } from './ui-navigation.js';
 
 function latch() {
@@ -125,7 +125,7 @@ for (const viewport of viewports) {
       await raw.fill('[{"unfinished":');
       const saves: string[] = [];
       page.on('request', (value) => {
-        if (isEditDraftSaveRequest(value)) saves.push(value.url());
+        if (isResourceSaveRequest(value)) saves.push(value.url());
       });
       await leave();
       await expectDraftLeaveDialogLayout(guard, viewport.width);
@@ -168,7 +168,7 @@ for (const viewport of viewports) {
         await route.continue();
       });
       await leave();
-      const saved = waitForEditDraftSave(page, prompt ? 'prompt-preset' : 'content', original.id);
+      const saved = waitForResourceSave(page, prompt ? 'prompt-preset' : 'content', original.id);
       try {
         await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
         await arrived.promise;
@@ -218,7 +218,7 @@ test('LEAVE multiple prompt roles stay open without saving only the current role
   await title.fill(translationTitle);
   const saves: string[] = [];
   page.on('request', (value) => {
-    if (isEditDraftSaveRequest(value)) saves.push(value.url());
+    if (isResourceSaveRequest(value)) saves.push(value.url());
   });
   await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   const guard = page.getByRole('alertdialog', { name: '미저장 프롬프트 확인', exact: true });

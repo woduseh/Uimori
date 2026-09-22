@@ -1,6 +1,6 @@
 import { readerConversation } from '../core/reader-conversation.js';
 import type { ReaderRun } from '../core/types.js';
-import { readerDetail, readerRuns } from '../server/reader.js';
+import { readerDetail } from '../server/reader.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -135,62 +135,6 @@ test('successful request repeats with current settings in a new branch and idemp
   expect(store.product.branches(chat.id)).toHaveLength(branches + 1);
   expect(() => store.retryRun(first.run.id, 'repeat-once')).toThrow('Idempotency');
 });
-test('active requests cannot repeat and validation failure rolls back both new branch and run', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Retry rollback');
-  const completeRun = complete(store, chat.id, 'Completed source');
-  const before = store.product.export().tables;
-  expect(() =>
-    store.retryRun(completeRun.run.id, 'failed-validation', () => {
-      throw new Error('Rejected current snapshot');
-    })
-  ).toThrow('Rejected current snapshot');
-  expect(store.product.export().tables).toEqual(before);
-  const active = queued(store, chat.id);
-  expect(() => store.retryRun(active.id, 'active-repeat')).toThrow('still active');
-});
-
-test('failed retries replace the visible attempt at the unchanged head and preserve immutable history across restore', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Failed recovery');
-  const original = queued(store, chat.id);
-  store.finishRun(original.id, 'failed', 'Synthetic failure');
-  const frozen = structuredClone(store.run(original.id));
-  const branchCount = store.product.branches(chat.id).length;
-  const retry = store.retryRun(original.id, 'retry-failed').run;
-  expect(retry.snapshot.branchId).toBe(original.snapshot.branchId);
-  expect(store.product.branches(chat.id)).toHaveLength(branchCount);
-  expect(readerRuns(store, chat.id).find((run) => run.id === original.id)?.supersededBy).toBe(
-    retry.id
-  );
-  store.finishRun(retry.id, 'failed', 'Second failure');
-  const edited = store.retryRun(retry.id, 'retry-edited', undefined, 'Edited request').run;
-  store.startRun(edited.id);
-  store.completeRun(
-    edited.id,
-    'Recovered response',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    edited.snapshot.settings
-  );
-  const visible = readerRuns(store, chat.id).filter((run) => !run.supersededBy);
-  expect(visible.map((run) => run.id)).toEqual([edited.id]);
-  expect(visible[0].request).toBe('Edited request');
-  expect(store.run(original.id)).toEqual(frozen);
-  expect(() => store.retryRun(original.id, 'stale-retry')).toThrow('newer attempt');
-  expect(store.retryRun(original.id, 'retry-failed').created).toBe(false);
-  const restored = database();
-  restored.product.import(store.product.export());
-  expect(readerRuns(restored, chat.id).map((run) => [run.id, run.supersededBy])).toEqual(
-    readerRuns(store, chat.id).map((run) => [run.id, run.supersededBy])
-  );
-  // A historical page may omit the successful run; suppression still comes from durable metadata.
-  expect(readerRuns(restored, chat.id, [original.id])[0].supersededBy).toBe(retry.id);
-  expect(
-    readerDetail(restored, chat.id, {})
-      .runs.filter((run) => !run.supersededBy)
-      .map((run) => run.id)
-  ).toContain(edited.id);
-});
 
 test('failed retry after the original head advances branches at its original parent', () => {
   const store = database(),
@@ -203,38 +147,6 @@ test('failed retry after the original head advances branches at its original par
   expect(retry.snapshot.branchId).not.toBe(original.snapshot.branchId);
   expect(retry.snapshot.history).toEqual([]);
   expect(store.chat(chat.id).headRevision).toBe(later.source.id);
-});
-
-test('independent failed turns keep request order through running, repeated failure, success and restore', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Ordered recovery');
-  const a = queued(store, chat.id, 'A');
-  store.finishRun(a.id, 'failed', 'A failed');
-  const b = queued(store, chat.id, 'B');
-  store.finishRun(b.id, 'failed', 'B failed');
-  const retryA = store.retryRun(a.id, 'retry-A').run;
-  const entries = (target: Store) => {
-    const detail = readerDetail(target, chat.id, {});
-    return readerConversation(detail.sources, detail.runs as ReaderRun[]).map((entry) =>
-      entry.kind === 'source' ? entry.source.runId : entry.run.id
-    );
-  };
-  expect(entries(store)).toEqual([retryA.id, b.id]);
-  store.finishRun(retryA.id, 'failed', 'A failed again');
-  expect(entries(store)).toEqual([retryA.id, b.id]);
-  const retryB = store.retryRun(b.id, 'retry-B').run;
-  expect(entries(store)).toEqual([retryA.id, retryB.id]);
-  store.startRun(retryB.id);
-  store.completeRun(
-    retryB.id,
-    'B success',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    retryB.snapshot.settings
-  );
-  expect(entries(store)).toEqual([retryA.id, retryB.id]);
-  const restored = database();
-  restored.product.import(store.product.export());
-  expect(entries(restored)).toEqual([retryA.id, retryB.id]);
 });
 
 test('pending turns follow five-source page boundaries without losing active work or source numbering', () => {

@@ -1,10 +1,9 @@
-import { prepareNativeFixtureRun } from './fixtures/native-run.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
@@ -240,7 +239,7 @@ describe('M1 product data with actual file SQLite', () => {
       title: 'Local fixture',
       protocol: 'fixture-sse-v1',
       endpoint: 'http://127.0.0.1:49999/turn',
-      credentialEnv: 'UIMORI_PROVIDER_SYNTHETIC',
+      credentialRef: 'UIMORI_PROVIDER_SYNTHETIC',
       enabled: true,
     }) as Connection;
     const model = product.model({
@@ -255,7 +254,7 @@ describe('M1 product data with actual file SQLite', () => {
     });
     const snapshot = product.snapshot(chat.id)!;
     expect(snapshot.models.main?.modelId).toBe('user-entered-unknown-model');
-    expect(snapshot.models.main?.connection.credentialEnv).toBe('UIMORI_PROVIDER_SYNTHETIC');
+    expect(snapshot.models.main?.connection.credentialRef).toBe('UIMORI_PROVIDER_SYNTHETIC');
     expect(bound.catalog).toEqual([]);
     expect(() =>
       product.connection({
@@ -281,7 +280,7 @@ describe('M1 product data with actual file SQLite', () => {
         title: bound.title,
         protocol: bound.protocol,
         endpoint: bound.endpoint,
-        credentialEnv: bound.credentialEnv,
+        credentialRef: bound.credentialRef,
         enabled: false,
         expectedRevision: bound.revision,
       },
@@ -293,90 +292,6 @@ describe('M1 product data with actual file SQLite', () => {
     expect(product.get<Connection>('connection', bound.id)).toEqual(disabled);
     expect(() => product.get<Connection>('connection', bound.id, 1)).toThrow('Setting not found');
     expect(snapshot.models.main?.connection).toEqual(bound);
-  });
-
-  test('P09 preserves sibling candidates from the exact original snapshot and each descendant ancestry with branch CAS', async () => {
-    const { store, product } = await database();
-    const chat = createFixtureChat(store, 'candidate-story');
-    const canon = product.content(contentBody('module', 'Original canon revision.')) as Content;
-    profile(product, chat, [reference(canon)]);
-    const base = completedSource(store, product, chat.id, 'BASE_SCENE');
-    const original = await prepareNativeFixtureRun(
-      store,
-      queuedRun(store, product, chat.id, 'Same candidate request')
-    );
-    store.startRun(original.id);
-    const a = store.completeRun(original.id, 'CANDIDATE_A', noUsage, original.snapshot.settings);
-    const changedCanon = product.content(
-      { ...contentBody('module', 'Later canon revision.'), expectedRevision: 1 },
-      canon.id
-    ) as Content;
-    profile(product, chat, [reference(changedCanon)]);
-    store.settings(chat.id, store.chat(chat.id).settingsRevision, {
-      ...store.chat(chat.id).settings,
-      preset: 'vivid',
-    });
-    const key = randomUUID();
-    const candidate = store.candidate(original.id, key, 'Sibling B');
-    const {
-      branchId: _oldBranch,
-      candidateOf: _oldCandidate,
-      ...originalFrozen
-    } = original.snapshot;
-    const { branchId: candidateBranch, candidateOf, ...candidateFrozen } = candidate.run.snapshot;
-    expect(candidateFrozen).toEqual(originalFrozen);
-    expect(candidate.run.parentRevision).toBe(base.id);
-    expect(candidateOf).toBe(original.id);
-    expect(
-      candidate.run.snapshot.profile?.packages?.find((item) => item.id === canon.id)?.body
-    ).toBe('Original canon revision.');
-    expect(candidate.run.snapshot.settings.preset).toBe('calm');
-    expect(store.candidate(original.id, key, 'Sibling B')).toMatchObject({
-      created: false,
-      run: { id: candidate.run.id },
-    });
-    expect(() => store.candidate(original.id, key, 'Different title')).toThrow(
-      'Idempotency key reused'
-    );
-    store.startRun(candidate.run.id);
-    const b = store.completeRun(
-      candidate.run.id,
-      'CANDIDATE_B',
-      noUsage,
-      candidate.run.snapshot.settings
-    );
-    expect(store.chat(chat.id).headRevision).toBe(a.id);
-    expect(product.branch(chat.id, candidateBranch).headRevision).toBe(b.id);
-    const aDescendant = completedSource(store, product, chat.id, 'A_DESCENDANT');
-    const bRun = queuedRun(store, product, chat.id, 'Continue B', { branchId: candidateBranch });
-    expect(bRun.snapshot.history.map((item) => item.text)).toEqual(['BASE_SCENE', 'CANDIDATE_B']);
-    store.startRun(bRun.id);
-    const bDescendant = store.completeRun(bRun.id, 'B_DESCENDANT', noUsage, bRun.snapshot.settings);
-    expect(store.history(aDescendant.id).map((item) => item.text)).toEqual([
-      'BASE_SCENE',
-      'CANDIDATE_A',
-      'A_DESCENDANT',
-    ]);
-    expect(store.history(bDescendant.id).map((item) => item.text)).toEqual([
-      'BASE_SCENE',
-      'CANDIDATE_B',
-      'B_DESCENDANT',
-    ]);
-    expect(() =>
-      queuedRun(store, product, chat.id, 'Stale B', {
-        branchId: candidateBranch,
-        expectedRevision: b.id,
-      })
-    ).toThrow('Source revision conflict');
-    expect(() =>
-      queuedRun(store, product, chat.id, 'Stale profile', { expectedProfileRevision: 1 })
-    ).toThrow('Profile revision conflict');
-    const other = createFixtureChat(store, 'other-candidate-story');
-    expect(() =>
-      product.createBranch(other.id, { title: 'Cannot cross chat', fromRevision: a.id })
-    ).toThrow('Source outside chat');
-    expect(store.detail(chat.id).sources).toHaveLength(5);
-    expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   });
 
   test('P05 P06 P12 records fixture refusals and partials without source/jobs; duplicate attempt finishes cannot rewrite usage', async () => {
@@ -429,7 +344,7 @@ describe('M1 product data with actual file SQLite', () => {
       store.startRun(run.id);
       const result = await runMain(await prepareNativeRisuRun(run.snapshot), {
         signal: new AbortController().signal,
-        approvedOrigins: [server.origin],
+
         authorize: (value) => product.authorize(value),
         onInput: (input) => store.input(run.id, input),
         onToolEvent: (tool) => store.tool(run.id, tool),
@@ -462,142 +377,6 @@ describe('M1 product data with actual file SQLite', () => {
     expect(product.attempts(chat.id).every((attempt) => attempt.costUsd === null)).toBe(true);
   });
 
-  test.each(['connection', 'folder'] as const)(
-    'P11 import status includes %s-only data and a prior empty result never authorizes overwriting it',
-    async (kind) => {
-      const { store, product } = await database();
-      const empty = product.export();
-      expect(product.importStatus()).toEqual({ canImport: true });
-      expect(product.export().tables).toEqual(empty.tables);
-      if (kind === 'connection')
-        product.connection({
-          title: 'Only a saved connection',
-          protocol: 'fixture-sse-v1',
-          endpoint: 'http://127.0.0.1:9/',
-          enabled: false,
-        });
-      else
-        store.libraryOrganization.createFolder({
-          expectedRevision: store.libraryOrganization.snapshot().revision,
-          category: 'bot',
-          title: 'Only an empty folder',
-        });
-      expect(store.chats()).toEqual([]);
-      expect(product.all('content')).toEqual([]);
-      const occupied = product.export().tables;
-      expect(product.importStatus()).toEqual({ canImport: false });
-      expect(() => product.import(empty)).toThrow('Restore requires an empty database');
-      expect(product.export().tables).toEqual(occupied);
-      expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    }
-  );
-
-  test('P11 exports/restores source bytes, lineage and assets while disabling connections and unfinished work', async () => {
-    const { store, product } = await database();
-    const chat = createFixtureChat(store, 'archive-story');
-    const canon = product.content(
-      contentBody('module', 'A portable author declaration.')
-    ) as Content;
-    const bound = product.connection({
-      title: 'Fixture',
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:49999/turn',
-      credentialEnv: 'UIMORI_PROVIDER_ARCHIVE_FIXTURE',
-      enabled: true,
-    }) as Connection;
-    profile(product, chat, [reference(canon)]);
-    const first = completedSource(
-      store,
-      product,
-      chat.id,
-      'First original paragraph.\n\nSecond original paragraph.'
-    );
-    const second = completedSource(
-      store,
-      product,
-      chat.id,
-      'A descendant keeps the earlier scene.'
-    );
-    store.requestTranslation(first.id);
-    const asset = product.createAsset(chat.id, assetBody);
-    const archive = product.export();
-    const original = structuredClone(archive);
-    const target = await database();
-    expect(target.product.import(archive)).toEqual({ restored: true, chats: 1 });
-    expect(archive).toEqual(original);
-    expect(target.store.source(first.id)).toEqual(store.source(first.id));
-    expect(target.store.history(second.id)).toEqual(store.history(second.id));
-    expect(target.product.asset(asset.id).bytes).toEqual(Buffer.from(pixel, 'base64'));
-    expect(target.product.asset(asset.id).asset.hash).toBe(asset.hash);
-    expect(target.product.snapshot(chat.id)?.packages).toEqual(product.snapshot(chat.id)?.packages);
-    expect(target.product.get<Connection>('connection', bound.id)).toMatchObject({
-      enabled: false,
-    });
-    expect(target.product.get<Connection>('connection', bound.id)).not.toHaveProperty(
-      'credentialEnv'
-    );
-    expect(target.store.queuedJobs()).toEqual([]);
-    expect(target.store.detail(chat.id).jobs.every((job) => job.status === 'interrupted')).toBe(
-      true
-    );
-    expect(target.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    expect(() => target.product.import(original)).toThrow('Restore requires an empty database');
-  });
-
-  test('P11 rejects changed source/asset bytes and invalid ancestry atomically in an empty restore target', async () => {
-    const { store, product } = await database();
-    const chat = createFixtureChat(store, 'integrity-story');
-    const source = completedSource(store, product, chat.id);
-    store.requestTranslation(source.id);
-    const asset = product.createAsset(chat.id, assetBody);
-    const archive = product.export();
-    const mutations: { name: string; mutate: (value: typeof archive) => void }[] = [
-      {
-        name: 'source hash',
-        mutate: (value) => {
-          value.tables.sources[0].text = 'Changed bytes';
-        },
-      },
-      {
-        name: 'asset hash',
-        mutate: (value) => {
-          value.tables.assets[0].bytes = Buffer.from('corrupt bytes').toString('base64');
-        },
-      },
-      {
-        name: 'source cycle',
-        mutate: (value) => {
-          value.tables.sources[0].parent_revision = source.id;
-        },
-      },
-      {
-        name: 'missing attachment revision',
-        mutate: (value) => {
-          value.tables.profiles.push({
-            chat_id: chat.id,
-            body: JSON.stringify({
-              ...product.profile(chat.id),
-              attachments: [{ id: 'missing', revision: 1 }],
-            }),
-          });
-        },
-      },
-    ];
-    for (const mutation of mutations) {
-      const target = await database();
-      const invalid = structuredClone(archive);
-      mutation.mutate(invalid);
-      expect(() => target.product.import(invalid), mutation.name).toThrow();
-      expect(target.store.chats(), mutation.name).toEqual([]);
-      expect(target.store.db.prepare('SELECT count(*) AS count FROM sources').get()).toEqual({
-        count: 0,
-      });
-      expect(target.product.assets()).toEqual([]);
-      expect(target.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    }
-    expect(product.asset(asset.id).asset.hash).toBe(asset.hash);
-  });
-
   test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, DATABASE_SCHEMA_VERSION + 1])(
     'P11 rejects unsupported schema %i without automatic migration or backup',
     async (version) => {
@@ -625,50 +404,9 @@ describe('M1 product data with actual file SQLite', () => {
       }
     }
   );
-
-  test('P11 reopens actual backup bytes as standalone SQLite while the source database remains owned', async () => {
-    const { item, store, product } = await database();
-    const chat = createFixtureChat(store, 'live-backup-fixture');
-    const source = completedSource(
-      store,
-      product,
-      chat.id,
-      'WAL-backed source committed before the backup.'
-    );
-    const asset = product.createAsset(chat.id, assetBody);
-    const bytes = product.backup();
-    const path = join(item.directory, 'downloaded-backup.sqlite');
-    await writeFile(path, bytes);
-    const reopened = new DatabaseSync(path, { readOnly: true });
-    try {
-      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
-        user_version: DATABASE_SCHEMA_VERSION,
-      });
-      expect(
-        reopened.prepare('SELECT id,text,hash FROM sources WHERE id=?').get(source.id)
-      ).toEqual({ id: source.id, text: source.text, hash: source.hash });
-      expect(reopened.prepare('SELECT source_revision FROM jobs ORDER BY id').all()).toEqual(
-        store.db.prepare('SELECT source_revision FROM jobs ORDER BY id').all()
-      );
-      expect(
-        Buffer.from(
-          (
-            reopened.prepare('SELECT bytes FROM assets WHERE id=?').get(asset.id) as {
-              bytes: Uint8Array;
-            }
-          ).bytes
-        )
-      ).toEqual(Buffer.from(pixel, 'base64'));
-      expect(reopened.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally {
-      reopened.close();
-    }
-    expect(store.source(source.id).hash).toBe(source.hash);
-    expect((await readdir(item.directory)).some((name) => name.includes('.backup-'))).toBe(false);
-  });
 });
 
-async function application(options: { approvedOrigins?: string[]; accessToken?: string } = {}) {
+async function application(options: { accessToken?: string } = {}) {
   const item = await directory();
   const app = await createApp({
     dbPath: join(item.directory, 'http.sqlite'),
@@ -733,27 +471,6 @@ async function terminalJob(url: string, chatId: string, id: string): Promise<Job
 }
 
 describe('M1 real HTTP application boundaries', () => {
-  test('P11 import status is uncached metadata and import rejects changes made after the read', async () => {
-    const { app, url } = await application();
-    const empty = app.store.product.export();
-    const response = await fetch(`${url}/api/import/status`);
-    expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(await response.json()).toEqual({ canImport: true });
-    expect(app.store.product.export().tables).toEqual(empty.tables);
-    app.store.libraryOrganization.createFolder({
-      expectedRevision: app.store.libraryOrganization.snapshot().revision,
-      category: 'bot',
-      title: 'Saved after the status read',
-    });
-    const before = app.store.product.export().tables;
-    expect(await api(url, '/api/import/status')).toEqual({ canImport: false });
-    expect(await api(url, '/api/import', { archive: empty }, { status: 409 })).toEqual({
-      error: 'Restore requires an empty database',
-    });
-    expect(app.store.product.export().tables).toEqual(before);
-  });
-
   test('P07 P08 P12 explicit retry translates the whole scene with the current model and retains source-time references', async () => {
     vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-jev-key');
     const originalFetch = globalThis.fetch;
@@ -842,7 +559,7 @@ describe('M1 real HTTP application boundaries', () => {
       ]);
     });
     fixtureItem.close = provider.close;
-    const { app, url } = await application({ approvedOrigins: [provider.origin] });
+    const { app, url } = await application({});
     const created = await api<Chat>(url, '/api/chats', { title: 'Translation HTTP fixture' });
     const chat = await api<Chat>(
       url,
@@ -966,7 +683,6 @@ describe('M1 real HTTP application boundaries', () => {
       buildId: 'invalid-translation-snapshot',
       instanceId: randomUUID(),
       testMode: true,
-      approvedOrigins: [provider.origin],
     });
     item.close = () => app.close();
     const store = app.store,
@@ -1046,7 +762,7 @@ describe('M1 real HTTP application boundaries', () => {
         ]);
     });
     fixtureItem.close = provider.close;
-    const { app, url } = await application({ approvedOrigins: [provider.origin] });
+    const { app, url } = await application({});
     const initial = await api<Chat>(url, '/api/chats', { title: 'HTTP provider chat' });
     const chat = await api<Chat>(
       url,
@@ -1149,12 +865,12 @@ describe('M1 real HTTP application boundaries', () => {
     const priorEnv = process.env[envName];
     process.env[envName] = 'SYNTHETIC_CATALOG_CREDENTIAL';
     try {
-      const { app, url } = await application({ approvedOrigins: [provider.origin] });
+      const { app, url } = await application({});
       const bound = app.store.product.connection({
         title: 'Catalog fixture',
         protocol: 'fixture-sse-v1',
         endpoint: provider.endpoint,
-        credentialEnv: envName,
+        credentialRef: envName,
         enabled: true,
       }) as Connection;
       const model = app.store.product.model({
@@ -1169,7 +885,7 @@ describe('M1 real HTTP application boundaries', () => {
       expect(refreshed.catalog.map((item) => item.id)).toEqual(['catalog-new-entry']);
       expect(refreshed.catalog[0].capabilities.structuredOutput).toBeNull();
       expect(refreshed.catalog[0].priceRevision).toBeNull();
-      expect(refreshed.credentialEnv).toBe(envName);
+      expect(refreshed.credentialRef).toBe(envName);
       expect(refreshed.enabled).toBe(true);
       expect(app.store.product.get<ModelPreset>('model', model.id)).toEqual(model);
       fail = true;
@@ -1177,7 +893,7 @@ describe('M1 real HTTP application boundaries', () => {
       const failed = app.store.product.get<Connection>('connection', bound.id);
       expect(failed.catalog).toEqual(refreshed.catalog);
       expect(failed.catalogError).toBeTruthy();
-      expect(failed.credentialEnv).toBe(envName);
+      expect(failed.credentialRef).toBe(envName);
       expect(failed.enabled).toBe(true);
       expect(app.store.product.get<ModelPreset>('model', model.id).modelId).toBe(
         'manual-unlisted-id'

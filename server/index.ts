@@ -18,10 +18,7 @@ const access = {
 };
 const network = networkPolicy(access);
 const address = listenAddress(process.env, network);
-const approvedOrigins = (process.env.UIMORI_PROVIDER_ORIGINS ?? '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
+
 if (
   process.env.UIMORI_CODEX_ENABLED !== undefined &&
   !['0', '1'].includes(process.env.UIMORI_CODEX_ENABLED)
@@ -42,7 +39,7 @@ const app = await createApp({
   instanceId,
   ...access,
   webRoot: resolve('dist/web'),
-  approvedOrigins,
+
   vertexRequestTier: parseVertexRequestTier(process.env.UIMORI_VERTEX_REQUEST_TIER),
   codex,
   maintenance: process.env.UIMORI_MAINTENANCE === '1',

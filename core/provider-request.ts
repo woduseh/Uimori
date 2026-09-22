@@ -17,10 +17,9 @@ import { ProviderContractError } from './provider-errors.js';
 import {
   isVertexFileReference,
   validVertexFileReference,
-  validCredentialEnv,
+  validCredentialRef,
 } from './credential-reference.js';
 import { validateContextBudget } from './context-budget.js';
-import { providerOriginApproval } from './provider-origin-policy.js';
 import { validatePricingSnapshot } from './model-pricing.js';
 import { ProviderOptionsError, validateProviderOptions } from './provider-options.js';
 import type { CatalogModel, ProviderConnection, ProviderRequest } from './transport.js';
@@ -53,18 +52,15 @@ export function numeric(value: unknown, integer = false): number | null {
 }
 export const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 
-/** Only validated official roots or host-approved origins are eligible; content cannot approve one. */
-export function validateConnection(
-  value: unknown,
-  approvedOrigins: readonly string[]
-): ProviderConnection {
-  keys(value, ['id', 'protocol', 'endpoint', 'credentialEnv']);
+/** The owner configures a connection; protocol URL syntax is checked at this boundary. */
+export function validateConnection(value: unknown): ProviderConnection {
+  keys(value, ['id', 'protocol', 'endpoint', 'credentialRef']);
   string(value.id);
   string(value.endpoint, 2048);
   if (!PROVIDER_PROTOCOLS.includes(value.protocol as ProviderProtocol))
     reject('UNSUPPORTED_PROTOCOL');
   if (value.protocol === 'codex-app-server-v1') {
-    if (value.endpoint !== 'codex://local' || value.credentialEnv !== undefined)
+    if (value.endpoint !== 'codex://local' || value.credentialRef !== undefined)
       reject('INVALID_CODEX_CONNECTION');
     return { id: value.id, protocol: value.protocol, endpoint: value.endpoint };
   }
@@ -74,19 +70,7 @@ export function validateConnection(
   } catch {
     return reject('INVALID_ENDPOINT');
   }
-  const approval = providerOriginApproval(
-    value.protocol as ProviderProtocol,
-    value.endpoint,
-    approvedOrigins
-  );
-  if (
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    (!approval && !approvedOrigins.includes(url.origin))
-  )
-    reject('ENDPOINT_NOT_APPROVED');
+  if (url.username || url.password || url.search || url.hash) reject('INVALID_ENDPOINT');
   // An unselected fixture protocol never becomes a generic remote proxy.
   if (
     value.protocol === 'fixture-sse-v1' &&
@@ -102,20 +86,19 @@ export function validateConnection(
         : 'INVALID_PROVIDER_ENDPOINT'
     );
   }
-  if (!approval) reject('ENDPOINT_NOT_APPROVED');
-  if (value.credentialEnv !== undefined && !validCredentialEnv(value.credentialEnv))
+  if (value.credentialRef !== undefined && !validCredentialRef(value.credentialRef))
     reject('INVALID_CREDENTIAL_REFERENCE');
   if (
-    typeof value.credentialEnv === 'string' &&
-    isVertexFileReference(value.credentialEnv) &&
-    (value.protocol !== 'vertex-gemini-v1' || !validVertexFileReference(value.credentialEnv))
+    typeof value.credentialRef === 'string' &&
+    isVertexFileReference(value.credentialRef) &&
+    (value.protocol !== 'vertex-gemini-v1' || !validVertexFileReference(value.credentialRef))
   )
     reject('INVALID_CREDENTIAL_REFERENCE');
   return {
     id: value.id,
     protocol: value.protocol as ProviderProtocol,
     endpoint: url.href,
-    ...(value.credentialEnv ? { credentialEnv: value.credentialEnv as string } : {}),
+    ...(value.credentialRef ? { credentialRef: value.credentialRef as string } : {}),
   };
 }
 
@@ -199,7 +182,8 @@ export function validateRequest(value: unknown): ProviderRequest {
   // An explicitly selected empty prompt is distinct from using the application default.
   if (typeof value.stable.contract !== 'string' || value.stable.contract.length > 200_000)
     reject('INVALID_STRING');
-  if (!Array.isArray(value.stable.tools) || value.stable.tools.length > 32) reject('INVALID_TOOLS');
+  if (!Array.isArray(value.stable.tools) || value.stable.tools.length > 128)
+    reject('INVALID_TOOLS');
   const names = new Set<string>();
   for (const tool of value.stable.tools) {
     keys(tool, ['name', 'description', 'inputSchema']);

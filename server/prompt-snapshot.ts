@@ -1,3 +1,4 @@
+import { applyMessageChanges } from '../core/message-changes.js';
 import { nativePromptSlots } from './native-prompt-slots.js';
 import { nativeExampleMessages } from '../core/risu-native-messages.js';
 import { nativeRisuFieldKey } from '../core/risu-native-execution.js';
@@ -38,16 +39,18 @@ export function captureLogicalHistory(
       : store.sourceOriginal(entry.revision);
     const row = store.db
       .prepare(
-        "SELECT request,json_extract(snapshot,'$.packageStart.mode') AS startMode FROM runs WHERE id=?"
+        "SELECT request,snapshot,json_extract(snapshot,'$.packageStart.mode') AS startMode FROM runs WHERE id=?"
       )
-      .get(source.runId) as { request: string; startMode: string | null } | undefined;
+      .get(source.runId) as
+      | { request: string; snapshot: string; startMode: string | null }
+      | undefined;
     if (!row) throw new Error('PROMPT_HISTORY_REQUEST_MISSING');
     const provenance = {
       sourceRevision: entry.revision,
       sourceHash: entry.contentHash ?? source.hash,
       runId: source.runId,
     };
-    const owner = store.run(source.runId).snapshot;
+    const owner = JSON.parse(row.snapshot) as RunSnapshot;
     const native = owner.nativeRisuAuthored;
     const output = owner.nativeRisuExecution?.output;
     if (native)
@@ -107,7 +110,7 @@ export function captureLogicalHistory(
           ...(native.greeting ? { sourceKind: 'authored-start' as const } : {}),
         }))
       );
-      return accumulated;
+      return applyMessageChanges(accumulated, owner.messageChanges);
     }
     accumulated.push(
       ...(row.startMode === 'authored'
@@ -128,7 +131,7 @@ export function captureLogicalHistory(
         ...(row.startMode === 'authored' ? { sourceKind: 'authored-start' as const } : {}),
       }
     );
-    return accumulated;
+    return applyMessageChanges(accumulated, owner.messageChanges);
   }, []);
 }
 function contextFromPackages(

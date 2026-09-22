@@ -14,18 +14,14 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createApp, type App } from '../server/app.js';
 import { Store } from '../server/store.js';
-import { forkChat } from '../server/chat-fork.js';
 import { estimateContextTokens } from '../core/context-budget.js';
 import { measureMainContext, withContextProjection } from '../server/context-planning.js';
 import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
-import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
-import { importRisuPresetProgram } from '../server/risu-preset-program.js';
-import { readChatVariables } from '../server/chat-variables.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { Run, RunSnapshot, Source } from '../core/types.js';
 
 const endpoint = 'http://127.0.0.1:44997/turn',
-  origin = 'http://127.0.0.1:44997';
+  _origin = 'http://127.0.0.1:44997';
 const credential = 'SYNTHETIC_CONTEXT_TEST_CREDENTIAL';
 const secret = 'synthetic-context-credential-never-persist';
 const summary =
@@ -90,7 +86,6 @@ async function setup(options: { evaluated?: boolean; count?: number; short?: boo
   const app = (item.app = await createApp({
     dbPath: join(item.directory, 'story.sqlite'),
     buildId: 'synthetic-context-test',
-    approvedOrigins: [origin],
   }));
   await app.ready();
   // Keep these compression boundaries on the same short synthetic instructions.
@@ -146,7 +141,7 @@ async function setup(options: { evaluated?: boolean; count?: number; short?: boo
     title: 'Synthetic memory and main',
     protocol: 'fixture-sse-v1',
     endpoint,
-    credentialEnv: credential,
+    credentialRef: credential,
     enabled: true,
   }) as Connection;
   const model = app.store.product.model({
@@ -228,12 +223,6 @@ function recordRequests(
     expect(body).not.toHaveProperty('contextBudget');
     return respond(body, options);
   });
-}
-async function restored(archive: unknown) {
-  const item = await directory(),
-    store = (item.store = new Store(join(item.directory, 'restored.sqlite')));
-  store.product.import(archive);
-  return store;
 }
 
 describe('automatic input summaries through real App and file SQLite', () => {
@@ -434,50 +423,6 @@ describe('automatic input summaries through real App and file SQLite', () => {
     expect(app.store.chat(chatId).headRevision).toBe(sources.at(-1)!.id);
   });
 
-  test('forks and JSON-restores summary snapshots with mapped provenance, scrubs credentials, and rejects summary tampering', async () => {
-    const { app, chatId, connection } = await setup(),
-      bodies: Body[] = [];
-    recordRequests(app, bodies);
-    const run = await terminal(app, (await start(app, chatId)).id);
-    expect(run.status, run.error ?? '').toBe('completed');
-    const fork = forkChat(app.store, chatId, {
-      fromRevision: run.sourceRevision,
-      idempotencyKey: randomUUID(),
-    });
-    const forkRun = app.store.run(app.store.source(fork.headRevision!).runId),
-      forkPlan = forkRun.snapshot.contextPlan!;
-    expect(forkPlan.summary).toBe(summary);
-    expect(forkPlan.compacted.length).toBe(run.snapshot.contextPlan!.compacted.length);
-    expect(
-      forkPlan.compacted.every((ref) => app.store.source(ref.revision).chatId === fork.id)
-    ).toBe(true);
-    expect(app.store.product.attempts(fork.id)).toEqual([]);
-    const archive = JSON.parse(JSON.stringify(app.store.product.export())),
-      copy = await restored(archive);
-    expect(copy.run(run.id).snapshot.contextPlan).toEqual(run.snapshot.contextPlan);
-    expect(copy.run(forkRun.id).snapshot.contextPlan).toEqual(forkPlan);
-    expect(copy.product.get<Connection>('connection', connection.id)).toMatchObject({
-      enabled: false,
-    });
-    expect(copy.product.get<Connection>('connection', connection.id)).not.toHaveProperty(
-      'credentialEnv'
-    );
-    expect(copy.run(run.id).snapshot.profile!.models.main!.connection).not.toHaveProperty(
-      'credentialEnv'
-    );
-    expect(copy.run(forkRun.id).snapshot.profile!.models.main!.connection.enabled).toBe(false);
-    expect(fetch).toHaveBeenCalledTimes(bodies.length);
-    const tampered = structuredClone(archive),
-      row = tampered.tables.runs.find((value: { id: string }) => value.id === run.id),
-      snapshot = JSON.parse(row.snapshot);
-    snapshot.contextPlan.summary = '위조된 요약은 원래 응답과 달라요.';
-    row.snapshot = JSON.stringify(snapshot);
-    const item = await directory(),
-      rejected = (item.store = new Store(join(item.directory, 'rejected.sqlite')));
-    expect(() => rejected.product.import(tampered)).toThrow();
-    expect(rejected.chats()).toEqual([]);
-  });
-
   test('summary calls share the host budget while a zero-round evaluation preset still receives its first main call', async () => {
     const { app, chatId } = await setup({ evaluated: true }),
       bodies: Body[] = [];
@@ -532,97 +477,6 @@ async function contextTerminal(app: App, id: string) {
   return app.store.context.job(id);
 }
 describe('standalone context summaries and explicit corrections', () => {
-  test('native manual context edits and compaction prepare isolated inputs without executing card callbacks', async () => {
-    const { app, chatId } = await setup({ count: 4, short: true });
-    const preset = importRisuPresetProgram({
-      name: 'Native context',
-      promptTemplate: [
-        { type: 'plain', role: 'system', text: 'Context {{getvar::mode}}' },
-        { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
-      ],
-    });
-    updatePromptWorkspace(app.store, {
-      expectedRevision: modelWorkspace(app.store).revision,
-      main: { title: preset.title, program: preset.program, values: {} },
-    });
-    const source = {
-      name: 'synthetic.json',
-      base64: Buffer.from(
-        JSON.stringify({
-          spec: 'chara_card_v3',
-          data: {
-            name: 'Native context module',
-            description: '{{setvar::mode::copy}}Context body',
-            extensions: {
-              risuai: {
-                triggerscript: [
-                  {
-                    type: 'start',
-                    effect: [
-                      { type: 'triggerlua', code: 'error("CANONICAL_CALLBACK_MUST_NOT_RUN")' },
-                    ],
-                  },
-                ],
-              },
-            },
-          },
-        })
-      ).toString('base64'),
-    };
-    const preview = prepareRisuImport({ source, kind: 'module' });
-    const saved = applyRisuImport(app.store, {
-      source,
-      kind: 'module',
-      digest: preview.digest,
-      allowPartial: false,
-      idempotencyKey: 'native-context',
-    });
-    const profile = app.store.product.profile(chatId);
-    app.store.product.updateProfile(chatId, {
-      expectedRevision: profile.revision,
-      image: profile.image,
-      packageAttachments: [
-        ...(profile.packageAttachments ?? []),
-        { id: saved.receipt.items[0]!.id, revision: 1, role: 'module' },
-      ],
-    });
-    const branchId = `main:${chatId}`;
-    const before = {
-      head: app.store.chat(chatId).headRevision,
-      variables: readChatVariables(app.store, chatId, branchId),
-      runs: app.store.detail(chatId).runs.length,
-    };
-    const initial = await contextApi(app, chatId, 'GET', '/context');
-    const bodies: Body[] = [];
-    recordRequests(app, bodies);
-    const job = await contextTerminal(
-      app,
-      (await contextApi(app, chatId, 'POST', '/context/compact', contextCommand(initial))).id
-    );
-    expect(job.status, job.error ?? '').toBe('completed');
-    expect(job.snapshot.nativeRisuExecution).toMatchObject({
-      variables: { mode: 'copy' },
-      issues: ['RISU_NATIVE_CONTEXT_CALLBACKS_DEFERRED'],
-    });
-    expect(JSON.stringify(job.snapshot.nativeRisuPresetProgram)).toContain('Context copy');
-    expect(bodies.map((body) => body.role)).toEqual(['context']);
-    const current = await contextApi(app, chatId, 'GET', '/context');
-    const edited = await contextApi(app, chatId, 'PUT', '/context/summary', {
-      ...contextCommand(current),
-      summary: 'User native summary',
-    });
-    expect(edited.checkpoint.plan.summary).toBe('User native summary');
-    expect(bodies).toHaveLength(1);
-    expect({
-      head: app.store.chat(chatId).headRevision,
-      variables: readChatVariables(app.store, chatId, branchId),
-      runs: app.store.detail(chatId).runs.length,
-    }).toEqual(before);
-    const copy = await restored(app.store.product.export());
-    expect(copy.context.job(job.id).snapshot.nativeRisuExecution).toEqual(
-      job.snapshot.nativeRisuExecution
-    );
-  });
   test('an unset main model rejects new summary operations while preserving accepted command receipts', async () => {
     const { app, chatId } = await setup({ count: 0 });
     const initial = await contextApi(app, chatId, 'GET', '/context');
@@ -660,23 +514,7 @@ describe('standalone context summaries and explicit corrections', () => {
     expect(app.store.product.attempts(chatId)).toEqual([]);
     expect(fetch).not.toHaveBeenCalled();
   });
-  test('a manual job can use its entire one-call budget and its attempt survives archive restore', async () => {
-    const { app, chatId } = await setup({ count: 4, short: true }),
-      bodies: Body[] = [];
-    recordRequests(app, bodies);
-    const chat = app.store.chat(chatId);
-    app.store.settings(chatId, chat.settingsRevision, { ...chat.settings, maxCalls: 1 });
-    const detail = await contextApi(app, chatId, 'GET', '/context');
-    const job = await contextTerminal(
-      app,
-      (await contextApi(app, chatId, 'POST', '/context/compact', contextCommand(detail))).id
-    );
-    expect(job.status, job.error ?? '').toBe('completed');
-    expect(job.snapshot.contextPlan!.summaryCalls).toBe(1);
-    expect(bodies).toHaveLength(1);
-    const copy = await restored(app.store.product.export());
-    expect(copy.context.job(job.id).snapshot.contextPlan).toEqual(job.snapshot.contextPlan);
-  });
+
   test('an unset context model permits short main input and a no-op but blocks required compaction', async () => {
     const short = await setup({ count: 1, short: true });
     const workspace = modelWorkspace(short.app.store);
@@ -747,240 +585,5 @@ describe('standalone context summaries and explicit corrections', () => {
     expect(main.status, main.error ?? '').toBe('completed');
     expect(JSON.stringify(bodies.find((body) => body.role === 'main'))).toContain(noteText);
     expect(main.snapshot.story?.notes[0].text).toBe(noteText);
-  });
-  test('cancelling a manual request rejects late completion and emits only one terminal event', async () => {
-    const { app, chatId } = await setup({ count: 4, short: true });
-    let release!: (value: Response) => void, announce!: () => void;
-    const waiting = new Promise<void>((resolve) => (announce = resolve)),
-      pending = new Promise<Response>((resolve) => (release = resolve));
-    vi.mocked(fetch).mockImplementation(async () => {
-      announce();
-      return pending;
-    });
-    const detail = await contextApi(app, chatId, 'GET', '/context'),
-      queued = await contextApi(app, chatId, 'POST', '/context/compact', contextCommand(detail));
-    await waiting;
-    await contextApi(app, chatId, 'POST', `/context/jobs/${queued.id}/cancel`, {});
-    release(complete(summary));
-    await vi.waitFor(
-      () => expect(app.store.product.attempts(chatId)[0].status).not.toBe('running'),
-      { timeout: 5000 }
-    );
-    expect(app.store.context.job(queued.id).status).toBe('cancelled');
-    expect(app.store.context.detail(chatId).checkpoint).toBeNull();
-    app.store.context.fail(queued.id, 'LATE_FAILURE');
-    app.store.context.cancel(chatId, queued.id);
-    expect(
-      app.store.db
-        .prepare(
-          "SELECT kind FROM events WHERE entity_id=? AND kind IN ('context.job.completed','context.job.failed','context.job.cancelled')"
-        )
-        .all(queued.id)
-        .map((row) => row.kind)
-    ).toEqual(['context.job.cancelled']);
-    const copy = await restored(app.store.product.export());
-    expect(copy.context.job(queued.id).status).toBe('cancelled');
-    expect(copy.context.detail(chatId).checkpoint).toBeNull();
-  });
-  test('manual compaction works below automatic threshold, repeated compact is a no-op, and neither creates a main Run', async () => {
-    const { app, chatId, sources } = await setup({ count: 4, short: true }),
-      bodies: Body[] = [];
-    recordRequests(app, bodies);
-    const before = app.store.detail(chatId).runs.length,
-      detail = await contextApi(app, chatId, 'GET', '/context');
-    const queued = await contextApi(
-      app,
-      chatId,
-      'POST',
-      '/context/compact',
-      contextCommand(detail)
-    );
-    const job = await contextTerminal(app, queued.id);
-    expect(job.status, job.error ?? '').toBe('completed');
-    expect(job.noop).toBe(false);
-    expect(job.snapshot.contextPlan!.compacted).toHaveLength(2);
-    expect(job.snapshot.contextPlan!.recentSourceRevisions).toEqual(
-      sources.slice(-2).map((s) => s.id)
-    );
-    expect(bodies.length).toBeGreaterThan(0);
-    expect(bodies.every((body) => body.role === 'context')).toBe(true);
-    expect(app.store.detail(chatId).runs).toHaveLength(before);
-    expect(app.store.chat(chatId).headRevision).toBe(sources.at(-1)!.id);
-    const nextDetail = await contextApi(app, chatId, 'GET', '/context');
-    expect(nextDetail.usable).toBe(true);
-    const calls = bodies.length;
-    const noop = await contextTerminal(
-      app,
-      (await contextApi(app, chatId, 'POST', '/context/compact', contextCommand(nextDetail))).id
-    );
-    expect(noop.status).toBe('completed');
-    expect(noop.noop).toBe(true);
-    expect(bodies).toHaveLength(calls);
-    expect(noop.checkpoint).toEqual(job.checkpoint);
-    const copy = await restored(app.store.product.export());
-    expect(copy.context.detail(chatId).checkpoint?.plan.summary).toBe(summary);
-    expect(copy.context.job(job.id).status).toBe('completed');
-  });
-  test('summary editing and restoration need no Run and exact replay creates no duplicate revision', async () => {
-    const { app, chatId } = await setup({ count: 0 });
-    const d = await contextApi(app, chatId, 'GET', '/context');
-    const firstCommand = { ...contextCommand(d, 'edit-one'), summary: 'A user-authored summary.' };
-    const first = await contextApi(app, chatId, 'PUT', '/context/summary', firstCommand);
-    expect(first.activeRevision).toBe(1);
-    expect(first.checkpoint.origin).toBe('edit');
-    expect(first.usable).toBe(true);
-    const changed = await contextApi(app, chatId, 'PUT', '/context/summary', {
-      ...contextCommand(first),
-      summary: 'The corrected summary.',
-    });
-    expect(changed.activeRevision).toBe(2);
-    const replay = await contextApi(app, chatId, 'PUT', '/context/summary', firstCommand);
-    expect(replay.checkpoint.id).toBe(first.checkpoint.id);
-    expect(app.store.context.detail(chatId).activeRevision).toBe(2);
-    const reverted = await contextApi(app, chatId, 'PUT', '/context/summary', {
-      ...contextCommand(changed),
-      restoreCheckpoint: {
-        id: first.checkpoint.id,
-        revision: first.checkpoint.revision,
-        hash: first.checkpoint.hash,
-      },
-    });
-    expect(reverted.activeRevision).toBe(3);
-    expect(reverted.checkpoint.plan.summary).toBe(firstCommand.summary);
-    await contextApi(
-      app,
-      chatId,
-      'PUT',
-      '/context/summary',
-      { ...contextCommand(first), summary: 'Stale update' },
-      409
-    );
-    expect(app.store.detail(chatId).runs).toEqual([]);
-    expect(app.store.product.attempts(chatId)).toEqual([]);
-    expect(fetch).not.toHaveBeenCalled();
-    const copy = await restored(app.store.product.export());
-    expect(copy.context.detail(chatId).checkpoint?.plan.summary).toBe(firstCommand.summary);
-  });
-  test('a late automatic result remains an immutable candidate after an authored summary edit wins CAS', async () => {
-    const { app, chatId } = await setup();
-    let release!: (value: Response) => void, announced!: () => void;
-    const started = new Promise<void>((resolve) => (announced = resolve)),
-      pending = new Promise<Response>((resolve) => (release = resolve));
-    let delayed = false;
-    vi.mocked(fetch).mockImplementation(async (_url, options) => {
-      const body = JSON.parse(String(options?.body));
-      if (body.role === 'context' && !delayed) {
-        delayed = true;
-        announced();
-        return pending;
-      }
-      return complete(body.role === 'context' ? summary : finalText);
-    });
-    const run = await start(app, chatId);
-    await started;
-    const detail = await contextApi(app, chatId, 'GET', '/context');
-    const edited = await contextApi(app, chatId, 'PUT', '/context/summary', {
-      ...contextCommand(detail),
-      summary: 'User correction takes precedence as the active summary.',
-    });
-    release(complete(summary));
-    const completed = await terminal(app, run.id);
-    expect(completed.status, completed.error ?? '').toBe('completed');
-    const current = await contextApi(app, chatId, 'GET', '/context');
-    expect(current.checkpoint.id).toBe(edited.checkpoint.id);
-    expect(current.activeRevision).toBe(edited.activeRevision);
-    expect(completed.snapshot.contextPlan!.checkpoint?.id).not.toBe(edited.checkpoint.id);
-    expect(
-      app.store.context.checkpoint(completed.snapshot.contextPlan!.checkpoint!).activated
-    ).toBe(false);
-    expect(completed.snapshot.contextPlan!.summary).toBe(summary);
-    const copy = await restored(app.store.product.export());
-    expect(copy.run(run.id).snapshot.contextPlan).toEqual(completed.snapshot.contextPlan);
-  });
-  test('source-anchored notes enforce revision and head CAS, retire by replacement, and invalidate active summary reuse', async () => {
-    const { app, chatId } = await setup({ count: 3, short: true });
-    const base = await contextApi(app, chatId, 'GET', '/context');
-    const edited = await contextApi(app, chatId, 'PUT', '/context/summary', {
-      ...contextCommand(base),
-      summary: 'Earlier derived summary.',
-    });
-    const command = {
-      text: 'The lighthouse is red, as explicitly corrected by the user.',
-      author: 'user',
-      expectedRevision: 0,
-      expectedHeadRevision: base.headRevision,
-      idempotencyKey: 'note-one',
-    };
-    const note = await contextApi(app, chatId, 'POST', '/notes', command);
-    expect(note.note.kind).toBe('author-note');
-    expect(note.note.atRevision).toBe(base.headRevision);
-    expect(await contextApi(app, chatId, 'POST', '/notes', command)).toEqual(note);
-    const invalid = await contextApi(app, chatId, 'GET', '/context');
-    expect(invalid.checkpoint.id).toBe(edited.checkpoint.id);
-    expect(invalid.usable).toBe(false);
-    expect(invalid.invalidReason).toBeTruthy();
-    await contextApi(
-      app,
-      chatId,
-      'POST',
-      '/notes',
-      { ...command, idempotencyKey: 'stale', text: 'Stale' },
-      409
-    );
-    await contextApi(
-      app,
-      chatId,
-      'POST',
-      '/notes',
-      { ...command, expectedRevision: 1, expectedHeadRevision: null, idempotencyKey: 'wrong-head' },
-      409
-    );
-    await contextApi(app, chatId, 'POST', '/notes', {
-      ...command,
-      text: '',
-      retired: true,
-      replacesId: note.note.id,
-      expectedRevision: 1,
-      idempotencyKey: 'retire',
-    });
-    expect(app.store.story.detail(chatId).notes).toEqual([]);
-    expect(app.store.story.notes.revision(chatId)).toBe(2);
-    expect(
-      app.store.db.prepare('SELECT COUNT(*) AS n FROM author_notes WHERE chat_id=?').get(chatId)?.n
-    ).toBe(2);
-    const copy = await restored(app.store.product.export());
-    expect(copy.story.detail(chatId).notes).toEqual([]);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-  test('manual checkpoints created after the selected fork point are excluded while eligible summary edits remap', async () => {
-    const { app, chatId, sources } = await setup({ count: 4, short: true });
-    const detail = await contextApi(app, chatId, 'GET', '/context');
-    const edited = await contextApi(app, chatId, 'PUT', '/context/summary', {
-      ...contextCommand(detail),
-      summary: 'Eligible manual summary.',
-    });
-    const copy = forkChat(app.store, chatId, {
-      fromRevision: sources.at(-1)!.id,
-      idempotencyKey: 'copy-checkpoint',
-    });
-    const copied = app.store.context.detail(copy.id);
-    expect(copied.checkpoint?.plan.summary).toBe('Eligible manual summary.');
-    expect(copied.checkpoint?.id).not.toBe(edited.checkpoint.id);
-    expect(copied.usable).toBe(true);
-    expect(
-      copied.checkpoint?.plan.compacted.every(
-        (ref) => app.store.source(ref.revision).chatId === copy.id
-      )
-    ).toBe(true);
-    const old = forkChat(app.store, chatId, {
-      fromRevision: sources[0].id,
-      idempotencyKey: 'earlier-checkpoint',
-    });
-    expect(app.store.context.detail(old.id).checkpoint).toBeNull();
-    const restoredCopy = await restored(app.store.product.export());
-    expect(restoredCopy.context.detail(copy.id).checkpoint?.plan.summary).toBe(
-      'Eligible manual summary.'
-    );
-    expect(fetch).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 import { nativeContent } from './fixtures/native-content.js';
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
-import { isEditDraftSaveRequest, waitForContentDraftSave } from './fixtures/edit-draft-save.js';
+import { isResourceSaveRequest, waitForContentSave } from './fixtures/resource-save.js';
 import { createLibraryContent } from './ui-navigation.js';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Content } from '../core/product.js';
@@ -86,7 +86,7 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
       body = '친절한 안내자예요. 내가 고른 길을 존중하며 짧게 대답해요.';
     await panel.getByLabel('Risu 자료 이름', { exact: true }).fill(createdTitle);
     await panel.getByLabel('캐릭터 설정', { exact: true }).fill(body);
-    const savedResponse = waitForContentDraftSave(page);
+    const savedResponse = waitForContentSave(page);
     await panel.getByRole('button', { name: '자료 등록', exact: true }).click();
     const saved = await savedResponse;
     expect(saved.text).toBe(body);
@@ -143,7 +143,7 @@ test('LUSE03 empty persona and module folders explain their roles and offer the 
   let contentWrites = 0;
   page.on('request', (item) => {
     if (
-      isEditDraftSaveRequest(item) ||
+      isResourceSaveRequest(item) ||
       (['POST', 'PUT'].includes(item.method()) &&
         /^\/api\/content(?:\/[^/]+)?$/u.test(new URL(item.url()).pathname))
     )

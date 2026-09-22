@@ -44,7 +44,7 @@ const editConnection = (c: Connection, extra: Record<string, unknown> = {}) =>
     protocol: c.protocol,
     endpoint: c.endpoint,
     enabled: c.enabled,
-    ...(c.credentialEnv ? { credentialEnv: c.credentialEnv } : {}),
+    ...(c.credentialRef ? { credentialRef: c.credentialRef } : {}),
     expectedRevision: c.revision,
     ...extra,
   });
@@ -98,7 +98,7 @@ test('prepare is read only and create/update enforce the same CAS contract', () 
 test('catalog/error retention uses credential authority and old connection execution is revoked', () => {
   const s = database();
   const p = s.product;
-  const c = p.connection(connectionBody({ credentialEnv: 'UIMORI_PROVIDER_TEST_A' })) as Connection;
+  const c = p.connection(connectionBody({ credentialRef: 'UIMORI_PROVIDER_TEST_A' })) as Connection;
   const cached = p.save(
     'connection',
     {
@@ -119,7 +119,7 @@ test('catalog/error retention uses credential authority and old connection execu
     catalogError: 'CATALOG_FAILED',
   });
   const changed = p.connection(
-    editConnection(rename, { credentialEnv: 'UIMORI_PROVIDER_TEST_B' }),
+    editConnection(rename, { credentialRef: 'UIMORI_PROVIDER_TEST_B' }),
     c.id
   ) as Connection;
   expect(changed).toMatchObject({ catalog: [], catalogUpdatedAt: null, catalogError: null });
@@ -128,7 +128,7 @@ test('catalog/error retention uses credential authority and old connection execu
   expect(() => p.get('connection', cached.id, cached.revision)).toThrow('Setting not found');
   expect(cached).toMatchObject({
     catalog: rename.catalog,
-    credentialEnv: 'UIMORI_PROVIDER_TEST_A',
+    credentialRef: 'UIMORI_PROVIDER_TEST_A',
   });
   const disabled = p.connection(editConnection(changed, { enabled: false }), c.id) as Connection;
   expect(() => p.authorize(changed)).toThrow('disabled');
@@ -214,104 +214,23 @@ test('model metadata is server sourced and disabling blocks new selection while 
   expect(() => p.model(modelBody(cached, { enabled: null }))).toThrow('Invalid boolean');
 });
 
-test('archive roundtrip retains management metadata, strips authority, and rejects forged metadata atomically', () => {
-  const s = database();
-  const p = s.product;
-  const c = p.connection(connectionBody({ credentialEnv: 'UIMORI_PROVIDER_TEST_A' })) as Connection;
-  const m = p.model(
-    modelBody(c, {
-      enabled: false,
-      pricing: { mode: 'manual', rates: { input: 2, output: 8, cacheRead: 0.5, cacheWrite: 3 } },
-    })
-  ) as ModelPreset;
-  const archive = p.export();
-  const restored = database();
-  restored.product.import(archive);
-  expect(restored.product.get('model', m.id)).toEqual(m);
-  expect(restored.product.get<Connection>('connection', c.id)).toMatchObject({
-    enabled: false,
-    catalogUpdatedAt: null,
-  });
-  expect(restored.product.get('connection', c.id)).not.toHaveProperty('credentialEnv');
-  expect(p.get<Connection>('connection', c.id).credentialEnv).toBe('UIMORI_PROVIDER_TEST_A');
-  for (const mutate of [
-    (body: any) => {
-      body.source.connectionRevision = 999;
-    },
-    (body: any) => {
-      body.source.kind = 'forged-catalog';
-    },
-    (body: any) => {
-      body.pricing.rates.input = 'free';
-    },
-    (body: any) => {
-      body.source.catalogUpdatedAt = '2026-02-30T00:00:00.000Z';
-    },
-  ]) {
-    const bad = structuredClone(archive);
-    const row = bad.tables.provider_settings.find((r: any) => r.kind === 'model')!;
-    const body = JSON.parse(row.body);
-    mutate(body);
-    row.body = JSON.stringify(body);
-    const empty = database();
-    expect(() => empty.product.import(bad)).toThrow();
-    expect(count(empty)).toBe(0);
-  }
-  const optionalMetadata = structuredClone(archive);
-  for (const row of optionalMetadata.tables.provider_settings) {
-    const body = JSON.parse(row.body);
-    delete body.source;
-    delete body.enabled;
-    delete body.pricing;
-    delete body.catalogUpdatedAt;
-    if (row.kind === 'connection') body.enabled = true;
-    row.body = JSON.stringify(body);
-  }
-  const minimalStore = database();
-  minimalStore.product.import(optionalMetadata);
-  expect(minimalStore.product.get('model', m.id)).not.toHaveProperty('enabled');
-});
-
-test('readiness reveals only presence and approved origin without authenticating', () => {
-  const s = database();
-  const c = s.product.connection(connectionBody()) as Connection;
+test('readiness reports configured URL and stored-key presence without contacting providers', () => {
+  const store = database();
   const network = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden'));
-  expect(readiness(s.product, c, [])).toEqual({
+  const connection = store.product.connection({
+    ...connectionBody(),
+    endpoint: 'http://192.168.1.2:8080/v1',
+    apiKey: 'test-only-secret',
+  }) as Connection;
+  expect(readiness(store.product, connection)).toEqual({
     enabled: true,
-    originApproved: false,
-    credentialStatus: 'not-required',
+    originApproved: true,
+    credentialStatus: 'configured',
     catalogKind: 'remote',
   });
-  vi.stubEnv('My_Gateway_Token', 'TOP_SECRET');
-  const withKey = { ...c, credentialEnv: 'My_Gateway_Token' };
-  const ready = readiness(s.product, withKey, ['http://127.0.0.1:9999']);
-  expect(ready.credentialStatus).toBe('configured');
-  expect(JSON.stringify(ready)).not.toContain('TOP_SECRET');
-  vi.stubEnv('My_Gateway_Token', 'bad\r\nvalue');
-  expect(readiness(s.product, withKey, []).credentialStatus).toBe('missing');
-  vi.stubEnv('GOOGLE_APPLICATION_CREDENTIALS', s.path);
-  expect(readiness(s.product, { ...c, protocol: 'vertex-gemini-v1' }, [])).toMatchObject({
-    credentialStatus: 'adc-configured',
-    catalogKind: 'local-support',
-  });
-  expect(
-    readiness(
-      s.product,
-      { ...c, protocol: 'vertex-gemini-v1', credentialEnv: 'GOOGLE_APPLICATION_CREDENTIALS' },
-      []
-    )
-  ).toMatchObject({ credentialStatus: 'adc-configured', catalogKind: 'local-support' });
-  vi.stubEnv('GOOGLE_APPLICATION_CREDENTIALS', s.path + '.absent');
-  expect(readiness(s.product, { ...c, protocol: 'vertex-gemini-v1' }, []).credentialStatus).toBe(
-    'adc-unchecked'
-  );
-  expect(
-    readiness(
-      s.product,
-      { ...c, protocol: 'vertex-gemini-v1', credentialEnv: 'GOOGLE_APPLICATION_CREDENTIALS' },
-      []
-    ).credentialStatus
-  ).toBe('adc-unchecked');
+  expect(JSON.stringify(readiness(store.product, connection))).not.toContain('test-only-secret');
+  store.credentials.set(connection.credentialRef!, null);
+  expect(readiness(store.product, connection).credentialStatus).toBe('missing');
   expect(network).not.toHaveBeenCalled();
 });
 

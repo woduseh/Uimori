@@ -1,3 +1,4 @@
+import { ImageMetadataFields } from './ImageMetadataFields.js';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { RisuContent } from '../core/risu-content.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
@@ -111,7 +112,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
   const images = value.images ?? [],
     needle = query.trim().toLocaleLowerCase();
   const found = images.filter((image) =>
-    `${image.title} ${nativeImageNames(value, image.id).join(' ')}`
+    `${image.title} ${image.description} ${nativeImageNames(value, image.id).join(' ')}`
       .toLocaleLowerCase()
       .includes(needle)
   );
@@ -152,7 +153,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
               void filesChosen(files);
             }}
           />
-          <small>PNG · JPEG · WebP · AVIF · GIF, 파일마다 2MB 이하</small>
+          <small>PNG · JPEG · WebP · AVIF · GIF, 최대 64MiB · 자동 WebP 변환</small>
         </label>
       </div>
       {missing > 0 && (
@@ -182,7 +183,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
                 onClick={() => setSelected(image.id)}
               >
                 <img src={`/api/package-image-blobs/${image.blobHash}`} alt="" loading="lazy" />
-                <span>{nativeImageNames(value, image.id)[0] ?? image.title}</span>
+                <span>{image.title}</span>
                 {image.id === value.portraitImageId && <small>대표 이미지</small>}
               </button>
             ))}
@@ -226,9 +227,21 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
             <img
               className="native-assets-preview"
               src={`/api/package-image-blobs/${active.blobHash}`}
-              alt={names[0] ?? active.title}
+              alt={active.title}
             />
-            <strong>{names.join(', ') || active.title}</strong>
+            <ImageMetadataFields
+              image={active}
+              onChange={(next) =>
+                change({
+                  ...value,
+                  images: images.map((image) => (image.id === next.id ? next : image)),
+                })
+              }
+            />
+            <details>
+              <summary>스크립트 참조 이름</summary>
+              <code>{names.join(', ') || active.id}</code>
+            </details>
             <p className="muted">
               {names.length
                 ? '에셋 이름은 원문의 연결에 사용돼요. 파일을 교체해도 이름과 연결을 유지해요.'

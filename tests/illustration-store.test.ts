@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test } from 'vitest';
-import { createHash, randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { HttpError } from '../server/request-validation.js';
@@ -13,7 +12,6 @@ import {
   illustrationJob,
   illustrationReferences,
   illustrationSettings,
-  illustrationsForChat,
   illustrationsForSources,
   illustrationSlots,
   loadIllustrationReference,
@@ -25,8 +23,6 @@ import {
   updateIllustrationReferences,
   updateIllustrationSettings,
 } from '../server/illustrations.js';
-import { forkChat } from '../server/chat-fork.js';
-import { chatDeletionImpact, deleteChat } from '../server/chat-deletion.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import {
   chatWithSource,
@@ -81,7 +77,7 @@ function codexModel(store: Store) {
   }) as ModelPreset;
 }
 
-async function executedComfyIllustration() {
+async function _executedComfyIllustration() {
   const store = databases.create();
   const { chat, source } = chatWithSource(store);
   const comfy = await comfyUIFixture({ authorization: 'Bearer synthetic' });
@@ -125,7 +121,7 @@ async function executedComfyIllustration() {
   const job = reserveIllustration(store, source, 'manual');
   const result = await runIllustrationJob(store, job.id, 'archive-worker', {
     signal: new AbortController().signal,
-    approvedOrigins: [provider.origin],
+
     resolveCredential: () => 'Bearer synthetic',
     resolveComfyCredential: () => 'Bearer synthetic',
     authorize: (value) => store.product.authorize(value),
@@ -139,97 +135,6 @@ async function executedComfyIllustration() {
 }
 
 describe('integrated illustration audit regressions', () => {
-  test('real provider attempts round-trip with a fork without duplicate ownership or replaying remote work', async () => {
-    const { store, chat, source, job } = await executedComfyIllustration();
-    const forked = forkChat(store, chat.id, {
-      fromRevision: source.id,
-      idempotencyKey: randomUUID(),
-    });
-    const copied = illustrationsForChat(store, forked.id)[0];
-    expect(copied.diagnostic?.attempts).toEqual([]);
-    const archive = store.product.export();
-    const restored = databases.create();
-    expect(() => restored.product.import(archive)).not.toThrow();
-    const attemptId = job.diagnostic!.attempts[0];
-    expect(
-      restored.db.prepare('SELECT role,status,cost_usd FROM attempts WHERE id=?').get(attemptId)
-    ).toMatchObject({ role: 'illustration', status: 'completed', cost_usd: null });
-    expect(illustrationsForChat(restored, chat.id)[0].images[0].hash).toBe(
-      illustrationsForChat(store, chat.id)[0].images[0].hash
-    );
-    expect(illustrationsForChat(restored, forked.id)[0].status).toBe('completed');
-    removeIllustration(restored, job.id);
-    expect(
-      restored.db.prepare('SELECT id FROM attempts WHERE id=?').get(attemptId)
-    ).toBeUndefined();
-    const again = databases.create();
-    expect(() => again.product.import(restored.product.export())).not.toThrow();
-  });
-
-  test('a real illustration attempt can be restored even without a fork', async () => {
-    const { store } = await executedComfyIllustration();
-    expect(() => databases.create().product.import(store.product.export())).not.toThrow();
-  });
-
-  test('restore disables global automation and removes ComfyUI authentication and frozen remote authority', () => {
-    const store = databases.create();
-    const { source } = chatWithSource(store);
-    const model = codexModel(store);
-    const { revision, ...body } = fixtureSettings({
-      generator: 'comfyui',
-      automatic: true,
-      comfyui: {
-        baseUrl: 'http://comfy.example.test:8188',
-        authorizationEnv: 'PRODUCTION_AUTH',
-        workflow: FIXTURE_WORKFLOW,
-        promptModel: { id: model.id },
-      },
-    });
-    updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
-    const job = reserveIllustration(store, source, 'manual');
-    const restored = databases.create();
-    restored.product.import(store.product.export());
-    expect(illustrationSettings(restored)).toMatchObject({
-      generator: 'none',
-      automatic: false,
-      comfyui: { authorizationEnv: '' },
-    });
-    expect(illustrationJob(restored, job.id).input.comfyui).toMatchObject({
-      authorizationEnv: '',
-      disabled: true,
-    });
-  });
-
-  test.each(['mime', 'oversize', 'chat'] as const)(
-    'restore rejects illustration image %s tampering atomically',
-    (fault) => {
-      const store = databases.create();
-      const { source } = chatWithSource(store);
-      complete(
-        store,
-        reserveIllustration(store, source, 'manual', {
-          testMode: true,
-          settings: fixtureSettings(),
-        }).id
-      );
-      const other = chatWithSource(store, 'Other source');
-      const archive = store.product.export();
-      const row = archive.tables.illustration_images[0];
-      if (fault === 'mime') row.mime = 'image/jpeg';
-      if (fault === 'chat') row.chat_id = other.chat.id;
-      if (fault === 'oversize') {
-        const bytes = Buffer.concat([PNG, Buffer.alloc(16_000_001)]);
-        row.bytes = bytes.toString('base64');
-        row.hash = createHash('sha256').update(bytes).digest('hex');
-      }
-      const restored = databases.create();
-      expect(() => restored.product.import(archive)).toThrow();
-      expect(restored.db.prepare('SELECT COUNT(*) AS n FROM illustration_images').get()).toEqual({
-        n: 0,
-      });
-    }
-  );
-
   test('retry and reconcile cannot bypass active work or the current per-source limit', () => {
     const store = databases.create();
     const { source } = chatWithSource(store);
@@ -683,78 +588,5 @@ describe('illustration storage on the current schema', () => {
       }
     );
     expect(withoutReferences.input.codex?.references).toEqual([]);
-  });
-  test('forks copy completed illustrations of the copied text, deletion removes rows and archives round-trip', () => {
-    const store = databases.create();
-    const { chat, source } = chatWithSource(store);
-    const settings = fixtureSettings({ maxPerSource: 3 });
-    const done = complete(
-      store,
-      reserveIllustration(store, source, 'manual', { settings, testMode: true }).id
-    );
-    const pending = reserveIllustration(store, source, 'manual', { settings, testMode: true });
-    const forked = forkChat(store, chat.id, {
-      fromRevision: source.id,
-      idempotencyKey: randomUUID(),
-    });
-    const copied = illustrationsForChat(store, forked.id);
-    expect(copied).toHaveLength(1);
-    expect(copied[0]).toMatchObject({ status: 'completed', origin: 'manual', chatId: forked.id });
-    expect(copied[0].id).not.toBe(done.id);
-    expect(copied[0].images[0].hash).toBe(
-      illustrationsForChat(store, chat.id).find((item) => item.id === done.id)!.images[0].hash
-    );
-    const bytes = store.db
-      .prepare('SELECT bytes FROM illustration_images WHERE id=?')
-      .get(copied[0].images[0].id) as { bytes: Uint8Array };
-    expect(Buffer.from(bytes.bytes).equals(PNG)).toBe(true);
-    expect(
-      http(() => deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request)).statusCode
-    ).toBe(409);
-    cancelIllustration(store, pending.id);
-    deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request);
-    expect(
-      store.db.prepare('SELECT COUNT(*) AS n FROM illustration_jobs WHERE chat_id=?').get(chat.id)
-    ).toEqual({ n: 0 });
-    expect(
-      store.db.prepare('SELECT COUNT(*) AS n FROM illustration_images WHERE chat_id=?').get(chat.id)
-    ).toEqual({ n: 0 });
-    expect(illustrationsForChat(store, forked.id)).toHaveLength(1);
-    const codex = codexModel(store);
-    const { revision, ...body } = fixtureSettings({
-      generator: 'codex',
-      codex: { model: { id: codex.id }, useReferences: true },
-    });
-    updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
-    const frozen = reserveIllustration(
-      store,
-      completedSource(store, forked.id, 'Frozen scene.'),
-      'manual'
-    );
-    const archive = store.product.export();
-    expect(Object.keys(archive.tables)).toEqual(
-      expect.arrayContaining([
-        'illustration_settings',
-        'illustration_jobs',
-        'illustration_images',
-        'illustration_references',
-      ])
-    );
-    const restored = databases.create();
-    restored.product.import(archive);
-    expect(illustrationSettings(restored)).toEqual({
-      ...illustrationSettings(store),
-      generator: 'none',
-      automatic: false,
-      comfyui: { ...illustrationSettings(store).comfyui, authorizationEnv: '' },
-    });
-    const restoredJobs = illustrationsForChat(restored, forked.id);
-    expect(restoredJobs.map((item) => item.status).sort()).toEqual(['completed', 'interrupted']);
-    expect(restoredJobs.find((item) => item.status === 'completed')?.images[0].hash).toBe(
-      copied[0].images[0].hash
-    );
-    const restoredFrozen = illustrationJob(restored, frozen.id);
-    expect(restoredFrozen.input.codex?.model.connection.enabled).toBe(false);
-    expect(restoredFrozen.input.codex?.model.connection).not.toHaveProperty('credentialEnv');
   });
 });

@@ -28,7 +28,7 @@ type Target = { model: ModelPreset; connection: Connection; request: ProviderReq
 type TestRow = { id: string; model_id: string; model_revision: number; body: string };
 type TestOptions = Pick<
   ProviderExecutionOptions,
-  'approvedOrigins' | 'resolveCredential' | 'executeCodex' | 'vertexRequestTier'
+  'resolveCredential' | 'executeCodex' | 'vertexRequestTier'
 > & {
   signal: AbortSignal;
   track: (work: Promise<void>) => void;
@@ -228,7 +228,6 @@ export function providerConnectionTestRoutes(
             try {
               authorize();
               result = await executeProvider(transportConnection(connection), input, {
-                approvedOrigins: options.approvedOrigins,
                 signal,
                 timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
                 vertexRequestTier: options.vertexRequestTier,

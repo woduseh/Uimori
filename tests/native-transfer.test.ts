@@ -3,13 +3,11 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { createHash } from 'node:crypto';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import {
   applyNativeTransfer,
   exportNativeTransfer,
-  nativeTransferOriginal,
   nativeTransferRoutes,
   prepareNativeTransfer,
 } from '../server/native-transfer.js';
@@ -94,7 +92,7 @@ function model(store: Store): ModelPreset {
     title: 'Synthetic private connection',
     protocol: 'fixture-sse-v1',
     endpoint: 'http://127.0.0.1:49999/turn',
-    credentialEnv: 'NATIVE_TRANSFER_PRIVATE_CREDENTIAL',
+    credentialRef: 'NATIVE_TRANSFER_PRIVATE_CREDENTIAL',
     enabled: true,
   });
   return store.product.model({
@@ -192,77 +190,12 @@ function request(file: NativeTransferFile, key = 'synthetic-import') {
   };
 }
 function snapshot(store: Store) {
-  return store.product.export().tables;
-}
-
-test('NATIVE14 opaque source files retain their bytes and entry ownership through re-export and archive', () => {
-  const f = sourceFixture(),
-    target = database().store;
-  const entry = f.file.contents.find((item) => item.source.id === f.persona.id)!;
-  const bytes = Buffer.from([0, 255, 13, 10, 83, 89, 78, 84, 72]);
-  const attached = {
-    entryKey: entry.key,
-    name: 'synthetic-original.bin',
-    mediaType: 'application/octet-stream',
-    hash: createHash('sha256').update(bytes).digest('hex'),
-    base64: bytes.toString('base64'),
-  };
-  f.file.sourceFiles = [attached];
-  const prepared = prepareNativeTransfer({ file: f.file });
-  expect(prepared.summary).toMatchObject({ sourceFiles: 1, sourceFileBytes: bytes.length });
-  const receipt = applyNativeTransfer(target, request(f.file));
-  const imported = receipt.items.find((item) => item.key === entry.key)!;
-  expect(nativeTransferOriginal(target, receipt.id)).toEqual(f.file);
-  expect(JSON.stringify(target.product.all('content'))).not.toContain(attached.base64);
-  const exported = exportNativeTransfer(target, { items: [{ kind: 'content', id: imported.id }] });
-  expect(exported.sourceFiles).toEqual([{ ...attached, entryKey: exported.roots[0].key }]);
-  const restored = database().store;
-  restored.product.import(target.product.export());
-  expect(nativeTransferOriginal(restored, receipt.id)).toEqual(f.file);
-  expect(exportNativeTransfer(restored, { items: [{ kind: 'content', id: imported.id }] })).toEqual(
-    exported
+  return Object.fromEntries(
+    ['versions', 'profiles', 'chats', 'image_blobs', 'library_hidden', 'import_operations'].map(
+      (table) => [table, store.db.prepare(`SELECT * FROM ${table}`).all()]
+    )
   );
-  expect(applyNativeTransfer(restored, request(f.file))).toMatchObject({
-    id: receipt.id,
-    created: false,
-  });
-});
-
-test('NATIVE15 invalid source bytes, attachment keys and forged archive files are rejected before writes', () => {
-  const f = sourceFixture(),
-    target = database().store;
-  const bytes = Buffer.from('SYNTHETIC ORIGINAL');
-  const attached = {
-    entryKey: f.file.contents[0].key,
-    name: 'source.txt',
-    mediaType: 'text/plain',
-    hash: createHash('sha256').update(bytes).digest('hex'),
-    base64: bytes.toString('base64'),
-  };
-  f.file.sourceFiles = [attached];
-  const before = snapshot(target);
-  for (const change of [
-    { hash: '0'.repeat(64) },
-    { base64: attached.base64 + '\n' },
-    { entryKey: 'not-in-file' },
-    { name: '../source.txt' },
-  ]) {
-    const file = { ...f.file, sourceFiles: [{ ...attached, ...change }] };
-    expect(() => prepareNativeTransfer({ file })).toThrow();
-  }
-  expect(snapshot(target)).toEqual(before);
-  const receipt = applyNativeTransfer(target, request(f.file));
-  const archive = target.product.export();
-  const row = archive.tables.native_transfer_receipts[0] as any;
-  const original = JSON.parse(row.original);
-  original.sourceFiles[0].base64 = Buffer.from('altered').toString('base64');
-  row.original = JSON.stringify(original);
-  const restored = database().store,
-    empty = snapshot(restored);
-  expect(() => restored.product.import(archive)).toThrow('NATIVE_TRANSFER_SOURCE_FILE_HASH');
-  expect(snapshot(restored)).toEqual(empty);
-  expect(nativeTransferOriginal(target, receipt.id)).toEqual(f.file);
-});
+}
 
 test('NATIVE16 source bytes share the existing whole-file size limit', () => {
   const { file } = sourceFixture();
@@ -345,7 +278,7 @@ test('NATIVE02 prepare writes nothing; apply creates one identity graph without 
   expect(combinations.find((item) => item.title === 'Previous options')!.controls).toEqual(
     source.file.prompts[0].combinations.find((item) => item.title === 'Previous options')!.controls
   );
-  expect(nativeTransferOriginal(target.store, receipt.id)).toEqual(source.file);
+
   const original = String(
     target.store.db.prepare('SELECT original FROM native_transfer_receipts').get()!.original
   );
@@ -509,70 +442,6 @@ test('NATIVE07 external related IDs are reported and preserved as origin while b
   expect(imported.relatedIds).toEqual([
     receipt.items.find((item) => item.category === 'persona')!.id,
   ]);
-  expect(nativeTransferOriginal(store, receipt.id)).toEqual(file);
-});
-
-test('NATIVE08 origin survives hidden entries, later edits, re-export and archive restore without embedding bodies in receipts', () => {
-  const source = sourceFixture(),
-    { store } = database();
-  const receipt = applyNativeTransfer(store, request(source.file));
-  const bot = receipt.items.find((item) => item.category === 'bot')!;
-  const saved = store.product.get<Content>('content', bot.id);
-  save(
-    store,
-    'bot',
-    'Edited imported bot',
-    { ...saved.package!, body: 'Later edited text' },
-    saved
-  );
-  const exported = exportNativeTransfer(store, { items: [{ kind: 'content', id: bot.id }] });
-  expect(exported.contents.find((item) => item.source.id === bot.id)!.origin).toMatchObject({
-    digest: receipt.digest,
-    sourceId: source.bot.id,
-  });
-  store.db.prepare("INSERT INTO library_hidden VALUES('content',?)").run(bot.id);
-  expect(() => exportNativeTransfer(store, { items: [{ kind: 'content', id: bot.id }] })).toThrow(
-    'deleted'
-  );
-  expect(nativeTransferOriginal(store, receipt.id)).toEqual(source.file);
-  const target = database().store;
-  target.product.import(store.product.export());
-  expect(nativeTransferOriginal(target, receipt.id)).toEqual(source.file);
-  expect(applyNativeTransfer(target, request(source.file))).toEqual({ ...receipt, created: false });
-});
-
-test.each([
-  'origin-target',
-  'source-identity',
-  'receipt-target',
-  'combination-target',
-  'mapped-model',
-] as const)('NATIVE09 archive rejects crossed origin bindings atomically: %s', (variant) => {
-  const source = sourceFixture(),
-    { store } = database();
-  const receipt = applyNativeTransfer(store, request(source.file));
-  const archive = store.product.export();
-  const row = archive.tables.native_transfer_receipts[0] as any;
-  const index = JSON.parse(row.original),
-    body = JSON.parse(row.body);
-  if (variant === 'origin-target') index.contents[0].id = index.contents[1].id;
-  else if (variant === 'source-identity') index.contents[0].source.id = 'foreign-source';
-  else if (variant === 'receipt-target') body.items[0].id = body.items[1].id;
-  else if (variant === 'combination-target')
-    index.prompts[0].combinations[0].id = index.contents[0].id;
-  else {
-    const promptId = receipt.items.find((item) => item.kind === 'prompt-preset')!.id;
-    const promptRow = archive.tables.versions.find((item: any) => item.id === promptId) as any;
-    const prompt = JSON.parse(promptRow.body);
-    prompt.program.collaboration.enabled = false;
-    promptRow.body = JSON.stringify(prompt);
-  }
-  row.original = JSON.stringify(index);
-  row.body = JSON.stringify(body);
-  const target = database().store,
-    before = snapshot(target);
-  expect(() => target.product.import(archive)).toThrow();
-  expect(snapshot(target)).toEqual(before);
 });
 
 test('NATIVE10 prepare and core validation detach their output without editing the original file', () => {
@@ -582,30 +451,6 @@ test('NATIVE10 prepare and core validation detach their output without editing t
   checked.file.contents[0].source.title = 'Changed detached output';
   expect(source.file).toEqual(before);
   expect(prepareNativeTransfer({ file: source.file })).not.toHaveProperty('file');
-});
-
-test('NATIVE11 two receipts cannot claim creation of the same non-image identities', () => {
-  const source = sourceFixture(),
-    { store } = database();
-  applyNativeTransfer(store, request(source.file));
-  const archive = store.product.export(),
-    original = archive.tables.native_transfer_receipts[0] as any;
-  const duplicate = {
-    ...original,
-    id: 'synthetic-second-receipt',
-    request_key: 'other-key',
-    created_at: '2026-09-12T00:00:00.000Z',
-  };
-  duplicate.body = JSON.stringify({
-    ...JSON.parse(original.body),
-    id: duplicate.id,
-    importedAt: duplicate.created_at,
-  });
-  archive.tables.native_transfer_receipts.push(duplicate);
-  const target = database().store,
-    before = snapshot(target);
-  expect(() => target.product.import(archive)).toThrow('NATIVE_TRANSFER_REUSED_IDENTITY');
-  expect(snapshot(target)).toEqual(before);
 });
 
 test('NATIVE12 the native file uses the existing module depth limit before persistence', () => {

@@ -198,7 +198,7 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
       value,
       {
         ...h,
-        approvedOrigins: [],
+
         authorize: () => {
           throw new Error('unused');
         },
@@ -229,7 +229,7 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
       });
     const mainHooks = {
       ...h,
-      approvedOrigins: [],
+
       authorize: () => {
         throw new Error('context model is separate');
       },
@@ -267,7 +267,7 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
     const h = hooks(),
       mainHooks = {
         ...h,
-        approvedOrigins: [],
+
         authorize: () => {
           throw new Error('unused');
         },
@@ -313,7 +313,7 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
     const h = hooks(),
       mainHooks = {
         ...h,
-        approvedOrigins: [],
+
         authorize: () => {
           throw new Error('unused');
         },

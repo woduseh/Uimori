@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -105,46 +105,6 @@ function success(init?: RequestInit, score = 0.95) {
 }
 
 describe('JEV connection settings and explicit diagnostics', () => {
-  test('saves a server-local key with CAS and survives restart without exposing it in app data', async () => {
-    const { app, item } = await setup();
-    const initial = await status(app);
-    expect(initial).toMatchObject({
-      configured: false,
-      credentialSource: 'missing',
-      hasSavedKey: false,
-      modelId: 'jev-latest',
-      endpoint: 'https://api.typesafe.ai/v1/systemone',
-      latestTest: null,
-    });
-    const saved = await save(app, initial.revision);
-    expect(saved.revision).toBeGreaterThan(initial.revision);
-    expect(saved).toMatchObject({ configured: true, credentialSource: 'saved', hasSavedKey: true });
-    await save(app, initial.revision, 'synthetic-stale-change', 409);
-    expect(await status(app)).toEqual(saved);
-    const exported = JSON.stringify(app.store.product.export());
-    expect(exported).not.toContain(savedKey);
-    expect(exported).not.toContain('provider_connection_tests');
-    const database = app.store.db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-      .all() as { name: string }[];
-    for (const { name } of database) {
-      const rows = app.store.db.prepare(`SELECT * FROM "${name.replaceAll('"', '""')}"`).all();
-      expect(JSON.stringify(rows), name).not.toContain(savedKey);
-    }
-    await app.close();
-    item.app = undefined;
-    expect(
-      (await readFile(join(item.directory, 'story.sqlite'))).includes(Buffer.from(savedKey))
-    ).toBe(false);
-    const reopened = (item.app = await createApp({
-      dbPath: join(item.directory, 'story.sqlite'),
-      buildId: 'jev-provider-restart',
-    }));
-    await reopened.ready();
-    expect(await status(reopened)).toEqual(saved);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
   test.each([
     ['empty', ''],
     ['whitespace', '   '],

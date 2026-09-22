@@ -161,37 +161,3 @@ test('absent usage stays unknown after cancellation and provider tier mismatch i
     notes: ['SERVICE_TIER_MISMATCH'],
   });
 });
-
-test('archive roundtrip preserves attempt frozen pricing, estimate, actual amount and source status', () => {
-  const { store, chat, wire } = setup();
-  const run = store.createRun(
-    chat.id,
-    {
-      request: 'Synthetic priced request',
-      expectedRevision: store.product.branch(chat.id).headRevision,
-      expectedSettingsRevision: chat.settingsRevision,
-      idempotencyKey: 'synthetic-pricing-archive-run',
-    },
-    (current) => ({
-      chatId: chat.id,
-      parentRevision: current.headRevision,
-      settingsRevision: current.settingsRevision,
-      settings: current.settings,
-      request: 'Synthetic priced request',
-      history: [],
-      resources: [],
-    })
-  ).run;
-  const id = store.product.startAttempt(chat.id, run.id, null, { ...wire(), role: 'main' });
-  store.product.finishAttempt(id, result('partial', 0.321));
-  const before = store.product.attempts(chat.id);
-  const restored = database();
-  restored.product.import(store.product.export());
-  expect(restored.product.attempts(chat.id)).toEqual(before);
-  expect(restored.product.attempts(chat.id)[0]).toMatchObject({
-    status: 'partial',
-    costUsd: 0.321,
-    estimatedCost: { status: 'estimated', usd: 0.0025 },
-    pricingSnapshot: { source: 'manual', rates: { input: 2 } },
-  });
-});

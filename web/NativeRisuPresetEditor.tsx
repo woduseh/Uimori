@@ -1,3 +1,4 @@
+import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useId, useState, type DragEvent, type ReactNode } from 'react';
 import {
   createNativeRisuPresetProgram,
@@ -8,7 +9,11 @@ import { validateRisuPrompt, type RisuPrompt, type PromptValue } from '../core/r
 import { PromptControlFields } from './PromptControlFields.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { NativeRisuToggleEditor } from './NativeRisuToggleEditor.js';
-import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
+import {
+  useBufferedEditorState,
+  useUnappliedEditorField,
+  useEditorSavePreparation,
+} from './resource-editor.js';
 import { SectionNavigation } from './SectionNavigation.js';
 import { IconButton } from './IconButton.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
@@ -71,6 +76,22 @@ export function NativeRisuPresetEditor({
     regexPending ||
     togglePending;
   useUnappliedEditorField('prompt.native.source', pending);
+  useEditorSavePreparation('prompt.native.source', (model) => {
+    if (pendingParts.some((part) => part !== 'regex' && part !== 'toggles'))
+      throw new Error('프롬프트의 잘못된 입력을 확인해 주세요.');
+    return model;
+  });
+  const prepareProgram = (model: ResourceModel, patch: Record<string, unknown>): ResourceModel => {
+    if (!('program' in model)) throw new Error('프리셋 편집기에서 저장해 주세요.');
+    const input = { ...model.program.nativeRisuPreset.preset, ...patch };
+    return {
+      ...model,
+      program: validateRisuPrompt({
+        ...model.program,
+        ...createNativeRisuPresetProgram(nativeRisuPresetSource(input)),
+      }),
+    };
+  };
   useEffect(() => {
     onPendingDraftChange?.(pending);
   }, [pending, onPendingDraftChange]);
@@ -478,6 +499,12 @@ export function NativeRisuPresetEditor({
           program={program}
           draftPath="prompt.native.toggles"
           onPendingChange={setTogglePending}
+          prepareSave={(model, values) =>
+            prepareProgram(model, {
+              customPromptTemplateToggle: values.toggles,
+              templateDefaultVariables: values.variables,
+            })
+          }
           onChange={({ toggles, variables }) =>
             update(
               { customPromptTemplateToggle: toggles, templateDefaultVariables: variables },
@@ -491,6 +518,11 @@ export function NativeRisuPresetEditor({
           value={(source.regex ?? source.presetRegex ?? []) as unknown[]}
           draftPath="prompt.native.regex"
           onPendingChange={setRegexPending}
+          prepareSave={(model, regex) =>
+            prepareProgram(model, {
+              [source.regex != null || source.presetRegex == null ? 'regex' : 'presetRegex']: regex,
+            })
+          }
           onChange={(regex) =>
             update({
               [source.regex != null || source.presetRegex == null ? 'regex' : 'presetRegex']: regex,

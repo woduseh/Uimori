@@ -40,7 +40,7 @@ const snapshot = (): RunSnapshot => ({
 });
 const hooks = (): MainHooks => ({
   signal: new AbortController().signal,
-  approvedOrigins: [],
+
   authorize: vi.fn(() => {
     throw new Error('Generative fallback forbidden');
   }),

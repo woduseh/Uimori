@@ -140,7 +140,7 @@ export function publishHelperContext(
     };
     const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
     store.db
-      .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,snapshot_pack(?),?,?)')
+      .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?,?)')
       .run(
         checkpoint.id,
         scopeKey,
@@ -161,54 +161,4 @@ export function publishHelperContext(
         .run(scopeKey, chatId, revision, checkpoint.id);
     return { activeRevision: activated ? revision : base.activeRevision, checkpoint, activated };
   });
-}
-export function validateHelperContexts(store: Store) {
-  for (const row of store.db
-    .prepare("SELECT * FROM context_checkpoints WHERE scope_key LIKE 'helper:%'")
-    .all() as Row[]) {
-    const snapshot = JSON.parse(row.snapshot),
-      taskRow = store.db.prepare('SELECT * FROM helper_tasks WHERE id=?').get(snapshot.taskId) as
-        | Row
-        | undefined;
-    const conversation = store.db
-      .prepare('SELECT * FROM helper_conversations WHERE id=?')
-      .get(snapshot.conversationId) as Row | undefined;
-    const checkpoint = store.context.checkpoint({
-      id: row.id,
-      revision: row.revision,
-      hash: row.hash,
-    });
-    if (
-      snapshot.kind !== 'helper' ||
-      !conversation ||
-      !taskRow ||
-      taskRow.conversation_id !== conversation.id ||
-      row.scope_key !== `helper:${conversation.id}` ||
-      row.chat_id !== conversation.chat_id ||
-      !Number.isSafeInteger(snapshot.segment) ||
-      snapshot.segment < 1 ||
-      !['automatic', 'edit', 'manual'].includes(row.origin) ||
-      ![0, 1].includes(row.activated)
-    )
-      throw new HttpError(400, 'Invalid helper checkpoint owner');
-    const expected = refs(helperHistory(store, conversation.id)).slice(
-      0,
-      checkpoint.plan.compacted.length
-    );
-    if (
-      !isDeepStrictEqual(expected, checkpoint.plan.compacted) ||
-      !isDeepStrictEqual(expected, snapshot.messageRefs) ||
-      checkpoint.plan.dependencyKey !== row.scope_key ||
-      !checkpoint.plan.summary?.trim()
-    )
-      throw new HttpError(400, 'Invalid helper checkpoint messages');
-    for (const event of snapshot.eventRefs) {
-      const source = store.db
-        .prepare('SELECT * FROM helper_events WHERE seq=? AND task_id=?')
-        .get(event.seq, snapshot.taskId) as Row | undefined;
-      if (!source || hash([source.kind, JSON.parse(source.data)]) !== event.hash)
-        throw new HttpError(400, 'Invalid helper checkpoint event');
-    }
-    if (snapshot.base.checkpoint) store.context.checkpoint(snapshot.base.checkpoint);
-  }
 }

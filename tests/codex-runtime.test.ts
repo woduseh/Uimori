@@ -144,7 +144,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     expect(
       await api.runtime.execute(connection, request(), {
         signal: new AbortController().signal,
-        approvedOrigins: [],
+
         onWire,
       })
     ).toMatchObject({ status: 'error', error: { code: 'CODEX_LOGIN_REQUIRED' } });
@@ -156,7 +156,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     let wire: WireRecord | undefined;
     const result = await runtime.execute(connection, request(), {
       signal: new AbortController().signal,
-      approvedOrigins: [],
+
       onWire: (value) => {
         expect(
           records().some((row) => row.method === 'thread/start' || row.method === 'turn/start')
@@ -210,7 +210,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     const { runtime, records } = setup();
     const result = await runtime.execute(connection, request(), {
       signal: new AbortController().signal,
-      approvedOrigins: [],
+
       onWire: () => {
         throw new ProviderContractError('RECORDING_FAILED');
       },
@@ -222,7 +222,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     const { runtime, records } = setup();
     const result = await runtime.execute(connection, request(), {
       signal: new AbortController().signal,
-      approvedOrigins: [],
+
       beforeTurn: () => {
         throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
       },
@@ -237,7 +237,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       const { runtime, records } = setup(mode);
       const result = await runtime.execute(connection, request(), {
         signal: new AbortController().signal,
-        approvedOrigins: [],
+
         timeoutMs: 500,
       });
       expect(result).toMatchObject({ status: 'error', error: { code: 'TIMEOUT' } });
@@ -256,7 +256,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     const { runtime, records } = setup(mode);
     const result = await runtime.execute(connection, request(), {
       signal: new AbortController().signal,
-      approvedOrigins: [],
+
       timeoutMs: 5000,
     });
     expect(result).toMatchObject({ status: 'error', text: '', error: { code } });
@@ -269,7 +269,6 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       const { runtime, records } = setup(mode);
       const result = await runtime.execute(connection, request(), {
         signal: new AbortController().signal,
-        approvedOrigins: [],
       });
       expect(result).toMatchObject({
         status: 'completed',
@@ -285,7 +284,6 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     expect(
       await runtime.execute(connection, request(), {
         signal: new AbortController().signal,
-        approvedOrigins: [],
       })
     ).toMatchObject({ status: 'completed', text: 'A synthetic scene.' });
   });
@@ -296,13 +294,13 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       onSecondWire = vi.fn();
     const a = runtime.execute(connection, request(), {
       signal: first.signal,
-      approvedOrigins: [],
+
       timeoutMs: 5000,
     });
     await vi.waitFor(() => expect(records().some((row) => row.method === 'turn/start')).toBe(true));
     const b = runtime.execute(connection, request(), {
       signal: second.signal,
-      approvedOrigins: [],
+
       timeoutMs: 5000,
       onWire: onSecondWire,
     });
@@ -315,7 +313,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
   });
   it('lets queued ordinary work run after a slot is released', async () => {
     const { runtime, records } = setup('normal', {}, 1);
-    const options = { signal: new AbortController().signal, approvedOrigins: [] };
+    const options = { signal: new AbortController().signal };
     const results = await Promise.all([
       runtime.execute(connection, request(), options),
       runtime.execute(connection, request(), options),

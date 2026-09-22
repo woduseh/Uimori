@@ -191,7 +191,7 @@ export async function compactToolReads(
         authorized.id !== target.connectionId ||
         authorized.protocol !== target.connection.protocol ||
         authorized.endpoint !== target.connection.endpoint ||
-        authorized.credentialEnv !== target.connection.credentialEnv
+        authorized.credentialRef !== target.connection.credentialRef
       )
         throw new Error('CONNECTION_NOT_AUTHORIZED');
       return authorized;
@@ -202,7 +202,6 @@ export async function compactToolReads(
       transportConnection(authorized),
       requestFor(remaining.slice(0, lo)),
       {
-        approvedOrigins: hooks.approvedOrigins,
         signal: hooks.signal,
         resolveCredential: hooks.resolveCredential,
         executeCodex: hooks.executeCodex,

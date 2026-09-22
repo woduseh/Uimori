@@ -1,9 +1,13 @@
-import { SnapshotDatabase, initSnapshotStorage } from './snapshot-database.js';
-import { canRecoverMainJudgment } from '../core/main-judgment-recovery.js';
+import { retainCompletedLore } from './lore-retention-state.js';
+import { verifiedRunLoreReads } from './lore-context.js';
+import { captureNativeMessageChanges } from './native-message-changes.js';
+import { releaseCompletedRunInputs } from './execution-retention.js';
+import { retryRun as retryPersonalRun } from './run-retry.js';
+import { executionSnapshot, settleSnapshot } from './execution-snapshot.js';
+import { CredentialStore, initCredentials } from './credentials.js';
 import { DatabaseSync } from 'node:sqlite';
 import { initHelperWorkspace } from './helper-workspace.js';
 import { databaseSchemaVersion, initializeDatabaseSchema } from './database-schema.js';
-import { initEditDrafts } from './edit-drafts.js';
 import { initChatOverrides } from './chat-overrides.js';
 import { initChatOptions } from './chat-options.js';
 import { initResponseStreams } from './response-stream.js';
@@ -36,10 +40,7 @@ import {
   checkpointChatVariablesInTransaction,
   writeChatVariablesInTransaction,
 } from './chat-variables.js';
-import { restoreCandidateChatVariables } from './chat-variables-archive.js';
-import { resetNativeRisuCandidate } from './risu-native-archive.js';
-import { nativeRisuPending } from './risu-native-run.js';
-import { nativeRisuLegacyReceipt, nativeRisuSnapshotNeedsRefresh } from './risu-native-readonly.js';
+import { nativeRisuLegacyReceipt } from './risu-native-readonly.js';
 import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
 import { IDENTITY_PATTERN } from '../core/identity.js';
 import {
@@ -79,6 +80,7 @@ const now = () => new Date().toISOString();
 export class Store {
   readonly db: DatabaseSync;
   readonly product: ProductStore;
+  readonly credentials: CredentialStore;
   readonly story: StoryStore;
   readonly outline: OutlineStore;
   readonly context: ContextStore;
@@ -100,7 +102,7 @@ export class Store {
       throw new Error('Database already has a running server owner');
     }
     try {
-      this.db = new SnapshotDatabase(this.path);
+      this.db = new DatabaseSync(this.path);
     } catch (error) {
       this.ownership.close();
       throw error;
@@ -108,6 +110,7 @@ export class Store {
     try {
       databaseSchemaVersion(this.db);
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
+      this.credentials = new CredentialStore(this.db);
       this.product = new ProductStore(this);
       this.story = new StoryStore(this);
       this.outline = new OutlineStore(this);
@@ -130,17 +133,16 @@ export class Store {
       CREATE TABLE provider_connection_tests (id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, model_id TEXT NOT NULL, model_revision INTEGER NOT NULL, status TEXT NOT NULL, sent_at TEXT, body TEXT NOT NULL);
       CREATE UNIQUE INDEX one_active_connection_test_per_model ON provider_connection_tests(model_id) WHERE status='running';
       `);
+        initCredentials(this.db);
         this.product.initFresh();
         this.story.initFresh();
         this.context.initFresh();
         this.organization.init();
         this.libraryOrganization.init();
         initHelperWorkspace(this);
-        initEditDrafts(this);
         initChatOverrides(this);
         initChatOptions(this);
         initResponseStreams(this.db);
-        initSnapshotStorage(this.db);
       });
       // The maintenance row belongs to every boot, not only to a fresh database.
       initMaintenance(this);
@@ -392,7 +394,7 @@ export class Store {
       ...(isSourceOnlyTranscript(captured)
         ? {}
         : {
-            mainJudgmentEnabled: promptWorkspace(this).mainJudgmentEnabled !== false,
+            mainJudgmentEnabled: promptWorkspace(this).mainJudgmentEnabled === true,
             mainJudgmentThreshold: mainJudgmentThreshold(
               promptWorkspace(this).mainJudgmentThreshold
             ),
@@ -415,7 +417,7 @@ export class Store {
     const status = 'queued';
     this.db
       .prepare(
-        'INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,?,?,snapshot_pack(?),?,?,?,?,?)'
+        'INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)'
       )
       .run(
         id,
@@ -434,85 +436,13 @@ export class Store {
     this.event(chatId, `run.${status}`, id);
     return { run: this.run(id), created: true };
   }
-  /** A new request with current settings, branching before the selected response. */
   retryRun(
     runId: string,
     key: string,
     validate?: (snapshot: RunSnapshot) => void,
     editedRequest?: string
-  ): { run: Run; created: boolean } {
-    return this.transaction(() => {
-      const original = this.run(runId);
-      const requestEdited = editedRequest !== undefined;
-      const nextRequest = requestEdited ? text(editedRequest, 'request') : original.request;
-      const prior = this.db
-        .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
-        .get(original.chatId, key) as Row | undefined;
-      if (prior) {
-        const command = parse(prior.command);
-        if (
-          command.retryOf !== runId ||
-          (command.requestEdited === true) !== requestEdited ||
-          command.request !== nextRequest
-        )
-          throw new HttpError(409, 'Idempotency key reused with different command');
-        return { run: this.run(prior.id), created: false };
-      }
-      if (['queued', 'running'].includes(original.status))
-        throw new HttpError(409, 'Original run is still active');
-      if (
-        original.snapshot.packageStart?.mode === 'authored' ||
-        original.snapshot.nativeRisuAuthored
-      )
-        throw new HttpError(409, 'Authored opening has no model request to repeat');
-      const profile = this.product.snapshot(original.chatId);
-      const chat = this.chat(original.chatId);
-      const originalBranch = this.product.branch(original.chatId, original.snapshot.branchId);
-      if (
-        !original.sourceRevision &&
-        this.db
-          .prepare("SELECT id FROM runs WHERE chat_id=? AND json_extract(command,'$.retryOf')=?")
-          .get(original.chatId, original.id)
-      )
-        throw new HttpError(409, 'This request already has a newer attempt');
-      // Keep the unchanged failed turn's position and preserve each execution.
-      const branch =
-        !original.sourceRevision && originalBranch.headRevision === original.parentRevision
-          ? originalBranch
-          : this.product.createBranch(original.chatId, {
-              title: requestEdited ? '요청 수정' : '다시 요청',
-              fromRevision: original.parentRevision,
-            });
-      return this.createRunInTransaction(
-        original.chatId,
-        {
-          request: nextRequest,
-          expectedRevision: original.parentRevision,
-          expectedSettingsRevision: chat.settingsRevision,
-          expectedProfileRevision: profile.revision,
-          branchId: branch.id,
-          idempotencyKey: key,
-          retryOf: runId,
-          ...(original.snapshot.loreContextReset ? { loreContextReset: true } : {}),
-          ...(requestEdited ? { requestEdited: true } : {}),
-        },
-        (current) => {
-          const snapshot: RunSnapshot = {
-            chatId: current.id,
-            parentRevision: current.headRevision,
-            settingsRevision: current.settingsRevision,
-            settings: current.settings,
-            request: nextRequest,
-            history: this.history(current.headRevision),
-            resources: this.product.resources(current.id, profile),
-            profile,
-            branchId: branch.id,
-          };
-          validate?.(snapshot);
-          return snapshot;
-        }
-      );
-    });
+  ) {
+    return retryPersonalRun(this, runId, key, { request: editedRequest, validate });
   }
   candidate(
     runId: string,
@@ -520,100 +450,18 @@ export class Store {
     title: string,
     validate?: (snapshot: RunSnapshot) => void,
     judgmentRecovery = false
-  ): { run: Run; created: boolean } {
-    return this.transaction(() => {
-      const original = this.run(runId);
-      if (
-        original.snapshot.packageStart?.mode === 'authored' ||
-        original.snapshot.nativeRisuAuthored
-      )
-        throw new HttpError(409, 'Authored opening cannot be regenerated as a model candidate');
-      if (['queued', 'running'].includes(original.status))
-        throw new HttpError(409, 'Original run is still active');
-      const canonical = json({
-        candidateOf: runId,
-        title,
-        ...(judgmentRecovery ? { judgmentRecovery: true } : {}),
-      });
-      const prior = this.db
-        .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
-        .get(original.chatId, key) as Row | undefined;
-      if (prior) {
-        if (prior.command !== canonical)
-          throw new HttpError(409, 'Idempotency key reused with different command');
-        return { run: this.run(prior.id), created: false };
-      }
-      if (judgmentRecovery && !canRecoverMainJudgment(original))
-        throw new HttpError(409, '보존된 본문의 판정 실패만 다시 판정할 수 있어요.');
-      if (nativeRisuPending(original.snapshot))
-        throw new HttpError(
-          409,
-          '카드 실행 준비가 끝나지 않은 요청이에요. 현재 설정으로 다시 요청해 주세요.'
-        );
-      if (nativeRisuSnapshotNeedsRefresh(original.snapshot))
-        throw new HttpError(
-          409,
-          '이전 프롬프트 형식으로 준비한 요청이에요. 현재 설정으로 다시 요청해 주세요.'
-        );
-      validate?.(original.snapshot);
-      if (
-        original.snapshot.history.some(
-          (item) =>
-            this.source(item.revision).hash !==
-            (item.contentHash ?? this.sourceOriginal(item.revision).hash)
-        )
-      )
-        throw new HttpError(409, 'Candidate source history changed; retry with current settings');
-      const branch = this.product.createBranch(original.chatId, {
-        title,
-        fromRevision: original.parentRevision,
-      });
-      const snapshot: RunSnapshot = {
-        ...structuredClone(original.snapshot),
-        branchId: branch.id,
-        candidateOf: original.id,
-      };
-      if (judgmentRecovery) snapshot.judgmentRecovery = true;
-      else {
-        delete snapshot.judgmentRecovery;
-        resetNativeRisuCandidate(snapshot);
-        delete snapshot.mainJudgment;
-      }
-      if (snapshot.contextPlan?.status === 'ready' && snapshot.promptCompilation) {
-        snapshot.contextPlan.summaryCalls = 0;
-        snapshot.contextPlan.usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
-      }
-      restoreCandidateChatVariables(
-        this,
-        original.chatId,
-        branch.id,
-        snapshot.profile?.variableState
-      );
-      const id = randomUUID();
-      const time = now();
-      this.db
-        .prepare(
-          "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,'queued',?,snapshot_pack(?),?,?,?,?,?)"
-        )
-        .run(
-          id,
-          original.chatId,
-          original.parentRevision,
-          original.request,
-          json(snapshot),
-          key,
-          canonical,
-          time,
-          time,
-          branch.id
-        );
-      this.event(original.chatId, 'run.queued', id);
-      return { run: this.run(id), created: true };
+  ) {
+    return retryPersonalRun(this, runId, key, {
+      title,
+      validate,
+      alwaysCopy: !judgmentRecovery,
+      judgmentOnly: judgmentRecovery,
     });
   }
   run(id: string): Run {
     const row = this.db.prepare('SELECT * FROM runs WHERE id=?').get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Run not found');
+    const snapshot = executionSnapshot(this, parse(row.snapshot));
     // Until aggregate settlement, count durable attempts rather than prepared main inputs.
     // Extension/context calls have no model_inputs row; title generation is a separate task.
     const calls = row.usage
@@ -627,10 +475,10 @@ export class Store {
       id: row.id,
       chatId: row.chat_id,
       parentRevision: row.parent_revision,
-      settingsRevision: parse(row.snapshot).settingsRevision,
+      settingsRevision: snapshot.settingsRevision,
       status: row.status,
       request: row.request,
-      snapshot: parse(row.snapshot),
+      snapshot,
       sourceRevision: row.source_revision,
       error: row.error,
       usage: parse(row.usage) ?? {
@@ -835,8 +683,22 @@ export class Store {
       if (!run.snapshot.candidateOf) scheduleAutomaticIllustration(this, source);
     }
     checkpointChatVariablesInTransaction(this, source.id, source.chatId, branch.id);
+    retainCompletedLore(
+      this,
+      run,
+      source,
+      verifiedRunLoreReads(this, { ...run, status: 'completed', sourceRevision: source.id })
+    );
     this.event(source.chatId, 'source.ready', source.id);
     this.event(source.chatId, 'run.completed', id);
+    this.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
+      json({
+        ...settleSnapshot(run.snapshot),
+        messageChanges: captureNativeMessageChanges(this, run.snapshot, source),
+      }),
+      id
+    );
+    releaseCompletedRunInputs(this.db, id);
     return source;
   }
   sourceOriginal(id: string): Source {

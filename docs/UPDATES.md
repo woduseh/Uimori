@@ -36,7 +36,7 @@ npm run update -- cancel --config .local/update.json --key update-2026-09-19
 
 ## Transition and recovery
 
-Only empty or current schema-24 databases are supported. The controller does not upgrade old data: a copied older database fails candidate admission before writes. Preserve its volume and backups; beginning with the new native structure requires a separate empty volume, outside an in-place update. See [data formats](DATA-MIGRATIONS.md).
+Only empty or current personal-v1 schema-1 databases are supported. Use the separate schema-24-to-personal-v1 transfer tool before changing deployment volumes. The update controller itself does not upgrade old data: a copied older database fails candidate admission before writes. Preserve its volume and backups; beginning with the new native structure requires a separate empty volume, outside an in-place update. See [data formats](DATA-MIGRATIONS.md).
 
 The controller prepares the image, closes maintenance, waits for `activeWork` to reach zero, and stops the app. It archives the entire data volume, restores it into a new volume, and starts the candidate with `UIMORI_MAINTENANCE=1`. The candidate command checks for the app's ready event. It then changes `UIMORI_IMAGE` and `UIMORI_DATA_VOLUME` in the environment file, starts the Compose app service, checks `/api/session`, and reopens maintenance. Other environment settings, the previous volume, and the backup remain in place.
 

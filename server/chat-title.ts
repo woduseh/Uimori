@@ -13,7 +13,7 @@ import type { Store } from './store.js';
 
 type Options = Pick<
   ProviderExecutionOptions,
-  'approvedOrigins' | 'resolveCredential' | 'executeCodex' | 'vertexRequestTier'
+  'resolveCredential' | 'executeCodex' | 'vertexRequestTier'
 > & {
   signal: AbortSignal;
   track: (work: Promise<void>) => void;

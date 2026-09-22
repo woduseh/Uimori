@@ -10,7 +10,7 @@ await runBrowserVerification({
     'tests/library-compact-browser.spec.ts',
     'tests/library-images-browser.spec.ts',
     'tests/new-story-browser.spec.ts',
-    'tests/edit-drafts-browser.spec.ts',
+    'tests/personal-workspace-browser.spec.ts',
     'tests/deletion-browser.spec.ts',
   ],
 });

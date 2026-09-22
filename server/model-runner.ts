@@ -55,7 +55,7 @@ export type MainHooks = {
   onToolEvent: (event: ToolEvent) => void | Promise<void>;
   /** Durable owner of model-written context checkpoints; absent owners deny context.write/new. */
   persistContext?: ContextPersistence;
-  approvedOrigins: readonly string[];
+
   timeoutMs?: number;
   vertexRequestTier?: 'standard' | 'flex';
   authorize: (connection: Connection) => Connection | Promise<Connection>;
@@ -231,7 +231,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
             authorized.id !== target.connectionId ||
             authorized.endpoint !== target.connection.endpoint ||
             authorized.protocol !== target.connection.protocol ||
-            authorized.credentialEnv !== target.connection.credentialEnv
+            authorized.credentialRef !== target.connection.credentialRef
           )
             return fail('CONNECTION_NOT_AUTHORIZED');
         } catch (error) {
@@ -262,7 +262,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     const remainingTimeout = evaluation?.remainingMs();
     if (remainingTimeout === 0) return fail('TIMEOUT');
     const result = await executeProvider(transportConnection(authorized), request, {
-      approvedOrigins: hooks.approvedOrigins,
       signal: hooks.signal,
       resolveCredential: hooks.resolveCredential,
       executeCodex: hooks.executeCodex,

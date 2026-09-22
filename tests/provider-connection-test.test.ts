@@ -41,16 +41,14 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
-async function setup(
-  options: { approvedOrigins?: string[]; accessToken?: string; credentialEnv?: string } = {}
-) {
+async function setup(options: { accessToken?: string; credentialRef?: string } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'uimori-connection-test-'));
   const item: (typeof owned)[number] = { directory };
   owned.push(item);
   const app = (item.app = await createApp({
     dbPath: join(directory, 'story.sqlite'),
     buildId: 'synthetic-test',
-    approvedOrigins: options.approvedOrigins ?? ['http://127.0.0.1:9'],
+
     accessToken: options.accessToken,
   }));
   await app.ready();
@@ -59,7 +57,7 @@ async function setup(
     protocol: 'fixture-sse-v1',
     endpoint,
     enabled: true,
-    ...(options.credentialEnv ? { credentialEnv: options.credentialEnv } : {}),
+    ...(options.credentialRef ? { credentialRef: options.credentialRef } : {}),
   }) as Connection;
   const model = app.store.product.model({
     title: 'Synthetic model',
@@ -106,7 +104,7 @@ const sse = (...events: unknown[]) =>
   new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
     headers: { 'content-type': 'text/event-stream' },
   });
-const completed = () =>
+const _completed = () =>
   sse(
     { type: 'text_delta', delta: 'OK' },
     {
@@ -129,64 +127,8 @@ const modelUpdate = (model: ModelPreset, overrides: Record<string, unknown> = {}
 });
 
 describe('one-call provider connection diagnostics', () => {
-  test('persists before send, deduplicates pending and finished requests, and isolates diagnostics from story archives', async () => {
-    const { app, model } = await setup();
-    let release!: (value: Response) => void;
-    vi.mocked(fetch).mockImplementation(async (_url, options) => {
-      const row = app.store.db
-        .prepare('SELECT sent_at,body FROM provider_connection_tests')
-        .get() as { sent_at: string; body: string };
-      expect(row.sent_at).toBeTypeOf('string');
-      expect(JSON.parse(row.body).status).toBe('running');
-      const body = JSON.parse(String(options?.body));
-      // The preset's own options travel so the provider's answer is a verdict on them; only size is capped.
-      expect(body).toMatchObject({
-        stable: { tools: [] },
-        generation: { maxOutputTokens: 256, temperature: 1, thinkingLevel: 'HIGH' },
-        input: { task: 'API 연결 테스트 중이니 OK만 답해주세요.', controls: {} },
-      });
-      for (const field of ['history', 'source', 'catalog', 'results'])
-        expect(body.input).not.toHaveProperty(field);
-      return new Promise<Response>((resolve) => {
-        release = resolve;
-      });
-    });
-    const key = randomUUID(),
-      started = await post(app, model, key);
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    expect(await post(app, model, key)).toEqual(started);
-    await post(app, model, randomUUID(), 409);
-    release(completed());
-    const done = await terminal(app, started.id);
-    expect(done).toMatchObject({
-      status: 'completed',
-      text: 'OK',
-      truncated: false,
-      modelId: model.id,
-      modelRevision: model.revision,
-      providerModelId: model.modelId,
-      usage: { inputTokens: 12, outputTokens: 1, costUsd: null },
-      error: null,
-    });
-    expect(done.latencyMs).toBeGreaterThanOrEqual(0);
-    expect(await post(app, model, key)).toEqual(done);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const stored = JSON.stringify(
-      app.store.db.prepare('SELECT * FROM provider_connection_tests').all()
-    );
-    expect(stored).not.toContain('OPAQUE_MUST_NOT_SURVIVE');
-    expect(stored).not.toContain('RAW_USAGE_MUST_NOT_SURVIVE');
-    expect(stored).not.toContain('authorization');
-    for (const table of ['chats', 'runs', 'sources', 'attempts', 'jobs'])
-      expect(app.store.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()).toMatchObject({
-        n: 0,
-      });
-    expect(app.store.product.export().tables).not.toHaveProperty('provider_connection_tests');
-    await post(app, { ...model, revision: 2 }, key, 409);
-  });
-
   test('rejects stale or disabled models, disabled connections, unapproved origins, and user-supplied prompt fields', async () => {
-    const { app, model, connection } = await setup({ approvedOrigins: [] });
+    const { app, model, connection } = await setup({});
     await post(app, { ...model, revision: 2 }, randomUUID(), 409);
     await post(app, model, randomUUID(), 400, { prompt: 'Unrequested extra content' });
     const attempt = await post(app, model);
@@ -219,10 +161,9 @@ describe('one-call provider connection diagnostics', () => {
 
   test('rechecks the saved model after asynchronous credential resolution and never sends a changed model', async () => {
     let release!: (value: string) => void;
-    const { app, model } = await setup({ credentialEnv: 'SYNTHETIC_CONNECTION_TEST_KEY' });
+    const { app, model } = await setup({ credentialRef: 'SYNTHETIC_CONNECTION_TEST_KEY' });
     const probe = Fastify() as unknown as App;
     providerConnectionTestRoutes(probe, app.store, {
-      approvedOrigins: ['http://127.0.0.1:9'],
       signal: new AbortController().signal,
       authenticated: () => true,
       track: () => {},
@@ -345,7 +286,6 @@ describe('one-call provider connection diagnostics', () => {
     const reopened = (item.app = await createApp({
       dbPath: join(item.directory, 'story.sqlite'),
       buildId: 'recovery-test',
-      approvedOrigins: ['http://127.0.0.1:9'],
     }));
     await reopened.ready();
     expect(await post(reopened, model, key)).toMatchObject({

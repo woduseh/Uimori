@@ -1,5 +1,5 @@
 import { nativeContent } from './fixtures/native-content.js';
-import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
+import { waitForContentSave } from './fixtures/resource-save.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
@@ -159,7 +159,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   await page
     .getByLabel('캐릭터 설정', { exact: true })
     .fill('Mira is a synthetic harbor keeper. Her compass is silver in this revision.');
-  const savedContent = waitForContentDraftSave(page, added.id);
+  const savedContent = waitForContentSave(page, added.id);
   await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
   expect((await savedContent).package?.nativeRisu.card.description).toBe(
     'Mira is a synthetic harbor keeper. Her compass is silver in this revision.'
@@ -265,7 +265,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   expect(after).toMatchObject({
     endpoint: connection.endpoint,
     enabled: false,
-    credentialEnv: 'UIMORI_PROVIDER_SYNTHETIC',
+    credentialRef: 'UIMORI_PROVIDER_SYNTHETIC',
   });
   expect((await request.get(`/api/revisions/connection/${connection.id}/1`)).ok()).toBe(false);
   await openDetails(page, 'profile-editor');
@@ -300,7 +300,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     id: connection.id,
     endpoint: connection.endpoint,
     enabled: true,
-    credentialEnv: connection.credentialEnv,
+    credentialRef: connection.credentialRef,
   });
   // Activating the current connection makes its existing model IDs selectable immediately.
   const activatedModels = (await getLibrary(request)).models;
@@ -746,7 +746,7 @@ test('P04 Vertex settings use service-account references and persist distinct ma
   await page.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
   const connection = (await (await connectionResponse).json()) as Connection;
   expect(connection).toMatchObject({ protocol: 'vertex-gemini-v1', enabled: true });
-  expect(connection).not.toHaveProperty('credentialEnv');
+  expect(connection).not.toHaveProperty('credentialRef');
   await editor.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await openProviderMenu(page, '프로바이더', unique);
   await editor
@@ -864,7 +864,7 @@ test('P04 named and custom providers save native options from mobile settings wi
     expect(connection).toMatchObject({
       protocol: item.protocol,
       endpoint: item.endpoint,
-      credentialEnv: item.credential,
+      credentialRef: item.credential,
       enabled: true,
     });
     await expect(page.getByRole('form', { name: '모델 편집 양식' })).toBeVisible();

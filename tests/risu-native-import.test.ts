@@ -1,22 +1,14 @@
 import { afterEach, expect, test } from 'vitest';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { createHash } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { decodeImage } from '../server/package-images.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
 import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
-import {
-  applyNativeTransfer,
-  exportNativeTransfer,
-  nativeTransferOriginal,
-  prepareNativeTransfer,
-} from '../server/native-transfer.js';
 import { decodeRPack } from '../server/compat/risu/rpack.js';
 import {
-  nativeRisuBackground,
   nativeRisuLore,
   nativeRisuRegex,
   nativeRisuTriggers,
@@ -25,8 +17,7 @@ import {
 } from '../core/risu-native.js';
 import { validateRisuContent } from '../core/risu-content.js';
 import type { Content } from '../core/product.js';
-import { EditDraftService, initEditDrafts } from '../server/edit-drafts.js';
-import { nativeRisuPreview } from '../server/risu-native-preview.js';
+
 import { createNativeRisuCbs } from '../server/risu-native-cbs.js';
 import { supportedNativeRisuSnapshot } from '../server/risu-native-readonly.js';
 import { writeRisuZip } from '../server/risu-export-codec.js';
@@ -148,7 +139,7 @@ function createNativeContent(store: Store, card = synthetic()) {
 
 test.each(['json', 'charx'])(
   'explicit persona %s imports preserve cards without creating a chat',
-  (format) => {
+  async (format) => {
     const store = database(),
       card = synthetic();
     const source =
@@ -172,7 +163,7 @@ test.each(['json', 'charx'])(
       allowPartial: true,
       idempotencyKey: 'persona',
     };
-    const result = applyRisuImport(store, request);
+    const result = await applyRisuImport(store, request);
     expect(result.chat).toBeNull();
     expect(result.receipt.items[0].key).toBe('persona');
     const saved = store.product.get<Content>('content', result.receipt.items[0].id);
@@ -184,12 +175,12 @@ test.each(['json', 'charx'])(
       values: { phase: 'ready' },
       attachmentRoles: ['persona'],
     });
-    expect(applyRisuImport(store, request)).toMatchObject({
+    expect(await applyRisuImport(store, request)).toMatchObject({
       chat: null,
       receipt: { created: false },
     });
     expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
-    expect(() => applyRisuImport(store, { ...request, kind: 'bot' })).toThrow(
+    expect(async () => await applyRisuImport(store, { ...request, kind: 'bot' })).toThrow(
       'RISU_IMPORT_DRAFT_CHANGED'
     );
 
@@ -303,147 +294,6 @@ test('content saves reject retired Uimori instructions without modifying the cur
   expect(store.product.get<Content>('content', id)).toEqual(saved);
 });
 
-test('native draft supports large preserved documents and incomplete raw buffers without saving them', () => {
-  const store = database();
-  const card = synthetic();
-  card.unknown.nested = ['x'.repeat(5_100_000)];
-  const saved = createNativeContent(store, card);
-  initEditDrafts(store);
-  const service = new EditDraftService(store),
-    authority = { requestId: 'native-editor', assert: () => {} };
-  const { id: _id, revision: _revision, ...model } = saved;
-  const draft = service.create(
-    {
-      editorKey: `content:${saved.id}`,
-      kind: 'content',
-      targetId: saved.id,
-      model,
-      operationId: 'native-create',
-    },
-    authority
-  );
-  expect(service.validate(draft.id).valid).toBe(true);
-  const buffer = '{"unfinished":"' + 'x'.repeat(1_100_000);
-  service.patch(
-    draft.id,
-    {
-      expectedRevision: draft.revision,
-      operationId: 'native-patch',
-      model,
-      rawFields: { 'package.native.source': buffer },
-      unappliedFields: ['package.native.source'],
-    },
-    authority
-  );
-  expect(service.get(draft.id).rawFields['package.native.source']).toBe(buffer);
-  expect(service.validate(draft.id).valid).toBe(false);
-  expect(store.product.get<Content>('content', saved.id).revision).toBe(saved.revision);
-  expect(() =>
-    service.create(
-      {
-        editorKey: 'new:content:bot',
-        kind: 'content',
-        targetId: null,
-        model: { ...model, package: undefined, text: 'x'.repeat(5_100_000) },
-        operationId: 'ordinary-limit',
-      },
-      authority
-    )
-  ).toThrow('Draft model too large');
-});
-
-test('start preview uses fresh display Lua, CBS and regex without creating chat state', async () => {
-  const store = database(),
-    card = synthetic();
-  card.first_mes = 'hello';
-  card.extensions.risuai.triggerscript = [
-    {
-      type: 'start',
-      effect: [
-        {
-          type: 'triggerlua',
-          code: `
-local count = 0
-listenEdit('editDisplay', function(id, text)
-  count = count + 1
-  setChatVar(id, 'phase', 'preview')
-  return text .. ' {{user}} {{getvar::phase}} ' .. count
-end)
-`,
-        },
-      ],
-    },
-  ];
-  const saved = createNativeContent(store, card);
-  const before = store.product.export();
-  const query = { revision: String(saved.revision), startId: 'start-0', userName: 'Visitor' };
-  const first = await nativeRisuPreview(store, saved.id, query);
-  expect(first.html).toContain('<b>Native pilot</b>');
-  expect(first.html).toContain('Visitor preview 1');
-  expect(first.html).toContain('.chooser{color: red}');
-  expect(await nativeRisuPreview(store, saved.id, query)).toEqual(first);
-  expect(store.product.export().tables).toEqual(before.tables);
-  await expect(
-    nativeRisuPreview(store, saved.id, { ...query, startId: 'missing' })
-  ).rejects.toThrow('Authored start not found');
-});
-
-test('native card remains the exact authored document through import, original export and backup', () => {
-  const card = synthetic(),
-    source = sourceOf({ spec: 'chara_card_v3', data: card });
-  const store = database(),
-    preview = prepareRisuImport({ source });
-  expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
-  const result = applyRisuImport(store, {
-    source,
-    digest: preview.digest,
-    allowPartial: true,
-    idempotencyKey: 'native',
-  });
-  const pkg = store.product.get<Content>('content', result.receipt.items[0].id).package!;
-  expect(result.chat!.headRevision).not.toBeNull();
-  expect(store.sourceOriginal(result.chat!.headRevision!).text).toBe(card.first_mes);
-  expect(
-    store.db.prepare('SELECT count(*) AS n FROM runs WHERE chat_id=?').get(result.chat!.id)!.n
-  ).toBe(1);
-  const replay = applyRisuImport(store, {
-    source,
-    digest: preview.digest,
-    allowPartial: true,
-    idempotencyKey: 'native',
-  });
-  expect(replay.chat!.headRevision).toBe(result.chat!.headRevision);
-  expect(
-    store.db.prepare('SELECT count(*) AS n FROM runs WHERE chat_id=?').get(result.chat!.id)!.n
-  ).toBe(1);
-  expect(pkg.nativeRisu!.card).toEqual(card);
-  expect(pkg.nativeRisu!.sourceHash).toBe(
-    createHash('sha256').update(Buffer.from(source.base64, 'base64')).digest('hex')
-  );
-  expect(pkg.body).toBe(card.description);
-  expect(pkg.starts!.map((start) => start.text)).toEqual([
-    card.first_mes,
-    ...card.alternate_greetings,
-  ]);
-  expect(nativeRisuRegex(pkg.nativeRisu!)).toEqual(card.extensions.risuai.customScripts);
-  expect(nativeRisuTriggers(pkg.nativeRisu!)).toEqual(
-    card.extensions.risuai.triggerscript.map((trigger) => ({ ...trigger, lowLevelAccess: false }))
-  );
-  expect(nativeRisuBackground(pkg.nativeRisu!)).toBe(card.extensions.risuai.backgroundHTML);
-  expect(nativeRisuLore(pkg.nativeRisu!)).toEqual(card.character_book.entries);
-  expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0].base64).toBe(
-    source.base64
-  );
-  const restored = database();
-  restored.product.import(store.product.export());
-  expect(
-    restored.product.get<Content>('content', result.receipt.items[0].id).package!.nativeRisu
-  ).toEqual(pkg.nativeRisu);
-  expect(nativeTransferOriginal(restored, result.receipt.id).sourceFiles![0].base64).toBe(
-    source.base64
-  );
-});
-
 test('embedded module selection distinguishes absent/null/empty lore without mutating either source', () => {
   const card = synthetic();
   const native = { version: 1 as const, card, assets: [], sourceHash: 'a'.repeat(64) };
@@ -458,12 +308,12 @@ test('embedded module selection distinguishes absent/null/empty lore without mut
   expect(card).toEqual(synthetic());
 });
 
-test('a card without first_mes keeps an empty chat even when alternate greetings exist', () => {
+test('a card without first_mes keeps an empty chat even when alternate greetings exist', async () => {
   const card = { ...synthetic(), first_mes: '' };
   const source = sourceOf(card),
     store = database();
   const preview = prepareRisuImport({ source });
-  const result = applyRisuImport(store, {
+  const result = await applyRisuImport(store, {
     source,
     digest: preview.digest,
     allowPartial: true,
@@ -567,76 +417,3 @@ test('AVIF brand validation and GIF signatures cannot be confused with arbitrary
 });
 
 // Opt-in local evidence only: no private card or machine path enters repository fixtures.
-test.runIf(Boolean(process.env.UIMORI_RISU_LOCAL_CARDS))(
-  'local reference cards preserve documents, script counts and embedded assets',
-  () => {
-    const paths: string[] = JSON.parse(process.env.UIMORI_RISU_LOCAL_CARDS!);
-    for (const path of paths) {
-      const bytes = readFileSync(path);
-      const input = readCharacterCard(
-        { name: basename(path), uploadId: 'local-evidence' },
-        undefined,
-        () => bytes
-      );
-      const { file, preview } = analyzeNativeRisuImport(input);
-      const pkg = file.contents[0].source.package!;
-      const supported = normalizeRisuContentSource({
-        ...pkg.nativeRisu!,
-        card: input.nativeCard!,
-        ...(input.nativeModule ? { module: input.nativeModule } : {}),
-      });
-      expect(pkg.nativeRisu!.card).toEqual(supported.card);
-      expect(pkg.nativeRisu!.module).toEqual(supported.module);
-      expect(pkg.starts!.length).toBeGreaterThan(0);
-      expect(pkg.nativeRisu!.assets.length).toBe(pkg.images!.length);
-      if (bytes.length > 64 * 1024 * 1024) {
-        const store = database();
-        const result = applyRisuImport(
-          store,
-          {
-            source: input.source,
-            digest: preview.digest,
-            allowPartial: true,
-            idempotencyKey: 'large-native-local',
-          },
-          () => bytes
-        );
-        const contentId = result.receipt.items[0].id;
-        const exported = exportNativeTransfer(store, {
-          items: [{ kind: 'content', id: contentId }],
-        });
-        expect(Buffer.byteLength(JSON.stringify(exported))).toBeGreaterThan(64 * 1024 * 1024);
-        const prepared = prepareNativeTransfer({ file: exported });
-        const target = database();
-        const copied = applyNativeTransfer(target, {
-          file: exported,
-          digest: prepared.digest,
-          modelBindings: [],
-          idempotencyKey: 'large-native-roundtrip',
-        });
-        expect(
-          target.product.get<Content>('content', copied.items[0].id).package!.nativeRisu
-        ).toEqual(pkg.nativeRisu);
-        const restored = database();
-        restored.product.import(store.product.export());
-        expect(restored.product.get<Content>('content', contentId).package!.nativeRisu).toEqual(
-          pkg.nativeRisu
-        );
-        expect(nativeTransferOriginal(restored, result.receipt.id).images).toEqual(file.images);
-      }
-      console.info(
-        JSON.stringify({
-          file: basename(path),
-          starts: preview.summary.starts,
-          lore: preview.summary.lore,
-          images: preview.summary.images,
-          imageMimes: [...new Set(pkg.images!.map((image) => image.mime))],
-          regex: nativeRisuRegex(pkg.nativeRisu!).length,
-          triggers: nativeRisuTriggers(pkg.nativeRisu!).length,
-          findings: preview.findings.map(({ code, level }) => ({ code, level })),
-        })
-      );
-    }
-  },
-  60_000
-);

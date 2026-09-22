@@ -1,3 +1,5 @@
+import type { Store } from '../../server/store.js';
+import { modelWorkspace, updateModelWorkspace } from '../../server/prompt-workspace.js';
 import { vi } from 'vitest';
 import { JEV_ENDPOINT } from '../../server/jev-judgment.js';
 
@@ -39,4 +41,16 @@ export function installJevFixture() {
     );
   });
   return requests;
+}
+
+/** Explicit app setup for scenarios that exercise the optional judgment feature. */
+export function configureJevFixture(store: Store, enabled = true) {
+  store.credentials.set('jev', 'synthetic-jev-test-key');
+  const current = modelWorkspace(store);
+  updateModelWorkspace(store, {
+    expectedRevision: current.revision,
+    routes: current.routes,
+    translationPolicy: current.translationPolicy,
+    mainJudgmentEnabled: enabled,
+  });
 }

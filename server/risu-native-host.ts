@@ -14,10 +14,7 @@ import type { NativeRisuExecutionOptions } from './risu-native-runtime.js';
 import { requestNativeInteraction } from './risu-native-interactions.js';
 import { HttpError, record } from './request-validation.js';
 
-type Hooks = Pick<
-  MainHooks,
-  'approvedOrigins' | 'resolveCredential' | 'executeCodex' | 'vertexRequestTier'
->;
+type Hooks = Pick<MainHooks, 'resolveCredential' | 'executeCodex' | 'vertexRequestTier'>;
 export function nativeScriptModel(snapshot: RunSnapshot, method: string) {
   return method === 'axLLM'
     ? (snapshot.profile?.scriptModel ?? snapshot.profile?.models.main)

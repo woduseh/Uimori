@@ -36,7 +36,7 @@ const connectionInput = (title: string) => ({
   title,
   protocol: 'openai-responses-v1',
   endpoint: 'http://127.0.0.1:9/v1',
-  credentialEnv: 'PM_SYNTHETIC_KEY',
+  credentialRef: 'PM_SYNTHETIC_KEY',
   enabled: true,
 });
 const modelInput = (connection: Connection, title: string) => ({
@@ -52,7 +52,7 @@ const connectionBody = (item: Connection, changes: Record<string, unknown> = {})
   title: item.title,
   protocol: item.protocol,
   endpoint: item.endpoint,
-  credentialEnv: item.credentialEnv,
+  credentialRef: item.credentialRef,
   enabled: item.enabled,
   expectedRevision: item.revision,
   ...changes,
@@ -214,7 +214,7 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
     title,
     protocol: 'vercel-chat-v1',
     endpoint: 'https://ai-gateway.vercel.sh/v1',
-    credentialEnv: 'PM_SYNTHETIC_KEY',
+    credentialRef: 'PM_SYNTHETIC_KEY',
     enabled: true,
   });
   await settings(page);
@@ -693,11 +693,11 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   await expect(upload.getByRole('status')).toContainText(projectId);
   const uploadResponse = await uploaded;
   expect(uploadResponse.ok()).toBeTruthy();
-  const { credentialEnv } = (await uploadResponse.json()) as { credentialEnv: string };
-  expect(credentialEnv).toMatch(/^UIMORI_PROVIDER_VERTEX_FILE_[A-F0-9]{32}$/);
+  const { credentialRef } = (await uploadResponse.json()) as { credentialRef: string };
+  expect(credentialRef).toMatch(/^UIMORI_PROVIDER_VERTEX_FILE_[A-F0-9]{32}$/);
   expect(uploads).toBe(1);
   expect(uploadBody).toEqual({ serviceAccount });
-  await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(credentialEnv);
+  await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(credentialRef);
   const authSettings = form.locator('.provider-auth-settings'),
     changeAuth = form.getByRole('button', {
       name: '서버 ADC / 환경변수 방식으로 변경',
@@ -707,7 +707,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   await expect(changeAuth).toBeHidden();
   await authSettings.getByText('고급 인증 설정', { exact: true }).click();
   await expect(changeAuth).toBeVisible();
-  await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(credentialEnv);
+  await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(credentialRef);
   await authSettings.getByText('고급 인증 설정', { exact: true }).click();
   await expect(changeAuth).toBeHidden();
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models`;
@@ -726,14 +726,14 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   );
   await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
   expect((await posted).postDataJSON()).toMatchObject({
-    credentialEnv,
+    credentialRef,
     endpoint,
     title,
     protocol: 'vertex-gemini-v1',
   });
   await expect
     .poll(async () => (await library(request)).connections.find((item) => item.title === title))
-    .toMatchObject({ credentialEnv, endpoint });
+    .toMatchObject({ credentialRef, endpoint });
   expect(JSON.stringify(await library(request))).not.toContain('BEGIN PRIVATE KEY');
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await page.getByLabel('프로바이더·모델 검색').fill(title);
@@ -744,8 +744,8 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   await expect(form.getByLabel('서버 환경변수 이름')).toBeVisible();
   await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue('');
   expect(
-    (await library(request)).connections.find((item) => item.title === title)?.credentialEnv
-  ).toBe(credentialEnv);
+    (await library(request)).connections.find((item) => item.title === title)?.credentialRef
+  ).toBe(credentialRef);
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
   expect(observed.legacyReads).toEqual([]);
@@ -760,7 +760,7 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
       title,
       protocol: 'anthropic-messages-v1',
       endpoint: 'https://api.anthropic.com/v1',
-      credentialEnv: 'UIMORI_PROVIDER_ANTHROPIC',
+      credentialRef: 'UIMORI_PROVIDER_ANTHROPIC',
       enabled: true,
     });
   await settings(page);
@@ -945,7 +945,7 @@ for (const [index, item] of providerOptionCases.entries()) {
         title,
         protocol: item.protocol,
         endpoint: item.endpoint,
-        credentialEnv: 'PM_SYNTHETIC_KEY',
+        credentialRef: 'PM_SYNTHETIC_KEY',
         enabled: false,
       });
     await settings(page);
@@ -1025,14 +1025,14 @@ test('PMUI12 changing the model or connection keeps choices visible as unverifie
       title,
       protocol: 'openai-responses-v1',
       endpoint: 'https://api.openai.com/v1',
-      credentialEnv: 'PM_SYNTHETIC_KEY',
+      credentialRef: 'PM_SYNTHETIC_KEY',
       enabled: false,
     }),
     anthropic = await api<Connection>(request, '/connections', {
       title: title + ' Anthropic',
       protocol: 'anthropic-messages-v1',
       endpoint: 'https://api.anthropic.com/v1',
-      credentialEnv: 'PM_SYNTHETIC_KEY',
+      credentialRef: 'PM_SYNTHETIC_KEY',
       enabled: false,
     });
   await settings(page);
@@ -1252,7 +1252,7 @@ test('PMUI15 a forced Google service tier is shown and conflicting saved choices
       protocol: 'vertex-gemini-v1',
       endpoint:
         'https://aiplatform.googleapis.com/v1/projects/synthetic-forced-tier/locations/global/publishers/google/models',
-      credentialEnv: 'PM_SYNTHETIC_KEY',
+      credentialRef: 'PM_SYNTHETIC_KEY',
       enabled: true,
     });
   const model = await api<ModelPreset>(request, '/model-presets', {
@@ -1418,7 +1418,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
     endpoint: 'codex://local',
     enabled: true,
   });
-  expect(savedConnection.credentialEnv).toBeUndefined();
+  expect(savedConnection.credentialRef).toBeUndefined();
   expect(savedConnection).not.toHaveProperty('requestTier');
   await modelForm.getByLabel('모델 프리셋 이름', { exact: true }).fill('PMUI10 Codex 모델');
   await modelForm.getByLabel('모델 ID', { exact: true }).fill('synthetic-codex-model');
@@ -1551,7 +1551,7 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
     .toMatchObject({
       protocol: 'deepseek-chat-v1',
       endpoint: 'https://api.deepseek.com/v1',
-      credentialEnv: 'DEEPSEEK_API_KEY',
+      credentialRef: 'DEEPSEEK_API_KEY',
       enabled: false,
     });
   const cases = [
@@ -1595,7 +1595,7 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
         title,
         protocol: item.protocol,
         endpoint: item.endpoint,
-        credentialEnv: 'PM_SYNTHETIC_KEY',
+        credentialRef: 'PM_SYNTHETIC_KEY',
         enabled: false,
       });
     await settings(page);

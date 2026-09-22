@@ -30,7 +30,7 @@ import {
   getActiveEditorContext,
   refreshActiveEditor,
   type ActiveEditorContext,
-} from './editor-workspace-context.js';
+} from './resource-editor.js';
 import { useHelperSessions } from './useHelperSessions.js';
 import { HelperSessionBar } from './HelperSessionBar.js';
 import type { Branch } from '../core/product.js';
@@ -379,7 +379,7 @@ export function HelperPanel(props: Props) {
       if (!request) {
         const before = getActiveEditorContext(),
           selected = await flushActiveEditor();
-        if ((before?.draftId ?? null) !== (selected?.draftId ?? null))
+        if ((before?.targetId ?? null) !== (selected?.targetId ?? null))
           throw new Error('편집 대상이 바뀌었어요. 현재 초안을 확인한 뒤 다시 보내 주세요.');
         request = {
           requestKey: crypto.randomUUID(),
@@ -389,7 +389,8 @@ export function HelperPanel(props: Props) {
           ...(selected
             ? {
                 editor: {
-                  draftId: selected.draftId,
+                  targetId: selected.targetId,
+                  model: selected.model,
                   revision: selected.revision,
                   title: selected.title,
                   kind: selected.kind,

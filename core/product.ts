@@ -144,12 +144,12 @@ export type Connection = ContentRef & {
   title: string;
   protocol: ProviderProtocol;
   endpoint: string;
-  credentialEnv?: string;
+  credentialRef?: string;
   /**
    * Gemini connections only: server environment variable holding a Gemini Developer API key used
    * solely to list Gemini models and limits. Never used for generation requests.
    */
-  catalogCredentialEnv?: string;
+  catalogCredentialRef?: string;
   enabled: boolean;
   catalog: {
     id: string;
@@ -183,7 +183,7 @@ export type Connection = ContentRef & {
  * snapshots drop exactly these so a restored copy cannot name the origin's secrets. Keep in step
  * with the Connection type above; archive validation rejects any other connection field.
  */
-export const CONNECTION_CREDENTIAL_FIELDS = ['credentialEnv', 'catalogCredentialEnv'] as const;
+export const CONNECTION_CREDENTIAL_FIELDS = ['credentialRef', 'catalogCredentialRef'] as const;
 /** Strips credential references from an archived connection copy and disables it. */
 export function disableArchivedConnection(connection: Record<string, unknown>): void {
   for (const key of CONNECTION_CREDENTIAL_FIELDS) delete connection[key];
@@ -359,19 +359,8 @@ export function validateProviderEndpoint(protocol: ProviderProtocol, value: stri
       throw new Error('FIXTURE_REQUIRES_LOOPBACK');
     return value;
   }
-  const official = {
-    'anthropic-messages-v1': 'https://api.anthropic.com/v1',
-    'vercel-chat-v1': 'https://ai-gateway.vercel.sh/v1',
-    'deepseek-chat-v1': 'https://api.deepseek.com/v1',
-  };
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('HTTP_ENDPOINT_REQUIRED');
   const normalized = url.href.replace(/\/$/u, '');
-  if (protocol !== 'openai-chat-v1' && protocol !== 'openai-responses-v1') {
-    if (normalized !== official[protocol]) throw new Error('INVALID_PROVIDER_ENDPOINT');
-  } else if (
-    url.protocol !== 'https:' &&
-    !(url.protocol === 'http:' && ['127.0.0.1', '[::1]'].includes(url.hostname))
-  )
-    throw new Error('HTTPS_OR_LOOPBACK_REQUIRED');
   return normalized;
 }
 export function parseVertexRequestTier(value: string | undefined): VertexRequestTier | undefined {

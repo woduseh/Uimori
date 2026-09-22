@@ -66,6 +66,11 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
+  /** Compact Lua-authored message edits retained after execution inputs are released. */
+  messageChanges?: import('./message-changes.js').MessageChanges;
+  /** A completed message can store just display metadata instead of execution input. */
+  settled?: boolean;
+  displayModelTitle?: string;
   /** Frozen at reservation; omitted historical values mean enabled. */
   mainJudgmentEnabled?: boolean;
   mainJudgmentThreshold?: number;

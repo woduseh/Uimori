@@ -50,11 +50,6 @@ m.Path=pathlib.PurePosixPath
 base=['--commit','a'*40,'--build-id','b'*64,'--dist-hash','c'*64,'--release-dir','/opt/uimori/releases/test']
 a=m.arguments(base+['--fresh','--image','ghcr.io/team/app@sha256:'+'d'*64,'--check-only'])
 assert a.fresh and a.check_only and a.image.startswith('ghcr.io/')
-migration=m.arguments(base+['--migrate-schema-23-to-24'])
-assert migration.migrate_schema_23_to_24 and not migration.fresh
-try: m.arguments(base+['--fresh','--migrate-schema-23-to-24'])
-except SystemExit as e: assert e.code==2
-else: raise AssertionError('fresh migration accepted')
 for extra in [['--commit','bad'],['--release-dir','/opt/uimori/releases/../app'],['--image','--bad']]:
     try: m.arguments(base+extra)
     except SystemExit as e: assert e.code==2

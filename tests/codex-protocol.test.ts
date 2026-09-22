@@ -40,7 +40,7 @@ test('all provider roles use injected Codex execution without HTTP authority or 
     const result = await executeProvider(
       connection,
       { ...request(), role },
-      { signal: new AbortController().signal, approvedOrigins: [], executeCodex: run }
+      { signal: new AbortController().signal, executeCodex: run }
     );
     expect(result.status).toBe('completed');
     expect(result.usage.costUsd).toBeNull();
@@ -50,21 +50,20 @@ test('all provider roles use injected Codex execution without HTTP authority or 
     (
       await executeProvider(connection, request(), {
         signal: new AbortController().signal,
-        approvedOrigins: [],
       })
     ).error?.code
   ).toBe('CODEX_UNAVAILABLE');
-  expect(() => validateConnection({ ...connection, credentialEnv: 'SECRET' }, [])).toThrow(
+  expect(() => validateConnection({ ...connection, credentialRef: 'SECRET' })).toThrow(
     'INVALID_CODEX_CONNECTION'
   );
-  expect(() => validateConnection({ ...connection, endpoint: 'codex://other' }, [])).toThrow(
+  expect(() => validateConnection({ ...connection, endpoint: 'codex://other' })).toThrow(
     'INVALID_CODEX_CONNECTION'
   );
   await expect(
     executeProvider(
       connection,
       { ...request(), generation: { ...request().generation!, structuredOutput: false } },
-      { signal: new AbortController().signal, approvedOrigins: [], executeCodex: run }
+      { signal: new AbortController().signal, executeCodex: run }
     )
   ).rejects.toThrow('UNSUPPORTED_GENERATION_OPTIONS');
 });

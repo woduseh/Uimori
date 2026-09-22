@@ -12,7 +12,7 @@ import {
   type PendingChatOptions,
   type ChatOptionState,
 } from '../core/chat-options.js';
-import type { HelperTask, HelperGrant } from '../core/helper.js';
+import type { HelperTask } from '../core/helper.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { CurrentPrompt, ProfileSnapshot } from '../core/product.js';
 import {
@@ -570,30 +570,6 @@ export class ChatOptionsStore {
   }
 }
 
-export function chatOptionGrants(
-  store: Store,
-  conversationId: string,
-  requestId: string
-): HelperGrant[] {
-  const conversation = new HelperWorkspace(store).conversation(conversationId);
-  if (conversation.scope.kind !== 'chat') return [];
-  const service = new ChatOptionsStore(store),
-    state = service.get(conversation.scope.chatId, conversation.scope.branchId);
-  return state.delegations
-    .filter(
-      (item) =>
-        item.conversationId === conversationId &&
-        !item.revokedAt &&
-        isDeepStrictEqual(item.binding, state.binding)
-    )
-    .map((item) => ({
-      id: randomUUID(),
-      requestId,
-      target: item.id,
-      actions: item.fields.map((id) => `options.choose:${id}`),
-      provenance: 'delegation',
-    }));
-}
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',
   properties,
@@ -637,7 +613,7 @@ export const helperOptionTools: ProviderTool[] = [
   {
     name: 'options.oneoff',
     description:
-      'Apply explicit next-request option values only after a direct user instruction for this chat. Does not grant future discretion or change global settings. Read options first.',
+      'Set next-request option values for the selected chat. Read options first for definitions and the current revision.',
     inputSchema: schema(
       {
         expectedRevision: { type: 'integer', minimum: 0 },
@@ -654,34 +630,6 @@ export const helperOptionTools: ProviderTool[] = [
       ['expectedRevision', 'binding', 'values', 'expectedHeadRevision', 'operationId']
     ),
   },
-  {
-    name: 'options.choose',
-    description:
-      'Choose only unfixed fields covered by an active user delegation for the next main request. Cannot change models, prompts, global settings or grant permissions. Use values and binding returned by options.read; stable operationId and revision required.',
-    inputSchema: schema(
-      {
-        expectedRevision: { type: 'integer', minimum: 0 },
-        binding: {
-          type: 'object',
-          properties: { owner: str, definitionHash: str },
-          required: ['owner', 'definitionHash'],
-          additionalProperties: false,
-        },
-        values: { type: 'object' },
-        expectedHeadRevision: { type: ['string', 'null'] },
-        delegationId: str,
-        operationId: str,
-      },
-      [
-        'expectedRevision',
-        'binding',
-        'values',
-        'expectedHeadRevision',
-        'delegationId',
-        'operationId',
-      ]
-    ),
-  },
 ];
 export function invokeHelperOptions(
   store: Store,
@@ -694,66 +642,22 @@ export function invokeHelperOptions(
   const service = new ChatOptionsStore(store);
   if (name === 'options.read') {
     fields(record(value), []);
-    return helperOptionState(service.get(scope.chatId, scope.branchId), task.conversationId);
+    return helperOptionState(service.get(scope.chatId, scope.branchId));
   }
-  if (name !== 'options.choose' && name !== 'options.oneoff')
-    throw new HttpError(400, 'Unknown option tool');
-  const b = record(value);
-  const savedTask = new HelperWorkspace(store).task(task.id);
-  if (savedTask.status !== 'running') throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
-  if (
-    savedTask.conversationId !== task.conversationId ||
-    !isDeepStrictEqual(savedTask.snapshot.scope, scope)
-  )
-    throw new HttpError(403, 'Helper option scope changed');
-  if (name === 'options.oneoff')
-    return helperOptionState(
-      service.stage(
-        scope.chatId,
-        { ...b, branchId: scope.branchId },
-        {
-          requestId: task.id,
-          assert: () =>
-            new HelperWorkspace(store).authorize(task.id, scope.chatId, 'options.oneoff'),
-        }
-      ),
-      task.conversationId
-    );
-  const delegationId = text(b.delegationId, 'delegation ID', 100);
+  if (name !== 'options.oneoff') throw new HttpError(400, 'Unknown option tool');
+  new HelperWorkspace(store).assertRunning(task.id);
   return helperOptionState(
     service.stage(
       scope.chatId,
-      { ...b, branchId: scope.branchId },
+      { ...record(value), branchId: scope.branchId },
       {
         requestId: task.id,
-        assert: (intent) => {
-          if (
-            intent.action !== 'choose' ||
-            intent.chatId !== scope.chatId ||
-            intent.branchId !== scope.branchId ||
-            !service
-              .delegations(scope.chatId, scope.branchId)
-              .some(
-                (item) =>
-                  item.id === delegationId &&
-                  item.conversationId === task.conversationId &&
-                  !item.revokedAt
-              ) ||
-            !savedTask.snapshot.grants.some(
-              (grant) =>
-                grant.provenance === 'delegation' &&
-                grant.target === delegationId &&
-                intent.fields.every((id) => grant.actions.includes(`options.choose:${id}`))
-            )
-          )
-            throw new HttpError(403, '이 작업에 사용자 옵션 위임이 없어요.');
-        },
-      },
-      true
-    ),
-    task.conversationId
+        assert: () => new HelperWorkspace(store).assertRunning(task.id),
+      }
+    )
   );
 }
+
 export function chatOptionRoutes(app: FastifyInstance, store: Store): void {
   const service = new ChatOptionsStore(store);
   const authority = (body: unknown): ChatOptionAuthority => ({

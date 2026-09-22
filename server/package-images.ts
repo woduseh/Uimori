@@ -1,3 +1,5 @@
+import { processImageUpload } from './image-processing.js';
+import { storeImage, readImage } from './image-storage.js';
 import { assertPackageImageReferences } from './package-image-references.js';
 import { HttpError, fields, isSha256Hex, record, text } from './request-validation.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -25,7 +27,7 @@ export function decodeImage(
 ): { bytes: Buffer; mime: PackageImageBlob['mime']; hash: string } {
   if (!PACKAGE_IMAGE_MIMES.includes(mime as PackageImageBlob['mime']))
     throw new HttpError(400, 'PNG, JPEG, WebP, AVIF 또는 GIF 이미지를 선택해 주세요.');
-  const base64 = text(encoded, 'image bytes', 3_000_000);
+  const base64 = text(encoded, 'image bytes', 90 * 1024 * 1024);
   if (!/^[A-Za-z0-9+/]+={0,2}$/u.test(base64)) throw new HttpError(400, 'Invalid image encoding');
   const bytes = Buffer.from(base64, 'base64');
   const valid =
@@ -56,7 +58,7 @@ export function decodeImage(
               bytes.toString('ascii', 8, 12) === 'WEBP' &&
               bytes.readUInt32LE(4) + 8 === bytes.length &&
               ['VP8 ', 'VP8L', 'VP8X'].includes(bytes.toString('ascii', 12, 16));
-  if (base64 !== bytes.toString('base64') || bytes.length > 2_000_000 || !valid)
+  if (base64 !== bytes.toString('base64') || bytes.length > 64 * 1024 * 1024 || !valid)
     throw new HttpError(400, 'Invalid image bytes');
   return {
     bytes,
@@ -90,17 +92,11 @@ export function putValidatedImageBlob(
   product: ProductStore,
   blob: PackageImageBlob
 ): PackageImageBlob {
-  const existing = product.db
-    .prepare("SELECT body FROM versions WHERE kind='package-image' AND id=? AND revision=1")
-    .get(blob.hash) as { body: string } | undefined;
-  if (existing) {
-    if (!isDeepStrictEqual(validateImageBlob(JSON.parse(existing.body)), blob))
-      throw new HttpError(409, 'Image blob collision');
-    return blob;
-  }
-  product.db
-    .prepare("INSERT INTO versions VALUES('package-image',?,1,?)")
-    .run(blob.hash, JSON.stringify(blob));
+  storeImage(product.db, {
+    hash: blob.hash,
+    mime: blob.mime,
+    bytes: Buffer.from(blob.base64, 'base64'),
+  });
   return blob;
 }
 export function assertPackageImages(product: ProductStore, pkg: RisuContent) {
@@ -469,19 +465,22 @@ export function packageImageRoutes(
   store: Store,
   hooks: { publish: (id: string) => void; pump: () => void }
 ) {
-  app.post('/api/package-image-blobs', { bodyLimit: 4 * 1024 * 1024 }, async (request) => {
-    const blob = putImageBlob(store.product, request.body);
+  app.post('/api/package-image-blobs', { bodyLimit: 90 * 1024 * 1024 }, async (request) => {
+    const blob = putImageBlob(
+      store.product,
+      await processImageUpload({ base64: record(request.body).base64 })
+    );
     return { hash: blob.hash, mime: blob.mime, url: `/api/package-image-blobs/${blob.hash}` };
   });
   app.get<{ Params: { hash: string } }>(
     '/api/package-image-blobs/:hash',
     async (request, reply) => {
-      const blob = store.product.get<PackageImageBlob>('package-image', request.params.hash, 1);
+      const blob = readImage(store.db, request.params.hash);
       return reply
         .header('X-Content-Type-Options', 'nosniff')
         .header('Cache-Control', 'private, max-age=31536000, immutable')
         .type(blob.mime)
-        .send(Buffer.from(blob.base64, 'base64'));
+        .send(blob.bytes);
     }
   );
   app.post('/api/package-bundles/export', { bodyLimit: 8 * 1024 * 1024 }, async (request) => {

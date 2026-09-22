@@ -5,12 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import {
-  ChatOverridesStore,
-  validateChatOverrideArchive,
-  validateChatOverrideSnapshot,
-  type ChatOverrideAuthority,
-} from '../server/chat-overrides.js';
+import { ChatOverridesStore, type ChatOverrideAuthority } from '../server/chat-overrides.js';
 import {
   chatOverrideHash,
   projectChatPackageCompilation,
@@ -21,9 +16,7 @@ import { serializeRisuLoreSources } from '../core/risu-context-source.js';
 import type { Content } from '../core/product.js';
 import type { RisuContent, ContentAttachment } from '../core/risu-content.js';
 import { compiledPackages } from '../core/package-context.js';
-import { roleResources } from '../core/provider.js';
 import { fixtureBotInput } from './fixtures/chat.js';
-import { forkChat } from '../server/chat-fork.js';
 
 const owned: { store: Store; dir: string }[] = [];
 afterEach(() => {
@@ -338,38 +331,6 @@ test('authority, source scope, root/package revisions and text-only selectors re
   expect(store.db.prepare('SELECT 1 FROM chat_override_operations').all()).toHaveLength(1);
 });
 
-test('branch reservation and fork exclude later source-anchored overrides while preserving the selected past', () => {
-  const store = database(),
-    bot = save(store, 'Fork bot'),
-    chat = store.createChat('Anchor scope', 'calm', { botId: bot.id });
-  const first = complete(store, run(store, chat.id));
-  patch(store, chat.id, selector(bot), 'Valid at first source');
-  const branch = store.product.createBranch(chat.id, {
-    title: 'Earlier branch',
-    fromRevision: first.id,
-  });
-  const second = complete(store, run(store, chat.id));
-  patch(store, chat.id, selector(bot), 'Future override at second source');
-  const earlier = run(store, chat.id, branch.id);
-  expect(
-    roleResources(earlier.snapshot).some((item) => item.text === 'Valid at first source')
-  ).toBe(true);
-  expect(
-    roleResources(earlier.snapshot).some((item) => item.text === 'Future override at second source')
-  ).toBe(false);
-  store.finishRun(earlier.id, 'cancelled', 'Synthetic test cleanup');
-  const forked = forkChat(store, chat.id, { fromRevision: first.id, idempotencyKey: randomUUID() });
-  const copied = new ChatOverridesStore(store).get(forked.id);
-  expect(copied.overrides.map((entry) => entry.value)).toEqual(['Valid at first source']);
-  expect(copied.overrides[0].atSource).toBe(forked.headRevision);
-  expect(copied.overrides[0].atSource).not.toBe(first.id);
-  expect(
-    store.db.prepare('SELECT 1 FROM chat_override_operations WHERE chat_id=?').all(forked.id)
-  ).toHaveLength(0);
-  expect(store.source(second.id).chatId).toBe(chat.id);
-  validateChatOverrideArchive(store);
-});
-
 test('an edited source anchor preserves the override record but excludes it from new request projections', () => {
   const store = database(),
     bot = save(store, 'Retcon bot'),
@@ -382,33 +343,4 @@ test('an edited source anchor preserves the override record but excludes it from
   expect(current.overrides[0].value).toBe('Before retcon');
   expect(current.conflicts).toMatchObject([{ kind: 'anchor-changed' }]);
   expect(store.product.snapshot(chat.id).chatOverrides!.projections).toEqual([]);
-});
-
-test('override versions, operation receipts and frozen original/projection snapshots roundtrip and reject tampering', () => {
-  const store = database(),
-    bot = save(store, 'Archive bot'),
-    chat = store.createChat('Archive scope', 'calm', { botId: bot.id });
-  const { input, result } = patch(store, chat.id, selector(bot), 'Archived local lore');
-  const generated = run(store, chat.id);
-  complete(store, generated);
-  validateChatOverrideArchive(store);
-  validateChatOverrideSnapshot(store, generated.snapshot.profile!, generated.snapshot.history);
-  const archive = store.product.export(),
-    restored = database();
-  restored.product.import(archive);
-  expect(restored.run(generated.id).snapshot).toEqual(store.run(generated.id).snapshot);
-  expect(new ChatOverridesStore(restored).patch(chat.id, input, authority)).toEqual(result);
-  const forged = structuredClone(generated.snapshot.profile!);
-  forged.chatOverrides!.projections[0].package.body = 'Forged executable body';
-  expect(() => validateChatOverrideSnapshot(restored, forged, generated.snapshot.history)).toThrow(
-    /projection mismatch/
-  );
-  const malformed = structuredClone(archive),
-    row = malformed.tables.chat_lore_overrides[0];
-  const entry = JSON.parse(String(row.body));
-  entry.baseEntry.text = 'Fabricated source';
-  row.body = JSON.stringify(entry);
-  const target = database();
-  expect(() => target.product.import(malformed)).toThrow();
-  expect(target.chats()).toHaveLength(0);
 });

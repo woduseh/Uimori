@@ -35,7 +35,7 @@ export type ProviderConnection = {
   id: string;
   protocol: ProviderProtocol;
   endpoint: string;
-  credentialEnv?: string;
+  credentialRef?: string;
 };
 /**
  * Narrows a stored connection setting to the transport shape. Host records carry title, revision,
@@ -46,7 +46,7 @@ export function transportConnection(connection: ProviderConnection): ProviderCon
     id: connection.id,
     protocol: connection.protocol,
     endpoint: connection.endpoint,
-    ...(connection.credentialEnv ? { credentialEnv: connection.credentialEnv } : {}),
+    ...(connection.credentialRef ? { credentialRef: connection.credentialRef } : {}),
   };
 }
 export type ProviderTool = { name: string; description: string; inputSchema: Json };
@@ -167,7 +167,7 @@ export type ProviderExecutionOptions = {
     request: ProviderRequest,
     options: ProviderExecutionOptions
   ) => Promise<ProviderResult>;
-  approvedOrigins: readonly string[];
+
   signal: AbortSignal;
   timeoutMs?: number;
   vertexRequestTier?: VertexRequestTier;
@@ -220,7 +220,7 @@ export async function executeProvider(
     };
   }
   if (connectionValue.protocol === 'codex-app-server-v1') {
-    const connection = validateConnection(connectionValue, options.approvedOrigins),
+    const connection = validateConnection(connectionValue),
       request = validateRequest(requestValue);
     if (request.generation) validateModelOptions(request.generation, connection.protocol);
     if (options.executeCodex)
@@ -276,7 +276,7 @@ export async function executeProvider(
     return result;
   };
   try {
-    const connection = validateConnection(connectionValue, options.approvedOrigins);
+    const connection = validateConnection(connectionValue);
     const request = validateRequest(requestValue);
     const progress = createPublicTextProgress(request, connection.protocol, { ...options, signal });
     if (signal.aborted) return failure('CANCELLED');
@@ -300,9 +300,9 @@ export async function executeProvider(
     };
     assertContextBudget(bodyValue, request.contextBudget);
     const body = JSON.stringify(bodyValue);
-    if (connection.credentialEnv) {
+    if (connection.credentialRef) {
       secret = await (options.resolveCredential ?? ((name) => process.env[name]))(
-        connection.credentialEnv,
+        connection.credentialRef,
         connection,
         signal
       );

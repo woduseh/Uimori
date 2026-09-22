@@ -1,6 +1,6 @@
 import { useState, type ComponentProps } from 'react';
 import { createRoot } from 'react-dom/client';
-import { EditorDraftProvider } from '../../web/editor-workspace-context.js';
+import { ResourceEditorProvider } from '../../web/resource-editor.js';
 import { NativeRisuRegexEditor } from '../../web/NativeRisuRegexEditor.js';
 import '../../web/style.css';
 import '../../web/native-editor.css';
@@ -25,9 +25,9 @@ export function mount() {
         pendingField: () => {},
       },
       activate: () => {},
-    } as unknown as ComponentProps<typeof EditorDraftProvider>['value'];
+    } as unknown as ComponentProps<typeof ResourceEditorProvider>['value'];
     return (
-      <EditorDraftProvider value={provider}>
+      <ResourceEditorProvider value={provider}>
         <div className="native-editor">
           <button
             type="button"
@@ -69,7 +69,7 @@ export function mount() {
           </button>
           <output>{JSON.stringify(value)}</output>
         </div>
-      </EditorDraftProvider>
+      </ResourceEditorProvider>
     );
   }
   createRoot(document.getElementById('mount')!).render(<Harness />);

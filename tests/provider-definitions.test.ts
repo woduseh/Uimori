@@ -24,17 +24,17 @@ describe('local provider definitions (no network or provider capability inferenc
     for (const item of PROVIDER_DEFINITIONS) {
       if (item.endpointDefault)
         expect(validateProviderEndpoint(item.id, item.endpointDefault)).toBe(item.endpointDefault);
-      if (item.credentialEnvDefault)
-        expect(item.credentialEnvDefault).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/u);
+      if (item.credentialRefDefault)
+        expect(item.credentialRefDefault).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/u);
     }
     for (const protocol of ['fixture-sse-v1', 'vertex-gemini-v1', 'openai-chat-v1'] as const)
       expect(providerDefinition(protocol).endpointDefault).toBe('');
-    expect(providerDefinition('openai-responses-v1').credentialEnvDefault).toBe('OPENAI_API_KEY');
-    expect(providerDefinition('anthropic-messages-v1').credentialEnvDefault).toBe(
+    expect(providerDefinition('openai-responses-v1').credentialRefDefault).toBe('OPENAI_API_KEY');
+    expect(providerDefinition('anthropic-messages-v1').credentialRefDefault).toBe(
       'ANTHROPIC_API_KEY'
     );
-    expect(providerDefinition('vercel-chat-v1').credentialEnvDefault).toBe('VERCEL_API_KEY');
-    expect(providerDefinition('openai-chat-v1').credentialEnvDefault).toBe('PROVIDER_API_KEY');
+    expect(providerDefinition('vercel-chat-v1').credentialRefDefault).toBe('VERCEL_API_KEY');
+    expect(providerDefinition('openai-chat-v1').credentialRefDefault).toBe('PROVIDER_API_KEY');
   });
   test('keeps adapter provenance separate from unknown model capabilities and prices', () => {
     for (const item of PROVIDER_DEFINITIONS) {

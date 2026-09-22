@@ -7,8 +7,6 @@ import { createApp, type App } from '../server/app.js';
 import {
   mainJudgmentInput,
   mainJudgmentRequest,
-  mainJudgmentInputHash,
-  validateMainJudgmentInput,
   validateMainJudgmentWire,
 } from '../server/main-judgment.js';
 import type { CodexRuntimeService } from '../server/codex-runtime.js';
@@ -140,7 +138,8 @@ async function fixture(
     codexRuntime: runtime,
   });
   owner.app = app;
-  if (!judgmentEnabled || mainThreshold !== 0.9) {
+  if (key) app.store.credentials.set('jev', 'synthetic-jev-key');
+  {
     const workspace = modelWorkspace(app.store);
     updateModelWorkspace(app.store, {
       routes: workspace.routes,
@@ -261,41 +260,7 @@ test.each([
   expect(f.judged).toHaveLength(1);
   expect(f.app.store.product.attempts(f.chat.id)).toHaveLength(2);
 });
-test.each([
-  '“I refuse,” the captain said, opening the gate.',
-  'Here is a plan: first review the evidence.',
-  'Which of the two scenes should I analyze?',
-])('accepts the selected task output without requiring fiction: %s', async (text) => {
-  const f = await fixture(text, 0.58);
-  expect(f.run).toMatchObject({
-    status: 'completed',
-    error: null,
-    partialText: '',
-    usage: { modelCalls: 2, inputTokens: 18, outputTokens: 8 },
-  });
-  expect(f.app.store.sourceOriginal(f.run.sourceRevision!).text).toBe(text);
-  expect(f.judged[0].state).toEqual({ response: text });
-  const attempt = f.app.store.product
-    .attempts(f.chat.id)
-    .find((item) => (item.request as WireRecord).judgment?.kind === 'main-refusal')!;
-  expect(() =>
-    validateMainJudgmentWire(f.run.snapshot.mainJudgment!, attempt.request as WireRecord)
-  ).not.toThrow();
-  expect(() =>
-    validateMainJudgmentWire(
-      mainJudgmentInput('different candidate'),
-      attempt.request as WireRecord
-    )
-  ).toThrow('MAIN_JUDGMENT_ATTEMPT_MISMATCH');
-  const archive = f.app.store.product.export();
-  const restored = new Store(join(owned.at(-1)!.directory, 'restore.sqlite'));
-  try {
-    restored.product.import(archive);
-    expect(restored.run(f.run.id).status).toBe('completed');
-  } finally {
-    restored.close();
-  }
-});
+
 test.each([
   [1, true, 'MAIN_JUDGMENT_CALL_BUDGET'],
   [8, false, 'JEV_CREDENTIAL_REQUIRED'],
@@ -308,28 +273,7 @@ test.each([
     expect(f.judged).toEqual([]);
   }
 );
-test('a candidate owns its response judgment while preserving the original frozen input', async () => {
-  const f = await fixture('First response.', 0.58);
-  f.output.text = 'Independent candidate response.';
-  const candidate = await api(f.app, `/api/runs/${f.run.id}/candidate`, {
-    idempotencyKey: randomUUID(),
-    title: 'Candidate',
-  });
-  await expect
-    .poll(() => f.app.store.run(candidate.id).status, { timeout: 6000 })
-    .not.toMatch(/^(queued|running)$/u);
-  const run = f.app.store.run(candidate.id);
-  expect(run).toMatchObject({ status: 'completed', error: null });
-  expect(run.snapshot.mainJudgment).toEqual(mainJudgmentInput(f.output.text));
-  expect(run.snapshot.mainJudgment).not.toEqual(f.run.snapshot.mainJudgment);
-  const restored = new Store(join(owned.at(-1)!.directory, 'candidate-restore.sqlite'));
-  try {
-    restored.product.import(f.app.store.product.export());
-    expect(restored.run(candidate.id).snapshot.mainJudgment).toEqual(run.snapshot.mainJudgment);
-  } finally {
-    restored.close();
-  }
-});
+
 test.each(['input', 'editRequest'] as const)(
   'Lua %s preserves a writer call and its JEV judgment',
   async (stage) => {
@@ -352,23 +296,6 @@ test('preserves the whole Unicode response and only asks about service refusal',
   expect(mainJudgmentRequest(input).state).toEqual({ response: candidate });
   expect(Object.keys(mainJudgmentRequest(input).questions)).toEqual(['explicitRefusal']);
   expect(mainJudgmentRequest(input).questions.explicitRefusal.type).toBe('noul');
-});
-
-test('sends and archives the entire long response, including its middle', async () => {
-  const candidate =
-    'Beginning 😀' + '가나다'.repeat(3000) + ' middle refusal quote ' + '漢字'.repeat(3000) + 'End';
-  const f = await fixture(candidate, 0.58);
-  expect(f.run.status).toBe('completed');
-  expect(f.judged[0].state).toEqual({ response: candidate });
-  expect(Object.keys(f.judged[0].questions)).toEqual(['explicitRefusal']);
-  expect(f.run.snapshot.mainJudgment).toEqual(mainJudgmentInput(candidate));
-  const restored = new Store(join(owned.at(-1)!.directory, 'long-restore.sqlite'));
-  try {
-    restored.product.import(f.app.store.product.export());
-    expect(restored.run(f.run.id).snapshot.mainJudgment?.response).toBe(candidate);
-  } finally {
-    restored.close();
-  }
 });
 
 test.each([
@@ -394,38 +321,6 @@ test.each([
     ).toThrow('MAIN_JUDGMENT_ATTEMPT_MISMATCH');
   }
 );
-
-test('rejects changed response contents, receipt hashes, and judgment wire questions', async () => {
-  const f = await fixture('Original full response.', 0.58);
-  const input = f.run.snapshot.mainJudgment!;
-  const wire = f.app.store.product
-    .attempts(f.chat.id)
-    .find((item) => (item.request as WireRecord).judgment?.kind === 'main-refusal')!
-    .request as WireRecord;
-  expect(() => validateMainJudgmentInput({ ...input, response: 'Changed' })).toThrow(
-    'MAIN_JUDGMENT_INPUT_INVALID'
-  );
-  expect(mainJudgmentInputHash(input)).not.toBe(
-    mainJudgmentInputHash(mainJudgmentInput(input.response + 'tail'))
-  );
-  const changed = structuredClone(wire);
-  const body = changed.body as { questions: Record<string, unknown> };
-  body.questions.extra = { type: 'noul', instructions: 'Another question' };
-  changed.bodySha256 = digest(changed.body);
-  changed.stablePrefixSha256 = digest(body.questions);
-  expect(() => validateMainJudgmentWire(input, changed)).toThrow('MAIN_JUDGMENT_ATTEMPT_MISMATCH');
-  const archive = f.app.store.product.export();
-  const serialized = JSON.stringify(archive).replaceAll(
-    'Original full response.',
-    'Tampered full response.'
-  );
-  const restored = new Store(join(owned.at(-1)!.directory, 'tampered-restore.sqlite'));
-  try {
-    expect(() => restored.product.import(JSON.parse(serialized))).toThrow();
-  } finally {
-    restored.close();
-  }
-});
 
 test('preserves oversized main output when JEV preflight rejects it before an attempt', async () => {
   const candidate = '가😀 '.repeat(20000);
@@ -481,61 +376,6 @@ test('disabled main judgment does not accept a partial generation', async () => 
   expect(f.run.status).not.toBe('completed');
   expect(f.run.sourceRevision).toBeNull();
   expect(f.judged).toHaveLength(0);
-});
-
-test('rejudges preserved text once without writer/input replay and preserves archive lineage', async () => {
-  const f = await fixture('Preserved response', 'failure', 8, true, 'recovery');
-  expect(f.run.snapshot.nativeRisuExecution?.variables.inputCount).toBe('1');
-  vi.stubGlobal(
-    'fetch',
-    async () =>
-      new Response(
-        JSON.stringify({
-          model: 'jev-latest',
-          answers: { explicitRefusal: { type: 'noul', noul: 0.1 } },
-          usage: { input_tokens: 7, output_tokens: 3 },
-        })
-      )
-  );
-  const reader = await api(f.app, `/api/chats/${f.chat.id}/reader`);
-  expect(reader.runs.find((run: { id: string }) => run.id === f.run.id).canRejudge).toBe(true);
-  const key = randomUUID();
-  const recovered = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: key });
-  const duplicate = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: key });
-  expect(duplicate.id).toBe(recovered.id);
-  await expect
-    .poll(() => f.app.store.run(recovered.id).status, { timeout: 6000 })
-    .toBe('completed');
-  const run = f.app.store.run(recovered.id);
-  expect(f.calls).toHaveLength(1);
-  expect(run.usage.modelCalls).toBe(1);
-  expect(run.snapshot.nativeRisuExecution?.output?.variables).toMatchObject({
-    inputCount: '1',
-    outputCount: '1',
-  });
-  expect(f.app.store.sourceOriginal(run.sourceRevision!).text).toBe('Preserved response');
-  expect(f.app.store.run(f.run.id)).toEqual(f.run);
-  expect(run.snapshot.branchId).not.toBe(f.run.snapshot.branchId);
-  const fork = await api(f.app, `/api/chats/${f.chat.id}/fork`, {
-    fromRevision: run.sourceRevision,
-    idempotencyKey: randomUUID(),
-  });
-  const forked = (await api(f.app, `/api/chats/${fork.id}`)).runs[0];
-  expect(forked.snapshot.judgmentRecovery).toBeUndefined();
-  const restored = new Store(join(owned.at(-1)!.directory, 'rejudge-restore.sqlite'));
-  try {
-    restored.product.import(f.app.store.product.export());
-    expect(restored.run(run.id).snapshot.judgmentRecovery).toBe(true);
-  } finally {
-    restored.close();
-  }
-  const denied = await f.app.inject({
-    method: 'POST',
-    url: `/api/runs/${run.id}/rejudge`,
-    headers: { host: '127.0.0.1' },
-    payload: { idempotencyKey: randomUUID() },
-  });
-  expect(denied.statusCode).toBe(409);
 });
 
 test('a second judgment failure keeps the same response recoverable without writer charges', async () => {

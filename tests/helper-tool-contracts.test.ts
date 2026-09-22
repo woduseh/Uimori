@@ -33,7 +33,6 @@ async function fixture(kind: 'chat' | 'library' = 'chat') {
     dbPath: join(path, 'test.sqlite'),
     buildId: 'helper-tool-contracts',
     testMode: true,
-    approvedOrigins: ['http://127.0.0.1:9'],
   });
   owned.push({ app, path });
   const store = app.store;
@@ -114,7 +113,7 @@ function mockSend(
     .spyOn(transport, 'executeProvider')
     .mockImplementation(async (connection, request, options) => {
       expect(request.role).toBe('helper');
-      transport.validateConnection(connection, options.approvedOrigins);
+      transport.validateConnection(connection);
       options.beforeTurn?.();
       await options.onWire?.({
         connectionId: connection.id,

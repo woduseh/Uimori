@@ -26,13 +26,13 @@ const variants: ProviderConnection[] = [
     protocol: 'vertex-gemini-v1',
     endpoint:
       'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
-    credentialEnv: 'UIMORI_PROVIDER_TIMEOUT_TEST',
+    credentialRef: 'UIMORI_PROVIDER_TIMEOUT_TEST',
   },
   {
     id: 'chat-timeout',
     protocol: 'openai-chat-v1',
     endpoint: 'https://compatible.synthetic.invalid/v1',
-    credentialEnv: 'UIMORI_PROVIDER_TIMEOUT_TEST',
+    credentialRef: 'UIMORI_PROVIDER_TIMEOUT_TEST',
   },
 ];
 const request = (connection: ProviderConnection): ProviderRequest => ({
@@ -138,7 +138,7 @@ describe('provider-specific HTTP dispatcher and safe failure codes', () => {
       const pending = executeProvider(connection, request(connection), {
         signal: controller.signal,
         timeoutMs: mode === 'timeout' ? 400 : 5000,
-        approvedOrigins: [new URL(connection.endpoint).origin],
+
         resolveCredential: () => secret,
         onWire: (wire) => {
           wires.push(wire);
@@ -187,7 +187,7 @@ describe('provider-specific HTTP dispatcher and safe failure codes', () => {
     vi.stubGlobal('fetch', send);
     const result = await executeProvider(connection, request(connection), {
       signal: new AbortController().signal,
-      approvedOrigins: [new URL(connection.endpoint).origin],
+
       resolveCredential: () => secret,
     });
     expect(result.error).toEqual({ code });

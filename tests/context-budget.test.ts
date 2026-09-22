@@ -51,7 +51,7 @@ const connection = (variant: Variant): ProviderConnection => ({
   id: 'context-budget-test',
   protocol: variant.protocol,
   endpoint: variant.endpoint,
-  credentialEnv: 'UIMORI_PROVIDER_CONTEXT_TEST',
+  credentialRef: 'UIMORI_PROVIDER_CONTEXT_TEST',
 });
 const request = (variant = variants[0] as Variant): ProviderRequest => ({
   role: 'main',
@@ -342,7 +342,7 @@ describe('final wire body budget before credentials and transmission', () => {
       vi.stubGlobal('fetch', fetch);
       const result = await executeProvider(connection(variant), input, {
         signal: new AbortController().signal,
-        approvedOrigins: [new URL(variant.endpoint).origin],
+
         resolveCredential,
         onWire,
       });
@@ -388,7 +388,7 @@ describe('final wire body budget before credentials and transmission', () => {
       vi.stubGlobal('fetch', fetch);
       const result = await executeProvider(connection(variant), input, {
         signal: new AbortController().signal,
-        approvedOrigins: [new URL(variant.endpoint).origin],
+
         resolveCredential,
         onWire,
       });
@@ -411,7 +411,7 @@ describe('final wire body budget before credentials and transmission', () => {
       vi.stubGlobal('fetch', fetch);
       const result = await executeProvider(connection(variant), input, {
         signal: new AbortController().signal,
-        approvedOrigins: [new URL(variant.endpoint).origin],
+
         resolveCredential,
         onWire,
       });
@@ -449,7 +449,7 @@ describe('final wire body budget before credentials and transmission', () => {
     vi.stubGlobal('fetch', fetch);
     const result = await executeProvider(connection(variant), input, {
       signal: new AbortController().signal,
-      approvedOrigins: [new URL(variant.endpoint).origin],
+
       resolveCredential,
       onWire,
     });
@@ -473,7 +473,7 @@ describe('final wire body budget before credentials and transmission', () => {
       const result = await runtime.execute(
         { id: 'codex-budget', protocol: 'codex-app-server-v1', endpoint: 'codex://local' },
         input,
-        { signal: new AbortController().signal, approvedOrigins: [], onWire, beforeTurn }
+        { signal: new AbortController().signal, onWire, beforeTurn }
       );
       expect(result.error?.code).toBe('INPUT_CONTEXT_LIMIT_EXCEEDED');
       expect(onWire).not.toHaveBeenCalled();

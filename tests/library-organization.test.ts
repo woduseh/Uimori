@@ -8,7 +8,6 @@ import { fixtureBotInput } from './fixtures/chat.js';
 import type { Content } from '../core/product.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
 import { createApp } from '../server/app.js';
-import { putImageBlob } from '../server/package-images.js';
 
 const owned: { dir: string; store: Store }[] = [];
 afterEach(() => {
@@ -82,45 +81,6 @@ test('library folders and cross-category moves preserve exact content revisions,
   ]);
 });
 
-test('bulk moves validate every item and destination before mutation, and stale CAS changes nothing', () => {
-  const store = fixture(),
-    bot = content(store, 'A'),
-    dest = folder(store, 'Persona folder', 'persona');
-  const prompt = store.product.promptPreset({ title: 'Prompt', role: 'main', text: 'Write.' });
-  const before = store.product.export().tables;
-  const attempts = [
-    {
-      items: [key(bot), { kind: 'content', id: 'missing' }],
-      category: 'persona',
-      folderId: dest.id,
-    },
-    {
-      items: [key(bot), { kind: 'prompt-preset', id: prompt.id }],
-      category: 'persona',
-      folderId: dest.id,
-    },
-    { items: [key(bot)], category: 'bot', folderId: dest.id },
-    { items: [key(bot), key(bot)], category: 'persona', folderId: dest.id },
-    { items: [key(bot)], category: 'prompts', folderId: null },
-    { items: [key(bot)], category: 'persona', folderId: 'missing' },
-  ];
-  for (const request of attempts) {
-    expect(() =>
-      store.libraryOrganization.move({ expectedRevision: revision(store), ...request })
-    ).toThrow();
-    expect(store.product.export().tables).toEqual(before);
-  }
-  expect(() =>
-    store.libraryOrganization.move({
-      expectedRevision: revision(store) - 1,
-      items: [key(bot)],
-      category: 'persona',
-      folderId: dest.id,
-    })
-  ).toThrow('새로고침');
-  expect(store.product.export().tables).toEqual(before);
-});
-
 test('reordering is category scoped and folder deletion moves members to unclassified without deleting contents', () => {
   const store = fixture(),
     a = folder(store, 'A'),
@@ -182,92 +142,6 @@ test('item deletion cleans placement and retains immutable references', () => {
   ).not.toThrow();
   expect(store.product.get('content', used.id)).toEqual(used);
   expect(store.product.all('content')).not.toContainEqual(used);
-});
-
-test('archives round trip folders and reject poisoned scope or missing placement atomically', () => {
-  const store = fixture(),
-    bot = content(store, 'A'),
-    dest = folder(store, 'P', 'persona');
-  store.libraryOrganization.move({
-    expectedRevision: revision(store),
-    items: [key(bot)],
-    category: 'persona',
-    folderId: dest.id,
-  });
-  const archive = store.product.export(),
-    before = structuredClone(archive),
-    restored = fixture();
-  expect(archive.version).toBe(1);
-  restored.product.import(archive);
-  expect(restored.libraryOrganization.snapshot()).toEqual(store.libraryOrganization.snapshot());
-  expect(archive).toEqual(before);
-  for (const poison of ['scope', 'missing', 'order', 'revision'] as const) {
-    const target = fixture(),
-      empty = target.product.export().tables,
-      bad = structuredClone(archive);
-    if (poison === 'scope') bad.tables.library_placements[0].category = 'bot';
-    if (poison === 'missing') bad.tables.library_placements = [];
-    if (poison === 'order') bad.tables.library_folders[0].sort_position = 3;
-    if (poison === 'revision') bad.tables.library_organization_state[0].revision = 0;
-    expect(() => target.product.import(bad), poison).toThrow();
-    expect(target.product.export().tables, poison).toEqual(empty);
-  }
-});
-
-test('old standalone content kinds are rejected at creation and archive restore', () => {
-  const store = fixture(),
-    bot = content(store, 'A');
-  for (const kind of ['lore', 'canon', 'skill', 'glossary']) {
-    expect(() => store.product.content({ ...fixtureBotInput('Rejected'), kind })).toThrow(
-      'content kind'
-    );
-    const target = fixture(),
-      before = target.product.export().tables,
-      archive = store.product.export();
-    const row = archive.tables.versions.find((row) => row.kind === 'content' && row.id === bot.id)!;
-    row.body = JSON.stringify({ ...JSON.parse(row.body), kind });
-    expect(() => target.product.import(archive)).toThrow('content kind');
-    expect(target.product.export().tables).toEqual(before);
-  }
-});
-
-test('summary cover follows the latest portrait while exact revision and archived blob references stay fixed', () => {
-  const store = fixture();
-  const blob = putImageBlob(store.product, {
-    mime: 'image/png',
-    base64:
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=',
-  });
-  const input = fixtureBotInput('Portrait');
-  input.package.images = [
-    {
-      id: 'portrait',
-      title: 'First portrait',
-      blobHash: blob.hash,
-      mime: blob.mime,
-      allowedUse: 'profile',
-      description: '',
-    },
-  ];
-  input.package.portraitImageId = 'portrait';
-  const first = store.product.content(input) as Content;
-  expect(
-    store.product.library(true).contents.find((item) => item.id === first.id)?.coverImage
-  ).toEqual({ url: `/api/package-image-blobs/${blob.hash}`, title: 'First portrait' });
-  const updated = structuredClone(input);
-  delete updated.package.portraitImageId;
-  store.product.content({ ...updated, expectedRevision: first.revision }, first.id);
-  expect(
-    store.product.library(true).contents.find((item) => item.id === first.id)?.coverImage
-  ).toBeUndefined();
-  expect(store.product.get<Content>('content', first.id, 1).package?.portraitImageId).toBe(
-    'portrait'
-  );
-  expect(store.product.get<Content>('content', first.id, 2).package?.images).toHaveLength(1);
-  const restored = fixture();
-  restored.product.import(store.product.export());
-  expect(restored.product.get('content', first.id, 1)).toEqual(first);
-  expect(restored.product.get('package-image', blob.id, 1)).toEqual(blob);
 });
 
 test('HTTP routes share one organization revision and reject hidden or unknown fields', async () => {

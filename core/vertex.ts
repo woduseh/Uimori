@@ -178,7 +178,7 @@ export async function executeVertexProvider(
     return result;
   };
   try {
-    const connection = validateConnection(connectionValue, options.approvedOrigins);
+    const connection = validateConnection(connectionValue);
     const request = validateRequest(requestValue);
     const prepared = encodeVertex(request);
     const requestedTier = request.generation?.serviceTier;
@@ -194,10 +194,10 @@ export async function executeVertexProvider(
     if (signal.aborted) return failure('CANCELLED');
     assertContextBudget(prepared.body, request.contextBudget);
     // Google's well-known variable contains an ADC file path, never a bearer token.
-    const token = isVertexAdcReference(connection.credentialEnv)
+    const token = isVertexAdcReference(connection.credentialRef)
       ? await vertexAccessToken(signal)
       : await (options.resolveCredential ?? ((name) => process.env[name]))(
-          connection.credentialEnv!,
+          connection.credentialRef!,
           connection,
           signal
         );

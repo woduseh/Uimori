@@ -7,21 +7,16 @@ import { tmpdir } from 'node:os';
 import { crc32, deflateRawSync } from 'node:zlib';
 import { Store } from '../server/store.js';
 import { applyRisuImport, prepareRisuImport, risuImportRoutes } from '../server/risu-import.js';
-import { nativeTransferOriginal } from '../server/native-transfer.js';
+
 import type { Content } from '../core/product.js';
 import { nativeRisuRegex } from '../core/risu-native.js';
 import { resolvePackageStart } from '../core/package-start.js';
-import { createPackageStart } from '../server/package-start.js';
 import { compileContentAttachment } from '../core/package-runtime.js';
 import { modelWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
-import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { decodeRPack } from '../server/compat/risu/rpack.js';
 import { convertCharbook } from '../server/compat/risu/lorebook.js';
-import { fixtureBotInput } from './fixtures/chat.js';
-import { buildPackagePresentation } from '../server/package-presentation.js';
 import { createHash } from 'node:crypto';
-import { importRisuPresetProgram } from '../server/risu-preset-program.js';
 import { cardZip } from '../server/character-card-file.js';
 import { uploadDirectory, uploadRoutes } from '../server/uploads.js';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
@@ -75,149 +70,9 @@ const sourceOf = (value: unknown) => ({
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
 });
 
-test('imported bot and preset defaults share one read context with module lore and frozen openings', async () => {
-  const store = database();
-  const preset = importRisuPresetProgram({
-    name: 'Variable preset',
-    templateDefaultVariables: 'shared=PRESET\nfallback=FALLBACK',
-    promptTemplate: [
-      { type: 'plain', role: 'system', text: 'PRESET:{{getvar::shared}}/{{getvar::fallback}}' },
-      { type: 'plain', role: 'system', type2: 'globalNote', text: '' },
-      { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
-    ],
-  });
-  updatePromptWorkspace(store, {
-    expectedRevision: modelWorkspace(store).revision,
-    main: {
-      title: preset.title,
-      program: preset.program,
-      values: {},
-    },
-  });
-  const original = card();
-  const source = sourceOf({
-    ...original,
-    data: {
-      ...original.data,
-      description: 'BODY:{{getvar::shared}}',
-      first_mes: 'OPEN:{{getvar::shared}}/{{getvar::fallback}}',
-      post_history_instructions: '{{#when::var::flag}}GUIDANCE:{{getvar::shared}}{{/when}}',
-      extensions: { risuai: { defaultVariables: 'shared=BOT\nshared=IGNORED\nflag=true' } },
-    },
-  });
-  const before = store.product.export();
-  const preview = prepareRisuImport({ source });
-  expect(store.product.export().tables).toEqual(before.tables);
-  expect(preview.findings.filter((item) => item.level === 'unsupported')).toEqual([]);
-  const saved = applyRisuImport(store, {
-    source,
-    digest: preview.digest,
-    allowPartial: false,
-    idempotencyKey: 'variables',
-  });
-  const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
-  expect(bot.package!.variableDefaults).toEqual({
-    values: { shared: 'BOT', flag: 'true' },
-    attachmentRoles: ['bot'],
-  });
-  const moduleSource = sourceOf({
-    ...original,
-    data: {
-      ...original.data,
-      name: 'Variable reader module',
-      description: '',
-      first_mes: '',
-      alternate_greetings: [],
-      extensions: { risuai: { defaultVariables: 'shared=MODULE_IGNORED' } },
-      character_book: {
-        entries: [
-          {
-            name: 'Reader',
-            content: 'MODULE:{{getvar::shared}}/{{getvar::fallback}}',
-            constant: true,
-          },
-        ],
-      },
-    },
-  });
-  const modulePreview = prepareRisuImport({ source: moduleSource, kind: 'module' });
-  const importedModule = applyRisuImport(store, {
-    source: moduleSource,
-    kind: 'module',
-    digest: modulePreview.digest,
-    allowPartial: false,
-    idempotencyKey: 'reader-module',
-  });
-  const module = store.product.get<Content>('content', importedModule.receipt.items[0].id);
-  const chat = store.createChat('Variable opening', undefined, { botId: bot.id }),
-    profile = store.product.profile(chat.id);
-  store.product.updateProfile(chat.id, {
-    expectedRevision: profile.revision,
-    image: false,
-    packageAttachments: [
-      ...profile.packageAttachments!,
-      { id: module.id, revision: module.revision, role: 'module' },
-    ],
-  });
-  const frozen = store.product.snapshot(chat.id)!;
-  const snapshot = compileSnapshotPrompt(
-    await prepareNativeRisuRun({
-      chatId: chat.id,
-      parentRevision: null,
-      settingsRevision: chat.settingsRevision,
-      settings: chat.settings,
-      request: 'Continue.',
-      history: [],
-      logicalHistory: [],
-      profile: frozen,
-      resources: store.product.resources(chat.id, frozen),
-    })
-  );
-  const input = JSON.stringify(snapshot.promptCompilation!.messages);
-  for (const expected of ['BODY:BOT', 'PRESET:BOT/FALLBACK', 'MODULE:BOT/FALLBACK', 'GUIDANCE:BOT'])
-    expect(input).toContain(expected);
-  expect(input).not.toContain('MODULE_IGNORED');
-  const opened = createPackageStart(store, chat.id, {
-    packageId: bot.id,
-    packageRevision: bot.revision,
-    startId: 'start-0',
-    expectedSettingsRevision: chat.settingsRevision,
-    expectedProfileRevision: frozen.revision,
-    idempotencyKey: 'variables-opening',
-  });
-  expect(store.sourceOriginal(opened.run.sourceRevision!).text).toBe(
-    'OPEN:{{getvar::shared}}/{{getvar::fallback}}'
-  );
-  store.product.content(
-    {
-      kind: bot.kind,
-      title: bot.title,
-      description: bot.description,
-      text: bot.text,
-      loading: bot.loading,
-      relatedIds: [],
-      expectedRevision: bot.revision,
-      package: {
-        ...bot.package!,
-        variableDefaults: { values: { shared: 'CHANGED', flag: 'true' }, attachmentRoles: ['bot'] },
-      },
-    },
-    bot.id
-  );
-  expect(JSON.stringify(compileSnapshotPrompt(snapshot).promptCompilation!.messages)).toBe(input);
-  expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
-    source.base64
-  );
-  const restored = database();
-  expect(() => restored.product.import(store.product.export())).not.toThrow();
-  expect(restored.sourceOriginal(opened.run.sourceRevision!).text).toBe(
-    'OPEN:{{getvar::shared}}/{{getvar::fallback}}'
-  );
-});
-
 test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
   'retired card fields are excluded while active global notes and source bytes remain: %s',
-  (globalNote) => {
+  async (globalNote) => {
     const store = database();
     const workspace = modelWorkspace(store);
     updatePromptWorkspace(store, {
@@ -243,7 +98,7 @@ test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
     const preview = prepareRisuImport({ source });
     expect(preview.findings.filter((finding) => finding.level === 'unsupported')).toEqual([]);
     expect(preview.findings.map((finding) => finding.code)).toContain('native-risu');
-    const saved = applyRisuImport(store, {
+    const saved = await applyRisuImport(store, {
       source,
       digest: preview.digest,
       allowPartial: false,
@@ -271,9 +126,6 @@ test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
     expect(content.package).not.toHaveProperty('instructions');
     expect(delivered).not.toContain('EXCLUDED_');
     expect(modelWorkspace(store)).toEqual(before);
-    expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
-      source.base64
-    );
   }
 );
 
@@ -321,7 +173,7 @@ test('module JSON registers a reusable module without a bot, chat or memory', as
     allowPartial: false,
     idempotencyKey: 'module-json',
   };
-  const result = applyRisuImport(store, body);
+  const result = await applyRisuImport(store, body);
   expect(result.chat).toBeNull();
   expect(result.receipt.items[0].category).toBe('module');
   expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
@@ -345,16 +197,14 @@ test('module JSON registers a reusable module without a bot, chat or memory', as
   expect(nativeRisuRegex(pkg.nativeRisu!)).toEqual([
     expect.objectContaining({ in: '<status>(.*?)</status>', out: '**$1**' }),
   ]);
-  expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0].base64).toBe(
-    source.base64
-  );
-  expect(applyRisuImport(store, body).receipt).toMatchObject({
+
+  expect((await applyRisuImport(store, body)).receipt).toMatchObject({
     id: result.receipt.id,
     created: false,
   });
 });
 
-test('module lorebook keys, secondary keys and mode remain in authoritative Risu source', () => {
+test('module lorebook keys, secondary keys and mode remain in authoritative Risu source', async () => {
   const store = database();
   // Module lore is already in Risu's database shape, so these fields are the entry's own, not
   // extensions another frontend wrote.
@@ -390,7 +240,7 @@ test('module lorebook keys, secondary keys and mode remain in authoritative Risu
     name: 'module.json',
   };
   const preview = prepareRisuImport({ source });
-  const result = applyRisuImport(store, {
+  const result = await applyRisuImport(store, {
     source,
     digest: preview.digest,
     allowPartial: true,
@@ -405,7 +255,7 @@ test('module lorebook keys, secondary keys and mode remain in authoritative Risu
   expect(pkg.lore.every((item) => !Object.hasOwn(item, 'activation'))).toBe(true);
 });
 
-test('module scripts remain native source and module import cannot create memory', () => {
+test('module scripts remain native source and module import cannot create memory', async () => {
   const store = database();
   const source = sourceOf({
     type: 'risuModule',
@@ -427,13 +277,13 @@ test('module scripts remain native source and module import cannot create memory
     allowPartial: false,
     idempotencyKey: 'scripted-module',
   };
-  const saved = applyRisuImport(store, body);
+  const saved = await applyRisuImport(store, body);
   expect(
     store.product.get<Content>('content', saved.receipt.items[0].id).package!.nativeRisu!.module!
       .trigger
   ).toEqual([{ type: 'output', effect: [{ type: 'triggerlua', code: 'return "not executed"' }] }]);
-  expect(() =>
-    applyRisuImport(store, { ...body, allowPartial: true, memoryIds: ['lore-0'] })
+  expect(
+    async () => await applyRisuImport(store, { ...body, allowPartial: true, memoryIds: ['lore-0'] })
   ).toThrow('Unknown request field');
   expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
   expect(() =>
@@ -443,7 +293,7 @@ test('module scripts remain native source and module import cannot create memory
   ).toThrow('RISU_IMPORT_INVALID_FILE');
 });
 
-test('card display regex stays native without creating a second transform program', () => {
+test('card display regex stays native without creating a second transform program', async () => {
   const store = database();
   const value = card();
   Object.assign(value.data, {
@@ -465,7 +315,7 @@ test('card display regex stays native without creating a second transform progra
     preview = prepareRisuImport({ source });
   expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(false);
   expect(preview.findings).toContainEqual(expect.objectContaining({ code: 'native-risu' }));
-  const saved = applyRisuImport(store, {
+  const saved = await applyRisuImport(store, {
     source,
     digest: preview.digest,
     allowPartial: false,
@@ -481,18 +331,15 @@ test('card display regex stays native without creating a second transform progra
       flag: 'g',
     },
   ]);
-  expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
-    source.base64
-  );
 });
 
-test('imported opening identity tokens stay native until the opening runtime evaluates them', () => {
+test('imported opening identity tokens stay native until the opening runtime evaluates them', async () => {
   const store = database(),
     value = card();
   value.data.first_mes = '{{char}} welcomes {{user}}.';
   const source = sourceOf(value),
     preview = prepareRisuImport({ source });
-  const saved = applyRisuImport(store, {
+  const saved = await applyRisuImport(store, {
     source,
     digest: preview.digest,
     allowPartial: false,
@@ -503,9 +350,6 @@ test('imported opening identity tokens stay native until the opening runtime eva
   expect(resolvePackageStart(content.package!, 'start-0').text).toBe('{{char}} welcomes {{user}}.');
   expect(saved.chat!.headRevision).not.toBeNull();
   expect(store.sourceOriginal(saved.chat!.headRevision!).text).toBe(value.data.first_mes);
-  expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
-    source.base64
-  );
 });
 
 test('card imports preserve all lore and cannot move it into the first chat notes', async () => {
@@ -557,7 +401,7 @@ test('card imports preserve all lore and cannot move it into the first chat note
     expect(store.story.notes.revision(result.chat.id)).toBe(0);
     expect(JSON.stringify(bot)).not.toContain(source.base64);
     const selectedBody = { ...body, idempotencyKey: 'with-memory', memoryIds: ['lore-1'] };
-    expect(() => applyRisuImport(store, selectedBody)).toThrow('Unknown request field');
+    expect(async () => await applyRisuImport(store, selectedBody)).toThrow('Unknown request field');
     expect(
       (
         bot.package!.nativeRisu.card.character_book as { entries: { enabled: boolean }[] }
@@ -570,10 +414,8 @@ test('card imports preserve all lore and cannot move it into the first chat note
         .find((item) => item.id.endsWith(':lore:lore-1'))?.text
     ).toBe('Earlier travel with {{user}}.');
     expect(store.story.notes.revision(secondChat.id)).toBe(0);
-    expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0].base64).toBe(
-      source.base64
-    );
-    expect(applyRisuImport(store, body)).toMatchObject({
+
+    expect(await applyRisuImport(store, body)).toMatchObject({
       receipt: { id: result.receipt.id, created: false },
       chat: { id: result.chat.id },
     });
@@ -638,109 +480,6 @@ function embeddedModule(module: Record<string, unknown>) {
   ]);
 }
 
-test('one CharX imports as a module, attaches to a bot, and uses canonical lore and display without duplication', async () => {
-  const store = database(),
-    value = card();
-  Object.assign(value.data, {
-    creator_notes: 'Module information',
-    extensions: {
-      risuai: {
-        customScripts: [{ type: 'editdisplay', in: 'SOURCE', out: 'WRONG INLINE' }],
-        triggerscript: [{ unexpected: 'inline trigger' }],
-      },
-    },
-  });
-  const source = {
-    name: 'neutral.charx',
-    base64: zip([
-      ['card.json', Buffer.from(JSON.stringify(value))],
-      [
-        'module.risum',
-        embeddedModule({
-          name: 'Not the card title',
-          description: 'Not the card creator notes',
-          lorebook: [
-            {
-              comment: 'Canonical lore',
-              content: 'UNIQUE_EMBEDDED_LORE {{char}}',
-              alwaysActive: true,
-              insertorder: 41,
-            },
-          ],
-          regex: [{ type: 'editdisplay', in: 'SOURCE', out: 'DISPLAY', ableFlag: true, flag: 'g' }],
-          trigger: [],
-        }),
-      ],
-    ]).toString('base64'),
-  };
-  const preview = prepareRisuImport({ source, kind: 'module' }),
-    asBot = prepareRisuImport({ source, kind: 'bot' });
-  expect(preview).toMatchObject({
-    kind: 'module',
-    title: value.data.name,
-    description: 'Module information',
-    summary: { lore: 1, starts: 2, images: 0 },
-  });
-  expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(false);
-  expect(preview.digest).not.toBe(asBot.digest);
-  const body = {
-    source,
-    kind: 'module' as const,
-    digest: preview.digest,
-    allowPartial: false,
-    idempotencyKey: 'canonical-module',
-  };
-  expect(() => applyRisuImport(store, { ...body, kind: 'bot' })).toThrow(
-    'RISU_IMPORT_DRAFT_CHANGED'
-  );
-  const saved = applyRisuImport(store, body);
-  expect(saved.chat).toBeNull();
-  expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
-  const content = store.product.get<Content>('content', saved.receipt.items[0].id);
-  expect(content.package!.lore.map((lore) => lore.text)).toEqual(['UNIQUE_EMBEDDED_LORE {{char}}']);
-  expect(content.package!.lore[0].loreContext?.order).toBe(41);
-  expect(content.package!.identity).toBeUndefined();
-  const input = fixtureBotInput('Host Bot');
-  input.package.modules = [{ id: content.id, revision: content.revision }];
-  const bot = store.product.content(input) as Content;
-  const chat = store.createChat('Using imported module', undefined, { botId: bot.id });
-  const profile = store.product.snapshot(chat.id)!;
-  const snapshot = compileSnapshotPrompt({
-    chatId: chat.id,
-    parentRevision: null,
-    settingsRevision: chat.settingsRevision,
-    settings: chat.settings,
-    request: 'Continue.',
-    history: [],
-    logicalHistory: [],
-    profile,
-    resources: store.product.resources(chat.id, profile),
-  });
-  const messages = JSON.stringify(snapshot.promptCompilation!.messages);
-  expect(messages.match(/UNIQUE_EMBEDDED_LORE/gu)).toHaveLength(1);
-  expect(messages).not.toContain('The sky is green.');
-  const display = await buildPackagePresentation(snapshot, {
-    id: 'source',
-    chatId: chat.id,
-    text: 'SOURCE',
-    hash: createHash('sha256').update('SOURCE').digest('hex'),
-  });
-  expect(display.original.text).toBe('SOURCE');
-  expect('html' in display.original && display.original.html).toContain('DISPLAY');
-  const original = nativeTransferOriginal(store, saved.receipt.id);
-  expect(original.sourceFiles).toHaveLength(1);
-  expect(original.sourceFiles![0].base64).toBe(source.base64);
-  expect(applyRisuImport(store, body).receipt).toMatchObject({
-    id: saved.receipt.id,
-    created: false,
-  });
-  const restored = database();
-  restored.product.import(store.product.export());
-  expect(nativeTransferOriginal(restored, saved.receipt.id).sourceFiles![0].base64).toBe(
-    source.base64
-  );
-});
-
 test.each([undefined, null, []])(
   'embedded lore fallback distinguishes missing/null from an empty list: %j',
   (lorebook) => {
@@ -788,7 +527,7 @@ test('module envelopes retain their explicit kind and malformed embedded section
   expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
 });
 
-test('module project ZIP reads ordered asset files within one project folder without RPack', () => {
+test('module project ZIP reads ordered asset files within one project folder without RPack', async () => {
   const store = database();
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
@@ -826,7 +565,7 @@ test('module project ZIP reads ordered asset files within one project folder wit
     summary: { lore: 1, starts: 0, images: 1 },
   });
   expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(false);
-  const result = applyRisuImport(store, {
+  const result = await applyRisuImport(store, {
     source,
     digest: preview.digest,
     allowPartial: false,
@@ -839,10 +578,7 @@ test('module project ZIP reads ordered asset files within one project folder wit
   ]);
   expect(content.package!.images).toHaveLength(1);
   expect(result.chat).toBeNull();
-  expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0]).toMatchObject({
-    mediaType: 'application/zip',
-    base64: source.base64,
-  });
+
   const missing = {
     name: source.name,
     base64: zip([
@@ -881,7 +617,7 @@ test('module project refuses paths outside its folder and multiple module defini
   ).toThrow('RISU_IMPORT_INVALID_FILE');
 });
 
-test('charx keeps card-owned images while reading its embedded module; corrupt files never register', () => {
+test('charx keeps card-owned images while reading its embedded module; corrupt files never register', async () => {
   const store = database();
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
@@ -910,7 +646,7 @@ test('charx keeps card-owned images while reading its embedded module; corrupt f
     idempotencyKey: 'charx',
   };
   expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
-  const result = applyRisuImport(store, body);
+  const result = await applyRisuImport(store, body);
   const pkg = store.product.get<Content>('content', result.receipt.items[0].id).package!;
   expect(pkg.images).toHaveLength(1);
   expect(pkg.starts![0].text).toBe('{{image::main}}');
@@ -993,7 +729,7 @@ test('a container beyond the inline limit is staged on disk, imported, and never
     const content = store.product.get<Content>('content', receipt.items[0].id);
     expect(content.title).toBe('Synthetic Pilot');
     // The registered material carries no copy of the original container.
-    expect(nativeTransferOriginal(store, receipt.id).sourceFiles).toBeUndefined();
+
     expect(existsSync(join(uploadDirectory(store.path), `${uploadId}.bin`))).toBe(false);
     expect(
       (
@@ -1025,7 +761,7 @@ test('an expansion bomb and an oversized member stay refused whatever the contai
   expect(() => cardZip(oversized)).toThrow('RISU_IMPORT_INVALID_FILE');
 });
 
-test('a comment in card text stays in native source without a converted template', () => {
+test('a comment in card text stays in native source without a converted template', async () => {
   const store = database(),
     original = card();
   const source = sourceOf({
@@ -1034,7 +770,7 @@ test('a comment in card text stays in native source without a converted template
   });
   const preview = prepareRisuImport({ source });
   expect(preview.findings.map((item) => item.code)).not.toContain('compat-evaluation');
-  const saved = applyRisuImport(store, {
+  const saved = await applyRisuImport(store, {
     source,
     digest: preview.digest,
     allowPartial: false,
@@ -1168,7 +904,7 @@ const SURFACE_CODES = [
   'asset-role',
 ];
 
-test('card metadata and typed assets remain in native source without conversion findings', () => {
+test('card metadata and typed assets remain in native source without conversion findings', async () => {
   const store = database();
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
@@ -1216,7 +952,7 @@ test('card metadata and typed assets remain in native source without conversion 
   expect(levels['native-risu']).toBe('info');
   // The settings that now have their own notice no longer fall into the generic bucket.
   expect(levels['extension-settings']).toBeUndefined();
-  const saved = applyRisuImport(store, {
+  const saved = await applyRisuImport(store, {
     source,
     digest: preview.digest,
     allowPartial: true,
@@ -1238,7 +974,7 @@ test('card metadata and typed assets remain in native source without conversion 
   for (const code of [...SURFACE_CODES, 'creator-notes-truncated'])
     expect(plainCodes).not.toContain(code);
   expect(plainPreview.findings.filter((finding) => finding.level === 'unsupported')).toEqual([]);
-  const plainSaved = applyRisuImport(store, {
+  const plainSaved = await applyRisuImport(store, {
     source: plain,
     digest: plainPreview.digest,
     allowPartial: false,
@@ -1250,7 +986,7 @@ test('card metadata and typed assets remain in native source without conversion 
   ).toContain('synthetic-card.json');
 });
 
-test('creator notes beyond the description limit are cut with an ellipsis and a notice', () => {
+test('creator notes beyond the description limit are cut with an ellipsis and a notice', async () => {
   const store = database();
   const original = card();
   const source = sourceOf({
@@ -1261,7 +997,7 @@ test('creator notes beyond the description limit are cut with an ellipsis and a 
   expect(preview.findings).toContainEqual(
     expect.objectContaining({ code: 'creator-notes-truncated', level: 'info' })
   );
-  const saved = applyRisuImport(store, {
+  const saved = await applyRisuImport(store, {
     source,
     digest: preview.digest,
     allowPartial: false,

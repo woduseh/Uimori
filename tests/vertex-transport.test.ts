@@ -14,7 +14,7 @@ const connection: ProviderConnection = {
   id: 'vertex-test',
   protocol: 'vertex-gemini-v1',
   endpoint: `${origin}/v1/projects/synthetic-project/locations/global/publishers/google/models`,
-  credentialEnv: 'UIMORI_PROVIDER_VERTEX_TEST',
+  credentialRef: 'UIMORI_PROVIDER_VERTEX_TEST',
 };
 const token = 'synthetic-vertex-secret-do-not-record';
 const request = (): ProviderRequest => ({
@@ -76,7 +76,6 @@ async function redirectedFixture(handler: Parameters<typeof loopbackProvider>[0]
   return { ...local, urls };
 }
 const options = (extra: Record<string, unknown> = {}) => ({
-  approvedOrigins: [],
   signal: new AbortController().signal,
   resolveCredential: () => token,
   ...extra,
@@ -87,7 +86,7 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
     vi.stubEnv('GOOGLE_APPLICATION_CREDENTIALS', 'Z:\\missing\\synthetic-service-account.json');
     const resolveCredential = vi.fn(() => token);
     const result = await executeProvider(
-      { ...connection, credentialEnv: 'GOOGLE_APPLICATION_CREDENTIALS' },
+      { ...connection, credentialRef: 'GOOGLE_APPLICATION_CREDENTIALS' },
       request(),
       options({ resolveCredential })
     );

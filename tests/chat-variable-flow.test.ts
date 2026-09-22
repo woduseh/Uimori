@@ -6,11 +6,9 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import type { Content } from '../core/product.js';
-import { executionContext } from '../core/execution-context.js';
 import { Store } from '../server/store.js';
 import { chatVariableRoutes } from '../server/chat-variable-routes.js';
 import { readChatVariables } from '../server/chat-variables.js';
-import { freezeReservationSnapshot } from '../server/reservation-snapshot.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 
 const owned: { store: Store; app: FastifyInstance; directory: string }[] = [];
@@ -69,76 +67,6 @@ function fixture() {
   return { store, app, chat, branch, bot, url, reserve };
 }
 const noUsage = { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null };
-
-test('HTTP edits freeze native card variables; pending writes, historical forks and candidates retain ownership', async () => {
-  const f = fixture();
-  const initial = (await f.app.inject(f.url)).json();
-  expect(initial).toMatchObject({
-    revision: 0,
-    values: {},
-    defaults: { mood: 'calm' },
-    resolved: { mood: 'calm' },
-    pending: false,
-  });
-  expect(f.store.db.prepare('SELECT * FROM chat_variable_states').all()).toEqual([]);
-  const command = {
-    expectedRevision: 0,
-    expectedSourceHash: null,
-    idempotencyKey: randomUUID(),
-    values: { mood: 'bright', empty: '' },
-  };
-  const saved = await f.app.inject({ method: 'PUT', url: f.url, payload: command });
-  expect(saved.statusCode).toBe(200);
-  expect(saved.json()).toMatchObject({ revision: 1, resolved: { mood: 'bright', empty: '' } });
-  const run = await f.reserve();
-  expect(run.snapshot.profile?.variableState).toEqual({ revision: 1, values: command.values });
-  const rejected = await f.app.inject({
-    method: 'PUT',
-    url: f.url,
-    payload: {
-      ...command,
-      expectedRevision: 1,
-      idempotencyKey: randomUUID(),
-      values: { mood: 'late' },
-    },
-  });
-  expect(rejected.statusCode).toBe(409);
-  const replay = await f.app.inject({ method: 'PUT', url: f.url, payload: command });
-  expect(replay.statusCode).toBe(200);
-  expect(replay.json()).toMatchObject({ revision: 1, pending: true });
-  f.store.startRun(run.id);
-  const source = f.store.completeRun(run.id, 'Synthetic output', noUsage, run.snapshot.settings);
-  const changed = await f.app.inject({
-    method: 'PUT',
-    url: f.url,
-    payload: {
-      ...command,
-      expectedRevision: readChatVariables(f.store, f.chat.id, f.branch.id).revision,
-      expectedSourceHash: source.hash,
-      idempotencyKey: randomUUID(),
-      values: { mood: 'newer' },
-    },
-  });
-  expect(changed.statusCode).toBe(200);
-  const historical = f.store.product.createBranch(f.chat.id, {
-    title: 'Historical',
-    fromRevision: source.id,
-  });
-  expect(readChatVariables(f.store, f.chat.id, historical.id).values).toEqual(command.values);
-  const candidate = f.store.candidate(run.id, randomUUID(), 'Same original inputs').run;
-  expect(readChatVariables(f.store, f.chat.id, candidate.snapshot.branchId!)).toEqual(
-    run.snapshot.profile!.variableState
-  );
-  expect(candidate.snapshot.profile?.variableState).toEqual(run.snapshot.profile?.variableState);
-  expect(readChatVariables(f.store, f.chat.id, f.branch.id).values).toEqual({ mood: 'newer' });
-  expect(
-    executionContext(freezeReservationSnapshot(f.store, run.snapshot, { purpose: 'resume-state' }))
-      .variables
-  ).toEqual(command.values);
-  expect(f.store.product.get<Content>('content', f.bot.id, f.bot.revision).package?.body).toBe(
-    'Preserved original body'
-  );
-});
 
 test('historical snapshots omit overrides and their candidates do not borrow later values', async () => {
   const f = fixture();

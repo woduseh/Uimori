@@ -1,3 +1,4 @@
+import { normalizeTransferImages } from './transfer-images.js';
 import type { FastifyInstance } from 'fastify';
 import {
   RISU_IMPORT_MAX_BYTES,
@@ -31,15 +32,15 @@ export function prepareRisuImport(
   return analyze(body.source, body.kind as RisuImportKind | undefined, readStaged).preview;
 }
 
-export function applyRisuImport(
+export async function applyRisuImport(
   store: Store,
   value: unknown,
   readStaged?: (uploadId: string) => Buffer
-): RisuImportResult {
+): Promise<RisuImportResult> {
   const body = record(value);
   fields(body, ['source', 'kind', 'digest', 'imageHandoffIds', 'allowPartial', 'idempotencyKey']);
   const requestKey = text(body.idempotencyKey, 'request key', 100);
-  const { file, preview } = analyze(
+  const { file: originalFile, preview } = analyze(
     body.source,
     body.kind as RisuImportKind | undefined,
     readStaged
@@ -49,7 +50,7 @@ export function applyRisuImport(
   if (preview.findings.some((item) => item.level === 'unsupported') && !body.allowPartial)
     throw new HttpError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');
   if (body.imageHandoffIds !== undefined) {
-    const policy = file.contents[0].source.package!.imageHandoff;
+    const policy = originalFile.contents[0].source.package!.imageHandoff;
     if (
       !Array.isArray(body.imageHandoffIds) ||
       body.imageHandoffIds.length > 64 ||
@@ -64,6 +65,7 @@ export function applyRisuImport(
         enabled: body.imageHandoffIds.includes(range.id),
       }));
   }
+  const file = await normalizeTransferImages(originalFile);
   const prepared = prepareNativeTransfer({ file });
   return store.transaction(() => {
     const receipt = applyNativeTransfer(store, {
@@ -105,7 +107,7 @@ export function risuImportRoutes(app: FastifyInstance, store: Store) {
     prepareRisuImport(request.body, readStaged)
   );
   app.post('/api/risu-imports/apply', { bodyLimit }, async (request, reply) => {
-    const result = applyRisuImport(store, request.body, readStaged);
+    const result = await applyRisuImport(store, request.body, readStaged);
     const source = record(record(request.body).source);
     // The staged file has served its purpose once the material is registered.
     if (result.receipt.created && typeof source.uploadId === 'string')

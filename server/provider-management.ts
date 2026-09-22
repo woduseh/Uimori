@@ -1,5 +1,4 @@
 import { promptWorkspace } from './prompt-workspace.js';
-import { existsSync } from 'node:fs';
 import {
   workspaceModelRef,
   type Connection,
@@ -7,14 +6,10 @@ import {
   type ModelPreset,
 } from '../core/product.js';
 import type { ProductStore } from './product-store.js';
-import {
-  isVertexAdcReference,
-  isVertexFileReference,
-  validCredentialEnv,
-} from '../core/credential-reference.js';
+import { isVertexFileReference, validCredentialRef } from '../core/credential-reference.js';
 import type { VertexCredentialStore } from './vertex-credentials.js';
 import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
-import { providerOriginApproval } from '../core/provider-origin-policy.js';
+import { validateProviderEndpoint } from '../core/product.js';
 
 export type ProviderReadiness = {
   enabled: boolean;
@@ -27,7 +22,6 @@ export type ProviderReadiness = {
 export function readiness(
   _store: ProductStore,
   connection: Connection,
-  approvedOrigins: readonly string[],
   credentials?: VertexCredentialStore,
   agent?: CodexRuntimeStatus
 ): ProviderReadiness {
@@ -39,22 +33,18 @@ export function readiness(
       catalogKind: 'agent-runtime',
     };
   let originApproved = false;
-  originApproved =
-    providerOriginApproval(connection.protocol, connection.endpoint, approvedOrigins) !== null;
+  try {
+    validateProviderEndpoint(connection.protocol, connection.endpoint);
+    originApproved = true;
+  } catch {
+    /* Invalid URL. */
+  }
   let credentialStatus: ProviderReadiness['credentialStatus'];
-  if (
-    connection.protocol === 'vertex-gemini-v1' &&
-    isVertexAdcReference(connection.credentialEnv)
-  ) {
-    const path = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    credentialStatus = path && existsSync(path) ? 'adc-configured' : 'adc-unchecked';
-  } else if (connection.credentialEnv) {
-    const reference = connection.credentialEnv;
+  if (connection.credentialRef) {
+    const reference = connection.credentialRef;
     const configured = isVertexFileReference(reference)
       ? credentials?.configured(connection) === true
-      : validCredentialEnv(reference) &&
-        Boolean(process.env[reference]) &&
-        !/[\r\n]/u.test(process.env[reference]!);
+      : validCredentialRef(reference) && _store.store.credentials.status(reference).configured;
     credentialStatus = configured ? 'configured' : 'missing';
   } else
     credentialStatus = ['fixture-sse-v1', 'openai-chat-v1'].includes(connection.protocol)
@@ -65,7 +55,7 @@ export function readiness(
     originApproved,
     credentialStatus,
     catalogKind:
-      connection.protocol === 'vertex-gemini-v1' && !connection.catalogCredentialEnv
+      connection.protocol === 'vertex-gemini-v1' && !connection.catalogCredentialRef
         ? 'local-support'
         : 'remote',
   };

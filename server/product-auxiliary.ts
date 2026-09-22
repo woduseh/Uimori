@@ -110,7 +110,7 @@ export type AuxiliaryJobHooks = {
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   signal: AbortSignal;
-  approvedOrigins: readonly string[];
+
   authorize: (connection: Connection) => MaybePromise<Connection>;
   onAttemptStart: (wire: WireRecord) => MaybePromise<string>;
   onAttemptFinish: (id: string, result: ProviderResult) => MaybePromise<void>;
@@ -469,7 +469,6 @@ export async function runAuxiliaryJob(
     const remainingTimeout = diagnostics?.remainingMs();
     if (remainingTimeout === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT');
     const result = await executeProvider(transportConnection(authorized), body, {
-      approvedOrigins: hooks.approvedOrigins,
       signal: hooks.signal,
       resolveCredential: hooks.resolveCredential,
       executeCodex: hooks.executeCodex,

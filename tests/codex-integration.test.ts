@@ -1,4 +1,4 @@
-import { installJevFixture } from './fixtures/jev.js';
+import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -259,6 +259,7 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     'PUT'
   );
   const judgments = installJevFixture();
+  configureJevFixture(app.store);
   const initial = await api(app, '/api/chats', { title: 'Synthetic Codex story' });
   const chat = await api(
     app,

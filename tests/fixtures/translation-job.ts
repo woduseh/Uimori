@@ -143,7 +143,7 @@ export function bridge(seed: AuxiliaryBundle) {
   };
   return { data, store, outputs, claims };
 }
-export function hooks(origin = 'http://127.0.0.1:1') {
+export function hooks(_origin = 'http://127.0.0.1:1') {
   const wire: WireRecord[] = [];
   const finishes: { id: string; result: ProviderResult }[] = [];
   const options: AuxiliaryJobHooks = {
@@ -161,7 +161,7 @@ export function hooks(origin = 'http://127.0.0.1:1') {
         ),
     },
     signal: new AbortController().signal,
-    approvedOrigins: [origin],
+
     authorize: (value) => value,
     onAttemptStart: (value) => {
       wire.push(structuredClone(value));

@@ -59,36 +59,6 @@ function append(store: Store, chatId: string, text: string, branchId?: string) {
   );
 }
 
-test('history preserves exact original/latest edit, branch order and immutable run snapshots', () => {
-  const { store, chat } = fixture();
-  const first = append(store, chat.id, '첫 문단 😀\r\n\r\n```txt\r\n원문\r\n\r\n```');
-  const second = append(store, chat.id, 'Second scene');
-  const branch = store.product.createBranch(chat.id, { title: 'Other', fromRevision: first.id });
-  const other = append(store, chat.id, 'Other branch', branch.id);
-  const frozen = store.run(second.runId).snapshot;
-  const edited = store.editSource(first.id, {
-    expectedRevision: 0,
-    text: '수정된 문단\n\n둘째 문단 😀',
-  });
-  store.editSource(first.id, { expectedRevision: 1, text: '최신 수정\r\n공백 보존  😀' });
-  const latest = store.source(first.id);
-  expect(latest.hash).not.toBe(edited.hash);
-  const expected = {
-    revision: first.id,
-    text: latest.text,
-    contentHash: latest.hash,
-  };
-  expect(store.history(second.id)).toEqual([expected, { revision: second.id, text: second.text }]);
-  expect(store.history(other.id)).toEqual([expected, { revision: other.id, text: other.text }]);
-  expect(store.run(second.runId).snapshot).toEqual(frozen);
-  expect(store.sourceOriginal(first.id).text).toBe(first.text);
-  expect(store.validateHistory(frozen.history, first.id)).toBe(true);
-  store.editSource(first.id, { expectedRevision: 2, text: first.text });
-  expect(store.history(first.id)).toEqual([{ revision: first.id, text: first.text }]);
-  expect(store.history(null)).toEqual([]);
-  expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-});
-
 test('history still rejects missing ancestors and ancestry cycles', () => {
   const { store, chat } = fixture();
   const first = append(store, chat.id, 'Original');

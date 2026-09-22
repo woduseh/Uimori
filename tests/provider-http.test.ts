@@ -38,7 +38,7 @@ const connection = (variant: Variant): ProviderConnection => ({
   id: 'provider-local-test',
   protocol: variant.protocol,
   endpoint: variant.endpoint,
-  credentialEnv: 'UIMORI_PROVIDER_HTTP_TEST',
+  credentialRef: 'UIMORI_PROVIDER_HTTP_TEST',
 });
 const request = (variant: Variant): ProviderRequest => ({
   role: 'main',
@@ -76,9 +76,9 @@ const request = (variant: Variant): ProviderRequest => ({
   },
 });
 // Official providers need no operator configuration; compatible servers still require explicit approval.
-const options = (variant: Variant) => ({
+const options = (_variant: Variant) => ({
   signal: new AbortController().signal,
-  approvedOrigins: variant.protocol === 'openai-chat-v1' ? [new URL(variant.endpoint).origin] : [],
+
   resolveCredential: () => secret,
 });
 const message: Json = {
@@ -565,24 +565,12 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
   );
 
   test.each(variants)(
-    '$protocol validates origin and credentials before journaling or fetching',
+    '$protocol validates endpoint syntax and credentials before journaling or fetching',
     async (variant) => {
       const fetch = vi.fn();
       const resolveCredential = vi.fn(() => secret);
       const onWire = vi.fn();
       vi.stubGlobal('fetch', fetch);
-      const unapproved = {
-        ...connection(variant),
-        endpoint: 'https://unapproved.synthetic.invalid/v1',
-      };
-      expect(
-        await executeProvider(unapproved, request(variant), {
-          ...options(variant),
-          approvedOrigins: [],
-          resolveCredential,
-          onWire,
-        })
-      ).toMatchObject({ error: { code: 'ENDPOINT_NOT_APPROVED' } });
       const malformed = {
         ...connection(variant),
         endpoint: variant.endpoint + '?redirect=unapproved',
@@ -590,11 +578,11 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
       expect(
         await executeProvider(malformed, request(variant), {
           ...options(variant),
-          approvedOrigins: [new URL(variant.endpoint).origin],
+
           resolveCredential,
           onWire,
         })
-      ).toMatchObject({ error: { code: 'ENDPOINT_NOT_APPROVED' } });
+      ).toMatchObject({ error: { code: 'INVALID_ENDPOINT' } });
       expect(resolveCredential).not.toHaveBeenCalled();
       expect(onWire).not.toHaveBeenCalled();
       expect(fetch).not.toHaveBeenCalled();
@@ -607,6 +595,26 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
       ).toMatchObject({ error: { code: 'CREDENTIAL_UNAVAILABLE' } });
       expect(onWire).not.toHaveBeenCalled();
       expect(fetch).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each(variants)(
+    '$protocol can call a configured compatible host without an approval list',
+    async (variant) => {
+      const fetch = vi.fn(
+        async (_input: RequestInfo | URL, _init?: RequestInit) => stream(events(variant)).response
+      );
+      vi.stubGlobal('fetch', fetch);
+      const result = await executeProvider(
+        { ...connection(variant), endpoint: 'https://custom.synthetic.invalid/v1' },
+        request(variant),
+        options(variant)
+      );
+      expect(result.status).toBe('completed');
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(String(fetch.mock.calls[0]?.[0])).toBe(
+        'https://custom.synthetic.invalid/v1' + variant.path
+      );
     }
   );
 
@@ -652,7 +660,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
       request(variant),
       {
         signal: new AbortController().signal,
-        approvedOrigins: ['http://127.0.0.1:9876'],
+
         resolveCredential,
       }
     );

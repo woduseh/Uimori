@@ -1,3 +1,5 @@
+import { editNativeSource, resourceWithNativeSource } from './native-source-edit.js';
+import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useId, useState } from 'react';
 import type { RisuContent } from '../core/risu-content.js';
 import { detectRisuImageHandoff } from '../core/risu-image-handoff.js';
@@ -8,10 +10,13 @@ import {
   nativeRisuRegex,
   nativeRisuTriggers,
   normalizeRisuContentSource,
-  validateRisuContentSource,
   type RisuContentSource,
 } from '../core/risu-native.js';
-import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
+import {
+  useBufferedEditorState,
+  useUnappliedEditorField,
+  useEditorSavePreparation,
+} from './resource-editor.js';
 import { PackagePortraitEditor } from './PackagePortraitEditor.js';
 import { PackageFeaturesEditor } from './PackageFeaturesEditor.js';
 import { RisuImageHandoffFields } from './RisuImageHandoffFields.js';
@@ -169,41 +174,25 @@ export function RisuNativeFields({
     card: native.card,
     module: native.module ?? {},
   }[selectedPart];
+  useEditorSavePreparation('package.native.source', (model) => {
+    if (!draft) return model;
+    if (!('package' in model)) throw new Error('콘텐츠 원문을 확인해 주세요.');
+    return resourceWithNativeSource(
+      model,
+      editNativeSource(model.package.nativeRisu!, draft.part, draft.text)
+    );
+  });
+  const prepareEntries = (model: ResourceModel, part: 'regex' | 'triggers', entries: unknown[]) => {
+    if (!('package' in model)) throw new Error('콘텐츠 원문을 확인해 주세요.');
+    return resourceWithNativeSource(
+      model,
+      editNativeSource(model.package.nativeRisu!, part, JSON.stringify(entries))
+    );
+  };
   function applyJson() {
     if (!draft) return;
     try {
-      const parsed: unknown = JSON.parse(draft.text);
-      const next = structuredClone(native);
-      if (draft.part === 'card' || draft.part === 'module') {
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-          throw new Error('JSON 객체를 입력해 주세요.');
-        next[draft.part] = parsed as Record<string, unknown>;
-      } else {
-        if (!Array.isArray(parsed)) throw new Error('JSON 배열을 입력해 주세요.');
-        if (draft.part === 'greetings') {
-          if (parsed.some((item) => typeof item !== 'string'))
-            throw new Error('시작문은 문자열 배열로 입력해 주세요.');
-          next.card.alternate_greetings = parsed;
-        } else {
-          if (parsed.some((item) => !item || typeof item !== 'object' || Array.isArray(item)))
-            throw new Error('각 항목은 JSON 객체여야 해요.');
-          if (draft.part === 'lore') {
-            if (moduleLore) next.module = { ...next.module, lorebook: parsed };
-            else
-              next.card.character_book = { ...object(next.card.character_book), entries: parsed };
-          } else if (next.module)
-            next.module[draft.part === 'regex' ? 'regex' : 'trigger'] = parsed;
-          else
-            next.card.extensions = {
-              ...object(next.card.extensions),
-              risuai: {
-                ...nativeRisuExtension(next),
-                [draft.part === 'regex' ? 'customScripts' : 'triggerscript']: parsed,
-              },
-            };
-        }
-      }
-      update(validateRisuContentSource(next));
+      update(editNativeSource(native, draft.part, draft.text));
       setDraft(null);
       setError('');
     } catch (caught) {
@@ -259,7 +248,7 @@ export function RisuNativeFields({
       </label>
       <div className="form-actions">
         <button type="button" disabled={!draft} onClick={applyJson}>
-          JSON 적용
+          폼에 반영
         </button>
         <button
           type="button"
@@ -583,6 +572,7 @@ export function RisuNativeFields({
             value={Array.isArray(triggers) ? triggers : []}
             draftPath="package.native.triggers"
             onChange={writeTriggers}
+            prepareSave={(model, entries) => prepareEntries(model, 'triggers', entries)}
             onPendingChange={setTriggersDirty}
             disabled={!!draft}
           />
@@ -592,6 +582,7 @@ export function RisuNativeFields({
               value={Array.isArray(regex) ? regex : []}
               draftPath="package.native.regex"
               onChange={writeRegex}
+              prepareSave={(model, entries) => prepareEntries(model, 'regex', entries)}
               onPendingChange={setRegexDirty}
               disabled={!!draft}
             />

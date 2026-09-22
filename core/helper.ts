@@ -1,3 +1,4 @@
+import type { EditorContext } from './resource-editing.js';
 import type { ModelSnapshot } from './product.js';
 import type { RunSnapshot, Usage } from './types.js';
 import type { ContextCheckpointRef } from './context-plan.js';
@@ -35,14 +36,7 @@ export type HelperStatus =
   | 'cancelled'
   | 'interrupted';
 export type HelperLimits = { totalCalls: number; helperCalls: number; artifacts: number };
-export type HelperGrant = {
-  id: string;
-  requestId: string;
-  target: string;
-  actions: string[];
-  provenance: 'direct-user-request' | 'delegation';
-};
-export type HelperEditor = { draftId: string; revision: number; title: string; kind: string };
+export type HelperEditor = EditorContext;
 export type HelperSelection = { sourceId: string; sourceHash: string; text: string };
 export type HelperTaskSnapshot = {
   retryOf?: string;
@@ -56,7 +50,6 @@ export type HelperTaskSnapshot = {
   history: { id: string; role: 'user' | 'assistant'; text: string }[];
   context?: { activeRevision: number; checkpoint: ContextCheckpointRef | null };
   persona: string;
-  grants: HelperGrant[];
   limits: HelperLimits;
 };
 export type HelperTask = {

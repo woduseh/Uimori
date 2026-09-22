@@ -7,7 +7,7 @@ export function canRecoverMainJudgment(
     run.status === 'failed' &&
     !!run.error?.startsWith('JEV_') &&
     !run.sourceRevision &&
-    run.snapshot.mainJudgmentEnabled !== false &&
+    run.snapshot.mainJudgmentEnabled === true &&
     !!run.snapshot.mainJudgment &&
     run.partialText === run.snapshot.mainJudgment.response &&
     !run.snapshot.nativeRisuExecution?.output

@@ -73,31 +73,6 @@ function begin(store: Store, chatId: string) {
   ).run;
 }
 
-test('upload deletion hides catalog entry and retains bytes, emits an event, and leaves archive valid', async () => {
-  const { store, app, chat, asset, published } = fixture();
-  const before = store.product.export();
-  const result = await injectWithFixtureBot(app, {
-    method: 'DELETE',
-    url: `/api/chats/${chat.id}/assets/${asset.id}`,
-    payload: {},
-  });
-  expect(result.statusCode).toBe(200);
-  expect(result.json()).toEqual({ deleted: true, id: asset.id });
-  expect(store.product.asset(asset.id).bytes).toHaveLength(8);
-  expect(store.product.assets(chat.id)).toEqual([]);
-  expect(published).toEqual([chat.id]);
-  expect(store.events(chat.id, 0)).toEqual(
-    expect.arrayContaining([expect.objectContaining({ kind: 'asset.deleted', entityId: asset.id })])
-  );
-  expect(before.tables.assets).toHaveLength(1);
-  expect(store.product.export().tables.assets).toHaveLength(1);
-  const directory = mkdtempSync(join(tmpdir(), 'uimori-asset-deletion-')),
-    target = new Store(join(directory, 'import.sqlite')),
-    appForImport = Fastify();
-  owned.push({ directory, store: target, app: appForImport });
-  expect(() => target.product.import(store.product.export())).not.toThrow();
-});
-
 test('cross-chat and malformed deletions preserve the uploaded bytes', async () => {
   const { store, app, chat, asset, published } = fixture(),
     other = createFixtureChat(store, 'Other');

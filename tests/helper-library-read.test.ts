@@ -229,7 +229,6 @@ test('helper searches metadata then reads the discovered item without changing e
   });
   const work: Promise<void>[] = [],
     runtime = new HelperRuntime(f.store, {
-      approvedOrigins: ['http://127.0.0.1:9'],
       owner: 'synthetic-library-read',
       signal: new AbortController().signal,
       track: (pending) => work.push(pending),
@@ -254,7 +253,7 @@ test('helper searches metadata then reads the discovered item without changing e
   };
   let calls = 0;
   vi.spyOn(transport, 'executeProvider').mockImplementation(async (target, request, options) => {
-    transport.validateConnection(target, options.approvedOrigins);
+    transport.validateConnection(target);
     options.beforeTurn?.();
     await options.onWire?.({
       connectionId: target.id,
@@ -324,7 +323,7 @@ test('helper searches metadata then reads the discovered item without changing e
   await Promise.all(work);
   expect(runtime.workspace.task(task.id)).toMatchObject({
     status: 'completed',
-    snapshot: { grants: [] },
+    snapshot: {},
     usage: { modelCalls: 3 },
   });
   expect(calls).toBe(3);

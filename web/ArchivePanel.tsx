@@ -1,19 +1,13 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { api, saveDownload } from './api.js';
-import { IconButton } from './IconButton.js';
-import { CloseIcon, DownloadIcon, RefreshIcon, UploadIcon } from './ui-icons.js';
+import { useEffect, useState } from 'react';
 import { ChatBackupImport } from './ChatBackupImport.js';
-import { MaintenanceControl } from './MaintenanceControl.js';
-
-type ImportStatus = 'loading' | 'allowed' | 'occupied' | 'failed';
-type ArchiveOperation = 'json' | 'sqlite' | 'import';
+import { ResourceBundleImport } from './ResourceBundleImport.js';
+import { DownloadIcon } from './ui-icons.js';
 
 export function ArchivePanel({
   onImported,
   onError,
   onDirtyChange,
   expanded = false,
-  active = true,
 }: {
   onImported: () => Promise<void>;
   onError: (error: string) => void;
@@ -21,149 +15,13 @@ export function ArchivePanel({
   expanded?: boolean;
   active?: boolean;
 }) {
-  const [archive, setArchive] = useState<{ value: unknown } | null>(null);
-  const [fileSelected, setFileSelected] = useState(false);
-  const [reading, setReading] = useState(false);
-  const [busy, setBusy] = useState<ArchiveOperation | null>(null);
-  const [fileError, setFileError] = useState('');
-  const [backupError, setBackupError] = useState('');
-  const [importError, setImportError] = useState('');
-  const [backupMessage, setBackupMessage] = useState('');
-  const [importMessage, setImportMessage] = useState('');
-  const [status, setStatus] = useState<ImportStatus>('loading');
-  const [statusError, setStatusError] = useState('');
-  const [transcriptBusy, setTranscriptBusy] = useState(false);
-  const [transcriptError, setTranscriptError] = useState('');
-  const [transcriptMessage, setTranscriptMessage] = useState('');
-  const [chatBackupDirty, setChatBackupDirty] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
-  const readVersion = useRef(0);
-  const statusVersion = useRef(0);
-  const operationLock = useRef(false);
-  const dirtyHandler = useRef(onDirtyChange);
-  dirtyHandler.current = onDirtyChange;
-  const id = useId();
-
-  const refreshStatus = useCallback(async () => {
-    const version = ++statusVersion.current;
-    setStatus('loading');
-    setStatusError('');
-    try {
-      const result = await api<{ canImport: boolean }>('/import/status');
-      if (typeof result?.canImport !== 'boolean') throw new Error('Invalid import status');
-      if (version !== statusVersion.current) return;
-      setStatus(result.canImport ? 'allowed' : 'occupied');
-    } catch {
-      if (version !== statusVersion.current) return;
-      setStatus('failed');
-      setStatusError('복원 가능 여부를 확인하지 못했어요. 다시 확인해 주세요.');
-    }
-  }, []);
+  const [busy, setBusy] = useState(false);
+  const [chatDirty, setChatDirty] = useState(false);
+  const [resourceDirty, setResourceDirty] = useState(false);
+  const [error, setError] = useState('');
   useEffect(() => {
-    if (active) void refreshStatus();
-  }, [active, refreshStatus]);
-  useEffect(() => {
-    onDirtyChange?.(fileSelected || reading || busy !== null || chatBackupDirty);
-  }, [onDirtyChange, fileSelected, reading, busy, chatBackupDirty]);
-  useEffect(
-    () => () => {
-      readVersion.current++;
-      statusVersion.current++;
-      dirtyHandler.current?.(false);
-    },
-    []
-  );
-
-  function clearSelection() {
-    readVersion.current++;
-    setArchive(null);
-    setFileSelected(false);
-    setReading(false);
-    setFileError('');
-    if (fileInput.current) fileInput.current.value = '';
-  }
-  async function readFile(file?: File) {
-    const version = ++readVersion.current;
-    setArchive(null);
-    setFileSelected(!!file);
-    setReading(!!file);
-    setFileError('');
-    setImportError('');
-    setImportMessage('');
-    if (!file) return;
-    void refreshStatus();
-    try {
-      const text = await file.text();
-      if (version !== readVersion.current) return;
-      setArchive({ value: JSON.parse(text) as unknown });
-    } catch {
-      if (version !== readVersion.current) return;
-      setFileError('파일을 읽지 못했거나 JSON 형식이 아니에요. JSON 백업 파일을 선택해 주세요.');
-    } finally {
-      if (version === readVersion.current) setReading(false);
-    }
-  }
-  async function perform(kind: ArchiveOperation, work: () => Promise<void>) {
-    if (operationLock.current) return;
-    operationLock.current = true;
-    setBusy(kind);
-    onError('');
-    if (kind === 'import') {
-      setImportError('');
-      setImportMessage('');
-    } else {
-      setBackupError('');
-      setBackupMessage('');
-    }
-    try {
-      await work();
-    } catch (error) {
-      const message = (error as Error).message;
-      if (kind === 'import') {
-        setImportError(message);
-        await refreshStatus();
-      } else setBackupError(message);
-    } finally {
-      operationLock.current = false;
-      setBusy(null);
-    }
-  }
-  async function importTranscript(file: File) {
-    if (operationLock.current) return;
-    operationLock.current = true;
-    setTranscriptBusy(true);
-    setTranscriptError('');
-    setTranscriptMessage('');
-    onError('');
-    try {
-      const transcript = JSON.parse(await file.text()) as unknown;
-      const result = await api<{ chat: { title: string }; skippedAttachments: unknown[] }>(
-        '/chats/import-transcript',
-        { transcript, idempotencyKey: crypto.randomUUID() }
-      );
-      const skipped = result.skippedAttachments.length;
-      // The chat exists now; the list refresh runs in the background so the busy state ends here.
-      setTranscriptBusy(false);
-      setTranscriptMessage(
-        `"${result.chat.title}" 채팅을 만들었어요.` +
-          (skipped ? ` 서재에 없는 자료 ${skipped}개는 장착하지 않았어요.` : '')
-      );
-      void onImported().catch((caught) =>
-        setTranscriptError(
-          `채팅은 만들었어요. 목록을 새로 읽지 못했어요. ${(caught as Error).message}`
-        )
-      );
-    } catch (error) {
-      setTranscriptError(
-        error instanceof SyntaxError
-          ? '파일을 읽지 못했거나 JSON 형식이 아니에요. 채팅 본문 JSON 파일을 선택해 주세요.'
-          : (error as Error).message
-      );
-    } finally {
-      operationLock.current = false;
-      setTranscriptBusy(false);
-    }
-  }
+    onDirtyChange?.(busy || chatDirty || resourceDirty);
+  }, [busy, chatDirty, resourceDirty, onDirtyChange]);
   const Container = expanded ? 'section' : 'details';
   return (
     <Container
@@ -172,229 +30,60 @@ export function ArchivePanel({
       aria-label="백업과 가져오기"
     >
       {!expanded && <summary>내보내기와 복원</summary>}
-      <p className="muted">전체 작업 공간의 백업과 복원</p>
-      <section aria-label="백업 받기">
-        <h3>백업</h3>
-        <div className="archive-backup-options">
-          <div className="archive-backup-option">
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy !== null}
-              aria-describedby={`${id}-json-help`}
-              onClick={() => {
-                void perform('json', async () => {
-                  const result = await api('/export');
-                  saveDownload('uimori-archive.json', result);
-                  setBackupMessage('JSON 내보내기를 준비했어요.');
-                });
-              }}
-            >
-              <DownloadIcon size={18} aria-hidden="true" /> JSON 내보내기
-            </button>
-            <div className="archive-backup-description">
-              <strong>전체 데이터 내보내기</strong>
-              <p id={`${id}-json-help`} className="muted">
-                JSON · 자료와 대화를 새 빈 DB로 옮겨요.
-              </p>
-            </div>
-          </div>
-          <div className="archive-backup-option">
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy !== null}
-              aria-describedby={`${id}-sqlite-help`}
-              onClick={() => {
-                void perform('sqlite', async () => {
-                  const response = await fetch('/api/backup');
-                  if (!response.ok) throw new Error(`백업을 만들지 못했어요. (${response.status})`);
-                  const url = URL.createObjectURL(await response.blob());
-                  const anchor = document.createElement('a');
-                  anchor.href = url;
-                  anchor.download = 'uimori-backup.sqlite';
-                  anchor.click();
-                  setTimeout(() => URL.revokeObjectURL(url), 1000);
-                  setBackupMessage('일관된 SQLite 백업을 준비했어요.');
-                });
-              }}
-            >
-              <DownloadIcon size={18} aria-hidden="true" /> SQLite 백업 다운로드
-            </button>
-            <div className="archive-backup-description">
-              <strong>데이터베이스 백업</strong>
-              <p id={`${id}-sqlite-help`} className="muted">
-                SQLite · 서버 데이터베이스 전체를 보관해요.
-              </p>
-            </div>
-          </div>
-        </div>
-        {backupError && (
-          <p className="error" role="alert">
-            {backupError}
-          </p>
-        )}
-        {backupMessage && <p role="status">{backupMessage}</p>}
-      </section>
-      <details className="recovery-settings-disclosure archive-restore">
-        <summary>전체 데이터 복원</summary>
-        <p className="muted" id={`${id}-import-condition`}>
-          새 빈 데이터베이스에만 복원할 수 있어요. 현재 자료에 덮어쓰거나 합치지 않아요.
+      <section aria-label="데이터베이스 백업">
+        <h3>작업실 전체 백업</h3>
+        <p>
+          DB 스냅샷에는 자료·대화·이미지와 앱에 등록한 API 키가 들어 있어요. 개인 보관용 파일이에요.
         </p>
-        <div className="archive-import-status">
-          {status === 'loading' && <p role="status">복원 가능 여부를 확인하고 있어요…</p>}
-          {status === 'allowed' && (
-            <p role="status">현재 DB에 가져올 수 있어요. 실행할 때 서버가 다시 확인해요.</p>
-          )}
-          {status === 'occupied' && (
-            <p role="status">
-              현재 DB에 자료가 있어 가져올 수 없어요. 새 빈 데이터베이스를 준비해 주세요.
-            </p>
-          )}
-          {statusError && (
-            <p className="error" role="alert">
-              {statusError}
-            </p>
-          )}
-          <IconButton
-            label="복원 가능 여부 다시 확인"
-            icon={RefreshIcon}
-            disabled={busy !== null || status === 'loading'}
-            onClick={() => void refreshStatus()}
-          />
-        </div>
-        <form
-          className="editor-grid"
-          aria-label="JSON 가져오기"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!archive || reading || status !== 'allowed' || operationLock.current) return;
-            const value = archive.value;
-            void perform('import', async () => {
-              await api('/import', { archive: value });
-              clearSelection();
-              setImportMessage('빈 DB에 가져오기를 완료했어요.');
-              try {
-                await onImported();
-              } catch (error) {
-                setImportError(
-                  `가져오기는 완료됐어요. 목록을 새로 읽지 못했어요. ${(error as Error).message}`
-                );
-              }
-              await refreshStatus();
-            });
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setError('');
+            onError('');
+            try {
+              const response = await fetch('/api/backup');
+              if (!response.ok) throw new Error(`백업을 만들지 못했어요. (${response.status})`);
+              const url = URL.createObjectURL(await response.blob());
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'uimori-backup.sqlite';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (caught) {
+              setError((caught as Error).message);
+            } finally {
+              setBusy(false);
+            }
           }}
         >
-          <div className="full">
-            <label htmlFor={`${id}-archive-file`}>가져올 JSON 파일</label>
-            <div className="archive-file-field archive-restore-file-row">
-              <input
-                id={`${id}-archive-file`}
-                ref={fileInput}
-                aria-label="가져올 JSON 파일"
-                aria-describedby={`${id}-import-condition${fileError ? ` ${id}-file-error` : ''}`}
-                aria-invalid={!!fileError}
-                type="file"
-                accept="application/json,.json"
-                disabled={busy !== null}
-                onChange={(event) => void readFile(event.target.files?.[0])}
-              />
-              {fileSelected && (
-                <IconButton
-                  label="선택한 파일 해제"
-                  icon={CloseIcon}
-                  disabled={busy !== null}
-                  onClick={clearSelection}
-                />
-              )}
-            </div>
-          </div>
-          {reading && (
-            <p className="full" role="status">
-              파일을 읽고 있어요…
-            </p>
-          )}
-          {fileError && (
-            <p id={`${id}-file-error`} className="error full" role="alert">
-              {fileError}
-            </p>
-          )}
-          <div className="archive-import-actions form-actions full">
-            <button disabled={busy !== null || reading || !archive || status !== 'allowed'}>
-              <UploadIcon size={18} aria-hidden="true" />{' '}
-              {busy === 'import' ? '가져오는 중…' : '빈 DB에 가져오기'}
-            </button>
-            {!fileSelected && <small>먼저 JSON 백업 파일을 선택해 주세요.</small>}
-          </div>
-          {importError && (
-            <p className="error full" role="alert">
-              {importError}
-            </p>
-          )}
-          {importMessage && (
-            <p className="full" role="status">
-              {importMessage}
-            </p>
-          )}
-        </form>
+          <DownloadIcon size={18} aria-hidden="true" />
+          {busy ? '백업 준비 중…' : 'DB 스냅샷 다운로드'}
+        </button>
         <details>
-          <summary>서버 관리자를 위한 복원 안내</summary>
-          <p className="muted">
-            JSON 파일은 새 빈 데이터베이스에서 위 가져오기를 사용해요. SQLite 백업은 서버를 종료하고
-            새 UIMORI_DB 경로에 보관해 다시 열 수 있어요. 이미 자료가 있는 DB로의 가져오기는 서버가
-            거절해요.
+          <summary>DB 스냅샷으로 복원하기</summary>
+          <p>
+            서버를 종료하고 백업 파일을 새 경로에 놓은 뒤 UIMORI_DB로 그 경로를 지정해 시작해요.
+            확인이 끝날 때까지 기존 DB는 별도로 보관해요.
           </p>
         </details>
-      </details>
-      {expanded && (
-        <details className="recovery-settings-disclosure">
-          <summary>서버 관리</summary>
-          <MaintenanceControl />
-        </details>
-      )}
-      <details className="recovery-settings-disclosure">
-        <summary>개별 채팅 가져오기</summary>
-        <p className="muted">
-          채팅 백업은 분기와 실행 기록까지, 본문 JSON은 원문·요청·번역·메모를 가져와요.
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+      </section>
+      <ResourceBundleImport onImported={onImported} onDirtyChange={setResourceDirty} />
+      <section>
+        <h3>이어 쓸 채팅 가져오기</h3>
+        <p>
+          메시지·번역·이미지·메모·변수와 연결 자료를 새 채팅으로 복원해요. 분기는 각각 독립 사본이
+          돼요.
         </p>
-        <ChatBackupImport
-          onImported={onImported}
-          onDirtyChange={setChatBackupDirty}
-          disabled={busy !== null || transcriptBusy}
-        />
-        <section aria-label="채팅 본문 가져오기">
-          <h3>채팅 본문 가져오기</h3>
-          <p className="muted" id={`${id}-transcript-help`}>
-            외부에서 만든 uimori-chat-transcript 형식의 본문 JSON을 새 채팅으로 읽어요.
-            원문·요청·최신 번역·메모만 담은 한 분기의 자료이며, 완전 백업은 위의 채팅 백업
-            가져오기를 사용해요. 봇은 이 서재에 있어야 해요.
-          </p>
-          <div className="archive-file-field">
-            <label>
-              채팅 본문 JSON 파일
-              <input
-                aria-label="채팅 본문 JSON 파일"
-                aria-describedby={`${id}-transcript-help`}
-                type="file"
-                accept="application/json,.json"
-                disabled={busy !== null || transcriptBusy}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = '';
-                  if (file) void importTranscript(file);
-                }}
-              />
-            </label>
-          </div>
-          {transcriptBusy && <p role="status">채팅을 만들고 있어요…</p>}
-          {transcriptError && (
-            <p className="error" role="alert">
-              {transcriptError}
-            </p>
-          )}
-          {transcriptMessage && <p role="status">{transcriptMessage}</p>}
-        </section>
-      </details>
+        <ChatBackupImport onImported={onImported} onDirtyChange={setChatDirty} disabled={busy} />
+      </section>
     </Container>
   );
 }

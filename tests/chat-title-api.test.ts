@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp } from '../server/app.js';
-import { Store } from '../server/store.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import * as transport from '../core/transport.js';
 import type { Chat } from '../core/types.js';
@@ -28,7 +27,6 @@ async function setup() {
     dbPath: join(path, 'test.sqlite'),
     buildId: 'title-api',
     testMode: true,
-    approvedOrigins: ['http://127.0.0.1:9'],
   });
   owned.push({ path, close: () => app.close() });
   const bot = app.store.product.content(fixtureBotInput());
@@ -89,63 +87,6 @@ test('manual title API validates text and revision without mutating state', asyn
   const accepted = await rename(chat, 'x'.repeat(200));
   expect(accepted.statusCode).toBe(200);
   expect(accepted.json<Chat>().title).toHaveLength(200);
-});
-
-test('manual title changes preserve chat execution, organization and source records and export the new title', async () => {
-  const { app, create, rename } = await setup();
-  const chat = await create();
-  const store = app.store;
-  const profile = store.product.snapshot(chat.id);
-  const run = store.createRun(
-    chat.id,
-    {
-      request: 'Synthetic source',
-      expectedRevision: chat.headRevision,
-      expectedSettingsRevision: chat.settingsRevision,
-      idempotencyKey: randomUUID(),
-    },
-    () => ({
-      chatId: chat.id,
-      parentRevision: chat.headRevision,
-      settingsRevision: chat.settingsRevision,
-      settings: chat.settings,
-      request: 'Synthetic source',
-      history: [],
-      resources: store.product.resources(chat.id, profile),
-      profile,
-    })
-  ).run;
-  store.startRun(run.id);
-  store.completeRun(
-    run.id,
-    'Immutable synthetic source',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
-  const before = store.chat(chat.id);
-  const sources = store.db.prepare('SELECT * FROM sources WHERE chat_id=?').all(chat.id);
-  expect(sources).toHaveLength(1);
-  const runs = store.db.prepare('SELECT * FROM runs WHERE chat_id=?').all(chat.id);
-  const saved = await rename(before, 'Renamed with source');
-  expect(saved.statusCode).toBe(200);
-  const after = saved.json<Chat>();
-  const stable = (value: Chat) => ({
-    headRevision: value.headRevision,
-    settingsRevision: value.settingsRevision,
-    settings: value.settings,
-    botId: value.botId,
-    folderId: value.folderId,
-    sortPosition: value.sortPosition,
-    organizationRevision: value.organizationRevision,
-  });
-  expect(stable(after)).toEqual(stable(before));
-  expect(store.db.prepare('SELECT * FROM sources WHERE chat_id=?').all(chat.id)).toEqual(sources);
-  expect(store.db.prepare('SELECT * FROM runs WHERE chat_id=?').all(chat.id)).toEqual(runs);
-  const path = await mkdtemp(join(tmpdir(), 'uimori-title-api-'));
-  const restored = new Store(join(path, 'restored.sqlite'));
-  owned.push({ path, close: () => restored.close() });
-  restored.product.import(store.product.export());
-  expect(restored.chat(chat.id).title).toBe('Renamed with source');
 });
 
 test('automatic title enrollment needs explicit opt-in and a configured title model without provider calls', async () => {

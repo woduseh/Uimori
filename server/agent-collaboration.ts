@@ -248,7 +248,6 @@ export function createAgentCollaboration(
       });
       let attempt: string | undefined;
       const result = await executeProvider(transportConnection(authorized), request, {
-        approvedOrigins: hooks.approvedOrigins,
         signal: hooks.signal,
         resolveCredential: hooks.resolveCredential,
         executeCodex: hooks.executeCodex,

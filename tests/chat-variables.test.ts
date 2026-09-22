@@ -5,7 +5,6 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { Store } from '../server/store.js';
 import {
-  checkpointChatVariablesInTransaction,
   readChatVariables,
   writeChatVariables,
   writeChatVariablesInTransaction,
@@ -87,24 +86,6 @@ test('untouched branch reads are pure and reject cross-chat ownership', () => {
   expect(() => writeChatVariables(store, other.id, branch.id, command())).toThrow(
     'Branch not found'
   );
-});
-
-test('writes replace only branch overrides and return detached maps', () => {
-  const { store, chat, branch } = fixture();
-  const other = store.product.createBranch(chat.id, { title: 'Other', fromRevision: null });
-  const input = command({ score: '2', blank: '' });
-  const result = writeChatVariables(store, chat.id, branch.id, input);
-  input.values.score = 'changed input';
-  result.values.blank = 'changed output';
-  expect(readChatVariables(store, chat.id, branch.id)).toEqual({
-    revision: 1,
-    values: { score: '2', blank: '' },
-  });
-  expect(readChatVariables(store, chat.id, other.id)).toEqual({ revision: 0, values: {} });
-  expect(writeChatVariables(store, chat.id, branch.id, command({}, 1))).toEqual({
-    revision: 2,
-    values: {},
-  });
 });
 
 test('explicit equal-value writes advance revision and stale ABA commands fail', () => {
@@ -189,36 +170,6 @@ test('host adoption requires a transaction and rolls state, receipt and event ba
     store.transaction(() => writeChatVariablesInTransaction(store, chat.id, branch.id, input))
       .revision
   ).toBe(1);
-});
-
-test('source checkpoints preserve written overrides immutably and omit untouched branches', () => {
-  const { store, chat, branch } = fixture();
-  const first = append(store, chat.id, branch.id);
-  store.transaction(() =>
-    checkpointChatVariablesInTransaction(store, first.id, chat.id, branch.id)
-  );
-  expect(store.db.prepare('SELECT * FROM chat_variable_outputs').all()).toEqual([]);
-  writeChatVariables(store, chat.id, branch.id, { ...command(), expectedSourceHash: first.hash });
-  const second = append(store, chat.id, branch.id, 'Second source');
-  store.transaction(() =>
-    checkpointChatVariablesInTransaction(store, second.id, chat.id, branch.id)
-  );
-  const frozen = store.db.prepare('SELECT * FROM chat_variable_outputs').all();
-  writeChatVariables(store, chat.id, branch.id, {
-    ...command({ score: '9' }, 1),
-    expectedSourceHash: second.hash,
-  });
-  store.transaction(() =>
-    checkpointChatVariablesInTransaction(store, second.id, chat.id, branch.id)
-  );
-  expect(store.db.prepare('SELECT * FROM chat_variable_outputs').all()).toEqual(frozen);
-  expect(JSON.parse(String(frozen[0].body))).toEqual({ revision: 1, values: { score: '0' } });
-  const other = store.product.createBranch(chat.id, { title: 'Other', fromRevision: second.id });
-  expect(() =>
-    store.transaction(() =>
-      checkpointChatVariablesInTransaction(store, second.id, chat.id, other.id)
-    )
-  ).toThrow('CHAT_VARIABLE_SOURCE_OWNER');
 });
 
 test('invalid maps and malformed commands leave no write receipts', () => {

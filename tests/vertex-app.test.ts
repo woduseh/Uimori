@@ -1,4 +1,4 @@
-import { installJevFixture } from './fixtures/jev.js';
+import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 import { injectWithFixtureBot, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -23,7 +23,7 @@ const origin = 'https://aiplatform.googleapis.com';
 const endpoint = `${origin}/v1/projects/synthetic-project/locations/global/publishers/google/models`;
 const providerUrl = `${endpoint}/gemini-3.8-flash:streamGenerateContent?alt=sse`;
 const fakeBearer = 'synthetic-vertex-app-bearer';
-const credentialEnv = 'UIMORI_PROVIDER_VERTEX_APP_TEST';
+const credentialRef = 'UIMORI_PROVIDER_VERTEX_APP_TEST';
 const usage = {
   promptTokenCount: 10,
   candidatesTokenCount: 5,
@@ -88,14 +88,14 @@ async function launch(item: (typeof owned)[number]) {
     buildId: 'vertex-app-local-fixture',
     instanceId: randomUUID(),
     testMode: true,
-    approvedOrigins: [origin],
   });
   item.app = app;
+  configureJevFixture(app.store);
   await app.listen({ port: 0, host: '127.0.0.1' });
   return app;
 }
 async function fixture(handler: Parameters<typeof loopbackProvider>[0]) {
-  vi.stubEnv(credentialEnv, fakeBearer);
+  vi.stubEnv(credentialRef, fakeBearer);
   const item = {
     directory: await mkdtemp(join(tmpdir(), 'uimori vertex app fixture ')),
   } as (typeof owned)[number];
@@ -256,7 +256,7 @@ async function setup(app: App, translation = true) {
     title: 'Vertex to local HTTP fixture',
     protocol: 'vertex-gemini-v1',
     endpoint,
-    credentialEnv,
+    apiKey: fakeBearer,
     enabled: true,
   });
   const main = await api<ModelPreset>(app, '/api/model-presets', {

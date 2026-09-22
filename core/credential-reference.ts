@@ -1,5 +1,5 @@
-export const CREDENTIAL_ENV_PATTERN = '^[A-Za-z_][A-Za-z0-9_]*$';
-export const validCredentialEnv = (value: unknown): value is string =>
+export const CREDENTIAL_REF_PATTERN = '^[A-Za-z_][A-Za-z0-9_]*$';
+export const validCredentialRef = (value: unknown): value is string =>
   typeof value === 'string' && value.length <= 200 && /^[A-Za-z_][A-Za-z0-9_]*$/u.test(value);
 export const VERTEX_ADC_ENV = 'GOOGLE_APPLICATION_CREDENTIALS';
 export const isVertexAdcReference = (value: string | undefined) =>

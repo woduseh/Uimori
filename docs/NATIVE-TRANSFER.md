@@ -1,46 +1,9 @@
-# 자료 파일 이동 v1
+# 독립 자료 교환
 
-`uimori-native-transfer` v1은 저장한 봇·페르소나·모듈·프롬프트 프리셋을 다른 설치에 새 사본으로 옮기는 교환 형식이에요. DB schema·전체 보관 archive·채팅 전체 백업과 버전을 공유하지 않으며, 각각의 현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. Risu `.charx`·`.risum`·`.risup` 컨테이너 해석이나 원본 스크립트 실행은 이 기능의 범위가 아니에요.
+봇·페르소나·모듈·프리셋의 **개별 백업**은 Uimori 설정과 연결 자료·이미지를 함께 옮기는 기능이에요. Risu 파일 내보내기와는 별도예요. 원본 파일 컨테이너나 실행 영수증을 보존하지 않고 현재 저장된 자료를 내보내요.
 
-선택적 `sourceFiles`는 각 자료에 귀속된 원본 파일의 이름·MIME·SHA256·base64를 보존해요. 전체 256 MiB 한도를 공유하고 영수증 원본·재내보내기·전체 archive에서 유지하지만 모델 입력에는 복사하지 않아요. [Risu 카드 가져오기](RISU-IMPORT.md)는 이 저장 경로를 재사용해요.
+공통 `uimori-native-transfer` 형식에 선택한 자료, 필요한 연결 모듈, 프리셋 옵션 조합과 이미지가 들어가요. 서버 DB 테이블을 그대로 노출하지 않아요. 가져올 때는 검토 후 항상 새 ID의 사본으로 추가하고 내부 참조를 새 자료에 연결해요. 같은 이름의 기존 자료를 덮어쓰거나 자동 병합하지 않아요.
 
-이 교환 형식은 원본 보존, 전체 archive 복원, 내부 API 호환을 위해 유지하지만 서재와 프롬프트 목록에는 별도 가져오기·내보내기 화면을 노출하지 않아요. 사용자가 Risu 자료를 옮길 때는 서재 각 탭의 **자료 가져오기**, 프롬프트 목록의 **프롬프트 가져오기**, 개별 편집기의 Risu 내보내기를 사용해요. 저장 응답이 불확실할 때 같은 파일·선택·요청 키로 재확인하는 API 계약은 유지해요.
+프리셋이 외부 모델 ID를 명시했다면 목적지 모델에 연결하거나 주 모델 따르기를 선택할 수 있어요. 프로바이더 키는 포함하지 않아요. 이미지 이름·설명·Risu 참조 이름은 함께 보존하지만 이미지 바이트는 공통 WebP 처리 경계를 거쳐요. 이미 WebP인 이미지는 다시 손실 압축하지 않아요.
 
-## 자료와 참조
-
-- `roots`는 사용자가 선택한 자료·프리셋의 `{kind,key}` 목록이에요. `contents`와 `prompts`의 key는 파일 안에서만 유효해요. 원본 ID·이름·내용 hash로 목적지 자료와 자동 병합하지 않아요.
-- 콘텐츠 항목은 `{key,source,modules,origin?}`예요. `source`에 원래 `Content`와 패키지 정의를 보존해요. `modules`는 선언 순서대로 실제 사용한 모듈 항목 key를 기록해요. 내보내기는 기존 live 연결처럼 최신 모듈 개정을 캡처하므로, 원본 패키지에 적힌 이전 모듈 개정과 이 배열이 가리키는 실제 개정이 다를 수 있어요. 대상 모듈의 원본 ID는 선언된 ID와 같아야 해요.
-- 공유·중첩 모듈은 한 번만 저장해요. 실행 순서는 기존 루트 우선 DFS와 모듈 선언 순서를 유지해요. 저장 순서만 자식 우선으로 계산해요. 역할별 장착 중복 제거, 순환·개정 충돌·깊이 20·장착 100개 한도도 기존 `resolvePackageGraph`를 사용해요.
-- 패키지 안 로어·폴더·시작·제어·행동·정규식·이미지 항목 ID와 본문의 문자열은 바꾸지 않아요. 자료 ID, 패키지 ID/개정, 모듈 참조, 포함된 콘텐츠 간 `relatedIds`, 옵션 조합 소유권만 구조적으로 remap해요. 파일에 없는 외부 `relatedIds`는 prepare에서 안내하고 원본 영수증에 보존하며 목적지의 같은 ID에 연결하지 않아요. 패키지 로어의 `relatedIds`는 패키지 내부 참조라 그대로 유지해요.
-- 프롬프트 항목은 `{key,source,combinations,origin?}`예요. 소유 프리셋이 명확한 옵션 조합만 내보내며 각 조합의 원래 `controls`와 `values`를 유지해요. 현재 프롬프트와 옵션 정의가 다른 조합은 보존하되 기존 일치 검사에 따라 적용 대상에서 제외하고 prepare에 안내해요. 전역 작업본이나 전역 작업본 소유 조합은 이 내보내기 대상이 아니에요.
-
-## 준비와 적용
-
-1. `POST /api/native-transfers/export`는 `{items:[{kind:'content'|'prompt-preset',id}]}`를 받아 선택 항목과 의존 모듈·이미지·프리셋 소유 조합을 함께 내보내요. 삭제된 루트는 내보낼 수 없어요. 이미 연결된 의존 모듈의 조회는 기존 live 연결 계약을 따라요.
-2. `POST /api/native-transfers/prepare`는 `{file}`을 받아 `digest/summary/entries/modelRequirements/warnings`를 반환해요. DB 접근·이미지 저장·자료 등록·모델 호출이 없어요. 파일을 다시 반환하지 않으므로 UI는 선택한 원본 file을 초안으로 유지해요.
-3. `POST /api/native-transfers/apply`는 `{file,digest,modelBindings,idempotencyKey}`를 받아 서버에서 다시 검증해요. 한 transaction에서 이미지, 자식 모듈, 루트, 프리셋, 조합, 영수증을 등록해요. 하나라도 실패하면 새 이미지·자료·분류·영수증이 모두 롤백돼요.
-4. 결과는 `{id,created,digest,importedAt,summary,items}`이고 각 item은 원래 key와 새 ID/revision 1을 포함해요. 같은 요청 키·같은 파일/매핑은 재시작 후에도 같은 결과(`created:false`)를 반환해요. 같은 키의 다른 내용은 충돌이며, 새 키는 서로 독립적인 새 사본이에요. 이름은 겹칠 수 있어요.
-
-자료·이미지 등록만 수행하며 기존 전역 모델/연결/프롬프트 작업본, 채팅 설정·장착·옵션, 기존 자료의 내용·분류·숨김은 변경하지 않아요. 행동 초기화·난수 생성·시작문 저장·작업 예약도 하지 않아요.
-
-## 외부 모델 요구 사항
-
-협업자의 명시적 `agent.model`은 원본 모델 ID를 가진 requirement로 나타나요. 모델 정의·endpoint·credential 설정을 파일에 수록하거나 목적지의 같은 ID·이름으로 자동 연결하지 않아요. 각 requirement에는 `{requirementKey,mode:'local',model:{id}}` 또는 `{requirementKey,mode:'inherit-main'}`의 명시 선택이 필요해요. 원래 `model:null`인 협업자는 본문 모델 상속을 그대로 유지해요.
-
-적용 transaction에서 목적지 모델·연결의 존재·삭제·활성 상태를 다시 검사해요. 협업이 꺼져 있어도 명시 모델은 같은 검사를 받아요. 미연결 상태는 초안으로 남으며 원본 ID를 조용히 null로 치환하거나 저장 완료로 표시하지 않아요. `inherit-main`을 선택한 변경과 원래 모델 ID는 영수증에 보존해요.
-
-## 이미지와 운영 한도
-
-단일 교환 파일은 현재 256 MiB, 자료·프리셋 합계 1,000개, 옵션 조합 합계 1,000개, 이미지 blob 합계 10,000개를 넘지 않아요. Risu 컨테이너의 이미지가 base64로 커져도 같은 한도 안에서 가져오기·내보내기·재가져오기를 처리해요. 각 패키지와 프롬프트에는 개별 스키마 한도도 적용돼요. `nativeRisu`를 담는 패키지는 JSON 원문 8 MiB와 저장용 표시 필드를 합쳐 12 MiB까지 허용하고, 일반 패키지의 기존 한도는 유지해요. 이 값은 구현의 운영 한도이며 모든 Risu 자료의 실행 호환을 뜻하지 않아요.
-
-이미지는 기존 PNG/JPEG/WebP MIME, 정규 base64, 2,000,000 decoded bytes/이미지 한도와 바이트 서명·SHA-256 검사를 사용해요. 파일의 이미지 집합과 전체 패키지 참조가 정확히 일치해야 하며 누락·중복·불필요한 blob·MIME 불일치를 거절해요. 이미 존재하는 hash의 bytes/MIME도 일치해야 재사용해요. 실제 이미지의 완전한 디코딩·픽셀 크기 검사는 현재 계약에 없어요. 대용량 스트리밍·압축 컨테이너·이미지 변환은 별도 범위예요.
-
-## 원본과 보관
-
-현재 schema 21의 `native_transfer_receipts`가 요청 키의 UNIQUE 제약과 원본 연결 정보를 보관해요. 구형 DB를 변환하지 않아요. 영수증에 원본 JSON·이미지 bytes를 다시 복사하지 않아요. 가져온 불변 revision 1과 원래 ID/개정, module/related/model 참조, 옵션 값의 존재 여부, 새 ID 매핑을 사용해 `GET /api/native-transfers/:id/original`에서 원래 파일 데이터를 재구성해요. JSON 필드 순서나 공백은 원본 보존 대상이 아니며 작성된 문자열과 데이터는 보존해요.
-
-나중에 수정하거나 서재에서 삭제해도 원래 개정은 유지되므로 원본을 재구성할 수 있어요. 재내보내기 `origin`에는 이전 가져오기 digest·entry key·원래 ID/개정을 담고 현재 자료와 출처를 구분해요. 현재 `uimori-archive` v1은 이 영수증 collection을 필수로 포함해요. 복원 시 출처 재구성, 실제 새 자료/프리셋/조합의 ID·참조·모델 매핑, digest, 영수증 간 신규 ID의 중복 소유를 검증하고 실패하면 전체 복원을 롤백해요. 채팅 백업 v1은 채팅에 필요한 library version을 보존하지만 별도 자료 가져오기 영수증은 운반하지 않아요. SQLite 백업은 전체 영수증을 보존해요.
-
-## 구현과 검증
-
-타입: `core/native-transfer.ts`. 순수 검증: `core/native-transfer-validation.ts`, `core/package-graph.ts`. 저장·라우트: `server/native-transfer.ts`. 집중 검사는 `tests/native-transfer.test.ts`, 현재 DB 구조 검사는 `tests/database-schema.test.ts`예요. 합성 계약 검사와 실제 대형 자료·브라우저·의미 품질 검증을 구분해요.
+`server/resource-bundle.ts`가 사용자 자료 묶음을 만들고 적용해요. `server/transfer-images.ts`는 묶음의 이미지 변환과 참조 치환만 맡아요. 전체 실행 이력의 재현·복구·신뢰 증명을 위한 receipt 체계는 없어요.

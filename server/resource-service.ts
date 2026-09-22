@@ -1,0 +1,54 @@
+import type { Store } from './store.js';
+import type { ResourceKind, ResourceModel, SavedResource } from '../core/resource-editing.js';
+import { promptWorkspace, updatePromptWorkspace } from './prompt-workspace.js';
+import { editableResource } from '../core/resource-editing.js';
+import { HttpError } from './request-validation.js';
+
+export function readResource(store: Store, kind: ResourceKind, id: string): SavedResource {
+  return kind === 'prompt-workspace' ? promptWorkspace(store) : store.product.get(kind, id);
+}
+
+export function saveResource(
+  store: Store,
+  edit: {
+    kind: ResourceKind;
+    id: string | null;
+    expectedRevision?: number;
+    model: ResourceModel;
+  }
+) {
+  return store.transaction(() => {
+    const id = edit.kind === 'prompt-workspace' ? 'current' : edit.id;
+    const previous = id ? readResource(store, edit.kind, id) : null;
+    if (previous && previous.revision !== edit.expectedRevision)
+      throw new HttpError(409, '저장된 자료가 변경됐어요. 최신 자료를 확인해 주세요.');
+    const input = { ...edit.model, expectedRevision: edit.expectedRevision };
+    const saved: SavedResource =
+      edit.kind === 'prompt-workspace'
+        ? updatePromptWorkspace(store, input)
+        : edit.kind === 'content'
+          ? (store.product.content(input, id ?? undefined) as SavedResource)
+          : (store.product.promptPreset(input, id ?? undefined) as SavedResource);
+    if (previous && id)
+      store.db
+        .prepare(`INSERT INTO resource_undo(kind,id,saved_revision,model) VALUES(?,?,?,?)
+      ON CONFLICT(kind,id) DO UPDATE SET saved_revision=excluded.saved_revision,model=excluded.model`)
+        .run(edit.kind, id, saved.revision, JSON.stringify(editableResource(edit.kind, previous)));
+    return { saved, created: previous === null };
+  });
+}
+
+export function undoResource(store: Store, kind: ResourceKind, id: string, revision: number) {
+  const row = store.db
+    .prepare('SELECT saved_revision,model FROM resource_undo WHERE kind=? AND id=?')
+    .get(kind, id);
+  if (!row) throw new HttpError(404, '직전 저장본이 없어요.');
+  if (row.saved_revision !== revision)
+    throw new HttpError(409, '최근 저장 이후 자료가 변경됐어요.');
+  return saveResource(store, {
+    kind,
+    id,
+    expectedRevision: revision,
+    model: JSON.parse(String(row.model)),
+  });
+}

@@ -38,7 +38,7 @@ export function ModelWorkspaceEditor({
         contextModel: workspace.contextModel ?? null,
         scriptModel: workspace.scriptModel ?? null,
         routes: workspace.modelRoutes,
-        mainJudgmentEnabled: workspace.mainJudgmentEnabled !== false,
+        mainJudgmentEnabled: workspace.mainJudgmentEnabled === true,
         mainJudgmentThreshold: workspace.mainJudgmentThreshold ?? 0.9,
         translationPolicy: workspace.translationPolicy,
       });
@@ -87,7 +87,7 @@ export function ModelWorkspaceEditor({
       {
         expectedRevision: draft.revision,
         routes: draft.routes,
-        mainJudgmentEnabled: draft.mainJudgmentEnabled !== false,
+        mainJudgmentEnabled: draft.mainJudgmentEnabled === true,
         mainJudgmentThreshold: draft.mainJudgmentThreshold,
         titleModel: draft.titleModel ?? null,
         helperModel: draft.helperModel ?? null,
@@ -164,7 +164,7 @@ export function ModelWorkspaceEditor({
     return `${configured}/${values.length}개 설정됨`;
   };
   const enabledJudgments =
-    Number(draft.mainJudgmentEnabled !== false) +
+    Number(draft.mainJudgmentEnabled === true) +
     Number(draft.translationPolicy.judgment.enabled !== false);
   return (
     <section aria-label="역할별 모델 설정" className="settings-section">
@@ -294,7 +294,7 @@ export function ModelWorkspaceEditor({
                   <h5>본문</h5>
                   <Switch
                     aria-label="본문 서비스 거절 감지 사용"
-                    checked={draft.mainJudgmentEnabled !== false}
+                    checked={draft.mainJudgmentEnabled === true}
                     onChange={(event) =>
                       change({ ...draft, mainJudgmentEnabled: event.target.checked })
                     }

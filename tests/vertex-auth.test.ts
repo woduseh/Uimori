@@ -36,7 +36,6 @@ test('L01 P04 missing ADC and SDK auth errors cannot disclose credentials or sta
   vi.stubGlobal('fetch', generation);
   const onWire = vi.fn();
   const result = await executeProvider(connection, request, {
-    approvedOrigins: ['https://aiplatform.googleapis.com'],
     signal: new AbortController().signal,
     onWire,
   });
@@ -60,7 +59,6 @@ test('L01 P05 abort while obtaining ADC prevents late token from starting genera
   const controller = new AbortController();
   const onWire = vi.fn();
   const pending = executeProvider(connection, request, {
-    approvedOrigins: ['https://aiplatform.googleapis.com'],
     signal: controller.signal,
     onWire,
   });

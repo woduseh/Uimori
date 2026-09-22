@@ -7,8 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { createFixtureChat } from './fixtures/chat.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { Store, type HttpError } from '../server/store.js';
-import { forkChat } from '../server/chat-fork.js';
-import { directHelperGrants } from '../server/helper-workspace.js';
+
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { OUTLINE_CONTRACT, OUTLINE_LEVEL_LABELS } from '../core/outline.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -48,7 +47,7 @@ function chatWithMainModel(store: Store, title: string) {
     title: 'Synthetic outline connection',
     protocol: 'fixture-sse-v1',
     endpoint: 'http://127.0.0.1:1/sse',
-    credentialEnv: 'UIMORI_OUTLINE_TEST_KEY',
+    credentialRef: 'UIMORI_OUTLINE_TEST_KEY',
     enabled: true,
   }) as Connection;
   const model = store.product.model({
@@ -292,25 +291,6 @@ describe('hierarchical composition', () => {
     const second = compose(store, chat.id, key);
     expect(second.created).toEqual(first.created);
     expect(second.detail.nodes).toHaveLength(first.detail.nodes.length);
-  });
-
-  test('batch receipts bind the complete payload, branch and authority before replay', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '배치 영수증 검사');
-    const branch = store.product.createBranch(chat.id, { title: '다른 분기', fromRevision: null });
-    const body = {
-      idempotencyKey: randomUUID(),
-      operations: [{ op: 'create', ref: 'root', level: 'theme', title: '처음 계획', intent: '' }],
-    };
-    const first = store.outline.apply(chat.id, body, 'user');
-    for (const [changed, authority] of [
-      [{ ...body, operations: [{ ...body.operations[0], title: '다른 계획' }] }, 'user'],
-      [{ ...body, branchId: branch.id }, 'user'],
-      [body, 'model'],
-    ] as const)
-      expect(failure(() => store.outline.apply(chat.id, changed, authority)).statusCode).toBe(409);
-    expect(store.outline.detail(chat.id).nodes).toEqual(first.detail.nodes);
-    expect(store.outline.detail(chat.id, branch.id).nodes).toEqual([]);
   });
 
   test('duplicate refs and late mixed-operation errors reject the whole batch', async () => {
@@ -569,56 +549,6 @@ describe('hierarchical composition', () => {
     }
   );
 
-  test('a reserved custom request stays intact when a child is added and unrelated siblings stay writable', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '직접 요청문 보존');
-    compose(store, chat.id);
-    const episode = find(store, chat.id, '1화 잠긴 문');
-    const sibling = find(store, chat.id, '2화 장부의 첫 장');
-    const request = '직접 지정한 요청: 대사는 한 줄만 쓰고 열쇠를 보여 주세요.';
-    const key = randomUUID();
-    const command = store.outline.sceneCommand(episode.id, { idempotencyKey: key, request });
-    const other = store.outline.sceneCommand(sibling.id, { idempotencyKey: randomUUID() });
-    store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [
-          {
-            op: 'create',
-            level: 'beat',
-            parentId: episode.id,
-            title: '새 세부 사건',
-            intent: '열쇠가 빛난다.',
-          },
-        ],
-      },
-      'model'
-    );
-    expect(store.story.command(command.id)).toMatchObject({ request, status: 'cancelled' });
-    expect(store.outline.sceneCommand(episode.id, { idempotencyKey: key, request }).request).toBe(
-      request
-    );
-    expect(store.story.command(other.id).status).toBe('pending');
-    const fresh = store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID(), request });
-    expect(fresh.request).toBe(request);
-    const cancelledRun = reserve(store, chat.id, fresh.id);
-    store.finishRun(cancelledRun.id, 'cancelled', 'User cancelled an accepted outline run');
-    expect(store.story.command(fresh.id)).toMatchObject({
-      status: 'cancelled',
-      runId: cancelledRun.id,
-    });
-    // A new attempt of an already accepted, user-cancelled Run remains an explicit retry.
-    const first = write(store, chat.id, fresh.id, '열쇠가 빛났다.');
-    const second = write(store, chat.id, other.id, '다음 회차가 이어졌다.');
-    expect(first.run.request).toBe(request);
-    expect(second.run.snapshot.outline?.path.at(-1)?.id).toBe(sibling.id);
-    const restored = await database();
-    restored.product.import(store.product.export());
-    expect(restored.story.command(command.id)).toMatchObject({ status: 'cancelled', request });
-    expect(restored.run(first.run.id).request).toBe(request);
-  });
-
   test('an accepted run is replayed with its original plan after later composition edits', async () => {
     const store = await database();
     const chat = createFixtureChat(store, '접수된 집필 응답 재확인');
@@ -727,64 +657,6 @@ describe('hierarchical composition', () => {
     const { run } = write(store, chat.id, command.id, '최종 계획이 같은 원문');
     expect(run.snapshot.outline?.path.at(-1)?.intent).toBe(node.intent);
     expect(run.snapshot.outline?.path.at(-1)?.revision).toBe(current.revision);
-  });
-
-  test('receipts survive restore after deletion and reject forged references to another chat', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '삭제된 구성 영수증');
-    const other = createFixtureChat(store, '다른 채팅');
-    const body = {
-      idempotencyKey: randomUUID(),
-      operations: [{ op: 'create', ref: 'root', level: 'theme', title: '처음 계획', intent: '' }],
-    };
-    const first = store.outline.apply(chat.id, body, 'user');
-    const node = first.detail.nodes[0];
-    store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [{ op: 'remove', id: node.id, expectedRevision: node.revision }],
-      },
-      'user'
-    );
-    const foreign = store.outline.apply(
-      other.id,
-      {
-        ...body,
-        idempotencyKey: randomUUID(),
-      },
-      'user'
-    ).detail.nodes[0];
-    const archive = store.product.export();
-    const restored = await database();
-    restored.product.import(archive);
-    expect(restored.outline.apply(chat.id, body, 'user')).toEqual({
-      detail: { ...first.detail, nodes: [] },
-      created: first.created,
-    });
-    expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    for (const tamper of ['created', 'operation', 'authority'] as const) {
-      const forged = structuredClone(archive);
-      const receipt = forged.tables.outline_batches.find(
-        (row) => row.chat_id === chat.id && row.request_key === body.idempotencyKey
-      )!;
-      if (tamper === 'created') receipt.created = JSON.stringify([{ ref: 'root', id: foreign.id }]);
-      if (tamper === 'operation')
-        receipt.operations = JSON.stringify([
-          {
-            op: 'create',
-            ref: 'root',
-            parentId: foreign.id,
-            level: 'theme',
-            title: '처음 계획',
-            intent: '',
-          },
-        ]);
-      if (tamper === 'authority') receipt.authority = 'unrestricted';
-      const refused = await database();
-      expect(failure(() => refused.product.import(forged)).statusCode).toBe(400);
-      expect(refused.db.prepare('SELECT id FROM chats').all()).toEqual([]);
-    }
   });
 
   test('the largest allowed batch commits once, and an oversized batch commits nothing', async () => {
@@ -1059,43 +931,6 @@ describe('hierarchical composition', () => {
     expect(store.story.detail(chat.id).commands).toEqual([]);
   });
 
-  test('a fork keeps composition but never inherits another line’s completed units', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '포크 검사');
-    compose(store, chat.id);
-    const first = find(store, chat.id, '1화 잠긴 문');
-    const firstCommand = store.outline.sceneCommand(first.id, { idempotencyKey: randomUUID() });
-    const opening = write(store, chat.id, firstCommand.id, '문은 잠겨 있었다.');
-    const second = find(store, chat.id, '2화 장부의 첫 장');
-    const secondCommand = store.outline.sceneCommand(second.id, { idempotencyKey: randomUUID() });
-    write(store, chat.id, secondCommand.id, '장부의 첫 장을 펼쳤다.');
-
-    const forked = forkChat(store, chat.id, {
-      fromRevision: opening.source.id,
-      idempotencyKey: randomUUID(),
-    });
-    const nodes = store.outline.detail(forked.id).nodes;
-    expect(nodes.map((node) => node.title)).toEqual(
-      store.outline.detail(chat.id).nodes.map((node) => node.title)
-    );
-    expect(nodes.every((node) => node.branchId === `main:${forked.id}`)).toBe(true);
-    const forkedFirst = nodes.find((node) => node.title === '1화 잠긴 문');
-    const forkedSecond = nodes.find((node) => node.title === '2화 장부의 첫 장');
-    expect(forkedFirst?.progress.state).toBe('written');
-    // The second episode was written after the fork point on the original line only.
-    expect(forkedSecond?.progress.state).toBe('planned');
-    expect(forkedSecond?.progress.sourceRevision).toBeNull();
-    // Request receipts keep their original target and are never copied into a new chat.
-    expect(
-      store.db.prepare('SELECT * FROM outline_batches WHERE chat_id=?').all(forked.id)
-    ).toEqual([]);
-    const restored = await database();
-    restored.product.import(store.product.export());
-    expect(restored.outline.detail(forked.id)).toEqual(store.outline.detail(forked.id));
-    expect(restored.outline.detail(chat.id)).toEqual(store.outline.detail(chat.id));
-    expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  });
-
   test('a pin protects its own wording, not the planning beneath it', async () => {
     const store = await database();
     const chat = createFixtureChat(store, '고정 범위 검사');
@@ -1141,73 +976,5 @@ describe('hierarchical composition', () => {
       )
     );
     expect(conflict.statusCode).toBe(409);
-  });
-
-  test('a fork copies only the composition of the branch it forked from', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '분기 귀속 검사');
-    compose(store, chat.id);
-    const first = find(store, chat.id, '1화 잠긴 문');
-    const command = store.outline.sceneCommand(first.id, { idempotencyKey: randomUUID() });
-    const opening = write(store, chat.id, command.id, '문은 잠겨 있었다.');
-    const other = store.product.createBranch(chat.id, {
-      title: '다른 갈래',
-      fromRevision: opening.source.id,
-    });
-    store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [
-          {
-            op: 'create',
-            level: 'theme',
-            title: '다른 갈래 주제',
-            intent: '이 갈래만의 주제예요.',
-          },
-        ],
-        branchId: other.id,
-      },
-      'user'
-    );
-    expect(store.outline.detail(chat.id, other.id).nodes.map((node) => node.title)).toEqual([
-      '다른 갈래 주제',
-    ]);
-
-    const forked = forkChat(store, chat.id, {
-      fromRevision: opening.source.id,
-      idempotencyKey: randomUUID(),
-    });
-    const titles = store.outline.detail(forked.id).nodes.map((node) => node.title);
-    expect(titles).toContain('1화 잠긴 문');
-    expect(titles).not.toContain('다른 갈래 주제');
-  });
-
-  test('composition survives the archive export and restore path', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '보관 검사');
-    compose(store, chat.id);
-    const archive = store.product.export();
-    expect(archive.tables.outline_nodes).toHaveLength(7);
-    const restored = await database();
-    restored.product.import(archive);
-    expect(restored.outline.detail(chat.id).nodes.map((node) => node.title)).toEqual(
-      store.outline.detail(chat.id).nodes.map((node) => node.title)
-    );
-  });
-
-  test('a clear composition instruction grants the outline write, quoted text does not', () => {
-    const scope = { kind: 'chat', chatId: 'chat-1', branchId: 'main:chat-1' } as const;
-    const granted = directHelperGrants(
-      'request-1',
-      scope,
-      '3화 분량을 주제부터 작은 사건까지 구성해 줘'
-    );
-    expect(granted[0]?.actions).toContain('outline.write');
-    expect(granted[0]?.provenance).toBe('direct-user-request');
-    expect(
-      directHelperGrants('request-2', scope, '이 문장 "구성을 바꿔 줘" 는 인물의 대사예요.')
-    ).toEqual([]);
-    expect(directHelperGrants('request-3', scope, '남은 구성이 어떻게 되어 있어?')).toEqual([]);
   });
 });

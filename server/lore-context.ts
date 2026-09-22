@@ -1,3 +1,4 @@
+import { readLoreRetention } from './lore-retention-state.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -37,11 +38,18 @@ function currentDependencies(store: Store, snapshot: RunSnapshot): boolean {
 }
 /** Source edits and changed ancestors invalidate all reads made under that context. */
 export function loreRunIsCurrent(store: Store, run: Run): boolean {
+  const retained = !run.snapshot.loreContext ? readLoreRetention(store, run) : undefined;
+  const context = retained?.context ?? run.snapshot.loreContext;
   if (
     run.status !== 'completed' ||
     !run.sourceRevision ||
-    !run.snapshot.loreContext ||
-    !currentDependencies(store, run.snapshot)
+    !context ||
+    !(retained
+      ? isDeepStrictEqual(
+          context.dependencies,
+          loreDependencies({ ...run.snapshot, history: store.history(run.parentRevision) })
+        )
+      : currentDependencies(store, run.snapshot))
   )
     return false;
   try {
@@ -51,7 +59,7 @@ export function loreRunIsCurrent(store: Store, run: Run): boolean {
       original.chatId === run.chatId &&
       original.runId === run.id &&
       original.hash === current.hash &&
-      run.snapshot.loreContext.canonHash ===
+      context.canonHash ===
         store.story.notes.canonHash(store.story.notes.scope(run.chatId, run.parentRevision))
     );
   } catch {
@@ -61,6 +69,7 @@ export function loreRunIsCurrent(store: Store, run: Run): boolean {
 /** Recompute each successful main read against its immutable source corpus; metadata search is never a receipt. */
 export function verifiedRunLoreReads(store: Store, run: Run): RetainedLore[] {
   if (!loreRunIsCurrent(store, run)) return [];
+  if (!run.snapshot.loreContext) return structuredClone(readLoreRetention(store, run)?.reads ?? []);
   const source = store.sourceOriginal(run.sourceRevision!),
     resources = roleResources(run.snapshot),
     result: RetainedLore[] = [];
@@ -225,7 +234,7 @@ export function freezeLoreContext(store: Store, snapshot: RunSnapshot): RunSnaps
   const parentEligible = !!parent && loreRunIsCurrent(store, parent);
   return selectLoreContext(snapshot, {
     canonHash,
-    parent: parent?.snapshot.loreContext,
+    parent: parent && (readLoreRetention(store, parent)?.context ?? parent.snapshot.loreContext),
     parentEligible,
     parentReads: parentEligible ? verifiedRunLoreReads(store, parent!) : [],
   });

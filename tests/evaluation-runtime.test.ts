@@ -1,4 +1,4 @@
-import { installJevFixture } from './fixtures/jev.js';
+import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -21,7 +21,7 @@ import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js'
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
 import { translationFixtureRenderedSlot } from './fixtures/translation-job.js';
 
-const credentialEnv = 'Evaluation_Runtime_Key';
+const credentialRef = 'Evaluation_Runtime_Key';
 const bearer = 'synthetic-evaluation-fixture-key';
 const marker = 'PRIVATE_EVALUATION_NOTICE';
 const opaque = 'PRIVATE_EVALUATION_OPAQUE';
@@ -77,7 +77,7 @@ async function fixture(
   handler: (body: Body, response: ServerResponse, requestNumber: number) => void | Promise<void>,
   settings: { timeoutMs?: number; maximumToolRounds?: number; maxCalls?: number } = {}
 ) {
-  vi.stubEnv(credentialEnv, bearer);
+  vi.stubEnv(credentialRef, bearer);
   installJevFixture();
   const owner: Owner = { directory: await mkdtemp(join(tmpdir(), 'uimori-evaluation-runtime-')) };
   owners.push(owner);
@@ -110,9 +110,9 @@ async function fixture(
     buildId: 'evaluation-runtime-fixture',
     instanceId: randomUUID(),
     testMode: true,
-    approvedOrigins: [provider.origin],
   });
   owner.app = app;
+  configureJevFixture(app.store);
   await app.listen({ port: 0, host: '127.0.0.1' });
   chat = await api<Chat>(app, '/api/chats', { title: 'Synthetic evaluated story' });
   chat = await api<Chat>(
@@ -158,7 +158,7 @@ async function fixture(
     title: 'Local Responses fixture',
     protocol: 'openai-responses-v1',
     endpoint: `${provider.origin}/v1`,
-    credentialEnv,
+    apiKey: bearer,
     enabled: true,
   });
   const model = await api<ModelPreset>(app, '/api/model-presets', {
@@ -398,13 +398,13 @@ test('current connection enabled flag and credential availability are rechecked 
           title: state.connection.title,
           protocol: state.connection.protocol,
           endpoint: state.connection.endpoint,
-          credentialEnv,
+          credentialRef,
           enabled: false,
           expectedRevision: state.connection.revision,
         },
         'PUT'
       );
-    else vi.stubEnv(credentialEnv, '');
+    else vi.stubEnv(credentialRef, '');
     gate.release();
     const result = await settled(state, run.id);
     expect(result.status).toBe('failed');

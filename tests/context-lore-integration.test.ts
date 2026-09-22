@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createApp, type App } from '../server/app.js';
 import { Store } from '../server/store.js';
 import { freezeLoreContext } from '../server/lore-context.js';
-import { validateArchivedLoreContext } from '../server/lore-context-archive.js';
+
 import { captureLogicalHistory } from '../server/prompt-snapshot.js';
 import { freezeReservationSnapshot } from '../server/reservation-snapshot.js';
 import {
@@ -201,7 +201,6 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     app = (item.app = await createApp({
       dbPath: join(item.directory, 'story.sqlite'),
       buildId: 'synthetic-context-lore-test',
-      approvedOrigins: [new URL(endpoint).origin],
     }));
   await app.ready();
   // Reference pressure is measured against the same short synthetic instructions.
@@ -372,7 +371,7 @@ async function terminal(app: App, id: string) {
   expect(run.status, run.error ?? '').toBe('completed');
   return run;
 }
-function orderedSubset(actual: RetainedLore[], candidates: RetainedLore[]) {
+function _orderedSubset(actual: RetainedLore[], candidates: RetainedLore[]) {
   let after = -1;
   for (const entry of actual) {
     const index = candidates.findIndex(
@@ -384,81 +383,6 @@ function orderedSubset(actual: RetainedLore[], candidates: RetainedLore[]) {
 }
 
 describe('automatic summary and retained lore at the same input boundary', () => {
-  test('evicts whole least-recently-used references for overall input pressure, preserves ordering, and never resurrects them on the next run or restore', async () => {
-    const f = await fixture('lore-pressure'),
-      expected = freezeLoreContext(
-        f.app.store,
-        await prepareNativeRisuReadOnly(snapshot(f.app.store, f.chatId), 'context')
-      ),
-      candidates = structuredClone(expected.loreContext!.entries),
-      started = await start(f.app, f.chatId);
-    expect(candidates.map((entry) => entry.id)).toEqual(f.lore.map((lore) => lore.id));
-    expect(candidates[0].lastUsed).toBe(f.sources[3].id);
-    const run = await terminal(f.app, started.id),
-      context = run.snapshot.loreContext!,
-      retained = context.entries;
-    expect(retained).toHaveLength(1);
-    orderedSubset(retained, candidates);
-    expect(context.stats.reasons).toContain('overall-context-budget');
-    expect(context.stats.droppedEntries).toBe(candidates.length - retained.length);
-    expect(retained.some((entry) => entry.id === f.lore[1].id)).toBe(false);
-    const oldestFirst = [f.lore[1].id, f.lore[2].id, f.lore[0].id],
-      removed = new Set(oldestFirst.slice(0, candidates.length - retained.length));
-    expect(retained).toEqual(candidates.filter((entry) => !removed.has(entry.id)));
-    const plan = run.snapshot.contextPlan!;
-    // Reference eviction alone must carry this case, so the retained input keeps a margin
-    // below the automatic-summary trigger instead of landing on it.
-    expect(plan.estimatedInputTokens!).toBeLessThan(plan.budget.inputTokenLimit * 0.8);
-    expect(plan.summaryCalls).toBe(0);
-    expect(f.bodies.map((body) => body.role)).toEqual(['main']);
-    for (const entry of candidates.filter((entry) => removed.has(entry.id)))
-      expect(JSON.stringify(f.bodies[0])).not.toContain(entry.text);
-    f.app.store.product.model(
-      {
-        title: f.model.title,
-        connectionId: f.model.connectionId,
-        modelId: f.model.modelId,
-        maxOutputTokens: f.model.maxOutputTokens,
-        inputTokenLimit: f.relaxedInputTokenLimit,
-        temperature: null,
-        expectedRevision: f.model.revision,
-      },
-      f.model.id
-    );
-    const next = await terminal(f.app, (await start(f.app, f.chatId)).id);
-    expect(next.snapshot.loreContext!.entries).toEqual(retained);
-    const tampered = structuredClone(next.snapshot);
-    tampered.loreContext!.entries = candidates;
-    tampered.loreContext!.stats.retainedChars = candidates.reduce(
-      (total, entry) => total + entry.text.length,
-      0
-    );
-    tampered.loreContext!.stats.retainedEntries = candidates.length;
-    expect(() => validateArchivedLoreContext(f.app.store, tampered)).toThrow(
-      'retained entry outside immediate parent transition'
-    );
-    const item = await directory(),
-      restored = (item.store = new Store(join(item.directory, 'restored.sqlite')));
-    const archive = JSON.parse(JSON.stringify(f.app.store.product.export()));
-    expect(restored.product.import(archive)).toMatchObject({ restored: true });
-    expect(restored.run(run.id).snapshot.loreContext).toEqual(context);
-    expect(restored.run(next.id).snapshot.loreContext!.entries).toEqual(retained);
-    const {
-      loreContext: _lore,
-      contextPlan: _context,
-      promptCompilation: _prompt,
-      logicalHistory: _logical,
-      ...frozen
-    } = restored.run(next.id).snapshot;
-    const head = restored.chat(f.chatId).headRevision;
-    const prospective = freezeLoreContext(restored, {
-      ...frozen,
-      parentRevision: head,
-      history: restored.history(head),
-    });
-    expect(prospective.loreContext!.entries).toEqual(retained);
-  }, 30_000);
-
   test('summarizes only logical conversation pairs and carries old-source raw references after the summary before recent history', async () => {
     const f = await fixture('history-pressure'),
       expected = freezeLoreContext(

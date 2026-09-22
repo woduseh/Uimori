@@ -79,22 +79,7 @@ test('native first and alternative greetings retain authored text with no indepe
   ])
     expect(() => validatePackageStarts([{ ...pkg.starts![0], ...extra }])).toThrow();
 });
-test('confirming an authored greeting is atomic, idempotent and preserved by current archives', () => {
-  const f = fixture(),
-    before = structuredClone(f.content.package);
-  const first = createPackageStart(f.store, f.chat.id, f.command);
-  expect(first.created).toBe(true);
-  expect(first.run.status).toBe('completed');
-  expect(f.store.source(first.run.sourceRevision!).text).toBe(f.pkg.starts![0].text);
-  const replay = createPackageStart(f.store, f.chat.id, f.command);
-  expect(replay.created).toBe(false);
-  expect(replay.run.id).toBe(first.run.id);
-  expect(f.store.product.get<Content>('content', f.content.id).package).toEqual(before);
-  const restored = database();
-  restored.product.import(f.store.product.export());
-  expect(restored.run(first.run.id).snapshot.packageStart).toEqual(first.run.snapshot.packageStart);
-  expect(restored.source(first.run.sourceRevision!).text).toBe(f.pkg.starts![0].text);
-});
+
 test('greeting selection rejects stale ownership and subsequent attempts without adding a source', () => {
   const f = fixture();
   expect(() =>

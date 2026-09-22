@@ -1,7 +1,5 @@
 import { expect, test } from 'vitest';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
-import { Store } from '../server/store.js';
 import type { Json } from '../core/transport.js';
 import type { Connection, ModelPreset, PromptPreset } from '../core/product.js';
 import {
@@ -12,7 +10,7 @@ import {
   call,
   collaboration,
   consults,
-  credentialEnv,
+  credentialRef,
   deferred,
   fixture,
   message,
@@ -62,51 +60,6 @@ test('absent and disabled collaboration preserve one writing call plus JEV judgm
     expect(detail.jobs).toEqual([]);
   }
   expect(permissions[0]).toEqual(permissions[1]);
-});
-
-test('completed advisor attempts restore with their frozen models and reject forged advisor attribution atomically', async () => {
-  const state = await fixture(
-    async (_body, target, number, wire) => {
-      expect(wire.agentId).toBe(number === 1 ? 'advisor' : undefined);
-      await send(target, [message(number === 1 ? 'Synthetic advisor evidence.' : 'Final scene.')]);
-    },
-    { collaboration: collaboration({ agents: [agent('advisor', { trigger: 'before' })] }) }
-  );
-  const run = await settled(state, (await state.start()).id);
-  expect(run.status).toBe('completed');
-  const archive = state.app.store.product.export();
-  const restored = new Store(join(state.owner.directory, 'restored.sqlite'));
-  try {
-    expect(restored.product.import(archive)).toMatchObject({ restored: true });
-    expect(restored.run(run.id).usage).toEqual(run.usage);
-    expect(restored.run(run.id).toolEvents).toEqual(run.toolEvents);
-    expect(restored.product.attempts(state.chat.id)).toHaveLength(3);
-    expect(restored.detail(state.chat.id).sources.map((source) => source.text)).toEqual([
-      'Final scene.',
-    ]);
-    const model = restored.run(run.id).snapshot.profile!.collaborationModels!.advisor;
-    expect(model.id).toBe(state.advisorModel.id);
-    expect(model.connection.enabled).toBe(false);
-    expect(model.connection).not.toHaveProperty('credentialEnv');
-  } finally {
-    restored.close();
-  }
-  for (const agentId of ['unconfigured', 'constructor']) {
-    const damaged = structuredClone(archive);
-    const attempt = damaged.tables.attempts.find((row) => JSON.parse(row.request).agentId)!;
-    attempt.request = JSON.stringify({ ...JSON.parse(attempt.request), agentId });
-    const rejected = new Store(join(state.owner.directory, `rejected-${agentId}.sqlite`));
-    try {
-      expect(() => rejected.product.import(damaged)).toThrow(
-        'Advisor attempt attribution mismatch'
-      );
-      expect(rejected.chats()).toEqual([]);
-      expect(rejected.db.prepare('SELECT 1 FROM attempts').all()).toEqual([]);
-    } finally {
-      rejected.close();
-    }
-  }
-  expect(state.provider.requests).toHaveLength(2);
 });
 
 test('before advisors run in order with scoped reads, selected models and explicit shared controls; only final main prose becomes a source', async () => {
@@ -749,7 +702,7 @@ test('current advisor connection authorization is checked again between read rou
       title: state.advisorConnection.title,
       protocol: state.advisorConnection.protocol,
       endpoint: state.advisorConnection.endpoint,
-      credentialEnv,
+      credentialRef,
       enabled: false,
       expectedRevision: state.advisorConnection.revision,
     },

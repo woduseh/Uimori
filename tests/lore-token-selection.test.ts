@@ -49,7 +49,7 @@ async function selectedSnapshot(attachments = 1) {
   };
   const hooks: MainHooks = {
     signal: new AbortController().signal,
-    approvedOrigins: [],
+
     authorize: () => {
       throw new Error('No generative provider may run in this test');
     },

@@ -237,8 +237,7 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
       warnings.push({
         code: 'EXTERNAL_RELATED_IDS',
         key: entry.key,
-        message:
-          '파일에 포함되지 않은 관련 자료 ID는 원본 영수증에 보존하고 새 자료에 자동 연결하지 않아요.',
+        message: '파일에 없는 관련 자료는 자동 연결하지 않아요.',
       });
   }
   const reached = new Set<string>(),
@@ -289,13 +288,15 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
       image.id !== image.hash ||
       image.revision !== 1 ||
       !PACKAGE_IMAGE_MIMES.includes(image.mime) ||
-      expectedImages.get(image.hash) !== image.mime
+      (expectedImages.has(image.hash) && expectedImages.get(image.hash) !== image.mime)
     )
       fail('IMAGE_REFERENCES');
-    text(image.base64, 3_000_000);
+    text(image.base64, 90 * 1024 * 1024);
   }
   unique(images.map((image) => image.hash));
-  if (images.length !== expectedImages.size) fail('IMAGE_REFERENCES');
+  const includedImages = new Set(images.map((image) => image.hash));
+  if ([...expectedImages.keys()].some((hash) => !includedImages.has(hash)))
+    fail('IMAGE_REFERENCES');
   const file = structuredClone(raw) as NativeTransferFile;
   const entries: NativeTransferPrepare['entries'] = [
     ...file.contents.map((entry) => ({

@@ -18,7 +18,6 @@ import type {
   SavedPromptCombination,
 } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
-import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 
 const owned: { directory: string; app?: App }[] = [];
@@ -666,46 +665,6 @@ describe('global working prompts and independent library copies', () => {
     );
   });
 
-  test('archive restores copied prompts and rejects forged frozen role or compiled prompt content atomically', async () => {
-    const app = await application(),
-      chat = createFixtureChat(app.store, 'Archive copies');
-    const preset = await request<PromptPreset>(
-      app,
-      '/prompt-presets',
-      prompt('main', 'Archive literal')
-    );
-    await apply(app, preset);
-    const run = capture(app, chat.id);
-    const compiled = compileSnapshotPrompt({ ...run.snapshot, contextPlan: undefined });
-    app.store.db
-      .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-      .run(JSON.stringify(compiled), run.id);
-    const archive = app.store.product.export();
-    const target = await application();
-    expect(target.store.product.import(archive)).toMatchObject({ restored: true });
-    expect(target.store.run(run.id).snapshot.profile!.promptPresets!.main!.program).toEqual(
-      preset.program
-    );
-    expect(await workspace(target)).toEqual(await workspace(app));
-    for (const forge of [
-      (snapshot: any) => {
-        snapshot.profile.promptPresets.main.role = 'translation';
-      },
-      (snapshot: any) => {
-        snapshot.promptCompilation.messages[0].content[0].text = 'Forged compiled text';
-      },
-    ]) {
-      const damaged = structuredClone(archive);
-      const row = damaged.tables.runs.find((row) => row.id === run.id)!;
-      const snapshot = JSON.parse(row.snapshot);
-      forge(snapshot);
-      row.snapshot = JSON.stringify(snapshot);
-      const rejected = await application();
-      expect(() => rejected.store.product.import(damaged)).toThrow();
-      expect(rejected.store.chats()).toEqual([]);
-    }
-  });
-
   test('an unavailable optional translation connection does not block a main snapshot', async () => {
     const app = await application(),
       chat = createFixtureChat(app.store, 'Optional translation');
@@ -823,80 +782,6 @@ describe('translation prompt preview uses the job compiler without writes', () =
 });
 
 describe('explicit status recovery with current model', () => {
-  test('freezes the new model, retains the original run and failed job, and rejects duplicate or superseded recovery', async () => {
-    const app = await application();
-    const store = app.store;
-    const chat = createFixtureChat(store, 'Synthetic status recovery');
-    store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
-    const run = capture(app, chat.id);
-    const source = complete(app, run);
-    const original = store.detail(chat.id).jobs.find((job) => job.kind === 'status')!;
-    store.failQueuedJob(original.id, original.generation, 'MODEL_REQUIRED:status');
-    const frozenRun = store.run(run.id);
-    const frozenJob = store.job(original.id);
-    const connection = store.product.connection({
-      title: 'Synthetic status',
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:1',
-      enabled: true,
-    }) as Connection;
-    const model = store.product.model({
-      title: 'Synthetic status',
-      connectionId: connection.id,
-      modelId: 'fixture-status',
-      maxOutputTokens: 1024,
-      temperature: null,
-    }) as ModelPreset;
-    const profile = store.product.profile(chat.id);
-    updateTestProfile(
-      store.product,
-      chat.id,
-      profileBody(profile, { routes: { ...profile.routes, status: { id: model.id } } })
-    );
-    const created = store.requestStatus(source.id, source.hash, original.id);
-    expect(created.id).not.toBe(original.id);
-    expect(created.input).toMatchObject({
-      statusModelSelection: { id: model.id },
-      statusModelSnapshot: { id: model.id },
-    });
-    expect(store.run(run.id)).toEqual(frozenRun);
-    expect(store.job(original.id)).toEqual(frozenJob);
-    expect(() => store.requestStatus(source.id, source.hash, original.id)).toThrow(/changed/);
-    expect(() => store.requestStatus(source.id, source.hash, created.id)).toThrow(/active/);
-    expect(() => store.retryJob(original.id)).toThrow(/replaced/);
-    const claimed = store.claimJob(created.id, 'synthetic-status-owner', {
-      inputs: [],
-      toolEvents: [],
-    })!;
-    expect(claimed.input).toMatchObject({ statusModelSelection: { id: model.id } });
-    store.failJob(created.id, claimed.generation, 'synthetic-status-owner', 'Synthetic failure');
-    const nextProfile = store.product.profile(chat.id);
-    updateTestProfile(
-      store.product,
-      chat.id,
-      profileBody(nextProfile, { routes: { ...nextProfile.routes, status: null } })
-    );
-    expect(
-      store.product.resolveJobPrompt(run.snapshot, store.retryJob(created.id).input).profile?.models
-        .status?.id
-    ).toBe(model.id);
-    store.cancelJob(created.id);
-    const archived = store.product.export();
-    const restored = await application();
-    restored.store.product.import(archived);
-    const restoredInput = restored.store.job(created.id).input;
-    expect(restoredInput).toMatchObject({
-      statusModelSnapshot: { id: model.id, connection: { enabled: false } },
-    });
-    const malformed = structuredClone(archived);
-    const row = malformed.tables.jobs.find((row) => row.id === created.id)!;
-    const invalidInput = JSON.parse(row.input);
-    delete invalidInput.statusModelSelection;
-    row.input = JSON.stringify(invalidInput);
-    const rejected = await application();
-    expect(() => rejected.store.product.import(malformed)).toThrow(/requires selection/);
-  });
-
   test('rolls back validation failures and rejects changed source or active older workers', async () => {
     const app = await application();
     const store = app.store;

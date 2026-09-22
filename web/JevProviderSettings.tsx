@@ -285,11 +285,7 @@ export function JevProviderSettings({
                 />
                 <small>
                   <span>
-                    {status.credentialSource === 'saved'
-                      ? 'Uimori에 저장한 키'
-                      : status.credentialSource === 'environment'
-                        ? '서버 환경변수의 키'
-                        : '등록되지 않음'}
+                    {status.credentialSource === 'saved' ? 'Uimori에 저장한 키' : '등록되지 않음'}
                   </span>
                   {' · '}
                   키는 서버에 저장하며 다시 표시하지 않아요.
