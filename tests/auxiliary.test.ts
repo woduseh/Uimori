@@ -107,7 +107,7 @@ describe('M1 source-bound auxiliary roles', () => {
         const search = packet.results[0].result as { items: { id: string }[] };
         return {
           kind: 'tool',
-          action: { callId: 'read', name: 'knowledge.read', args: { id: search.items[0].id } },
+          action: { callId: 'read', name: 'knowledge.read', args: { ids: [search.items[0].id] } },
         };
       }
       return '미라는 초록 눈 아래에 누가 서 있는지 알 수 없었다.';
@@ -119,9 +119,7 @@ describe('M1 source-bound auxiliary roles', () => {
     ]);
     expect(JSON.stringify(observed[1])).not.toContain('초록 눈');
     expect(JSON.stringify(observed[2])).toContain('초록 눈');
-    expect(
-      (observed[2].results[1].result as { source: { revision: number } }).source.revision
-    ).toBe(5);
+    expect((observed[2].results[1].result as any).items[0].read.source.revision).toBe(5);
     expect(JSON.stringify(result)).not.toMatch(
       /CHANGED_AFTER_START|EXCLUDED_FUTURE_CANARY|FUTURE_REVEAL/
     );
@@ -200,13 +198,21 @@ describe('M1 source-bound auxiliary roles', () => {
       if (!packet.results.length)
         return {
           kind: 'tool',
-          action: { callId: 'missing', name: 'knowledge.read', args: { id: 'not-found' } },
+          action: { callId: 'missing', name: 'knowledge.read', args: { ids: [] } },
         };
       if (packet.results.length === 1) {
-        expect(packet.results[0]).toMatchObject({ denied: true, errorKind: 'recoverable' });
+        expect(packet.results[0]).toMatchObject({
+          denied: true,
+          errorKind: 'recoverable',
+          result: { code: 'INVALID_ARGUMENTS' },
+        });
         return {
           kind: 'tool',
-          action: { callId: 'corrected', name: 'knowledge.read', args: { id: 'chat-a:glossary' } },
+          action: {
+            callId: 'corrected',
+            name: 'knowledge.read',
+            args: { ids: ['chat-a:glossary'] },
+          },
         };
       }
       return '이름이 있는 원문.';
@@ -227,7 +233,7 @@ describe('M1 source-bound auxiliary roles', () => {
           action: {
             callId: `missing-${++calls}`,
             name: 'knowledge.read',
-            args: { id: 'not-found' },
+            args: { ids: [] },
           },
         })
       )

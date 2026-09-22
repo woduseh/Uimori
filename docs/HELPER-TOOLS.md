@@ -30,16 +30,16 @@ Search can filter `kinds` and `ids`. Resource kinds include `bot`, `persona`, `m
 Each hit contains an exact `ref`, source `origin`, an original-text excerpt, UTF-16 `range`, `matchRange`, `line`, `totalChars`, and continuation information. Chat metadata includes its scene number and head. `context` counts surrounding UTF-16 units, not lines. Copy a returned reference unchanged:
 
 ```json
-{"ref":{"scope":"library","kind":"bot","id":"<returned-id>","revision":7,"field":"/card/description","hash":"<returned-hash>"},"offset":120,"limit":1200}
+{"refs":[{"scope":"library","kind":"bot","id":"<returned-id>","revision":7,"field":"/card/description","hash":"<returned-hash>"}],"offset":120,"limit":1200}
 ```
 
 An empty reference field denotes a document directory. Read it to obtain paged field references, then read the needed field. Field names are JSON pointers, not executable paths. A live revision/hash change yields `DATA_SOURCE_CHANGED`; search again rather than silently reading a different version. Returned source text and offsets are not normalized or rewritten, and surrogate pairs are not split.
 
-`data.read` also accepts `refs` (up to sixteen) instead of `ref`. Each entry returns its own result or error; a shared text offset/limit applies to all entries. Mixed directory and text reads work with omitted limits. A non-null `nextIndex` identifies refs not returned because of the batch output budget. Submit those remaining refs in another call. Source-specific `nextOffset` still indicates unread content inside each field.
+`data.read` always accepts `refs` (one to sixteen). A single read still uses a one-item array. Each entry returns its own result or error; a shared text offset/limit applies to all entries. Mixed directory and text reads work with omitted limits. A non-null `nextIndex` identifies refs not returned because of the batch output budget. Submit `refs.slice(nextIndex)` in another call; `nextIndex` is not a text offset. Source-specific `nextOffset` still indicates unread content inside each field.
 
 Search results page by matching windows. Later matches in the same long field remain discoverable. Follow `nextOffset`; `complete` means the selected search traversal is complete, not that the contents of every excerpt have been read or that a fact is absent. Different aliases, omitted ranges, or a different scope can still matter. Do not reread a full bot merely because a bounded excerpt was returned when the supplied evidence already answers the question.
 
-Search defaults to ten results, at most fifty, with at most eight patterns. Excerpts are at most 2,000 UTF-16 units. Single text reads default to 4,000 and accept at most 10,000 units; directories default to twenty fields, at most fifty. Search/directory/SQL result assembly uses a small approximately 16,000-character output budget. References, metadata, and JSON transport overhead are separate from text length.
+Search defaults to ten results, at most fifty, with at most eight patterns. Excerpts are at most 2,000 UTF-16 units. Each text read defaults to 4,000 and accepts at most 10,000 units; directories default to twenty fields, at most fifty. Search/directory/SQL result assembly uses a small approximately 16,000-character output budget. References, metadata, and JSON transport overhead are separate from text length.
 
 ## Read-only SQL
 
@@ -87,7 +87,9 @@ That is an `app.tools` request. With no names, the tool returns a compact catalo
 {"name":"resource.read","arguments":{"kind":"content","id":"<resource-id>"}}
 ```
 
-For an existing save, preserve the native editing model and supply the latest revision according to `resource.save`'s discovered schema. Editing tools intentionally retain full models where necessary; a simple factual question should use the data tools instead. A user request to review or propose still does not authorize saving.
+For an existing save, preserve the native editing model and supply the latest revision according to `resource.save`'s discovered schema. Mutation identity is host-owned: app-operation schemas do not ask the model to invent an `operationId`; the helper passes it separately to services that need receipts. A new provider call ID is a new operation, not an automatic replay of a previous write. Revision checks remain explicit. See [Tool contracts](TOOL-CONTRACTS.md). Editing tools intentionally retain full models where necessary; a simple factual question should use the data tools instead. A user request to review or propose still does not authorize saving.
+
+Resource mutations use the existing helper operation receipt in the same transaction as the save. If the provider subsequently fails, the existing UI can show the committed effects and prevent a blind retry. Read-only resource and theme queries do not create mutation receipts.
 
 The provider-visible tool list stays fixed at five throughout a native continuation. `app.call` retains its envelope name/arguments in native tool history; the host dispatches the inner operation and the UI reports its real operation name. Compaction classifies the inner operation: read bodies can be summarized, while completed mutation exchanges retain exact arguments and results and are not replayed. Very large mandatory instructions or mutation arguments can still exceed a small context window; the host does not silently truncate them to claim success.
 

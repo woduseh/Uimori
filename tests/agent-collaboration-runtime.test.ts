@@ -87,12 +87,19 @@ test('before advisors run in order with scoped reads, selected models and explic
         expect(body.tools).toHaveLength(2);
         toolName(body, 'knowledge.search');
         toolName(body, 'knowledge.read');
-        await send(target, [call(body, 'knowledge.read', { id: state.lore.id }, 'before-read')]);
+        await send(target, [call(body, 'knowledge.read', { ids: [state.lore.id] }, 'before-read')]);
       } else if (number === 2) {
         expect(wire.agentId).toBe('advisor');
         expect(outputs(body)[0]).toMatchObject({
-          text: state.lore.text,
-          source: { id: state.lore.id, revision: state.lore.revision },
+          items: [
+            {
+              denied: false,
+              read: {
+                text: state.lore.text,
+                source: { id: state.lore.id, revision: state.lore.revision },
+              },
+            },
+          ],
         });
         await send(target, [message(longOpinion)]);
       } else if (number === 3) {
@@ -162,7 +169,7 @@ test('before advisors run in order with scoped reads, selected models and explic
   expect(result.evidence).toMatchObject([
     {
       tool: 'knowledge.read',
-      args: { id: state.lore.id, offset: 0, limit: 4096 },
+      args: { ids: [state.lore.id], offset: 0, limit: 4096 },
       reference: `resource:${state.lore.id}@${state.lore.revision}#chars=0-${state.lore.text.length}`,
     },
   ]);
@@ -188,7 +195,7 @@ test('on-demand main -> advisor read loop -> main persists attempts before HTTP 
       await send(target, [
         { type: 'reasoning', id: 'advisor-reasoning', encrypted_content: opaque, summary: [] },
         call(body, 'knowledge.search', { query: 'copper' }, 'search'),
-        call(body, 'knowledge.read', { id: state.lore.id }, 'read'),
+        call(body, 'knowledge.read', { ids: [state.lore.id] }, 'read'),
       ]);
     } else if (number === 3) {
       expect(wire.agentId).toBe('advisor');
@@ -196,7 +203,7 @@ test('on-demand main -> advisor read loop -> main persists attempts before HTTP 
         body.input.some((item) => item.type === 'reasoning' && item.encrypted_content === opaque)
       ).toBe(true);
       expect(outputs(body)).toHaveLength(2);
-      expect(outputs(body)[1].text).toBe(state.lore.text);
+      expect(outputs(body)[1].items[0].read.text).toBe(state.lore.text);
       await send(target, [message('The attached source places it north of the harbor.')]);
     } else if (number === 4) {
       expect(wire.agentId).toBeUndefined();
@@ -385,7 +392,7 @@ test('host, collaboration and per-advisor budgets bound real requests while rese
       async (body, target, number, wire) => {
         if (wire.agentId === 'advisor' && scenario.read)
           await send(target, [
-            call(body, 'knowledge.read', { id: state.lore.id }, `budget-read-${number}`),
+            call(body, 'knowledge.read', { ids: [state.lore.id] }, `budget-read-${number}`),
           ]);
         else if (wire.agentId) await send(target, [message('Bounded advisory opinion.')]);
         else {
@@ -442,7 +449,7 @@ test('advisor recursive consult, state writes, final submission and ungranted re
               call(
                 body,
                 'knowledge.read',
-                { id: state.foreign.id },
+                { ids: [state.foreign.id] },
                 `excluded-read-${advisorRequests}`
               ),
             ]);
@@ -452,7 +459,7 @@ test('advisor recursive consult, state writes, final submission and ungranted re
                 ? { agentId: 'advisor', question: 'Recurse' }
                 : { id: state.lore.id, content: 'MUST_NOT_COMMIT', values: { changed: true } };
             await send(target, [
-              call(body, 'knowledge.read', { id: state.lore.id }, 'must-not-read-mixed-turn'),
+              call(body, 'knowledge.read', { ids: [state.lore.id] }, 'must-not-read-mixed-turn'),
               rawCall(forbidden, args, 'forbidden'),
             ]);
           }
@@ -472,7 +479,10 @@ test('advisor recursive consult, state writes, final submission and ungranted re
     const reads = run.toolEvents.filter((event) => event.name === 'agents.read');
     if (forbidden === 'foreign-resource') {
       expect(reads).toHaveLength(3);
-      expect(reads[0]).toMatchObject({ denied: true, result: { code: 'RESOURCE_UNAVAILABLE' } });
+      expect(reads[0]).toMatchObject({
+        denied: false,
+        result: { items: [{ denied: true, error: { code: 'RESOURCE_UNAVAILABLE' } }] },
+      });
       expect(consults(run)[0].result.error).toBe('ADVISOR_CALL_BUDGET_EXHAUSTED');
     } else expect(reads).toEqual([]);
     expect(
@@ -554,7 +564,7 @@ test('cancelling a live advisor closes its HTTP stream, preserves completed usag
       expect(wire.agentId).toBe('advisor');
       if (number === 1)
         await send(target, [
-          call(body, 'knowledge.read', { id: state.lore.id }, 'read-before-cancel'),
+          call(body, 'knowledge.read', { ids: [state.lore.id] }, 'read-before-cancel'),
         ]);
       else {
         expect(number).toBe(2);
@@ -686,7 +696,7 @@ test('current advisor connection authorization is checked again between read rou
         received.release();
         await gate.promise;
         await send(target, [
-          call(body, 'knowledge.read', { id: state.lore.id }, 'read-before-revoke'),
+          call(body, 'knowledge.read', { ids: [state.lore.id] }, 'read-before-revoke'),
         ]);
       } else {
         expect(number).toBe(2);
@@ -740,9 +750,13 @@ test('advisor can correct invalid search arguments while only successful reads b
         await send(target, [call(body, 'knowledge.search', { limit: 101 }, 'invalid-search')]);
       else if (advisorRequests === 2) {
         expect(outputs(body)[0]).toMatchObject({ code: 'INVALID_ARGUMENTS' });
-        await send(target, [call(body, 'knowledge.read', { id: state.lore.id }, 'corrected-read')]);
+        await send(target, [
+          call(body, 'knowledge.read', { ids: [state.lore.id] }, 'corrected-read'),
+        ]);
       } else {
-        expect(outputs(body).at(-1)).toMatchObject({ text: state.lore.text });
+        expect(outputs(body).at(-1)).toMatchObject({
+          items: [{ denied: false, read: { text: state.lore.text } }],
+        });
         await send(target, [message('Advice based on the permitted reference.')]);
       }
     },

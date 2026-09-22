@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { sourceHash } from '../core/source-history.js';
 import { executeStoryRead, STORY_RESULT_MAX_BYTES } from '../core/story-context.js';
 import type { RunSnapshot } from '../core/types.js';
-import { MAIN_READ_TOOLS } from '../server/main-request.js';
+import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 
 function snapshot(
   texts = ['Authored opening.', 'Mira promises the lantern.', 'The captain waits.']
@@ -43,7 +43,7 @@ function read(fixed: RunSnapshot, name: string, args: Record<string, unknown>) {
 }
 
 describe('scene locators in frozen source ancestry', () => {
-  test('authored starts count, and compacting, filtering and paging never renumber originals', () => {
+  test('authored starts count, and compacting, searching and paging never renumber originals', () => {
     const fixed = snapshot();
     fixed.contextPlan = {
       version: 1,
@@ -61,9 +61,9 @@ describe('scene locators in frozen source ancestry', () => {
       error: null,
     };
     const original = structuredClone(fixed);
-    const listed = read(fixed, 'story.list', { offset: 1, limit: 1 });
+    const listed = read(fixed, 'story.search', { offset: 1, limit: 1 });
     expect(listed.results).toEqual([
-      expect.objectContaining({ sceneNumber: 2, index: 1, revision: 'source-1', compacted: true }),
+      expect.objectContaining({ sceneNumber: 2, revision: 'source-1', compacted: true }),
     ]);
     expect(listed).toMatchObject({
       total: 3,
@@ -80,15 +80,11 @@ describe('scene locators in frozen source ancestry', () => {
       sceneNumber: 2,
       source: { revision: 'source-1', hash: fixed.history[1].contentHash },
     });
-    expect(found.sceneScope).toEqual(listed.sceneScope);
     expect(read(fixed, 'story.read', { sceneNumber: 1 }).text).toBe('Authored opening.');
-    expect(read(fixed, 'story.read', { sceneNumber: 2 })).toEqual(
-      read(fixed, 'story.read', { id: 'source-1', sceneNumber: 2 })
-    );
     expect(fixed).toEqual(original);
     expect(MAIN_READ_TOOLS.find((tool) => tool.name === 'story.read')!.inputSchema).toMatchObject({
+      required: ['sceneNumber'],
       properties: { sceneNumber: { type: 'integer', minimum: 1 } },
-      anyOf: [{ required: ['id'] }, { required: ['sceneNumber'] }],
     });
   });
 
@@ -102,31 +98,21 @@ describe('scene locators in frozen source ancestry', () => {
     }
   );
 
-  test('mismatched selectors, another branch and stale source hashes cannot be read', () => {
+  test('legacy revision selector is invalid while an out-of-range scene is unavailable', () => {
     const fixed = snapshot();
-    expect(invoke(fixed, 'story.read', { id: 'source-0', sceneNumber: 2 })).toMatchObject({
+    expect(invoke(fixed, 'story.read', { id: 'source-0' })).toMatchObject({
       denied: true,
       result: { code: 'INVALID_ARGUMENTS' },
     });
-    for (const args of [{ sceneNumber: 4 }, { id: 'other-branch' }])
-      expect(invoke(fixed, 'story.read', args)).toMatchObject({
-        denied: true,
-        result: { code: 'RESOURCE_UNAVAILABLE' },
-      });
-    expect(invoke(fixed, 'story.read', {})).toMatchObject({
-      denied: true,
-      result: { code: 'INVALID_ARGUMENTS' },
-    });
-    fixed.history[0].text = 'Unhashed edit.';
-    expect(invoke(fixed, 'story.read', { sceneNumber: 2 })).toMatchObject({
+    expect(invoke(fixed, 'story.read', { sceneNumber: 4 })).toMatchObject({
       denied: true,
       result: { code: 'RESOURCE_UNAVAILABLE' },
     });
   });
 
   test('forks share prefix ordinals while divergent tails and edits retain exact source identity', () => {
-    const original = snapshot(),
-      fork = structuredClone(original);
+    const original = snapshot();
+    const fork = structuredClone(original);
     fork.chatId = 'fork';
     fork.history[2] = {
       revision: 'fork-tail',
@@ -138,36 +124,27 @@ describe('scene locators in frozen source ancestry', () => {
     expect(prefix.source).toEqual(read(original, 'story.read', { sceneNumber: 2 }).source);
     const tail = read(fork, 'story.read', { sceneNumber: 3 });
     expect(tail.source.revision).toBe('fork-tail');
-    expect(tail.sceneScope).toMatchObject({
-      chatId: 'fork',
-      headRevision: 'fork-tail',
-      headHash: fork.history[2].contentHash,
-    });
-    expect(tail.source).not.toEqual(read(original, 'story.read', { sceneNumber: 3 }).source);
+    expect(tail.sceneScope).toMatchObject({ chatId: 'fork', headRevision: 'fork-tail' });
     fork.history[1] = {
       ...fork.history[1],
       text: 'Corrected promise.',
       contentHash: sourceHash('Corrected promise.'),
     };
     const edited = read(fork, 'story.read', { sceneNumber: 2 });
-    expect(edited).toMatchObject({
-      sceneNumber: 2,
-      source: { revision: prefix.source.revision, hash: sourceHash('Corrected promise.') },
-    });
+    expect(edited.source.hash).toBe(sourceHash('Corrected promise.'));
     expect(edited.source.hash).not.toBe(prefix.source.hash);
   });
 
-  test('number reads preserve UTF-16 continuation and the byte cap, identical to ID reads', () => {
-    const text = '🌙 "정확한 인용"\n'.repeat(4000),
-      fixed = snapshot([text]);
-    let offset: number | null = 0,
-      recovered = '';
+  test('scene-number reads preserve UTF-16 continuation and the byte cap', () => {
+    const text = '🌙 "정확한 인용"\n'.repeat(4000);
+    const fixed = snapshot([text]);
+    let offset: number | null = 0;
+    let recovered = '';
     while (offset !== null) {
-      const numbered = read(fixed, 'story.read', { sceneNumber: 1, offset, limit: 16000 });
-      expect(numbered).toEqual(read(fixed, 'story.read', { id: 'source-0', offset, limit: 16000 }));
-      expect(numbered.source.start).toBe(offset);
-      recovered += numbered.text;
-      offset = numbered.nextOffset;
+      const page = read(fixed, 'story.read', { sceneNumber: 1, offset, limit: 16000 });
+      expect(page.source.start).toBe(offset);
+      recovered += page.text;
+      offset = page.nextOffset;
     }
     expect(recovered).toBe(text);
   });

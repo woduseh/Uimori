@@ -1,3 +1,4 @@
+import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
 import { estimateContextTokens } from '../core/context-budget.js';
 import {
@@ -24,7 +25,6 @@ import { createHash } from 'node:crypto';
 import { attachMainHostContext } from './main-host-context.js';
 import {
   buildMainProviderRequest,
-  MAIN_READ_TOOLS,
   encodeMainPreview,
   storySubmissionEnabled,
   STORY_SUBMIT_MAX_CHARS,

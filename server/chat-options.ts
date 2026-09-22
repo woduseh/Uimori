@@ -338,9 +338,8 @@ export const helperOptionTools: ProviderTool[] = [
           additionalProperties: false,
         },
         values: { type: 'object' },
-        operationId: str,
       },
-      ['expectedRevision', 'binding', 'values', 'operationId']
+      ['expectedRevision', 'binding', 'values']
     ),
   },
 ];
@@ -348,7 +347,8 @@ export function invokeHelperOptions(
   store: Store,
   task: HelperTask,
   name: string,
-  value: unknown
+  value: unknown,
+  operationId: string
 ): unknown {
   const scope = task.snapshot.scope;
   if (scope.kind !== 'chat') throw new HttpError(403, '채팅에서만 창작 옵션을 선택할 수 있어요.');
@@ -360,7 +360,11 @@ export function invokeHelperOptions(
   if (name !== 'options.oneoff') throw new HttpError(400, 'Unknown option tool');
   new HelperWorkspace(store).assertRunning(task.id);
   return helperOptionState(
-    service.stage(scope.chatId, { ...record(value), branchId: scope.branchId }, task.id)
+    service.stage(
+      scope.chatId,
+      { ...record(value), branchId: scope.branchId, operationId },
+      task.id
+    )
   );
 }
 

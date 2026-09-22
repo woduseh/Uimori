@@ -1,3 +1,4 @@
+import { KNOWLEDGE_SKILL_TOOLS } from './read-tools.js';
 import { createHash } from 'node:crypto';
 import { conversationSummary } from './context-projection.js';
 import type { ModelInput, Resource, RunSnapshot, ToolEvent, Usage } from './types.js';
@@ -15,18 +16,13 @@ import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 import { PROMPT_COMPILER_VERSIONS, type PromptCompilerVersion } from './risu-prompt.js';
 
 // These are host permissions, never instructions read from a content package.
-const ALLOWED_TOOLS = Object.freeze([
-  'knowledge.search',
-  'knowledge.read',
-  'skills.list',
-  'skills.load',
-]);
+const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
 /** Per-entry summary length in the main catalog; the body stays behind the read tools. */
 export const CATALOG_SUMMARY_CHARS = 160;
 /** Serialized length budget for the whole catalog list, which rides in every main request. */
 export const CATALOG_CHARS = 24_000;
 export const CATALOG_READ_GUIDANCE =
-  'Relevant references may already be included in the input; do not read them again. The catalog contains summaries of additional references. If the reply needs missing detail, fetch known ids together with knowledge.read({ids:[...]}); one id also works. Use knowledge.search only when the needed entry is not identifiable from the catalog. Retrieval is optional when the supplied context is sufficient.';
+  'Relevant references may already be included in the input; do not read them again. The catalog contains summaries of additional references. If the reply needs missing detail, fetch known ids with knowledge.read({ids:[...]}), using a one-item array for a single reference. Use knowledge.search only when the needed entry is not identifiable from the catalog. Retrieval is optional when the supplied context is sufficient.';
 
 const metadata = ({ text: _text, chatId: _chatId, ...item }: Resource) => item;
 const scopedMetadata = (item: Resource, allowedIds: Set<string>) => ({
@@ -197,11 +193,8 @@ export function buildMainInput(
   input.tools.push(...STORY_READ_NAMES);
   if (snapshot.contextPlan) {
     const kept = new Set(snapshot.contextPlan.recentSourceRevisions);
-    input.history = structuredClone(
-      validateSourceHistory(snapshot).filter((entry) => kept.has(entry.revision))
-    );
+    input.history = structuredClone(input.history.filter((entry) => kept.has(entry.revision)));
     input.contextSummary = conversationSummary(snapshot);
-    for (const tool of STORY_READ_NAMES) if (!input.tools.includes(tool)) input.tools.push(tool);
   }
   if (snapshot.outline) {
     input.outline = structuredClone(snapshot.outline);
@@ -243,20 +236,46 @@ export type ToolAction = {
 };
 
 export type KnowledgeReadResult = {
-  source: { id: string; revision: number; hash: string };
-  range: { start: number; end: number };
+  source: Pick<Resource, 'id' | 'revision' | 'kind' | 'sourceKind'> & {
+    hash: string;
+    reference: string;
+  };
+  range: { start: number; end: number; unit: 'utf16-code-unit' };
+  totalChars: number;
+  nextOffset: number | null;
   text: string;
 };
+function readResourceRange(
+  resource: Resource,
+  offset: number,
+  limit: number,
+  role: string
+): KnowledgeReadResult {
+  const end = Math.min(resource.text.length, offset + limit);
+  return {
+    source: {
+      id: resource.id,
+      kind: resource.kind,
+      ...(role === 'translation' && resource.sourceKind ? { sourceKind: resource.sourceKind } : {}),
+      revision: resource.revision,
+      hash: hash(resource.text),
+      reference: `resource:${resource.id}@${resource.revision}#chars=${offset}-${end}`,
+    },
+    range: { start: offset, end, unit: 'utf16-code-unit' },
+    totalChars: resource.text.length,
+    text: resource.text.slice(offset, end),
+    nextOffset: end < resource.text.length ? end : null,
+  };
+}
 /** Callers verify the full event against executeTool before treating these as durable receipts. */
 export function knowledgeReadResults(event: ToolEvent): KnowledgeReadResult[] {
   if (event.denied || event.name !== 'knowledge.read') return [];
-  const data = event.result as Record<string, unknown>;
-  if (Array.isArray(data.items))
-    return data.items.flatMap((item) => {
-      const entry = item as { denied?: boolean; read?: KnowledgeReadResult };
-      return entry.denied === false && entry.read ? [entry.read] : [];
-    });
-  return [data as unknown as KnowledgeReadResult];
+  const data = event.result as { items?: unknown[] };
+  if (!Array.isArray(data.items)) return [];
+  return data.items.flatMap((item) => {
+    const entry = item as { denied?: boolean; read?: KnowledgeReadResult };
+    return entry.denied === false && entry.read ? [entry.read] : [];
+  });
 }
 
 /** Execute a reusable read action against the immutable Run's local corpus. */
@@ -267,17 +286,8 @@ export function executeTool(
   role: 'main' | 'translation' | 'status' | 'image' = 'main'
 ): ToolEvent {
   checkAbort(signal);
-  if ((role === 'main' || role === 'translation') && STORY_READ_NAMES.includes(action.name)) {
-    const event = executeStoryRead(
-      snapshot,
-      action,
-      role === 'translation' || !!snapshot.contextPlan
-    );
-    // RESOURCE_UNAVAILABLE also masks source-integrity exceptions; never relax that boundary.
-    if (event.denied && (event.result as { code?: string }).code === 'INVALID_ARGUMENTS')
-      event.errorKind = 'recoverable';
-    return event;
-  }
+  if ((role === 'main' || role === 'translation') && STORY_READ_NAMES.includes(action.name))
+    return executeStoryRead(snapshot, action);
   const denied = (code: string): ToolEvent => ({
     callId: action.callId,
     name: ALLOWED_TOOLS.includes(action.name) ? action.name : 'unapproved',
@@ -292,7 +302,8 @@ export function executeTool(
   // Scope applies before search, counts, pagination, and individual reads alike.
   const scope = roleResources(snapshot, role);
   const { args } = action;
-  if (action.name === 'knowledge.read' && Object.hasOwn(args, 'ids')) {
+
+  if (action.name === 'knowledge.read') {
     if (
       Object.keys(args).some((key) => !['ids', 'offset', 'limit'].includes(key)) ||
       !Array.isArray(args.ids) ||
@@ -302,24 +313,22 @@ export function executeTool(
       new Set(args.ids).size !== args.ids.length
     )
       return denied('INVALID_ARGUMENTS');
+
     const offset = pageNumber(args.offset, 0, Number.MAX_SAFE_INTEGER);
     const limit = pageNumber(args.limit, 4096, 4096);
     if (offset === null || limit === null || limit === 0) return denied('INVALID_ARGUMENTS');
+
     const items = args.ids.map((id) => {
-      const result = executeTool(
-        snapshot,
-        { callId: action.callId, name: 'knowledge.read', args: { id, offset, limit } },
-        signal,
-        role
-      );
-      return {
-        id,
-        denied: result.denied,
-        ...(result.denied ? { error: result.result } : { read: result.result }),
-      };
+      const resource = scope.find((item) => item.id === id && item.kind === 'lore');
+      if (!resource) return { id, denied: true, error: { code: 'RESOURCE_UNAVAILABLE' } };
+      if (offset > resource.text.length)
+        return { id, denied: true, error: { code: 'INVALID_ARGUMENTS' } };
+
+      return { id, denied: false, read: readResourceRange(resource, offset, limit, role) };
     });
     return { ...action, args: { ids: args.ids, offset, limit }, denied: false, result: { items } };
   }
+
   const search = action.name === 'knowledge.search' || action.name === 'skills.list';
   if (
     Object.keys(args).some(
@@ -327,13 +336,15 @@ export function executeTool(
     )
   )
     return denied('INVALID_ARGUMENTS');
-  if (action.name === 'knowledge.search' || action.name === 'skills.list') {
+
+  if (search) {
     if (args.query !== undefined && (typeof args.query !== 'string' || args.query.length > 512))
       return denied('INVALID_ARGUMENTS');
     const query = typeof args.query === 'string' ? args.query : '';
     const offset = pageNumber(args.offset, 0, Number.MAX_SAFE_INTEGER);
     const limit = pageNumber(args.limit, 20, 100);
     if (offset === null || limit === null || limit === 0) return denied('INVALID_ARGUMENTS');
+
     const terms = query.toLocaleLowerCase('en').split(/\s+/u).filter(Boolean);
     const matches = scope.filter(
       (item) =>
@@ -353,50 +364,28 @@ export function executeTool(
       result: {
         items,
         total: matches.length,
-        continuation:
-          offset + items.length < matches.length ? { offset: offset + items.length, limit } : null,
+        nextOffset: offset + items.length < matches.length ? offset + items.length : null,
       },
     };
   }
-  if (typeof args.id !== 'string' || args.id.length > 200) return denied('INVALID_ARGUMENTS');
-  const resource = scope.find((item) => item.id === args.id);
-  // Missing and excluded resources deliberately have the same observable error.
-  if (
-    !resource ||
-    (action.name === 'skills.load' ? resource.kind !== 'skill' : resource.kind !== 'lore')
-  )
-    return denied('RESOURCE_UNAVAILABLE');
+
+  if (typeof args.id !== 'string' || !args.id || args.id.length > 200)
+    return denied('INVALID_ARGUMENTS');
+  const resource = scope.find((item) => item.id === args.id && item.kind === 'skill');
+  if (!resource) return denied('RESOURCE_UNAVAILABLE');
+
   const offset = pageNumber(args.offset, 0, resource.text.length);
   const limit = pageNumber(args.limit, 4096, 16384);
   if (offset === null || limit === null || limit === 0) return denied('INVALID_ARGUMENTS');
-  const end = Math.min(resource.text.length, offset + limit);
-  const truncated = end < resource.text.length;
   return {
     ...action,
     args: { id: resource.id, offset, limit },
     denied: false,
-    result: {
-      source: {
-        id: resource.id,
-        kind: resource.kind,
-        ...(role === 'translation' && resource.sourceKind
-          ? { sourceKind: resource.sourceKind }
-          : {}),
-        revision: resource.revision,
-        hash: hash(resource.text),
-        reference: `resource:${resource.id}@${resource.revision}#chars=${offset}-${end}`,
-      },
-      range: { start: offset, end, unit: 'utf16-code-unit' },
-      totalLength: resource.text.length,
-      text: resource.text.slice(offset, end),
-      truncated,
-      continuation: truncated ? { id: resource.id, offset: end, limit } : null,
-    },
+    result: readResourceRange(resource, offset, limit, role),
   };
 }
 
 type SearchResult = { items: Omit<Resource, 'text' | 'chatId'>[] };
-type ReadResult = { text: string };
 type ModelStep = { kind: 'tool'; action: ToolAction } | { kind: 'text'; text: string };
 
 /** A deterministic fixture provider, not a creative quality or API compatibility model. */
@@ -415,7 +404,7 @@ function scriptedStep(input: ModelInput, research: boolean): ModelStep {
   if (discovered && !success.some((result) => result.name === 'knowledge.read')) {
     return {
       kind: 'tool',
-      action: { callId: 'call-read', name: 'knowledge.read', args: { id: discovered.id } },
+      action: { callId: 'call-read', name: 'knowledge.read', args: { ids: [discovered.id] } },
     };
   }
   const skill = input.catalog.find((item) => item.kind === 'skill');
@@ -426,9 +415,9 @@ function scriptedStep(input: ModelInput, research: boolean): ModelStep {
     };
   }
   const read = success.find((result) => result.name === 'knowledge.read');
-  const detail = read
-    ? (read.result as ReadResult).text
-    : 'The evening tide moved softly beneath the wooden pier.';
+  const detail =
+    (read ? knowledgeReadResults(read)[0]?.text : undefined) ??
+    'The evening tide moved softly beneath the wooden pier.';
   const opening =
     input.preset === 'vivid'
       ? 'Wind struck the pier in bright, salt-heavy bursts. Mira caught her coat against her wrist, the brass compass cold in her palm.'

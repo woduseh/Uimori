@@ -53,17 +53,6 @@ function returnedReadMetadata(event: ToolEvent): Json | undefined {
         return found ? [pick(found, ['sceneNumber', 'source', 'truncated', 'nextOffset'])] : [];
       }),
     };
-  if (event.name === 'notes.read')
-    return pick(result, [
-      'id',
-      'kind',
-      'atRevision',
-      'atHash',
-      'author',
-      'range',
-      'totalChars',
-      'nextOffset',
-    ]);
   if (event.name === 'knowledge.read' && Array.isArray(result.items))
     return {
       items: result.items.flatMap((item) => {
@@ -73,14 +62,14 @@ function returnedReadMetadata(event: ToolEvent): Json | undefined {
           ? [
               {
                 id: entry.id as Json,
-                ...pick(read, ['source', 'range', 'totalLength', 'truncated', 'continuation']),
+                ...pick(read, ['source', 'range', 'totalChars', 'nextOffset']),
               },
             ]
           : [];
       }),
     };
-  if (event.name === 'knowledge.read' || event.name === 'skills.load')
-    return pick(result, ['source', 'range', 'totalLength', 'truncated', 'continuation']);
+  if (event.name === 'skills.load')
+    return pick(result, ['source', 'range', 'totalChars', 'nextOffset']);
   return undefined;
 }
 

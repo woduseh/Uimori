@@ -370,7 +370,6 @@ describe('model-driven working summary and window switch inside one main run', (
                 start: 2,
                 end: 32,
               },
-              truncated: true,
               nextOffset: 32,
             },
           },
@@ -1030,7 +1029,7 @@ describe('model-driven working summary and window switch inside one main run', (
     const saved = persistence();
     const log = hooks(saved.persist);
     const bodies = script([
-      (_body, n) => toolTurn([{ id: 'c1', name: 'story.list', args: {} }], n),
+      (_body, n) => toolTurn([{ id: 'c1', name: 'story.search', args: {} }], n),
       (_body, n) =>
         toolTurn([{ id: 'c2', name: 'context.write', args: { summary: workingSummary } }], n),
       (_body, n) => toolTurn([{ id: 'c3', name: 'context.new', args: { keepRecent: 2 } }], n),
@@ -1044,7 +1043,7 @@ describe('model-driven working summary and window switch inside one main run', (
     expect(bodies).toHaveLength(5);
     const first = bodies[0];
     expect(first.stable.tools.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining([...CONTEXT_TOOL_NAMES, 'story.list', 'story.search', 'story.read'])
+      expect.arrayContaining([...CONTEXT_TOOL_NAMES, 'story.search', 'story.read'])
     );
     expect(first.stable.contract).toContain(CONTEXT_TOOLS_CONTRACT);
     expect(first.stable.contract).toContain(CONTEXT_SUMMARY_SEMANTICS);
@@ -1059,7 +1058,7 @@ describe('model-driven working summary and window switch inside one main run', (
     expect(bodies[1].opaqueState).toBe('OPAQUE_1');
     expect(bodies[2].opaqueState).toBe('OPAQUE_2');
     expect(log.events.map((event) => event.name)).toEqual([
-      'story.list',
+      'story.search',
       'context.write',
       'context.new',
       'story.read',
@@ -1148,7 +1147,7 @@ describe('model-driven working summary and window switch inside one main run', (
         toolTurn(
           [
             { id: 'c2', name: 'context.new', args: { summary: workingSummary } },
-            { id: 'c3', name: 'story.list', args: {} },
+            { id: 'c3', name: 'story.search', args: {} },
           ],
           n
         ),
@@ -1159,7 +1158,7 @@ describe('model-driven working summary and window switch inside one main run', (
     expect(log.events.map((event) => [event.name, event.denied])).toEqual([
       ['context.new', true],
       ['context.new', true],
-      ['story.list', false],
+      ['story.search', false],
     ]);
     expect(log.events[0]).toMatchObject({
       result: { code: 'SUMMARY_REQUIRED' },
