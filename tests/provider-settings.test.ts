@@ -260,11 +260,13 @@ describe('provider settings, catalogs and archive contracts', () => {
                 { thinkingMode: 'enabled', thinkingBudgetTokens: 2048, temperature: 1 },
                 { thinkingMode: 'adaptive', temperature: 0 },
               ]
-            : [
-                { thinkingLevel: 'HIGH' },
-                { thinkingMode: 'disabled' },
-                { thinkingBudgetTokens: 2048 },
-              ];
+            : protocol === 'vercel-chat-v1'
+              ? [{ thinkingBudgetTokens: 2048 }]
+              : [
+                  { thinkingLevel: 'HIGH' },
+                  { thinkingMode: 'disabled' },
+                  { thinkingBudgetTokens: 2048 },
+                ];
       for (const changes of [
         ...forbidden,
         ...(protocol === 'vercel-chat-v1'
@@ -282,6 +284,78 @@ describe('provider settings, catalogs and archive contracts', () => {
         await request(app, '/model-presets', modelBody(connection, changes), 400);
     }
     expect(app.store.product.all('model')).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('gateway options do not require a model family or duplicate the UI profile allowlist', async () => {
+    const app = await application();
+    const connection = await request<Connection>(
+      app,
+      '/connections',
+      connectionBody('vercel-chat-v1')
+    );
+    for (const changes of [
+      { topP: 0.8, stopSequences: ['END'] },
+      { outputEffort: 'max', thinkingMode: 'adaptive' },
+      { thinkingLevel: 'HIGH' },
+      { modelFamily: 'xai', reasoningEffort: 'xhigh' },
+    ]) {
+      const model = await request<ModelPreset>(
+        app,
+        '/model-presets',
+        modelBody(connection, changes)
+      );
+      expect(model).toMatchObject(changes);
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('moving a model changes only display order, is atomic and survives a pre-existing edit', async () => {
+    const app = await application();
+    const connection = await request<Connection>(
+      app,
+      '/connections',
+      connectionBody('openai-responses-v1')
+    );
+    const models = await Promise.all(
+      ['Alpha', 'Beta', 'Gamma'].map((title) =>
+        request<ModelPreset>(
+          app,
+          '/model-presets',
+          modelBody(connection, { title, reasoningEffort: 'high' })
+        )
+      )
+    );
+    const [alpha, beta] = models;
+    const snapshots = models.map((model) => app.store.product.modelSnapshot(model.id));
+    expect(await request(app, `/model-presets/${alpha.id}/move`, { direction: 'up' })).toEqual({
+      moved: false,
+    });
+    await request(app, `/model-presets/${beta.id}/move`, { direction: 'up' });
+    for (const original of models) {
+      const { displayOrder, ...current } = app.store.product.get<ModelPreset>('model', original.id);
+      expect(current).toEqual(original);
+      expect(displayOrder).toBeDefined();
+    }
+    expect(models.map((model) => app.store.product.modelSnapshot(model.id))).toEqual(snapshots);
+    const betaOrder = app.store.product.get<ModelPreset>('model', beta.id).displayOrder;
+    const edited = await request<ModelPreset>(
+      app,
+      `/model-presets/${beta.id}`,
+      modelBody(connection, { title: 'Edited Beta', expectedRevision: beta.revision }),
+      200,
+      'PUT'
+    );
+    expect(edited.displayOrder).toBe(betaOrder);
+    const beforeFailure = app.store.product.all('model');
+    app.store.db.exec(
+      "CREATE TRIGGER fail_order BEFORE UPDATE ON provider_settings WHEN NEW.id='" +
+        alpha.id +
+        "' BEGIN SELECT RAISE(ABORT, 'injected ordering failure'); END"
+    );
+    expect(() => app.store.product.moveModel(beta.id, { direction: 'down' })).toThrow();
+    expect(app.store.product.all('model')).toEqual(beforeFailure);
+    app.store.db.exec('DROP TRIGGER fail_order');
     expect(fetch).not.toHaveBeenCalled();
   });
 

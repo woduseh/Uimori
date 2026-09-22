@@ -2,39 +2,33 @@
 
 고급 탭의 공식/직접 입력 단가와 호출 후 추정 비용은 [모델 요금](MODEL-PRICING.md)을 봐요. 가격은 모델 실행 지원 여부를 결정하지 않아요.
 
-2026-09-09 기준 구현 계약이에요. 모델별 옵션 힌트와 프로토콜 단위 검증은 `core/model-capabilities.ts`, 요청 변환은 각 공급자 encoder가 관리해요. 실제 공급자 요청·캐시 hit·청구액은 합성 검사만으로 확인하지 않아요.
+## 모델 계열과 생성 옵션
 
-모델 ID는 실행 조건이 아니에요. 앱의 힌트 표는 검토한 모델의 옵션 목록과 한도를 먼저 보여주는 용도이며, 표에 없는 ID도 저장·실행할 수 있어요. **모델 계열**(OpenAI/Anthropic/Google/DeepSeek/xAI)은 모델 ID와 별도로 생성 옵션의 형태를 정해요. 공식/직접 프로바이더는 계열 기본값을 채우고, Vercel AI Gateway는 알려진 `provider/model` prefix를 추정하며 사용자가 언제든 명시적으로 바꿀 수 있어요. 알 수 없는 Gateway 모델은 계열만 고르면 기존 모델 표에 이름을 추가하지 않아도 해당 제조사 옵션을 사용할 수 있어요.
+프로바이더에는 접속 주소와 앱에서 등록한 API 키를, 모델 프리셋에는 모델 ID와 생성 옵션을 저장해요. **모델 ID는 Uimori의 지원 목록에 있을 필요가 없어요.** 목록과 검토 표는 입력을 돕는 힌트이며 실제 모델 지원 여부는 공급자가 판정해요.
 
-저장 검증은 프로토콜 encoder가 실제로 표현할 수 있는 옵션과 선택한 계열의 옵션을 함께 확인해요. 비워 둔 선택 옵션은 요청에 넣지 않고, 모델별 지원 여부는 최종적으로 공급자의 응답이 판정해요. 4xx 거절이 가리킨 옵션은 실패 턴 카드·보조 작업 카드·응답 테스트 결과에 이름으로 표시하며 공급자 메시지 원문은 저장하거나 보여주지 않아요.
+직접 연결은 해당 API의 생성 옵션을 사용해요. Vercel AI Gateway에서는 **모델 계열**을 자동 또는 OpenAI·Anthropic·Google·DeepSeek·xAI로 선택해요. 자동은 `provider/model`의 prefix를 참고하며 모르는 제조사에는 공통 옵션을 보여 줘요. 계열을 반드시 선택해야 저장할 수 있는 제약은 없어요. 수동 선택은 모델 ID를 바꿔도 유지되며, 자동으로 되돌릴 수도 있어요.
 
-모델·프로바이더 편집은 최신 설정 한 벌을 갱신해요. 사용자가 고르는 버전이나 과거 설정 목록은 없어요. 내부 revision은 동시 편집 충돌을 막는 CAS 토큰이며, 새 생성·번역 예약·상태 재구축·문맥 정리은 모델 ID로 최신 설정을 읽어요. 진행 중인 작업과 과거 Run은 자기 모델·프로바이더 snapshot을 유지해요. 프로바이더의 프로토콜을 바꾸면 모델 설정을 다시 검토·저장하기 전까지 새 실행을 차단해요.
+계열은 **화면에서 고를 옵션의 묶음**이지 추가 API 허용 목록이 아니에요. 직접 계열이나 프로바이더를 바꾸면 새 경로에서 사용할 수 없는 초안 옵션만 초기화하고 공통 설정은 유지해요. 모델 ID만 바꿀 때는 기존 값을 유지해 사용자가 검토할 수 있어요. 직접 연결의 프로토콜을 다른 제조사 형식으로 바꾸는 기능은 아니에요.
 
-입력 컨텍스트 한도와 자동 요약은 [컨텍스트 문서](CONTEXT-LIMITS.md)를 확인해요. 기본 입력 한도 272,000은 로컬 추정 기준이며, 출력 토큰 한도와 별개예요.
+`모델 기본값`은 API 필드를 생략해요. `none`, `disabled`, 숫자 0은 명시값이에요. 저장 시 JSON·숫자 범위와 해당 encoder가 표현할 수 있는 필드를 확인하되, 모델 이름이나 계열을 이유로 보내기 가능한 값을 추가로 차단하지 않아요. 공급자의 실패 응답을 보고 effort를 낮추거나 Flex를 Standard로 자동 변경하지 않아요.
 
-## 프로바이더와 지원 모델
+현재 옵션 정의는 [모델 계열](../core/model-family.ts), [프로토콜 정의](../core/provider-definitions.ts), [모델별 힌트와 값 검증](../core/model-capabilities.ts)이 기준이에요. 모델 ID·한도·옵션 목록을 문서에 별도로 복제하지 않아요. 계열의 옵션 목록을 보여주는 것과 특정 모델이 모든 옵션을 지원한다고 확인하는 것은 달라요. 공급자 목록이나 검토 표에서 확인한 값만 확인된 힌트로 표시해요.
 
-프로바이더에는 접속 주소와 서버 인증 참조를 저장하고, 생성 설정은 모델 프리셋에 저장해요. Google 카드 이름은 **Google Agent Platform**, API 프로토콜은 `vertex-gemini-v1`이며 location은 **global 고정**이에요.
+### Vercel 추가 옵션
 
-| 경로 | 검토한 모델 ID | 주요 옵션 |
-| --- | --- | --- |
-| Google Agent Platform | `gemini-3.5-flash-lite`, `gemini-3.8-flash`, `gemini-3.1-pro-preview` | Thinking Level, Standard/Flex, 출력 한도. Flash-Lite는 MINIMAL(기본)/MEDIUM/HIGH. 3.1 Pro만 temperature/top-p 제공 |
-| OpenAI Responses | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.6`, `gpt-6-astra` | Reasoning Effort/Mode/Context, Verbosity, Service Tier(Flex 포함) |
-| Anthropic Messages | `claude-opus-5`, `claude-fable-5-1` | Output Effort, Thinking, Service Tier, 정지 문자열 |
-| OpenAI Chat | 위의 등록된 GPT ID | Reasoning Effort와 Service Tier(Flex 포함). Responses 전용 제어와 캐시 설정은 제공하지 않음 |
-| Vercel AI Gateway | `provider/model` 및 수동 ID | 모델 계열에 따라 OpenAI/Anthropic/Google/DeepSeek/xAI 생성 옵션을 표시. 알려진 prefix는 자동 추정하고 미지 ID는 사용자가 계열 선택. 공통 Chat 옵션과 providerOptions 확장 지원 |
-| DeepSeek · OpenAI 호환 Chat | `deepseek-v4-pro`, `deepseek-v4-flash` | none(추론 끄기)/low/high/max, 기본 high. 출력 한도 384,000. temperature는 none에서만 제공 |
-| 표에 없는 모델 | 수동 모델 ID 또는 목록의 ID | 해당 프로토콜이 보낼 수 있는 옵션 전체. 지원 여부는 공급자 응답으로 확인 |
+표준 옵션은 Chat 요청 필드나 `providerOptions`로 변환해요. Claude effort/thinking은 `anthropic`, GPT verbosity는 `openai`, Gemini thinking level은 `google`·`vertex` 양쪽에 같은 형태로 전달해요. 실제 적용은 라우팅된 공급자의 지원을 따라요. 계열이 자동이거나 없는 저장 모델도 명시한 생성 옵션은 누락하지 않아요. 제조사와 실제 라우팅 공급자는 다를 수 있으므로 Claude를 Bedrock 등으로 라우팅할 때는 필요에 따라 해당 공급자의 추가 옵션을 지정해요. 계열 선택이 공급자 라우팅을 강제로 고정하지는 않아요.
 
-2026-09-09 추가 모델은 [Google Flash-Lite](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-5-flash-lite), [Vercel Grok](https://vercel.com/ai-gateway/models/grok-4.6), [Vercel Sol](https://vercel.com/ai-gateway/models/gpt-5.6-sol), [DeepSeek](https://api-docs.deepseek.com/quick_start/pricing/) 공식 명세를 확인했어요. 표의 출력 상한은 목록에서 모델을 고를 때 미리 채우는 값이고, 저장 검증은 모든 모델에 500,000까지 허용해요. 실제 상한은 공급자가 판정해요. 이 값은 최대 허용량이며 기본 출력량을 늘리지 않아요. 실제 공급자 호출·계정 가용성은 별도 확인이 필요해요.
+**고급 → 추가 공급자 옵션 (JSON)**은 라우팅이나 새 공급자 옵션을 직접 지정하는 선택 기능이에요. 같은 namespace의 옵션을 직접 적으면 해당 값이 UI에서 만든 값보다 우선해요. 예를 들어 `anthropic.thinking`을 직접 쓰면 그 객체 전체를 대체하며 임의의 깊은 병합은 하지 않아요. API 키는 프로바이더의 키 입력란에 등록해요.
 
-표에 없는 ID도 저장·실행해요. 모델 목록 API는 ID 발견에 사용하고, 옵션 지원 근거는 표의 힌트와 공급자 응답이에요. 임의 호환 URL에 표의 모델 ID를 넣어도 공식 서버의 가용성을 보증하지 않아요.
+모델 계열 선택만으로 아직 구현하지 않은 API 필드·캐시 방식·도구 기능이 추가되지는 않아요. 실제 요청의 성공·모델별 조합·청구 결과는 공급자에서 확인해야 해요. 이 경로의 로컬 테스트는 합성 요청 변환과 저장 동작을 검증해요.
 
-`모델 기본값`은 API 필드를 생략해요. `none`, `disabled`, 숫자 0은 명시값이에요. 모델 변경으로 부적합해진 값은 초안에 남겨 표시하고, 사용자가 수정하기 전 저장하지 않아요. provider 오류에 따른 effort 하향이나 Flex→Standard 자동 전환은 없어요.
+### 저장과 실행
 
-Fable 5.1은 Adaptive Thinking이 항상 켜져 있어요. 강제 도구 호출을 지원하지 않으므로 평가 도구의 `preloaded` 모드는 함께 저장할 수 없고 `model-selected`를 사용해요. Opus 5는 Thinking을 끌 수 있지만 Output Effort `xhigh/max`와 동시에 끌 수 없어요.
+모델·프로바이더 편집은 최신 설정 한 벌을 갱신해요. 새 호출은 현재 설정을 읽고 진행 중인 작업과 과거 Run은 자기 snapshot을 유지해요. 내부 revision은 동시 편집 충돌을 확인하기 위한 값이에요. 프로토콜을 바꾸면 모델 설정을 다시 검토·저장해야 해요.
 
-지원 기간 6개월은 힌트 표를 재검토하는 운영 기준이고 실행을 막는 기능은 아니에요. Gemini 3.1 Pro는 사용자가 지정한 기준 모델 예외예요. 새 ID나 suffix는 표에 없어도 바로 쓸 수 있고, 표에 추가하면 옵션 목록이 먼저 보여요. API 출시일을 확인하지 못한 모델의 날짜는 추정하지 않아요.
+모델 목록은 프로바이더별로 묶고 그룹 안에서 위·아래로 정렬해요. 정렬은 한 요청·한 트랜잭션에서 표시 순서만 변경해요. 모델의 생성 옵션·revision·응답 테스트 결과나 진행 중인 요청은 변경하지 않아요. 검색 중에는 그룹을 펼치고 순서 변경을 잠시 비활성화해요.
+
+입력 컨텍스트 한도와 자동 요약은 [컨텍스트 문서](CONTEXT-LIMITS.md)를 확인해요. 기본 입력 한도 272,000은 로컬 추정 기준이며 출력 토큰 한도와 별개예요.
 
 ## 캐시 위치·자동 배치·유지 시간
 
@@ -72,14 +66,12 @@ Fable 5.1은 Adaptive Thinking이 항상 켜져 있어요. 강제 도구 호출�
 
 ## 저장·실행 경계
 
-프로바이더의 구형 requestTier, Claude 공통 reasoningEffort, 모델의 capabilityRevision 저장 형식을 받지 않아요. DB 구조의 지원 이관은 [migration](DATA-MIGRATIONS.md)과 구분하며 제거한 모델 형식을 자동 변환하는 기능은 아니에요. 사용자 DB를 자동 초기화하지 않아요.
-
-모델 revision은 생성 옵션을 보관해요. Run/job snapshot은 이를 고정하며, main/translation/status/image/state/context/helper는 공통 추출기로 같은 필드를 전달해요. 최신 프로바이더 enabled·endpoint·인증·origin 권한은 호출마다 다시 확인해요. 평가 절약 모드는 명시 opt-in일 때만 출력 한도·effort를 줄이고 나머지 binding을 바꾸지 않아요.
-
-누적 호출 횟수와 추정 금액으로 차단하던 ProviderBudget은 제거됐어요. 요청별 출력·시간·도구 반복 한도, 전송 전 기록, 취소·중복 방지, 원문/hash 귀속, 실제 usage와 `costUsd=null`은 유지해요.
+모델 revision은 생성 옵션을 보관해요. Run/job snapshot은 이를 고정하며, main/translation/status/image/state/context/helper는 공통 추출기로 같은 필드를 전달해요. 호출 시 현재 프로바이더의 활성 상태와 인증을 확인해요. 평가 절약 모드는 명시 opt-in일 때만 출력 한도·effort를 줄이고 나머지 binding을 바꾸지 않아요.
 
 ## 공식 근거
 
 - [Google 명칭](https://docs.cloud.google.com/gemini-enterprise-agent-platform/vertex-ai-name-changes), [Gemini 3.8 Flash](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-3-8-flash), [Gemini 3.1 Pro](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-1-pro)
 - [OpenAI GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model/gpt-5.6), [Reasoning](https://developers.openai.com/api/docs/guides/reasoning), [Flex](https://developers.openai.com/api/docs/guides/flex-processing), [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
 - [Claude Opus 5](https://platform.claude.com/docs/en/models/opus-5/whats-new-opus-5), [Fable 5.1](https://platform.claude.com/docs/en/models/fable-5-1/whats-new-fable-5-1), [Effort](https://platform.claude.com/docs/en/build-with-claude/effort), [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
+
+Vercel 요청 변환 참고: [Chat 확장 옵션](https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions/advanced), [Claude 사고 옵션](https://vercel.com/docs/ai-gateway/models-and-providers/reasoning/anthropic), [Gemini/Vertex 사고 옵션](https://vercel.com/docs/ai-gateway/models-and-providers/reasoning/google).

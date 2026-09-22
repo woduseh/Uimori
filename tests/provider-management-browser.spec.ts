@@ -221,10 +221,18 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
   const form = page.getByRole('form', { name: '모델 편집 양식' });
   await form.getByLabel('모델 프리셋 이름').fill(title + ' 모델');
   await form.getByLabel('프로바이더', { exact: true }).selectOption(connection.id);
-  await form.getByLabel('모델 ID', { exact: true }).fill('openai/gpt-5.6-sol');
+  await form.getByLabel('모델 ID', { exact: true }).fill('future-lab/unknown-model');
+  await form.getByLabel('모델 계열', { exact: true }).selectOption('anthropic');
+  await expect(
+    form.getByLabel('모델 계열', { exact: true }).locator('option[value=""]')
+  ).toHaveText('자동 · 공통 옵션');
+  await form.getByLabel('사고 강도', { exact: true }).selectOption('max');
   await form.getByRole('button', { name: '고급', exact: true }).click();
   const providerOptions = form.getByLabel('providerOptions (JSON)', { exact: true });
+  await expect(providerOptions).toBeHidden();
+  await form.locator('summary').filter({ hasText: '추가 공급자 옵션 (JSON)' }).click();
   await expect(providerOptions).toBeVisible();
+  await form.getByLabel('사고 모드', { exact: true }).selectOption('adaptive');
   await providerOptions.fill('{"gateway":{"only":["openai"]}}');
   await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
   await expect(
@@ -232,6 +240,26 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
   ).toBeVisible();
   const saved = (await library(request)).models.find((item) => item.title === title + ' 모델')!;
   expect(saved.providerOptions).toEqual({ gateway: { only: ['openai'] } });
+  expect(saved).toMatchObject({
+    modelFamily: 'anthropic',
+    outputEffort: 'max',
+    thinkingMode: 'adaptive',
+  });
+  await settings(page);
+  await page.getByRole('button', { name: saved.title + ' 모델 수정', exact: true }).click();
+  await expect(form.getByLabel('모델 계열', { exact: true })).toHaveValue('anthropic');
+  await form.getByLabel('모델 계열', { exact: true }).selectOption('google');
+  await form.getByLabel('사고 강도', { exact: true }).selectOption('HIGH');
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect
+    .poll(
+      async () => (await library(request)).models.find((item) => item.id === saved.id)?.modelFamily
+    )
+    .toBe('google');
+  const updated = (await library(request)).models.find((item) => item.id === saved.id)!;
+  expect(updated).toMatchObject({ thinkingLevel: 'HIGH' });
+  expect(updated).not.toHaveProperty('outputEffort');
+  expect(updated).not.toHaveProperty('thinkingMode');
 });
 
 test('PMUI02 connection clone requires review and stale edits retain their draft and CAS revision until explicit reload', async ({
@@ -1639,6 +1667,11 @@ test('PMUI model presets group by provider, collapse independently and persist m
   await expect(firstGroup.getByText('2개 모델', { exact: true })).toBeVisible();
   await expect(secondGroup.getByText('1개 모델', { exact: true })).toBeVisible();
 
+  const mutations: string[] = [];
+  page.on('request', (r) => {
+    if (['POST', 'PUT'].includes(r.method()) && r.url().includes('/api/model-presets'))
+      mutations.push(new URL(r.url()).pathname);
+  });
   await firstGroup
     .getByRole('button', { name: `${beta.title} 모델 위로 이동`, exact: true })
     .click();
@@ -1646,10 +1679,12 @@ test('PMUI model presets group by provider, collapse independently and persist m
     page.getByRole('status').filter({ hasText: '모델 표시 순서를 저장했어요.' })
   ).toBeVisible();
   const after = await library(request);
+  expect(mutations).toEqual([`/api/model-presets/${beta.id}/move`]);
+  expect(after.models.find((item) => item.id === beta.id)?.revision).toBe(beta.revision);
   expect(after.models.find((item) => item.id === beta.id)?.displayOrder).toBe(0);
-  expect(after.models.find((item) => item.id === alpha.id)?.displayOrder).toBe(100);
+  expect(after.models.find((item) => item.id === alpha.id)?.displayOrder).toBe(1);
 
-  await firstGroup.locator('summary').click();
+  await firstGroup.locator(':scope > summary').click();
   await expect(
     firstGroup.getByRole('button', { name: `${beta.title} 모델 수정`, exact: true })
   ).toBeHidden();

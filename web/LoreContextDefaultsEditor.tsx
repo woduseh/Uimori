@@ -83,7 +83,7 @@ export function LoreContextDefaultsEditor({
       <p className="muted">
         새 채팅을 만들 때 이 값을 복사해요. 이미 만든 채팅의 정책과 과거 실행은 바뀌지 않아요.
       </p>
-      <fieldset disabled={busy} className="control-grid lore-context-settings-card">
+      <fieldset disabled={busy} className="control-grid">
         <LoreContextPolicyEditor
           value={policyOf(draft)}
           onChange={(policy) => {

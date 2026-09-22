@@ -623,10 +623,9 @@ function App() {
   function renderReadingSettings(onStartFocus?: () => void) {
     return (
       <div className="settings-stack reading-preferences">
-        <section className="reading-base-group" aria-labelledby="reading-basic-heading">
+        <section className="settings-card reading-settings-group" aria-label="기본 보기">
           <header className="reading-settings-group-heading">
-            <h4 id="reading-basic-heading">기본 보기</h4>
-            <p>본문의 글꼴과 크기, 폭을 이 기기에 맞춰 조절해요.</p>
+            <h4>기본 보기</h4>
           </header>
           <label>
             본문 글꼴
@@ -686,10 +685,9 @@ function App() {
           </div>
         </section>
 
-        <section className="reading-base-group" aria-labelledby="reading-translation-heading">
+        <section className="settings-card reading-settings-group" aria-label="번역">
           <header className="reading-settings-group-heading">
-            <h4 id="reading-translation-heading">번역</h4>
-            <p>새 원고를 처음 열 때 보여 줄 본문을 정해요.</p>
+            <h4>번역</h4>
           </header>
           <label>
             새 원고의 기본 보기

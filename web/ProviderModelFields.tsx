@@ -3,16 +3,15 @@ import { ToggleRow } from './ToggleRow.js';
 import { ModelPricingEditor } from './ModelPricingEditor.js';
 import { AddIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef } from 'react';
-import type { Connection, ModelGeneration, VertexRequestTier } from '../core/product.js';
+import type { Connection, VertexRequestTier } from '../core/product.js';
 import {
   MODEL_FAMILY_CHOICES,
   effectiveModelFamily,
-  modelFamilyProfile,
+  modelFamilyOptionKeys,
 } from '../core/model-family.js';
 import {
   PROTOCOL_OPTION_VALUES,
   protocolCacheTtls,
-  protocolOptionKeys,
   protocolServiceTiers,
   supportedModels,
 } from '../core/model-capabilities.js';
@@ -275,7 +274,7 @@ function ThinkingSelect({
       {stale.map((field) => (
         <ModelOptionSelect
           key={field}
-          label={`이전 프로바이더의 사고 강도 · ${field}`}
+          label={`이전 설정의 사고 강도 · ${field}`}
           value={value[field]}
           choices={undefined}
           vocabulary={[]}
@@ -304,13 +303,11 @@ export function ProviderModelFields({
   const vertex = protocol === 'vertex-gemini-v1',
     fixture = protocol === 'fixture-sse-v1',
     codex = protocol === 'codex-app-server-v1';
-  const keys = protocol ? protocolOptionKeys(protocol) : [];
   const family = connection
     ? effectiveModelFamily(connection.protocol, value.modelId, value.modelFamily)
     : undefined;
-  const profile = family ? modelFamilyProfile(family) : undefined;
-  const sends = (key: string) =>
-    keys.includes(key) && (!profile || profile.optionKeys.includes(key as keyof ModelGeneration));
+  const keys = protocol ? modelFamilyOptionKeys(protocol, family) : [];
+  const sends = (key: string) => keys.includes(key);
   const hints = connection ? modelHints(connection, value.modelId, value.modelFamily) : undefined;
   const capability = hints?.capability;
   const cacheTtlAvailable = value.cacheMode === 'explicit' || value.cacheMode === 'automatic';
@@ -349,7 +346,7 @@ export function ProviderModelFields({
             list="available-models"
             required
             value={value.modelId}
-            onChange={(event) => onChange(updateModelId(value, connection, event.target.value))}
+            onChange={(event) => onChange(updateModelId(value, event.target.value))}
           />
           <datalist id="available-models">
             {modelChoices.map((item) => (
@@ -360,23 +357,28 @@ export function ProviderModelFields({
           </datalist>
           <small>목록에서 고르거나 모델 ID를 직접 입력하세요.</small>
         </label>
-        {connection && protocol !== 'fixture-sse-v1' && (
+        {connection && protocol === 'vercel-chat-v1' && (
           <label className="full">
             모델 계열
             <select
               aria-label="모델 계열"
-              required
-              value={family ?? ''}
+              value={value.modelFamily}
               onChange={(event) =>
                 onChange(
                   selectModelFamily(
                     value,
-                    event.target.value as (typeof MODEL_FAMILY_CHOICES)[number]['id']
+                    event.target.value as ModelDraft['modelFamily'],
+                    connection
                   )
                 )
               }
             >
-              {!family && <option value="">모델 계열을 선택하세요</option>}
+              <option value="">
+                자동 ·{' '}
+                {MODEL_FAMILY_CHOICES.find(
+                  (item) => item.id === effectiveModelFamily(connection.protocol, value.modelId)
+                )?.label ?? '공통 옵션'}
+              </option>
               {MODEL_FAMILY_CHOICES.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.label}
@@ -384,8 +386,7 @@ export function ProviderModelFields({
               ))}
             </select>
             <small>
-              모델 이름과 별개로 생성 옵션의 종류를 정해요. 게이트웨이의 새 모델도 계열만 맞추면
-              같은 옵션을 사용할 수 있어요.
+              새 모델의 옵션이 맞지 않으면 계열을 직접 고르세요. 미지정 옵션은 보내지 않아요.
             </small>
           </label>
         )}
@@ -474,25 +475,26 @@ export function ProviderModelFields({
         )}
         <h4 className="provider-field-heading full">생성 옵션</h4>
         {protocol === 'vercel-chat-v1' && (
-          <label className="full">
-            providerOptions (JSON)
-            <textarea
-              ref={providerOptionsRef}
-              aria-label="providerOptions (JSON)"
-              aria-invalid={providerOptionsError ? true : undefined}
-              maxLength={PROVIDER_OPTIONS_MAX_CHARS}
-              rows={8}
-              spellCheck={false}
-              value={value.providerOptions}
-              onChange={(event) => update({ providerOptions: event.target.value })}
-              placeholder={'{\n  "gateway": {\n    "only": ["openai"]\n  }\n}'}
-            />
-            <small>
-              Vercel AI Gateway에 추가로 전달할 JSON 객체예요. 모델 계열의 표준 옵션은 위 설정에서
-              자동 변환하고, 여기서는 gateway.only 같은 라우팅 옵션이나 새 공급자 옵션을 직접
-              지정해요. 같은 값을 직접 적으면 이 JSON이 우선해요.
-            </small>
-          </label>
+          <details className="full provider-extra-options" open={!!value.providerOptions}>
+            <summary>추가 공급자 옵션 (JSON)</summary>
+            <label>
+              providerOptions (JSON)
+              <textarea
+                ref={providerOptionsRef}
+                aria-label="providerOptions (JSON)"
+                aria-invalid={providerOptionsError ? true : undefined}
+                maxLength={PROVIDER_OPTIONS_MAX_CHARS}
+                rows={5}
+                spellCheck={false}
+                value={value.providerOptions}
+                onChange={(event) => update({ providerOptions: event.target.value })}
+                placeholder={'{\n  "gateway": {\n    "only": ["openai"]\n  }\n}'}
+              />
+              <small>
+                라우팅이나 추가 옵션을 직접 지정해요. 같은 공급자 옵션은 이 JSON의 값이 우선해요.
+              </small>
+            </label>
+          </details>
         )}
         {/* Options the protocol cannot send stay visible while a value is set, so it can be cleared. */}
         {(hints?.thinkingModes || value.thinkingMode) && (
@@ -536,10 +538,7 @@ export function ProviderModelFields({
           label="Temperature"
           value={value.temperature}
           sendable={sends('temperature')}
-          documented={
-            capability?.temperature ??
-            (profile?.optionKeys.includes('temperature') ? undefined : false)
-          }
+          documented={capability?.temperature}
           min={0}
           max={2}
           onChange={(temperature) => update({ temperature })}
@@ -548,9 +547,7 @@ export function ProviderModelFields({
           label="Top P"
           value={value.topP}
           sendable={sends('topP')}
-          documented={
-            capability?.topP ?? (profile?.optionKeys.includes('topP') ? undefined : false)
-          }
+          documented={capability?.topP}
           min={0}
           max={1}
           onChange={(topP) => update({ topP })}

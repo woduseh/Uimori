@@ -1,6 +1,6 @@
 import { baselineThemeColors, colorInputValue } from './theme-color-input.js';
 import { useEffect, useRef, useState } from 'react';
-import { Palette, Plus, Upload, Download, Copy, Trash2, Eye, RotateCcw } from 'lucide-react';
+import { Plus, Upload, Download, Copy, Trash2, Eye, RotateCcw } from 'lucide-react';
 import {
   THEME_COLOR_KEYS,
   emptyTheme,
@@ -186,14 +186,7 @@ export function ThemeSettings({
   }
   return (
     <section className="theme-settings" aria-label="테마와 색상">
-      <div className="theme-intro">
-        <Palette size={24} aria-hidden="true" />
-        <div>
-          <h3>이야기에 어울리는 색과 분위기</h3>
-          <p>테마는 작업실에 저장돼요. 본문과 봇의 동작은 그대로 유지해요.</p>
-        </div>
-      </div>
-      <div className="theme-toolbar theme-control-bar">
+      <div className="settings-card theme-toolbar theme-control-bar">
         <label>
           화면 모드
           <select
@@ -416,8 +409,8 @@ export function ThemeSettings({
               ))}
             </div>
             <p className="muted">
-              지정하지 않은 색은 기본 테마에서 상속해요. 위 ‘색상 보기’에서 밝은 색과 어두운 색을
-              각각 편집해요.
+              지정하지 않은 색은 기본 테마에서 상속해요. 위 ‘미리보기 색상’에서 밝은 색과 어두운
+              색을 각각 편집해요.
             </p>
             <details className="theme-code">
               <summary>CSS·HTML 직접 편집</summary>

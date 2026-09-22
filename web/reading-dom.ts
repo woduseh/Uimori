@@ -12,7 +12,12 @@ function paragraphText(paragraph: Element): { text: string; parts: TextPart[] } 
   const visit = (node: Node) => {
     if (node.nodeType === Node.TEXT_NODE) {
       const start = text.length;
-      text += node.textContent ?? '';
+      const value = node.textContent ?? '';
+      // Markdown emits <br> followed by a formatting newline. It is one visible break, not two.
+      text +=
+        node.previousSibling instanceof Element && node.previousSibling.tagName === 'BR'
+          ? value.replace(/^\r?\n/u, (newline) => ' '.repeat(newline.length))
+          : value;
       parts.push({ node: node as Text, start, end: text.length });
     } else if (node instanceof Element) {
       if (node.matches(protectedElements)) text += '\u0000';

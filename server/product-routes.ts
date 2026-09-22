@@ -216,6 +216,9 @@ export function productRoutes(
     options.credentials?.validate(prepared.value);
     return product.connection(request.body, request.params.id);
   });
+  app.post<{ Params: { id: string } }>('/api/model-presets/:id/move', (request) =>
+    product.moveModel(request.params.id, request.body)
+  );
   app.post('/api/model-presets', async (request) => product.model(request.body));
   app.put<{ Params: { id: string } }>('/api/model-presets/:id', async (request) =>
     product.model(request.body, request.params.id)

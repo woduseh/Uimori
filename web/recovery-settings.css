@@ -87,40 +87,7 @@
   padding-block: 12px;
   font-weight: 600;
 }
-.archive-settings .archive-backup-options {
-  display: block;
-}
-.archive-settings .archive-backup-option {
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: center;
-  gap: 16px;
-  padding: 18px 0;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-}
-.archive-settings .archive-backup-option > button {
-  flex: none;
-  width: auto;
-}
-.archive-settings .archive-backup-description {
-  flex: 1;
-  min-width: 0;
-}
-.archive-settings .archive-backup-description p {
-  margin: 6px 0 0;
-}
-.archive-settings > section {
-  margin-block: 24px;
-}
-.archive-restore-file-row {
-  margin-top: 8px;
-}
-.archive-settings .archive-restore-file-row > button {
-  align-self: center;
-}
+
 .codex-connection-steps {
   list-style: none;
   padding: 0;
@@ -150,13 +117,7 @@
   .recovery-settings-row code {
     max-width: 100%;
   }
-  .archive-settings .archive-backup-option {
-    flex-direction: column-reverse;
-    align-items: stretch;
-  }
-  .archive-settings .archive-backup-option > button {
-    align-self: flex-start;
-  }
+
   .settings-page[data-settings-section="general"] .settings-section > label:not(.check),
   .settings-page[data-settings-section="general"] .settings-stack > label {
     grid-template-columns: minmax(0, 1fr);
@@ -169,14 +130,10 @@
   display: grid;
   gap: 16px;
 }
-.archive-settings > .archive-management-card {
+.archive-management-card {
   display: grid;
   gap: 14px;
   margin: 0;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
 }
 .archive-card-heading h3,
 .archive-card-heading p,
@@ -189,12 +146,14 @@
 }
 .archive-action-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
   padding-top: 4px;
 }
 .archive-action-row > div {
+  flex: 1 1 240px;
   min-width: 0;
 }
 .archive-action-row > button {
@@ -215,14 +174,21 @@
   line-height: 1.55;
 }
 @media (max-width: 560px) {
-  .archive-settings > .archive-management-card {
+  .archive-management-card {
     padding: 14px;
   }
   .archive-action-row {
     align-items: stretch;
     flex-direction: column;
   }
+  .archive-action-row > div {
+    flex-basis: auto;
+  }
   .archive-action-row > button {
     align-self: flex-start;
   }
+}
+
+.archive-management-card > button {
+  justify-self: start;
 }

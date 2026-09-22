@@ -166,8 +166,3 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-
-/* Settings pages share the same control-card surface as role/model settings. */
-.lore-context-settings-card > .lore-context-panel {
-  grid-column: 1 / -1;
-}
