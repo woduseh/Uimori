@@ -210,8 +210,10 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     detail: '1',
     coNarration: '0',
   });
-  expect(saved.snapshot.promptCompilation?.values).toEqual({ detail: '1', coNarration: '0' });
-  expect(saved.inputs[0].task).toBe('(OOC: Continue the harbor scene.) SYNTHETIC_P01');
+  // Completed runs retain the selected prompt values in the frozen profile, while the
+  // full compiler payload is intentionally retired from durable execution snapshots.
+  expect(saved.snapshot.promptCompilation).toBeUndefined();
+  expect(saved.inputs).toEqual([]);
 });
 
 test('P04 manual model IDs and distinct main/translation routing preserve connection authority after catalog failure', async ({
