@@ -1,0 +1,53 @@
+/* Opt-in presentation hook: existing themes keep their current layout. */
+.reader-gallery {
+  display: none;
+}
+.reader-gallery-card {
+  margin: 0;
+  min-width: 0;
+}
+.reader-portrait-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.reader-portrait-button img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+.reader-portrait-button:disabled {
+  opacity: 1;
+}
+.reader-portrait-empty {
+  display: grid;
+  place-items: center;
+  min-height: 96px;
+  width: 100%;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 32px;
+}
+.app-dialog.reader-portrait-dialog {
+  width: fit-content;
+  max-width: min(960px, calc(100vw - 32px));
+}
+.reader-portrait-dialog .dialog-body {
+  display: grid;
+  place-items: center;
+  padding: 12px;
+}
+.reader-portrait-dialog .dialog-body img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(100dvh - 170px);
+  object-fit: contain;
+  border-radius: 8px;
+}

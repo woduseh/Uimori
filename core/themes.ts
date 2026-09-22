@@ -1,3 +1,5 @@
+import { liquidGallery } from './liquid-gallery.js';
+
 /** Presentation resources only. Never include these in a model request or story snapshot. */
 export const THEME_COLOR_KEYS = [
   'bg',
@@ -189,6 +191,7 @@ export const BUILTIN_THEMES: Theme[] = [
       ),
     },
   },
+  { ...liquidGallery, id: 'builtin:liquid-gallery', revision: 1 },
 ];
 export function themeDefinition(theme: Theme): ThemeDefinition {
   const { id: _id, revision: _revision, ...definition } = theme;
