@@ -78,6 +78,14 @@ Actual local Risu materials are excluded from ordinary browser discovery. Set `U
 
 `npm run release:check -- --area <verify:*>` runs `quality`, a matching `build`, and the selected browser area. The default is `verify:browser-smoke`; `--full` selects `quality:full` and replaces that default with `verify:browser`. Explicit areas remain selected alongside the full suite. Deployment-tooling changes normally select `verify:selfhost`. Receipt matching, reuse and deployment rules are in [ORACLE-RELEASE](ORACLE-RELEASE.md).
 
+### Publishing a version
+
+`package.json` is the app version source; `npm version <version> --no-git-tag-version` updates it and the lockfile without creating a tag. `server/app-version.ts` imports the package metadata, which TypeScript copies into the compiled output. Both `/api/health` and the Codex handshake use that value; the About screen reads it from the server and keeps the separate build fingerprint. Do not reset the DB schema to match an app release number.
+
+Update README, release notes under `docs/releases/`, and any affected installation/data instructions. Check the final candidate with the release checker and focused version, startup/restart, schema/backup and About-screen tests. Synthetic model/CLI fixtures are not evidence of live-provider quality or a real Docker upgrade.
+
+Commit and push the reviewed candidate, confirm checks for that exact commit, then create an annotated `v<version>` tag and publish the matching GitHub release notes. Never move an already published release tag; corrections get a new version. Do not include local configuration, credentials, DBs or test evidence in a source release. Release publication does not deploy Oracle or operate the generic updater.
+
 ## Static checks and CI
 
 [Biome](../biome.json) owns formatting, lint rules and direct import boundaries. TypeScript uses strict checking. The dependency tests parse TypeScript/JavaScript syntax and recursively discover source files: side-effect imports and re-exports participate in eager runtime cycle checks, erased type imports do not. Literal dynamic imports participate in snapshot boundary checks but not eager cycles. Computed runtime import paths are not statically resolved. License and snapshot manifest checks remain separate.

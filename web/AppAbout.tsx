@@ -4,17 +4,20 @@ import { ExternalLinkIcon, LibraryIcon } from './ui-icons.js';
 import license from '../LICENSE?raw';
 import notices from '../THIRD_PARTY_NOTICES.md?raw';
 
+type AppBuild = { version: string; buildId: string };
+
 export function AppAbout() {
-  const [buildId, setBuildId] = useState('');
+  const [build, setBuild] = useState<AppBuild | null>(null);
   const [error, setError] = useState(false);
   const [refresh, setRefresh] = useState(0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Retry explicitly starts a fresh request after a failed health lookup.
   useEffect(() => {
     let active = true;
     setError(false);
-    void api<{ buildId: string }>('/health')
+    setBuild(null);
+    void api<AppBuild>('/health')
       .then((result) => {
-        if (active) setBuildId(result.buildId);
+        if (active) setBuild(result);
       })
       .catch(() => {
         if (active) setError(true);
@@ -35,9 +38,20 @@ export function AppAbout() {
       <div className="recovery-settings-row">
         <div>
           <strong>실행 버전</strong>
-          <p className="muted">현재 서버의 빌드 식별자</p>
+          <p className="muted">현재 서버의 앱 버전</p>
         </div>
-        <code data-testid="app-build-id">{buildId || (error ? '확인 실패' : '확인 중…')}</code>
+        <code data-testid="app-version">
+          {build ? `v${build.version}` : error ? '확인 실패' : '확인 중…'}
+        </code>
+      </div>
+      <div className="recovery-settings-row">
+        <div>
+          <strong>빌드 식별자</strong>
+          <p className="muted">같은 버전 안의 소스 변경을 구분해요.</p>
+        </div>
+        <code data-testid="app-build-id">
+          {build?.buildId ?? (error ? '확인 실패' : '확인 중…')}
+        </code>
       </div>
       {error && (
         <p role="alert">
