@@ -44,7 +44,7 @@ import {
 } from '../core/translation-context.js';
 import { RisuPromptError } from '../core/risu-prompt.js';
 import type { AuxiliaryFailureDiagnostic } from '../core/auxiliary-diagnostic.js';
-import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
+import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { judgeTranslationRefusal } from './translation-judgment.js';
 import { JevError, type JevHooks } from './jev-judgment.js';
 
@@ -146,7 +146,7 @@ const safeError = (error: unknown) => {
   return 'AUXILIARY_EXECUTION_FAILED';
 };
 const toolSchemas: ProviderTool[] = [
-  ...STORY_READ_TOOLS,
+  ...MAIN_READ_TOOLS,
   {
     name: 'translation.search',
     description:
@@ -166,63 +166,6 @@ const toolSchemas: ProviderTool[] = [
     name: 'translation.read',
     description:
       'Read discovered evidence with exact source provenance and range. Follow nextOffset for the next range.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        offset: { type: 'integer' },
-        limit: { type: 'integer' },
-      },
-      required: ['id'],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'knowledge.search',
-    description:
-      'Search all approved source-time local references; return metadata with continuation.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string' },
-        offset: { type: 'integer' },
-        limit: { type: 'integer' },
-      },
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'knowledge.read',
-    description:
-      'Read a scoped reference by ID and optional UTF-16 offset/limit. Results identify revision, range and continuation.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        offset: { type: 'integer' },
-        limit: { type: 'integer' },
-      },
-      required: ['id'],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'skills.list',
-    description:
-      'Discover scoped method guidance. This does not load its body or grant permissions.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string' },
-        offset: { type: 'integer' },
-        limit: { type: 'integer' },
-      },
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'skills.load',
-    description: 'Read a guidance body by ID. Its text never expands host permissions.',
     inputSchema: {
       type: 'object',
       properties: {

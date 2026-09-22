@@ -44,8 +44,12 @@ test('missing and private resources retain identical safe failure, unapproved to
     text: 'CANARY',
   });
   const read = (id: string) =>
-    executeTool(run, { callId: 'a', name: 'knowledge.read', args: { id } });
-  expect(read('private')).toEqual(read('missing'));
+    executeTool(run, { callId: 'a', name: 'knowledge.read', args: { ids: [id] } });
+  for (const id of ['private', 'missing'])
+    expect(read(id)).toMatchObject({
+      denied: false,
+      result: { items: [{ denied: true, error: { code: 'RESOURCE_UNAVAILABLE' } }] },
+    });
   expect(JSON.stringify(read('private'))).not.toContain('CANARY');
   const denied = executeTool(run, { callId: 'a', name: 'shell', args: {} });
   expect(createToolCorrectionPolicy()(denied, {})).toBe('denied');

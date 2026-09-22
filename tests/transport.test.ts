@@ -205,7 +205,7 @@ describe('server main runner through the actual loopback adapter', () => {
             index: 0,
             id: 'read-1',
             name: 'knowledge.read',
-            argumentsDelta: '{"id":"lore-1"}',
+            argumentsDelta: '{"ids":["lore-1"]}',
           },
           { type: 'opaque_state', state: 'PRIVATE_CONTINUATION' },
           { type: 'done', reason: 'tool_calls' },
@@ -260,7 +260,7 @@ describe('server main runner through the actual loopback adapter', () => {
             index: 0,
             id: 'read-lore',
             name: 'knowledge.read',
-            argumentsDelta: '{"id":"lore-1"}',
+            argumentsDelta: '{"ids":["lore-1"]}',
           },
           {
             type: 'tool_delta',
@@ -279,7 +279,7 @@ describe('server main runner through the actual loopback adapter', () => {
           'read-lore',
           'read-skill',
         ]);
-        expect(body.input.results[0].result.text).toBe(
+        expect(body.input.results[0].result.items[0].read.text).toBe(
           'A copper observatory stands on the northern hill.'
         );
         expect(body.opaqueState).toEqual({ continuation: 'fixture-opaque-9' });
@@ -340,7 +340,7 @@ describe('server main runner through the actual loopback adapter', () => {
             index: 0,
             id: originalId,
             name: 'knowledge.read',
-            argumentsDelta: '{"id":"lore-1"}',
+            argumentsDelta: '{"ids":["lore-1"]}',
           },
           { type: 'usage', inputTokens: 7, outputTokens: 2 },
           { type: 'done', reason: 'tool_calls' },
@@ -359,7 +359,7 @@ describe('server main runner through the actual loopback adapter', () => {
             index: 1,
             id: originalId,
             name: 'knowledge.read',
-            argumentsDelta: '{"id":"lore-1"}',
+            argumentsDelta: '{"ids":["lore-1"]}',
           },
           { type: 'usage', inputTokens: 11, outputTokens: 4 },
           { type: 'done', reason: 'tool_calls' },
@@ -435,7 +435,7 @@ describe('server main runner through the actual loopback adapter', () => {
           index: 0,
           id: 'read-lore',
           name: 'knowledge.read',
-          argumentsDelta: '{"id":"lore-1"}',
+          argumentsDelta: '{"ids":["lore-1"]}',
         },
         { type: 'done', reason: 'tool_calls' },
       ]);
@@ -954,7 +954,7 @@ test('native CBS prompt stays frozen across tools after the caller changes its p
           index: 0,
           id: 'custom-read',
           name: 'knowledge.read',
-          argumentsDelta: '{"id":"lore-1"}',
+          argumentsDelta: '{"ids":["lore-1"]}',
         },
         { type: 'opaque_state', state: { test: 'custom-continuation' } },
         { type: 'done', reason: 'tool_calls' },
@@ -1002,9 +1002,6 @@ test('native CBS prompt stays frozen across tools after the caller changes its p
       'knowledge.read',
       'skills.list',
       'skills.load',
-      'notes.list',
-      'notes.read',
-      'story.list',
       'story.search',
       'story.read',
     ]);

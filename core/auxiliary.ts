@@ -219,7 +219,7 @@ export function translationInput(
     referencePolicy:
       AUTHOR_NOTE_GUIDANCE +
       (snapshot.translationGuide ? '\n' + TRANSLATION_GUIDE_POLICY : '') +
-      ' Optional story.list/search/read retrieves frozen prior originals; notes.list/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. A search with no matches needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
+      ' Optional story.search/read retrieves frozen prior originals; explicit source-time notes are already supplied as context evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. A search with no matches needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
     ...(snapshot.profile?.promptPresets?.translation ? { customPrompt: true } : {}),
     outputSchema: {},
   };

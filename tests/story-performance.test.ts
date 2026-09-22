@@ -261,6 +261,8 @@ function measuredPath(f: Awaited<ReturnType<typeof fixture>>, counts: Counts) {
     args: { query: 'old-source-end!!', limit: 5 },
   });
   const searchEnd = performance.now();
+  const firstSceneNumber =
+    snapshot.history.findIndex((item) => item.revision === firstRevision) + 1;
   let offset: number | null = 0;
   let roundtrip = '';
   let pages = 0;
@@ -268,7 +270,7 @@ function measuredPath(f: Awaited<ReturnType<typeof fixture>>, counts: Counts) {
     const read = executeTool(snapshot, {
       callId: `old-read-${pages}`,
       name: 'story.read',
-      args: { id: firstRevision, offset, limit: 8192 },
+      args: { sceneNumber: firstSceneNumber, offset, limit: 8192 },
     });
     if (read.denied) throw new Error('Synthetic source read denied');
     const result = read.result as {
@@ -290,10 +292,12 @@ function measuredPath(f: Awaited<ReturnType<typeof fixture>>, counts: Counts) {
     callId: 'lore-read',
     name: 'knowledge.read',
     args: {
-      id: snapshot.resources.find(
-        (resource) => resource.title === `Synthetic lore ${counts.loreCount - 1}`
-      )!.id,
-      limit: 8192,
+      ids: [
+        snapshot.resources.find(
+          (resource) => resource.title === `Synthetic lore ${counts.loreCount - 1}`
+        )!.id,
+      ],
+      limit: 4096,
     },
   });
   const loreEnd = performance.now();
@@ -381,7 +385,7 @@ function validateOutput(
   expect(JSON.stringify(result.loreSearch.result)).toContain(
     `Synthetic lore ${counts.loreCount - 1}`
   );
-  expect((result.loreRead.result as { text: string }).text).toContain(
+  expect((result.loreRead.result as any).items[0].read.text).toContain(
     `needle-lore-${counts.loreCount - 1}`
   );
   expect(result.assetSearch.total).toBe(1);

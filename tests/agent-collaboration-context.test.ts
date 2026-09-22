@@ -37,8 +37,8 @@ test('identical explicit context caches failures; a changed reference or draft s
       switch (++mainCalls) {
         case 1:
           await send(target, [
-            call(body, 'knowledge.read', { id: state.lore.id, limit: 10 }, 'reference-1'),
-            call(body, 'knowledge.read', { id: state.lore.id, offset: 10 }, 'reference-2'),
+            call(body, 'knowledge.read', { ids: [state.lore.id], limit: 10 }, 'reference-1'),
+            call(body, 'knowledge.read', { ids: [state.lore.id], offset: 10 }, 'reference-2'),
           ]);
           break;
         case 2:
@@ -177,7 +177,9 @@ test('future, missing and private advisor references are recoverable and correct
     async (body, target, _number, wire) => {
       if (wire.agentId === 'a') {
         if (++aCalls === 1)
-          await send(target, [call(body, 'knowledge.read', { id: state.lore.id }, 'private-read')]);
+          await send(target, [
+            call(body, 'knowledge.read', { ids: [state.lore.id] }, 'private-read'),
+          ]);
         else await send(target, [message(selectedAdvice)]);
         return;
       }
@@ -189,9 +191,10 @@ test('future, missing and private advisor references are recoverable and correct
         expect(packet(body).source.consultationContext.references[1]).toMatchObject({
           name: 'knowledge.read',
           kind: 'read-result',
-          denied: true,
-          errorKind: 'recoverable',
-          result: { code: 'RESOURCE_UNAVAILABLE' },
+          denied: false,
+          result: {
+            items: [{ denied: true, error: { code: 'RESOURCE_UNAVAILABLE' } }],
+          },
         });
         expect(JSON.stringify(body)).not.toContain(selectedAdvice);
         expect(JSON.stringify(body)).not.toContain(state.foreign.text);
@@ -200,7 +203,7 @@ test('future, missing and private advisor references are recoverable and correct
       }
       if (++mainCalls === 1) {
         await send(target, [
-          call(body, 'knowledge.read', { id: state.foreign.id }, 'denied-read'),
+          call(body, 'knowledge.read', { ids: [state.foreign.id] }, 'denied-read'),
           ...invalid.map(({ id, args }) =>
             call(
               body,
@@ -209,7 +212,7 @@ test('future, missing and private advisor references are recoverable and correct
               id
             )
           ),
-          call(body, 'knowledge.read', { id: state.lore.id }, 'future-read'),
+          call(body, 'knowledge.read', { ids: [state.lore.id] }, 'future-read'),
         ]);
       } else if (mainCalls === 2) {
         expect(outputs(body)).toEqual(
@@ -272,21 +275,27 @@ test('oversized serialized references and drafts can be corrected without spendi
         return;
       }
       if (++mainCalls === 1)
-        await send(target, [
-          call(body, 'knowledge.read', { id: state.lore.id, limit: 16384 }, 'large-1'),
-          call(
-            body,
-            'knowledge.read',
-            { id: state.lore.id, offset: 16384, limit: 16384 },
-            'large-2'
-          ),
-        ]);
+        await send(
+          target,
+          Array.from({ length: 8 }, (_, index) =>
+            call(
+              body,
+              'knowledge.read',
+              { ids: [state.lore.id], offset: index * 4096, limit: 4096 },
+              `large-${index + 1}`
+            )
+          )
+        );
       else if (mainCalls === 2)
         await send(target, [
           call(
             body,
             'agents.consult',
-            { agentId: 'advisor', question: 'Review.', contextRefs: ['large-1', 'large-2'] },
+            {
+              agentId: 'advisor',
+              question: 'Review.',
+              contextRefs: Array.from({ length: 8 }, (_, index) => `large-${index + 1}`),
+            },
             'large-context'
           ),
           call(
@@ -341,7 +350,7 @@ test('cached and forwarded advice retains original identity, read ranges and fla
       if (wire.agentId === 'a') {
         if (++aCalls === 1) {
           await send(target, [
-            call(body, 'knowledge.read', { id: state.lore.id, offset: 3, limit: 42 }, 'a-read'),
+            call(body, 'knowledge.read', { ids: [state.lore.id], offset: 3, limit: 42 }, 'a-read'),
           ]);
         } else
           await send(target, [
@@ -362,14 +371,14 @@ test('cached and forwarded advice retains original identity, read ranges and fla
             evidence: [
               {
                 tool: 'knowledge.read',
-                args: { id: state.lore.id, offset: 3, limit: 42 },
+                args: { ids: [state.lore.id], offset: 3, limit: 42 },
                 source: {
                   id: state.lore.id,
                   revision: state.lore.revision,
                   hash: expect.any(String),
                 },
                 range: { start: 3, end: 45 },
-                truncated: true,
+                nextOffset: 45,
               },
             ],
           },

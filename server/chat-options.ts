@@ -338,9 +338,8 @@ export const helperOptionTools: ProviderTool[] = [
           additionalProperties: false,
         },
         values: { type: 'object' },
-        operationId: str,
       },
-      ['expectedRevision', 'binding', 'values', 'operationId']
+      ['expectedRevision', 'binding', 'values']
     ),
   },
 ];

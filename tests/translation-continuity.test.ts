@@ -104,8 +104,6 @@ describe('whole-source translation continuity', () => {
       expect.arrayContaining([
         'story.search',
         'story.read',
-        'notes.list',
-        'notes.read',
         'translation.search',
         'translation.read',
       ])

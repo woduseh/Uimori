@@ -507,7 +507,7 @@ describe('M1 real HTTP application boundaries', () => {
             index: 0,
             id: 'translation-read-glossary',
             name: 'knowledge.read',
-            argumentsDelta: JSON.stringify({ id: glossaryId }),
+            argumentsDelta: JSON.stringify({ ids: [glossaryId] }),
           },
           { type: 'done', reason: 'tool_calls' },
         ]);
@@ -516,7 +516,14 @@ describe('M1 real HTTP application boundaries', () => {
       expect(body.input.results[0]).toMatchObject({
         callId: 'translation-read-glossary',
         denied: false,
-        result: { text: expectedGlossary, source: { revision: expectedGlossaryRevision } },
+        result: {
+          items: [
+            {
+              denied: false,
+              read: { text: expectedGlossary, source: { revision: expectedGlossaryRevision } },
+            },
+          ],
+        },
       });
       if (failTranslation) {
         await writeSse(response, [
