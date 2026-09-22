@@ -4,6 +4,8 @@ import {
   AGENT_CONTEXT_REFS_MAX,
   AGENT_DRAFT_CHARS_MAX,
   type AgentConsultationContext,
+  type AgentAdvice,
+  type AdviceOrigin,
 } from '../core/agent-collaboration.js';
 import type { ToolEvent } from '../core/types.js';
 
@@ -55,4 +57,14 @@ export function resolveAgentContext(
   if (serialized.length > AGENT_CONTEXT_CHARS_MAX)
     throw new AgentContextError('ADVISOR_CONTEXT_TOO_LARGE');
   return { hash: createHash('sha256').update(serialized).digest('hex'), ...content };
+}
+
+/** A flat lineage of selected host-produced opinions; forwarding is not new confirmation. */
+export function adviceOrigins(context?: AgentConsultationContext): AdviceOrigin[] {
+  const origins = (context?.references ?? []).flatMap((event) => {
+    if (event.kind !== 'advice' || event.denied) return [];
+    const advice = event.result as AgentAdvice;
+    return [{ agentId: advice.agentId, consultationId: advice.consultationId }, ...advice.basedOn];
+  });
+  return [...new Map(origins.map((origin) => [JSON.stringify(origin), origin])).values()];
 }

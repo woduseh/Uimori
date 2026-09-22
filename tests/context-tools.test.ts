@@ -19,6 +19,7 @@ import {
   contextWindowStatus,
 } from '../core/context-tools.js';
 import { encodeResponses } from '../core/openai-protocol.js';
+import { buildCodexTurn } from '../core/codex-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
@@ -383,7 +384,8 @@ describe('model-driven working summary and window switch inside one main run', (
   test('summary headroom includes retained source metadata and exact receipts in the actual fresh body', async () => {
     const fixed = await fixedHeavySnapshot(),
       log = hooks(persistence().persist),
-      limit = measureMainContext(fixed).estimatedInputTokens + 2800;
+      // Fixture packets contain both logical messages and JSON data; reserve room for both reference copies.
+      limit = measureMainContext(fixed).estimatedInputTokens + 4200;
     fixed.profile!.models.main!.inputTokenLimit = limit;
     fixed.contextPlan!.budget.inputTokenLimit = limit;
     delete fixed.promptCompilation;
@@ -437,7 +439,9 @@ describe('model-driven working summary and window switch inside one main run', (
     const emptyBody = structuredClone(bodies[2]);
     const emptyHistory = emptyBody.input.source.completedToolHistory as { events: ToolEvent[] };
     (emptyHistory.events[1].result as { summary: string }).summary = '';
-    const fixedTokens = estimateContextTokens(emptyBody);
+    const fixedTokens = estimateContextTokens(
+      buildMainProviderRequest(fixed, { completedToolHistory: emptyHistory.events }).request
+    );
     const goal = (bodies[1].input as unknown as { controls: { targetSummaryTokens: number } })
       .controls.targetSummaryTokens;
     // Metadata consumes real room that the previous non-read-only estimate omitted.
@@ -464,7 +468,7 @@ describe('model-driven working summary and window switch inside one main run', (
     const bodies = script([
       (_body, n) =>
         toolTurn(
-          [{ id: 'small-useful-read', name: 'story.read', args: { sceneNumber: 1, limit: 1200 } }],
+          [{ id: 'small-useful-read', name: 'story.read', args: { sceneNumber: 1, limit: 2400 } }],
           n
         ),
       () => completed(),
@@ -905,6 +909,9 @@ describe('model-driven working summary and window switch inside one main run', (
       saved = persistence(),
       log = hooks(saved.persist);
     // This case isolates repeated receipt/continuation preservation from summary chunking.
+    // Keep space for all exact receipts in the fixture's logical-message and JSON representations.
+    fixed.profile!.models.main!.inputTokenLimit = 16384;
+    fixed.contextPlan!.budget.inputTokenLimit = 16384;
     fixed.profile!.contextModel!.inputTokenLimit = 65536;
     const original = structuredClone(fixed);
     const largeReads = (prefix: string, offset: number) =>
@@ -1334,5 +1341,97 @@ describe('model-driven working summary and window switch inside one main run', (
       expect(encoded.lastIndexOf('CURRENT_REQUEST_CANARY')).toBeGreaterThan(-1);
     }
     expect(outcome.switched).toEqual(preservedSnapshot);
+  });
+  test('fresh read-compaction requests keep derived prose and exact receipts outside instructions on every codec', async () => {
+    const fixed = await snapshot(false);
+    const original = structuredClone(fixed);
+    const marker = 'DERIVED_CLAIM_ONLY: the keeper may distrust Mira; this is an interpretation.';
+    const receipt: ToolEvent = {
+      callId: 'saved-before-compaction',
+      name: 'context.write',
+      args: { summary: 'saved separately' },
+      result: {
+        saved: true,
+        checkpoint: { id: 'checkpoint-exact', revision: 2, hash: 'receipt-hash' },
+      },
+      denied: false,
+    };
+    const read: ToolEvent = {
+      callId: 'read-before-compaction',
+      name: 'story.read',
+      args: { sceneNumber: 1 },
+      denied: false,
+      result: {
+        kind: 'host-compacted-reads',
+        summary: marker,
+        references: [
+          {
+            name: 'story.read',
+            args: { sceneNumber: 1 },
+            returned: {
+              source: {
+                revision: 'chapter-0',
+                hash: fixed.history[0].contentHash,
+                start: 10,
+                end: 80,
+              },
+            },
+          },
+        ],
+      },
+    };
+    // A subsequent compaction carries prior receipts too, without changing the saved snapshot.
+    for (const events of [[read], [receipt, read]]) {
+      const { request } = buildMainProviderRequest(fixed, { completedToolHistory: events });
+      const response = encodeResponses({ ...request, modelId: 'gpt-5.6' }).body as Record<
+        string,
+        any
+      >;
+      const chat = encodeChat({ ...request, modelId: 'gpt-5.6' }).body as Record<string, any>;
+      const anthropic = encodeAnthropic({ ...request, modelId: 'claude-opus-5' }).body as Record<
+        string,
+        any
+      >;
+      const vertex = encodeVertex({ ...request, modelId: VERTEX_GEMINI_MODEL_ID }).body as Record<
+        string,
+        any
+      >;
+      const codex = buildCodexTurn(request);
+      const bodies = [
+        {
+          codec: 'Responses',
+          instructions: [
+            response.instructions,
+            ...response.input.filter((m: any) => m.role === 'system'),
+          ],
+          data: response.input.filter((m: any) => m.role !== 'system'),
+        },
+        {
+          codec: 'Chat',
+          instructions: chat.messages.filter((m: any) => m.role === 'system'),
+          data: chat.messages.filter((m: any) => m.role !== 'system'),
+        },
+        { codec: 'Anthropic', instructions: anthropic.system, data: anthropic.messages },
+        { codec: 'Vertex', instructions: vertex.systemInstruction, data: vertex.contents },
+        {
+          codec: 'Codex',
+          instructions: codex.developerInstructions,
+          data: JSON.parse(codex.inputText),
+        },
+      ];
+      for (const { codec, instructions, data } of bodies) {
+        expect(JSON.stringify(instructions), codec).not.toContain(marker);
+        expect(JSON.stringify(data).split(marker).length - 1, codec).toBe(1);
+        expect(JSON.stringify(data), codec).toContain('read-before-compaction');
+        expect(JSON.stringify(data), codec).toContain(fixed.history[0].contentHash);
+        expect(JSON.stringify(data), codec).toContain('same-request-in-progress');
+        if (events.length === 2) expect(JSON.stringify(data), codec).toContain('checkpoint-exact');
+      }
+      expect(request.input.source).toMatchObject({ completedToolHistory: { events } });
+      expect(request.prompt!.messages.at(-1)!.content[0].text).toContain('Host continuation');
+      expect(request).not.toHaveProperty('opaqueState');
+      expect(request.stable.tools).toEqual(buildMainProviderRequest(fixed).request.stable.tools);
+    }
+    expect(fixed).toEqual(original);
   });
 });

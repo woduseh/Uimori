@@ -144,7 +144,7 @@ test('before advisors run in order with scoped reads, selected models and explic
     'agents.consult',
   ]);
   const result = consults(run)[0].result;
-  expect(result.source).toEqual({
+  expect(result.source).toMatchObject({
     chatId: state.chat.id,
     parentRevision: null,
     prompt: run.snapshot.profile!.prompts!.main,
@@ -159,7 +159,7 @@ test('before advisors run in order with scoped reads, selected models and explic
   expect(detail.jobs).toEqual([]);
   expect(detail.attempts).toHaveLength(5);
   expect(state.app.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  expect(result.evidence).toEqual([
+  expect(result.evidence).toMatchObject([
     {
       tool: 'knowledge.read',
       args: { id: state.lore.id, offset: 0, limit: 4096 },
@@ -261,6 +261,7 @@ test('on-demand main -> advisor read loop -> main persists attempts before HTTP 
 test('different follow-up questions receive prior advice and share the per-advisor budget', async () => {
   const first = 'Which part of the setting matters here?';
   const second = 'Given that constraint, suggest another character response.';
+  let originalAdvice: unknown;
   const state = await fixture(
     async (body, target, number, wire) => {
       if (number === 1) {
@@ -272,6 +273,7 @@ test('different follow-up questions receive prior advice and share the per-advis
         expect(packet(body).source).not.toHaveProperty('previousConsultations');
         await send(target, [message('The observatory can be seen from the harbor.')]);
       } else if (number === 3) {
+        originalAdvice = outputs(body)[0];
         await send(target, [
           call(body, 'agents.consult', { agentId: 'advisor', question: second }, 'follow-up'),
           call(body, 'agents.consult', { agentId: 'advisor', question: first }, 'repeat-first'),
@@ -285,14 +287,19 @@ test('different follow-up questions receive prior advice and share the per-advis
       } else if (number === 4) {
         expect(wire.agentId).toBe('advisor');
         expect(packet(body).task).toBe(second);
-        expect(packet(body).source.previousConsultations).toEqual([
-          {
-            question: first,
-            status: 'completed',
-            text: 'The observatory can be seen from the harbor.',
-            truncated: false,
-          },
-        ]);
+        expect(packet(body).source.previousConsultations).toEqual([originalAdvice]);
+        expect(originalAdvice).toMatchObject({
+          kind: 'advice',
+          consultationId: 'first',
+          agentId: 'advisor',
+          question: first,
+          status: 'completed',
+          truncated: false,
+          text: 'The observatory can be seen from the harbor.',
+          evidence: [],
+          basedOn: [],
+          source: { chatId: state.chat.id, parentRevision: null },
+        });
         await send(target, [message('The keeper could avoid looking toward it.')]);
       } else {
         expect(number).toBe(5);

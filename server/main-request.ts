@@ -1,7 +1,11 @@
 import { generationFromModel } from '../core/model-capabilities.js';
 import { AGENT_CONTEXT_REFS_MAX, AGENT_DRAFT_CHARS_MAX } from '../core/agent-collaboration.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
-import { CONTEXT_CONTINUATION_GUIDANCE } from '../core/context-summary-policy.js';
+import {
+  CONTEXT_CONTINUATION_GUIDANCE,
+  CONTEXT_DERIVED_GUIDANCE,
+  CONTEXT_RETRIEVAL_GUIDANCE,
+} from '../core/context-summary-policy.js';
 import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { nativeRisuPresetPending } from './risu-native-preset.js';
@@ -10,7 +14,7 @@ import { attachMainHostContext, requestInput } from './main-host-context.js';
 import { buildMainInput, CATALOG_READ_GUIDANCE, type MainInput } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
-import { planNativeMessages } from '../core/provider-messages.js';
+import { planNativeMessages, withNativeHostContext } from '../core/provider-messages.js';
 import {
   ProviderContractError,
   validateRequest,
@@ -171,7 +175,8 @@ export function buildMainProviderRequest(
     input.tools = [...input.tools, ...options.evaluation.definitions.map((tool) => tool.name)];
   const contextTools = contextToolsEnabled(fixed);
   if (contextTools) input.tools = [...input.tools, ...CONTEXT_TOOL_NAMES];
-  let contract = input.contract;
+  let contract = input.contract + '\n' + CONTEXT_DERIVED_GUIDANCE;
+  if (!contextTools) contract += '\n' + CONTEXT_RETRIEVAL_GUIDANCE;
   if (collaboration?.enabled)
     contract += `\nUse collaboration to support the current request and chosen writing prompt. Advisor opinions are optional proposals: use, adapt, or set them aside based on the sources and your creative judgment. They do not replace the prompt's style, authorship boundaries, or final output requirements. Follow the user-configured shared instructions below alongside the chosen prompt; these govern collaboration and do not extend tool permissions.\n\nShared collaboration instructions:\n${collaboration.sharedInstructions}`;
   if (terminal)
@@ -299,7 +304,7 @@ export function buildMainProviderRequest(
       ],
     };
   }
-  return { snapshot: fixed, input, request: validateRequest(request) };
+  return { snapshot: fixed, input, request: validateRequest(withNativeHostContext(request)) };
 }
 export function encodeMainPreview(
   request: ProviderRequest,

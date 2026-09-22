@@ -76,10 +76,14 @@ export function withContextProjection(
 ): RunSnapshot {
   if (!snapshot.contextPlan) throw new Error('CONTEXT_PLAN_REQUIRED');
   const { promptCompilation: _compiled, ...base } = snapshot;
+  const { checkpoint, ...plan } = snapshot.contextPlan;
+  const unchanged =
+    summary === plan.summary && JSON.stringify(compacted) === JSON.stringify(plan.compacted);
   return {
     ...base,
     contextPlan: {
-      ...snapshot.contextPlan,
+      ...plan,
+      ...(unchanged && checkpoint ? { checkpoint } : {}),
       status: 'ready',
       compacted: structuredClone(compacted),
       summary,
