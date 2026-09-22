@@ -32,6 +32,8 @@ Use the smallest existing tests that exercise the affected behavior and plausibl
 
 `quality` runs Biome and TypeScript without starting the app or a browser; `check` runs TypeScript alone. `test:tooling` creates a fresh build before running build, verification and release-tooling tests, so it also works from a clean checkout. `quality:full` runs `quality`, that build-backed tooling suite, then the complete Vitest suite. The build precedes Vitest because some tests restart the compiled server. Vitest uses a 30-second per-test emergency cap for hosted Windows runner variance; operation-specific polls and network deadlines remain explicit and shorter.
 
+Helper data/gateway changes use `npm test -- tests/helper-data-tools.test.ts tests/helper-data-runtime.test.ts tests/helper-tool-contracts.test.ts tests/helper-library-read.test.ts tests/helper-compaction.test.ts tests/context-compaction.test.ts`. The data tests use real read-only SQLite child processes; runtime tests exercise native Chat encoding/decoding against intercepted synthetic responses, not a paid provider. The manual-compaction regression counts full writer projections rather than enforcing a machine-dependent time threshold. Build before checking compiled child-process or browser execution.
+
 ## Verification runners
 
 Use a build matching the current app source for checks that execute `dist`. Focused tests that import source modules do not need a build.
