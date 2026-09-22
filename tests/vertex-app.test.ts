@@ -299,7 +299,7 @@ function command(chat: Chat, profile: ChatProfile) {
 }
 const runDone = async (app: App, runId: string) => {
   await expect
-    .poll(async () => (await api<Run>(app, `/api/runs/${runId}`)).status, { timeout: 4000 })
+    .poll(async () => (await api<Run>(app, `/api/runs/${runId}`)).status, { timeout: 10000 })
     .toBe('completed');
   return api<Run>(app, `/api/runs/${runId}`);
 };

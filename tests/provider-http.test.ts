@@ -360,17 +360,22 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test('Vercel does not receive native OpenAI options inferred from its routed model name', async () => {
+  test('Vercel sends explicit OpenAI-family options through providerOptions', async () => {
     const variant = variants[2];
     const input = request(variant);
     input.modelId = 'openai/gpt-5.6-sol';
     input.generation!.verbosity = 'low';
-    const fetch = vi.fn();
+    const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.providerOptions).toEqual({ openai: { textVerbosity: 'low' } });
+      expect(body).not.toHaveProperty('verbosity');
+      return stream(events(variant)).response;
+    });
     vi.stubGlobal('fetch', fetch);
-    expect((await executeProvider(connection(variant), input, options(variant))).error?.code).toBe(
-      'UNSUPPORTED_GENERATION_OPTIONS'
+    expect((await executeProvider(connection(variant), input, options(variant))).status).toBe(
+      'completed'
     );
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   test.each([200, 429])(
