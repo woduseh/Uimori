@@ -34,7 +34,6 @@ import {
   contextToolsEnabled,
 } from '../core/context-tools.js';
 
-export { MAIN_READ_TOOLS };
 export const STORY_SUBMIT_MAX_CHARS = 500_000;
 export const STORY_SUBMIT_TOOL: ProviderTool = {
   name: 'story.submit',

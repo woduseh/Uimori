@@ -571,9 +571,13 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
       'Matches are paged non-overlapping windows; all-mode requires every pattern in the same field, not necessarily the same excerpt. Match/excerpt offsets refer to exact original text. Matches are not proof of unread content. current uses this task reservation; library/chats are live originals; editor is unsaved. No-match is not proof that a fact is absent. Use another pattern or read the relevant fields.',
   };
 }
-function read(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<string, unknown>) {
-  only(args, ['ref', 'offset', 'limit']);
-  const ref = object(args.ref) as DataRef;
+function read(
+  db: DatabaseSync,
+  snapshot: HelperTaskSnapshot,
+  value: unknown,
+  args: Record<string, unknown>
+) {
+  const ref = object(value) as DataRef;
   if (
     !['current', 'library', 'chats', 'editor'].includes(ref.scope) ||
     Object.keys(ref).some(
@@ -655,26 +659,20 @@ function runDataOperation(input: DataOperation): unknown {
       .get(input.taskId);
     if (!row) throw new Error('DATA_TASK_UNAVAILABLE');
     const snapshot = { scope: JSON.parse(String(row.scope)) } as HelperTaskSnapshot;
-    const requestedRefs =
-      input.name === 'data.read'
-        ? (() => {
-            only(input.args, ['refs', 'offset', 'limit']);
-            if (
-              !Array.isArray(input.args.refs) ||
-              !input.args.refs.length ||
-              input.args.refs.length > 16
-            )
-              throw new Error('DATA_LIST_INVALID');
-            return input.args.refs;
-          })()
-        : [];
+    let requestedRefs: unknown[] = [];
+    if (input.name === 'data.read') {
+      only(input.args, ['refs', 'offset', 'limit']);
+      if (!Array.isArray(input.args.refs) || !input.args.refs.length || input.args.refs.length > 16)
+        throw new Error('DATA_LIST_INVALID');
+      requestedRefs = input.args.refs;
+    }
     const scopes =
       input.name === 'data.search'
         ? [
             input.args.scope ??
               (row.has_editor ? 'editor' : row.has_writing ? 'current' : 'library'),
           ]
-        : requestedRefs.map((ref) => object(ref).scope);
+        : requestedRefs.map((ref) => (ref as DataRef | null)?.scope);
     if (scopes.includes('current')) {
       const writing = db
         .prepare("SELECT json_extract(snapshot,'$.writing') body FROM helper_tasks WHERE id=?")
@@ -696,11 +694,7 @@ function runDataOperation(input: DataOperation): unknown {
       try {
         item = {
           ref,
-          read: read(db, snapshot, {
-            ref,
-            offset: input.args.offset,
-            limit: input.args.limit ?? (object(ref).field === '' ? 8 : 2000),
-          }),
+          read: read(db, snapshot, ref, input.args),
         };
       } catch (error) {
         item = { ref, error: error instanceof Error ? error.message : 'DATA_READ_FAILED' };

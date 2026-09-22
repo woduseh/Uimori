@@ -363,7 +363,7 @@ test('translation tools support empty memory with disabled indexing, bounded pag
   expect(read(call('shell', {}))).not.toHaveProperty('errorKind');
 });
 
-test.each(['denied', 'budget', 'empty'] as const)(
+test.each(['missing-scene', 'budget', 'empty'] as const)(
   'HTTP %s tool result preserves bounded execution and durable job status',
   async (mode) => {
     const store = database();
@@ -397,7 +397,13 @@ test.each(['denied', 'budget', 'empty'] as const)(
         await writeSse(res, [...actions, { type: 'done', reason: 'tool_calls' }]);
         return;
       }
-      expect(wire.input.results[0].result.total).toBe(0);
+      if (mode === 'empty') expect(wire.input.results[0].result.total).toBe(0);
+      else
+        expect(wire.input.results[0]).toMatchObject({
+          denied: true,
+          errorKind: 'recoverable',
+          result: { code: 'RESOURCE_UNAVAILABLE' },
+        });
       await writeSse(res, [
         {
           type: 'text_delta',
@@ -411,9 +417,9 @@ test.each(['denied', 'budget', 'empty'] as const)(
     const target = source(store, chat.id);
     const job = store.requestTranslation(target.id);
     const outcome = await execute(store, job.id, server.origin);
-    expect(outcome?.status).toBe(mode === 'empty' ? 'completed' : 'failed');
-    expect(count).toBe(mode === 'empty' ? 2 : 1);
-    expect(store.job(job.id).result?.text).toBe(mode === 'empty' ? '조용히 기다렸다.' : undefined);
+    expect(outcome?.status).toBe(mode === 'budget' ? 'failed' : 'completed');
+    expect(count).toBe(mode === 'budget' ? 1 : 2);
+    expect(store.job(job.id).result?.text).toBe(mode === 'budget' ? undefined : '조용히 기다렸다.');
     if (mode === 'budget') expect(outcome?.error).toBe('TOOL_CONTEXT_BUDGET_EXHAUSTED');
   }
 );

@@ -161,7 +161,6 @@ test('real transport executes requested outline writing without generating prose
               id: 'outline',
               name: 'outline.write',
               argumentsDelta: JSON.stringify({
-                operationId: 'outline',
                 operations: [{ op: 'create', level: 'theme', title: '계획만 저장', intent: '' }],
               }),
             },
@@ -242,7 +241,6 @@ test('a saved change survives an explanation EOF and prevents whole-request retr
               arguments: {
                 title: '저장 완료',
                 expectedRevision: chat.titleRevision ?? 0,
-                operationId: 'rename',
               },
             },
           ],

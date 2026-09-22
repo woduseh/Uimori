@@ -4,7 +4,7 @@ Uimori keeps model-facing tools deliberately small and provider-portable. Runtim
 
 ## Read tools
 
-The main writer, translation role, and advisors share these reference tools:
+The main writer and translation role use the shared definitions in `core/read-tools.ts`. Advisors receive the subset enabled for them. Role-specific source scope still applies:
 
 | Tool | Contract |
 | --- | --- |
@@ -33,14 +33,18 @@ When a semantic condition cannot be represented portably without a union, keep t
 
 ## Pagination and results
 
-Collection reads use `items` or `results`, `total`, and `nextOffset`. Text reads expose `totalChars` and `nextOffset`. A null `nextOffset` means the selected item or traversal is complete.
+Main reference collections use `items` or `results`, `total`, and `nextOffset`. Text reads expose `totalChars`, the returned range, and `nextOffset`. A null `nextOffset` means no later page remains; it does not claim that an omitted earlier range was read.
 
-Batch reads keep failure local to each entry. For example, one unavailable `knowledge.read` ID produces an item-level error without discarding successful reads from the same batch.
+Helper `data.read` has two distinct pagination dimensions: each item's `nextOffset` continues its text or field directory, while batch `nextIndex` points to unreturned refs. Resubmit `refs.slice(nextIndex)` rather than passing that index as a text offset. The helper's streaming search reports `complete` instead of an exact total. See [Helper tools](HELPER-TOOLS.md) for its page sizes and result budgets.
+
+Batch reads keep resource failures local to each entry, including a malformed helper ref. Invalid batch structure, such as a missing or empty array, still fails the call. Mistyped scene numbers and text offsets return correctable errors; corrupt frozen story sources are still denied, never silently read.
 
 ## Mutations
 
 Revision and source-hash checks remain explicit when they protect stale-write correctness. Idempotency identity is different: the model does not invent `operationId` values for helper app mutations.
 
-The helper derives mutation identity from the immutable helper task ID and the provider tool-call ID, then passes that host-owned value to internal services that need receipts or idempotency keys. This preserves duplicate-write protection without adding bookkeeping arguments to every model-facing mutation schema.
+The helper derives mutation identity from the helper task ID and provider tool-call ID and passes it separately from model arguments. Only adapters for services that use receipts add the identity to their internal commands. There is no second mutation-tool registry to maintain.
+
+Reusing a completed tool-call ID is rejected by the helper loop. A new call ID is a new operation, not a semantic replay of a prior request. Existing-resource saves still use revision checks; identical new-resource creation requests with different call IDs are not automatically deduplicated.
 
 `app.tools -> app.call` remains intentional. It keeps the helper's native tool list and per-request schema tokens small while exposing exact operation schemas only when needed.

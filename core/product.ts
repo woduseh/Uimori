@@ -195,7 +195,7 @@ export type ModelPreset = ContentRef &
     timeoutMs?: number;
     enabled?: boolean;
     evaluationTools?: EvaluationToolOptions;
-    /** Opt-in main-role context tools: model-written working summary, window switch and story.search/read. */
+    /** Opt-in main-role working-summary reads/writes and context window switching. */
     contextTools?: boolean;
     /** Optional JSON passed to Vercel AI Gateway; never used as a credential container. */
     providerOptions?: ProviderOptions;

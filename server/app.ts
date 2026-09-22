@@ -301,12 +301,12 @@ export async function createApp(options: AppOptions): Promise<App> {
     track,
     streams,
     services: {
-      context: async (task, name, args, hooks) => {
+      context: async (task, name, args, hooks, operationId) => {
         const scope = task.snapshot.scope;
         if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
         if (name === 'context.read')
           return readHelperChatContext(store, scope.chatId, scope.branchId);
-        const key = `helper:${task.id}:${text(args.operationId, 'operation ID', 64)}`;
+        const key = `helper:${task.id}:${operationId}`;
         const base = {
           branchId: scope.branchId,
           expectedHeadRevision: task.snapshot.writing!.parentRevision,

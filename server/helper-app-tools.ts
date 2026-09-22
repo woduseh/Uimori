@@ -1,7 +1,7 @@
 import type { Json, ProviderTool } from '../core/transport.js';
 import { RESOURCE_TOOLS } from './helper-resource-tools.js';
 import { helperOptionTools } from './chat-options.js';
-import { MAIN_READ_TOOLS } from './main-request.js';
+import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',

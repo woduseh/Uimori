@@ -1,3 +1,5 @@
+import { editableResource } from '../core/resource-editing.js';
+import { nativeDraftTitle } from './fixtures/native-content.js';
 import { describeHelperTools } from '../server/helper-app-tools.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -143,7 +145,11 @@ function result<T>(request: transport.ProviderRequest, id: string): T {
   expect(found.denied).toBe(false);
   return found.result as T;
 }
-async function submit(f: Awaited<ReturnType<typeof fixture>>, request: string) {
+async function submit(
+  f: Awaited<ReturnType<typeof fixture>>,
+  request: string,
+  expectedStatus: HelperTask['status'] = 'completed'
+) {
   const response = await f.app.inject({
     method: 'POST',
     url: '/api/helper/conversations/' + f.conversation.id + '/messages',
@@ -158,7 +164,7 @@ async function submit(f: Awaited<ReturnType<typeof fixture>>, request: string) {
     }
   );
   const completed = f.workspace.task(task.id);
-  expect(completed.status, completed.error ?? 'helper task failed').toBe('completed');
+  expect(completed.status, completed.error ?? 'helper task failed').toBe(expectedStatus);
   return completed;
 }
 function definition(request: transport.ProviderRequest, name: string) {
@@ -168,7 +174,7 @@ function definition(request: transport.ProviderRequest, name: string) {
   return tool!.inputSchema;
 }
 
-test('helper read events retain recoverable argument errors and non-recoverable masked source failures', async () => {
+test('helper read events retain recoverable argument and missing-scene errors', async () => {
   const f = await fixture();
   mockSend((request, round) => {
     if (round === 0)
@@ -188,7 +194,7 @@ test('helper read events retain recoverable argument errors and non-recoverable 
       denied: true,
       result: { code: 'RESOURCE_UNAVAILABLE' },
     });
-    expect(event(request, 'outside-source')).not.toHaveProperty('errorKind');
+    expect(event(request, 'outside-source').errorKind).toBe('recoverable');
     expect(event(request, 'missing-reference')).toMatchObject({
       denied: true,
       errorKind: 'recoverable',
@@ -446,4 +452,78 @@ test('library schema exposes folder CAS and item identity for a discovered read-
   });
   await submit(f, '서재에 폴더를 만들어줘. 그 폴더로 자료를 이동해줘');
   expect(f.store.libraryOrganization.snapshot().folders).toHaveLength(1);
+});
+
+test('app.call supplies distinct host identities without polluting model arguments', async () => {
+  const f = await fixture();
+  const writes = vi.spyOn(f.store.story.notes, 'write');
+  const firstArgs = {
+    name: 'notes.write',
+    arguments: { body: { expectedRevision: 0, text: 'First note.' } },
+  };
+  mockSend((request, round) => {
+    if (round === 0) return calls(call('note-first', 'app.call', firstArgs));
+    const first = result<{ revision: number }>(request, 'note-first');
+    expect(event(request, 'note-first').args).toEqual(firstArgs);
+    if (round === 1)
+      return calls(
+        call('note-second', 'app.call', {
+          name: 'notes.write',
+          arguments: { body: { expectedRevision: first.revision, text: 'Second note.' } },
+        })
+      );
+    expect(result<{ revision: number }>(request, 'note-second').revision).toBe(first.revision + 1);
+    expect(JSON.stringify(request.input.results)).not.toContain('operationId');
+    return structuredClone(success);
+  });
+  const task = await submit(f, '서로 다른 메모 두 개를 저장해줘');
+  expect(writes).toHaveBeenCalledTimes(2);
+  const keys = writes.mock.calls.map(
+    ([, body]) => (body as { idempotencyKey: string }).idempotencyKey
+  );
+  expect(new Set(keys).size).toBe(2);
+  for (const key of keys) expect(key).toContain(task.id);
+  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM author_notes').get()).toEqual({ n: 2 });
+});
+
+test('resource saves leave real receipts so a later failure cannot offer a duplicate retry', async () => {
+  const f = await fixture('library');
+  const title = 'Saved before provider failure';
+  const model = nativeDraftTitle(editableResource('content', f.bot), title);
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('save-real', 'app.call', {
+          name: 'resource.save',
+          arguments: { kind: 'content', id: f.bot.id, expectedRevision: f.bot.revision, model },
+        })
+      );
+    expect(result(request, 'save-real')).toMatchObject({
+      id: f.bot.id,
+      revision: f.bot.revision + 1,
+    });
+    return {
+      ...structuredClone(success),
+      status: 'error',
+      text: '',
+      error: { code: 'UNEXPECTED_EOF' },
+    };
+  });
+  const request = '자료 이름을 바꾸고 저장해줘';
+  const task = await submit(f, request, 'failed');
+  expect(task.completedEffects?.count).toBe(1);
+  expect(f.store.product.get<Content>('content', f.bot.id)).toMatchObject({
+    title,
+    revision: f.bot.revision + 1,
+  });
+  expect(
+    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 1 });
+  const retry = await f.app.inject({
+    method: 'POST',
+    url: '/api/helper/conversations/' + f.conversation.id + '/messages',
+    payload: { requestKey: randomUUID(), text: request, retryOf: task.id },
+  });
+  expect(retry.statusCode).toBe(409);
+  expect(retry.body).toContain('HELPER_EFFECTS_ALREADY_COMMITTED');
 });

@@ -4,7 +4,7 @@ import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
 import { executeStoryRead, STORY_READ_NAMES } from '../core/story-context.js';
 import { sourceHash } from '../core/source-history.js';
 import type { RunSnapshot } from '../core/types.js';
-import { MAIN_READ_TOOLS } from '../server/main-request.js';
+import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 
 const apps: FastifyInstance[] = [];
 afterEach(async () => {
