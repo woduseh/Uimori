@@ -724,6 +724,17 @@ export class ProductStore {
   }
   resolveJobPrompt(snapshot: RunSnapshot, input: unknown): RunSnapshot {
     const resolved = structuredClone(snapshot);
+    // Explicit null freezes the absence of a guide as well as a populated one. Old jobs do not
+    // silently adopt newly edited metadata at worker start or during judgment-only recovery.
+    if (
+      input &&
+      typeof input === 'object' &&
+      !Array.isArray(input) &&
+      Object.hasOwn(input, 'translationGuide')
+    )
+      resolved.translationGuide = structuredClone(
+        (input as { translationGuide: RunSnapshot['translationGuide'] }).translationGuide
+      );
     for (const role of ['translation', 'status'] as const) {
       const key = `${role}ModelSelection`;
       if (

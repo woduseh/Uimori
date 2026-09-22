@@ -1,0 +1,124 @@
+.translation-guide-editor {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+.translation-guide-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.translation-guide-intro > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--accent);
+}
+.translation-guide-intro p {
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+.translation-guide-editor h3 {
+  margin: 0;
+}
+.translation-guide-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.translation-guide-editor textarea {
+  width: 100%;
+  line-height: 1.7;
+}
+.translation-guide-terms-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.translation-guide-terms-heading p {
+  margin: 4px 0 0;
+}
+.translation-guide-terms-heading button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.translation-guide-empty {
+  background: var(--surface-raised);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 18px;
+  margin: 0;
+}
+.translation-guide-terms {
+  display: grid;
+  gap: 12px;
+}
+.translation-guide-term {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  margin: 0;
+  min-width: 0;
+}
+.translation-guide-term legend {
+  color: var(--muted);
+  padding: 0 5px;
+  font-size: 13px;
+}
+.translation-guide-term-note {
+  grid-column: 1 / 3;
+}
+.translation-guide-term-delete {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  align-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.translation-guide-preview {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.translation-guide-preview summary {
+  cursor: pointer;
+}
+.translation-guide-preview p {
+  margin-top: 12px;
+}
+.translation-guide-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  max-height: 360px;
+  overflow: auto;
+  background: var(--surface-raised);
+  padding: 16px;
+  border-radius: 8px;
+}
+.translation-guide-help {
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .translation-guide-term {
+    grid-template-columns: 1fr;
+  }
+  .translation-guide-term-note,
+  .translation-guide-term-delete {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .translation-guide-term-delete {
+    justify-self: end;
+  }
+  .translation-guide-terms-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}

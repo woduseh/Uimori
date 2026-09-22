@@ -39,7 +39,7 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
   {
     name: 'resource.save',
     description:
-      'Create or save an application resource directly. Use the latest revision when editing an existing ID; omit id/revision to create. There is no server draft or separate apply step. For content, preserve its native Risu source and edit that source rather than only its projection.',
+      'Create or save an application resource directly. Use the latest revision when editing an existing ID; omit id/revision to create. There is no server draft or separate apply step. For content, preserve its native Risu source and edit that source rather than only its projection. Bot translation guides live only at model.package.nativeRisu.card.extensions.uimori.translationGuide: {instructions: string, terms: [{source: string, target: string, note?: string}]}. Preserve other extensions. If the bot is a standalone module with an empty native card, edit nativeRisu.module.extensions.uimori.translationGuide instead; do not create a card. Never merge guides from mounted modules. These are translation metadata, not story facts, chat overrides, or regex replacements. A draft/proposal request does not authorize saving.',
     inputSchema: {
       type: 'object',
       properties: { kind, id: string, expectedRevision: revision, model: { type: 'object' } },

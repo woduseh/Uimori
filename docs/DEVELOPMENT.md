@@ -41,6 +41,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run quality:full` | Formatting, lint, types, tooling tests, fresh build and complete Vitest suite. |
 | `npm run test:tooling` | Fresh build plus build, verification and release-tooling tests, including failure detection. |
 | `npm run verify:themes` | Custom themes, palettes, portable files, reader state preservation and emergency recovery. |
+| `npm run verify:translation-guides` | Bot guide forms, native JSON, draft recovery, validation and mobile layout. |
 | `npm run verify:personal` | Ordinary resource saves, local recovery, image metadata, provider keys and portable chat restoration. |
 | `npm run verify:browser-smoke` | Small browser suite for chat and global prompt settings. |
 | `npm run verify:ui` | Reader layout, editing and reading preferences; accepts `--grep` and `--visual`. Renderer unit tests run separately with `npm test -- tests/prose.test.ts`. |

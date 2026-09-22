@@ -117,6 +117,8 @@ export type RunSnapshot = {
   candidateOf?: string;
   /** Rejudge the preserved response without invoking the writer or input hooks. */
   judgmentRecovery?: true;
+  /** Translation-job metadata captured at admission, never used to construct a writing request. */
+  translationGuide?: import('./translation-guide.js').BotTranslationGuide | null;
   forkedFrom?: {
     chatId: string;
     runId: string;

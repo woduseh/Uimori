@@ -28,7 +28,7 @@ export function compileTranslationPrompt(
     persona: input.context.persona?.text ?? '',
     lore: '',
     lorebook: '',
-    // No separate glossary category exists. Source-time modules remain in lore/context.references.
+    // Explicit bot terms travel once in context.translationGuide, not a second glossary path.
     glossary: '',
     notes: snapshot.story?.notes ? JSON.stringify(snapshot.story.notes) : '',
     source: input.sourceText ?? JSON.stringify(input.blocks),

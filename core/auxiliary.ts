@@ -1,4 +1,5 @@
 export { compileTranslationPrompt } from './translation-prompt.js';
+import { TRANSLATION_GUIDE_POLICY, type BotTranslationGuide } from './translation-guide.js';
 import { imageCatalogPage, type ImageMetadata } from './image-catalog.js';
 import { createHash } from 'node:crypto';
 import { TRANSLATION_TEXT_MAX_CHARS } from './content-limits.js';
@@ -20,6 +21,8 @@ export type AuxiliarySource = { id: string; chatId: string; text: string; hash: 
 export type VersionedText = { id: string; revision: string | number; text: string };
 /** Host projects the originating Run snapshot here, never the currently selected chat. */
 export type SourceTimeContext = {
+  /** Explicit translation choices, distinct from story/reference facts. */
+  translationGuide?: BotTranslationGuide;
   packages?: ContentRoleContext;
   revision: string;
   bot: VersionedText | null;
@@ -208,10 +211,14 @@ export function translationInput(
     context: {
       ...base.context,
       ...(packages ? { packages } : {}),
+      ...(snapshot.translationGuide
+        ? { translationGuide: structuredClone(snapshot.translationGuide) }
+        : {}),
     },
     contract: '',
     referencePolicy:
       AUTHOR_NOTE_GUIDANCE +
+      (snapshot.translationGuide ? '\n' + TRANSLATION_GUIDE_POLICY : '') +
       ' Optional story.list/search/read retrieves frozen prior originals; notes.list/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. A search with no matches needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
     ...(snapshot.profile?.promptPresets?.translation ? { customPrompt: true } : {}),
     outputSchema: {},
