@@ -1,3 +1,4 @@
+import { APP_VERSION } from './app-version.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 
 export type CodexProcessErrorCode =
@@ -74,7 +75,7 @@ export class CodexProcess {
       this.child.stderr.on('error', () => {});
       this.child.stderr.resume();
       await this.request('initialize', {
-        clientInfo: { name: 'uimori', title: 'Uimori', version: '0.0.1' },
+        clientInfo: { name: 'uimori', title: 'Uimori', version: APP_VERSION },
         capabilities: {
           experimentalApi: this.options.experimentalApi ?? false,
           requestAttestation: false,

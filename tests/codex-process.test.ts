@@ -1,3 +1,4 @@
+import packageJson from '../package.json' with { type: 'json' };
 import { afterEach, describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { CodexProcess } from '../server/codex-process.js';
@@ -22,6 +23,11 @@ describe('Codex app-server stdio process', () => {
   it('handshakes and correlates concurrent responses in different order', async () => {
     const value = client();
     await value.start();
+    expect(await value.request('fixture/clientInfo', {})).toEqual({
+      name: 'uimori',
+      title: 'Uimori',
+      version: packageJson.version,
+    });
     const delayed = value.request('fixture/delay', { first: true });
     expect(await value.request('fixture/echo', { second: true })).toEqual({ second: true });
     expect(await delayed).toEqual({ first: true });

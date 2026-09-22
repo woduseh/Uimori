@@ -1,3 +1,4 @@
+import { APP_VERSION } from './app-version.js';
 import { flushPendingImageCleanup } from './unused-data.js';
 import { themeRoutes } from './themes.js';
 import { inputTranslationRoutes } from './input-translation.js';
@@ -1248,6 +1249,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   app.get('/api/health', async () => ({
     ready: true,
+    version: APP_VERSION,
     testMode: options.testMode === true,
     buildId: options.buildId,
     instanceId,
