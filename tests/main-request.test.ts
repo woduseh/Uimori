@@ -554,6 +554,7 @@ describe('Recoverable read failures in the real main runner', () => {
   test.each([
     ['knowledge.search', { query: 'harbor', limit: 101 }, 'INVALID_ARGUMENTS'],
     ['knowledge.read', { ids: [] }, 'INVALID_ARGUMENTS'],
+    ['story.read', { sceneNumber: 999999 }, 'RESOURCE_UNAVAILABLE'],
   ] as const)(
     'returns %s failure for correction without treating it as success',
     async (name, args, code) => {

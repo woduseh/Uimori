@@ -22,7 +22,7 @@ import {
 } from '../core/transport.js';
 import type { RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import type { MainHooks } from './model-runner.js';
-import { MAIN_READ_TOOLS } from './main-request.js';
+import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { agentSharedOptions } from './agent-shared-options.js';
 import { AgentContextError, resolveAgentContext, adviceOrigins } from './agent-context.js';
 
@@ -307,15 +307,15 @@ export function createAgentCollaboration(
         if (event.denied) continue;
         if (event.name === 'knowledge.read') {
           for (const read of knowledgeReadResults(event)) {
-            const source = read.source as Record<string, unknown>;
+            const source = read.source;
             evidence.push({
               tool: event.name,
               args: event.args,
               reference: source.reference ?? null,
               source,
               range: read.range,
-              ...(read.totalChars !== undefined ? { totalChars: read.totalChars } : {}),
-              ...(read.nextOffset !== undefined ? { nextOffset: read.nextOffset } : {}),
+              totalChars: read.totalChars,
+              nextOffset: read.nextOffset,
             });
           }
           continue;

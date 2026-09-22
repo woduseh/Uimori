@@ -9,7 +9,7 @@ import type { RunSnapshot } from '../core/types.js';
 import type { MainHooks } from '../server/model-runner.js';
 import type { WireRecord } from '../core/transport.js';
 import { executeTool, knowledgeReadResults } from '../core/provider.js';
-import { MAIN_READ_TOOLS } from '../server/main-request.js';
+import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 
 const response = (answers: Record<string, number>) =>
   new Response(

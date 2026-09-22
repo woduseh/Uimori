@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { sourceHash } from '../core/source-history.js';
 import { executeStoryRead, STORY_RESULT_MAX_BYTES } from '../core/story-context.js';
 import type { RunSnapshot } from '../core/types.js';
-import { MAIN_READ_TOOLS } from '../server/main-request.js';
+import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 
 function snapshot(
   texts = ['Authored opening.', 'Mira promises the lantern.', 'The captain waits.']

@@ -67,7 +67,7 @@
 
 요약의 중요한 약속·정정·미해결 사실에는 출처를 아는 경우 `[scene 12]`처럼 짧은 위치를 남기도록 지시해요. 자동 요약은 모든 분할 조각에 `sourceSceneNumber`를 보내고, 모델 주도 `context.read/new`도 compacted/retained 원문의 번호·revision/hash와 범위를 알려줘요. 번호를 모르는 오래된 사실에 출처를 지어내거나 원문마다 요약 항목을 만들도록 요구하지 않아요. 위치 표기는 기존 전체 요약 목표 안에 포함하며 의미상 정확성은 모델 출력에 달려 있어요.
 
-번호가 있으면 `story.read {sceneNumber: 12}`로 바로 읽어요. 모델-facing 계약은 `sceneNumber` 하나만 식별자로 사용하며 내부 revision ID는 provenance로 반환할 뿐 조회 인자로 받지 않아요. 범위 밖 번호는 `RESOURCE_UNAVAILABLE`로 거절하고 원문 hash 검증·UTF-16 offset·24,000바이트 결과 한도는 그대로 적용해요. 위치 표기는 조회를 돕는 정보이고 저장 원문·정정 권한·checkpoint 유효성을 바꾸지 않아요.
+번호가 있으면 `story.read {sceneNumber: 12}`로 바로 읽어요. 모델-facing 계약은 `sceneNumber` 하나만 식별자로 사용하며 내부 revision ID는 provenance로 반환할 뿐 조회 인자로 받지 않아요. 범위 밖 번호는 수정 가능한 `RESOURCE_UNAVAILABLE`, 잘못된 문자 위치는 `INVALID_ARGUMENTS`로 반환하고 원문 hash 검증·UTF-16 offset·24,000바이트 결과 한도는 그대로 적용해요. 원문 무결성 오류는 수정 가능한 입력 실수로 취급하지 않아요. 위치 표기는 조회를 돕는 정보이고 저장 원문·정정 권한·checkpoint 유효성을 바꾸지 않아요.
 
 ## 수동 정리와 요약 편집
 
@@ -100,8 +100,8 @@
 | `context.read` | 저장된 작업 요약, 현재 창에서 빠진 원문(compacted)과 남은 원문(retained)의 장면 번호·revision/hash, 범위와 마지막 checkpoint 참조를 돌려줘요. |
 | `context.write {summary}` | 작업 요약을 저장·교체해요. 결과가 돌아오기 전에 checkpoint(`origin: 'model'`)로 저장되며 **현재 창은 바꾸지 않고** 다음 창과 다음 턴에 반영돼요. |
 | `context.new {keepRecent?, summary?}` | 새 컨텍스트 창을 열어요. 최근 `keepRecent`개(기본 2, 최대 8) 이전의 원문 교환과 **이전 도구 결과 전부**가 전송 입력에서 빠지고, 저장된(또는 이번에 넘긴) 요약이 그 자리를 대신해요. 정리할 원문이 있으면 요약이 필수예요. 같은 라운드에 다른 도구와 함께 부르면 거절해요. |
-| `story.search {query?, offset?, limit?}` | query를 생략하거나 비우면 전개 순서대로 sceneNumber·revision·hash·글자 수·짧은 미리보기와 compacted 여부를 돌려줘요. query가 있으면 모든 공백 구분 용어가 같은 원문에 등장하는 장면을 대소문자 구분 없이 찾아요(NFKC 정규화). |
-| `story.read {sceneNumber, offset?, limit?}` | 알려진 1-based 장면 번호로 원문을 직접 읽어요. 장면 번호·sceneScope·출처 revision/hash와 읽은 구간·`nextOffset`을 반환해요. |
+
+원문 목록·검색과 `story.read`는 이 설정과 무관한 기본 조회 도구예요. [장면 번호로 원문 찾기](#요약에서-원문-장면-찾기)를 참고해요.
 
 동작 순서는 다음과 같아요.
 

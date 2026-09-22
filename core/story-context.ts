@@ -1,3 +1,4 @@
+import { STORY_READ_TOOLS } from './story-read-tools.js';
 import {
   readStorySource,
   searchStorySources,
@@ -7,7 +8,7 @@ import {
 import type { RunSnapshot, ToolEvent } from './types.js';
 import type { ToolAction } from './provider.js';
 
-export const STORY_READ_NAMES = ['story.search', 'story.read'];
+export const STORY_READ_NAMES = STORY_READ_TOOLS.map((tool) => tool.name);
 const LIST_PREVIEW_CHARS = 160;
 export const STORY_RESULT_MAX_BYTES = 24000;
 const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value), 'utf8');
@@ -74,12 +75,13 @@ function listStorySources(snapshot: RunSnapshot, offset: number, limit: number) 
 }
 
 export function executeStoryRead(snapshot: RunSnapshot, action: ToolAction): ToolEvent {
-  const denied = (code: string): ToolEvent => ({
+  const denied = (code: string, recoverable = code === 'INVALID_ARGUMENTS'): ToolEvent => ({
     callId: action.callId,
     name: action.name,
     args: {},
     result: { code },
     denied: true,
+    ...(recoverable ? { errorKind: 'recoverable' as const } : {}),
   });
   if (!STORY_READ_NAMES.includes(action.name)) return denied('TOOL_NOT_ALLOWED');
 
@@ -89,9 +91,11 @@ export function executeStoryRead(snapshot: RunSnapshot, action: ToolAction): Too
   const allowed = search ? ['query', 'offset', 'limit'] : ['sceneNumber', 'offset', 'limit'];
   if (Object.keys(args).some((key) => !allowed.includes(key))) return denied('INVALID_ARGUMENTS');
 
-  const offset = args.offset === undefined ? 0 : Number(args.offset);
-  const limit = args.limit === undefined ? (search ? 20 : 4096) : Number(args.limit);
+  const offset = args.offset === undefined ? 0 : args.offset;
+  const limit = args.limit === undefined ? (search ? 20 : 4096) : args.limit;
   if (
+    typeof offset !== 'number' ||
+    typeof limit !== 'number' ||
     !Number.isSafeInteger(offset) ||
     offset < 0 ||
     !Number.isSafeInteger(limit) ||
@@ -137,7 +141,8 @@ export function executeStoryRead(snapshot: RunSnapshot, action: ToolAction): Too
     if (!Number.isSafeInteger(args.sceneNumber) || (args.sceneNumber as number) < 1)
       return denied('INVALID_ARGUMENTS');
     const numbered = scope.history[(args.sceneNumber as number) - 1];
-    if (!numbered) return denied('RESOURCE_UNAVAILABLE');
+    if (!numbered) return denied('RESOURCE_UNAVAILABLE', true);
+    if (offset > numbered.text.length) return denied('INVALID_ARGUMENTS');
 
     const page = readStorySource(scope, { revision: numbered.revision, offset, limit });
     const { quote: _quote, ...source } = page.source;

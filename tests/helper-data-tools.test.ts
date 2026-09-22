@@ -450,3 +450,47 @@ test('live chat grep and SQL follow each actual ancestry and preserve scene numb
   });
   expect(counts.rows.map((row: any) => row.n)).toEqual([3, 3]);
 });
+
+test('batch reads use one documented default for text and directory pages', async () => {
+  const f = fixture();
+  const input = fixtureBotInput('Batch defaults', 'source '.repeat(900));
+  input.package.nativeRisu.card.extensions = {
+    toolTest: Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`field${i}`, `value${i}`])),
+  };
+  const saved = f.store.product.content(input) as Content;
+  const found = await f.invoke('data.search', { ids: [saved.id], patterns: ['source'], limit: 1 });
+  const ref = found.items[0].ref as DataRef;
+  const text = await readOne(f, ref);
+  expect(text.text).toHaveLength(4000);
+  expect(text.nextOffset).toBe(4000);
+  const listed = await f.invoke('data.search', { ids: [saved.id] });
+  const directory = await readOne(f, listed.items[0].ref);
+  expect(directory.fields).toHaveLength(20);
+  expect(directory.nextOffset).toBe(20);
+
+  let remaining = Array.from({ length: 5 }, () => ref);
+  let returned = 0;
+  while (remaining.length) {
+    const batch = await f.invoke('data.read', { refs: remaining });
+    expect(batch.items.length).toBeGreaterThan(0);
+    for (const item of batch.items) expect(item.read.nextOffset).toBe(4000);
+    returned += batch.items.length;
+    remaining = batch.nextIndex === null ? [] : remaining.slice(batch.nextIndex);
+  }
+  expect(returned).toBe(5);
+});
+
+test('malformed and stale refs do not discard valid batch reads', async () => {
+  const f = fixture();
+  bot(f);
+  const found = await f.invoke('data.search', { patterns: ['27세'] });
+  const ref = found.items[0].ref as DataRef;
+  const batch = await f.invoke('data.read', {
+    refs: [null, { ...ref, hash: '0'.repeat(64) }, ref],
+  });
+  expect(batch.items).toHaveLength(3);
+  expect(batch.items[0]).toMatchObject({ ref: null, error: 'DATA_OBJECT_REQUIRED' });
+  expect(batch.items[1].error).toContain('DATA_SOURCE_CHANGED');
+  expect(batch.items[2].read.text).toContain('27세');
+  expect(batch.nextIndex).toBeNull();
+});

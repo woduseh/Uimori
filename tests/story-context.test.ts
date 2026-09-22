@@ -118,3 +118,36 @@ describe('author-note validation stays separate from model read tools', () => {
     ).toThrow('STORY_NOTE_INVALID');
   });
 });
+
+test('browse previews normalize real whitespace and preserve literal backslashes', () => {
+  const fixed = snapshot('First\t  line\nSecond \\section');
+  expect(read(fixed, 'story.search', {}).results[0].preview).toBe('First line Second \\section');
+});
+
+test('mistyped scene and range are correctable while corrupt source history stays terminal', () => {
+  const fixed = snapshot('original');
+  const invoke = (args: Record<string, unknown>) =>
+    executeStoryRead(fixed, { callId: 'read', name: 'story.read', args });
+  expect(invoke({ sceneNumber: 2 })).toMatchObject({
+    denied: true,
+    errorKind: 'recoverable',
+    result: { code: 'RESOURCE_UNAVAILABLE' },
+  });
+  expect(invoke({ sceneNumber: 1, offset: 100 })).toMatchObject({
+    denied: true,
+    errorKind: 'recoverable',
+    result: { code: 'INVALID_ARGUMENTS' },
+  });
+  for (const offset of ['0', null, false]) {
+    expect(invoke({ sceneNumber: 1, offset })).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: { code: 'INVALID_ARGUMENTS' },
+    });
+  }
+  expect(invoke({ sceneNumber: 1 })).toMatchObject({ denied: false, result: { text: 'original' } });
+  fixed.history[0].contentHash = sourceHash('corrupt');
+  const corrupt = invoke({ sceneNumber: 1 });
+  expect(corrupt).toMatchObject({ denied: true, result: { code: 'RESOURCE_UNAVAILABLE' } });
+  expect(corrupt).not.toHaveProperty('errorKind');
+});

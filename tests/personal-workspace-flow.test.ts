@@ -364,7 +364,6 @@ test('library helper can directly edit an unselected resource and rename another
                 chatId: chat.id,
                 title: 'Changed from library',
                 expectedRevision: chat.titleRevision ?? 0,
-                operationId: 'rename-once',
               },
             },
           },

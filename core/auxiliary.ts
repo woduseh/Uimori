@@ -1,3 +1,4 @@
+import { KNOWLEDGE_SKILL_TOOLS } from './read-tools.js';
 export { compileTranslationPrompt } from './translation-prompt.js';
 import { TRANSLATION_GUIDE_POLICY, type BotTranslationGuide } from './translation-guide.js';
 import { imageCatalogPage, type ImageMetadata } from './image-catalog.js';
@@ -179,7 +180,7 @@ const baseInput = (
   catalog: snapshot.resources
     .filter((item) => item.chatId === snapshot.chatId)
     .map(({ text: _text, chatId: _chatId, ...item }) => item),
-  tools: ['knowledge.search', 'knowledge.read', 'skills.list', 'skills.load'],
+  tools: KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name),
   results: [] as ToolEvent[],
 });
 /** The source is sent once, verbatim. The host owns identity; prose is not a schema. */

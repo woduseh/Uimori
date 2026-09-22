@@ -1,3 +1,4 @@
+import { KNOWLEDGE_SKILL_TOOLS } from './read-tools.js';
 import { createHash } from 'node:crypto';
 import { conversationSummary } from './context-projection.js';
 import type { ModelInput, Resource, RunSnapshot, ToolEvent, Usage } from './types.js';
@@ -15,12 +16,7 @@ import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 import { PROMPT_COMPILER_VERSIONS, type PromptCompilerVersion } from './risu-prompt.js';
 
 // These are host permissions, never instructions read from a content package.
-const ALLOWED_TOOLS = Object.freeze([
-  'knowledge.search',
-  'knowledge.read',
-  'skills.list',
-  'skills.load',
-]);
+const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
 /** Per-entry summary length in the main catalog; the body stays behind the read tools. */
 export const CATALOG_SUMMARY_CHARS = 160;
 /** Serialized length budget for the whole catalog list, which rides in every main request. */
@@ -197,11 +193,8 @@ export function buildMainInput(
   input.tools.push(...STORY_READ_NAMES);
   if (snapshot.contextPlan) {
     const kept = new Set(snapshot.contextPlan.recentSourceRevisions);
-    input.history = structuredClone(
-      validateSourceHistory(snapshot).filter((entry) => kept.has(entry.revision))
-    );
+    input.history = structuredClone(input.history.filter((entry) => kept.has(entry.revision)));
     input.contextSummary = conversationSummary(snapshot);
-    for (const tool of STORY_READ_NAMES) if (!input.tools.includes(tool)) input.tools.push(tool);
   }
   if (snapshot.outline) {
     input.outline = structuredClone(snapshot.outline);
@@ -243,12 +236,37 @@ export type ToolAction = {
 };
 
 export type KnowledgeReadResult = {
-  source: { id: string; revision: number; hash: string };
-  range: { start: number; end: number };
-  totalChars?: number;
-  nextOffset?: number | null;
+  source: Pick<Resource, 'id' | 'revision' | 'kind' | 'sourceKind'> & {
+    hash: string;
+    reference: string;
+  };
+  range: { start: number; end: number; unit: 'utf16-code-unit' };
+  totalChars: number;
+  nextOffset: number | null;
   text: string;
 };
+function readResourceRange(
+  resource: Resource,
+  offset: number,
+  limit: number,
+  role: string
+): KnowledgeReadResult {
+  const end = Math.min(resource.text.length, offset + limit);
+  return {
+    source: {
+      id: resource.id,
+      kind: resource.kind,
+      ...(role === 'translation' && resource.sourceKind ? { sourceKind: resource.sourceKind } : {}),
+      revision: resource.revision,
+      hash: hash(resource.text),
+      reference: `resource:${resource.id}@${resource.revision}#chars=${offset}-${end}`,
+    },
+    range: { start: offset, end, unit: 'utf16-code-unit' },
+    totalChars: resource.text.length,
+    text: resource.text.slice(offset, end),
+    nextOffset: end < resource.text.length ? end : null,
+  };
+}
 /** Callers verify the full event against executeTool before treating these as durable receipts. */
 export function knowledgeReadResults(event: ToolEvent): KnowledgeReadResult[] {
   if (event.denied || event.name !== 'knowledge.read') return [];
@@ -268,13 +286,8 @@ export function executeTool(
   role: 'main' | 'translation' | 'status' | 'image' = 'main'
 ): ToolEvent {
   checkAbort(signal);
-  if ((role === 'main' || role === 'translation') && STORY_READ_NAMES.includes(action.name)) {
-    const event = executeStoryRead(snapshot, action);
-    // RESOURCE_UNAVAILABLE also masks source-integrity exceptions; never relax that boundary.
-    if (event.denied && (event.result as { code?: string }).code === 'INVALID_ARGUMENTS')
-      event.errorKind = 'recoverable';
-    return event;
-  }
+  if ((role === 'main' || role === 'translation') && STORY_READ_NAMES.includes(action.name))
+    return executeStoryRead(snapshot, action);
   const denied = (code: string): ToolEvent => ({
     callId: action.callId,
     name: ALLOWED_TOOLS.includes(action.name) ? action.name : 'unapproved',
@@ -311,27 +324,7 @@ export function executeTool(
       if (offset > resource.text.length)
         return { id, denied: true, error: { code: 'INVALID_ARGUMENTS' } };
 
-      const end = Math.min(resource.text.length, offset + limit);
-      return {
-        id,
-        denied: false,
-        read: {
-          source: {
-            id: resource.id,
-            kind: resource.kind,
-            ...(role === 'translation' && resource.sourceKind
-              ? { sourceKind: resource.sourceKind }
-              : {}),
-            revision: resource.revision,
-            hash: hash(resource.text),
-            reference: `resource:${resource.id}@${resource.revision}#chars=${offset}-${end}`,
-          },
-          range: { start: offset, end, unit: 'utf16-code-unit' },
-          totalChars: resource.text.length,
-          text: resource.text.slice(offset, end),
-          nextOffset: end < resource.text.length ? end : null,
-        },
-      };
+      return { id, denied: false, read: readResourceRange(resource, offset, limit, role) };
     });
     return { ...action, args: { ids: args.ids, offset, limit }, denied: false, result: { items } };
   }
@@ -384,27 +377,11 @@ export function executeTool(
   const offset = pageNumber(args.offset, 0, resource.text.length);
   const limit = pageNumber(args.limit, 4096, 16384);
   if (offset === null || limit === null || limit === 0) return denied('INVALID_ARGUMENTS');
-  const end = Math.min(resource.text.length, offset + limit);
   return {
     ...action,
     args: { id: resource.id, offset, limit },
     denied: false,
-    result: {
-      source: {
-        id: resource.id,
-        kind: resource.kind,
-        ...(role === 'translation' && resource.sourceKind
-          ? { sourceKind: resource.sourceKind }
-          : {}),
-        revision: resource.revision,
-        hash: hash(resource.text),
-        reference: `resource:${resource.id}@${resource.revision}#chars=${offset}-${end}`,
-      },
-      range: { start: offset, end, unit: 'utf16-code-unit' },
-      totalChars: resource.text.length,
-      text: resource.text.slice(offset, end),
-      nextOffset: end < resource.text.length ? end : null,
-    },
+    result: readResourceRange(resource, offset, limit, role),
   };
 }
 
