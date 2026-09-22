@@ -19,6 +19,10 @@ import {
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
 import { defaultProfile, type Content, type Connection } from '../core/product.js';
 import { buildMainInput, CATALOG_READ_GUIDANCE } from '../core/provider.js';
+import {
+  CONTEXT_DERIVED_GUIDANCE,
+  CONTEXT_RETRIEVAL_GUIDANCE,
+} from '../core/context-summary-policy.js';
 import type { ModelInput, RunSnapshot, ToolEvent } from '../core/types.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
 
@@ -983,8 +987,15 @@ test('native CBS prompt stays frozen across tools after the caller changes its p
   expect(server.requests).toHaveLength(2);
   for (const captured of server.requests) {
     const wire = JSON.parse(captured.body);
-    // The authored prompt stays literal; the host contract carries only its catalog read guidance.
-    expect(wire.stable.contract).toBe('\n' + CATALOG_READ_GUIDANCE);
+    // Authored text stays literal; evidence and retrieval policies belong to the host contract.
+    expect(wire.stable.contract).toBe(
+      '\n' +
+        CONTEXT_DERIVED_GUIDANCE +
+        '\n' +
+        CONTEXT_RETRIEVAL_GUIDANCE +
+        '\n' +
+        CATALOG_READ_GUIDANCE
+    );
     expect(wire.prompt.messages[0].content[0].text).toBe(custom.replace('{{char}}', 'Ada'));
     expect(wire.stable.tools.map((tool: { name: string }) => tool.name)).toEqual([
       'knowledge.search',

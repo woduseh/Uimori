@@ -12,7 +12,15 @@ import { encodeVertex } from '../core/vertex-protocol.js';
 import { encodeResponses } from '../core/openai-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
-import { planNativeMessages } from '../core/provider-messages.js';
+import {
+  NATIVE_HOST_CONTEXT_ID,
+  planNativeMessages,
+  withNativeHostContext,
+} from '../core/provider-messages.js';
+import {
+  CONTEXT_DERIVED_GUIDANCE,
+  CONTEXT_RETRIEVAL_GUIDANCE,
+} from '../core/context-summary-policy.js';
 import type { ProviderRequest } from '../core/transport.js';
 import type { RunSnapshot } from '../core/types.js';
 
@@ -91,7 +99,11 @@ describe('single prompt program defaults at real native encoder boundaries', () 
         const built = buildMainProviderRequest(await prepareNativeRisuRun(seed));
         const before = structuredClone(built.request.prompt);
         const preview = encodeMainPreview(built.request, seed.profile!.models.main!);
-        expect(built.request.stable.contract).toBe('');
+        expect(built.request.stable.contract).toBe(
+          '\n' + CONTEXT_DERIVED_GUIDANCE + '\n' + CONTEXT_RETRIEVAL_GUIDANCE
+        );
+        for (const guidance of [CONTEXT_DERIVED_GUIDANCE, CONTEXT_RETRIEVAL_GUIDANCE])
+          expect(JSON.stringify(preview.body).split(guidance)).toHaveLength(2);
         expect(built.request.prompt!.messages[0].content[0].text).toBe(
           custom ? 'Literal Character' : DEFAULT_MAIN_PROMPT
         );
@@ -103,7 +115,7 @@ describe('single prompt program defaults at real native encoder boundaries', () 
     }
   );
   test.each(protocols)(
-    '%s compiles default translation with exact source context/schema and no main history',
+    '%s compiles default translation with source-time references without replaying main turns',
     (protocol) => {
       const seed = snapshot(protocol),
         source = {
@@ -115,7 +127,8 @@ describe('single prompt program defaults at real native encoder boundaries', () 
       seed.history = [{ revision: 'main-history', text: 'MAIN HISTORY MUST NOT LEAK' }];
       const input = translationInput(source, sourceTimeContext(seed, 'translation'), seed);
       const compilation = compileTranslationPrompt(input, seed, 'Translate this chunk.')!;
-      const request: ProviderRequest = {
+      // Match production assembly: encoders receive already-finalized user-role references.
+      const request: ProviderRequest = withNativeHostContext({
         role: 'translation',
         modelId: seed.profile!.models.translation!.modelId,
         generation: { maxOutputTokens: 1024, temperature: null },
@@ -136,7 +149,7 @@ describe('single prompt program defaults at real native encoder boundaries', () 
           },
           results: [],
         },
-      };
+      });
       const body =
         protocol === 'vertex-gemini-v1'
           ? encodeVertex(request).body
@@ -148,13 +161,20 @@ describe('single prompt program defaults at real native encoder boundaries', () 
       expect(compilation.messages[0].content[0].text).toBe(DEFAULT_TRANSLATION_PROMPT);
       expect(compilation.messages.filter((m) => m.provenance.origin === 'history')).toHaveLength(0);
       expect(compilation.messages.filter((m) => m.provenance.origin === 'current')).toHaveLength(1);
-      expect(JSON.stringify(body)).toContain(source.hash);
+      const hostMessages = request.prompt!.messages.filter(
+        (message) => message.id === NATIVE_HOST_CONTEXT_ID
+      );
+      expect(hostMessages).toHaveLength(1);
+      expect(hostMessages[0].role).toBe('user');
+      expect(hostMessages[0].content[0].text).toContain(source.hash);
+      expect(JSON.stringify(body).split(source.hash)).toHaveLength(2);
+      expect(JSON.stringify(body).split(source.text)).toHaveLength(2);
       expect(compilation.messages.some((message) => message.id === 'outputSchema')).toBe(false);
       if (protocol === 'vertex-gemini-v1') {
         const mapped = planNativeMessages(request, protocol)!;
         expect(mapped.messages).toHaveLength(1);
         expect((mapped.messages[0] as { parts: unknown[] }).parts).toHaveLength(
-          compilation.messages.filter((m) => m.role === 'user').length
+          request.prompt!.messages.filter((m) => m.role === 'user').length
         );
       }
     }

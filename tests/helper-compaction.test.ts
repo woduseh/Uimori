@@ -302,6 +302,9 @@ function continuation(request: transport.ProviderRequest) {
 
 test('helper compaction resumes completed library reads and exact writes within the same task', async () => {
   const f = await fixture({ fixed: false });
+  // Keep metadata-only discovery below the soft trigger as the real tool catalog grows.
+  // The long library body must still exceed the hard limit and require one compaction.
+  f.updateModel(f.helperModel.id, { inputTokenLimit: 16384 });
   const library = f.store.product.content(
     fixtureBotInput('Read progress register', readText.repeat(9))
   ) as Content;
@@ -378,20 +381,32 @@ test('helper compaction resumes completed library reads and exact writes within 
   expect(task.status).toBe('completed');
   expect(task.snapshot).toEqual(originalSnapshot);
   expect(task.usage.modelCalls).toBe(4);
+  expect(log.requests.map((request) => request.role)).toEqual([
+    'helper',
+    'helper',
+    'context',
+    'helper',
+  ]);
+  const limit = f.target('helper').inputTokenLimit!;
+  expect(
+    estimateContextTokens(encodeMainPreview(log.requests[1], f.target('helper')).body)
+  ).toBeLessThan(limit * 0.85);
   expect(f.mutations).toBe(1);
   expect(compactions(f, task)).toHaveLength(1);
   expect(compactions(f, task)[0].applied).toBe(true);
+  expect(compactions(f, task)[0].beforeTokens).toBeGreaterThan(limit);
+  expect(compactions(f, task)[0].afterTokens).toBeLessThan(limit);
   const resumed = log.requests.at(-1)!;
   const receipt = f.store.db
     .prepare('SELECT result FROM helper_operations WHERE task_id=?')
     .get(task.id)!;
   expect(carried(resumed)[0].result).toEqual(JSON.parse(String(receipt.result)));
   const fixedRequest = structuredClone(resumed);
-  (fixedRequest.input.source as Record<string, transport.Json>).summary = '';
+  const source = fixedRequest.input.source as Record<string, transport.Json>;
+  (source.summary as Record<string, transport.Json>).text = '';
   const fixedTokens = estimateContextTokens(
     encodeMainPreview(fixedRequest, f.target('helper')).body
   );
-  const limit = f.target('helper').inputTokenLimit!;
   expect(
     log.requests.find((request) => request.role === 'context')!.input.controls.targetSummaryTokens
   ).toBe(Math.max(1, Math.floor(Math.min(2048, limit / 8, limit - fixedTokens))));
