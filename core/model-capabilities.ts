@@ -1,7 +1,7 @@
 import type { ModelGeneration, ProviderProtocol } from './product.js';
 import { providerDefinition } from './provider-definitions.js';
 import { ProviderContractError } from './provider-errors.js';
-import { modelFamilyProfile } from './model-family.js';
+import { MODEL_FAMILIES } from './product.js';
 
 export const GENERATION_KEYS = [
   'modelFamily',
@@ -296,11 +296,7 @@ export function validateGenerationShape(value: unknown): asserts value is ModelG
     Object.keys(g).some((key) => !GENERATION_KEYS.includes(key as (typeof GENERATION_KEYS)[number]))
   )
     reject();
-  if (
-    g.modelFamily !== undefined &&
-    !['openai', 'anthropic', 'google', 'deepseek', 'xai'].includes(g.modelFamily)
-  )
-    reject();
+  if (g.modelFamily !== undefined && !MODEL_FAMILIES.includes(g.modelFamily)) reject();
   if (
     !Number.isSafeInteger(g.maxOutputTokens) ||
     g.maxOutputTokens < 1 ||
@@ -358,21 +354,9 @@ export function validateGenerationShape(value: unknown): asserts value is ModelG
 export function validateModelOptions(g: ModelGeneration, protocol: ProviderProtocol): void {
   validateGenerationShape(g);
   const keys = protocolOptionKeys(protocol);
-  const vercelFamilyKeys =
-    protocol === 'vercel-chat-v1' && g.modelFamily
-      ? modelFamilyProfile(g.modelFamily).optionKeys
-      : undefined;
-  const legacyVercelKeys = ['structuredOutput', 'reasoningEffort', 'serviceTier'];
   for (const key of Object.keys(g)) {
     if (key === 'modelFamily' || key === 'maxOutputTokens' || key === 'temperature') continue;
     if (!keys.includes(key)) reject();
-    if (
-      protocol === 'vercel-chat-v1' &&
-      !(vercelFamilyKeys
-        ? vercelFamilyKeys.includes(key as keyof ModelGeneration)
-        : legacyVercelKeys.includes(key))
-    )
-      reject();
   }
   if (g.temperature !== null && !keys.includes('temperature')) reject();
   if (g.cacheTtl !== undefined) {

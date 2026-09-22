@@ -10,19 +10,12 @@
   display: grid;
   gap: 16px;
   min-width: 0;
-  padding-bottom: 0;
-  border-bottom: 0;
 }
 .reading-preview {
   min-width: 0;
   padding: 14px 16px;
   border-radius: 12px;
   background: var(--surface-raised);
-}
-.reading-preview > small {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--muted);
 }
 .reading-preview .prose > p:last-of-type {
   margin-bottom: 0;
@@ -80,20 +73,16 @@
   margin-block-end: 0;
 }
 
-.reading-preferences,
-.reading-settings {
+.reading-preferences {
+  container-type: inline-size;
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
-.reading-base-group,
 .reading-settings-group {
   display: grid;
   gap: 0;
-  min-width: 0;
-  padding: 0 16px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
+  padding-block: 0;
 }
 .reading-settings-group-heading {
   padding: 14px 0 10px;
@@ -108,22 +97,21 @@
   font-size: 12px;
   line-height: 1.5;
 }
-.reading-base-group > label,
 .reading-settings-group > label,
 .reading-spacing > label {
   display: grid;
-  grid-template-columns: minmax(130px, 1fr) minmax(140px, 44%);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 44%);
   align-items: center;
   gap: 16px;
   padding-block: 12px;
   border-top: 1px solid var(--line);
 }
-.reading-base-group select,
 .reading-settings-group select {
   width: 100%;
   min-width: 0;
 }
 .reading-range-control {
+  min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 48px;
   align-items: center;
@@ -144,6 +132,10 @@
   gap: 16px;
   padding-block: 12px;
   border-top: 1px solid var(--line);
+}
+.reading-option-toggle > .check {
+  flex: none;
+  white-space: nowrap;
 }
 .reading-option-toggle > div {
   display: grid;
@@ -173,12 +165,10 @@
 .reading-focus-start {
   justify-self: start;
 }
-@media (max-width: 560px) {
-  .reading-base-group,
+@container (max-width: 420px) {
   .reading-settings-group {
     padding-inline: 12px;
   }
-  .reading-base-group > label,
   .reading-settings-group > label,
   .reading-spacing > label {
     grid-template-columns: minmax(0, 1fr);

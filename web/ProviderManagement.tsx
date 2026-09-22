@@ -1,3 +1,4 @@
+import { compareModelDisplayOrder } from '../core/model-order.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import {
   JEV_PROVIDER_DEFINITION,
@@ -265,11 +266,7 @@ export function ConnectionEditor({
       library.connections.find((c) => c.id === item.connectionId)?.title
     )
   );
-  const compareModelOrder = (a: ModelPreset, b: ModelPreset) =>
-    (a.displayOrder ?? Number.MAX_SAFE_INTEGER) - (b.displayOrder ?? Number.MAX_SAFE_INTEGER) ||
-    a.title.localeCompare(b.title, 'ko') ||
-    a.id.localeCompare(b.id);
-  const orderedModels = [...models].sort(compareModelOrder);
+  const orderedModels = [...models].sort(compareModelDisplayOrder);
   const modelGroups: { connection?: Connection; models: ModelPreset[] }[] = library.connections
     .map((connection) => ({
       connection,
@@ -405,7 +402,7 @@ export function ConnectionEditor({
     }
     const next = {
       ...modelDraft(item),
-      ...(copy ? { title: item.title + ' 복사', displayOrder: undefined } : {}),
+      ...(copy ? { title: item.title + ' 복사' } : {}),
     };
     setModel(next);
     setModelBaseline(JSON.stringify(next));
@@ -505,23 +502,8 @@ export function ConnectionEditor({
     );
   }
   function reorderModel(item: ModelPreset, direction: -1 | 1) {
-    const group = library.models
-      .filter((candidate) => candidate.connectionId === item.connectionId)
-      .sort(compareModelOrder);
-    const index = group.findIndex((candidate) => candidate.id === item.id);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= group.length) return;
-    [group[index], group[target]] = [group[target]!, group[index]!];
     void perform(async () => {
-      for (const [order, candidate] of group.entries()) {
-        const displayOrder = order * 100;
-        if (candidate.displayOrder === displayOrder) continue;
-        await api<ModelPreset>(
-          `/model-presets/${candidate.id}`,
-          editableModelBody(candidate, { displayOrder }),
-          'PUT'
-        );
-      }
+      await api(`/model-presets/${item.id}/move`, { direction: direction === -1 ? 'up' : 'down' });
       setMessage('모델 표시 순서를 저장했어요.');
     });
   }
@@ -639,14 +621,8 @@ export function ConnectionEditor({
       );
       return false;
     }
-    const siblingOrder = library.models
-      .filter((item) => item.connectionId === chosen.id && item.id !== editingModel?.id)
-      .map((item, index) => item.displayOrder ?? index * 100);
     const body = {
       ...modelPayload(model, chosen),
-      ...(!editingModel && model.displayOrder === undefined
-        ? { displayOrder: (siblingOrder.length ? Math.max(...siblingOrder) : -100) + 100 }
-        : {}),
       ...(editingModel ? { expectedRevision: editingModel.revision } : {}),
     };
     return perform(() => saveModel(body, editingModel?.id, true, leave), 'model');
@@ -1155,6 +1131,7 @@ export function ConnectionEditor({
                   if (filter) return;
                   const open = event.currentTarget.open;
                   setCollapsedModelGroups((current) => {
+                    if (current.has(groupKey) === !open) return current;
                     const next = new Set(current);
                     if (open) next.delete(groupKey);
                     else next.add(groupKey);
@@ -1643,7 +1620,7 @@ export function ConnectionEditor({
               onChoose={(item) =>
                 setModel((current) => {
                   // Picking from the list is an explicit choice: published limits prefill and stay editable.
-                  const selected = updateModelId(current, chosen, item.id);
+                  const selected = updateModelId(current, item.id);
                   const hints = chosen
                     ? modelHints(chosen, item.id, selected.modelFamily)
                     : undefined;

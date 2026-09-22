@@ -36,21 +36,51 @@ test('SCUI04 recovery settings expose real build information and grouped data at
     await page.goto('/');
     await navigationAction(page, '설정');
     const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-    for (const section of ['일반', '데이터 관리', 'Codex 연결', '앱 정보·라이선스']) {
+    for (const section of [
+      '일반',
+      '테마·색상',
+      '로어 문맥',
+      '데이터 관리',
+      'Codex 연결',
+      '앱 정보·라이선스',
+    ]) {
       await selectSettingsSection(page, section);
       const pane = dialog.getByRole('tabpanel');
       if (section === '일반') {
         await expect(pane.getByLabel('앱 화면 테마')).toBeVisible();
-      } else if (section === '데이터 관리') {
+      } else if (section === '테마·색상') {
+        const controls = pane.locator('.theme-control-bar select');
+        await expect(controls).toHaveCount(3);
+        const sizes = await controls.evaluateAll((nodes) =>
+          nodes.map((node) => {
+            const box = node.getBoundingClientRect();
+            return { width: box.width, height: box.height };
+          })
+        );
+        for (const size of sizes) {
+          expect(Math.abs(size.width - sizes[0].width)).toBeLessThan(2);
+          expect(Math.abs(size.height - sizes[0].height)).toBeLessThan(2);
+        }
         await expect(
-          pane.getByRole('heading', { name: '작업실 전체 백업', exact: true })
+          pane.getByRole('button', { name: '새 커스텀 테마', exact: true })
         ).toBeVisible();
+      } else if (section === '로어 문맥') {
+        await expect(pane.getByRole('heading', { name: '로어 사용', exact: true })).toBeVisible();
+        await expect(pane.locator('fieldset.control-grid')).toBeVisible();
+      } else if (section === '데이터 관리') {
+        await expect(pane.getByRole('heading', { name: '백업 · 복원', exact: true })).toBeVisible();
         await expect(
           pane.getByRole('button', { name: 'DB 스냅샷 다운로드', exact: true })
         ).toBeVisible();
         const restore = pane
           .locator('details')
-          .filter({ has: page.locator('summary', { hasText: 'DB 스냅샷으로 복원하기' }) });
+          .filter({ has: page.locator('summary', { hasText: '전체 복원 방법' }) });
+        await expect(
+          pane.getByRole('heading', { name: '자료 가져오기', exact: true })
+        ).toBeVisible();
+        await expect(
+          pane.getByRole('heading', { name: '채팅 가져오기', exact: true })
+        ).toBeVisible();
         await expect(restore).not.toHaveAttribute('open', '');
         await restore.locator('summary').click();
         await expect(restore).toContainText('서버를 종료하고');

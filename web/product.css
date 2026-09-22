@@ -41,14 +41,20 @@
 .editor-grid label {
   min-width: 0;
 }
+.settings-card,
+.control-grid {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.settings-card {
+  background: var(--panel);
+}
 .control-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  min-width: 0;
   margin: 0;
 }
 /* A group inside a group is a label, not a second card. Only the outer one draws a box. */

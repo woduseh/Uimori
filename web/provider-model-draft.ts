@@ -1,12 +1,9 @@
 import type { Connection, ModelFamily, ModelPreset, VertexRequestTier } from '../core/product.js';
-import {
-  defaultModelFamily,
-  effectiveModelFamily,
-  inferModelFamily,
-} from '../core/model-family.js';
+import { effectiveModelFamily, modelFamilyOptionKeys } from '../core/model-family.js';
 import type { ModelPricing, TokenRates } from '../core/pricing-types.js';
 import { validateModelPricing } from '../core/model-pricing.js';
 import {
+  GENERATION_KEYS,
   generationFromModel,
   modelCapability,
   validateModelOptions,
@@ -75,7 +72,6 @@ export type ModelDraft = {
   connectionRef: string;
   modelId: string;
   modelFamily: ModelFamily | '';
-  displayOrder?: number;
   maxOutputTokens: string;
   inputTokenLimit: string;
   temperature: string;
@@ -105,7 +101,6 @@ export const initialModel = (): ModelDraft => ({
   connectionRef: '',
   modelId: '',
   modelFamily: '',
-  displayOrder: undefined,
   maxOutputTokens: '8192',
   inputTokenLimit: '',
   temperature: '',
@@ -139,7 +134,6 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     connectionRef: value.connectionId,
     modelId: value.modelId,
     modelFamily: value.modelFamily ?? '',
-    displayOrder: value.displayOrder,
     maxOutputTokens: String(value.maxOutputTokens),
     inputTokenLimit: value.inputTokenLimit === undefined ? '' : String(value.inputTokenLimit),
     temperature: value.temperature === null ? '' : String(value.temperature),
@@ -172,59 +166,47 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     pricing: pricingDraft(value.pricing),
   };
 }
+/** Switching an option profile clears only controls the new profile cannot represent. */
+function supportedDraft(draft: ModelDraft, connection: Connection): ModelDraft {
+  const family = effectiveModelFamily(connection.protocol, draft.modelId, draft.modelFamily);
+  const keys = modelFamilyOptionKeys(connection.protocol, family);
+  const defaults = initialModel();
+  const next = { ...draft };
+  for (const key of GENERATION_KEYS) {
+    if (key === 'modelFamily' || key === 'maxOutputTokens' || !(key in next) || keys.includes(key))
+      continue;
+    Object.assign(next, { [key]: defaults[key as keyof ModelDraft] });
+  }
+  if (connection.protocol !== 'vercel-chat-v1') next.providerOptions = '';
+  return next;
+}
 export function selectModelConnection(draft: ModelDraft, connection: Connection): ModelDraft {
-  // A direct provider supplies the natural family default. Gateways wait for the model ID or user choice.
-  return {
-    ...draft,
-    connectionRef: connection.id,
-    modelId: '',
-    modelFamily: defaultModelFamily(connection.protocol) ?? '',
-    thinkingLevel: '',
-    reasoningEffort: '',
-    outputEffort: '',
-    thinkingMode: '',
-    verbosity: '',
-  };
+  return supportedDraft(
+    { ...draft, connectionRef: connection.id, modelId: '', modelFamily: '' },
+    connection
+  );
 }
-export function selectModelFamily(draft: ModelDraft, modelFamily: ModelFamily): ModelDraft {
-  if (draft.modelFamily === modelFamily) return draft;
-  return {
-    ...draft,
-    modelFamily,
-    thinkingLevel: '',
-    reasoningEffort: '',
-    outputEffort: '',
-    thinkingMode: '',
-    verbosity: '',
-  };
-}
-export function updateModelId(
+export function selectModelFamily(
   draft: ModelDraft,
-  connection: Connection | undefined,
-  modelId: string
+  modelFamily: ModelFamily | '',
+  connection: Connection
 ): ModelDraft {
-  if (!connection) return { ...draft, modelId };
-  const before = inferModelFamily(connection.protocol, draft.modelId);
-  const after = inferModelFamily(connection.protocol, modelId);
-  const shouldFollowInference = !draft.modelFamily || draft.modelFamily === before;
-  return {
-    ...draft,
-    modelId,
-    ...(shouldFollowInference && after ? { modelFamily: after } : {}),
-  };
+  return supportedDraft({ ...draft, modelFamily }, connection);
+}
+export function updateModelId(draft: ModelDraft, modelId: string): ModelDraft {
+  // Empty family means automatic; an explicit choice always wins, even when it matches the old ID.
+  return { ...draft, modelId };
 }
 export function modelPayload(draft: ModelDraft, connection: Connection) {
   const providerOptions =
     connection.protocol === 'vercel-chat-v1'
       ? parseProviderOptionsText(draft.providerOptions)
       : undefined;
-  const modelFamily = effectiveModelFamily(connection.protocol, draft.modelId, draft.modelFamily);
   return {
     title: draft.title,
     connectionId: connection.id,
     modelId: draft.modelId,
-    ...(modelFamily ? { modelFamily } : {}),
-    ...(draft.displayOrder !== undefined ? { displayOrder: draft.displayOrder } : {}),
+    ...(draft.modelFamily ? { modelFamily: draft.modelFamily } : {}),
     maxOutputTokens: Number(draft.maxOutputTokens),
     ...(draft.inputTokenLimit !== '' ? { inputTokenLimit: Number(draft.inputTokenLimit) } : {}),
     temperature: draft.temperature === '' ? null : Number(draft.temperature),
@@ -274,7 +256,7 @@ export function providerOptionsDraftError(draft: ModelDraft, connection: Connect
       case 'PROVIDER_OPTIONS_TOO_LARGE':
         return `providerOptions가 너무 커요. ${PROVIDER_OPTIONS_MAX_CHARS.toLocaleString()}자 이하로 줄여 주세요.`;
       case 'PROVIDER_OPTIONS_SENSITIVE_FIELD':
-        return 'providerOptions에 API 키·토큰·비밀값을 넣지 마세요. 프로바이더 인증은 서버 환경변수로 설정해 주세요.';
+        return 'providerOptions에 API 키·토큰·비밀값을 넣지 마세요. 프로바이더의 API 키 입력란을 사용해 주세요.';
       default:
         return 'providerOptions JSON을 확인해 주세요.';
     }
@@ -299,11 +281,6 @@ export function modelDraftError(
 ): string {
   const providerError = providerOptionsDraftError(draft, connection);
   if (providerError) return providerError;
-  if (
-    connection.protocol !== 'fixture-sse-v1' &&
-    !effectiveModelFamily(connection.protocol, draft.modelId, draft.modelFamily)
-  )
-    return '모델 계열을 선택해 주세요.';
   try {
     validateModelPricing(pricingPayload(draft.pricing));
     if (!draft.maxOutputTokens.trim()) return '최대 출력 토큰을 입력해 주세요.';

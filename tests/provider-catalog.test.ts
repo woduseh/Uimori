@@ -253,3 +253,35 @@ test('Gemini Developer API list entries keep generation models only, drop the mo
   ])
     expect(geminiListEntry(raw)).toBeUndefined();
 });
+
+test('unknown family templates do not fabricate verified values or narrow Grok reasoning vocabulary', () => {
+  const hints = modelHints(connection('vercel-chat-v1'), 'vendor/new-model', 'xai');
+  expect(hints.source).toBe('none');
+  expect(hints.thinking?.known).toBeUndefined();
+  expect(hints.thinking?.all).toContain('xhigh');
+  expect(modelHints(connection('vercel-chat-v1'), 'unknown/new').thinking?.field).toBe(
+    'reasoningEffort'
+  );
+});
+
+test('gateway common effort hints do not claim native Claude or Gemini option support', () => {
+  const gateway = connection('vercel-chat-v1', [
+    {
+      id: 'vendor/new-model',
+      name: 'New model',
+      capabilities: {},
+      priceRevision: null,
+      options: { thinking: ['low', 'high'] },
+    },
+  ]);
+  expect(modelHints(gateway, 'vendor/new-model').thinking?.known).toEqual(['low', 'high']);
+  expect(modelHints(gateway, 'vendor/new-model', 'anthropic').thinking).toMatchObject({
+    field: 'outputEffort',
+    known: undefined,
+  });
+  expect(modelHints(gateway, 'vendor/new-model', 'google').thinking).toMatchObject({
+    field: 'thinkingLevel',
+    known: undefined,
+    all: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'],
+  });
+});

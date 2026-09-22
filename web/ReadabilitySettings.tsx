@@ -7,7 +7,6 @@ import {
   type QuoteRole,
 } from './reading-preferences.js';
 import './reading.css';
-import './recovery-settings.css';
 
 const previewText =
   '그녀는 문 앞에서 돌아섰다. “정말 같이 갈 거야?” 나는 고개를 끄덕였다. ‘이번에는 도망치지 않겠어.’\n\n「그럼 출발하자.」 그녀는 『별의 기록』을 가방에 넣었다.';
@@ -47,10 +46,9 @@ export function ReadabilitySettings({
 }) {
   return (
     <section className="reading-settings" aria-label="읽기 스타일 설정">
-      <section className="reading-settings-group" aria-labelledby="reading-style-heading">
+      <section className="settings-card reading-settings-group" aria-label="스타일과 간격">
         <header className="reading-settings-group-heading">
-          <h4 id="reading-style-heading">읽기 스타일</h4>
-          <p>본문의 강조와 여백을 한 번에 조절해요.</p>
+          <h4>읽기 스타일</h4>
         </header>
         <label>
           스타일
@@ -125,10 +123,10 @@ export function ReadabilitySettings({
         </div>
       </section>
 
-      <section className="reading-settings-group" aria-labelledby="reading-support-heading">
+      <section className="settings-card reading-settings-group" aria-label="보조 표시">
         <header className="reading-settings-group-heading">
-          <h4 id="reading-support-heading">보조 표시</h4>
-          <p>대사와 생각을 본문에서 더 쉽게 구분해요.</p>
+          <h4>보조 표시</h4>
+          <p>대사·생각 앞뒤에 문단 여백을 넣어요. 원문은 바뀌지 않아요.</p>
         </header>
         <div className="reading-toggles">
           <label className="check">
@@ -175,12 +173,11 @@ export function ReadabilitySettings({
       </section>
 
       <section
-        className="reading-settings-group reading-preview-group"
-        aria-labelledby="reading-preview-heading"
+        className="settings-card reading-settings-group reading-preview-group"
+        aria-label="미리보기"
       >
         <header className="reading-settings-group-heading">
-          <h4 id="reading-preview-heading">미리보기</h4>
-          <p>현재 설정을 예문에 바로 반영해요.</p>
+          <h4>미리보기</h4>
         </header>
         <div className="reading-preview" aria-label="읽기 스타일 미리보기">
           <div className="prose" data-testid="reading-preview">

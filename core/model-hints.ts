@@ -1,9 +1,5 @@
 import type { Connection, ModelFamily, ProviderProtocol } from './product.js';
-import {
-  effectiveModelFamily,
-  modelFamilyProfile,
-  type ModelFamilyProfile,
-} from './model-family.js';
+import { effectiveModelFamily, modelFamilyProfile } from './model-family.js';
 import {
   modelCapability,
   PROTOCOL_OPTION_VALUES,
@@ -33,9 +29,9 @@ export type ModelHints = {
   };
   thinkingModes?: { known?: readonly string[]; all: readonly string[] };
   family?: ModelFamily;
-  profile?: ModelFamilyProfile;
 };
 export function thinkingField(protocol: ProviderProtocol): ThinkingField | undefined {
+  if (protocol === 'vercel-chat-v1') return 'reasoningEffort';
   const keys = protocolOptionKeys(protocol);
   return keys.includes('thinkingLevel')
     ? 'thinkingLevel'
@@ -79,7 +75,12 @@ export function modelHints(
   const listed = connection.catalog.find((item) => item.id === modelId);
   const fromList = listed?.limits !== undefined || listed?.options !== undefined;
   const protocolField = thinkingField(connection.protocol);
-  const field = connection.protocol === 'vercel-chat-v1' ? profile?.thinking?.field : protocolField;
+  const field =
+    connection.protocol === 'vercel-chat-v1'
+      ? ((['thinkingLevel', 'outputEffort', 'reasoningEffort'] as const).find((key) =>
+          profile?.optionKeys.includes(key)
+        ) ?? protocolField)
+      : protocolField;
   const reviewedThinking =
     field === 'thinkingLevel'
       ? capability?.thinkingLevels
@@ -107,27 +108,26 @@ export function modelHints(
                     : 'reasoning_effort'
                 : (thinkingWireField(connection.protocol) ?? field),
             gateway: ['vercel-chat-v1', 'openai-chat-v1'].includes(connection.protocol),
+            // A family template is not evidence that a particular model supports every value.
+            // Gateway catalog effort describes its common Chat field, not a native family field.
             known:
-              connection.protocol === 'vercel-chat-v1'
-                ? (reviewedThinking ?? profile?.thinking?.values)
-                : (listed?.options?.thinking ?? reviewedThinking),
-            all: (profile?.thinking?.values ?? PROTOCOL_OPTION_VALUES[field]) as readonly string[],
+              (field === protocolField ? listed?.options?.thinking : undefined) ?? reviewedThinking,
+            all: PROTOCOL_OPTION_VALUES[field],
           },
         }
       : {}),
     ...(protocolOptionKeys(connection.protocol).includes('thinkingMode') &&
-    (connection.protocol !== 'vercel-chat-v1' || profile?.thinkingModes)
+    (connection.protocol !== 'vercel-chat-v1' || profile?.optionKeys.includes('thinkingMode'))
       ? {
           thinkingModes: {
             known:
               connection.protocol === 'vercel-chat-v1'
-                ? profile?.thinkingModes
+                ? capability?.thinkingModes
                 : (listed?.options?.thinkingModes ?? capability?.thinkingModes),
-            all: profile?.thinkingModes ?? PROTOCOL_OPTION_VALUES.thinkingMode,
+            all: PROTOCOL_OPTION_VALUES.thinkingMode,
           },
         }
       : {}),
     ...(family ? { family } : {}),
-    ...(profile ? { profile } : {}),
   };
 }

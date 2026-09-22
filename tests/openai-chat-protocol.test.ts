@@ -188,6 +188,7 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     };
     expect(record(encodeChat(google, 'vercel-chat-v1').body).providerOptions).toEqual({
       google: { thinkingConfig: { thinkingLevel: 'high' } },
+      vertex: { thinkingConfig: { thinkingLevel: 'high' } },
     });
 
     const openai = request();
@@ -203,6 +204,21 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
       reasoning_effort: 'high',
       providerOptions: { openai: { textVerbosity: 'low' } },
     });
+  });
+
+  test('Vercel converts explicitly supplied options even when family metadata is automatic or absent', () => {
+    const input = request();
+    input.modelId = 'future-lab/custom-model';
+    input.generation = {
+      maxOutputTokens: 4096,
+      temperature: null,
+      outputEffort: 'max',
+      thinkingMode: 'adaptive',
+    };
+    expect(record(encodeChat(input, 'vercel-chat-v1').body)).toMatchObject({
+      providerOptions: { anthropic: { effort: 'max', thinking: { type: 'adaptive' } } },
+    });
+    expect(record(encodeChat(input, 'vercel-chat-v1').body)).not.toHaveProperty('modelFamily');
   });
 
   test('Vercel forwards providerOptions and binds it across tool continuation', () => {

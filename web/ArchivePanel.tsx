@@ -30,17 +30,15 @@ export function ArchivePanel({
       aria-label="백업과 가져오기"
     >
       {!expanded && <summary>내보내기와 복원</summary>}
-      <section className="archive-management-card" aria-label="백업과 복원">
-        <div className="archive-card-heading">
-          <div>
-            <h3>백업 · 복원</h3>
-            <p className="muted">작업실 전체 상태를 저장하거나 이전 백업으로 되돌려요.</p>
-          </div>
-        </div>
+      <section className="settings-card archive-management-card" aria-label="백업과 복원">
+        <header className="archive-card-heading">
+          <h3>백업 · 복원</h3>
+          <p className="muted">작업실 전체 상태를 저장하거나 이전 백업으로 되돌려요.</p>
+        </header>
         <div className="archive-action-row">
           <div>
             <strong>작업실 전체 백업</strong>
-            <p className="muted">자료·대화·이미지와 등록된 API 키를 DB 스냅샷으로 저장해요.</p>
+            <p className="muted">자료·대화·이미지와 API 키를 저장해요. 개인 보관용 파일이에요.</p>
           </div>
           <button
             type="button"
@@ -71,10 +69,10 @@ export function ArchivePanel({
           </button>
         </div>
         <details className="archive-restore-details">
-          <summary>작업실 전체 복원</summary>
+          <summary>전체 복원 방법</summary>
           <p className="muted">
-            백업 DB를 UIMORI_DB 경로로 지정해 작업실 전체 상태를 복원해요. 확인 전까지 기존 DB는
-            보관해 주세요.
+            서버를 종료하고 백업 DB를 별도 경로에 둔 뒤 UIMORI_DB에 지정해 다시 시작해요. 복원을
+            확인할 때까지 기존 DB는 보관해 주세요.
           </p>
         </details>
         {error && (

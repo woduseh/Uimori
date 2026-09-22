@@ -117,15 +117,16 @@ export function ChatBackupImport({
     }
   }
   return (
-    <section className="chat-backup-import archive-management-card" aria-label="채팅 가져오기">
-      <div className="archive-card-heading">
-        <div>
-          <h3>채팅 가져오기</h3>
-          <p className="muted" id={`${id}-help`}>
-            채팅 백업 파일을 새 채팅으로 복원해 이어서 사용할 수 있어요.
-          </p>
-        </div>
-      </div>
+    <section
+      className="settings-card chat-backup-import archive-management-card"
+      aria-label="채팅 가져오기"
+    >
+      <header className="archive-card-heading">
+        <h3>채팅 가져오기</h3>
+        <p className="muted" id={`${id}-help`}>
+          채팅 백업 파일을 새 채팅으로 복원해 이어서 사용할 수 있어요.
+        </p>
+      </header>
       <div className="archive-file-field">
         <label>
           채팅 백업 파일 선택

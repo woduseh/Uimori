@@ -1,3 +1,4 @@
+import { effectiveModelFamily } from '../core/model-family.js';
 import { describe, expect, test } from 'vitest';
 import type { Connection, ModelPreset } from '../core/product.js';
 import {
@@ -63,32 +64,65 @@ describe('model numeric drafts', () => {
     }
   );
 
-  test('defaults direct providers and follows Vercel model-family prefixes without overriding a manual choice', () => {
-    const openai = {
-      ...connection,
-      id: 'openai',
-      protocol: 'openai-responses-v1' as const,
-      endpoint: 'https://api.openai.com/v1',
-    };
-    expect(selectModelConnection(initialModel(), openai).modelFamily).toBe('openai');
-
-    const gateway = selectModelConnection(initialModel(), vercelConnection);
-    expect(gateway.modelFamily).toBe('');
-    const inferred = updateModelId(gateway, vercelConnection, 'anthropic/claude-opus-5.5');
-    expect(inferred.modelFamily).toBe('anthropic');
-    const manual = selectModelFamily(inferred, 'google');
-    expect(updateModelId(manual, vercelConnection, 'openai/gpt-6-sol').modelFamily).toBe('google');
+  test('automatic defaults never overwrite an explicit family, including a choice matching the old prefix', () => {
+    const direct = { ...connection, protocol: 'openai-responses-v1' as const };
+    const draft = selectModelConnection(initialModel(), direct);
+    expect(draft.modelFamily).toBe('');
+    expect(effectiveModelFamily(direct.protocol, draft.modelId, draft.modelFamily)).toBe('openai');
+    const automatic = updateModelId(initialModel(), 'anthropic/future-model');
+    expect(automatic.modelFamily).toBe('');
+    expect(effectiveModelFamily(vercelConnection.protocol, automatic.modelId)).toBe('anthropic');
+    const manual = selectModelFamily(automatic, 'anthropic', vercelConnection);
+    expect(updateModelId(manual, 'openai/future-model').modelFamily).toBe('anthropic');
+    expect(selectModelFamily(manual, '', vercelConnection).modelFamily).toBe('');
   });
 
-  test('requires a family for an unknown gateway model and persists an explicit family and display order', () => {
-    const unknown = { ...initialModel(), modelId: 'future-lab/model-1' };
-    expect(modelDraftError(unknown, vercelConnection)).toBe('모델 계열을 선택해 주세요.');
-    const configured = { ...unknown, modelFamily: 'xai' as const, displayOrder: 200 };
-    expect(modelDraftError(configured, vercelConnection)).toBe('');
-    expect(modelPayload(configured, vercelConnection)).toMatchObject({
-      modelFamily: 'xai',
-      displayOrder: 200,
+  test('an unknown gateway family can save common options without impersonating a known maker', () => {
+    const unknown = { ...initialModel(), modelId: 'future-lab/model-1', topP: '0.8' };
+    expect(modelDraftError(unknown, vercelConnection)).toBe('');
+    expect(modelPayload(unknown, vercelConnection)).toMatchObject({ topP: 0.8 });
+    expect(modelPayload(unknown, vercelConnection)).not.toHaveProperty('modelFamily');
+    expect(modelPayload({ ...unknown, modelFamily: 'xai' }, vercelConnection)).toHaveProperty(
+      'modelFamily',
+      'xai'
+    );
+  });
+
+  test('changing family clears unavailable generation fields but keeps shared values', () => {
+    const before = {
+      ...initialModel(),
+      modelFamily: 'openai' as const,
+      modelId: 'custom',
+      maxOutputTokens: '16000',
+      temperature: '0.3',
+      topP: '0.7',
+      reasoningEffort: 'high',
+      reasoningMode: 'standard',
+      reasoningContext: 'auto',
+      verbosity: 'low',
+      cacheMode: 'automatic',
+      cacheTtl: '30m',
+    };
+    const after = selectModelFamily(before, 'google', vercelConnection);
+    expect(after).toMatchObject({
+      modelFamily: 'google',
+      maxOutputTokens: '16000',
+      temperature: '0.3',
+      topP: '0.7',
+      reasoningEffort: '',
+      reasoningMode: '',
+      reasoningContext: '',
+      verbosity: '',
+      cacheMode: '',
+      cacheTtl: '',
     });
+    expect(modelDraftError(after, vercelConnection)).toBe('');
+    const same = selectModelFamily(
+      { ...initialModel(), reasoningEffort: 'high' },
+      'openai',
+      vercelConnection
+    );
+    expect(same.reasoningEffort).toBe('high');
   });
 
   test('keeps Vercel providerOptions as JSON and leaves it out of other protocols', () => {

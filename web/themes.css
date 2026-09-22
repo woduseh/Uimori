@@ -1,4 +1,5 @@
 .theme-settings {
+  container-type: inline-size;
   display: grid;
   gap: 20px;
   min-width: 0;
@@ -6,21 +7,6 @@
 .theme-settings h3,
 .theme-settings p {
   margin-bottom: 0;
-}
-.theme-intro {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  padding-block: 4px 8px;
-}
-.theme-intro > svg {
-  flex: none;
-  margin-top: 4px;
-  color: var(--accent);
-}
-.theme-intro p {
-  color: var(--muted);
-  margin-top: 6px;
 }
 .theme-toolbar {
   display: flex;
@@ -50,6 +36,8 @@
   gap: 14px;
 }
 .theme-card {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--line);
   border-radius: 14px;
   overflow: hidden;
@@ -61,6 +49,8 @@
   outline-offset: 2px;
 }
 .theme-card-apply {
+  flex: 1;
+  align-content: start;
   width: 100%;
   text-align: left;
   border: 0;
@@ -244,20 +234,20 @@
 }
 
 .theme-control-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-raised);
 }
 .theme-control-bar > label {
-  min-width: min(100%, 150px);
+  min-width: 0;
 }
 .theme-control-bar > label > select {
-  min-width: 150px;
+  min-width: 0;
+  width: 100%;
 }
 .theme-library-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
@@ -266,6 +256,7 @@
   border-bottom: 1px solid var(--line);
 }
 .theme-library-copy {
+  flex: 1 1 240px;
   min-width: 0;
 }
 .theme-library-copy h4,
@@ -279,6 +270,7 @@
 }
 .theme-library-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   flex: none;
@@ -300,7 +292,25 @@
     align-items: stretch;
     flex-direction: column;
   }
+  .theme-library-copy {
+    flex-basis: auto;
+  }
   .theme-library-actions {
     flex-wrap: wrap;
+  }
+}
+
+.theme-control-bar > .theme-current,
+.theme-control-bar > button {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin: 0;
+}
+@container (max-width: 440px) {
+  .theme-control-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .theme-library-actions > button {
+    flex: 1;
   }
 }

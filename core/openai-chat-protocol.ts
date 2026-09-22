@@ -29,23 +29,26 @@ function vercelProviderOptions(request: ProviderRequest): Json | undefined {
     // Explicit JSON stays authoritative over profile-derived defaults.
     base[name] = current ? { ...automatic, ...current } : automatic;
   };
-  if (generation?.modelFamily === 'openai') {
+  if (generation) {
     mergeNamespace('openai', {
       ...(generation.verbosity !== undefined ? { textVerbosity: generation.verbosity } : {}),
     });
-  } else if (generation?.modelFamily === 'anthropic') {
+
     mergeNamespace('anthropic', {
       ...(generation.outputEffort !== undefined ? { effort: generation.outputEffort } : {}),
       ...(generation.thinkingMode !== undefined
         ? { thinking: { type: generation.thinkingMode } }
         : {}),
     });
-  } else if (generation?.modelFamily === 'google') {
-    mergeNamespace('google', {
-      ...(generation.thinkingLevel !== undefined
-        ? { thinkingConfig: { thinkingLevel: generation.thinkingLevel.toLowerCase() } }
-        : {}),
-    });
+
+    if (generation.thinkingLevel !== undefined) {
+      // Gemini may be served through either backend; both use the same native option shape.
+      for (const provider of ['google', 'vertex']) {
+        mergeNamespace(provider, {
+          thinkingConfig: { thinkingLevel: generation.thinkingLevel.toLowerCase() },
+        });
+      }
+    }
   }
   return Object.keys(base).length ? base : undefined;
 }

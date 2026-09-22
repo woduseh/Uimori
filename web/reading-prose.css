@@ -34,3 +34,8 @@
 .reading-quote-break-after::after {
   margin-block-end: var(--reading-paragraph-gap, 1.35em);
 }
+/* The inserted paragraph boundary replaces an adjacent authored line break.
+   Keep the BR in the DOM so turning the reading option off restores the original. */
+.reading-quote-break-after + br {
+  display: none;
+}

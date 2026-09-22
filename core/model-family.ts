@@ -1,41 +1,20 @@
-import type { ModelFamily, ModelGeneration, ProviderProtocol } from './product.js';
-
-export const MODEL_FAMILY_CHOICES: readonly {
-  id: ModelFamily;
-  label: string;
-  description: string;
-}[] = [
-  { id: 'openai', label: 'OpenAI · GPT', description: 'GPT 계열의 추론·출력 옵션을 사용해요.' },
-  {
-    id: 'anthropic',
-    label: 'Anthropic · Claude',
-    description: 'Claude 계열의 effort·thinking 옵션을 사용해요.',
-  },
-  {
-    id: 'google',
-    label: 'Google · Gemini',
-    description: 'Gemini 계열의 thinking level 옵션을 사용해요.',
-  },
-  { id: 'deepseek', label: 'DeepSeek', description: 'DeepSeek 계열의 사고 강도 옵션을 사용해요.' },
-  { id: 'xai', label: 'xAI · Grok', description: 'Grok 계열의 추론 옵션을 사용해요.' },
-] as const;
+import {
+  MODEL_FAMILIES,
+  type ModelFamily,
+  type ModelGeneration,
+  type ProviderProtocol,
+} from './product.js';
+import { providerDefinition } from './provider-definitions.js';
 
 type GenerationKey = keyof ModelGeneration;
 export type ModelFamilyProfile = Readonly<{
-  id: ModelFamily;
   label: string;
   optionKeys: readonly GenerationKey[];
-  thinking?: {
-    field: 'thinkingLevel' | 'reasoningEffort' | 'outputEffort';
-    values: readonly string[];
-  };
-  thinkingModes?: readonly NonNullable<ModelGeneration['thinkingMode']>[];
 }>;
 
 const common = ['maxOutputTokens', 'temperature', 'structuredOutput', 'serviceTier'] as const;
 const profiles: Record<ModelFamily, ModelFamilyProfile> = {
   openai: {
-    id: 'openai',
     label: 'OpenAI · GPT',
     optionKeys: [
       ...common,
@@ -48,13 +27,8 @@ const profiles: Record<ModelFamily, ModelFamilyProfile> = {
       'cacheMode',
       'cacheTtl',
     ],
-    thinking: {
-      field: 'reasoningEffort',
-      values: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
-    },
   },
   anthropic: {
-    id: 'anthropic',
     label: 'Anthropic · Claude',
     optionKeys: [
       ...common,
@@ -65,31 +39,22 @@ const profiles: Record<ModelFamily, ModelFamilyProfile> = {
       'cacheMode',
       'cacheTtl',
     ],
-    thinking: { field: 'outputEffort', values: ['low', 'medium', 'high', 'xhigh', 'max'] },
-    thinkingModes: ['disabled', 'adaptive'],
   },
   google: {
-    id: 'google',
     label: 'Google · Gemini',
     optionKeys: [...common, 'thinkingLevel', 'topP', 'stopSequences'],
-    thinking: { field: 'thinkingLevel', values: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'] },
   },
   deepseek: {
-    id: 'deepseek',
     label: 'DeepSeek',
     optionKeys: [...common, 'reasoningEffort', 'topP', 'stopSequences'],
-    thinking: {
-      field: 'reasoningEffort',
-      values: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
-    },
   },
   xai: {
-    id: 'xai',
     label: 'xAI · Grok',
     optionKeys: [...common, 'reasoningEffort', 'topP', 'stopSequences'],
-    thinking: { field: 'reasoningEffort', values: ['low', 'medium', 'high'] },
   },
 };
+
+export const MODEL_FAMILY_CHOICES = MODEL_FAMILIES.map((id) => ({ id, label: profiles[id].label }));
 
 export function modelFamilyProfile(family: ModelFamily): ModelFamilyProfile {
   return profiles[family];
@@ -132,5 +97,19 @@ export function effectiveModelFamily(
   modelId: string,
   selected?: ModelFamily | ''
 ): ModelFamily | undefined {
-  return selected || inferModelFamily(protocol, modelId) || defaultModelFamily(protocol);
+  return selected || inferModelFamily(protocol, modelId);
+}
+
+/** UI choices, not an API allowlist. Direct adapters keep their actual wire vocabulary. */
+export function modelFamilyOptionKeys(
+  protocol: ProviderProtocol,
+  family?: ModelFamily
+): readonly string[] {
+  const keys = providerDefinition(protocol).optionKeys;
+  if (protocol !== 'vercel-chat-v1') return keys;
+  return family
+    ? keys.filter((key) => profiles[family].optionKeys.includes(key as GenerationKey))
+    : keys.filter(
+        (key) => !['outputEffort', 'thinkingMode', 'thinkingLevel', 'verbosity'].includes(key)
+      );
 }

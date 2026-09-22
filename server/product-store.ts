@@ -1,3 +1,4 @@
+import { compareModelDisplayOrder } from '../core/model-order.js';
 import { encodedImage, storeImage } from './image-storage.js';
 import { prepareConnection, saveConnection } from './provider-connections.js';
 import { recordContentProfileEvents } from './content-profile-events.js';
@@ -480,8 +481,10 @@ export class ProductStore {
       'expectedRevision',
     ]);
     const expectedRevision = id ? number(b.expectedRevision, 'revision') : undefined;
-    if (id && this.get<ModelPreset>('model', id).revision !== expectedRevision)
+    const current = id ? this.get<ModelPreset>('model', id) : undefined;
+    if (current && current.revision !== expectedRevision)
       throw new HttpError(409, 'Revision conflict');
+    const displayOrder = current ? current.displayOrder : b.displayOrder;
     const connectionId = text(b.connectionId, 'connection ID', 100);
     if (validationConnection && validationConnection.id !== connectionId)
       throw new HttpError(400, 'Validation connection mismatch');
@@ -507,8 +510,8 @@ export class ProductStore {
         ? { providerOptions: structuredClone(b.providerOptions) }
         : {}),
       ...(b.enabled !== undefined ? { enabled: boolean(b.enabled) } : {}),
-      ...(b.displayOrder !== undefined
-        ? { displayOrder: number(b.displayOrder, 'model display order', 0, 1_000_000_000) }
+      ...(displayOrder !== undefined
+        ? { displayOrder: number(displayOrder, 'model display order', 0) }
         : {}),
       ...(b.pricing !== undefined ? { pricing: modelPricing(b.pricing) } : {}),
       source: {
@@ -522,13 +525,37 @@ export class ProductStore {
     const prepared = this.prepareModel(value, id);
     return this.save('model', prepared.value, id, prepared.expectedRevision);
   }
+  /** Presentation-only ordering must not revise model generation settings or credentials. */
+  moveModel(id: string, value: unknown) {
+    const body = record(value);
+    const direction = choice(body.direction, ['up', 'down'], 'model move direction');
+    return this.store.transaction(() => {
+      const model = this.get<ModelPreset>('model', id);
+      const group = (this.all('model') as ModelPreset[])
+        .filter((item) => item.connectionId === model.connectionId)
+        .sort(compareModelDisplayOrder);
+      const index = group.findIndex((item) => item.id === id);
+      const target = index + (direction === 'up' ? -1 : 1);
+      if (index < 0 || target < 0 || target >= group.length) return { moved: false };
+      [group[index], group[target]] = [group[target]!, group[index]!];
+      const update = this.db.prepare(
+        "UPDATE provider_settings SET body=json_set(body, '$.displayOrder', ?) WHERE kind='model' AND id=?"
+      );
+      group.forEach((item, order) => {
+        if (item.displayOrder !== order) update.run(order, item.id);
+      });
+      return { moved: true };
+    });
+  }
   modelSnapshot(id: string, role?: string, authorize = true): ModelSnapshot {
     try {
       this.assertAvailable('model', id);
       // New executions use the current contract; stored settings and historical snapshots stay intact.
-      const { capabilityRevision: _retiredRevision, ...model } = this.get<
-        ModelPreset & { capabilityRevision?: unknown }
-      >('model', id);
+      const {
+        capabilityRevision: _retiredRevision,
+        displayOrder: _displayOrder,
+        ...model
+      } = this.get<ModelPreset & { capabilityRevision?: unknown }>('model', id);
       if (authorize && model.enabled === false) throw new HttpError(403, 'Model disabled');
       this.assertAvailable('connection', model.connectionId);
       const connection = this.get<Connection>('connection', model.connectionId);

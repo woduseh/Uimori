@@ -417,7 +417,8 @@ test('READUI02 helper answers, independent scenes and public streams share readi
         await expect(quotes(text, 'dialogue').first()).toHaveAttribute('data-emphasis', 'subtle');
       }
       expect((await answer.textContent())?.trimEnd()).toBe(helperAnswerText);
-      expect(Math.abs((await answer.boundingBox())!.height - answerHeight)).toBeLessThan(1);
+      // Even authored single-newline dialogue gains paragraph space with this option enabled.
+      expect((await answer.boundingBox())!.height).toBeGreaterThan(answerHeight);
       expect(await card.locator('.helper-prose').textContent()).toBe(artifactText);
       expect(await stream.textContent()).toBe(streamText);
       await expect(panel.getByTestId('source-request')).toHaveCount(2);
@@ -456,6 +457,7 @@ test('READUI02 helper answers, independent scenes and public streams share readi
       await openHelper(page);
       await expect(panel.locator('.reading-quote-break')).toHaveCount(0);
       await expect(answer).toHaveText(helperAnswerText);
+      expect(Math.abs((await answer.boundingBox())!.height - answerHeight)).toBeLessThan(1);
       await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
     }
     const after = await detail(request, before.chat.id);
@@ -470,4 +472,66 @@ test('READUI02 helper answers, independent scenes and public streams share readi
     await page.goto('about:blank');
     await page.unrouteAll({ behavior: 'wait' });
   }
+});
+
+test('READUI03 inline, single-newline and paragraph quotes share one visual gap without modifying saved text', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await seed(request);
+  const source = chat.sources[0];
+  const text =
+    '서술 A “대사 A” 서술 뒤 A\n\n서술 B\n“대사 B”\n서술 뒤 B\n\n서술 C\n\n“대사 C”\n\n서술 뒤 C\n\n서술 D ‘생각 D’ 서술 뒤 D';
+  const response = await request.put(`/api/sources/${source.id}/text`, {
+    data: { text, expectedRevision: source.editRevision ?? 0 },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await clipboard(page);
+  await page.goto(`/?chat=${chat.chat.id}`);
+  const article = page.getByTestId('source');
+  const prose = article.getByTestId('source-text').locator('.risu-chat-text');
+  await expect(prose).toContainText('대사 A');
+  const original = await prose.textContent();
+  for (const width of [1440, 360]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const settings = await readingDialog(page);
+    await settings.getByLabel('읽기 스타일', { exact: true }).selectOption('dialogue');
+    await settings.getByLabel('생각 줄바꿈', { exact: true }).check();
+    await settings.getByLabel('문단 간격', { exact: true }).selectOption('1');
+    await fits(page, settings);
+    await settings.locator('.dialog-body').evaluate((node) => {
+      node.scrollTop = 0;
+    });
+    await settings.screenshot({ path: info.outputPath(`reading-settings-${width}.png`) });
+    await closeDialog(page, settings);
+    await waitForNativeLayout(article.getByTestId('source-text'));
+    const distances = await prose.evaluate((node) => {
+      const top = (text: string) => {
+        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          const part = walker.currentNode as Text;
+          const index = part.data.indexOf(text);
+          if (index < 0) continue;
+          const range = document.createRange();
+          range.setStart(part, index);
+          range.setEnd(part, index + text.length);
+          return range.getBoundingClientRect().top;
+        }
+        throw new Error(`Missing visible text ${text}`);
+      };
+      return ['A', 'B', 'C', 'D'].map((id) => {
+        const quote = (id === 'D' ? '생각 ' : '대사 ') + id;
+        return [top(quote) - top('서술 ' + id), top('서술 뒤 ' + id) - top(quote)];
+      });
+    });
+    for (const gaps of distances)
+      for (const gap of gaps) expect(Math.abs(gap - distances[2][0])).toBeLessThan(2);
+    expect(await prose.textContent()).toBe(original);
+    await article.screenshot({ path: info.outputPath(`quote-spacing-${width}.png`) });
+  }
+  const stored = (await detail(request, chat.chat.id)).sources.find(
+    (item) => item.id === source.id
+  )!;
+  expect(stored.text).toBe(text);
 });
