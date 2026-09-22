@@ -47,7 +47,7 @@ const content = (title = 'Synthetic', relatedIds: string[] = []) => ({
   relatedIds,
 });
 
-test('removes library visibility while preserving the latest stored resource and enforcing CAS', () => {
+test('removes unreferenced resources physically while enforcing revision conflicts', () => {
   const s = database(),
     a = s.product.content(content()),
     b = s.product.content(content('Keep'));
@@ -60,10 +60,10 @@ test('removes library visibility while preserving the latest stored resource and
     deleted: true,
     id: a.id,
   });
-  expect(s.db.prepare('SELECT * FROM versions WHERE id=?').all(a.id)).toHaveLength(1);
+  expect(s.db.prepare('SELECT * FROM versions WHERE id=?').all(a.id)).toHaveLength(0);
   expect(s.product.all('content').some((item) => item.id === a.id)).toBe(false);
   expect(() => s.product.get('content', a.id, 1)).toThrow('content revision not found');
-  expect(s.product.get('content', a.id)).toEqual(changed);
+  expect(() => s.product.get('content', a.id)).toThrow('content revision not found');
   expect(s.product.get('content', b.id)).toEqual(b);
   expect(() => deleteLibraryItem(s, 'content', a.id, { expectedRevision: 2 })).toThrow('not found');
 });
@@ -79,7 +79,9 @@ test('historical and current content references do not block removing a library 
     blockers: [],
   });
   deleteLibraryItem(s, 'content', module.id, { expectedRevision: 1 });
-  expect(s.db.prepare('SELECT * FROM versions ORDER BY kind,id,revision').all()).toEqual(history);
+  expect(s.db.prepare('SELECT * FROM versions ORDER BY kind,id,revision').all()).toEqual(
+    history.filter((row) => row.id !== module.id)
+  );
   expect(s.product.get<{ revision: number }>('content', owner.id).revision).toBe(2);
 });
 
@@ -97,8 +99,10 @@ test('prompt copies and chat contents survive preset deletion', () => {
   deleteLibraryItem(s, 'prompt-preset', prompt.id, { expectedRevision: 1 });
   deleteLibraryItem(s, 'prompt-combination', combination.id, { expectedRevision: 1 });
   expect(s.product.profile(chat.id)).toEqual(before);
-  expect(s.product.get('prompt-preset', prompt.id, 1)).toEqual(prompt);
-  expect(s.product.get('prompt-combination', combination.id, 1)).toEqual(combination);
+  expect(() => s.product.get('prompt-preset', prompt.id, 1)).toThrow('revision not found');
+  expect(() => s.product.get('prompt-combination', combination.id, 1)).toThrow(
+    'revision not found'
+  );
 });
 
 test('connection deletion revokes future sends and hides dependent models while preserving active diagnostics', () => {

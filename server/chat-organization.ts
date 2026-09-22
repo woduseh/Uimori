@@ -238,31 +238,6 @@ export class ChatOrganizationStore {
     if (bots.size !== 1 || !bots.has(owner.botId))
       throw new HttpError(409, 'A chat cannot replace or remove its owning bot');
   }
-  validateArchive() {
-    if (
-      this.store.db
-        .prepare(
-          'SELECT 1 FROM chats c LEFT JOIN chat_organization o ON o.chat_id=c.id WHERE o.chat_id IS NULL LIMIT 1'
-        )
-        .get()
-    )
-      throw new HttpError(400, 'Missing chat organization');
-    for (const row of this.store.db.prepare('SELECT * FROM chat_folders').all() as Row[]) {
-      this.bot(row.bot_id);
-      text(row.title, 'folder title', 200);
-      number(row.revision, 'folder revision');
-      if (row.default_persona !== null) this.persona(JSON.parse(row.default_persona));
-    }
-    for (const row of this.store.db.prepare('SELECT * FROM chat_organization').all() as Row[]) {
-      this.bot(row.bot_id);
-      number(row.revision, 'organization revision');
-      if (!Number.isSafeInteger(row.sort_position))
-        throw new HttpError(400, 'Invalid chat sort position');
-      if (row.folder_id !== null) this.folder(row.bot_id, row.folder_id);
-      const profile = this.store.product.profile(row.chat_id);
-      this.assertBotAttachments(row.chat_id, profile.packageAttachments);
-    }
-  }
 }
 
 export function chatOrganizationRoutes(

@@ -255,8 +255,7 @@ describe('model-written summary and window switch through the real App and file 
     const current = (await contextApi(app, chatId, 'GET', '/context')) as ContextDetail;
     expect(current.checkpoint!.id).toBe(edited.checkpoint!.id);
     expect(current.checkpoint!.origin).toBe('edit');
-    const candidate = current.checkpoints.find((entry) => entry.origin === 'model')!;
-    expect(candidate).toMatchObject({ activated: false, plan: { summary: workingSummary } });
+    expect(current).not.toHaveProperty('checkpoints');
     const bodies = script([() => complete('다음 장면.')]);
     const next = await terminal(app, (await start(app, chatId, '다음 장면을 써 주세요.')).id);
     expect(next.status, next.error ?? '').toBe('completed');

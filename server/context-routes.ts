@@ -17,7 +17,7 @@ export function contextRoutes(app: FastifyInstance, store: Store, hooks: Context
   const publicJob = ({ snapshot: _snapshot, ...job }: ContextJob) => job;
   const detail = (chatId: string, branchId?: string) => {
     const value = store.context.detail(chatId, branchId);
-    return { ...value, jobs: value.jobs.map(publicJob) };
+    return value;
   };
   app.get<{ Params: { id: string }; Querystring: { branchId?: string } }>(
     '/api/chats/:id/context',
@@ -27,7 +27,7 @@ export function contextRoutes(app: FastifyInstance, store: Store, hooks: Context
     const body = record(request.body),
       snapshot = await hooks.snapshot(request.params.id, body.branchId);
     const value = store.context.edit(request.params.id, body, snapshot);
-    return { ...value, jobs: value.jobs.map(publicJob) };
+    return value;
   });
   app.post<{ Params: { id: string } }>('/api/chats/:id/context/compact', async (request) => {
     const body = record(request.body),
@@ -63,7 +63,7 @@ export function contextRoutes(app: FastifyInstance, store: Store, hooks: Context
   app.get<{ Params: { id: string; jobId: string } }>(
     '/api/chats/:id/context/jobs/:jobId',
     async (request) => {
-      const job = store.context.job(request.params.jobId);
+      const job = store.context.job(request.params.jobId, false);
       if (job.chatId !== request.params.id) throw new HttpError(404, 'Context job not found');
       return publicJob(job);
     }

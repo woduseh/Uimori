@@ -98,7 +98,7 @@ async function assertBounds(page: Page) {
   expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
 }
 
-test('CTXUI01 summary authoring without a Run, edit and restore are durable at both widths', async ({
+test('CTXUI01 summary authoring without a Run, edits replace the current summary durably at both widths', async ({
   page,
   request,
 }, info) => {
@@ -115,17 +115,10 @@ test('CTXUI01 summary authoring without a Run, edit and restore are durable at b
   await expect(panel.getByTestId('context-summary-text')).toHaveText(
     '두 번째 요약: 배가 출발했다.'
   );
-  await panel.locator('.context-history > summary').click();
-  const old = panel
-    .locator('.context-history li')
-    .filter({ hasText: '첫 요약: 항구의 종이 울렸다.' });
-  await old.getByRole('button', { name: '이 요약으로 되돌리기', exact: true }).click();
-  await expect(panel.getByTestId('context-summary-text')).toHaveText(
-    '첫 요약: 항구의 종이 울렸다.'
-  );
+  await expect(panel.locator('.context-history')).toHaveCount(0);
   const saved = await read<Detail>(request, `/chats/${chat.id}/context`);
-  expect(saved.activeRevision).toBe(3);
-  expect(saved.checkpoints).toHaveLength(3);
+  expect(saved.activeRevision).toBe(2);
+  expect(saved).not.toHaveProperty('checkpoints');
   expect((await read<ChatDetail>(request, `/chats/${chat.id}`)).runs).toEqual([]);
   expect(await read<unknown[]>(request, `/chats/${chat.id}/attempts`)).toEqual([]);
   for (const width of DEFAULT_WIDTHS) {
@@ -138,7 +131,7 @@ test('CTXUI01 summary authoring without a Run, edit and restore are durable at b
   await openChatSettings(page);
   await selectChatSettingsSection(page, '기억·로어');
   await expect(panel.getByTestId('context-summary-text')).toHaveText(
-    '첫 요약: 항구의 종이 울렸다.'
+    '두 번째 요약: 배가 출발했다.'
   );
 });
 

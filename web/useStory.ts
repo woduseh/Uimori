@@ -14,7 +14,7 @@ import {
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { subscribeAppHistory } from './app-history.js';
 import type { Chat, ReaderDetail, Run } from '../core/types.js';
-import type { Content, CurrentPrompt, Library } from '../core/product.js';
+import type { Content, CurrentPrompt, Library, PromptPreset } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
 import { api, ApiError, definiteRejection, libraryChangedKey } from './api.js';
 import { requestChatFork } from './fork-request.js';
@@ -950,10 +950,37 @@ export function useStory() {
   }
   const quickLock = useRef(false);
   const pinnedPromptId = detail?.profile?.pinned?.mainPromptPresetId;
-  const pinnedPrompt = library?.promptPresets?.find(
+  const pinnedMetadata = library?.promptPresets?.find(
     (item) => item.id === pinnedPromptId && item.role === 'main'
   );
-  // Library summaries keep prompt programs. A missing pin must never fall back to the workspace.
+  const pinId = pinnedMetadata?.id,
+    pinRevision = pinnedMetadata?.revision;
+  const [loadedPin, setLoadedPin] = useState<PromptPreset | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!pinId || pinRevision === undefined) {
+      setLoadedPin(null);
+      return;
+    }
+    void api<PromptPreset>(`/prompt-presets/${encodeURIComponent(pinId)}`)
+      .then((value) => {
+        if (!cancelled) setLoadedPin(value);
+      })
+      .catch((cause) => {
+        if (!cancelled) {
+          setLoadedPin(null);
+          setError((cause as Error).message);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pinId, pinRevision]);
+  const pinnedPrompt =
+    loadedPin?.id === pinnedPromptId && loadedPin?.revision === pinnedMetadata?.revision
+      ? loadedPin
+      : null;
+  // Only the selected pin is loaded in full. A missing pin never falls back to global settings.
   const currentPrompt: CurrentPrompt | undefined = pinnedPromptId
     ? pinnedPrompt
       ? {

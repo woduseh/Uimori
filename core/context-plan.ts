@@ -37,7 +37,7 @@ export type ContextJob = {
   chatId: string;
   branchId: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
-  snapshot: import('./types.js').RunSnapshot;
+  snapshot: import('./types.js').RunSnapshot | null;
   checkpoint: ContextCheckpointRef | null;
   error: string | null;
   noop: boolean;
@@ -50,7 +50,6 @@ export type ContextDetail = {
   notesRevision: number;
   headRevision: string | null;
   checkpoint: ContextCheckpoint | null;
-  checkpoints: ContextCheckpoint[];
   jobs: Omit<ContextJob, 'snapshot'>[];
   usable: boolean;
   invalidReason: string | null;

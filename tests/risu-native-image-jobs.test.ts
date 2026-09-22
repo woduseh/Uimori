@@ -91,21 +91,25 @@ test('validated image annotations use native boxes and placement without changin
   expect(asset).toBeDefined();
   const claim = store.claimJob(pending.id, 'images', {})!;
   expect(
-    store.completeJob(pending.id, claim.generation, 'images', {
-      mock: true,
-      sourceRevision: source.id,
-      sourceHash: source.hash,
-      imageTarget: pending.imageTarget,
-      annotations: [
-        {
-          blockAnchor: splitSource(source)[0].anchor,
-          assetRef: asset.ref,
-          assetRevision: asset.revision,
-          assetHash: asset.hash,
-          presentationIntent: 'inline',
-          caption: 'Synthetic smile',
-        },
-      ],
+    store.finishAuxiliary(pending.id, claim.generation, 'images', {
+      status: 'completed',
+      result: {
+        mock: true,
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        imageTarget: pending.imageTarget,
+        annotations: [
+          {
+            blockAnchor: splitSource(source)[0].anchor,
+            assetRef: asset.ref,
+            assetRevision: asset.revision,
+            assetHash: asset.hash,
+            presentationIntent: 'inline',
+            caption: 'Synthetic smile',
+          },
+        ],
+      },
+      error: null,
     })
   ).toBe(true);
   const receipt = structuredClone(store.job(pending.id));

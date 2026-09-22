@@ -801,7 +801,6 @@ export class HelperRuntime {
             contextBase = publishHelperContext(
               this.store,
               task,
-              segment + 1,
               summary.text,
               summary.usage,
               nextEstimate,
