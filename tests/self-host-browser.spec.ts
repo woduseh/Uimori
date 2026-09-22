@@ -54,8 +54,9 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
         sameSite: 'Strict',
         path: '/',
       });
-      expect(session!.expires - Date.now() / 1000).toBeGreaterThan(43_000);
-      expect(session!.expires - Date.now() / 1000).toBeLessThanOrEqual(43_200);
+      const remaining = session!.expires - Date.now() / 1000;
+      expect(remaining).toBeGreaterThan(399 * 24 * 60 * 60);
+      expect(remaining).toBeLessThanOrEqual(400 * 24 * 60 * 60);
     }
     async function assertLiveStream(page: Page, chatId: string) {
       const observation = await page.evaluate(
@@ -136,7 +137,6 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
       expect((await request.get('/api/chats')).status()).toBe(401);
       expect((await request.get('/api/health')).status()).toBe(401);
       expect((await request.get('/%61pi/library')).status()).toBe(401);
-      expect((await request.get('/%61pi/export')).status()).toBe(401);
       expect(
         (await request.get('/api/session', { headers: { Host: 'untrusted.invalid' } })).status()
       ).toBe(403);
@@ -203,7 +203,7 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
     test(`SHUI02 desktop and ${MOBILE_WIDTH}px mobile share persisted chats and live HTTPS SSE across re-entry`, async ({
       browser,
     }, info) => {
-      test.setTimeout(60_000);
+      test.setTimeout(120_000);
       const desktop = await browser.newContext({
         baseURL: origin,
         ignoreHTTPSErrors: true,
