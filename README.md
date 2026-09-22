@@ -2,7 +2,7 @@
 
 긴 원고를 읽고 다음 장면을 이어 쓰는 개인용 창작 웹앱이에요. 봇별 채팅·폴더, Risu 원본 봇·페르소나·모듈, 프롬프트와 모델의 독립 설정, 원문·번역 편집, 분기, 이야기 기억과 백업을 제공해요.
 
-현재 릴리스는 **`v0.1.0`**이에요. 개인용 초기 개발 릴리스이며, 기능과 데이터 형식은 앞으로 바뀔 수 있어요. 주요 기능과 알려진 제한은 [릴리스 노트](docs/releases/v0.1.0.md)에 정리했어요. Risu 원본의 저장·편집·실행 범위는 [가져오기 안내](docs/RISU-IMPORT.md), 설치와 업데이트의 현재 제한은 [업데이트 안내](docs/UPDATES.md)를 확인해요.
+현재 릴리스는 **`v0.1.1`**이에요. 개인용 초기 개발 릴리스이며, 기능과 데이터 형식은 앞으로 바뀔 수 있어요. 주요 변경과 알려진 제한은 [릴리스 노트](docs/releases/v0.1.1.md)에 정리했어요. Risu 원본의 저장·편집·실행 범위는 [가져오기 안내](docs/RISU-IMPORT.md), 설치와 업데이트의 현재 제한은 [업데이트 안내](docs/UPDATES.md)를 확인해요.
 
 개인 ChatGPT 구독으로 에이전트를 실행하려면 [Codex 연결 안내](docs/CODEX.md)를 따라 서버 실행기를 준비하고 **설정 → Codex 연결**에서 로그인해요.
 
@@ -11,7 +11,7 @@
 Node **24.14 이상 24.x**, npm, Chrome 또는 Edge가 필요해요. SQLite는 Node에 포함된 기능을 사용해요.
 
 ```powershell
-git clone --branch v0.1.0 --single-branch https://github.com/woduseh/Uimori.git
+git clone --branch v0.1.1 --single-branch https://github.com/woduseh/Uimori.git
 cd Uimori
 npm ci
 npm run dev
