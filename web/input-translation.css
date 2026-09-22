@@ -1,0 +1,70 @@
+.input-translation-controls {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+}
+.input-translation-controls .input-translation-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: var(--control-h);
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.quick-controls .input-translation-controls select {
+  width: 88px;
+  max-width: 88px;
+  padding: 5px 18px 5px 4px;
+  font-size: 12px;
+}
+.input-translation-feedback {
+  margin: 6px 6px 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.input-translation-feedback p {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 4px 0;
+}
+.input-translation-original {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.input-translation-original > details {
+  flex: 1;
+  min-width: 0;
+}
+.input-translation-feedback pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 120px;
+  overflow: auto;
+  margin: 6px 0;
+  font: inherit;
+  color: var(--text);
+}
+.input-translation-feedback .link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: inherit;
+}
+.input-translation-candidate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+@media (max-width: 600px) {
+  .input-translation-button > span {
+    display: none;
+  }
+}
