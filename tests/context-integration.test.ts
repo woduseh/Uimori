@@ -494,7 +494,11 @@ describe('standalone context summaries and explicit corrections', () => {
       routes: { ...workspace.routes, main: null },
       translationPolicy: workspace.translationPolicy,
     });
-    expect(await contextApi(app, chatId, 'PUT', '/context/summary', editCommand)).toEqual(saved);
+    const currentBeforeReplay = await contextApi(app, chatId, 'GET', '/context');
+    expect(await contextApi(app, chatId, 'PUT', '/context/summary', editCommand)).toEqual(
+      currentBeforeReplay
+    );
+    expect(currentBeforeReplay.checkpoint).toEqual(saved.checkpoint);
     expect(await contextApi(app, chatId, 'POST', '/context/compact', compactCommand)).toMatchObject(
       { id: completed.id, status: 'completed', noop: true }
     );

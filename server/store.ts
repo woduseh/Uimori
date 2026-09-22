@@ -1,3 +1,5 @@
+import { migrateIndependentChats } from './migrate-independent-chats.js';
+import { pruneUnusedData } from './unused-data.js';
 import { retainCompletedLore } from './lore-retention-state.js';
 import { verifiedRunLoreReads } from './lore-context.js';
 import { captureNativeMessageChanges } from './native-message-changes.js';
@@ -116,8 +118,10 @@ export class Store {
       this.context = new ContextStore(this);
       this.organization = new ChatOrganizationStore(this);
       this.libraryOrganization = new LibraryOrganizationStore(this);
-      initializeDatabaseSchema(this.db, () => {
-        this.db.exec(`
+      initializeDatabaseSchema(
+        this.db,
+        () => {
+          this.db.exec(`
       CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, head_revision TEXT, settings_revision INTEGER NOT NULL, settings TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), parent_revision TEXT, status TEXT NOT NULL, request TEXT NOT NULL, snapshot TEXT NOT NULL, request_key TEXT NOT NULL, command TEXT NOT NULL, source_revision TEXT, error TEXT, usage TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, branch_id TEXT REFERENCES branches(id), partial_text TEXT, UNIQUE(chat_id,request_key));
       CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_branch ON runs(branch_id) WHERE status IN ('queued','running');
@@ -132,17 +136,22 @@ export class Store {
       CREATE TABLE provider_connection_tests (id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, model_id TEXT NOT NULL, model_revision INTEGER NOT NULL, status TEXT NOT NULL, sent_at TEXT, body TEXT NOT NULL);
       CREATE UNIQUE INDEX one_active_connection_test_per_model ON provider_connection_tests(model_id) WHERE status='running';
       `);
-        initCredentials(this.db);
-        this.product.initFresh();
-        this.story.initFresh();
-        this.context.initFresh();
-        this.organization.init();
-        this.libraryOrganization.init();
-        initHelperWorkspace(this);
-        initChatOverrides(this);
-        initChatOptions(this);
-        initResponseStreams(this.db);
-      });
+          initCredentials(this.db);
+          this.product.initFresh();
+          this.story.initFresh();
+          this.context.initFresh();
+          this.organization.init();
+          this.libraryOrganization.init();
+          initHelperWorkspace(this);
+          initChatOverrides(this);
+          initChatOptions(this);
+          initResponseStreams(this.db);
+        },
+        () => {
+          migrateIndependentChats(this);
+          pruneUnusedData(this.db, null);
+        }
+      );
       // The maintenance row belongs to every boot, not only to a fresh database.
       initMaintenance(this);
     } catch (error) {
@@ -883,34 +892,7 @@ export class Store {
       return job;
     });
   }
-  completeJob(
-    id: string,
-    generation: number,
-    owner: string,
-    result: unknown,
-    controls?: Controls
-  ): boolean {
-    return this.transaction(() => {
-      const row = this.db.prepare('SELECT * FROM jobs WHERE id=?').get(id) as Row | undefined;
-      if (!row || row.status !== 'running' || row.generation !== generation || row.owner !== owner)
-        return false;
-      const source = this.source(row.source_revision);
-      if (source.hash !== row.source_hash || source.chatId !== row.chat_id)
-        throw new Error('Job source dependency changed');
-      if (row.kind === 'image') imageTargetSource(this, this.job(id), true);
-      this.db
-        .prepare(
-          'INSERT INTO job_results VALUES(?,?,?,?) ON CONFLICT(job_id) DO UPDATE SET generation=excluded.generation,result=excluded.result,created_at=excluded.created_at'
-        )
-        .run(id, generation, json(result), now());
-      controls?.fail('job-transaction');
-      this.db.prepare("UPDATE jobs SET status='completed',updated_at=? WHERE id=?").run(now(), id);
-      if (row.kind === 'translation') scheduleTranslationImages(this, this.job(id));
-      releaseCompletedJobInputs(this.db, id);
-      this.event(row.chat_id, 'job.completed', id);
-      return true;
-    });
-  }
+
   failJob(id: string, generation: number, owner: string, error: string) {
     this.transaction(() => {
       const changed = this.db
@@ -1024,11 +1006,7 @@ export class Store {
       return true;
     });
   }
-  ownsJob(id: string, generation: number, owner: string) {
-    return !!this.db
-      .prepare("SELECT 1 FROM jobs WHERE id=? AND generation=? AND owner=? AND status='running'")
-      .get(id, generation, owner);
-  }
+
   recover() {
     this.transaction(() => {
       for (const row of this.db

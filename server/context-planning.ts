@@ -1,3 +1,5 @@
+export { contextDependencyKey } from './context-dependency.js';
+import { contextDependencyKey } from './context-dependency.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { createHash } from 'node:crypto';
 import type { ContextPlan } from '../core/context-plan.js';
@@ -24,29 +26,12 @@ export function persistedContextSnapshot(
   return persisted;
 }
 
-const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const contextSourceRefs = (snapshot: RunSnapshot) =>
   snapshot.history.map((source) => ({
     revision: source.revision,
     hash: source.contentHash ?? createHash('sha256').update(source.text).digest('hex'),
   }));
-/** Stable semantic dependencies. Per-run random draws and evolving derived state are not canon. */
-export function contextDependencyKey(snapshot: RunSnapshot): string {
-  return hash({
-    packages: snapshot.profile?.packages ?? [],
-    prompt: snapshot.profile?.promptPresets?.main ?? null,
-    promptControls: snapshot.profile?.promptControls ?? null,
-    canon: snapshot.story?.canonHash ?? null,
-    resources: snapshot.resources,
-    ...((snapshot.nativeRisuExecution?.inputHistoryRevision ?? snapshot.nativeRisuHistoryRevision)
-      ? {
-          nativeHistory:
-            snapshot.nativeRisuExecution?.inputHistoryRevision ??
-            snapshot.nativeRisuHistoryRevision,
-        }
-      : {}),
-  });
-}
+
 export function seedContextPlan(
   snapshot: RunSnapshot,
   target: ModelSnapshot | undefined = snapshot.profile?.models.main

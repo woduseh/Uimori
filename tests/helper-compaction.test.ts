@@ -596,7 +596,7 @@ test('small helper compaction stays above 85%, preserves exact writes, and waits
   expect(decisions[0].afterTokens).toBeLessThanOrEqual(limit);
   expect(f.mutations).toBe(1);
   expect(f.store.product.get<Content>('content', f.saved.id).revision).toBe(2);
-  expect(checkpointRows(f)).toHaveLength(2);
+  expect(checkpointRows(f)).toHaveLength(1);
   expect(task.snapshot.model.maxOutputTokens).toBe(1024);
   expect(task.snapshot).not.toHaveProperty('contextModel');
 });
@@ -878,7 +878,6 @@ test('a concurrent helper checkpoint remains active when the current task adopts
       const published = publishHelperContext(
         f.store,
         current,
-        1,
         'Concurrent valid helper summary',
         { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
         100,
@@ -894,8 +893,8 @@ test('a concurrent helper checkpoint remains active when the current task adopts
   const task = await f.run();
   expect(task.status).toBe('completed');
   const rows = checkpointRows(f);
-  expect(rows).toHaveLength(2);
-  expect(rows.map((row) => Number(row.activated))).toEqual([1, 0]);
+  expect(rows).toHaveLength(1);
+  expect(rows.map((row) => Number(row.activated))).toEqual([1]);
   expect(
     f.store.db
       .prepare('SELECT checkpoint_id FROM context_heads WHERE scope_key=?')

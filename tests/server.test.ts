@@ -290,12 +290,30 @@ describe('file SQLite HTTP runtime', () => {
     expect(retried.attempt).toBe(2);
     const retryAgain = await api(url, `/api/jobs/${failed.id}/retry`, {});
     expect(retryAgain.attempt).toBe(2);
-    expect(app.store.completeJob(failed.id, 1, 'wrong-owner', { mock: true })).toBe(false);
-    expect(app.store.completeJob(failed.id, 2, 'wrong-owner', { mock: true })).toBe(false);
+    expect(
+      app.store.finishAuxiliary(failed.id, 1, 'wrong-owner', {
+        status: 'completed',
+        result: { mock: true },
+        error: null,
+      })
+    ).toBe(false);
+    expect(
+      app.store.finishAuxiliary(failed.id, 2, 'wrong-owner', {
+        status: 'completed',
+        result: { mock: true },
+        error: null,
+      })
+    ).toBe(false);
     const ownership = app.store.db.prepare('SELECT owner FROM jobs WHERE id=?').get(failed.id) as {
       owner: string;
     };
-    expect(app.store.completeJob(failed.id, 2, ownership.owner, retried.result)).toBe(false);
+    expect(
+      app.store.finishAuxiliary(failed.id, 2, ownership.owner, {
+        status: 'completed',
+        result: retried.result,
+        error: null,
+      })
+    ).toBe(false);
     expect(app.store.db.prepare('SELECT count(*) AS n FROM job_results').get()).toEqual({ n: 4 });
     expect(all.runs.map((value) => value.inputs.length)).toEqual([0, 0]);
   });

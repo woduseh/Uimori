@@ -8,7 +8,7 @@
 
 모델 편집의 **입력 컨텍스트 한도**는 요청 준비에 쓰는 토큰 추정 한도예요. 기본값은 **272,000**, 직접 지정 범위는 **8,192–1,000,000**이에요. 출력 토큰 한도는 별개예요. 확인된 native 모델은 전체 문맥에서 선택한 출력 예약량을 뺀 값도 실효 입력 한도에 적용해요. Codex 실행기·Vercel 경로·미등록 모델에 API 모델의 전체 문맥 크기를 추정 적용하지 않아요.
 
-**채팅 설정 → 자동 후속 작업 → 작업당 모델 호출 한도**는 정수 1~32회이며 새 채팅의 기본값은 8회예요. `PATCH /api/chats/:id/settings`와 archive도 같은 범위를 허용해요. 본문 요청의 조회 후속 호출·문맥 요약은 이 한도를 함께 사용하고, 설정 변경은 이후 예약에 반영돼요. 번역은 별도 정책의 2~64회, 도우미는 전체 2~100회 안에서 판단 호출을 1~전체 한도로 정하므로 도우미의 전체·판단 한도 32/32도 허용돼요. 호출 횟수는 입력 토큰 한도·출력 한도와 다른 제한이에요.
+**채팅 설정 → 자동 후속 작업 → 작업당 모델 호출 한도**는 정수 1~32회이며 새 채팅의 기본값은 8회예요. `PATCH /api/chats/:id/settings`도 같은 범위를 허용해요. 본문 요청의 조회 후속 호출·문맥 요약은 이 한도를 함께 사용하고, 설정 변경은 이후 예약에 반영돼요. 번역은 별도 정책의 2~64회, 도우미는 전체 2~100회 안에서 판단 호출을 1~전체 한도로 정하므로 도우미의 전체·판단 한도 32/32도 허용돼요. 호출 횟수는 입력 토큰 한도·출력 한도와 다른 제한이에요.
 
 1. 예약할 때 전체 원문과 실제 user/assistant 쌍, 모델·프로바이더·자료·메모·원문 구간 정책, 활성 checkpoint의 정확한 ID/revision/hash를 고정해요.
 2. 최종 요청 body의 system·메시지·도구·카탈로그·출력 스키마를 모두 세어요. 캐시 읽기 토큰도 입력 문맥에 포함해요.
@@ -73,25 +73,17 @@
 
 **채팅 설정 → 기억과 메모**에서 현재 요약, 요약한 원문 범위, 최근 정리 작업과 메모를 확인해요. **지금 압축**은 자동 임계값 아래에서도 최근 두 원문 이전의 이력을 압축해요. 남은 정리 대상이 없고 입력이 한도 안이면 공급자를 호출하지 않는 no-op으로 완료해요. 본문 Run이나 새 장면을 만들지 않아요.
 
-요약 직접 편집과 이전 요약으로 되돌리기도 본문 Run 없이 저장할 수 있어요. 자동·수동·직접 편집은 같은 불변 checkpoint 형식을 사용해요. 저장은 활성 revision과 선택 분기 head를 비교하고, 같은 요청 키를 재전송하면 기존 결과를 돌려줘요. 되돌리기는 현재 원문·메모·구간 의존성에 맞는 과거 요약으로 새 revision을 만들어요.
+요약 직접 편집은 현재 요약을 교체해요. 이전 요약 목록과 복원 UI는 제공하지 않아요. 편집 요청은 활성 revision과 원문 head를 확인하고 재전송 시 변경을 중복 적용하지 않은 채 현재 상태를 반환해요. 작은 요청 해시만 저장하며 전체 조회 결과를 영수증으로 복사하지 않아요.
 
 네이티브 Risu 자료와 RISUP를 사용하는 수동 압축·요약 편집은 작업 입력의 사본에서 CBS·정규식을 먼저 평가해요. 도우미의 같은 문맥 도구도 이 경계를 사용해요. 평가 결과를 작업에 고정하며 Lua/V2 콜백·지속 VM·추가 모델 호출·채팅 변수 쓰기는 실행하지 않아요. 수동 압축에 필요한 요약 모델 호출과 checkpoint 저장은 기존 예산·CAS 계약을 유지해요.
 
-자동 정리를 기다리는 동안 사용자가 요약이나 메모를 고치면 늦은 결과는 비활성 후보로 남아요. 다음 요청의 활성 요약을 되돌리지 않으며, 그 자동 결과로 실제 실행된 과거 Run은 자신이 사용한 checkpoint를 계속 가리켜요. 원문이 추가되더라도 기존 prefix가 동일해야 활성화할 수 있고, 편집·분기 변경으로 prefix가 달라지면 활성화하지 않아요.
+자동 정리를 기다리는 동안 사용자가 요약이나 메모를 고치면 늦은 결과는 비활성 후보로 남아요. 다음 요청의 활성 요약을 되돌리지 않으며, 현재 진행 중인 실행은 자신이 포착한 checkpoint를 계속 사용해요. 완료 뒤 활성 상태나 재시도 입력이 참조하지 않는 후보는 정리해요. 원문이 추가되더라도 기존 prefix가 동일해야 활성화할 수 있고, 편집·분기 변경으로 prefix가 달라지면 활성화하지 않아요.
 
 `GET /api/chats/:id/context`, `PUT /context/summary`, `POST /context/compact`와 `/context/jobs/:jobId`의 조회·취소가 이 계약을 사용해요. 각 짧은 경로 앞에는 `/api/chats/:id`가 붙어요. 자동·수동 결과는 `context_checkpoints`, 활성 포인터는 `context_heads`, 수동 실행과 전송 영수증은 `context_jobs/context_job_attempts`에 보존해요.
 
-도우미의 `context.read`는 활성 checkpoint 한 개의 요약·ID/revision/hash·출처 원문과 의존성, 현재 유효한 메모·정정, CAS revision과 요약 사용 가능 여부만 반환해요. 요약 본문은 자르지 않으며 과거 checkpoint 본문·이력과 정리 작업 정보는 모델 입력에 반복해서 넣지 않아요. 화면의 문맥 상세 API는 이전 요약과 작업 이력을 계속 제공해요. 메모가 바뀌어 사용할 수 없는 활성 요약도 조회할 수 있지만 `usable: false`와 이유를 함께 반환하고, 조회로 변경 권한이 생기지 않아요.
+도우미의 `context.read`와 화면 상세는 같은 현재 요약·원문 출처·유효한 메모·사용 가능 여부를 읽어요. 화면만 최근 10개 정리 작업의 작은 상태를 더 제공해요. 완료 작업의 전체 입력이나 과거 checkpoint 본문을 조회해서 버리는 경로는 없어요. 요약이 현재 자료와 맞지 않으면 `usable: false`와 이유를 반환해요.
 
-서버에서도 `ContextStore.current`가 활성 상태만 읽고 `detail`이 화면용 checkpoint·작업 이력을 추가해요. 두 경로의 revision·메모 revision·원문 head·사용 가능 여부는 같은 함수에서 계산해요. 활성 checkpoint의 hash와 현재 의존성은 조회마다 검사하며 전역 캐시를 두지 않아요. `tests/helper-context-read.test.ts`는 이력이 10개에서 100개로, 작업이 5개에서 50개로 늘어나도 모델 조회가 같은 활성 plan 1개만 읽는지 확인해요.
-
-반복 측정은 PowerShell에서 다음과 같이 실행해요. 결과는 새 `output/benchmarks/context-read-*/context-read.json`에 보존해요.
-
-```powershell
-$env:UIMORI_CONTEXT_READ_BENCHMARK = '1'
-try { npm test -- tests/helper-context-read.test.ts }
-finally { Remove-Item Env:UIMORI_CONTEXT_READ_BENCHMARK }
-```
+`server/context-dependency.ts`는 실제 작문 program과 적용값·자료·정정·네이티브 이력에 따라 재사용을 판단해요. 전역 설정 번호나 도우미/번역 모델만 바뀐 것은 본문 요약 무효화 사유가 아니에요. `tests/final-cleanup.test.ts`와 `tests/helper-context-read.test.ts`가 저장 수명과 조회 경계를 검사해요.
 
 ## 사용자 메모·정정
 
@@ -162,7 +154,7 @@ EOF는 공급자 스트림이 정상 완료 신호 없이 끝났다는 뜻이에
 
 `tiktoken@1.0.22`의 로컬 WASM `o200k_base`를 사용해 최대 4,096 UTF-16 단위의 조각으로 계산하고 같은 요청의 동일 조각은 재사용해요. 합계에 10% 여유를 더해요. 문자열·키·토큰을 외부 계산 서비스로 보내지 않아요. 다른 모델 tokenizer·공급자 내부 포맷·조각 경계 차이가 있으므로 실제 청구 토큰이나 상한 보장은 아니에요. 같은 내용의 body라도 실행마다 새로 만드는 Run·메시지 ID와 해시 때문에 추정값이 조금씩 달라져요. 관측한 예로 직렬화 길이가 15,887 UTF-16 단위로 동일한 body에서 추정값이 6,943–7,011 토큰(약 1%) 범위로 움직였어요. 85%·75% 판정은 이 편차보다 큰 여유가 있을 때만 결정적이므로, 합성 검사도 픽스처를 경계 1% 안쪽에 두지 않아요.
 
-구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/context-tools.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tool-compaction.ts`, `server/model-runner.ts`, `server/context-tools.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 모델 주도 경로는 `tests/context-tools.test.ts`(도구 루프·세그먼트 경계·네 native 인코더의 새 요청 형식)와 `tests/context-model-driven-integration.test.ts`(실제 App·SQLite에서 저장·전환·회수·다음 Run 재사용·사용자 편집 우선·archive/fork)로 확인해요. 실행 중 조회 결과 정리와 결과 반환 후 알림은 `tests/context-tools.test.ts`, 단계별 EOF는 `tests/context-compaction.test.ts`와 `tests/helper-draft-runtime.test.ts`에도 회귀가 있어요. 실제 요약의 의미 품질·공급자 인증·계정별 문맥 상한·물리적 휴대폰 검증은 별도예요.
+구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/context-tools.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tool-compaction.ts`, `server/model-runner.ts`, `server/context-tools.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 모델 주도 경로는 `tests/context-tools.test.ts`(도구 루프·세그먼트 경계·네 native 인코더의 새 요청 형식)와 `tests/context-model-driven-integration.test.ts`(실제 App·SQLite에서 저장·전환·회수·다음 Run 재사용·사용자 편집 우선·현재 요약 재사용)로 확인해요. 실행 중 조회 결과 정리와 결과 반환 후 알림은 `tests/context-tools.test.ts`, 단계별 EOF는 `tests/context-compaction.test.ts`와 `tests/helper-compaction.test.ts`에도 회귀가 있어요. 실제 요약의 의미 품질·공급자 인증·계정별 문맥 상한·물리적 휴대폰 검증은 별도예요.
 
 ### 파생 문맥 검증
 

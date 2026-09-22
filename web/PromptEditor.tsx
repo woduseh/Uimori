@@ -1,3 +1,4 @@
+import { api } from './api.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
@@ -113,24 +114,36 @@ export function PromptEditor({
   }, [dirty, busy, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   useEffect(() => {
-    setDrafts((current) => {
-      let next = current;
-      for (const role of roles) {
-        const draft = current[role];
-        const latest = [...(library.promptPresets ?? []), ...localPresets]
-          .filter((item) => item.id === (draft.base?.id ?? draft.source.split('@')[0]))
-          .sort((a, b) => b.revision - a.revision)[0];
-        if (
-          latest &&
-          !draft.dirty &&
-          !composerDirty[`${role}:${draft.source}`] &&
-          keyOf(latest) !== keyOf(draft.base ?? { id: '', revision: 0 })
-        )
-          next = { ...next, [role]: draftFor(role, latest) };
-      }
-      return next;
-    });
-  }, [library.promptPresets, localPresets, composerDirty]);
+    let cancelled = false;
+    for (const selectedRole of roles) {
+      const draft = drafts[selectedRole];
+      const latest = [...(library.promptPresets ?? []), ...localPresets]
+        .filter((item) => item.id === draft.base?.id)
+        .sort((a, b) => b.revision - a.revision)[0];
+      if (
+        !latest ||
+        draft.dirty ||
+        composerDirty[`${selectedRole}:${draft.source}`] ||
+        latest.revision === draft.base?.revision
+      )
+        continue;
+      void api<PromptPreset>(`/prompt-presets/${encodeURIComponent(latest.id)}`)
+        .then((full) => {
+          if (cancelled) return;
+          setDrafts((current) =>
+            current[selectedRole].dirty || current[selectedRole].source !== draft.source
+              ? current
+              : { ...current, [selectedRole]: draftFor(selectedRole, full) }
+          );
+        })
+        .catch((cause) => {
+          if (!cancelled) setError((cause as Error).message);
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [library.promptPresets, localPresets, composerDirty, drafts]);
   const draft = drafts[role];
   const model: PromptEditModel = {
     title: draft.title,
@@ -181,9 +194,21 @@ export function PromptEditor({
     setError('');
     setStatus('');
   };
-  function choose(source: string) {
+  async function choose(source: string) {
     if (pendingTemplate) return;
-    const preset = presets.find((item) => item.role === role && keyOf(item) === source);
+    const selected = presets.find((item) => item.role === role && keyOf(item) === source);
+    let preset: PromptPreset | undefined;
+    if (selected) {
+      setBusy(true);
+      try {
+        preset = await api<PromptPreset>(`/prompt-presets/${encodeURIComponent(selected.id)}`);
+      } catch (cause) {
+        setError((cause as Error).message);
+        return;
+      } finally {
+        setBusy(false);
+      }
+    }
     setDrafts((current) => {
       draftCache.current[`${role}:${current[role].source}`] = current[role];
       const cached = draftCache.current[`${role}:${source}`];

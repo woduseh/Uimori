@@ -100,16 +100,16 @@ test('explicit equal-value writes advance revision and stale ABA commands fail',
   expect(store.db.prepare('SELECT count(*) AS n FROM chat_variable_journal').get()!.n).toBe(4);
 });
 
-test('same receipt replays after head, state and active work change; changed commands conflict', () => {
+test('a repeated command acknowledges current state without overwriting later variables', () => {
   const { store, chat, branch } = fixture();
   const input = command({ z: '2', a: '1' });
-  const result = writeChatVariables(store, chat.id, branch.id, input);
+  writeChatVariables(store, chat.id, branch.id, input);
   writeChatVariables(store, chat.id, branch.id, command({ a: 'other' }, 1));
   append(store, chat.id, branch.id);
   reserve(store, chat.id, branch.id);
   expect(
     writeChatVariables(store, chat.id, branch.id, { ...input, values: { a: '1', z: '2' } })
-  ).toEqual(result);
+  ).toEqual({ revision: 2, values: { a: 'other' } });
   expect(() => writeChatVariables(store, chat.id, branch.id, { ...input, values: {} })).toThrow(
     'CHAT_VARIABLE_IDEMPOTENCY_CONFLICT'
   );

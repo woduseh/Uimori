@@ -103,8 +103,10 @@ Local fixtures, browser emulation, live providers, and physical devices establis
 
 `npm run reset:dev` deletes only this checkout's default `.local/uimori.sqlite` and its SQLite sidecars. Existing backups and older database files remain untouched. Stop the server first. The command rejects an in-use database or unsafe paths and does not reset an arbitrary `UIMORI_DB`.
 
-Empty and personal-v1 databases are admitted. Personal schemas 1 and 2 upgrade once to schema 3; unrelated legacy formats are rejected before schema writes. Use disposable databases for development. Current data formats and this boundary are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).
+Empty and personal-v1 databases are admitted. Personal schemas 1, 2 and 3 upgrade once to schema 4; unrelated legacy formats are rejected before schema writes. Use disposable databases for development. Current data formats and this boundary are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).
 
 Manual storage measurements use `scripts/synthetic-story.mjs` and current transcript-v2 import, not obsolete package shapes or cumulative completed snapshots. After building, run `node --expose-gc scripts/measure-context-storage.mjs` or `node scripts/measure-transcript-import.mjs --counts=10,100`. These are synthetic measurements, not CI timing gates.
 
 `tests/fixtures/personal-schema-1.sql` is synthetic output from the previous product build (`9a14ac4`, same application source as `bf7de22`), including real native resources, translation, fixed values and oneoff/delegation rows. The migration test loads that prior schema rather than relabeling a newly created database.
+
+`tests/fixtures/personal-schema-3.sql` is synthetic output from the real `7cac3f7` runtime. Its intentionally added legacy branch exercises conversion into independent chats. `tests/final-cleanup.test.ts` checks message/translation/helper/variable retention and restart idempotence without a live provider. The ordinary branch ID remains an internal execution scope, not a public shared-branch management API.

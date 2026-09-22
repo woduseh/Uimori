@@ -55,7 +55,7 @@ test('old content versions and even empty retired instruction arrays are rejecte
 });
 
 test('schema-23 admission refuses before rewriting the database or supplying a migration', () => {
-  expect(DATABASE_SCHEMA_VERSION).toBe(3);
+  expect(DATABASE_SCHEMA_VERSION).toBe(4);
   const directory = mkdtempSync(join(tmpdir(), 'uimori-format-boundary-'));
   const file = join(directory, 'old.sqlite');
   let db: DatabaseSync | undefined;

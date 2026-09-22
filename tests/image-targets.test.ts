@@ -108,11 +108,15 @@ function translate(store: Store, source: Source) {
   const job = store.requestTranslation(source.id);
   const claimed = store.claimJob(job.id, 'translation-fixture', {})!;
   expect(
-    store.completeJob(job.id, claimed.generation, 'translation-fixture', {
-      mock: true,
-      sourceRevision: source.id,
-      sourceHash: source.hash,
-      text: translated,
+    store.finishAuxiliary(job.id, claimed.generation, 'translation-fixture', {
+      status: 'completed',
+      result: {
+        mock: true,
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        text: translated,
+      },
+      error: null,
     })
   ).toBe(true);
   return store.job(job.id);
@@ -166,12 +170,16 @@ async function finishImage(store: Store, job: Job) {
   );
   const claimed = store.claimJob(job.id, 'image-fixture', {})!;
   expect(
-    store.completeJob(job.id, claimed.generation, 'image-fixture', {
-      mock: true,
-      sourceRevision: job.sourceRevision,
-      sourceHash: job.sourceHash,
-      imageTarget: target(job),
-      annotations: presentation.entries,
+    store.finishAuxiliary(job.id, claimed.generation, 'image-fixture', {
+      status: 'completed',
+      result: {
+        mock: true,
+        sourceRevision: job.sourceRevision,
+        sourceHash: job.sourceHash,
+        imageTarget: target(job),
+        annotations: presentation.entries,
+      },
+      error: null,
     })
   ).toBe(true);
   expect(store.job(job.id).status).toBe('completed');
@@ -303,11 +311,15 @@ test('translation edits invalidate only translated placement and fence an alread
   });
   expect(store.job(localized.id).status).toBe('stale');
   expect(
-    store.completeJob(localized.id, claimed.generation, 'late-worker', {
-      mock: true,
-      sourceRevision: source.id,
-      sourceHash: source.hash,
-      annotations: [],
+    store.finishAuxiliary(localized.id, claimed.generation, 'late-worker', {
+      status: 'completed',
+      result: {
+        mock: true,
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        annotations: [],
+      },
+      error: null,
     })
   ).toBe(false);
   expect(store.job(original.id)).toEqual(original);

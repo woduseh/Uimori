@@ -171,9 +171,13 @@ function finishOther(store: Store, revision: Source, assetId: string) {
               },
             ],
           };
-    expect(store.completeJob(job.id, claimed.generation, 'synthetic-fork-worker', result)).toBe(
-      true
-    );
+    expect(
+      store.finishAuxiliary(job.id, claimed.generation, 'synthetic-fork-worker', {
+        status: 'completed',
+        result: result,
+        error: null,
+      })
+    ).toBe(true);
   }
 }
 const pixel =

@@ -789,7 +789,13 @@ describe('explicit status recovery with current model', () => {
     expect(() => store.requestStatus(source.id, source.hash, created.id)).toThrow(/changed/);
     const replacement = store.requestStatus(source.id, edited.hash, created.id);
     expect(replacement.sourceHash).toBe(edited.hash);
-    expect(store.completeJob(created.id, claimed.generation, 'old-worker', {})).toBe(false);
+    expect(
+      store.finishAuxiliary(created.id, claimed.generation, 'old-worker', {
+        status: 'completed',
+        result: {},
+        error: null,
+      })
+    ).toBe(false);
     store.cancelJob(replacement.id);
     store.db.prepare("UPDATE jobs SET status='running' WHERE id=?").run(original.id);
     expect(() => store.requestStatus(source.id, edited.hash, replacement.id)).toThrow(/active/);
