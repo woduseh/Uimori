@@ -1,10 +1,12 @@
+import { migrateContextStorage } from './migrate-context-storage.js';
+import { pruneContextHistory } from './context-retention.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { initDatabaseReadIndexes } from './database-performance.js';
 import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 
-export const DATABASE_SCHEMA_VERSION = 3;
+export const DATABASE_SCHEMA_VERSION = 4;
 const FORMAT = 'uimori-personal-v1';
 
 export class DatabaseSchemaError extends Error {
@@ -41,10 +43,14 @@ export function databaseSchemaVersion(db: DatabaseSync): number {
 }
 
 /** A new baseline; future migrations run once in order rather than supporting old shapes at runtime. */
-export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () => void): void {
+export function initializeDatabaseSchema(
+  db: DatabaseSync,
+  initializeFresh: () => void,
+  migrateUserData: () => void = () => {}
+): void {
   const previous = databaseSchemaVersion(db);
   if (previous === DATABASE_SCHEMA_VERSION) return;
-  db.exec('BEGIN IMMEDIATE');
+  db.exec('BEGIN IMMEDIATE; PRAGMA defer_foreign_keys=ON');
   try {
     if (previous === 0) {
       initializeFresh();
@@ -58,7 +64,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
       CREATE TABLE chat_lore_state(chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,body TEXT NOT NULL,PRIMARY KEY(chat_id,branch_id));
       CREATE TABLE import_operations(key TEXT PRIMARY KEY,digest TEXT NOT NULL,result TEXT NOT NULL);
       CREATE TABLE chat_variable_states(chat_id TEXT NOT NULL,branch_id TEXT NOT NULL,revision INTEGER NOT NULL,values_json TEXT NOT NULL,PRIMARY KEY(chat_id,branch_id));
-      CREATE TABLE chat_variable_journal(chat_id TEXT NOT NULL,branch_id TEXT NOT NULL,request_key TEXT NOT NULL,payload_hash TEXT NOT NULL,payload TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(chat_id,branch_id,request_key));
+      CREATE TABLE chat_variable_journal(chat_id TEXT NOT NULL,branch_id TEXT NOT NULL,request_key TEXT NOT NULL,payload_hash TEXT NOT NULL,revision INTEGER NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(chat_id,branch_id,request_key));
       CREATE TABLE chat_variable_outputs(source_id TEXT PRIMARY KEY,body TEXT NOT NULL);
       CREATE TABLE maintenance(id INTEGER PRIMARY KEY CHECK(id=1),epoch INTEGER NOT NULL,status TEXT NOT NULL CHECK(status IN ('open','closed')),reason TEXT,updated_at TEXT NOT NULL);
     `);
@@ -103,6 +109,11 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
           WHERE json_type(result,'$.artifactRef') IS NULL AND task_id IN
           (SELECT id FROM helper_tasks WHERE status='completed');
       `);
+    }
+    if (previous > 0 && previous < 4) {
+      migrateContextStorage(db);
+      migrateUserData();
+      pruneContextHistory(db);
     }
     initDatabaseReadIndexes(db);
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}`);

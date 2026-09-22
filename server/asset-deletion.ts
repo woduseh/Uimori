@@ -1,3 +1,4 @@
+import { pruneUnusedData } from './unused-data.js';
 import { HttpError, fields, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
@@ -13,6 +14,7 @@ export function deleteChatAsset(store: Store, chatId: string, assetId: string, v
     store.product.assertAvailable('asset', assetId);
     store.db.prepare("INSERT INTO library_hidden(kind,id) VALUES('asset',?)").run(assetId);
     store.event(chatId, 'asset.deleted', assetId);
+    pruneUnusedData(store.db);
     return { deleted: true, id: assetId };
   });
 }

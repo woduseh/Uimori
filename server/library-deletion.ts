@@ -1,3 +1,4 @@
+import { pruneUnusedData } from './unused-data.js';
 import { HttpError, fields, number, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
@@ -76,6 +77,7 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
       }
     }
     store.libraryOrganization.remove(kind, id);
+    pruneUnusedData(store.db);
     return { deleted: true, id };
   });
 }

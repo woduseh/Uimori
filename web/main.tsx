@@ -36,7 +36,6 @@ import {
   ChevronDown,
   Download,
   GitFork,
-  History,
   ListTree,
   Maximize,
   Menu,
@@ -124,9 +123,7 @@ const AppSettingsPanel = deferredPanel(
     </Dialog>
   )
 );
-const BranchesPanel = deferredPanel('보관된 분기', async () => ({
-  default: (await import('./WorkspacePanels.js')).BranchesPanel,
-}));
+
 const TasksPanel = deferredPanel('작업 현황', async () => ({
   default: (await import('./WorkspacePanels.js')).TasksPanel,
 }));
@@ -134,16 +131,7 @@ const OutlinePanel = deferredPanel('계층형 구성', async () => ({
   default: (await import('./OutlinePanel.js')).OutlinePanel,
 }));
 
-type Panel =
-  | ''
-  | 'navigation'
-  | 'new'
-  | 'story'
-  | 'branches'
-  | 'tasks'
-  | 'settings'
-  | 'reading'
-  | 'outline';
+type Panel = '' | 'navigation' | 'new' | 'story' | 'tasks' | 'settings' | 'reading' | 'outline';
 /* Device layout preferences. The reader column and the right work slot are the two
    widths a person notices, so both are choices rather than fixed numbers. */
 const READING_WIDTHS = [760, 880, 1040];
@@ -274,7 +262,7 @@ function App() {
       'data',
       'security',
     ];
-    const panels: Panel[] = ['navigation', 'new', 'branches', 'tasks', 'reading', 'outline'];
+    const panels: Panel[] = ['navigation', 'new', 'tasks', 'reading', 'outline'];
     if (link.panel === 'story')
       openChatSettings(chatSections.find((section) => section === link.section) ?? undefined);
     else if (link.panel === 'settings') {
@@ -868,26 +856,13 @@ function App() {
                       <Activity size={18} aria-hidden="true" />
                       작업 현황
                     </button>
-                    {(s.detail?.branches?.length ?? 0) > 1 && (
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={(event) => {
-                          fromChatMenu(event);
-                          setPanel('branches');
-                        }}
-                      >
-                        <History size={18} aria-hidden="true" />
-                        보관된 분기
-                      </button>
-                    )}
                     {s.detail && (
                       <DeleteButton
                         path={`/chats/${encodeURIComponent(s.selected)}`}
                         preparePath={`/chats/${encodeURIComponent(s.selected)}/deletion-impact`}
                         title={s.detail.chat.title}
                         label="채팅 삭제"
-                        description="이 채팅의 모든 분기, 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요."
+                        description="이 채팅의 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요."
                         disabled={!!s.active}
                         onError={s.setError}
                         onDeleted={() => s.loadChats()}
@@ -1728,9 +1703,7 @@ function App() {
           />
         )}
       </Dialog>
-      <Dialog open={panel === 'branches'} title="보관된 분기" onClose={() => setPanel('')}>
-        <BranchesPanel state={s} onClose={() => setPanel('')} />
-      </Dialog>
+
       <Dialog
         scopeKey={s.selected}
         open={panel === 'tasks'}

@@ -1,3 +1,4 @@
+import { pruneContextHistory } from './context-retention.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { ContextCheckpointRef, ContextPlan } from '../core/context-plan.js';
@@ -41,10 +42,10 @@ export class ContextStore {
   }
   initFresh() {
     this.db.exec(`
-      CREATE TABLE context_checkpoints(id TEXT PRIMARY KEY,scope_key TEXT NOT NULL,chat_id TEXT REFERENCES chats(id),revision INTEGER NOT NULL,hash TEXT NOT NULL,origin TEXT NOT NULL,plan TEXT NOT NULL,snapshot TEXT NOT NULL,created_at TEXT NOT NULL,activated INTEGER NOT NULL);
+      CREATE TABLE context_checkpoints(id TEXT PRIMARY KEY,scope_key TEXT NOT NULL,chat_id TEXT REFERENCES chats(id),revision INTEGER NOT NULL,hash TEXT NOT NULL,origin TEXT NOT NULL,plan TEXT NOT NULL,created_at TEXT NOT NULL,activated INTEGER NOT NULL);
       CREATE TABLE context_heads(scope_key TEXT PRIMARY KEY,chat_id TEXT REFERENCES chats(id),revision INTEGER NOT NULL,checkpoint_id TEXT REFERENCES context_checkpoints(id));
-      CREATE TABLE context_commands(scope_key TEXT NOT NULL,chat_id TEXT NOT NULL REFERENCES chats(id),request_key TEXT NOT NULL,command TEXT NOT NULL,result TEXT NOT NULL,PRIMARY KEY(scope_key,request_key));
-      CREATE TABLE context_jobs(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),branch_id TEXT NOT NULL REFERENCES branches(id),request_key TEXT NOT NULL,command TEXT NOT NULL,status TEXT NOT NULL,snapshot TEXT NOT NULL,checkpoint TEXT,error TEXT,noop INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(chat_id,request_key));
+      CREATE TABLE context_commands(scope_key TEXT NOT NULL,chat_id TEXT NOT NULL REFERENCES chats(id),request_key TEXT NOT NULL,command_hash TEXT NOT NULL,revision INTEGER NOT NULL,PRIMARY KEY(scope_key,request_key));
+      CREATE TABLE context_jobs(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),branch_id TEXT NOT NULL REFERENCES branches(id),request_key TEXT NOT NULL,command TEXT NOT NULL,status TEXT NOT NULL,snapshot TEXT,checkpoint TEXT,error TEXT,noop INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(chat_id,request_key));
       CREATE UNIQUE INDEX one_active_context_job ON context_jobs(branch_id) WHERE status IN ('queued','running');
       CREATE TABLE context_job_attempts(job_id TEXT NOT NULL REFERENCES context_jobs(id),attempt_id TEXT NOT NULL UNIQUE REFERENCES attempts(id),PRIMARY KEY(job_id,attempt_id));
     `);
@@ -63,9 +64,11 @@ export class ContextStore {
     };
   }
   checkpoint(value: ContextCheckpointRef): ContextCheckpoint {
-    const row = this.db.prepare('SELECT * FROM context_checkpoints WHERE id=?').get(value.id) as
-      | Row
-      | undefined;
+    const row = this.db
+      .prepare(
+        'SELECT id,scope_key,chat_id,revision,hash,origin,plan,created_at,activated FROM context_checkpoints WHERE id=?'
+      )
+      .get(value.id) as Row | undefined;
     if (!row || row.revision !== value.revision || row.hash !== value.hash)
       throw new HttpError(400, 'CONTEXT_CHECKPOINT_MISSING');
     const plan = parse(row.plan) as ContextPlan;
@@ -135,21 +138,7 @@ export class ContextStore {
       contextBase: { ...base, activeRevision: head.revision, checkpoint: own },
     };
   }
-  assertSnapshot(snapshot: RunSnapshot) {
-    const selected = snapshot.contextPlan?.checkpoint;
-    if (!selected) {
-      if (snapshot.contextPlan?.summary)
-        throw new HttpError(400, 'CONTEXT_CHECKPOINT_RECEIPT_MISSING');
-      return;
-    }
-    const checkpoint = this.checkpoint(selected);
-    if (
-      checkpoint.chatId !== snapshot.chatId ||
-      checkpoint.scopeKey !== snapshot.contextBase?.scopeKey ||
-      !isDeepStrictEqual(projection(checkpoint.plan), projection(snapshot.contextPlan!))
-    )
-      throw new HttpError(400, 'CONTEXT_CHECKPOINT_SNAPSHOT_MISMATCH');
-  }
+
   publishPrepared(
     snapshot: RunSnapshot,
     options: { origin: ContextCheckpoint['origin']; activate?: boolean }
@@ -193,7 +182,7 @@ export class ContextStore {
         this.store.story.notes.revision(snapshot.chatId) === base.notesRevision &&
         unchanged;
       this.db
-        .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?,?)')
+        .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?)')
         .run(
           checkpoint.id,
           checkpoint.scopeKey,
@@ -202,7 +191,6 @@ export class ContextStore {
           checkpoint.hash,
           checkpoint.origin,
           JSON.stringify(checkpoint.plan),
-          JSON.stringify(snapshot),
           checkpoint.createdAt,
           Number(checkpoint.activated)
         );
@@ -274,20 +262,16 @@ export class ContextStore {
     const scope = this.scope(chatId, branchId);
     return {
       ...this.currentState(chatId, scope),
-      checkpoints: (
-        this.db
-          .prepare(
-            'SELECT id,revision,hash FROM context_checkpoints WHERE scope_key=? ORDER BY rowid DESC LIMIT 100'
-          )
-          .all(scope.scopeKey) as ContextCheckpointRef[]
-      ).map((value) => this.checkpoint(value)),
       jobs: (
         this.db
           .prepare(
-            'SELECT id FROM context_jobs WHERE chat_id=? AND branch_id=? ORDER BY rowid DESC LIMIT 50'
+            'SELECT id FROM context_jobs WHERE chat_id=? AND branch_id=? ORDER BY rowid DESC LIMIT 10'
           )
           .all(chatId, scope.branch.id) as Row[]
-      ).map((row) => this.job(row.id)),
+      ).map((row) => {
+        const { snapshot: _input, ...status } = this.job(row.id, false);
+        return status;
+      }),
     };
   }
   private expected(chatId: string, body: Row) {
@@ -310,45 +294,26 @@ export class ContextStore {
       'expectedHeadRevision',
       'idempotencyKey',
       'summary',
-      'restoreCheckpoint',
     ]);
     const key = text(body.idempotencyKey, 'request key', 120);
+    const digest = createHash('sha256').update(JSON.stringify(body)).digest('hex');
     return this.store.transaction(() => {
-      const { scopeKey } = this.scope(chatId, body.branchId),
-        command = JSON.stringify(body);
+      const { scopeKey } = this.scope(chatId, body.branchId);
       const receipt = this.db
-        .prepare('SELECT command,result FROM context_commands WHERE scope_key=? AND request_key=?')
-        .get(scopeKey, key) as Row | undefined;
+        .prepare('SELECT command_hash FROM context_commands WHERE scope_key=? AND request_key=?')
+        .get(scopeKey, key);
       if (receipt) {
-        if (receipt.command !== command) throw new HttpError(409, 'Context request key reused');
-        return parse(receipt.result);
+        if (receipt.command_hash !== digest) throw new HttpError(409, 'Context request key reused');
+        return this.detail(chatId, body.branchId);
       }
       this.expected(chatId, body);
       if (!snapshot.profile?.models.main) throw new HttpError(409, 'MODEL_REQUIRED:main');
       let prepared = this.prepareRun(snapshot, scopeKey);
       const previous = this.previous(prepared);
-      let summary: string, compacted: ContextPlan['compacted'];
-      if (body.restoreCheckpoint !== undefined) {
-        if (body.summary !== undefined)
-          throw new HttpError(400, 'Choose summary or restore checkpoint');
-        const checkpoint = this.checkpoint(body.restoreCheckpoint);
-        if (
-          checkpoint.scopeKey !== scopeKey ||
-          checkpoint.plan.dependencyKey !== prepared.contextPlan?.dependencyKey ||
-          !isDeepStrictEqual(
-            checkpoint.plan.compacted,
-            contextSourceRefs(prepared).slice(0, checkpoint.plan.compacted.length)
-          )
-        )
-          throw new HttpError(409, '되돌릴 요약의 원문이나 정정 기준이 현재와 달라요.');
-        summary = checkpoint.plan.summary!;
-        compacted = checkpoint.plan.compacted;
-      } else {
-        summary = text(body.summary, 'summary', 200000);
-        compacted =
-          previous?.compacted ??
-          contextSourceRefs(prepared).slice(0, Math.max(0, prepared.history.length - 2));
-      }
+      const summary = text(body.summary, 'summary', 200000);
+      const compacted =
+        previous?.compacted ??
+        contextSourceRefs(prepared).slice(0, Math.max(0, prepared.history.length - 2));
       prepared = withContextProjection(prepared, compacted, summary);
       const measured = measureMainContext(prepared);
       if (measured.estimatedInputTokens > prepared.contextPlan!.budget.inputTokenLimit)
@@ -361,11 +326,12 @@ export class ContextStore {
         },
       };
       this.publishPrepared(prepared, { origin: 'edit' });
-      const result = this.detail(chatId, body.branchId);
+      const revision = this.head(scopeKey).revision;
       this.db
         .prepare('INSERT INTO context_commands VALUES(?,?,?,?,?)')
-        .run(scopeKey, chatId, key, command, JSON.stringify(result));
-      return result;
+        .run(scopeKey, chatId, key, digest, revision);
+      pruneContextHistory(this.db);
+      return this.detail(chatId, body.branchId);
     });
   }
   schedule(chatId: string, value: unknown, snapshot: RunSnapshot): ContextJob {
@@ -411,8 +377,12 @@ export class ContextStore {
       return this.job(id);
     });
   }
-  job(id: string): ContextJob {
-    const row = this.db.prepare('SELECT * FROM context_jobs WHERE id=?').get(id) as Row | undefined;
+  job(id: string, includeInput = true): ContextJob {
+    const row = this.db
+      .prepare(
+        `SELECT id,chat_id,branch_id,status,checkpoint,error,noop,created_at,updated_at,${includeInput ? 'snapshot' : 'NULL'} AS snapshot FROM context_jobs WHERE id=?`
+      )
+      .get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Context job not found');
     return {
       id: row.id,
@@ -445,16 +415,17 @@ export class ContextStore {
       const published = this.publishPrepared(snapshot, { origin: 'manual' });
       this.db
         .prepare(
-          "UPDATE context_jobs SET status='completed',snapshot=?,checkpoint=?,noop=?,updated_at=? WHERE id=? AND status='running'"
+          "UPDATE context_jobs SET status='completed',snapshot=NULL,checkpoint=?,noop=?,updated_at=? WHERE id=? AND status='running'"
         )
         .run(
-          JSON.stringify(published),
           JSON.stringify(published.contextPlan?.checkpoint ?? null),
           Number(!published.contextPlan?.summaryCalls),
           new Date().toISOString(),
           id
         );
       this.store.event(job.chatId, 'context.job.completed', id);
+      this.releaseJobDetails(id);
+      pruneContextHistory(this.db);
       return this.job(id);
     });
   }
@@ -463,7 +434,7 @@ export class ContextStore {
       const job = this.job(id);
       const changed = this.db
         .prepare(
-          "UPDATE context_jobs SET status='failed',error=?,updated_at=? WHERE id=? AND status='running'"
+          "UPDATE context_jobs SET status='failed',snapshot=NULL,error=?,updated_at=? WHERE id=? AND status='running'"
         )
         .run(error, new Date().toISOString(), id);
       if (changed.changes) this.store.event(job.chatId, 'context.job.failed', id);
@@ -476,150 +447,25 @@ export class ContextStore {
       if (job.chatId !== chatId) throw new HttpError(404, 'Context job not found');
       const changed = this.db
         .prepare(
-          "UPDATE context_jobs SET status='cancelled',error='CANCELLED',updated_at=? WHERE id=? AND status IN ('queued','running')"
+          "UPDATE context_jobs SET status='cancelled',snapshot=NULL,error='CANCELLED',updated_at=? WHERE id=? AND status IN ('queued','running')"
         )
         .run(new Date().toISOString(), id);
       if (changed.changes) this.store.event(chatId, 'context.job.cancelled', id);
       return this.job(id);
     });
   }
+  private releaseJobDetails(id: string) {
+    this.db
+      .prepare(`UPDATE attempts SET request=json_object('role',role,'modelId',model_id),
+      response=json_object('status',status,'error',error)
+      WHERE id IN (SELECT attempt_id FROM context_job_attempts WHERE job_id=?) AND status!='running'`)
+      .run(id);
+  }
   recover() {
     this.db
       .prepare(
-        "UPDATE context_jobs SET status='interrupted',error='Server stopped; explicit retry required',updated_at=? WHERE status IN ('queued','running')"
+        "UPDATE context_jobs SET status='interrupted',snapshot=NULL,error='Server stopped; explicit retry required',updated_at=? WHERE status IN ('queued','running')"
       )
       .run(new Date().toISOString());
-  }
-  /** Copy eligible immutable summaries, including manual edits with no associated Run. */
-  forkInTransaction(
-    originalChatId: string,
-    newChatId: string,
-    mapSnapshot: (snapshot: RunSnapshot) => RunSnapshot,
-    runIds: Map<string, string>,
-    activeScopeKey: string
-  ) {
-    const scopeKey = this.scope(newChatId).scopeKey;
-    const mappedRefs = new Map<string, ContextCheckpointRef>();
-    const originals = this.db
-      .prepare('SELECT * FROM context_checkpoints WHERE chat_id=? ORDER BY rowid')
-      .all(originalChatId) as Row[];
-    for (const row of originals) {
-      if (!row.scope_key.startsWith(`chat:${originalChatId}:`)) continue;
-      let snapshot: RunSnapshot;
-      try {
-        snapshot = mapSnapshot(parse(row.snapshot));
-      } catch {
-        continue;
-      }
-      const plan = snapshot.contextPlan;
-      if (!plan?.summary) continue;
-      delete plan.checkpoint;
-      snapshot.contextBase = {
-        scopeKey,
-        activeRevision: row.revision - 1,
-        notesRevision: this.store.story.notes.revision(newChatId),
-        checkpoint: null,
-      };
-      const mapped = {
-        id: randomUUID(),
-        revision: Number(row.revision),
-        hash: checkpointHash(scopeKey, Number(row.revision), plan),
-      };
-      this.db
-        .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?,?)')
-        .run(
-          mapped.id,
-          scopeKey,
-          newChatId,
-          mapped.revision,
-          mapped.hash,
-          row.origin,
-          JSON.stringify(plan),
-          JSON.stringify(snapshot),
-          row.created_at,
-          row.activated
-        );
-      mappedRefs.set(row.id, mapped);
-      const originalHead = this.head(row.scope_key);
-      // Copy the selected active checkpoint only; historical activated flags remain history.
-      if (row.scope_key === activeScopeKey && originalHead.checkpointId === row.id)
-        this.db
-          .prepare(
-            'INSERT INTO context_heads VALUES(?,?,?,?) ON CONFLICT(scope_key) DO UPDATE SET revision=excluded.revision,checkpoint_id=excluded.checkpoint_id'
-          )
-          .run(scopeKey, newChatId, mapped.revision, mapped.id);
-    }
-    for (const newRunId of runIds.values()) {
-      const snapshot = this.store.run(newRunId).snapshot;
-      if (snapshot.contextBase) {
-        snapshot.contextBase = {
-          ...snapshot.contextBase,
-          scopeKey,
-          checkpoint: snapshot.contextBase.checkpoint
-            ? (mappedRefs.get(snapshot.contextBase.checkpoint.id) ?? null)
-            : null,
-        };
-      }
-      if (snapshot.contextPlan?.checkpoint) {
-        const mapped = mappedRefs.get(snapshot.contextPlan.checkpoint.id);
-        if (!mapped) throw new HttpError(400, 'Fork summary checkpoint dependency missing');
-        snapshot.contextPlan.checkpoint = mapped;
-      }
-      this.db
-        .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-        .run(JSON.stringify(snapshot), newRunId);
-    }
-  }
-  validateArchive() {
-    for (const row of this.db.prepare('SELECT * FROM context_checkpoints').all() as Row[]) {
-      if (parse(row.snapshot).kind === 'helper') continue; // Validated with its real helper message/event owners.
-      this.store.chat(row.chat_id);
-      const cp = this.checkpoint({ id: row.id, revision: row.revision, hash: row.hash });
-      if (
-        !['automatic', 'manual', 'edit', 'model'].includes(cp.origin) ||
-        !Number.isSafeInteger(cp.revision) ||
-        cp.revision < 1 ||
-        ![0, 1].includes(row.activated)
-      )
-        throw new HttpError(400, 'Invalid context checkpoint');
-      const snapshot = parse(row.snapshot) as RunSnapshot;
-      if (
-        snapshot.chatId !== cp.chatId ||
-        snapshot.contextBase?.scopeKey !== cp.scopeKey ||
-        !isDeepStrictEqual(projection(snapshot.contextPlan!), projection(cp.plan)) ||
-        !this.store.validateHistory(snapshot.history, snapshot.parentRevision)
-      )
-        throw new HttpError(400, 'Invalid checkpoint source snapshot');
-      validateContextPlan(snapshot);
-    }
-    for (const row of this.db.prepare('SELECT * FROM context_heads').all() as Row[]) {
-      const cp = this.byId(row.checkpoint_id);
-      if (
-        cp.chatId !== row.chat_id ||
-        cp.scopeKey !== row.scope_key ||
-        cp.revision !== row.revision ||
-        !cp.activated
-      )
-        throw new HttpError(400, 'Invalid active context checkpoint');
-    }
-    for (const row of this.db.prepare('SELECT * FROM context_jobs').all() as Row[]) {
-      const job = this.job(row.id);
-      this.store.product.branch(job.chatId, job.branchId);
-      if (
-        !['completed', 'failed', 'cancelled', 'interrupted'].includes(job.status) ||
-        job.snapshot.chatId !== job.chatId ||
-        job.snapshot.branchId !== job.branchId ||
-        !this.store.validateHistory(job.snapshot.history, job.snapshot.parentRevision)
-      )
-        throw new HttpError(400, 'Invalid context job');
-      if (job.checkpoint) this.assertSnapshot(job.snapshot);
-    }
-    for (const row of this.db
-      .prepare(
-        'SELECT a.*,j.chat_id AS owner_chat FROM context_job_attempts x JOIN attempts a ON a.id=x.attempt_id JOIN context_jobs j ON j.id=x.job_id'
-      )
-      .all() as Row[])
-      if (row.chat_id !== row.owner_chat || row.role !== 'context' || row.run_id !== null)
-        throw new HttpError(400, 'Invalid context attempt owner');
   }
 }

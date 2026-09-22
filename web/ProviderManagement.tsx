@@ -506,14 +506,13 @@ export function ConnectionEditor({
     else void perform(() => saveModel(updated, id, false));
   }
   async function latest(kind: 'connection' | 'model') {
-    const fresh = await api<Library>('/library');
     if (kind === 'connection' && editingConnection) {
-      const value = fresh.connections.find((item) => item.id === editingConnection.id);
+      const value = await api<Connection>(`/connections/${editingConnection.id}`);
       if (!value) throw new Error('프로바이더를 찾지 못했어요.');
       showConnection(value, false, true);
     }
     if (kind === 'model' && editingModel) {
-      const value = fresh.models.find((item) => item.id === editingModel.id);
+      const value = await api<ModelPreset>(`/model-presets/${editingModel.id}`);
       if (!value) throw new Error('모델을 찾지 못했어요.');
       await showModel(value, false, true);
     }

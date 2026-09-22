@@ -1,9 +1,7 @@
-import { HttpError, fields, number, record, text } from './request-validation.js';
-import { isDeepStrictEqual } from 'node:util';
+import { imageDataHashes, pruneUnusedData } from './unused-data.js';
+import { HttpError, fields, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
-import { deleteChatOverrideSourcesInTransaction } from './chat-overrides.js';
-import { deleteIllustrationsForSources } from './illustrations.js';
 
 type Row = Record<string, any>;
 const chatTables = [
@@ -35,37 +33,14 @@ const chatTables = [
   'runs',
   'branches',
 ];
-const references = (value: unknown, ids: Set<string>): boolean =>
-  typeof value === 'string'
-    ? ids.has(value)
-    : Array.isArray(value)
-      ? value.some((item) => references(item, ids))
-      : !!value &&
-        typeof value === 'object' &&
-        Object.values(value).some((item) => references(item, ids));
 
-/** Capture a reviewed selection. Branch revisions also change when new story text commits. */
+/** Describe the selected chat. Unrelated diagnostic events cannot invalidate its deletion. */
 export function chatDeletionImpact(store: Store, chatId: string) {
-  const chat = store.chat(chatId);
-  const expectedEventSequence = Number(
-    (
-      store.db
-        .prepare('SELECT COALESCE(MAX(seq),0) AS seq FROM events WHERE chat_id=?')
-        .get(chatId) as Row
-    ).seq
-  );
+  store.chat(chatId);
   return {
-    request: {
-      expectedSettingsRevision: chat.settingsRevision,
-      expectedOrganizationRevision: chat.organizationRevision ?? 1,
-      expectedProfileRevision: store.product.profile(chatId).revision,
-      expectedEventSequence,
-      expectedBranches: store.product
-        .branches(chatId)
-        .map((branch) => ({ id: branch.id, revision: branch.revision })),
-    },
+    request: {},
     description:
-      '채팅의 모든 분기, 원문, 번역, 상태·문맥·메모, 도우미, 이미지와 실행 기록을 영구 삭제해요. 별도로 포크한 채팅과 공통 자료는 유지돼요.',
+      '이 채팅의 원문·번역·메모·도우미와 작업 기록을 삭제해요. 독립 사본과 공통 자료는 유지돼요.',
   };
 }
 
@@ -112,32 +87,23 @@ function removeRunArtifacts(store: Store, runIds: string[], sourceIds: string[],
 
 export function deleteChat(store: Store, chatId: string, value: unknown) {
   const body = record(value);
-  fields(body, [
-    'expectedSettingsRevision',
-    'expectedOrganizationRevision',
-    'expectedProfileRevision',
-    'expectedEventSequence',
-    'expectedBranches',
-  ]);
-  for (const key of [
-    'expectedSettingsRevision',
-    'expectedOrganizationRevision',
-    'expectedProfileRevision',
-  ])
-    number(body[key], key);
-  number(body.expectedEventSequence, 'event sequence', 0, Number.MAX_SAFE_INTEGER);
-  if (!Array.isArray(body.expectedBranches))
-    throw new HttpError(400, '삭제할 분기 목록이 필요해요.');
-  for (const value of body.expectedBranches) {
-    const item = record(value);
-    fields(item, ['id', 'revision']);
-    text(item.id, 'branch ID', 100);
-    number(item.revision, 'branch revision');
-  }
+  fields(body, []);
   return store.transaction(() => {
-    if (!isDeepStrictEqual(body, chatDeletionImpact(store, chatId).request))
-      throw new HttpError(409, '채팅이 변경됐어요. 최신 내용을 확인한 뒤 다시 삭제해 주세요.');
+    store.chat(chatId);
     assertIdle(store, chatId);
+    const imageCandidates = new Set<string>();
+    for (const sql of [
+      'SELECT hash AS value FROM assets WHERE chat_id=?',
+      'SELECT hash AS value FROM illustration_images WHERE chat_id=?',
+      'SELECT text AS value FROM sources WHERE chat_id=?',
+      'SELECT e.text AS value FROM source_edits e JOIN sources s ON s.id=e.source_id WHERE s.chat_id=?',
+      'SELECT snapshot AS value FROM runs WHERE chat_id=?',
+      'SELECT r.result AS value FROM job_results r JOIN jobs j ON j.id=r.job_id WHERE j.chat_id=?',
+      'SELECT m.text AS value FROM helper_messages m JOIN helper_conversations c ON c.id=m.conversation_id WHERE c.chat_id=?',
+      'SELECT a.text AS value FROM helper_artifacts a JOIN helper_conversations c ON c.id=a.conversation_id WHERE c.chat_id=?',
+    ])
+      for (const row of store.db.prepare(sql).iterate(chatId))
+        for (const hash of imageDataHashes(row.value)) imageCandidates.add(hash);
     store.db.exec('PRAGMA defer_foreign_keys=ON');
     const ids = (table: string) =>
       (store.db.prepare(`SELECT id FROM ${table} WHERE chat_id=?`).all(chatId) as Row[]).map(
@@ -152,178 +118,9 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
     for (const table of chatTables)
       store.db.prepare(`DELETE FROM ${table} WHERE chat_id=?`).run(chatId);
     store.db.prepare('DELETE FROM chats WHERE id=?').run(chatId);
+    pruneUnusedData(store.db, imageCandidates);
     return { deleted: true };
   });
-}
-
-function removeBranchHelpers(store: Store, chatId: string, branchId: string) {
-  const conversations = store.db
-    .prepare('SELECT id FROM helper_conversations WHERE chat_id=? AND branch_id=?')
-    .all(chatId, branchId) as Row[];
-  for (const conversation of conversations) {
-    const tasks = store.db
-      .prepare('SELECT id FROM helper_tasks WHERE conversation_id=?')
-      .all(conversation.id) as Row[];
-    for (const scope of [
-      `helper:${conversation.id}`,
-      ...tasks.map((task) => `artifact:${task.id}`),
-    ]) {
-      for (const table of ['context_heads', 'context_checkpoints'])
-        store.db.prepare(`DELETE FROM ${table} WHERE scope_key=?`).run(scope);
-    }
-    store.db
-      .prepare(
-        'DELETE FROM attempts WHERE id IN (SELECT x.attempt_id FROM helper_task_attempts x JOIN helper_tasks t ON t.id=x.task_id WHERE t.conversation_id=?)'
-      )
-      .run(conversation.id);
-    store.db.prepare('DELETE FROM helper_conversations WHERE id=?').run(conversation.id);
-  }
-}
-
-/** Delete branch-owned history only when no surviving branch depends on it. */
-export function deleteBranch(store: Store, chatId: string, branchId: string, value: unknown) {
-  const body = record(value);
-  fields(body, ['expectedRevision']);
-  const expected = number(body.expectedRevision, 'branch revision');
-  return store.transaction(() => {
-    const branch = store.product.branch(chatId, branchId);
-    if (branch.revision !== expected)
-      throw new HttpError(409, '분기가 변경됐어요. 최신 내용을 확인한 뒤 다시 삭제해 주세요.');
-    if (branch.default)
-      throw new HttpError(
-        409,
-        '기본 분기는 삭제할 수 없어요. 다른 분기를 기본으로 지정하거나 채팅 삭제를 이용해 주세요.'
-      );
-    assertIdle(store, chatId);
-    const runIds = (
-      store.db
-        .prepare('SELECT id FROM runs WHERE chat_id=? AND branch_id=?')
-        .all(chatId, branchId) as Row[]
-    ).map((row) => String(row.id));
-    const runSet = new Set(runIds);
-    const sourceIds = (
-      store.db.prepare('SELECT id,run_id FROM sources WHERE chat_id=?').all(chatId) as Row[]
-    )
-      .filter((row) => runSet.has(row.run_id))
-      .map((row) => String(row.id));
-    const sourceSet = new Set(sourceIds),
-      dependencies = new Set([branchId, ...sourceIds, ...runIds]);
-    const conflict = () => {
-      throw new HttpError(
-        409,
-        '다른 분기가 이 분기의 원문 또는 상태를 참조하고 있어요. 참조하는 분기를 먼저 삭제해 주세요.'
-      );
-    };
-    for (const other of store.product.branches(chatId))
-      if (other.id !== branchId && other.headRevision && sourceSet.has(other.headRevision))
-        conflict();
-    for (const row of store.db.prepare('SELECT * FROM runs WHERE chat_id=?').all(chatId) as Row[])
-      if (
-        !runSet.has(row.id) &&
-        (sourceSet.has(row.parent_revision) || references(JSON.parse(row.snapshot), dependencies))
-      )
-        conflict();
-    for (const row of store.db
-      .prepare('SELECT * FROM sources WHERE chat_id=?')
-      .all(chatId) as Row[])
-      if (!sourceSet.has(row.id) && sourceSet.has(row.parent_revision)) conflict();
-    const ownScope = store.context.scope(chatId, branchId).scopeKey;
-    const helperScopes = new Set<string>();
-    const helperTasks = store.db
-      .prepare(
-        'SELECT t.*,c.branch_id AS helper_branch,c.id AS conversation FROM helper_tasks t JOIN helper_conversations c ON c.id=t.conversation_id WHERE c.chat_id=?'
-      )
-      .all(chatId) as Row[];
-    for (const row of helperTasks) {
-      if (row.helper_branch === branchId) {
-        helperScopes.add(`helper:${row.conversation}`);
-        helperScopes.add(`artifact:${row.id}`);
-      } else if (references(JSON.parse(row.snapshot), dependencies)) conflict();
-    }
-    for (const table of ['context_checkpoints', 'context_jobs'])
-      for (const row of store.db
-        .prepare('SELECT * FROM ' + table + ' WHERE chat_id=?')
-        .all(chatId) as Row[])
-        if (
-          (table === 'context_checkpoints'
-            ? row.scope_key !== ownScope && !helperScopes.has(row.scope_key)
-            : row.branch_id !== branchId) &&
-          references(JSON.parse(row.snapshot), dependencies)
-        )
-          conflict();
-    const notes = store.db
-      .prepare('SELECT * FROM author_notes WHERE chat_id=?')
-      .all(chatId) as Row[];
-    const noteIds = notes
-      .filter((row) => references(JSON.parse(row.entry), dependencies))
-      .map((row) => String(row.id));
-    if (notes.some((row) => !noteIds.includes(row.id) && noteIds.includes(row.replaces_id)))
-      conflict();
-    for (const id of noteIds) dependencies.add(id);
-    for (const row of store.db.prepare('SELECT * FROM runs WHERE chat_id=?').all(chatId) as Row[])
-      if (!runSet.has(row.id) && references(JSON.parse(row.snapshot), dependencies)) conflict();
-    for (const row of notes)
-      if (!noteIds.includes(row.id) && references(JSON.parse(row.entry), dependencies)) conflict();
-    const jobIds = (
-      store.db.prepare('SELECT id,source_revision FROM jobs WHERE chat_id=?').all(chatId) as Row[]
-    )
-      .filter((row) => sourceSet.has(row.source_revision))
-      .map((row) => String(row.id));
-    store.db.exec('PRAGMA defer_foreign_keys=ON');
-    removeBranchHelpers(store, chatId, branchId);
-    removeRunArtifacts(store, runIds, sourceIds, jobIds);
-    deleteChatOverrideSourcesInTransaction(store, chatId, sourceSet);
-    store.db
-      .prepare(
-        "DELETE FROM chat_option_operations WHERE chat_id=? AND json_extract(intent,'$.branchId')=?"
-      )
-      .run(chatId, branchId);
-    store.db
-      .prepare(
-        'DELETE FROM context_job_attempts WHERE job_id IN (SELECT id FROM context_jobs WHERE chat_id=? AND branch_id=?)'
-      )
-      .run(chatId, branchId);
-    store.db
-      .prepare('DELETE FROM context_jobs WHERE chat_id=? AND branch_id=?')
-      .run(chatId, branchId);
-    for (const table of ['context_commands', 'context_heads', 'context_checkpoints'])
-      store.db.prepare('DELETE FROM ' + table + ' WHERE scope_key=?').run(ownScope);
-    if (noteIds.length)
-      store.db.prepare('DELETE FROM author_note_commands WHERE chat_id=?').run(chatId);
-    removeIds(store, 'author_notes', 'id', noteIds);
-    removeIds(store, 'attempts', 'job_id', jobIds);
-    removeIds(store, 'attempts', 'run_id', runIds);
-    removeIds(store, 'jobs', 'id', jobIds);
-    deleteIllustrationsForSources(store, sourceIds);
-    for (const table of [
-      'outline_batches',
-      'outline_nodes',
-      'scene_commands',
-      'chat_variable_states',
-      'chat_variable_journal',
-    ])
-      store.db
-        .prepare(`DELETE FROM ${table} WHERE chat_id=? AND branch_id=?`)
-        .run(chatId, branchId);
-    removeIds(store, 'sources', 'id', sourceIds);
-    removeIds(store, 'runs', 'id', runIds);
-    store.db.prepare('DELETE FROM branches WHERE id=? AND chat_id=?').run(branchId, chatId);
-    store.event(chatId, 'branch.deleted', branchId);
-    return { deleted: true };
-  });
-}
-
-function assertUnreferencedStoryEntry(store: Store, chatId: string, id: string) {
-  const ids = new Set([id]);
-  for (const table of ['runs'])
-    for (const row of store.db
-      .prepare(`SELECT snapshot FROM ${table} WHERE chat_id=?`)
-      .all(chatId) as Row[])
-      if (references(JSON.parse(row.snapshot), ids))
-        throw new HttpError(
-          409,
-          '저장된 실행 기록에서 사용하는 항목이에요. 해당 분기 또는 채팅과 함께 삭제해 주세요.'
-        );
 }
 
 export function deleteSceneCommand(store: Store, id: string, value: unknown) {
@@ -336,7 +133,6 @@ export function deleteSceneCommand(store: Store, id: string, value: unknown) {
         409,
         '실행 기록에 연결된 새 장면 요청이에요. 해당 분기 또는 채팅과 함께 삭제해 주세요.'
       );
-    assertUnreferencedStoryEntry(store, command.chatId, id);
     if (store.db.prepare('SELECT 1 FROM outline_nodes WHERE command_id=?').get(id))
       throw new HttpError(
         409,
@@ -362,14 +158,7 @@ export function chatDeletionRoutes(
     onChatDeleted?.(request.params.id);
     return result;
   });
-  app.delete<{ Params: { id: string; branchId: string } }>(
-    '/api/chats/:id/branches/:branchId',
-    async (request) => {
-      const result = deleteBranch(store, request.params.id, request.params.branchId, request.body);
-      publish(request.params.id);
-      return result;
-    }
-  );
+
   app.delete<{ Params: { id: string } }>('/api/scene-commands/:id', async (request) => {
     const result = deleteSceneCommand(store, request.params.id, request.body ?? {});
     publish(result.chatId);

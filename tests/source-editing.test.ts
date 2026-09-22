@@ -259,7 +259,13 @@ test('CAS manual edit fences a late owned job while preserving prior execution e
     expectedRevision: job.revision!,
     expectedSourceHash: s.hash,
   });
-  expect(store.completeJob(job.id, active.generation, 'owner', { text: 'late' })).toBe(false);
+  expect(
+    store.finishAuxiliary(job.id, active.generation, 'owner', {
+      status: 'completed',
+      result: { text: 'late' },
+      error: null,
+    })
+  ).toBe(false);
   expect(manual.id).not.toBe(job.id);
   expect(store.job(job.id).generation).toBeGreaterThan(active.generation);
   expect(() =>
@@ -288,7 +294,13 @@ test('source editing invalidates jobs and preserves both old and new snapshot hi
   expect(store.sourceAtHash(s.id, s.hash).text).toBe(s.text);
   expect(store.validateHistory(before.history, s.id)).toBe(true);
   expect(store.history(s.id)[0].contentHash).toBe(edited.hash);
-  expect(store.completeJob(job.id, active.generation, 'owner', {})).toBe(false);
+  expect(
+    store.finishAuxiliary(job.id, active.generation, 'owner', {
+      status: 'completed',
+      result: {},
+      error: null,
+    })
+  ).toBe(false);
   expect(store.job(job.id).status).toBe('stale');
   expect(store.detail(s.chatId).jobs.some((j) => j.id === job.id)).toBe(false);
   expect(() => store.editSource(s.id, { text: 'bad', expectedRevision: 0 })).toThrow('conflict');
@@ -365,15 +377,15 @@ test('unsupported future database refuses startup without rewriting translation 
   item.store = undefined;
   const path = join(item.dir, 'test.sqlite');
   const db = new DatabaseSync(path);
-  db.exec('PRAGMA user_version=4;');
+  db.exec('PRAGMA user_version=5;');
   db.close();
-  expect(() => new Store(path)).toThrow('Database version 4 is not the personal-v1 format');
+  expect(() => new Store(path)).toThrow('Database version 5 is not the personal-v1 format');
   const original = new DatabaseSync(path, { readOnly: true });
   try {
     expect(original.prepare('SELECT status FROM jobs WHERE id=?').get(job.id)).toEqual({
       status: 'queued',
     });
-    expect(original.prepare('PRAGMA user_version').get()).toEqual({ user_version: 4 });
+    expect(original.prepare('PRAGMA user_version').get()).toEqual({ user_version: 5 });
   } finally {
     original.close();
   }

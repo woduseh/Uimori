@@ -14,7 +14,6 @@ import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
 import { readRunStatus } from './run-projections.js';
 import { ChatTitleService } from './chat-title.js';
-import { BranchTitleService } from './branch-title.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
 import { readHelperChatContext } from './helper-context.js';
 import { helperRoutes } from './helper-routes.js';
@@ -330,16 +329,18 @@ export async function createApp(options: AppOptions): Promise<App> {
           snapshot
         );
         if (job.status !== 'queued') return job;
+        if (!job.snapshot) throw new HttpError(409, 'CONTEXT_INPUT_MISSING');
+        const input = job.snapshot;
         if (!store.context.start(job.id)) return store.context.job(job.id);
         try {
           const remaining =
             task.snapshot.limits.totalCalls - helper.workspace.task(task.id).usage.modelCalls;
           const prepared = await prepareInputContext(
             {
-              ...job.snapshot,
+              ...input,
               settings: {
-                ...job.snapshot.settings,
-                maxCalls: Math.min(job.snapshot.settings.maxCalls, remaining),
+                ...input.settings,
+                maxCalls: Math.min(input.settings.maxCalls, remaining),
               },
             },
             {
@@ -356,7 +357,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 return attempt;
               },
             },
-            store.context.previous(job.snapshot)
+            store.context.previous(input)
           );
           hooks.signal.throwIfAborted();
           return store.context.finish(job.id, prepared.snapshot);
@@ -380,14 +381,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     track,
     publish,
   });
-  const branchTitles = new BranchTitleService(store, {
-    resolveCredential,
-    executeCodex,
-    vertexRequestTier: options.vertexRequestTier,
-    signal: stopping.signal,
-    track,
-    publish,
-  });
+
   // Maintenance keeps admitted work finishing but starts no new external work.
   const forcedClosed = options.maintenance === true;
   const admitted = () => admissionOpen(store, forcedClosed);
@@ -971,7 +965,6 @@ export async function createApp(options: AppOptions): Promise<App> {
           pumpIllustrations();
           if (admitted()) {
             titles.afterSource(id);
-            branchTitles.afterSource(id);
           }
         } catch (error) {
           if (!stopping.signal.aborted) {
@@ -1107,6 +1100,8 @@ export async function createApp(options: AppOptions): Promise<App> {
         'context'
       ),
     execute: async (job, signal) => {
+      const snapshot = job.snapshot;
+      if (!snapshot) throw new HttpError(409, 'CONTEXT_INPUT_MISSING');
       const hooks: MainHooks = {
         signal: AbortSignal.any([signal, stopping.signal]),
 
@@ -1124,7 +1119,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               store.context.job(job.id).status !== 'running'
             )
               throw new Error('CONTEXT_CANCELLED');
-            const target = job.snapshot.profile?.contextModel;
+            const target = snapshot.profile?.contextModel;
             if (!target) throw new Error('MODEL_REQUIRED:context');
             store.product.authorize(target.connection);
             const attempt = store.product.startAttempt(job.chatId, null, null, wire);
@@ -1134,9 +1129,9 @@ export async function createApp(options: AppOptions): Promise<App> {
         onAttemptFinish: (id, result) => store.product.finishAttempt(id, result),
       };
       const prepared = await prepareInputContext(
-        job.snapshot,
+        snapshot,
         { ...hooks, reason: 'manual', reserveCalls: 0, onProgress: () => {} },
-        store.context.previous(job.snapshot)
+        store.context.previous(snapshot)
       );
       return prepared.snapshot;
     },
@@ -1287,14 +1282,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     publish(chat.id);
     return chat;
   });
-  app.post<{ Params: { id: string; branchId: string } }>(
-    '/api/chats/:id/branches/:branchId/title',
-    async (request) => {
-      const branch = store.product.branch(request.params.id, request.params.branchId);
-      branchTitles.start(branch.chatId, branch.id, true);
-      return branch;
-    }
-  );
+
   app.get<{ Params: { id: string } }>('/api/chats/:id', async (request) =>
     store.detail(request.params.id)
   );
