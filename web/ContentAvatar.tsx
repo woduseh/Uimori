@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Content } from '../core/product.js';
 import './content-picker.css';
+import { contentPortraitUrl } from './content-portrait.js';
 
 function AvatarImage({ url, initial }: { url: string; initial: string }) {
   const [failed, setFailed] = useState(false);
@@ -22,14 +23,7 @@ export function ContentAvatar({
   className?: string;
 }) {
   const name = title ?? content?.title ?? '';
-  const portrait = content?.package?.images?.find(
-    (image) => image.id === content.package?.portraitImageId && image.allowedUse !== 'inline'
-  );
-  const url = content?.package
-    ? portrait
-      ? `/api/package-image-blobs/${portrait.blobHash}`
-      : ''
-    : (content?.coverImage?.url ?? '');
+  const url = contentPortraitUrl(content);
   return (
     <span className={`content-avatar ${className}`} aria-hidden="true">
       <AvatarImage key={url} url={url} initial={Array.from(name.trim())[0] ?? '?'} />
