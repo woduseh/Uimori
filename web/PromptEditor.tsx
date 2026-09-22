@@ -507,7 +507,7 @@ export function PromptEditor({
         </p>
         {pendingTemplate && (
           <p className="muted">
-            미적용 문법 초안이 있어요. 해당 본문에서 적용하거나 되돌린 뒤 저장·전환해 주세요.
+            원문 입력은 저장할 때 함께 검증해요. 오류가 있으면 입력을 유지하고 알려드려요.
           </p>
         )}
         {draft.dirty && (

@@ -77,9 +77,10 @@ const sameModel = (left: ResourceModel, right: ResourceModel) => {
   const entries = Object.entries(left);
   return (
     entries.length === Object.keys(right).length &&
-    entries.every(([key, value]) =>
+    (entries.every(([key, value]) =>
       Object.is(value, (right as unknown as Record<string, unknown>)[key])
-    )
+    ) ||
+      JSON.stringify(left) === JSON.stringify(right))
   );
 };
 export function useResourceEditor(options: Options) {
@@ -183,63 +184,67 @@ export function useBufferedEditorState<T>(
   options?: { syncPristineInitial?: boolean }
 ): [T, Dispatch<SetStateAction<T>>] {
   const editor = useContext(EditorContextValue);
-  const latest = useRef({ editor, initial });
-  latest.current = { editor, initial };
-  const readInitial = () =>
-    typeof latest.current.initial === 'function'
-      ? (latest.current.initial as () => T)()
-      : latest.current.initial;
-  const decode = () => {
-    const raw = latest.current.editor?.state.local.rawFields[path];
-    const fallback = readInitial();
-    if (raw === undefined) return fallback;
+  const initialValue = typeof initial === 'function' ? (initial as () => T)() : initial;
+  const signature = JSON.stringify(initialValue);
+  const restore = editor?.state.restoreVersion ?? 0;
+  const [standalone, setStandalone] = useState<T>(() => initialValue);
+  const raw = editor?.state.local.rawFields[path];
+  let value = editor ? initialValue : standalone;
+  if (raw !== undefined) {
     try {
-      return (typeof fallback === 'string' ? raw : JSON.parse(raw)) as T;
+      value = (typeof initialValue === 'string' ? raw : JSON.parse(raw)) as T;
     } catch {
-      return fallback;
+      // Device-local recovery can be stale; the current model remains the fallback.
     }
-  };
-  const [value, setValue] = useState<T>(decode);
+  }
   const current = useRef(value);
   current.current = value;
-  const restore = editor?.state.restoreVersion ?? 0;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Restore only on resource adoption, not on each keystroke.
+  const latest = useRef({ editor, initialValue, signature });
+  latest.current = { editor, initialValue, signature };
+  const previous = useRef({ path, restore, signature });
   useEffect(() => {
-    const next = decode();
-    current.current = next;
-    setValue(next);
-  }, [path, restore]);
-  const initialSignature = options?.syncPristineInitial ? JSON.stringify(readInitial()) : '';
-  const previousInitial = useRef(initialSignature);
-  useEffect(() => {
-    if (!options?.syncPristineInitial || previousInitial.current === initialSignature) return;
-    if (JSON.stringify(current.current) === previousInitial.current) {
-      const next = JSON.parse(initialSignature) as T;
-      current.current = next;
-      setValue(next);
-      latest.current.editor?.session.setField(
-        path,
-        typeof next === 'string' ? next : initialSignature
-      );
-    }
-    previousInitial.current = initialSignature;
-  }, [initialSignature, path, options?.syncPristineInitial]);
+    const old = previous.current;
+    previous.current = { path, restore, signature };
+    if (
+      !options?.syncPristineInitial ||
+      old.path !== path ||
+      old.restore !== restore ||
+      old.signature === signature
+    )
+      return;
+    const serialized = JSON.stringify(current.current);
+    if (serialized !== old.signature && serialized !== signature) return;
+    // A parent/accepted-model update is not new typing. The context already owns recovery.
+    if (latest.current.editor) latest.current.editor.session.setField(path, undefined);
+    else setStandalone(latest.current.initialValue);
+  }, [path, restore, signature, options?.syncPristineInitial]);
   const update = useCallback<Dispatch<SetStateAction<T>>>(
     (action) => {
       const next =
         typeof action === 'function' ? (action as (old: T) => T)(current.current) : action;
-      if (Object.is(next, current.current)) return;
+      if (
+        Object.is(next, current.current) ||
+        JSON.stringify(next) === JSON.stringify(current.current)
+      )
+        return;
       current.current = next;
-      setValue(next);
-      latest.current.editor?.session.setField(
-        path,
-        typeof next === 'string' ? next : JSON.stringify(next)
-      );
+      const owner = latest.current;
+      if (owner.editor)
+        owner.editor.session.setField(
+          path,
+          JSON.stringify(next) === owner.signature
+            ? undefined
+            : typeof next === 'string'
+              ? next
+              : JSON.stringify(next)
+        );
+      else setStandalone(next);
     },
     [path]
   );
   return [value, update];
 }
+
 /** Input widgets prepare their own values at Save; no extra persisted draft or apply stage. */
 export function useEditorSavePreparation(
   path: string,

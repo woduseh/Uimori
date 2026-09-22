@@ -95,9 +95,8 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     await expect(start).toBeEnabled();
     await start.scrollIntoViewIfNeeded();
     await expect(start).toBeInViewport();
-    await expect(
-      panel.getByRole('status').filter({ hasText: '저장됨 · 다음 실행부터 사용해요.' })
-    ).toContainText(`${createdTitle} 저장됨 · 다음 실행부터 사용해요.`);
+    await expect(panel.getByRole('heading', { name: createdTitle, exact: true })).toBeVisible();
+    await expect(panel.locator('.resource-editor-status').getByRole('status')).toHaveText('저장됨');
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-saved-${width}.png`) });
     await start.click();

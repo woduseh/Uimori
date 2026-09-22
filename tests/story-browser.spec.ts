@@ -197,7 +197,7 @@ test('S06 S07 reading preserves source text while the asset catalog does not pre
 }, testInfo) => {
   const chat = await create(page, 'S06 S07 합성 표현과 에셋');
   const png =
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jK1sAAAAASUVORK5CYII=';
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEUlEQVQImWMQCej5D8IMMAYAP7QHvSBXvZYAAAAASUVORK5CYII=';
   const uploadedIds = new Set<string>();
   for (let index = 0; index < 5; index++) {
     const response = await request.post(`/api/chats/${chat.id}/assets`, {

@@ -67,7 +67,7 @@ for (const width of DEFAULT_WIDTHS) {
     await accessibleControl(dialog.getByRole('button', { name: '이미지 등록', exact: true }));
     await page.screenshot({ path: info.outputPath(`image-register-${width}.png`) });
     await page.keyboard.press('Escape');
-    // Both panels fetch the shared workspace. Hold it to inspect and use the loading retry.
+    // Both consumers share a cached workspace. A fresh page exercises initial-load recovery.
     let ready = false;
     await page.route('**/api/prompt-workspace', async (route) => {
       if (ready) await route.continue();
@@ -78,6 +78,7 @@ for (const width of DEFAULT_WIDTHS) {
           body: JSON.stringify({ message: '합성 일시 오류' }),
         });
     });
+    await page.reload();
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '역할별 모델');
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
@@ -94,6 +95,8 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(models).not.toContainText('명확한 거절일 때만 추가 번역');
     await page.screenshot({ path: info.outputPath(`model-save-${width}.png`) });
     ready = false;
+    await page.reload();
+    await navigationAction(page, '설정');
     await selectSettingsSection(page, '현재 프롬프트');
     await accessibleControl(reload);
     ready = true;

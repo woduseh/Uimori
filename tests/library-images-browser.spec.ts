@@ -409,26 +409,30 @@ test('LIMG04 shared module references show current names and portraits while kee
     parent = await seed(request, 'bot', `고정 연결 봇 ${Date.now()}`, {
       modules: [{ id: child.id, revision: child.revision }],
     });
-  const changed = await request.put(`/api/content/${child.id}`, {
+  const changed = await request.post('/api/resources/save', {
     data: {
-      kind: child.kind,
-      title: `${child.title} 새 이름`,
-      description: child.description,
-      text: child.text,
-      loading: child.loading,
-      relatedIds: [],
-      package: nativeContent(
-        { ...child.package!.nativeRisu.card, name: `${child.title} 새 이름` },
-        { ...child.package!, ...portraitPart(newHash) },
-        child.kind
-      ),
+      kind: 'content',
+      id: child.id,
       expectedRevision: child.revision,
+      model: {
+        kind: child.kind,
+        title: `${child.title} 새 이름`,
+        description: child.description,
+        text: child.text,
+        loading: child.loading,
+        relatedIds: [],
+        package: nativeContent(
+          { ...child.package!.nativeRisu.card, name: `${child.title} 새 이름` },
+          { ...child.package!, ...portraitPart(newHash) },
+          child.kind
+        ),
+      },
     },
   });
   expect(changed.ok(), await changed.text()).toBe(true);
   const library = await edit(page, parent);
   await selectPackageSection(page, '고급 설정');
-  await library.getByRole('button', { name: '모듈', exact: true }).click();
+  await library.getByRole('button', { name: /연결 모듈/, exact: false }).click();
   const features = library.getByLabel('패키지 모듈과 기능 편집', { exact: true });
   const current = features.getByRole('group', { name: `${child.title} 새 이름`, exact: true });
   await expect(current).toBeVisible();
@@ -437,10 +441,13 @@ test('LIMG04 shared module references show current names and portraits while kee
     `/api/package-image-blobs/${newHash.hash}`
   );
   await expect(features.getByText(child.title, { exact: true })).toHaveCount(0);
-  const original: Content = await (
-    await request.get(`/api/revisions/content/${child.id}/${child.revision}`)
-  ).json();
-  expect(original.package).toEqual(child.package);
+  const restored = await request.post(`/api/resources/content/${child.id}/undo`, {
+    data: { expectedRevision: child.revision + 1 },
+  });
+  expect(restored.ok(), await restored.text()).toBe(true);
+  const original = (await restored.json()).saved as Content;
+  expect(original.title).toBe(child.title);
+  expect(original.package.images).toEqual(child.package.images);
 });
 
 test('LIMG05 quick persona selection shows one current selection after its image changes', async ({

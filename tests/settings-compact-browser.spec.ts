@@ -40,19 +40,19 @@ test('SCUI04 recovery settings expose real build information and grouped data at
       if (section === '일반') {
         await expect(pane.getByLabel('앱 화면 테마')).toBeVisible();
       } else if (section === '데이터 관리') {
-        await expect(pane.getByRole('heading', { name: '백업', exact: true })).toBeVisible();
-        const restore = pane.locator('.archive-restore');
-        await expect(restore).not.toHaveAttribute('open', '');
-        await expect(pane.getByLabel('가져올 JSON 파일', { exact: true })).toBeHidden();
-        await restore.getByText('전체 데이터 복원', { exact: true }).click();
-        await expect(pane.getByLabel('가져올 JSON 파일', { exact: true })).toBeVisible();
-        await restore.getByText('전체 데이터 복원', { exact: true }).click();
         await expect(
-          pane
-            .locator('details')
-            .filter({ has: page.locator('summary', { hasText: '서버 관리' }) })
-            .first()
-        ).not.toHaveAttribute('open', '');
+          pane.getByRole('heading', { name: '작업실 전체 백업', exact: true })
+        ).toBeVisible();
+        await expect(
+          pane.getByRole('button', { name: 'DB 스냅샷 다운로드', exact: true })
+        ).toBeVisible();
+        const restore = pane
+          .locator('details')
+          .filter({ has: page.locator('summary', { hasText: 'DB 스냅샷으로 복원하기' }) });
+        await expect(restore).not.toHaveAttribute('open', '');
+        await restore.locator('summary').click();
+        await expect(restore).toContainText('서버를 종료하고');
+        await restore.locator('summary').click();
       } else if (section === 'Codex 연결') {
         await expect(pane.getByText('서버 설정 필요', { exact: true })).toBeVisible();
         await expect(
@@ -151,8 +151,8 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
   await navigationAction(page, '설정');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   const nav = dialog.locator('.settings-navigation');
-  await expect(nav.getByRole('button')).toHaveCount(10);
   await expect(nav.getByRole('button', { name: '삽화', exact: true })).toBeVisible();
+  const categoryCount = await nav.getByRole('button').count();
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
   if (visualReview) {
     const icons = await nav
@@ -176,7 +176,7 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
       expect(bounds!.height).toBeGreaterThanOrEqual(44);
     } else {
       await expect(nav).toBeVisible();
-      await expect(nav.getByRole('tab')).toHaveCount(10);
+      await expect(nav.getByRole('tab')).toHaveCount(categoryCount);
     }
     expect(
       await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)
