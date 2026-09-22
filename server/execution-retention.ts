@@ -1,16 +1,43 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-/** Completed prose is the durable result; historical provider packets are not a second manuscript. */
+/** Keep billing and error summaries, not a second copy of every model conversation. */
+function releaseAttemptBodies(db: DatabaseSync, scope: 'run' | 'job' | 'helper', id: string): void {
+  const predicate =
+    scope === 'helper'
+      ? 'id IN (SELECT attempt_id FROM helper_task_attempts WHERE task_id=?)'
+      : scope === 'run'
+        ? 'run_id=?'
+        : 'job_id=?';
+  db.prepare(`UPDATE attempts SET
+    request=json_object('protocol',json_extract(request,'$.protocol'),
+      'role',role,'modelId',model_id,'pricingSnapshot',json_extract(request,'$.pricingSnapshot'),
+      'pricingStartedAt',json_extract(request,'$.pricingStartedAt'),'detailsOmitted',json('true')),
+    response=CASE WHEN response IS NULL THEN NULL ELSE json_object(
+      'status',status,'error',json_extract(response,'$.error'),
+      'usage',json_extract(response,'$.usage'),'estimatedCost',json_extract(response,'$.estimatedCost'),
+      'detailsOmitted',json('true')) END
+    WHERE ${predicate} AND status!='running'`).run(id);
+}
+
 export function releaseCompletedRunInputs(db: DatabaseSync, runId: string): void {
   db.prepare('DELETE FROM model_inputs WHERE run_id=?').run(runId);
   db.prepare('DELETE FROM tool_events WHERE run_id=?').run(runId);
-  db.prepare(`UPDATE attempts SET
-      request=json_object('protocol',json_extract(request,'$.protocol'),
-        'role',role,'modelId',model_id,'pricingSnapshot',json_extract(request,'$.pricingSnapshot'),
-        'pricingStartedAt',json_extract(request,'$.pricingStartedAt'),'detailsOmitted',json('true')),
-      response=CASE WHEN response IS NULL THEN NULL ELSE json_object(
-        'status',status,'error',json_extract(response,'$.error'),
-        'usage',json_extract(response,'$.usage'),'estimatedCost',json_extract(response,'$.estimatedCost'),
-        'detailsOmitted',json('true')) END
-    WHERE run_id=? AND status!='running'`).run(runId);
+  releaseAttemptBodies(db, 'run', runId);
+}
+
+/** Retain image catalogs/targets and translation settings used by display and dependent jobs. */
+export function releaseCompletedJobInputs(db: DatabaseSync, jobId: string): void {
+  db.prepare(`UPDATE jobs SET input=json_remove(input,'$.initial','$.inputs','$.toolEvents',
+    '$.failureDiagnostic','$.judgmentRecovery') WHERE id=? AND status='completed' AND json_valid(input)`).run(
+    jobId
+  );
+  releaseAttemptBodies(db, 'job', jobId);
+}
+
+/** Successful helper conversation text is in helper_messages; failed requests keep retry inputs. */
+export function releaseCompletedHelperInputs(db: DatabaseSync, taskId: string): void {
+  db.prepare(`UPDATE helper_tasks SET snapshot=json_set(json_remove(snapshot,
+    '$.writing','$.editor','$.selection','$.contextModel'),'$.history',json('[]'))
+    WHERE id=? AND status='completed'`).run(taskId);
+  releaseAttemptBodies(db, 'helper', taskId);
 }

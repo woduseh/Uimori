@@ -7,12 +7,6 @@ import { jsonPayloadHash } from './json-hash.js';
 import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
-export const chatVariableTables = [
-  'chat_variable_states',
-  'chat_variable_journal',
-  'chat_variable_outputs',
-] as const;
-
 export type ChatVariableCommand = {
   expectedRevision: number;
   expectedSourceHash: string | null;

@@ -356,7 +356,7 @@ test('edited source exposes hidden slot CAS and rejects a stale translation edit
   expect(saved.id).not.toBe(old.id);
   expect(store.requestTranslation(s.id).result?.text).toBe('Current');
 });
-test('unsupported v2 database refuses startup without rewriting translation reservations', () => {
+test('unsupported future database refuses startup without rewriting translation reservations', () => {
   const store = database();
   const s = source(store);
   const job = store.requestTranslation(s.id);
@@ -365,15 +365,15 @@ test('unsupported v2 database refuses startup without rewriting translation rese
   item.store = undefined;
   const path = join(item.dir, 'test.sqlite');
   const db = new DatabaseSync(path);
-  db.exec('PRAGMA user_version=2;');
+  db.exec('PRAGMA user_version=3;');
   db.close();
-  expect(() => new Store(path)).toThrow('Database version 2 is not the personal-v1 format');
+  expect(() => new Store(path)).toThrow('Database version 3 is not the personal-v1 format');
   const original = new DatabaseSync(path, { readOnly: true });
   try {
     expect(original.prepare('SELECT status FROM jobs WHERE id=?').get(job.id)).toEqual({
       status: 'queued',
     });
-    expect(original.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
+    expect(original.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 });
   } finally {
     original.close();
   }

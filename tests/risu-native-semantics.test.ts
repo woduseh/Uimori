@@ -256,7 +256,7 @@ test('native ChatML and history preserve roles and text despite retired settings
   ]);
 });
 
-test.each(['risu-native-prompt-1', 'risu-native-prompt-2'] as const)(
+test.each(['risu-native-prompt-2'] as const)(
   '%s suppresses retired blocks and settings in historical presets',
   (compilerVersion) => {
     const input = fixture(
@@ -287,7 +287,7 @@ test.each(['risu-native-prompt-1', 'risu-native-prompt-2'] as const)(
     });
     expect(result.compilerVersion).toBe(compilerVersion);
     expect(result.messages.map((message) => message.content[0].text)).toEqual([
-      compilerVersion === 'risu-native-prompt-1' ? 'Saved note' : '{{slot}}',
+      '{{slot}}',
       'Saved post',
       'Go',
     ]);

@@ -1,3 +1,4 @@
+import { setFixtureModelRoutes } from './fixtures/chat.js';
 import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
@@ -184,6 +185,11 @@ async function fixture(
     'PUT'
   );
   const prior = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`);
+  await setFixtureModelRoutes(app, {
+    main: { id: model.id },
+    translation: { id: model.id },
+    status: null,
+  });
   const profile = await api<ChatProfile>(
     app,
     `/api/chats/${chat.id}/profile`,
@@ -191,7 +197,6 @@ async function fixture(
       expectedRevision: prior.revision,
       packageAttachments: [...prior.packageAttachments!, { ...ref(lore), role: 'module' }],
 
-      routes: { main: { id: model.id }, translation: { id: model.id }, status: null },
       image: false,
     },
     'PUT'

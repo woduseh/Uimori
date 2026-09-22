@@ -455,11 +455,19 @@ test('all helper sessions share two execution slots while each session preserves
     c = f.workspace.create(a.scope, 'c');
   const releases = new Map<string, () => void>();
   const calls: string[] = [];
+  const histories = new Map<string, string[]>();
   let live = 0,
     peak = 0;
   mockSend(async (request) => {
     const name = String(request.input.task);
     calls.push(name);
+    const activeTask = f.workspace
+      .tasks(name.startsWith('A') ? a.id : name.startsWith('B') ? b.id : c.id)
+      .find((task) => task.status === 'running')!;
+    histories.set(
+      name,
+      activeTask.snapshot.history.map((message) => message.text)
+    );
     live++;
     peak = Math.max(peak, live);
     await new Promise<void>((resolve) => releases.set(name, resolve));
@@ -487,11 +495,9 @@ test('all helper sessions share two execution slots while each session preserves
   await vi.waitFor(() => expect(f.workspace.task(a2.id).status).toBe('completed'));
   await Promise.all(f.work);
   expect(peak).toBe(2);
-  expect(f.workspace.task(a2.id).snapshot.history.map((message) => message.text)).toEqual([
-    'A1',
-    'A1 답변',
-  ]);
-  expect(f.workspace.task(c1.id).snapshot.history).toEqual([]);
+  expect(histories.get('A2')).toEqual(['A1', 'A1 답변']);
+  expect(histories.get('C1')).toEqual([]);
+  expect(f.workspace.task(a2.id).snapshot.history).toEqual([]);
   expect([a1, a2, b1, c1].map((task) => f.workspace.task(task.id).status)).toEqual([
     'completed',
     'completed',

@@ -63,6 +63,6 @@ Risu 메시지의 기본 글자색·글자 크기·글꼴·줄간격은 상속�
 
 ## Helper sessions and branches
 
-A chat branch can have multiple helper sessions, selected in one panel. Conversation history, drafts, context, and permissions belong to the session. The list includes sessions from other branches: users can read them, then navigate to the owning branch to send requests or make changes. Moving between branches restores that branch's session selection; switching sessions or closing the panel does not cancel work. Sessions use the global helper model.
+A chat branch can have multiple helper sessions, selected in one panel. Conversation history, drafts, and context belong to the session; tools follow the current user request without per-action grants. The list includes sessions from other branches: users can select their context or explicitly target another chat through helper tools. Moving between branches restores that branch's session selection; switching sessions or closing the panel does not cancel work. Sessions use the global helper model.
 
 Setting a branch as the default changes which branch opens when entering the chat. It does not merge or copy content, move running requests, or redirect an already open reader. A chat has one default branch; choose another before deleting it.

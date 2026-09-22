@@ -270,7 +270,6 @@ const profileBody = (prior: ChatProfile, changes: Record<string, unknown> = {}) 
   expectedRevision: prior.revision,
   packageAttachments: prior.packageAttachments,
 
-  routes: prior.routes,
   image: prior.image,
   ...changes,
 });

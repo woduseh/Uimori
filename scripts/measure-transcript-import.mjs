@@ -1,3 +1,4 @@
+import { createSyntheticBot } from './synthetic-story.mjs';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -34,31 +35,12 @@ for (const count of counts) {
   const file = path.join(directory, `${count}.sqlite`);
   const store = new Store(file);
   try {
-    const bot = store.product.content({
-      kind: 'bot',
-      title: 'Synthetic import bot',
-      description: '',
-      text: '',
-      loading: 'pinned',
-      relatedIds: [],
-      package: {
-        version: 2,
-        id: 'benchmark',
-        revision: 1,
-        title: 'Synthetic import bot',
-        description: '',
-        body: '',
-        lore: [],
-        controls: [],
-        transforms: [],
-      },
-    });
+    const bot = createSyntheticBot(store);
     const transcript = {
       format: 'uimori-chat-transcript',
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       title: `Synthetic ${count}`,
-      attachments: [],
       packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
       notes: [],
       entries: Array.from({ length: count }, (_, index) => ({

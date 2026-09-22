@@ -1,3 +1,5 @@
+import { createSyntheticBot } from './synthetic-story.mjs';
+import { importChatTranscript } from '../dist/server/chat-transcript.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
@@ -30,41 +32,37 @@ const save = (file, value) => writeFile(file, JSON.stringify(value, null, 2) + '
 let fixture;
 if (args.includes('--fixture')) {
   fixture = JSON.parse(await readFile(descriptor, 'utf8'));
-  assert.equal(fixture.kind, 'uimori-context-storage-synthetic-v1');
+  assert.equal(fixture.kind, 'uimori-context-storage-synthetic-v2');
 }
 const store = new Store(path.join(directory, 'synthetic.sqlite'));
 try {
   if (!fixture) {
-    const bot = store.product.content({
-      kind: 'bot',
-      title: 'Synthetic performance bot',
-      description: '',
-      text: '',
-      loading: 'pinned',
-      relatedIds: [],
-      package: {
-        version: 2,
-        id: 'benchmark',
-        revision: 1,
-        title: 'Synthetic performance bot',
-        description: '',
-        body: '',
-        lore: [],
-        controls: [],
-        transforms: [],
-      },
-    });
-    fixture = { kind: 'uimori-context-storage-synthetic-v1', scenarios: [] };
-    const insertRun = store.db.prepare(`INSERT INTO runs
-      (id,chat_id,parent_revision,status,request,snapshot,request_key,command,source_revision,created_at,updated_at,branch_id)
-      VALUES(?,?,?,'completed',?,?,?,?,?,?,?,?)`);
-    const insertSource = store.db.prepare('INSERT INTO sources VALUES(?,?,?,?,?,?,?)');
+    const bot = createSyntheticBot(store);
+    fixture = { kind: 'uimori-context-storage-synthetic-v2', scenarios: [] };
     for (const count of [10, 100, 300]) {
-      const chat = store.createChat(`Synthetic ${count} scenes`, 'calm', { botId: bot.id });
-      const history = [];
-      const paragraphs =
-        'A traveler records the river, the bridge and the lantern. This is synthetic prose for a local measurement.\n\n';
-      const settings = { ...chat.settings, translation: false, maxCalls: 8 };
+      const imported = importChatTranscript(store, {
+        idempotencyKey: 'measurement-' + count,
+        transcript: {
+          format: 'uimori-chat-transcript',
+          version: 2,
+          exportedAt: new Date().toISOString(),
+          title: 'Synthetic ' + count,
+          packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+          notes: [],
+          entries: Array.from({ length: count }, (_, i) => ({
+            request: 'Scene ' + i,
+            text: (
+              'Scene ' +
+              i +
+              '. ' +
+              'A traveler records the river and the lantern. '.repeat(200)
+            ).slice(0, 8000),
+            translation: null,
+          })),
+        },
+      });
+      const chat = imported.chat,
+        history = store.history(chat.headRevision);
       const plan = {
         version: 1,
         status: 'ready',
@@ -78,57 +76,13 @@ try {
         usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
         error: null,
       };
-      store.transaction(() => {
-        for (let index = 0; index < count; index++) {
-          const id = `source-${count}-${index}`;
-          const runId = `run-${count}-${index}`;
-          const text = (`Scene ${index}.\n\n` + paragraphs.repeat(80)).slice(0, 8000);
-          const parentRevision = history.at(-1)?.revision ?? null;
-          const time = new Date(index * 1000).toISOString();
-          const snapshot = {
-            chatId: chat.id,
-            request: `Continue scene ${index}`,
-            parentRevision,
-            settingsRevision: 1,
-            settings,
-            history,
-            resources: [],
-            branchId: `main:${chat.id}`,
-            contextPlan: {
-              ...plan,
-              recentSourceRevisions: history.map((source) => source.revision),
-            },
-          };
-          insertRun.run(
-            runId,
-            chat.id,
-            parentRevision,
-            snapshot.request,
-            JSON.stringify(snapshot),
-            runId,
-            '{}',
-            id,
-            time,
-            time,
-            `main:${chat.id}`
-          );
-          insertSource.run(id, chat.id, runId, parentRevision, text, hash(text), time);
-          history.push({ revision: id, text });
-        }
-        store.db
-          .prepare('UPDATE chats SET head_revision=? WHERE id=?')
-          .run(history.at(-1).revision, chat.id);
-        store.db
-          .prepare('UPDATE branches SET head_revision=?,revision=? WHERE chat_id=?')
-          .run(history.at(-1).revision, count + 1, chat.id);
-      });
       fixture.scenarios.push({
         count,
         charsPerSource: 8000,
         chatId: chat.id,
-        head: history.at(-1).revision,
+        head: chat.headRevision,
         expectedHistoryHash: hash(JSON.stringify(history)),
-        settings,
+        settings: chat.settings,
         plan,
       });
     }
@@ -161,7 +115,7 @@ try {
     scenarios: [],
     limitations: [
       'Storage stages called by generation, not end-to-end model latency or billing.',
-      'Synthetic 8000-character scenes with full cumulative run history; no profile/resource/diagnostic payloads.',
+      'Synthetic 8000-character scenes imported through the current transcript format with settled run snapshots.',
       'First timed sample precedes per-path warmups, but fixture validation/hash/history reads have already warmed caches. OS file cache is not flushed.',
       'Explicit GC before each sample is outside timing. Heap delta is retained-at-return allocation, not peak RSS.',
       'SQL instrumentation is a separate untimed diagnostic invocation; timings have no instrumentation.',

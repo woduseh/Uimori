@@ -1,4 +1,3 @@
-import { isDeepStrictEqual } from 'node:util';
 import type { Content } from '../../core/product.js';
 import type { Settings } from '../../core/types.js';
 import type { Store } from '../../server/store.js';
@@ -28,40 +27,6 @@ export async function injectWithFixtureBot(
   app: Pick<FastifyInstance, 'inject'>,
   options: InjectOptions | string
 ) {
-  // Legacy scenario fixtures now issue two explicit writes: global model selection and chat data.
-  if (
-    typeof options !== 'string' &&
-    String(options.method).toUpperCase() === 'PUT' &&
-    /^\/api\/chats\/[^/]+\/profile$/.test(typeof options.url === 'string' ? options.url : '')
-  ) {
-    const body =
-      typeof options.payload === 'string' ? JSON.parse(options.payload) : options.payload;
-    if (body && typeof body === 'object' && !Array.isArray(body) && Object.hasOwn(body, 'routes')) {
-      const { routes, ...profile } = body as Record<string, unknown>;
-      const currentResponse = await app.inject({
-        method: 'GET',
-        url: '/api/model-workspace',
-        headers: options.headers,
-      });
-      if (currentResponse.statusCode === 200) {
-        const current = currentResponse.json();
-        const saved = isDeepStrictEqual(current.routes, routes)
-          ? currentResponse
-          : await app.inject({
-              method: 'PUT',
-              url: '/api/model-workspace',
-              headers: options.headers,
-              payload: {
-                expectedRevision: current.revision,
-                routes,
-                translationPolicy: current.translationPolicy,
-              },
-            });
-        if (saved.statusCode !== 200) return saved;
-        options = { ...options, payload: JSON.stringify(profile) };
-      }
-    }
-  }
   if (
     typeof options !== 'string' &&
     String(options.method ?? 'GET').toUpperCase() === 'POST' &&
@@ -116,4 +81,26 @@ export function createFixtureChat(
 ) {
   const botId = organization.botId ?? (store.product.content(fixtureBotInput()) as Content).id;
   return store.createChat(title, preset, { ...organization, botId });
+}
+
+/** Explicit global-model setup; the tested profile request uses the real current API. */
+export async function setFixtureModelRoutes(
+  app: Pick<FastifyInstance, 'inject'>,
+  routes: Record<string, { id: string } | null>
+) {
+  const headers = { host: '127.0.0.1' };
+  const response = await app.inject({ method: 'GET', url: '/api/model-workspace', headers });
+  if (response.statusCode !== 200) throw new Error(response.body);
+  const current = response.json();
+  const saved = await app.inject({
+    method: 'PUT',
+    url: '/api/model-workspace',
+    headers,
+    payload: {
+      expectedRevision: current.revision,
+      routes,
+      translationPolicy: current.translationPolicy,
+    },
+  });
+  if (saved.statusCode !== 200) throw new Error(saved.body);
 }

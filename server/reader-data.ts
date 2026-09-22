@@ -43,3 +43,31 @@ export function readerJobIds(store: Pick<Store, 'db'>, sourceId: string, sourceH
       ORDER BY j.created_at,j.id`)
     .all(sourceId, sourceHash) as { id: string }[];
 }
+
+/** Only authored context and this source's image results invalidate native display.
+ * Progress/usage/queue events still refresh activity, never the expensive presentation.
+ */
+export function readerPresentationRevisions(
+  store: Pick<Store, 'db'>,
+  chatId: string,
+  branchId: string,
+  sourceIds: string[]
+): Record<string, string> {
+  const shared = store.db
+    .prepare(`SELECT COALESCE(MAX(seq),0) AS revision FROM events
+    WHERE chat_id=? AND (kind GLOB 'source.*' OR kind GLOB 'asset.*'
+      OR kind IN ('profile.updated','prompt-workspace.updated')
+      OR (kind='chat.variables.changed' AND entity_id=?))`)
+    .get(chatId, branchId) as { revision: number };
+  const images = store.db
+    .prepare(`SELECT j.source_revision AS sourceId,MAX(e.seq) AS revision
+    FROM events e JOIN jobs j ON j.id=e.entity_id
+    WHERE e.chat_id=? AND j.kind='image' AND j.source_revision IN (SELECT value FROM json_each(?))
+      AND e.kind IN ('job.completed','job.partial','job.stale','job.cancelled','job.failed')
+    GROUP BY j.source_revision`)
+    .all(chatId, JSON.stringify(sourceIds)) as { sourceId: string; revision: number }[];
+  const bySource = new Map(images.map((row) => [row.sourceId, row.revision]));
+  return Object.fromEntries(
+    sourceIds.map((id) => [id, shared.revision + ':' + (bySource.get(id) ?? 0)])
+  );
+}

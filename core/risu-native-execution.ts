@@ -6,7 +6,7 @@ export type NativeRisuMessage = { id?: string; role: 'user' | 'char'; data: stri
 
 /** Execution results, never another editable copy of the authored card. */
 export type NativeRisuExecution = {
-  version: 1 | 2;
+  version: 2;
   inputHash: string;
   beforeVariableRevision: number;
   variables: Record<string, string>;

@@ -298,7 +298,7 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
       sourceHash: 'a'.repeat(64),
     };
     value.nativeRisuExecution = {
-      version: 1,
+      version: 2,
       inputHash: 'b'.repeat(64),
       beforeVariableRevision: 0,
       variables: {},

@@ -16,21 +16,21 @@ function file() {
   return join(directory, 'app.sqlite');
 }
 
-test('personal schema 1 initializes and remains readable after an extra query index', () => {
+test('personal current schema initializes and remains readable after an extra query index', () => {
   const path = file();
   const first = new Store(path);
-  expect(databaseSchemaVersion(first.db)).toBe(1);
+  expect(databaseSchemaVersion(first.db)).toBe(2);
   first.db.exec('CREATE INDEX optional_user_index ON sources(created_at)');
   first.close();
   const next = new Store(path);
-  expect(databaseSchemaVersion(next.db)).toBe(1);
+  expect(databaseSchemaVersion(next.db)).toBe(2);
   expect(
     next.db.prepare("SELECT name FROM sqlite_schema WHERE name='optional_user_index'").get()
   ).toBeTruthy();
   next.close();
 });
 
-test.each([2, 23, 24])('opening another schema %s leaves its bytes untouched', (version) => {
+test.each([3, 23, 24])('opening another schema %s leaves its bytes untouched', (version) => {
   const path = file(),
     db = new DatabaseSync(path);
   db.exec(

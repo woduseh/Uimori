@@ -26,11 +26,7 @@ import { projectedLogicalHistory } from '../core/context-projection.js';
 import { nativeRisuPresetPending, projectNativeRisuPresetProgram } from './risu-native-preset.js';
 
 /** Pair each exact source version with its actual user request; never infer roles from prose. */
-export function captureLogicalHistory(
-  store: Store,
-  snapshot: RunSnapshot,
-  options: { legacyNativeOutputReplay?: boolean } = {}
-): PromptHistoryMessage[] {
+export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): PromptHistoryMessage[] {
   const entries = snapshot.history;
   const sourceMessages = new Set<string>();
   return entries.reduce<PromptHistoryMessage[]>((accumulated, entry) => {
@@ -79,7 +75,6 @@ export function captureLogicalHistory(
           // keep their own Lua changes. Unchanged receipt input is a carried-forward
           // value, which must not resurrect text already corrected earlier in this fold.
           const preserveSource =
-            !options.legacyNativeOutputReplay &&
             existing?.sourceRevision !== undefined &&
             sourceMessages.has(existing.id) &&
             ((capturedHashes.has(existing.sourceRevision) &&
@@ -204,7 +199,7 @@ function contextFromPackages(
       : undefined,
   };
 }
-/** Pass `compilerVersion` only to reproduce a stored compilation; a fresh one takes the current stamp. */
+/** Compile the current native prompt semantics for this request. */
 export function compileSnapshotPrompt(
   snapshot: RunSnapshot,
   program?: RisuPrompt,
@@ -221,9 +216,7 @@ export function compileSnapshotPrompt(
   const context = contextFromPackages(snapshot, packages, options.compilerVersion);
   const promptCompilation = compileRisuPrompt(selected, {
     ...context,
-    ...(snapshot.profile && options.compilerVersion !== 'risu-native-prompt-1'
-      ? { controls: effectiveRisuControls(snapshot.profile, selected) }
-      : {}),
+    ...(snapshot.profile ? { controls: effectiveRisuControls(snapshot.profile, selected) } : {}),
     ...(values ? { values } : {}),
     ...(options.compilerVersion ? { compilerVersion: options.compilerVersion } : {}),
   });

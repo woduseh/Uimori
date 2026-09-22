@@ -210,7 +210,7 @@ test('native source is authoritative and rejects a second authored representatio
 test('preset CBS sees messages after pre-turn scripts and the current input', async () => {
   const input = snapshot(preset('{{lastmessage}}'));
   input.nativeRisuExecution = {
-    version: 1,
+    version: 2,
     inputHash: 'test',
     beforeVariableRevision: 0,
     variables: {},
