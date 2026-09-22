@@ -925,3 +925,39 @@ describe('input context projection and durable summary calls', () => {
     expect(unsaved.results).toEqual([]);
   });
 });
+
+test('manual compaction fits one source prefix without rebuilding the writer input for every scene', async () => {
+  const source = await snapshot(
+    Array.from(
+      { length: 160 },
+      (_, index) => `Scene ${index}: Mira keeps the promise unresolved, not completed.`
+    )
+  );
+  source.profile!.contextModel = { ...model('summary-model'), inputTokenLimit: 65536 };
+  let measurements = 0;
+  const log = observed({
+    reason: 'manual',
+    measureInput: (projected) => {
+      measurements++;
+      return measureMainContext(projected);
+    },
+  });
+  const fragments: SummaryPayload['fragments'][] = [];
+  vi.mocked(fetch).mockImplementation(async (_url, options) => {
+    const request = JSON.parse(String(options?.body));
+    fragments.push(request.input.source.fragments);
+    return completed('Mira keeps her promise unresolved. [scene 1]');
+  });
+  const result = await prepareInputContext(source, log.hooks);
+  expect(result.usage.modelCalls).toBe(1);
+  expect(result.snapshot.contextPlan!.compacted).toHaveLength(158);
+  expect(result.snapshot.contextPlan!.recentSourceRevisions).toEqual(['source-158', 'source-159']);
+  expect(
+    fragments
+      .flat()
+      .filter((fragment) => fragment.role === 'assistant')
+      .map((fragment) => fragment.sourceRevision)
+  ).toEqual(source.history.slice(0, 158).map((item) => item.revision));
+  expect(result.snapshot.history).toEqual(source.history);
+  expect(measurements).toBeLessThanOrEqual(4);
+});
