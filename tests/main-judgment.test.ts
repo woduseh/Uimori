@@ -1,3 +1,4 @@
+import { setFixtureModelRoutes } from './fixtures/chat.js';
 import {
   observeExecutions,
   observedExecution,
@@ -222,6 +223,7 @@ ${
     'PATCH'
   );
   const profile = await api(app, `/api/chats/${chat.id}/profile`);
+  await setFixtureModelRoutes(app, { main: { id: model.id }, translation: null, status: null });
   await api(
     app,
     `/api/chats/${chat.id}/profile`,
@@ -229,7 +231,6 @@ ${
       expectedRevision: profile.revision,
       image: false,
       imageTranslation: false,
-      routes: { main: { id: model.id }, translation: null, status: null },
     },
     'PUT'
   );

@@ -37,152 +37,6 @@ type StreamIdentity = { taskKind: ResponseTaskKind; taskId: string; chatId?: str
 type StreamRow = { owner: string; status: ResponseStreamStatus };
 const keyOf = (identity: StreamIdentity) => JSON.stringify([identity.taskKind, identity.taskId]);
 
-const terminalStatuses = ['completed', 'partial', 'failed', 'refused', 'cancelled', 'interrupted'];
-const streamOwner = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-function archiveError(reason: string): never {
-  throw new HttpError(400, `Invalid response stream archive: ${reason}`);
-}
-
-/** Detached archive rows never retain an execution lease or restart uncertain provider work. */
-export function normalizeResponseStreamArchiveRow(table: string, row: Record<string, unknown>) {
-  if (table !== 'response_stream_tasks') return;
-  if (typeof row.owner !== 'string' || !streamOwner.test(row.owner)) archiveError('owner');
-  row.owner = randomUUID();
-  if (row.status === 'running') row.status = 'interrupted';
-}
-
-/** Validate after insertion and parent graph checks, within the importing transaction. */
-export function validateResponseStreamArchive(store: Pick<Store, 'db'>) {
-  type Task = {
-    task_kind: string;
-    task_id: string;
-    chat_id: string | null;
-    run_id: string | null;
-    helper_task_id: string | null;
-    owner: string;
-    status: string;
-    created_at: string;
-    updated_at: string;
-  };
-  type Chunk = {
-    seq: number;
-    task_kind: string;
-    task_id: string;
-    attempt_id: string;
-    segment: number;
-    offset: number;
-    text: string;
-  };
-  const tasks = store.db.prepare('SELECT * FROM response_stream_tasks').all() as Task[];
-  const identities = new Set<string>();
-  for (const task of tasks) {
-    const key = JSON.stringify([task.task_kind, task.task_id]);
-    if (
-      !['main', 'helper'].includes(task.task_kind) ||
-      typeof task.task_id !== 'string' ||
-      !task.task_id ||
-      typeof task.owner !== 'string' ||
-      !streamOwner.test(task.owner) ||
-      !terminalStatuses.includes(task.status) ||
-      identities.has(key) ||
-      !Number.isFinite(Date.parse(task.created_at)) ||
-      !Number.isFinite(Date.parse(task.updated_at)) ||
-      task.updated_at < task.created_at
-    )
-      archiveError('task identity or state');
-    identities.add(key);
-    if (task.task_kind === 'main') {
-      const run = store.db.prepare('SELECT chat_id FROM runs WHERE id=?').get(task.task_id) as
-        | { chat_id: string }
-        | undefined;
-      if (
-        !run ||
-        task.run_id !== task.task_id ||
-        task.helper_task_id !== null ||
-        task.chat_id !== run.chat_id
-      )
-        archiveError('main owner');
-    } else {
-      const parent = store.db
-        .prepare(
-          'SELECT c.chat_id FROM helper_tasks t JOIN helper_conversations c ON c.id=t.conversation_id WHERE t.id=?'
-        )
-        .get(task.task_id) as { chat_id: string | null } | undefined;
-      if (
-        !parent ||
-        task.helper_task_id !== task.task_id ||
-        task.run_id !== null ||
-        task.chat_id !== parent.chat_id
-      )
-        archiveError('helper owner');
-    }
-    let latestSegment = -1,
-      latestAttempt: string | undefined;
-    const closedAttempts = new Set<string>();
-    const offsets = new Map<string, number>();
-    const chunks = store.db
-      .prepare('SELECT * FROM response_stream_chunks WHERE task_kind=? AND task_id=? ORDER BY seq')
-      .all(task.task_kind, task.task_id) as Chunk[];
-    for (const chunk of chunks) {
-      if (
-        !Number.isSafeInteger(chunk.seq) ||
-        chunk.seq < 1 ||
-        typeof chunk.attempt_id !== 'string' ||
-        !chunk.attempt_id ||
-        !Number.isSafeInteger(chunk.segment) ||
-        chunk.segment < 0 ||
-        chunk.segment < latestSegment ||
-        !Number.isSafeInteger(chunk.offset) ||
-        typeof chunk.text !== 'string' ||
-        !chunk.text ||
-        chunk.offset !== (offsets.get(chunk.attempt_id) ?? 0) + chunk.text.length
-      )
-        archiveError('chunk sequence or offset');
-      if (latestAttempt !== chunk.attempt_id) {
-        if (closedAttempts.has(chunk.attempt_id)) archiveError('reopened attempt');
-        if (latestAttempt) closedAttempts.add(latestAttempt);
-        latestAttempt = chunk.attempt_id;
-      }
-      const attempt = store.db
-        .prepare('SELECT chat_id,run_id,job_id,role FROM attempts WHERE id=?')
-        .get(chunk.attempt_id) as
-        | { chat_id: string | null; run_id: string | null; job_id: string | null; role: string }
-        | undefined;
-      if (!attempt || attempt.chat_id !== task.chat_id || attempt.job_id !== null)
-        archiveError('attempt owner');
-      if (task.task_kind === 'main') {
-        if (attempt.run_id !== task.run_id || attempt.role !== 'main' || chunk.segment !== 0)
-          archiveError('main attempt');
-      } else {
-        const binding = store.db
-          .prepare('SELECT task_id,segment,purpose FROM helper_task_attempts WHERE attempt_id=?')
-          .get(chunk.attempt_id) as
-          | { task_id: string; segment: number; purpose: string }
-          | undefined;
-        if (
-          !binding ||
-          binding.task_id !== task.task_id ||
-          binding.segment !== chunk.segment ||
-          attempt.run_id !== null ||
-          !(
-            (binding.purpose === 'helper' && attempt.role === 'helper') ||
-            (binding.purpose === 'writing' && attempt.role === 'main')
-          )
-        )
-          archiveError('helper attempt');
-      }
-      offsets.set(chunk.attempt_id, chunk.offset);
-      latestSegment = chunk.segment;
-    }
-  }
-  const orphan = store.db
-    .prepare(
-      'SELECT 1 FROM response_stream_chunks c LEFT JOIN response_stream_tasks t ON t.task_kind=c.task_kind AND t.task_id=c.task_id WHERE t.task_id IS NULL LIMIT 1'
-    )
-    .get();
-  if (orphan) archiveError('orphan chunk');
-}
-
 /** Public text has its own cursor; streaming never requires reloading the whole chat. */
 export class ResponseStreamStore {
   private readonly listeners = new Map<string, Set<() => void>>();
@@ -330,6 +184,11 @@ export class ResponseStreamStore {
           options.taskId,
           owner
         );
+      if (changed.changes && status === 'completed' && !options.signal.aborted) {
+        this.store.db
+          .prepare('DELETE FROM response_stream_chunks WHERE task_kind=? AND task_id=?')
+          .run(options.taskKind, options.taskId);
+      }
       if (changed.changes) this.publish(options);
     };
     const onAbort = () => {

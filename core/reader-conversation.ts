@@ -15,20 +15,36 @@ export function readerRequestOrder(
       forkRequestOrder?: number | null;
     }
   >,
-  id: string
+  id: string,
+  cache: Map<string, number> = new Map()
 ): number {
+  const known = cache.get(id);
+  if (known !== undefined) return known;
   let row = rows.get(id);
+  const path: string[] = [];
   const seen = new Set<string>();
   while (row) {
-    if (Number.isSafeInteger(row.forkRequestOrder) && row.forkRequestOrder! < 0)
-      return row.forkRequestOrder!;
+    if (
+      cache.has(row.id) ||
+      (Number.isSafeInteger(row.forkRequestOrder) && row.forkRequestOrder! < 0)
+    )
+      break;
     if (!row.retryOf || seen.has(row.id)) break;
     seen.add(row.id);
+    path.push(row.id);
     const previous = rows.get(row.retryOf);
     if (!previous) break;
     row = previous;
   }
-  return row?.admissionOrder ?? Number.MAX_SAFE_INTEGER;
+  const order = row
+    ? (cache.get(row.id) ??
+      (Number.isSafeInteger(row.forkRequestOrder) && row.forkRequestOrder! < 0
+        ? row.forkRequestOrder!
+        : row.admissionOrder))
+    : Number.MAX_SAFE_INTEGER;
+  cache.set(id, order);
+  for (const ancestor of path) cache.set(ancestor, order);
+  return order;
 }
 
 /** Preserve source pagination and numbering, inserting attempts at their original request position. */

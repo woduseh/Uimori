@@ -160,35 +160,7 @@ export function imageCatalog(input: unknown): AssetEntry[] {
     throw new HttpError(400, 'Duplicate frozen asset reference');
   return structuredClone(catalog.entries) as AssetEntry[];
 }
-export function validateImageCatalog(store: Store, chatId: string, input: unknown) {
-  const entries = imageCatalog(input);
-  for (const entry of entries) {
-    let expected: AssetEntry | undefined;
-    const match = /^package:([^:]+):(bot|persona|module):([^:]+)$/u.exec(entry.ref);
-    if (match) {
-      const pkg = store.product.get<{ package: RisuContent }>(
-        'content',
-        match[1],
-        entry.revision
-      ).package;
-      expected = packageImages({
-        chatId,
-        packages: [pkg],
-        packageAttachments: [
-          { id: pkg.id, revision: pkg.revision, role: match[2] as 'bot' | 'persona' | 'module' },
-        ],
-      })
-        .map(assetEntry)
-        .find((item) => item.ref === entry.ref);
-      assertPackageImages(store.product, pkg);
-    } else {
-      const asset = store.product.asset(entry.ref).asset;
-      if (asset.chatId === chatId) expected = assetEntry(asset);
-    }
-    if (!expected || !isDeepStrictEqual(entry, expected))
-      throw new HttpError(400, 'Frozen image catalog reference mismatch');
-  }
-}
+
 const readerAssets = (chatId: string, entries: AssetEntry[]): Asset[] =>
   entries.map((entry) => ({
     id: entry.ref,
@@ -235,27 +207,7 @@ export function mergedReaderAssets(store: Store, chatId: string, sourceIds?: str
   }
   return [...unique.values()];
 }
-export function forkImageInput(
-  input: unknown,
-  assetIds: Map<string, string>
-): {
-  imageCatalog: ImageCatalog;
-  imageTarget?: ImageTarget;
-} {
-  const entries = imageCatalog(input).map((entry) => {
-    const id = assetIds.get(entry.ref);
-    return id ? { ...entry, ref: id, url: `/api/assets/${id}` } : entry;
-  });
-  const frozen = record(input);
-  return {
-    ...(frozen.imageTarget ? { imageTarget: frozen.imageTarget as ImageTarget } : {}),
-    imageCatalog: {
-      version: 1,
-      hash: createHash('sha256').update(JSON.stringify(entries)).digest('hex'),
-      entries,
-    },
-  };
-}
+
 export function imageTargetSource(
   store: Store,
   job: Pick<Job, 'sourceRevision' | 'sourceHash' | 'input'>,

@@ -55,7 +55,8 @@ export function StreamingResponse({
         cursor = chunk.seq;
         added.push(chunk);
       }
-      if (added.length) setChunks((old) => [...old, ...added]);
+      if (page.status === 'completed') setChunks([]);
+      else if (added.length) setChunks((old) => [...old, ...added]);
       setStatus(page.status);
       setDisconnected(false);
       failures = 0;

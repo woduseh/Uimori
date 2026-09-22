@@ -38,13 +38,6 @@ const parse = (value: unknown) => (value == null ? null : JSON.parse(String(valu
 const ACTIVE: IllustrationStatus[] = ['queued', 'running'];
 const RETRYABLE_STATUSES: IllustrationStatus[] = ['failed', 'cancelled', 'interrupted'];
 
-export const ILLUSTRATION_TABLES = [
-  'illustration_settings',
-  'illustration_references',
-  'illustration_jobs',
-  'illustration_images',
-] as const;
-
 /** Create current tables during fresh database initialization. */
 export function initIllustrations(db: DatabaseSync) {
   db.exec(`
@@ -832,65 +825,6 @@ export function deleteIllustrationsForSources(store: Store, sourceIds: string[])
       'DELETE FROM illustration_jobs WHERE source_revision IN (SELECT value FROM json_each(?))'
     )
     .run(json(sourceIds));
-}
-/** Completed illustrations of the exact copied text travel with a fork; active work does not. */
-export function copyIllustrationsForFork(
-  store: Store,
-  newChatId: string,
-  sources: { oldId: string; newId: string; hash: string }[]
-): void {
-  for (const source of sources) {
-    const jobs = store.db
-      .prepare(
-        "SELECT * FROM illustration_jobs WHERE source_revision=? AND source_hash=? AND status='completed' ORDER BY created_at,id"
-      )
-      .all(source.oldId, source.hash) as Row[];
-    for (const job of jobs) {
-      const jobId = randomUUID();
-      const originalDiagnostic = parse(job.diagnostic);
-      const copiedDiagnostic = originalDiagnostic
-        ? {
-            ...originalDiagnostic,
-            attempts: [],
-            copiedFrom: { jobId: job.id, attemptIds: originalDiagnostic.attempts ?? [] },
-          }
-        : null;
-      store.db
-        .prepare(
-          "INSERT INTO illustration_jobs(id,chat_id,source_revision,source_hash,origin,status,generation,owner,attempt,input,diagnostic,error,created_at,updated_at) VALUES(?,?,?,?,?,'completed',?,NULL,?,?,?,NULL,?,?)"
-        )
-        .run(
-          jobId,
-          newChatId,
-          source.newId,
-          job.source_hash,
-          job.origin,
-          job.generation,
-          job.attempt,
-          job.input,
-          copiedDiagnostic === null ? null : json(copiedDiagnostic),
-          job.created_at,
-          job.updated_at
-        );
-      for (const image of store.db
-        .prepare('SELECT * FROM illustration_images WHERE job_id=? ORDER BY position')
-        .all(job.id) as Row[])
-        store.db
-          .prepare(
-            'INSERT INTO illustration_images(id,job_id,chat_id,position,mime,hash,body,created_at) VALUES(?,?,?,?,?,?,?,?)'
-          )
-          .run(
-            randomUUID(),
-            jobId,
-            newChatId,
-            image.position,
-            image.mime,
-            image.hash,
-            image.body,
-            image.created_at
-          );
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------

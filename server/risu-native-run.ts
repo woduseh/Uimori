@@ -81,7 +81,7 @@ export function validateNativeRisuExecution(snapshot: RunSnapshot): void {
   if (
     typeof receipt !== 'object' ||
     Array.isArray(receipt) ||
-    ![1, 2].includes(receipt.version) ||
+    receipt.version !== 2 ||
     receipt.inputHash !== nativeRisuInputHash(snapshot) ||
     receipt.beforeVariableRevision !== (snapshot.profile?.variableState?.revision ?? 0) ||
     typeof receipt.request !== 'string' ||

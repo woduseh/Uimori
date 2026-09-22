@@ -24,7 +24,7 @@ export function requiredChecks(area = 'verify:browser-smoke', full = false, scri
     );
   return [
     ...new Set([
-      'quality:full',
+      ...(full ? ['quality:full'] : ['quality', 'build']),
       ...(full && area === 'verify:browser-smoke' ? [] : [area]),
       ...(full ? ['verify:browser'] : []),
     ]),
@@ -119,7 +119,7 @@ export async function runReleaseChecks(
       if (identityKey(await sourceIdentity()) !== identityKey(identity))
         throw new Error('Source changed during release checks');
       const reusableCheck = await cachedCheckPassed(summary.checks[name], name);
-      if (reusableCheck && name === 'quality:full') {
+      if (reusableCheck && (name === 'quality:full' || name === 'build')) {
         try {
           await buildIdentity();
         } catch {

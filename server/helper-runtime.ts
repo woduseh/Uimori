@@ -596,7 +596,6 @@ export class HelperRuntime {
           409,
           '진행 중인 작업을 중지하고 공급자 요청이 종료된 뒤 삭제해 주세요.'
         );
-      new ChatOptionsStore(this.store).detachConversation(id);
       return this.workspace.delete(id, expected);
     });
   }

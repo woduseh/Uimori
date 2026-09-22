@@ -13,15 +13,11 @@ export type PackagePresentationSource = {
   text: string;
   translation?: { text: string; sourceRevision: string; sourceHash: string };
 };
-/** The route supplies an exact source and its originating Run snapshot. No current library reads. */
+/** Render the selected source against the caller's current authored context. */
 export async function buildPackagePresentation(
   snapshot: RunSnapshot,
   source: PackagePresentationSource,
-  state?: { sourceRevision: string; sourceHash: string; values: Record<string, unknown> },
   options: {
-    skipSourceTransforms?: boolean;
-    /** Stored output/display hook result for this exact response; never recomputed here. */
-    displayEdit?: { text: string; changed: boolean; applied: string[] };
     nativeMessageIndex?: number;
     nativeDisplayText?: string;
     nativeTranslationText?: string;
@@ -45,8 +41,6 @@ export async function buildPackagePresentation(
       source.translation.sourceHash !== source.hash)
   )
     throw new RisuContentError('PACKAGE_PRESENTATION_TRANSLATION_MISMATCH');
-  if (state && (state.sourceRevision !== source.id || state.sourceHash !== source.hash))
-    throw new RisuContentError('PACKAGE_PRESENTATION_STATE_MISMATCH');
   const native = nativeRisuContext(snapshot);
   if (native) {
     const renderer = createNativeRisuWorkerSession<NativeRisuRenderInput, NativeRisuRenderResult>(
@@ -130,9 +124,6 @@ export async function buildPackagePresentation(
         original,
         ...(translation ? { translation } : {}),
         issues: [...original.issues, ...(translation?.issues ?? [])],
-        stateViews: [],
-        inlineImageUrls: undefined,
-        inputTransform: undefined,
         request: { text: snapshot.request, changed: false, applied: [] as string[] },
       };
     } finally {
@@ -149,8 +140,5 @@ export async function buildPackagePresentation(
       : {}),
     request: { text: snapshot.request, changed: false, applied: [] as string[] },
     issues: [] as string[],
-    stateViews: [],
-    inlineImageUrls: undefined,
-    inputTransform: undefined,
   };
 }

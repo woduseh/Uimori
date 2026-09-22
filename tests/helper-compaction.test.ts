@@ -375,11 +375,15 @@ test('helper compaction resumes completed library reads and exact writes within 
     expect(JSON.stringify(request.input)).not.toContain(readText);
     expect(events(request)).toEqual([]);
     expect(request).not.toHaveProperty('opaqueState');
+    expect(f.workspace.task(f.currentTaskId).snapshot).toEqual(originalSnapshot);
     return structuredClone(success);
   });
   const task = await f.run();
   expect(task.status).toBe('completed');
-  expect(task.snapshot).toEqual(originalSnapshot);
+  expect(task.snapshot.scope).toEqual(originalSnapshot!.scope);
+  expect(task.snapshot.history).toEqual([]);
+  expect(task.snapshot).not.toHaveProperty('editor');
+  expect(task.snapshot).not.toHaveProperty('contextModel');
   expect(task.usage.modelCalls).toBe(4);
   expect(log.requests.map((request) => request.role)).toEqual([
     'helper',
@@ -519,6 +523,7 @@ test('small helper compaction stays above 85%, preserves exact writes, and waits
       expect(request.stable.contract).toContain(CONTEXT_SUMMARY_SEMANTICS);
       expect(Number(request.input.controls?.targetSummaryTokens)).toBeGreaterThan(1);
       expect(request.generation?.maxOutputTokens).toBe(4096);
+      expect(f.workspace.task(f.currentTaskId).snapshot.contextModel?.maxOutputTokens).toBe(8192);
       return summarized();
     }
     helperCalls++;
@@ -589,7 +594,7 @@ test('small helper compaction stays above 85%, preserves exact writes, and waits
   expect(f.store.product.get<Content>('content', f.saved.id).revision).toBe(2);
   expect(checkpointRows(f)).toHaveLength(2);
   expect(task.snapshot.model.maxOutputTokens).toBe(1024);
-  expect(task.snapshot.contextModel?.maxOutputTokens).toBe(8192);
+  expect(task.snapshot).not.toHaveProperty('contextModel');
 });
 
 test('unhelpful helper compaction preserves actual Vertex signatures, results and write-only continuation', async () => {

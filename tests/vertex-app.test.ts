@@ -1,3 +1,4 @@
+import { setFixtureModelRoutes } from './fixtures/chat.js';
 import type { Job } from '../core/types.js';
 import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
@@ -269,6 +270,11 @@ async function setup(app: App, translation = true) {
     'PUT'
   );
   const prior = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`);
+  await setFixtureModelRoutes(app, {
+    main: { id: main.id },
+    translation: translation ? { id: auxiliary.id } : null,
+    status: null,
+  });
   const profile = await api<ChatProfile>(
     app,
     `/api/chats/${chat.id}/profile`,
@@ -276,11 +282,6 @@ async function setup(app: App, translation = true) {
       expectedRevision: prior.revision,
       packageAttachments: contents.map((item) => ({ ...ref(item), role: item.kind })),
 
-      routes: {
-        main: { id: main.id },
-        translation: translation ? { id: auxiliary.id } : null,
-        status: null,
-      },
       image: false,
     },
     'PUT'

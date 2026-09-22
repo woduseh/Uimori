@@ -76,7 +76,7 @@ function fixture() {
 
 test('one presentation preserves hook/render order, extra messages and primary-only translation', async () => {
   const { snapshot, source, options } = fixture();
-  const result = await buildPackagePresentation(snapshot, source, undefined, options);
+  const result = await buildPackagePresentation(snapshot, source, options);
   assert.deepEqual(state.log, [
     'hook:original',
     'render:original',
@@ -96,18 +96,12 @@ test('one presentation preserves hook/render order, extra messages and primary-o
 test('both hook and renderer failures close their request-owned worker', async () => {
   const { snapshot, source, options } = fixture();
   state.failHook = 'extra';
-  await assert.rejects(
-    buildPackagePresentation(snapshot, source, undefined, options),
-    /hook failed/u
-  );
+  await assert.rejects(buildPackagePresentation(snapshot, source, options), /hook failed/u);
   assert.equal(state.created, 1);
   assert.equal(state.closed, 1);
   state.failHook = '';
   state.failRender = 'translated';
-  await assert.rejects(
-    buildPackagePresentation(snapshot, source, undefined, options),
-    /render failed/u
-  );
+  await assert.rejects(buildPackagePresentation(snapshot, source, options), /render failed/u);
   assert.equal(state.created, 2);
   assert.equal(state.closed, 2);
 });

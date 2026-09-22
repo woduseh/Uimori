@@ -4,7 +4,7 @@ Uimori has a persistent maintenance mode and an operator CLI for updating a Comp
 
 ## Maintenance mode
 
-`GET /api/maintenance` returns the current status, epoch, and `activeWork`. `POST /api/maintenance` accepts `{status:"closed"|"open", reason?:string}`. The setting persists across restarts and is also available from the app's backup settings.
+`GET /api/maintenance` returns the current status, epoch, and `activeWork`. `POST /api/maintenance` accepts `{status:"closed"|"open", reason?:string}`. The setting persists across restarts and is controlled by the operator API.
 
 Closing maintenance blocks new writes and worker claims. In-progress work can finish and save its results; reads, login, diagnostics, cancellation, and skipping remain available. Rejected writes return `503 MAINTENANCE_CLOSED`, and the browser retains its drafts.
 
@@ -36,7 +36,7 @@ npm run update -- cancel --config .local/update.json --key update-2026-09-19
 
 ## Transition and recovery
 
-Only empty or current personal-v1 schema-1 databases are supported. Use the separate schema-24-to-personal-v1 transfer tool before changing deployment volumes. The update controller itself does not upgrade old data: a copied older database fails candidate admission before writes. Preserve its volume and backups; beginning with the new native structure requires a separate empty volume, outside an in-place update. See [data formats](DATA-MIGRATIONS.md).
+Empty and personal-v1 databases are supported. Opening a personal schema-1 copy upgrades it transactionally to schema 2; preserve its backup before starting the candidate. Other legacy formats still require the separate schema-24-to-personal-v1 transfer tool and a verified new database. The controller does not infer or reset unrelated formats. See [data formats](DATA-MIGRATIONS.md).
 
 The controller prepares the image, closes maintenance, waits for `activeWork` to reach zero, and stops the app. It archives the entire data volume, restores it into a new volume, and starts the candidate with `UIMORI_MAINTENANCE=1`. The candidate command checks for the app's ready event. It then changes `UIMORI_IMAGE` and `UIMORI_DATA_VOLUME` in the environment file, starts the Compose app service, checks `/api/session`, and reopens maintenance. Other environment settings, the previous volume, and the backup remain in place.
 

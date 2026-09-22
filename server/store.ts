@@ -1,7 +1,7 @@
 import { retainCompletedLore } from './lore-retention-state.js';
 import { verifiedRunLoreReads } from './lore-context.js';
 import { captureNativeMessageChanges } from './native-message-changes.js';
-import { releaseCompletedRunInputs } from './execution-retention.js';
+import { releaseCompletedRunInputs, releaseCompletedJobInputs } from './execution-retention.js';
 import { retryRun as retryPersonalRun } from './run-retry.js';
 import { executionSnapshot, settleSnapshot } from './execution-snapshot.js';
 import { CredentialStore, initCredentials } from './credentials.js';
@@ -40,7 +40,6 @@ import {
   checkpointChatVariablesInTransaction,
   writeChatVariablesInTransaction,
 } from './chat-variables.js';
-import { nativeRisuLegacyReceipt } from './risu-native-readonly.js';
 import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
 import { IDENTITY_PATTERN } from '../core/identity.js';
 import {
@@ -781,13 +780,18 @@ export class Store {
   ): Job {
     return requestStatus(this, id, expectedSourceHash, expectedJobId, validate);
   }
-  job(id: string): Job {
+  job(id: string, view: 'execution' | 'reader' = 'execution'): Job {
     const row = this.db
       .prepare(
-        'SELECT j.*,r.result FROM jobs j LEFT JOIN job_results r ON r.job_id=j.id WHERE j.id=?'
+        `SELECT j.id,j.chat_id,j.source_revision,j.source_hash,j.kind,j.status,j.generation,
+          j.error,j.created_at,j.updated_at,j.revision,
+          ${view === 'reader' ? "CASE WHEN j.kind='image' THEN json_object('imageTarget',json_extract(j.input,'$.imageTarget')) ELSE NULL END" : 'j.input'} AS input,
+          r.result FROM jobs j LEFT JOIN job_results r ON r.job_id=j.id WHERE j.id=?`
       )
       .get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Job not found');
+    const input = parse(row.input),
+      result = parse(row.result ?? null);
     return {
       id: row.id,
       chatId: row.chat_id,
@@ -797,15 +801,13 @@ export class Store {
       status: row.status,
       attempt: row.generation,
       generation: row.generation,
-      input: parse(row.input),
-      ...(row.kind === 'image' && parse(row.input)?.imageTarget
-        ? { imageTarget: parse(row.input).imageTarget }
-        : {}),
+      input: input,
+      ...(row.kind === 'image' && input?.imageTarget ? { imageTarget: input.imageTarget } : {}),
       ...(row.kind === 'translation' &&
       row.status === 'completed' &&
-      typeof parse(row.result)?.text === 'string'
+      typeof result?.text === 'string'
         ? (() => {
-            const body = parse(row.result).text;
+            const body = result.text;
             const textHash = createHash('sha256').update(body).digest('hex');
             return {
               translationLayout: {
@@ -820,7 +822,7 @@ export class Store {
             };
           })()
         : {}),
-      result: parse(row.result ?? null),
+      result,
       error: row.error,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -833,7 +835,7 @@ export class Store {
               )
               .get(row.source_revision, row.source_hash, row.revision) as Row | undefined;
             if (!previous) return {};
-            const saved = this.job(previous.id);
+            const saved = this.job(previous.id, view);
             try {
               validateTranslationArtifact(saved, this.source(row.source_revision));
             } catch {
@@ -904,6 +906,7 @@ export class Store {
       controls?.fail('job-transaction');
       this.db.prepare("UPDATE jobs SET status='completed',updated_at=? WHERE id=?").run(now(), id);
       if (row.kind === 'translation') scheduleTranslationImages(this, this.job(id));
+      releaseCompletedJobInputs(this.db, id);
       this.event(row.chat_id, 'job.completed', id);
       return true;
     });
@@ -1016,6 +1019,7 @@ export class Store {
         .run(value.status, value.error, now(), id);
       if (row.kind === 'translation' && value.status === 'completed')
         scheduleTranslationImages(this, this.job(id));
+      if (value.status === 'completed') releaseCompletedJobInputs(this.db, id);
       this.event(row.chat_id, `job.${value.status}`, id);
       return true;
     });
@@ -1033,13 +1037,7 @@ export class Store {
         const run = this.run(row.id);
         this.db
           .prepare("UPDATE runs SET status='interrupted',error=?,updated_at=? WHERE id=?")
-          .run(
-            nativeRisuLegacyReceipt(run.snapshot)
-              ? '이전 프롬프트 형식의 요청은 자동 재개하지 않아요. 현재 설정으로 다시 요청해 주세요.'
-              : 'Server stopped; generation was not automatically replayed',
-            now(),
-            run.id
-          );
+          .run('Server stopped; generation was not automatically replayed', now(), run.id);
         this.story.finishCommandInTransaction(run.id, 'failed');
         this.event(run.chatId, 'run.interrupted', run.id);
       }

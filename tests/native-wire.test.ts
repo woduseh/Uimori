@@ -19,7 +19,7 @@ const message = (id: string, role: LogicalMessage['role'], text: string): Logica
   },
 });
 const prompt = (): ProviderPrompt => ({
-  compilerVersion: 'risu-native-prompt-1',
+  compilerVersion: 'risu-native-prompt-2',
   values: { length: 'standard' },
   messages: [
     message('system', 'system', 'NATIVE_SYSTEM'),

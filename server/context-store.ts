@@ -14,13 +14,7 @@ import { fields, HttpError, number, record, text } from './request-validation.js
 import type { Store } from './store.js';
 
 type Row = Record<string, any>;
-export const CONTEXT_TABLES = [
-  'context_checkpoints',
-  'context_heads',
-  'context_commands',
-  'context_jobs',
-  'context_job_attempts',
-];
+
 import type { ContextCheckpoint, ContextJob } from '../core/context-plan.js';
 export type { ContextCheckpoint, ContextJob } from '../core/context-plan.js';
 const parse = (v: unknown): any => (typeof v === 'string' ? JSON.parse(v) : v);

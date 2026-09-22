@@ -108,7 +108,7 @@ export function projectNativeRisuPresetProgram(
     receipt = snapshot.nativeRisuPresetProgram;
   if (!source || !receipt) return program;
   if (
-    ![1, 2].includes(receipt.version) ||
+    receipt.version !== 2 ||
     receipt.sourceHash !== hash(source) ||
     !receipt.fields ||
     typeof receipt.fields !== 'object' ||
@@ -117,11 +117,8 @@ export function projectNativeRisuPresetProgram(
   )
     throw new Error('RISU_NATIVE_PRESET_RECEIPT_MISMATCH');
   const context = fieldContext(snapshot);
-  const fieldPlan = nativeRisuPresetFields(
-    source,
-    receipt.version === 1 ? { legacy: true } : context
-  );
-  if (receipt.version === 2 && receipt.contextHash !== hash(fieldPlan))
+  const fieldPlan = nativeRisuPresetFields(source, context);
+  if (receipt.contextHash !== hash(fieldPlan))
     throw new Error('RISU_NATIVE_PRESET_RECEIPT_MISMATCH');
   const expected = Object.keys(fieldPlan).sort();
   if (JSON.stringify(expected) !== JSON.stringify(Object.keys(receipt.fields).sort()))

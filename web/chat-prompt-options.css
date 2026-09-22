@@ -188,13 +188,6 @@
   margin-left: auto;
   flex-shrink: 0;
 }
-.chat-delegation-fields {
-  gap: 6px;
-}
-.chat-delegation-fields legend {
-  padding: 16px 0 4px;
-  font-weight: 600;
-}
 .chat-option-record {
   display: grid;
   gap: 6px;
