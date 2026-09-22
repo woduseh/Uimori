@@ -170,6 +170,15 @@ test('library filters distinguish bot/persona/module, hide retired library entri
   expect(batch.items[0].read.text).toContain('나이');
   expect(batch.items[2].error).toContain('DATA_SOURCE_CHANGED');
   expect(batch.nextIndex).toBeNull();
+  const sixteen = await f.invoke('data.read', {
+    refs: Array.from({ length: 16 }, () => refs[0]),
+    limit: 1,
+  });
+  expect(sixteen.items).toHaveLength(16);
+  expect(sixteen.nextIndex).toBeNull();
+  await expect(
+    f.invoke('data.read', { refs: Array.from({ length: 17 }, () => refs[0]), limit: 1 })
+  ).rejects.toThrow('DATA_LIST_INVALID');
   await expect(f.invoke('data.read', { ref: refs[0], refs })).rejects.toThrow();
 });
 
