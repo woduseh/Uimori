@@ -69,7 +69,7 @@ for (const width of DEFAULT_WIDTHS) {
     expect(await error.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: info.outputPath(`source-error-${width}.png`) });
   });
-  test(`REDIT01 ${width} inline request editing preserves drafts and original answers while branching`, async ({
+  test(`REDIT01 ${width} inline request editing preserves drafts and original answers while copying a chat`, async ({
     page,
     request,
   }, info) => {
@@ -80,6 +80,11 @@ for (const width of DEFAULT_WIDTHS) {
     const edit = source.getByRole('button', { name: '요청 편집', exact: true });
     const composer = page.getByRole('textbox', { name: '다음 장면 요청' });
     await composer.fill('입력창에 보존할 초안');
+    await page.route('**/api/chats/*/input-translation', (route) =>
+      route.fulfill({ json: { text: 'Composer translation to preserve', targetLanguage: 'en' } })
+    );
+    await page.getByRole('button', { name: '입력 번역', exact: true }).click();
+    await expect(composer).toHaveValue('Composer translation to preserve');
     await source.getByTestId('source-request').hover();
     await expect(edit).toBeVisible();
     await expect(edit.locator('svg')).toHaveCount(1);
@@ -118,23 +123,34 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(field).toHaveValue('수정한 합성 요청');
     await expect(field).toBeDisabled();
     await page.getByRole('button', { name: '이전 요청 확인' }).click();
-    await expect.poll(() => new URL(page.url()).searchParams.get('branch')).toBeTruthy();
+    await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(chat.id);
+    const copiedChatId = new URL(page.url()).searchParams.get('chat')!;
+    expect(copiedChatId).toBeTruthy();
     expect(calls).toHaveLength(2);
     expect(calls[1]).toEqual(calls[0]);
     expect(calls[0].request).toBe('수정한 합성 요청');
     const after = await detail(request, chat.id);
-    expect(after.runs).toHaveLength(2);
-    const edited = after.runs.find((item) => item.id !== run.id)!;
+    const copied = await detail(request, copiedChatId);
+    expect(after.runs).toHaveLength(1);
+    expect(copied.runs).toHaveLength(1);
+    const edited = copied.runs[0];
+    expect(edited.chatId).toBe(copiedChatId);
     expect(edited.parentRevision).toBeNull();
     expect(edited.request).toBe('수정한 합성 요청');
     expect(edited.snapshot.branchId).not.toBe(run.snapshot.branchId);
-    expect(new URL(page.url()).searchParams.get('branch')).toBe(edited.snapshot.branchId);
+    expect(new URL(page.url()).searchParams.get('branch')).toBeNull();
     expect(after.sources.find((item) => item.id === before.sources[0].id)).toEqual(
       before.sources[0]
     );
     expect(after.runs.find((item) => item.id === run.id)?.request).toBe('원래 합성 요청');
     expect(await page.evaluate((id) => sessionStorage.getItem(`draft:${id}`), chat.id)).toBe(
-      '입력창에 보존할 초안'
+      'Composer translation to preserve'
     );
+    expect(
+      await page.evaluate(
+        (id) => JSON.parse(sessionStorage.getItem(`input-translation:draft:${id}`) ?? 'null')?.text,
+        chat.id
+      )
+    ).toBe('입력창에 보존할 초안');
   });
 }

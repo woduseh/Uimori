@@ -23,8 +23,14 @@
 .request-message details[open] .request-collapse {
   display: inline;
 }
+.request-copy-error {
+  margin: 4px 0;
+  font-size: 12px;
+  text-align: right;
+}
 .request-message-actions {
   display: flex;
+  gap: 4px;
   justify-content: flex-end;
   opacity: 0;
 }

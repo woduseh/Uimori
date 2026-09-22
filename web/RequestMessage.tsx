@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import { ArrowUp, Pencil, RefreshCw, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ArrowUp, Check, Copy, Pencil, RefreshCw, X } from 'lucide-react';
 import { IconButton } from './IconButton.js';
 import { SHEET_MEDIA } from './ActionMenu.js';
 import './request-message.css';
@@ -34,6 +34,32 @@ export function RequestMessage({
   const [revealed, setRevealed] = useState(false);
   const [draft, setDraft] = useState(request);
   const [busy, setBusy] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
+  const copyVersion = useRef(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A different stored request invalidates clipboard completion and its feedback.
+  useLayoutEffect(() => {
+    copyVersion.current++;
+    setCopyState('idle');
+    return () => {
+      copyVersion.current++;
+    };
+  }, [runId, request]);
+  useEffect(() => {
+    if (copyState !== 'copied') return;
+    const timer = setTimeout(() => setCopyState('idle'), 1800);
+    return () => clearTimeout(timer);
+  }, [copyState]);
+  const copyRequest = async () => {
+    const version = ++copyVersion.current;
+    setCopyState('copying');
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(request);
+      if (copyVersion.current === version) setCopyState('copied');
+    } catch {
+      if (copyVersion.current === version) setCopyState('failed');
+    }
+  };
   const lock = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -163,8 +189,18 @@ export function RequestMessage({
               </dl>
             </details>
           )}
-          {onSubmit && (
-            <div className="request-message-actions">
+          <div className="request-message-actions">
+            <IconButton
+              icon={copyState === 'copied' ? Check : Copy}
+              label={copyState === 'copied' ? '요청 복사됨' : '요청 복사'}
+              className="secondary"
+              disabled={copyState === 'copying'}
+              onClick={() => void copyRequest()}
+            />
+            <span className="sr-only" role="status">
+              {copyState === 'copied' ? '요청을 복사했어요.' : ''}
+            </span>
+            {onSubmit && (
               <IconButton
                 ref={trigger}
                 icon={Pencil}
@@ -180,7 +216,12 @@ export function RequestMessage({
                   setEditing(true);
                 }}
               />
-            </div>
+            )}
+          </div>
+          {copyState === 'failed' && (
+            <p className="error request-copy-error" role="alert">
+              요청을 복사하지 못했어요. 브라우저의 클립보드 권한을 확인해 주세요.
+            </p>
           )}
         </>
       )}

@@ -11,6 +11,7 @@ import { isModelSelectable } from './model-selection.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { DismissibleError } from './DismissibleError.js';
 import { ChatComposer, ComposerInput } from './ChatComposer.js';
+import { InputTranslationControls, InputTranslationFeedback } from './InputTranslation.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { IconButton } from './IconButton.js';
 import { PinIcon } from './ui-icons.js';
@@ -206,6 +207,12 @@ function App() {
   const [optionsOpen, setOptionsOpen] = useState(false),
     [optionsDirty, setOptionsDirty] = useState(false),
     [optionsBusy, setOptionsBusy] = useState(false);
+  const inputTranslationDisabled =
+    optionsBusy ||
+    !s.detail ||
+    s.pendingProfile ||
+    !!s.pendingRequest ||
+    s.submitting.includes(s.viewKey);
   const [helperOpen, setHelperOpen] = useState(false);
   const [helperSelection, setHelperSelection] = useState<{
     key: string;
@@ -1354,7 +1361,7 @@ function App() {
                     placeholder={
                       // A wrapping placeholder would grow the one-row composer on narrow screens.
                       compact
-                        ? '다음 장면을 부탁해 보세요…'
+                        ? '장면 요청…'
                         : `다음 장면을 부탁하거나, 채팅을 이어가세요… · ${enterSend ? 'Enter' : 'Ctrl+Enter'} 보내기`
                     }
                   />
@@ -1438,6 +1445,11 @@ function App() {
                         />
                       )}
                     </ComposerMore>
+                    <InputTranslationControls
+                      translation={s.inputTranslation}
+                      disabled={inputTranslationDisabled}
+                      empty={!s.draft.trim()}
+                    />
                   </div>
                   {s.active && !s.pendingRequest ? (
                     <button
@@ -1477,6 +1489,12 @@ function App() {
                     </button>
                   )}
                 </ChatComposer>
+                {!sourceEditing && (
+                  <InputTranslationFeedback
+                    translation={s.inputTranslation}
+                    disabled={inputTranslationDisabled}
+                  />
+                )}
                 {sourceEditing && s.active && (
                   <button
                     type="button"

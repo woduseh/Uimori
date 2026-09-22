@@ -1,4 +1,5 @@
 import { themeRoutes } from './themes.js';
+import { inputTranslationRoutes } from './input-translation.js';
 import { ChatTranscriptError } from '../core/chat-transcript.js';
 import { resourceRoutes } from './resource-routes.js';
 import { rejudgeTranslation } from './source-editing.js';
@@ -1153,6 +1154,13 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   resourceRoutes(app, store);
   themeRoutes(app, store);
+  inputTranslationRoutes(app, store, {
+    signal: stopping.signal,
+    resolveCredential,
+    executeCodex,
+    vertexRequestTier: options.vertexRequestTier,
+    track,
+  });
   chatOverrideRoutes(app, new ChatOverridesStore(store), publish);
   responseStreamRoutes(app, streams, { authenticated: session.authenticated });
   providerConnectionTestRoutes(app, store, {

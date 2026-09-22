@@ -19,6 +19,7 @@ import type { ChatOptionState } from '../core/chat-options.js';
 import { api, ApiError, definiteRejection, libraryChangedKey } from './api.js';
 import { requestChatFork } from './fork-request.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
+import { useInputTranslation } from './useInputTranslation.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { refValue } from './content-ref.js';
 import {
@@ -123,6 +124,7 @@ export function useStory() {
   const detail = loadedDetail?.chat.id === selected ? loadedDetail : null;
   const [archivedContents, setArchivedContents] = useState<Content[]>([]);
   const [draft, setDraft] = useState('');
+  const draftIdentity = useRef({ text: '', revision: 0 });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loreResetDraft, setLoreResetDraft] = useState(false);
@@ -544,7 +546,9 @@ export function useStory() {
     sessionStorage.setItem(`reading:${viewKey}`, JSON.stringify(position));
   }, [selected, viewKey, readSource]);
   useLayoutEffect(() => {
-    setDraft(sessionStorage.getItem(draftKey) || '');
+    const text = sessionStorage.getItem(draftKey) || '';
+    draftIdentity.current = { text, revision: draftIdentity.current.revision + 1 };
+    setDraft(text);
     setLoreResetDraft(sessionStorage.getItem(`lore-reset:${draftKey}`) === 'true');
     const cursor = readDraftCursor(`cursor:${draftKey}`);
     const frame = requestAnimationFrame(() => {
@@ -570,6 +574,7 @@ export function useStory() {
       );
   }, [draftKey]);
   function editDraft(value: string) {
+    draftIdentity.current = { text: value, revision: draftIdentity.current.revision + 1 };
     setDraft(value);
     sessionStorage.setItem(draftKey, value);
   }
@@ -582,6 +587,25 @@ export function useStory() {
   const branch =
     detail?.branches?.find((item) => item.id === activeBranchId) ??
     detail?.branches?.find((item) => item.default);
+  const inputTranslation = useInputTranslation({
+    draftKey,
+    epoch: view.epoch,
+    chatId: selected,
+    branchId: branch?.id,
+    readDraft: () => ({
+      ...draftIdentity.current,
+      key: currentDraftKey.current,
+      epoch: navigation.current.epoch,
+    }),
+    writeDraft: editDraft,
+    available: () =>
+      !!detail &&
+      navigation.current.destination === 'story' &&
+      navigation.current.chat === selected &&
+      !submitLocks.current.has(viewKey) &&
+      !readCommand(commandStorageKey(selected, activeBranchId)) &&
+      !sessionStorage.getItem(`pending-profile:${selected}`),
+  });
   const sources = useMemo(() => detail?.sources ?? [], [detail]);
   const visibleRuns =
     detail?.runs.filter(
@@ -808,6 +832,7 @@ export function useStory() {
       );
       return false;
     }
+    const sentTranslationId = inputTranslation.beginSend();
     track('sending');
     submitLocks.current.add(sentView);
     setSubmitting([...submitLocks.current]);
@@ -827,6 +852,7 @@ export function useStory() {
       track('accepted', admitted.id);
       accepted = true;
       clearCommand(commandKey, idempotencyKey);
+      if (!preserveDraft) inputTranslation.accepted(sentKey, sentTranslationId);
       if (payload.editedRequest && payload.retryOf)
         sessionStorage.removeItem(`request-edit:${payload.retryOf}`);
       if (!preserveDraft && payload.loreContextReset) {
@@ -835,7 +861,10 @@ export function useStory() {
       }
       if (!preserveDraft && sessionStorage.getItem(sentKey) === sentDraft) {
         sessionStorage.removeItem(sentKey);
-        if (currentDraftKey.current === sentKey) setDraft('');
+        if (currentDraftKey.current === sentKey) {
+          draftIdentity.current = { text: '', revision: draftIdentity.current.revision + 1 };
+          setDraft('');
+        }
       }
       if (currentView.current === sentView)
         setNotice(
@@ -1123,6 +1152,7 @@ export function useStory() {
     library,
     libraryError,
     draft,
+    inputTranslation,
     error,
     notice,
     connected,

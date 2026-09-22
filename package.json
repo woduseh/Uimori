@@ -56,7 +56,8 @@
     "test:personal": "vitest run tests/personal-workspace-v1.test.ts tests/personal-workspace-flow.test.ts tests/database-schema.test.ts tests/access-session.test.ts",
     "verify:personal": "node scripts/verify-personal.mjs",
     "verify:themes": "node scripts/verify-themes.mjs",
-    "verify:translation-guides": "node scripts/verify-translation-guides.mjs"
+    "verify:translation-guides": "node scripts/verify-translation-guides.mjs",
+    "verify:input-translation": "node scripts/verify-input-translation.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.3",
