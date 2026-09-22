@@ -308,13 +308,31 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
             await phone.request.delete('/api/session', { headers: mutationHeaders, data: {} })
           ).status()
         ).toBe(200);
-        await phone
-          .getByLabel('다음 장면 요청', { exact: true })
-          .fill('SYNTHETIC_EXPIRED_SESSION_MUST_NOT_GENERATE');
-        await phone.getByRole('button', { name: '원문 생성', exact: true }).click();
-        await expect(
-          phone.getByRole('heading', { name: '개인 작업실에 연결', exact: true })
-        ).toBeVisible();
+        const loginHeading = phone.getByRole('heading', {
+          name: '개인 작업실에 연결',
+          exact: true,
+        });
+        // The revoked SSE may notify the gate first. Otherwise make one protected UI
+        // request without waiting for Playwright actionability while that gate can rerender.
+        if (!(await loginHeading.isVisible())) {
+          try {
+            await phone
+              .getByLabel('다음 장면 요청', { exact: true })
+              .fill('SYNTHETIC_EXPIRED_SESSION_MUST_NOT_GENERATE');
+            await phone
+              .getByRole('button', { name: '원문 생성', exact: true })
+              .evaluate((button: HTMLButtonElement) => button.click());
+          } catch {
+            // A concurrent auth rerender is the other expected path; the assertion below proves it.
+          }
+        }
+        await expect(loginHeading).toBeVisible();
+        await expect(phone.getByRole('button', { name: '원문 생성', exact: true })).toHaveCount(0);
+        const afterLogout = (await (
+          await pc.request.get(`/api/chats/${chat.id}`)
+        ).json()) as ChatDetail;
+        expect(afterLogout.runs).toHaveLength(2);
+        expect(afterLogout.sources).toHaveLength(2);
         expect((await pc.request.get('/api/health')).status()).toBe(200);
         await login(phone, `/?chat=${chat.id}`);
         await expect(phone.getByTestId('source')).toHaveCount(2);
