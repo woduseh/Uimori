@@ -72,7 +72,8 @@ for (const width of [1440, 412]) {
     expect((await save(page)).text).toBe(card.description);
     await selectPackageSection(page, '기본 정보');
     await page.getByLabel('Risu 자료 이름', { exact: true }).fill('Recovered local input');
-    await expect(page.getByText('이 기기에 복구용 입력 보관됨', { exact: true })).toBeVisible();
+    // The compact header hides this secondary hint; persistence is verified by reload below.
+    await expect(page.getByText('이 기기에 복구용 입력 보관됨', { exact: true })).toBeAttached();
     await page.reload();
     // Navigation state need not persist; the resource's per-device input does.
     if (!(await page.getByLabel('Risu 자료 이름', { exact: true }).isVisible()))
