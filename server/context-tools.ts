@@ -214,7 +214,7 @@ export async function executeContextTool(
           plan.budget.inputTokenLimit
         ),
         guidance:
-          'Earlier exchanges and tool results have left the input. Read any known [scene N] anchor directly with story.read({sceneNumber:N}); story.list/search still discover every original in this sceneScope.',
+          'Earlier exchanges and tool results have left the input. Read any known [scene N] anchor directly with story.read({sceneNumber:N}); story.search without a query still discovers every original in this sceneScope.',
       },
       denied: false,
     },

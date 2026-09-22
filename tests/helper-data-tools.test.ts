@@ -67,6 +67,19 @@ function bot(
   return f.store.product.content({ ...fixtureBotInput('하린 ' + kind, text), kind }) as Content;
 }
 
+async function readOne(
+  f: ReturnType<typeof fixture>,
+  ref: DataRef,
+  options: { offset?: number; limit?: number } = {}
+) {
+  const batch = await f.invoke('data.read', { refs: [ref], ...options });
+  expect(batch.items).toHaveLength(1);
+  const item = batch.items[0];
+  if (item.error) throw new Error(item.error);
+  expect(batch.nextIndex).toBeNull();
+  return item.read;
+}
+
 test('grep returns authored excerpts once, supports two-character Korean queries, and reads exact ranges', async () => {
   const f = fixture(),
     b = bot(f);
@@ -82,8 +95,7 @@ test('grep returns authored excerpts once, supports two-character Korean queries
   expect(hit.origin).toBe('live-library-original');
   expect(hit.ref).toMatchObject({ id: b.id, kind: 'bot', field: '/card/description', revision: 1 });
   expect(JSON.stringify(result)).not.toContain('nativeRisu');
-  const read = await f.invoke('data.read', {
-    ref: hit.ref,
+  const read = await readOne(f, hit.ref, {
     offset: hit.matchRange.start,
     limit: 6,
   });
@@ -154,8 +166,7 @@ test('library filters distinguish bot/persona/module, hide retired library entri
   f.store.db.prepare('INSERT INTO library_hidden VALUES(?,?)').run('content', m.id);
   const list = await f.invoke('data.search', {});
   expect(list.items).toHaveLength(2);
-  const directory = await f.invoke('data.read', {
-    ref: list.items.find((i: any) => i.ref.id === b.id).ref,
+  const directory = await readOne(f, list.items.find((i: any) => i.ref.id === b.id).ref, {
     limit: 1,
   });
   expect(directory.fields).toHaveLength(1);
@@ -206,10 +217,8 @@ test('live references detect a later revision while unsaved editor input is sepa
     { ...fixtureBotInput(b.title, '나이: 31세'), expectedRevision: b.revision },
     b.id
   );
-  await expect(f.invoke('data.read', { ref: found.items[0].ref })).rejects.toThrow(
-    'DATA_SOURCE_CHANGED'
-  );
-  expect((await f.invoke('data.read', { ref: unsaved.items[0].ref })).text).toContain('29세');
+  await expect(readOne(f, found.items[0].ref)).rejects.toThrow('DATA_SOURCE_CHANGED');
+  expect((await readOne(f, unsaved.items[0].ref)).text).toContain('29세');
 });
 
 test('current scope retains reservation facts, complete old prose, source roles, imported claims and conflicting chat overrides', async () => {
@@ -283,7 +292,7 @@ test('current scope retains reservation facts, complete old prose, source roles,
   expect(result.items.find((i: any) => i.ref.kind === 'override').origin).toContain('conflicting');
   const source = result.items.find((i: any) => i.ref.field === '/text' && i.ref.kind === 'chat');
   expect(source.metadata.sceneNumber).toBe(1);
-  expect((await f.invoke('data.read', { ref: source.ref })).text).toBe(text);
+  expect((await readOne(f, source.ref)).text).toBe(text);
 });
 
 test('SQL views support schema discovery, aggregate queries, params, JSON and cross-view joins without mutation', async () => {
@@ -375,7 +384,7 @@ test('cancellation stops the isolated process and zero-width regex/surrogate rea
   expect(found.items.filter((item: any) => item.ref.field === '/card/description')).toHaveLength(1);
   expect(found.complete).toBe(true);
   const ref: DataRef = (await f.invoke('data.search', { patterns: ['나이'] })).items[0].ref;
-  const read = await f.invoke('data.read', { ref, offset: 1, limit: 1 });
+  const read = await readOne(f, ref, { offset: 1, limit: 1 });
   expect(read.text).toBe('😀');
   expect(read.nextOffset).toBe(2);
   const controller = new AbortController();
@@ -434,7 +443,7 @@ test('live chat grep and SQL follow each actual ancestry and preserve scene numb
       (item: any) => item.ref.chatId === chats[0].id && !item.text.includes('기록 1-')
     )
   ).toBe(true);
-  const read = await f.invoke('data.read', { ref: found.items[2].ref });
+  const read = await readOne(f, found.items[2].ref);
   expect(read.text).toContain('0-2');
   const counts = await f.invoke('db.query', {
     sql: 'SELECT chat_id,COUNT(*) n FROM agent_messages GROUP BY chat_id ORDER BY chat_id',

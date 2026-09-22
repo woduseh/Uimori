@@ -123,7 +123,7 @@ function read(
   const event = executeTool(run.snapshot, {
     callId: randomUUID(),
     name,
-    args: { id: f.loreId, offset, limit },
+    args: { ids: [f.loreId], offset, limit },
   });
   f.store.tool(run.id, event);
   return event;
@@ -149,9 +149,9 @@ test('only successful main reads retain the exact observed range; search, denied
   const forged = executeTool(first.snapshot, {
     callId: 'forged',
     name: 'knowledge.read',
-    args: { id: f.loreId, offset: 20, limit: 3 },
+    args: { ids: [f.loreId], offset: 20, limit: 3 },
   });
-  (forged.result as { text: string }).text = 'FAKE';
+  (forged.result as any).items[0].read.text = 'FAKE';
   f.store.tool(first.id, forged);
   const source = complete(f, first);
   const second = (await queue(f)).run,
@@ -336,7 +336,7 @@ test('package revision and persona detachment invalidate only currently excluded
     executeTool(a.snapshot, {
       callId: 'persona-read',
       name: 'knowledge.read',
-      args: { id, offset: 0, limit: 7 },
+      args: { ids: [id], offset: 0, limit: 7 },
     })
   );
   read(f, a, 0, 4);
@@ -356,7 +356,7 @@ test('package revision and persona detachment invalidate only currently excluded
     executeTool(d.snapshot, {
       callId: 'persona-again',
       name: 'knowledge.read',
-      args: { id, offset: 0, limit: 7 },
+      args: { ids: [id], offset: 0, limit: 7 },
     })
   );
   complete(f, d);

@@ -38,7 +38,7 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
               index: 0,
               id: 'read-old-glossary',
               name: 'knowledge.read',
-              argumentsDelta: '{"id":"old-glossary"}',
+              argumentsDelta: '{"ids":["old-glossary"]}',
             },
             {
               type: 'tool_delta',
@@ -105,8 +105,8 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
       'read-old-glossary',
       'load-method',
     ]);
-    expect(second.input.results[0].result.text).toContain('SOURCE_TIME_GLOSSARY');
-    expect(second.input.results[0].result.source.revision).toBe(7);
+    expect(second.input.results[0].result.items[0].read.text).toContain('SOURCE_TIME_GLOSSARY');
+    expect(second.input.results[0].result.items[0].read.source.revision).toBe(7);
     expect(JSON.stringify(server.requests)).not.toMatch(/FUTURE_MUTATION|EXCLUDED_OTHER_CHAT/);
     expect(JSON.stringify(seed.source)).toBe(original);
   });
@@ -178,7 +178,7 @@ test('custom translation prompt survives tool continuation and refusal retry wit
           index: 0,
           id: 'custom-glossary',
           name: 'knowledge.read',
-          argumentsDelta: '{"id":"old-glossary"}',
+          argumentsDelta: '{"ids":["old-glossary"]}',
         },
         { type: 'opaque_state', state: { test: 'custom-translation' } },
         { type: 'done', reason: 'tool_calls' },

@@ -505,7 +505,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
     const ve = encodeVertex(v);
     const vd = new VertexDecoder(ve.context);
     const signed = {
-      functionCall: { id: 'Vertex.Call', name: 'knowledge.read', args: { id: 'synthetic' } },
+      functionCall: { id: 'Vertex.Call', name: 'knowledge.read', args: { ids: ['synthetic'] } },
       thoughtSignature: 'signed-vertex',
     };
     vd.accept({

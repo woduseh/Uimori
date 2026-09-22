@@ -48,7 +48,7 @@ export const CONTEXT_TOOLS: ProviderTool[] = [
   },
 ];
 export const CONTEXT_TOOLS_CONTRACT =
-  '\nContext window tools are registered for this run. Tool results carry projected contextWindow usage including the returned data. context.write saves a working summary for later windows and turns without changing the current window. context.new, called alone, opens a new window: exchanges before the kept recent ones and all earlier tool results leave the transmitted input, your summary stands in for them, and the host keeps every original. story.list, story.search, story.read, notes.list and notes.read work in every window; recover exact decisions and wording from originals instead of guessing. Act before usedRatio reaches 0.85. If completed reads fill the window, the host summarizes those reads before the next model call while preserving mutation receipts; story history is compacted before the next writing turn. Summaries are derived reference data: explicit user notes and the current request take precedence.\nWorking-memory rules for context.write and context.new: ' +
+  '\nContext window tools are registered for this run. Tool results carry projected contextWindow usage including the returned data. context.write saves a working summary for later windows and turns without changing the current window. context.new, called alone, opens a new window: exchanges before the kept recent ones and all earlier tool results leave the transmitted input, your summary stands in for them, and the host keeps every original. story.search and story.read work in every window; explicit user notes are already supplied as host context; recover exact decisions and wording from originals instead of guessing. Act before usedRatio reaches 0.85. If completed reads fill the window, the host summarizes those reads before the next model call while preserving mutation receipts; story history is compacted before the next writing turn. Summaries are derived reference data: explicit user notes and the current request take precedence.\nWorking-memory rules for context.write and context.new: ' +
   CONTEXT_SUMMARY_SEMANTICS +
   '\n' +
   CONTEXT_RETRIEVAL_GUIDANCE;
@@ -94,7 +94,7 @@ export function contextWindowStatus(
       : level === 'notice'
         ? {
             notice:
-              'Input is filling up. Before it reaches 85%, save a working summary with context.write and call context.new. Compacted originals stay retrievable through story.list, story.search and story.read.',
+              'Input is filling up. Before it reaches 85%, save a working summary with context.write and call context.new. Compacted originals stay retrievable through story.search and story.read.',
           }
         : {}),
   };
@@ -118,7 +118,6 @@ export function contextWindowReference(snapshot: RunSnapshot): Json | undefined 
     compactedExchanges: plan.compacted.length,
     retainedExchanges: plan.recentSourceRevisions.length,
     summaryChars: plan.summary?.length ?? 0,
-    tools:
-      'context.read, context.write, context.new, story.list, story.search, story.read, notes.list, notes.read',
+    tools: 'context.read, context.write, context.new, story.search, story.read',
   };
 }

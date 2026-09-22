@@ -313,7 +313,7 @@ test('preset evaluation mixes permitted reads and local tools; buffered Response
         await send(target, [
           reasoning('main-reasoning'),
           call(body, 'knowledge.search', { query: 'copper' }, 'search'),
-          call(body, 'knowledge.read', { id: state.lore.id }, 'read'),
+          call(body, 'knowledge.read', { ids: [state.lore.id] }, 'read'),
           call(body, 'eval_get_context', {}, 'context'),
         ]);
       else {
@@ -495,7 +495,7 @@ test('duplicate call IDs and terminal plus host calls cannot commit or dispatch 
       const first = artifact(body, 'must not commit', 'same');
       const other =
         mode === 'mixed'
-          ? call(body, 'knowledge.read', { id: state.lore.id }, 'host')
+          ? call(body, 'knowledge.read', { ids: [state.lore.id] }, 'host')
           : ({ ...(first as object), id: 'different-output-id' } as Json);
       await send(target, [first, other]);
     });

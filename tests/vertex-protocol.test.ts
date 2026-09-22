@@ -46,7 +46,7 @@ const call = (id: string | undefined, source = 'lore-1'): Json => ({
   functionCall: {
     ...(id !== undefined ? { id } : {}),
     name: 'knowledge.read',
-    args: { id: source },
+    args: { ids: [source] },
   },
 });
 function start(input = request()) {
@@ -58,7 +58,7 @@ function results(output: ProviderResult): Json[] {
     callId: item.id,
     name: item.name,
     args: item.arguments,
-    result: { text: `Read ${item.arguments.id}` },
+    result: { text: `Read ${String((item.arguments.ids as Json[])[0])}` },
     denied: false,
   }));
 }
@@ -389,7 +389,7 @@ describe('Vertex 3.8 request and continuation protocol', () => {
       functionCall: {
         id: 'Complete-Args.Original',
         name: 'knowledge.read',
-        args: { id: 'lore-1' },
+        args: { ids: ['lore-1'] },
         willContinue: false,
       },
       thoughtSignature: 'UNCHANGED_COMPLETE_SIGNATURE',
@@ -399,7 +399,7 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     expect(output).toMatchObject({
       status: 'tool_calls',
       toolCalls: [
-        { id: 'Complete-Args.Original', name: 'knowledge.read', arguments: { id: 'lore-1' } },
+        { id: 'Complete-Args.Original', name: 'knowledge.read', arguments: { ids: ['lore-1'] } },
       ],
     });
     const second = start(continued(input, output));
@@ -633,9 +633,9 @@ describe('Vertex streamed response decoder', () => {
         willContinue: true,
       },
     },
-    { functionCall: { name: 'knowledge.read', args: { id: 'lore-1' }, willContinue: true } },
-    { functionCall: { name: 'knowledge.read', args: { id: 'lore-1' }, willContinue: 'false' } },
-    { functionCall: { name: 'knowledge.read', args: { id: 'lore-1' }, partialArgs: [] } },
+    { functionCall: { name: 'knowledge.read', args: { ids: ['lore-1'] }, willContinue: true } },
+    { functionCall: { name: 'knowledge.read', args: { ids: ['lore-1'] }, willContinue: 'false' } },
+    { functionCall: { name: 'knowledge.read', args: { ids: ['lore-1'] }, partialArgs: [] } },
   ])('refuses unexpected streamed argument representation %#', (part) => {
     const { decoder } = start();
     expect(() =>
@@ -665,7 +665,7 @@ describe('Vertex streamed response decoder', () => {
     { value: { candidates: [{ index: 1 }] }, code: 'VERTEX_MULTIPLE_CANDIDATES' },
     { value: event([], 'FUTURE_UNKNOWN_REASON'), code: 'VERTEX_UNKNOWN_FINISH_REASON' },
     {
-      value: event([{ functionCall: { name: 'knowledge.read', args: '{"id":"lore-1"}' } }]),
+      value: event([{ functionCall: { name: 'knowledge.read', args: '{"ids":["lore-1"]}' } }]),
       code: 'INVALID_TOOL_ARGUMENTS',
     },
     {

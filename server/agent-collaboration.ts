@@ -13,7 +13,7 @@ import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { AUTHOR_NOTE_GUIDANCE } from '../core/notes.js';
 import { OUTLINE_CONTRACT } from '../core/outline.js';
-import { buildMainInput, executeTool } from '../core/provider.js';
+import { buildMainInput, executeTool, knowledgeReadResults } from '../core/provider.js';
 import {
   executeProvider,
   type Json,
@@ -305,6 +305,21 @@ export function createAgentCollaboration(
         if (outcome === 'denied') return finish('unavailable', 'ADVISOR_READ_DENIED');
         results.push(event);
         if (event.denied) continue;
+        if (event.name === 'knowledge.read') {
+          for (const read of knowledgeReadResults(event)) {
+            const source = read.source as Record<string, unknown>;
+            evidence.push({
+              tool: event.name,
+              args: event.args,
+              reference: source.reference ?? null,
+              source,
+              range: read.range,
+              ...(read.totalChars !== undefined ? { totalChars: read.totalChars } : {}),
+              ...(read.nextOffset !== undefined ? { nextOffset: read.nextOffset } : {}),
+            });
+          }
+          continue;
+        }
         const read = event.result as Record<string, unknown> | null;
         const source = read?.source as Record<string, unknown> | undefined;
         evidence.push({
@@ -313,19 +328,8 @@ export function createAgentCollaboration(
           reference: source?.reference ?? null,
           ...(source ? { source } : {}),
           ...(read?.range ? { range: read.range } : {}),
-          ...(read?.truncated !== undefined ? { truncated: read.truncated } : {}),
-          ...(read?.continuation ? { continuation: read.continuation } : {}),
-          ...(event.name === 'story.read'
-            ? { keptRanges: read?.keptRanges, excludedRanges: read?.excludedRanges }
-            : {}),
-          ...(event.name === 'notes.read'
-            ? {
-                entry: read?.entry,
-                sourceCount: read?.sourceCount,
-                provenanceTruncated: read?.provenanceTruncated,
-                sourceContinuation: read?.sourceContinuation,
-              }
-            : {}),
+          ...(read?.totalChars !== undefined ? { totalChars: read.totalChars } : {}),
+          ...(read?.nextOffset !== undefined ? { nextOffset: read.nextOffset } : {}),
         });
       }
       opaqueState = result.opaqueState;

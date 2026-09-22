@@ -30,7 +30,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.lore',
     description:
-      'Read or edit an attachment-scoped lore override in this chat. Read first: use attachments[].scope plus lore[].id and field to form selector, and copy lore[].fieldHashes[field] as expectedFieldHash. Both mutations require body selector, expectedRevision, expectedHeadRevision and operationId. Patch additionally requires expectedProfileRevision, expectedPackageRevision, expectedFieldHash and value; omit those four fields for remove. The host supplies the branch. Shared originals stay intact. Mutations require a user request for chat-only lore.',
+      'Read or edit an attachment-scoped lore override in this chat. Read first: use attachments[].scope plus lore[].id and field to form selector, and copy lore[].fieldHashes[field] as expectedFieldHash. Both mutations require body selector, expectedRevision and expectedHeadRevision. Patch additionally requires expectedProfileRevision, expectedPackageRevision, expectedFieldHash and value; omit those four fields for remove. The host supplies the branch and mutation identity. Shared originals stay intact. Mutations require a user request for chat-only lore.',
     inputSchema: schema(
       {
         action: { type: 'string', enum: ['read', 'patch', 'remove'] },
@@ -52,13 +52,12 @@ const TOOLS: ProviderTool[] = [
             ),
             expectedRevision: revision,
             expectedHeadRevision: { type: ['string', 'null'], maxLength: 100 },
-            operationId: { type: 'string', minLength: 1, maxLength: 160 },
             expectedProfileRevision: integer,
             expectedPackageRevision: integer,
             expectedFieldHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
             value: { type: 'string', maxLength: 1_000_000 },
           },
-          ['selector', 'expectedRevision', 'expectedHeadRevision', 'operationId']
+          ['selector', 'expectedRevision', 'expectedHeadRevision']
         ),
       },
       ['action']
@@ -99,24 +98,21 @@ const TOOLS: ProviderTool[] = [
     name: 'chat.rename',
     description:
       'Rename this chat using its current title revision after a user request. Read settings first.',
-    inputSchema: schema(
-      { title: str, expectedRevision: { type: 'integer', minimum: 0 }, operationId: str },
-      ['title', 'expectedRevision', 'operationId']
-    ),
+    inputSchema: schema({ title: str, expectedRevision: { type: 'integer', minimum: 0 } }, [
+      'title',
+      'expectedRevision',
+    ]),
   },
   {
     name: 'chat.fork',
     description:
       'Fork from an actual discovered source ID in this conversation ancestry. Only copies the chosen past, never this helper history or drafts. Requires the user request.',
-    inputSchema: schema({ sourceId: str, title: str, operationId: str }, [
-      'sourceId',
-      'operationId',
-    ]),
+    inputSchema: schema({ sourceId: str, title: str }, ['sourceId']),
   },
   {
     name: 'library.organize',
     description:
-      'Read current folder revision then create a folder or move explicitly requested items. Mutations require operationId and body.expectedRevision. For create-folder supply body.category and title. For move supply body.items, category and folderId (null moves to the category root); omit title. Item kind is content or prompt-preset; category is bot, persona, module or prompts. Stable operation IDs prevent duplicate writes.',
+      'Read current folder revision then create a folder or move explicitly requested items. Mutations require body.expectedRevision. For create-folder supply body.category and title. For move supply body.items, category and folderId (null moves to the category root); omit title. Item kind is content or prompt-preset; category is bot, persona, module or prompts. The host owns mutation identity.',
     inputSchema: schema(
       {
         action: { type: 'string', enum: ['read', 'create-folder', 'move'] },
@@ -138,7 +134,6 @@ const TOOLS: ProviderTool[] = [
           },
           ['expectedRevision', 'category']
         ),
-        operationId: itemId,
       },
       ['action']
     ),
@@ -153,19 +148,18 @@ const TOOLS: ProviderTool[] = [
     name: 'context.compact',
     description:
       'Compact the current chat through the shared context service when the user requested compaction. Read context first.',
-    inputSchema: schema({ expectedRevision: { type: 'integer', minimum: 0 }, operationId: str }, [
+    inputSchema: schema({ expectedRevision: { type: 'integer', minimum: 0 } }, [
       'expectedRevision',
-      'operationId',
     ]),
   },
   {
     name: 'context.edit',
     description:
       'Edit the active summary using its exact expected revision and a user request. Read context first.',
-    inputSchema: schema(
-      { expectedRevision: { type: 'integer', minimum: 0 }, summary: str, operationId: str },
-      ['expectedRevision', 'summary', 'operationId']
-    ),
+    inputSchema: schema({ expectedRevision: { type: 'integer', minimum: 0 }, summary: str }, [
+      'expectedRevision',
+      'summary',
+    ]),
   },
   {
     name: 'outline.read',
@@ -205,15 +199,14 @@ const TOOLS: ProviderTool[] = [
             additionalProperties: false,
           },
         },
-        operationId: str,
       },
-      ['operations', 'operationId']
+      ['operations']
     ),
   },
   {
     name: 'notes.write',
     description:
-      'Save a user note or correction after a user request. Read context.read for notesRevision and use it as body.expectedRevision. Supply body.text for a new note; add replacesId to replace a discovered note. To retire one, supply replacesId and retired:true instead of text. The host supplies the current branch, source anchor and user attribution; do not supply them yourself. Stable operationId prevents duplicate writes.',
+      'Save a user note or correction after a user request. Read context.read for notesRevision and use it as body.expectedRevision. Supply body.text for a new note; add replacesId to replace a discovered note. To retire one, supply replacesId and retired:true instead of text. The host supplies the current branch, source anchor, user attribution and mutation identity; do not supply them yourself.',
     inputSchema: schema(
       {
         body: schema(
@@ -225,19 +218,15 @@ const TOOLS: ProviderTool[] = [
           },
           ['expectedRevision']
         ),
-        operationId: { type: 'string', minLength: 1, maxLength: 64 },
       },
-      ['body', 'operationId']
+      ['body']
     ),
   },
   {
     name: 'artifact.generate',
     description:
       'Write ONE independent what-if scene using the pinned writing prompt, model, actual story context and read-only state. Return exact artifact reference; do not rewrite its prose.',
-    inputSchema: schema(
-      { request: str, operationId: str, artifactId: str, expectedRevision: integer },
-      ['request', 'operationId']
-    ),
+    inputSchema: schema({ request: str, artifactId: str, expectedRevision: integer }, ['request']),
   },
   {
     name: 'artifact.read',

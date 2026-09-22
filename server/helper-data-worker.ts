@@ -656,9 +656,18 @@ function runDataOperation(input: DataOperation): unknown {
     if (!row) throw new Error('DATA_TASK_UNAVAILABLE');
     const snapshot = { scope: JSON.parse(String(row.scope)) } as HelperTaskSnapshot;
     const requestedRefs =
-      input.name === 'data.read' && Array.isArray(input.args.refs)
-        ? input.args.refs
-        : [input.args.ref];
+      input.name === 'data.read'
+        ? (() => {
+            only(input.args, ['refs', 'offset', 'limit']);
+            if (
+              !Array.isArray(input.args.refs) ||
+              !input.args.refs.length ||
+              input.args.refs.length > 16
+            )
+              throw new Error('DATA_LIST_INVALID');
+            return input.args.refs;
+          })()
+        : [];
     const scopes =
       input.name === 'data.search'
         ? [
@@ -680,13 +689,9 @@ function runDataOperation(input: DataOperation): unknown {
     }
     if (input.name === 'data.search')
       return search(db, snapshot, { ...input.args, scope: scopes[0] });
-    if (input.args.refs === undefined) return read(db, snapshot, input.args);
-    only(input.args, ['refs', 'offset', 'limit']);
-    if (!Array.isArray(input.args.refs) || !input.args.refs.length || input.args.refs.length > 16)
-      throw new Error('DATA_LIST_INVALID');
     const items: unknown[] = [];
     let size = 0;
-    for (const ref of input.args.refs) {
+    for (const ref of requestedRefs) {
       let item: unknown;
       try {
         item = {
@@ -705,7 +710,7 @@ function runDataOperation(input: DataOperation): unknown {
       items.push(item);
       size += chars;
     }
-    return { items, nextIndex: items.length < input.args.refs.length ? items.length : null };
+    return { items, nextIndex: items.length < requestedRefs.length ? items.length : null };
   } finally {
     db.close();
   }

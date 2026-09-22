@@ -339,7 +339,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
                 : 'Synthetic prose';
         const output = [toolOutput(body, 'story.submit', content)];
         if (invalid === 'mixed')
-          output.push(toolOutput(body, 'knowledge.read', { id: 'synthetic' }, 'Call.Read'));
+          output.push(toolOutput(body, 'knowledge.read', { ids: ['synthetic'] }, 'Call.Read'));
         await writeSse(response, [toolTurn(output), '[DONE]']);
       });
       closes.push(server.close);
@@ -553,7 +553,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
 describe('Recoverable read failures in the real main runner', () => {
   test.each([
     ['knowledge.search', { query: 'harbor', limit: 101 }, 'INVALID_ARGUMENTS'],
-    ['knowledge.read', { id: 'mistyped-id' }, 'RESOURCE_UNAVAILABLE'],
+    ['knowledge.read', { ids: [] }, 'INVALID_ARGUMENTS'],
   ] as const)(
     'returns %s failure for correction without treating it as success',
     async (name, args, code) => {
