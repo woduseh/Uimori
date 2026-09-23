@@ -68,9 +68,6 @@ test('one-time schema-24 copy preserves sources, notes, media and JEV key withou
       'Original story',
       'source',
       JSON.stringify({
-        preset: 'calm',
-        mode: 'direct',
-        translation: false,
         status: false,
         maxCalls: 8,
       })

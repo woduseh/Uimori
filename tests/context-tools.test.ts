@@ -1,3 +1,4 @@
+import { VERTEX_GEMINI_MODEL_ID } from './fixtures/vertex-model.js';
 import { refreshNativeSnapshot } from './fixtures/native-snapshot.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
@@ -9,7 +10,7 @@ import {
   CONTEXT_RETRIEVAL_GUIDANCE,
   CONTEXT_SUMMARY_SEMANTICS,
 } from '../core/context-summary-policy.js';
-import { defaultProfile, type ModelSnapshot, VERTEX_GEMINI_MODEL_ID } from '../core/product.js';
+import { defaultProfile, type ModelSnapshot } from '../core/product.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json } from '../core/transport.js';
 import {
@@ -76,7 +77,7 @@ async function snapshot(contextTools = true): Promise<RunSnapshot> {
       chatId: 'synthetic-context-tools-chat',
       parentRevision: history.at(-1)!.revision,
       settingsRevision: 1,
-      settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 8 },
+      settings: { status: false, maxCalls: 8 },
       request: 'CURRENT_REQUEST_CANARY: 등불 약속을 이어서 써 주세요.',
       history,
       resources: [],

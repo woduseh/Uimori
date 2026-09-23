@@ -212,7 +212,6 @@ async function setup(app: App, translation = true) {
     {
       expectedSettingsRevision: chat.settingsRevision,
       ...chat.settings,
-      translation,
       status: false,
       maxCalls: 12,
     },

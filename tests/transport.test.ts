@@ -130,7 +130,7 @@ function routedSnapshot(endpoint: string): RunSnapshot {
     parentRevision: 'parent-1',
     settingsRevision: 1,
     request: 'Visit the place the keeper mentioned.',
-    settings: { preset: 'calm', mode: 'direct', translation: true, status: true, maxCalls: 4 },
+    settings: { status: true, maxCalls: 4 },
     history: [{ revision: 'parent-1', text: 'Ada points beyond the harbor.' }],
     resources: contents.map((content) => ({
       ...content,

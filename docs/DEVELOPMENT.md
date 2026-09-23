@@ -128,8 +128,14 @@ Manual storage measurements use `scripts/synthetic-story.mjs` and current transc
 
 `tests/fixtures/personal-schema-1.sql` is synthetic output from the previous product build (`9a14ac4`, same application source as `bf7de22`), including real native resources, translation, fixed values and oneoff/delegation rows. The migration test loads that prior schema rather than relabeling a newly created database.
 
-`tests/fixtures/personal-schema-3.sql` is synthetic output from the real `7cac3f7` runtime. Its intentionally added legacy branch exercises conversion into independent chats. `tests/final-cleanup.test.ts` checks message/translation/helper/variable retention and restart idempotence without a live provider. The ordinary branch ID remains an internal execution scope, not a public shared-branch management API.
+`tests/fixtures/personal-schema-3.sql` is synthetic output from the real `7cac3f7` runtime. Its intentionally added legacy branch exercises conversion into independent chats. `tests/database-schema.test.ts` checks prior-schema migration and restart idempotence; `tests/text-retention.test.ts` and `tests/execution-retention.test.ts` check retained messages and execution payloads without a live provider. The ordinary branch ID remains an internal execution scope, not a public shared-branch management API.
 
 ### Interrupted browser runs
 
 Browser checks use Playwright's live list reporter and a JSON report. If a run is interrupted before the JSON report completes, its test count is unknown rather than zero; consult the live log and individual failure traces. Do not label a partially executed suite as passing or make it pass by restoring a retired product contract.
+
+### Synthetic generation
+
+`core/fixture-provider.ts` exposes explicit fixture behavior separately from product chat settings. Unit tests pass options to `executeFixtureMain` or `MainHooks.fixture`; HTTP scenarios use `app.controls.fixture` or `/api/test/control` with `action: "fixture"`. The controls are exposed only in test mode, captured before execution waits, and never saved in chat settings or provider inputs. Normal generation still requires a configured model. Test settings conflicts with current `maxCalls`/`status`, not mock style fields.
+
+Storage regressions are grouped by their owner: reader projections, chat option receipts, execution retention, text retention, and database migrations. The storage measurement tools use `scripts/synthetic-story.mjs`; the pre-native loading runner has been removed.

@@ -68,7 +68,7 @@ function bundle(sourceText = text): AuxiliaryBundle {
       chatId: source.chatId,
       parentRevision: null,
       settingsRevision: 1,
-      settings: { preset: 'calm', mode: 'direct', translation: true, status: false, maxCalls: 5 },
+      settings: { status: false, maxCalls: 5 },
       request: 'MAIN_TASK_MUST_NOT_REPLAY',
       history: [],
       logicalHistory: [{ id: 'main-history', role: 'user', text: 'MAIN_HISTORY_MUST_NOT_REPLAY' }],

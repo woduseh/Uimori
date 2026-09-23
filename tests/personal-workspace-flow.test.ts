@@ -1,3 +1,5 @@
+import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
+import { describe } from 'vitest';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync, createWriteStream } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -87,7 +89,7 @@ function story(store: Store, text = 'A scene', bot?: Content) {
 test('HTTP accepts an image over 2MiB and stores one WebP BLOB used by chat assets', async () => {
   const app = await application();
   const bot = app.store.product.content(fixtureBotInput()) as Content;
-  const chat = app.store.createChat('Image test', 'calm', { botId: bot.id });
+  const chat = app.store.createChat('Image test', { botId: bot.id });
   const png = await sharp(randomBytes(1100 * 800 * 3), {
     raw: { width: 1100, height: 800, channels: 3 },
   })
@@ -207,7 +209,7 @@ test('renaming a resource invalidates only dependent chats and latest content ha
 test('independent copies and portable restores retain inline images, notes and can accept another request', async () => {
   const source = database();
   const bot = source.product.content(fixtureBotInput('Inline bot')) as Content;
-  const blank = source.createChat('Asset owner', 'calm', { botId: bot.id });
+  const blank = source.createChat('Asset owner', { botId: bot.id });
   const image = await processImage(
     await sharp({ create: { width: 12, height: 8, channels: 3, background: '#223344' } })
       .png()
@@ -398,4 +400,63 @@ test('library helper can directly edit an unselected resource and rename another
   expect(store.product.get<Content>('content', bot.id).title).toBe('Helper changed');
   expect(store.chat(chat.id).title).toBe('Changed from library');
   expect(workspace.task(task.id).snapshot).not.toHaveProperty('grants');
+});
+
+describe('Concurrent portable chat restore', () => {
+  const owners: { directory: string; store: Store; app?: App }[] = [];
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    for (const owner of owners.splice(0)) {
+      if (owner.app) await owner.app.close();
+      else owner.store.close();
+      rmSync(owner.directory, { recursive: true, force: true });
+    }
+  });
+
+  function database() {
+    const directory = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
+    const owner = { directory, store: new Store(join(directory, 'app.sqlite')) };
+    owners.push(owner);
+    return owner;
+  }
+
+  async function manuscript(store: Store) {
+    const card = {
+      spec: 'chara_card_v3',
+      spec_version: '3.0',
+      data: {
+        name: 'Synthetic cleanup bot',
+        description: 'Only synthetic test data.',
+        first_mes: 'Original manuscript.',
+      },
+    };
+    const source = {
+      name: 'synthetic.json',
+      base64: Buffer.from(JSON.stringify(card)).toString('base64'),
+    };
+    const prepared = prepareRisuImport({ source });
+    const result = await applyRisuImport(store, {
+      source,
+      digest: prepared.digest,
+      allowPartial: false,
+      idempotencyKey: randomUUID(),
+    });
+    const row = store.db.prepare('SELECT id FROM sources WHERE chat_id=?').get(result.chat!.id)!;
+    return { chat: result.chat!, source: store.source(String(row.id)) };
+  }
+
+  test('concurrent copies of the same backup return one committed result', async () => {
+    const { store } = database();
+    const { chat } = await manuscript(store);
+    const body = { backup: exportChatBackup(store, chat.id), idempotencyKey: 'same-copy' };
+    const [first, second] = await Promise.all([
+      importChatBackup(store, body),
+      importChatBackup(store, body),
+    ]);
+    expect([first.created, second.created].sort()).toEqual([false, true]);
+    expect(first.chat.id).toBe(second.chat.id);
+    expect(store.chats()).toHaveLength(2);
+    expect((await importChatBackup(store, body)).created).toBe(false);
+  });
 });

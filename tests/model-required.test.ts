@@ -31,6 +31,12 @@ for (const testMode of [false, true]) {
     directory = await mkdtemp(join(tmpdir(), 'uimori-model-required-'));
     app = await createApp({ dbPath: join(directory, 'test.sqlite'), buildId: 'test', testMode });
     expect((await app.inject('/api/health')).json().testMode).toBe(testMode);
+    const fixtureControl = await app.inject({
+      method: 'POST',
+      url: '/api/test/control',
+      payload: { action: 'fixture' },
+    });
+    expect(fixtureControl.statusCode).toBe(testMode ? 200 : 404);
     const chat = createFixtureChat(app.store, 'Synthetic chat');
     const response = await app.inject({
       method: 'POST',

@@ -10,7 +10,7 @@ function snapshot(): RunSnapshot {
     branchId: 'branch',
     parentRevision: null,
     settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 4 },
+    settings: { status: false, maxCalls: 4 },
     request: 'Continue',
     history: [],
     resources: [],

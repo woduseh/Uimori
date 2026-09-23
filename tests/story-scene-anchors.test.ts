@@ -16,7 +16,7 @@ function snapshot(
     chatId: 'scene-test',
     parentRevision: history.at(-1)?.revision ?? null,
     settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 8 },
+    settings: { status: false, maxCalls: 8 },
     request: 'Continue.',
     resources: [],
     history,

@@ -308,7 +308,7 @@ test('translation tools support empty memory with disabled indexing, bounded pag
     parentRevision: 'a',
     history: [{ revision: 'a', text: 'Captain speaks.' }],
     settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: true, status: false, maxCalls: 8 },
+    settings: { status: false, maxCalls: 8 },
     request: '',
     resources: [],
   };
@@ -456,7 +456,7 @@ test('translation searches and reads frozen bot/persona/modules even when absent
             }
       ) as { id: string; revision: number }
   );
-  const chat = createFixtureChat(store, 'roles', 'calm', { botId: contents[0].id });
+  const chat = createFixtureChat(store, 'roles', { botId: contents[0].id });
   const prior = store.product.profile(chat.id);
   updateTestProfile(store.product, chat.id, {
     expectedRevision: prior.revision,

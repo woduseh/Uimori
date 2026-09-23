@@ -1,9 +1,10 @@
+import { VERTEX_GEMINI_MODEL_ID } from './fixtures/vertex-model.js';
 import { describe, expect, test } from 'vitest';
 import { encodeResponses, ResponsesDecoder } from '../core/openai-protocol.js';
 import { encodeChat, ChatDecoder } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic, AnthropicDecoder } from '../core/anthropic-protocol.js';
 import { encodeVertex, VertexDecoder } from '../core/vertex-protocol.js';
-import { VERTEX_GEMINI_MODEL_ID } from '../core/product.js';
+
 import type { LogicalMessage, ProviderPrompt } from '../core/risu-prompt.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
 import { planNativeMessages } from '../core/provider-messages.js';

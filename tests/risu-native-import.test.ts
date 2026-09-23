@@ -185,7 +185,7 @@ test.each(['json', 'charx'])(
     });
 
     const bot = createNativeContent(store);
-    const chat = store.createChat('Persona snapshot', undefined, { botId: bot.id });
+    const chat = store.createChat('Persona snapshot', { botId: bot.id });
     const profile = store.product.snapshot(chat.id);
     profile.packages = [saved.package];
     profile.packageAttachments = [

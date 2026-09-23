@@ -42,3 +42,7 @@ npm run transfer:personal -- --source /absolute/old.sqlite --target /absolute/ne
 현재 자료와 수정 번호가 기준이에요. 일반 자료 저장의 직전본 한 개는 되돌리기에 사용하지만 모든 과거 개정이나 실행 입력을 영구 재현하지 않아요.
 
 전체 작업실 복구는 SQLite 스냅샷을 사용해요. API 키와 이미지도 포함되므로 개인적으로 보관해요. 외부 Codex 로그인 디렉터리는 DB 백업 범위가 아니에요. [개별 자료](NATIVE-TRANSFER.md)와 [채팅 백업](CHAT-BACKUP.md)은 현재 사용자 자료를 새 사본으로 가져오며 내부 실행 기록을 재생하지 않아요.
+
+### 채팅 실행 설정
+
+채팅 설정은 장면 해설 자동 생성(`status`)과 본문 작업 호출 한도(`maxCalls`)를 저장해요. 예전 DB·휴대용 백업의 `preset`, `mode`, `translation` 필드는 읽기·복원 경계에서 무시하고 이후 저장에서 제외해요. 별도 DB 재작성이나 스키마 번호 변경은 없으며 실제 번역 기능과 번역 정책은 유지해요.

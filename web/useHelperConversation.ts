@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HelperConversation, HelperEvent, HelperMessage, HelperTask } from '../core/helper.js';
 import { api } from './api.js';
+import { evictHelperViews } from './helper-conversation-cache.js';
 
 export type HelperTaskView = Omit<HelperTask, 'snapshot'> & { modelTitle: string };
 type View = {
@@ -12,7 +13,7 @@ type View = {
 };
 const id = encodeURIComponent;
 
-/** Retains visited pages across panel hides and reads only new events while idle. */
+/** Retains the current and recent conversations across panel hides; idle reads use event cursors. */
 export function useHelperConversation(open: boolean, conversationId: string | null) {
   const scopeKey = conversationId ?? '';
   const selectedScope = useRef(scopeKey);
@@ -20,6 +21,7 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
   const cache = useRef(new Map<string, View>());
   const cursors = useRef(new Map<string, number>());
   const versions = useRef(new Map<string, number>());
+  const requestVersion = useRef(0);
   const [views, setViews] = useState<Record<string, View>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,54 +36,64 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
     };
   }, []);
   const write = useCallback((key: string, value: View) => {
+    cache.current.delete(key);
     cache.current.set(key, value);
-    if (alive.current) setViews((old) => ({ ...old, [key]: value }));
+    for (const removed of evictHelperViews(cache.current, selectedScope.current)) {
+      cursors.current.delete(removed);
+      versions.current.delete(removed);
+    }
+    if (alive.current) setViews(Object.fromEntries(cache.current));
   }, []);
   const refresh = useCallback(
     async (conversation: Pick<HelperConversation, 'id'>) => {
       const key = conversation.id;
-      const version = (versions.current.get(key) ?? 0) + 1;
+      // Global request identities cannot be reused after a view has been evicted and reopened.
+      const version = ++requestVersion.current;
       versions.current.set(key, version);
-      const {
-        messages,
-        tasks,
-        conversation: latestConversation,
-        eventCursor,
-      } = await api<{
-        messages: HelperMessage[];
-        tasks: HelperTaskView[];
-        conversation: HelperConversation;
-        eventCursor: number;
-      }>(`/helper/conversations/${id(conversation.id)}/view`);
-      if (!alive.current || versions.current.get(key) !== version) return;
-      // The first view starts at now. Later views must not skip effects arriving between polls.
-      if (!cursors.current.has(key)) cursors.current.set(key, eventCursor);
-      const previous = cache.current.get(key);
-      const messageIds = new Set(messages.map((message) => message.id));
-      const latestGroups = new Map(
-        messages.map((message) => [message.requestGroupId, message.latestTaskId])
-      );
-      const taskIds = new Set(tasks.map((task) => task.id));
-      write(key, {
-        conversation:
-          previous?.conversation.revision &&
-          previous.conversation.revision > latestConversation.revision
-            ? previous.conversation
-            : latestConversation,
-        messages: [
-          ...(previous?.messages ?? []).filter(
-            (message) =>
-              !messageIds.has(message.id) &&
-              (!message.requestGroupId ||
-                !latestGroups.has(message.requestGroupId) ||
-                latestGroups.get(message.requestGroupId) === message.taskId)
-          ),
-          ...messages,
-        ],
-        tasks: [...tasks, ...(previous?.tasks ?? []).filter((task) => !taskIds.has(task.id))],
-        hasOlderMessages: messages.length === 100 && (previous?.hasOlderMessages ?? true),
-        hasOlderTasks: tasks.length === 50 && (previous?.hasOlderTasks ?? true),
-      });
+      try {
+        const {
+          messages,
+          tasks,
+          conversation: latestConversation,
+          eventCursor,
+        } = await api<{
+          messages: HelperMessage[];
+          tasks: HelperTaskView[];
+          conversation: HelperConversation;
+          eventCursor: number;
+        }>(`/helper/conversations/${id(key)}/view`);
+        if (!alive.current || versions.current.get(key) !== version) return;
+        // The first view starts at now. Later views must not skip effects arriving between polls.
+        if (!cursors.current.has(key)) cursors.current.set(key, eventCursor);
+        const previous = cache.current.get(key);
+        const messageIds = new Set(messages.map((message) => message.id));
+        const latestGroups = new Map(
+          messages.map((message) => [message.requestGroupId, message.latestTaskId])
+        );
+        const taskIds = new Set(tasks.map((task) => task.id));
+        write(key, {
+          conversation:
+            previous?.conversation.revision &&
+            previous.conversation.revision > latestConversation.revision
+              ? previous.conversation
+              : latestConversation,
+          messages: [
+            ...(previous?.messages ?? []).filter(
+              (message) =>
+                !messageIds.has(message.id) &&
+                (!message.requestGroupId ||
+                  !latestGroups.has(message.requestGroupId) ||
+                  latestGroups.get(message.requestGroupId) === message.taskId)
+            ),
+            ...messages,
+          ],
+          tasks: [...tasks, ...(previous?.tasks ?? []).filter((task) => !taskIds.has(task.id))],
+          hasOlderMessages: messages.length === 100 && (previous?.hasOlderMessages ?? true),
+          hasOlderTasks: tasks.length === 50 && (previous?.hasOlderTasks ?? true),
+        });
+      } finally {
+        if (versions.current.get(key) === version) versions.current.delete(key);
+      }
     },
     [write]
   );
@@ -131,7 +143,6 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
       polling = true;
       try {
         if (!document.hidden) {
-          // Opening/reopening uses one current view instead of draining old event pages.
           if (!initialized) {
             await refresh({ id: conversationId });
             initialized = true;
@@ -159,7 +170,12 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
         void poll();
       }
     };
-    setLoading(!cache.current.has(scopeKey));
+    const cached = cache.current.get(scopeKey);
+    if (cached) {
+      cache.current.delete(scopeKey);
+      cache.current.set(scopeKey, cached);
+    }
+    setLoading(!cached);
     setError('');
     void poll();
     addEventListener('visibilitychange', visible);
@@ -180,6 +196,8 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
       const path = `/helper/conversations/${id(view.conversation.id)}/${kind}?before=${id(before)}`;
       if (kind === 'messages') {
         const page = await api<HelperMessage[]>(path);
+        if (!alive.current || (!cache.current.has(scopeKey) && selectedScope.current !== scopeKey))
+          return;
         const latest = cache.current.get(scopeKey) ?? view;
         const existing = new Set(latest.messages.map((item) => item.id));
         write(scopeKey, {
@@ -189,6 +207,8 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
         });
       } else {
         const page = await api<HelperTaskView[]>(path);
+        if (!alive.current || (!cache.current.has(scopeKey) && selectedScope.current !== scopeKey))
+          return;
         const latest = cache.current.get(scopeKey) ?? view;
         const existing = new Set(latest.tasks.map((item) => item.id));
         write(scopeKey, {
@@ -214,18 +234,14 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
     refresh,
     earlier,
     updateConversation: (conversation: HelperConversation) => {
-      const key = conversation.id,
-        previous = cache.current.get(key);
-      if (previous) write(key, { ...previous, conversation });
+      const previous = cache.current.get(conversation.id);
+      if (previous) write(conversation.id, { ...previous, conversation });
     },
     updateTask: (task: HelperTaskView) => {
-      const entry = [...cache.current].find(
-        ([, view]) => view.conversation.id === task.conversationId
-      );
-      if (!entry) return;
-      const [key, view] = entry;
+      const view = cache.current.get(task.conversationId);
+      if (!view) return;
       const existing = view.tasks.some((item) => item.id === task.id);
-      write(key, {
+      write(task.conversationId, {
         ...view,
         tasks: existing
           ? view.tasks.map((item) => (item.id === task.id ? task : item))

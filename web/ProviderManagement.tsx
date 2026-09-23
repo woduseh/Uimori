@@ -1,3 +1,14 @@
+import { ProviderConnectionForm } from './ProviderConnectionForm.js';
+import { ProviderModelForm } from './ProviderModelForm.js';
+import {
+  initialProviderEditorState,
+  providerEditorReducer,
+  initialConnection,
+  connectionDraft,
+  connectionPayload,
+  type ConnectionDraft,
+} from './provider-editor-state.js';
+import type { ModelDraft } from './provider-model-draft.js';
 import { compareModelDisplayOrder } from '../core/model-order.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import {
@@ -7,15 +18,12 @@ import {
 } from '../core/jev-provider.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Dialog } from './Dialog.js';
-import { Switch } from './BooleanControls.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useReducer, type SetStateAction } from 'react';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
-import { SaveButton } from './SaveButton.js';
 import {
   AddIcon,
   BackIcon,
-  CloseIcon,
   ConnectionIcon,
   CopyIcon,
   ForwardIcon,
@@ -26,9 +34,6 @@ import {
   UpIcon,
   DownIcon,
 } from './ui-icons.js';
-import { VertexCredentialUpload } from './VertexCredentialUpload.js';
-import { ProviderCatalogPicker } from './ProviderCatalogPicker.js';
-import { modelHints } from '../core/model-hints.js';
 import type {
   Connection,
   Library,
@@ -36,20 +41,14 @@ import type {
   ProviderProtocol,
   VertexRequestTier,
 } from '../core/product.js';
-import {
-  PROVIDER_DEFINITIONS,
-  PROVIDER_CHOICES,
-  providerDefinition,
-} from '../core/provider-definitions.js';
+import { PROVIDER_CHOICES, providerDefinition } from '../core/provider-definitions.js';
 import { api, ApiError } from './api.js';
 import {
   initialModel,
   modelDraft,
   modelDraftError,
   modelPayload,
-  ProviderModelFields,
   selectModelConnection,
-  updateModelId,
 } from './ProviderModelFields.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js';
@@ -58,40 +57,6 @@ import './ProviderManagement.css';
 import './settings-actions.css';
 
 const versionRef = (item: { id: string; revision: number }) => `${item.id}@${item.revision}`;
-type ConnectionDraft = {
-  title: string;
-  protocol: ProviderProtocol;
-  endpoint: string;
-  credentialRef: string;
-  apiKey?: string | null;
-  enabled: boolean;
-};
-const initialConnection = (): ConnectionDraft => ({
-  title: '',
-  protocol: 'fixture-sse-v1',
-  endpoint: '',
-  credentialRef: '',
-  enabled: false,
-});
-const connectionDraft = (item: Connection): ConnectionDraft => ({
-  title: item.title,
-  protocol: item.protocol,
-  endpoint: item.endpoint,
-  credentialRef: item.credentialRef ?? '',
-  enabled: item.enabled,
-});
-function connectionPayload(value: ConnectionDraft) {
-  return {
-    title: value.title,
-    protocol: value.protocol,
-    endpoint: value.protocol === 'codex-app-server-v1' ? 'codex://local' : value.endpoint,
-    ...(value.protocol !== 'codex-app-server-v1' && value.credentialRef.trim()
-      ? { credentialRef: value.credentialRef.trim() }
-      : {}),
-    ...(value.apiKey !== undefined ? { apiKey: value.apiKey } : {}),
-    enabled: value.enabled,
-  };
-}
 const matches = (query: string, ...values: (string | undefined)[]) =>
   !query || values.some((value) => value?.toLocaleLowerCase().includes(query));
 
@@ -126,9 +91,7 @@ export function ConnectionEditor({
   const [screen, setScreen] = useState<
     'models' | 'connections' | 'providers' | 'connection' | 'model' | 'jev'
   >('models');
-  const [setup, setSetup] = useState(false),
-    [connectionStarted, setConnectionStarted] = useState(false),
-    [modelStarted, setModelStarted] = useState(false);
+  const [setup, setSetup] = useState(false);
   const [modelSection, setModelSection] = useState<'basic' | 'advanced'>('basic');
   const [expandedModelGroups, setExpandedModelGroups] = useState<Set<string>>(() => new Set());
   const heading = useRef<HTMLDivElement>(null);
@@ -158,16 +121,29 @@ export function ConnectionEditor({
     });
   }
 
-  const [connection, setConnection] = useState(initialConnection);
-  const [editingConnection, setEditingConnection] = useState<Connection>();
-  const [connectionCopy, setConnectionCopy] = useState(false);
-  const [model, setModel] = useState(initialModel);
-  const [editingModel, setEditingModel] = useState<ModelPreset>();
-  const [modelCopy, setModelCopy] = useState(false);
-  const [connectionBaseline, setConnectionBaseline] = useState(() =>
-      JSON.stringify(initialConnection())
-    ),
-    [modelBaseline, setModelBaseline] = useState(() => JSON.stringify(initialModel()));
+  const [drafts, dispatchDraft] = useReducer(
+    providerEditorReducer,
+    undefined,
+    initialProviderEditorState
+  );
+  const {
+    value: connection,
+    editing: editingConnection,
+    baseline: connectionBaseline,
+    started: connectionStarted,
+  } = drafts.connection;
+  const {
+    value: model,
+    editing: editingModel,
+    baseline: modelBaseline,
+    started: modelStarted,
+  } = drafts.model;
+  const setConnection = (update: SetStateAction<ConnectionDraft>) =>
+    dispatchDraft({ type: 'connection.change', update });
+  const setModel = (update: SetStateAction<ModelDraft>) =>
+    dispatchDraft({ type: 'model.change', update });
+  const conflict = drafts.conflict;
+  const setConflict = (kind: typeof conflict) => dispatchDraft({ type: 'conflict', kind });
   const [discard, setDiscard] = useState<{ kind: 'connection' | 'model'; proceed: () => void }>();
   function replaceDraft(kind: 'connection' | 'model', proceed: () => void) {
     const dirty =
@@ -217,25 +193,12 @@ export function ConnectionEditor({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   const setBusy = setOperationBusy;
-  const [conflict, setConflict] = useState<'connection' | 'model' | null>(null);
   const [registeredModel, setRegisteredModel] = useState<ModelPreset>();
   const operationLock = useRef(false);
   const jevSave = useRef<(() => Promise<boolean>) | null>(null);
   const connectionForm = useRef<HTMLFormElement>(null);
   const modelForm = useRef<HTMLFormElement>(null);
   const chosen = library.connections.find((item) => item.id === model.connectionRef);
-  const modelConnections = library.connections;
-  const codex = connection.protocol === 'codex-app-server-v1',
-    definition = providerDefinition(connection.protocol),
-    vertex = connection.protocol === 'vertex-gemini-v1';
-
-  const endpointLabel = codex
-    ? 'Codex 실행 위치'
-    : vertex
-      ? 'Google Agent Platform endpoint'
-      : connection.protocol === 'fixture-sse-v1'
-        ? '로컬 endpoint'
-        : 'API 기본 주소';
   const filter = query.trim().toLocaleLowerCase();
   function modelGroupOpen(groupKey: string) {
     return !!filter || expandedModelGroups.has(groupKey);
@@ -283,35 +246,16 @@ export function ConnectionEditor({
   if (orphanedModels.length) modelGroups.push({ models: orphanedModels });
 
   async function deletedConnection(item: Connection) {
-    if (editingConnection?.id === item.id) {
-      const next = initialConnection();
-      setEditingConnection(undefined);
-      setConnection(next);
-      setConnectionBaseline(JSON.stringify(next));
-      setConnectionStarted(false);
-      setConnectionCopy(false);
-      if (screen === 'connection') navigate('connections');
-    }
-    if (model.connectionRef === item.id) {
-      setModel((current) => ({ ...current, connectionRef: '' }));
-      setModelBaseline((current) => JSON.stringify({ ...JSON.parse(current), connectionRef: '' }));
-    }
-    setConflict(null);
+    if (editingConnection?.id === item.id && screen === 'connection') navigate('connections');
+    dispatchDraft({ type: 'connection.deleted', id: item.id });
     setError('');
     onError('');
     setMessage(item.title + ' 프로바이더를 삭제했어요.');
     await reload();
   }
   async function deletedModel(item: ModelPreset) {
-    if (editingModel?.id === item.id) {
-      const next = initialModel();
-      setEditingModel(undefined);
-      setModel(next);
-      setModelBaseline(JSON.stringify(next));
-      setModelStarted(false);
-      setModelCopy(false);
-      if (screen === 'model') navigate('models');
-    }
+    if (editingModel?.id === item.id && screen === 'model') navigate('models');
+    dispatchDraft({ type: 'model.deleted', id: item.id });
     if (registeredModel?.id === item.id) setRegisteredModel(undefined);
 
     setConflict(null);
@@ -382,14 +326,9 @@ export function ConnectionEditor({
       ...connectionDraft(item),
       ...(copy ? { title: item.title + ' 복사', enabled: false } : {}),
     };
-    setConnection(next);
-    setConnectionBaseline(JSON.stringify(next));
-    setEditingConnection(copy ? undefined : structuredClone(item));
-    setConnectionCopy(copy);
-    setConflict(null);
+    dispatchDraft({ type: 'connection.open', value: next, editing: copy ? undefined : item, copy });
     setError('');
     onError('');
-    setConnectionStarted(true);
     returnItem.current = { screen: 'connections', id: item.id };
     setSetup(false);
     navigate('connection');
@@ -408,28 +347,16 @@ export function ConnectionEditor({
       ...modelDraft(item),
       ...(copy ? { title: item.title + ' 복사' } : {}),
     };
-    setModel(next);
-    setModelBaseline(JSON.stringify(next));
-    setEditingModel(copy ? undefined : structuredClone(item));
-    setModelCopy(copy);
-    setConflict(null);
-    setModelStarted(true);
+    dispatchDraft({ type: 'model.open', value: next, editing: copy ? undefined : item, copy });
     setModelSection('basic');
     returnItem.current = { screen: 'models', id: item.id };
     navigate('model');
   }
   function startModelFor(item: Connection) {
     const next = selectModelConnection(initialModel(), item);
-    setModel(next);
-    setModelBaseline(JSON.stringify(next));
-    setEditingModel(undefined);
-    setModelCopy(false);
-    setModelStarted(true);
+    dispatchDraft({ type: 'model.open', value: next });
     setModelSection('basic');
     navigate('model');
-  }
-  function chooseConnection(item: Connection) {
-    setModel((current) => selectModelConnection(current, item));
   }
   async function saveConnection(
     body: Record<string, unknown>,
@@ -443,11 +370,7 @@ export function ConnectionEditor({
       id ? 'PUT' : 'POST'
     );
     if (fromForm) {
-      setEditingConnection(saved);
-      setConnection(connectionDraft(saved));
-      setConnectionBaseline(JSON.stringify(connectionDraft(saved)));
-      setConnectionCopy(false);
-      setConflict(null);
+      dispatchDraft({ type: 'connection.open', value: connectionDraft(saved), editing: saved });
       if (!id && !leave) {
         replaceDraft('model', () => startModelFor(saved));
       }
@@ -466,11 +389,7 @@ export function ConnectionEditor({
       id ? 'PUT' : 'POST'
     );
     if (fromForm) {
-      setEditingModel(saved);
-      setModel(modelDraft(saved));
-      setModelBaseline(JSON.stringify(modelDraft(saved)));
-      setModelCopy(false);
-      setConflict(null);
+      dispatchDraft({ type: 'model.open', value: modelDraft(saved), editing: saved });
       setRegisteredModel(saved);
       returnItem.current = { screen: 'models', id: saved.id };
       setSetup(false);
@@ -538,14 +457,9 @@ export function ConnectionEditor({
       credentialRef: '',
       enabled: protocol !== 'fixture-sse-v1',
     };
-    setConnection(next);
-    setConnectionBaseline(JSON.stringify(next));
-    setEditingConnection(undefined);
-    setConnectionCopy(false);
-    setConflict(null);
+    dispatchDraft({ type: 'connection.open', value: next });
     setError('');
     onError('');
-    setConnectionStarted(true);
     navigate('connection');
   }
   function newModel(approved = false) {
@@ -555,20 +469,10 @@ export function ConnectionEditor({
     }
     const linked =
       chosen ?? library.connections.find((item) => item.enabled) ?? library.connections[0];
-    if (linked) {
-      const next = selectModelConnection(initialModel(), linked);
-      setModel(next);
-      setModelBaseline(JSON.stringify(next));
-    } else {
-      setModel(initialModel());
-      setModelBaseline(JSON.stringify(initialModel()));
-    }
-    setEditingModel(undefined);
-    setModelCopy(false);
-    setConflict(null);
+    const next = linked ? selectModelConnection(initialModel(), linked) : initialModel();
+    dispatchDraft({ type: 'model.open', value: next });
     setError('');
     setSetup(false);
-    setModelStarted(true);
     setModelSection('basic');
     navigate('model');
   }
@@ -1243,405 +1147,45 @@ export function ConnectionEditor({
           )}
         </div>
       </section>
-      <form
+      <ProviderConnectionForm
         hidden={screen !== 'connection'}
-        ref={connectionForm}
-        className="editor-grid provider-management-form"
-        aria-label="프로바이더 편집 양식"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submitConnection();
+        draft={drafts.connection}
+        connections={library.connections}
+        conflict={conflict === 'connection'}
+        busy={busy}
+        operationBusy={operationBusy}
+        formRef={connectionForm}
+        onChange={setConnection}
+        onUploadBusy={setUploadingCredential}
+        onSubmit={submitConnection}
+        onReload={() => {
+          void perform(() => latest('connection'), 'connection');
         }}
-      >
-        <h3 className="full">
-          {editingConnection
-            ? '프로바이더 수정'
-            : connectionCopy
-              ? '프로바이더 복제 검토'
-              : '프로바이더 등록'}
-        </h3>
-        {editingConnection && (
-          <div className="provider-draft-note full">
-            <p>
-              저장한 변경은 다음 신규 생성부터 적용돼요. 진행 중이거나 완료된 실행의 설정은
-              유지돼요.
-            </p>
-            {library.connections.find((item) => item.id === editingConnection.id)?.revision !==
-              editingConnection.revision && (
-              <p>다른 곳에서 프로바이더가 변경됐어요. 입력한 초안은 유지했어요.</p>
-            )}
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy}
-              onClick={() => {
-                void perform(() => latest('connection'), 'connection');
-              }}
-            >
-              최신 프로바이더 설정 불러오기
-            </button>
-          </div>
-        )}
-        {connectionCopy && (
-          <p className="provider-draft-note full">
-            새 프로바이더로 복사해요. 주소와 키를 확인하고 저장해 주세요.
-          </p>
-        )}
-        {conflict === 'connection' && (
-          <p className="error full" role="alert">
-            다른 곳에서 프로바이더가 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.
-          </p>
-        )}
-        <fieldset className="editor-fields full provider-connection-fields" disabled={busy}>
-          <label>
-            프로바이더 종류
-            <select
-              aria-label="프로바이더 프로토콜"
-              value={connection.protocol}
-              onChange={(event) => {
-                const protocol = event.target.value as ProviderProtocol,
-                  definition = providerDefinition(protocol);
-                setConnection({
-                  ...connection,
-                  protocol,
-                  endpoint: definition.endpointDefault,
-                  credentialRef: '',
-                  apiKey: undefined,
-                });
-              }}
-            >
-              {PROVIDER_DEFINITIONS.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            프로바이더 이름
-            <input
-              aria-label="프로바이더 이름"
-              required
-              maxLength={160}
-              value={connection.title}
-              onChange={(event) => setConnection({ ...connection, title: event.target.value })}
-            />
-          </label>
-          {vertex && (
-            <VertexCredentialUpload
-              credentialRef={connection.credentialRef}
-              disabled={operationBusy}
-              onBusy={setUploadingCredential}
-              onRegistered={(value) =>
-                setConnection((current) => ({
-                  ...current,
-                  credentialRef: value.credentialRef,
-                  endpoint: `https://aiplatform.googleapis.com/v1/projects/${value.projectId}/locations/global/publishers/google/models`,
-                }))
-              }
-            />
-          )}
-          {vertex && (
-            <label className="full">
-              Google Cloud 프로젝트 ID
-              <input
-                aria-label="Google Cloud 프로젝트 ID"
-                placeholder="my-project"
-                value={
-                  connection.endpoint.match(/\/projects\/([^/]+)\/locations\/global\//)?.[1] ?? ''
-                }
-                onChange={(event) =>
-                  setConnection({
-                    ...connection,
-                    endpoint: event.target.value.trim()
-                      ? `https://aiplatform.googleapis.com/v1/projects/${event.target.value.trim()}/locations/global/publishers/google/models`
-                      : '',
-                  })
-                }
-              />
-              <small>프로젝트 ID를 입력하면 global 주소를 채워요.</small>
-            </label>
-          )}
-          <label className="full">
-            {endpointLabel}
-            <input
-              aria-label={endpointLabel}
-              type="url"
-              required
-              readOnly={codex}
-              placeholder={
-                vertex
-                  ? 'https://aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/global/publishers/google/models'
-                  : connection.protocol === 'fixture-sse-v1'
-                    ? 'http://127.0.0.1:포트'
-                    : 'https://provider.example/v1'
-              }
-              value={connection.endpoint}
-              onChange={(event) => setConnection({ ...connection, endpoint: event.target.value })}
-            />
-          </label>
-          {!codex && !vertex && (
-            <label className="full">
-              API 키
-              <input
-                aria-label="API 키"
-                type="password"
-                autoComplete="new-password"
-                placeholder={
-                  connection.credentialRef
-                    ? '등록됨 · 변경할 때 입력'
-                    : 'API 키 입력 · 인증 없는 서버는 생략'
-                }
-                value={connection.apiKey ?? ''}
-                onChange={(event) => setConnection({ ...connection, apiKey: event.target.value })}
-              />
-              {connection.credentialRef && (
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => setConnection({ ...connection, apiKey: null, credentialRef: '' })}
-                >
-                  등록한 키 삭제
-                </button>
-              )}
-            </label>
-          )}
-          <label className="check">
-            <Switch
-              checked={connection.enabled}
-              onChange={(event) => setConnection({ ...connection, enabled: event.target.checked })}
-            />
-            이 프로바이더 사용
-          </label>
-          <small className="full">
-            {codex
-              ? '에이전트 설정에서 Codex에 로그인해 주세요.'
-              : vertex
-                ? '서비스 계정 JSON을 등록하면 사용할 수 있어요.'
-                : 'API 키는 서버 DB에 저장돼요. 키를 저장하면 재시작 없이 사용할 수 있어요.'}
-          </small>
-          <details className="provider-definition full">
-            <summary>프로바이더 템플릿 정보</summary>
-            <dl>
-              <dt>정의</dt>
-              <dd>{definition.id}</dd>
-              <dt>확인일</dt>
-              <dd>{definition.source.checkedAt}</dd>
-              <dt>근거</dt>
-              <dd>로컬 어댑터 · {definition.source.reference}</dd>
-              <dt>인증 방식</dt>
-              <dd>{definition.auth}</dd>
-              <dt>목록 방식</dt>
-              <dd>
-                {definition.catalog === 'remote'
-                  ? '명시 요청 시 원격 조회'
-                  : '로그인한 에이전트 모델 목록'}
-              </dd>
-              <dt>설정할 수 있는 옵션</dt>
-              <dd>{definition.optionKeys.join(', ')}</dd>
-            </dl>
-            <ul>
-              {definition.limitations.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <p>프로바이더 템플릿은 로컬 구현의 설명이에요. 모델별 기능과 가격은 미확인이에요.</p>
-          </details>
-        </fieldset>
-        <div className="provider-actions full provider-save-actions">
-          {editingConnection && deleteConnection(editingConnection)}
-          <small className="provider-save-status">
-            {editingConnection
-              ? JSON.stringify(connection) === connectionBaseline
-                ? '저장한 프로바이더예요.'
-                : '아직 저장하지 않은 변경이 있어요.'
-              : '아직 저장하지 않은 프로바이더예요.'}
-          </small>
-          <button
-            type="button"
-            className="secondary"
-            disabled={busy}
-            onClick={() => navigate('connections')}
-          >
-            프로바이더 편집 끝내기
-          </button>
-          <button className="primary" disabled={busy}>
-            {editingConnection ? '프로바이더 변경 저장' : '프로바이더 등록'}
-          </button>
-        </div>
-      </form>
-      <form
+        onDone={() => navigate('connections')}
+        deleteAction={editingConnection && deleteConnection(editingConnection)}
+      />
+      <ProviderModelForm
         hidden={screen !== 'model'}
-        ref={modelForm}
-        className="editor-grid provider-management-form"
-        aria-label="모델 편집 양식"
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submitModel();
+        draft={drafts.model}
+        models={library.models}
+        modelConnections={library.connections}
+        conflict={conflict === 'model'}
+        busy={busy}
+        forcedVertexTier={forcedVertexTier}
+        modelSection={modelSection}
+        onSectionChange={setModelSection}
+        formRef={modelForm}
+        onChange={setModel}
+        onSubmit={submitModel}
+        onReload={() => {
+          void perform(() => latest('model'), 'model');
         }}
-      >
-        <h3 className="full">
-          {editingModel
-            ? '모델 프리셋 수정'
-            : modelCopy
-              ? '모델 프리셋 복제 검토'
-              : '모델 프리셋 등록'}
-        </h3>
-        {editingModel &&
-          (conflict === 'model' ||
-            library.models.find((item) => item.id === editingModel.id)?.revision !==
-              editingModel.revision) && (
-            <div className="provider-draft-note full">
-              {library.models.find((item) => item.id === editingModel.id)?.revision !==
-                editingModel.revision && (
-                <p>다른 곳에서 모델이 변경됐어요. 입력한 초안은 유지했어요.</p>
-              )}
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy}
-                onClick={() => {
-                  void perform(() => latest('model'), 'model');
-                }}
-              >
-                최신 모델 설정 불러오기
-              </button>
-            </div>
-          )}
-        {modelCopy && (
-          <p className="provider-draft-note full">설정을 검토한 뒤 새 프리셋으로 저장해요.</p>
-        )}
-        {conflict === 'model' && (
-          <p className="error full" role="alert">
-            다른 곳에서 모델이 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.
-          </p>
-        )}
-        <div className="provider-model-tabs full" aria-label="모델 편집 항목">
-          {(['basic', 'advanced'] as const).map((section, index) => (
-            <button
-              type="button"
-              className={modelSection === section ? 'selected' : 'secondary'}
-              aria-pressed={modelSection === section}
-              key={section}
-              onClick={() => setModelSection(section)}
-            >
-              {['기본', '고급'][index]}
-            </button>
-          ))}
-        </div>
-        <fieldset className="editor-fields full" disabled={busy}>
-          <div className="provider-model-section full" hidden={modelSection !== 'basic'}>
-            <h4 className="provider-field-heading full">모델 선택</h4>
-            <label className="full">
-              모델 프리셋 이름
-              <input
-                aria-label="모델 프리셋 이름"
-                required
-                maxLength={160}
-                value={model.title}
-                onChange={(event) => setModel({ ...model, title: event.target.value })}
-              />
-            </label>
-            <label className="full">
-              프로바이더
-              <select
-                aria-label="프로바이더"
-                required
-                value={model.connectionRef}
-                onChange={(event) => {
-                  const item = modelConnections.find((item) => item.id === event.target.value);
-                  if (item) chooseConnection(item);
-                  else setModel({ ...model, connectionRef: '' });
-                }}
-              >
-                <option value="">프로바이더 선택</option>
-                {model.connectionRef && !chosen && (
-                  <option value={model.connectionRef} disabled>
-                    프로바이더 확인 필요
-                  </option>
-                )}
-                {modelConnections.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title}
-                    {item.enabled ? '' : ' · 비활성'}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {chosen && !chosen.enabled && (
-              <p className="provider-draft-note full">
-                비활성 프로바이더를 사용하는 모델은 새로 실행할 수 없어요. 프로바이더를 활성화하면
-                다시 사용할 수 있어요.
-              </p>
-            )}
-            <ProviderCatalogPicker
-              key={chosen?.id}
-              connection={chosen}
-              selectedId={model.modelId}
-              busy={busy}
-              onRefresh={(item) => {
-                void perform(() => catalog(item));
-              }}
-              onChoose={(item) =>
-                setModel((current) => {
-                  // Picking from the list is an explicit choice: published limits prefill and stay editable.
-                  const selected = updateModelId(current, item.id);
-                  const hints = chosen
-                    ? modelHints(chosen, item.id, selected.modelFamily)
-                    : undefined;
-                  return {
-                    ...selected,
-                    title:
-                      !current.title ||
-                      current.title === current.modelId ||
-                      current.title ===
-                        chosen?.catalog.find((entry) => entry.id === current.modelId)?.name
-                        ? item.name
-                        : current.title,
-                    ...(hints?.maxOutputTokens !== undefined
-                      ? { maxOutputTokens: String(hints.maxOutputTokens) }
-                      : {}),
-                    ...(hints?.inputTokenLimit !== undefined
-                      ? { inputTokenLimit: String(hints.inputTokenLimit) }
-                      : {}),
-                  };
-                })
-              }
-            />
-          </div>
-          <ProviderModelFields
-            section={modelSection}
-            value={model}
-            onChange={setModel}
-            connection={chosen}
-            forcedVertexTier={forcedVertexTier}
-          />
-        </fieldset>
-        <div className="provider-actions full provider-save-actions provider-model-save-actions">
-          {editingModel && deleteModel(editingModel, true)}
-          <small className="provider-save-status">
-            {editingModel
-              ? JSON.stringify(model) === modelBaseline
-                ? '저장한 모델 프리셋이에요.'
-                : '아직 저장하지 않은 변경이 있어요.'
-              : '아직 저장하지 않은 모델 프리셋이에요.'}
-          </small>
-          <IconButton
-            icon={CloseIcon}
-            label="모델 편집 끝내기"
-            disabled={busy}
-            onClick={() => navigate('models')}
-          />
-          {editingModel ? (
-            <SaveButton label="모델 변경 저장" disabled={busy || !chosen} aria-busy={busy} />
-          ) : (
-            <button className="primary" disabled={busy || !chosen}>
-              모델 프리셋 등록
-            </button>
-          )}
-        </div>
-      </form>
+        onDone={() => navigate('models')}
+        onCatalog={(item) => {
+          void perform(() => catalog(item));
+        }}
+        deleteAction={editingModel && deleteModel(editingModel, true)}
+      />
       {error && (
         <p className="error" role="alert">
           {error}

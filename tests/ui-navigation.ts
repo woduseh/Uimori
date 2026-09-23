@@ -102,7 +102,25 @@ export async function startProviderConnection(page: Page) {
   }
   await expect(editor.getByRole('region', { name: '제공자 선택', exact: true })).toBeVisible();
 }
+/** Open the owning provider group before targeting a model in a collapsed list. */
+export async function revealProviderModel(page: Page, title: string) {
+  const card = page.getByRole('article', {
+    name: `${title} 모델`,
+    exact: true,
+    includeHidden: true,
+  });
+  const group = page.locator('.provider-model-group').filter({ has: card });
+  await expect(group).toHaveCount(1);
+  if (!(await group.evaluate((node) => (node as HTMLDetailsElement).open)))
+    await group.locator(':scope > summary').click();
+  await expect(card).toBeVisible();
+}
+export async function openProviderModel(page: Page, title: string) {
+  await revealProviderModel(page, title);
+  await page.getByRole('button', { name: title + ' 모델 수정', exact: true }).click();
+}
 export async function openProviderMenu(page: Page, kind: '모델' | '프로바이더', title: string) {
+  if (kind === '모델') await revealProviderModel(page, title);
   const menu = page
     .getByTestId('connection-editor')
     .getByLabel(`${title} ${kind} 메뉴`, { exact: true });
@@ -111,6 +129,7 @@ export async function openProviderMenu(page: Page, kind: '모델' | '프로바�
     await menu.click();
 }
 export async function revealProviderDiagnostics(page: Page, title: string) {
+  await revealProviderModel(page, title);
   const card = page.getByRole('article', { name: `${title} 모델`, exact: true });
   await expect(card.getByText('진단과 상세', { exact: true })).toHaveCount(0);
   await expect(

@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 /** Author-side composition. A plan states what is intended next; it is never story fact. */
 export const OUTLINE_LEVELS = ['theme', 'mainStory', 'arc', 'episode', 'beat'] as const;
 export type OutlineLevel = (typeof OUTLINE_LEVELS)[number];
@@ -76,12 +74,6 @@ export type OutlineSnapshot = {
  */
 export const OUTLINE_CONTRACT =
   'outline is the author-side composition for this unit: path holds the upper intent, children the smaller events planned inside it. It is planning, not story that already happened, not a character memory, and not a world fact. Write only the unit named by the last path entry. Later units and any ending or reversal named in an upper level stay unrevealed until their own unit is written. A fixed entry is a user-pinned condition to honor.';
-
-/** Seal what was actually frozen, so a later read can tell the applied composition apart. */
-export const sealOutlineSnapshot = (outline: Omit<OutlineSnapshot, 'hash'>): OutlineSnapshot => ({
-  ...outline,
-  hash: createHash('sha256').update(JSON.stringify(outline)).digest('hex'),
-});
 
 export const outlineSnapshotNode = (node: OutlineNode): OutlineSnapshotNode => ({
   id: node.id,

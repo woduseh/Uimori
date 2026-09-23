@@ -102,7 +102,6 @@ async function setup(options: { evaluated?: boolean; count?: number; short?: boo
   let chat = createFixtureChat(app.store, '합성 긴 한국어 대화');
   chat = app.store.settings(chat.id, chat.settingsRevision, {
     ...chat.settings,
-    translation: false,
     status: false,
     maxCalls: 16,
   });

@@ -119,9 +119,6 @@ test.runIf(paths.length > 0 && !!presetPath)(
         parentRevision: null,
         settingsRevision: 1,
         settings: {
-          preset: 'calm',
-          mode: 'direct',
-          translation: false,
           status: false,
           maxCalls: 1,
         },

@@ -1,3 +1,5 @@
+import { vi } from 'vitest';
+import { describe } from 'vitest';
 import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -105,7 +107,7 @@ test('themes, choices and undo persist across SQLite restart without a schema mi
 test('chat overrides bot overrides global; deleting a theme removes only its appearance references', () => {
   const store = database();
   const bot = store.product.content(fixtureBotInput('Theme bot'));
-  const chat = store.createChat('Theme chat', undefined, { botId: bot.id });
+  const chat = store.createChat('Theme chat', { botId: bot.id });
   const before = JSON.stringify(store.chat(chat.id));
   const a = save(store, 'Global');
   const b = save(store, 'Bot');
@@ -221,4 +223,43 @@ test('HTTP API saves, exports, selects, validates and deletes a theme', async ()
   expect((await app.inject('/api/themes')).json().preferences.defaultThemeId).toBe(
     DEFAULT_THEME_ID
   );
+});
+
+describe('Theme catalog revalidation', () => {
+  const owners: { directory: string; store: Store; app?: App }[] = [];
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    for (const owner of owners.splice(0)) {
+      if (owner.app) await owner.app.close();
+      else owner.store.close();
+      rmSync(owner.directory, { recursive: true, force: true });
+    }
+  });
+
+  async function application() {
+    const directory = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
+    const app = await createApp({
+      dbPath: join(directory, 'app.sqlite'),
+      buildId: 'extended-cleanup-test',
+      testMode: true,
+      codex: { enabled: false },
+    });
+    owners.push({ directory, store: app.store, app });
+    return app;
+  }
+
+  test('unchanged theme catalog revalidates without sending definitions, and saves invalidate its ETag', async () => {
+    const app = await application();
+    const first = await app.inject({ url: '/api/themes' });
+    expect(first.statusCode).toBe(200);
+    const headers = { 'if-none-match': String(first.headers.etag) };
+    const same = await app.inject({ url: '/api/themes', headers });
+    expect(same.statusCode).toBe(304);
+    expect(same.body).toBe('');
+    saveResource(app.store, { kind: 'theme', id: null, model: emptyTheme('New synthetic theme') });
+    const changed = await app.inject({ url: '/api/themes', headers });
+    expect(changed.statusCode).toBe(200);
+    expect(changed.headers.etag).not.toBe(first.headers.etag);
+  });
 });

@@ -119,7 +119,6 @@ async function seed(request: APIRequestContext, squareBot = false) {
     data: {
       ...chat.settings,
       status: false,
-      translation: false,
       expectedSettingsRevision: chat.settingsRevision,
     },
   });

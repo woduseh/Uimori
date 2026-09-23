@@ -6,7 +6,6 @@ import './settings-actions.css';
 import { useEffect, useState } from 'react';
 import type { Chat, Settings } from '../core/types.js';
 import { api } from './api.js';
-import { useTestMode } from './useTestMode.js';
 export function SettingsEditor({
   chat,
   onSaved,
@@ -23,7 +22,6 @@ export function SettingsEditor({
   hideHeading?: boolean;
 }) {
   const [value, setValue] = useState<Settings>(chat.settings);
-  const testMode = useTestMode();
   const [revision, setRevision] = useState(chat.settingsRevision);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -120,39 +118,6 @@ export function SettingsEditor({
             1~32회. 본문의 조회 후속 호출과 문맥 요약을 함께 세어요. 번역·도우미는 각 기능의 별도
             호출 한도를 사용해요.
           </small>
-          {testMode && (
-            <details className="full fixture-settings">
-              <summary>개발자용 모의 실행 제어</summary>
-              <div className="editor-grid">
-                <label>
-                  모의 서술 프리셋
-                  <select
-                    aria-label="서술 프리셋"
-                    value={value.preset}
-                    onChange={(event) => update('preset', event.target.value as Settings['preset'])}
-                  >
-                    <option value="calm">차분한 서술</option>
-                    <option value="vivid">선명한 서술</option>
-                  </select>
-                </label>
-                <label>
-                  모의 생성 경로
-                  <select
-                    aria-label="모의 생성 경로"
-                    value={value.mode}
-                    onChange={(event) => update('mode', event.target.value as Settings['mode'])}
-                  >
-                    <option value="direct">바로 쓰기 · 도구 없음</option>
-                    <option value="research">로컬 자료 조사 후 쓰기</option>
-                  </select>
-                </label>
-                <small className="full">
-                  이 값은 scripted mock 동작에 사용해요. 문체·시점·분량은 선택한 프롬프트와 창작
-                  옵션에서 설정해요.
-                </small>
-              </div>
-            </details>
-          )}
           <div className="form-actions full settings-save-actions">
             {dirty && (
               <button

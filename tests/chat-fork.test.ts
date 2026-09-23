@@ -221,7 +221,7 @@ async function _rich(app: App) {
   });
   store.settings(chat.id, chat.settingsRevision, {
     ...chat.settings,
-    preset: 'vivid',
+
     maxCalls: 4,
   });
   const asset = store.product.createAsset(chat.id, {

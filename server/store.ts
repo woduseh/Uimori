@@ -1,3 +1,4 @@
+import { normalizeChatSettings } from '../core/chat-settings.js';
 import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
 import { migrateIndependentChats } from './migrate-independent-chats.js';
 import { pruneUnusedData } from './unused-data.js';
@@ -215,7 +216,7 @@ export class Store {
       titleRevision: row.title_revision ?? 0,
       headRevision: row.head_revision,
       settingsRevision: row.settings_revision,
-      settings: parse(row.settings),
+      settings: normalizeChatSettings(parse(row.settings)),
       createdAt: row.created_at,
       lastActivityAt: row.last_activity_at ?? row.created_at,
       ...organization,
@@ -241,16 +242,12 @@ export class Store {
   }
   createChat(
     title: string,
-    preset: Settings['preset'] = 'calm',
     organization: { botId?: string; folderId?: string | null } = {},
     internalId?: string
   ): Chat {
     const id = internalId === undefined ? randomUUID() : text(internalId, 'internal chat ID', 100);
     if (!IDENTITY_PATTERN.test(id)) throw new HttpError(400, 'Invalid internal chat ID');
     const settings: Settings = {
-      preset,
-      mode: 'direct',
-      translation: true,
       status: false,
       maxCalls: 8,
     };
@@ -322,6 +319,7 @@ export class Store {
     return history.reverse();
   }
   settings(id: string, expected: number, settings: Settings): Chat {
+    settings = normalizeChatSettings(settings);
     return this.transaction(() => {
       this.chat(id);
       const changed = this.db

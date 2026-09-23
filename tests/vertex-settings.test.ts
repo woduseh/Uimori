@@ -1,3 +1,7 @@
+import {
+  VERTEX_GEMINI_MODEL_ID,
+  VERTEX_GEMINI_MAX_OUTPUT_TOKENS,
+} from './fixtures/vertex-model.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -6,12 +10,7 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { GoogleAuth } from 'google-auth-library';
 import { createApp, type App } from '../server/app.js';
-import {
-  VERTEX_GEMINI_MODEL_ID,
-  VERTEX_GEMINI_MAX_OUTPUT_TOKENS,
-  type Connection,
-  type ModelPreset,
-} from '../core/product.js';
+import { type Connection, type ModelPreset } from '../core/product.js';
 
 const owned: { directory: string; app?: App }[] = [];
 afterEach(async () => {
