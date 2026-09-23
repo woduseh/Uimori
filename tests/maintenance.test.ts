@@ -1,10 +1,11 @@
+import Fastify from 'fastify';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { realpath } from 'node:fs/promises';
 import { afterEach, expect, test } from 'vitest';
 import { createApp, type App } from '../server/app.js';
-import { maintenanceState, setMaintenance } from '../server/maintenance.js';
+import { maintenanceState, setMaintenance, maintenanceRoutes } from '../server/maintenance.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { app: App; directory: string }[] = [];
@@ -143,4 +144,47 @@ test('repeating the same gate change keeps one epoch and a maintenance boot cann
   });
   expect(reopen.statusCode).toBe(409);
   expect(reopen.json()).toEqual({ error: 'MAINTENANCE_BOOT' });
+});
+
+test('closing admission waits for previously admitted HTTP writes and releases failed writes', async () => {
+  const { app } = await boot();
+  const http = Fastify();
+  let release!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  http.post('/slow-write', async () => {
+    entered();
+    await barrier;
+    return { saved: true };
+  });
+  http.post('/failed-write', async () => {
+    throw new Error('synthetic write failed');
+  });
+  maintenanceRoutes(http, app.store, { forcedClosed: false, activeWork: () => 0 });
+  const pending = http.inject({ method: 'POST', url: '/slow-write' }).then((response) => response);
+  await started;
+  try {
+    const closed = await http.inject({
+      method: 'POST',
+      url: '/api/maintenance',
+      payload: { status: 'closed', reason: 'oracle:test' },
+    });
+    expect(closed.json()).toMatchObject({ status: 'closed', activeWork: 1 });
+    expect((await http.inject({ method: 'POST', url: '/slow-write' })).statusCode).toBe(503);
+    release();
+    await pending;
+    expect((await http.inject('/api/maintenance')).json().activeWork).toBe(0);
+    await http.inject({ method: 'POST', url: '/api/maintenance', payload: { status: 'open' } });
+    expect((await http.inject({ method: 'POST', url: '/failed-write' })).statusCode).toBe(500);
+    expect((await http.inject('/api/maintenance')).json().activeWork).toBe(0);
+  } finally {
+    release();
+    await pending;
+    await http.close();
+  }
 });

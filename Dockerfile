@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:24-bookworm-slim AS base
+FROM node:24.21.0-bookworm-slim AS base
 WORKDIR /app
 RUN node -e "const [major, minor] = process.versions.node.split('.').map(Number); if (major !== 24 || minor < 14) process.exit(1)"
 
@@ -15,7 +15,10 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 FROM base AS runtime
+ARG UIMORI_REVISION=""
+LABEL io.uimori.managed="true" org.opencontainers.image.revision=$UIMORI_REVISION
 ARG UIMORI_CODEX_VERSION=""
+LABEL io.uimori.codex-version=$UIMORI_CODEX_VERSION
 RUN if [ -n "$UIMORI_CODEX_VERSION" ]; then npm install --global "@openai/codex@$UIMORI_CODEX_VERSION" --no-audit --no-fund && npm cache clean --force; fi
 ENV NODE_ENV=production UIMORI_HOST=0.0.0.0 UIMORI_PORT=4310 UIMORI_DB=/data/uimori.sqlite
 COPY --from=production-dependencies /app/node_modules ./node_modules

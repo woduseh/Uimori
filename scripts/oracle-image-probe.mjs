@@ -34,8 +34,8 @@ export function verifyIdentity(directory, buildId, distHash) {
   if (
     identity.buildId !== buildId ||
     identity.sourceHash !== buildId ||
-    identity.distHash !== distHash ||
-    artifactHash(directory) !== distHash
+    (distHash && identity.distHash !== distHash) ||
+    artifactHash(directory) !== identity.distHash
   )
     throw new Error('Image build identity or artifact hash mismatch');
   return identity;
@@ -93,6 +93,7 @@ export async function bootProbe(app = '/app', data = '/data') {
       UIMORI_PUBLIC_ORIGIN: 'https://oracle-probe.invalid',
       UIMORI_ACCESS_TOKEN: 'isolated-oracle-image-probe-token-0000',
       UIMORI_CODEX_ENABLED: '0',
+      UIMORI_MAINTENANCE: '1',
       UIMORI_BUILD_ID: identity.buildId,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -126,7 +127,12 @@ export async function bootProbe(app = '/app', data = '/data') {
   }
   return {
     status: 'PASS',
-    identity,
+    identity: {
+      buildId: identity.buildId,
+      sourceHash: identity.sourceHash,
+      distHash: identity.distHash,
+      node: identity.node,
+    },
     database: inspectData(data, { integrity: true, columns: true }),
     scope: 'Isolated actual-image Linux boot; no provider calls',
   };

@@ -55,7 +55,7 @@ Tailscale 기기 이름은 `sudo tailscale set --hostname=<새이름>`으로 바
 1. 앱을 정지하고 현재 데이터와 환경 설정을 백업해요. 같은 앱 이미지와 데이터 volume을 유지해요.
 2. 기존 포트의 설정을 해당 `serve` 또는 `funnel` 명령에 원래 flags와 `off`를 붙여 제거하고, 기기 이름을 변경해 새 DNS 이름을 확인해요. 예를 들어 기존 백그라운드 Funnel 8443은 `sudo tailscale funnel --bg --https=8443 off`로 해제해요. 다른 서비스의 설정은 유지해요.
 3. 서버 `.env.self-host`의 `UIMORI_PUBLIC_ORIGIN`을 새 주소로 바꾸고, 같은 Compose 파일로 `up -d --no-build app`을 실행해요. 새 이름·포트로 기존 공개 범위에 맞는 Serve 또는 Funnel을 설정해요.
-4. Oracle 배포 도구의 로컬 `accessEnvFile`도 같은 origin으로 맞춰요. 접근 토큰과 다른 설정은 유지해요.
+4. Oracle 배포 설정의 `expectedOrigin`도 같은 origin으로 맞춰요. 접근 토큰과 다른 설정은 유지해요.
 5. 인증서, 로그인, 기본 API, 앱 health와 데이터 보존을 확인해요. DNS·인증서 준비 중 발생한 실패와 이후 성공은 구분해서 기록해요. 실패하면 저장해 둔 이전 이름·라우팅·환경 설정으로 복구해요.
 
 도메인을 바꾸면 브라우저 origin도 달라져요. 새 주소에서 기존 접속 토큰으로 다시 로그인하고 즐겨찾기를 갱신해요. 예전 origin의 브라우저 초안·저장 정보는 자동으로 새 주소에 옮겨지지 않으므로 전환 전에 필요한 입력을 저장해요. [Funnel 해제·백그라운드 실행 안내](https://tailscale.com/docs/reference/tailscale-cli/funnel)

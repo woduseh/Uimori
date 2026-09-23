@@ -79,7 +79,7 @@ Actual local Risu materials are excluded from ordinary browser discovery. Set `U
 
 ## Release checks
 
-`npm run release:check -- --area <verify:*>` runs `quality`, a matching `build`, and the selected browser area. The default is `verify:browser-smoke`; `--full` selects `quality:full` and replaces that default with `verify:browser`. Explicit areas remain selected alongside the full suite. Deployment-tooling changes normally select `verify:selfhost`. Receipt matching, reuse and deployment rules are in [ORACLE-RELEASE](ORACLE-RELEASE.md).
+`npm run release:check -- --area <verify:*>` runs `quality`, a matching `build`, and the selected browser area. The default is `verify:browser-smoke`; `--full` selects `quality:full` and replaces that default with `verify:browser`. Explicit areas remain selected alongside the full suite. Deployment-tooling changes normally select `verify:selfhost`. Local receipt matching and reuse remain developer conveniences. Oracle deployment independently requires the exact SHA’s full GitHub CI result and runs image/DB/HTTPS checks on the host; see [ORACLE-RELEASE](ORACLE-RELEASE.md).
 
 ### Publishing a version
 

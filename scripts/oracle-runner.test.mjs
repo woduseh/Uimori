@@ -77,7 +77,10 @@ events=[]
 class Fake(m.Runner):
     @contextlib.contextmanager
     def stage(self,name): yield
-    def data(self,action,*args,**kwargs): events.append(action)
+    def data(self,action,*args,**kwargs):
+        events.append(action)
+        return {'status':'closed','reason':'oracle:test'} if action=='maintenance' else {}
+    def control(self,action,*args): events.append('control-'+action); return {'status':'open'}
     def compose(self,*args): events.append(args[0])
     def run(self,*args,**kwargs): events.append(args[0])
     def write_env(self,text): assert text=='original'; events.append('env')
@@ -85,11 +88,11 @@ class Fake(m.Runner):
     def routing(self): return {}
     def wait_healthy(self,image,volume): assert image=='sha256:old' and volume=='old'; events.append('healthy')
 with tempfile.TemporaryDirectory() as temp:
-    r=object.__new__(Fake); r.stopped=True; r.candidate_started=True; r.backed_up=True; r.checked_out=True
+    r=object.__new__(Fake); r.reopening=False; r.gate_owned=True; r.owner='oracle:test'; r.args=type('Args',(),{'fresh':False})(); r.stopped=True; r.candidate_started=True; r.backed_up=True; r.checked_out=True
     r.summary={}; r.volume_name='new'; r.old_volume='old'; r.image='sha256:new'; r.old_image='sha256:old'; r.previous='previous'; r.old_env='original'; r.private=pathlib.Path(temp); r.app=r.private; r.env=r.private/'env'
     r.env.write_text('original'); r.old_routing={}
     r.rollback()
-    assert events==['inspect','stop','inspect','restore','git','env','start','healthy'],events
+    assert events==['maintenance','inspect','stop','maintenance','inspect','restore','git','env','start','healthy','control-open'],events
     assert r.summary['rollback']=='PASS'
     assert 'sha256:old' in (r.private/'rollback.json').read_text()
 `));
@@ -101,7 +104,7 @@ class Fake(m.Runner):
     def stage(self,name): yield
     def data(self,*args,**kwargs): raise RuntimeError('Active work')
     def compose(self,*args): raise AssertionError('must not stop active application')
-r=object.__new__(Fake); r.stopped=True; r.candidate_started=True; r.summary={}; r.volume_name='new'; r.image='image'
+r=object.__new__(Fake); r.reopening=False; r.gate_owned=True; r.owner='oracle:test'; r.args=type('Args',(),{'fresh':False})(); r.stopped=True; r.candidate_started=True; r.summary={}; r.volume_name='new'; r.image='image'
 try: r.rollback()
 except RuntimeError as e: assert str(e)=='Active work'
 else: raise AssertionError('active work was accepted')
@@ -126,10 +129,11 @@ class Fake(m.Runner):
         return m.json.dumps(config)
     def data(self,action,*args,**kwargs): events.append(('data',action)); return {}
     def new_volume(self,*args,**kwargs): return 'isolated'
-    def probe(self,*args): events.append(('probe',bool(args))); return {'status':'PASS','database':{'columns':{}}}
+    def control(self,*args): return {'status':'open','forcedClosed':False}
+    def probe(self,*args): events.append(('probe',bool(args))); return {'status':'PASS','identity':{'distHash':'d'*64},'database':{'columns':{}}}
     def docker(self,*args,**kwargs):
         events.append(('docker',args[0]))
-        return m.json.dumps([{'Id':'sha256:old' if args[-1]=='configured-old' else 'sha256:new'}]) if args[:2]==('image','inspect') else ''
+        return m.json.dumps([{'Id':'sha256:old' if args[-1]=='configured-old' else 'sha256:new','Config':{'Labels':{'io.uimori.managed':'true','org.opencontainers.image.revision':'a'*40,'io.uimori.codex-version':'1.0'}}}]) if args[:2]==('image','inspect') else ''
 with tempfile.TemporaryDirectory() as temp:
     base=pathlib.Path(temp).resolve(); app=base/'app'; app.mkdir(); release=base/'release'; release.mkdir()
     (app/'.env.self-host').write_text('UIMORI_PUBLIC_ORIGIN=https://example.test\\n')
@@ -154,3 +158,13 @@ else: raise AssertionError('missing current column accepted')
 actual['helper_tasks'].update(started_at=shape,retired_column=shape)
 assert m.validate_columns(expected,actual)['status']=='PASS'
 `));
+
+test('real Oracle state machine verifies switch, rollback, lost-reopen and fresh boundaries on disposable fixtures', () => {
+  const file = fileURLToPath(new URL('../deploy/oracle-update-test.py', import.meta.url));
+  const result = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-B', file], {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 20_000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});

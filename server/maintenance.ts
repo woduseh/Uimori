@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { fields, record, text, HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -92,16 +92,24 @@ export function maintenanceRoutes(
   options: { forcedClosed: boolean; activeWork: () => number }
 ) {
   const state = () => maintenanceStatus(store, options.forcedClosed);
+  // Closing admission must also drain already admitted asynchronous HTTP writes,
+  // not only background model work. Auth/control requests are deliberately excluded.
+  const writes = new Set<FastifyRequest>();
+  const activeWork = () => options.activeWork() + writes.size;
   app.addHook('onRequest', async (request) => {
-    if (
-      MUTATING.has(request.method) &&
-      !ALWAYS_ADMITTED.has(request.routeOptions.url ?? '') &&
-      !admissionOpen(store, options.forcedClosed)
-    )
-      throw new HttpError(503, 'MAINTENANCE_CLOSED');
+    if (!MUTATING.has(request.method) || ALWAYS_ADMITTED.has(request.routeOptions.url ?? ''))
+      return;
+    if (!admissionOpen(store, options.forcedClosed)) throw new HttpError(503, 'MAINTENANCE_CLOSED');
+    writes.add(request);
+  });
+  app.addHook('onResponse', async (request) => {
+    writes.delete(request);
+  });
+  app.addHook('onError', async (request) => {
+    writes.delete(request);
   });
   app.get('/api/maintenance', async (_request, reply) =>
-    reply.header('Cache-Control', 'no-store').send({ ...state(), activeWork: options.activeWork() })
+    reply.header('Cache-Control', 'no-store').send({ ...state(), activeWork: activeWork() })
   );
   app.post('/api/maintenance', async (request) => {
     const body = record(request.body);
@@ -114,6 +122,6 @@ export function maintenanceRoutes(
       closed: status === 'closed',
       ...(reason === undefined ? {} : { reason }),
     });
-    return { ...state(), ...next, activeWork: options.activeWork() };
+    return { ...state(), ...next, activeWork: activeWork() };
   });
 }

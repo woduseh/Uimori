@@ -1,9 +1,9 @@
 {
-  "host": "ubuntu@168.110.23.8",
+  "host": "ubuntu@oracle.example",
   "identityFile": "C:/private/uimori-oracle.pem",
   "knownHostsFile": "C:/private/known_hosts",
   "appDirectory": "/opt/uimori/app",
   "releaseRoot": "/opt/uimori/releases",
-  "accessEnvFile": "C:/private/production.env",
-  "area": "verify:browser-smoke"
+  "expectedOrigin": "https://uimori.example.ts.net",
+  "sourceRef": "main"
 }
