@@ -234,8 +234,12 @@ for (const viewport of viewports) {
 
       await selectLore(editor, '인물');
       await editor.getByRole('button', { name: '폴더 삭제', exact: true }).click();
-      const dialog = page.getByRole('dialog', { name: '폴더 삭제', exact: true });
+      const dialog = page.getByRole('alertdialog', { name: '폴더 삭제', exact: true });
       await expect(dialog).toBeVisible();
+      await expect(dialog).toHaveClass(/delete-dialog/);
+      await expect(dialog.getByRole('button', { name: '폴더만 삭제', exact: true })).toHaveClass(
+        /delete-button/
+      );
       await dialog.getByRole('button', { name: '폴더만 삭제', exact: true }).click();
       await selectLore(editor, '수문장');
       await expect(editor.getByLabel('로어 폴더', { exact: true })).toHaveValue('');
