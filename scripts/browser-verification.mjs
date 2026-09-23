@@ -1,3 +1,4 @@
+import { assertBrowserRuntime } from './browser-runtime.mjs';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, copyFile } from 'node:fs/promises';
@@ -102,6 +103,7 @@ export async function runBrowserVerification({
       throw new Error('Node >=24.14.0 <25 required');
     }
     const identity = await assertBuild();
+    summary.environment.browserRuntime = await assertBrowserRuntime({ executablePath: browser });
     summary.identity = identity;
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
@@ -169,7 +171,11 @@ export async function runBrowserVerification({
     }
   } catch (error) {
     failures.push(error.message);
-    if (/spawn EPERM|Browser executable missing/u.test(error.message)) environmentBlocked = true;
+    if (
+      error.code === 'BROWSER_RUNTIME_UNAVAILABLE' ||
+      /spawn EPERM|Browser executable missing/u.test(error.message)
+    )
+      environmentBlocked = true;
   } finally {
     const cleanupErrors = [];
     await Promise.all(cancellationCleanup);

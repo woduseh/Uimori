@@ -13,7 +13,7 @@ npm run dev
 
 For an offline install with a populated npm cache, add `--offline`. `dev` builds and starts the server; `npm start` uses the existing build. See [README](../README.md) for app configuration.
 
-Run `npm run doctor` when diagnosing the environment. It checks Node, child processes, SQLite, loopback HTTP, and Chromium. `--no-browser` checks only the API environment. Set `UIMORI_BROWSER_PATH` to use a browser outside the discovered locations. The shared resolver falls back to an installed Playwright Chromium.
+Run `npm run doctor` when diagnosing the environment. It checks Node, child processes, SQLite, loopback HTTP, and Chromium. `--no-browser` checks only the API environment. Set `UIMORI_BROWSER_PATH` to use a browser outside the discovered locations. The shared resolver falls back to an installed Playwright Chromium. `doctor`, the shared browser harness and `verify:selfhost` launch the resolved browser and check a synthetic loopback page and nonzero text geometry before app tests. Missing libraries, fonts or executables report `BLOCKED`; this basic layout check does not prove complete glyph coverage. Configure an environment-specific wrapper with `UIMORI_BROWSER_PATH`, not a hardcoded workspace path.
 
 ## Verification
 
@@ -51,7 +51,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run verify:ui` | Reader layout, editing and reading preferences; accepts `--grep` and `--visual`. Renderer unit tests run separately with `npm test -- tests/prose.test.ts`. |
 | Feature-specific `verify:*` scripts | Suites such as `verify:packages`, `verify:providers`, `verify:library`, and `verify:navigation`; see [package scripts](../package.json). |
 | `npm run verify:browser` | Full local synthetic browser regression. |
-| `npm run verify:selfhost` | Local synthetic HTTPS proxy, session, and reconnection checks using Chromium. |
+| `npm run verify:selfhost` | Independent HTTPS/authentication, cross-device SSE, and re-entry/session-revocation scenarios. Accepts `--grep` for diagnosis; a filtered run is not the full suite. |
 | `npm run verify:visual` | Full browser suite with extra viewport and layout checks; use `--grep` to focus it. |
 | `npm run verify:gallery` | Screen and journey captures; see [UI-GALLERY](UI-GALLERY.md). |
 | `npm run benchmark:story` | Repeated long-story performance measurements. |
@@ -96,6 +96,8 @@ Commit and push the reviewed candidate, confirm checks for that exact commit, th
 [CI](../.github/workflows/quality.yml) reports the Windows quality job for every PR and main push. Changes limited to Markdown under `docs/`, root README/AGENTS or LICENSE skip installation/build/tests; mixed changes, missing comparison history and manual runs execute full quality. A cheap shared change classifier starts Windows quality and a small Ubuntu core job independently for non-documentation changes: one build, `npm test -- tests/server.test.ts tests/personal-workspace-flow.test.ts`, then `npm run verify:browser -- --grep READERREC` using Playwright Chromium. This covers server persistence/restart, backup recovery and Reader request/SSE recovery without repeating the full suite on Linux. The Windows quality and Linux core jobs each have a 30-minute emergency cap so normal hosted-runner variance can finish and report test failures; individual test deadlines remain the primary stuck-work detector. Manual browser runs still build and execute the complete `verify:browser` suite. Local results, hosted Linux CI and Oracle ARM64 deployment are separate evidence.
 
 `npm run test:personal` exercises the personal-workspace contracts. `node --test scripts/transfer-personal-v1.test.mjs` verifies read-only schema-24 extraction after building. The removed transparent snapshot archive has no optimizer or DDL signature check.
+
+Self-host checks print bounded named steps and retain failure traces for desktop and mobile contexts. They use disposable synthetic credentials, not production access. Each scenario creates its own required chat/model state and is selectable alone. Filling the composer occurs before session revocation; the subsequent conditional DOM click cannot wait for a composer already removed by the login gate.
 
 ## Results and troubleshooting
 

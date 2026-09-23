@@ -7,6 +7,7 @@ import { listenAddress, networkPolicy } from '../server/network-policy.js';
 
 // Exercise the real reporter, artifact files and cleanup paths while replacing
 // process/browser launch and build inputs with deterministic fault boundaries.
+vi.mock('../scripts/browser-runtime.mjs', () => ({ assertBrowserRuntime: vi.fn() }));
 vi.mock('../scripts/lib.mjs', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   assertBuild: vi.fn(),
@@ -17,6 +18,9 @@ vi.mock('../scripts/lib.mjs', async (importOriginal) => ({
   artifactScan: vi.fn(),
   json: vi.fn(),
 }));
+const { assertBrowserRuntime } = await import(
+  new URL('../scripts/browser-runtime.mjs', import.meta.url).href
+);
 const libraryUrl = new URL('../scripts/lib.mjs', import.meta.url).href;
 const runnerUrl = new URL('../scripts/browser-verification.mjs', import.meta.url).href;
 const lib = await import(libraryUrl);
@@ -54,6 +58,7 @@ beforeEach(() => {
   report = browserReport();
   commandFailure = { code: 0, timedOut: false };
   lib.assertBuild.mockResolvedValue(identity);
+  vi.mocked(assertBrowserRuntime).mockResolvedValue({ name: 'synthetic' });
   vi.stubEnv('UIMORI_VISUAL_REVIEW', '0');
   lib.browserPath.mockReturnValue(process.execPath);
   lib.killOwned.mockResolvedValue({ exited: true });
@@ -393,4 +398,16 @@ test('terminal summary saving begins after cancellation listeners have been rele
   const { summary } = await run();
   expect(terminalWrite).toBe(true);
   expect(summary.status).toBe('PASS');
+});
+
+test('unrunnable browser is BLOCKED before creating the application', async () => {
+  vi.mocked(assertBrowserRuntime).mockRejectedValue(
+    Object.assign(new Error('missing libglib'), {
+      code: 'BROWSER_RUNTIME_UNAVAILABLE',
+    })
+  );
+  const { summary } = await run();
+  expect(summary.status).toBe('BLOCKED');
+  expect(lib.startServer).not.toHaveBeenCalled();
+  expect(lib.command).not.toHaveBeenCalled();
 });

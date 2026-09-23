@@ -1,13 +1,64 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test as base, type Page } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { Content, ModelWorkspace } from '../core/product.js';
+
+// Playwright traces all contexts created through its browser fixture.
+const test = base.extend<{ phone: Page; pageErrors: undefined }>({
+  pageErrors: [
+    async ({ context }, use, info) => {
+      const errors: string[] = [];
+      context.on('weberror', (event) => errors.push(event.error().message));
+      await use(undefined);
+      if (errors.length)
+        await info.attach('desktop-page-errors', {
+          body: JSON.stringify(errors),
+          contentType: 'application/json',
+        });
+      if (info.status === info.expectedStatus) expect(errors).toEqual([]);
+    },
+    { auto: true },
+  ],
+  phone: async ({ browser }, use, info) => {
+    const context = await browser.newContext({
+      baseURL: process.env.UIMORI_BASE_URL,
+      ignoreHTTPSErrors: true,
+      viewport: { width: MOBILE_WIDTH, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    const errors: string[] = [];
+    context.on('weberror', (event) => errors.push(event.error().message));
+    context.setDefaultTimeout(10_000);
+    context.setDefaultNavigationTimeout(15_000);
+    try {
+      await use(await context.newPage());
+    } finally {
+      await context.close();
+    }
+    if (errors.length)
+      await info.attach('mobile-page-errors', {
+        body: JSON.stringify(errors),
+        contentType: 'application/json',
+      });
+    if (info.status === info.expectedStatus) expect(errors).toEqual([]);
+  },
+});
+async function step<T>(name: string, run: () => Promise<T>): Promise<T> {
+  console.log(`SELFHOST_STEP ${name}`);
+  return test.step(name, run, { timeout: 20_000 });
+}
 
 // This suite needs the authenticated HTTPS fixture and must contribute neither
 // skipped tests nor false evidence to ordinary loopback browser regressions.
 if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
-  test.use({ ignoreHTTPSErrors: true, trace: 'off' });
+  test.use({
+    ignoreHTTPSErrors: true,
+    trace: 'retain-on-failure',
+    actionTimeout: 10_000,
+    navigationTimeout: 15_000,
+  });
 if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
   test.describe('personal self-host HTTPS', () => {
     const origin = process.env.UIMORI_BASE_URL!;
@@ -200,168 +251,160 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
       ).toBeVisible();
     });
 
-    test(`SHUI02 desktop and ${MOBILE_WIDTH}px mobile share persisted chats and live HTTPS SSE across re-entry`, async ({
-      browser,
-    }, info) => {
-      test.setTimeout(120_000);
-      const desktop = await browser.newContext({
-        baseURL: origin,
-        ignoreHTTPSErrors: true,
-        viewport: { width: DESKTOP_WIDTH, height: 1000 },
+    async function createChat(pc: Page): Promise<Chat> {
+      await selectSyntheticMainModel(pc);
+      const title = `합성 HTTPS 개인 작업실 ${test.info().testId}`;
+      const response = await pc.request.post('/api/content', {
+        headers: mutationHeaders,
+        data: {
+          kind: 'bot',
+          title: `합성 HTTPS 안내자 ${test.info().testId}`,
+          description: 'Public synthetic self-host fixture',
+          text: 'A synthetic harbor keeper.',
+          loading: 'pinned',
+          relatedIds: [],
+        },
       });
-      const mobile = await browser.newContext({
-        baseURL: origin,
-        ignoreHTTPSErrors: true,
-        viewport: { width: MOBILE_WIDTH, height: 844 },
-        isMobile: true,
-        hasTouch: true,
-      });
-      const errors: string[] = [];
-      const pc = await desktop.newPage();
-      pc.on('pageerror', (error) => errors.push(error.message));
-      let phone = await mobile.newPage();
-      phone.on('pageerror', (error) => errors.push(error.message));
-      try {
-        await login(pc);
-        await selectSyntheticMainModel(pc);
-        const title = '합성 HTTPS 개인 작업실';
-        const response = await pc.request.post('/api/content', {
-          headers: mutationHeaders,
-          data: {
-            kind: 'bot',
-            title: '합성 HTTPS 안내자',
-            description: 'Public synthetic self-host fixture',
-            text: 'A synthetic harbor keeper.',
-            loading: 'pinned',
-            relatedIds: [],
-          },
-        });
-        expect(response.ok()).toBe(true);
-        const bot = (await response.json()) as Content;
-        await pc.reload();
-        await pc.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
-        await pc
-          .getByRole('dialog', { name: '새 채팅', exact: true })
-          .locator('.new-story-options > summary')
-          .click();
-        await pc.getByLabel('새 채팅 이름', { exact: true }).fill(title);
-        const created = pc.waitForResponse(
-          (item) =>
-            new URL(item.url()).pathname === '/api/chats' && item.request().method() === 'POST'
-        );
-        await pc.getByRole('button', { name: '채팅 만들기', exact: true }).click();
-        const chat = (await (await created).json()) as Chat;
-        await expect(pc.getByRole('heading', { name: title, exact: true })).toBeVisible();
-        await assertBrowserSecurity(pc);
-        await assertLiveStream(pc, chat.id);
-        await login(phone, `/?chat=${chat.id}`);
-        await expect(phone.getByRole('heading', { name: title, exact: true })).toBeVisible();
-        await assertBrowserSecurity(phone);
-        await assertLiveStream(phone, chat.id);
-        const pcSession = (await desktop.cookies(origin)).find(
-          (cookie) => cookie.name === 'uimori_session'
-        )!;
-        const phoneSession = (await mobile.cookies(origin)).find(
-          (cookie) => cookie.name === 'uimori_session'
-        )!;
-        expect(pcSession.value).not.toBe(phoneSession.value);
+      expect(response.ok()).toBe(true);
+      const bot = (await response.json()) as Content;
+      await pc.reload();
+      await pc.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
+      await pc
+        .getByRole('dialog', { name: '새 채팅', exact: true })
+        .locator('.new-story-options > summary')
+        .click();
+      await pc.getByLabel('새 채팅 이름', { exact: true }).fill(title);
+      const created = pc.waitForResponse(
+        (item) =>
+          new URL(item.url()).pathname === '/api/chats' && item.request().method() === 'POST'
+      );
+      await pc.getByRole('button', { name: '채팅 만들기', exact: true }).click();
+      const chat = (await (await created).json()) as Chat;
+      await expect(pc.getByRole('heading', { name: title, exact: true })).toBeVisible();
 
-        await pc
-          .getByLabel('다음 장면 요청', { exact: true })
-          .fill('SYNTHETIC_SELF_HOST_FIRST: A sealed letter waits on the harbor desk.');
-        await pc.getByRole('button', { name: '원문 생성', exact: true }).click();
-        await expect(pc.getByTestId('source')).toHaveCount(1);
-        await expect(phone.getByTestId('source')).toHaveCount(1); // SSE update, no reload or navigation.
-        const saved = (await (await pc.request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+      return chat;
+    }
+    async function generate(page: Page, text: string, count: number) {
+      await page.getByLabel('다음 장면 요청', { exact: true }).fill(text);
+      await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+      await expect(page.getByTestId('source')).toHaveCount(count);
+    }
+    const detail = async (page: Page, chat: Chat): Promise<ChatDetail> => {
+      const response = await page.request.get(`/api/chats/${chat.id}`, { timeout: 10_000 });
+      expect(response.status()).toBe(200);
+      return response.json();
+    };
+
+    test('SHUI02 desktop and mobile share persisted chats and live HTTPS SSE', async ({
+      page: pc,
+      phone,
+    }, info) => {
+      test.setTimeout(60_000);
+      await pc.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+      const chat = await step('create independent chat', async () => {
+        await login(pc);
+        return createChat(pc);
+      });
+      await step('connect independent mobile session', async () => {
+        await login(phone, `/?chat=${chat.id}`);
+        await assertBrowserSecurity(pc);
+        await assertBrowserSecurity(phone);
+        await assertLiveStream(pc, chat.id);
+        await assertLiveStream(phone, chat.id);
+        const session = async (p: Page) =>
+          (await p.context().cookies(origin)).find((c) => c.name === 'uimori_session')!.value;
+        expect(await session(pc)).not.toBe(await session(phone));
+      });
+      await step('observe the same generated source over mobile SSE without reload', async () => {
+        await generate(
+          pc,
+          'SYNTHETIC_SELF_HOST_FIRST: A sealed letter waits on the harbor desk.',
+          1
+        );
+        await expect(phone.getByTestId('source')).toHaveCount(1);
+        const saved = await detail(pc, chat);
         expect(saved.sources).toHaveLength(1);
-        const sourceId = saved.sources[0].id;
-        await expect(phone.getByTestId('source')).toHaveAttribute('data-source-id', sourceId);
+        await expect(phone.getByTestId('source')).toHaveAttribute(
+          'data-source-id',
+          saved.sources[0].id
+        );
         expect(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true
         );
         if (visualReview)
-          await phone.screenshot({
-            path: info.outputPath(`https-mobile-shared-source-${MOBILE_WIDTH}.png`),
-          });
-        if (visualReview)
-          await pc.screenshot({ path: info.outputPath('https-desktop-shared-source.png') });
+          await phone.screenshot({ path: info.outputPath('https-mobile-shared-source.png') });
+      });
+    });
 
+    test('SHUI03 tab re-entry and revoked mobile session preserve desktop and stored results', async ({
+      page: pc,
+      phone: initialPhone,
+    }) => {
+      test.setTimeout(60_000);
+      let phone = initialPhone;
+      await pc.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+      const chat = await step('prepare an independent chat and source', async () => {
+        await login(pc);
+        const chat = await createChat(pc);
+        await generate(pc, 'SYNTHETIC_SELF_HOST_REENTRY: A compass waits on the desk.', 1);
+        await login(phone, `/?chat=${chat.id}`);
+        await expect(phone.getByTestId('source')).toHaveCount(1);
+        return chat;
+      });
+      const saved = await detail(pc, chat);
+      await step('close mobile tab, generate, reopen and reload', async () => {
+        const mobile = phone.context();
         await phone.close();
-        await pc
-          .getByLabel('다음 장면 요청', { exact: true })
-          .fill('SYNTHETIC_SELF_HOST_SECOND: The keeper places a brass compass beside the letter.');
-        await pc.getByRole('button', { name: '원문 생성', exact: true }).click();
-        await expect(pc.getByTestId('source')).toHaveCount(2);
+        await generate(pc, 'SYNTHETIC_SELF_HOST_SECOND: The keeper opens the letter.', 2);
         phone = await mobile.newPage();
-        phone.on('pageerror', (error) => errors.push(error.message));
         await phone.goto(`/?chat=${chat.id}`);
         await expect(phone.getByTestId('source')).toHaveCount(2);
         await assertLiveStream(phone, chat.id);
         await assertBrowserSecurity(phone);
         await phone.reload();
         await expect(phone.getByTestId('source')).toHaveCount(2);
-
-        // Invalidate this device's server session while its UI remains open. The
-        // next protected UI request must return it to login, without affecting PC.
+      });
+      await step('revoke mobile session while UI is open', async () => {
+        // Fill while still authenticated. After revocation the gate can remove the
+        // composer between awaits; waiting for actionability there used to consume
+        // the entire test timeout. The conditional click below is one DOM task.
+        await phone
+          .getByLabel('다음 장면 요청', { exact: true })
+          .fill('SYNTHETIC_EXPIRED_SESSION_MUST_NOT_GENERATE');
+        await expect(phone.getByRole('button', { name: '원문 생성', exact: true })).toBeEnabled();
         expect(
           (
-            await phone.request.delete('/api/session', { headers: mutationHeaders, data: {} })
+            await phone.request.delete('/api/session', {
+              headers: mutationHeaders,
+              data: {},
+              timeout: 10_000,
+            })
           ).status()
         ).toBe(200);
-        const loginHeading = phone.getByRole('heading', {
-          name: '개인 작업실에 연결',
-          exact: true,
+        await phone.evaluate(() => {
+          const button = [...document.querySelectorAll('button')].find(
+            (b) => b.textContent?.trim() === '원문 생성'
+          );
+          button?.click();
         });
-        // The revoked SSE may notify the gate first. Otherwise make one protected UI
-        // request without waiting for Playwright actionability while that gate can rerender.
-        if (!(await loginHeading.isVisible())) {
-          try {
-            await phone
-              .getByLabel('다음 장면 요청', { exact: true })
-              .fill('SYNTHETIC_EXPIRED_SESSION_MUST_NOT_GENERATE');
-            await phone
-              .getByRole('button', { name: '원문 생성', exact: true })
-              .evaluate((button: HTMLButtonElement) => button.click());
-          } catch {
-            // A concurrent auth rerender is the other expected path; the assertion below proves it.
-          }
-        }
-        await expect(loginHeading).toBeVisible();
+        await expect(
+          phone.getByRole('heading', { name: '개인 작업실에 연결', exact: true })
+        ).toBeVisible();
         await expect(phone.getByRole('button', { name: '원문 생성', exact: true })).toHaveCount(0);
-        const afterLogout = (await (
-          await pc.request.get(`/api/chats/${chat.id}`)
-        ).json()) as ChatDetail;
-        expect(afterLogout.runs).toHaveLength(2);
-        expect(afterLogout.sources).toHaveLength(2);
-        expect((await pc.request.get('/api/health')).status()).toBe(200);
+        const after = await detail(pc, chat);
+        expect(after.runs).toHaveLength(2);
+        expect(after.sources).toHaveLength(2);
+        expect((await pc.request.get('/api/health', { timeout: 10_000 })).status()).toBe(200);
+      });
+      await step('reauthenticate and verify original source is unchanged', async () => {
         await login(phone, `/?chat=${chat.id}`);
         await expect(phone.getByTestId('source')).toHaveCount(2);
-        const final = (await (await pc.request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+        const final = await detail(pc, chat);
         expect(final.runs).toHaveLength(2);
         expect(final.sources).toHaveLength(2);
-        expect(final.sources.find((source) => source.id === sourceId)).toEqual(saved.sources[0]);
-        expect(errors).toEqual([]);
-        await info.attach('https-browser-observations', {
-          contentType: 'application/json',
-          body: JSON.stringify(
-            {
-              chatId: chat.id,
-              firstSourceId: sourceId,
-              sourceCount: final.sources.length,
-              independentSessions: true,
-              liveMobileSseUpdate: true,
-              tabReentry: true,
-              sessionReauthentication: true,
-              viewport: { width: MOBILE_WIDTH, height: 844 },
-              browserErrors: errors,
-            },
-            null,
-            2
-          ),
-        });
-      } finally {
-        await mobile.close();
-        await desktop.close();
-      }
+        expect(final.sources.find((source) => source.id === saved.sources[0].id)).toEqual(
+          saved.sources[0]
+        );
+      });
     });
   });
