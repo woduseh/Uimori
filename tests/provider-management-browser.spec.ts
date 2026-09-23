@@ -1584,7 +1584,7 @@ test('PMLEAVE provider draft switch saves before replacement and applies reversi
   expect(saved.enabled).toBe(false);
 });
 
-test('PMUI model presets group by provider, collapse independently and persist manual order', async ({
+test('PMUI model presets group by provider, start collapsed and persist manual order', async ({
   page,
   request,
 }) => {
@@ -1624,6 +1624,20 @@ test('PMUI model presets group by provider, collapse independently and persist m
     .filter({ hasText: secondConnection.title });
   await expect(firstGroup.getByText('2개 모델', { exact: true })).toBeVisible();
   await expect(secondGroup.getByText('1개 모델', { exact: true })).toBeVisible();
+  await expect(
+    firstGroup.getByRole('button', { name: `${beta.title} 모델 수정`, exact: true })
+  ).toBeHidden();
+  await expect(
+    secondGroup.getByRole('button', { name: `Gamma ${suffix} 모델 수정`, exact: true })
+  ).toBeHidden();
+
+  await firstGroup.locator(':scope > summary').click();
+  await expect(
+    firstGroup.getByRole('button', { name: `${beta.title} 모델 수정`, exact: true })
+  ).toBeVisible();
+  await expect(
+    secondGroup.getByRole('button', { name: `Gamma ${suffix} 모델 수정`, exact: true })
+  ).toBeHidden();
 
   const mutations: string[] = [];
   page.on('request', (r) => {
