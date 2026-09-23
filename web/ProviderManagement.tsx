@@ -1416,9 +1416,7 @@ export function ConnectionEditor({
               <dd>
                 {definition.catalog === 'remote'
                   ? '명시 요청 시 원격 조회'
-                  : definition.catalog === 'agent-runtime'
-                    ? '로그인한 에이전트 모델 목록'
-                    : '로컬 지원 목록'}
+                  : '로그인한 에이전트 모델 목록'}
               </dd>
               <dt>설정할 수 있는 옵션</dt>
               <dd>{definition.optionKeys.join(', ')}</dd>
