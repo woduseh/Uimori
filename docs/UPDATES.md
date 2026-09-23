@@ -12,7 +12,7 @@ From a clean source checkout, with the existing server stopped:
 
 ```sh
 git fetch origin --tags
-git switch --detach v0.1.1
+git switch --detach v0.2.0
 npm ci
 npm run dev
 ```
@@ -21,7 +21,7 @@ A source archive without Git can instead be extracted into a separate directory;
 
 To recover, stop the new server, retain its data for inspection, and restore the **previous application/image together with its pre-update DB snapshot**. Start from a separate restored DB path/volume, or move the stopped DB and its `-wal`/`-shm` sidecars aside before replacing it; never combine a snapshot with unrelated WAL files. DB downgrade is not supported. Work saved after the snapshot is not included in that recovery point. See [backup scope](DATA-MIGRATIONS.md#복구와-자료-교환).
 
-The Oracle runner's `--source-ref` currently accepts a branch, not a release tag. For this release, deploy the verified `main` commit matching `v0.1.1`; do not pass the tag as a branch. Tag creation and GitHub release publication never deploy the running service.
+The Oracle runner's `--source-ref` currently accepts a branch, not a release tag. For this release, deploy the verified `main` commit matching `v0.2.0`; do not pass the tag as a branch. Tag creation and GitHub release publication never deploy the running service.
 
 ## Maintenance mode
 
