@@ -497,6 +497,15 @@ export class ProductStore {
       connectionId,
       modelId,
       ...generationFromModel(b as ModelPreset),
+      ...(b.executionMode !== undefined
+        ? {
+            executionMode: choice(
+              b.executionMode,
+              ['realtime', 'batch'],
+              'execution mode'
+            ) as NonNullable<ModelPreset['executionMode']>,
+          }
+        : {}),
       capabilityProtocol: connection.protocol,
       ...(b.inputTokenLimit !== undefined ? { inputTokenLimit: b.inputTokenLimit } : {}),
       ...(vertex || b.timeoutMs !== undefined
@@ -899,12 +908,35 @@ export class ProductStore {
       );
     return id;
   }
+  resumeAttempt(id: string, runId: string, request: WireRecord) {
+    const row = this.db
+      .prepare('SELECT run_id,role,connection_id,model_id,request FROM attempts WHERE id=?')
+      .get(id) as Row | undefined;
+    const batch = this.db
+      .prepare('SELECT 1 FROM anthropic_batches WHERE attempt_id=? AND run_id=?')
+      .get(id, runId);
+    const previous = row ? parse(row.request) : null;
+    if (
+      !row ||
+      !batch ||
+      row.run_id !== runId ||
+      row.role !== request.role ||
+      row.connection_id !== request.connectionId ||
+      row.model_id !== request.modelId ||
+      previous?.protocol !== request.protocol ||
+      previous?.bodySha256 !== request.bodySha256 ||
+      previous?.stablePrefixSha256 !== request.stablePrefixSha256 ||
+      previous?.executionMode !== 'batch'
+    )
+      throw new HttpError(409, 'Batch attempt recovery mismatch');
+    return id;
+  }
   finishAttempt(id: string, result: ProviderResult) {
     const row = this.db.prepare('SELECT request FROM attempts WHERE id=?').get(id) as
       | Row
       | undefined;
     const request = row ? parse(row.request) : null;
-    const estimatedCost = estimateCost(
+    let estimatedCost = estimateCost(
       request?.pricingSnapshot,
       result.usage,
       request?.pricingStartedAt ?? '',
@@ -916,6 +948,22 @@ export class ProductStore {
           : undefined
         : undefined
     );
+    if (
+      request?.executionMode === 'batch' &&
+      request?.protocol === 'anthropic-messages-v1' &&
+      estimatedCost.status !== 'unavailable'
+    )
+      estimatedCost = {
+        ...estimatedCost,
+        usd: estimatedCost.usd === null ? null : estimatedCost.usd * 0.5,
+        subtotalUsd: estimatedCost.subtotalUsd * 0.5,
+        lines: estimatedCost.lines.map((line) => ({
+          ...line,
+          rate: line.rate === null ? null : line.rate * 0.5,
+          usd: line.usd === null ? null : line.usd * 0.5,
+        })),
+        notes: [...estimatedCost.notes, 'ANTHROPIC_BATCH_50_PERCENT'],
+      };
     const safe = {
       ...structuredClone(result),
       estimatedCost,

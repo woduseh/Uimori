@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import type { RunSnapshot, Usage } from '../core/types.js';
+import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { Controls } from '../server/controls.js';
 import { HttpError, Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -158,6 +159,149 @@ test('cancellation and recovery preserve staged text without publishing source o
     partial_text: 'Canonical provider text',
     usage: JSON.stringify(noUsage),
   });
+});
+
+test('recovery resumes only Runs backed by a durable Anthropic Batch attempt', () => {
+  const { store, chat } = fixture();
+  const recoverable = queued(store, chat.id);
+  store.startRun(recoverable.id);
+  const wire: WireRecord = {
+    connectionId: 'anthropic',
+    protocol: 'anthropic-messages-v1',
+    role: 'main',
+    modelId: 'claude-opus-5',
+    method: 'POST',
+    url: 'https://api.anthropic.com/v1/messages/batches',
+    headers: {},
+    body: { execution_mode: 'batch' },
+    bodySha256: 'batch-request',
+    stablePrefixSha256: 'stable',
+    executionMode: 'batch',
+  };
+  const attempt = store.product.startAttempt(chat.id, recoverable.id, null, wire);
+  const time = new Date().toISOString();
+  store.db
+    .prepare(
+      `INSERT INTO anthropic_batches(
+        attempt_id,run_id,ordinal,batch_id,custom_id,request_sha256,status,result,created_at,updated_at
+      ) VALUES(?,?,0,?,?,?,'in_progress',NULL,?,?)`
+    )
+    .run(attempt, recoverable.id, 'batch-1', attempt, wire.bodySha256, time, time);
+
+  const otherChat = createFixtureChat(store, 'Unsafe provider outcome');
+  const unsafe = queued(store, otherChat.id);
+  store.startRun(unsafe.id);
+  const unsafeAttempt = store.product.startAttempt(otherChat.id, unsafe.id, null, {
+    ...wire,
+    connectionId: 'other-provider',
+    executionMode: undefined,
+  });
+
+  expect(store.recover()).toEqual([recoverable.id]);
+  expect(rawRun(store, recoverable.id).status).toBe('queued');
+  expect(store.db.prepare('SELECT status FROM attempts WHERE id=?').get(attempt)).toEqual({
+    status: 'running',
+  });
+  expect(rawRun(store, unsafe.id).status).toBe('interrupted');
+  expect(
+    store.db.prepare('SELECT status,error FROM attempts WHERE id=?').get(unsafeAttempt)
+  ).toEqual({
+    status: 'interrupted',
+    error: 'Provider outcome uncertain; not replayed',
+  });
+});
+
+test('Batch recovery survives closing and reopening the SQLite store', () => {
+  const { store, chat } = fixture();
+  const owner = owned.at(-1)!;
+  const run = queued(store, chat.id);
+  store.startRun(run.id);
+  const wire: WireRecord = {
+    connectionId: 'anthropic',
+    protocol: 'anthropic-messages-v1',
+    role: 'main',
+    modelId: 'claude-opus-5',
+    method: 'POST',
+    url: 'https://api.anthropic.com/v1/messages/batches',
+    headers: {},
+    body: { execution_mode: 'batch' },
+    bodySha256: 'reopen-request',
+    stablePrefixSha256: 'reopen-stable',
+    executionMode: 'batch',
+  };
+  const attempt = store.product.startAttempt(chat.id, run.id, null, wire);
+  const time = new Date().toISOString();
+  store.db
+    .prepare(
+      `INSERT INTO anthropic_batches(
+        attempt_id,run_id,ordinal,batch_id,custom_id,request_sha256,status,result,created_at,updated_at
+      ) VALUES(?,?,0,?,?,?,'in_progress',NULL,?,?)`
+    )
+    .run(attempt, run.id, 'batch-reopen', attempt, wire.bodySha256, time, time);
+  store.close();
+
+  const reopened = new Store(join(owner.directory, 'story.sqlite'));
+  owner.store = reopened;
+  expect(reopened.recover()).toEqual([run.id]);
+  expect(reopened.run(run.id).status).toBe('queued');
+  expect(
+    reopened.db.prepare('SELECT batch_id,status FROM anthropic_batches WHERE run_id=?').get(run.id)
+  ).toEqual({ batch_id: 'batch-reopen', status: 'in_progress' });
+});
+
+test('Batch attempts estimate Anthropic token cost at the documented half-price rate', () => {
+  const { store, chat } = fixture();
+  const run = queued(store, chat.id);
+  store.startRun(run.id);
+  const wire: WireRecord = {
+    connectionId: 'anthropic',
+    protocol: 'anthropic-messages-v1',
+    role: 'main',
+    modelId: 'claude-opus-5',
+    method: 'POST',
+    url: 'https://api.anthropic.com/v1/messages/batches',
+    headers: {},
+    body: {},
+    bodySha256: 'pricing-batch',
+    stablePrefixSha256: 'stable',
+    executionMode: 'batch',
+    pricingStartedAt: '2026-09-23T00:00:00.000Z',
+    pricingSnapshot: {
+      version: 1,
+      protocol: 'anthropic-messages-v1',
+      modelId: 'claude-opus-5',
+      source: 'manual',
+      checkedAt: '2026-09-23',
+      serviceTier: 'standard',
+      rates: { input: 2, output: 8, cacheRead: 0.5, cacheWrite: 2.5 },
+      notes: [],
+    },
+  };
+  const attempt = store.product.startAttempt(chat.id, run.id, null, wire);
+  const result: ProviderResult = {
+    status: 'completed',
+    text: 'Synthetic Batch output.',
+    toolCalls: [],
+    refusal: null,
+    error: null,
+    usage: {
+      inputTokens: 1000,
+      outputTokens: 100,
+      costUsd: null,
+      raw: {
+        input_tokens: 1000,
+        output_tokens: 100,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+      priceRevision: null,
+    },
+    opaqueState: null,
+  };
+  store.product.finishAttempt(attempt, result);
+  const saved = store.product.attempts(chat.id).find((item) => item.id === attempt)!;
+  expect(saved.estimatedCost?.usd).toBeCloseTo(0.0014, 8);
+  expect(saved.estimatedCost?.notes).toContain('ANTHROPIC_BATCH_50_PERCENT');
 });
 
 test('source completion clears the staged duplicate atomically and rollback retains it', () => {

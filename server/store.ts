@@ -54,6 +54,7 @@ import {
   latestImageJob,
 } from './package-images.js';
 import { recoverIllustrations, scheduleAutomaticIllustration } from './illustrations.js';
+import { recoverableAnthropicBatchRun } from './anthropic-batch.js';
 import type {
   Settings,
   Chat as BaseChat,
@@ -1016,12 +1017,21 @@ export class Store {
     });
   }
 
-  recover() {
+  recover(): string[] {
+    const resumed: string[] = [];
     this.transaction(() => {
       for (const row of this.db
         .prepare("SELECT id FROM runs WHERE status IN ('queued','running')")
         .all() as Row[]) {
         const run = this.run(row.id);
+        if (recoverableAnthropicBatchRun(this, run.id)) {
+          this.db
+            .prepare("UPDATE runs SET status='queued',error=NULL,updated_at=? WHERE id=?")
+            .run(now(), run.id);
+          this.event(run.chatId, 'run.queued', run.id);
+          resumed.push(run.id);
+          continue;
+        }
         this.db
           .prepare("UPDATE runs SET status='interrupted',error=?,updated_at=? WHERE id=?")
           .run('Server stopped; generation was not automatically replayed', now(), run.id);
@@ -1047,13 +1057,22 @@ export class Store {
           );
       }
       this.db
-        .prepare(
-          "UPDATE attempts SET status='interrupted',error='Provider outcome uncertain; not replayed' WHERE status='running'"
-        )
+        .prepare(`
+          UPDATE attempts
+          SET status='interrupted',error='Provider outcome uncertain; not replayed'
+          WHERE status='running'
+            AND NOT EXISTS(
+              SELECT 1 FROM anthropic_batches b
+              JOIN runs r ON r.id=b.run_id
+              WHERE b.attempt_id=attempts.id AND r.status='queued'
+            )
+        `)
         .run();
       recoverIllustrations(this);
     });
+    return resumed;
   }
+
   detail(id: string) {
     const chat = this.chat(id);
     return {

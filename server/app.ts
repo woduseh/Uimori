@@ -513,6 +513,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     requireModel,
     resolveCredential,
     executeCodex,
+    batchPollIntervalMs: options.testMode ? 5 : 10_000,
     vertexRequestTier: options.vertexRequestTier,
     jevCredential: jevCredentials.resolve,
     publish,
@@ -1100,13 +1101,15 @@ export async function createApp(options: AppOptions): Promise<App> {
   maintenanceRoutes(app, store, { forcedClosed, activeWork: () => work.size });
   // A maintenance boot proves migration and reads only: it neither recovers nor starts work.
   pruneUploads(store.path);
+  let recoveredRuns: string[] = [];
   if (!forcedClosed) {
-    store.recover();
+    recoveredRuns = store.recover();
     helper.workspace.interrupt();
     streams.recover();
     flushPendingImageCleanup(store.db);
   }
   app.addHook('onListen', async () => {
+    for (const runId of recoveredRuns) execute(runId);
     pumpJobs();
     pumpIllustrations();
   });

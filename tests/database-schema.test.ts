@@ -39,6 +39,24 @@ test('personal current schema initializes and remains readable after an extra qu
   next.close();
 });
 
+test('schema 5 upgrades by adding durable Anthropic Batch recovery storage', () => {
+  const path = file();
+  const current = new Store(path);
+  current.close();
+  const old = new DatabaseSync(path);
+  old.exec('DROP TABLE anthropic_batches; PRAGMA user_version=5');
+  old.close();
+
+  const upgraded = new Store(path);
+  expect(databaseSchemaVersion(upgraded.db)).toBe(DATABASE_SCHEMA_VERSION);
+  expect(
+    upgraded.db
+      .prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='anthropic_batches'")
+      .get()
+  ).toEqual({ name: 'anthropic_batches' });
+  upgraded.close();
+});
+
 test.each([DATABASE_SCHEMA_VERSION + 1, 23, 24])(
   'opening another schema %s leaves its bytes untouched',
   (version) => {

@@ -254,6 +254,7 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
     error: string | null;
   };
   modelTitle?: string;
+  executionMode?: import('./product.js').ModelExecutionMode;
   /** Read-time projection of the failing attempt's provider verdict; never stored on the run. */
   rejection?: import('./provider-rejection.js').ProviderRejection;
   packageStart?: Pick<import('./package-start.js').PackageStartSnapshot, 'mode' | 'title'>;

@@ -13,7 +13,7 @@ function releaseAttemptBodies(db: DatabaseSync, scope: 'run' | 'job' | 'helper',
   db.prepare(`UPDATE attempts SET
     request=json_object('protocol',json_extract(request,'$.protocol'),
       'role',role,'modelId',model_id,'pricingSnapshot',json_extract(request,'$.pricingSnapshot'),
-      'pricingStartedAt',json_extract(request,'$.pricingStartedAt'),'detailsOmitted',json('true')),
+      'pricingStartedAt',json_extract(request,'$.pricingStartedAt'),'executionMode',json_extract(request,'$.executionMode'),'detailsOmitted',json('true')),
     response=CASE WHEN response IS NULL THEN NULL ELSE json_object(
       'status',status,'error',json_extract(response,'$.error'),
       'usage',json_extract(response,'$.usage'),'estimatedCost',json_extract(response,'$.estimatedCost'),
@@ -24,6 +24,8 @@ function releaseAttemptBodies(db: DatabaseSync, scope: 'run' | 'job' | 'helper',
 export function releaseCompletedRunInputs(db: DatabaseSync, runId: string): void {
   db.prepare('DELETE FROM model_inputs WHERE run_id=?').run(runId);
   db.prepare('DELETE FROM tool_events WHERE run_id=?').run(runId);
+  // Once the source is committed, the raw Batch result is duplicate story text. Keep only recovery metadata.
+  db.prepare('UPDATE anthropic_batches SET result=NULL WHERE run_id=?').run(runId);
   releaseAttemptBodies(db, 'run', runId);
   pruneContextHistory(db);
   pruneSourceEdits(db);

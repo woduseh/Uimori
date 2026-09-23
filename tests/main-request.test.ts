@@ -550,6 +550,95 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
   );
 });
 
+describe('Batch recovery in the real main tool loop', () => {
+  test('replays a durable tool receipt instead of executing or persisting it twice', async () => {
+    const work = await snapshot('https://api.anthropic.com/v1');
+    const target = work.profile!.models.main!;
+    target.connection.protocol = 'anthropic-messages-v1';
+    target.modelId = 'claude-opus-5';
+    target.executionMode = 'batch';
+
+    const execute = (log: ReturnType<typeof hooks>) => {
+      let calls = 0;
+      log.value.executeAnthropicBatch = async (_connection, _request, options) => {
+        calls++;
+        await options.onWire?.({
+          connectionId: 'connection',
+          protocol: 'anthropic-messages-v1',
+          role: 'main',
+          modelId: 'claude-opus-5',
+          method: 'POST',
+          url: 'https://api.anthropic.com/v1/messages/batches',
+          headers: {},
+          body: {},
+          bodySha256: `body-${calls}`,
+          stablePrefixSha256: 'stable',
+          executionMode: 'batch',
+        });
+        return calls === 1
+          ? {
+              status: 'tool_calls',
+              text: '',
+              toolCalls: [
+                {
+                  id: 'batch-read',
+                  name: 'knowledge.search',
+                  arguments: { query: 'harbor' },
+                },
+              ],
+              refusal: null,
+              error: null,
+              usage: {
+                inputTokens: 10,
+                outputTokens: 2,
+                costUsd: null,
+                raw: null,
+                priceRevision: null,
+              },
+              opaqueState: null,
+            }
+          : {
+              status: 'completed',
+              text: 'Batch continuation complete.',
+              toolCalls: [],
+              refusal: null,
+              error: null,
+              usage: {
+                inputTokens: 12,
+                outputTokens: 5,
+                costUsd: null,
+                raw: null,
+                priceRevision: null,
+              },
+              opaqueState: null,
+            };
+      };
+      return () => calls;
+    };
+
+    const first = hooks('');
+    const firstCalls = execute(first);
+    expect(await runMain(work, first.value)).toMatchObject({
+      status: 'completed',
+      text: 'Batch continuation complete.',
+      usage: { modelCalls: 2, inputTokens: 22, outputTokens: 7 },
+    });
+    expect(firstCalls()).toBe(2);
+    expect(first.events).toHaveLength(1);
+    expect(first.events[0]).toMatchObject({ callId: 'batch-read', name: 'knowledge.search' });
+
+    const resumed = hooks('');
+    resumed.value.replayToolEvents = structuredClone(first.events);
+    const resumedCalls = execute(resumed);
+    expect(await runMain(work, resumed.value)).toMatchObject({
+      status: 'completed',
+      text: 'Batch continuation complete.',
+    });
+    expect(resumedCalls()).toBe(2);
+    expect(resumed.events).toEqual([]);
+  });
+});
+
 describe('Recoverable read failures in the real main runner', () => {
   test.each([
     ['knowledge.search', { query: 'harbor', limit: 101 }, 'INVALID_ARGUMENTS'],

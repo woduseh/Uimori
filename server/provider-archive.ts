@@ -49,6 +49,7 @@ export function connectionEndpoint(value: unknown, protocol: Connection['protoco
 
 export const modelOptionKeys = [
   ...GENERATION_KEYS.filter((key) => !['maxOutputTokens', 'temperature'].includes(key)),
+  'executionMode',
   'timeoutMs',
   'evaluationTools',
   'contextTools',
@@ -90,6 +91,15 @@ export function validateModelMetadata(value: Row) {
 }
 
 export function validateModelGeneration(value: Row, protocol?: Connection['protocol']) {
+  if (value.executionMode !== undefined) {
+    choice(value.executionMode, ['realtime', 'batch'], 'execution mode');
+    if (
+      value.executionMode === 'batch' &&
+      protocol !== undefined &&
+      protocol !== 'anthropic-messages-v1'
+    )
+      throw new HttpError(400, 'Batch execution requires an Anthropic Messages connection');
+  }
   if (value.inputTokenLimit !== undefined)
     number(value.inputTokenLimit, 'input context limit', 8192, 1000000);
   if (value.evaluationTools !== undefined)

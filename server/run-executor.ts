@@ -25,6 +25,7 @@ import {
 import { JEV_ENDPOINT, JEV_MODEL, JevError } from './jev-judgment.js';
 import { judgeMainRefusal, mainJudgmentInput, validateMainJudgmentWire } from './main-judgment.js';
 import { JevCredentialStore } from './jev-credentials.js';
+import { AnthropicBatchRun } from './anthropic-batch.js';
 import type { Usage } from '../core/types.js';
 
 function mergeUsage(left: Usage, right: Usage): Usage {
@@ -43,6 +44,7 @@ type RunExecutorDependencies = {
   requireModel: (target: unknown, role: string) => void;
   resolveCredential: MainHooks['resolveCredential'];
   executeCodex: MainHooks['executeCodex'];
+  batchPollIntervalMs?: number;
   vertexRequestTier: MainHooks['vertexRequestTier'];
   jevCredential: JevCredentialStore['resolve'];
   publish: (chatId: string) => void;
@@ -60,6 +62,7 @@ export function createRunExecutor({
   requireModel,
   resolveCredential,
   executeCodex,
+  batchPollIntervalMs = 10_000,
   vertexRequestTier,
   jevCredential,
   publish,
@@ -68,6 +71,7 @@ export function createRunExecutor({
   const execute = (id: string) => {
     const fixture = { ...controls.fixture };
     const controller = new AbortController();
+    const anthropicBatch = new AnthropicBatchRun(store, id, batchPollIntervalMs);
     runs.set(id, controller);
     const onStop = () => controller.abort(new Error('Server stopping'));
     signal.addEventListener('abort', onStop, { once: true });
@@ -138,6 +142,7 @@ export function createRunExecutor({
                 store.product.mockAttempt(run.chatId, id, null, 'main', input);
             },
             onToolEvent: (event) => store.tool(id, event),
+            replayToolEvents: run.toolEvents,
             persistContext: (prepared, own) =>
               store.transaction(() => {
                 if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
@@ -154,12 +159,33 @@ export function createRunExecutor({
               }),
 
             resolveCredential,
+            executeAnthropicBatch: (connection, request, execution) =>
+              anthropicBatch.execute(connection, request, execution),
             executeCodex,
             authorize: (connection) => store.product.authorize(connection),
-            vertexRequestTier: vertexRequestTier,
-            onAttemptStart: (wire) => {
+            vertexRequestTier,
+            cancelRemoteOnAbort: () => controller.signal.aborted && !signal.aborted,
+            onAttemptStart: (wire, resumeAttemptId) => {
               if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
                 throw new Error('Run cancelled');
+              if (resumeAttemptId !== undefined) {
+                if (
+                  wire.judgment ||
+                  wire.protocol !== 'anthropic-messages-v1' ||
+                  wire.executionMode !== 'batch'
+                )
+                  throw new Error('Invalid Batch attempt recovery');
+                const target = run.snapshot.profile?.models.main;
+                if (
+                  !target ||
+                  target.executionMode !== 'batch' ||
+                  target.modelId !== wire.modelId ||
+                  target.connectionId !== wire.connectionId
+                )
+                  throw new Error('Invalid Batch attempt recovery');
+                store.product.authorize(target.connection);
+                return store.product.resumeAttempt(resumeAttemptId, id, wire);
+              }
               if (wire.judgment) {
                 const current = store.run(id).snapshot;
                 if (wire.judgment.kind === 'main-refusal') {
@@ -197,7 +223,13 @@ export function createRunExecutor({
               if (target) store.product.authorize(target.connection);
               return store.product.startAttempt(run.chatId, id, null, wire);
             },
-            onAttemptFinish: (attempt, result) => store.product.finishAttempt(attempt, result),
+            onAttemptFinish: (attempt, result) => {
+              const batch = store.db
+                .prepare('SELECT 1 FROM anthropic_batches WHERE attempt_id=?')
+                .get(attempt);
+              if (signal.aborted && batch) return;
+              store.product.finishAttempt(attempt, result);
+            },
           };
           const assertCurrent = () => {
             if (controller.signal.aborted || readRunStatus(store, id) !== 'running')

@@ -113,7 +113,9 @@ function TurnActivityContent({
     : run.packageStart?.mode === 'authored'
       ? '작성된 도입문'
       : run.status === 'running'
-        ? '장면을 쓰는 중'
+        ? run.executionMode === 'batch'
+          ? 'Claude Batch 처리 중…'
+          : '장면을 쓰는 중'
         : `본문 ${labels[run.status] ?? run.status}`;
   const important = entries.filter((item) => item.status !== 'completed');
   const summary = [

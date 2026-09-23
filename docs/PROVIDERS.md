@@ -12,6 +12,18 @@ OpenAI Responses·Chat 호환, Anthropic Messages 등 프로토콜과 주소를 
 
 직접 연결은 해당 API의 생성 옵션을 사용하고, Vercel에서는 **모델 계열**로 제조사별 옵션을 골라요. 자동 추정·수동 선택 모두 가능하고 모르는 계열도 공통 옵션으로 저장할 수 있어요. 계열 선택이 공급자의 지원 여부를 보장하거나 새 전송 프로토콜을 추가하지는 않아요. 구체적인 동작은 [모델 생성 설정](MODEL-PARAMETERS.md)을 참고해요.
 
+## Anthropic Batch 실행
+
+직접 `Anthropic · Messages` 연결의 모델 프리셋은 **실행 방식**에서 `실시간` 또는 `Batch · 비동기 · 50% 할인`을 선택할 수 있어요. 기본값은 기존과 같은 실시간이에요. Batch는 현재 본문을 생성하는 main Run에 적용하며 번역·상태·도우미·제목 같은 별도 보조 작업은 기존 실시간 실행을 유지해요. Batch 응답은 스트리밍처럼 꾸미지 않고 완료되면 한 번에 표시해요.
+
+Uimori는 여러 사용자 요청을 모으는 자체 batching scheduler를 두지 않아요. 한 번의 모델 호출마다 Anthropic Batch에 요청 하나를 넣고 기존 `runMain` 도구 루프를 그대로 사용해요. Claude가 도구를 요청하면 그 결과를 처리한 다음 다음 모델 라운드를 새 Batch로 보내며, `story.submit`은 기존처럼 추가 모델 호출 없이 Run을 끝내요.
+
+Batch의 `runId`·`attemptId`·`batchId`·`customId`와 요청 해시를 SQLite에 저장해요. 서버가 중단되어도 Anthropic에 생성된 Batch는 유지되므로 다음 부팅에서 같은 Run과 Batch를 다시 조회해 이어 받아요. 이미 저장된 Batch 결과와 도구 영수증도 재사용해서 같은 공급자 요청이나 도구를 다시 실행하지 않아요. Batch 생성 POST를 보냈는지 확정할 수 없는데 `batchId`만 저장되지 않은 아주 짧은 구간은 중복 과금을 피하기 위해 자동 재전송하지 않고 실패로 남겨요.
+
+사용자가 Run을 취소하면 로컬 Run이 즉시 취소되고, 생성된 Anthropic Batch가 있으면 원격 취소도 best-effort로 요청해요. 서버 종료는 사용자 취소가 아니므로 원격 Batch를 취소하지 않아요. 취소 뒤 늦게 도착한 결과는 source로 commit하지 않아요.
+
+Anthropic Batch 요금은 공식 Batch 가격 정책의 50% 할인을 반영해 화면의 예상 비용도 절반으로 계산해요. 이 값은 저장된 토큰 단가와 공급자 사용량에 따른 추정치이며 실제 청구 내역은 Anthropic이 기준이에요.
+
 ## 모델 목록과 응답 확인
 
 **모델 목록 새로고침**은 사용자가 눌렀을 때만 실행해요. 일반 HTTP 프로바이더는 해당 연결의 목록 API를, Codex는 로그인한 실행기의 목록을, Vertex는 생성에 쓰는 것과 같은 Vertex 인증으로 Google Model Garden을 조회해요. 조회 실패 시 마지막으로 저장된 목록을 유지하며 모델 ID 직접 입력은 항상 가능해요.

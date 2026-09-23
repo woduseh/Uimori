@@ -1,6 +1,12 @@
 import type { ProviderHttpDiagnostic } from './provider-http-error.js';
 import { validateModelOptions } from './model-capabilities.js';
-import type { ProviderProtocol, VertexRequestTier, ModelGeneration, ModelRole } from './product.js';
+import type {
+  ModelExecutionMode,
+  ModelGeneration,
+  ModelRole,
+  ProviderProtocol,
+  VertexRequestTier,
+} from './product.js';
 import { executeVertexProvider } from './vertex.js';
 import { executeNativeProvider } from './provider-http.js';
 import type { ProviderPrompt } from './risu-prompt.js';
@@ -133,6 +139,8 @@ export type WireRecord = {
   };
   pricingSnapshot?: PricingSnapshot;
   pricingStartedAt?: string;
+  /** Host execution policy; never serialized into a model request. */
+  executionMode?: ModelExecutionMode;
   /** Host-only attribution. Never supplied by model output or serialized to the provider. */
   agentId?: string;
   connectionId: string;
@@ -175,6 +183,11 @@ function redact(value: Json, secret?: string): Json {
 
 /** Fetch + fatal UTF-8 decoder + SSE assembler. Never retries or follows redirects. */
 export type ProviderExecutionOptions = {
+  executeAnthropicBatch?: (
+    connection: ProviderConnection,
+    request: ProviderRequest,
+    options: ProviderExecutionOptions
+  ) => Promise<ProviderResult>;
   executeCodex?: (
     connection: ProviderConnection,
     request: ProviderRequest,
@@ -183,6 +196,9 @@ export type ProviderExecutionOptions = {
 
   signal: AbortSignal;
   timeoutMs?: number;
+  executionMode?: ModelExecutionMode;
+  /** Batch-only policy: server shutdown keeps remote work alive; an explicit Run cancel may cancel it. */
+  cancelRemoteOnAbort?: () => boolean;
   vertexRequestTier?: VertexRequestTier;
   resolveCredential?: (
     envReference: string,
@@ -192,7 +208,7 @@ export type ProviderExecutionOptions = {
   /** Awaited after Codex thread setup and before turn/start; never records another attempt.
    * Synchronous callbacks may return an ignored value. */
   beforeTurn?: () => unknown;
-  onWire?: (record: WireRecord) => void | Promise<void>;
+  onWire?: (record: WireRecord, resumeAttemptId?: string) => unknown | Promise<unknown>;
   /** Decoder-selected public answer deltas; excludes tools, reasoning and final-only envelopes. */
   onProgress?: (progress: ProviderProgress) => void | Promise<void>;
 };
@@ -228,8 +244,38 @@ export async function executeProvider(
     const onWire = options.onWire;
     options = {
       ...options,
-      onWire: (wire) =>
-        onWire?.({ ...wire, pricingSnapshot, pricingStartedAt: new Date().toISOString() }),
+      onWire: (wire, resumeAttemptId) =>
+        onWire?.(
+          { ...wire, pricingSnapshot, pricingStartedAt: new Date().toISOString() },
+          resumeAttemptId
+        ),
+    };
+  }
+  if (options.executionMode === 'batch') {
+    if (connectionValue.protocol !== 'anthropic-messages-v1')
+      reject('BATCH_EXECUTION_REQUIRES_ANTHROPIC');
+    const connection = validateConnection(connectionValue),
+      request = validateRequest(requestValue);
+    if (request.generation) validateModelOptions(request.generation, connection.protocol);
+    if (options.executeAnthropicBatch)
+      return options.executeAnthropicBatch(connection, request, {
+        ...options,
+        onProgress: undefined,
+      });
+    return {
+      status: 'error',
+      text: '',
+      toolCalls: [],
+      refusal: null,
+      error: { code: 'ANTHROPIC_BATCH_UNAVAILABLE' },
+      usage: {
+        inputTokens: null,
+        outputTokens: null,
+        costUsd: null,
+        raw: null,
+        priceRevision: null,
+      },
+      opaqueState: null,
     };
   }
   if (connectionValue.protocol === 'codex-app-server-v1') {

@@ -1,4 +1,10 @@
-import type { Connection, ModelFamily, ModelPreset, VertexRequestTier } from '../core/product.js';
+import type {
+  Connection,
+  ModelExecutionMode,
+  ModelFamily,
+  ModelPreset,
+  VertexRequestTier,
+} from '../core/product.js';
 import { effectiveModelFamily, modelFamilyOptionKeys } from '../core/model-family.js';
 import type { ModelPricing, TokenRates } from '../core/pricing-types.js';
 import { validateModelPricing } from '../core/model-pricing.js';
@@ -86,6 +92,7 @@ export type ModelDraft = {
   reasoningMode: string;
   reasoningContext: string;
   serviceTier: string;
+  executionMode: ModelExecutionMode;
   cacheMode: string;
   cacheTtl: string;
   thinkingMode: string;
@@ -115,6 +122,7 @@ export const initialModel = (): ModelDraft => ({
   reasoningMode: '',
   reasoningContext: '',
   serviceTier: '',
+  executionMode: 'realtime',
   cacheMode: '',
   cacheTtl: '',
   thinkingMode: '',
@@ -149,6 +157,7 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     reasoningMode: value.reasoningMode ?? '',
     reasoningContext: value.reasoningContext ?? '',
     serviceTier: value.serviceTier ?? '',
+    executionMode: value.executionMode ?? 'realtime',
     cacheMode: value.cacheMode ?? '',
     cacheTtl: value.cacheTtl ?? '',
     thinkingMode: value.thinkingMode ?? '',
@@ -178,6 +187,7 @@ function supportedDraft(draft: ModelDraft, connection: Connection): ModelDraft {
     Object.assign(next, { [key]: defaults[key as keyof ModelDraft] });
   }
   if (connection.protocol !== 'vercel-chat-v1') next.providerOptions = '';
+  if (connection.protocol !== 'anthropic-messages-v1') next.executionMode = 'realtime';
   return next;
 }
 export function selectModelConnection(draft: ModelDraft, connection: Connection): ModelDraft {
@@ -226,6 +236,9 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
     ...(draft.reasoningMode ? { reasoningMode: draft.reasoningMode } : {}),
     ...(draft.reasoningContext ? { reasoningContext: draft.reasoningContext } : {}),
     ...(draft.serviceTier ? { serviceTier: draft.serviceTier } : {}),
+    ...(connection.protocol === 'anthropic-messages-v1' && draft.executionMode === 'batch'
+      ? { executionMode: 'batch' as const }
+      : {}),
     ...(draft.cacheMode ? { cacheMode: draft.cacheMode } : {}),
     ...(draft.cacheTtl ? { cacheTtl: draft.cacheTtl } : {}),
     ...(draft.thinkingMode ? { thinkingMode: draft.thinkingMode } : {}),

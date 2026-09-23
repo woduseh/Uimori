@@ -21,6 +21,13 @@ const connection: Connection = {
   catalog: [],
   catalogError: null,
 };
+const anthropicConnection: Connection = {
+  ...connection,
+  id: 'anthropic',
+  title: 'Anthropic',
+  protocol: 'anthropic-messages-v1',
+  endpoint: 'https://api.anthropic.com/v1',
+};
 const vercelConnection: Connection = {
   ...connection,
   id: 'vercel',
@@ -33,6 +40,20 @@ describe('model numeric drafts', () => {
   test('uses a 600-second response timeout for new models', () => {
     expect(initialModel().timeoutSeconds).toBe('600');
     expect(modelPayload(initialModel(), connection).timeoutMs).toBe(600_000);
+  });
+
+  test('keeps Anthropic Batch as host execution mode and resets it on another connection', () => {
+    const batch = { ...initialModel(), modelId: 'claude-opus-5', executionMode: 'batch' as const };
+    expect(modelPayload(batch, anthropicConnection)).toMatchObject({ executionMode: 'batch' });
+    expect(modelPayload(batch, connection)).not.toHaveProperty('executionMode');
+    expect(selectModelConnection(batch, connection).executionMode).toBe('realtime');
+    expect(
+      modelDraft({
+        ...modelPayload(batch, anthropicConnection),
+        id: 'model',
+        revision: 1,
+      } as ModelPreset).executionMode
+    ).toBe('batch');
   });
 
   test.each(['', ' ', '0', '-1', '1.5', 'NaN', 'Infinity', '500001'])(

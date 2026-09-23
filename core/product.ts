@@ -15,6 +15,7 @@ export type ProviderProtocol = (typeof PROVIDER_PROTOCOLS)[number];
 export const MODEL_FAMILIES = ['openai', 'anthropic', 'google', 'deepseek', 'xai'] as const;
 export type ModelFamily = (typeof MODEL_FAMILIES)[number];
 export type VertexRequestTier = 'standard' | 'flex';
+export type ModelExecutionMode = 'realtime' | 'batch';
 export type ModelGeneration = {
   /** Model-maker profile used to expose and adapt generation options. It is host metadata, not a wire field by itself. */
   modelFamily?: ModelFamily;
@@ -190,6 +191,8 @@ export type ModelPreset = ContentRef &
     modelId: string;
     inputTokenLimit?: number;
     capabilityProtocol?: ProviderProtocol;
+    /** Host execution policy; omitted means the existing real-time provider call. */
+    executionMode?: ModelExecutionMode;
     timeoutMs?: number;
     enabled?: boolean;
     /** User-controlled display order inside a provider group. */

@@ -23,6 +23,7 @@ import {
 import type { ModelInput, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { attachMainHostContext } from './main-host-context.js';
 import {
   buildMainProviderRequest,
@@ -32,6 +33,7 @@ import {
 } from './main-request.js';
 import {
   executeContextTool,
+  replayContextTool,
   type ContextPersistence,
   type ContextToolState,
 } from './context-tools.js';
@@ -51,19 +53,23 @@ export type MainHooks = {
   initialUsage?: Usage;
   /** Calls owned by the host after the writer completes (for example response judgment). */
   reserveCalls?: number;
+  executeAnthropicBatch?: import('../core/transport.js').ProviderExecutionOptions['executeAnthropicBatch'];
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   signal: AbortSignal;
   onInput: (input: ModelInput) => void | Promise<void>;
   onToolEvent: (event: ToolEvent) => void | Promise<void>;
+  /** Durable tool receipts used only when resuming a recoverable Batch Run. */
+  replayToolEvents?: readonly ToolEvent[];
   /** Durable owner of model-written context checkpoints; absent owners deny context.write/new. */
   persistContext?: ContextPersistence;
 
   timeoutMs?: number;
   vertexRequestTier?: 'standard' | 'flex';
   authorize: (connection: Connection) => Connection | Promise<Connection>;
-  onAttemptStart: (request: WireRecord) => string | Promise<string>;
+  onAttemptStart: (request: WireRecord, resumeAttemptId?: string) => string | Promise<string>;
   onAttemptFinish: (id: string, result: ProviderResult) => void | Promise<void>;
+  cancelRemoteOnAbort?: () => boolean;
   onResponseProgress?: (
     progress: ProviderProgress & { attemptId: string; segment: number }
   ) => void | Promise<void>;
@@ -122,6 +128,29 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     text = '',
     status: MainResult['status'] = hooks.signal.aborted ? 'cancelled' : text ? 'partial' : 'error'
   ): MainResult => ({ status, error, text, usage });
+  const replayEvents = new Map<string, ToolEvent>();
+  let replayInvalid = false;
+  for (const event of hooks.replayToolEvents ?? []) {
+    if (event.callId.startsWith('__advisor_before_')) continue;
+    const key = JSON.stringify([event.callId, event.name]);
+    if (replayEvents.has(key)) replayInvalid = true;
+    replayEvents.set(key, structuredClone(event));
+  }
+  const takeReplay = (callId: string, name: string) => {
+    const key = JSON.stringify([callId, name]);
+    const event = replayEvents.get(key);
+    if (event) replayEvents.delete(key);
+    return event ? structuredClone(event) : undefined;
+  };
+  const persistOrReplay = async (expected: ToolEvent): Promise<boolean> => {
+    const saved = takeReplay(expected.callId, expected.name);
+    if (!saved) {
+      await hooks.onToolEvent(structuredClone(expected));
+      return true;
+    }
+    return isDeepStrictEqual(saved, expected);
+  };
+  if (replayInvalid) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
   if (!Number.isSafeInteger(maxCalls) || maxCalls < 1) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
   const collaboration = createAgentCollaboration(fixed, hooks, usage);
   await collaboration?.prepare();
@@ -267,15 +296,18 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     const result = await executeProvider(transportConnection(authorized), request, {
       signal: hooks.signal,
       resolveCredential: hooks.resolveCredential,
+      executeAnthropicBatch: hooks.executeAnthropicBatch,
       executeCodex: hooks.executeCodex,
       vertexRequestTier: hooks.vertexRequestTier,
+      executionMode: target.executionMode,
+      cancelRemoteOnAbort: hooks.cancelRemoteOnAbort,
       timeoutMs:
         remainingTimeout ??
         hooks.timeoutMs ??
         target.timeoutMs ??
         (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
-      onWire: async (wire) => {
-        attemptId = await hooks.onAttemptStart(wire);
+      onWire: async (wire, resumeAttemptId) => {
+        attemptId = await hooks.onAttemptStart(wire, resumeAttemptId);
         // Persistence completes before fetch. A crash leaves an uncertain attempt, not a queued replay.
         usage.modelCalls++;
         mainCalls++;
@@ -328,7 +360,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         return fail('INVALID_STORY_SUBMISSION');
       if (hooks.signal.aborted) return fail('CANCELLED');
       const preset = fixed.profile?.promptPresets?.main;
-      await hooks.onToolEvent({
+      const event: ToolEvent = {
         callId: call.id,
         name: call.name,
         args: { content },
@@ -345,7 +377,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
             promptPreset: preset ? { id: preset.id, revision: preset.revision } : null,
           },
         },
-      });
+      };
+      if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
       return { status: 'completed', text: content, error: null, usage };
     }
     const evaluationTerminals = result.toolCalls.filter(
@@ -365,7 +398,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       for (const call of result.toolCalls.filter((call) => call.name !== 'eval_submit_artifact')) {
         const event = evaluation.execute(call);
         results.push(event);
-        await hooks.onToolEvent(structuredClone(event));
+        if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
       }
       const submitted = evaluation.submit(
         evaluationTerminals[0],
@@ -373,12 +406,12 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       );
       if (!submitted.ok) {
         results.push(submitted.event);
-        await hooks.onToolEvent(structuredClone(submitted.event));
+        if (!(await persistOrReplay(submitted.event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
         opaqueState = result.opaqueState;
         continue;
       }
       if (hooks.signal.aborted) return fail('CANCELLED');
-      await hooks.onToolEvent({
+      const event: ToolEvent = {
         callId: evaluationTerminals[0].id,
         name: 'eval_submit_artifact',
         args: {},
@@ -392,7 +425,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           noticeCharacters: submitted.artifact.noticeCharacters,
           correctionCount: submitted.artifact.correctionCount,
         },
-      });
+      };
+      if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
       return { status: 'completed', text: submitted.artifact.text, error: null, usage };
     }
     opaqueState = result.opaqueState;
@@ -402,8 +436,25 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       if (hooks.signal.aborted) return fail('CANCELLED');
       // Transport only decodes. Exact frozen bindings separate state actions from read permissions.
       const action = { callId: call.id, name: call.name, args: call.arguments };
+      const saved = takeReplay(call.id, call.name);
       let event: ToolEvent;
-      if (call.name === 'agents.consult' && collaboration) {
+      if (saved) {
+        if (call.name === 'agents.consult' && collaboration) {
+          event = collaboration.replay(saved);
+        } else if (contextTools && (CONTEXT_TOOL_NAMES as readonly string[]).includes(call.name)) {
+          const outcome = replayContextTool(fixed, saved, contextState);
+          event = outcome.event;
+          if (outcome.switched) boundary = { snapshot: outcome.switched, event };
+        } else if (
+          evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
+        ) {
+          const restored = evaluation.execute(call);
+          if (!isDeepStrictEqual(restored, saved)) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
+          event = saved;
+        } else {
+          event = saved;
+        }
+      } else if (call.name === 'agents.consult' && collaboration) {
         event = await collaboration.consult(call.id, call.arguments, [...advisorContext.values()]);
       } else if (contextTools && (CONTEXT_TOOL_NAMES as readonly string[]).includes(call.name)) {
         const outcome = await executeContextTool(fixed, action, {
@@ -422,8 +473,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       results.push(event);
       if (collaboration && (event.name === 'agents.consult' || contextReadNames.has(event.name)))
         advisorContext.set(event.callId, structuredClone(event));
-      // Persist each real result immediately, before the next action or any request preview.
-      await hooks.onToolEvent(structuredClone(event));
+      // Persist each real result immediately. Recovery reuses the durable receipt instead.
+      if (!saved) await hooks.onToolEvent(structuredClone(event));
       const outcome = correction(event, call.arguments);
       if (outcome === 'denied') return fail('READ_TOOL_DENIED');
     }
