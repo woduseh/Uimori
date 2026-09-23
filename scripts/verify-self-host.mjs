@@ -1,3 +1,5 @@
+import { assertBrowserRuntime } from './browser-runtime.mjs';
+import { parseOptions } from './release-common.mjs';
 import browserWidths from '../fixtures/browser-viewports.json' with { type: 'json' };
 const { mobile: MOBILE_WIDTH } = browserWidths;
 import path from 'node:path';
@@ -27,7 +29,8 @@ import {
   canary,
 } from './lib.mjs';
 
-if (process.argv.length > 2) throw new Error('verify-self-host accepts no arguments');
+const options = parseOptions(process.argv.slice(2), { values: ['grep'] });
+if (options.grep) new RegExp(options.grep);
 const runId = `self-host-${newId()}`,
   directory = path.join(artifactRoot, runId),
   runtime = path.join(directory, 'runtime');
@@ -269,6 +272,7 @@ try {
     environmentBlocked = true;
     throw new Error('Node >=24.14.0 <25 required');
   }
+  summary.browserRuntime = await assertBrowserRuntime({ executablePath: browser });
   const identity = await assertBuild(),
     before = await fingerprint();
   summary.identity = identity;
@@ -283,6 +287,8 @@ try {
     UIMORI_INSTANCE: runId,
     UIMORI_BUILD_ID: identity.buildId,
     UIMORI_TEST_MODE: '',
+    UIMORI_CODEX_ENABLED: '0',
+    UIMORI_CODEX_EXECUTABLE: undefined,
     UIMORI_PUBLIC_ORIGIN: proxy.origin,
     UIMORI_ACCESS_TOKEN: randomBytes(32).toString('hex'),
     UIMORI_PROVIDER_FIXTURE_URL: providerFixture.url,
@@ -330,11 +336,13 @@ try {
       'node_modules/@playwright/test/cli.js',
       'test',
       'tests/self-host-browser.spec.ts',
-      '--reporter=json',
+      ...(options.grep ? ['--grep', options.grep] : []),
+      '--reporter=list,json',
     ],
     {
       env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: reporter },
       timeout: 180_000,
+      echo: true,
       log: path.join(directory, 'playwright.log'),
       children,
     }
@@ -348,17 +356,23 @@ try {
     throw error;
   }
   requireCommand(result);
-  for (const id of ['SHUI01', 'SHUI02'])
+  summary.selection = { grep: options.grep ?? null };
+  for (const id of options.grep ? [] : ['SHUI01', 'SHUI02', 'SHUI03'])
     if (!summary.report.tests.some((test) => test.status === 'passed' && test.title.includes(id)))
       throw new Error(`Missing ${id} evidence`);
   summary.providerFixture = providerFixture.stats();
+  const expectedCalls = summary.report.tests.reduce(
+    (sum, item) =>
+      sum + (item.title.includes('SHUI02') ? 1 : item.title.includes('SHUI03') ? 2 : 0),
+    0
+  );
   if (
-    summary.providerFixture.mainCalls !== 2 ||
-    summary.providerFixture.requests !== 2 ||
+    summary.providerFixture.mainCalls !== expectedCalls ||
+    summary.providerFixture.requests !== expectedCalls ||
     summary.providerFixture.errors.length
   )
-    throw new Error('Self-host main provider fixture did not receive exactly two valid calls');
-  if (!proxy.stats().eventStreams || !proxy.stats().eventBytes)
+    throw new Error('Self-host main provider fixture did not receive the expected valid calls');
+  if (expectedCalls && (!proxy.stats().eventStreams || !proxy.stats().eventBytes))
     throw new Error('No actual HTTPS event stream bytes observed');
   if (
     (await assertBuild()).buildId !== identity.buildId ||
@@ -368,7 +382,11 @@ try {
   summary.identityVerifiedAt = new Date().toISOString();
 } catch (error) {
   failures.push(error.message);
-  if (/spawn EPERM|Browser executable missing/u.test(error.message)) environmentBlocked = true;
+  if (
+    error.code === 'BROWSER_RUNTIME_UNAVAILABLE' ||
+    /spawn EPERM|Browser executable missing/u.test(error.message)
+  )
+    environmentBlocked = true;
 } finally {
   const cleanupErrors = [];
   if (proxy)
@@ -405,7 +423,7 @@ try {
     if (!live.length) {
       const evidence = path.join(directory, 'evidence-db');
       await mkdir(evidence, { recursive: true });
-      for (const name of await readdir(runtime))
+      for (const name of failures.length ? await readdir(runtime) : [])
         if (/\.sqlite(?:-wal|-shm)?$/u.test(name))
           await copyFile(path.join(runtime, name), path.join(evidence, name));
       await removeOwned(directory, runtime);

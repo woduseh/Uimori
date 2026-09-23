@@ -7,7 +7,8 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { artifactRoot, newId, browserPath, json, removeOwned } from './lib.mjs';
+import { assertBrowserRuntime } from './browser-runtime.mjs';
+import { artifactRoot, newId, json, removeOwned } from './lib.mjs';
 
 export function supportedNode(version) {
   const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(version);
@@ -32,9 +33,14 @@ function diagnostic(error) {
     .slice(0, 600);
   const code = error?.code ?? /\b(EACCES|EPERM|ENOENT)\b/.exec(message)?.[1];
   const blocked =
-    ['EACCES', 'EPERM', 'ENOENT', 'ERR_MODULE_NOT_FOUND', 'ERR_UNKNOWN_BUILTIN_MODULE'].includes(
-      code
-    ) ||
+    [
+      'EACCES',
+      'EPERM',
+      'ENOENT',
+      'ERR_MODULE_NOT_FOUND',
+      'ERR_UNKNOWN_BUILTIN_MODULE',
+      'BROWSER_RUNTIME_UNAVAILABLE',
+    ].includes(code) ||
     /Executable doesn't exist|Browser executable missing|requires Node|unable to open database file/.test(
       message
     );
@@ -121,7 +127,6 @@ export async function doctor(
   };
   let db;
   let server;
-  let context;
   let url;
   async function check(name, run) {
     const started = Date.now();
@@ -194,31 +199,11 @@ export async function doctor(
       });
     } else {
       await check('browser-launch-and-local-page', async () => {
-        const { chromium } = await import('@playwright/test');
-        const executablePath = browserPath();
-        if (executablePath && !existsSync(executablePath))
-          throw new Error('Browser executable missing');
-        context = await chromium.launchPersistentContext(path.join(temp, 'browser-profile'), {
-          executablePath,
-          headless: true,
-          // Same as playwright.config.ts: a system PAC proxy must not intercept 127.0.0.1.
-          args: ['--no-proxy-server'],
+        result.browser = await assertBrowserRuntime({
+          url,
+          screenshot: path.join(directory, 'doctor-browser.png'),
           viewport: { width: MOBILE_WIDTH, height: 844 },
-          timeout: 10000,
         });
-        const page = await context.newPage();
-        await page.goto(url, { timeout: 10000 });
-        if ((await page.locator('h1').innerText()) !== '로컬 실행 확인')
-          throw new Error('Browser localhost page mismatch');
-        result.browser = {
-          name: 'chromium',
-          version: context.browser().version(),
-          executablePath: executablePath || 'Playwright managed browser',
-          viewport: `${MOBILE_WIDTH}x844 emulator`,
-        };
-        await page.screenshot({ path: path.join(directory, 'doctor-browser.png') });
-        await context.close();
-        context = undefined;
       });
     }
   } finally {
@@ -227,7 +212,6 @@ export async function doctor(
       .map((check) => ({ name: check.name, status: 'FAIL', error: check.error }));
     for (const [name, close] of [
       ['sqlite', () => db?.close()],
-      ['browser', () => context?.close()],
       [
         'http',
         () =>
