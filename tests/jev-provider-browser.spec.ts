@@ -111,8 +111,15 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
   const saved = await connection(request);
   expect(saved).toMatchObject({ configured: true, hasSavedKey: true, credentialSource: 'saved' });
   await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
-  await expect(page.getByRole('article', { name: 'JEV 모델', exact: true })).toBeVisible();
+  const modelList = page.getByRole('region', { name: '저장한 모델 프리셋', exact: true });
+  const typeSafeGroup = modelList
+    .locator('.provider-model-group')
+    .filter({ hasText: 'TypeSafe AI' });
   const modelRow = page.getByRole('article', { name: 'JEV 모델', exact: true });
+  await expect(typeSafeGroup.getByText('1개 모델', { exact: true })).toBeVisible();
+  await expect(modelRow).toBeHidden();
+  await typeSafeGroup.locator(':scope > summary').click();
+  await expect(modelRow).toBeVisible();
   await expect(modelRow.getByLabel('JEV 모델 메뉴', { exact: true })).toBeVisible();
   if (visualReview) {
     await page.screenshot({ path: info.outputPath('jev-model-list-mobile.png') });

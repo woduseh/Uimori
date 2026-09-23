@@ -12,7 +12,7 @@
 }
 .sidebar-app-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 4px;
 }
