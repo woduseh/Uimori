@@ -1,6 +1,7 @@
+import { tmpdir } from 'node:os';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 import { artifactRoot, json, removeOwned } from './lib.mjs';
@@ -518,4 +519,31 @@ test('cleanup preview performs one read-only SSH query without CI or a deploymen
   assert.equal(commands.length, 1);
   assert.equal(commands[0][0], 'fixture-ssh');
   assert.equal(fixture.calls.length, 0);
+});
+
+test('Oracle controller starts without installed Playwright or any node_modules', async (t) => {
+  // Outside the repository so Node cannot accidentally resolve its test dependencies.
+  const isolated = await mkdtemp(path.join(tmpdir(), 'uimori-deploy-only-'));
+  t.after(() => rm(isolated, { recursive: true, force: true }));
+  const directory = path.join(isolated, 'scripts');
+  await mkdir(directory);
+  for (const name of [
+    'release-oracle.mjs',
+    'ci-gate.mjs',
+    'ci-summary.mjs',
+    'release-common.mjs',
+    'lib.mjs',
+    'browser-path.mjs',
+  ])
+    await copyFile(new URL(name, import.meta.url), path.join(directory, name));
+  const result = await runExternal(
+    process.execPath,
+    [path.join(directory, 'release-oracle.mjs'), '--help'],
+    {
+      cwd: isolated,
+      timeoutMs: 5000,
+    }
+  );
+  assert.equal(result.code, 0, result.output);
+  assert.match(result.output, /release:oracle/);
 });
