@@ -282,6 +282,10 @@ test('recent row caps, omitted links and unknown stored values remain bounded an
 test('only finite known diagnostics survive and no error suffix is forwarded', () => {
   expect(diagnosticError('HTTP_429')).toBe('HTTP_429');
   expect(diagnosticError('INVALID_TOOL_ARGUMENTS')).toBe('INVALID_TOOL_ARGUMENTS');
+  expect(diagnosticError('TOOL_RESULT_MISMATCH')).toBe('TOOL_RESULT_MISMATCH');
+  expect(diagnosticError('ANTHROPIC_CONTINUATION_MISMATCH')).toBe(
+    'ANTHROPIC_CONTINUATION_MISMATCH'
+  );
   expect(diagnosticError('HTTP_429: SECRET')).toBe('UNKNOWN_ERROR');
   expect(diagnosticError('Provider outcome uncertain; not replayed')).toBe(
     'PROVIDER_OUTCOME_UNCERTAIN'

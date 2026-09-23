@@ -405,7 +405,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     };
     expect(() => encodeAnthropic(thirdInput)).toThrow('TOOL_RESULT_MISMATCH');
   });
-  test.each(['missing', 'extra', 'duplicate', 'id', 'name', 'args', 'denied'])(
+  test.each(['missing', 'extra', 'duplicate', 'id', 'name', 'denied'])(
     'rejects %s tool result correspondence',
     (mutation) => {
       const input = request();
@@ -417,11 +417,24 @@ describe('Anthropic Messages request and opaque continuation', () => {
       if (mutation === 'duplicate') fresh[1].callId = fresh[0].callId;
       if (mutation === 'id') fresh[1].callId = 'unknown';
       if (mutation === 'name') fresh[1].name = 'skills.list';
-      if (mutation === 'args') fresh[1].args = { id: 'different' };
       if (mutation === 'denied') fresh[1].denied = 'true';
       expect(() => encodeAnthropic(next)).toThrow('TOOL_RESULT_MISMATCH');
     }
   );
+  test('accepts host-normalized tool arguments while binding results by call id and tool name', () => {
+    const input = request();
+    const output = turn(input, [
+      toolPart('call-normalized', 'tool_0_knowledge_read', { id: 'lore-1', limit: 4096 }),
+    ]);
+    const next = continued(input, output);
+    const fresh = (next.input.results as Record<string, Json>[])[0];
+    fresh.args = { id: 'lore-1', offset: 0, limit: 4096 };
+    const wire = native(encodeAnthropic(next).body);
+    const resultPart = wire.messages.at(-1).content[0];
+    expect(resultPart.tool_use_id).toBe('call-normalized');
+    expect(JSON.parse(resultPart.content)).toEqual(fresh.result);
+  });
+
   test('encodes a denied result as an error while preserving its payload', () => {
     const input = request();
     const next = continued(input, turn(input));
