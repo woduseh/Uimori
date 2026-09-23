@@ -257,12 +257,7 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
       )
         reject('INVALID_ANTHROPIC_CONTINUATION');
       const item = fresh.get(call.id);
-      if (
-        !item ||
-        item.name !== call.name ||
-        (item.args !== undefined && canonical(item.args) !== canonical(part.input))
-      )
-        reject('TOOL_RESULT_MISMATCH');
+      if (!item || item.name !== call.name) reject('TOOL_RESULT_MISMATCH');
       fresh.delete(call.id);
       return {
         type: 'tool_result',
