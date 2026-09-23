@@ -76,6 +76,8 @@ const errors = new Set([
   'ANTHROPIC_TOOL_INPUT_CHANGED',
   'ANTHROPIC_UNKNOWN_TOOL',
   'ANTHROPIC_TOOL_TERMINAL_MISMATCH',
+  'TOOL_RESULT_MISMATCH',
+  'ANTHROPIC_CONTINUATION_MISMATCH',
 ]);
 function member<T extends string>(value: unknown, values: readonly T[]): T | 'unknown' {
   return typeof value === 'string' && values.includes(value as T) ? (value as T) : 'unknown';

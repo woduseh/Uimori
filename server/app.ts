@@ -1012,6 +1012,8 @@ export async function createApp(options: AppOptions): Promise<App> {
             const message = error instanceof Error ? error.message : '';
             const safeError =
               message === 'Model call budget exhausted' ||
+              message === 'TOOL_RESULT_MISMATCH' ||
+              message === 'ANTHROPIC_CONTINUATION_MISMATCH' ||
               error instanceof JevError ||
               message.startsWith('Injected failure:') ||
               message.startsWith('MODEL_REQUIRED:') ||
