@@ -18,6 +18,12 @@ for (const width of DEFAULT_WIDTHS) {
     const prompts = destinations.getByRole('button', { name: '프롬프트', exact: true });
     await expect(destinations.getByRole('button')).toHaveText(['서재', '프롬프트']);
     await expect(navigation.getByLabel('앱 메뉴', { exact: true })).toHaveCount(0);
+    const footerBox = await footer.boundingBox();
+    const settingsBox = await settings.boundingBox();
+    expect(footerBox).not.toBeNull();
+    expect(settingsBox).not.toBeNull();
+    if (!footerBox || !settingsBox) throw new Error('Sidebar footer has no visible bounds');
+    expect(Math.abs(settingsBox.width - footerBox.width)).toBeLessThanOrEqual(1);
     for (const action of [library, prompts, settings]) {
       await expect(action).toBeVisible();
       await expect(action).toBeInViewport();
