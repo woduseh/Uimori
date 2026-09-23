@@ -311,6 +311,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         // Persistence completes before fetch. A crash leaves an uncertain attempt, not a queued replay.
         usage.modelCalls++;
         mainCalls++;
+        return attemptId;
       },
       onProgress: async (progress) => {
         if (attemptId !== undefined && !hooks.signal.aborted)
