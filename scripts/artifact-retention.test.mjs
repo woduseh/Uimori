@@ -134,3 +134,20 @@ test('tooling retention uses the same ownership rule and malformed metadata cann
   assert.equal(outcome.status, 'WARN');
   assert.ok(existsSync(broken));
 });
+
+test('current release receipts also protect the tooling runner human-readable report link', async (t) => {
+  const { repository, record, run } = await fixture(t);
+  const proof = await record('tooling-proof', 'PASS', 0, { kind: 'tooling' });
+  await record('tooling-newest', 'PASS', 20, { kind: 'tooling' });
+  const identity = await releaseFingerprint(repository);
+  const directory = path.join(repository, 'output/release/checks', identityKey(identity));
+  await mkdir(directory, { recursive: true });
+  const log = path.join(directory, 'quality-full.log');
+  await writeFile(log, `Tooling tests PASS. Report: ${path.join(proof, 'summary.json')}\n`);
+  await writeFile(
+    path.join(directory, 'summary.json'),
+    JSON.stringify({ identity, checks: { 'quality:full': { status: 'PASS', log } } })
+  );
+  assert.equal((await run({ keepPassed: 1, apply: true })).removed.length, 0);
+  assert.ok(existsSync(proof));
+});

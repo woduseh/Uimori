@@ -16,6 +16,8 @@ async function receiptProtections(repository) {
     // The receipt owns the check log. Its JSON result links the browser/tooling report.
     if (!path.resolve(check.log).startsWith(path.resolve(directory) + path.sep)) continue;
     for (const line of (await readFile(check.log, 'utf8')).split(/\r?\n/u)) {
+      const tooling = /^Tooling tests PASS\. Report: (.+)$/.exec(line);
+      if (tooling) protectedPaths.push(path.resolve(tooling[1]));
       try {
         const value = JSON.parse(line);
         for (const key of ['evidence', 'report'])
@@ -72,6 +74,8 @@ export async function retainArtifacts({
           owner?.active === false &&
           owner.directory === target &&
           owner.runId === entry.name &&
+          Number.isInteger(owner.ownerPid) &&
+          owner.ownerPid > 0 &&
           !isAlive(owner.ownerPid) &&
           ['PASS', 'FAIL', 'BLOCKED'].includes(summary?.status) &&
           owner.cleanup?.status === 'PASS' &&
