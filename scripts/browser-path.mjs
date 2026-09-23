@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { delimiter, join } from 'node:path';
 
 const require = createRequire(import.meta.url);
 
@@ -16,6 +17,15 @@ export function browserPath() {
     '/usr/bin/microsoft-edge',
   ].find(existsSync);
   if (installed) return installed;
+  const pathNames =
+    process.platform === 'win32'
+      ? ['chrome.exe', 'msedge.exe']
+      : ['google-chrome', 'chromium', 'microsoft-edge'];
+  for (const directory of (process.env.PATH ?? '').split(delimiter).filter(Boolean))
+    for (const name of pathNames) {
+      const candidate = join(directory, name);
+      if (existsSync(candidate)) return candidate;
+    }
   // Deployment imports the shared utilities without needing test packages installed.
   // Resolve Playwright only when a browser command actually asks for its managed binary.
   try {
