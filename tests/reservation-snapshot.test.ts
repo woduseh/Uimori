@@ -48,7 +48,7 @@ function phases() {
     branchId: 'branch',
     parentRevision: 'source-2',
     settingsRevision: 8,
-    settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 16 },
+    settings: { status: false, maxCalls: 16 },
     request: 'Frozen request',
     history: [
       { revision: 'source-1', text: 'Frozen source one', contentHash: 'hash-1' },

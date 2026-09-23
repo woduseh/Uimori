@@ -1,3 +1,10 @@
+import { vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { fixtureBotInput } from './fixtures/chat.js';
+import { importChatTranscript } from '../server/chat-transcript.js';
+import { readerPresentationRevisions } from '../server/reader-data.js';
+import { readerRequestOrder } from '../core/reader-conversation.js';
+import { describe } from 'vitest';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -6,7 +13,7 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import { readerActivities, readerDetail, readerRuns } from '../server/reader.js';
-import type { Store } from '../server/store.js';
+import { Store } from '../server/store.js';
 import type { RunSnapshot } from '../core/types.js';
 
 const owned: { app: App; directory: string }[] = [];
@@ -554,4 +561,139 @@ test('translation resolution uses same source hash and revision beyond the recen
   expect(
     readerActivities(store, chat.id, {}).items.find((a) => a.id === original.id)
   ).toMatchObject({ superseded: false, executionUncertain: true });
+});
+
+describe('Reader projection and retry costs', () => {
+  const owned: { store: Store; path: string }[] = [];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    for (const item of owned.splice(0)) {
+      item.store.close();
+      rmSync(item.path, { recursive: true, force: true });
+    }
+  });
+
+  function fixture() {
+    const path = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
+    const owner = { store: new Store(join(path, 'app.sqlite')), path };
+    owned.push(owner);
+    const store = owner.store;
+    const bot = store.product.content(fixtureBotInput());
+    const chat = importChatTranscript(store, {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        title: 'Audit fixture',
+        exportedAt: new Date().toISOString(),
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [
+          { request: 'First', text: 'First scene.', translation: '첫 장면.' },
+          { request: 'Second', text: 'Second scene.', translation: '둘째 장면.' },
+        ],
+      },
+    }).chat;
+    const sources = store.history(chat.headRevision).map((item) => store.source(item.revision));
+    const branch = store.product.branch(chat.id);
+    return { owner, store, chat, sources, branch };
+  }
+
+  test('display revisions ignore progress and unrelated branch variables, but track authored changes', () => {
+    const { store, chat, branch, sources } = fixture();
+    const read = () =>
+      readerPresentationRevisions(
+        store,
+        chat.id,
+        branch.id,
+        sources.map((s) => s.id)
+      );
+    const initial = read();
+    for (const kind of ['run.usage', 'run.running', 'job.queued', 'job.running', 'chat.renamed'])
+      store.event(chat.id, kind, 'synthetic-progress');
+    store.event(chat.id, 'chat.variables.changed', 'another-branch');
+    expect(read()).toEqual(initial);
+    store.event(chat.id, 'chat.variables.changed', branch.id);
+    const variables = read();
+    expect(variables).not.toEqual(initial);
+    store.event(chat.id, 'source.edited', sources[0]!.id);
+    expect(read()).not.toEqual(variables);
+  });
+
+  test('reader input projection does not parse discarded diagnostic bodies', () => {
+    const { store, sources } = fixture();
+    const job = store.db
+      .prepare("SELECT id FROM jobs WHERE source_revision=? AND kind='translation'")
+      .get(sources[0]!.id)!;
+    const marker = 'PRIVATE_DIAGNOSTIC_' + 'x'.repeat(16384);
+    store.db
+      .prepare('UPDATE jobs SET input=? WHERE id=?')
+      .run(JSON.stringify({ inputs: [marker] }), job.id);
+    const parse = vi.spyOn(JSON, 'parse');
+    const light = store.job(String(job.id), 'reader');
+    expect(light.result?.text).toBe('첫 장면.');
+    expect(light.input).toBeNull();
+    expect(parse.mock.calls.some(([value]) => value.includes(marker))).toBe(false);
+    const full = store.job(String(job.id));
+    expect(full.input).toEqual({ inputs: [marker] });
+  });
+
+  test('reader hydrates the visible retry, while the task history still contains superseded failures', () => {
+    const { store, chat, branch } = fixture();
+    const insert =
+      store.db.prepare(`INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id)
+    VALUES(?,?,?,'failed',?,?,?,?,?,?,?)`);
+    store.transaction(() => {
+      for (let i = 0; i < 120; i++) {
+        const id = `failed-${i}`;
+        const time = new Date(Date.now() + i).toISOString();
+        const snapshot = {
+          chatId: chat.id,
+          branchId: branch.id,
+          parentRevision: chat.headRevision,
+          request: 'Retry',
+          settings: chat.settings,
+          settingsRevision: chat.settingsRevision,
+          history: [],
+          resources: [],
+        };
+        insert.run(
+          id,
+          chat.id,
+          chat.headRevision,
+          'Retry',
+          JSON.stringify(snapshot),
+          id,
+          JSON.stringify(i ? { retryOf: `failed-${i - 1}` } : {}),
+          time,
+          time,
+          branch.id
+        );
+      }
+    });
+    const detail = readerDetail(store, chat.id, {});
+    expect(detail.reader.pendingRunIds).toEqual(['failed-119']);
+    expect(detail.runs.filter((run) => !run.sourceRevision).map((run) => run.id)).toEqual([
+      'failed-119',
+    ]);
+    expect(readerRuns(store, chat.id).filter((run) => !run.sourceRevision)).toHaveLength(120);
+  });
+
+  test('shared retry order cache traverses ancestry once rather than once per retry', () => {
+    const rows = new Map(
+      Array.from({ length: 500 }, (_, i) => [
+        String(i),
+        {
+          id: String(i),
+          admissionOrder: i + 1,
+          retryOf: i ? String(i - 1) : null,
+        },
+      ])
+    );
+    const get = vi.spyOn(rows, 'get');
+    const cache = new Map<string, number>();
+    for (const id of rows.keys()) expect(readerRequestOrder(rows, id, cache)).toBe(1);
+    expect(get.mock.calls.length).toBeLessThan(1500);
+  });
 });

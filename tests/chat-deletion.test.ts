@@ -63,7 +63,7 @@ async function run(store: Store, chatId: string, branchId = `main:${chatId}`, fi
     run.id,
     'Synthetic scene.',
     { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    { ...run.snapshot.settings, translation: false, status: false }
+    { ...run.snapshot.settings, status: false }
   );
   return { run, source };
 }

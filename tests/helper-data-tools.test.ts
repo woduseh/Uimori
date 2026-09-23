@@ -230,7 +230,7 @@ test('current scope retains reservation facts, complete old prose, source roles,
     branchId: 'branch-A',
     parentRevision: 'scene-A',
     settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 16 },
+    settings: { status: false, maxCalls: 16 },
     request: 'inspect',
     history: [{ revision: 'scene-A', text, contentHash: hash(text) }],
     resources: [],
@@ -298,7 +298,7 @@ test('current scope retains reservation facts, complete old prose, source roles,
 test('SQL views support schema discovery, aggregate queries, params, JSON and cross-view joins without mutation', async () => {
   const f = fixture(),
     b = bot(f),
-    chat = createFixtureChat(f.store, 'SQL view chat', 'calm', { botId: b.id });
+    chat = createFixtureChat(f.store, 'SQL view chat', { botId: b.id });
   const schema = await f.invoke('db.query', {});
   expect(schema.views.map((v: any) => v.name)).toEqual([
     'agent_resources',

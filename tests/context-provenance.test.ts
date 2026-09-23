@@ -16,7 +16,7 @@ const snapshot = (summary: string): RunSnapshot => ({
   branchId: 'branch-a',
   parentRevision: 'scene-3',
   settingsRevision: 1,
-  settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 8 },
+  settings: { status: false, maxCalls: 8 },
   request: '현재 장면만 이어 써 주세요.',
   resources: [],
   history: [1, 2, 3].map((n) => ({

@@ -1,14 +1,15 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
-import { executeMain, executeTool, knowledgeReadResults } from '../core/provider.js';
+import { executeTool, knowledgeReadResults } from '../core/provider.js';
+import { executeFixtureMain as executeMain } from '../core/fixture-provider.js';
 import { syntheticResources } from './fixtures/resources.js';
 import type { ModelInput, RunSnapshot, ToolEvent } from '../core/types.js';
 
-const snapshot = (mode: 'direct' | 'research' = 'research'): RunSnapshot => ({
+const snapshot = (): RunSnapshot => ({
   chatId: 'chat-a',
   parentRevision: null,
   settingsRevision: 1,
-  settings: { mode, preset: 'calm', translation: true, status: true, maxCalls: 6 },
+  settings: { status: true, maxCalls: 6 },
   request: 'Listen beside the pier without deciding the reader response.',
   history: [],
   resources: [
@@ -45,11 +46,10 @@ const capture = () => {
 };
 
 describe('F04 actual role context and scoped read loop', () => {
-  test('F04 direct path uses exactly one main invocation and no tool/planner, preserves task and preset', async () => {
-    const run = snapshot('direct');
-    run.settings.preset = 'vivid';
+  test('F04 direct path uses exactly one main invocation and no tool/planner, preserves task and explicit fixture style', async () => {
+    const run = snapshot();
     const observed = capture();
-    const result = await executeMain(run, observed.hooks);
+    const result = await executeMain(run, observed.hooks, { preset: 'vivid' });
     expect(result.usage).toEqual({
       modelCalls: 1,
       inputTokens: null,
@@ -59,7 +59,7 @@ describe('F04 actual role context and scoped read loop', () => {
     expect(observed.inputs).toHaveLength(1);
     expect(observed.events).toEqual([]);
     expect(observed.inputs[0].task).toBe(run.request);
-    expect(observed.inputs[0].preset).toBe('vivid');
+    expect(observed.inputs[0]).not.toHaveProperty('preset');
     expect(result.text).toContain('Wind struck the pier');
     expect(result.text).toContain(run.request);
     expect(result.text.split('\n\n')).toHaveLength(3);
@@ -68,7 +68,7 @@ describe('F04 actual role context and scoped read loop', () => {
   test('F04 metadata is separate from source bodies and real call/results reach the next exact model input', async () => {
     const run = snapshot();
     const observed = capture();
-    const result = await executeMain(run, observed.hooks);
+    const result = await executeMain(run, observed.hooks, { mode: 'research' });
     expect(result.usage.modelCalls).toBe(4);
     expect(observed.events.map((event) => event.name)).toEqual([
       'knowledge.search',
@@ -206,7 +206,7 @@ describe('F04 actual role context and scoped read loop', () => {
     const run = snapshot();
     run.settings.maxCalls = 2;
     const budget = capture();
-    await expect(executeMain(run, budget.hooks)).rejects.toMatchObject({
+    await expect(executeMain(run, budget.hooks, { mode: 'research' })).rejects.toMatchObject({
       name: 'BudgetError',
       message: 'Model call budget exhausted',
     });
@@ -240,11 +240,11 @@ describe('F04 actual role context and scoped read loop', () => {
       input.tools.push('shell.execute');
       input.results.length = 0;
       run.chatId = 'chat-b';
-      run.settings.preset = 'vivid';
+      run.settings.maxCalls = 1;
       run.resources[0].text = 'MUTATED_AFTER_START';
     };
-    const result = await executeMain(run, observed.hooks);
-    expect(observed.inputs.every((input) => input.preset === 'calm')).toBe(true);
+    const result = await executeMain(run, observed.hooks, { mode: 'research' });
+    expect(result.usage.modelCalls).toBe(4);
     expect(observed.inputs.every((input) => !input.tools.includes('shell.execute'))).toBe(true);
     expect(result.text).toContain('blue ferry bell');
     expect(result.text).not.toContain('MUTATED_AFTER_START');

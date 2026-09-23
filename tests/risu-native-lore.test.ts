@@ -38,7 +38,7 @@ async function fixture(
     chatId: 'native-lore',
     parentRevision: null,
     settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', maxCalls: 4, translation: false, status: false },
+    settings: { maxCalls: 4, status: false },
     request: 'CURRENT',
     history: [
       { revision: 's1', text: 'H1' },

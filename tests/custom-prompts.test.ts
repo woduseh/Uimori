@@ -33,7 +33,7 @@ function snapshot(): RunSnapshot {
     chatId: 'prompt-chat',
     parentRevision: null,
     settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: true, status: false, maxCalls: 4 },
+    settings: { status: false, maxCalls: 4 },
     request: 'Continue the scene.',
     history: [],
     resources: [],

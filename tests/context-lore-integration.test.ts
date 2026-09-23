@@ -217,7 +217,6 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
   let chat = createFixtureChat(app.store, '문맥 요약과 조회 자료 합성 검증');
   chat = app.store.settings(chat.id, chat.settingsRevision, {
     ...chat.settings,
-    translation: false,
     status: false,
     maxCalls: 16,
   });

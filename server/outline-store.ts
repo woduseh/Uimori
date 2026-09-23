@@ -1,6 +1,6 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { deleteSceneCommand } from './chat-deletion.js';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -12,7 +12,6 @@ import {
   outlineParentLevel,
   outlineSnapshotNode,
   outlineTree,
-  sealOutlineSnapshot,
   outlineWritable,
   type OutlineDetail,
   type OutlineLevel,
@@ -20,6 +19,12 @@ import {
   type OutlineProgress,
   type OutlineSnapshot,
 } from '../core/outline.js';
+
+/** Seal what was actually frozen, so a later read can tell the applied composition apart. */
+const sealOutlineSnapshot = (outline: Omit<OutlineSnapshot, 'hash'>): OutlineSnapshot => ({
+  ...outline,
+  hash: createHash('sha256').update(JSON.stringify(outline)).digest('hex'),
+});
 
 type Row = Record<string, any>;
 const now = () => new Date().toISOString();

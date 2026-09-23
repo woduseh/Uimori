@@ -50,7 +50,7 @@ test('library folders and cross-category moves preserve exact content revisions,
     bot = content(store, 'Owner'),
     persona = content(store, 'Reader', 'persona');
   const destination = folder(store, 'Characters', 'module');
-  const chat = store.createChat('Story', 'calm', { botId: bot.id });
+  const chat = store.createChat('Story', { botId: bot.id });
   const beforeContent = store.product.get('content', bot.id),
     beforeProfile = store.product.profile(chat.id);
   const beforeRevision = revision(store);
@@ -75,7 +75,7 @@ test('library folders and cross-category moves preserve exact content revisions,
     expect(libraryFolderOf(library, key(bot))).toBe(destination.id);
   }
   // Actual package roles are independent of both immutable kind and current folder category.
-  const roleChat = store.createChat('Persona used as bot', 'calm', { botId: persona.id });
+  const roleChat = store.createChat('Persona used as bot', { botId: persona.id });
   expect(store.product.profile(roleChat.id).packageAttachments).toEqual([
     { id: persona.id, revision: persona.revision, role: 'bot' },
   ]);
@@ -130,7 +130,7 @@ test('item deletion cleans placement and retains immutable references', () => {
     category: 'bot',
     folderId: dest.id,
   });
-  store.createChat('Protected story', 'calm', { botId: used.id });
+  store.createChat('Protected story', { botId: used.id });
   expect(libraryDeletionImpact(store, 'content', unused.id).canDelete).toBe(true);
   expect(libraryDeletionImpact(store, 'content', used.id).canDelete).toBe(true);
   const before = revision(store);

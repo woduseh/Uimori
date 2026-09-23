@@ -1,3 +1,5 @@
+import { createApp, type App } from '../server/app.js';
+import { describe } from 'vitest';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -545,4 +547,48 @@ test('the helper persona is bounded, saved per conversation and reaches only the
   expect(calls.every((call) => call.role === 'helper')).toBe(true);
   expect(calls[0].stable.contract).toContain(UI_HELPER_PERSONA);
   expect(calls[1].stable.contract).not.toContain(UI_HELPER_PERSONA);
+});
+
+describe('Helper current view cursor', () => {
+  const owners: { directory: string; store: Store; app?: App }[] = [];
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    for (const owner of owners.splice(0)) {
+      if (owner.app) await owner.app.close();
+      else owner.store.close();
+      rmSync(owner.directory, { recursive: true, force: true });
+    }
+  });
+
+  async function application() {
+    const directory = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
+    const app = await createApp({
+      dbPath: join(directory, 'app.sqlite'),
+      buildId: 'extended-cleanup-test',
+      testMode: true,
+      codex: { enabled: false },
+    });
+    owners.push({ directory, store: app.store, app });
+    return app;
+  }
+
+  test('helper opening returns current state and a cursor beyond old update pages', async () => {
+    const app = await application();
+    const workspace = new HelperWorkspace(app.store);
+    const conversation = workspace.create({ kind: 'library', workId: 'synthetic' }, 'open');
+    app.store.transaction(() => {
+      for (let i = 0; i < 1200; i++) workspace.event(conversation.id, null, 'conversation.updated');
+    });
+    const response = await app.inject({ url: `/api/helper/conversations/${conversation.id}/view` });
+    expect(response.statusCode).toBe(200);
+    const view = response.json();
+    expect(view.eventCursor).toBe(workspace.latestEventSequence(conversation.id));
+    expect(view.messages).toEqual([]);
+    expect(workspace.events(conversation.id, view.eventCursor)).toEqual([]);
+    workspace.event(conversation.id, null, 'theme.updated');
+    expect(workspace.events(conversation.id, view.eventCursor).map((event) => event.kind)).toEqual([
+      'theme.updated',
+    ]);
+  });
 });

@@ -8,7 +8,7 @@ const snapshot = (): RunSnapshot => ({
   chatId: 'lore-test',
   parentRevision: null,
   settingsRevision: 1,
-  settings: { mode: 'direct', preset: 'calm', translation: false, status: false, maxCalls: 2 },
+  settings: { status: false, maxCalls: 2 },
   request: 'Visit the harbor',
   history: [],
   resources: [],

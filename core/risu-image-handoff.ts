@@ -200,17 +200,3 @@ export function projectRisuImageHandoff(pkg: RisuContent, enabled: boolean): Ris
     }),
   };
 }
-
-export function risuImageGuidance(pkg: RisuContent): string {
-  if (!pkg.nativeRisu || !pkg.imageHandoff) return '';
-  return pkg.imageHandoff.ranges
-    .filter(
-      (range) =>
-        range.enabled &&
-        activeField(range.field) &&
-        imageHandoffSource(pkg.nativeRisu!, range.field).slice(range.start, range.end) ===
-          range.text
-    )
-    .map((range) => range.text)
-    .join('\n\n');
-}

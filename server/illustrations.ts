@@ -805,28 +805,6 @@ export function recoverIllustrations(store: Store): void {
     }
   });
 }
-export function deleteIllustrationsForSources(store: Store, sourceIds: string[]): void {
-  if (!sourceIds.length) return;
-  deleteIllustrationAttempts(
-    store,
-    store.db
-      .prepare(
-        'SELECT chat_id,diagnostic FROM illustration_jobs WHERE source_revision IN (SELECT value FROM json_each(?))'
-      )
-      .all(json(sourceIds)) as Row[]
-  );
-  store.db
-    .prepare(
-      'DELETE FROM illustration_images WHERE job_id IN (SELECT id FROM illustration_jobs WHERE source_revision IN (SELECT value FROM json_each(?)))'
-    )
-    .run(json(sourceIds));
-  store.db
-    .prepare(
-      'DELETE FROM illustration_jobs WHERE source_revision IN (SELECT value FROM json_each(?))'
-    )
-    .run(json(sourceIds));
-}
-
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------

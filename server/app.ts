@@ -1,3 +1,5 @@
+import { normalizeChatSettings } from '../core/chat-settings.js';
+import { createRunExecutor } from './run-executor.js';
 import { APP_VERSION } from './app-version.js';
 import { flushPendingImageCleanup } from './unused-data.js';
 import { themeRoutes } from './themes.js';
@@ -14,7 +16,6 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
-import { readRunStatus } from './run-projections.js';
 import { ChatTitleService } from './chat-title.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
 import { readHelperChatContext } from './helper-context.js';
@@ -28,30 +29,12 @@ import { readerActivities, readerDetail, readerRuns } from './reader.js';
 import { chatActivities } from './chat-activity.js';
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
-import { runMain, ModelRunError, type MainHooks } from './model-runner.js';
-import { prepareInputContext, ContextCompactionError } from './context-compaction.js';
-import {
-  previousContextPlan,
-  contextSourceRefs,
-  validateContextPlan,
-  persistedContextSnapshot,
-} from './context-planning.js';
-import { prepareNativeRisuRun, prepareNativeRisuOutput } from './risu-native-run.js';
+import { type MainHooks } from './model-runner.js';
+import { prepareInputContext } from './context-compaction.js';
 import { prepareNativeRisuReadOnly } from './risu-native-readonly.js';
 import { createNativeRisuHost } from './risu-native-host.js';
 import { nativeInteractionRoutes } from './risu-native-interactions.js';
-import { disposeAllNativeRisuSessions, disposeNativeRisuSession } from './risu-native-runtime.js';
-import { nativeRisuSessionKey } from './risu-native-context.js';
-import { prepareNativeRisuRequest } from './risu-native-request.js';
-import { freezeLoreContext } from './lore-context.js';
-import { compileSnapshotPrompt } from './prompt-snapshot.js';
-import {
-  loreSelectionPending,
-  prepareLoreSelection,
-  loreSelectionAttemptInputHashes,
-} from './lore-selection.js';
-import { JEV_ENDPOINT, JEV_MODEL, JevError } from './jev-judgment.js';
-import { judgeMainRefusal, mainJudgmentInput, validateMainJudgmentWire } from './main-judgment.js';
+import { disposeAllNativeRisuSessions } from './risu-native-runtime.js';
 import { validateImageJudgmentWire } from './image-judgment.js';
 import { validateTranslationJudgmentWire } from './jev-attribution.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
@@ -93,7 +76,7 @@ import type { Connection } from '../core/product.js';
 import type { CodexImageRequest } from './codex-runtime.js';
 
 import { PROVIDER_PROTOCOLS } from '../core/product.js';
-import type { Settings, RunSnapshot, Usage } from '../core/types.js';
+import type { RunSnapshot } from '../core/types.js';
 
 export type AppOptions = {
   dbPath: string;
@@ -112,28 +95,6 @@ export type AppOptions = {
 };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
-function mergeUsage(left: Usage, right: Usage): Usage {
-  const total: Usage = { ...left, modelCalls: left.modelCalls + right.modelCalls };
-  for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const)
-    total[key] = left[key] === null || right[key] === null ? null : left[key] + right[key];
-  return total;
-}
-function settings(body: RecordBody): Settings {
-  if (
-    !['calm', 'vivid'].includes(String(body.preset)) ||
-    !['direct', 'research'].includes(String(body.mode)) ||
-    typeof body.translation !== 'boolean' ||
-    typeof body.status !== 'boolean'
-  )
-    throw new HttpError(400, 'Invalid settings');
-  return {
-    preset: body.preset as Settings['preset'],
-    mode: body.mode as Settings['mode'],
-    translation: body.translation,
-    status: body.status,
-    maxCalls: number(body.maxCalls, 'maxCalls', 1, 32),
-  };
-}
 
 export async function createApp(options: AppOptions): Promise<App> {
   const network = networkPolicy(options);
@@ -250,9 +211,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   const streamAuthority = new Map<ServerResponse, () => boolean>();
   const work = new Set<Promise<void>>();
   const runs = new Map<string, AbortController>();
-  const jobs = new Set<string>();
   const jobControllers = new Map<string, AbortController>();
-  const illustrations = new Set<string>();
   const illustrationControllers = new Map<string, AbortController>();
 
   const stopping = new AbortController();
@@ -397,8 +356,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   const pumpJobs = () => {
     if (stopping.signal.aborted || !admitted()) return;
     for (const id of store.queuedJobs()) {
-      if (jobs.has(id)) continue;
-      jobs.add(id);
+      if (jobControllers.has(id)) continue;
       const controller = new AbortController();
       jobControllers.set(id, controller);
       const signal = AbortSignal.any([controller.signal, stopping.signal]);
@@ -470,7 +428,6 @@ export async function createApp(options: AppOptions): Promise<App> {
                 store.failJob(id, current.generation, instanceId, message);
             }
           } finally {
-            jobs.delete(id);
             jobControllers.delete(id);
             if (chatId && !stopping.signal.aborted) {
               publish(chatId);
@@ -485,8 +442,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   const pumpIllustrations = () => {
     if (stopping.signal.aborted || !admitted()) return;
     for (const id of queuedIllustrations(store)) {
-      if (illustrations.has(id)) continue;
-      illustrations.add(id);
+      if (illustrationControllers.has(id)) continue;
       const controller = new AbortController();
       illustrationControllers.set(id, controller);
       const signal = AbortSignal.any([controller.signal, stopping.signal]);
@@ -532,7 +488,6 @@ export async function createApp(options: AppOptions): Promise<App> {
                 if (changed.changes && chatId) store.event(chatId, 'illustration.failed', id);
               });
           } finally {
-            illustrations.delete(id);
             illustrationControllers.delete(id);
             if (chatId && !stopping.signal.aborted) {
               publish(chatId);
@@ -548,501 +503,25 @@ export async function createApp(options: AppOptions): Promise<App> {
       );
     }
   };
-  const execute = (id: string) => {
-    const controller = new AbortController();
-    runs.set(id, controller);
-    const onStop = () => controller.abort(new Error('Server stopping'));
-    stopping.signal.addEventListener('abort', onStop, { once: true });
-    track(
-      (async () => {
-        const run = store.run(id);
-        const judgeResponse =
-          run.snapshot.mainJudgmentEnabled === true &&
-          !!run.snapshot.profile?.models.main &&
-          run.snapshot.profile.models.main.connection.protocol !== 'fixture-sse-v1';
-        let response: ReturnType<ResponseStreamStore['createWriter']> | undefined;
-        // This Run's own calls only. Reusing a candidate's prepared state does not recharge it.
-        let priorUsage: Usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
-        try {
-          if (!store.startRun(id)) return;
-          if (run.snapshot.judgmentRecovery)
-            store.stageRunOutput(id, run.snapshot.mainJudgment!.response);
-          response = streams.createWriter({
-            taskKind: 'main',
-            taskId: id,
-            chatId: run.chatId,
-            signal: controller.signal,
-            isActive: () => readRunStatus(store, id) === 'running',
-          });
-          requireModel(run.snapshot.profile?.models.main, 'main');
-          if (judgeResponse && !(await jevCredentials.resolve()))
-            throw new JevError('JEV_CREDENTIAL_REQUIRED');
-          if (
-            judgeResponse &&
-            run.snapshot.settings.maxCalls < (run.snapshot.judgmentRecovery ? 1 : 2)
-          )
-            throw new JevError('MAIN_JUDGMENT_CALL_BUDGET');
-          publish(run.chatId);
-          await controls.wait('run', controller.signal);
-          const hooks: MainHooks = {
-            reserveCalls: Number(judgeResponse),
-            prepareRequest: async (request, usage) => {
-              const current = store.run(id).snapshot;
-              const prepared = await prepareNativeRisuRequest(current, request, {
-                signal: controller.signal,
-                host: createNativeRisuHost(
-                  store,
-                  id,
-                  current,
-                  usage,
-                  hooks,
-                  'editRequest',
-                  1 + Number(judgeResponse)
-                ),
-              });
-              if (prepared.snapshot !== current) {
-                store.transaction(() => {
-                  assertCurrent();
-                  store.db
-                    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-                    .run(JSON.stringify(prepared.snapshot), id);
-                });
-                executionSnapshot.nativeRisuExecution = prepared.snapshot.nativeRisuExecution;
-              }
-              return prepared.request;
-            },
-            signal: controller.signal,
-            onResponseProgress: response.progress,
-            onInput: (input) => {
-              store.input(id, input);
-              if (run.snapshot.profile && !run.snapshot.profile.models.main)
-                store.product.mockAttempt(run.chatId, id, null, 'main', input);
-            },
-            onToolEvent: (event) => store.tool(id, event),
-            persistContext: (prepared, own) =>
-              store.transaction(() => {
-                if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
-                  throw new Error('Run cancelled');
-                const published = store.context.publishPrepared(
-                  store.context.rebase(prepared, own),
-                  { origin: 'model' }
-                );
-                const checkpoint = published.contextPlan?.checkpoint;
-                return {
-                  snapshot: published,
-                  activated: checkpoint ? store.context.checkpoint(checkpoint).activated : false,
-                };
-              }),
-
-            resolveCredential,
-            executeCodex,
-            authorize: (connection) => store.product.authorize(connection),
-            vertexRequestTier: options.vertexRequestTier,
-            onAttemptStart: (wire) => {
-              if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
-                throw new Error('Run cancelled');
-              if (wire.judgment) {
-                const current = store.run(id).snapshot;
-                if (wire.judgment.kind === 'main-refusal') {
-                  if (!current.mainJudgment) throw new Error('Missing main judgment input');
-                  validateMainJudgmentWire(current.mainJudgment, wire);
-                  return store.product.startAttempt(run.chatId, id, null, wire);
-                }
-                if (
-                  wire.judgment.kind !== 'lore-selection' ||
-                  wire.protocol !== 'typesafe-systemone-v1' ||
-                  wire.connectionId !== 'typesafe-judgment' ||
-                  wire.modelId !== JEV_MODEL ||
-                  wire.role !== 'context' ||
-                  wire.url !== JEV_ENDPOINT ||
-                  wire.method !== 'POST' ||
-                  wire.agentId ||
-                  !loreSelectionAttemptInputHashes(current).includes(wire.judgment.inputHash)
-                )
-                  throw new Error('Invalid judgment attempt');
-                return store.product.startAttempt(run.chatId, id, null, wire);
-              }
-              let target =
-                wire.agentId !== undefined
-                  ? run.snapshot.profile?.collaborationModels?.[wire.agentId]
-                  : wire.role === 'context'
-                    ? run.snapshot.profile?.contextModel
-                    : run.snapshot.profile?.models.main;
-              if (
-                wire.agentId !== undefined &&
-                (!target ||
-                  target.modelId !== wire.modelId ||
-                  target.connectionId !== wire.connectionId)
-              )
-                throw new Error('Invalid advisor attempt');
-              if (target) store.product.authorize(target.connection);
-              return store.product.startAttempt(run.chatId, id, null, wire);
-            },
-            onAttemptFinish: (attempt, result) => store.product.finishAttempt(attempt, result),
-          };
-          const assertCurrent = () => {
-            if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
-              throw new Error('CONTEXT_CANCELLED');
-            if (
-              store.product.branch(run.chatId, run.snapshot.branchId).headRevision !==
-                run.parentRevision ||
-              JSON.stringify(contextSourceRefs(run.snapshot)) !==
-                JSON.stringify(
-                  contextSourceRefs({
-                    ...run.snapshot,
-                    history: store.history(run.parentRevision),
-                  })
-                ) ||
-              (run.snapshot.story &&
-                store.story.notes.canonHash({
-                  chatId: run.chatId,
-                  history: run.snapshot.history,
-                }) !== run.snapshot.story.canonHash)
-            )
-              throw new Error('CONTEXT_DEPENDENCIES_CHANGED');
-          };
-          hooks.initialUsage = structuredClone(priorUsage);
-          let executionSnapshot = run.snapshot;
-          let result: Awaited<ReturnType<typeof runMain>>;
-          if (run.snapshot.judgmentRecovery) {
-            const preserved = run.snapshot.mainJudgment!;
-            result = {
-              status: 'completed',
-              text: preserved.response,
-              usage: priorUsage,
-              error: null,
-            };
-          } else {
-            const reservedCompilationSnapshot = run.snapshot;
-            let compilationSnapshot = reservedCompilationSnapshot;
-            executionSnapshot = await prepareNativeRisuRun(executionSnapshot, {
-              signal: controller.signal,
-              host: createNativeRisuHost(
-                store,
-                id,
-                executionSnapshot,
-                priorUsage,
-                hooks,
-                'before-turn',
-                1 + Number(judgeResponse)
-              ),
-            });
-            hooks.initialUsage = structuredClone(priorUsage);
-            compilationSnapshot =
-              reservedCompilationSnapshot === run.snapshot
-                ? executionSnapshot
-                : {
-                    ...compilationSnapshot,
-                    nativeRisuExecution: executionSnapshot.nativeRisuExecution,
-                    nativeRisuPresetProgram: executionSnapshot.nativeRisuPresetProgram,
-                  };
-            if (executionSnapshot.nativeRisuExecution) {
-              store.transaction(() => {
-                assertCurrent();
-                store.db
-                  .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
-                  .run(
-                    JSON.stringify(
-                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
-                    ),
-                    new Date().toISOString(),
-                    id
-                  );
-              });
-            }
-            // The selection reads the reserved snapshot, exactly as archive validation recomputes its
-            // inputs, and freezes before the lore context and the input plan measure what is pinned.
-            if (loreSelectionPending(executionSnapshot)) {
-              assertCurrent();
-              const selection = await prepareLoreSelection(executionSnapshot, hooks, {
-                jev: { credential: jevCredentials.resolve },
-                reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
-              });
-              priorUsage = mergeUsage(priorUsage, selection.usage);
-              hooks.initialUsage = structuredClone(priorUsage);
-              const receipt = selection.snapshot.loreSelection;
-              executionSnapshot = { ...executionSnapshot, loreSelection: receipt };
-              compilationSnapshot = { ...compilationSnapshot, loreSelection: receipt };
-              store.transaction(() => {
-                assertCurrent();
-                store.db
-                  .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
-                  .run(
-                    JSON.stringify(
-                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
-                    ),
-                    new Date().toISOString(),
-                    id
-                  );
-                store.event(run.chatId, 'run.context.updated', id);
-              });
-              publish(run.chatId);
-            }
-            if (
-              (executionSnapshot.nativeRisuExecution !== undefined ||
-                executionSnapshot.loreSelection !== undefined) &&
-              !executionSnapshot.contextPlan
-            ) {
-              assertCurrent();
-              executionSnapshot = freezeLoreContext(store, executionSnapshot);
-              compilationSnapshot =
-                reservedCompilationSnapshot === run.snapshot
-                  ? executionSnapshot
-                  : freezeLoreContext(store, compilationSnapshot);
-              const contextBase = run.snapshot.contextBase;
-              executionSnapshot = store.context.prepareRun(executionSnapshot);
-              compilationSnapshot =
-                reservedCompilationSnapshot === run.snapshot
-                  ? executionSnapshot
-                  : store.context.prepareRun(compilationSnapshot);
-              executionSnapshot.contextBase = contextBase;
-              compilationSnapshot.contextBase = contextBase;
-            }
-            if (executionSnapshot.contextPlan) {
-              assertCurrent();
-              const reuse =
-                executionSnapshot.candidateOf &&
-                executionSnapshot.contextPlan.status === 'ready' &&
-                executionSnapshot.promptCompilation;
-              if (!reuse) {
-                const prepared = await prepareInputContext(
-                  compilationSnapshot,
-                  {
-                    ...hooks,
-                    reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
-                    authorize: (connection) => {
-                      assertCurrent();
-                      return store.product.authorize(connection);
-                    },
-                    onAttemptStart: (wire) => {
-                      assertCurrent();
-                      return hooks.onAttemptStart(wire);
-                    },
-                    onProgress: (plan) => {
-                      store.transaction(() => {
-                        assertCurrent();
-                        const current = store.run(id);
-                        store.db.prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?').run(
-                          JSON.stringify(
-                            persistedContextSnapshot(current.snapshot, {
-                              ...executionSnapshot,
-                              contextPlan: plan,
-                            })
-                          ),
-                          new Date().toISOString(),
-                          id
-                        );
-                        store.event(run.chatId, 'run.context.updated', id);
-                      });
-                      publish(run.chatId);
-                    },
-                  },
-                  previousContextPlan(store, executionSnapshot)
-                );
-                priorUsage = mergeUsage(priorUsage, prepared.usage);
-                hooks.initialUsage = structuredClone(priorUsage);
-                prepared.snapshot.branchId = executionSnapshot.branchId;
-                store.transaction(() => {
-                  assertCurrent();
-                  prepared.snapshot = store.context.publishPrepared(prepared.snapshot, {
-                    origin: 'automatic',
-                  });
-                  validateContextPlan(prepared.snapshot);
-                  store.db
-                    .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
-                    .run(
-                      JSON.stringify(
-                        persistedContextSnapshot(store.run(id).snapshot, prepared.snapshot)
-                      ),
-                      new Date().toISOString(),
-                      id
-                    );
-                  store.event(run.chatId, 'run.context.updated', id);
-                });
-                executionSnapshot = prepared.snapshot;
-              }
-            }
-            // Native preparation invalidates the old compilation even when a fixture has no
-            // model/context plan. Persist the exact prepared prompt before any writer input.
-            if (!executionSnapshot.promptCompilation) {
-              executionSnapshot = {
-                ...executionSnapshot,
-                promptCompilation: compileSnapshotPrompt(compilationSnapshot).promptCompilation,
-              };
-              store.transaction(() => {
-                assertCurrent();
-                store.db
-                  .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-                  .run(
-                    JSON.stringify(
-                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
-                    ),
-                    id
-                  );
-              });
-            }
-            result = await runMain(executionSnapshot, hooks);
-          }
-          response.flush();
-          if (controller.signal.aborted) {
-            // Cancellation owns the terminal state; late provider usage is accounting only.
-            store.settleCancelledUsage(id, result.usage);
-            publish(run.chatId);
-            return;
-          }
-          if (result.status !== 'completed') {
-            store.finishRun(
-              id,
-              result.status === 'error' ? 'failed' : result.status,
-              result.error ?? 'Provider execution ended',
-              result.status === 'partial' ? result.text : '',
-              result.usage
-            );
-            publish(run.chatId);
-            return;
-          }
-          // Response hooks compute outside the source transaction; only verified state receipts
-          // are adopted with the unchanged main text. Keep provider accounting on fatal host errors.
-          priorUsage = structuredClone(result.usage);
-          store.stageRunOutput(id, result.text);
-          if (judgeResponse) {
-            if (priorUsage.modelCalls >= run.snapshot.settings.maxCalls)
-              throw new JevError('MAIN_JUDGMENT_CALL_BUDGET');
-            const input = mainJudgmentInput(result.text, run.snapshot.mainJudgmentThreshold);
-            store.transaction(() => {
-              assertCurrent();
-              store.db
-                .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-                .run(JSON.stringify({ ...store.run(id).snapshot, mainJudgment: input }), id);
-            });
-            const judgment = await judgeMainRefusal(input, {
-              signal: controller.signal,
-              credential: jevCredentials.resolve,
-              onAttemptStart: async (wire) => {
-                const attempt = await hooks.onAttemptStart(wire);
-                priorUsage.modelCalls++;
-                return attempt;
-              },
-              onAttemptFinish: async (attempt, outcome) => {
-                priorUsage = mergeUsage(priorUsage, {
-                  modelCalls: 0,
-                  inputTokens: outcome.usage.inputTokens,
-                  outputTokens: outcome.usage.outputTokens,
-                  costUsd: outcome.usage.costUsd,
-                });
-                await hooks.onAttemptFinish(attempt, outcome);
-              },
-            });
-            if (judgment.verdict !== 'accepted') {
-              store.finishRun(id, 'refused', 'MAIN_RESPONSE_REFUSED', result.text, priorUsage);
-              publish(run.chatId);
-              return;
-            }
-          }
-          const nativeOutput = await prepareNativeRisuOutput(executionSnapshot, result.text, {
-            signal: controller.signal,
-            host: createNativeRisuHost(
-              store,
-              id,
-              executionSnapshot,
-              priorUsage,
-              hooks,
-              'after-turn'
-            ),
-          });
-          store.transaction(() => {
-            assertCurrent();
-            if (nativeOutput.nativeRisuExecution)
-              store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
-                JSON.stringify({
-                  ...store.run(id).snapshot,
-                  nativeRisuExecution: nativeOutput.nativeRisuExecution,
-                }),
-                id
-              );
-            store.completeRunInTransaction(
-              id,
-              nativeOutput.nativeRisuExecution?.output?.text ?? result.text,
-              priorUsage,
-              run.snapshot.settings,
-              controls
-            );
-          });
-          if (controls.crashAfterSourceCommit) process.exit(86);
-          publish(run.chatId);
-          pumpJobs();
-          pumpIllustrations();
-          if (admitted()) {
-            titles.afterSource(id);
-          }
-        } catch (error) {
-          if (!stopping.signal.aborted) {
-            if (error instanceof ContextCompactionError) {
-              const usage = mergeUsage(priorUsage, error.usage);
-              store.transaction(() => {
-                const current = store.run(id);
-                if (current.status === 'running')
-                  store.db
-                    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-                    .run(JSON.stringify({ ...current.snapshot, contextPlan: error.plan }), id);
-              });
-              store.finishRun(
-                id,
-                controller.signal.aborted ? 'cancelled' : 'failed',
-                error.message,
-                undefined,
-                usage
-              );
-              if (controller.signal.aborted) store.settleCancelledUsage(id, usage);
-              publish(run.chatId);
-              return;
-            }
-            if (error instanceof ModelRunError) {
-              store.finishRun(
-                id,
-                controller.signal.aborted ? 'cancelled' : 'failed',
-                controller.signal.aborted ? 'Run cancelled' : error.message,
-                undefined,
-                error.usage
-              );
-              if (controller.signal.aborted) store.settleCancelledUsage(id, error.usage);
-              publish(run.chatId);
-              return;
-            }
-            const message = error instanceof Error ? error.message : '';
-            const safeError =
-              message === 'Model call budget exhausted' ||
-              message === 'TOOL_RESULT_MISMATCH' ||
-              message === 'ANTHROPIC_CONTINUATION_MISMATCH' ||
-              error instanceof JevError ||
-              message.startsWith('Injected failure:') ||
-              message.startsWith('MODEL_REQUIRED:') ||
-              message.startsWith('CONTEXT_')
-                ? message
-                : controller.signal.aborted
-                  ? 'Run cancelled'
-                  : 'Scripted generation failed';
-            store.finishRun(
-              id,
-              controller.signal.aborted ? 'cancelled' : 'failed',
-              safeError,
-              undefined,
-              priorUsage.modelCalls ? priorUsage : undefined
-            );
-            if (controller.signal.aborted && priorUsage.modelCalls)
-              store.settleCancelledUsage(id, priorUsage);
-            publish(run.chatId);
-          }
-        } finally {
-          const status = readRunStatus(store, id);
-          if (status !== 'completed') disposeNativeRisuSession(nativeRisuSessionKey(run.snapshot));
-          response?.finish(status === 'queued' || status === 'running' ? 'interrupted' : status);
-          runs.delete(id);
-          stopping.signal.removeEventListener('abort', onStop);
-        }
-      })()
-    );
-  };
+  const execute = createRunExecutor({
+    store,
+    controls,
+    streams,
+    signal: stopping.signal,
+    runs,
+    track,
+    requireModel,
+    resolveCredential,
+    executeCodex,
+    vertexRequestTier: options.vertexRequestTier,
+    jevCredential: jevCredentials.resolve,
+    publish,
+    afterSource: (id) => {
+      pumpJobs();
+      pumpIllustrations();
+      if (admitted()) titles.afterSource(id);
+    },
+  });
   app.addHook('onRequest', async (request) => {
     const denied = deniedBrowserRequest(network, {
       method: request.method,
@@ -1264,21 +743,15 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.get('/api/chat-activities', async () => chatActivities(store));
   app.post('/api/chats', async (request) => {
     const body: RecordBody = record(request.body);
-    fields(body, ['title', 'preset', 'botId', 'folderId', 'autoTitle']);
+    fields(body, ['title', 'botId', 'folderId', 'autoTitle']);
     if (body.autoTitle !== undefined && typeof body.autoTitle !== 'boolean')
       throw new HttpError(400, 'Invalid automatic title choice');
-    if (body.preset !== undefined && !['calm', 'vivid'].includes(String(body.preset)))
-      throw new HttpError(400, 'Invalid preset');
-    const chat = store.createChat(
-      text(body.title, 'title', 120),
-      body.preset as Settings['preset'] | undefined,
-      {
-        ...(body.botId === undefined ? {} : { botId: text(body.botId, 'bot ID', 100) }),
-        ...(body.folderId === undefined
-          ? {}
-          : { folderId: body.folderId === null ? null : text(body.folderId, 'folder ID', 100) }),
-      }
-    );
+    const chat = store.createChat(text(body.title, 'title', 120), {
+      ...(body.botId === undefined ? {} : { botId: text(body.botId, 'bot ID', 100) }),
+      ...(body.folderId === undefined
+        ? {}
+        : { folderId: body.folderId === null ? null : text(body.folderId, 'folder ID', 100) }),
+    });
     if (body.autoTitle === true) titles.enroll(chat.id);
     return chat;
   });
@@ -1311,18 +784,11 @@ export async function createApp(options: AppOptions): Promise<App> {
   );
   app.patch<{ Params: { id: string } }>('/api/chats/:id/settings', async (request) => {
     const body: RecordBody = record(request.body);
-    fields(body, [
-      'expectedSettingsRevision',
-      'preset',
-      'mode',
-      'translation',
-      'status',
-      'maxCalls',
-    ]);
+    fields(body, ['expectedSettingsRevision', 'status', 'maxCalls']);
     const chat = store.settings(
       request.params.id,
       number(body.expectedSettingsRevision, 'settings revision', 1, 1e9),
-      settings(body)
+      normalizeChatSettings(body)
     );
     publish(chat.id);
     return chat;
@@ -1572,8 +1038,17 @@ export async function createApp(options: AppOptions): Promise<App> {
     app.get('/api/test/control', async () => controls.snapshot());
     app.post('/api/test/control', async (request) => {
       const body: RecordBody = record(request.body);
-      fields(body, ['action', 'barrier', 'point']);
-      if (body.action === 'hold' || body.action === 'release') {
+      fields(body, ['action', 'barrier', 'point', 'preset', 'mode']);
+      if (body.action === 'fixture') {
+        if (body.preset !== undefined && !['calm', 'vivid'].includes(String(body.preset)))
+          throw new HttpError(400, 'Invalid fixture preset');
+        if (body.mode !== undefined && !['direct', 'research'].includes(String(body.mode)))
+          throw new HttpError(400, 'Invalid fixture mode');
+        controls.fixture = {
+          preset: body.preset as 'calm' | 'vivid' | undefined,
+          mode: body.mode as 'direct' | 'research' | undefined,
+        };
+      } else if (body.action === 'hold' || body.action === 'release') {
         if (
           !['run', 'translation', 'status', 'image', 'state', 'context', 'illustration'].includes(
             String(body.barrier)

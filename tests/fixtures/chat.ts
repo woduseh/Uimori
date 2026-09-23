@@ -1,5 +1,4 @@
 import type { Content } from '../../core/product.js';
-import type { Settings } from '../../core/types.js';
 import type { Store } from '../../server/store.js';
 import { nativeContent } from './native-content.js';
 import type { FastifyInstance } from 'fastify';
@@ -76,11 +75,10 @@ export async function postFixtureChat(
 export function createFixtureChat(
   store: Store,
   title: string,
-  preset: Settings['preset'] = 'calm',
   organization: { botId?: string; folderId?: string | null } = {}
 ) {
   const botId = organization.botId ?? (store.product.content(fixtureBotInput()) as Content).id;
-  return store.createChat(title, preset, { ...organization, botId });
+  return store.createChat(title, { ...organization, botId });
 }
 
 /** Explicit global-model setup; the tested profile request uses the real current API. */

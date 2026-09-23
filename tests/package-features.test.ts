@@ -66,7 +66,7 @@ test('shared native modules resolve once and keep immutable snapshots independen
     ref(shared, 'module'),
     ref(persona, 'persona'),
   ]);
-  const chat = createFixtureChat(store, 'Shared native module', 'calm', { botId: bot.id }),
+  const chat = createFixtureChat(store, 'Shared native module', { botId: bot.id }),
     current = store.product.profile(chat.id);
   store.product.updateProfile(chat.id, {
     expectedRevision: current.revision,

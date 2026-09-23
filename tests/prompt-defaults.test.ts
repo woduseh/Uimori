@@ -62,7 +62,7 @@ function snapshot(protocol: ProviderProtocol): RunSnapshot {
     chatId: 'default-prompt',
     parentRevision: null,
     settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: true, status: false, maxCalls: 3 },
+    settings: { status: false, maxCalls: 3 },
     request: 'Continue.',
     history: [],
     resources: [],

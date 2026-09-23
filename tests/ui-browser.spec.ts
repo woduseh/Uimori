@@ -1363,7 +1363,6 @@ test('UI18 translation is requested only by first view click, never by restore, 
   const changed = await request.patch(`/api/chats/${chat.id}/settings`, {
     data: {
       ...before.chat.settings,
-      translation: false,
       expectedSettingsRevision: before.chat.settingsRevision,
     },
   });

@@ -180,7 +180,7 @@ test('one reusable package supplies distinct bot, persona and module IDs without
   const { store } = fixture(),
     item = image(store),
     content = save(store, [item]),
-    chat = createFixtureChat(store, 'Synthetic', 'calm', { botId: content.id });
+    chat = createFixtureChat(store, 'Synthetic', { botId: content.id });
   attach(store, chat.id, content);
   const profile = store.product.snapshot(chat.id)!;
   const assets = packageImages(profile);
@@ -198,7 +198,7 @@ test('source reservation and delayed worker keep old names and removed images; e
   const { store } = fixture(),
     item = image(store),
     first = save(store, [item]),
-    chat = createFixtureChat(store, 'Synthetic', 'calm', { botId: first.id });
+    chat = createFixtureChat(store, 'Synthetic', { botId: first.id });
   attach(store, chat.id, first);
   const run = begin(store, chat.id),
     renamed = save(store, [{ ...item, title: '새 이름' }], first);
@@ -265,7 +265,7 @@ test('one Reader page retains different revisions of the same package image ref 
   const { store } = fixture(),
     oldImage = image(store),
     first = save(store, [oldImage]),
-    chat = createFixtureChat(store, 'Synthetic', 'calm', { botId: first.id });
+    chat = createFixtureChat(store, 'Synthetic', { botId: first.id });
   attach(store, chat.id, first, ['bot']);
   const older = finish(store, begin(store, chat.id));
   completeImage(store, older);
@@ -313,7 +313,7 @@ test('one Reader page retains different revisions of the same package image ref 
 test('Reader and detail expose each explicitly selected fixture module, chat and bot image version once', () => {
   const { store } = fixture(),
     content = save(store, [image(store)]),
-    chat = createFixtureChat(store, 'Synthetic image projection', 'calm', { botId: content.id });
+    chat = createFixtureChat(store, 'Synthetic image projection', { botId: content.id });
   attach(store, chat.id, content, ['bot']);
   const fixtureModule = save(store, [
     { ...image(store), id: 'synthetic-scene', title: 'Explicit fixture scene' },

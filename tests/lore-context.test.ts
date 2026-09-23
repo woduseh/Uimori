@@ -32,7 +32,7 @@ function fixture() {
   const dir = mkdtempSync(join(tmpdir(), 'uimori-lore-')),
     store = new Store(join(dir, 'story.sqlite'));
   owned.push({ store, dir });
-  const chat = createFixtureChat(store, 'Synthetic lore', 'calm');
+  const chat = createFixtureChat(store, 'Synthetic lore');
   const lore = store.product.content({
     kind: 'module',
     title: 'Synthetic reference',
@@ -450,7 +450,7 @@ test('no-call preview accepts the selected default prompt and unsaved policy wit
       testMode: true,
     });
   owned.push({ dir, close: () => app.close() });
-  const chat = createFixtureChat(app.store, 'Preview', 'calm'),
+  const chat = createFixtureChat(app.store, 'Preview'),
     before = app.store.db.prepare('SELECT total_changes() AS n').get();
   const response = await injectWithFixtureBot(app, {
     method: 'POST',

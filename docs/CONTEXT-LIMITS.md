@@ -83,7 +83,7 @@
 
 도우미의 `context.read`와 화면 상세는 같은 현재 요약·원문 출처·유효한 메모·사용 가능 여부를 읽어요. 화면만 최근 10개 정리 작업의 작은 상태를 더 제공해요. 완료 작업의 전체 입력이나 과거 checkpoint 본문을 조회해서 버리는 경로는 없어요. 요약이 현재 자료와 맞지 않으면 `usable: false`와 이유를 반환해요.
 
-`server/context-dependency.ts`는 실제 작문 program과 적용값·자료·정정·네이티브 이력에 따라 재사용을 판단해요. 전역 설정 번호나 도우미/번역 모델만 바뀐 것은 본문 요약 무효화 사유가 아니에요. `tests/final-cleanup.test.ts`와 `tests/helper-context-read.test.ts`가 저장 수명과 조회 경계를 검사해요.
+`server/context-dependency.ts`는 실제 작문 program과 적용값·자료·정정·네이티브 이력에 따라 재사용을 판단해요. 전역 설정 번호나 도우미/번역 모델만 바뀐 것은 본문 요약 무효화 사유가 아니에요. `tests/context-checkpoint-storage.test.ts`와 `tests/helper-context-read.test.ts`가 저장 수명과 조회 경계를 검사해요.
 
 ## 사용자 메모·정정
 

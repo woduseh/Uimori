@@ -1,7 +1,4 @@
 export type Settings = {
-  preset: 'calm' | 'vivid';
-  mode: 'direct' | 'research';
-  translation: boolean;
   status: boolean;
   maxCalls: number;
 };
@@ -39,7 +36,6 @@ export type ModelInput = {
   role: 'main';
   contract: string;
   task: string;
-  preset: Settings['preset'];
   facts: string[];
   history: {
     revision: string;
@@ -71,7 +67,7 @@ export type RunSnapshot = {
   /** A completed message can store just display metadata instead of execution input. */
   settled?: boolean;
   displayModelTitle?: string;
-  /** Frozen at reservation; omitted historical values mean enabled. */
+  /** Frozen at reservation; only an explicit true enables response judgment. */
   mainJudgmentEnabled?: boolean;
   mainJudgmentThreshold?: number;
   /** Bounded input receipt for the host judgment of the unmodified model response. */

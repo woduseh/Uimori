@@ -122,7 +122,6 @@ async function fixture(
     {
       expectedSettingsRevision: chat.settingsRevision,
       ...chat.settings,
-      translation: true,
       status: false,
       maxCalls: settings.maxCalls ?? 8,
     },

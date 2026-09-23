@@ -47,7 +47,7 @@ test('host-resolved bot and external module grants remain distinct after composi
     chatId: 'permissions',
     parentRevision: null,
     settingsRevision: 1,
-    settings: { mode: 'direct', preset: 'calm', translation: false, status: false, maxCalls: 4 },
+    settings: { status: false, maxCalls: 4 },
     request: '',
     history: [],
     resources: [],

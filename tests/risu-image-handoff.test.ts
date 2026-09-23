@@ -5,7 +5,6 @@ import {
   detectRisuImageHandoff,
   imageHandoffSource,
   projectRisuImageHandoff,
-  risuImageGuidance,
   risuImageHandoffText,
   validateRisuImageHandoff,
 } from '../core/risu-image-handoff.js';
@@ -82,7 +81,6 @@ test('image handoff moves exact explicit instruction ranges only when automatic 
     'A. Narrative\nKeep this.\nD. Outfit\nKeep this too.'
   );
   expect(projected.lore[0].text).toBe('');
-  expect(risuImageGuidance(original)).toContain('only when visually present');
   expect(original).toEqual(before);
   const overlapping = structuredClone(original.imageHandoff!);
   overlapping.ranges.push({ ...overlapping.ranges[0], id: 'overlap' });
@@ -155,7 +153,6 @@ test('retired image instruction receipts are rejected instead of kept readable',
   expect(detectRisuImageHandoff(native)?.ranges).toEqual([]);
   const value = { ...pkg(native), imageHandoff: historical };
   expect(imageHandoffSource(native, 'card:scenario')).toBe('');
-  expect(risuImageGuidance(value)).toBe('');
   expect(risuImageHandoffText(value, 'card:scenario')).toBe('');
 });
 
@@ -304,7 +301,10 @@ test.runIf(Boolean(process.env.UIMORI_RISU_LOCAL_CARDS))(
         name: selected.name,
         url: assetUrls[selected.name],
         templates: policy.tagTemplates,
-        guidance: risuImageGuidance(content),
+        guidance: policy.ranges
+          .filter((range) => range.enabled)
+          .map((range) => range.text)
+          .join('\n\n'),
       });
       if (isHinano) {
         expect(policy.ranges).toHaveLength(1);

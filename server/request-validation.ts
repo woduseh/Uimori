@@ -50,17 +50,6 @@ export function archiveList(value: unknown, maximum = 300): any[] {
     throw new HttpError(400, 'Invalid archive list');
   return value;
 }
-/** A row read back from an archived table; its columns are only known once validated. */
-export type ArchiveRow = Record<string, any>;
-/** Refuses one archive's contents. Every archive kind has its own message opening. */
-export type ArchiveReject = (reason: string) => never;
-/** Builds the rejector an archive validator throws with; `label` opens each of its messages. */
-export const archiveRejector =
-  (label: string): ArchiveReject =>
-  (reason: string) => {
-    throw new HttpError(400, `${label}: ${reason}`);
-  };
-
 /** Archives record every hash as a lowercase sha256 digest. */
 export const isSha256Hex = (value: unknown): value is string =>
   typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
