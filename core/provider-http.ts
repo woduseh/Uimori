@@ -31,6 +31,7 @@ import type {
   ProviderConnection,
   ProviderExecutionOptions,
   ProviderResult,
+  ProviderToolArgumentDiagnostic,
 } from './transport.js';
 
 type Decoder = {
@@ -80,7 +81,11 @@ export async function executeNativeProvider(
   const signal = AbortSignal.any([options.signal, timeout]);
   let decoder: Decoder | undefined;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-  const failure = (code: string, diagnostic?: ProviderHttpDiagnostic) => {
+  const failure = (
+    code: string,
+    diagnostic?: ProviderHttpDiagnostic,
+    toolArgumentDiagnostic?: ProviderToolArgumentDiagnostic
+  ) => {
     const result = decoder?.snapshot() ?? empty();
     result.status = options.signal.aborted
       ? 'cancelled'
@@ -92,6 +97,7 @@ export async function executeNativeProvider(
     result.error = {
       code: options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : code,
       ...(diagnostic ? { diagnostic } : {}),
+      ...(toolArgumentDiagnostic ? { toolArgumentDiagnostic } : {}),
     };
     result.toolCalls = [];
     result.opaqueState = null;
@@ -220,13 +226,17 @@ export async function executeNativeProvider(
     if (signal.aborted) return failure('CANCELLED');
     return decoder.finish();
   } catch (error) {
-    return failure(
+    const code =
       error instanceof ProviderContractError ||
-        error instanceof OpenAIProtocolError ||
-        error instanceof OpenAIChatProtocolError ||
-        error instanceof AnthropicProtocolError
+      error instanceof OpenAIProtocolError ||
+      error instanceof OpenAIChatProtocolError ||
+      error instanceof AnthropicProtocolError
         ? error.code
-        : transportFailureCode(error)
+        : transportFailureCode(error);
+    return failure(
+      code,
+      undefined,
+      error instanceof AnthropicProtocolError ? error.toolArgumentDiagnostic : undefined
     );
   } finally {
     try {

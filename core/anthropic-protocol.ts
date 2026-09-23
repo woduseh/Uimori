@@ -10,6 +10,7 @@ import type {
   ProviderRequest,
   ProviderResult,
   ProviderToolCall,
+  ProviderToolArgumentDiagnostic,
   ProviderUsage,
 } from './transport.js';
 import { nativeHostInstruction, planNativeMessages } from './provider-messages.js';
@@ -17,13 +18,16 @@ import { modelCapability, validateModelOptions } from './model-capabilities.js';
 import { planProviderCache } from './provider-cache.js';
 
 export class AnthropicProtocolError extends Error {
-  constructor(readonly code: string) {
+  constructor(
+    readonly code: string,
+    readonly toolArgumentDiagnostic?: ProviderToolArgumentDiagnostic
+  ) {
     super(code);
     this.name = 'AnthropicProtocolError';
   }
 }
-function reject(code: string): never {
-  throw new AnthropicProtocolError(code);
+function reject(code: string, toolArgumentDiagnostic?: ProviderToolArgumentDiagnostic): never {
+  throw new AnthropicProtocolError(code, toolArgumentDiagnostic);
 }
 const object = (value: unknown): value is Record<string, Json> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -434,7 +438,24 @@ type StreamBlock = {
   json: string;
   hasJsonDelta: boolean;
   invalid: string | null;
+  invalidDiagnostic: ProviderToolArgumentDiagnostic | null;
 };
+function jsonParseOffset(error: unknown): number | null {
+  if (!(error instanceof SyntaxError)) return null;
+  const match = /(?:position|at position) (\d+)/iu.exec(error.message);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+function serializedChars(value: unknown): number | null {
+  if (value === undefined) return null;
+  try {
+    const encoded = JSON.stringify(value);
+    return typeof encoded === 'string' ? encoded.length : null;
+  } catch {
+    return null;
+  }
+}
 const truncated = new Set(['max_tokens', 'model_context_window_exceeded']);
 const reasons = new Set([
   'end_turn',
@@ -459,6 +480,7 @@ export class AnthropicDecoder {
   private stopSequence: string | null = null;
   private explicitRefusal = false;
   private fault: string | null = null;
+  private faultDiagnostic: ProviderToolArgumentDiagnostic | null = null;
   private observedUsage: ProviderUsage = {
     inputTokens: null,
     outputTokens: null,
@@ -471,13 +493,36 @@ export class AnthropicDecoder {
     if (this.context.phase !== 'request') reject('INVALID_ANTHROPIC_CONTINUATION');
     this.ids = new Set(this.context.usedIds);
   }
+  private toolArgumentDiagnostic(
+    blockIndex: number,
+    content: Record<string, Json>,
+    stage: ProviderToolArgumentDiagnostic['stage'],
+    argumentChars: number | null,
+    hasJsonDelta: boolean,
+    parseOffset: number | null = null
+  ): ProviderToolArgumentDiagnostic {
+    const wireName = nonempty(content.name) ? content.name : null;
+    return {
+      kind: 'tool-arguments',
+      toolName: wireName
+        ? (this.context.toolNames.find((tool) => tool.wireName === wireName)?.name ?? null)
+        : null,
+      stage,
+      blockIndex,
+      argumentChars,
+      hasJsonDelta,
+      parseOffset,
+    };
+  }
   accept(value: unknown): void {
-    if (this.fault) reject(this.fault);
+    if (this.fault) reject(this.fault, this.faultDiagnostic ?? undefined);
     try {
       this.acceptEvent(copy(value));
     } catch (error) {
       this.fault = error instanceof AnthropicProtocolError ? error.code : 'INVALID_ANTHROPIC_EVENT';
-      throw new AnthropicProtocolError(this.fault);
+      this.faultDiagnostic =
+        error instanceof AnthropicProtocolError ? (error.toolArgumentDiagnostic ?? null) : null;
+      throw new AnthropicProtocolError(this.fault, this.faultDiagnostic ?? undefined);
     }
   }
   private acceptEvent(event: Json): void {
@@ -544,7 +589,7 @@ export class AnthropicDecoder {
       ) {
         if (this.blocks.some((block) => block.open)) reject('ANTHROPIC_UNCLOSED_CONTENT_BLOCK');
         const invalid = this.blocks.find((block) => block.invalid);
-        if (invalid?.invalid) reject(invalid.invalid);
+        if (invalid?.invalid) reject(invalid.invalid, invalid.invalidDiagnostic ?? undefined);
         if ((this.stopReason === 'tool_use') !== this.calls.length > 0)
           reject('ANTHROPIC_TOOL_TERMINAL_MISMATCH');
       }
@@ -580,7 +625,16 @@ export class AnthropicDecoder {
         reject('INVALID_ANTHROPIC_CONTENT_BLOCK');
       if (content.type === 'tool_use') {
         if (!nonempty(content.id) || !nonempty(content.name) || !object(content.input))
-          reject('INVALID_TOOL_ARGUMENTS');
+          reject(
+            'INVALID_TOOL_ARGUMENTS',
+            this.toolArgumentDiagnostic(
+              index,
+              content,
+              'tool_start_shape',
+              serializedChars(content.input),
+              false
+            )
+          );
         if (this.ids.has(content.id)) reject('DUPLICATE_TOOL_ID');
         if (!this.context.toolNames.some((tool) => tool.wireName === content.name))
           reject('ANTHROPIC_UNKNOWN_TOOL');
@@ -588,7 +642,14 @@ export class AnthropicDecoder {
           reject('INVALID_TOOLS');
         this.ids.add(content.id);
       }
-      this.blocks.push({ content, open: true, json: '', hasJsonDelta: false, invalid: null });
+      this.blocks.push({
+        content,
+        open: true,
+        json: '',
+        hasJsonDelta: false,
+        invalid: null,
+        invalidDiagnostic: null,
+      });
       return;
     }
     const block = this.blocks[index];
@@ -646,12 +707,27 @@ export class AnthropicDecoder {
         let parsed: unknown;
         try {
           parsed = JSON.parse(block.json);
-        } catch {
+        } catch (error) {
           block.invalid = 'INVALID_TOOL_ARGUMENTS';
+          block.invalidDiagnostic = this.toolArgumentDiagnostic(
+            index,
+            block.content,
+            'tool_json_parse',
+            block.json.length,
+            true,
+            jsonParseOffset(error)
+          );
           return;
         }
         if (!object(parsed) || !isJson(parsed)) {
           block.invalid = 'INVALID_TOOL_ARGUMENTS';
+          block.invalidDiagnostic = this.toolArgumentDiagnostic(
+            index,
+            block.content,
+            'tool_json_shape',
+            block.json.length,
+            true
+          );
           return;
         }
         block.content.input = structuredClone(parsed);
@@ -682,7 +758,14 @@ export class AnthropicDecoder {
   snapshot(): ProviderResult {
     const text = this.publicText();
     let status: ProviderResult['status'] = text || this.blocks.length ? 'partial' : 'error';
-    let error: { code: string } | null = this.fault ? { code: this.fault } : null;
+    let error: ProviderResult['error'] = this.fault
+      ? {
+          code: this.fault,
+          ...(this.faultDiagnostic
+            ? { toolArgumentDiagnostic: structuredClone(this.faultDiagnostic) }
+            : {}),
+        }
+      : null;
     let refusal: string | null = null;
     if (!this.fault && this.stopped) {
       if (this.stopReason === 'refusal' || this.explicitRefusal) {
@@ -738,7 +821,7 @@ export class AnthropicDecoder {
     }) as ProviderResult;
   }
   finish(): ProviderResult {
-    if (this.fault) reject(this.fault);
+    if (this.fault) reject(this.fault, this.faultDiagnostic ?? undefined);
     if (!this.stopped) {
       this.fault = 'UNEXPECTED_EOF';
       reject(this.fault);

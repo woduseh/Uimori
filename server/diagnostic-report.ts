@@ -9,6 +9,8 @@ import {
   diagnosticProtocol,
   diagnosticRole,
   diagnosticStatus,
+  diagnosticToolArgumentStage,
+  diagnosticToolName,
   type DiagnosticReport,
   type DiagnosticScope,
 } from '../core/diagnostic-report.js';
@@ -72,6 +74,12 @@ export function createDiagnosticReport(
       CASE WHEN json_valid(request) THEN substr(json_extract(request,'$.protocol'),1,60) ELSE NULL END AS protocol,
       CASE WHEN json_valid(request) THEN julianday(substr(json_extract(request,'$.pricingStartedAt'),1,30)) END AS preparedDay,
       CASE WHEN json_valid(response) THEN CASE WHEN json_type(response,'$.error.diagnostic.httpStatus')='integer' THEN json_extract(response,'$.error.diagnostic.httpStatus') END END AS httpStatus,
+      CASE WHEN json_valid(response) THEN substr(json_extract(response,'$.error.toolArgumentDiagnostic.toolName'),1,101) END AS toolName,
+      CASE WHEN json_valid(response) THEN substr(json_extract(response,'$.error.toolArgumentDiagnostic.stage'),1,40) END AS toolArgumentStage,
+      CASE WHEN json_valid(response) THEN json_extract(response,'$.error.toolArgumentDiagnostic.blockIndex') END AS toolBlockIndex,
+      CASE WHEN json_valid(response) THEN json_extract(response,'$.error.toolArgumentDiagnostic.argumentChars') END AS toolArgumentChars,
+      CASE WHEN json_valid(response) THEN json_extract(response,'$.error.toolArgumentDiagnostic.hasJsonDelta') END AS toolHasJsonDelta,
+      CASE WHEN json_valid(response) THEN json_extract(response,'$.error.toolArgumentDiagnostic.parseOffset') END AS toolParseOffset,
       ${Array.from({ length: 8 }, (_, i) => `CASE WHEN json_valid(response) THEN substr(json_extract(response,'$.error.diagnostic.fields[${i}]'),1,129) END AS field${i}`).join(',')}
       FROM attempts WHERE chat_id=? ${scope.runId ? 'AND run_id=?' : ''} ORDER BY rowid DESC LIMIT ?`)
       .all(...params, DIAGNOSTIC_LIMITS.attempts + 1);
@@ -85,6 +93,20 @@ export function createDiagnosticReport(
   const selectedRuns = runs.slice(0, DIAGNOSTIC_LIMITS.runs);
   const runIds = new Set(selectedRuns.map((row) => row.id));
   const selectedAttempts = attempts.slice(0, DIAGNOSTIC_LIMITS.attempts);
+  const toolArgumentFailure = (
+    row: Row
+  ): DiagnosticReport['attempts'][number]['toolArgumentFailure'] => {
+    const stage = diagnosticToolArgumentStage(row.toolArgumentStage);
+    if (!stage) return null;
+    return {
+      toolName: diagnosticToolName(row.toolName),
+      stage,
+      blockIndex: diagnosticNumber(row.toolBlockIndex),
+      argumentChars: diagnosticNumber(row.toolArgumentChars),
+      hasJsonDelta: row.toolHasJsonDelta === 1,
+      parseOffset: diagnosticNumber(row.toolParseOffset),
+    };
+  };
   const days = selectedAttempts
     .map((row) => diagnosticNumber(row.preparedDay))
     .filter((n): n is number => n !== null);
@@ -172,6 +194,7 @@ export function createDiagnosticReport(
           )
         ),
       ],
+      toolArgumentFailure: toolArgumentFailure(row),
     })),
   };
   if (Buffer.byteLength(JSON.stringify(report)) > DIAGNOSTIC_LIMITS.bytes)

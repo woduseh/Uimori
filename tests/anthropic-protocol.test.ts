@@ -509,6 +509,46 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
       expect(decoder.snapshot().toolCalls).toEqual([]);
     }
   );
+  test('records safe metadata for malformed streamed tool arguments without retaining their content', () => {
+    const { decoder } = start();
+    begin(decoder);
+    const partial = '{"id":"PRIVATE_ARGUMENT';
+    block(decoder, 0, toolPart('call-bad', 'tool_0_knowledge_read', {}), [
+      { type: 'input_json_delta', partial_json: partial },
+    ]);
+    expect(() => end(decoder, 'tool_use')).toThrow('INVALID_TOOL_ARGUMENTS');
+    const diagnostic = decoder.snapshot().error?.toolArgumentDiagnostic;
+    expect(diagnostic).toMatchObject({
+      kind: 'tool-arguments',
+      toolName: 'knowledge.read',
+      stage: 'tool_json_parse',
+      blockIndex: 0,
+      argumentChars: partial.length,
+      hasJsonDelta: true,
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain('PRIVATE_ARGUMENT');
+  });
+  test('records tool-start shape failures using the registered host tool name', () => {
+    const { decoder } = start();
+    begin(decoder);
+    expect(() =>
+      decoder.accept({
+        type: 'content_block_start',
+        index: 0,
+        content_block: toolPart('call-shape', 'tool_0_knowledge_read', []),
+      })
+    ).toThrow('INVALID_TOOL_ARGUMENTS');
+    expect(decoder.snapshot().error?.toolArgumentDiagnostic).toEqual({
+      kind: 'tool-arguments',
+      toolName: 'knowledge.read',
+      stage: 'tool_start_shape',
+      blockIndex: 0,
+      argumentChars: 2,
+      hasJsonDelta: false,
+      parseOffset: null,
+    });
+  });
+
   test('retains partial status for truncated tool JSON without executing or continuing it', () => {
     const input = request();
     const { decoder } = start(input);
