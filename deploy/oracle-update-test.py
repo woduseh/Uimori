@@ -204,6 +204,33 @@ class OracleTransitions(unittest.TestCase):
             with self.assertRaises(RuntimeError): host.rollback()
             self.assertNotIn(("data", "restore"), host.events)
 
+    def test_retention_failure_cannot_undo_successful_deployment(self):
+        with self.host() as host:
+            host.execute()
+            def failure(): raise OSError("injected cleanup failure")
+            host.retire = failure
+            host.finish()
+            self.assertEqual(host.summary["status"], "PASS")
+            self.assertEqual(host.summary["writes"], "OPEN")
+            self.assertEqual(host.summary["retention"]["status"], "WARN")
+            self.assertNotIn(("data", "restore"), host.events)
+
+    def test_temporary_cleanup_warning_is_separate_and_check_only_never_retires(self):
+        with self.host() as host:
+            host.execute()
+            def cleanup(): host.summary["cleanup"] = {"status": "FAIL", "remaining": ["probe"]}
+            host.cleanup = cleanup
+            host.retire = lambda: {"status": "WARN", "warnings": ["unresolved cleanup"]}
+            host.finish()
+            self.assertEqual(host.summary["status"], "PASS")
+            self.assertEqual(host.summary["cleanup"]["status"], "WARN")
+        with self.host(check_only=True) as host:
+            host.execute()
+            def unexpected(): raise AssertionError("check-only must not garbage collect")
+            host.retire = unexpected
+            host.finish()
+            self.assertNotIn("retention", host.summary)
+
 
 if __name__ == "__main__":
     unittest.main()

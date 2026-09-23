@@ -116,7 +116,9 @@ Local fixtures, browser emulation, live providers, and physical devices establis
 
 ## Reset and cleanup
 
-`npm run cleanup -- --run <run-id>` removes the entire inactive owned run, including logs and diagnostic artifacts. It never stops unrelated processes. Successful browser runs remove their temporary DB; failed runs retain a copy under `evidence-db`.
+`npm run cleanup -- --run <run-id>` removes one explicitly selected inactive browser run, including diagnostic artifacts. It never stops unrelated processes. Successful browser runs remove temporary databases; failed runs retain a copy under `evidence-db`.
+
+Browser/self-host and tooling runners perform bounded local artifact retention after their own run finishes. For each owned output family, the newest three successes and five failures are retained, in addition to the current run, any active/alive-owner process, uncertain cleanup, unowned output and artifacts referenced by the current source's successful local release checks. `npm run cleanup -- --retention` previews candidates; add `--apply` for explicit cleanup. It never sends termination signals or removes arbitrary user data. Cleanup warnings are recorded independently and cannot turn a successful verification into a failed app test. CI uploads retain seven days of reports; browser fixtures use synthetic credentials, never production tokens.
 
 `npm run reset:dev` deletes only this checkout's default `.local/uimori.sqlite` and its SQLite sidecars. Existing backups and older database files remain untouched. Stop the server first. The command rejects an in-use database or unsafe paths and does not reset an arbitrary `UIMORI_DB`.
 

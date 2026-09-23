@@ -1,3 +1,4 @@
+import { retainArtifacts } from './artifact-retention.mjs';
 import { parseShard, browserCases } from './ci-summary.mjs';
 import { assertBrowserRuntime } from './browser-runtime.mjs';
 import path from 'node:path';
@@ -276,6 +277,8 @@ export async function runBrowserVerification({
     await Promise.all(cancellationCleanup);
     summary.status = failures.length ? (environmentBlocked ? 'BLOCKED' : 'FAIL') : 'PASS';
     summary.finishedAt = new Date().toISOString();
+    await json(path.join(directory, 'summary.json'), summary);
+    summary.retention = await retainArtifacts({ current: directory, apply: true });
     await json(path.join(directory, 'summary.json'), summary);
     if (process.env.UIMORI_CI_BROWSER_REPORT)
       await json(path.resolve(root, process.env.UIMORI_CI_BROWSER_REPORT), summary);

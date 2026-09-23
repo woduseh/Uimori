@@ -1,3 +1,4 @@
+import { retainArtifacts } from './artifact-retention.mjs';
 import { assertBrowserRuntime } from './browser-runtime.mjs';
 import { parseOptions } from './release-common.mjs';
 import browserWidths from '../fixtures/browser-viewports.json' with { type: 'json' };
@@ -449,6 +450,8 @@ try {
   }
   summary.status = failures.length ? (environmentBlocked ? 'BLOCKED' : 'FAIL') : 'PASS';
   summary.finishedAt = new Date().toISOString();
+  await json(path.join(directory, 'summary.json'), summary);
+  summary.retention = await retainArtifacts({ current: directory, apply: true });
   await json(path.join(directory, 'summary.json'), summary);
   process.removeListener('SIGINT', cancel);
   process.removeListener('SIGTERM', cancel);

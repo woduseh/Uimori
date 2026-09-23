@@ -15,6 +15,7 @@ import {
 export const remoteFiles = [
   'deploy/oracle-update.sh',
   'deploy/oracle-update.py',
+  'deploy/oracle_gc.py',
   'scripts/oracle-data.mjs',
   'scripts/oracle-image-probe.mjs',
   'scripts/oracle-smoke.mjs',
@@ -192,10 +193,13 @@ export async function releaseOracle(options, dependencies = {}) {
   const ssh = dependencies.ssh ?? openSsh('ssh'),
     scp = dependencies.scp ?? openSsh('scp');
   const sshArgs = sshOptions(config);
-  if (options.status) {
+  if (options.status || options['cleanup-plan']) {
     if (options.runId && !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(options.runId))
       throw new Error('Invalid run ID');
-    const script = await readFile(path.join(root, 'deploy/oracle-status.py'), 'utf8');
+    const script = await readFile(
+      path.join(root, options['cleanup-plan'] ? 'deploy/oracle_gc.py' : 'deploy/oracle-status.py'),
+      'utf8'
+    );
     const command = [
       'python3',
       '-c',
@@ -402,17 +406,19 @@ if (isMain(import.meta.url)) {
   try {
     const options = parseOptions(process.argv.slice(2), {
       values: ['config', 'image', 'source-ref', 'run-id'],
-      flags: ['fresh', 'check-only', 'plan', 'status', 'help'],
+      flags: ['fresh', 'check-only', 'plan', 'status', 'cleanup-plan', 'help'],
     });
     if (options.help)
       console.log(
-        'release:oracle -- [--config path] [--source-ref main] [--image reference] [--check-only | --plan | --status [--run-id id]]'
+        'release:oracle -- [--config path] [--source-ref main] [--image reference] [--check-only | --plan | --cleanup-plan | --status [--run-id id]]'
       );
     else {
       if (
-        [options.plan, options.status, options['check-only']].filter(Boolean).length > 1 ||
+        [options.plan, options.status, options['check-only'], options['cleanup-plan']].filter(
+          Boolean
+        ).length > 1 ||
         (options['run-id'] && !options.status) ||
-        (options.status && (options.fresh || options.image))
+        ((options.status || options['cleanup-plan']) && (options.fresh || options.image))
       )
         throw new Error('Conflicting Oracle modes');
       const controller = new AbortController();
@@ -426,7 +432,8 @@ if (isMain(import.meta.url)) {
           runId: options['run-id'],
           signal: controller.signal,
         });
-        if (options.plan || options.status) console.log(JSON.stringify(result, null, 2));
+        if (options.plan || options.status || options['cleanup-plan'])
+          console.log(JSON.stringify(result, null, 2));
         process.exitCode = ['PASS', 'PLAN', 'STATUS'].includes(result.status) ? 0 : 1;
       } finally {
         process.removeListener('SIGINT', cancel);

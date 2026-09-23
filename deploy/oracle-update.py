@@ -442,6 +442,29 @@ class Runner:
                 errors.append(str(self.candidate))
         self.summary["cleanup"] = {"status": "FAIL" if errors else "PASS", "remaining": errors}
 
+    def retire(self):
+        from runpy import run_path
+        collect = run_path(str(Path(__file__).with_name("oracle_gc.py")))["collect_garbage"]
+        return collect(self.app, self.release.parent, self.docker, apply=True,
+            remove=lambda directory: self.run("sudo", "-n", "rm", "-rf", "--", str(directory)))
+
+    def finish(self):
+        # Cleanup failures are warnings, never a reason to restore an already-open app.
+        try:
+            self.cleanup()
+        except Exception as error:
+            self.summary["cleanup"] = {"status": "WARN", "remaining": [str(error)]}
+        if self.summary.get("cleanup", {}).get("status") == "FAIL":
+            self.summary["cleanup"]["status"] = "WARN"
+        self.summary["finishedAt"] = time.time()
+        self.persist()
+        if self.summary["status"] == "PASS" and self.summary.get("writes") == "OPEN":
+            try:
+                self.summary["retention"] = self.retire()
+            except Exception as error:
+                self.summary["retention"] = {"status": "WARN", "warnings": [str(error)]}
+        self.persist()
+
 
 def main():
     import fcntl  # Linux host only; module helpers remain testable on Windows.
@@ -467,12 +490,7 @@ def main():
             except BaseException as rollback_error:
                 runner.summary.update(rollback="FAIL", rollbackError=str(rollback_error))
         finally:
-            runner.cleanup()
-            if runner.summary["cleanup"]["status"] != "PASS":
-                runner.summary["status"] = "FAIL"
-                code = 1
-            runner.summary["finishedAt"] = time.time()
-            runner.persist()
+            runner.finish()
             print("ORACLE_REPORT " + runner.summary["report"], flush=True)
             print("ORACLE_SUMMARY " + json.dumps(runner.summary), flush=True)
         return code

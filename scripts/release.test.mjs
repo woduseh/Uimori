@@ -502,3 +502,20 @@ test('progress emits complete redacted lines without losing the final command ou
   assert.equal(result.code, 0);
   assert.deepEqual(lines, ['ORACLE_STAGE [redacted]']);
 });
+
+test('cleanup preview performs one read-only SSH query without CI or a deployment', async (t) => {
+  const fixture = await releaseFixture(t);
+  const commands = [];
+  fixture.dependencies.execute = async (executable, args) => {
+    commands.push([executable, args]);
+    return { code: 0, output: JSON.stringify({ status: 'PLAN', images: [], directories: [] }) };
+  };
+  const result = await releaseOracle(
+    { config: fixture.configFile, 'cleanup-plan': true },
+    fixture.dependencies
+  );
+  assert.equal(result.status, 'PLAN');
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0][0], 'fixture-ssh');
+  assert.equal(fixture.calls.length, 0);
+});
