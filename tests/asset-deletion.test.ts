@@ -109,7 +109,7 @@ test('deletion preserves active execution and immutable completed image catalogs
     run.id,
     'Synthetic source.',
     { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    { ...run.snapshot.settings, translation: false, status: false }
+    { ...run.snapshot.settings, status: false }
   );
   const now = new Date().toISOString();
   store.db

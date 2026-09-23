@@ -8,7 +8,8 @@ import {
   contextWindowStatus,
   type ContextWindowStatus,
 } from '../core/context-tools.js';
-import { executeMain, executeTool } from '../core/provider.js';
+import { executeTool } from '../core/provider.js';
+import { executeFixtureMain, type FixtureGeneration } from '../core/fixture-provider.js';
 import type { Connection } from '../core/product.js';
 import {
   executeProvider,
@@ -44,6 +45,8 @@ export type MainResult = {
   usage: Usage;
 };
 export type MainHooks = {
+  /** Explicit deterministic behavior for the no-model test path only. */
+  fixture?: FixtureGeneration;
   prepareRequest?: (request: ProviderRequest, usage: Usage) => Promise<ProviderRequest>;
   initialUsage?: Usage;
   /** Calls owned by the host after the writer completes (for example response judgment). */
@@ -91,7 +94,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   if (hooks.reserveCalls) fixed.settings.maxCalls -= hooks.reserveCalls;
   const target = fixed.profile?.models.main;
   if (!target) {
-    const result = await executeMain(fixed, hooks);
+    const result = await executeFixtureMain(fixed, hooks, hooks.fixture);
     return { status: 'completed', ...result, error: null };
   }
   const contextTools = contextToolsEnabled(fixed);

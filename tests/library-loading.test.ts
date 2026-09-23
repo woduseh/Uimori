@@ -1,3 +1,14 @@
+import { afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { Store } from '../server/store.js';
+import { fixtureBotInput } from './fixtures/chat.js';
+import { importChatTranscript } from '../server/chat-transcript.js';
+import { helperWritingSnapshot } from '../server/helper-runtime.js';
+import { prepareNativeRisuReadOnly } from '../server/risu-native-readonly.js';
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import { writeChatVariables } from '../server/chat-variables.js';
+import { describe } from 'vitest';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -38,7 +49,7 @@ test('library summary omits bodies and unrelated assets; current editing rejects
           relatedIds: [],
         }) as Content
       );
-    const chat = createFixtureChat(app.store, 'Synthetic asset archive', 'calm', {
+    const chat = createFixtureChat(app.store, 'Synthetic asset archive', {
       botId: items[0].id,
     });
     for (let i = 0; i < 3; i++)
@@ -115,3 +126,111 @@ test('library summary omits bodies and unrelated assets; current editing rejects
     await rm(target, { recursive: true, force: true });
   }
 }, 30000);
+
+describe('Small library summaries and option receipts', () => {
+  const owners: { store: Store; path: string }[] = [];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    for (const { store, path } of owners.splice(0)) {
+      store.close();
+      rmSync(path, { recursive: true, force: true });
+    }
+  });
+
+  function database() {
+    const path = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
+    const owner = { store: new Store(join(path, 'app.sqlite')), path };
+    owners.push(owner);
+    return owner.store;
+  }
+
+  function fixture(count = 4) {
+    const store = database();
+    const connection = store.product.connection({
+      title: 'Synthetic',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9',
+      enabled: true,
+    });
+    const model = store.product.model({
+      title: 'Main',
+      connectionId: connection.id,
+      modelId: 'fixture',
+      temperature: null,
+      maxOutputTokens: 1024,
+      inputTokenLimit: 272000,
+    });
+    const helper = store.product.model({
+      title: 'Helper',
+      connectionId: connection.id,
+      modelId: 'other',
+      temperature: null,
+      maxOutputTokens: 1024,
+    });
+    const workspace = modelWorkspace(store);
+    updateModelWorkspace(store, {
+      expectedRevision: workspace.revision,
+      routes: { ...workspace.routes, main: { id: model.id } },
+      translationPolicy: workspace.translationPolicy,
+    });
+    const bot = store.product.content(fixtureBotInput()) as Content;
+    const chat = importChatTranscript(store, {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Current summary',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: Array.from({ length: count }, (_, i) => ({
+          request: 'Request ' + i,
+          text: ('Scene ' + i + '. ' + 'river '.repeat(600)).slice(0, 3000),
+          translation: null,
+        })),
+      },
+    }).chat;
+    const branch = store.product.branch(chat.id);
+    const snapshot = () =>
+      prepareNativeRisuReadOnly(
+        helperWritingSnapshot(store, chat.id, branch.id, 'context'),
+        'context'
+      );
+    return { store, chat, branch, model, helper, bot, snapshot };
+  }
+
+  test('library summary never contains preset programs and variable retries never overwrite current values', () => {
+    const { store, chat, branch } = fixture();
+    const presets = Array.from({ length: 8 }, (_, i) =>
+      store.product.promptPreset({
+        title: 'Preset ' + i,
+        role: 'main',
+        text: 'Long prompt. '.repeat(3000),
+      })
+    );
+    const summary = store.product.library(true);
+    expect(summary.promptPresets).toHaveLength(8);
+    expect(summary.promptPresets!.every((p) => !('program' in p))).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(summary))).toBeLessThan(16000);
+    expect(store.product.get('prompt-preset', presets[0].id)).toHaveProperty('program');
+    const source = store.source(branch.headRevision!);
+    let first: Parameters<typeof writeChatVariables>[3] | undefined;
+    for (let i = 0; i < 10; i++) {
+      const command = {
+        expectedRevision: i,
+        expectedSourceHash: source.hash,
+        idempotencyKey: randomUUID(),
+        values: { large: 'v'.repeat(32000), iteration: String(i) },
+      };
+      first ??= command;
+      writeChatVariables(store, chat.id, branch.id, command);
+    }
+    expect(writeChatVariables(store, chat.id, branch.id, first!).values.iteration).toBe('9');
+    expect(
+      Buffer.byteLength(
+        JSON.stringify(store.db.prepare('SELECT * FROM chat_variable_journal').all())
+      )
+    ).toBeLessThan(5000);
+  });
+});

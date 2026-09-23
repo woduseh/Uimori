@@ -68,7 +68,7 @@ function fixture() {
   for (const { mime, base64 } of file.images) putImageBlob(store.product, { mime, base64 });
   const { id: _id, revision: _revision, ...body } = file.contents[0].source;
   const content = store.product.content(body) as Content;
-  const chat = createFixtureChat(store, 'Native images', 'calm', { botId: content.id });
+  const chat = createFixtureChat(store, 'Native images', { botId: content.id });
   const { chatId: _chatId, revision, ...profile } = store.product.profile(chat.id);
   updateTestProfile(store.product, chat.id, {
     ...profile,

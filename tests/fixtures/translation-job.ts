@@ -63,7 +63,7 @@ export function bundle(text = 'Mira waited quietly beside the pier.'): Auxiliary
       chatId: 'chat-a',
       parentRevision: null,
       settingsRevision: 2,
-      settings: { preset: 'calm', mode: 'direct', translation: true, status: true, maxCalls: 6 },
+      settings: { status: true, maxCalls: 6 },
       request: 'A quiet evening',
       history: [],
       resources: [

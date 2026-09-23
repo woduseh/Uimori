@@ -89,7 +89,7 @@ async function snapshot(
     chatId: profile.chatId,
     parentRevision: null,
     settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 3 },
+    settings: { status: false, maxCalls: 3 },
     request: 'SYNTHETIC_CURRENT_ONCE',
     history: [],
     resources: [],
@@ -150,10 +150,10 @@ const toolTurn = (output: Json[]): Json => ({
 });
 
 describe('Exact native main preview and terminal submission (synthetic loopback only)', () => {
-  test('mock style settings never enter a custom prompt request or its host context', async () => {
+  test('retired fields in an old execution snapshot never enter a custom prompt request or its host context', async () => {
     const work = await snapshot();
     const before = buildMainProviderRequest(work).request;
-    work.settings.preset = 'vivid';
+    Object.assign(work.settings, { preset: 'vivid', mode: 'research' });
     const after = buildMainProviderRequest(work).request;
     expect(after).toEqual(before);
     expect(after.input.controls).toEqual({});

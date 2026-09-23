@@ -63,11 +63,6 @@ async function storySettings(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   if (!(await dialog.isVisible())) await openChatSettings(page);
   await selectChatSettingsSection(page, '자동 작업');
-  const fixture = dialog
-    .locator('details')
-    .filter({ has: page.locator('summary', { hasText: '개발자용 모의 실행 제어' }) });
-  if ((await fixture.count()) && (await fixture.getAttribute('open')) === null)
-    await fixture.locator('summary').click();
 }
 async function openWork(page: Page) {
   await closeDialog(page);
@@ -93,6 +88,7 @@ async function send(page: Page, prompt: string): Promise<Run> {
 }
 
 test.afterEach(async ({ request }) => {
+  await control(request, 'fixture', {});
   for (const barrier of ['run', 'translation', 'status'])
     await control(request, 'release', { barrier });
 });
@@ -115,8 +111,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     const a = await newStatusChat(page, '합성 A · 등대');
     const b = await newStatusChat(bPage, '합성 B · 정원');
     await storySettings(bPage);
-    await bPage.getByLabel('서술 프리셋').selectOption('vivid');
-    await bPage.getByLabel('모의 생성 경로').selectOption('research');
+    await bPage.getByLabel('작업당 모델 호출 한도').fill('6');
     await bPage.getByRole('button', { name: '설정 저장', exact: true }).click();
     await expect
       .poll(async () => (await detail(request, b.id)).chat.settingsRevision)
@@ -126,15 +121,17 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await aSecondTab.goto(`/?chat=${a.id}`);
     await expect(aSecondTab.getByRole('heading', { name: a.title, exact: true })).toBeVisible();
     await storySettings(aSecondTab);
-    await aSecondTab.getByLabel('서술 프리셋').selectOption('vivid');
+    await aSecondTab.getByLabel('작업당 모델 호출 한도').fill('6');
     await control(request, 'hold', { barrier: 'run' });
     await control(request, 'hold', { barrier: 'translation' });
     await control(request, 'hold', { barrier: 'status' });
     const aRun = await send(page, '(OOC: Write a quiet lighthouse scene.) SYNTHETIC_A');
+    await control(request, 'fixture', { mode: 'research', preset: 'vivid' });
     const bRun = await send(
       bPage,
       'Write a garden scene after researching the harbor. SYNTHETIC_B'
     );
+    await control(request, 'fixture', {});
     expect(aRun.id).not.toBe(bRun.id);
     // Keep the second tab's unsaved settings intact for the later revision conflict.
     const aWorkTab = await context.newPage();
@@ -148,7 +145,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     } finally {
       await aWorkTab.close();
     }
-    await expect(aSecondTab.getByLabel('서술 프리셋')).toHaveValue('vivid');
+    await expect(aSecondTab.getByLabel('작업당 모델 호출 한도')).toHaveValue('6');
     // Duplicate identical HTTP command uses the exact browser-submitted body/key.
     const command = commands.get(aRun.id)!;
     expect(command).toMatchObject({
@@ -169,7 +166,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     expect(conflict.status()).toBe(409);
     // A changed setting while held must not alter the existing run snapshot.
     await storySettings(page);
-    await page.getByLabel('서술 프리셋').selectOption('vivid');
+    await page.getByLabel('작업당 모델 호출 한도').fill('6');
     await page.getByRole('button', { name: '설정 저장', exact: true }).click();
     await expect
       .poll(async () => (await detail(request, a.id)).chat.settingsRevision)
@@ -180,7 +177,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     ).toContainText('다른 요청이 먼저 반영됐어요');
     await aSecondTab.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
     await expect(aSecondTab.getByRole('alert')).toHaveCount(0);
-    expect((await detail(request, a.id)).runs[0].snapshot.settings.preset).toBe('calm');
+    expect((await detail(request, a.id)).runs[0].snapshot.settings.maxCalls).toBe(8);
     await page.close();
     await control(request, 'release', { barrier: 'run' });
     await expect.poll(async () => (await detail(request, a.id)).runs[0].status).toBe('completed');

@@ -1,3 +1,4 @@
+import { openProviderModel } from './ui-navigation.js';
 import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
@@ -242,7 +243,7 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
     thinkingMode: 'adaptive',
   });
   await settings(page);
-  await page.getByRole('button', { name: saved.title + ' 모델 수정', exact: true }).click();
+  await openProviderModel(page, saved.title);
   await expect(form.getByLabel('모델 계열', { exact: true })).toHaveValue('anthropic');
   await form.getByLabel('모델 계열', { exact: true }).selectOption('google');
   await form.getByLabel('사고 강도', { exact: true }).selectOption('HIGH');
@@ -356,7 +357,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   );
   await settings(page);
   await page.getByLabel('프로바이더·모델 검색').fill(title);
-  await page.getByRole('button', { name: original.title + ' 모델 수정', exact: true }).click();
+  await openProviderModel(page, original.title);
   const form = page.getByRole('form', { name: '모델 편집 양식' });
   await expect(form.getByLabel('프로바이더', { exact: true })).toHaveValue(`${connection.id}`);
   await expect(
@@ -800,7 +801,7 @@ test('PMUI09 invalid hidden model fields receive focus and a reversible disable 
     enabled: true,
   });
   await settings(page);
-  await page.getByRole('button', { name: a.title + ' 모델 수정', exact: true }).click();
+  await openProviderModel(page, a.title);
   form = page.getByRole('form', { name: '모델 편집 양식' });
   await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByRole('switch', { name: '새 모델 선택에 표시' }).uncheck();
@@ -809,7 +810,7 @@ test('PMUI09 invalid hidden model fields receive focus and a reversible disable 
     .poll(async () => (await library(request)).models.find((item) => item.id === a.id)?.enabled)
     .toBe(false);
   await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
-  await page.getByRole('button', { name: b.title + ' 모델 수정', exact: true }).click();
+  await openProviderModel(page, b.title);
   await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(b.title);
   await form.getByLabel('모델 프리셋 이름').fill(b.title + ' 내 초안');
   expect((await library(request)).models.find((item) => item.id === b.id)).toEqual(b);
@@ -821,10 +822,10 @@ const providerOptionCases = [
     protocol: 'vercel-chat-v1',
     endpoint: 'https://ai-gateway.vercel.sh/v1',
     modelId: 'openai/gpt-5.6-sol',
-    choices: { '사고 강도': 'high', '서비스 등급': 'flex' },
-    saved: { reasoningEffort: 'high', serviceTier: 'flex' },
+    choices: { '사고 강도': 'high', '서비스 등급': 'flex', Verbosity: 'high' },
+    saved: { reasoningEffort: 'high', serviceTier: 'flex', verbosity: 'high' },
     absent: ['thinkingLevel'],
-    hidden: ['Thinking Level', 'Output Effort', 'Verbosity'],
+    hidden: ['Thinking Level', 'Output Effort'],
   },
   {
     protocol: 'vertex-gemini-v1',
@@ -969,7 +970,7 @@ for (const [index, item] of providerOptionCases.entries()) {
     const saved = (await library(request)).models.find((model) => model.title === title)!;
     for (const key of item.absent) expect(saved).not.toHaveProperty(key);
     expect(connection).not.toHaveProperty('requestTier');
-    await page.getByRole('button', { name: title + ' 모델 수정', exact: true }).click();
+    await openProviderModel(page, title);
     for (const [label, value] of Object.entries(item.choices)) {
       await form.getByRole('button', { name: tabFor(label), exact: true }).click();
       await expect(form.getByLabel(label, { exact: true })).toHaveValue(value!);
@@ -980,7 +981,7 @@ for (const [index, item] of providerOptionCases.entries()) {
   });
 }
 
-test('PMUI12 changing the model or connection keeps choices visible as unverified or unsendable, and only unsendable values block saving', async ({
+test('PMUI12 changing provider clears unrepresentable options, keeps common fields and permits unknown model values', async ({
   page,
   request,
 }, info) => {
@@ -1011,32 +1012,29 @@ test('PMUI12 changing the model or connection keeps choices visible as unverifie
   await strength.selectOption('none');
   await form.getByRole('button', { name: '고급', exact: true }).click();
   await form.getByLabel('Verbosity', { exact: true }).selectOption('low');
-  // Switching to another protocol keeps the choices visible as unsendable until the user clears them.
+  // A new protocol discards only fields it cannot send, retaining the common draft values.
   await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByLabel('프로바이더', { exact: true }).selectOption(`${anthropic.id}`);
-  const stale = form.getByLabel('이전 프로바이더의 사고 강도 · reasoningEffort', { exact: true });
-  await expect(stale).toHaveValue('none');
-  await expect(form).toContainText('이 프로바이더에서 보낼 수 없어요');
+  await expect(
+    form.getByLabel('이전 설정의 사고 강도 · reasoningEffort', { exact: true })
+  ).toHaveCount(0);
+  await expect(form.getByLabel('모델 ID', { exact: true })).toHaveValue('');
+  await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(title);
+  await expect(form.getByLabel('최대 출력 토큰')).toHaveValue('8192');
   await form.getByRole('button', { name: '고급', exact: true }).click();
-  await expect(form.getByLabel('Verbosity', { exact: true })).toHaveValue('low');
-  await form.getByLabel('Verbosity', { exact: true }).selectOption('');
   await expect(form.getByLabel('Verbosity', { exact: true })).toHaveCount(0);
   await form.getByRole('button', { name: '기본', exact: true }).click();
-  await stale.selectOption('');
-  await expect(stale).toHaveCount(0);
   await form.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
   await form.getByLabel('모델 ID', { exact: true }).fill('gpt-5.6-sol');
   await strength.selectOption('none');
   await form.getByRole('button', { name: '고급', exact: true }).click();
   await form.getByLabel('Verbosity', { exact: true }).selectOption('low');
   await form.getByRole('button', { name: '기본', exact: true }).click();
-  await form.getByLabel('모델 ID', { exact: true }).fill('gpt-6-astra');
-  // Astra documents no `none`: the choice is kept and marked unverified rather than rewritten or blocked.
+  await form.getByLabel('모델 ID', { exact: true }).fill('synthetic-future-model');
+  // Unknown model support is not a reason to discard or block a protocol-representable value.
   await expect(strength).toHaveValue('none');
-  await expect(
-    strength.locator('optgroup[label="미확인 값 · 공급자가 판정"] option[value="none"]')
-  ).toHaveCount(1);
-  await expect(form).toContainText('이 모델의 지원 여부가 확인되지 않은 값이에요.');
+  await expect(strength.locator('option[value="none"]')).toBeEnabled();
+  expect(await strength.evaluate((node) => (node as HTMLSelectElement).checkValidity())).toBe(true);
   if (visualReview)
     await form.screenshot({
       path: info.outputPath('provider-parameters-preserved-invalid-desktop.png'),
@@ -1055,7 +1053,7 @@ test('PMUI12 changing the model or connection keeps choices visible as unverifie
   await expect
     .poll(async () => (await library(request)).models.find((model) => model.title === title))
     .toMatchObject({
-      modelId: 'gpt-6-astra',
+      modelId: 'synthetic-future-model',
       reasoningEffort: 'none',
       verbosity: 'low',
       cacheMode: 'disabled',
@@ -1135,7 +1133,7 @@ test('PMUI13 response tests are explicit and late results stay with the original
   expect(posts[0]).toMatchObject({ expectedRevision: a.revision });
   expect(posts[0].idempotencyKey).toMatch(/^[0-9a-f-]{36}$/i);
   await page.getByLabel('프로바이더·모델 검색').fill(b.title);
-  await page.getByRole('button', { name: b.title + ' 모델 수정', exact: true }).click();
+  await openProviderModel(page, b.title);
   const form = page.getByRole('form', { name: '모델 편집 양식' });
   await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(b.title);
   release();
@@ -1247,7 +1245,7 @@ test('PMUI15 a forced Google service tier is shown and conflicting saved choices
   });
   await settings(page);
   await page.getByLabel('프로바이더·모델 검색').fill(title);
-  await page.getByRole('button', { name: title + ' 모델 수정', exact: true }).click();
+  await openProviderModel(page, title);
   const form = page.getByRole('form', { name: '모델 편집 양식' });
   await expect(form.getByRole('button', { name: '기본', exact: true })).toHaveAttribute(
     'aria-pressed',
@@ -1510,8 +1508,11 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
     await form.getByLabel('모델 목록 검색').fill(item.modelId);
     const picker = form.getByRole('region', { name: '저장된 모델 목록에서 선택' });
     await expect(picker).toContainText('모델 목록에서 선택');
-    await expect(picker.getByRole('button')).toHaveCount(1);
-    await picker.getByRole('button').click();
+    const choice = picker
+      .getByRole('button')
+      .filter({ has: page.getByText(item.modelId, { exact: true }) });
+    await expect(choice).toHaveCount(1);
+    await choice.click();
     await expect(form.getByLabel('모델 ID', { exact: true })).toHaveValue(item.modelId);
     await form.getByLabel('모델 프리셋 이름').fill(title);
     // Documented values lead; the rest of the protocol vocabulary stays selectable as unverified.

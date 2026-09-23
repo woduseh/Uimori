@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { Store } from '../server/store.js';
 import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { injectWithFixtureBot, createFixtureChat } from './fixtures/chat.js';
@@ -681,5 +683,60 @@ describe('provider settings, catalogs and archive contracts', () => {
     accept(response({ data: [{ id: 'late-model' }] }));
     await refresh;
     expect(app.store.product.get('connection', connection.id)).toEqual(edited);
+  });
+});
+
+describe('Current revision retrieval', () => {
+  const owners: { directory: string; store: Store; app?: App }[] = [];
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    for (const owner of owners.splice(0)) {
+      if (owner.app) await owner.app.close();
+      else owner.store.close();
+      rmSync(owner.directory, { recursive: true, force: true });
+    }
+  });
+
+  async function application() {
+    const directory = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
+    const app = await createApp({
+      dbPath: join(directory, 'app.sqlite'),
+      buildId: 'extended-cleanup-test',
+      testMode: true,
+      codex: { enabled: false },
+    });
+    owners.push({ directory, store: app.store, app });
+    return app;
+  }
+
+  test('provider/model conflict recovery can retrieve the current revision without returning API keys', async () => {
+    const app = await application();
+    const connection = app.store.product.connection({
+      title: 'Current provider',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9',
+      enabled: true,
+    });
+    const model = app.store.product.model({
+      title: 'Current model',
+      connectionId: connection.id,
+      modelId: 'synthetic',
+      temperature: null,
+      maxOutputTokens: 1024,
+    });
+    for (const [route, item] of [
+      ['connections', connection],
+      ['model-presets', model],
+    ] as const) {
+      const response = await app.inject({ url: `/api/${route}/${item.id}` });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        id: item.id,
+        title: item.title,
+        revision: item.revision,
+      });
+      expect(response.json()).not.toHaveProperty('apiKey');
+    }
   });
 });

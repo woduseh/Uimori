@@ -290,14 +290,15 @@ export function responseStreamRoutes(
         'x-accel-buffering': 'no',
       });
       let unsubscribe = () => {};
+      let blocked = false;
       connections.add(reply.raw);
       const heartbeat = setInterval(() => {
         if (!options.authenticated(request.headers.cookie)) reply.raw.end();
-        else if (!reply.raw.destroyed) reply.raw.write(': keepalive\n\n');
+        else if (!blocked && !reply.raw.destroyed) blocked = !reply.raw.write(': keepalive\n\n');
       }, 15_000);
       heartbeat.unref();
       const send = () => {
-        if (reply.raw.destroyed) return;
+        if (blocked || reply.raw.destroyed || reply.raw.writableEnded) return;
         if (!options.authenticated(request.headers.cookie)) {
           unsubscribe();
           reply.raw.end();
@@ -306,18 +307,25 @@ export function responseStreamRoutes(
         let page: ResponseStreamPage;
         do {
           page = streams.read(target.taskKind, target.taskId, after);
-          reply.raw.write(`id: ${page.cursor}\ndata: ${JSON.stringify(page)}\n\n`);
+          blocked = !reply.raw.write(`id: ${page.cursor}\ndata: ${JSON.stringify(page)}\n\n`);
+          // write(false) still accepts this page. Resume after it, never send it twice.
           after = page.cursor;
-        } while (page.hasMore);
-        if (page.status !== 'running') {
+        } while (page.hasMore && !blocked);
+        if (!page.hasMore && page.status !== 'running') {
           unsubscribe();
           reply.raw.end();
         }
       };
+      const drain = () => {
+        blocked = false;
+        send();
+      };
+      reply.raw.on('drain', drain);
       unsubscribe = streams.subscribe(target, send);
       reply.raw.on('close', () => {
         clearInterval(heartbeat);
         connections.delete(reply.raw);
+        reply.raw.off('drain', drain);
         unsubscribe();
       });
       send();

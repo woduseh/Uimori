@@ -56,12 +56,12 @@ function _titles(store: Store, botId: string, folderId: string | null) {
 test('invalid and stale order anchors roll back every position and revision', async () => {
   const { store, bot, other } = await fixture();
   const folder = store.organization.createFolder(bot.id, { title: 'Elsewhere' });
-  const moving = store.createChat('Moving', 'calm', { botId: bot.id });
-  const wrongFolder = store.createChat('Wrong folder', 'calm', {
+  const moving = store.createChat('Moving', { botId: bot.id });
+  const wrongFolder = store.createChat('Wrong folder', {
     botId: bot.id,
     folderId: folder.id,
   });
-  const wrongBot = store.createChat('Wrong bot', 'calm', { botId: other.id });
+  const wrongBot = store.createChat('Wrong bot', { botId: other.id });
   const original = store.chats();
   for (const beforeChatId of [moving.id, wrongFolder.id, wrongBot.id, 'missing']) {
     expect(() =>
@@ -92,7 +92,7 @@ test('bot ownership and folder defaults apply only at creation; moves/deletion p
   const { store, bot, persona, nextPersona } = await fixture();
   const org = store.organization;
   const folder = org.createFolder(bot.id, { title: 'First', defaultPersona: ref(persona) });
-  const chat = store.createChat('Owned', 'calm', { botId: bot.id, folderId: folder.id });
+  const chat = store.createChat('Owned', { botId: bot.id, folderId: folder.id });
   expect(chat).toMatchObject({ botId: bot.id, folderId: folder.id, organizationRevision: 1 });
   expect(store.product.profile(chat.id).packageAttachments).toEqual([
     { ...ref(bot), role: 'bot' },
@@ -107,7 +107,7 @@ test('bot ownership and folder defaults apply only at creation; moves/deletion p
     { ...ref(bot), role: 'bot' },
     { ...ref(persona), role: 'persona' },
   ]);
-  const next = store.createChat('Next', 'calm', { botId: bot.id, folderId: folder.id });
+  const next = store.createChat('Next', { botId: bot.id, folderId: folder.id });
   expect(store.product.profile(next.id).packageAttachments).toEqual([
     { ...ref(bot), role: 'bot' },
     { ...ref(nextPersona), role: 'persona' },
@@ -131,7 +131,7 @@ test('cross-bot moves, stale edits and invalid defaults fail without losing orga
   const org = store.organization;
   const a = org.createFolder(bot.id, { title: 'A' });
   const b = org.createFolder(other.id, { title: 'B' });
-  const chat = store.createChat('Owned', 'calm', { botId: bot.id, folderId: a.id });
+  const chat = store.createChat('Owned', { botId: bot.id, folderId: a.id });
   expect(() => org.move(chat.id, { expectedRevision: 1, folderId: b.id })).toThrow(
     'Folder not found'
   );
@@ -150,7 +150,7 @@ test('cross-bot moves, stale edits and invalid defaults fail without losing orga
       defaultPersona: { id: 'missing-persona', revision: 1 },
     })
   ).toThrow('not found');
-  expect(() => store.createChat('Bad', 'calm', { botId: bot.id, folderId: b.id })).toThrow(
+  expect(() => store.createChat('Bad', { botId: bot.id, folderId: b.id })).toThrow(
     'Folder not found'
   );
   expect(store.chats()).toHaveLength(1);
@@ -164,7 +164,7 @@ test('fork inherits original owner/folder/profile without reapplying changed def
     title: 'Stories',
     defaultPersona: ref(persona),
   });
-  const chat = store.createChat('Original', 'calm', {
+  const chat = store.createChat('Original', {
     botId: bot.id,
     folderId: folder.id,
   });
@@ -193,7 +193,7 @@ test('fork inherits original owner/folder/profile without reapplying changed def
     run.id,
     'Synthetic scene.',
     { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    { ...run.snapshot.settings, translation: false, status: false }
+    { ...run.snapshot.settings, status: false }
   );
   store.organization.updateFolder(bot.id, folder.id, {
     expectedRevision: 1,
@@ -213,10 +213,10 @@ test('fork inherits original owner/folder/profile without reapplying changed def
 test('creation selects ownership and later attachments never infer a new owner', async () => {
   const { store, bot, other } = await fixture();
   expect(() => store.createChat('Missing owner')).toThrow('owning bot');
-  expect(() => store.createChat('Removed sentinel', 'calm', { botId: '__legacy__' })).toThrow();
+  expect(() => store.createChat('Removed sentinel', { botId: '__legacy__' })).toThrow();
   expect(store.chats()).toHaveLength(0);
   expect(store.db.prepare('SELECT COUNT(*) AS n FROM branches').get()).toMatchObject({ n: 0 });
-  const explicit = store.createChat('Owned', 'calm', { botId: bot.id });
+  const explicit = store.createChat('Owned', { botId: bot.id });
   attach(store, explicit.id, [ref(bot)]);
   expect(() => attach(store, explicit.id, [ref(other)])).toThrow('owning bot');
   expect(store.chat(explicit.id).botId).toBe(bot.id);
@@ -312,7 +312,7 @@ test('one package can own a chat and serve as a persona through explicit attachm
     title: 'Package folder',
     defaultPersona: ref(content),
   });
-  const chat = store.createChat('Package roles', 'calm', {
+  const chat = store.createChat('Package roles', {
     botId: content.id,
     folderId: folder.id,
   });

@@ -20,7 +20,7 @@ try {
     loading: 'pinned',
     relatedIds: [],
   });
-  const chat = app.store.createChat(title, 'calm', { botId: owner.id });
+  const chat = app.store.createChat(title, { botId: owner.id });
   // Exercise the host's real task tracking when both work and terminal storage
   // fail. No model or transport is replaced or called.
   app.store.startRun = () => {

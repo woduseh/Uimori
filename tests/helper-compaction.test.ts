@@ -1,3 +1,4 @@
+import { VERTEX_GEMINI_MODEL_ID } from './fixtures/vertex-model.js';
 import * as resourceTools from '../server/helper-resource-tools.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -17,12 +18,7 @@ import {
   CONTEXT_SUMMARY_SEMANTICS,
 } from '../core/context-summary-policy.js';
 import { generationFromModel } from '../core/model-capabilities.js';
-import {
-  VERTEX_GEMINI_MODEL_ID,
-  type Content,
-  type ModelPreset,
-  type ModelSnapshot,
-} from '../core/product.js';
+import { type Content, type ModelPreset, type ModelSnapshot } from '../core/product.js';
 import type { HelperEditor, HelperTask } from '../core/helper.js';
 import type { ToolEvent } from '../core/types.js';
 import * as transport from '../core/transport.js';

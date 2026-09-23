@@ -1,7 +1,8 @@
+import { VERTEX_GEMINI_MODEL_ID } from './fixtures/vertex-model.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { expect, test } from 'vitest';
-import { defaultProfile, VERTEX_GEMINI_MODEL_ID } from '../core/product.js';
+import { defaultProfile } from '../core/product.js';
 import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 import { compiledPackages } from '../core/package-context.js';
 import { buildMainInput } from '../core/provider.js';
@@ -51,7 +52,7 @@ function fixture(): RunSnapshot {
     chatId: 'chat',
     parentRevision: 'old',
     settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 4 },
+    settings: { status: false, maxCalls: 4 },
     request: 'CURRENT_SENTINEL',
     history: [{ revision: 'old', text: 'HISTORY_SENTINEL' }],
     resources: [],

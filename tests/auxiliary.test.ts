@@ -43,7 +43,7 @@ const snapshot = (): RunSnapshot => ({
   chatId: 'chat-a',
   parentRevision: 'source-previous',
   settingsRevision: 1,
-  settings: { mode: 'direct', preset: 'calm', translation: true, status: true, maxCalls: 6 },
+  settings: { status: true, maxCalls: 6 },
   request: 'A quiet fictional scene',
   history: [],
   resources: [

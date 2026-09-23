@@ -88,9 +88,6 @@ test('bundled native presets are editable independent copies and compile in all 
         parentRevision: null,
         settingsRevision: 1,
         settings: {
-          preset: 'calm',
-          mode: 'direct',
-          translation: false,
           status: false,
           maxCalls: 8,
         },

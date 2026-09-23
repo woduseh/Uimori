@@ -325,7 +325,7 @@ test('module-only bot guides preserve an empty card; attached module metadata is
     guide
   );
   const saved = store.product.content(input) as Content;
-  const chat = store.createChat('Module owner', undefined, { botId: saved.id });
+  const chat = store.createChat('Module owner', { botId: saved.id });
   expect(saved.package.nativeRisu.card).toEqual({});
   expect(currentBotTranslationGuide(store, chat.id)).toMatchObject({ ...guide, botId: saved.id });
   const main = fixtureBotInput('Card wins');
@@ -337,7 +337,7 @@ test('module-only bot guides preserve an empty card; attached module metadata is
   expect(
     currentBotTranslationGuide(
       store,
-      store.createChat('No inherited module guide', undefined, { botId: cardBot.id }).id
+      store.createChat('No inherited module guide', { botId: cardBot.id }).id
     )
   ).toBeNull();
 });

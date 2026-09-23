@@ -158,7 +158,7 @@ const selector = (
 test('shared module lore with different link overrides keeps distinct request source boundaries', () => {
   const store = database(),
     bot = save(store, 'Scope owner'),
-    chat = store.createChat('Module source scopes', 'calm', { botId: bot.id });
+    chat = store.createChat('Module source scopes', { botId: bot.id });
   const pkg = nativeContent({
     name: 'Shared module',
     character_book: {
@@ -228,7 +228,7 @@ test('shared module lore with different link overrides keeps distinct request so
 test('the same package in bot and persona roles receives an override only on the requested attachment', () => {
   const store = database(),
     bot = save(store, 'Shared identity'),
-    chat = store.createChat('Role scope', 'calm', { botId: bot.id });
+    chat = store.createChat('Role scope', { botId: bot.id });
   profile(store, chat.id, [ref(bot, 'bot'), ref(bot, 'persona')]);
   patch(store, chat.id, selector(bot), 'Bot-only local lore');
   const value = run(store, chat.id);
@@ -287,7 +287,7 @@ test('source scope, root/package revisions and text-only selectors reject forged
   const store = database(),
     bot = save(store, 'Scoped bot'),
     unrelated = save(store, 'Unrelated module');
-  const chat = store.createChat('Mutation guards', 'calm', { botId: bot.id });
+  const chat = store.createChat('Mutation guards', { botId: bot.id });
   const { service, input, result } = patch(store, chat.id, selector(bot), 'Local');
   expect(service.patch(chat.id, input, requestId)).toEqual(result);
   expect(() => service.patch(chat.id, { ...input, value: 'Changed replay' }, requestId)).toThrow(
@@ -328,7 +328,7 @@ test('source scope, root/package revisions and text-only selectors reject forged
 test('an edited source anchor preserves the override record but excludes it from new request projections', () => {
   const store = database(),
     bot = save(store, 'Retcon bot'),
-    chat = store.createChat('Anchor hash', 'calm', { botId: bot.id });
+    chat = store.createChat('Anchor hash', { botId: bot.id });
   const source = complete(store, run(store, chat.id));
   patch(store, chat.id, selector(bot), 'Before retcon');
   store.editSource(source.id, { text: 'Edited historical source', expectedRevision: 0 });

@@ -457,8 +457,7 @@ test.describe('actual local native Risu cards', () => {
       const current = app.store.chat(chat.id);
       app.store.settings(chat.id, current.settingsRevision, {
         ...current.settings,
-        mode: 'direct',
-        translation: false,
+
         status: false,
         maxCalls: 8,
       });

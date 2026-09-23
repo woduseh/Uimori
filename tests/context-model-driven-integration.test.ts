@@ -96,7 +96,6 @@ async function setup(options: { count?: number; contextTools?: boolean } = {}) {
   let chat = createFixtureChat(app.store, '합성 모델 주도 문맥 대화');
   chat = app.store.settings(chat.id, chat.settingsRevision, {
     ...chat.settings,
-    translation: false,
     status: false,
     maxCalls: 8,
   });

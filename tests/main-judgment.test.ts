@@ -217,7 +217,6 @@ ${
       expectedSettingsRevision: chat.settingsRevision,
       ...chat.settings,
       status: false,
-      translation: false,
       maxCalls,
     },
     'PATCH'

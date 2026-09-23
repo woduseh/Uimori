@@ -72,7 +72,7 @@ async function fixture(kind: 'chat' | 'library' = 'chat') {
     ],
   };
   const bot = store.product.content(input) as Content;
-  const chat = createFixtureChat(store, 'Synthetic chat', 'calm', { botId: bot.id });
+  const chat = createFixtureChat(store, 'Synthetic chat', { botId: bot.id });
   const scope =
     kind === 'chat'
       ? { kind, chatId: chat.id, branchId: 'main:' + chat.id }
