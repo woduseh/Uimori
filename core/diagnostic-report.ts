@@ -34,6 +34,7 @@ const roles = [
   'title',
   'illustration',
 ] as const;
+const toolArgumentStages = ['tool_start_shape', 'tool_json_parse', 'tool_json_shape'] as const;
 const protocols = [
   'typesafe-systemone-v1',
   'fixture-sse-v1',
@@ -71,6 +72,10 @@ const errors = new Set([
   'CODEX_REQUEST_FAILED',
   'CODEX_TIMEOUT',
   'CODEX_CANCELLED',
+  'INVALID_TOOL_ARGUMENTS',
+  'ANTHROPIC_TOOL_INPUT_CHANGED',
+  'ANTHROPIC_UNKNOWN_TOOL',
+  'ANTHROPIC_TOOL_TERMINAL_MISMATCH',
 ]);
 function member<T extends string>(value: unknown, values: readonly T[]): T | 'unknown' {
   return typeof value === 'string' && values.includes(value as T) ? (value as T) : 'unknown';
@@ -78,6 +83,13 @@ function member<T extends string>(value: unknown, values: readonly T[]): T | 'un
 export const diagnosticStatus = (value: unknown) => member(value, statuses);
 export const diagnosticRole = (value: unknown) => member(value, roles);
 export const diagnosticProtocol = (value: unknown) => member(value, protocols);
+export const diagnosticToolArgumentStage = (value: unknown) =>
+  typeof value === 'string' &&
+  toolArgumentStages.includes(value as (typeof toolArgumentStages)[number])
+    ? (value as (typeof toolArgumentStages)[number])
+    : null;
+export const diagnosticToolName = (value: unknown) =>
+  typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,100}$/u.test(value) ? value : null;
 export function diagnosticError(value: unknown): string | null {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value === 'string' && (errors.has(value) || /^HTTP_[45]\d{2}$/u.test(value)))
@@ -218,5 +230,13 @@ export type DiagnosticReport = {
     durationMs: null;
     httpStatus: number | null;
     rejectedFields: string[];
+    toolArgumentFailure: {
+      toolName: string | null;
+      stage: (typeof toolArgumentStages)[number];
+      blockIndex: number | null;
+      argumentChars: number | null;
+      hasJsonDelta: boolean;
+      parseOffset: number | null;
+    } | null;
   }[];
 };

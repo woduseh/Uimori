@@ -96,12 +96,25 @@ export type ProviderToolCall = {
   arguments: Record<string, Json>;
   recoveredFromTruncation?: boolean;
 };
+export type ProviderToolArgumentDiagnostic = {
+  kind: 'tool-arguments';
+  toolName: string | null;
+  stage: 'tool_start_shape' | 'tool_json_parse' | 'tool_json_shape';
+  blockIndex: number;
+  argumentChars: number | null;
+  hasJsonDelta: boolean;
+  parseOffset: number | null;
+};
 export type ProviderResult = {
   status: 'completed' | 'tool_calls' | 'refused' | 'partial' | 'error' | 'cancelled';
   text: string;
   toolCalls: ProviderToolCall[];
   refusal: string | null;
-  error: { code: string; diagnostic?: ProviderHttpDiagnostic } | null;
+  error: {
+    code: string;
+    diagnostic?: ProviderHttpDiagnostic;
+    toolArgumentDiagnostic?: ProviderToolArgumentDiagnostic;
+  } | null;
   usage: ProviderUsage;
   opaqueState: Json;
   delivery?: {

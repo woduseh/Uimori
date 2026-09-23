@@ -281,12 +281,58 @@ test('recent row caps, omitted links and unknown stored values remain bounded an
 
 test('only finite known diagnostics survive and no error suffix is forwarded', () => {
   expect(diagnosticError('HTTP_429')).toBe('HTTP_429');
+  expect(diagnosticError('INVALID_TOOL_ARGUMENTS')).toBe('INVALID_TOOL_ARGUMENTS');
   expect(diagnosticError('HTTP_429: SECRET')).toBe('UNKNOWN_ERROR');
   expect(diagnosticError('Provider outcome uncertain; not replayed')).toBe(
     'PROVIDER_OUTCOME_UNCERTAIN'
   );
   expect(diagnosticError(null)).toBeNull();
   for (const value of [NaN, Infinity, -1, '123', {}]) expect(diagnosticNumber(value)).toBeNull();
+});
+
+test('tool argument diagnostics expose only bounded structural metadata', async () => {
+  const app = await fixture(),
+    store = app.store;
+  const chat = createFixtureChat(store, 'tool-diagnostic');
+  const { run, attempt } = runFixture(store, chat.id, 'PRIVATE_SOURCE');
+  store.db.prepare('UPDATE attempts SET error=?,request=?,response=? WHERE id=?').run(
+    'INVALID_TOOL_ARGUMENTS',
+    JSON.stringify({ protocol: 'anthropic-messages-v1' }),
+    JSON.stringify({
+      error: {
+        code: 'INVALID_TOOL_ARGUMENTS',
+        toolArgumentDiagnostic: {
+          kind: 'tool-arguments',
+          toolName: 'story.submit',
+          stage: 'tool_json_parse',
+          blockIndex: 2,
+          argumentChars: 1847,
+          hasJsonDelta: true,
+          parseOffset: 912,
+          private: 'PRIVATE_ARGUMENT_BODY',
+        },
+      },
+    }),
+    attempt
+  );
+  const report = createDiagnosticReport(
+    store,
+    { scope: 'chat', chatId: chat.id, runId: run.id },
+    { buildId: 'a'.repeat(64) }
+  );
+  expect(report.attempts[0]).toMatchObject({
+    errorCode: 'INVALID_TOOL_ARGUMENTS',
+    protocol: 'anthropic-messages-v1',
+    toolArgumentFailure: {
+      toolName: 'story.submit',
+      stage: 'tool_json_parse',
+      blockIndex: 2,
+      argumentChars: 1847,
+      hasJsonDelta: true,
+      parseOffset: 912,
+    },
+  });
+  expect(JSON.stringify(report)).not.toContain('PRIVATE_ARGUMENT_BODY');
 });
 
 test('relative preparation timing and HTTP rejection paths exclude timestamps, request IDs and arbitrary provider text', async () => {
