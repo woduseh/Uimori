@@ -168,3 +168,13 @@ test('real Oracle state machine verifies switch, rollback, lost-reopen and fresh
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
 });
+
+test('Oracle retention preserves the recovery pair and never prunes unrelated services', () => {
+  const file = fileURLToPath(new URL('../deploy/oracle-gc-test.py', import.meta.url));
+  const result = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-B', file], {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 20_000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});

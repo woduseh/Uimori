@@ -41,6 +41,7 @@ npm run release:oracle -- --config .local/oracle-release.json --source-ref main
 
 | 옵션 | 동작 |
 | --- | --- |
+| `--cleanup-plan` | 현재 운영 상태와 보존 정책으로 삭제 후보만 조회해요. 삭제·배포·CI 실행은 하지 않아요. |
 | `--plan` | 설정과 선택한 로컬 소스를 표시해요. GitHub·SSH 접속이나 서버 변경은 없어요. |
 | `--check-only` | CI 확인 후 실제 이미지를 만들고 빈 DB 및 운영 DB 복제본을 검증해요. 운영 앱을 중지하거나 maintenance를 변경하지 않아요. 상태 조회용 인증 세션은 만들 수 있어요. |
 | 기본 실행 | 검증·쓰기 중지·백업·전환·호스트 HTTPS smoke·쓰기 재개까지 진행해요. |
@@ -75,6 +76,22 @@ CI 확인 → Oracle preflight → pinned SHA 이미지 준비
 SSH가 끊기면 같은 명령을 바로 재실행하지 말고 알려진 run ID로 상태를 조회해요. 실제 image·volume·health와 lock이 확인되기 전에는 성공이나 실패를 추정하지 않아요. 실행 중인 작업을 자동 재개하거나 새로운 배포로 덮어쓰는 기능은 없어요.
 
 컨트롤러 보고서는 `output/release/oracle/<run>/summary.json`, 서버 보고서는 `/opt/uimori/releases/<run>/oracle-summary.json`이에요. 단계 시작·종료와 경과시간을 바로 출력하고 CI 실행 번호, image identity, 백업, smoke, 쓰기 재개 및 롤백 결과를 분리해서 남겨요. 비밀 설정 전체는 출력하지 않으며 하위 명령 오류의 비공개 진단 로그 위치를 기록해요.
+
+## 성공 후 자동 정리
+
+정리는 새 앱의 smoke와 쓰기 재개가 모두 확인된 뒤, 동일 배포 lock 안에서 한 번 실행돼요. 배포 성공과 정리 결과는 별도예요. 오래된 파일이나 이미지 하나를 지우지 못해도 정상 운영 앱을 실패 처리하거나 롤백하지 않고 `retention.status=WARN` 및 남은 대상을 기록해요.
+
+현재 실행 이미지와 직전 복구용 이미지, 최신 성공 배포의 직전 DB·동반 파일·환경 백업을 한 복구 세트로 보존해요. 실제 컨테이너 image/volume, 백업 무결성 기록, 백업 파일 존재, 두 이미지의 존재가 확인되어야 오래된 세트를 지워요. 기존 컨테이너가 참조하는 이미지(중지된 컨테이너 포함)도 보존해요.
+
+삭제 대상은 `uimori-oracle-v2` 관리 표식과 정상 종료 기록이 있는 오래된 릴리스, `io.uimori.managed=true` 이미지 중 `uimori:candidate-<SHA>` 태그만 있거나 태그가 없고 더 이상 보호되지 않는 이미지예요. 최근 종료된 실패 기록은 5개 남겨요. 중단/롤백 실패/쓰기 상태 불명확/임시 정리 실패 기록과 관련 이미지는 자동 삭제하지 않아요. 이전 배포 도구가 만든 미표식 디렉터리·이미지는 자동으로 관리 대상으로 편입하지 않아요. 첫 개편 배포 뒤에도 이런 예전 자료가 남을 수 있으며 `--cleanup-plan`에서 미확인 대상으로 표시해요.
+
+```bash
+npm run release:oracle -- --config .local/oracle-release.json --cleanup-plan
+```
+
+컨트롤러 preview는 읽기 전용이며 별도 수동 apply 모드를 제공하지 않아요. 실제 정리는 정상 배포 뒤 자동 수행해요. 동작 중인 배포가 lock을 잡고 있다면 preview도 재시도하기 전 해당 배포 종료를 확인해요.
+
+**운영 데이터 볼륨과 fresh 모드의 이전 볼륨은 자동 삭제하지 않아요.** PocketRisu, Tia Workspace, SSH/인증 파일, 개발 브랜치·worktree, 공유 Docker builder 캐시와 서버 전체 네트워크도 이 정리 대상이 아니에요. `docker system prune`, 전역 image/volume/builder prune을 실행하지 않아요.
 
 ## 개인 작업실 v1 전환
 

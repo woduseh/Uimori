@@ -1,3 +1,4 @@
+import { retainArtifacts } from './artifact-retention.mjs';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
@@ -5,7 +6,13 @@ import { artifactRoot, ownedPath, removeOwned } from './lib.mjs';
 
 try {
   const args = process.argv.slice(2);
-  if (args.length === 0) {
+  if (args[0] === '--retention') {
+    if (args.length > 2 || (args.length === 2 && args[1] !== '--apply'))
+      throw new Error('Use --retention [--apply]');
+    const result = await retainArtifacts({ apply: args.includes('--apply') });
+    console.log(JSON.stringify(result, null, 2));
+    if (result.status === 'WARN') process.exitCode = 1;
+  } else if (args.length === 0) {
     const runs = [];
     if (existsSync(artifactRoot))
       for (const id of await readdir(artifactRoot)) {

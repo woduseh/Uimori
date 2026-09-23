@@ -7,6 +7,7 @@ import { listenAddress, networkPolicy } from '../server/network-policy.js';
 
 // Exercise the real reporter, artifact files and cleanup paths while replacing
 // process/browser launch and build inputs with deterministic fault boundaries.
+vi.mock('../scripts/artifact-retention.mjs', () => ({ retainArtifacts: vi.fn() }));
 vi.mock('../scripts/browser-runtime.mjs', () => ({ assertBrowserRuntime: vi.fn() }));
 vi.mock('../scripts/lib.mjs', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -18,6 +19,9 @@ vi.mock('../scripts/lib.mjs', async (importOriginal) => ({
   artifactScan: vi.fn(),
   json: vi.fn(),
 }));
+const { retainArtifacts } = await import(
+  new URL('../scripts/artifact-retention.mjs', import.meta.url).href
+);
 const { assertBrowserRuntime } = await import(
   new URL('../scripts/browser-runtime.mjs', import.meta.url).href
 );
@@ -58,6 +62,7 @@ beforeEach(() => {
   report = browserReport();
   commandFailure = { code: 0, timedOut: false };
   lib.assertBuild.mockResolvedValue(identity);
+  vi.mocked(retainArtifacts).mockResolvedValue({ status: 'PASS', removed: [] });
   vi.mocked(assertBrowserRuntime).mockResolvedValue({ name: 'synthetic' });
   vi.stubEnv('UIMORI_VISUAL_REVIEW', '0');
   lib.browserPath.mockReturnValue(process.execPath);
@@ -431,3 +436,13 @@ test.each(['0/4', '5/4', '1/0', 'bad'])(
     expect(lib.startServer).not.toHaveBeenCalled();
   }
 );
+
+test('artifact cleanup warnings preserve the original browser result', async () => {
+  vi.mocked(retainArtifacts).mockResolvedValue({
+    status: 'WARN',
+    warnings: ['synthetic cleanup failure'],
+  });
+  const { summary } = await run();
+  expect(summary.status).toBe('PASS');
+  expect(summary.retention.status).toBe('WARN');
+});

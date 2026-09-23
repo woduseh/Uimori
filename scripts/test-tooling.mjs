@@ -1,8 +1,9 @@
+import { retainArtifacts } from './artifact-retention.mjs';
 import { readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { run } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { json, newId, root } from './lib.mjs';
+import { createOwnership, json, newId, root } from './lib.mjs';
 
 function eventJson(event) {
   return JSON.stringify(event, (_key, value) =>
@@ -36,6 +37,8 @@ async function defaultFiles() {
 export async function testTooling(files) {
   const directory = path.join(root, 'output', 'tooling', newId());
   const report = path.join(directory, 'summary.json');
+  const owner = createOwnership(directory, new Date().toISOString());
+  await json(path.join(directory, 'ownership.json'), owner);
   const summary = {
     status: 'FAIL',
     scope:
@@ -136,6 +139,12 @@ export async function testTooling(files) {
     summary.finishedAt = new Date().toISOString();
     summary.elapsedMs = Date.parse(summary.finishedAt) - Date.parse(summary.startedAt);
     await writeFile(summary.log, events.join('\n') + '\n');
+    await json(report, summary);
+    owner.active = false;
+    owner.finishedAt = summary.finishedAt;
+    owner.cleanup = { status: !summary.counts || summary.counts.cancelled ? 'UNCERTAIN' : 'PASS' };
+    await json(path.join(directory, 'ownership.json'), owner);
+    summary.retention = await retainArtifacts({ current: directory, apply: true });
     await json(report, summary);
     console.log(`Tooling tests ${summary.status}. Report: ${report}`);
   }
