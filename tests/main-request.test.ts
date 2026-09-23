@@ -562,7 +562,7 @@ describe('Batch recovery in the real main tool loop', () => {
       let calls = 0;
       log.value.executeAnthropicBatch = async (_connection, _request, options) => {
         calls++;
-        await options.onWire?.({
+        const attemptId = await options.onWire?.({
           connectionId: 'connection',
           protocol: 'anthropic-messages-v1',
           role: 'main',
@@ -575,6 +575,7 @@ describe('Batch recovery in the real main tool loop', () => {
           stablePrefixSha256: 'stable',
           executionMode: 'batch',
         });
+        expect(typeof attemptId).toBe('string');
         return calls === 1
           ? {
               status: 'tool_calls',
