@@ -825,7 +825,7 @@ const providerOptionCases = [
     choices: { '사고 강도': 'high', '서비스 등급': 'flex', Verbosity: 'high' },
     saved: { reasoningEffort: 'high', serviceTier: 'flex', verbosity: 'high' },
     absent: ['thinkingLevel'],
-    hidden: ['Thinking Level', 'Output Effort'],
+    hidden: ['Thinking Level', 'Output Effort', '실행 방식'],
   },
   {
     protocol: 'vertex-gemini-v1',
@@ -835,7 +835,7 @@ const providerOptionCases = [
     choices: { '서비스 등급': 'flex' },
     saved: { serviceTier: 'flex' },
     absent: ['thinkingLevel'],
-    hidden: ['Verbosity', '사고 모드'],
+    hidden: ['Verbosity', '사고 모드', '실행 방식'],
   },
   {
     protocol: 'vertex-gemini-v1',
@@ -845,7 +845,7 @@ const providerOptionCases = [
     choices: { '사고 강도': 'HIGH', '서비스 등급': 'flex' },
     saved: { thinkingLevel: 'HIGH', serviceTier: 'flex' },
     absent: ['outputEffort'],
-    hidden: ['Verbosity', '사고 모드'],
+    hidden: ['Verbosity', '사고 모드', '실행 방식'],
   },
   {
     protocol: 'openai-responses-v1',
@@ -866,7 +866,7 @@ const providerOptionCases = [
       cacheTtl: '30m',
     },
     absent: ['outputEffort'],
-    hidden: ['사고 모드'],
+    hidden: ['사고 모드', '실행 방식'],
   },
   {
     protocol: 'anthropic-messages-v1',
@@ -874,12 +874,14 @@ const providerOptionCases = [
     modelId: 'claude-opus-5',
     choices: {
       '사고 강도': 'high',
+      '실행 방식': 'batch',
       '사고 모드': 'disabled',
       '캐시 방식': 'explicit',
       '캐시 유지 시간': '5m',
     },
     saved: {
       outputEffort: 'high',
+      executionMode: 'batch',
       thinkingMode: 'disabled',
       cacheMode: 'explicit',
       cacheTtl: '5m',
@@ -891,7 +893,12 @@ const providerOptionCases = [
     protocol: 'anthropic-messages-v1',
     endpoint: 'https://api.anthropic.com/v1',
     modelId: 'claude-fable-5-1',
-    choices: { '사고 강도': 'max', '캐시 방식': 'automatic', '캐시 유지 시간': '1h' },
+    choices: {
+      '사고 강도': 'max',
+      '실행 방식': 'realtime',
+      '캐시 방식': 'automatic',
+      '캐시 유지 시간': '1h',
+    },
     saved: { outputEffort: 'max', cacheMode: 'automatic', cacheTtl: '1h' },
     absent: ['reasoningEffort', 'thinkingMode'],
     hidden: ['Verbosity'],
@@ -906,7 +913,7 @@ for (const [index, item] of providerOptionCases.entries()) {
     const observed = observe(page),
       prefix = 'PMUI11 ' + Date.now();
     const tabFor = (label: string) =>
-      ['사고 강도', '서비스 등급'].includes(label) ? '기본' : '고급';
+      ['사고 강도', '서비스 등급', '실행 방식'].includes(label) ? '기본' : '고급';
     const title = prefix + ' ' + item.modelId,
       connection = await api<Connection>(request, '/connections', {
         title,

@@ -81,10 +81,19 @@ test('active run or outstanding provider attempt blocks deletion until completio
       "INSERT INTO attempts(id,chat_id,run_id,role,connection_id,model_id,status,request) VALUES('attempt',?,?,'main','fixture','fixture','running','{}')"
     )
     .run(chat.id, pending.id);
+  const time = new Date().toISOString();
+  store.db
+    .prepare(
+      "INSERT INTO anthropic_batches VALUES('attempt',?,0,'batch-delete','attempt','request','ended',NULL,?,?)"
+    )
+    .run(pending.id, time, time);
   expect(() => deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request)).toThrow(
     '공급자 요청'
   );
   store.db.prepare("UPDATE attempts SET status='cancelled'").run();
   deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request);
   expect(store.chats()).toEqual([]);
+  expect(store.db.prepare('SELECT count(*) AS count FROM anthropic_batches').get()).toEqual({
+    count: 0,
+  });
 });

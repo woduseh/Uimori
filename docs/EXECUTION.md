@@ -10,6 +10,16 @@
 
 상태 확인은 `server/run-projections.ts`의 경량 조회를 사용해요. Reader는 과거 실패 전체 대신 현재 페이지·최신 실패·활성 작업을 조회하고, 전체 작업 이력은 별도로 불러와요. 표시 변환은 전역 이벤트 커서가 아니라 원문·변수·자료·이미지 결과 변경에 반응해요. 원문 전체를 읽어야 하는 요청에서만 본문을 가져와요. 재작성·분기는 [독립 채팅 사본](CHAT-BACKUP.md)이며 과거 전체 실행의 결정적 재생을 제공하지 않아요.
 
+## 복구 가능한 Anthropic Batch Run
+
+일반 실시간 provider 요청은 서버가 끊기면 결과를 확정할 수 없으므로 기존처럼 active Run을 `interrupted`로 바꿔 자동 재전송하지 않아요. 반면 main 모델의 Anthropic Batch 실행은 공급자 쪽 작업 ID가 살아 있으므로 `anthropic_batches`의 durable 상태가 있는 Run만 다시 `queued`로 되돌려 worker가 이어 받아요.
+
+복구 worker는 Run을 처음부터 임의 재실행하는 대신 같은 `runMain`을 재진입해 Batch 라운드 순서와 요청 해시를 대조해요. 이미 `batchId`가 있는 라운드는 생성 API를 다시 호출하지 않고 조회부터 시작하고, 이미 결과 JSONL을 회수한 라운드는 저장된 결과를 다시 decode해요. provider tool call 뒤에 저장된 `tool_events`도 replay receipt로 사용하므로 읽기·도우미·문맥 도구나 terminal 제출을 중복 실행하지 않아요. `context.new` 같은 상태성 도구는 저장된 checkpoint를 바탕으로 실행 중 상태만 복원하고 새 checkpoint를 만들지 않아요.
+
+새 Batch를 만들기 전에는 로컬 row를 `reserved`로 먼저 기록해요. `reserved` 상태는 아직 원격 생성 시도를 시작하지 않았으므로 재시작 후 안전하게 생성할 수 있어요. 원격 생성 시도 직전에 `creating`으로 바꾸며, `creating`인데 `batchId`가 없으면 응답 수신 전 서버가 끊긴 것인지 알 수 없으므로 자동 재전송하지 않아요. 중복 과금 방지가 자동 복구보다 우선이에요.
+
+성공해 source가 commit되면 복구에 필요했던 원본 Batch 결과 본문은 제거하고 Batch/attempt 식별 메타데이터만 남겨요.
+
 ## 이어 쓰기에 필요한 결과
 
 Lua가 추가·수정·이동한 메시지는 `messageChanges` 변경분으로 남겨요. 사용자 원문 수정과 충돌하면 당시 source hash를 비교해 새 사용자 수정을 보존해요. 채팅 복사와 휴대용 복원에서는 이 메시지의 식별자도 새 자료에 맞게 연결해요.

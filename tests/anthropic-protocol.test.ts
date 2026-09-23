@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import {
   AnthropicDecoder,
   AnthropicProtocolError,
+  decodeAnthropicMessage,
   diagnosticAnthropicBody,
   encodeAnthropic,
 } from '../core/anthropic-protocol.js';
@@ -126,6 +127,37 @@ function translationRequest() {
 
 // Synthetic protocol objects only: no SDK, credentials, network requests or model-quality claims.
 describe('Anthropic Messages request and opaque continuation', () => {
+  test('decodes a non-streaming Batch message through the native continuation decoder', () => {
+    const encoded = encodeAnthropic(request());
+    const result = decodeAnthropicMessage(
+      {
+        id: 'msg_batch',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-opus-5',
+        content: [
+          { type: 'text', text: 'Batch prose.' },
+          {
+            type: 'tool_use',
+            id: 'batch-tool',
+            name: 'tool_0_knowledge_read',
+            input: { id: 'lore-1' },
+          },
+        ],
+        stop_reason: 'tool_use',
+        stop_sequence: null,
+        usage: { input_tokens: 12, output_tokens: 7 },
+      },
+      encoded.context
+    );
+    expect(result).toMatchObject({
+      status: 'tool_calls',
+      text: 'Batch prose.',
+      toolCalls: [{ id: 'batch-tool', name: 'knowledge.read', arguments: { id: 'lore-1' } }],
+      usage: { inputTokens: 12, outputTokens: 7 },
+    });
+    expect(result.opaqueState).not.toBeNull();
+  });
   test('encodes the complete request and collision-free aliases without changing optional tool parameters', () => {
     const input = request();
     input.stable.tools.push({ ...input.stable.tools[0], name: 'knowledge_read' });

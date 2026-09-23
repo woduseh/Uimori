@@ -71,6 +71,50 @@ const summaryText = (value: unknown): string | undefined => {
   return text && text.length <= CONTEXT_SUMMARY_MAX_CHARS ? text : undefined;
 };
 
+/** Rebuild local loop state from an already-persisted context tool receipt without writing again. */
+export function replayContextTool(
+  fixed: RunSnapshot,
+  event: ToolEvent,
+  state: ContextToolState
+): { event: ToolEvent; switched?: RunSnapshot } {
+  const saved = structuredClone(event);
+  if (saved.name === 'context.read') return { event: saved };
+  const result =
+    saved.result && typeof saved.result === 'object' && !Array.isArray(saved.result)
+      ? (saved.result as Record<string, unknown>)
+      : {};
+  const checkpoint =
+    result.checkpoint && typeof result.checkpoint === 'object'
+      ? (structuredClone(result.checkpoint) as ContextCheckpointRef)
+      : null;
+  if (saved.name === 'context.write') {
+    if (typeof saved.args.summary === 'string') state.workingSummary = saved.args.summary;
+    if (checkpoint) state.checkpoint = checkpoint;
+    return { event: saved };
+  }
+  if (saved.name !== 'context.new') return { event: saved };
+  const plan = fixed.contextPlan;
+  if (!plan) throw new Error('CONTEXT_TOOLS_UNAVAILABLE');
+  const keepRecent =
+    typeof saved.args.keepRecent === 'number' ? saved.args.keepRecent : CONTEXT_KEEP_RECENT_DEFAULT;
+  const summary =
+    saved.args.summary === undefined
+      ? state.workingSummary
+      : typeof saved.args.summary === 'string'
+        ? saved.args.summary
+        : null;
+  const compactedCount = Math.max(plan.compacted.length, fixed.history.length - keepRecent);
+  const refs = contextSourceRefs(fixed).slice(0, compactedCount);
+  const staged = stageContextProjection(fixed, refs, summary).snapshot;
+  const switched =
+    checkpoint && staged.contextPlan
+      ? { ...staged, contextPlan: { ...staged.contextPlan, checkpoint } }
+      : staged;
+  state.workingSummary = summary;
+  state.checkpoint = checkpoint ?? state.checkpoint;
+  return { event: saved, switched };
+}
+
 /** One context tool call inside the main loop. Denials are host verdicts, never provider output. */
 export async function executeContextTool(
   fixed: RunSnapshot,

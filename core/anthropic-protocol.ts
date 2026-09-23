@@ -825,6 +825,39 @@ export class AnthropicDecoder {
   }
 }
 
+/** Decode a non-streaming Messages response through the same state machine used by SSE. */
+export function decodeAnthropicMessage(value: unknown, context: AnthropicTurn): ProviderResult {
+  const message = copy(value, 'INVALID_ANTHROPIC_EVENT');
+  if (
+    !object(message) ||
+    message.type !== 'message' ||
+    message.role !== 'assistant' ||
+    !nonempty(message.id) ||
+    !Array.isArray(message.content) ||
+    !nonempty(message.stop_reason)
+  )
+    reject('INVALID_ANTHROPIC_EVENT');
+  const decoder = new AnthropicDecoder(context);
+  decoder.accept({
+    type: 'message_start',
+    message: { ...message, content: [], stop_reason: null, stop_sequence: null },
+  });
+  for (const [index, block] of message.content.entries()) {
+    decoder.accept({ type: 'content_block_start', index, content_block: block });
+    decoder.accept({ type: 'content_block_stop', index });
+  }
+  decoder.accept({
+    type: 'message_delta',
+    delta: {
+      stop_reason: message.stop_reason,
+      stop_sequence: message.stop_sequence ?? null,
+      ...(message.stop_details === undefined ? {} : { stop_details: message.stop_details }),
+    },
+  });
+  decoder.accept({ type: 'message_stop' });
+  return decoder.finish();
+}
+
 /** Diagnostic copies hide reasoning and signatures while actual continuation bytes stay intact. */
 export function diagnosticAnthropicBody(value: Json): Json {
   if (Array.isArray(value)) return value.map(diagnosticAnthropicBody);

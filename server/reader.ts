@@ -172,7 +172,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
       AND json_type(snapshot,'$.nativeRisuExecution.output') IS NULL) AS canRejudge,
     json_extract(command,'$.retryOf') AS retryOf,
     CASE WHEN source_revision IS NULL THEN (SELECT newer.id FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id ORDER BY newer.created_at DESC,newer.id DESC LIMIT 1) END AS supersededBy,
-    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE COALESCE(json_extract(snapshot,'$.displayModelTitle'),json_extract(snapshot,'$.profile.models.main.title')) END AS modelTitle,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
+    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE COALESCE(json_extract(snapshot,'$.displayModelTitle'),json_extract(snapshot,'$.profile.models.main.title')) END AS modelTitle,json_extract(snapshot,'$.profile.models.main.executionMode') AS executionMode,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
     json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
@@ -188,6 +188,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
   ).map((row) => ({
     ...row,
     canRejudge: !!row.canRejudge,
+    executionMode: row.executionMode ?? undefined,
     estimatedCost: runCosts.get(row.id),
     snapshot: {
       ...JSON.parse(row.snapshot),

@@ -140,6 +140,7 @@ describe('provider settings, catalogs and archive contracts', () => {
         'thinkingBudgetTokens',
         'thinkingLevel',
         'timeoutMs',
+        'executionMode',
       ])
         expect(defaults).not.toHaveProperty(key);
       const options =
@@ -149,6 +150,7 @@ describe('provider settings, catalogs and archive contracts', () => {
               outputEffort: 'high',
               thinkingMode: 'adaptive',
               serviceTier: 'standard_only',
+              executionMode: 'batch',
               timeoutMs: 1800000,
             }
           : { structuredOutput: false, reasoningEffort: 'xhigh', timeoutMs: 1800000 };
@@ -169,6 +171,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       )
     ).toMatchObject({ thinkingLevel: 'HIGH', timeoutMs: 600000 });
     await request(app, '/model-presets', modelBody(fixture, { timeoutMs: 600001 }), 400);
+    await request(app, '/model-presets', modelBody(fixture, { executionMode: 'batch' }), 400);
     const vertex = await request<Connection>(
       app,
       '/connections',

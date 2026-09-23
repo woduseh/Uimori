@@ -414,6 +414,22 @@ export function ProviderModelFields({
         </label>
         {codex && <small className="full">출력 목표 토큰은 실제 출력량을 보장하지 않아요.</small>}
         {hints && <ThinkingSelect hints={hints} value={value} onChange={update} />}
+        {protocol === 'anthropic-messages-v1' && (
+          <label>
+            실행 방식
+            <select
+              aria-label="실행 방식"
+              value={value.executionMode}
+              onChange={(event) =>
+                update({ executionMode: event.target.value as ModelDraft['executionMode'] })
+              }
+            >
+              <option value="realtime">실시간</option>
+              <option value="batch">Batch · 비동기 · 50% 할인</option>
+            </select>
+            <small>본문 Run을 Anthropic Batch로 실행해요. 응답은 완료될 때 한 번에 표시돼요.</small>
+          </label>
+        )}
         {protocol && (sends('serviceTier') || value.serviceTier) && (
           <ModelOptionSelect
             label="서비스 등급"

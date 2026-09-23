@@ -7,7 +7,7 @@ import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 
-export const DATABASE_SCHEMA_VERSION = 5;
+export const DATABASE_SCHEMA_VERSION = 6;
 const FORMAT = 'uimori-personal-v1';
 
 export class DatabaseSchemaError extends Error {
@@ -83,6 +83,22 @@ export function initializeDatabaseSchema(
           WHERE json_type(snapshot,'$.profile.chatOptions')='object';`);
     }
     db.exec('CREATE TABLE IF NOT EXISTS image_cleanup_candidates(hash TEXT PRIMARY KEY)');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS anthropic_batches(
+        attempt_id TEXT PRIMARY KEY REFERENCES attempts(id),
+        run_id TEXT NOT NULL REFERENCES runs(id),
+        ordinal INTEGER NOT NULL,
+        batch_id TEXT UNIQUE,
+        custom_id TEXT NOT NULL,
+        request_sha256 TEXT NOT NULL,
+        status TEXT NOT NULL,
+        result TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(run_id,ordinal)
+      );
+      CREATE INDEX IF NOT EXISTS anthropic_batches_run ON anthropic_batches(run_id,ordinal);
+    `);
     if (previous > 0 && previous < 3) {
       // One-time conversion of execution metadata, not ongoing legacy shape support.
       db.exec(`

@@ -105,6 +105,42 @@ export function createAgentCollaboration(
   let spentCalls = 0;
   const bootstrap: ToolEvent[] = [];
 
+  const replay = (saved: ToolEvent): ToolEvent => {
+    const result =
+      saved.result && typeof saved.result === 'object' && !Array.isArray(saved.result)
+        ? (saved.result as AgentAdvice)
+        : undefined;
+    if (
+      saved.name !== 'agents.consult' ||
+      !result ||
+      result.kind !== 'advice' ||
+      typeof saved.args.agentId !== 'string' ||
+      typeof saved.args.question !== 'string' ||
+      result.agentId !== saved.args.agentId
+    )
+      throw new Error('AGENT_RECOVERY_MISMATCH');
+    const agent = config.agents.find((item) => item.id === result.agentId);
+    if (!agent) throw new Error('AGENT_RECOVERY_MISMATCH');
+    const question = saved.args.question.trim();
+    if (result.question !== question) throw new Error('AGENT_RECOVERY_MISMATCH');
+    const requestKey = JSON.stringify([agent.id, question, result.contextHash ?? null]);
+    const event = structuredClone(saved) as ToolEvent & { result: AgentAdvice };
+    cached.set(requestKey, event);
+    const previous = previousByAgent.get(agent.id) ?? [];
+    previous.push(structuredClone(result));
+    previousByAgent.set(agent.id, previous);
+    spentByAgent.set(agent.id, (spentByAgent.get(agent.id) ?? 0) + result.usage.modelCalls);
+    spentCalls += result.usage.modelCalls;
+    totalUsage.modelCalls += result.usage.modelCalls;
+    for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const) {
+      totalUsage[key] =
+        totalUsage[key] === null || result.usage[key] === null
+          ? null
+          : totalUsage[key] + result.usage[key];
+    }
+    return event;
+  };
+
   const consult = async (
     callId: string,
     args: Record<string, unknown>,
@@ -338,10 +374,19 @@ export function createAgentCollaboration(
   return {
     bootstrap,
     consult,
+    replay,
     async prepare() {
       for (const agent of config.agents.filter((item) => item.trigger === 'before')) {
         if (hooks.signal.aborted) break;
-        const event = await consult(`__advisor_before_${agent.id}`, {
+        const callId = `__advisor_before_${agent.id}`;
+        const saved = hooks.replayToolEvents?.find(
+          (event) => event.callId === callId && event.name === 'agents.consult'
+        );
+        if (saved) {
+          bootstrap.push(replay(saved));
+          continue;
+        }
+        const event = await consult(callId, {
           agentId: agent.id,
           question:
             '현재 사용자 요청과 설정된 지침에 따라 맡은 관점에서 도움이 될 판단과 선택지를 제안해 주세요. 기존 자료의 사실과 새로운 창작 제안을 구분해 주세요.',

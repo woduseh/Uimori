@@ -79,6 +79,7 @@ function removeIds(store: Store, table: string, column: string, ids: string[]) {
 }
 
 function removeRunArtifacts(store: Store, runIds: string[], sourceIds: string[], jobIds: string[]) {
+  removeIds(store, 'anthropic_batches', 'run_id', runIds);
   for (const table of ['model_inputs', 'tool_events']) removeIds(store, table, 'run_id', runIds);
   for (const table of ['source_edits', 'chat_variable_outputs'])
     removeIds(store, table, 'source_id', sourceIds);
