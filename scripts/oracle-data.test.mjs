@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import {
+  dataMaintenance,
   copyCredentials,
   copyStoppedData,
   inspectData,
@@ -122,6 +123,18 @@ test('actual-image hash matches build runner ordering and rejects altered artifa
     JSON.stringify({ buildId: build, sourceHash: build, distHash: hash })
   );
   assert.equal(verifyIdentity(root, build, hash).buildId, build);
+  assert.equal(verifyIdentity(root, build).distHash, hash);
   writeFileSync(join(root, 'a.js'), 'tampered');
   assert.throws(() => verifyIdentity(root, build, hash), /mismatch/);
+});
+
+test('persisted fresh-volume maintenance stays closed and is read without mutation', (t) => {
+  const { source, db } = fixture(t);
+  db.exec(
+    "CREATE TABLE maintenance(id INTEGER PRIMARY KEY, status TEXT, reason TEXT, epoch INTEGER, updated_at TEXT); INSERT INTO maintenance VALUES (1,'open',NULL,0,'old')"
+  );
+  assert.equal(dataMaintenance(source).status, 'open');
+  assert.equal(dataMaintenance(source, 'oracle:isolated-fresh').status, 'closed');
+  assert.equal(dataMaintenance(source).reason, 'oracle:isolated-fresh');
+  assert.throws(() => dataMaintenance(source, 'bad-owner'));
 });

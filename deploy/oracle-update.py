@@ -15,8 +15,9 @@ from urllib.parse import urlsplit
 
 def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("commit", "build-id", "dist-hash", "release-dir"):
+    for name in ("commit", "build-id", "release-dir"):
         parser.add_argument("--" + name, required=True)
+    parser.add_argument("--dist-hash")
     parser.add_argument("--app-dir", default="/opt/uimori/app")
     parser.add_argument("--fresh", action="store_true")
     parser.add_argument("--image")
@@ -25,6 +26,8 @@ def arguments(argv=None):
     parser.add_argument("--source-ref", default="main")
     args = parser.parse_args(argv)
     for name, length in (("commit", 40), ("build_id", 64), ("dist_hash", 64)):
+        if name == "dist_hash" and getattr(args, name) is None:
+            continue
         if not re.fullmatch("[0-9a-f]{" + str(length) + "}", getattr(args, name)):
             parser.error("Invalid " + name)
     release = Path(args.release_dir)
@@ -94,10 +97,13 @@ class Runner:
         self.backed_up = False
         self.checked_out = False
         self.candidate_started = False
+        self.gate_owned = False
+        self.reopening = False
+        self.owner = "oracle:" + self.release.name
         self.temporary_volumes = []
         self.probe_containers = []
         mode = "fresh" if args.fresh else "update"
-        self.summary = {"status": "RUNNING", "commit": args.commit, "sourceRef": args.source_ref, "buildId": args.build_id, "distHash": args.dist_hash, "mode": mode, "checkOnly": args.check_only, "stages": [], "rollback": "NOT_NEEDED"}
+        self.summary = {"status": "RUNNING", "commit": args.commit, "sourceRef": args.source_ref, "buildId": args.build_id, "distHash": args.dist_hash, "mode": mode, "checkOnly": args.check_only, "stages": [], "rollback": "NOT_NEEDED", "managedBy": "uimori-oracle-v2", "writes": "UNCHANGED", "startedAt": time.time()}
 
     def persist(self):
         self.summary["report"] = str(self.release / "oracle-summary.json")
@@ -120,6 +126,7 @@ class Runner:
         finally:
             item["durationMs"] = round((time.time() - item["startedAt"]) * 1000)
             self.persist()
+            print("ORACLE_STAGE " + name + " " + item["status"] + " " + str(item["durationMs"]) + "ms", flush=True)
 
     def run(self, *command, cwd=None, timeout=120):
         # Command output can contain credentials (compose config); never echo it on errors.
@@ -163,6 +170,8 @@ class Runner:
         if target:
             kind, source = target
             mounts += ["--mount", "type=" + kind + ",src=" + source + ",dst=/backup"]
+        if action == "close-maintenance":
+            mounts += ["-e", "UIMORI_MAINTENANCE_OWNER=" + self.owner]
         paths = ["/backup", "/data"] if action == "restore" else ["/data", "/backup"]
         return json.loads(self.docker("run", "--rm", "--network", "none", "--read-only", "--user", "0", "--tmpfs", "/tmp", *mounts, image or self.old_image, "node", "/runner/oracle-data.mjs", action, *paths))
 
@@ -180,7 +189,7 @@ class Runner:
         name = "uimori-probe-" + self.release.name + ("-copy" if volume else "-fresh")
         self.probe_containers.append(name)
         data = ["--mount", "type=volume,src=" + volume + ",dst=/data"] if volume else ["--tmpfs", "/data:uid=1000,gid=1000"]
-        return json.loads(self.docker("run", "--rm", "--name", name, "--network", "none", "--read-only", "--tmpfs", "/tmp", *data, "--mount", "type=bind,src=" + str(self.scripts) + ",dst=/runner,readonly", "-e", "EXPECTED_BUILD=" + self.args.build_id, "-e", "EXPECTED_DIST=" + self.args.dist_hash, self.image, "node", "/runner/oracle-image-probe.mjs", timeout=60))
+        return json.loads(self.docker("run", "--rm", "--name", name, "--network", "none", "--read-only", "--tmpfs", "/tmp", *data, "--mount", "type=bind,src=" + str(self.scripts) + ",dst=/runner,readonly", "-e", "EXPECTED_BUILD=" + self.args.build_id, "-e", "EXPECTED_DIST=" + (self.args.dist_hash or ""), self.image, "node", "/runner/oracle-image-probe.mjs", timeout=60))
 
     def write_env(self, text):
         temporary = self.env.with_suffix(".oracle-tmp")
@@ -200,10 +209,49 @@ class Runner:
             time.sleep(2)
         raise RuntimeError("Application did not become healthy within 90 seconds")
 
-    def remote_commit(self):
-        remote = self.run("git", "ls-remote", "--exit-code", "origin", "refs/heads/" + self.args.source_ref).split()
-        if not remote or remote[0] != self.args.commit:
-            raise RuntimeError("origin/" + self.args.source_ref + " changed; verify the new commit before deploying")
+    def control(self, action, image=None):
+        # No controller-side token, Tailscale route or browser dependencies.
+        return json.loads(self.docker("run", "--rm", "--network", "host", "--read-only", "--user", "0", "--tmpfs", "/tmp",
+            "--mount", "type=bind,src=" + str(self.scripts) + ",dst=/runner,readonly",
+            "--mount", "type=bind,src=" + str(self.env) + ",dst=/run/uimori.env,readonly",
+            image or self.old_image, "node", "/runner/oracle-host-control.mjs", action, "/run/uimori.env", self.owner, self.args.build_id,
+            timeout=90 if action == "smoke" else 20))
+
+    def close_writes(self):
+        self.gate_owned = True  # A lost POST response may still have closed our gate.
+        self.summary["writes"] = "CLOSING"
+        self.persist()
+        deadline = time.monotonic() + 30
+        state = self.control("close")
+        for _ in range(30):
+            if state.get("status") != "closed" or state.get("reason") != self.owner:
+                raise RuntimeError("Maintenance ownership changed while draining")
+            if not state.get("activeWork"):
+                self.data("inspect", self.old_volume)
+                self.summary["writes"] = "CLOSED"
+                return
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(1)
+            state = self.control("status")
+        raise RuntimeError("Active work did not finish; deployment stopped without cancelling user work")
+
+    def reopen_writes(self, image):
+        # Crossing this boundary forbids DB restoration even if the response is lost.
+        self.reopening = True
+        self.summary["writes"] = "REOPENING"
+        self.persist()
+        self.control("open", image)
+        if self.control("status", image).get("status") != "open":
+            raise RuntimeError("Write reopening unconfirmed; inspect state without restoring DB")
+        self.summary["writes"] = "OPEN"
+        self.persist()
+
+    def assert_closed_data(self, volume, image):
+        gate = self.data("maintenance", volume, image=image)
+        if gate.get("status") != "closed" or gate.get("reason") != self.owner:
+            raise RuntimeError("Cannot restore data after writes reopened or maintenance ownership changed")
+        self.data("inspect", volume, image=image)
 
     def execute(self):
         with self.stage("preflight"):
@@ -239,28 +287,38 @@ class Runner:
             self.summary.update(previousCommit=self.previous, previousImage=self.old_image, previousVolume=self.old_volume)
             self.data("inspect", self.old_volume)
             self.old_credentials = self.data("credential-digest", self.old_volume)
-            self.remote_commit()
+            gate = self.control("status")
+            if gate.get("status") != "open" or gate.get("forcedClosed"):
+                raise RuntimeError("Existing maintenance must be resolved before deployment")
         with self.stage("candidate"):
-            self.run("git", "fetch", "origin", self.args.source_ref)
+            self.run("git", "fetch", "origin", self.args.commit)
             if self.run("git", "rev-parse", "FETCH_HEAD") != self.args.commit:
                 raise RuntimeError("Fetched commit mismatch")
             self.run("git", "worktree", "add", "--detach", str(self.candidate), self.args.commit)
             if self.run("git", "rev-parse", "HEAD", cwd=self.candidate) != self.args.commit or self.run("git", "status", "--porcelain", cwd=self.candidate):
                 raise RuntimeError("Candidate checkout mismatch")
             image_ref = self.args.image or "uimori:candidate-" + self.args.commit
+            codex = self.old_config["services"]["app"].get("build", {}).get("args", {}).get("UIMORI_CODEX_VERSION", "") or ""
             if not self.args.image:
-                codex = self.old_config["services"]["app"].get("build", {}).get("args", {}).get("UIMORI_CODEX_VERSION", "") or ""
-                self.docker("build", "--build-arg", "UIMORI_CODEX_VERSION=" + codex, "--tag", image_ref, str(self.candidate), timeout=900)
+                self.docker("build", "--build-arg", "UIMORI_CODEX_VERSION=" + codex, "--build-arg", "UIMORI_REVISION=" + self.args.commit, "--tag", image_ref, str(self.candidate), timeout=900)
             if self.args.image:
                 try:
                     self.docker("image", "inspect", image_ref)
                 except RuntimeError:
                     self.docker("pull", image_ref, timeout=600)
-            self.image = json.loads(self.docker("image", "inspect", image_ref))[0]["Id"]
+            metadata = json.loads(self.docker("image", "inspect", image_ref))[0]
+            labels = metadata.get("Config", {}).get("Labels", {}) or {}
+            if labels.get("org.opencontainers.image.revision") != self.args.commit or labels.get("io.uimori.managed") != "true":
+                raise RuntimeError("Candidate image is not labelled for the verified source SHA")
+            if labels.get("io.uimori.codex-version", "") != codex:
+                raise RuntimeError("Candidate Codex version differs from configured build settings")
+            self.summary["buildSettings"] = {"codexVersion": codex, "revision": self.args.commit}
+            self.image = metadata["Id"]
             self.summary["image"] = self.image
         with self.stage("fresh-image-probe"):
             self.summary["freshProbe"] = self.probe()
             self.expected_columns = self.summary["freshProbe"]["database"].pop("columns")
+            self.summary["distHash"] = self.summary["freshProbe"]["identity"]["distHash"]
         if not self.args.fresh:
             with self.stage("compatibility-probe"):
                 copy = self.new_volume("probe")
@@ -273,27 +331,32 @@ class Runner:
                     raise RuntimeError(str(error) + " Existing database is incompatible with the candidate image. Use the separate personal-v1 transfer tool for schema 24; --fresh discards all app data/settings/API keys and retains only external login files.") from error
         with self.stage("ready-to-switch"):
             self.compose("config", "--quiet", cwd=self.candidate)
-            self.remote_commit()
             if self.env.read_text() != self.old_env or self.routing() != self.old_routing or self.inspect()["Image"] != self.old_image:
                 raise RuntimeError("Live environment changed during candidate verification")
             self.data("inspect", self.old_volume)
         if self.args.check_only:
             self.summary["status"] = "PASS"
             return
+        with self.stage("close-and-drain"):
+            self.close_writes()
         with self.stage("stop-and-backup"):
             self.stopped = True
             self.compose("stop", "app")
             self.data("inspect", self.old_volume)
+            backup = self.private / "data"
+            backup.mkdir(mode=0o700)
+            self.summary["backup"] = self.data("backup", self.old_volume, ("bind", str(backup)))
+            if self.summary["backup"].get("integrity") != "ok":
+                raise RuntimeError("Stopped database backup was not verified")
+            self.backed_up = True
             if self.args.fresh:
                 self.volume_name = self.new_volume("data", temporary=False)
                 self.summary["volume"] = self.volume_name
                 self.summary["credentials"] = self.data("credentials", self.old_volume, ("volume", self.volume_name))
+                self.probe(self.volume_name)
+                self.data("close-maintenance", self.volume_name, image=self.image)
             else:
-                backup = self.private / "data"
-                backup.mkdir(mode=0o700)
-                self.data("backup", self.old_volume, ("bind", str(backup)))
                 self.volume_name = self.old_volume
-                self.backed_up = True
             self.summary["volume"] = self.volume_name
         with self.stage("switch"):
             self.checked_out = True
@@ -307,25 +370,37 @@ class Runner:
             self.compose("up", "-d", "--no-build", "app")
         with self.stage("health"):
             self.wait_healthy(self.image, self.volume_name)
+            self.assert_closed_data(self.volume_name, self.image)
             self.summary["database"] = self.data("audit", self.volume_name, image=self.image)
             if self.data("credential-digest", self.volume_name, image=self.image) != self.old_credentials:
                 raise RuntimeError("Stored credentials changed during deployment")
             if protected_environment(self.env.read_text()) != protected_environment(self.old_env) or self.routing() != self.old_routing:
                 raise RuntimeError("Protected environment or Tailscale routing changed")
-            self.remote_commit()
+        with self.stage("https-smoke"):
+            self.summary["smoke"] = self.control("smoke", self.image)
+            if self.summary["smoke"].get("status") != "PASS":
+                raise RuntimeError("Host HTTPS/API smoke failed")
+        with self.stage("reopen-writes"):
+            self.reopen_writes(self.image)
         self.summary["status"] = "PASS"
 
     def rollback(self):
+        if self.reopening:
+            self.summary["rollback"] = "REFUSED_AFTER_REOPEN"
+            return
         if not self.stopped:
+            if self.gate_owned:
+                self.control("open")
+                self.summary["writes"] = "OPEN"
             return
         self.summary["rollback"] = "RUNNING"
         with self.stage("rollback"):
             if self.candidate_started:
                 # Do not overwrite work submitted by a user after the new app became available.
-                self.data("inspect", self.volume_name, image=self.image)
+                self.assert_closed_data(self.volume_name, self.image)
                 self.compose("stop", "app")
-                self.data("inspect", self.volume_name, image=self.image)
-            if self.backed_up and self.candidate_started:
+                self.assert_closed_data(self.volume_name, self.image)
+            if self.backed_up and self.candidate_started and not self.args.fresh:
                 self.data("restore", self.old_volume, ("bind", str(self.private / "data")))
             if self.checked_out:
                 self.run("git", "checkout", "--detach", self.previous)
@@ -337,6 +412,8 @@ class Runner:
             self.wait_healthy(self.old_image, self.old_volume)
             if self.env.read_text() != self.old_env or self.routing() != self.old_routing:
                 raise RuntimeError("Rollback environment or routing verification failed")
+            self.control("open")
+            self.summary["writes"] = "OPEN"
             self.summary["rollback"] = "PASS"
 
     def cleanup(self):
@@ -394,6 +471,7 @@ def main():
             if runner.summary["cleanup"]["status"] != "PASS":
                 runner.summary["status"] = "FAIL"
                 code = 1
+            runner.summary["finishedAt"] = time.time()
             runner.persist()
             print("ORACLE_REPORT " + runner.summary["report"], flush=True)
             print("ORACLE_SUMMARY " + json.dumps(runner.summary), flush=True)

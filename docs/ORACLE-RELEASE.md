@@ -1,83 +1,83 @@
 # Oracle 릴리스
 
-이 문서는 기존 Oracle Uimori 서비스의 릴리스 실행기를 설명해요. 기본 branch는 `main`이며 `--source-ref`로 push한 다른 branch를 지정할 수 있어요. 실제 서버·공개 주소·라우팅은 배포 설정과 호스트에서 확인해요.
+Oracle 운영 진입점은 `npm run release:oracle` 하나예요. 소스 검증은 정확한 커밋의 GitHub Actions가 담당하고, 실제 이미지·데이터·접속 검증은 Oracle 호스트가 담당해요. main push는 자동 배포하지 않아요.
 
 ## 준비
 
-Node 24.14 이상 24.x에서 clean checkout을 사용해요. 실행기는 `HEAD`와 설정 또는 명령의 `origin/<sourceRef>` 전체 SHA가 같아야 진행하며 source를 stage, commit, push하지 않아요. 변경 검토와 push는 배포 명령 전에 직접 끝내요.
+컨트롤러에는 Node 24.x, Git, 로그인된 GitHub CLI(`gh`, 저장소 Actions 읽기 권한), SSH/SCP가 필요해요. CI의 Node 기준은 `.nvmrc`, Oracle 이미지의 Node 기준은 Dockerfile에 명시돼 있어요. 로컬 Docker·Playwright·미리 만든 `dist`·운영 접속 토큰 사본은 배포 조건이 아니에요.
 
-로컬 전체 검사에는 원격 실행기의 회귀 검사를 위한 Python 3가 필요해요. Windows에서는 `python`, Linux에서는 `python3`를 사용해요. Oracle 서버에도 Python 3, Docker와 Compose, Git이 준비돼 있어야 해요.
+Oracle에는 기존 Uimori 앱, Docker/Compose, Python 3, Git, Tailscale 경로가 있어야 해요. 운영 앱은 healthy이고 checkout은 clean이어야 해요. 진행 중인 생성이나 기존 maintenance가 있으면 먼저 정상 종료·해제하고 배포해요. 배포 도구는 사용자 작업을 강제로 취소하지 않아요.
 
-SSH 키, `known_hosts`, 운영 접속 설정은 Git에 넣지 않고 `.local/oracle-release.json` 같은 ignored 경로에 둬요. 저장소의 [예시 설정](../deploy/oracle-release.example.json)을 복사해 절대 경로를 채워요.
+[예시 설정](../deploy/oracle-release.example.json)을 ignored `.local/oracle-release.json`에 복사해요.
 
 ```json
 {
-  "host": "ubuntu@168.110.23.8",
+  "host": "ubuntu@oracle.example",
   "identityFile": "C:/private/uimori-oracle.pem",
   "knownHostsFile": "C:/private/known_hosts",
   "appDirectory": "/opt/uimori/app",
   "releaseRoot": "/opt/uimori/releases",
-  "accessEnvFile": "C:/private/production.env",
-  "sourceRef": "main",
-  "area": "verify:browser-smoke"
+  "expectedOrigin": "https://uimori.example.ts.net",
+  "sourceRef": "main"
 }
 ```
 
-`releaseRoot`는 실행기가 사용하는 전용 staging 경로 `/opt/uimori/releases`로 고정돼요. 다른 경로로 바꾸는 설정이 아니며 `appDirectory`와 겹칠 수 없어요.
-
-`accessEnvFile`에는 기존 `UIMORI_PUBLIC_ORIGIN`과 `UIMORI_ACCESS_TOKEN`이 있어야 해요. 예를 들어 HTTPS 443을 사용하면 `UIMORI_PUBLIC_ORIGIN=https://uimori.taila7874d.ts.net`처럼 설정하고 후행 `/`를 붙이지 않아요. 서버 `.env.self-host`와 로컬 `accessEnvFile`이 같은 origin을 사용해야 해요. 토큰과 키 내용은 명령 인자, 로그, 저장소에 남기지 않아요. 배포는 이 공개 주소와 접근 토큰을 바꾸지 않아요. 이름·포트 변경은 [Tailscale 접속 주소 변경](TAILSCALE-DEPLOY.md#접속-이름이나-포트-변경)을 별도로 따라요.
-
-로컬 Docker는 필요하지 않아요. 기본 경로는 서버에서 이미 받은 정확한 SHA를 한 번 빌드하고 immutable image ID로 이후 검사와 전환을 이어 가요. 이미 관리 중인 registry image가 있다면 `--image registry.example/uimori@sha256:...`처럼 전체 image reference를 줄 수 있어요. 이 입력 기능만 있으며 현재 절차는 Docker를 설치하거나 새 image repository·registry를 만들지 않아요.
-
-대상 호스트가 `aarch64`이고 다른 컴퓨터에서 이미지를 만든다면 `docker buildx build --platform linux/arm64 ... --push`처럼 Linux ARM64 대상을 포함해야 해요. 같은 검증 커밋과 운영의 `UIMORI_CODEX_VERSION`으로 만들고, 서버에서 접근 가능한 registry에 올린 digest를 `--image`로 전달해요. 실제 업로드·registry 인증 설정은 이 명령에 포함되지 않아요. 플랫폼 지정은 [Docker 공식 문서](https://docs.docker.com/build/building/multi-platform/#build-multi-platform-images)를 따라요.
+`expectedOrigin`은 운영 `.env.self-host`의 `UIMORI_PUBLIC_ORIGIN`과 같은 HTTPS origin이며 경로나 후행 `/`를 넣지 않아요. `releaseRoot`는 `/opt/uimori/releases`로 고정돼요. 키와 `known_hosts` 파일은 기존 개인 파일 경로를 사용해요. **이전 설정의 `accessEnvFile`과 `area`는 제거하고 `expectedOrigin`으로 바꿔요.** 컨트롤러는 운영 접속 토큰 파일을 더 이상 읽지 않아요. 서버의 기존 origin·토큰·인증 파일은 유지해요.
 
 ## 검증과 배포
 
-기본 릴리스 검사는 `quality`, 현재 소스의 `build`, 선택한 기능 영역을 실행해 내용 지문이 포함된 영수증을 남겨요. 기본 영역은 `verify:browser-smoke`예요.
-
-```powershell
-npm run release:check -- --area verify:browser-smoke
-npm run release:oracle -- --config .local/oracle-release.json --area verify:browser-smoke
+```bash
+npm run release:oracle -- --config .local/oracle-release.json --plan
+npm run release:oracle -- --config .local/oracle-release.json --source-ref main
 ```
 
-다른 branch를 배포할 때는 해당 branch를 먼저 검토·commit·push한 뒤 source ref를 명시해요.
+배포 시작 시 clean HEAD와 `origin/<sourceRef>`의 전체 SHA가 일치해야 해요. 도구는 그 SHA를 고정하고 `Quality` workflow의 해당 branch/SHA 실행을 GitHub에서 조회해요. `static`, `tests (1/4)`부터 `tests (4/4)`, `tooling`, `linux-core`, `selfhost`, 최종 `quality`가 모두 성공해야 해요. PR 임시 merge commit, 다른 SHA, docs-only 성공, 취소·누락·실패한 job은 대체 증거가 아니에요. 같은 SHA의 더 최신 실행이 실패했으면 오래된 초록불로 돌아가지 않아요. GitHub 조회 실패도 검증 생략으로 처리하지 않아요.
 
-```powershell
-npm run release:oracle -- --config .local/oracle-release.json --source-ref codex/beta-foundations --area verify:providers
-```
+문서 전용 커밋을 실제 배포하려면 해당 branch의 정확한 SHA에 workflow를 수동 실행해 전체 필수 검사를 통과시켜요. `workflow_dispatch`의 `browser=true`는 전체 브라우저 회귀까지 추가해요. 다른 branch 배포도 같은 전체 검증이 필요해요. 진행 중 main이 앞서가더라도 이미 선택한 검증 SHA를 바꾸거나 정상 전환을 롤백하지 않아요.
 
-`release:oracle`도 같은 검증을 요구해요. 현재 source와 실행 환경·검사 계약 지문이 모두 같은 성공 영수증은 검사별로 재사용해요. 성공 검사의 빌드만 없거나 stale이면 검사를 반복하지 않고 build만 복구한 뒤 현재 source와 artifact 일치를 다시 확인해요. source나 실행 환경·검사 계약이 달라졌으면 stale로 판정해 다시 실행해요. 같은 source에 실패 기록이 있으면 `--area`를 줄이거나 `--full`을 빼서 우회할 수 없어요. 실패 원인을 해결하고 그 범위를 다시 통과해야 해요. 커밋 때문에 내용이 바뀌지 않았다면 커밋 전 성공한 영수증도 clean HEAD가 된 뒤 재사용할 수 있어요.
-
-`--area`는 변경 영역의 기존 `verify:*` npm script를 선택하며 기본값은 `verify:browser-smoke`예요. `--full`은 `quality:full`과 기본 smoke 대신 `verify:browser`를 실행하며, 명시한 기능 영역은 함께 검사해요. 추가 범위는 [DEVELOPMENT](DEVELOPMENT.md#verification)에 따라 선택해요.
-
-Development checks follow [DEVELOPMENT](DEVELOPMENT.md#verification). For a release involving deployment tooling, select `verify:selfhost`; changes to the broader browser connection flow may also need `verify:browser-smoke`. The release runner applies the receipt checks described above.
+`release:check -- --area <verify:*>`는 별도의 로컬 개발 검증 명령으로 남아요. 기본 `quality`·build·선택한 synthetic 테스트와 내용 기반 영수증 재사용 규칙은 유지하지만, 이 영수증으로 Oracle의 CI 관문을 대체하지 않아요. 로컬에서 동일한 E2E를 다시 실행하거나 영수증을 수동 수정할 필요가 없어요.
 
 ## 실행 모드
 
-| 명령 | 동작 |
+| 옵션 | 동작 |
 | --- | --- |
-| `npm run release:oracle -- --config .local/oracle-release.json --source-ref <branch> --plan` | 설정과 로컬 검증 상태만 확인해요. SSH 연결이나 서버 변경은 없어요. |
-| `npm run release:oracle -- --config .local/oracle-release.json --check-only` | 원격 전제와 이미지를 검증하고 기본 경로에서는 서버 이미지를 빌드해요. 실행 중인 앱을 중지하거나 DB를 초기화하거나 활성 앱을 바꾸지 않아요. |
-| `npm run release:oracle -- --config .local/oracle-release.json` | 현재 DB를 백업한 뒤 같은 운영 볼륨으로 업데이트하고, health와 HTTPS/API smoke까지 확인해요. |
-| `npm run release:oracle -- --config .local/oracle-release.json --fresh` | 새 운영 볼륨으로 시작해요. 이전 볼륨은 rollback용으로 남겨요. |
-| `npm run release:oracle -- --config .local/oracle-release.json --image <전체-reference>` | 서버 build 대신 지정한 immutable image를 검사하고 사용해요. tag만으로 움직이는 reference보다 digest를 권장해요. |
+| `--plan` | 설정과 선택한 로컬 소스를 표시해요. GitHub·SSH 접속이나 서버 변경은 없어요. |
+| `--check-only` | CI 확인 후 실제 이미지를 만들고 빈 DB 및 운영 DB 복제본을 검증해요. 운영 앱을 중지하거나 maintenance를 변경하지 않아요. 상태 조회용 인증 세션은 만들 수 있어요. |
+| 기본 실행 | 검증·쓰기 중지·백업·전환·호스트 HTTPS smoke·쓰기 재개까지 진행해요. |
+| `--image <image ID 또는 digest>` | 기본 서버 build 대신 이미 준비한 이미지 하나를 검사해 사용해요. `--check-only` 결과의 immutable image ID를 재사용할 수 있어요. |
+| `--status` | 현재 checkout, image/volume/health, 배포 lock과 최근 서버 기록을 읽어요. CI를 재실행하거나 배포를 재개하지 않아요. |
+| `--status --run-id <id>` | 지정한 실행 기록과 실제 운영 상태를 나란히 읽어요. 없는 실행은 `release: null`로 표시해요. |
+| `--fresh` | 명시적 초기화예요. 새 데이터 볼륨을 만들고 외부 로그인 파일만 복사해요. 기존 DB·설정·앱 API 키는 새 앱에 이어지지 않아요. |
 
+기본 경로는 Oracle에서 정확한 SHA를 한 번 빌드해요. 이후 모든 probe와 전환은 같은 immutable image ID를 사용해요. 이미지에는 `io.uimori.managed=true`, `org.opencontainers.image.revision=<전체 SHA>`, `io.uimori.codex-version=<설정값>` label이 있어야 해요. 새 registry나 멀티아키텍처 배포 체계를 만들지는 않아요. 외부 이미지도 이 label과 현재 Codex 빌드 설정이 일치해야 하며 실제 ARM64 부팅 검사를 통과해야 해요.
 
-일반 업데이트는 앱 전환 전에 SQLite 복구본을 만들고 기존 DB를 그대로 사용해요. 기본 경로는 모든 표의 모든 행을 hash하지 않으며, backup 성공, schema/앱 호환성, 활성 작업 부재, health와 smoke를 검사해요. 사용자 원문 삭제나 DB reset은 업데이트 계약에 포함하지 않아요. 앱의 명시적인 forward migration은 폐기된 내부 메타데이터를 정리할 수 있으므로 [변경 내용](DATA-MIGRATIONS.md)을 확인해요.
-
-`--fresh`는 새 볼륨과 새 DB를 만들고 기존 볼륨을 보존해요. 기존 `<database>.vertex-credentials` 디렉터리와 `<database>.codex/auth.json`만 새 볼륨에 복사해요. Codex 세션·설정과 DB의 모델·연결 reference는 초기화되므로 새 DB에서 다시 설정해야 해요. 환경의 origin, access token과 공개 라우팅은 유지해요.
-
+로컬 `dist`를 다시 만들어 원격 빌드와 비교하지 않아요. 컨트롤러는 소스 build fingerprint를 계산하고, 실제 이미지에서 해당 fingerprint와 이미지 내부 manifest·artifact hash를 검증해요. Node와 최종 dist hash는 서버 기록에 남아요.
 
 ## 서버 안전장치와 결과 해석
 
-원격 실행기는 동시에 한 릴리스만 허용하는 lock, 배포 SHA pin, 서버 checkout/source 일치, 활성 작업 부재, Compose 설정, loopback 바인딩을 전환 전에 확인해요. 원격 `origin/main`이 진행되거나 전제가 바뀌면 중단하고 새 SHA를 다시 검증해요. 동작 중인 작업은 후보 검사 전후와 전환 경계에서 확인하지만 검사 사이에 이미 끝난 편집까지 감지하지는 못해요. 개인 운영자는 앱을 멈추고 교체하는 짧은 전환 구간에 저장·생성 요청을 하지 않아야 해요.
+```text
+CI 확인 → Oracle preflight → pinned SHA 이미지 준비
+→ 빈 DB maintenance boot → 운영 DB 복제본 maintenance boot
+→ maintenance 닫기 → 이미 승인된 작업/HTTP 쓰기 종료 확인
+→ 앱 정지 → DB·동반 파일·기존 환경 백업과 무결성 확인
+→ 후보 이미지 전환 (쓰기 계속 닫힘)
+→ health·DB·외부 인증 파일·환경·라우팅 확인
+→ Oracle 호스트의 실제 HTTPS/API smoke
+→ 쓰기 재개 요청 및 상태 확인 → PASS
+```
 
-이미지는 실행 중인 앱을 유지한 채 한 번 준비하고, 전환 구간에만 앱을 교체해요. 새 앱의 health나 loopback 검사가 실패하면 직전 image와 해당 모드의 이전 볼륨으로 rollback을 시도하고 결과를 별도로 기록해요. rollback은 전환 중 사용자 작업 손실을 완전히 차단한다는 보장이 아니므로 위의 무쓰기 조건을 지켜요. SSH가 끊기거나 rollback이 실패했다면 성공을 추정하지 말고 lock 상태, 실행 image ID, checkout SHA, volume과 health를 먼저 조회해요.
+복제본 probe는 `UIMORI_MAINTENANCE=1`로 외부 작업과 복구 worker를 시작하지 않아요. 실제 전환에는 재시작 후에도 보존되는 DB maintenance 상태를 사용해요. 이미 승인된 비동기 HTTP 쓰기도 active work로 집계해요. 종료가 늦으면 배포를 중단하고 기존 앱의 admission을 돌려놓으며 생성 작업을 강제로 취소하지 않아요.
 
-성공한 서버 전환 뒤 작은 HTTPS/API smoke가 공개 origin, 인증, build identity와 기본 읽기 경로를 확인해요. 이 smoke는 실제 공급자 호출, 과금, 창작 의미 품질, 실제 휴대폰 동작을 증명하지 않아요. 배포와 smoke의 성공·실패를 각각 기록해요.
+호스트 control은 기존 운영 환경 파일을 read-only mount한 일회성 컨테이너에서 실행돼요. admission 제어는 정확한 Host/Origin을 가진 loopback HTTP를 사용하고, 최종 smoke는 host network에서 실제 HTTPS 주소와 인증서를 검증해요. 컨트롤러의 Tailscale 라우팅 유무는 배포 조건이 아니에요. smoke는 인증 세션과 읽기 API·HTML/JS만 확인하며 유료 모델 호출은 하지 않아요. 호스트에서의 성공이 외부 인터넷·모든 휴대폰 경로의 성공을 증명하지는 않아요.
 
-`output/release/oracle/<run>/summary.json`에는 로컬 검증 재사용, 파일 전송, 서버 작업, 공개 HTTPS smoke의 시간이 구분돼요. 서버 receipt의 `stages`에는 이미지 준비, 격리 검사, 백업, 전환과 health 시간이 있어요. 최초 의존성 다운로드나 캐시 유무에 따라 준비 시간이 달라지므로 고정 시간을 보장하지 않아요. 로컬 image build와 registry 업로드는 선택지이며 현재 기본 절차에는 없어요.
+전환 전 실패는 기존 앱을 유지해요. 전환 후 **쓰기 재개 요청 전** 실패는 maintenance 소유권·닫힘·idle을 확인한 뒤 직전 이미지/DB/환경으로 롤백해요. 쓰기 재개 요청을 보내기 전에 `REOPENING`을 저장하므로 응답을 잃어도 DB를 과거 백업으로 자동 복원하지 않아요. 사용자가 새 앱에서 저장했을 가능성이 있는 상태를 덮어쓰지 않기 위해서예요. 이 경우 `REFUSED_AFTER_REOPEN` 또는 상태 불확실성을 보고하고 `--status`로 조사해요.
+
+SSH가 끊기면 같은 명령을 바로 재실행하지 말고 알려진 run ID로 상태를 조회해요. 실제 image·volume·health와 lock이 확인되기 전에는 성공이나 실패를 추정하지 않아요. 실행 중인 작업을 자동 재개하거나 새로운 배포로 덮어쓰는 기능은 없어요.
+
+컨트롤러 보고서는 `output/release/oracle/<run>/summary.json`, 서버 보고서는 `/opt/uimori/releases/<run>/oracle-summary.json`이에요. 단계 시작·종료와 경과시간을 바로 출력하고 CI 실행 번호, image identity, 백업, smoke, 쓰기 재개 및 롤백 결과를 분리해서 남겨요. 비밀 설정 전체는 출력하지 않으며 하위 명령 오류의 비공개 진단 로그 위치를 기록해요.
 
 ## 개인 작업실 v1 전환
 
-schema 23→24 전용 배포 옵션은 제거했어요. schema 24→개인 작업실 v1은 [별도 사용자 자료 복사 도구](DATA-MIGRATIONS.md)를 사용하고 확인된 새 DB를 별도 볼륨으로 배포해요. 업데이트 명령은 이 변환을 자동 수행하지 않아요. `--fresh`는 앱 자료·설정·DB API 키를 버리는 명시적 초기화이며 외부 실행기 로그인 파일만 보존해요.
+일반 업데이트는 운영 데이터 볼륨을 유지하고 앱의 명시적 forward migration만 실행해요. unrelated legacy DB는 자동 초기화하지 않아요. schema 24→개인 작업실 v1은 [별도 사용자 자료 복사 도구](DATA-MIGRATIONS.md)를 사용해요.
+
+`--fresh`는 새 볼륨에 기존 `<database>.vertex-credentials`와 `<database>.codex/auth.json`만 복사해요. 새 DB를 격리 부팅한 뒤 persisted maintenance를 닫고 전환하므로 검증 중 쓰기가 열리지 않아요. 이전 볼륨과 배포 전 백업은 보존하고, fresh 롤백은 이전 볼륨으로 돌아가며 새 사용자 자료를 이전 DB에 섞지 않아요.

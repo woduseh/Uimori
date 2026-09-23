@@ -284,7 +284,7 @@ test('Oracle configuration rejects remote shell options, overlapping paths and e
     host: 'ubuntu@oracle.example',
     identityFile: '/key',
     knownHostsFile: '/hosts',
-    accessEnvFile: '/env',
+    expectedOrigin: 'https://example.test',
   };
   const config = validateConfig(valid);
   assert.equal(config.sourceRef, 'main');
@@ -337,22 +337,21 @@ async function releaseFixture(
     sourceRef = 'main',
     malformedRemote = false,
     badSmoke = false,
+    badCi = false,
     missingOrigin = false,
   } = {}
 ) {
   const outputRoot = await directory(t);
   const configFile = path.join(outputRoot, 'config.json');
-  for (const name of ['key', 'hosts', 'env'])
+  for (const name of ['key', 'hosts'])
     await writeFile(path.join(outputRoot, name), 'private fixture');
   await json(configFile, {
     host: 'ubuntu@oracle.example',
     identityFile: 'key',
     knownHostsFile: 'hosts',
-    accessEnvFile: 'env',
+    expectedOrigin: 'https://example.test',
     sourceRef,
   });
-  const checks = await checksFixture(t);
-  const receipt = await checks.run();
   const calls = [],
     secret = 'private-token-'.repeat(4);
   const dependencies = {
@@ -361,16 +360,11 @@ async function releaseFixture(
     ssh: 'fixture-ssh',
     scp: 'fixture-scp',
     log: () => {},
-    fingerprint: async () => identity,
-    assertBuild: async () => build,
-    readAccessEnv: async () => ({ origin: 'https://example.test', token: secret }),
-    check: async () => {
+    fingerprint: async () => ({ hash: build.buildId }),
+    checkCi: async () => {
       calls.push('verification');
-      return receipt;
-    },
-    smoke: async () => {
-      calls.push('smoke');
-      return { status: badSmoke ? 'FAIL' : 'PASS' };
+      if (badCi) throw new Error('CI not successful');
+      return { status: 'PASS', commit };
     },
     execute: async (executable, args) => {
       if (executable === 'git') {
@@ -394,6 +388,8 @@ async function releaseFixture(
                 sourceRef,
                 buildId: build.buildId,
                 distHash: build.distHash,
+                smoke: { status: badSmoke ? 'FAIL' : 'PASS' },
+                writes: 'OPEN',
                 mode: command.includes("'--fresh'") ? 'fresh' : 'update',
                 checkOnly: command.includes("'--check-only'"),
                 ...(missingOrigin ? {} : { publicOrigin: 'https://example.test' }),
@@ -430,7 +426,7 @@ test('plan contacts no remote; dirty or unpushed source cannot stage a release',
   assert.deepEqual(unpushed.calls, []);
 });
 
-test('check-only never invokes production login, while deployed release requires HTTPS success', async (t) => {
+test('controller has no local login/browser dependency; deployed release requires host HTTPS success', async (t) => {
   const fixture = await releaseFixture(t);
   const result = await releaseOracle(
     { config: fixture.configFile, 'check-only': true },
@@ -466,4 +462,43 @@ test('check-only requires exact origin in the remote proof even without a login 
   assert.equal(outcome.status, 'FAIL');
   assert.match(outcome.error, /Remote public origin/);
   assert.equal(fixture.calls.includes('smoke'), false);
+});
+
+test('failed CI prevents staging and remote execution', async (t) => {
+  const fixture = await releaseFixture(t, { badCi: true });
+  const result = await releaseOracle({ config: fixture.configFile }, fixture.dependencies);
+  assert.equal(result.status, 'FAIL');
+  assert.deepEqual(fixture.calls, ['verification']);
+});
+
+test('Oracle arguments need only the source build fingerprint, never a controller dist artifact', async () => {
+  const config = validateConfig({
+    host: 'ubuntu@oracle.example',
+    identityFile: '/key',
+    knownHostsFile: '/hosts',
+    expectedOrigin: 'https://example.test',
+  });
+  const command = remoteCommand({
+    config,
+    commit,
+    build: { buildId: build.buildId },
+    releaseDirectory: '/opt/uimori/releases/test',
+    origin: config.expectedOrigin,
+  });
+  assert.ok(!command.includes('--dist-hash'));
+});
+
+test('progress emits complete redacted lines without losing the final command outcome', async () => {
+  const lines = [];
+  const result = await runExternal(
+    process.execPath,
+    ['-e', `process.stdout.write('ORACLE_'); setTimeout(() => console.log('STAGE secret'), 10);`],
+    {
+      timeoutMs: 5000,
+      progress: (line) => lines.push(line),
+      redact: (line) => line.replaceAll('secret', '[redacted]'),
+    }
+  );
+  assert.equal(result.code, 0);
+  assert.deepEqual(lines, ['ORACLE_STAGE [redacted]']);
 });

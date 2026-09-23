@@ -132,7 +132,8 @@ export function copyStoppedData(source, destination) {
   safeTree(source);
   for (const name of readdirSync(source))
     copyWithOwnership(join(source, name), join(destination, name));
-  return { copied: true };
+  const database = inspectData(destination, { integrity: true });
+  return { copied: true, integrity: database.integrity };
 }
 
 export function restoreData(source, destination) {
@@ -185,6 +186,24 @@ export async function snapshotDatabase(source, destination) {
   return inspectData(destination, { integrity: true });
 }
 
+// This write is only used on a new isolated --fresh volume after its maintenance boot.
+export function dataMaintenance(directory, closeOwner) {
+  const db = new DatabaseSync(join(directory, database), { readOnly: !closeOwner });
+  try {
+    if (closeOwner) {
+      if (!closeOwner.startsWith('oracle:')) throw new Error('Invalid maintenance owner');
+      db.prepare(
+        "UPDATE maintenance SET status='closed', epoch=epoch+1, reason=?, updated_at=? WHERE id=1"
+      ).run(closeOwner, new Date().toISOString());
+    }
+    const row = db.prepare('SELECT status, reason, epoch FROM maintenance WHERE id=1').get();
+    if (!row) throw new Error('Maintenance row missing');
+    return row;
+  } finally {
+    db.close();
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const [command, source = '/data', destination = '/backup'] = process.argv.slice(2);
   const actions = {
@@ -195,6 +214,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     credentials: () => copyCredentials(source, destination),
     'credential-digest': () => credentialDigest(source),
     snapshot: () => snapshotDatabase(source, destination),
+    maintenance: () => dataMaintenance(source),
+    'close-maintenance': () => {
+      if (!process.env.UIMORI_MAINTENANCE_OWNER) throw new Error('Missing maintenance owner');
+      return dataMaintenance(source, process.env.UIMORI_MAINTENANCE_OWNER);
+    },
   };
   if (!actions[command])
     throw new Error('Expected inspect, audit, backup, restore, credentials, or snapshot');

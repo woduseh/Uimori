@@ -91,6 +91,7 @@ export async function runExternal(
     signal,
     redact = (value) => value,
     env = {},
+    progress,
     spawnChild = spawn,
     terminateChild = killOwned,
     stopTimeoutMs = 5000,
@@ -107,8 +108,17 @@ export async function runExternal(
   let output = '',
     timedOut = false,
     cancelled = false;
+  let pending = '';
   const append = (chunk) => {
-    output += chunk.toString();
+    const text = chunk.toString();
+    output += text;
+    if (progress) {
+      pending += text;
+      const lines = pending.split(/\r?\n/u);
+      pending = lines.pop();
+      for (const line of lines) progress(redact(line));
+      if (pending.length > 65536) pending = '';
+    }
     // Keep a useful tail even when a child prints an unexpectedly large report.
     if (output.length > 8_000_000) output = output.slice(-8_000_000);
   };
