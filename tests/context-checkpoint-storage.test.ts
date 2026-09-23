@@ -1,3 +1,17 @@
+import { vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { fixtureBotInput } from './fixtures/chat.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
+import { importChatTranscript } from '../server/chat-transcript.js';
+import { helperWritingSnapshot } from '../server/helper-runtime.js';
+import { prepareNativeRisuReadOnly } from '../server/risu-native-readonly.js';
+import {
+  modelWorkspace,
+  updateModelWorkspace,
+  promptWorkspace,
+  updatePromptWorkspace,
+} from '../server/prompt-workspace.js';
+import { type Content } from '../core/product.js';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -59,7 +73,7 @@ function fixture() {
       chatId: chat.id,
       parentRevision: history.at(-1)?.revision ?? null,
       settingsRevision: chat.settingsRevision,
-      settings: { ...chat.settings, translation: false, status: false, maxCalls: 16 },
+      settings: { ...chat.settings, status: false, maxCalls: 16 },
       request: '다음 장면을 이어 주세요.',
       history: structuredClone(history),
       resources: [],
@@ -271,5 +285,185 @@ describe('stored context checkpoint selection', () => {
     expect(() => f.store.history('source-3')).toThrow(
       expect.objectContaining({ statusCode: 404, message: 'Source not found' })
     );
+  });
+});
+
+describe('Current checkpoint lifetime', () => {
+  const owners: { store: Store; path: string }[] = [];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    for (const { store, path } of owners.splice(0)) {
+      store.close();
+      rmSync(path, { recursive: true, force: true });
+    }
+  });
+
+  function database() {
+    const path = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
+    const owner = { store: new Store(join(path, 'app.sqlite')), path };
+    owners.push(owner);
+    return owner.store;
+  }
+
+  function fixture(count = 4) {
+    const store = database();
+    const connection = store.product.connection({
+      title: 'Synthetic',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9',
+      enabled: true,
+    });
+    const model = store.product.model({
+      title: 'Main',
+      connectionId: connection.id,
+      modelId: 'fixture',
+      temperature: null,
+      maxOutputTokens: 1024,
+      inputTokenLimit: 272000,
+    });
+    const helper = store.product.model({
+      title: 'Helper',
+      connectionId: connection.id,
+      modelId: 'other',
+      temperature: null,
+      maxOutputTokens: 1024,
+    });
+    const workspace = modelWorkspace(store);
+    updateModelWorkspace(store, {
+      expectedRevision: workspace.revision,
+      routes: { ...workspace.routes, main: { id: model.id } },
+      translationPolicy: workspace.translationPolicy,
+    });
+    const bot = store.product.content(fixtureBotInput()) as Content;
+    const chat = importChatTranscript(store, {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Current summary',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: Array.from({ length: count }, (_, i) => ({
+          request: 'Request ' + i,
+          text: ('Scene ' + i + '. ' + 'river '.repeat(600)).slice(0, 3000),
+          translation: null,
+        })),
+      },
+    }).chat;
+    const branch = store.product.branch(chat.id);
+    const snapshot = () =>
+      prepareNativeRisuReadOnly(
+        helperWritingSnapshot(store, chat.id, branch.id, 'context'),
+        'context'
+      );
+    return { store, chat, branch, model, helper, bot, snapshot };
+  }
+
+  test('current summaries do not retain full inputs or detail receipts after repeated jobs and edits', async () => {
+    const { store, chat, branch, snapshot } = fixture(4);
+    for (let i = 0; i < 2; i++) {
+      const input = await snapshot(),
+        current = store.context.current(chat.id);
+      const job = store.context.schedule(
+        chat.id,
+        {
+          expectedRevision: current.activeRevision,
+          expectedHeadRevision: branch.headRevision,
+          idempotencyKey: randomUUID(),
+        },
+        input
+      );
+      store.context.start(job.id);
+      const plan = {
+        ...input.contextPlan!,
+        status: 'ready' as const,
+        compacted: contextSourceRefs(input).slice(0, 2),
+        recentSourceRevisions: input.history.slice(2).map((s) => s.revision),
+        summary: 'Summary ' + i,
+        estimatedInputTokens: 1000,
+      };
+      store.context.finish(job.id, { ...input, contextPlan: plan });
+      const detail = store.context.detail(chat.id);
+      expect(detail.jobs.every((j) => !('snapshot' in j))).toBe(true);
+      const body = {
+        expectedRevision: detail.activeRevision,
+        expectedHeadRevision: branch.headRevision,
+        idempotencyKey: randomUUID(),
+        summary: 'Edited ' + i,
+      };
+      const saved = store.context.edit(chat.id, body, await snapshot());
+      expect(store.context.edit(chat.id, body, await snapshot()).activeRevision).toBe(
+        saved.activeRevision
+      );
+    }
+    expect(
+      store.db
+        .prepare('PRAGMA table_info(context_checkpoints)')
+        .all()
+        .map((r) => r.name)
+    ).not.toContain('snapshot');
+    expect(store.db.prepare('SELECT count(*) AS n FROM context_checkpoints').get()?.n).toBe(1);
+    expect(
+      store.db.prepare('SELECT count(*) AS n FROM context_jobs WHERE snapshot IS NOT NULL').get()?.n
+    ).toBe(0);
+    expect(
+      Buffer.byteLength(JSON.stringify(store.db.prepare('SELECT * FROM context_commands').all()))
+    ).toBeLessThan(4000);
+    expect(store.context.current(chat.id)).toMatchObject({
+      usable: true,
+      checkpoint: { plan: { summary: 'Edited 1' } },
+    });
+    expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  });
+
+  test('unrelated helper and translation settings do not invalidate the main summary', async () => {
+    const { store, chat, branch, helper, snapshot } = fixture();
+    store.context.edit(
+      chat.id,
+      {
+        expectedRevision: 0,
+        expectedHeadRevision: branch.headRevision,
+        idempotencyKey: 'summary',
+        summary: 'A factual source summary.',
+      },
+      await snapshot()
+    );
+    const initial = store.context.current(chat.id);
+    expect(initial.usable).toBe(true);
+    const models = modelWorkspace(store);
+    updateModelWorkspace(store, {
+      expectedRevision: models.revision,
+      helperModel: { id: helper.id },
+      routes: { ...models.routes, translation: { id: helper.id } },
+      translationPolicy: models.translationPolicy,
+    });
+    expect(store.context.current(chat.id)).toMatchObject({
+      usable: true,
+      checkpoint: initial.checkpoint,
+    });
+    const workspace = promptWorkspace(store);
+    updatePromptWorkspace(store, {
+      expectedRevision: workspace.revision,
+      translation: {
+        ...workspace.translation,
+        program: nativePrompt('A new translation-only rule.', {}, 'translation'),
+        values: {},
+        defaultValues: {},
+      },
+    });
+    expect(store.context.current(chat.id).usable).toBe(true);
+    const next = promptWorkspace(store);
+    updatePromptWorkspace(store, {
+      expectedRevision: next.revision,
+      main: {
+        ...next.main,
+        program: nativePrompt('A genuinely different main instruction.'),
+        values: {},
+        defaultValues: {},
+      },
+    });
+    expect(store.context.current(chat.id).usable).toBe(false);
   });
 });

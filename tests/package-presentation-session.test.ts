@@ -52,7 +52,7 @@ function fixture() {
     chatId: 'chat',
     parentRevision: null,
     settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: true, status: false, maxCalls: 8 },
+    settings: { status: false, maxCalls: 8 },
     request: 'request',
     history: [],
     resources: [],

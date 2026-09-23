@@ -63,9 +63,6 @@ const manuscript = (length: number) =>
   `old-source-begin\n${'Synthetic scene. '.repeat(Math.ceil(length / 17))}`.slice(0, length - 17) +
   '\nold-source-end!!';
 const fixedSettings = {
-  preset: 'calm' as const,
-  mode: 'direct' as const,
-  translation: false,
   status: false,
   maxCalls: 8,
 };

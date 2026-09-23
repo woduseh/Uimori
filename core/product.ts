@@ -182,7 +182,6 @@ export type Connection = ContentRef & {
  * snapshots drop exactly these so a restored copy cannot name the origin's secrets. Keep in step
  * with the Connection type above; archive validation rejects any other connection field.
  */
-export const CONNECTION_CREDENTIAL_FIELDS = ['credentialRef'] as const;
 
 export type ModelPreset = ContentRef &
   ModelGeneration & {
@@ -316,8 +315,6 @@ export const defaultProfile = (chatId: string): ChatProfile => ({
   imageTranslation: true,
 });
 
-export const VERTEX_GEMINI_MODEL_ID = 'gemini-3.8-flash';
-export const VERTEX_GEMINI_MAX_OUTPUT_TOKENS = 65_536;
 export const VERTEX_GEMINI_DEFAULT_TIMEOUT_MS = 300_000;
 
 /** The first live adapter supports Google's global project endpoint only. */

@@ -100,7 +100,7 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
     });
     const bot = attachments.find((ref) => ref.role === 'bot');
     if (!bot) throw new HttpError(400, '채팅을 이어 쓸 봇이 필요해요.');
-    const chat = store.createChat(title, 'calm', { botId: bot.id });
+    const chat = store.createChat(title, { botId: bot.id });
     const profile = store.product.profile(chat.id);
     store.product.updateProfile(chat.id, {
       expectedRevision: profile.revision,

@@ -54,7 +54,6 @@ function chat(store: Store) {
   const created = createFixtureChat(store, 'Synthetic story notes');
   store.settings(created.id, created.settingsRevision, {
     ...created.settings,
-    translation: false,
     status: false,
   });
   return created.id;

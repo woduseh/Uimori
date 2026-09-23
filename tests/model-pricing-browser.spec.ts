@@ -130,7 +130,6 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   const configured = await request.patch(`/api/chats/${chat.id}/settings`, {
     data: {
       ...chat.settings,
-      translation: false,
       status: false,
       expectedSettingsRevision: chat.settingsRevision,
     },

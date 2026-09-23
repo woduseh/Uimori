@@ -47,7 +47,7 @@ function fixture() {
     relatedIds: [],
     package: pkg,
   }) as Content;
-  const chat = createFixtureChat(store, 'Synthetic greeting', 'calm', { botId: content.id });
+  const chat = createFixtureChat(store, 'Synthetic greeting', { botId: content.id });
   const profile = store.product.profile(chat.id);
   return {
     store,

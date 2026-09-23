@@ -407,7 +407,7 @@ test('card imports preserve all lore and cannot move it into the first chat note
         bot.package!.nativeRisu.card.character_book as { entries: { enabled: boolean }[] }
       ).entries.every((entry) => entry.enabled !== false)
     ).toBe(true);
-    const secondChat = store.createChat('Another chat', undefined, { botId: bot.id });
+    const secondChat = store.createChat('Another chat', { botId: bot.id });
     expect(
       store.product
         .resources(secondChat.id, store.product.snapshot(secondChat.id))

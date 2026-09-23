@@ -59,7 +59,7 @@ function fixture(
     if (options.portraitOnly) bot.package.portraitImageId = 'window';
   }
   const content = store.product.content(bot);
-  const chat = createFixtureChat(store, 'Synthetic image targets', 'calm', { botId: content.id });
+  const chat = createFixtureChat(store, 'Synthetic image targets', { botId: content.id });
   {
     const { chatId: _id, revision, ...profile } = store.product.profile(chat.id);
     updateTestProfile(store.product, chat.id, {

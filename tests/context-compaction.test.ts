@@ -66,7 +66,7 @@ async function snapshot(texts: string[] = []): Promise<RunSnapshot> {
       chatId: 'synthetic-compaction-chat',
       parentRevision: history.at(-1)?.revision ?? null,
       settingsRevision: 1,
-      settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 16 },
+      settings: { status: false, maxCalls: 16 },
       request: currentRequest,
       history,
       resources: [],

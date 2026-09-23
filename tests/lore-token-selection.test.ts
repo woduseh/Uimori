@@ -18,7 +18,7 @@ async function selectedSnapshot(attachments = 1, limit?: (policy: LoreContextPol
     chatId: 'token-selection',
     parentRevision: null,
     settingsRevision: 1,
-    settings: { mode: 'research', preset: 'calm', translation: false, status: false, maxCalls: 4 },
+    settings: { status: false, maxCalls: 4 },
     request: 'Visit the harbor',
     history: [],
     resources: [],

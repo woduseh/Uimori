@@ -27,7 +27,6 @@ async function seed(request: APIRequestContext, label: string) {
     data: {
       ...chat.settings,
       status: false,
-      translation: false,
       expectedSettingsRevision: chat.settingsRevision,
     },
   });

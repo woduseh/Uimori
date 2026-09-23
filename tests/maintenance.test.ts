@@ -31,7 +31,7 @@ async function boot(options: { maintenance?: boolean; directory?: string } = {})
 
 test('a closed gate blocks new writes, keeps reads and cancellation, and survives a restart', async () => {
   const { app, directory } = await boot();
-  const chat = createFixtureChat(app.store, 'Maintenance fixture', 'calm');
+  const chat = createFixtureChat(app.store, 'Maintenance fixture');
   const opened = await app.inject({ method: 'GET', url: '/api/maintenance' });
   expect(opened.json()).toMatchObject({ status: 'open', epoch: 0, forcedClosed: false });
   // The session read carries the same gate, so no screen polls while the app is open.

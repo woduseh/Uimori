@@ -116,7 +116,7 @@ test('native source normalizes projections and freezes old run content after edi
     saved = save(store, input);
   expect(saved.package).toEqual({ ...input, id: saved.id, revision: 1 });
   expect(input.id).toBe('imported');
-  const chat = createFixtureChat(store, 'Story', 'calm', { botId: saved.id });
+  const chat = createFixtureChat(store, 'Story', { botId: saved.id });
   const run = await capture(store, chat.id),
     before = JSON.stringify(run.snapshot);
   const edited = save(
@@ -158,7 +158,7 @@ test('native source normalizes projections and freezes old run content after edi
 test('cross-role attachment of one package namespaces resources while invalid refs and mixed primary roles reject atomically', () => {
   const store = db(),
     pkg = save(store),
-    chat = createFixtureChat(store, 'Story', 'calm', { botId: pkg.id });
+    chat = createFixtureChat(store, 'Story', { botId: pkg.id });
   const refs = [
     { ...reference(pkg), role: 'bot' },
     { ...reference(pkg), role: 'persona' },

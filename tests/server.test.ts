@@ -123,7 +123,7 @@ describe('file SQLite HTTP runtime', () => {
   });
   it('F02 fixes snapshots, rejects stale revisions, and deduplicates a logical command', async () => {
     const { app, url, chat } = await setup();
-    const other = await api<Chat>(url, '/api/chats', { title: '별도의 도시', preset: 'vivid' });
+    const other = await api<Chat>(url, '/api/chats', { title: '별도의 도시' });
     await control(url, { action: 'hold', barrier: 'run' });
     const cmd = command(chat);
     const run = await api<Run>(url, `/api/chats/${chat.id}/runs`, cmd);
@@ -134,7 +134,7 @@ describe('file SQLite HTTP runtime', () => {
     const changed = await api<Chat>(
       url,
       `/api/chats/${chat.id}/settings`,
-      { expectedSettingsRevision: 1, ...chat.settings, preset: 'vivid' },
+      { expectedSettingsRevision: 1, ...chat.settings, maxCalls: 6 },
       'PATCH'
     );
     await api(
@@ -144,15 +144,15 @@ describe('file SQLite HTTP runtime', () => {
       'PATCH',
       409
     );
-    expect((await api<Run>(url, `/api/runs/${run.id}`)).snapshot.settings.preset).toBe('calm');
+    expect((await api<Run>(url, `/api/runs/${run.id}`)).snapshot.settings.maxCalls).toBe(8);
     const independent = await api<Run>(url, `/api/chats/${other.id}/runs`, command(other));
     await control(url, { action: 'release', barrier: 'run' });
     await completed(url, run.id);
     const finished = observedExecution(app.store, run.id);
     await completed(url, independent.id);
-    expect(finished.inputs[0].preset).toBe('calm');
+    expect(finished.snapshot.settings.maxCalls).toBe(8);
     expect(finished.snapshot.resources.every((resource) => resource.chatId === chat.id)).toBe(true);
-    expect(observedExecution(app.store, independent.id).inputs[0].preset).toBe('vivid');
+    expect(observedExecution(app.store, independent.id).snapshot.settings.maxCalls).toBe(8);
     expect((await detail(url, other)).runs[0].inputs).toEqual([]);
     await api(url, `/api/chats/${chat.id}/runs`, command(changed), 'POST', 409);
     expect(app.store.db.prepare('SELECT count(*) AS n FROM runs').get()).toEqual({ n: 2 });
@@ -161,10 +161,11 @@ describe('file SQLite HTTP runtime', () => {
 
   it('F03 replays durable event IDs and keeps errors out of source; F04 enforces call budget and cancellation', async () => {
     const { app, url, chat } = await setup();
+    app.controls.fixture = { mode: 'research' };
     const configured = await api<Chat>(
       url,
       `/api/chats/${chat.id}/settings`,
-      { expectedSettingsRevision: 1, ...chat.settings, mode: 'research', maxCalls: 2 },
+      { expectedSettingsRevision: 1, ...chat.settings, maxCalls: 2 },
       'PATCH'
     );
     const run = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(configured));
@@ -216,7 +217,7 @@ describe('file SQLite HTTP runtime', () => {
     const configured = await api<Chat>(
       url,
       `/api/chats/${chat.id}/settings`,
-      { expectedSettingsRevision: 1, ...chat.settings, translation: false, status: false },
+      { expectedSettingsRevision: 1, ...chat.settings, status: false },
       'PATCH'
     );
     const next = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(configured));
@@ -378,11 +379,12 @@ describe('file SQLite HTTP runtime', () => {
 
   it('F04 reads scoped SQLite references through research calls and applies the native global note', async () => {
     const { app, url, chat } = await setup();
+    app.controls.fixture = { mode: 'research' };
     const other = await api<Chat>(url, '/api/chats', { title: '다른 자료 범위' });
     const configured = await api<Chat>(
       url,
       `/api/chats/${chat.id}/settings`,
-      { expectedSettingsRevision: 1, ...chat.settings, mode: 'research' },
+      { expectedSettingsRevision: 1, ...chat.settings },
       'PATCH'
     );
     const resourceRows = app.store.product.resources(chat.id, app.store.product.snapshot(chat.id));

@@ -50,7 +50,6 @@ function fixture() {
   const created = createFixtureChat(store, 'Synthetic advisor snapshot');
   const chat = store.settings(created.id, created.settingsRevision, {
     ...created.settings,
-    translation: false,
     status: false,
   });
   const connection = product.connection({

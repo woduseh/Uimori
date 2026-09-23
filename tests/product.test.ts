@@ -164,7 +164,7 @@ describe('M1 product data with actual file SQLite', () => {
     const bot = product.content(
       fixtureBotInput('Attached story owner', 'Ada is the keeper.')
     ) as Content;
-    const chat = createFixtureChat(store, 'attached-story', 'calm', { botId: bot.id });
+    const chat = createFixtureChat(store, 'attached-story', { botId: bot.id });
     const canon = product.content(
       contentBody('module', 'The harbor has never had electricity.')
     ) as Content;
@@ -673,7 +673,6 @@ describe('M1 real HTTP application boundaries', () => {
     const initial = createFixtureChat(store, 'Invalid queued translation fixture');
     const chat = store.settings(initial.id, initial.settingsRevision, {
       ...initial.settings,
-      translation: false,
       status: false,
     });
     const connection = product.connection({

@@ -35,7 +35,7 @@ function fixture() {
   const input = fixtureBotInput('Synthetic shared state', 'Preserved original body');
   input.package.nativeRisu.card.extensions = { risuai: { defaultVariables: 'mood=calm' } };
   const bot = store.product.content(input) as Content;
-  const chat = createFixtureChat(store, 'Synthetic variable flow', 'calm', { botId: bot.id });
+  const chat = createFixtureChat(store, 'Synthetic variable flow', { botId: bot.id });
   const branch = store.product.branch(chat.id);
   const url = `/api/chats/${chat.id}/variables`;
   const reserve = async () =>

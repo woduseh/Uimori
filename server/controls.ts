@@ -1,3 +1,4 @@
+import type { FixtureGeneration } from '../core/fixture-provider.js';
 export type Barrier = 'run' | 'translation' | 'status' | 'image' | 'state' | 'illustration';
 export type FailurePoint =
   | 'source-transaction'
@@ -10,6 +11,7 @@ export type FailurePoint =
 
 /** Explicit deterministic controls. Never registered outside UIMORI_TEST_MODE. */
 export class Controls {
+  fixture: FixtureGeneration = {};
   readonly held = new Set<Barrier>();
   readonly failures = new Set<FailurePoint>();
   private waiters = new Map<Barrier, Set<() => void>>();

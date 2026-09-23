@@ -18,7 +18,6 @@ async function seed(request: APIRequestContext, title: string, requests: string[
   const configured = await request.patch(`/api/chats/${chat.id}/settings`, {
     data: {
       ...chat.settings,
-      translation: false,
       status: false,
       expectedSettingsRevision: chat.settingsRevision,
     },
