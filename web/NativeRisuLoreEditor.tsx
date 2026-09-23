@@ -9,6 +9,7 @@ import {
   ExpandIcon,
   DropdownIcon,
   DeleteIcon,
+  CloseIcon,
   UpIcon,
   DownIcon,
   ListIcon,
@@ -27,6 +28,7 @@ import {
   type LoreDropPosition,
 } from './native-lore-document.js';
 import './native-risu-lore.css';
+import './deletion.css';
 
 function Keywords({
   value,
@@ -616,6 +618,8 @@ export function NativeRisuLoreEditor({
       <Dialog
         open={deleting !== null}
         title={deleting !== null && isLoreFolder(entries[deleting]) ? '폴더 삭제' : '로어 삭제'}
+        role="alertdialog"
+        className="delete-dialog"
         onClose={() => setDeleting(null)}
       >
         <p>
@@ -623,12 +627,14 @@ export function NativeRisuLoreEditor({
             ? '폴더만 삭제하고 안의 로어는 상위 폴더로 옮겨요.'
             : '선택한 로어를 삭제할까요?'}
         </p>
-        <div className="actions">
+        <div className="form-actions">
           <button type="button" className="secondary" onClick={() => setDeleting(null)}>
+            <CloseIcon size={18} aria-hidden="true" />
             취소
           </button>
           <button
             type="button"
+            className="delete-button"
             onClick={() => {
               if (deleting === null) return;
               onChange(

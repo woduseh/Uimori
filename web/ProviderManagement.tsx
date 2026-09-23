@@ -130,7 +130,7 @@ export function ConnectionEditor({
     [connectionStarted, setConnectionStarted] = useState(false),
     [modelStarted, setModelStarted] = useState(false);
   const [modelSection, setModelSection] = useState<'basic' | 'advanced'>('basic');
-  const [collapsedModelGroups, setCollapsedModelGroups] = useState<Set<string>>(() => new Set());
+  const [expandedModelGroups, setExpandedModelGroups] = useState<Set<string>>(() => new Set());
   const heading = useRef<HTMLDivElement>(null);
   const returnItem = useRef<{ screen: 'models' | 'connections'; id: string } | undefined>(
     undefined
@@ -237,6 +237,19 @@ export function ConnectionEditor({
         ? '로컬 endpoint'
         : 'API 기본 주소';
   const filter = query.trim().toLocaleLowerCase();
+  function modelGroupOpen(groupKey: string) {
+    return !!filter || expandedModelGroups.has(groupKey);
+  }
+  function toggleModelGroup(groupKey: string, open: boolean) {
+    if (filter) return;
+    setExpandedModelGroups((current) => {
+      if (current.has(groupKey) === open) return current;
+      const next = new Set(current);
+      if (open) next.add(groupKey);
+      else next.delete(groupKey);
+      return next;
+    });
+  }
   const jevMatches =
     hasJev &&
     matches(
@@ -1048,56 +1061,72 @@ export function ConnectionEditor({
       >
         <div className="provider-saved-list">
           {jevMatches && (
-            <article className="provider-saved-item" aria-label="JEV 모델">
-              <div className="provider-item-heading">
-                <button
-                  type="button"
-                  className="provider-item-open secondary"
-                  disabled={busy}
-                  aria-label="JEV 모델 설정"
-                  data-provider-id={JEV_PROVIDER_DEFINITION.id}
-                  onClick={() => {
-                    setSetup(false);
-                    openJev('models');
-                  }}
-                >
-                  <strong>JEV</strong>
-                  <span className="provider-item-subtitle">
-                    TypeSafe AI · {JEV_PROVIDER_DEFINITION.modelId} · 판단 전용
-                  </span>
-                </button>
-                <ActionMenu label="JEV 모델 메뉴">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => {
-                      setSetup(false);
-                      openJev('models');
-                    }}
-                  >
-                    <ConnectionIcon size={18} aria-hidden="true" /> 연결 설정
-                  </button>
-                </ActionMenu>
+            <details
+              className="provider-model-group"
+              open={modelGroupOpen(JEV_PROVIDER_DEFINITION.id)}
+              onToggle={(event) =>
+                toggleModelGroup(JEV_PROVIDER_DEFINITION.id, event.currentTarget.open)
+              }
+            >
+              <summary>
+                <span>
+                  <strong>{JEV_PROVIDER_DEFINITION.label}</strong>
+                  <small>1개 모델</small>
+                </span>
+              </summary>
+              <div className="provider-model-group-list">
+                <article className="provider-saved-item" aria-label="JEV 모델">
+                  <div className="provider-item-heading">
+                    <button
+                      type="button"
+                      className="provider-item-open secondary"
+                      disabled={busy}
+                      aria-label="JEV 모델 설정"
+                      data-provider-id={JEV_PROVIDER_DEFINITION.id}
+                      onClick={() => {
+                        setSetup(false);
+                        openJev('models');
+                      }}
+                    >
+                      <strong>{JEV_PROVIDER_DEFINITION.modelLabel}</strong>
+                      <span className="provider-item-subtitle">
+                        {JEV_PROVIDER_DEFINITION.modelId} · 판단 전용
+                      </span>
+                    </button>
+                    <ActionMenu label="JEV 모델 메뉴">
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => {
+                          setSetup(false);
+                          openJev('models');
+                        }}
+                      >
+                        <ConnectionIcon size={18} aria-hidden="true" /> 연결 설정
+                      </button>
+                    </ActionMenu>
+                  </div>
+                  <section className="provider-model-test" aria-label="JEV 응답 테스트 설정">
+                    <div className="provider-actions">
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        aria-label="JEV 응답 테스트 설정 열기"
+                        onClick={() => {
+                          setSetup(false);
+                          openJev('models');
+                        }}
+                      >
+                        테스트 보기
+                      </button>
+                      <small>요금이 발생할 수 있어요.</small>
+                    </div>
+                  </section>
+                </article>
               </div>
-              <section className="provider-model-test" aria-label="JEV 응답 테스트 설정">
-                <div className="provider-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    aria-label="JEV 응답 테스트 설정 열기"
-                    onClick={() => {
-                      setSetup(false);
-                      openJev('models');
-                    }}
-                  >
-                    테스트 보기
-                  </button>
-                  <small>요금이 발생할 수 있어요.</small>
-                </div>
-              </section>
-            </article>
+            </details>
           )}
           {modelGroups.map((group) => {
             const groupKey = group.connection?.id ?? 'missing-provider';
@@ -1105,18 +1134,8 @@ export function ConnectionEditor({
               <details
                 className="provider-model-group"
                 key={groupKey}
-                open={!!filter || !collapsedModelGroups.has(groupKey)}
-                onToggle={(event) => {
-                  if (filter) return;
-                  const open = event.currentTarget.open;
-                  setCollapsedModelGroups((current) => {
-                    if (current.has(groupKey) === !open) return current;
-                    const next = new Set(current);
-                    if (open) next.delete(groupKey);
-                    else next.add(groupKey);
-                    return next;
-                  });
-                }}
+                open={modelGroupOpen(groupKey)}
+                onToggle={(event) => toggleModelGroup(groupKey, event.currentTarget.open)}
               >
                 <summary>
                   <span>
