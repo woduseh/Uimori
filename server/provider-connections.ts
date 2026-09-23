@@ -84,16 +84,13 @@ export function saveConnection(product: ProductStore, value: unknown, id?: strin
     for (const write of prepared.writes)
       product.store.credentials.set(write.reference, write.value);
     // A removed connection key must not survive as an orphan secret in DB backups.
-    const legacyCatalogCredential = (
-      previous as (Connection & { catalogCredentialRef?: string }) | undefined
-    )?.catalogCredentialRef;
-    for (const reference of new Set([previous?.credentialRef, legacyCatalogCredential])) {
-      if (!reference?.startsWith('API_')) continue;
+    const previousCredential = previous?.credentialRef;
+    if (previousCredential?.startsWith('API_')) {
       const referenced = product.db
         .prepare(`SELECT 1 FROM provider_settings WHERE kind='connection'
         AND json_extract(body,'$.credentialRef')=?`)
-        .get(reference);
-      if (!referenced) product.store.credentials.set(reference, null);
+        .get(previousCredential);
+      if (!referenced) product.store.credentials.set(previousCredential, null);
     }
     return saved;
   });

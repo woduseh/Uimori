@@ -465,33 +465,28 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   expect(observed.legacyReads).toEqual([]);
 });
 
-test('PMUI04 model catalog refresh is separate from provider selection', async ({
+test('PMUI04 selecting a provider does not refresh its model catalog until requested', async ({
   page,
   request,
 }) => {
   const title = 'PMUI04 ' + Date.now();
   const connection = await api<Connection>(request, '/connections', connectionInput(title));
-  const requests: string[] = [];
+  let catalogRequests = 0;
   page.on('request', (value) => {
-    const path = new URL(value.url()).pathname;
-    if (path.includes('/catalog') || path.includes('/readiness')) requests.push(path);
+    if (new URL(value.url()).pathname.endsWith(`/connections/${connection.id}/catalog`))
+      catalogRequests++;
   });
 
   await settings(page);
   await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
   const form = page.getByRole('form', { name: '모델 편집 양식' });
   await form.getByLabel('프로바이더', { exact: true }).selectOption(connection.id);
-  await expect(form.getByText('프로바이더 준비 상태와 목록 새로고침')).toHaveCount(0);
-  await expect(form.getByRole('button', { name: '모델 목록 새로고침', exact: true })).toBeVisible();
-  expect(requests).toEqual([]);
+  const refresh = form.getByRole('button', { name: '모델 목록 새로고침', exact: true });
+  await expect(refresh).toBeVisible();
+  expect(catalogRequests).toBe(0);
 
-  await form.getByRole('button', { name: '모델 목록 새로고침', exact: true }).click();
-  await expect
-    .poll(
-      () => requests.filter((path) => path.endsWith(`/connections/${connection.id}/catalog`)).length
-    )
-    .toBe(1);
-  expect(requests.some((path) => path.includes('/readiness'))).toBe(false);
+  await refresh.click();
+  await expect.poll(() => catalogRequests).toBe(1);
 });
 
 test('PMUI07 quick setup selects a cached catalog model and keeps drafts across workspace pages', async ({

@@ -2,15 +2,21 @@
 
 ## 등록
 
-**설정 → 프로바이더·모델 → 프로바이더 관리**에서 종류·이름·API 기본 주소·API 키를 입력하고 저장해요. 키 값은 앱에서 바로 등록하고 서버 DB에 저장해요. 별도 환경변수 이름, 주소 허용 목록, 서버 재시작은 필요하지 않아요. 수정 시 비워둔 키 입력은 기존 키를 유지하고, 키 삭제 동작은 저장된 연결에서 키를 해제해요.
+**설정 → 프로바이더·모델 → 프로바이더 관리**에서 연결을 등록해요. 일반 API 연결은 API 키를 앱에서 바로 저장하고, Vertex는 서비스 계정 JSON을 등록하며, Codex는 전용 로그인 상태를 사용해요. 수정 시 비워 둔 일반 키 입력은 기존 키를 유지하고 키 삭제 동작은 저장된 연결에서 키를 해제해요.
 
 OpenAI Responses·Chat 호환, Anthropic Messages 등 프로토콜과 주소를 구분해요. 공식 주소는 초기값이고 사용자 지정 호환 주소도 입력할 수 있어요. LAN HTTP 주소도 지원해요. 컨테이너 안의 localhost는 컨테이너 자신이므로 다른 PC의 주소를 직접 지정해야 해요.
 
-모델 프리셋에는 공급자 모델 ID와 출력·사고·생성 옵션을 저장하고, **역할별 모델**에서 작문·번역·도우미 등의 모델을 선택해요. 목록에 없는 모델 ID도 수동 입력할 수 있어요. 모델 목록 조회와 응답 테스트는 명시적으로 실행해요. 저장만으로 외부 모델 요청을 시작하지 않아요.
+모델 프리셋에는 공급자 모델 ID와 출력·사고·생성 옵션을 저장하고, **역할별 모델**에서 작문·번역·도우미 등의 모델을 선택해요. 목록에 없는 모델 ID도 수동 입력할 수 있어요. 저장만으로 외부 요청을 시작하지 않아요.
 
 모델 프리셋 목록은 프로바이더별로 묶여 표시되고 각 묶음을 접을 수 있어요. 같은 프로바이더 안의 모델은 위·아래 이동으로 표시 순서를 저장해요. 검색 중에는 일치 항목을 보여 주기 위해 묶음을 자동으로 펼치며 순서 변경은 잠시 비활성화해요.
 
 직접 연결은 해당 API의 생성 옵션을 사용하고, Vercel에서는 **모델 계열**로 제조사별 옵션을 골라요. 자동 추정·수동 선택 모두 가능하고 모르는 계열도 공통 옵션으로 저장할 수 있어요. 계열 선택이 공급자의 지원 여부를 보장하거나 새 전송 프로토콜을 추가하지는 않아요. 구체적인 동작은 [모델 생성 설정](MODEL-PARAMETERS.md)을 참고해요.
+
+## 모델 목록과 응답 확인
+
+**모델 목록 새로고침**은 사용자가 눌렀을 때만 실행해요. 일반 HTTP 프로바이더는 해당 연결의 목록 API를, Codex는 로그인한 실행기의 목록을, Vertex는 생성에 쓰는 것과 같은 Vertex 인증으로 Google Model Garden을 조회해요. 조회 실패 시 마지막으로 저장된 목록을 유지하며 모델 ID 직접 입력은 항상 가능해요.
+
+실제 생성 가능 여부는 모델 프리셋의 **응답 테스트**로 확인해요. 저장 여부와 목록 조회 성공만으로 모델 호출 성공을 추정하지 않아요.
 
 ## 키와 전체 백업
 
@@ -24,7 +30,7 @@ OpenAI Responses·Chat 호환, Anthropic Messages 등 프로토콜과 주소를 
 
 ## Google Agent Platform / Vertex
 
-Gemini용 `vertex-gemini-v1` 연결에서는 서비스 계정 JSON을 앱에서 등록해요. JSON은 DB에 저장하고 프로젝트 ID를 주소에 반영해요. 모델 목록 새로고침도 같은 Vertex 인증으로 Google Model Garden의 `publishers.models.list`를 조회하며 별도 Gemini Developer API 키는 사용하지 않아요. 실제 모델 접근 권한은 Google Cloud 설정에 따라요.
+Gemini용 `vertex-gemini-v1` 연결에서는 서비스 계정 JSON을 앱에서 등록하고 프로젝트 ID를 global endpoint에 반영해요. 등록한 Vertex 인증을 생성과 Google Model Garden 모델 목록 조회에 함께 사용해요.
 
 ## Codex
 
@@ -34,6 +40,6 @@ Codex는 API 키를 입력하는 연결이 아니라 전용 실행기의 로그�
 
 `server/provider-connections.ts`는 연결 입력·키 저장을, `server/credentials.ts`는 DB 키 읽기/쓰기를 맡아요. 프로토콜별 encoder와 transport는 모델 요청 형식과 응답 파싱을 맡아요. 자료 편집과 과거 백업 검증이 공급자 전송 경로에 개입하지 않아요. 실제 지원 옵션과 응답 품질은 해당 서비스에서 확인해야 해요.
 
-## Reversible settings and concurrent edits
+## 편집과 동시 수정
 
-Enabling/disabling a provider or model applies immediately; it does not delete resources and does not require a separate impact-confirmation panel. Unsaved form text is still protected when switching editors. A conflicting save keeps the draft and its original revision until the user loads the latest settings; the provider/model detail GET endpoints return the current editable resource, never the stored API key itself.
+프로바이더·모델의 활성/비활성은 자료를 삭제하지 않고 다음 호출부터 적용돼요. 편집 화면을 바꿀 때 저장하지 않은 입력은 보호하고, 다른 곳에서 먼저 저장한 경우 현재 초안을 유지한 채 최신 설정을 다시 불러오게 해요. 프로바이더·모델 조회 API는 편집 가능한 설정만 반환하며 저장된 키 원문은 반환하지 않아요.

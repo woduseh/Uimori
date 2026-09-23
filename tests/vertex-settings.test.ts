@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { GoogleAuth } from 'google-auth-library';
 import { createApp, type App } from '../server/app.js';
 import {
   VERTEX_GEMINI_MODEL_ID,
@@ -60,6 +61,20 @@ async function request<T>(
 }
 const endpoint =
   'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models';
+const serviceAccount = {
+  type: 'service_account',
+  project_id: 'synthetic-project',
+  client_email: 'synthetic@synthetic-project.iam.gserviceaccount.com',
+  private_key: '-----BEGIN PRIVATE KEY-----\nSYNTHETIC\n-----END PRIVATE KEY-----',
+  token_uri: 'https://oauth2.googleapis.com/token',
+};
+async function vertexCredential(app: App) {
+  return (
+    await request<{ credentialRef: string }>(app, '/provider-management/vertex-credentials', {
+      serviceAccount,
+    })
+  ).credentialRef;
+}
 const vertexConnection = (changes: Record<string, unknown> = {}) => ({
   title: 'Synthetic Vertex',
   protocol: 'vertex-gemini-v1',
@@ -183,8 +198,11 @@ describe('Vertex connection and model settings with file SQLite', () => {
     expect(app.store.product.all('model')).toHaveLength(4);
   });
 
-  test('refreshes Gemini models from Vertex Model Garden with the registered Vertex credential', async () => {
+  test('refreshes Gemini models with the same uploaded Vertex credential used for generation', async () => {
     const app = await application();
+    const token = vi
+      .spyOn(GoogleAuth.prototype, 'getAccessToken')
+      .mockResolvedValue('synthetic-oauth-token');
     const seen: { url: string; authorization: string | null }[] = [];
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       seen.push({
@@ -202,31 +220,56 @@ describe('Vertex connection and model settings with file SQLite', () => {
         { status: 200, headers: { 'content-type': 'application/json' } }
       );
     });
+    const credentialRef = await vertexCredential(app);
     const connection = await request<Connection>(
       app,
       '/connections',
-      vertexConnection({ apiKey: 'synthetic-vertex-token' })
+      vertexConnection({ credentialRef })
     );
     const catalog = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
+
     expect(catalog.catalog.map((item) => item.id)).toEqual([
       'gemini-3.8-flash',
       'gemini-4-pro-preview',
     ]);
     expect(catalog.catalogError).toBeNull();
-    expect(seen).toHaveLength(1);
+    expect(seen).toEqual([
+      expect.objectContaining({
+        authorization: 'Bearer synthetic-oauth-token',
+      }),
+    ]);
     expect(seen[0].url).toContain('/v1beta1/publishers/google/models');
-    expect(seen[0].authorization).toBe('Bearer synthetic-vertex-token');
-    expect(JSON.stringify(catalog)).not.toContain('synthetic-vertex-token');
+    expect(JSON.stringify(catalog)).not.toContain('synthetic-oauth-token');
+    expect(token).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  test('Vertex model refresh fails closed without a generation credential and keeps cached data', async () => {
+  test('keeps the last Vertex model catalog when a later refresh fails', async () => {
     const app = await application();
-    const fetch = vi.spyOn(globalThis, 'fetch');
-    const connection = await request<Connection>(app, '/connections', vertexConnection());
+    vi.spyOn(GoogleAuth.prototype, 'getAccessToken').mockResolvedValue('synthetic-oauth-token');
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            publisherModels: [{ name: 'publishers/google/models/gemini-3.8-flash' }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(new Response('temporary failure', { status: 503 }));
+    const connection = await request<Connection>(
+      app,
+      '/connections',
+      vertexConnection({ credentialRef: await vertexCredential(app) })
+    );
     const listed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
-    expect(listed.catalog).toEqual([]);
-    expect(listed.catalogError).toBe('CATALOG_UNAVAILABLE');
-    expect(fetch).not.toHaveBeenCalled();
+    const failed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
+
+    expect(listed.catalog.map((item) => item.id)).toEqual(['gemini-3.8-flash']);
+    expect(failed.catalog).toEqual(listed.catalog);
+    expect(failed.catalogUpdatedAt).toBe(listed.catalogUpdatedAt);
+    expect(failed.catalogError).toBe('CATALOG_UNAVAILABLE');
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

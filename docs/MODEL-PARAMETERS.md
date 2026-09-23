@@ -14,6 +14,8 @@
 
 현재 옵션 정의는 [모델 계열](../core/model-family.ts), [프로토콜 정의](../core/provider-definitions.ts), [모델별 힌트와 값 검증](../core/model-capabilities.ts)이 기준이에요. 모델 ID·한도·옵션 목록을 문서에 별도로 복제하지 않아요. 계열의 옵션 목록을 보여주는 것과 특정 모델이 모든 옵션을 지원한다고 확인하는 것은 달라요. 공급자 목록이나 검토 표에서 확인한 값만 확인된 힌트로 표시해요.
 
+모델 선택 목록은 **마지막으로 조회한 공급자 목록과 Uimori가 검토한 로컬 힌트**를 합쳐 보여줘요. 동적 목록에 없는 새 모델도 ID를 직접 입력할 수 있고, 목록 조회 결과가 생성 가능 여부를 보장하지는 않아요.
+
 ### Vercel 추가 옵션
 
 표준 옵션은 Chat 요청 필드나 `providerOptions`로 변환해요. Claude effort/thinking은 `anthropic`, GPT verbosity는 `openai`, Gemini thinking level은 `google`·`vertex` 양쪽에 같은 형태로 전달해요. 실제 적용은 라우팅된 공급자의 지원을 따라요. 계열이 자동이거나 없는 저장 모델도 명시한 생성 옵션은 누락하지 않아요. 제조사와 실제 라우팅 공급자는 다를 수 있으므로 Claude를 Bedrock 등으로 라우팅할 때는 필요에 따라 해당 공급자의 추가 옵션을 지정해요. 계열 선택이 공급자 라우팅을 강제로 고정하지는 않아요.
