@@ -7,12 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       browser:
-        description: Run the complete local synthetic browser regression
+        description: Include the complete synthetic browser regression (3 independent shards)
         type: boolean
         default: false
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
@@ -33,66 +34,224 @@ jobs:
         env:
           UIMORI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
 
-  quality:
+  static:
     needs: changes
-    runs-on: windows-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-node@v7
+        if: needs.changes.outputs.docs_only != 'true'
         with:
-          node-version: '24.14.0'
+          node-version-file: .nvmrc
           cache: npm
       - if: needs.changes.outputs.docs_only != 'true'
         run: npm ci --no-audit --no-fund
       - if: needs.changes.outputs.docs_only != 'true'
-        run: npm run quality:full
+        run: npm run quality
       - if: needs.changes.outputs.docs_only == 'true'
-        run: git diff --check $env:UIMORI_DIFF_BASE HEAD
+        run: node -e "require('node:child_process').execFileSync('git', ['diff','--check',process.env.UIMORI_DIFF_BASE,'HEAD'], {stdio:'inherit'})"
         env:
           UIMORI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+
+  tests:
+    name: tests (${{ matrix.shard }}/4)
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # Some Vitest files launch dist/server/index.js. Each isolated runner builds once.
+      - run: npm run build
+      - run: node scripts/ci-vitest.mjs ${{ matrix.shard }}/4
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ci-vitest-${{ matrix.shard }}
+          path: output/ci/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+
+  tooling:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # test:tooling owns its one build; do not build a second time here.
+      - run: npm run test:tooling
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: tooling-diagnostics
+          path: output/tooling/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
 
   linux-core:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '24.14.0'
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
       - name: Server persistence, restart and backup recovery
         run: npm test -- tests/server.test.ts tests/personal-workspace-flow.test.ts
-      - name: Install Chromium for Reader recovery
+      - name: Install managed Chromium
         run: |
           npx playwright install --with-deps chromium
           node --input-type=module -e "import { appendFileSync } from 'node:fs'; import { chromium } from '@playwright/test'; appendFileSync(process.env.GITHUB_ENV, 'UIMORI_BROWSER_PATH=' + chromium.executablePath() + '\n');"
       - name: Reader recovery
         run: npm run verify:browser -- --grep READERREC
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: linux-core-diagnostics
+          path: output/playwright/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
 
-  browser:
-    if: github.event_name == 'workflow_dispatch' && inputs.browser
-    needs: quality
-    runs-on: windows-latest
-    # Includes installation and a fresh build; the regression itself is bounded at 30 minutes.
-    timeout-minutes: 45
+  selfhost:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '24.14.0'
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - run: npm run verify:browser
+      - name: Install managed Chromium
+        run: |
+          npx playwright install --with-deps chromium
+          node --input-type=module -e "import { appendFileSync } from 'node:fs'; import { chromium } from '@playwright/test'; appendFileSync(process.env.GITHUB_ENV, 'UIMORI_BROWSER_PATH=' + chromium.executablePath() + '\n');"
+      - run: npm run verify:selfhost
+      - run: npm run verify:browser-smoke
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: selfhost-diagnostics
+          path: output/playwright/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+
+  browser-full:
+    name: browser-full (${{ matrix.shard }}/3)
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' && inputs.browser
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Install managed Chromium
+        run: |
+          npx playwright install --with-deps chromium
+          node --input-type=module -e "import { appendFileSync } from 'node:fs'; import { chromium } from '@playwright/test'; appendFileSync(process.env.GITHUB_ENV, 'UIMORI_BROWSER_PATH=' + chromium.executablePath() + '\n');"
+      - run: npm run verify:browser -- --shard ${{ matrix.shard }}/3
+        env:
+          UIMORI_CI_BROWSER_REPORT: output/ci/browser-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ci-browser-${{ matrix.shard }}
+          path: output/ci/browser-${{ matrix.shard }}.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: browser-diagnostics-${{ matrix.shard }}
+          path: output/playwright/
+          overwrite: true
+          retention-days: 7
+
+  # Stable check name. Skips are accepted only for the declared docs/manual paths.
+  quality:
+    needs: [changes, static, tests, tooling, linux-core, selfhost, browser-full]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Check all required job outcomes
+        run: node scripts/ci-summary.mjs jobs
+        env:
+          UIMORI_CI_NEEDS: ${{ toJSON(needs) }}
+          UIMORI_DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          UIMORI_FULL_BROWSER: ${{ github.event_name == 'workflow_dispatch' && inputs.browser }}
+      - uses: actions/download-artifact@v8
+        if: needs.changes.outputs.docs_only != 'true'
+        with:
+          pattern: ci-vitest-*
+          path: output/collected
+          merge-multiple: true
+      - name: Verify complete, non-overlapping Vitest collection and summarize timings
+        if: needs.changes.outputs.docs_only != 'true'
+        run: node scripts/ci-summary.mjs vitest output/collected
+      - uses: actions/download-artifact@v8
+        if: github.event_name == 'workflow_dispatch' && inputs.browser
+        with:
+          pattern: ci-browser-*
+          path: output/collected
+          merge-multiple: true
+      - name: Verify complete browser collection
+        if: github.event_name == 'workflow_dispatch' && inputs.browser
+        run: node scripts/ci-summary.mjs browser output/collected

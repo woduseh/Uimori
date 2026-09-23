@@ -1,12 +1,14 @@
+import { parseShard, browserCases } from './ci-summary.mjs';
 import { assertBrowserRuntime } from './browser-runtime.mjs';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, copyFile } from 'node:fs/promises';
+import { mkdir, readdir, copyFile, readFile } from 'node:fs/promises';
 import { startProviderFixture } from './provider-management-fixture.mjs';
 import { parseOptions } from './release-common.mjs';
 import {
   artifactRoot,
   newId,
+  root,
   json,
   createOwnership,
   localVerificationEnv,
@@ -35,7 +37,11 @@ export async function runBrowserVerification({
   timeout = 600_000,
   limitations = [],
 }) {
-  const options = parseOptions(process.argv.slice(2), { values: ['grep'], flags: ['visual'] });
+  const options = parseOptions(process.argv.slice(2), {
+    values: ['grep', 'shard'],
+    flags: ['visual'],
+  });
+  if (options.shard) parseShard(options.shard);
   const focused = options.grep !== undefined;
   if (focused) {
     new RegExp(options.grep);
@@ -56,7 +62,8 @@ export async function runBrowserVerification({
     startedAt: new Date().toISOString(),
     environment: { node: process.version, platform: process.platform },
     scope,
-    selection: { files, grep, focused },
+    selection: { files, grep, focused, ...(options.shard ? { shard: options.shard } : {}) },
+    commit: process.env.GITHUB_SHA ?? null,
     visualReview,
     failures,
     cleanup: { status: 'NOT_RUN' },
@@ -134,6 +141,31 @@ export async function runBrowserVerification({
     });
     await json(path.join(directory, 'ownership.json'), ownership);
     assertNotCancelled();
+    if (options.shard) {
+      const inventory = path.join(directory, 'collection.json');
+      requireCommand(
+        await command(
+          [
+            'node_modules/@playwright/test/cli.js',
+            'test',
+            ...files,
+            ...(grep ? ['--grep', grep] : []),
+            '--list',
+            '--reporter=json',
+          ],
+          {
+            env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: inventory },
+            timeout: 60_000,
+            log: path.join(directory, 'collection.log'),
+            children,
+          }
+        )
+      );
+      summary.selection.allTests = browserCases(
+        JSON.parse(await readFile(inventory, 'utf8'))
+      ).sort();
+      if (!summary.selection.allTests.length) throw new Error('Empty full browser collection');
+    }
     const reporter = path.join(directory, 'playwright.json'),
       since = Date.now();
     const result = await command(
@@ -142,6 +174,7 @@ export async function runBrowserVerification({
         'test',
         ...files,
         ...(grep ? ['--grep', grep] : []),
+        ...(options.shard ? [`--shard=${options.shard}`] : []),
         '--reporter=list,json',
       ],
       {
@@ -162,6 +195,8 @@ export async function runBrowserVerification({
       failures.push(error.message);
     }
     requireCommand(result);
+    if (options.shard)
+      summary.testCases = browserCases(JSON.parse(await readFile(reporter, 'utf8'))).sort();
     if (failures.length) throw new Error('Required browser evidence is not PASS');
     if (visualReview) {
       const screenshots = (await filesBelow(env.UIMORI_BROWSER_OUTPUT)).filter((file) =>
@@ -242,6 +277,8 @@ export async function runBrowserVerification({
     summary.status = failures.length ? (environmentBlocked ? 'BLOCKED' : 'FAIL') : 'PASS';
     summary.finishedAt = new Date().toISOString();
     await json(path.join(directory, 'summary.json'), summary);
+    if (process.env.UIMORI_CI_BROWSER_REPORT)
+      await json(path.resolve(root, process.env.UIMORI_CI_BROWSER_REPORT), summary);
     console.log(
       JSON.stringify({
         status: summary.status,

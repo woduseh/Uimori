@@ -411,3 +411,23 @@ test('unrunnable browser is BLOCKED before creating the application', async () =
   expect(lib.startServer).not.toHaveBeenCalled();
   expect(lib.command).not.toHaveBeenCalled();
 });
+
+test('native browser shard records the full collection and only reports the selected execution', async () => {
+  process.argv.push('--shard', '1/3');
+  const { summary } = await run();
+  expect(summary.status).toBe('PASS');
+  expect(summary.selection.shard).toBe('1/3');
+  expect(summary.selection.allTests).toEqual(summary.testCases);
+  expect(lib.command.mock.calls[0][0]).toContain('--list');
+  expect(lib.command.mock.calls[0][0]).not.toContain('--shard=1/3');
+  expect(lib.command.mock.calls[1][0]).toContain('--shard=1/3');
+});
+
+test.each(['0/4', '5/4', '1/0', 'bad'])(
+  'invalid browser shard %s fails before server startup',
+  async (shard) => {
+    process.argv.push('--shard', shard);
+    await expect(run()).rejects.toThrow();
+    expect(lib.startServer).not.toHaveBeenCalled();
+  }
+);
