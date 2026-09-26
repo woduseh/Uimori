@@ -17,7 +17,9 @@ import {
   type RisuPrompt,
   type PromptValue,
 } from '../core/risu-prompt.js';
-import type { RunSnapshot } from '../core/types.js';
+import type { RunSnapshot, Source } from '../core/types.js';
+import { validateSourceIdentity } from '../core/auxiliary.js';
+import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { compiledPackages, type ResolvedPackage } from '../core/package-context.js';
@@ -29,15 +31,31 @@ import { nativeRisuPresetPending, projectNativeRisuPresetProgram } from './risu-
 export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): PromptHistoryMessage[] {
   const entries = snapshot.history;
   const sourceMessages = new Set<string>();
+  // This fold needs exact provenance, not Reader paragraph anchors or translation revisions.
+  // Keep the same original/selected-edit integrity checks without constructing those views.
+  const readSource = store.db.prepare(
+    'SELECT id,chat_id AS chatId,run_id AS runId,text,hash FROM sources WHERE id=?'
+  );
+  const readEdit = store.db.prepare(
+    'SELECT text,hash FROM source_edits WHERE source_id=? AND hash=? ORDER BY revision DESC LIMIT 1'
+  );
+  const readOwner = store.db.prepare(
+    "SELECT request,snapshot,json_extract(snapshot,'$.packageStart.mode') AS startMode FROM runs WHERE id=?"
+  );
   return entries.reduce<PromptHistoryMessage[]>((accumulated, entry) => {
-    const source = entry.contentHash
-      ? store.sourceAtHash(entry.revision, entry.contentHash)
-      : store.sourceOriginal(entry.revision);
-    const row = store.db
-      .prepare(
-        "SELECT request,snapshot,json_extract(snapshot,'$.packageStart.mode') AS startMode FROM runs WHERE id=?"
-      )
-      .get(source.runId) as
+    const source = readSource.get(entry.revision) as
+      | Pick<Source, 'id' | 'chatId' | 'runId' | 'text' | 'hash'>
+      | undefined;
+    if (!source) throw new HttpError(404, 'Source not found');
+    validateSourceIdentity(source);
+    if (entry.contentHash && entry.contentHash !== source.hash) {
+      const edit = readEdit.get(entry.revision, entry.contentHash) as
+        | Pick<Source, 'text' | 'hash'>
+        | undefined;
+      if (!edit) throw new HttpError(400, 'Unknown source content hash');
+      validateSourceIdentity({ ...source, ...edit });
+    }
+    const row = readOwner.get(source.runId) as
       | { request: string; snapshot: string; startMode: string | null }
       | undefined;
     if (!row) throw new Error('PROMPT_HISTORY_REQUEST_MISSING');

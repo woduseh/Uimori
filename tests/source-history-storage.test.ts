@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { Store } from '../server/store.js';
+import { captureLogicalHistory } from '../server/prompt-snapshot.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { store: Store; directory: string }[] = [];
@@ -95,5 +96,85 @@ test.each(['original-hash', 'original-blank', 'edit-hash', 'edit-blank'])(
         );
     }
     expect(() => store.history(source.id)).toThrow('SOURCE_IDENTITY_INVALID');
+  }
+);
+
+test('logical history reads the captured original or older edit instead of the current source version', () => {
+  const { store, chat } = fixture();
+  const original = append(store, chat.id, 'Original manuscript 😀\r\n\r\nSecond paragraph.');
+  const capturedEdit = store.editSource(original.id, {
+    expectedRevision: 0,
+    text: 'Earlier user edit 😀\r\n\r\nKeep this wording.',
+  });
+  const current = store.editSource(original.id, {
+    expectedRevision: 1,
+    text: 'A newer edit must not replace the captured version.',
+  });
+  const snapshot = store.run(original.runId).snapshot;
+  for (const entry of [
+    { revision: original.id, text: original.text },
+    { revision: original.id, text: original.text, contentHash: original.hash },
+    { revision: original.id, text: capturedEdit.text, contentHash: capturedEdit.hash },
+  ]) {
+    const logical = captureLogicalHistory(store, { ...snapshot, history: [entry] });
+    expect(logical).toEqual([
+      {
+        id: `request:${original.id}`,
+        role: 'user',
+        text: 'Synthetic history',
+        sourceRevision: original.id,
+        sourceHash: entry.contentHash ?? original.hash,
+        runId: original.runId,
+      },
+      {
+        id: `source:${original.id}`,
+        role: 'assistant',
+        text: entry.text,
+        sourceRevision: original.id,
+        sourceHash: entry.contentHash ?? original.hash,
+        runId: original.runId,
+      },
+    ]);
+  }
+  expect(store.source(original.id).text).toBe(current.text);
+  expect(() =>
+    captureLogicalHistory(store, {
+      ...snapshot,
+      history: [{ revision: original.id, text: current.text, contentHash: '0'.repeat(64) }],
+    })
+  ).toThrow('Unknown source content hash');
+  expect(() =>
+    captureLogicalHistory(store, {
+      ...snapshot,
+      history: [{ revision: 'missing', text: original.text }],
+    })
+  ).toThrow('Source not found');
+});
+
+test.each(['original', 'captured-edit'] as const)(
+  'logical history rejects a tampered %s even when the latest edit is valid',
+  (corrupted) => {
+    const { store, chat } = fixture();
+    const original = append(store, chat.id, 'Original manuscript.');
+    const selected = store.editSource(original.id, {
+      expectedRevision: 0,
+      text: 'Captured earlier edit.',
+    });
+    store.editSource(original.id, { expectedRevision: 1, text: 'Valid latest edit.' });
+    const snapshot = store.run(original.runId).snapshot;
+    if (corrupted === 'original')
+      store.db
+        .prepare('UPDATE sources SET text=? WHERE id=?')
+        .run('Tampered original', original.id);
+    else
+      store.db
+        .prepare('UPDATE source_edits SET text=? WHERE source_id=? AND revision=1')
+        .run('Tampered captured edit', original.id);
+    expect(() =>
+      captureLogicalHistory(store, {
+        ...snapshot,
+        history: [{ revision: original.id, text: selected.text, contentHash: selected.hash }],
+      })
+    ).toThrow('SOURCE_IDENTITY_INVALID');
   }
 );
