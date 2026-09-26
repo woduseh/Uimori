@@ -372,16 +372,6 @@ async function terminal(app: App, id: string) {
   expect(run.status, run.error ?? '').toBe('completed');
   return run;
 }
-function _orderedSubset(actual: RetainedLore[], candidates: RetainedLore[]) {
-  let after = -1;
-  for (const entry of actual) {
-    const index = candidates.findIndex(
-      (candidate, index) => index > after && JSON.stringify(candidate) === JSON.stringify(entry)
-    );
-    expect(index).toBeGreaterThan(after);
-    after = index;
-  }
-}
 
 describe('automatic summary and retained lore at the same input boundary', () => {
   test('summarizes only logical conversation pairs and carries old-source raw references after the summary before recent history', async () => {

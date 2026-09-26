@@ -24,13 +24,13 @@ import {
 import type { ProviderRequest } from '../core/transport.js';
 import type { RunSnapshot } from '../core/types.js';
 
-const protocols: ProviderProtocol[] = [
+const protocols = [
   'vertex-gemini-v1',
   'openai-responses-v1',
   'openai-chat-v1',
   'anthropic-messages-v1',
   'vercel-chat-v1',
-];
+] as const satisfies readonly ProviderProtocol[];
 function snapshot(protocol: ProviderProtocol): RunSnapshot {
   const modelId =
     protocol === 'vertex-gemini-v1'
@@ -157,7 +157,7 @@ describe('single prompt program defaults at real native encoder boundaries', () 
             ? encodeAnthropic(request).body
             : protocol === 'openai-responses-v1'
               ? encodeResponses(request).body
-              : encodeChat(request).body;
+              : encodeChat(request, protocol).body;
       expect(compilation.messages[0].content[0].text).toBe(DEFAULT_TRANSLATION_PROMPT);
       expect(compilation.messages.filter((m) => m.provenance.origin === 'history')).toHaveLength(0);
       expect(compilation.messages.filter((m) => m.provenance.origin === 'current')).toHaveLength(1);

@@ -31,16 +31,10 @@ import {
   illustrationDatabases,
   PNG_BASE64,
 } from './fixtures/illustration.js';
-import { comfyUIFixture, FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
-import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
-import { runIllustrationJob } from '../server/illustration-runner.js';
+import { FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
 
 const databases = illustrationDatabases('uimori-illustration-store-');
-const cleanups: (() => Promise<void>)[] = [];
-afterEach(async () => {
-  for (const close of cleanups.splice(0)) await close();
-  databases.cleanup();
-});
+afterEach(() => databases.cleanup());
 const PNG = Buffer.from(PNG_BASE64, 'base64');
 const generated = (caption = '캡션') => [{ mime: 'image/png' as const, bytes: PNG, caption }];
 const diagnostic = () => ({ stage: 'store' as const, attempts: [], retries: [] });
@@ -75,63 +69,6 @@ function codexModel(store: Store) {
     maxOutputTokens: 1024,
     temperature: null,
   }) as ModelPreset;
-}
-
-async function _executedComfyIllustration() {
-  const store = databases.create();
-  const { chat, source } = chatWithSource(store);
-  const comfy = await comfyUIFixture({ authorization: 'Bearer synthetic' });
-  cleanups.push(comfy.close);
-  const provider = await loopbackProvider(async (_request, response) => {
-    await writeSse(response, [
-      {
-        type: 'text_delta',
-        delta: JSON.stringify({ prompt: 'synthetic lantern', caption: '등불' }),
-      },
-      { type: 'done', reason: 'stop' },
-    ]);
-  });
-  cleanups.push(provider.close);
-  const connection = store.product.connection({
-    title: 'Archive prompt provider',
-    protocol: 'fixture-sse-v1',
-    endpoint: provider.endpoint,
-    enabled: true,
-  }) as Connection;
-  const model = store.product.model({
-    title: 'Archive prompt model',
-    connectionId: connection.id,
-    modelId: 'archive-prompt',
-    maxOutputTokens: 512,
-    temperature: null,
-  }) as ModelPreset;
-  const { revision, ...body } = fixtureSettings({
-    generator: 'comfyui',
-    automatic: true,
-    comfyui: {
-      baseUrl: comfy.origin,
-      authorizationEnv: 'UIMORI_AUDIT_COMFY_SECRET',
-      workflow: FIXTURE_WORKFLOW,
-      promptModel: { id: model.id },
-      timeoutMs: 10_000,
-      pollIntervalMs: 250,
-    },
-  });
-  updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
-  const job = reserveIllustration(store, source, 'manual');
-  const result = await runIllustrationJob(store, job.id, 'archive-worker', {
-    signal: new AbortController().signal,
-
-    resolveCredential: () => 'Bearer synthetic',
-    resolveComfyCredential: () => 'Bearer synthetic',
-    authorize: (value) => store.product.authorize(value),
-    onAttemptStart: (wire) => store.product.startAttempt(chat.id, null, null, wire),
-    onAttemptFinish: (id, value) => store.product.finishAttempt(id, value),
-  });
-  expect(result).toMatchObject({ status: 'completed', images: 1 });
-  expect(provider.requests).toHaveLength(1);
-  expect(comfy.prompts).toHaveLength(1);
-  return { store, chat, source, job: illustrationJob(store, job.id) };
 }
 
 describe('integrated illustration audit regressions', () => {

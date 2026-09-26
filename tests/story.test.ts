@@ -84,22 +84,6 @@ function queued(store: Store, chatId: string, request = 'Continue.', branchId?: 
       }) satisfies RunSnapshot
   ).run;
 }
-function _source(
-  store: Store,
-  chatId: string,
-  text = 'A ticket is bought. [[event:buy-ticket]]',
-  branchId?: string
-) {
-  const run = queued(store, chatId, 'Synthetic source, no provider.', branchId);
-  expect(run.status).toBe('queued');
-  store.startRun(run.id);
-  return store.completeRun(
-    run.id,
-    text,
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
-}
 async function api(
   app: App,
   method: 'GET' | 'POST' | 'PUT',
