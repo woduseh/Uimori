@@ -14,8 +14,9 @@ import * as transport from '../core/transport.js';
 import type { HelperTaskSnapshot } from '../core/helper.js';
 import Fastify from 'fastify';
 import { helperRoutes } from '../server/helper-routes.js';
-import { HELPER_PERSONA_MAX_CHARS } from '../core/content-limits.js';
+import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { UI_HELPER_PERSONA } from '../web/helper-persona.js';
+import { chatWithSource } from './fixtures/illustration.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
@@ -540,6 +541,96 @@ test('the helper persona is bounded, saved per conversation and reaches only the
   expect(calls.every((call) => call.role === 'helper')).toBe(true);
   expect(calls[0].stable.contract).toContain(UI_HELPER_PERSONA);
   expect(calls[1].stable.contract).not.toContain(UI_HELPER_PERSONA);
+});
+
+test('selected prose appears once in the current request and survives into the next helper turn', async () => {
+  const f = fixture();
+  const { source } = chatWithSource(f.store);
+  const selectedText = 'selected source sentence.\n'.repeat(5200) + 'THE_EXACT_END';
+  const current = f.store.editSource(source.id, { text: selectedText, expectedRevision: 0 });
+  const conversation = f.workspace.open({
+    kind: 'chat',
+    chatId: source.chatId,
+    branchId: `main:${source.chatId}`,
+  });
+  const calls: transport.ProviderRequest[] = [];
+  mockSend((request) => {
+    calls.push(structuredClone(request));
+    return success;
+  });
+  const request = 'Keep this exact user request.';
+  const selection = { sourceId: source.id, sourceHash: current.hash, text: selectedText };
+  const first = f.runtime.enqueue(
+    conversation.id,
+    'selected-passage',
+    request,
+    undefined,
+    selection
+  );
+  await Promise.all(f.work);
+  expect(f.workspace.task(first.id)).toMatchObject({ status: 'completed', request });
+  expect(f.workspace.task(first.id).snapshot.selection).toBeUndefined();
+  expect(calls[0].input.task).toBe(request);
+  expect(calls[0].input.history).toEqual([]);
+  expect(calls[0].input.source).toMatchObject({ selection });
+  expect(JSON.stringify(calls[0].input).split('THE_EXACT_END')).toHaveLength(2);
+  expect(
+    f.workspace.messages(conversation.id).find((message) => message.role === 'user')?.text
+  ).toBe(request);
+  const next = f.runtime.enqueue(
+    conversation.id,
+    'selection-follow-up',
+    'Now explain the final sentence.'
+  );
+  await Promise.all(f.work);
+  expect(f.workspace.task(next.id).status).toBe('completed');
+  expect(calls).toHaveLength(2);
+  const history = calls[1].input.history as { role: string; text: string }[];
+  expect(history[0].text).toContain(source.id);
+  expect(history[0].text).toContain(current.hash);
+  expect(history[0].text.endsWith(selectedText)).toBe(true);
+});
+
+test('the helper message route preserves full-length Korean requests and selected source text', async () => {
+  const f = fixture();
+  // This check reserves real SQLite work without dispatching a model request.
+  f.controller.abort();
+  const { source } = chatWithSource(f.store);
+  const selectedText = '가'.repeat(REQUEST_TEXT_MAX_CHARS - 1) + '끝';
+  const current = f.store.editSource(source.id, { text: selectedText, expectedRevision: 0 });
+  const conversation = f.workspace.open({
+    kind: 'chat',
+    chatId: source.chatId,
+    branchId: `main:${source.chatId}`,
+  });
+  const message = '나'.repeat(REQUEST_TEXT_MAX_CHARS - 1) + '끝';
+  const selection = { sourceId: source.id, sourceHash: current.hash, text: selectedText };
+  const app = Fastify({ bodyLimit: 4 * 1024 * 1024 });
+  helperRoutes(app, f.runtime);
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/helper/conversations/${conversation.id}/messages`,
+      payload: { requestKey: 'full-length-selection', text: message, selection },
+    });
+    expect(response.statusCode, response.body.slice(0, 300)).toBe(200);
+    const task = f.workspace.task(response.json().id);
+    expect(task.request).toBe(message);
+    expect(task.snapshot.selection).toEqual(selection);
+    const over = await app.inject({
+      method: 'POST',
+      url: `/api/helper/conversations/${conversation.id}/messages`,
+      payload: {
+        requestKey: 'over-length-selection',
+        text: '검토',
+        selection: { ...selection, text: selectedText + '넘침' },
+      },
+    });
+    expect(over.statusCode).toBe(400);
+    expect(f.workspace.tasks(conversation.id)).toHaveLength(1);
+  } finally {
+    await app.close();
+  }
 });
 
 describe('Helper current view cursor', () => {

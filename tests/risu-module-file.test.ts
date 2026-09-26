@@ -115,7 +115,7 @@ test('asset metadata and record counts must match exactly', () => {
   );
 });
 
-test('asset count, JSON bytes and total container bytes are bounded', () => {
+test('asset count, JSON bytes and individual asset bytes stay bounded in larger containers', () => {
   const metadata = Array.from({ length: 2000 }, (_, index) => [`asset ${index}`, '', 'png']);
   const assets = Array.from({ length: 2000 }, () => Buffer.alloc(0));
   expect(readEmbeddedRisuModule(file({ assets: metadata }, assets)).assets).toHaveLength(2000);
@@ -127,13 +127,22 @@ test('asset count, JSON bytes and total container bytes are bounded', () => {
   expect(readEmbeddedRisuModule(container(maximumJson))).toEqual({ module: {}, assets: [] });
   expectInvalid(container(Buffer.concat([maximumJson, Buffer.from(' ')])));
 
-  // Build a structurally valid oversized container with one binary record.
+  // One valid maximum-sized asset makes the whole container exceed the former 64 MiB cap.
   const prefix = file({ assets: [['large', '', 'bin']] }).subarray(0, -1);
-  const oversized = Buffer.alloc(64 * 1024 * 1024 + 1, encodeMap[0]);
-  prefix.copy(oversized);
-  oversized[prefix.length] = 1;
-  oversized.writeUInt32LE(oversized.length - prefix.length - 6, prefix.length + 1);
-  oversized[oversized.length - 1] = 0;
+  const assetBytes = 64 * 1024 * 1024;
+  const large = Buffer.alloc(prefix.length + 6 + assetBytes, encodeMap[0]);
+  prefix.copy(large);
+  large[prefix.length] = 1;
+  large.writeUInt32LE(assetBytes, prefix.length + 1);
+  large[large.length - 1] = 0;
+  const decoded = readEmbeddedRisuModule(large);
+  expect(decoded.assets).toHaveLength(1);
+  expect(decoded.assets[0].length).toBe(assetBytes);
+  expect(decoded.assets[0].every((byte) => byte === 0)).toBe(true);
+
+  // A valid extra payload byte crosses the retained per-asset boundary, not the file budget.
+  const oversized = Buffer.concat([large.subarray(0, -1), Buffer.from([encodeMap[0], 0])]);
+  oversized.writeUInt32LE(assetBytes + 1, prefix.length + 1);
   expectInvalid(oversized);
 });
 

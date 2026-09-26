@@ -1,4 +1,5 @@
 import type { Json, ProviderTool } from '../core/transport.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { RESOURCE_TOOLS } from './helper-resource-tools.js';
 import { helperOptionTools } from './chat-options.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
@@ -55,7 +56,7 @@ const TOOLS: ProviderTool[] = [
             expectedProfileRevision: integer,
             expectedPackageRevision: integer,
             expectedFieldHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
-            value: { type: 'string', maxLength: 1_000_000 },
+            value: { type: 'string', maxLength: SOURCE_TEXT_MAX_CHARS },
           },
           ['selector', 'expectedRevision', 'expectedHeadRevision']
         ),

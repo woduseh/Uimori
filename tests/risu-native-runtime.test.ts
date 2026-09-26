@@ -72,7 +72,53 @@ const input = (
 });
 
 describe('native Risu execution', () => {
-  it('round-trips long native history within unchanged JSON and Lua memory limits', async () => {
+  it('keeps a growing conversation intact across Lua sessions and full-chat reads and writes', async () => {
+    const content = native([
+      lua(`local calls = 0
+      function choose(id)
+        calls = calls + 1
+        local messages = getFullChat(id)
+        setChatVar(id, 'before', getChatData(id, 0))
+        messages[1].data = 'copy edit'
+        setChatVar(id, 'after', getChatData(id, 0))
+        setFullChatMain(id, getFullChatMain(id))
+        setChat(id, -1, getChatData(id, -1) .. ':edited')
+        addChat(id, 'user', 'next')
+        setChatVar(id, 'calls', calls)
+        setChatVar(id, 'length', getChatLength(id))
+      end`),
+    ]);
+    const options = { sessionKey: 'growing-native-history' };
+    const first = await executeRisuNative(input(content), options);
+    expect(first.variables.calls).toBe('1');
+    const messages = Array.from({ length: 100 }, (_, index) => ({
+      id: `long-scene-${index}`,
+      role: 'char' as const,
+      data: `장면 ${index}: ` + '가'.repeat(7100),
+    }));
+    expect(Buffer.byteLength(JSON.stringify(messages))).toBeGreaterThan(2 * 1024 * 1024);
+    const result = await executeRisuNative({ ...input(content), messages }, options);
+    expect(result.variables).toEqual({
+      before: messages[0].data,
+      after: messages[0].data,
+      calls: '2',
+      length: '101',
+    });
+    expect(result.messages.slice(0, -2)).toEqual(messages.slice(0, -1));
+    expect(result.messages.at(-2)).toEqual({
+      ...messages.at(-1),
+      data: messages.at(-1)!.data + ':edited',
+    });
+    expect(result.messages.at(-1)).toEqual({ role: 'user', data: 'next' });
+    const fresh = await executeRisuNative(input(content), options);
+    expect(fresh.variables.calls).toBe('3');
+    expect(fresh.messages).toEqual([
+      { id: 'first', role: 'char', data: 'Opening:edited' },
+      { role: 'user', data: 'next' },
+    ]);
+  });
+
+  it('round-trips native history containing Unicode and escaped characters', async () => {
     const tokenizer = get_encoding('o200k_base');
     let text: string;
     try {
@@ -122,12 +168,12 @@ describe('native Risu execution', () => {
         input(
           native([
             lua(`function choose(id)
-        setChatVar(id, 'escaped', string.rep(string.char(0), ${count}))
+        setChatVar(id, 'escaped', json.encode(string.rep(string.char(0), ${count})))
       end`),
           ])
         )
       )
-    ).rejects.toThrow(/RISU_LUA_PROGRAM_/);
+    ).rejects.toThrow('JSON_SIZE');
   });
 
   it.each(['128', '192, 175', '226, 130', '244, 144, 128, 128'])(

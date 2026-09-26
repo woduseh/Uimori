@@ -12,6 +12,7 @@ import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
+import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
 
 const owned: { path: string; store: Store }[] = [];
 function database() {
@@ -150,6 +151,43 @@ test('failed retry after the original head advances branches at its original par
   expect(retry.snapshot.history).toEqual([]);
   expect(store.chat(chat.id).headRevision).toBe(later.source.id);
 });
+
+test.each([4001, 20001])(
+  'an imported %i-character request can be edited and regenerated without changing its original',
+  (length) => {
+    const store = database();
+    const source = createFixtureChat(store, 'Long imported request');
+    complete(store, source.id, 'Original scene');
+    const transcript = exportChatTranscript(store, source.id);
+    const request = '요'.repeat(length - 3) + '끝부분';
+    transcript.entries[0].request = request;
+    const imported = importChatTranscript(store, { transcript, idempotencyKey: randomUUID() });
+    const original = store.run(store.source(imported.chat.headRevision!).runId);
+    expect(original.request).toBe(request);
+    const edited = `${request}\n수정한 전개`;
+    const retry = store.retryRun(original.id, 'long-request-edit', undefined, edited);
+    expect(retry.created).toBe(true);
+    expect(retry.run.request).toBe(edited);
+    expect(retry.run.snapshot.request).toBe(edited);
+    expect(retry.run.chatId).not.toBe(imported.chat.id);
+    store.startRun(retry.run.id);
+    store.completeRun(
+      retry.run.id,
+      'Revised scene',
+      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+      retry.run.snapshot.settings
+    );
+    expect(exportChatTranscript(store, retry.run.chatId).entries[0]).toMatchObject({
+      request: edited,
+      text: 'Revised scene',
+    });
+    expect(exportChatTranscript(store, imported.chat.id).entries[0]).toMatchObject({
+      request,
+      text: 'Original scene',
+    });
+    expect(store.retryRun(original.id, 'long-request-edit', undefined, edited).created).toBe(false);
+  }
+);
 
 test('pending turns follow five-source page boundaries without losing active work or source numbering', () => {
   const store = database(),

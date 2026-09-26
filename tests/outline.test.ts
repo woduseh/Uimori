@@ -468,6 +468,37 @@ describe('hierarchical composition', () => {
     ).toBe(409);
   });
 
+  test('long authored plans and explicit scene requests stay intact through reservation and replay', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '긴 집필 계획');
+    compose(store, chat.id);
+    const episode = find(store, chat.id, '1화 잠긴 문');
+    const intent = '장면의 세부 전개\n'.repeat(2500) + '계획의 끝';
+    store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [{ op: 'update', id: episode.id, expectedRevision: episode.revision, intent }],
+      },
+      'user'
+    );
+    expect(store.outline.node(episode.id).intent).toBe(intent);
+    const key = randomUUID();
+    const generated = store.outline.sceneCommand(episode.id, { idempotencyKey: key });
+    expect(generated.request).toBe(`회차 집필 요청: ${episode.title}\n${intent}`);
+    expect(
+      store.outline.sceneCommand(episode.id, { idempotencyKey: key, request: generated.request })
+    ).toEqual(generated);
+    const next = find(store, chat.id, '2화 장부의 첫 장');
+    const request = '명시한 집필 요청\n'.repeat(2500) + '요청의 끝';
+    const explicit = { idempotencyKey: randomUUID(), request };
+    const command = store.outline.sceneCommand(next.id, explicit);
+    expect(command.request).toBe(request);
+    expect(store.outline.sceneCommand(next.id, explicit)).toEqual(command);
+    expect(store.detail(chat.id).runs).toEqual([]);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   test('a scene-command key cannot bind an identically named second unit', async () => {
     const store = await database();
     const chat = createFixtureChat(store, '장면 요청 소유 검사');

@@ -119,8 +119,8 @@ test('before advisors run in order with scoped reads, selected models and explic
         expect(bootstrap.map((result) => result.agentId)).toEqual(['advisor', 'second']);
         expect(bootstrap.map((result) => result.status)).toEqual(['completed', 'completed']);
         expect(bootstrap[0]).toMatchObject({
-          text: 'A'.repeat(499),
-          truncated: true,
+          text: longOpinion,
+          truncated: false,
           usage: { modelCalls: 2, inputTokens: 14, outputTokens: 6, costUsd: null },
         });
         expect(body.input.filter((item) => item.type === 'function_call')).toHaveLength(2);

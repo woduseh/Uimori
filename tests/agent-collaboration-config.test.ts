@@ -56,7 +56,6 @@ describe('collaboration defaults and editable templates', () => {
       model: null,
       trigger: 'on-demand',
       maxCalls: 2,
-      maxOutputChars: 6000,
     });
     expect(agent.title).toMatch(/[가-힣]/u);
     expect(agent.description).toMatch(/[가-힣]/u);
@@ -73,10 +72,21 @@ describe('collaboration defaults and editable templates', () => {
 });
 
 describe('collaboration limits and references', () => {
-  test('empty agents are allowed only when disabled; disabled agents still validate', () => {
+  test('disabled settings preserve unfinished values but still reject malformed data', () => {
     rejects({ ...createAgentCollaboration(), enabled: true }, 'AGENTS_REQUIRED');
     expect(validateAgentCollaboration({ ...config(), enabled: false }).agents).toHaveLength(1);
-    rejects({ ...config({ maxCalls: 0 }), enabled: false }, 'INVALID_LIMIT');
+    const draft = {
+      ...config({ title: '', instructions: '', maxCalls: 0 }),
+      enabled: false,
+      maxCalls: 0,
+      sharedControls: ['deleted-option'],
+    };
+    expect(validateAgentCollaboration(draft, [])).toEqual(draft);
+    expect(() => validateAgentCollaboration({ ...draft, enabled: true }, [])).toThrow(
+      'AGENT_COLLABORATION_UNKNOWN_CONTROL'
+    );
+    rejects({ ...draft, enabled: true, sharedControls: [] }, 'INVALID_TEXT');
+    rejects({ ...config({ maxCalls: Number.NaN }), enabled: false }, 'INVALID_LIMIT');
     rejects({ ...createAgentCollaboration(), enabled: 'false' }, 'INVALID_ENABLED');
   });
 
@@ -102,15 +112,6 @@ describe('collaboration limits and references', () => {
       6,
       (value: unknown) => ({ ...config(), agents: [{ ...config().agents[0], maxCalls: value }] }),
     ],
-    [
-      'maxOutputChars',
-      500,
-      20_000,
-      (value: unknown) => ({
-        ...config(),
-        agents: [{ ...config().agents[0], maxOutputChars: value }],
-      }),
-    ],
   ] as const)('%s requires integers within inclusive limits', (_label, min, max, make) => {
     for (const value of [min, max]) expect(validateAgentCollaboration(make(value))).toBeDefined();
     for (const value of [min - 1, max + 1, min + 0.5, NaN, Infinity, -Infinity, String(min), null])
@@ -118,20 +119,32 @@ describe('collaboration limits and references', () => {
   });
 
   test.each([
-    ['title', 1, 120],
-    ['description', 0, 2000],
-    ['instructions', 1, 30_000],
-    ['sharedInstructions', 0, 30_000],
-  ] as const)('%s preserves text and enforces inclusive lengths', (field, min, max) => {
+    ['title', 1],
+    ['description', 0],
+    ['instructions', 1],
+    ['sharedInstructions', 0],
+  ] as const)('%s preserves long text without a separate character limit', (field, min) => {
     const make = (value: unknown) =>
       field === 'sharedInstructions'
         ? { ...config(), [field]: value }
         : { ...config(), agents: [{ ...config().agents[0], [field]: value }] };
-    for (const value of ['가'.repeat(min), '가'.repeat(max), ' \r\n가\n '])
+    for (const value of ['가'.repeat(min), '가'.repeat(60_001), ' \r\n가\n '])
       expect(validateAgentCollaboration(make(value))).toEqual(make(value));
-    for (const value of ['가'.repeat(max + 1), null, 1, undefined])
-      rejects(make(value), 'INVALID_TEXT');
+    for (const value of [null, 1, undefined]) rejects(make(value), 'INVALID_TEXT');
     if (min > 0) rejects(make(''), 'INVALID_TEXT');
+  });
+
+  test('legacy output character settings load without converting their value into tokens', () => {
+    for (const maxOutputChars of [0, 500, 6000, 20_000]) {
+      const legacy = config({ maxOutputChars });
+      expect(validateAgentCollaboration(legacy)).toEqual(config());
+      expect(legacy.agents[0].maxOutputChars).toBe(maxOutputChars);
+    }
+    for (const value of [-1, 1.5, NaN, '6000', null])
+      rejects(
+        { ...config(), agents: [{ ...config().agents[0], maxOutputChars: value }] },
+        'INVALID_LIMIT'
+      );
   });
 
   test('agent IDs use bounded ASCII lowercase names and reject unsafe names', () => {

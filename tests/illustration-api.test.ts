@@ -340,9 +340,19 @@ describe('illustration API in test mode with the synthetic generator', () => {
     item.close = comfy.close;
     const accepted = await settings({
       generator: 'comfyui',
-      comfyui: { ...body.comfyui, baseUrl: `${comfy.origin}/`, workflow: FIXTURE_WORKFLOW },
+      styleGuidance: '빛'.repeat(2001),
+      comfyui: {
+        ...body.comfyui,
+        baseUrl: `${comfy.origin}/`,
+        workflow: FIXTURE_WORKFLOW,
+        negativeGuidance: '글'.repeat(1001),
+      },
     });
     expect(accepted.comfyui.baseUrl).toBe(comfy.origin);
+    expect(await api('/api/illustration-settings')).toMatchObject({
+      styleGuidance: '빛'.repeat(2001),
+      comfyui: { negativeGuidance: '글'.repeat(1001) },
+    });
     const test = await api('/api/illustration-settings/comfyui/test', {
       baseUrl: comfy.origin,
       authorizationEnv: '',

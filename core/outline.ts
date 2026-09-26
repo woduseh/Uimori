@@ -1,3 +1,5 @@
+import { REQUEST_TEXT_MAX_CHARS } from './content-limits.js';
+
 /** Author-side composition. A plan states what is intended next; it is never story fact. */
 export const OUTLINE_LEVELS = ['theme', 'mainStory', 'arc', 'episode', 'beat'] as const;
 export type OutlineLevel = (typeof OUTLINE_LEVELS)[number];
@@ -18,7 +20,7 @@ export const outlineChildLevel = (level: OutlineLevel): OutlineLevel | null =>
 export const outlineWritable = (level: OutlineLevel) => OUTLINE_WRITABLE_LEVELS.includes(level);
 
 export const OUTLINE_TITLE_MAX = 200;
-export const OUTLINE_INTENT_MAX = 4000;
+export const OUTLINE_INTENT_MAX = REQUEST_TEXT_MAX_CHARS;
 
 /**
  * Progress is derived from the bound scene command and its committed source, never stored.

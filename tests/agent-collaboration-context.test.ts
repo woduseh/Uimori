@@ -254,7 +254,7 @@ test('future, missing and private advisor references are recoverable and correct
   });
 });
 
-test('oversized serialized references and drafts can be corrected without spending an advisor call', async () => {
+test('references and drafts exceeding the advisor model token budget can be corrected without spending an advisor call', async () => {
   let mainCalls = 0;
   let advisorCalls = 0;
   const state = await fixture(
@@ -296,7 +296,11 @@ test('oversized serialized references and drafts can be corrected without spendi
           call(
             body,
             'agents.consult',
-            { agentId: 'advisor', question: 'Review.', draft: 'x'.repeat(12001) },
+            {
+              agentId: 'advisor',
+              question: 'Review.',
+              draft: '수정할 장면과 인물의 선택. '.repeat(2000),
+            },
             'large-draft'
           ),
         ]);
@@ -305,6 +309,9 @@ test('oversized serialized references and drafts can be corrected without spendi
           (result) => result.code === 'ADVISOR_CONTEXT_TOO_LARGE'
         );
         expect(rejected).toHaveLength(2);
+        expect(
+          rejected.every((result) => result.correction.includes('8192 token input budget'))
+        ).toBe(true);
         await send(target, [
           call(
             body,
@@ -320,7 +327,8 @@ test('oversized serialized references and drafts can be corrected without spendi
     },
     {
       maxCalls: 8,
-      loreText: 'OVERSIZE_READ'.padEnd(40000, 'x'),
+      loreText: 'OVERSIZE_READ' + ' 서로 다른 관점이 보여요. '.repeat(3000).trimEnd(),
+      advisorInputTokenLimit: 8192,
       collaboration: collaboration({ agents: [agent('advisor', { tools: [] })] }),
     }
   );
@@ -334,6 +342,75 @@ test('oversized serialized references and drafts can be corrected without spendi
       errorKind: 'recoverable',
       result: { code: 'ADVISOR_CONTEXT_TOO_LARGE' },
     });
+});
+
+test('long questions, drafts and selected receipts reach the advisor intact when its token budget fits', async () => {
+  let mainCalls = 0;
+  const question = 'Explain '.repeat(1200).trim();
+  const draft = 'x'.repeat(32_001) + '😀END_OF_DRAFT';
+  const state = await fixture(
+    async (body, target, _number, wire) => {
+      if (wire.agentId) {
+        const input = packet(body);
+        expect(input.task).toBe(question);
+        expect(input.source.consultationContext.draft).toEqual({
+          status: 'uncommitted',
+          text: draft,
+        });
+        const references = input.source.consultationContext.references;
+        expect(references).toHaveLength(8);
+        expect(references.map((event: any) => event.result.items[0].read.text).join('')).toBe(
+          state.lore.text.slice(0, 32768)
+        );
+        await send(target, [
+          message('The complete draft and all selected evidence were received.'),
+        ]);
+        return;
+      }
+      if (++mainCalls === 1)
+        await send(
+          target,
+          Array.from({ length: 8 }, (_, index) =>
+            call(
+              body,
+              'knowledge.read',
+              { ids: [state.lore.id], offset: index * 4096, limit: 4096 },
+              `long-${index}`
+            )
+          )
+        );
+      else if (mainCalls === 2)
+        await send(target, [
+          call(
+            body,
+            'agents.consult',
+            {
+              agentId: 'advisor',
+              question,
+              draft,
+              contextRefs: Array.from({ length: 8 }, (_, index) => `long-${index}`),
+            },
+            'intact-context'
+          ),
+        ]);
+      else {
+        expect(mainCalls).toBe(3);
+        await send(target, [message(finalText)]);
+      }
+    },
+    {
+      advisorInputTokenLimit: 32_768,
+      loreText: 'FULL_SOURCE'.padEnd(40_000, 'x'),
+      collaboration: collaboration({ agents: [agent('advisor', { tools: [] })] }),
+    }
+  );
+  const run = await observedCompletion(state, (await state.start()).id);
+  expect(run.status).toBe('completed');
+  expect(state.provider.requests).toHaveLength(4);
+  expect(consults(run).find((event) => event.callId === 'intact-context')).toMatchObject({
+    denied: false,
+    result: { status: 'completed', usage: { modelCalls: 1 }, truncated: false },
+  });
 });
 
 test('cached and forwarded advice retains original identity, read ranges and flat upstream attribution', async () => {

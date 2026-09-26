@@ -1,4 +1,5 @@
 import { compareModelDisplayOrder } from '../core/model-order.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { encodedImage, storeImage } from './image-storage.js';
 import { prepareConnection, saveConnection } from './provider-connections.js';
 import { recordContentProfileEvents } from './content-profile-events.js';
@@ -320,7 +321,7 @@ export class ProductStore {
     if (packageInput === undefined) {
       const card = {
         name: text(b.title, 'title', 200),
-        description: text(b.text, 'text', 1_000_000, true),
+        description: text(b.text, 'text', SOURCE_TEXT_MAX_CHARS, true),
         creator_notes: text(b.description, 'description', 4000, true),
         first_mes: '',
         character_book: { entries: [] },
@@ -363,8 +364,8 @@ export class ProductStore {
       {
         kind,
         title: text(pkg.title, 'title', 200),
-        description: text(pkg.description, 'description', b.package ? 4000 : 2000, true),
-        text: text(pkg.body ?? '', 'text', b.package ? 1_000_000 : 100000, !!b.package),
+        description: text(pkg.description, 'description', 4000, true),
+        text: text(pkg.body ?? '', 'text', SOURCE_TEXT_MAX_CHARS, !!b.package),
         loading: choice(b.loading, ['pinned', 'discoverable'], 'loading'),
         relatedIds: [...new Set(b.relatedIds.map((x: unknown) => text(x, 'related ID', 100)))],
         package: pkg,

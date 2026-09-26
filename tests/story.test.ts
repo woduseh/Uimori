@@ -8,6 +8,7 @@ import { Store } from '../server/store.js';
 import { Controls } from '../server/controls.js';
 import { createApp, type App } from '../server/app.js';
 import type { RunSnapshot, Run } from '../core/types.js';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
 const owned: { directory: string; store?: Store; app?: App }[] = [];
 beforeEach(() => {
@@ -229,4 +230,38 @@ test('explicit notes need no transcripts, use CAS and preserve their replaced re
     },
     409
   );
+});
+
+test('long requests share one bound for new runs and scene reservations, without starting invalid work', async () => {
+  const app = await application();
+  const created = await api(app, 'POST', '/api/chats', { title: 'Long scene request' });
+  const longRequest = '가'.repeat(REQUEST_TEXT_MAX_CHARS);
+  const request = {
+    request: longRequest,
+    expectedRevision: null,
+    expectedSettingsRevision: created.settingsRevision + 1,
+    idempotencyKey: randomUUID(),
+  };
+  const response = await app.inject({
+    method: 'POST',
+    url: `/api/chats/${created.id}/runs`,
+    payload: request,
+  });
+  expect(response.statusCode, response.body).toBe(409);
+  expect(response.json()).toEqual({ error: 'Settings revision conflict' });
+  const command = await api(app, 'POST', `/api/chats/${created.id}/scene-commands`, {
+    label: 'Long scene',
+    request: longRequest,
+    idempotencyKey: randomUUID(),
+  });
+  expect(command.request).toBe(longRequest);
+  expect(app.store.story.command(command.id).request).toBe(longRequest);
+  const rejected = await app.inject({
+    method: 'POST',
+    url: `/api/chats/${created.id}/runs`,
+    payload: { ...request, request: longRequest + 'x' },
+  });
+  expect(rejected.statusCode, rejected.body).toBe(400);
+  expect(app.store.detail(created.id).runs).toEqual([]);
+  expect(globalThis.fetch).not.toHaveBeenCalled();
 });

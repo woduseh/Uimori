@@ -1,3 +1,5 @@
+import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
+
 /** Risu first_mes and alternate_greetings, without another authoring language. */
 export type PackageStart = {
   id: string;
@@ -49,7 +51,7 @@ export function validatePackageStartRef(value: unknown): PackageStartRef {
   return structuredClone(ref) as PackageStartRef;
 }
 export function validatePackageStarts(value: unknown): PackageStart[] {
-  if (!Array.isArray(value) || value.length > 100) fail('PACKAGE_START_LIST_LIMIT');
+  if (!Array.isArray(value)) fail('PACKAGE_START_LIST_LIMIT');
   const ids = new Set<string>();
   for (const raw of value as unknown[]) {
     const item = record(raw, ['id', 'title', 'description', 'mode', 'text']);
@@ -65,10 +67,9 @@ export function validatePackageStarts(value: unknown): PackageStart[] {
         (typeof item.description !== 'string' || item.description.length > 2000))
     )
       fail('PACKAGE_START_INVALID_TEXT');
-    // Authored greetings can include a full HTML/CSS selection screen, like a content body.
-    if ((item.text as string).length > 1_000_000) fail('PACKAGE_START_TEXT_TOO_LONG');
+    // A selected greeting becomes a stored message without truncating its HTML/CSS.
+    if ((item.text as string).length > SOURCE_TEXT_MAX_CHARS) fail('PACKAGE_START_TEXT_TOO_LONG');
   }
-  if (JSON.stringify(value).length > 2_000_000) fail('PACKAGE_START_SIZE_LIMIT');
   return structuredClone(value) as PackageStart[];
 }
 export function resolvePackageStart(

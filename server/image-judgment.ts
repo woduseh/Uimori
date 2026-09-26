@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { estimateContextTokens } from '../core/context-budget.js';
+import { textTokenExcerpt } from '../core/text-tokens.js';
 import {
   splitSource,
   type AssetEntry,
@@ -19,7 +20,7 @@ import { HttpError, record } from './request-validation.js';
 
 export const IMAGE_JUDGMENT_LIMITS = {
   blocks: 16,
-  blockChars: 1600,
+  blockTokens: 800,
   inputTokens: 28000,
   images: 4,
   threshold: 0.65,
@@ -60,6 +61,11 @@ export function imageJudgmentRequest(
   const allBlocks = splitSource(source);
   if (!allBlocks.length || !assets.length) return null;
   const { blocks, ordered } = candidates(source, assets);
+  const blockExcerpts = blocks.map(({ text }) => ({
+    text: textTokenExcerpt(text, IMAGE_JUDGMENT_LIMITS.blockTokens, {
+      marker: '\n[Remaining block text omitted]',
+    }).text,
+  }));
   const build = (count: number): JevRequest => {
     const catalog = ordered.slice(0, count).map(({ asset }, i) => ({
       id: `asset_${i}`,
@@ -84,9 +90,7 @@ export function imageJudgmentRequest(
         totalAssets: assets.length,
         evaluatedBlocks: blocks.length,
         totalBlocks: allBlocks.length,
-        blocks: blocks.map(({ text }) => ({
-          text: text.slice(0, IMAGE_JUDGMENT_LIMITS.blockChars),
-        })),
+        blocks: blockExcerpts,
         assets: catalog,
       } as Json,
       questions: Object.fromEntries(

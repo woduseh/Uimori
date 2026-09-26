@@ -75,7 +75,6 @@ export function agent(id = 'advisor', changes: Partial<AgentDefinition> = {}): A
     trigger: 'on-demand',
     tools: ['knowledge'],
     maxCalls: 3,
-    maxOutputChars: 6000,
     ...changes,
   };
 }
@@ -128,6 +127,7 @@ export async function fixture(
     timeoutMs?: number;
     loreText?: string;
     contextTools?: boolean;
+    advisorInputTokenLimit?: number;
   } = {}
 ) {
   vi.stubEnv(credentialRef, bearer);
@@ -246,6 +246,9 @@ export async function fixture(
     connectionId: advisorConnection.id,
     modelId: 'synthetic-collaboration-advisor',
     maxOutputTokens: 1024,
+    ...(options.advisorInputTokenLimit !== undefined
+      ? { inputTokenLimit: options.advisorInputTokenLimit }
+      : {}),
     temperature: null,
     timeoutMs: options.timeoutMs ?? 4000,
   });

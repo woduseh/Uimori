@@ -148,8 +148,7 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
   if (
     !Array.isArray(request.stable.tools) ||
     request.stable.tools.length > 128 ||
-    typeof request.stable.contract !== 'string' ||
-    request.stable.contract.length > 200_000
+    typeof request.stable.contract !== 'string'
   )
     reject('INVALID_TOOLS');
   const names = new Set<string>();

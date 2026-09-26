@@ -24,7 +24,7 @@ export type LoreSelectionEntry = {
   judgment?: import('./judgment.js').JevJudgmentReceipt;
   /** The JEV model the request used. Absent when no provider request was made. */
   model?: string;
-  /** The candidate list reached `LORE_SELECTION_LIMITS.catalogChars` and was cut. */
+  /** The candidate list reached the judgment token or question-count budget and was cut. */
   partial?: 'catalog';
   error?: string;
 };
@@ -32,11 +32,9 @@ export type LoreSelectionReceipt = { version: 1; entries: LoreSelectionEntry[] }
 export const LORE_SELECTION_LIMITS = {
   entries: 200,
   ids: 2000,
-  catalogChars: 200_000,
-  summaryChars: 160,
+  summaryTokens: 80,
   historyMessages: 12,
-  messageChars: 1_000,
-  requestChars: 4_000,
+  messageTokens: 500,
 };
 
 /** One attached revision. A package's whole lorebook is offered at once, so there is no field part. */

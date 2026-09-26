@@ -1,6 +1,7 @@
 import { createInterface } from 'node:readline';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 if (process.argv.includes('--version')) {
   process.stdout.write(
     'codex-cli ' + (process.env.UIMORI_CODEX_FIXTURE_VERSION ?? '0.153.0') + '\n'
@@ -17,8 +18,26 @@ let nextTurn = 0;
 let loggedOut = mode === 'logged-out';
 input.on('line', (line) => {
   const request = JSON.parse(line);
-  if (process.env.UIMORI_CODEX_FIXTURE_LOG)
-    appendFileSync(process.env.UIMORI_CODEX_FIXTURE_LOG, line + '\n');
+  if (process.env.UIMORI_CODEX_FIXTURE_LOG) {
+    if (mode === 'image-reference-budget' && request.method === 'turn/start') {
+      const logged = {
+        ...request,
+        params: {
+          ...request.params,
+          input: request.params.input.map((item) => {
+            if (item.type !== 'image') return item;
+            const bytes = Buffer.from(item.url.split(',')[1], 'base64');
+            return {
+              type: 'image',
+              bytes: bytes.length,
+              sha256: createHash('sha256').update(bytes).digest('hex'),
+            };
+          }),
+        },
+      };
+      appendFileSync(process.env.UIMORI_CODEX_FIXTURE_LOG, JSON.stringify(logged) + '\n');
+    } else appendFileSync(process.env.UIMORI_CODEX_FIXTURE_LOG, line + '\n');
+  }
   const { id, method, params } = request;
   if (method === 'initialized') {
     initialized = true;

@@ -21,6 +21,8 @@ import {
   ILLUSTRATION_MAX_IMAGE_BYTES,
 } from '../core/illustration.js';
 import { PNG_BASE64 } from './fixtures/illustration.js';
+import { CONTEXT_ESTIMATOR } from '../core/context-budget.js';
+import sharp from 'sharp';
 
 const fixture = resolve('tests/fixtures/codex-app-server.mjs');
 const connection = {
@@ -75,6 +77,57 @@ afterEach(async () => {
 });
 
 describe('Codex illustration turns through the synthetic app-server', () => {
+  it('rejects an oversized text request before an image turn is started or journaled', async () => {
+    const { runtime, records } = setup('image-native');
+    const wires: WireRecord[] = [];
+    const result = await runtime.generateImage(
+      connection,
+      {
+        ...request(),
+        contextBudget: { inputTokenLimit: 8192, estimator: CONTEXT_ESTIMATOR },
+        text: '강가에서 은빛 머리의 소녀가 등불을 흔든다. '.repeat(5000),
+      },
+      {
+        signal: new AbortController().signal,
+        onWire: (wire) => {
+          wires.push(wire);
+        },
+      }
+    );
+    expect(result).toMatchObject({
+      status: 'error',
+      error: { code: 'INPUT_CONTEXT_LIMIT_EXCEEDED' },
+    });
+    expect(wires).toEqual([]);
+    expect(records().some((entry) => entry.method === 'turn/start')).toBe(false);
+  });
+  it('transmits both large reference images without enlarging the result frame budget', async () => {
+    const png = await sharp({
+      create: { width: 4096, height: 3456, channels: 3, background: '#aaccdd' },
+    })
+      .png({ compressionLevel: 0 })
+      .toBuffer();
+    expect(png.length).toBeGreaterThan(40 * 1024 * 1024);
+    expect(png.length).toBeLessThan(64 * 1024 * 1024);
+    const base64 = png.toString('base64');
+    const { runtime, records } = setup('image-reference-budget');
+    const result = await runtime.generateImage(
+      connection,
+      request([
+        { mime: 'image/png', base64 },
+        { mime: 'image/png', base64 },
+      ]),
+      { signal: new AbortController().signal }
+    );
+    expect(result.status, result.error?.code).toBe('completed');
+    const received = records().find((entry) => entry.method === 'turn/start').params.input;
+    expect(received.filter((item: { type: string }) => item.type === 'image')).toEqual([
+      { type: 'image', bytes: png.length, sha256: createHash('sha256').update(png).digest('hex') },
+      { type: 'image', bytes: png.length, sha256: createHash('sha256').update(png).digest('hex') },
+    ]);
+    expect(result.images).toHaveLength(1);
+  }, 30_000);
+
   it('adds image generation alongside native utilities and returns only decoded image bytes and the caption', async () => {
     const { runtime, records } = setup('image-native');
     const wires: WireRecord[] = [];

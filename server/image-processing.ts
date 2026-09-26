@@ -1,8 +1,9 @@
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 import { HttpError } from './request-validation.js';
+import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 
-export const MAX_IMAGE_INPUT_BYTES = 64 * 1024 * 1024;
+export const MAX_IMAGE_INPUT_BYTES = IMAGE_INPUT_MAX_BYTES;
 const MAX_PIXELS = 64 * 1024 * 1024;
 const MAX_FRAMES = 500;
 const MAX_CONCURRENT_IMAGES = 2;

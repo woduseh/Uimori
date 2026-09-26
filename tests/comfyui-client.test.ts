@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import sharp from 'sharp';
+import { processImage } from '../server/image-processing.js';
 import {
   cancelComfyUIPrompt,
   comfyUISystemStats,
@@ -37,6 +39,29 @@ async function failure(promise: Promise<unknown>): Promise<IllustrationError> {
 }
 
 describe('remote ComfyUI client against a synthetic HTTP server', () => {
+  test('a valid PNG above 16 MB is retrieved intact and converted by the shared image intake', async () => {
+    const png = await sharp({
+      create: { width: 2400, height: 2400, channels: 3, background: '#aaccdd' },
+    })
+      .png({ compressionLevel: 0 })
+      .toBuffer();
+    expect(png.length).toBeGreaterThan(16_000_000);
+    const server = await fixture({ imageBytes: png });
+    const result = await generateWithComfyUI(
+      { baseUrl: server.origin, authorizationEnv: '' },
+      workflow(),
+      { signal: signal(), timeoutMs: 10000, pollIntervalMs: 10 }
+    );
+    expect(result.images[0].bytes.equals(png)).toBe(true);
+    const converted = await processImage(result.images[0].bytes);
+    expect(await sharp(converted.bytes).metadata()).toMatchObject({
+      format: 'webp',
+      width: 2400,
+      height: 2400,
+    });
+    expect(server.prompts).toHaveLength(1);
+  });
+
   test('the deadline cancels a body independently of fetch and never waits for its cancellation acknowledgement', async () => {
     const requests: string[] = [];
     let acknowledgeCancellation: () => void;

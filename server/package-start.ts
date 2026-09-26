@@ -1,4 +1,5 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { Content, ProfileSnapshot } from '../core/product.js';
 import type { Run, RunSnapshot } from '../core/types.js';
 import {
@@ -76,7 +77,7 @@ export function createPackageStart(
     if (prior) {
       // A lost response reuses the already frozen dynamic request. Store still compares every
       // other canonical command field before returning the prior Run.
-      request = text(record(JSON.parse(prior.command)).request, 'request', 4000);
+      request = text(record(JSON.parse(prior.command)).request, 'request', REQUEST_TEXT_MAX_CHARS);
     } else {
       const chat = store.chat(chatId);
       const profile = chatVariableProfile(store, chatId, store.product.branch(chatId).id);

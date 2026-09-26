@@ -1,6 +1,6 @@
 /** Risu API bridge executed inside the existing JSON-only Lua worker sandbox. */
 export const RISU_NATIVE_LUA_PRELUDE = String.raw`
-local __json, __input, __host = api.json, api.input, api.host.call
+local __json, __snapshot, __input, __host = api.json, api.snapshot, api.input, api.host.call
 local __load, __pcall, __pack, __unpack = load, pcall, table.pack, table.unpack
 local __allowed
 local function __scoped(allowed, callback, ...)
@@ -72,14 +72,14 @@ local function __index(index)
   if index < 0 then index = #__messages + index end
   return index + 1
 end
-local function __copy(value) return __decode(__json.decode(__json.encode(value))) end
+local function __copy(value) return __decode(__snapshot.decode(__snapshot.encode(value))) end
 function getChat(id, index) return __copy(__messages[__index(index)] or __json.null) end
-function getChatMain(id, index) return json.encode(getChat(id, index)) end
+function getChatMain(id, index) return __snapshot.encode(__encode(getChat(id, index), {})) end
 function getChatData(id, index) local chat = getChat(id, index); return chat and chat.data or '' end
 function getChatRole(id, index) local chat = getChat(id, index); return chat and chat.role or '' end
 function getChatLength(id) return #__messages end
 function getFullChat(id) return __copy(__messages) end
-function getFullChatMain(id) return __json.encode(__messages) end
+function getFullChatMain(id) return __snapshot.encode(__messages) end
 function getRecentChats(id, count)
   local result = {}
   for i = math.max(1, #__messages - math.max(0, math.floor(count or 0)) + 1), #__messages do
@@ -87,7 +87,7 @@ function getRecentChats(id, count)
   end
   return result
 end
-function getRecentChatsMain(id, count) return json.encode(getRecentChats(id, count)) end
+function getRecentChatsMain(id, count) return __snapshot.encode(__encode(getRecentChats(id, count), {})) end
 local function __writeChat()
   if __input.event == 'display' or __input.event == 'editDisplay' then error('RISU_NATIVE_DISPLAY_CHAT_WRITE_DENIED') end
 end
@@ -129,7 +129,7 @@ function setFullChat(id, value)
   end
   __messages = result
 end
-function setFullChatMain(id, value) setFullChat(id, json.decode(value)) end
+function setFullChatMain(id, value) setFullChat(id, __decode(__snapshot.decode(value))) end
 function getUserLastMessage(id)
   for i = #__messages, 1, -1 do if __messages[i].role == 'user' then return __messages[i].data end end
   return ''

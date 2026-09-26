@@ -72,7 +72,7 @@ function codexModel(store: Store) {
 }
 
 describe('integrated illustration audit regressions', () => {
-  test('retry and reconcile cannot bypass active work or the current per-source limit', () => {
+  test('reconcile recovers completed remote work at the generation limit without bypassing active work', () => {
     const store = databases.create();
     const { source } = chatWithSource(store);
     const { revision, ...body } = fixtureSettings({ maxPerSource: 1 });
@@ -94,17 +94,27 @@ describe('integrated illustration audit regressions', () => {
     );
     complete(store, active.id);
     expect(() => retryIllustration(store, old.id)).toThrow('ILLUSTRATION_LIMIT_REACHED');
+    const recovered = claimIllustrationForReconcile(store, old.id, 'reconcile');
+    expect(recovered.job.status).toBe('running');
+    expect(
+      completeIllustration(
+        store,
+        old.id,
+        recovered.job.generation,
+        'reconcile',
+        generated(),
+        diagnostic()
+      )
+    ).toBe(true);
+    expect(illustrationsForSources(store, [source.id]).flatMap((item) => item.images)).toHaveLength(
+      2
+    );
     expect(() => claimIllustrationForReconcile(store, old.id, 'reconcile')).toThrow(
+      'ILLUSTRATION_NOT_RECONCILABLE'
+    );
+    expect(() => reserveIllustration(store, source, 'manual', { testMode: true })).toThrow(
       'ILLUSTRATION_LIMIT_REACHED'
     );
-    const current = illustrationSettings(store);
-    const { revision: currentRevision, ...currentBody } = current;
-    updateIllustrationSettings(
-      store,
-      { expectedRevision: currentRevision, ...currentBody, maxPerSource: 2 },
-      true
-    );
-    expect(claimIllustrationForReconcile(store, old.id, 'reconcile').job.status).toBe('running');
   });
 
   test('the final storage boundary rejects MIME mismatches and oversized bytes without partial storage', () => {
@@ -119,7 +129,7 @@ describe('integrated illustration audit regressions', () => {
       { mime: 'image/jpeg' as const, bytes: PNG, caption: '' },
       {
         mime: 'image/png' as const,
-        bytes: Buffer.concat([PNG, Buffer.alloc(16_000_001)]),
+        bytes: Buffer.concat([PNG, Buffer.alloc(64 * 1024 * 1024)]),
         caption: '',
       },
     ]) {

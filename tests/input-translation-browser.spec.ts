@@ -61,6 +61,45 @@ async function seed(request: APIRequestContext, chat: Chat, text: string): Promi
   return run;
 }
 
+test('ITRAN long requests survive composer translation, send, edit and reload', async ({
+  page,
+  request,
+}) => {
+  const chat = await createChat(request);
+  const draft = '요'.repeat(3998) + '끝부분';
+  const translated = 'R'.repeat(19998) + 'END';
+  let translationCalls = 0;
+  await page.route(endpoint, async (route) => {
+    expect(route.request().postDataJSON().text).toBe(draft);
+    translationCalls++;
+    await answer(route, translated);
+  });
+  await open(page, chat.id);
+  await composer(page).fill(draft);
+  await expect(composer(page)).toHaveValue(draft);
+  await translate(page).click();
+  await expect(composer(page)).toHaveValue(translated);
+  expect(translationCalls).toBe(1);
+  expect((await detail(request, chat.id)).runs).toHaveLength(0);
+  await send(page).click();
+  await expect.poll(async () => (await detail(request, chat.id)).runs[0]?.status).toBe('completed');
+  expect((await detail(request, chat.id)).runs[0].request).toBe(translated);
+  await page.getByRole('button', { name: '요청 편집', exact: true }).click();
+  const editor = page.getByRole('textbox', { name: '요청 수정 내용', exact: true });
+  await expect(editor).toHaveValue(translated);
+  const edited = translated + '\n수정한 전개';
+  await editor.fill(edited);
+  await expect(editor).toHaveValue(edited);
+  await page.getByRole('button', { name: '수정한 요청 보내기', exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(chat.id);
+  const copyId = new URL(page.url()).searchParams.get('chat')!;
+  await expect.poll(async () => (await detail(request, copyId)).runs[0]?.status).toBe('completed');
+  await page.reload();
+  expect((await detail(request, copyId)).runs[0].request).toBe(edited);
+  expect((await detail(request, chat.id)).runs[0].request).toBe(translated);
+  expect(translationCalls).toBe(1);
+});
+
 for (const width of [360, 412, 1440]) {
   test(`ITRAN ${width} translate, undo, reload, edit and explicitly send only the final text`, async ({
     page,

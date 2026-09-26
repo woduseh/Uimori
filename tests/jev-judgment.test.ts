@@ -326,9 +326,12 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
         fetch: async (_url, init) => {
           const state = JSON.parse(String(init?.body)).state;
           expect(state.request).toBe('Native edited request');
-          expect(state.conversation[0].text).toHaveLength(1000);
-          expect(state.conversation[0].text).toContain('SCENE_TAIL');
-          expect(state.conversation[0].text).not.toContain('OLD_PREFIX');
+          // This is longer than the former character cap but fits the token excerpt budget.
+          expect(state.conversation[0]).toEqual({
+            role: 'assistant',
+            text: value.nativeRisuExecution!.history[0].text,
+            truncated: false,
+          });
           expect(state.entries).toEqual([
             { id: 'mountain', title: 'Mountain', text: 'Evaluated mountain.' },
           ]);

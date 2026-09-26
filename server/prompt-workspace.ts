@@ -1,4 +1,5 @@
 import { promptOptionOwner } from '../core/chat-options.js';
+import { EXECUTION_INPUT_MAX_CHARS } from '../core/content-limits.js';
 import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
 import type { FastifyInstance } from 'fastify';
 import type {
@@ -380,7 +381,7 @@ export function promptWorkspaceRoutes(
     publishResult(updateModelWorkspace(store, request.body))
   );
   app.get('/api/prompt-workspace', async () => promptWorkspace(store));
-  app.put('/api/prompt-workspace', { bodyLimit: 2_000_000 }, async (request) =>
+  app.put('/api/prompt-workspace', { bodyLimit: EXECUTION_INPUT_MAX_CHARS }, async (request) =>
     publishResult(updatePromptWorkspace(store, request.body))
   );
   app.post('/api/prompt-workspace/apply', async (request) => {

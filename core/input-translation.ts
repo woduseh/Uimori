@@ -12,8 +12,6 @@ export const INPUT_TRANSLATION_LANGUAGES = [
 ] as const;
 export type InputTranslationLanguage = (typeof INPUT_TRANSLATION_LANGUAGES)[number]['code'];
 export type InputTranslationResult = { text: string; targetLanguage: InputTranslationLanguage };
-// Matches the existing composer/send contract. Oversized results are never silently truncated.
-export const INPUT_TRANSLATION_MAX_LENGTH = 4000;
 export const INPUT_TRANSLATION_CONTEXT_LENGTH = 3000;
 
 export function inputTranslationLanguage(value: unknown) {

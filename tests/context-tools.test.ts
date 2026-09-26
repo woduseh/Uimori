@@ -300,6 +300,45 @@ afterEach(() => {
 });
 
 describe('model-driven working summary and window switch inside one main run', () => {
+  test('context.write accepts a long summary that fits tokens and reports token overflow separately', async () => {
+    const fixed = await snapshot();
+    const saved = persistence();
+    const state = { workingSummary: null as string | null, checkpoint: null };
+    const summary = 'Known fact:' + ' '.repeat(220_000) + 'KEEP_THE_END';
+    const options = {
+      state,
+      persist: saved.persist,
+      alone: true,
+      pendingResults: 0,
+      reservedBootstrap: 0,
+    };
+    const accepted = await executeContextTool(
+      fixed,
+      { callId: 'long-summary', name: 'context.write', args: { summary } },
+      options
+    );
+    expect(accepted.event.denied).toBe(false);
+    expect(state.workingSummary).toBe(summary);
+    expect(saved.calls).toHaveLength(1);
+    expect(saved.calls[0].summary).toBe(summary);
+    const rejected = await executeContextTool(
+      fixed,
+      {
+        callId: 'too-many-tokens',
+        name: 'context.write',
+        args: { summary: '가나다라마바사'.repeat(40_000) },
+      },
+      options
+    );
+    expect(rejected.event).toMatchObject({
+      denied: true,
+      result: { code: 'CONTEXT_FIXED_INPUT_TOO_LARGE' },
+    });
+    expect(saved.calls).toHaveLength(1);
+    expect(state.workingSummary).toBe(summary);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test.each([
     {
       consumerLimit: 65536,

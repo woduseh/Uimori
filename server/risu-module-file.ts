@@ -1,6 +1,6 @@
 import {
   RISU_IMPORT_MAX_ASSETS,
-  RISU_IMPORT_MAX_CONTAINER_BYTES,
+  RISU_IMPORT_MAX_UPLOAD_BYTES,
   RISU_IMPORT_MAX_ENTRY_BYTES,
   RISU_IMPORT_MAX_JSON_BYTES,
 } from '../core/risu-import.js';
@@ -20,7 +20,7 @@ export function readEmbeddedRisuModule(bytes: Buffer): {
   module: Record<string, unknown>;
   assets: Buffer[];
 } {
-  if (bytes.length > RISU_IMPORT_MAX_CONTAINER_BYTES) return invalid();
+  if (bytes.length > RISU_IMPORT_MAX_UPLOAD_BYTES) return invalid();
   let cursor = 0;
   const byte = () => {
     if (cursor >= bytes.length) return invalid();

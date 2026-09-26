@@ -1,3 +1,4 @@
+import { SOURCE_TEXT_MAX_CHARS as CONTEXT_SUMMARY_MAX_CHARS } from '../core/content-limits.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { CheckIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
@@ -176,7 +177,13 @@ export function ContextPanel({
   }
   async function saveSummary() {
     if (!draft) return true;
-    if (busy || conflict || !current || !draft.text.trim() || draft.text.length > 200000)
+    if (
+      busy ||
+      conflict ||
+      !current ||
+      !draft.text.trim() ||
+      draft.text.length > CONTEXT_SUMMARY_MAX_CHARS
+    )
       return false;
     return write(
       `${base}/summary`,
@@ -352,7 +359,7 @@ export function ContextPanel({
                 <textarea
                   rows={8}
                   required
-                  maxLength={200000}
+                  maxLength={CONTEXT_SUMMARY_MAX_CHARS}
                   value={draft.text}
                   disabled={busy}
                   onChange={(event) => setDraft({ ...draft, text: event.target.value })}

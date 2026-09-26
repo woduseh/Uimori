@@ -1,5 +1,6 @@
 /** Risu prompt source and host-owned execution receipts; no alternate authoring language. */
 import { validateAgentCollaboration } from './agent-collaboration.js';
+import { EXECUTION_INPUT_MAX_CHARS } from './content-limits.js';
 import { stripDeprecatedRisuPresetFields } from './risu-deprecated-fields.js';
 import {
   validateNativeRisuPreset,
@@ -125,13 +126,16 @@ function controlKey(value: unknown): asserts value is string {
 function primitive(value: unknown): asserts value is PromptValue {
   if (
     (value !== null && !['string', 'number', 'boolean'].includes(typeof value)) ||
-    (typeof value === 'number' && !Number.isFinite(value)) ||
-    (typeof value === 'string' && value.length > 200_000)
+    (typeof value === 'number' && !Number.isFinite(value))
   )
     fail('PROMPT_INVALID_VALUE');
 }
 /** Check serialized bounds before JSON.stringify/structuredClone can allocate an oversized AST. */
-function inspectPromptData(value: unknown, limit = 1_000_000, budget?: PromptBudget): void {
+function inspectPromptData(
+  value: unknown,
+  limit = EXECUTION_INPUT_MAX_CHARS,
+  budget?: PromptBudget
+): void {
   const pending: { value: unknown; leave?: boolean }[] = [{ value }],
     active = new Set<object>();
   let size = 0,
@@ -168,7 +172,6 @@ function inspectPromptData(value: unknown, limit = 1_000_000, budget?: PromptBud
       )
         fail('PROMPT_INVALID_FIELDS');
       const keys = Object.keys(v);
-      if (keys.length > 5000) fail('PROMPT_PROGRAM_LIMIT');
       active.add(v);
       pending.push({ value: v, leave: true });
       size += 2;
@@ -189,15 +192,13 @@ function inspectPromptData(value: unknown, limit = 1_000_000, budget?: PromptBud
   }
 }
 export function validateProviderPrompt(value: unknown): ProviderPrompt {
-  inspectPromptData(value, 1_500_000);
+  inspectPromptData(value);
   const p = object(value, ['compilerVersion', 'messages', 'cachePlan', 'values']);
   if (
     !PROMPT_COMPILER_VERSIONS.has(p.compilerVersion) ||
     !Array.isArray(p.messages) ||
     p.messages.length < 1 ||
-    p.messages.length > 1000 ||
     !Array.isArray(p.cachePlan) ||
-    p.cachePlan.length > 100 ||
     !isObject(p.values)
   )
     fail('PROMPT_INVALID_COMPILED');
@@ -211,14 +212,13 @@ export function validateProviderPrompt(value: unknown): ProviderPrompt {
       !['system', 'user', 'assistant'].includes(String(m.role)) ||
       !['complete', 'prefill'].includes(String(m.completion)) ||
       !Array.isArray(m.content) ||
-      m.content.length < 1 ||
-      m.content.length > 100
+      m.content.length < 1
     )
       fail('PROMPT_INVALID_MESSAGE');
     for (const part of m.content) {
       const c = object(part, ['type', 'text']);
       if (c.type !== 'text') fail('PROMPT_TEXT_ONLY');
-      str(c.text, 500_000);
+      str(c.text, EXECUTION_INPUT_MAX_CHARS);
     }
     const provenance = object(m.provenance, [
       'blockId',
@@ -244,7 +244,6 @@ export function validateProviderPrompt(value: unknown): ProviderPrompt {
     controlKey(key);
     primitive(value);
   }
-  if (JSON.stringify(value).length > 1_500_000) fail('PROMPT_COMPILED_LIMIT');
   return structuredClone(value) as ProviderPrompt;
 }
 
@@ -260,12 +259,13 @@ export function validateRisuPrompt(value: unknown): RisuPrompt {
     const execution = object(input.execution, ['storySubmission']);
     if (typeof execution.storySubmission !== 'boolean') fail('PROMPT_INVALID_EXECUTION');
   }
+  const result = structuredClone(value) as RisuPrompt;
   if (input.collaboration !== undefined)
-    validateAgentCollaboration(
+    result.collaboration = validateAgentCollaboration(
       input.collaboration,
       nativeRisuPresetControls(source).map((c) => c.id)
     );
-  return structuredClone(value) as RisuPrompt;
+  return result;
 }
 export function validateEditableRisuPrompt(value: unknown): RisuPrompt {
   const program = validateRisuPrompt(value);
@@ -522,8 +522,7 @@ export function compileRisuPrompt(
   }
   if (messages.some((m, i) => m.completion === 'prefill' && i !== messages.length - 1))
     fail('PROMPT_PREFILL_MUST_BE_LAST');
-  inspectPromptData(messages, 1_500_000);
-  if (messages.length > 1000) fail('PROMPT_COMPILED_LIMIT');
+  inspectPromptData(messages);
   return {
     usedSlots: [...usedSlots],
     ...(program.execution ? { execution: { ...program.execution } } : {}),

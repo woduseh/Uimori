@@ -9,6 +9,7 @@ import type { PackageImageBlob } from './package-images.js';
 import { packageImages } from '../core/package-images.js';
 import { resolvePackageProfile } from './package-features.js';
 import type { Asset, Connection, ModelPreset, ModelRef } from '../core/product.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import {
   defaultIllustrationSettings,
   ILLUSTRATION_GENERATORS,
@@ -116,7 +117,7 @@ export function validateIllustrationSettings(
     automatic: boolean(b.automatic, 'automatic'),
     maxPerSource: number(b.maxPerSource, 'maxPerSource', 1, ILLUSTRATION_MAX_PER_SOURCE),
     maxAutoRetries: number(b.maxAutoRetries, 'maxAutoRetries', 0, ILLUSTRATION_MAX_AUTO_RETRIES),
-    styleGuidance: text(b.styleGuidance, 'style guidance', 2000, true),
+    styleGuidance: text(b.styleGuidance, 'style guidance', SOURCE_TEXT_MAX_CHARS, true),
     codex: {
       model: modelRef(codex.model, 'Codex illustration model'),
       useReferences: boolean(codex.useReferences, 'useReferences'),
@@ -136,7 +137,12 @@ export function validateIllustrationSettings(
       timeoutMs: number(comfyui.timeoutMs, 'ComfyUI timeout', 10_000, 1_800_000),
       pollIntervalMs: number(comfyui.pollIntervalMs, 'ComfyUI poll interval', 250, 10_000),
       promptModel: modelRef(comfyui.promptModel, 'illustration prompt model'),
-      negativeGuidance: text(comfyui.negativeGuidance, 'negative guidance', 1000, true),
+      negativeGuidance: text(
+        comfyui.negativeGuidance,
+        'negative guidance',
+        SOURCE_TEXT_MAX_CHARS,
+        true
+      ),
     },
   };
 }
@@ -727,7 +733,8 @@ export function claimIllustrationForReconcile(
     if (!RETRYABLE_STATUSES.includes(job.status))
       throw new HttpError(409, 'ILLUSTRATION_NOT_RECONCILABLE');
     if (job.input.comfyui.disabled) throw new HttpError(409, 'CONNECTION_NOT_AUTHORIZED');
-    assertIllustrationSlot(store, job.sourceRevision);
+    if (illustrationSlots(store, job.sourceRevision).active > 0)
+      throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
     store.sourceAtHash(job.sourceRevision, job.sourceHash);
     store.db
       .prepare(
@@ -828,7 +835,8 @@ export function illustrationRoutes(
   app.get('/api/illustration-settings', async (_request, reply) =>
     reply.header('Cache-Control', 'no-store').send(illustrationSettings(store))
   );
-  app.put('/api/illustration-settings', { bodyLimit: 2_000_000 }, async (request) => {
+  // Both prose fields plus the workflow must fit even when JSON escapes every character.
+  app.put('/api/illustration-settings', { bodyLimit: 32 * 1024 * 1024 }, async (request) => {
     const settings = updateIllustrationSettings(store, request.body, hooks.testMode);
     for (const chat of store.chats())
       store.event(chat.id, 'illustration-settings.updated', chat.id);

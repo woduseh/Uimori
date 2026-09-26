@@ -1,4 +1,5 @@
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { DeleteButton } from './DeleteButton.js';
 import { useEffect, useRef, useState } from 'react';
 import { ContextPanel } from './ContextPanel.js';
@@ -178,7 +179,7 @@ function StoryPanelEditor({
       !commandLabel.trim() ||
       !commandText.trim() ||
       commandLabel.length > 120 ||
-      commandText.length > 4000 ||
+      commandText.length > REQUEST_TEXT_MAX_CHARS ||
       busy
     )
       return false;
@@ -303,7 +304,7 @@ function StoryPanelEditor({
               장면 요청
               <textarea
                 required
-                maxLength={4000}
+                maxLength={REQUEST_TEXT_MAX_CHARS}
                 value={commandText}
                 onChange={(event) => {
                   setCommandText(event.target.value);

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { Content } from '../core/product.js';
 import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 import { Store } from '../server/store.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
 const opened: { store: Store; directory: string }[] = [];
 function database() {
@@ -105,6 +106,18 @@ test('returned and caller-owned objects cannot mutate the persisted version', ()
   );
 });
 
+test('native descriptions survive saving through the common stored text boundary', () => {
+  const store = database();
+  const incoming = input();
+  const text = 'x'.repeat(SOURCE_TEXT_MAX_CHARS);
+  incoming.package.nativeRisu.card.description = text;
+  const saved = store.product.content(incoming) as Content;
+  const loaded = store.product.get<Content>('content', saved.id);
+  expect(loaded.text).toBe(text);
+  expect(loaded.package.body).toBe(text);
+  expect(loaded.package.nativeRisu.card.description).toBe(text);
+});
+
 test.each(['unknown-field', 'invalid-native', 'invalid-projection'] as const)(
   'a %s package still fails without writing a library version',
   (kind) => {
@@ -113,7 +126,7 @@ test.each(['unknown-field', 'invalid-native', 'invalid-projection'] as const)(
     if (kind === 'unknown-field') Object.assign(incoming.package, { unknown: true });
     if (kind === 'invalid-native') incoming.package.nativeRisu.sourceHash = 'invalid';
     if (kind === 'invalid-projection') {
-      incoming.package.nativeRisu.card.description = 'x'.repeat(1_000_001);
+      incoming.package.nativeRisu.card.description = 'x'.repeat(SOURCE_TEXT_MAX_CHARS + 1);
       incoming.package.nativeRisu.sourceHash = createHash('sha256')
         .update(JSON.stringify(incoming.package.nativeRisu.card))
         .digest('hex');

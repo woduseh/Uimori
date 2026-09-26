@@ -1,5 +1,8 @@
 import type { ModelRef, ModelSnapshot } from './product.js';
 import type { Json, ProviderRequest } from './transport.js';
+import { IMAGE_INPUT_MAX_BYTES } from './image-limits.js';
+import { contextBudgetForModel } from './context-budget.js';
+import { textTokenExcerpt } from './text-tokens.js';
 
 /** Scene illustration generation. Independent of the existing image placement job kind. */
 export const ILLUSTRATION_GENERATORS = ['none', 'codex', 'comfyui', 'fixture'] as const;
@@ -9,10 +12,11 @@ export const ILLUSTRATION_REFERENCE_ROLES = ['character', 'style'] as const;
 export type IllustrationReferenceRole = (typeof ILLUSTRATION_REFERENCE_ROLES)[number];
 export const ILLUSTRATION_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 export type IllustrationImageMime = (typeof ILLUSTRATION_IMAGE_MIMES)[number];
-export const ILLUSTRATION_MAX_IMAGE_BYTES = 16_000_000;
+export const ILLUSTRATION_MAX_IMAGE_BYTES = IMAGE_INPUT_MAX_BYTES;
 export const ILLUSTRATION_MAX_PER_SOURCE = 8;
 export const ILLUSTRATION_MAX_AUTO_RETRIES = 5;
-export const ILLUSTRATION_SCENE_EXCERPT_CHARACTERS = 24_000;
+// Bound optional model context by cost, while preserving the full authored text in storage.
+export const ILLUSTRATION_EXCERPT_TOKENS = { scene: 8000, bot: 2000, persona: 1000 } as const;
 
 export type IllustrationSettings = {
   revision: number;
@@ -202,10 +206,14 @@ export function isValidIllustrationImage(
 }
 
 /** Long scenes are excerpted from the end, where the newest events usually are. */
-export function excerptScene(text: string, max = ILLUSTRATION_SCENE_EXCERPT_CHARACTERS): string {
-  const characters = Array.from(text);
-  if (characters.length <= max) return text;
-  return `…${characters.slice(characters.length - max + 1).join('')}`;
+export function excerptScene(
+  text: string,
+  maxTokens: number = ILLUSTRATION_EXCERPT_TOKENS.scene
+): string {
+  return textTokenExcerpt(text, maxTokens, {
+    side: 'end',
+    marker: '[Earlier text omitted]\n',
+  }).text;
 }
 
 // ---------------------------------------------------------------------------
@@ -310,6 +318,7 @@ export function illustrationPromptRequest(
     modelId: model.modelId,
     stable: { contract: ILLUSTRATION_PROMPT_CONTRACT, tools: [] },
     generation,
+    contextBudget: contextBudgetForModel(model),
     pricingSnapshot: model.pricingSnapshot,
     ...(model.providerOptions !== undefined
       ? { providerOptions: structuredClone(model.providerOptions) }
@@ -323,22 +332,26 @@ export function illustrationPromptRequest(
         styleGuidance: scene.styleGuidance,
         negativeGuidance: scene.negativeGuidance,
         characterNotes: {
-          bot: scene.bot === null ? null : excerptScene(scene.bot, 6000),
-          persona: scene.persona === null ? null : excerptScene(scene.persona, 3000),
+          bot: scene.bot === null ? null : excerptScene(scene.bot, ILLUSTRATION_EXCERPT_TOKENS.bot),
+          persona:
+            scene.persona === null
+              ? null
+              : excerptScene(scene.persona, ILLUSTRATION_EXCERPT_TOKENS.persona),
         },
       },
     },
   };
 }
-const field = (value: unknown, max: number, required: boolean): string => {
+const field = (value: unknown, required: boolean): string => {
   if (value === undefined || value === null) {
     if (required) throw new IllustrationError('ILLUSTRATION_PROMPT_INVALID', true);
     return '';
   }
   if (typeof value !== 'string' || (required && !value.trim()))
     throw new IllustrationError('ILLUSTRATION_PROMPT_INVALID', true);
-  return Array.from(value.trim()).slice(0, max).join('');
+  return value.trim();
 };
+const captionField = (value: unknown) => Array.from(field(value, false)).slice(0, 300).join('');
 /** A skip decision is only honored when the host allowed it for this run. */
 export function parseIllustrationPlan(text: string, allowSkip: boolean): IllustrationPlan {
   const plan = planOf(text, allowSkip);
@@ -365,12 +378,12 @@ function planOf(text: string, allowSkip: boolean): { prompt?: IllustrationPrompt
   }
   if (!isRecord(value)) throw new IllustrationError('ILLUSTRATION_PROMPT_INVALID', true);
   if (allowSkip && (value.decision === 'skip' || value.skip === true))
-    return { skip: field(value.reason, 300, false) || '그릴 장면이 없다고 판단했어요.' };
+    return { skip: captionField(value.reason) || '그릴 장면이 없다고 판단했어요.' };
   return {
     prompt: {
-      prompt: field(value.prompt, 2000, true),
-      negativePrompt: field(value.negativePrompt, 1000, false),
-      caption: field(value.caption, 300, false),
+      prompt: field(value.prompt, true),
+      negativePrompt: field(value.negativePrompt, false),
+      caption: captionField(value.caption),
     },
   };
 }
@@ -401,8 +414,11 @@ export function codexIllustrationText(
     allowSkip: scene.allowSkip,
     styleGuidance: scene.styleGuidance,
     characterNotes: {
-      bot: scene.bot === null ? null : excerptScene(scene.bot, 6000),
-      persona: scene.persona === null ? null : excerptScene(scene.persona, 3000),
+      bot: scene.bot === null ? null : excerptScene(scene.bot, ILLUSTRATION_EXCERPT_TOKENS.bot),
+      persona:
+        scene.persona === null
+          ? null
+          : excerptScene(scene.persona, ILLUSTRATION_EXCERPT_TOKENS.persona),
     },
     attachedReferences: references.map((reference, index) => ({
       attachment: index + 1,

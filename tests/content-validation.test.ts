@@ -140,17 +140,34 @@ test('assertion, copying validation and compilation reject the same malformed co
   }
 });
 
-test('content byte budgets are still checked before compilation', () => {
+test('native byte budgets bound source data without counting its derived lore twice', () => {
   const input = content();
-  input.lore = Array.from({ length: 14 }, (_, index) => ({
+  input.lore = Array.from({ length: 7 }, (_, index) => ({
     id: `entry-${index}`,
     title: '',
     description: '',
-    text: 'x'.repeat(1_000_000),
+    text: `${index}:${'x'.repeat(900_000)}`,
     loading: 'discoverable',
   }));
-  expect(() => assertRisuContent(input)).toThrow('PACKAGE_SIZE_LIMIT');
-  expect(() => compileContentAttachment(input, attachment, context)).toThrow('PACKAGE_SIZE_LIMIT');
+  const entries = input.lore.map((entry) => ({ name: entry.id, content: entry.text, keys: [] }));
+  input.nativeRisu.card.character_book = { entries };
+  expect(Buffer.byteLength(JSON.stringify(input.nativeRisu))).toBeLessThan(8 * 1024 * 1024);
+  expect(Buffer.byteLength(JSON.stringify(input))).toBeGreaterThan(12 * 1024 * 1024);
+  assertRisuContent(input);
+  expect(validateRisuContent(input).lore.map((entry) => entry.text)).toEqual(
+    entries.map((entry) => entry.content)
+  );
+  expect(
+    compileContentAttachment(input, attachment, context)
+      .resources.slice(1)
+      .map((entry) => entry.text)
+  ).toEqual(entries.map((entry) => entry.content));
+
+  input.nativeRisu.card.extra = 'x'.repeat(3 * 1024 * 1024);
+  expect(() => assertRisuContent(input)).toThrow('PACKAGE_NATIVE_RISU_LIMIT');
+  expect(() => compileContentAttachment(input, attachment, context)).toThrow(
+    'PACKAGE_NATIVE_RISU_LIMIT'
+  );
 });
 
 test('revision, attachment and chat scope checks are retained', () => {

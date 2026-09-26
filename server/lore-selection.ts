@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { RisuContent, ContentAttachment } from '../core/risu-content.js';
 import { validateLoreContextPolicy } from '../core/lore-context.js';
-import { countTextTokens } from '../core/text-tokens.js';
+import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
 import {
   LORE_SELECTION_LIMITS,
   loreSelectionKey,
@@ -98,40 +98,34 @@ function candidateCatalog(target: LoreSelectionTarget): {
       return {
         id: lore.id,
         title: lore.title,
-        summary: (lore.description || text).slice(0, LORE_SELECTION_LIMITS.summaryChars),
+        summary: textTokenExcerpt(lore.description || text, LORE_SELECTION_LIMITS.summaryTokens, {
+          marker: '…',
+        }).text,
         chars: text.length,
         text,
       };
     })
     .filter((item) => !target.package.nativeRisu || item.chars > 0);
-  let cut = false;
-  let length = 2;
-  let keep = 0;
-  for (const item of catalog) {
-    const size = JSON.stringify(item).length + Number(keep > 0);
-    if (length + size > LORE_SELECTION_LIMITS.catalogChars) break;
-    length += size;
-    keep++;
-  }
-  if (keep < catalog.length) {
-    catalog.length = keep;
-    cut = true;
-  }
-  return { catalog, ...(cut ? { partial: 'catalog' as const } : {}) };
+  return { catalog };
 }
 
 /** The recent turns the model judges relevance against, cut to the limits it is told about. */
-function recentConversation(snapshot: RunSnapshot): { role: string; text: string }[] {
+function recentConversation(
+  snapshot: RunSnapshot
+): { role: string; text: string; truncated: boolean }[] {
   const logical = (snapshot.nativeRisuExecution?.history ?? snapshot.logicalHistory ?? []).filter(
     (message) => !message.current
   );
   const messages = logical.length
     ? logical.map((message) => ({ role: message.role as string, text: message.text }))
     : snapshot.history.map((item) => ({ role: 'assistant', text: item.text }));
-  return messages.slice(-LORE_SELECTION_LIMITS.historyMessages).map(({ role, text }) => ({
-    role,
-    text: text.slice(-LORE_SELECTION_LIMITS.messageChars),
-  }));
+  return messages.slice(-LORE_SELECTION_LIMITS.historyMessages).map(({ role, text }) => {
+    const excerpt = textTokenExcerpt(text, LORE_SELECTION_LIMITS.messageTokens, {
+      side: 'end',
+      marker: '…',
+    });
+    return { role, text: excerpt.text, truncated: excerpt.truncated };
+  });
 }
 
 /**
@@ -143,11 +137,7 @@ function selectionInputs(target: LoreSelectionTarget) {
   const { catalog, partial } = candidateCatalog(target);
   const policy = validateLoreContextPolicy(target.snapshot.profile?.loreContext);
   const conversation = recentConversation(target.snapshot);
-  const request = (
-    target.snapshot.nativeRisuExecution?.request ??
-    target.snapshot.request ??
-    ''
-  ).slice(0, LORE_SELECTION_LIMITS.requestChars);
+  const request = target.snapshot.nativeRisuExecution?.request ?? target.snapshot.request ?? '';
   const payload = {
     budget: policy.maxRetainedTokens,
     maxEntries: policy.maxRetainedEntries,
@@ -157,7 +147,7 @@ function selectionInputs(target: LoreSelectionTarget) {
   };
   const inputHash = sha256(
     JSON.stringify({
-      version: 'lore-selection-jev-v3-local-tokens',
+      version: 'lore-selection-jev-v4-token-excerpts',
       tokenEstimator: policy.tokenEstimator,
       judgment: policy.judgment,
       key: loreSelectionKey(target.attachment),

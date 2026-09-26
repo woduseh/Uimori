@@ -587,8 +587,18 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
         )?.status
     )
     .toBe('completed');
-  const saved = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail,
-    source = saved.sources[0];
+  const saved = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  const selectedText =
+    '선택의 시작\n' + '길게 이어지는 선택 원문이에요.\n'.repeat(7000) + '선택의 끝';
+  expect(selectedText.length).toBeGreaterThan(123_162);
+  const edited = await request.put(`/api/sources/${saved.sources[0].id}/text`, {
+    data: { text: selectedText, expectedRevision: saved.sources[0].editRevision ?? 0 },
+  });
+  expect(edited.ok(), await edited.text()).toBe(true);
+  const source = (await edited.json()) as ChatDetail['sources'][number];
+  const selectedSources = (
+    (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail
+  ).sources;
   await page.goto(`/?chat=${chat.id}`);
   const article = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
   // A session deleted in another window must not break the source-to-helper entry point.
@@ -606,14 +616,24 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
   await article.getByRole('button', { name: '도우미에게 물어보기' }).click();
   const panel = page.locator('#helper-panel');
   await expect(panel).toBeVisible();
-  await expect.poll(() => panel.getByLabel('도우미에게 요청').inputValue()).toContain(source.id);
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('선택한 원문을 검토해 주세요.');
+  await expect(
+    panel.getByText(`선택한 원문 · ${selectedText.length.toLocaleString()}자`, { exact: true })
+  ).toBeVisible();
+  const customRequest = '선택한 원문 전체에서 마지막 문장이 앞부분과 모순되는지 검토해 주세요.';
+  await panel.getByLabel('도우미에게 요청').fill(customRequest);
+  await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+  await openSourceActions(article);
+  await article.getByRole('button', { name: '도우미에게 물어보기' }).click();
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue(customRequest);
   await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
   await expect.poll(() => state.posts.length).toBe(1);
   expect(state.posts[0].selection).toEqual({
     sourceId: source.id,
     sourceHash: source.hash,
-    text: source.text.slice(0, 20000),
+    text: selectedText,
   });
+  expect(state.posts[0].text).toBe(customRequest);
   const failed = state.addFailed(state.current());
   state.current().events.push({
     seq: 100,
@@ -629,7 +649,7 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
   expect(state.streamReads.get(failed.id)).toBe(1);
   expect(
     ((await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail).sources
-  ).toEqual(saved.sources);
+  ).toEqual(selectedSources);
 });
 
 test('HELPUI05 retry edits in place, preserves composer and hides historical failure after reload', async ({

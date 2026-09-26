@@ -223,7 +223,7 @@ export class HelperWorkspace {
     return (
       this.store.db
         .prepare(
-          `SELECT m.*, COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id) AS request_group_id, root.rowid AS request_order,
+          `SELECT m.*, t.request AS request_text, COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id) AS request_group_id, root.rowid AS request_order,
           (SELECT latest.id FROM helper_tasks latest WHERE latest.conversation_id=m.conversation_id AND COALESCE(json_extract(latest.snapshot,'$.requestGroupId'),latest.id)=root.id ORDER BY latest.rowid DESC LIMIT 1) AS latest_task_id
           FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id JOIN helper_tasks root ON root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id)
           WHERE m.conversation_id=? ${before ? 'AND m.rowid < (SELECT rowid FROM helper_messages WHERE id=?)' : ''} ORDER BY m.rowid DESC LIMIT 100`
@@ -239,7 +239,7 @@ export class HelperWorkspace {
         conversationId: id,
         taskId: row.task_id,
         role: row.role,
-        text: row.text,
+        text: row.role === 'user' ? row.request_text : row.text,
         artifacts: JSON.parse(row.artifacts),
         createdAt: row.created_at,
       }));
@@ -392,9 +392,14 @@ export class HelperWorkspace {
           time,
           time
         );
+      // The current call receives selection separately; later turns retain it as conversation
+      // text after completed-task snapshots are released. Editing still uses the exact request.
+      const message = snapshot.selection
+        ? `${request}\n\n선택한 원문 ${snapshot.selection.sourceId} (SHA-256: ${snapshot.selection.sourceHash}):\n${snapshot.selection.text}`
+        : request;
       this.store.db
         .prepare('INSERT INTO helper_messages VALUES(?,?,?,?,?,?,?)')
-        .run(randomUUID(), conversationId, id, 'user', request, '[]', time);
+        .run(randomUUID(), conversationId, id, 'user', message, '[]', time);
       this.event(conversationId, id, 'task.queued');
       return this.task(id);
     });

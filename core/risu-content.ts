@@ -4,6 +4,7 @@ import { validatePackageStarts, type PackageStart } from './package-start.js';
 import { validatePackageModules, type PackageModuleRef } from './package-features.js';
 import { validateTemplateVariableDefaults } from './template-variables.js';
 import { assertRisuContentSource, type RisuContentSource } from './risu-native.js';
+import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
 
 export const CONTENT_ROLES = ['bot', 'persona', 'module'] as const;
 export type ContentRole = (typeof CONTENT_ROLES)[number];
@@ -122,7 +123,7 @@ export function assertRisuContent(value: unknown): asserts value is RisuContent 
   if (!Number.isSafeInteger(p.revision) || Number(p.revision) < 1) fail('PACKAGE_INVALID_REVISION');
   string(p.title, 200);
   string(p.description, 4000);
-  if (p.body !== undefined) string(p.body, 1_000_000);
+  if (p.body !== undefined) string(p.body, SOURCE_TEXT_MAX_CHARS);
   if (p.variableDefaults !== undefined) {
     const declaration = object(p.variableDefaults, ['values', 'attachmentRoles']);
     validateTemplateVariableDefaults(declaration.values);
@@ -172,7 +173,7 @@ export function assertRisuContent(value: unknown): asserts value is RisuContent 
     loreIds.push(l.id);
     string(l.title, 200);
     string(l.description, 4000);
-    string(l.text, 1_000_000);
+    string(l.text, SOURCE_TEXT_MAX_CHARS);
     if (l.loading !== 'pinned' && l.loading !== 'discoverable') fail('PACKAGE_LORE_LOADING', l.id);
     if (l.nativeRisuPosition !== undefined) {
       const position = object(l.nativeRisuPosition, ['mode', 'depth', 'role', 'order']);
@@ -244,9 +245,6 @@ export function assertRisuContent(value: unknown): asserts value is RisuContent 
     if (!['discoverable', 'model'].includes(activation.mode as string))
       fail('PACKAGE_LORE_ACTIVATION_MODE');
   }
-  const serialized = JSON.stringify(value);
-  if (new TextEncoder().encode(serialized).byteLength > 12 * 1024 * 1024)
-    fail('PACKAGE_SIZE_LIMIT');
 }
 
 /** Preserve the detached-copy contract used by importers, editors and archive validation. */

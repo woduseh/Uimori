@@ -2,8 +2,6 @@
 import type { ToolEvent, Usage } from './types.js';
 
 export const AGENT_CONTEXT_REFS_MAX = 8;
-export const AGENT_DRAFT_CHARS_MAX = 12_000;
-export const AGENT_CONTEXT_CHARS_MAX = 32_000;
 export type AgentConsultationContext = {
   hash: string;
   references: (ToolEvent & { kind: 'advice' | 'read-result' })[];
@@ -43,7 +41,8 @@ export type AgentDefinition = {
   trigger: 'before' | 'on-demand';
   tools: AgentReadScope[];
   maxCalls: number;
-  maxOutputChars: number;
+  /** Accepted only when reading older presets; normalized settings drop this retired limit. */
+  maxOutputChars?: number;
 };
 export type AgentCollaboration = {
   enabled: boolean;
@@ -68,7 +67,11 @@ function fail(code: string): never {
 }
 
 /** Read only enumerable own data properties; accessors are rejected without invoking them. */
-function record(value: unknown, fields: readonly string[]): Record<string, unknown> {
+function record(
+  value: unknown,
+  fields: readonly string[],
+  optional: readonly string[] = []
+): Record<string, unknown> {
   if (
     value === null ||
     typeof value !== 'object' ||
@@ -77,10 +80,14 @@ function record(value: unknown, fields: readonly string[]): Record<string, unkno
   )
     fail('INVALID_FIELDS');
   const keys = Reflect.ownKeys(value);
-  if (keys.length !== fields.length) fail('INVALID_FIELDS');
+  if (fields.some((key) => !Object.hasOwn(value, key))) fail('INVALID_FIELDS');
   const result: Record<string, unknown> = {};
   for (const key of keys) {
-    if (typeof key !== 'string' || unsafeIds.has(key) || !fields.includes(key))
+    if (
+      typeof key !== 'string' ||
+      unsafeIds.has(key) ||
+      (!fields.includes(key) && !optional.includes(key))
+    )
       fail('INVALID_FIELDS');
     const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
     if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) fail('INVALID_FIELDS');
@@ -105,13 +112,8 @@ function list(value: unknown, max: number): unknown[] {
   return result;
 }
 
-function text(value: unknown, min: number, max: number): string {
-  if (
-    typeof value !== 'string' ||
-    value.length < min ||
-    value.length > max ||
-    (min > 0 && !value.trim())
-  )
+function text(value: unknown, min: number): string {
+  if (typeof value !== 'string' || value.length < min || (min > 0 && !value.trim()))
     fail('INVALID_TEXT');
   return value;
 }
@@ -145,18 +147,15 @@ function unique(values: readonly string[], code: string): void {
   if (new Set(values).size !== values.length) fail(code);
 }
 
-function definition(value: unknown): AgentDefinition {
-  const agent = record(value, [
-    'id',
-    'title',
-    'description',
-    'instructions',
-    'model',
-    'trigger',
-    'tools',
-    'maxCalls',
-    'maxOutputChars',
-  ]);
+function definition(value: unknown, enabled: boolean): AgentDefinition {
+  const agent = record(
+    value,
+    ['id', 'title', 'description', 'instructions', 'model', 'trigger', 'tools', 'maxCalls'],
+    ['maxOutputChars']
+  );
+  // Legacy character limits are not converted into tokens or applied to new responses.
+  if (Object.hasOwn(agent, 'maxOutputChars'))
+    integer(agent.maxOutputChars, 0, Number.MAX_SAFE_INTEGER);
   let model: AgentDefinition['model'] = null;
   if (agent.model !== null) {
     const ref = record(agent.model, ['id']);
@@ -179,18 +178,17 @@ function definition(value: unknown): AgentDefinition {
   unique(tools, 'DUPLICATE_TOOL');
   return {
     id: agentId(agent.id),
-    title: text(agent.title, 1, 120),
-    description: text(agent.description, 0, 2000),
-    instructions: text(agent.instructions, 1, 30_000),
+    title: text(agent.title, enabled ? 1 : 0),
+    description: text(agent.description, 0),
+    instructions: text(agent.instructions, enabled ? 1 : 0),
     model,
     trigger: agent.trigger,
     tools,
-    maxCalls: integer(agent.maxCalls, 1, 6),
-    maxOutputChars: integer(agent.maxOutputChars, 500, 20_000),
+    maxCalls: integer(agent.maxCalls, enabled ? 1 : 0, 6),
   };
 }
 
-/** Validate disabled drafts too, and return detached JSON data without normalizing authored text. */
+/** Preserve unfinished disabled settings; require executable values and references when enabled. */
 export function validateAgentCollaboration(
   value: unknown,
   controlIds?: readonly string[]
@@ -205,11 +203,11 @@ export function validateAgentCollaboration(
   if (typeof input.enabled !== 'boolean') fail('INVALID_ENABLED');
   const sharedControls = list(input.sharedControls, 64).map(controlId);
   unique(sharedControls, 'DUPLICATE_CONTROL');
-  if (controlIds !== undefined) {
+  if (input.enabled && controlIds !== undefined) {
     const available = new Set(controlIds);
     if (sharedControls.some((id) => !available.has(id))) fail('UNKNOWN_CONTROL');
   }
-  const agents = list(input.agents, 6).map(definition);
+  const agents = list(input.agents, 6).map((agent) => definition(agent, input.enabled as boolean));
   if (input.enabled && agents.length === 0) fail('AGENTS_REQUIRED');
   unique(
     agents.map((agent) => agent.id),
@@ -217,10 +215,10 @@ export function validateAgentCollaboration(
   );
   return {
     enabled: input.enabled,
-    sharedInstructions: text(input.sharedInstructions, 0, 30_000),
+    sharedInstructions: text(input.sharedInstructions, 0),
     sharedControls,
     // The total is a shared ceiling, not a sum of reserved per-agent calls.
-    maxCalls: integer(input.maxCalls, 1, 12),
+    maxCalls: integer(input.maxCalls, input.enabled ? 1 : 0, 12),
     agents,
   };
 }
@@ -254,7 +252,6 @@ export function createAgentDefinition(
     trigger: 'on-demand',
     tools: ['story'],
     maxCalls: 2,
-    maxOutputChars: 6000,
   };
   if (kind === 'character') {
     agent.title = '인물 관점 협업자';

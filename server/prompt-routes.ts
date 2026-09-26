@@ -1,4 +1,5 @@
 import { currentBotTranslationGuide } from './translation-guide.js';
+import { EXECUTION_INPUT_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import { defaultProfile } from '../core/product.js';
@@ -33,7 +34,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
   });
   app.post<{ Params: { id: string } }>(
     '/api/chats/:id/prompt-preview',
-    { bodyLimit: 2_000_000 },
+    { bodyLimit: EXECUTION_INPUT_MAX_CHARS },
     async (request) => {
       const b = record(request.body);
       fields(b, [
@@ -93,7 +94,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         parentRevision: branch.headRevision,
         settingsRevision: chat.settingsRevision,
         settings: chat.settings,
-        request: text(b.request, 'preview request', 500_000),
+        request: text(b.request, 'preview request', REQUEST_TEXT_MAX_CHARS),
         history: store.history(branch.headRevision),
         resources: store.product.resources(chat.id, profile),
         profile,

@@ -6,6 +6,7 @@ import {
   excerptScene,
   fillComfyWorkflow,
   illustrationPromptRequest,
+  ILLUSTRATION_EXCERPT_TOKENS,
   IllustrationError,
   isRetryableIllustrationCode,
   parseCodexIllustrationCaption,
@@ -15,6 +16,7 @@ import {
 } from '../core/illustration.js';
 import { FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
 import { PNG_BASE64 } from './fixtures/illustration.js';
+import { countTextTokens } from '../core/text-tokens.js';
 
 describe('ComfyUI API-format workflow templates', () => {
   test('parses an API workflow, rejects the UI export and requires the prompt placeholder', () => {
@@ -56,7 +58,7 @@ describe('ComfyUI API-format workflow templates', () => {
 });
 
 describe('prompt model output and Codex caption parsing', () => {
-  test('accepts fenced, BOM-prefixed and embedded JSON while bounding field lengths', () => {
+  test('accepts fenced, BOM-prefixed and embedded JSON without cutting image prompts', () => {
     expect(
       parseIllustrationPlan(
         '```json\n{"prompt":"a girl","negativePrompt":"text","caption":"소녀"}\n```',
@@ -74,9 +76,21 @@ describe('prompt model output and Codex caption parsing', () => {
       kind: 'generate',
       prompt: { prompt: 'b', caption: 'c' },
     });
-    const bounded = parseIllustrationPlan(`{"prompt":"${'x'.repeat(3000)}"}`, false);
-    expect(bounded.kind).toBe('generate');
-    if (bounded.kind === 'generate') expect(bounded.prompt.prompt).toHaveLength(2000);
+    const prompt = 'silver hair, blue cloak, '.repeat(200);
+    const negativePrompt = 'blurry, text, '.repeat(200);
+    expect(
+      parseIllustrationPlan(
+        JSON.stringify({ prompt, negativePrompt, caption: '장면'.repeat(200) }),
+        false
+      )
+    ).toEqual({
+      kind: 'generate',
+      prompt: {
+        prompt: prompt.trim(),
+        negativePrompt: negativePrompt.trim(),
+        caption: '장면'.repeat(150),
+      },
+    });
     for (const bad of ['', 'nope', '{"negativePrompt":"only"}', '{"prompt":"  "}', '[1]'])
       expect(() => parseIllustrationPlan(bad, false)).toThrow('ILLUSTRATION_PROMPT_INVALID');
     try {
@@ -118,7 +132,7 @@ describe('prompt model output and Codex caption parsing', () => {
       { unavailable: true }
     );
   });
-  test('builds the prompt request as an illustration-role provider request with bounded scene data', () => {
+  test('bounds scene and character notes by tokens and carries the selected model input budget', () => {
     const request = illustrationPromptRequest(
       {
         id: 'm',
@@ -127,6 +141,7 @@ describe('prompt model output and Codex caption parsing', () => {
         connectionId: 'c',
         modelId: 'provider/model',
         maxOutputTokens: 1024,
+        inputTokenLimit: 16_384,
         temperature: null,
         connection: {
           id: 'c',
@@ -140,11 +155,11 @@ describe('prompt model output and Codex caption parsing', () => {
         },
       },
       {
-        text: 'x'.repeat(30_000),
+        text: '강가에서 은빛 머리의 소녀가 등불을 흔들었다. '.repeat(3000) + '마지막 장면',
         styleGuidance: 'watercolor',
         negativeGuidance: 'lowres',
-        bot: 'Mira has silver hair.',
-        persona: null,
+        bot: 'Mira has silver hair. '.repeat(3000),
+        persona: '나그네는 푸른 옷을 입고 있다. '.repeat(3000),
         allowSkip: false,
       },
       { maxOutputTokens: 1024, temperature: null }
@@ -152,10 +167,18 @@ describe('prompt model output and Codex caption parsing', () => {
     expect(request.role).toBe('illustration');
     expect(request.modelId).toBe('provider/model');
     expect(request.stable.tools).toEqual([]);
-    const source = request.input.source as { scene: string; characterNotes: { bot: string } };
-    expect(source.scene.length).toBe(24_000);
-    expect(source.scene.startsWith('…')).toBe(true);
-    expect(source.characterNotes.bot).toBe('Mira has silver hair.');
+    expect(request.contextBudget?.inputTokenLimit).toBe(16_384);
+    const source = request.input.source as {
+      scene: string;
+      characterNotes: { bot: string; persona: string };
+    };
+    for (const [key, value] of Object.entries({ scene: source.scene, ...source.characterNotes })) {
+      expect(value.startsWith('[Earlier text omitted]\n')).toBe(true);
+      expect(countTextTokens(value)).toBeLessThanOrEqual(
+        ILLUSTRATION_EXCERPT_TOKENS[key as keyof typeof ILLUSTRATION_EXCERPT_TOKENS]
+      );
+    }
+    expect(source.scene.endsWith('마지막 장면')).toBe(true);
   });
   test('the Codex input text labels references by role without carrying bytes', () => {
     const text = codexIllustrationText(
@@ -193,8 +216,13 @@ describe('image bytes, excerpts, retry classes and defaults', () => {
   });
   test('excerpts long scenes from the end and keeps short scenes verbatim', () => {
     expect(excerptScene('short')).toBe('short');
-    const excerpt = excerptScene('a'.repeat(10) + 'END', 5);
-    expect(excerpt).toBe('…aEND');
+    const inexpensive = 'x'.repeat(30_000);
+    expect(excerptScene(inexpensive)).toBe(inexpensive);
+    const excerpt = excerptScene('등불 아래 두 사람이 강을 바라본다. 🌙 '.repeat(100) + 'END', 80);
+    expect(excerpt.startsWith('[Earlier text omitted]\n')).toBe(true);
+    expect(excerpt.endsWith('END')).toBe(true);
+    expect(countTextTokens(excerpt)).toBeLessThanOrEqual(80);
+    expect(new TextDecoder().decode(new TextEncoder().encode(excerpt))).toBe(excerpt);
   });
   test('retries known-safe failures and leaves uncertain remote outcomes final', () => {
     for (const code of ['COMFYUI_EXECUTION_FAILED', 'CODEX_IMAGE_NOT_GENERATED', 'FIXTURE_FAILURE'])

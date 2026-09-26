@@ -1,4 +1,5 @@
 import { illustrationErrorMessage } from './illustration-labels.js';
+import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
@@ -8,8 +9,7 @@ const messages: Record<string, string> = {
   INPUT_TRANSLATION_TIMEOUT: '입력 번역이 제한 시간 안에 끝나지 않았어요. 다시 시도해 주세요.',
   INPUT_TRANSLATION_REFUSED: '번역 모델이 이 입력의 번역을 거절했어요.',
   INPUT_TRANSLATION_FAILED: '입력 번역을 완료하지 못했어요. 번역 모델 설정과 연결을 확인해 주세요.',
-  INPUT_TRANSLATION_TOO_LONG:
-    '번역문이 입력 한도인 4,000자를 넘었어요. 초안을 줄여 다시 번역해 주세요.',
+  INPUT_TRANSLATION_TOO_LONG: `번역문이 저장 한도인 ${REQUEST_TEXT_MAX_CHARS.toLocaleString('en-US')}자를 넘었어요. 초안을 나누어 번역해 주세요.`,
   MAINTENANCE_CLOSED:
     '업데이트 유지보수 중이라 새 저장·생성을 잠시 받지 않아요. 작성한 내용은 그대로 두고 유지보수가 끝난 뒤 다시 보내 주세요.',
   RISU_PRESET_INVALID_FILE:
@@ -20,10 +20,7 @@ const messages: Record<string, string> = {
   RISU_IMPORT_INVALID_FILE:
     '지원하는 캐릭터 카드·Risu 모듈 JSON 또는 올바른 .charx 파일인지 확인해 주세요.',
   RISU_IMPORT_TOO_LARGE: '캐릭터 카드 파일은 256 MiB 이하여야 해요.',
-  PACKAGE_START_TEXT_TOO_LONG:
-    '시작문 하나가 1,000,000자 한도를 넘었어요. 기본 시작문과 대체 시작문의 길이를 확인해 주세요.',
-  PACKAGE_START_SIZE_LIMIT:
-    '기본 시작문과 대체 시작문의 전체 크기가 한도를 넘었어요. 시작문을 나누거나 줄여 주세요.',
+  PACKAGE_START_TEXT_TOO_LONG: `시작문 하나가 ${SOURCE_TEXT_MAX_CHARS.toLocaleString('en-US')}자 저장 상한을 넘었어요. 기본 시작문과 대체 시작문의 길이를 확인해 주세요.`,
   UPLOAD_TOO_LARGE: '올릴 수 있는 파일은 256 MiB 이하예요.',
   UPLOAD_EMPTY: '빈 파일은 올릴 수 없어요. 파일을 다시 선택해 주세요.',
   UPLOAD_NOT_FOUND:

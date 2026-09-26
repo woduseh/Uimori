@@ -1,3 +1,4 @@
+import { CONTEXT_SUMMARY_MAX_CHARS } from '../core/context-tools.js';
 import { pruneContextHistory } from './context-retention.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -310,7 +311,7 @@ export class ContextStore {
       if (!snapshot.profile?.models.main) throw new HttpError(409, 'MODEL_REQUIRED:main');
       let prepared = this.prepareRun(snapshot, scopeKey);
       const previous = this.previous(prepared);
-      const summary = text(body.summary, 'summary', 200000);
+      const summary = text(body.summary, 'summary', CONTEXT_SUMMARY_MAX_CHARS);
       const compacted =
         previous?.compacted ??
         contextSourceRefs(prepared).slice(0, Math.max(0, prepared.history.length - 2));

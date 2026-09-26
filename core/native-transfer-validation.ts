@@ -1,4 +1,5 @@
 import { validateRisuContent, type RisuContent } from './risu-content.js';
+import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
 import { IDENTITY_PATTERN } from './identity.js';
 import { resolvePackageGraph } from './package-graph.js';
 import { PACKAGE_IMAGE_MIMES } from './package-images.js';
@@ -113,7 +114,7 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
       fail('CONTENT');
     text(source.title, 200);
     text(source.description, 4000, true);
-    text(source.text, 1_000_000, true);
+    text(source.text, SOURCE_TEXT_MAX_CHARS, true);
     const related = list(source.relatedIds, 100);
     related.forEach(identity);
     unique(related);

@@ -24,8 +24,7 @@ test('pinned prompt failures preserve the safe code and point to chat settings, 
 });
 
 test.each([
-  [400, 'PACKAGE_START_TEXT_TOO_LONG', '1,000,000자'],
-  [400, 'PACKAGE_START_SIZE_LIMIT', '시작문의 전체 크기'],
+  [400, 'PACKAGE_START_TEXT_TOO_LONG', '2,000,000자'],
   [400, 'CHAT_TRANSCRIPT_INVALID_REQUEST', '요청 문장'],
   [400, 'CHAT_TRANSCRIPT_UNSUPPORTED_VERSION', '앱의 버전'],
   [400, 'CHAT_BACKUP_UNSUPPORTED_VERSION', '앱의 버전'],

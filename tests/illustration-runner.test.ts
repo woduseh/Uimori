@@ -126,7 +126,7 @@ function codexModel(store: Store) {
     reasoningEffort: 'low',
   }) as ModelPreset;
 }
-async function promptModel(store: Store, reply: (body: any) => string) {
+async function promptModel(store: Store, reply: (body: any) => string, inputTokenLimit?: number) {
   const provider = await loopbackProvider(async (request, response) => {
     const body = JSON.parse(request.body);
     await writeSse(response, [
@@ -147,6 +147,7 @@ async function promptModel(store: Store, reply: (body: any) => string) {
     modelId: 'fixture-prompt-writer',
     maxOutputTokens: 512,
     temperature: null,
+    ...(inputTokenLimit === undefined ? {} : { inputTokenLimit }),
   }) as ModelPreset;
   return { provider, model };
 }
@@ -410,6 +411,46 @@ describe('illustration runner through the Codex image turn', () => {
 });
 
 describe('illustration runner through a prompt model and remote ComfyUI', () => {
+  test.each(['styleGuidance', 'negativeGuidance'] as const)(
+    '%s over the selected model budget stays intact and causes no model or render request',
+    async (field) => {
+      const store = databases.create();
+      const { source } = chatWithSource(store);
+      const { provider, model } = await promptModel(store, () => '{"prompt":"unused"}', 8192);
+      const comfy = await comfyUIFixture();
+      cleanups.push(comfy.close);
+      const guidance = '강가의 빛과 그림자, 그림 속 인물의 외모를 보존해 주세요. '.repeat(1000);
+      const job = reserveIllustration(store, source, 'manual', {
+        settings: fixtureSettings({
+          generator: 'comfyui',
+          styleGuidance: field === 'styleGuidance' ? guidance : '',
+          maxAutoRetries: 5,
+          comfyui: {
+            baseUrl: comfy.origin,
+            workflow: FIXTURE_WORKFLOW,
+            promptModel: { id: model.id },
+            negativeGuidance: field === 'negativeGuidance' ? guidance : '',
+          },
+        }),
+      });
+      const observed = hooks(store);
+      expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
+        status: 'failed',
+        code: 'ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED',
+        images: 0,
+      });
+      expect(provider.requests).toEqual([]);
+      expect(comfy.requests).toEqual([]);
+      expect(observed.wires).toEqual([]);
+      const frozen = illustrationJob(store, job.id);
+      expect(frozen.attempt).toBe(1);
+      expect(
+        field === 'styleGuidance'
+          ? frozen.input.styleGuidance
+          : frozen.input.comfyui?.negativeGuidance
+      ).toBe(guidance);
+    }
+  );
   test('asks the prompt model for JSON, fills the workflow and stores the rendered image with the caption', async () => {
     const store = databases.create();
     const { source } = chatWithSource(store);

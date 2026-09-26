@@ -22,6 +22,60 @@ import type { RunSnapshot } from '../core/types.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 
 const owned: { directory: string; app?: App }[] = [];
+test('large plain presets remain editable in the library, workspace and read-only request preview', async () => {
+  const app = await application();
+  const literal = ' '.repeat(9 * 1024 * 1024) + 'Preserve this complete instruction.';
+  const program = createDefaultRisuPrompt(literal);
+  const saved = await request<PromptPreset>(app, '/prompt-presets', {
+    title: 'Large preset',
+    role: 'main',
+    program,
+  });
+  const revised = await request<PromptPreset>(
+    app,
+    `/prompt-presets/${saved.id}`,
+    {
+      title: 'Edited large preset',
+      role: 'main',
+      program,
+      expectedRevision: saved.revision,
+    },
+    200,
+    'PUT'
+  );
+  expect(revised.program.nativeRisuPreset.preset.promptTemplate).toEqual(
+    program.nativeRisuPreset.preset.promptTemplate
+  );
+  const current = await workspace(app);
+  const updated = await request(
+    app,
+    '/prompt-workspace',
+    {
+      expectedRevision: current.revision,
+      main: { title: 'Large working preset', program, values: {} },
+    },
+    200,
+    'PUT'
+  );
+  expect(updated.main.program).toEqual(program);
+  const chat = createFixtureChat(app.store, 'Large preview');
+  const draft = 'a'.repeat(600_001);
+  const before = app.store.db.prepare('SELECT total_changes() AS n').get();
+  const preview = await request(app, `/chats/${chat.id}/prompt-preview`, {
+    program,
+    request: draft,
+  });
+  expect(preview.scope).toBe('preview-only-no-provider-call');
+  expect(preview.error).toBeUndefined();
+  expect(preview.compilation.messages[0].content[0].text).toBe(literal);
+  expect(
+    preview.compilation.messages.some((message: any) =>
+      message.content.some((part: any) => part.text === draft)
+    )
+  ).toBe(true);
+  expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
+  expect(fetch).not.toHaveBeenCalled();
+});
 test('option combinations bind to a prompt owner and exact control meanings while preserving working source identity', async () => {
   const app = await application();
   const program = createDefaultRisuPrompt('Options');

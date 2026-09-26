@@ -22,6 +22,7 @@ import type { Content } from '../core/product.js';
 import { createNativeRisuCbs } from '../server/risu-native-cbs.js';
 import { supportedNativeRisuSnapshot } from '../server/risu-native-readonly.js';
 import { writeRisuZip } from '../server/risu-export-codec.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
 const stores: { store: Store; directory: string }[] = [];
 function database() {
@@ -208,27 +209,70 @@ test('import preparation returns actionable greeting size errors through the app
       buildId: 'greeting-size-errors',
       testMode: true,
     });
-    for (const [code, greetings] of [
-      ['PACKAGE_START_TEXT_TOO_LONG', { first_mes: 'a'.repeat(1_000_001) }],
-      [
-        'PACKAGE_START_SIZE_LIMIT',
-        { first_mes: 'a'.repeat(1_000_000), alternate_greetings: ['b'.repeat(1_000_000)] },
-      ],
-    ] as const) {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/risu-imports/prepare',
-        payload: {
-          source: sourceOf({ name: 'Greeting size fixture', description: '', ...greetings }),
-        },
-      });
-      expect(response.statusCode).toBe(400);
-      expect(response.json()).toEqual({ error: code });
-    }
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/risu-imports/prepare',
+      payload: {
+        source: sourceOf({
+          name: 'Greeting size fixture',
+          description: '',
+          first_mes: 'a'.repeat(SOURCE_TEXT_MAX_CHARS + 1),
+        }),
+      },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'PACKAGE_START_TEXT_TOO_LONG' });
   } finally {
     await app?.close();
     removeFixtureDirectory(directory);
   }
+});
+
+test('import preserves a stored-message-sized opening and every alternative without a combined cap', async () => {
+  const store = database();
+  const first = 'a'.repeat(SOURCE_TEXT_MAX_CHARS);
+  const card = {
+    name: 'Many authored openings',
+    description: '',
+    first_mes: first,
+    alternate_greetings: Array.from({ length: 100 }, (_, index) => `Opening ${index}`),
+  };
+  const source = sourceOf(card);
+  const preview = prepareRisuImport({ source });
+  const result = await applyRisuImport(store, {
+    source,
+    digest: preview.digest,
+    allowPartial: false,
+    idempotencyKey: 'many-openings',
+  });
+  const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+  expect(saved.package.nativeRisu.card).toEqual(card);
+  expect(saved.package.starts?.map((start) => start.text)).toEqual([
+    first,
+    ...card.alternate_greetings,
+  ]);
+  expect(store.sourceOriginal(result.chat!.headRevision!).text).toBe(first);
+});
+
+test('native text within the source budget survives its duplicated body and lore projections', () => {
+  const card = {
+    name: 'Long manuscript material',
+    description: 'b'.repeat(1_100_000),
+    character_book: {
+      entries: Array.from({ length: 4 }, (_, index) => ({
+        name: `Chapter ${index}`,
+        content: `${index}${'a'.repeat(1_600_000)}`,
+        keys: [],
+        enabled: true,
+      })),
+    },
+  };
+  const { file } = analyzeNativeRisuImport(readCharacterCard(sourceOf(card)));
+  expect(file.contents[0].source.package.nativeRisu.card).toEqual(card);
+  expect(file.contents[0].source.package.body).toBe(card.description);
+  expect(file.contents[0].source.package.lore.map((entry) => entry.text)).toEqual(
+    card.character_book.entries.map((entry) => entry.content)
+  );
 });
 
 test.each(['json', 'charx'])(

@@ -478,6 +478,30 @@ async function contextTerminal(app: App, id: string) {
   return app.store.context.job(id);
 }
 describe('standalone context summaries and explicit corrections', () => {
+  test('summary editing admits long token-fitting text and rejects token overflow without changing the saved summary', async () => {
+    const { app, chatId } = await setup({ count: 0 });
+    const initial = await contextApi(app, chatId, 'GET', '/context');
+    const longSummary = 'Known fact:' + ' '.repeat(220_000) + 'KEEP_THE_END';
+    const command = { ...contextCommand(initial), summary: longSummary };
+    const saved = await contextApi(app, chatId, 'PUT', '/context/summary', command);
+    expect(saved.checkpoint.plan.summary).toBe(longSummary);
+    expect(await contextApi(app, chatId, 'PUT', '/context/summary', command)).toEqual(saved);
+    const rejected = await contextApi(
+      app,
+      chatId,
+      'PUT',
+      '/context/summary',
+      { ...contextCommand(saved), summary: '가나다라마바사'.repeat(40_000) },
+      400
+    );
+    expect(rejected.error).toBe('CONTEXT_FIXED_INPUT_TOO_LARGE');
+    expect((await contextApi(app, chatId, 'GET', '/context')).checkpoint.plan.summary).toBe(
+      longSummary
+    );
+    expect(app.store.product.attempts(chatId)).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test('an unset main model rejects new summary operations while preserving accepted command receipts', async () => {
     const { app, chatId } = await setup({ count: 0 });
     const initial = await contextApi(app, chatId, 'GET', '/context');

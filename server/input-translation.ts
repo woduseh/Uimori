@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { workspaceModelRef } from '../core/product.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
@@ -7,7 +8,6 @@ import {
   inputTranslationLanguage,
   inputTranslationTerms,
   INPUT_TRANSLATION_CONTEXT_LENGTH,
-  INPUT_TRANSLATION_MAX_LENGTH,
   type InputTranslationResult,
 } from '../core/input-translation.js';
 import {
@@ -32,10 +32,11 @@ type Options = Pick<
 export function inputTranslationRoutes(app: FastifyInstance, store: Store, options: Options) {
   app.post<{ Params: { id: string } }>(
     '/api/chats/:id/input-translation',
+    { bodyLimit: 16 * 1024 * 1024 },
     async (request, reply): Promise<InputTranslationResult> => {
       const body = record(request.body);
       fields(body, ['text', 'targetLanguage', 'branchId']);
-      const draft = text(body.text, 'input translation text', INPUT_TRANSLATION_MAX_LENGTH);
+      const draft = text(body.text, 'input translation text', REQUEST_TEXT_MAX_CHARS);
       const language = inputTranslationLanguage(body.targetLanguage);
       if (!language) throw new HttpError(400, 'INPUT_TRANSLATION_LANGUAGE_INVALID');
       const chatId = request.params.id;
@@ -101,7 +102,7 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
           throw new HttpError(422, 'INPUT_TRANSLATION_REFUSED');
         if (result.status !== 'completed' || result.toolCalls.length || !result.text.trim())
           throw new HttpError(502, 'INPUT_TRANSLATION_FAILED');
-        if (result.text.length > INPUT_TRANSLATION_MAX_LENGTH)
+        if (result.text.length > REQUEST_TEXT_MAX_CHARS)
           throw new HttpError(422, 'INPUT_TRANSLATION_TOO_LONG');
         return { text: result.text, targetLanguage: language.code };
       })();

@@ -1,17 +1,21 @@
 import packageJson from '../package.json' with { type: 'json' };
 import { afterEach, describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
-import { CodexProcess } from '../server/codex-process.js';
+import { CodexProcess, type CodexProcessOptions } from '../server/codex-process.js';
 
 const fixture = fileURLToPath(new URL('./fixtures/codex-app-server.mjs', import.meta.url));
 const active: CodexProcess[] = [];
-function client(mode = 'normal') {
+function client(
+  mode = 'normal',
+  limits: Pick<CodexProcessOptions, 'maxLineBytes' | 'maxWriteBytes'> = {}
+) {
   const value = new CodexProcess({
     command: process.execPath,
     args: [fixture],
     cwd: process.cwd(),
     env: { ...process.env, UIMORI_CODEX_FIXTURE_MODE: mode },
     timeoutMs: 1000,
+    ...limits,
   });
   active.push(value);
   return value;
@@ -82,6 +86,17 @@ describe('Codex app-server stdio process', () => {
     await value.start();
     const content = '한글 원고'.repeat(100_000);
     expect(await value.request('fixture/echo', { content })).toEqual({ content });
+  });
+  it('allows a larger outgoing payload while retaining the smaller incoming line guard', async () => {
+    const value = client('normal', { maxLineBytes: 1024, maxWriteBytes: 16 * 1024 });
+    await value.start();
+    expect(await value.request('fixture/clientInfo', { content: 'x'.repeat(4096) })).toMatchObject({
+      name: 'uimori',
+    });
+    await expect(
+      value.request('fixture/echo', { content: 'x'.repeat(2048) })
+    ).rejects.toMatchObject({ code: 'CODEX_PROTOCOL_ERROR' });
+    await expect(value.start()).rejects.toMatchObject({ code: 'CODEX_CLOSED' });
   });
   it('sanitizes provider errors and process exit diagnostics', async () => {
     const value = client();
