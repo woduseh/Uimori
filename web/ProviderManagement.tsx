@@ -302,7 +302,15 @@ export function ConnectionEditor({
     setMessage('');
     try {
       await work();
-      await reload();
+      // The command has completed. A failed read must not ask the caller to repeat it.
+      try {
+        await reload();
+      } catch (caught) {
+        const detail = caught instanceof Error ? caught.message : '목록 조회 실패';
+        const warning = `작업은 완료됐어요. 목록을 다시 불러오지 못했어요. ${detail}`;
+        setMessage(warning);
+        onError(warning);
+      }
       return true;
     } catch (caught) {
       const detail = caught instanceof Error ? caught.message : '작업을 완료하지 못했어요.';

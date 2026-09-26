@@ -269,8 +269,27 @@ export function PromptEditor({
       delete draftCache.current[`${role}:${draft.source}`];
       draftCache.current[`${role}:${keyOf(accepted)}`] = draftFor(role, accepted);
       setStatus('프롬프트를 저장했어요.');
-      await onSaved?.(accepted, !update);
-      await reload?.();
+      // Placement is a separate write; neither it nor a list read can undo this save.
+      const warnings: string[] = [];
+      try {
+        await onSaved?.(accepted, !update);
+      } catch (caught) {
+        warnings.push(
+          `프롬프트는 저장됐어요. 폴더에 배치하지 못했어요. ${(caught as Error).message}`
+        );
+      }
+      try {
+        await reload?.();
+      } catch (caught) {
+        warnings.push(
+          `프롬프트는 저장됐어요. 목록을 다시 불러오지 못했어요. ${(caught as Error).message}`
+        );
+      }
+      if (warnings.length) {
+        const warning = warnings.join('\n');
+        setError(warning);
+        onError(warning);
+      }
       return true;
     } catch (caught) {
       const message = (caught as Error).message;

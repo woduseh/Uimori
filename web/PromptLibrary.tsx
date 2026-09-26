@@ -201,12 +201,13 @@ export function PromptLibrary({
   async function placeCreated(preset: PromptPreset, created: boolean) {
     if (!created || folder === 'all' || folder === 'unclassified') return;
     const current = await api<LibraryOrganization>('/library/organization');
-    await organizer.mutate(
+    const placed = await organizer.mutate(
       '/library/organization/move',
       { items: [{ kind: 'prompt-preset', id: preset.id }], category: 'prompts', folderId: folder },
       'POST',
       current.revision
     );
+    if (!placed) throw new Error('폴더 배치를 완료하지 못했어요.');
   }
   async function clone(item: PromptPresetSummary) {
     if (mutation.current) return;
@@ -220,8 +221,22 @@ export function PromptLibrary({
         program: full.program,
         values: full.values,
       });
-      await placeCreated(copy, true);
-      await reload();
+      const warnings: string[] = [];
+      try {
+        await placeCreated(copy, true);
+      } catch (error) {
+        warnings.push(
+          `프롬프트는 복제됐어요. 폴더에 배치하지 못했어요. ${(error as Error).message}`
+        );
+      }
+      try {
+        await reload();
+      } catch (error) {
+        warnings.push(
+          `프롬프트는 복제됐어요. 목록을 다시 불러오지 못했어요. ${(error as Error).message}`
+        );
+      }
+      if (warnings.length) onError(warnings.join('\n'));
     } catch (error) {
       onError((error as Error).message);
     } finally {
