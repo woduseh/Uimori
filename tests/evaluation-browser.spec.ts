@@ -1,6 +1,6 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
-import { openChatSettings } from './ui-navigation.js';
+import { openChatSettings, revealProviderModel, openProviderModel } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -259,11 +259,12 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await page.reload();
   await navigation(page, '설정');
   await selectSettingsSection(page, '프로바이더·모델');
+  await revealProviderModel(page, model.title);
   await expect(page.getByText(title + ' 모델', { exact: true })).toBeVisible();
   expect((await library(request)).models.find((item) => item.id === model.id)).toEqual(model);
   expect(observed.errors).toEqual([]);
   expect(observed.forbidden).toEqual([]);
-  await page.getByRole('button', { name: title + ' 모델 모델 수정', exact: true }).click();
+  await openProviderModel(page, model.title);
   await page.getByRole('button', { name: '고급', exact: true }).click();
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).toBeChecked();
   await page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').uncheck();

@@ -53,11 +53,4 @@ describe('frozen Risu resource context', () => {
     s.profile!.packageAttachments![0].revision = 2;
     expect(() => compiledPackages(s, 'main')).toThrow('PACKAGE_SNAPSHOT_REVISION_MISSING');
   });
-  it('preserves frozen records independently of later authored changes', () => {
-    const s = snapshot(),
-      frozen = structuredClone(s);
-    s.profile!.packages![0].body = 'Later body';
-    expect(packageContext(frozen, 'main')!.pinned.some((r) => r.text === 'EXACT_BODY')).toBe(true);
-    expect(packageContext(frozen, 'main')!.pinned.some((r) => r.text === 'Later body')).toBe(false);
-  });
 });

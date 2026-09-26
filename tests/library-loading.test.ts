@@ -4,9 +4,6 @@ import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
-import { helperWritingSnapshot } from '../server/helper-runtime.js';
-import { prepareNativeRisuReadOnly } from '../server/risu-native-readonly.js';
-import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { writeChatVariables } from '../server/chat-variables.js';
 import { describe } from 'vitest';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
@@ -147,33 +144,6 @@ describe('Small library summaries and option receipts', () => {
 
   function fixture(count = 4) {
     const store = database();
-    const connection = store.product.connection({
-      title: 'Synthetic',
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:9',
-      enabled: true,
-    });
-    const model = store.product.model({
-      title: 'Main',
-      connectionId: connection.id,
-      modelId: 'fixture',
-      temperature: null,
-      maxOutputTokens: 1024,
-      inputTokenLimit: 272000,
-    });
-    const helper = store.product.model({
-      title: 'Helper',
-      connectionId: connection.id,
-      modelId: 'other',
-      temperature: null,
-      maxOutputTokens: 1024,
-    });
-    const workspace = modelWorkspace(store);
-    updateModelWorkspace(store, {
-      expectedRevision: workspace.revision,
-      routes: { ...workspace.routes, main: { id: model.id } },
-      translationPolicy: workspace.translationPolicy,
-    });
     const bot = store.product.content(fixtureBotInput()) as Content;
     const chat = importChatTranscript(store, {
       idempotencyKey: randomUUID(),
@@ -192,12 +162,7 @@ describe('Small library summaries and option receipts', () => {
       },
     }).chat;
     const branch = store.product.branch(chat.id);
-    const snapshot = () =>
-      prepareNativeRisuReadOnly(
-        helperWritingSnapshot(store, chat.id, branch.id, 'context'),
-        'context'
-      );
-    return { store, chat, branch, model, helper, bot, snapshot };
+    return { store, chat, branch };
   }
 
   test('library summary never contains preset programs and variable retries never overwrite current values', () => {

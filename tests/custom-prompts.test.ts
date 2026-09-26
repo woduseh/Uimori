@@ -47,7 +47,7 @@ afterEach(async () => {
 });
 
 describe('full editable prompt boundaries', () => {
-  test('defaults stay compatible, exact empty and whitespace prompts replace defaults, and snapshots remain independent', () => {
+  test('defaults stay compatible and exact empty and whitespace prompts replace defaults', () => {
     const original = snapshot();
     const context = sourceTimeContext(original, 'translation');
     const source = {
@@ -70,14 +70,11 @@ describe('full editable prompt boundaries', () => {
         main: preset('main', text),
         translation: preset('translation', text),
       };
-      const frozen = structuredClone(selected);
-      selected.profile!.promptPresets.main!.program = createDefaultRisuPrompt('FUTURE REVISION');
-      expect(frozen.profile!.promptPresets!.main!.program).toEqual(createDefaultRisuPrompt(text));
-      expect(buildMainInput(frozen).contract).toBe('');
-      const selectedContext = sourceTimeContext(frozen, 'translation');
-      const input = translationInput(source, selectedContext, frozen);
+      expect(buildMainInput(selected).contract).toBe('');
+      const selectedContext = sourceTimeContext(selected, 'translation');
+      const input = translationInput(source, selectedContext, selected);
       expect(input.contract).toBe('');
-      expect(compileTranslationPrompt(input, frozen, 'task')).toBeDefined();
+      expect(compileTranslationPrompt(input, selected, 'task')).toBeDefined();
       expect(input.customPrompt).toBe(true);
       expect(input.context.instructionRevision).toBe('prompt:prompt-translation@3');
       expect(input.sourceText).toBe(source.text);

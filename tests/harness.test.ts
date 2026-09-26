@@ -218,11 +218,11 @@ test.each(['missing', 'zero', 'skipped', 'retried', 'global'])(
             : fault === 'retried'
               ? browserReport({ results: [{ status: 'failed' }, { status: 'passed' }] })
               : browserReport({ errors: [{ message: 'global fixture failure' }] });
-    const { summary } = await run();
+    const { directory, summary } = await run();
     expect(summary.status).toBe('FAIL');
     expect(summary.failures.length).toBeGreaterThan(0);
     expect(summary.cleanup.status).toBe('PASS');
-    expect(existsSync(path.join('runtime'))).toBe(false);
+    expect(existsSync(path.join(directory, 'runtime'))).toBe(false);
     expect(process.exitCode).toBe(1);
   }
 );
@@ -419,10 +419,23 @@ test('unrunnable browser is BLOCKED before creating the application', async () =
 
 test('native browser shard records the full collection and only reports the selected execution', async () => {
   process.argv.push('--shard', '1/3');
+  const full = browserReport();
+  full.suites[0].specs.push(
+    ...browserReport({ title: 'CASE02 outside this shard' }).suites[0].specs
+  );
+  const execute = lib.command.getMockImplementation()!;
+  lib.command.mockImplementation(
+    async (args: string[], options: { env: Record<string, string> }) => {
+      report = args.includes('--list') ? full : browserReport();
+      return execute(args, options);
+    }
+  );
   const { summary } = await run();
   expect(summary.status).toBe('PASS');
   expect(summary.selection.shard).toBe('1/3');
-  expect(summary.selection.allTests).toEqual(summary.testCases);
+  expect(summary.selection.allTests).toHaveLength(2);
+  expect(summary.testCases).toHaveLength(1);
+  expect(summary.selection.allTests).toEqual(expect.arrayContaining(summary.testCases));
   expect(lib.command.mock.calls[0][0]).toContain('--list');
   expect(lib.command.mock.calls[0][0]).not.toContain('--shard=1/3');
   expect(lib.command.mock.calls[1][0]).toContain('--shard=1/3');

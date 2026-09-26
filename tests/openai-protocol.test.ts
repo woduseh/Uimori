@@ -407,7 +407,8 @@ describe('native Responses pure protocol (no live calls)', () => {
     const continued = next(input, run.decoder.finish());
     const results = continued.input.results as Json[];
     if (mode === 'missing') results.pop();
-    if (mode === 'extra' || mode === 'duplicate') results.push(structuredClone(results[0]));
+    if (mode === 'extra') results.push({ ...record(results[0]), callId: 'additional-call' });
+    if (mode === 'duplicate') results.push(structuredClone(results[0]));
     if (mode === 'wrong-id') record(results[0]).callId = 'not-original';
     if (mode === 'wrong-name') record(results[0]).name = 'knowledge_read';
     if (mode === 'tampered-state') record(continued.opaqueState!).bindingHash = 'changed';

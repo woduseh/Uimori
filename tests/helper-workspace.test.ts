@@ -337,13 +337,6 @@ test('server recovery interrupts queued work and never calls a provider', () => 
   expect(send).not.toHaveBeenCalled();
 });
 
-function _emptyStore() {
-  const path = mkdtempSync(join(tmpdir(), 'uimori-helper-')),
-    store = new Store(join(path, 'story.sqlite'));
-  owned.push({ store, path });
-  return store;
-}
-
 test('follow-up requests queue durably and start with the completed preceding exchange', async () => {
   const f = fixture();
   let release: () => void = () => {};

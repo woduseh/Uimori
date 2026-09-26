@@ -74,15 +74,21 @@ test('independent rewrites start from the copied checkpoint rather than later va
   expect(old.snapshot.profile).not.toHaveProperty('variableState');
   f.store.startRun(old.id);
   const source = f.store.completeRun(old.id, 'Historical source', noUsage, old.snapshot.settings);
-  await f.app.inject({
+  const current = readChatVariables(f.store, f.chat.id, f.branch.id);
+  const saved = await f.app.inject({
     method: 'PUT',
     url: f.url,
     payload: {
-      expectedRevision: 0,
+      expectedRevision: current.revision,
       expectedSourceHash: source.hash,
       idempotencyKey: randomUUID(),
       values: { mood: 'later' },
     },
+  });
+  expect(saved.statusCode, saved.body).toBe(200);
+  expect(readChatVariables(f.store, f.chat.id, f.branch.id)).toEqual({
+    revision: current.revision + 1,
+    values: { mood: 'later' },
   });
   const candidate = f.store.candidate(old.id, randomUUID(), 'Historical inputs').run;
   expect(candidate.snapshot.profile).not.toHaveProperty('variableState');
