@@ -67,7 +67,9 @@ test.each([DATABASE_SCHEMA_VERSION + 1, 23, 24])(
     );
     db.close();
     const before = readFileSync(path);
-    expect(() => new Store(path)).toThrow(/transfer user data/);
+    expect(() => new Store(path)).toThrow(
+      `Database version ${version} is not the personal-v1 format`
+    );
     expect(readFileSync(path)).toEqual(before);
   }
 );

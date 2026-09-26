@@ -1,11 +1,6 @@
 import { expect, test } from 'vitest';
-import { DatabaseSync } from 'node:sqlite';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { assertRisuContent, validateRisuContent } from '../core/risu-content.js';
 import { compileContentAttachment } from '../core/package-runtime.js';
-import { databaseSchemaVersion } from '../server/database-schema.js';
 import { nativeContent } from './fixtures/native-content.js';
 
 const current = () =>
@@ -51,32 +46,5 @@ test('old content versions and even empty retired instruction arrays are rejecte
     const retired = { ...current(), instructions };
     expect(() => assertRisuContent(retired)).toThrow('PACKAGE_INVALID_FIELDS');
     expect(() => validateRisuContent(retired)).toThrow('PACKAGE_INVALID_FIELDS');
-  }
-});
-
-test('schema-23 admission refuses before rewriting the database or supplying a migration', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'uimori-format-boundary-'));
-  const file = join(directory, 'old.sqlite');
-  let db: DatabaseSync | undefined;
-  try {
-    db = new DatabaseSync(file);
-    db.exec(
-      "CREATE TABLE saved_text(body TEXT); INSERT INTO saved_text VALUES('preserve'); PRAGMA user_version=23;"
-    );
-    db.close();
-    db = undefined;
-    const before = readFileSync(file);
-    db = new DatabaseSync(file);
-    expect(() => databaseSchemaVersion(db!)).toThrow(
-      'Database version 23 is not the personal-v1 format'
-    );
-    expect(db.prepare('PRAGMA user_version').get()?.user_version).toBe(23);
-    expect(db.prepare('SELECT body FROM saved_text').get()?.body).toBe('preserve');
-    db.close();
-    db = undefined;
-    expect(readFileSync(file)).toEqual(before);
-  } finally {
-    db?.close();
-    rmSync(directory, { recursive: true, force: true });
   }
 });

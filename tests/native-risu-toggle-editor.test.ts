@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   nativeToggleGroupWarnings,
-  nativeToggleTypes,
   parseNativeToggleLines,
   serializeNativeToggleDefinition,
   serializeNativeToggleLines,
@@ -20,11 +19,20 @@ describe('native toggle definition editor source preservation', () => {
     }
   });
 
-  it('recognizes all eight native forms and preserves select whitespace and empty options', () => {
+  it('parses authored forms and preserves select whitespace and empty options', () => {
     const raw =
       'on=Enabled\nmode=Mode=select= one,, two ,\nname=Name=text\nstory=Story=textarea\n=Section=divider\n=Help=caption\n=Group=group\n==groupEnd';
     const lines = parseNativeToggleLines(raw);
-    expect(lines.map((line) => line.definition?.type)).toEqual(nativeToggleTypes);
+    expect(lines.map((line) => line.definition?.type)).toEqual([
+      'toggle',
+      'select',
+      'text',
+      'textarea',
+      'divider',
+      'caption',
+      'group',
+      'groupEnd',
+    ]);
     expect(lines[1]?.definition?.options).toBe(' one,, two ,');
     expect(lines.map((line) => serializeNativeToggleDefinition(line.definition!)).join('\n')).toBe(
       raw
