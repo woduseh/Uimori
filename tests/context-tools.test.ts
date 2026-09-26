@@ -1142,7 +1142,7 @@ describe('model-driven working summary and window switch inside one main run', (
   test('a switch without any saved summary, or beside another call, is a recoverable denial', async () => {
     const saved = persistence();
     const log = hooks(saved.persist);
-    const bodies = script([
+    const rounds: ((body: Body, n: number) => Response)[] = [
       (_body, n) => toolTurn([{ id: 'c1', name: 'context.new', args: {} }], n),
       (_body, n) =>
         toolTurn(
@@ -1153,8 +1153,10 @@ describe('model-driven working summary and window switch inside one main run', (
           n
         ),
       () => completed(),
-    ]);
-    const result = await runMain(await snapshot(), log.value);
+    ];
+    const bodies = script(rounds);
+    const fixed = await snapshot();
+    const result = await runMain(fixed, log.value);
     expect(result.status).toBe('completed');
     expect(log.events.map((event) => [event.name, event.denied])).toEqual([
       ['context.new', true],
@@ -1169,6 +1171,19 @@ describe('model-driven working summary and window switch inside one main run', (
     expect(saved.calls).toEqual([]);
     expect(bodies[2].opaqueState).toBe('OPAQUE_2');
     expect(bodies[2].input.results).toHaveLength(3);
+
+    // Batch recovery re-enters this same loop with durable receipts. A rejected window
+    // switch must remain rejected, preserving every request sent after that receipt.
+    const resumed = hooks(saved.persist);
+    resumed.value.replayToolEvents = structuredClone(log.events);
+    const replayBodies = script(rounds);
+    expect(await runMain(fixed, resumed.value)).toMatchObject({
+      status: 'completed',
+      text: finalText,
+    });
+    expect(replayBodies).toEqual(bodies);
+    expect(resumed.events).toEqual([]);
+    expect(saved.calls).toEqual([]);
   });
 
   test('a failed durable save is reported, never treated as saved, and the run continues', async () => {

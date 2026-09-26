@@ -123,6 +123,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     hooks.initialUsage ?? { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }
   );
   let opaqueState: Json | undefined;
+  let continuationPrompt: ProviderRequest['prompt'];
   const fail = (
     error: string,
     text = '',
@@ -210,10 +211,18 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         ...(history.length ? { completedToolHistory: history } : {}),
       });
     };
+    // Continuation preflight must use the prompt actually sent after editRequest.
+    // Do not execute authored callbacks for estimates; the next real send is still
+    // prepared once and validated against the provider's continuation binding.
+    const preview = (request: ProviderRequest) =>
+      encodeMainPreview(
+        request.opaqueState != null ? { ...request, prompt: continuationPrompt } : request,
+        target
+      );
     let built = build();
     const latestRead = results.findLast(compactableRead)?.callId;
     if (!evaluation && fixed.contextPlan && latestRead) {
-      const before = estimateContextTokens(encodeMainPreview(built.request, target).body);
+      const before = estimateContextTokens(preview(built.request).body);
       const inputLimit = fixed.contextPlan.budget.inputTokenLimit;
       if (latestRead === lastUnhelpfulRead && before > inputLimit)
         return fail('CONTEXT_TOOL_COMPACTION_NO_PROGRESS');
@@ -221,11 +230,11 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         try {
           const history = [...completedToolHistory, ...segmentBootstrap, ...results];
           const compacted = await compactToolReads(fixed, history, hooks, usage, (projection) =>
-            estimateContextTokens(encodeMainPreview(build(projection).request, target).body)
+            estimateContextTokens(preview(build(projection).request).body)
           );
           // Completed work becomes ordinary host reference data, not unsigned native tool calls.
           const candidate = build(compacted);
-          const after = estimateContextTokens(encodeMainPreview(candidate.request, target).body);
+          const after = estimateContextTokens(preview(candidate.request).body);
           // 85% is a soft trigger, not a second admission limit. Keep a valid original
           // continuation when summarization fails to reduce it; never admit an oversized body.
           const applied = after < before && after <= inputLimit;
@@ -325,6 +334,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       await hooks.onAttemptFinish(attemptId, diagnostic);
     }
     addUsage(usage, result);
+    continuationPrompt = request.prompt;
     if (result.status !== 'tool_calls')
       return {
         status: result.status,
@@ -493,8 +503,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       if (batch.length) {
         // Native continuation validation needs every pending result. Only the completed batch
         // receives new wire annotations; durable receipts and prior continuation results stay fixed.
-        const measure = () =>
-          estimateContextTokens(encodeMainPreview(build().request, target).body);
+        const measure = () => estimateContextTokens(preview(build().request).body);
         const reserve = 128 * batch.length;
         const annotate = (tokens: number) => {
           const status = contextWindowStatus(tokens, fixed.contextPlan!.budget.inputTokenLimit);

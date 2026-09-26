@@ -102,24 +102,41 @@ export class ResponseStreamStore {
     }
   }
 
-  createWriter(options: StreamIdentity & { signal: AbortSignal; isActive: () => boolean }) {
+  createWriter(
+    options: StreamIdentity & {
+      signal: AbortSignal;
+      isActive: () => boolean;
+      resume?: boolean;
+      abortStatus?: () => 'cancelled' | 'interrupted';
+    }
+  ) {
     const owner = randomUUID();
     const timestamp = new Date().toISOString();
-    this.store.db
-      .prepare(
-        `INSERT INTO response_stream_tasks(task_kind,task_id,chat_id,run_id,helper_task_id,owner,status,created_at,updated_at)
+    // Only the startup executor may transfer a recoverable Batch stream to a new writer.
+    // Ordinary tasks still reject duplicate writers; an old owner cannot publish or finish it.
+    const resumed =
+      options.resume && options.taskKind === 'main' && options.isActive()
+        ? this.store.db
+            .prepare(`UPDATE response_stream_tasks SET owner=?,status='running',updated_at=?
+          WHERE task_kind='main' AND task_id=? AND status IN ('interrupted','cancelled')`)
+            .run(owner, timestamp, options.taskId).changes
+        : 0;
+    if (!resumed)
+      this.store.db
+        .prepare(
+          `INSERT INTO response_stream_tasks(task_kind,task_id,chat_id,run_id,helper_task_id,owner,status,created_at,updated_at)
        VALUES(?,?,?,?,?,?,'running',?,?)`
-      )
-      .run(
-        options.taskKind,
-        options.taskId,
-        options.chatId ?? null,
-        options.taskKind === 'main' ? options.taskId : null,
-        options.taskKind === 'helper' ? options.taskId : null,
-        owner,
-        timestamp,
-        timestamp
-      );
+        )
+        .run(
+          options.taskKind,
+          options.taskId,
+          options.chatId ?? null,
+          options.taskKind === 'main' ? options.taskId : null,
+          options.taskKind === 'helper' ? options.taskId : null,
+          owner,
+          timestamp,
+          timestamp
+        );
     let buffer: ResponseProgress | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let closed = false;
@@ -178,7 +195,7 @@ export class ResponseStreamStore {
          WHERE task_kind=? AND task_id=? AND owner=? AND status='running'`
         )
         .run(
-          options.signal.aborted ? 'cancelled' : status,
+          options.signal.aborted ? (options.abortStatus?.() ?? 'cancelled') : status,
           new Date().toISOString(),
           options.taskKind,
           options.taskId,

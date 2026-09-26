@@ -1,6 +1,6 @@
 import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { readStoredRunSnapshot } from '../server/run-projections.js';
-import { rejudgeTranslation } from '../server/source-editing.js';
+import { rejudgeTranslation, stageTranslationJudgment } from '../server/source-editing.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -255,6 +255,14 @@ test('CAS manual edit fences a late owned job while preserving prior execution e
   const job = store.requestTranslation(s.id);
   expect(store.requestTranslation(s.id).id).toBe(job.id);
   const active = store.claimJob(job.id, 'owner', {})!;
+  for (const [generation, owner] of [
+    [active.generation + 1, 'owner'],
+    [active.generation, 'stale-owner'],
+  ] as const)
+    expect(() =>
+      stageTranslationJudgment(store, job.id, generation, owner, 'Unowned candidate', true)
+    ).toThrow('no longer owns candidate');
+  expect(store.job(job.id).result).toBeNull();
   const manual = store.editTranslation(s.id, {
     text: 'Manual',
     expectedRevision: job.revision!,
@@ -269,6 +277,10 @@ test('CAS manual edit fences a late owned job while preserving prior execution e
   ).toBe(false);
   expect(manual.id).not.toBe(job.id);
   expect(store.job(job.id).generation).toBeGreaterThan(active.generation);
+  expect(() =>
+    stageTranslationJudgment(store, job.id, active.generation, 'owner', 'Late candidate', true)
+  ).toThrow('no longer owns candidate');
+  expect(store.job(manual.id).result?.text).toBe('Manual');
   expect(() =>
     store.editTranslation(s.id, {
       text: 'conflict',
@@ -303,6 +315,16 @@ test('source editing invalidates jobs and preserves both old and new snapshot hi
     })
   ).toBe(false);
   expect(store.job(job.id).status).toBe('stale');
+  expect(() =>
+    stageTranslationJudgment(
+      store,
+      job.id,
+      active.generation,
+      'owner',
+      'Old source candidate',
+      true
+    )
+  ).toThrow('no longer owns candidate');
   expect(store.detail(s.chatId).jobs.some((j) => j.id === job.id)).toBe(false);
   expect(() => store.editSource(s.id, { text: 'bad', expectedRevision: 0 })).toThrow('conflict');
   expect(store.editSource(s.id, { text: edited.text, expectedRevision: 1 }).editRevision).toBe(1);

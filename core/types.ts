@@ -70,6 +70,8 @@ export type RunSnapshot = {
   /** Frozen at reservation; only an explicit true enables response judgment. */
   mainJudgmentEnabled?: boolean;
   mainJudgmentThreshold?: number;
+  /** Complete response awaiting JEV; an interruption here may be explicitly rejudged. */
+  mainJudgmentPending?: true;
   /** Bounded input receipt for the host judgment of the unmodified model response. */
   mainJudgment?: {
     version: 'main-refusal-jev-v2';
@@ -195,6 +197,8 @@ export type Job = {
   result: {
     mock: boolean;
     manual?: boolean;
+    /** Complete translation waiting for a refusal verdict; never a published translation. */
+    judgmentPending?: true;
     imageTarget?: ImageTarget;
     text?: string;
     label?: string;

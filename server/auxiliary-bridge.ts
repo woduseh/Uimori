@@ -1,4 +1,4 @@
-import { translationRecovery } from './source-editing.js';
+import { stageTranslationJudgment, translationRecovery } from './source-editing.js';
 import { translationPolicy, type TranslationPolicy } from '../core/translation-settings.js';
 import type { Store } from './store.js';
 import { type AssetEntry } from '../core/auxiliary.js';
@@ -67,6 +67,9 @@ export function auxiliaryBridge(
     },
     finish(id, generation, owner, outcome) {
       store.finishAuxiliary(id, generation, owner, outcome, controls);
+    },
+    stageTranslationJudgment(id, generation, owner, candidate, pending) {
+      stageTranslationJudgment(store, id, generation, owner, candidate, pending);
     },
   };
 }

@@ -140,6 +140,9 @@ export function bridge(seed: AuxiliaryBundle) {
       if (token !== generation) throw new Error('STALE_GENERATION');
       outputs.push(structuredClone(outcome));
     },
+    stageTranslationJudgment: (_id, token) => {
+      if (token !== generation) throw new Error('STALE_GENERATION');
+    },
   };
   return { data, store, outputs, claims };
 }

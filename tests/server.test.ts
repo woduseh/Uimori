@@ -10,6 +10,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { backup, DatabaseSync } from 'node:sqlite';
 import { createApp, type App } from '../server/app.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
+import { loopbackProvider } from './fixtures/loopback-provider.js';
 
 const owned: { app?: App; directory: string; child?: ChildProcess }[] = [];
 afterEach(async () => {
@@ -113,6 +114,25 @@ const completed = (url: string, id: string) =>
   );
 
 describe('file SQLite HTTP runtime', () => {
+  it('keeps server shutdown distinct from user cancellation in the durable response stream', async () => {
+    const { app, url, chat, directory } = await setup();
+    await control(url, { action: 'hold', barrier: 'run' });
+    const run = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(chat));
+    expect(await api(url, `/api/response-streams/main/${run.id}`)).toMatchObject({
+      status: 'running',
+    });
+    await app.close();
+    const db = new DatabaseSync(join(directory, 'story.sqlite'), { readOnly: true });
+    try {
+      expect(
+        db.prepare('SELECT status FROM response_stream_tasks WHERE task_id=?').get(run.id)
+      ).toEqual({ status: 'interrupted' });
+      expect(db.prepare('SELECT count(*) AS n FROM sources').get()).toEqual({ n: 0 });
+    } finally {
+      db.close();
+    }
+  });
+
   it('reports the package version independently of the build fingerprint', async () => {
     const { url } = await setup();
     expect(await api(url, '/api/health')).toMatchObject({
@@ -466,6 +486,232 @@ async function startChild(directory: string) {
 }
 
 describe('built server process boundary', () => {
+  it('resumes Batch HTTP runs across process stops without recreating batches or replaying saved tools', async () => {
+    let phase = 0;
+    const batches: { customId: string; tool: string }[] = [];
+    const provider = await loopbackProvider((request, response) => {
+      const json = (value: unknown) => {
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify(value));
+      };
+      if (request.url === '/v1/messages/batches') {
+        const body = JSON.parse(request.body).requests[0];
+        batches.push({
+          customId: body.custom_id,
+          tool: body.params.tools.find((tool: { name: string }) =>
+            tool.name.endsWith('_knowledge_search')
+          ).name,
+        });
+        json({ id: `batch-${batches.length}`, processing_status: 'in_progress' });
+        return;
+      }
+      const match = /^\/v1\/messages\/batches\/batch-(\d+)(\/results)?$/u.exec(request.url);
+      if (!match) throw new Error(`Unexpected Batch request: ${request.url}`);
+      const ordinal = Number(match[1]);
+      if (!match[2]) {
+        json({
+          id: `batch-${ordinal}`,
+          processing_status: phase >= ordinal ? 'ended' : 'in_progress',
+        });
+        return;
+      }
+      response.writeHead(200, { 'content-type': 'application/x-ndjson' });
+      response.end(
+        JSON.stringify({
+          custom_id: batches[ordinal - 1].customId,
+          result: {
+            type: 'succeeded',
+            message: {
+              id: `message-${ordinal}`,
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-5',
+              content:
+                ordinal === 1
+                  ? [
+                      {
+                        type: 'tool_use',
+                        id: 'batch-search',
+                        name: batches[0].tool,
+                        input: { query: 'harbor' },
+                      },
+                    ]
+                  : [{ type: 'text', text: 'Recovered Batch manuscript.' }],
+              stop_reason: ordinal === 1 ? 'tool_use' : 'end_turn',
+              stop_sequence: null,
+              usage: { input_tokens: 11, output_tokens: 6 },
+            },
+          },
+        }) + '\n'
+      );
+    });
+    try {
+      const directory = await mkdtemp(join(tmpdir(), '서사 M0 batch-restart '));
+      let instance = await startChild(directory);
+      const bot = fixtureBotInput('Batch callback fixture');
+      bot.package.nativeRisu.card.extensions = {
+        risuai: {
+          triggerscript: [
+            {
+              type: 'start',
+              effect: [
+                {
+                  type: 'triggerlua',
+                  code: `listenEdit('editRequest', function(id, messages)
+          local count = (tonumber(getChatVar(id, 'requestCount')) or 0) + 1
+          setChatVar(id, 'requestCount', tostring(count))
+          messages[#messages].content = messages[#messages].content .. ' Stable request callback'
+          return messages
+        end)`,
+                },
+              ],
+            },
+          ],
+        },
+      };
+      const owner = await api(instance.url, '/api/content', bot);
+      const initial = await api<Chat>(instance.url, '/api/chats', {
+        title: 'Batch restart',
+        botId: owner.id,
+      });
+      const chat = await api<Chat>(
+        instance.url,
+        `/api/chats/${initial.id}/settings`,
+        {
+          expectedSettingsRevision: initial.settingsRevision,
+          ...initial.settings,
+          status: false,
+        },
+        'PATCH'
+      );
+      const connection = await api(instance.url, '/api/connections', {
+        title: 'Local Batch fixture',
+        protocol: 'anthropic-messages-v1',
+        endpoint: `${provider.origin}/v1`,
+        apiKey: 'synthetic-batch-key',
+        enabled: true,
+      });
+      const model = await api(instance.url, '/api/model-presets', {
+        title: 'Batch writer',
+        connectionId: connection.id,
+        modelId: 'claude-opus-5',
+        maxOutputTokens: 2048,
+        temperature: null,
+        executionMode: 'batch',
+      });
+      const workspace = await api(instance.url, '/api/model-workspace');
+      await api(
+        instance.url,
+        '/api/model-workspace',
+        {
+          expectedRevision: workspace.revision,
+          routes: { main: { id: model.id }, translation: null, status: null },
+          translationPolicy: workspace.translationPolicy,
+          mainJudgmentEnabled: false,
+        },
+        'PUT'
+      );
+      const run = await api<Run>(instance.url, `/api/chats/${chat.id}/runs`, command(chat));
+      for (const checkpoint of [1, 2]) {
+        // A poll proves the create acknowledgement and batch id were durably accepted.
+        await until(
+          async () =>
+            provider.requests.some(
+              (request) => request.url === `/v1/messages/batches/batch-${checkpoint}`
+            ),
+          Boolean
+        );
+        const before = await api<Run>(instance.url, `/api/runs/${run.id}`);
+        expect(before.status).toBe('running');
+        expect(before.toolEvents).toHaveLength(checkpoint - 1);
+        expect(before.snapshot.nativeRisuExecution?.variables.requestCount).toBe(
+          String(checkpoint)
+        );
+        expect(before.snapshot.nativeRisuExecution?.requestEdits).toHaveLength(checkpoint);
+        if (checkpoint === 2)
+          expect(before.toolEvents[0]).toMatchObject({ name: 'knowledge.search', denied: false });
+        const stopped = new Promise<void>((done) => instance.child.once('exit', () => done()));
+        instance.child.kill('SIGKILL');
+        await stopped;
+        owned.splice(owned.indexOf(instance.entry), 1);
+        phase = checkpoint;
+        instance = await startChild(directory);
+        if (checkpoint === 1) {
+          // Stop promptly on a product failure instead of hiding it behind a poll timeout.
+          await until(
+            async () => ({
+              run: await api<Run>(instance.url, `/api/runs/${run.id}`),
+              batches: batches.length,
+            }),
+            (value) => value.batches === 2 || !['queued', 'running'].includes(value.run.status)
+          );
+          const restarted = await api<Run>(instance.url, `/api/runs/${run.id}`);
+          expect(restarted.status, restarted.error ?? undefined).toBe('running');
+        }
+      }
+      const done = await until(
+        () => api<Run>(instance.url, `/api/runs/${run.id}`),
+        (value) => !['queued', 'running'].includes(value.status)
+      );
+      expect(done).toMatchObject({ status: 'completed', usage: { modelCalls: 2 } });
+      const final = await detail(instance.url, chat);
+      expect(final.sources).toHaveLength(1);
+      expect(final.sources[0].text).toBe('Recovered Batch manuscript.');
+      expect(final.runs).toHaveLength(1);
+      expect(batches).toHaveLength(2);
+      expect(provider.requests.filter((request) => request.url.endsWith('/results'))).toHaveLength(
+        2
+      );
+      expect(await api(instance.url, `/api/response-streams/main/${run.id}`)).toMatchObject({
+        status: 'completed',
+        chunks: [],
+      });
+      expect(
+        await (await fetch(`${instance.url}/api/response-streams/main/${run.id}/events`)).text()
+      ).toContain('"status":"completed"');
+      const db = new DatabaseSync(join(directory, 'story.sqlite'), { readOnly: true });
+      try {
+        expect(db.prepare('SELECT count(*) AS n FROM attempts WHERE run_id=?').get(run.id)).toEqual(
+          { n: 2 }
+        );
+        expect(
+          db
+            .prepare(
+              'SELECT count(*) AS n FROM anthropic_batches WHERE run_id=? AND result IS NOT NULL'
+            )
+            .get(run.id)
+        ).toEqual({ n: 0 });
+        if (process.env.UIMORI_ARTIFACT_DIR) {
+          const evidence = resolve(process.env.UIMORI_ARTIFACT_DIR, 'evidence');
+          await mkdir(evidence, { recursive: true });
+          await backup(db, join(evidence, 'batch-process-restart.sqlite'));
+          await writeFile(
+            join(evidence, 'batch-process-restart.json'),
+            JSON.stringify(
+              {
+                runId: run.id,
+                status: done.status,
+                sources: final.sources.length,
+                batches: batches.length,
+                resultFetches: provider.requests.filter((request) =>
+                  request.url.endsWith('/results')
+                ).length,
+                limitations:
+                  'Real child processes, HTTP, SQLite and SSE; local Anthropic fixture, no browser or live provider.',
+              },
+              null,
+              2
+            )
+          );
+        }
+      } finally {
+        db.close();
+      }
+    } finally {
+      await provider.close();
+    }
+  });
+
   it('isolates two processes and databases from one build and preserves each across restart', async () => {
     const directories = await Promise.all(
       ['a', 'b'].map((name) => mkdtemp(join(tmpdir(), `서사 M0 isolate-${name}-`)))
