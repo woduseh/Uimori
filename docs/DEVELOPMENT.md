@@ -132,6 +132,18 @@ Empty and personal-v1 databases are admitted. Personal schemas 1 through 5 upgra
 
 Manual storage measurements use `scripts/synthetic-story.mjs` and current transcript-v2 import, not obsolete package shapes or cumulative completed snapshots. After building, run `node --expose-gc scripts/measure-context-storage.mjs` or `node scripts/measure-transcript-import.mjs --counts=10,100`. These are synthetic measurements, not CI timing gates.
 
+For a long-novel workload, use `node --expose-gc scripts/measure-context-storage.mjs --long-story --label baseline`. It imports 10/30/100 Korean scenes around 7,500 `o200k_base` tokens each and 50 synthetic lore entries, recording exact UTF-16 length, UTF-8 bytes, tokens and hashes. Reuse the emitted directory with `--fixture <directory> --label improved` for identical stored inputs and full-output hash comparisons. History, checkpoint lookup, logical-message capture and native display-context construction are timed separately (three warmups, nine samples). These stages exclude native workers, transport and providers; the legacy 8,000-character mode remains available without `--long-story`.
+
+The existing Liquid Gallery runner also has opt-in long-reader timings:
+
+```powershell
+$env:UIMORI_BENCHMARK='1'
+npm run verify:liquid-gallery -- --grep PERF
+Remove-Item Env:UIMORI_BENCHMARK
+```
+
+This selects synthetic 8- and 30-scene workloads with roughly 7,500-token Korean originals and English translations, authored HTML/CSS, a local image and Lua button code. It records one warmup and five repetitions of re-entry, past-page navigation and saved original/translation switches in a desktop browser. Each Playwright JSON report includes the `long-reader-performance` attachment with exact text metrics, click-to-ready times, HTTP resource timings and main-thread long tasks. It verifies unchanged saved data and no new generation requests. The ready boundary is all target text plus visible images and two animation frames, not compositor paint; resource time includes local queue/transport and is not isolated server CPU. Timing values are observations, not pass thresholds. Reading preferences, themes and mobile layouts retain their separate functional browser checks.
+
 `tests/fixtures/personal-schema-1.sql` is synthetic output from the previous product build (`9a14ac4`, same application source as `bf7de22`), including real native resources, translation, fixed values and oneoff/delegation rows. The migration test loads that prior schema rather than relabeling a newly created database.
 
 `tests/fixtures/personal-schema-3.sql` is synthetic output from the real `7cac3f7` runtime. Its intentionally added legacy branch exercises conversion into independent chats. `tests/database-schema.test.ts` checks prior-schema migration and restart idempotence; `tests/text-retention.test.ts` and `tests/execution-retention.test.ts` check retained messages and execution payloads without a live provider. The ordinary branch ID remains an internal execution scope, not a public shared-branch management API.

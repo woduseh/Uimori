@@ -130,13 +130,18 @@ local function encode(value)
   local function quote(text)
     if #text > ${limits.guestJsonBytes} - size then error('JSON_SIZE', 0) end
     emit('"')
-    for _, code in utfcodes(text, true) do
-      if code == 34 then emit('\\"')
-      elseif code == 92 then emit('\\\\')
-      elseif code < 32 or (code >= 0xd800 and code <= 0xdfff) then emit(format('\\u%04x', code))
-      elseif code > 0x10ffff then error('JSON_VALUE', 0)
-      else emit(utfchar(code)) end
+    local start = 1
+    for at, code in utfcodes(text, true) do
+      local surrogate = code >= 0xd800 and code <= 0xdfff
+      if code == 34 or code == 92 or code < 32 or surrogate then
+        if start < at then emit(sub(text, start, at - 1)) end
+        if code == 34 then emit('\\"')
+        elseif code == 92 then emit('\\\\')
+        else emit(format('\\u%04x', code)) end
+        start = at + (surrogate and 3 or 1)
+      elseif code > 0x10ffff then error('JSON_VALUE', 0) end
     end
+    if start <= #text then emit(sub(text, start)) end
     emit('"')
   end
   local visit
