@@ -61,11 +61,12 @@ export function validatePackageStarts(value: unknown): PackageStart[] {
       typeof item.title !== 'string' ||
       item.title.length > 200 ||
       typeof item.text !== 'string' ||
-      item.text.length > 100_000 ||
       (item.description !== undefined &&
         (typeof item.description !== 'string' || item.description.length > 2000))
     )
       fail('PACKAGE_START_INVALID_TEXT');
+    // Authored greetings can include a full HTML/CSS selection screen, like a content body.
+    if ((item.text as string).length > 1_000_000) fail('PACKAGE_START_TEXT_TOO_LONG');
   }
   if (JSON.stringify(value).length > 2_000_000) fail('PACKAGE_START_SIZE_LIMIT');
   return structuredClone(value) as PackageStart[];

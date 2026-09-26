@@ -80,6 +80,38 @@ test('native first and alternative greetings retain authored text with no indepe
     expect(() => validatePackageStarts([{ ...pkg.starts![0], ...extra }])).toThrow();
 });
 
+test.each(['first', 'alternative'])(
+  'native %s greetings preserve authored text at the one-million-character limit',
+  (kind) => {
+    const text = '가'.repeat(1_000_000);
+    const pkg = nativeContent({
+      first_mes: kind === 'first' ? text : 'First greeting',
+      alternate_greetings: kind === 'alternative' ? [text] : [],
+    });
+    expect(resolvePackageStart(pkg, kind === 'first' ? 'start-0' : 'start-1').text).toBe(text);
+  }
+);
+
+test('oversized greeting text has a distinct error from malformed authored starts', () => {
+  const start = { id: 'start-0', title: 'Opening', mode: 'authored', text: 'a'.repeat(1_000_001) };
+  expect(() => validatePackageStarts([start])).toThrow('PACKAGE_START_TEXT_TOO_LONG');
+  expect(() => validatePackageStarts([{ ...start, text: null }])).toThrow(
+    'PACKAGE_START_INVALID_TEXT'
+  );
+});
+
+test('greetings retain the two-million-character combined JSON size limit', () => {
+  const starts = [
+    { id: 'start-0', title: 'First', mode: 'authored', text: 'a'.repeat(1_000_000) },
+    { id: 'start-1', title: 'Second', mode: 'authored', text: '' },
+  ];
+  starts[1].text = 'b'.repeat(2_000_000 - JSON.stringify(starts).length);
+  expect(JSON.stringify(starts)).toHaveLength(2_000_000);
+  expect(validatePackageStarts(starts)).toEqual(starts);
+  starts[1].text += 'b';
+  expect(() => validatePackageStarts(starts)).toThrow('PACKAGE_START_SIZE_LIMIT');
+});
+
 test('greeting selection rejects stale ownership and subsequent attempts without adding a source', () => {
   const f = fixture();
   expect(() =>
