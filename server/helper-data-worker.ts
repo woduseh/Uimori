@@ -357,14 +357,19 @@ function* documents(
       ids.length ? `id IN (${ids.map(() => '?').join(',')})` : '',
       kinds.length ? `kind IN (${kinds.map(() => '?').join(',')})` : '',
     ].filter(Boolean);
-    const query = string(args.query);
+    const query = fold(string(args.query));
+    // A title/ID filter should not transfer unrelated authored documents into this process.
+    // Keep the unfiltered traversal as one query instead of adding a lookup per document.
+    const document = query
+      ? db.prepare('SELECT document FROM agent_resources WHERE kind=? AND id=?')
+      : undefined;
     const rows = db
       .prepare(
-        `SELECT * FROM agent_resources ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY kind,id`
+        `SELECT ${query ? 'id,revision,kind,title' : '*'} FROM agent_resources ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY kind,id`
       )
       .iterate(...ids, ...kinds);
     for (const row of rows) {
-      if (query && !fold(`${row.title} ${row.id} ${row.kind}`).includes(fold(query))) continue;
+      if (query && !fold(`${row.title} ${row.id} ${row.kind}`).includes(query)) continue;
       yield {
         scope,
         kind: String(row.kind),
@@ -372,7 +377,10 @@ function* documents(
         revision: Number(row.revision),
         title: String(row.title),
         origin: 'live-library-original',
-        fields: { title: row.title, ...JSON.parse(String(row.document)) },
+        fields: {
+          title: row.title,
+          ...JSON.parse(String(document ? document.get(row.kind, row.id)?.document : row.document)),
+        },
       };
     }
     return;

@@ -155,6 +155,56 @@ test('literal metacharacters stay literal, regex and AND search work, and no mat
   await expect(f.invoke('data.search', { patterns: ['['], regex: true })).rejects.toThrow();
 });
 
+test('library title filters preserve normalized matches, distinct same-name resources and paging', async () => {
+  const f = fixture();
+  const sameName = ['bot', 'persona'].map(
+    (kind, index) =>
+      f.store.product.content({
+        ...fixtureBotInput('하린 Beacon', `나이: ${27 + index}세`),
+        kind,
+      }) as Content
+  );
+  const unrelated = f.store.product.content(
+    fixtureBotInput(
+      '다른 인물',
+      'Beacon은 본문에만 있다. 나이: 40세\n' + '배경 자료. '.repeat(6000)
+    )
+  ) as Content;
+  const hidden = f.store.product.content(fixtureBotInput('하린 Beacon', '나이: 99세')) as Content;
+  f.store.db.prepare('INSERT INTO library_hidden VALUES(?,?)').run('content', hidden.id);
+
+  const normalized = await f.invoke('data.search', {
+    query: 'ｂｅａｃｏｎ',
+    patterns: ['나이'],
+    limit: 1,
+  });
+  expect(normalized.items).toHaveLength(1);
+  expect(normalized.complete).toBe(false);
+  const next = await f.invoke('data.search', {
+    query: 'ｂｅａｃｏｎ',
+    patterns: ['나이'],
+    limit: 1,
+    offset: normalized.nextOffset,
+  });
+  expect(next.complete).toBe(true);
+  expect([...normalized.items, ...next.items].map((item: any) => item.ref.id)).toEqual(
+    sameName.map((content) => content.id)
+  );
+  expect(next.items[0].text).toContain('28세');
+
+  for (const query of ['하린', sameName[0]!.id.toUpperCase()]) {
+    const selected = await f.invoke('data.search', { query, kinds: ['bot'], patterns: ['나이'] });
+    expect(selected.items).toHaveLength(1);
+    expect(selected.items[0].ref.id).toBe(sameName[0]!.id);
+    expect(selected.items[0].text).toContain('27세');
+  }
+  const kindMatched = await f.invoke('data.search', { query: 'ＢＯＴ', patterns: ['나이'] });
+  expect(kindMatched.items.map((item: any) => item.ref.id).sort()).toEqual(
+    [sameName[0]!.id, unrelated.id].sort()
+  );
+  expect(f.store.product.get<Content>('content', unrelated.id)).toEqual(unrelated);
+});
+
 test('library filters distinguish bot/persona/module, hide retired library entries, and directory/batch reading is bounded', async () => {
   const f = fixture();
   const b = bot(f),
