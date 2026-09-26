@@ -1,7 +1,7 @@
 import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
-import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
+import { createFixtureChat, injectWithFixtureBot, setFixtureModelRoutes } from './fixtures/chat.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -228,6 +228,178 @@ async function contextApi(
 const toolEvents = (app: App, runId: string) => observedExecution(app.store, runId).toolEvents;
 
 describe('model-written summary and window switch through the real App and file SQLite', () => {
+  test('Anthropic context.new bootstrap uses its declared wire name through HTTP admission and saved Reader output', async () => {
+    const { app, chatId, sources } = await setup({ count: 3 });
+    const api = async (url: string, payload?: unknown) => {
+      const response = await app.inject({
+        method: payload === undefined ? 'GET' : 'POST',
+        url,
+        headers: { host: '127.0.0.1', 'content-type': 'application/json' },
+        ...(payload === undefined ? {} : { payload: JSON.stringify(payload) }),
+      });
+      expect(response.statusCode, response.body).toBe(200);
+      return response.json();
+    };
+    const key = 'synthetic-anthropic-context-key';
+    const connection = await api('/api/connections', {
+      title: 'Native Anthropic fixture',
+      protocol: 'anthropic-messages-v1',
+      endpoint: 'http://127.0.0.1:44996/v1',
+      enabled: true,
+      apiKey: key,
+    });
+    const model = await api('/api/model-presets', {
+      title: 'Native context tools',
+      connectionId: connection.id,
+      modelId: 'claude-opus-5',
+      inputTokenLimit: 32768,
+      maxOutputTokens: 4096,
+      temperature: null,
+      contextTools: true,
+    });
+    expect(JSON.stringify(await api(`/api/connections/${connection.id}`))).not.toContain(key);
+    expect((await api(`/api/model-presets/${model.id}`)).contextTools).toBe(true);
+    await setFixtureModelRoutes(app, { main: { id: model.id }, translation: null, status: null });
+    expect(fetch).not.toHaveBeenCalled();
+
+    type NativeTool = {
+      name: string;
+      input_schema: {
+        type: string;
+        properties: Record<string, Json>;
+        additionalProperties: boolean;
+      };
+    };
+    type NativeBlock = {
+      type: string;
+      id?: string;
+      name?: string;
+      input?: Json;
+      tool_use_id?: string;
+      content?: string;
+    };
+    type NativeBody = {
+      tools: NativeTool[];
+      messages: { role: string; content: NativeBlock[] }[];
+      model: string;
+    };
+    const bodies: NativeBody[] = [];
+    const violations: string[] = [];
+    vi.mocked(fetch).mockImplementation(async (url, options) => {
+      expect(String(url)).toBe('http://127.0.0.1:44996/v1/messages');
+      expect(new Headers(options?.headers).get('x-api-key')).toBe(key);
+      const body = JSON.parse(String(options?.body)) as NativeBody;
+      bodies.push(body);
+      expect(body.model).toBe('claude-opus-5');
+      const declaration = body.tools.find((tool) => 'keepRecent' in tool.input_schema.properties)!;
+      expect(declaration.input_schema).toMatchObject({
+        type: 'object',
+        additionalProperties: false,
+        properties: { keepRecent: { type: 'integer', minimum: 0 }, summary: { type: 'string' } },
+      });
+      const declaredNames = new Set(body.tools.map((tool) => tool.name));
+      // Anthropic's client-tool contract (2026-09-26), independently enforced by this fixture.
+      // https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools#specifying-client-tools
+      for (const tool of body.tools) expect(tool.name).toMatch(/^[a-zA-Z0-9_-]{1,128}$/u);
+      const uses = body.messages.flatMap((message) =>
+        message.content.filter((part) => part.type === 'tool_use')
+      );
+      for (const use of uses) {
+        if (!use.name || !/^[a-zA-Z0-9_-]{1,128}$/u.test(use.name) || !declaredNames.has(use.name))
+          violations.push(`Invalid or undeclared Anthropic tool_use name: ${use.name}`);
+      }
+      if (violations.length)
+        return new Response(
+          JSON.stringify({
+            type: 'error',
+            error: { type: 'invalid_request_error', message: violations.at(-1) },
+          }),
+          { status: 400 }
+        );
+      const first = bodies.length === 1;
+      expect(bodies.length).toBeLessThanOrEqual(2);
+      if (first) expect(uses).toEqual([]);
+      else {
+        expect(uses).toEqual([
+          {
+            type: 'tool_use',
+            id: 'native-context-switch',
+            name: declaration.name,
+            input: { keepRecent: 1, summary: workingSummary },
+          },
+        ]);
+        expect(body.messages[0].role).toBe('assistant');
+        expect(body.messages[1].role).toBe('user');
+        const result = body.messages[1].content[0];
+        expect(result).toMatchObject({ type: 'tool_result', tool_use_id: 'native-context-switch' });
+        expect(JSON.parse(result.content!)).toMatchObject({
+          switched: true,
+          compactedExchanges: 2,
+          retained: [{ sceneNumber: 3, revision: sources[2].id }],
+        });
+        expect(body.tools).toEqual(bodies[0].tools);
+        expect(JSON.stringify(body.messages)).toContain(workingSummary);
+        expect(JSON.stringify(body.messages)).not.toContain('CHAPTER_0_CANARY');
+      }
+      return sse(
+        {
+          type: 'message_start',
+          message: {
+            id: `native-${bodies.length}`,
+            type: 'message',
+            role: 'assistant',
+            model: body.model,
+            content: [],
+            stop_reason: null,
+            usage: { input_tokens: 11, output_tokens: 0 },
+          },
+        },
+        {
+          type: 'content_block_start',
+          index: 0,
+          content_block: first
+            ? { type: 'tool_use', id: 'native-context-switch', name: declaration.name, input: {} }
+            : { type: 'text', text: '' },
+        },
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: first
+            ? {
+                type: 'input_json_delta',
+                partial_json: JSON.stringify({ keepRecent: 1, summary: workingSummary }),
+              }
+            : { type: 'text_delta', text: finalText },
+        },
+        { type: 'content_block_stop', index: 0 },
+        {
+          type: 'message_delta',
+          delta: { stop_reason: first ? 'tool_use' : 'end_turn', stop_sequence: null },
+          usage: { output_tokens: 7 },
+        },
+        { type: 'message_stop' }
+      );
+    });
+    const run = await terminal(app, (await start(app, chatId)).id);
+    expect(violations).toEqual([]);
+    expect(run.status, run.error ?? '').toBe('completed');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(toolEvents(app, run.id)).toMatchObject([
+      { name: 'context.new', denied: false, result: { switched: true } },
+    ]);
+    expect(toolEvents(app, run.id)).toHaveLength(1);
+    expect(
+      app.store.db.prepare('SELECT COUNT(*) AS count FROM sources WHERE run_id=?').get(run.id)
+    ).toEqual({ count: 1 });
+    expect(app.store.source(run.sourceRevision!).text).toBe(finalText);
+    const reader = await api(`/api/chats/${chatId}/reader`);
+    expect(reader.sources.find((source: Source) => source.id === run.sourceRevision)?.text).toBe(
+      finalText
+    );
+    expect(reader.runs.find((entry: Run) => entry.id === run.id)?.status).toBe('completed');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   test('a user summary edit during the run wins CAS: the late model write stays an inactive candidate', async () => {
     const { app, chatId } = await setup({ count: 3 });
     let edited!: ContextDetail;
