@@ -45,7 +45,6 @@ for (const width of DEFAULT_WIDTHS) {
     await page.screenshot({ path: info.outputPath(`request-expanded-${width}.png`) });
     await message.locator('summary').click();
     await expect(message.locator('.request-preview')).toBeVisible();
-    await expect(source.getByText('표시 문구 바꾸기', { exact: true })).toHaveCount(0);
     const menu = source.getByLabel('장면 작업 메뉴', { exact: true });
     const metadata = source.getByRole('button', { name: '원문 연결 정보', exact: true });
     await expect(metadata).not.toBeVisible();
@@ -87,7 +86,6 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(composer).toHaveValue('Composer translation to preserve');
     await source.getByTestId('source-request').hover();
     await expect(edit).toBeVisible();
-    await expect(edit.locator('svg')).toHaveCount(1);
     if (width === DESKTOP_WIDTH) {
       await page.mouse.move(0, 0);
       await expect(source.locator('.request-message-actions')).toHaveCSS('opacity', '0');

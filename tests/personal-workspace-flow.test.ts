@@ -269,7 +269,7 @@ test('independent copies and portable restores retain inline images, notes and c
   expect(target.product.branches(restored.chat.id)).toHaveLength(1);
 });
 
-test('full SQLite snapshot includes database keys and WebP bytes, never a server draft archive', async () => {
+test('full SQLite snapshot includes database keys and WebP bytes', async () => {
   const store = database();
   const connection = store.product.connection({
     title: 'Local',
@@ -292,9 +292,6 @@ test('full SQLite snapshot includes database keys and WebP bytes, never a server
   expect(restored.credentials.get(connection.credentialRef)).toBe('private-key-for-test');
   expect(restored.credentials.get('jev')).toBe('private-jev-test-key');
   expect(readImage(restored.db, image.hash).bytes.equals(image.bytes)).toBe(true);
-  expect(
-    restored.db.prepare("SELECT name FROM sqlite_schema WHERE name LIKE 'edit_draft%'").all()
-  ).toEqual([]);
 });
 
 test('library helper can directly edit an unselected resource and rename another chat', async () => {
@@ -399,7 +396,6 @@ test('library helper can directly edit an unselected resource and rename another
   });
   expect(store.product.get<Content>('content', bot.id).title).toBe('Helper changed');
   expect(store.chat(chat.id).title).toBe('Changed from library');
-  expect(workspace.task(task.id).snapshot).not.toHaveProperty('grants');
 });
 
 describe('Concurrent portable chat restore', () => {

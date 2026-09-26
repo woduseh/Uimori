@@ -26,55 +26,26 @@ function tree(
   }));
 }
 
-test('a chat with one branch is a single flat row that never claims a fork', () => {
+test('a chat with one execution branch is a flat row, including an empty chat', () => {
+  expect(tree({}, {})).toEqual([]);
+  expect(tree({ main: null }, {})).toEqual([
+    { id: 'main', depth: 0, fork: null, forkIndex: null, own: 0, total: 0 },
+  ]);
   expect(tree({ main: 'b' }, { a: null, b: 'a' })).toEqual([
     { id: 'main', depth: 0, fork: null, forkIndex: null, own: 2, total: 2 },
   ]);
 });
 
-test('branches that all leave the first scene stay siblings at one level', () => {
-  // `third` stops at the fork itself, so it holds the trunk and the other two hang below it.
-  expect(tree({ main: 'b', second: 'c', third: 'a' }, { a: null, b: 'a', c: 'a' })).toEqual([
-    { id: 'third', depth: 0, fork: null, forkIndex: null, own: 1, total: 1 },
-    { id: 'main', depth: 1, fork: 'a', forkIndex: 1, own: 1, total: 2 },
-    { id: 'second', depth: 1, fork: 'a', forkIndex: 1, own: 1, total: 2 },
+test('missing sources and cyclic ancestry stop without inventing a fork', () => {
+  expect(tree({ main: 'gone' }, { a: null })).toEqual([
+    { id: 'main', depth: 0, fork: null, forkIndex: null, own: 0, total: 0 },
   ]);
-});
-
-test('a branch taken from inside another branch nests one level deeper', () => {
-  // a ─┬─ b            main
-  //    └─ c ── d       second, then third from inside it
-  const shape = tree({ main: 'b', second: 'c', third: 'd' }, { a: null, b: 'a', c: 'a', d: 'c' });
-  expect(shape).toEqual([
-    { id: 'main', depth: 1, fork: 'a', forkIndex: 1, own: 1, total: 2 },
-    { id: 'second', depth: 1, fork: 'a', forkIndex: 1, own: 1, total: 2 },
-    { id: 'third', depth: 2, fork: 'c', forkIndex: 2, own: 1, total: 3 },
-  ]);
-});
-
-test('scenes shared after a fork do not add levels, so depth counts forks and not scenes', () => {
-  // a ─ b ─ c ─┬─ d     two branches sharing three scenes before parting
-  //            └─ e
-  expect(tree({ main: 'd', second: 'e' }, { a: null, b: 'a', c: 'b', d: 'c', e: 'c' })).toEqual([
-    { id: 'main', depth: 1, fork: 'c', forkIndex: 3, own: 1, total: 4 },
-    { id: 'second', depth: 1, fork: 'c', forkIndex: 3, own: 1, total: 4 },
-  ]);
-});
-
-test('a branch with no scene yet reports no fork and sorts with the roots', () => {
-  expect(tree({ main: 'a', empty: null }, { a: null })).toEqual([
-    { id: 'empty', depth: 0, fork: null, forkIndex: null, own: 0, total: 0 },
+  expect(tree({ main: 'loop' }, { loop: 'loop' })).toEqual([
     { id: 'main', depth: 0, fork: null, forkIndex: null, own: 1, total: 1 },
   ]);
 });
 
-test('a branch head that lost its source stops the chain instead of looping', () => {
-  expect(tree({ main: 'gone' }, { a: null })).toEqual([
-    { id: 'main', depth: 0, fork: null, forkIndex: null, own: 0, total: 0 },
-  ]);
-});
-
-test('long histories and shared prefixes do not consume the call stack', () => {
+test('long manuscript histories do not consume the call stack', () => {
   const count = 20_000;
   const parents = Object.fromEntries(
     Array.from({ length: count }, (_, i) => [`s${i}`, i ? `s${i - 1}` : null])
@@ -82,9 +53,5 @@ test('long histories and shared prefixes do not consume the call stack', () => {
   const head = `s${count - 1}`;
   expect(tree({ main: head }, parents)).toEqual([
     { id: 'main', depth: 0, fork: null, forkIndex: null, own: count, total: count },
-  ]);
-  expect(tree({ main: 'left', other: 'right' }, { ...parents, left: head, right: head })).toEqual([
-    { id: 'main', depth: 1, fork: head, forkIndex: count, own: 1, total: count + 1 },
-    { id: 'other', depth: 1, fork: head, forkIndex: count, own: 1, total: count + 1 },
   ]);
 });

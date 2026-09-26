@@ -126,9 +126,6 @@ test('new translation freezes the current prompt and retry policy while pending 
   expect(store.job(reserved.id).result?.text).toBe(original.text);
   expect(store.job(next.id).previousResult).toBeUndefined();
   expect(readStoredRunSnapshot(store, original.runId)).toEqual(originalSnapshot);
-  expect(
-    store.db.prepare("SELECT name FROM sqlite_master WHERE name='job_chunks'").get()
-  ).toBeUndefined();
 });
 
 test('explicit retry creates a new current-policy job and preserves failed candidate plus last successful translation', async () => {

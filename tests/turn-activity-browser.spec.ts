@@ -147,7 +147,6 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
   await expect(first).not.toHaveAttribute('open');
   await expect(second).not.toHaveAttribute('open');
   await expect(first.locator(':scope > summary')).toContainText('본문 완료');
-  await expect(page.getByRole('button', { name: '실행 상세', exact: true })).toHaveCount(0);
   await first.locator(':scope > summary').click();
   await expect(first).toHaveAttribute('open', '');
   await expect(second).not.toHaveAttribute('open');

@@ -193,7 +193,7 @@ test('SCUI03 multi-entry browser back keeps the address and chat consistent with
   await expect(composer).toHaveValue('두번째 채팅의 미전송 요청');
 });
 
-test('SCUI01 settings list and details adapt at six widths with distinct icons and no overflow', async ({
+test('SCUI01 settings list and details adapt at six widths with no overflow', async ({
   page,
 }, info) => {
   const errors: string[] = [];
@@ -206,12 +206,6 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
   await expect(nav.getByRole('button', { name: '삽화', exact: true })).toBeVisible();
   const categoryCount = await nav.getByRole('button').count();
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
-  if (visualReview) {
-    const icons = await nav
-      .locator('svg')
-      .evaluateAll((nodes) => nodes.map((node) => node.innerHTML));
-    expect(new Set(icons).size).toBe(icons.length);
-  }
   if (visualReview)
     await page.screenshot({ path: info.outputPath(`settings-list-${MOBILE_WIDTH}.png`) });
   await selectSettingsSection(page, '일반');

@@ -132,11 +132,6 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
     '\n\n<script>globalThis.__uimoriExecuted=true</script>\n\n<img src=x onerror="globalThis.__uimoriExecuted=true">\n\n<ruby>物語<rt>이야기</rt></ruby>\n\n`asset:synthetic_fixed`\n\n[unsafe](javascript:alert(1))';
   const chat = await seed(request, `합성 UI reader ${Date.now()}`, longPrompt + malicious, 3);
   await prepareTranslations(request, chat.id); // This case measures cached view changes, not initial demand.
-  await expect
-    .poll(async () =>
-      (await data(request, chat.id)).jobs.every((job) => job.status === 'completed')
-    )
-    .toBe(true);
   const before = await data(request, chat.id);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

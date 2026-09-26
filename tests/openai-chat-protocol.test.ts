@@ -252,10 +252,12 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     { reasoningContext: 'all_turns' },
     { outputEffort: 'high' },
     { thinkingLevel: 'HIGH' },
+    { thinkingMode: 'disabled' },
+    { thinkingBudgetTokens: 1024, maxOutputTokens: 8192 },
   ])('does not silently send or discard foreign native option %j', (options) => {
     const input = request();
     Object.assign(input.generation!, options);
-    expect(() => encodeChat(input)).toThrow();
+    expect(() => encodeChat(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
   });
   test('registered GPT Chat models retain Flex across exact tool continuation', () => {
     const input = request();
@@ -557,15 +559,6 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     record(continued.input.source!).text = 'Different source';
     expect(() => encodeChat(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
   });
-
-  test.each(['thinkingLevel', 'thinkingMode', 'thinkingBudgetTokens'])(
-    'rejects foreign generation option %s',
-    (key) => {
-      const input = request();
-      Object.assign(input.generation!, { [key]: key === 'thinkingBudgetTokens' ? 1024 : 'LOW' });
-      expect(() => encodeChat(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
-    }
-  );
 
   test('rejects multiple choices, swapped response IDs, negative usage and data after finish', () => {
     expect(() =>

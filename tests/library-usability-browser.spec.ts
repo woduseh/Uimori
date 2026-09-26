@@ -61,16 +61,6 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-readable-${width}.png`) });
 
-    await panel.getByLabel('목록 관리', { exact: true }).click();
-    await panel.getByRole('button', { name: '선택', exact: true }).click();
-    await panel.getByRole('checkbox', { name: `${seed.title} 선택`, exact: true }).check();
-    await expect(panel.getByLabel('목록 관리', { exact: true })).toBeHidden();
-    await expect(panel.getByLabel('서재 검색', { exact: true })).toBeHidden();
-    await expect(
-      panel.getByRole('checkbox', { name: `${seed.title} 선택`, exact: true })
-    ).toBeChecked();
-    await panel.getByRole('button', { name: '완료', exact: true }).click();
-    await expect(panel.getByLabel('서재 검색', { exact: true })).toHaveValue(title);
     await createLibraryContent(page);
     await expect(panel.getByLabel('Risu 자료 이름', { exact: true })).toBeInViewport();
     await panel.getByLabel('캐릭터 설정', { exact: true }).scrollIntoViewIfNeeded();

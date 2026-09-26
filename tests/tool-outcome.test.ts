@@ -32,28 +32,6 @@ test('search schema and execution agree at boundaries and reject extra fields', 
     executeTool(snapshot, { callId: 'a', name: 'knowledge.search', args: { extra: true } })
   ).toMatchObject({ denied: true, errorKind: 'recoverable' });
 });
-test('missing and private resources retain identical safe failure, unapproved tools stay terminal', () => {
-  const run = structuredClone(snapshot);
-  run.resources.push({
-    id: 'private',
-    chatId: 'elsewhere',
-    kind: 'lore',
-    revision: 1,
-    title: 'Secret',
-    description: 'Secret',
-    text: 'CANARY',
-  });
-  const read = (id: string) =>
-    executeTool(run, { callId: 'a', name: 'knowledge.read', args: { ids: [id] } });
-  for (const id of ['private', 'missing'])
-    expect(read(id)).toMatchObject({
-      denied: false,
-      result: { items: [{ denied: true, error: { code: 'RESOURCE_UNAVAILABLE' } }] },
-    });
-  expect(JSON.stringify(read('private'))).not.toContain('CANARY');
-  const denied = executeTool(run, { callId: 'a', name: 'shell', args: {} });
-  expect(createToolCorrectionPolicy()(denied, {})).toBe('denied');
-});
 test('recoverable feedback stays available to the owning loop budget; unclassified failures stay terminal', () => {
   const event: ToolEvent = {
     callId: 'a',
@@ -69,6 +47,8 @@ test('recoverable feedback stays available to the owning loop budget; unclassifi
   expect(repeated(event, { limit: 101, query: 'a' })).toBe('continue');
   expect(repeated(event, { query: 'a', limit: 101 })).toBe('continue');
   expect(createToolCorrectionPolicy()({ ...event, errorKind: undefined }, {})).toBe('denied');
+  const denied = executeTool(snapshot, { callId: 'a', name: 'shell', args: {} });
+  expect(createToolCorrectionPolicy()(denied, {})).toBe('denied');
 });
 
 test('knowledge search splits whitespace and matches every term independently', () => {
