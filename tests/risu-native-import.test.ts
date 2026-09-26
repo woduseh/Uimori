@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { Store } from '../server/store.js';
 import { decodeImage } from '../server/package-images.js';
+import { readImage } from '../server/image-storage.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
 import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
@@ -29,18 +30,21 @@ function database() {
   stores.push({ store, directory });
   return store;
 }
+function removeFixtureDirectory(directory: string) {
+  const path = resolve(directory),
+    within = relative(resolve(tmpdir()), path);
+  if (
+    isAbsolute(within) ||
+    within.startsWith('..') ||
+    !basename(path).startsWith('uimori-native-risu-')
+  )
+    throw new Error('Unsafe fixture cleanup');
+  rmSync(path, { recursive: true, force: true });
+}
 afterEach(() => {
   for (const { store, directory } of stores.splice(0)) {
     store.close();
-    const path = resolve(directory),
-      within = relative(resolve(tmpdir()), path);
-    if (
-      isAbsolute(within) ||
-      within.startsWith('..') ||
-      !basename(path).startsWith('uimori-native-risu-')
-    )
-      throw new Error('Unsafe fixture cleanup');
-    rmSync(path, { recursive: true, force: true });
+    removeFixtureDirectory(directory);
   }
 });
 const sourceOf = (card: unknown) => ({
@@ -136,6 +140,96 @@ function createNativeContent(store: Store, card = synthetic()) {
   const { id: _id, revision: _revision, ...body } = file.contents[0].source;
   return store.product.content(body) as Content;
 }
+
+test.each(['json', 'charx'])(
+  'long HTML greetings survive %s preparation, import and initial message creation',
+  async (format) => {
+    const store = database();
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNI293xHwAF3QKpuamA4gAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    const greeting = `\r\n<section>{{image::main}}<button risu-trigger="begin">Begin</button>${'<p>Long authored opening.</p>'.repeat(4500)}</section>\n`;
+    const card = {
+      ...synthetic(),
+      first_mes: greeting,
+      alternate_greetings: [greeting.replace('Begin', 'Alternative')],
+      ...(format === 'charx'
+        ? { assets: [{ name: 'main', uri: 'embeded://assets/main.png', type: 'icon', ext: 'png' }] }
+        : {}),
+    };
+    const source =
+      format === 'json'
+        ? sourceOf(card)
+        : {
+            name: 'long-opening.charx',
+            base64: writeRisuZip(
+              new Map([
+                ['card.json', Buffer.from(JSON.stringify({ spec: 'chara_card_v3', data: card }))],
+                ['assets/main.png', png],
+              ])
+            ).toString('base64'),
+          };
+    const preview = prepareRisuImport({ source });
+    const result = await applyRisuImport(store, {
+      source,
+      digest: preview.digest,
+      allowPartial: false,
+      idempotencyKey: `long-opening-${format}`,
+    });
+    const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+    expect(saved.package.nativeRisu.card).toEqual(card);
+    expect(saved.package.starts?.map((start) => start.text)).toEqual([
+      greeting,
+      card.alternate_greetings[0],
+    ]);
+    expect(result.chat!.headRevision).not.toBeNull();
+    expect(store.sourceOriginal(result.chat!.headRevision!).text).toBe(greeting);
+    if (format === 'charx') {
+      expect(saved.package.images).toHaveLength(1);
+      const image = saved.package.images![0];
+      expect(saved.package.nativeRisu.assets).toEqual([
+        { name: 'main', uri: 'embeded://assets/main.png', imageId: image.id },
+      ]);
+      const stored = readImage(store.db, image.blobHash);
+      expect(stored.mime).toBe('image/webp');
+      expect(stored.bytes.subarray(8, 12).toString()).toBe('WEBP');
+    }
+  }
+);
+
+test('import preparation returns actionable greeting size errors through the app HTTP handler', async () => {
+  const { createApp } = await import('../server/app.js');
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-native-risu-http-'));
+  let app: Awaited<ReturnType<typeof createApp>> | undefined;
+  try {
+    app = await createApp({
+      dbPath: join(directory, 'fixture.sqlite'),
+      buildId: 'greeting-size-errors',
+      testMode: true,
+    });
+    for (const [code, greetings] of [
+      ['PACKAGE_START_TEXT_TOO_LONG', { first_mes: 'a'.repeat(1_000_001) }],
+      [
+        'PACKAGE_START_SIZE_LIMIT',
+        { first_mes: 'a'.repeat(1_000_000), alternate_greetings: ['b'.repeat(1_000_000)] },
+      ],
+    ] as const) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/risu-imports/prepare',
+        payload: {
+          source: sourceOf({ name: 'Greeting size fixture', description: '', ...greetings }),
+        },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ error: code });
+    }
+  } finally {
+    await app?.close();
+    removeFixtureDirectory(directory);
+  }
+});
 
 test.each(['json', 'charx'])(
   'explicit persona %s imports preserve cards without creating a chat',
