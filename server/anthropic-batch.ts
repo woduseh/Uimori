@@ -105,10 +105,12 @@ export function recoverableAnthropicBatchRun(store: Store, runId: string): boole
     .prepare('SELECT 1 FROM anthropic_batches WHERE run_id=? LIMIT 1')
     .get(runId);
   if (!batch) return false;
+  // Only Batch attempts have durable remote identities. Even a completed realtime
+  // call can precede its local receipt; replaying the main loop could charge it again.
   const unsafe = store.db
     .prepare(`
       SELECT 1 FROM attempts a
-      WHERE a.run_id=? AND a.status='running'
+      WHERE a.run_id=?
         AND NOT EXISTS(SELECT 1 FROM anthropic_batches b WHERE b.attempt_id=a.id)
       LIMIT 1
     `)

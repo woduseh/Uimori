@@ -73,6 +73,7 @@ export type AuxiliaryJobResult = {
   sourceRevision: string;
   sourceHash: string;
   text?: string;
+  judgmentPending?: true;
   label?: string;
   annotations?: {
     blockAnchor: string;
@@ -103,6 +104,13 @@ export type AuxiliaryStoreBridge = {
     generation: number,
     owner: string,
     outcome: AuxiliaryOutcome
+  ) => MaybePromise<void>;
+  stageTranslationJudgment: (
+    jobId: string,
+    generation: number,
+    owner: string,
+    candidate: string,
+    pending: boolean
   ) => MaybePromise<void>;
 };
 export type AuxiliaryJobHooks = {
@@ -383,6 +391,7 @@ export async function runAuxiliaryJob(
     (!target || target.connection.protocol === 'fixture-sse-v1');
   const maxCalls = job.kind === 'translation' ? policy.maxCalls : snapshot.settings.maxCalls;
   let candidateText: string | undefined = bundle.judgmentRecovery;
+  let judgmentPending = false;
   let stage: AuxiliaryFailureDiagnostic['stage'] = 'preparation';
   let lastAttemptId: string | undefined;
   const cancelState = () => hooks.cancellationStatus ?? 'cancelled';
@@ -617,6 +626,8 @@ export async function runAuxiliaryJob(
         if (!mock && policy.judgment.enabled !== false) {
           stage = 'translation-refusal';
           lastAttemptId = undefined;
+          await store.stageTranslationJudgment(jobId, generation, owner, candidateText, true);
+          judgmentPending = true;
           {
             if (calls >= maxCalls)
               throw Object.assign(new Error('Auxiliary call budget exhausted'), {
@@ -655,6 +666,8 @@ export async function runAuxiliaryJob(
         }
         if (hooks.signal.aborted) throw new AuxiliaryExecutionError('AUXILIARY_CANCELLED');
         if (verdict === 'refused') {
+          await store.stageTranslationJudgment(jobId, generation, owner, candidateText, false);
+          judgmentPending = false;
           if (!bundle.judgmentRecovery && retry < policy.maxRetries) continue;
           throw new AuxiliaryExecutionError('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED');
         }
@@ -690,7 +703,13 @@ export async function runAuxiliaryJob(
       status: hooks.signal.aborted ? cancelState() : 'failed',
       result:
         job.kind === 'translation' && candidateText
-          ? { mock, sourceRevision: source.id, sourceHash: source.hash, text: candidateText }
+          ? {
+              mock,
+              sourceRevision: source.id,
+              sourceHash: source.hash,
+              text: candidateText,
+              ...(judgmentPending ? { judgmentPending: true as const } : {}),
+            }
           : null,
       error: code,
       diagnostic: {
