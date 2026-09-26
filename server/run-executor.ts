@@ -257,6 +257,7 @@ export function createRunExecutor({
               throw new Error('CONTEXT_DEPENDENCIES_CHANGED');
           };
           hooks.initialUsage = structuredClone(priorUsage);
+          // Keep the reserved input fixed; preparation advances one execution snapshot.
           let executionSnapshot = run.snapshot;
           let result: Awaited<ReturnType<typeof runMain>>;
           if (run.snapshot.judgmentRecovery) {
@@ -268,8 +269,6 @@ export function createRunExecutor({
               error: null,
             };
           } else {
-            const reservedCompilationSnapshot = run.snapshot;
-            let compilationSnapshot = reservedCompilationSnapshot;
             executionSnapshot = await prepareNativeRisuRun(executionSnapshot, {
               signal: controller.signal,
               host: createNativeRisuHost(
@@ -283,14 +282,6 @@ export function createRunExecutor({
               ),
             });
             hooks.initialUsage = structuredClone(priorUsage);
-            compilationSnapshot =
-              reservedCompilationSnapshot === run.snapshot
-                ? executionSnapshot
-                : {
-                    ...compilationSnapshot,
-                    nativeRisuExecution: executionSnapshot.nativeRisuExecution,
-                    nativeRisuPresetProgram: executionSnapshot.nativeRisuPresetProgram,
-                  };
             if (executionSnapshot.nativeRisuExecution) {
               store.transaction(() => {
                 assertCurrent();
@@ -305,8 +296,7 @@ export function createRunExecutor({
                   );
               });
             }
-            // The selection reads the reserved snapshot, exactly as archive validation recomputes its
-            // inputs, and freezes before the lore context and the input plan measure what is pinned.
+            // Freeze selection before lore context and input planning measure the pinned material.
             if (loreSelectionPending(executionSnapshot)) {
               assertCurrent();
               const selection = await prepareLoreSelection(executionSnapshot, hooks, {
@@ -317,7 +307,6 @@ export function createRunExecutor({
               hooks.initialUsage = structuredClone(priorUsage);
               const receipt = selection.snapshot.loreSelection;
               executionSnapshot = { ...executionSnapshot, loreSelection: receipt };
-              compilationSnapshot = { ...compilationSnapshot, loreSelection: receipt };
               store.transaction(() => {
                 assertCurrent();
                 store.db
@@ -340,18 +329,9 @@ export function createRunExecutor({
             ) {
               assertCurrent();
               executionSnapshot = freezeLoreContext(store, executionSnapshot);
-              compilationSnapshot =
-                reservedCompilationSnapshot === run.snapshot
-                  ? executionSnapshot
-                  : freezeLoreContext(store, compilationSnapshot);
               const contextBase = run.snapshot.contextBase;
               executionSnapshot = store.context.prepareRun(executionSnapshot);
-              compilationSnapshot =
-                reservedCompilationSnapshot === run.snapshot
-                  ? executionSnapshot
-                  : store.context.prepareRun(compilationSnapshot);
               executionSnapshot.contextBase = contextBase;
-              compilationSnapshot.contextBase = contextBase;
             }
             if (executionSnapshot.contextPlan) {
               assertCurrent();
@@ -361,7 +341,7 @@ export function createRunExecutor({
                 executionSnapshot.promptCompilation;
               if (!reuse) {
                 const prepared = await prepareInputContext(
-                  compilationSnapshot,
+                  executionSnapshot,
                   {
                     ...hooks,
                     reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
@@ -422,7 +402,7 @@ export function createRunExecutor({
             if (!executionSnapshot.promptCompilation) {
               executionSnapshot = {
                 ...executionSnapshot,
-                promptCompilation: compileSnapshotPrompt(compilationSnapshot).promptCompilation,
+                promptCompilation: compileSnapshotPrompt(executionSnapshot).promptCompilation,
               };
               store.transaction(() => {
                 assertCurrent();
