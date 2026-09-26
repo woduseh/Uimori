@@ -238,6 +238,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
       }),
     ]);
     expect(seen[0].url).toContain('/v1beta1/publishers/google/models');
+    expect(new URL(seen[0].url).searchParams.get('pageSize')).toBe('300');
     expect(JSON.stringify(catalog)).not.toContain('synthetic-oauth-token');
     expect(token).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledTimes(1);

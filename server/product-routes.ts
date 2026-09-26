@@ -249,7 +249,7 @@ export function productRoutes(
         for (let page = 0; page < 5; page++) {
           product.authorize(previous);
           const url = new URL('https://aiplatform.googleapis.com/v1beta1/publishers/google/models');
-          url.searchParams.set('pageSize', '1000');
+          url.searchParams.set('pageSize', '300');
           if (pageToken) url.searchParams.set('pageToken', pageToken);
           const response = await fetch(url, {
             method: 'GET',
