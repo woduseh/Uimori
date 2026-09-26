@@ -275,7 +275,15 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
     const bootstrapMessages: Json[] = (bootstrap as Record<string, Json>[]).flatMap((item) => [
       {
         role: 'assistant',
-        content: [{ type: 'tool_use', id: item.callId, name: item.name, input: item.args }],
+        content: [
+          {
+            type: 'tool_use',
+            id: item.callId,
+            // Reuse declared aliases; retired bootstrap-only tools keep their valid history names.
+            name: toolNames.find((tool) => tool.name === item.name)?.wireName ?? item.name,
+            input: item.args,
+          },
+        ],
       },
       {
         role: 'user',
