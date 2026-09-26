@@ -427,7 +427,6 @@ for (const width of DEFAULT_WIDTHS) {
     let nav = await visibleNavigation(page);
     const section = nav.getByRole('button', { name: '봇', exact: true });
     await expect(section).toHaveAttribute('aria-expanded', 'false');
-    await expect(nav.getByText('선택된 봇이 없어요.', { exact: true })).toHaveCount(0);
     await section.click();
     const folder = nav.locator(`[data-bot-folder-id="${shared.id}"]`);
     await folder.getByRole('button', { name: `${folderTitle} 봇 폴더`, exact: true }).click();

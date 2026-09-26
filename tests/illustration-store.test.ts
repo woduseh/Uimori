@@ -158,7 +158,11 @@ describe('illustration storage on the current schema', () => {
     expect(store.db.prepare('PRAGMA user_version').get()).toEqual({
       user_version: DATABASE_SCHEMA_VERSION,
     });
-    expect(illustrationSettings(store)).toMatchObject({ revision: 1, generator: 'none' });
+    expect(illustrationSettings(store)).toMatchObject({
+      revision: 1,
+      generator: 'none',
+      automatic: false,
+    });
     const path = store.path;
     store.close();
     const reopened = new Store(path);

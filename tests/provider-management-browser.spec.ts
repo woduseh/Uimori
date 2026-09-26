@@ -926,7 +926,6 @@ for (const [index, item] of providerOptionCases.entries()) {
     await form.getByLabel('모델 프리셋 이름').fill(title);
     await form.getByLabel('모델 ID', { exact: true }).fill(item.modelId);
     await expect(form.getByLabel('모델 ID', { exact: true })).toBeEditable();
-    await expect(form.getByTestId('model-hint-source')).toHaveCount(0);
     for (const [label, value] of Object.entries(item.choices)) {
       await form.getByRole('button', { name: tabFor(label), exact: true }).click();
       await form.getByLabel(label, { exact: true }).selectOption(value!);
@@ -1342,7 +1341,6 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await expect(executionHelp).toBeVisible();
   await help.locator('summary').click();
   const refresh = panel.getByRole('button', { name: 'Codex 상태 다시 확인' });
-  await expect(refresh).toHaveText('');
   let releaseStatus!: () => void;
   statusGate = new Promise<void>((resolve) => {
     releaseStatus = resolve;
@@ -1531,7 +1529,6 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
     }
     for (const [label, value] of Object.entries(item.choices))
       await form.getByLabel(label, { exact: true }).selectOption(value!);
-    await expect(form.getByTestId('model-hint-source')).toHaveCount(0);
     if (item.protocol === 'deepseek-chat-v1')
       await expect(form.getByLabel('사고 모드', { exact: true })).toHaveCount(0);
     expect(

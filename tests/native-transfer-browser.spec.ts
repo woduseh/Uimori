@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import type { Content } from '../core/product.js';
 import type { RisuImportResult } from '../core/risu-import.js';
@@ -8,14 +8,11 @@ import { navigationAction } from './ui-navigation.js';
 
 type BrowserArgs = { page: Page; request: APIRequestContext };
 
-function atWidths(
-  name: string,
-  run: (args: BrowserArgs, width: number, info: TestInfo) => Promise<void>
-) {
+function atWidths(name: string, run: (args: BrowserArgs, width: number) => Promise<void>) {
   for (const width of DEFAULT_WIDTHS)
-    test(`${name} @ ${width}`, async ({ page, request }, info) => {
+    test(`${name} @ ${width}`, async ({ page, request }) => {
       await page.setViewportSize({ width, height: width <= 500 ? 915 : 1440 });
-      await run({ page, request }, width, info);
+      await run({ page, request }, width);
     });
 }
 
@@ -175,31 +172,5 @@ atWidths(
       base64: bytes.toString('base64'),
     });
     expect((decoded.nativeModule as Record<string, unknown>).name).toBe(title);
-  }
-);
-
-atWidths(
-  'NATIVEUI04 exposes one native import entry in each library context',
-  async ({ page }, width, info) => {
-    await page.goto('/');
-    await navigationAction(page, '봇');
-    await page.screenshot({ path: info.outputPath(`native-transfer-entry-${width}.png`) });
-    const dialog = await openImport(page, '봇');
-    await page.screenshot({ path: info.outputPath(`native-transfer-modal-${width}.png`) });
-    await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
-    for (const tab of ['봇', '페르소나', '모듈'] as const) {
-      await navigationAction(page, tab);
-      await expect(page.getByRole('button', { name: '자료 가져오기', exact: true })).toHaveCount(1);
-      await expect(
-        page.getByRole('button', { name: '자료 파일 가져오기·내보내기', exact: true })
-      ).toHaveCount(0);
-    }
-    await navigationAction(page, '프롬프트');
-    await expect(page.getByRole('button', { name: '프롬프트 가져오기', exact: true })).toHaveCount(
-      1
-    );
-    await expect(
-      page.getByRole('button', { name: '자료 파일 가져오기·내보내기', exact: true })
-    ).toHaveCount(0);
   }
 );

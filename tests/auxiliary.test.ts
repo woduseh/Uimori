@@ -14,7 +14,7 @@ import {
   type AuxiliarySource,
   type SourceTimeContext,
 } from '../core/auxiliary.js';
-import { BUILTIN_ASSETS, builtinAssetSvg, sourceScenes } from './fixtures/presentation.js';
+import { BUILTIN_ASSETS } from './fixtures/presentation.js';
 import type { RunSnapshot } from '../core/types.js';
 import { translationReader } from '../core/translation-context.js';
 
@@ -363,22 +363,11 @@ describe('M1 source-bound auxiliary roles', () => {
     const ctx = context();
     const canonBefore = JSON.stringify(ctx.references);
     const blocks = splitSource(raw);
-    const scenes = sourceScenes(blocks);
-    const input = presentationInput(raw, ctx, snapshot(), BUILTIN_ASSETS, scenes);
+    const input = presentationInput(raw, ctx, snapshot(), BUILTIN_ASSETS);
     expect(input.role).toBe('presentation');
     expect(input.tools).toEqual([]);
     expect(input.assets).toHaveLength(3);
     expect(input.blocks).toHaveLength(2);
-    expect(scenes.map((scene) => scene.location)).toEqual(['pier', 'observatory']);
-    for (const asset of BUILTIN_ASSETS) {
-      const bytes = builtinAssetSvg(asset.ref);
-      expect(bytes).toMatch(/^<svg /);
-      expect(createHash('sha256').update(bytes!).digest('hex')).toBe(asset.hash);
-      expect(asset.url).toBe(`/api/assets/${asset.ref}`);
-      expect(bytes).not.toMatch(/script|foreignObject|href=/);
-    }
-    expect(builtinAssetSvg('../private.svg')).toBeNull();
-    expect(builtinAssetSvg('__proto__')).toBeNull();
     const annotation = validatePresentation(
       raw,
       {

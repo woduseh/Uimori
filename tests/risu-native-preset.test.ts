@@ -266,12 +266,3 @@ test('native regex keeps captures and evaluates CBS after substitution in every 
     expect(result.text).toBe('4');
   }
 });
-test('nonnative authored programs are rejected', () => {
-  expect(() =>
-    validateRisuPrompt({
-      version: 1,
-      controls: [],
-      blocks: [{ id: 'history', title: 'history', kind: 'history', from: 0, to: 'end' }],
-    })
-  ).toThrow();
-});

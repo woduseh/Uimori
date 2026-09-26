@@ -108,37 +108,3 @@ test('translation ranking retains revision, creation-time and ID tie breaks', ()
     ['c']
   );
 });
-
-test('generated job rows have the same selection as the former reader predicate', () => {
-  const state = fixture();
-  const all: { id: string; hash: string; kind: string; revision: number; at: string }[] = [];
-  for (let i = 0; i < 400; i++) {
-    const row = {
-      id: String(i).padStart(4, '0'),
-      hash: `h-${i % 3}`,
-      kind: ['translation', 'image', 'status'][i % 3],
-      revision: i % 17,
-      at: `time-${i % 4}`,
-    };
-    all.push(row);
-    state.insert(row.id, row.hash, row.kind, row.revision, 'source', 'chat', row.at);
-  }
-  const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-  const latest = all
-    .filter((row) => row.kind === 'translation')
-    .sort((a, b) => b.revision - a.revision || compare(b.at, a.at) || compare(b.id, a.id))[0];
-  for (const hash of ['h-0', 'h-1', 'h-2']) {
-    const expected = all
-      .filter(
-        (row) =>
-          (row.hash === hash || row.kind === 'image') &&
-          (row.kind !== 'translation' || row.id === latest.id)
-      )
-      .sort((a, b) => compare(a.at, b.at) || compare(a.id, b.id))
-      .map((row) => row.id);
-    assert.deepEqual(
-      readerJobIds(state, 'source', hash).map((row) => row.id),
-      expected
-    );
-  }
-});

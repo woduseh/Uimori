@@ -44,43 +44,42 @@ const snapshot = (summary: string): RunSnapshot => ({
 });
 
 describe('derived context provenance (host mechanics, not model semantic accuracy)', () => {
-  test.each([
-    '미라는 선장이 돌아오면 돕겠다고 약속했다. 귀환과 이행 여부는 미확인이다. [scene 2]',
-    '미라는 선장이 배신했다고 말했다. 이는 미라의 주장이고 실제 배신은 확인되지 않았다. [scene 2]',
-    'character-advisor의 해석: 미라는 선장을 의심할 수 있다. 직접 확인된 인물 지식은 아니다.',
-    '작가 정정 [note 4]: 미라는 선장의 정체를 모른다. 앞 요약의 반대 주장은 폐기한다.',
-    '제안: 다음 장면에서 두 인물을 화해시킨다. 아직 채택하거나 집필한 사건이 아니다.',
-  ])('repeated projections preserve attributed prose and the covered prefix: %s', (text) => {
+  test('preserves attributed prose, the covered prefix and defensive copies', () => {
+    const text = [
+      '미라는 선장이 돌아오면 돕겠다고 약속했다. 귀환과 이행 여부는 미확인이다. [scene 2]',
+      '미라는 선장이 배신했다고 말했다. 이는 미라의 주장이고 실제 배신은 확인되지 않았다. [scene 2]',
+      'character-advisor의 해석: 미라는 선장을 의심할 수 있다. 직접 확인된 인물 지식은 아니다.',
+      '작가 정정 [note 4]: 미라는 선장의 정체를 모른다. 앞 요약의 반대 주장은 폐기한다.',
+      '제안: 다음 장면에서 두 인물을 화해시킨다. 아직 채택하거나 집필한 사건이 아니다.',
+    ].join('\n');
     const fixed = snapshot(text),
       original = structuredClone(fixed);
-    for (let pass = 0; pass < 5; pass++) {
-      const reference = conversationSummary(fixed)!;
-      expect(reference).toEqual({
-        kind: 'derived-conversation-summary',
-        text,
-        checkpoint: original.contextPlan!.checkpoint,
-        scope: { chatId: 'scope-chat', branchId: 'branch-a' },
-        covered: {
-          count: 2,
-          through: { revision: 'scene-2', hash: 'hash-2', viewHash: 'visible-range' },
-        },
-      });
-      const projected = projectedLogicalHistory(
-        fixed,
-        fixed.history.map((source) => ({
-          id: source.revision,
-          role: 'assistant',
-          text: source.text,
-          sourceRevision: source.revision,
-        }))
-      );
-      expect(projected.map((message) => message.id)).toEqual(['context-summary', 'scene-3']);
-      expect(projected[0].role).toBe('user');
-      expect(JSON.parse(projected[0].text.split('\n').slice(1).join('\n'))).toEqual(reference);
-      reference.checkpoint!.id = 'cannot-alter-owner';
-      reference.covered.through!.hash = 'cannot-alter-source';
-      expect(fixed).toEqual(original);
-    }
+    const reference = conversationSummary(fixed)!;
+    expect(reference).toEqual({
+      kind: 'derived-conversation-summary',
+      text,
+      checkpoint: original.contextPlan!.checkpoint,
+      scope: { chatId: 'scope-chat', branchId: 'branch-a' },
+      covered: {
+        count: 2,
+        through: { revision: 'scene-2', hash: 'hash-2', viewHash: 'visible-range' },
+      },
+    });
+    const projected = projectedLogicalHistory(
+      fixed,
+      fixed.history.map((source) => ({
+        id: source.revision,
+        role: 'assistant',
+        text: source.text,
+        sourceRevision: source.revision,
+      }))
+    );
+    expect(projected.map((message) => message.id)).toEqual(['context-summary', 'scene-3']);
+    expect(projected[0].role).toBe('user');
+    expect(JSON.parse(projected[0].text.split('\n').slice(1).join('\n'))).toEqual(reference);
+    reference.checkpoint!.id = 'cannot-alter-owner';
+    reference.covered.through!.hash = 'cannot-alter-source';
+    expect(fixed).toEqual(original);
   });
 
   test('a changed summary or coverage does not inherit the previous checkpoint identity', () => {

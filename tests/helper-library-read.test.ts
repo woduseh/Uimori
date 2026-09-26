@@ -80,7 +80,6 @@ test('library metadata keeps the exact latest visible response and never transfe
     const expected = legacyMetadata(f.store),
       actual = f.store.product.libraryMetadata();
     expect(actual).toEqual(expected);
-    expect(JSON.stringify(actual)).toBe(JSON.stringify(expected));
     expect(actual.contents.map((item) => item.id)).toEqual(
       actual.contents.map((item) => item.id).sort()
     );

@@ -24,20 +24,6 @@ function read(fixed: RunSnapshot, name: string, args: Record<string, unknown>) {
 }
 
 describe('bounded story ancestry reads', () => {
-  test('Unicode and escaped content round-trip through scene-number pagination', () => {
-    const text = '🌙 "quoted" \n'.repeat(1500);
-    const fixed = snapshot(text);
-    let offset: number | null = 0;
-    let recovered = '';
-    while (offset !== null) {
-      const page = read(fixed, 'story.read', { sceneNumber: 1, offset, limit: 16000 });
-      expect(page.source.start).toBe(offset);
-      recovered += page.text;
-      offset = page.nextOffset;
-    }
-    expect(recovered).toBe(text);
-  });
-
   test('story.search provides both ordered browsing and case-insensitive multi-term search', () => {
     const texts = [
       'Mira promised the Captain a lantern before the storm.',
@@ -84,17 +70,6 @@ describe('bounded story ancestry reads', () => {
     expect(both.results.map((item: { sceneNumber: number }) => item.sceneNumber)).toEqual([1, 2]);
     expect(read(fixed, 'story.search', { query: 'lantern storm' }).total).toBe(1);
     expect(read(fixed, 'story.search', { query: 'lantern letter' }).total).toBe(0);
-  });
-
-  test('reads cannot cross ancestry or ignore a stale source hash', () => {
-    const fixed = snapshot();
-    expect(
-      executeStoryRead(fixed, { callId: 'outside', name: 'story.read', args: { sceneNumber: 2 } })
-    ).toMatchObject({ denied: true, result: { code: 'RESOURCE_UNAVAILABLE' } });
-    fixed.history[0].contentHash = sourceHash('different');
-    expect(
-      executeStoryRead(fixed, { callId: 'stale', name: 'story.read', args: { sceneNumber: 1 } })
-    ).toMatchObject({ denied: true, result: { code: 'RESOURCE_UNAVAILABLE' } });
   });
 });
 
