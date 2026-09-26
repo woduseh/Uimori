@@ -42,6 +42,7 @@
   /* Motion: colour and opacity are quick, a panel or column change is slower. */
   --motion-fast: 120ms;
   --motion-panel: 180ms;
+  --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   /* Lucide chevron-right, the shared disclosure marker. */
   --chevron: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>');
   --nav-w: 248px;
@@ -1232,6 +1233,21 @@ input[type="checkbox"] {
 .app-dialog::backdrop {
   background: var(--shade);
 }
+/* Fade without transforming the containing block of fixed menus inside native dialogs.
+   Native close/unmount stays immediate; motion never owns focus or interaction state. */
+@media (prefers-reduced-motion: no-preference) {
+  .app-dialog[open] {
+    animation: app-dialog-enter var(--motion-panel) var(--motion-ease-out);
+  }
+}
+@keyframes app-dialog-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 .dialog-header {
   min-height: 56px;
   padding: 10px 18px 10px 24px;
@@ -1373,6 +1389,10 @@ input[type="checkbox"] {
   }
   .reader {
     padding: 24px 20px 36px;
+  }
+  /* Leave last-scene actions above the floating navigator; preserve theme overrides. */
+  :where(.reader-stage.has-scenes) .reader {
+    padding-bottom: 72px;
   }
   .story-context {
     margin-bottom: 22px;

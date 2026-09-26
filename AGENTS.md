@@ -19,5 +19,6 @@ Read only the references needed for the task:
 - [THEME-AUTHORING](docs/THEME-AUTHORING.md): read when creating or changing themes and their public styling contract.
 - [DEVELOPMENT](docs/DEVELOPMENT.md): setup, check selection, commands, and troubleshooting.
 - [ORACLE-RELEASE](docs/ORACLE-RELEASE.md): read when preparing or performing an authorized Oracle deployment.
+- [UIMORI-MOTION](.agents/skills/uimori-motion/SKILL.md): read when implementing or reviewing motion in app-owned UI controls.
 
 Update the owning document when behavior changes. Keep plans and execution history out of standing instructions.

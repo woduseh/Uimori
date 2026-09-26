@@ -62,6 +62,7 @@ export function ActionMenu({
         placement === 'top' ? above >= height || above > below : below < height && above > below;
       setPosition({
         position: 'fixed',
+        transformOrigin: upward ? 'bottom right' : 'top right',
         left: Math.max(
           8,
           Math.min(anchor.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8)

@@ -56,6 +56,7 @@
   border-radius: 12px;
   background: var(--panel);
   box-shadow: 0 12px 28px #0003;
+  transform-origin: top right;
 }
 .action-menu-body > button,
 .action-menu-body > .delete-control > button {
@@ -90,6 +91,7 @@
 .action-menu-up > .action-menu-body {
   top: auto;
   bottom: calc(100% + 4px);
+  transform-origin: bottom right;
 }
 /* Bottom sheet below 600px (SHEET_MEDIA in ActionMenu.tsx): a scrim behind and rows sized for
    thumbs. The doubled class outranks per-screen popover overrides such as `.source-actions >
@@ -120,5 +122,37 @@
   .action-menu[open] > .action-menu-body.action-menu-body > button,
   .action-menu[open] > .action-menu-body.action-menu-body > .delete-control > button {
     min-height: 48px;
+  }
+}
+/* Follow native details state. Do not retain a transform after the entrance. */
+@media (prefers-reduced-motion: no-preference) {
+  .action-menu[open] > .action-menu-body {
+    animation: action-menu-enter var(--motion-fast) var(--motion-ease-out);
+  }
+}
+@media (prefers-reduced-motion: no-preference) and (max-width: 600px) {
+  .action-menu[open] > .action-menu-body {
+    animation-name: action-sheet-enter;
+    animation-duration: var(--motion-panel);
+  }
+}
+@keyframes action-menu-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes action-sheet-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }

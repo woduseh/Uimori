@@ -48,7 +48,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run verify:translation-guides` | Bot guide forms, native JSON, draft recovery, validation and mobile layout. |
 | `npm run verify:personal` | Ordinary resource saves, local recovery, image metadata, provider keys and portable chat restoration. |
 | `npm run verify:browser-smoke` | Small browser suite for chat and global prompt settings. |
-| `npm run verify:ui` | Reader layout, editing and reading preferences; accepts `--grep` and `--visual`. Renderer unit tests run separately with `npm test -- tests/prose.test.ts`. |
+| `npm run verify:ui` | Reader layout, editing, reading preferences and shared-control motion; accepts `--grep` and `--visual`. Renderer unit tests run separately with `npm test -- tests/prose.test.ts`. |
 | Feature-specific `verify:*` scripts | Suites such as `verify:packages`, `verify:providers`, `verify:library`, and `verify:navigation`; see [package scripts](../package.json). |
 | `npm run verify:browser` | Full local synthetic browser regression. |
 | `npm run verify:selfhost` | Independent HTTPS/authentication, cross-device SSE, and re-entry/session-revocation scenarios. Accepts `--grep` for diagnosis; a filtered run is not the full suite. |
@@ -68,6 +68,12 @@ A report records the selected files, filter and executed tests. A run with no te
 `tests/server.test.ts` checks independent server processes, ports and SQLite databases from one build, including restart persistence. No extra Git checkouts are needed.
 
 After a matching build, `node --expose-gc scripts/benchmark-native-preparation.mjs` compares sequential and batched native text preparation for 10, 50 and 100 messages, three times each. It checks identical outputs and records elapsed time, Worker calls, sampled process RSS and cancellation latency under `output/benchmarks/`. These synthetic measurements exclude callbacks and provider work.
+
+### Shared-control motion
+
+Read the [Uimori motion skill](../.agents/skills/uimori-motion/SKILL.md) when changing app-owned dialog/menu/switch motion. `web/style.css` owns the timing/easing tokens; the native state and focus owners remain unchanged. Modals fade in without transforming nested fixed-position menus; action menus grow from their actual opening edge and become short upward reveals on phones. Closing stays immediate. When the mobile scene navigator is visible, the default reader leaves bottom clearance for the last scene controls; theme spacing still takes precedence. New motion is opt-in to the OS's no-preference mode; manuscript/author styles are not rewritten.
+
+After building, `npm run verify:ui -- --grep MOTION` exercises mobile/desktop controls with normal and reduced motion, rapid re-entry, persistent switch values and final geometry. It records screenshots and videos alongside browser reports. The skill lists existing nested-dialog, keyboard and long-reader checks to select when relevant.
 
 ## Builds and evidence
 
