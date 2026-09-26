@@ -349,6 +349,20 @@ export class HelperWorkspace {
           .get(conversationId, snapshot.requestGroupId);
         if (latest?.id !== previous.id)
           throw new HttpError(409, '이미 다시 시도한 요청이에요. 최신 결과를 확인해 주세요.');
+        // Retry replaces this task in helperHistory. A summary covering its messages
+        // cannot describe the replacement request. Invalidate its active pointer in
+        // the same transaction; normal retention owns the immutable checkpoint.
+        this.store.db
+          .prepare(
+            `UPDATE context_heads SET revision=revision+1,checkpoint_id=NULL
+             WHERE scope_key=? AND EXISTS (
+               SELECT 1 FROM context_checkpoints c
+               JOIN json_each(c.plan,'$.compacted') source
+               JOIN helper_messages m ON m.id=json_extract(source.value,'$.revision')
+               WHERE c.id=context_heads.checkpoint_id AND m.task_id=?
+             )`
+          )
+          .run(`helper:${conversationId}`, previous.id);
       }
       const id = randomUUID(),
         time = now();

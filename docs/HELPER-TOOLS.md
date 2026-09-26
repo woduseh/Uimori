@@ -71,6 +71,8 @@ SELECT/CTE, joins, aggregates and built-in JSON functions are available. Mutatio
 
 SQL returns at most 200 rows (default 50). Long text cells become explicit 2,000-character previews. `truncated` signals omitted rows and `truncatedCells` counts cell previews. Continue using deterministic ordering and narrower columns/conditions or SQL LIMIT/OFFSET. Large integers outside JavaScript's safe range return as decimal strings; binary values return omitted-byte metadata.
 
+Library title/ID/kind query filters are checked against metadata before loading matching authored document bodies. This preserves the same normalization, ordering and pagination; it reduces local body transfer, not the returned evidence or provider input. Broad queries may still load every matching document.
+
 Both SQL and grep run in a short-lived Node child process with a read-only connection, a three-second deadline, bounded JS/SQLite allocations and cancellation. This keeps a pathological query or regular expression from blocking the server's event loop. There is no persistent file mirror, polling service, new database migration, or extra package dependency. Process creation and bounded source loading still have a local cost; these tools reduce model input, not all work to zero.
 
 ## Discovering and executing app operations
@@ -89,7 +91,7 @@ That is an `app.tools` request. With no names, the tool returns a compact catalo
 
 For an existing save, preserve the native editing model and supply the latest revision according to `resource.save`'s discovered schema. Mutation identity is host-owned: app-operation schemas do not ask the model to invent an `operationId`; the helper passes it separately to services that need receipts. A new provider call ID is a new operation, not an automatic replay of a previous write. Revision checks remain explicit. See [Tool contracts](TOOL-CONTRACTS.md). Editing tools intentionally retain full models where necessary; a simple factual question should use the data tools instead. A user request to review or propose still does not authorize saving.
 
-Resource mutations use the existing helper operation receipt in the same transaction as the save. If the provider subsequently fails, the existing UI can show the committed effects and prevent a blind retry. Read-only resource and theme queries do not create mutation receipts.
+Resource mutations use the existing helper operation receipt in the same transaction as the save. If the provider subsequently fails, the existing UI can show the committed effects and prevent a blind retry. Read-only resource and theme queries do not create mutation receipts. Retrying a failed task replaces its messages in the effective helper history. If an active summary covers those replaced messages, retry enqueue clears only that active checkpoint reference in the same transaction. Enqueue preserves original messages and leaves historical checkpoints untouched; the existing completed-input retention policy may later prune unreferenced checkpoints. Valid earlier checkpoints remain reusable. Dependency validation and the committed-effect retry block still apply.
 
 The provider-visible tool list stays fixed at five throughout a native continuation. `app.call` retains its envelope name/arguments in native tool history; the host dispatches the inner operation and the UI reports its real operation name. Compaction classifies the inner operation: read bodies can be summarized, while completed mutation exchanges retain exact arguments and results and are not replayed. Very large mandatory instructions or mutation arguments can still exceed a small context window; the host does not silently truncate them to claim success.
 
@@ -100,3 +102,7 @@ The helper UI labels input tokens as cumulative. Provider usage is accumulated a
 These numeric events remain after ordinary completed-input cleanup. Old attempts need not have them; no historical values are fabricated. `agent_usage` is provider-reported usage; `agent_helper_inputs` is local o200k-based estimation with the app's margin. Do not combine them as though both were actual billed tokens.
 
 Manual conversation compaction indexes logical messages once and fits its known source prefix without reconstructing the full writer input for every candidate. It still validates source identity and complete source coverage, preserves recent exchanges, sends every selected fragment, and checks the actual merged summary before adopting it. Automatic compaction and semantic summary length policy are not replaced by a keyword-only shortcut.
+
+## Goal evaluation
+
+[Helper goal evaluation](HELPER-EVALUATION.md) fixes synthetic sources, allowed/forbidden changes and completion oracles before execution. Scripted provider checks verify transport and storage; they do not establish a real model's tool-selection or instruction-following quality.

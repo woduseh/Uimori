@@ -784,6 +784,86 @@ test.each(['eof', 'cancelled', 'connection-revoked'] as const)(
   }
 );
 
+test.each(['current failed task', 'earlier completed task'] as const)(
+  'a read-only retry invalidates only a checkpoint covering its replaced messages (%s)',
+  async (coveredTask) => {
+    const f = await fixture({ fixed: false, reviewOnly: true });
+    f.readValue = { revision: 1, text: readText.repeat(9) };
+    let helperCalls = 0;
+    const failedCall = coveredTask === 'current failed task' ? 2 : 3;
+    const log = script(f, (request) => {
+      if (request.role === 'context') return summarized();
+      if (++helperCalls === 1)
+        return tools(tool('evidence', 'resource.read', { kind: 'content', id: f.saved.id }));
+      if (helperCalls === failedCall)
+        return {
+          ...structuredClone(success),
+          status: 'error',
+          text: 'Unfinished review',
+          error: { code: 'UNEXPECTED_EOF' },
+        };
+      return structuredClone(success);
+    });
+    let failed = await f.run();
+    expect(checkpointRows(f)).toHaveLength(1);
+    if (coveredTask === 'earlier completed task') {
+      expect(failed.status).toBe('completed');
+      const next = f.runtime.enqueue(f.conversation.id, randomUUID(), 'Explain the review.');
+      await Promise.all(f.work);
+      failed = f.workspace.task(next.id);
+    }
+    expect(failed).toMatchObject({ status: 'failed', error: 'UNEXPECTED_EOF' });
+    expect(failed).not.toHaveProperty('completedEffects');
+    const checkpoints = checkpointRows(f);
+    const head = () =>
+      f.store.db
+        .prepare('SELECT revision,checkpoint_id FROM context_heads WHERE scope_key=?')
+        .get(`helper:${f.conversation.id}`)!;
+    const before = head();
+    const priorMessages = f.workspace.messages(f.conversation.id);
+    const retry = f.runtime.enqueue(
+      f.conversation.id,
+      randomUUID(),
+      'Finish the review; do not save changes.',
+      undefined,
+      undefined,
+      failed.id
+    );
+    expect(checkpointRows(f)).toEqual(checkpoints);
+    await Promise.all(f.work);
+    expect(f.workspace.task(retry.id), f.workspace.task(retry.id).error ?? '').toMatchObject({
+      status: 'completed',
+      usage: { modelCalls: 1, inputTokens: 11, outputTokens: 7 },
+    });
+    const retriedInput = log.requests.at(-1)!;
+    expect(retriedInput.input.task).toBe('Finish the review; do not save changes.');
+    expect(retriedInput.input.source).toMatchObject({
+      summary: {
+        text: coveredTask === 'earlier completed task' ? summaryText : '',
+      },
+    });
+    expect(JSON.stringify(retriedInput.input.history)).not.toContain('Unfinished review');
+    expect(head()).toEqual(
+      coveredTask === 'earlier completed task'
+        ? before
+        : { revision: Number(before.revision) + 1, checkpoint_id: null }
+    );
+    for (const message of priorMessages)
+      expect(
+        f.store.db.prepare('SELECT text FROM helper_messages WHERE id=?').get(message.id)
+      ).toMatchObject({ text: message.text });
+    const next = f.runtime.enqueue(f.conversation.id, randomUUID(), 'Continue reviewing only.');
+    await Promise.all(f.work);
+    expect(f.workspace.task(next.id).status).toBe('completed');
+    expect(f.mutations).toBe(0);
+    expect(f.store.product.get<Content>('content', f.saved.id).revision).toBe(1);
+    expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations').get()).toEqual({
+      n: 0,
+    });
+    expect(log.requests.filter((request) => request.role === 'context')).toHaveLength(1);
+  }
+);
+
 test.each([3, 12])(
   'chunked helper summaries honor total budget %i and reserve the final helper call',
   async (totalCalls) => {
