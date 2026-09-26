@@ -20,6 +20,10 @@ const messages: Record<string, string> = {
   RISU_IMPORT_INVALID_FILE:
     '지원하는 캐릭터 카드·Risu 모듈 JSON 또는 올바른 .charx 파일인지 확인해 주세요.',
   RISU_IMPORT_TOO_LARGE: '캐릭터 카드 파일은 256 MiB 이하여야 해요.',
+  PACKAGE_START_TEXT_TOO_LONG:
+    '시작문 하나가 1,000,000자 한도를 넘었어요. 기본 시작문과 대체 시작문의 길이를 확인해 주세요.',
+  PACKAGE_START_SIZE_LIMIT:
+    '기본 시작문과 대체 시작문의 전체 크기가 한도를 넘었어요. 시작문을 나누거나 줄여 주세요.',
   UPLOAD_TOO_LARGE: '올릴 수 있는 파일은 256 MiB 이하예요.',
   UPLOAD_EMPTY: '빈 파일은 올릴 수 없어요. 파일을 다시 선택해 주세요.',
   UPLOAD_NOT_FOUND:
