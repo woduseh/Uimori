@@ -1579,6 +1579,9 @@ test('PMLEAVE provider draft switch saves before replacement and applies reversi
   await discard.getByRole('button', { name: '계속 편집', exact: true }).click();
   await form.getByLabel('프로바이더 이름', { exact: true }).fill(title + ' saved');
   await form.getByLabel('이 프로바이더 사용').uncheck();
+  await page.route('**/api/library?view=summary', (route) =>
+    route.fulfill({ status: 503, json: { error: 'Synthetic summary failure' } })
+  );
   await switchToB();
   await discard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
   await expect(discard).toBeHidden();
@@ -1587,6 +1590,92 @@ test('PMLEAVE provider draft switch saves before replacement and applies reversi
   expect(saved.title).toBe(title + ' saved');
   expect(saved.revision).toBe(a.revision + 1);
   expect(saved.enabled).toBe(false);
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: '작업은 완료됐어요. 목록을 다시 불러오지 못했어요.' })
+  ).toBeVisible();
+});
+
+test('SAVEACK saving both provider drafts stops on a failed write but continues after failed summary reads', async ({
+  page,
+  request,
+}) => {
+  const title = 'SAVEACK provider ' + Date.now();
+  const connection = await api<Connection>(request, '/connections', connectionInput(title));
+  const model = await api<ModelPreset>(
+    request,
+    '/model-presets',
+    modelInput(connection, title + ' model')
+  );
+  const observed = observe(page);
+  await settings(page);
+  await openProviderModel(page, model.title);
+  const modelForm = page.getByRole('form', { name: '모델 편집 양식', includeHidden: true });
+  await modelForm.getByLabel('모델 프리셋 이름', { exact: true }).fill(model.title + ' saved');
+  await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await page
+    .getByRole('button', { name: connection.title + ' 프로바이더 수정', exact: true })
+    .click();
+  const connectionForm = page.getByRole('form', {
+    name: '프로바이더 편집 양식',
+    includeHidden: true,
+  });
+  await connectionForm
+    .getByLabel('프로바이더 이름', { exact: true })
+    .fill(connection.title + ' saved');
+
+  let failSave = true;
+  const writes: string[] = [];
+  const connectionPath = '/api/connections/' + connection.id;
+  const modelPath = '/api/model-presets/' + model.id;
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'PUT' && [connectionPath, modelPath].includes(path)) writes.push(path);
+  });
+  await page.route('**' + connectionPath, async (route) => {
+    if (route.request().method() === 'PUT' && failSave)
+      await route.fulfill({ status: 503, json: { error: 'Synthetic connection save failure' } });
+    else await route.continue();
+  });
+  await page.route('**/api/library?view=summary', (route) =>
+    route.fulfill({ status: 503, json: { error: 'Synthetic summary failure' } })
+  );
+
+  await page.keyboard.press('Escape');
+  const guard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
+  await guard.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+  await expect(guard.getByRole('alert')).toContainText('저장하지 못했어요');
+  await expect(connectionForm.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(
+    connection.title + ' saved'
+  );
+  await expect(modelForm.getByLabel('모델 프리셋 이름', { exact: true })).toHaveValue(
+    model.title + ' saved'
+  );
+  const before = await library(request);
+  expect(before.connections.find((item) => item.id === connection.id)).toEqual(connection);
+  expect(before.models.find((item) => item.id === model.id)).toEqual(model);
+  expect(writes).toEqual([connectionPath]);
+
+  failSave = false;
+  await guard.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+  await expect(guard).toBeHidden();
+  await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeHidden();
+  await expect(
+    page.getByRole('alert').filter({ hasText: '작업은 완료됐어요. 목록을 다시 불러오지 못했어요.' })
+  ).toBeVisible();
+  const saved = await library(request);
+  expect(saved.connections.find((item) => item.id === connection.id)).toMatchObject({
+    title: connection.title + ' saved',
+    revision: connection.revision + 1,
+  });
+  expect(saved.models.find((item) => item.id === model.id)).toMatchObject({
+    title: model.title + ' saved',
+    revision: model.revision + 1,
+  });
+  expect(writes).toEqual([connectionPath, connectionPath, modelPath]);
+  expect(observed.errors).toEqual([]);
+  expect(observed.generations).toEqual([]);
 });
 
 test('PMUI model presets group by provider, start collapsed and persist manual order', async ({
