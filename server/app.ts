@@ -5,6 +5,8 @@ import { flushPendingImageCleanup } from './unused-data.js';
 import { themeRoutes } from './themes.js';
 import { inputTranslationRoutes } from './input-translation.js';
 import { ChatTranscriptError } from '../core/chat-transcript.js';
+import { PackageStartError } from '../core/package-start.js';
+import { RisuContentError } from '../core/risu-content.js';
 import { resourceRoutes } from './resource-routes.js';
 import { rejudgeTranslation } from './source-editing.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
@@ -540,6 +542,9 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.setErrorHandler((error, _request, reply) => {
     const transferCode =
       error instanceof NativeTransferError && /^NATIVE_TRANSFER_[A-Z0-9_]{1,100}$/.test(error.code);
+    const startLimitCode =
+      (error instanceof RisuContentError || error instanceof PackageStartError) &&
+      ['PACKAGE_START_TEXT_TOO_LONG', 'PACKAGE_START_SIZE_LIMIT'].includes(error.message);
     const statusCode =
       error && typeof error === 'object' && 'statusCode' in error ? error.statusCode : undefined;
     const code =
@@ -550,7 +555,10 @@ export async function createApp(options: AppOptions): Promise<App> {
           : 500;
     void reply.code(code).send({
       error:
-        error instanceof HttpError || error instanceof ChatTranscriptError || transferCode
+        error instanceof HttpError ||
+        error instanceof ChatTranscriptError ||
+        transferCode ||
+        startLimitCode
           ? error.message
           : code === 400
             ? 'Invalid request'
