@@ -1,3 +1,4 @@
+import { modelRequestFields } from '../core/model-request-fields.js';
 import type { FastifyInstance } from 'fastify';
 import { workspaceModelRef } from '../core/product.js';
 import { generationFromModel } from '../core/model-capabilities.js';
@@ -51,13 +52,9 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
       const source = branch.headRevision ? store.source(branch.headRevision) : undefined;
       const input: ProviderRequest = {
         role: 'translation',
-        modelId: model.modelId,
-        pricingSnapshot: model.pricingSnapshot,
+        ...modelRequestFields(model),
         generation: generationFromModel(model),
         contextBudget: contextBudgetForModel(model),
-        ...(model.providerOptions !== undefined
-          ? { providerOptions: structuredClone(model.providerOptions) }
-          : {}),
         stable: { contract: inputTranslationContract(language.code), tools: [] },
         input: {
           task: JSON.stringify({

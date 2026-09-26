@@ -1,3 +1,4 @@
+import { modelRequestFields } from '../core/model-request-fields.js';
 import { createHash } from 'node:crypto';
 import { buildCodexDescriptor } from '../core/codex-protocol.js';
 import {
@@ -113,11 +114,7 @@ function summaryRequest(
   const { generation, targetSummaryTokens } = policy;
   return {
     role: 'context',
-    pricingSnapshot: target.pricingSnapshot,
-    modelId: target.modelId,
-    ...(target.providerOptions !== undefined
-      ? { providerOptions: structuredClone(target.providerOptions) }
-      : {}),
+    ...modelRequestFields(target),
     stable: {
       contract: `${SUMMARY_CONTRACT}\nThe complete rewritten working memory should use about ${targetSummaryTokens} tokens at most. This budget applies to old and new information together.`,
       tools: [],

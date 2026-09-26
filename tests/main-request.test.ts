@@ -258,6 +258,53 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     ).toBe(true);
   });
 
+  test('shared model metadata reaches the writer wire without exposing settings or repricing the snapshot', async () => {
+    const server = await loopbackProvider(async (_request, response) =>
+      writeSse(response, [complete('Synthetic final prose.'), '[DONE]'])
+    );
+    closes.push(server.close);
+    const work = await snapshot(server.origin + '/v1'),
+      target = work.profile!.models.main!;
+    target.modelId = 'openai/gpt-5.6-sol';
+    target.title = 'HOST_ONLY_MODEL_TITLE';
+    target.connection.protocol = 'vercel-chat-v1';
+    target.connection.credentialRef = 'HOST_ONLY_CREDENTIAL_REFERENCE';
+    target.providerOptions = { gateway: { order: ['synthetic-first', 'synthetic-second'] } };
+    target.pricingSnapshot = {
+      version: 1,
+      protocol: 'vercel-chat-v1',
+      modelId: target.modelId,
+      source: 'manual',
+      checkedAt: '2026-09-09',
+      serviceTier: 'standard',
+      rates: { input: 2, output: 8, cacheRead: null, cacheWrite: null },
+      notes: ['HOST_ONLY_PRICE_NOTE'],
+    };
+    // The reserved price remains authoritative even if the saved pricing policy differs.
+    target.pricing = {
+      mode: 'manual',
+      rates: { input: 20, output: 80, cacheRead: null, cacheWrite: null },
+    };
+    const before = structuredClone(work),
+      log = hooks(server.origin);
+    log.value.resolveCredential = () => 'synthetic-native-test-token';
+    const result = await runMain(work, log.value);
+    expect(result).toMatchObject({ status: 'completed', usage: { modelCalls: 1 } });
+    expect(server.requests).toHaveLength(1);
+    const body = JSON.parse(server.requests[0].body);
+    expect(body).toMatchObject({
+      model: 'openai/gpt-5.6-sol',
+      max_completion_tokens: 1024,
+      providerOptions: { gateway: { order: ['synthetic-first', 'synthetic-second'] } },
+    });
+    expect(body).not.toHaveProperty('pricingSnapshot');
+    expect(body).not.toHaveProperty('contextBudget');
+    expect(server.requests[0].body).not.toContain('HOST_ONLY_');
+    expect(log.attempts).toHaveLength(1);
+    expect(log.attempts[0].pricingSnapshot).toEqual(before.profile!.models.main!.pricingSnapshot);
+    expect(work).toEqual(before);
+  });
+
   test('NMR02 story notes are host context after the static native cache prefix', async () => {
     const work = await snapshot(),
       entry = {
