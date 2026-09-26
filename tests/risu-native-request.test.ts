@@ -36,7 +36,10 @@ async function prepared(code?: string, providerPrefill = false) {
         name: 'Bot',
         extensions: {
           risuai: {
-            triggerscript: code ? [{ type: 'start', effect: [{ type: 'triggerlua', code }] }] : [],
+            lowLevelAccess: true,
+            triggerscript: code
+              ? [{ type: 'start', lowLevelAccess: true, effect: [{ type: 'triggerlua', code }] }]
+              : [],
           },
         },
       },
@@ -135,3 +138,67 @@ test.each([
     ).toBe(true);
   }
 );
+
+test('request receipts replay by round without repeating Lua callbacks or folding a later identical request', async () => {
+  const input = await prepared(`listenEdit('editRequest', function(id, messages)
+    local count = (tonumber(getChatVar(id, 'requestCount')) or 0) + 1
+    setChatVar(id, 'requestCount', tostring(count))
+    LLM(id, 'Synthetic request edit callback')
+    messages[#messages].content = messages[#messages].content .. ' edit ' .. tostring(count)
+    return messages
+  end)`);
+  const calls: string[] = [];
+  const host = async (method: string) => {
+    calls.push(method);
+    return { success: true, result: 'Synthetic callback response' };
+  };
+  const first = await prepareNativeRisuRequest(input.snapshot, input.request, {
+    host,
+    requestOrdinal: 0,
+  });
+  const second = await prepareNativeRisuRequest(first.snapshot, input.request, {
+    host,
+    requestOrdinal: 1,
+  });
+  expect(calls).toEqual(['LLM', 'LLM']);
+  expect(first.request.prompt!.messages.at(-1)!.content[0]!.text).toBe('A scene edit 1');
+  expect(second.request.prompt!.messages.at(-1)!.content[0]!.text).toBe('A scene edit 2');
+  const persisted = JSON.parse(JSON.stringify(second.snapshot)) as RunSnapshot;
+  disposeAllNativeRisuSessions();
+  const replayFirst = await prepareNativeRisuRequest(persisted, input.request, {
+    host,
+    requestOrdinal: 0,
+  });
+  const replaySecond = await prepareNativeRisuRequest(replayFirst.snapshot, input.request, {
+    host,
+    requestOrdinal: 1,
+  });
+  expect(calls).toEqual(['LLM', 'LLM']);
+  expect(replayFirst.request).toEqual(first.request);
+  expect(replaySecond.request).toEqual(second.request);
+  expect(replaySecond.snapshot).toEqual(persisted);
+  expect(persisted.nativeRisuExecution!.variables.requestCount).toBe('2');
+  expect(persisted.nativeRisuExecution!.requestEdits).toHaveLength(2);
+});
+
+test('a replayed request rejects changed input before executing authored callbacks', async () => {
+  const input = await prepared(`listenEdit('editRequest', function(id, messages)
+    LLM(id, 'Synthetic request edit callback')
+    return messages
+  end)`);
+  const calls: string[] = [];
+  const host = async (method: string) => {
+    calls.push(method);
+    return { success: true, result: 'Synthetic callback response' };
+  };
+  const first = await prepareNativeRisuRequest(input.snapshot, input.request, {
+    host,
+    requestOrdinal: 0,
+  });
+  const changed = structuredClone(input.request);
+  changed.prompt!.messages.at(-1)!.content[0]!.text = 'Different scene';
+  await expect(
+    prepareNativeRisuRequest(first.snapshot, changed, { host, requestOrdinal: 0 })
+  ).rejects.toThrow('RISU_NATIVE_REQUEST_REPLAY_MISMATCH');
+  expect(calls).toEqual(['LLM']);
+});

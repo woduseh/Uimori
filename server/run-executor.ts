@@ -68,7 +68,7 @@ export function createRunExecutor({
   publish,
   afterSource,
 }: RunExecutorDependencies) {
-  const execute = (id: string) => {
+  const execute = (id: string, resume = false) => {
     const fixture = { ...controls.fixture };
     const controller = new AbortController();
     const anthropicBatch = new AnthropicBatchRun(store, id, batchPollIntervalMs);
@@ -95,6 +95,8 @@ export function createRunExecutor({
             chatId: run.chatId,
             signal: controller.signal,
             isActive: () => readRunStatus(store, id) === 'running',
+            resume,
+            abortStatus: () => (signal.aborted ? 'interrupted' : 'cancelled'),
           });
           requireModel(run.snapshot.profile?.models.main, 'main');
           if (judgeResponse && !(await jevCredential()))
@@ -106,12 +108,14 @@ export function createRunExecutor({
             throw new JevError('MAIN_JUDGMENT_CALL_BUDGET');
           publish(run.chatId);
           await controls.wait('run', controller.signal);
+          let requestOrdinal = 0;
           const hooks: MainHooks = {
             fixture,
             reserveCalls: Number(judgeResponse),
             prepareRequest: async (request, usage) => {
               const current = store.run(id).snapshot;
               const prepared = await prepareNativeRisuRequest(current, request, {
+                requestOrdinal: requestOrdinal++,
                 signal: controller.signal,
                 host: createNativeRisuHost(
                   store,
@@ -462,9 +466,14 @@ export function createRunExecutor({
             const input = mainJudgmentInput(result.text, run.snapshot.mainJudgmentThreshold);
             store.transaction(() => {
               assertCurrent();
-              store.db
-                .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-                .run(JSON.stringify({ ...store.run(id).snapshot, mainJudgment: input }), id);
+              store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
+                JSON.stringify({
+                  ...store.run(id).snapshot,
+                  mainJudgment: input,
+                  mainJudgmentPending: true,
+                }),
+                id
+              );
             });
             const judgment = await judgeMainRefusal(input, {
               signal: controller.signal,
@@ -484,6 +493,12 @@ export function createRunExecutor({
                 await hooks.onAttemptFinish(attempt, outcome);
               },
             });
+            // A resolved verdict must not make later output-hook interruption rejudgable.
+            store.db
+              .prepare(
+                "UPDATE runs SET snapshot=json_remove(snapshot,'$.mainJudgmentPending') WHERE id=?"
+              )
+              .run(id);
             if (judgment.verdict !== 'accepted') {
               store.finishRun(id, 'refused', 'MAIN_RESPONSE_REFUSED', result.text, priorUsage);
               publish(run.chatId);

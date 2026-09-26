@@ -4,8 +4,8 @@ export function canRecoverMainJudgment(
   run: Pick<Run, 'status' | 'error' | 'snapshot' | 'partialText' | 'sourceRevision'>
 ): boolean {
   return (
-    run.status === 'failed' &&
-    !!run.error?.startsWith('JEV_') &&
+    ((run.status === 'failed' && !!run.error?.startsWith('JEV_')) ||
+      (run.status === 'interrupted' && run.snapshot.mainJudgmentPending === true)) &&
     !run.sourceRevision &&
     run.snapshot.mainJudgmentEnabled === true &&
     !!run.snapshot.mainJudgment &&
