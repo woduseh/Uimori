@@ -378,7 +378,13 @@ test('LOADUI01 bounded pages, previous/next, deep links and reload preserve read
   context,
   request,
 }, info) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   const seeded = await seed(request, 12);
+  const emptyResponse = await request.post('/api/chats', {
+    data: { title: 'Empty reentry destination', botId: seeded.chat.botId },
+  });
+  expect(emptyResponse.ok()).toBe(true);
+  const empty = (await emptyResponse.json()) as Chat;
   const ids = seeded.sources.map((source) => source.id);
   const requests: string[] = [];
   page.on('request', (request) => requests.push(request.url()));
@@ -398,6 +404,7 @@ test('LOADUI01 bounded pages, previous/next, deep links and reload preserve read
   await expect(pager.getByRole('button', { name: '다음 원고' })).toBeDisabled();
   await pager.getByRole('button', { name: '이전 원고' }).click();
   await expect(pager).toContainText('6–10 / 12');
+  await settledNativeSources(page, ids.slice(5, 10));
   const reader = page.locator('[data-reader-scrollport]');
   const target = article(page, ids[6]).locator('[data-block-anchor]').first();
   await target.evaluate((element) => {
@@ -436,6 +443,45 @@ test('LOADUI01 bounded pages, previous/next, deep links and reload preserve read
     .toBeLessThan(4);
   await expect(articles(page)).toHaveCount(5);
   await expect(reader).toBeVisible();
+  await settledNativeSources(page, ids.slice(5, 10));
+  // Reenter through the real sidebar with no explicit source in the URL. Resolving
+  // the default branch must not briefly mount and transform the first page.
+  await page.locator(`[data-chat-id="${empty.id}"] .chat-link`).click();
+  await expect(
+    page.getByRole('heading', { name: '첫 장면을 들려주세요.', exact: true })
+  ).toBeVisible();
+  const presentations: string[] = [];
+  let recording = true;
+  page.on('request', (event) => {
+    const path = new URL(event.url()).pathname;
+    if (
+      recording &&
+      path.startsWith(`/api/chats/${seeded.chat.id}/sources/`) &&
+      path.endsWith('/presentation')
+    )
+      presentations.push(path.split('/').at(-2)!);
+  });
+  await page.locator(`[data-chat-id="${seeded.chat.id}"] .chat-link`).click();
+  await expect(pager).toContainText('6–10 / 12');
+  await settledNativeSources(page, ids.slice(5, 10));
+  for (const id of ids.slice(5, 10))
+    await expect(article(page, id).getByTestId('source-text')).toContainText(
+      'Mira waited beside the rail, leaving the next decision to her companion.'
+    );
+  await expect
+    .poll(async () =>
+      Math.abs(
+        (await target.evaluate(
+          (element) =>
+            element.getBoundingClientRect().top -
+            element.closest('[data-reader-scrollport]')!.getBoundingClientRect().top
+        )) - before
+      )
+    )
+    .toBeLessThan(4);
+  recording = false;
+  expect(presentations.filter((id) => ids.slice(0, 5).includes(id))).toEqual([]);
+  expect([...presentations].sort()).toEqual(ids.slice(5, 10).sort());
   if (visualReview) await page.screenshot({ path: info.outputPath('loading-reader-page.png') });
   const deep = await context.newPage();
   await deep.goto(`/?chat=${seeded.chat.id}&source=${ids[10]}`);
