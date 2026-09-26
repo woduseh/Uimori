@@ -1,3 +1,4 @@
+import { modelRequestFields } from '../core/model-request-fields.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { AGENT_CONTEXT_REFS_MAX } from '../core/agent-collaboration.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -175,11 +176,7 @@ export function buildMainProviderRequest(
   }
   const request: ProviderRequest = {
     role: 'main',
-    modelId: target.modelId,
-    pricingSnapshot: target.pricingSnapshot,
-    ...(target.providerOptions !== undefined
-      ? { providerOptions: structuredClone(target.providerOptions) }
-      : {}),
+    ...modelRequestFields(target),
     stable: {
       contract,
       tools: [

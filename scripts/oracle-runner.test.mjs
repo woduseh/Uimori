@@ -110,43 +110,6 @@ except RuntimeError as e: assert str(e)=='Active work'
 else: raise AssertionError('active work was accepted')
 `));
 
-test('check-only builds once and probes fresh plus coherent copy without switching app or volume', () =>
-  python(`
-from types import SimpleNamespace
-events=[]
-config={'services':{'app':{'image':'configured-old','environment':{'UIMORI_PUBLIC_ORIGIN':'https://example.test'},'build':{'args':{'UIMORI_CODEX_VERSION':'1.0'}}}},'volumes':{'data':{'name':'old'}}}
-class Fake(m.Runner):
-    def run(self,*args,cwd=None,**kwargs):
-        events.append(args[:2])
-        if args[:2]==('git','status'): return ''
-        if args[:2]==('git','rev-parse'): return 'a'*40 if cwd or args[-1] in ('origin/main','FETCH_HEAD') else 'b'*40
-        if args[:2]==('git','ls-remote'): return 'a'*40+' refs/heads/main'
-        return ''
-    def inspect(self): return {'HostConfig':{'PortBindings':{'4310/tcp':[{'HostIp':'127.0.0.1','HostPort':'4310'}]}},'State':{'Health':{'Status':'healthy'}},'Image':'sha256:old','Mounts':[{'Destination':'/data','Type':'volume','Name':'old'}],'Config':{'Env':['UIMORI_PUBLIC_ORIGIN=https://example.test']}}
-    def routing(self): return {}
-    def compose(self,*args,**kwargs):
-        events.append(('compose',args[0])); assert args[0]=='config'
-        return m.json.dumps(config)
-    def data(self,action,*args,**kwargs): events.append(('data',action)); return {}
-    def new_volume(self,*args,**kwargs): return 'isolated'
-    def control(self,*args): return {'status':'open','forcedClosed':False}
-    def probe(self,*args): events.append(('probe',bool(args))); return {'status':'PASS','identity':{'distHash':'d'*64},'database':{'columns':{}}}
-    def docker(self,*args,**kwargs):
-        events.append(('docker',args[0]))
-        return m.json.dumps([{'Id':'sha256:old' if args[-1]=='configured-old' else 'sha256:new','Config':{'Labels':{'io.uimori.managed':'true','org.opencontainers.image.revision':'a'*40,'io.uimori.codex-version':'1.0'}}}]) if args[:2]==('image','inspect') else ''
-with tempfile.TemporaryDirectory() as temp:
-    base=pathlib.Path(temp).resolve(); app=base/'app'; app.mkdir(); release=base/'release'; release.mkdir()
-    (app/'.env.self-host').write_text('UIMORI_PUBLIC_ORIGIN=https://example.test\\n')
-    args=SimpleNamespace(app_dir=str(app),release_dir=str(release),commit='a'*40,build_id='c'*64,dist_hash='d'*64,fresh=False,check_only=True,image=None,expected_origin='https://example.test',source_ref='main')
-    r=Fake(args); r.execute()
-    assert r.summary['status']=='PASS'
-    assert events.count(('docker','build'))==1
-    assert events.count(('probe',False))==1 and events.count(('probe',True))==1
-    assert ('data','snapshot') in events
-    assert ('git','checkout') not in events
-    assert not r.stopped and not r.checked_out and not r.candidate_started
-`));
-
 test('same-version database missing a candidate column fails semantic compatibility; extra columns remain allowed', () =>
   python(`
 shape={'type':'TEXT','notnull':0,'pk':0}

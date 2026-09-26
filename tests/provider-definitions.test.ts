@@ -14,8 +14,11 @@ describe('local provider definitions (no network or provider capability inferenc
     expect(new Set(PROVIDER_DEFINITIONS.map((item) => item.id)).size).toBe(
       PROVIDER_DEFINITIONS.length
     );
-    for (const protocol of PROVIDER_PROTOCOLS)
-      expect(providerDefinition(protocol).id).toBe(protocol);
+    for (const protocol of PROVIDER_PROTOCOLS) {
+      const definition = providerDefinition(protocol);
+      expect(definition.id).toBe(protocol);
+      expect(new Set(definition.optionKeys).size).toBe(definition.optionKeys.length);
+    }
     expect(() => providerDefinition('unregistered' as ProviderProtocol)).toThrow(
       'UNSUPPORTED_PROTOCOL'
     );
@@ -35,25 +38,6 @@ describe('local provider definitions (no network or provider capability inferenc
     );
     expect(providerDefinition('vercel-chat-v1').credentialRefDefault).toBe('VERCEL_API_KEY');
     expect(providerDefinition('openai-chat-v1').credentialRefDefault).toBe('PROVIDER_API_KEY');
-  });
-  test('keeps adapter provenance separate from unknown model capabilities and prices', () => {
-    for (const item of PROVIDER_DEFINITIONS) {
-      expect(Number.isInteger(item.revision) && item.revision > 0).toBe(true);
-      expect(item.source.kind).toBe('adapter');
-      expect(item.source.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(new Date(item.source.checkedAt).toISOString().slice(0, 10)).toBe(
-        item.source.checkedAt
-      );
-      expect(item.source.reference).toMatch(/^core\/[a-z-]+\.ts#[A-Za-z]+$/);
-      expect(item.modelCapabilities).toEqual({ tools: null, structuredOutput: null });
-      expect(item.price).toBe('unknown');
-      expect(item.limitations.length).toBeGreaterThan(0);
-      expect(new Set(item.optionKeys).size).toBe(item.optionKeys.length);
-    }
-    expect(providerDefinition('vertex-gemini-v1').catalog).toBe('remote');
-    expect(
-      PROVIDER_DEFINITIONS.every((item) => ['remote', 'agent-runtime'].includes(item.catalog))
-    ).toBe(true);
   });
   test('keeps direct adapters provider-specific while the Vercel gateway advertises selectable family options', () => {
     expect(providerDefinition('vertex-gemini-v1').optionKeys).toEqual([

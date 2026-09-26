@@ -208,6 +208,7 @@ test.each([false, true])(
 test.each(['missing', 'zero', 'skipped', 'retried', 'global'])(
   'browser harness rejects %s reporter evidence and still records cleanup',
   async (fault) => {
+    if (fault === 'zero') process.argv.push('--grep', 'no such case');
     report =
       fault === 'missing'
         ? undefined
@@ -221,6 +222,7 @@ test.each(['missing', 'zero', 'skipped', 'retried', 'global'])(
     const { directory, summary } = await run();
     expect(summary.status).toBe('FAIL');
     expect(summary.failures.length).toBeGreaterThan(0);
+    if (fault === 'zero') expect(summary.selection.focused).toBe(true);
     expect(summary.cleanup.status).toBe('PASS');
     expect(existsSync(path.join(directory, 'runtime'))).toBe(false);
     expect(process.exitCode).toBe(1);
@@ -268,14 +270,6 @@ test('focused visual checks narrow the existing selection and record their actua
     expect.arrayContaining(['--grep', summary.selection.grep]),
     expect.objectContaining({ env: expect.objectContaining({ UIMORI_VISUAL_REVIEW: '1' }) })
   );
-});
-
-test('a focused selection with no executed tests fails', async () => {
-  process.argv.push('--grep', 'no such case');
-  report = { suites: [] };
-  const { summary } = await run();
-  expect(summary.status).toBe('FAIL');
-  expect(summary.selection.focused).toBe(true);
 });
 
 test.each([['--grep', '['], ['--unknown'], ['--grep'], ['--visual', '--visual']])(

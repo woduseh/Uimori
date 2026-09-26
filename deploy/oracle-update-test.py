@@ -13,7 +13,7 @@ spec.loader.exec_module(m)
 
 
 class Host(m.Runner):
-    def __init__(self, base, *, fault=None, fresh=False, check_only=False, image=None):
+    def __init__(self, base, *, fault=None, fresh=False, check_only=False, image=None, codex_version=""):
         app, release = base / "app", base / "release"
         app.mkdir(); release.mkdir()
         (app / ".env.self-host").write_text("UIMORI_PUBLIC_ORIGIN=https://example.test\nUIMORI_IMAGE=sha256:old\nUIMORI_DATA_VOLUME=old\n")
@@ -23,6 +23,7 @@ class Host(m.Runner):
         super().__init__(args)
         self.events = []
         self.fault = fault
+        self.codex_version = codex_version
         self.live_image = "sha256:old"
         self.live_volume = "old"
         self.closed = False
@@ -54,7 +55,8 @@ class Host(m.Runner):
         values = m.environment_values(self.env.read_text())
         if args[0] == "config":
             return json.dumps({"services": {"app": {"image": values["UIMORI_IMAGE"],
-                "environment": {"UIMORI_PUBLIC_ORIGIN": "https://example.test"}}},
+                "environment": {"UIMORI_PUBLIC_ORIGIN": "https://example.test"},
+                "build": {"args": {"UIMORI_CODEX_VERSION": self.codex_version}}}},
                 "volumes": {"data": {"name": values["UIMORI_DATA_VOLUME"]}}})
         if args[0] == "up":
             assert self.closed, "candidate must not accept user writes during validation"
@@ -69,7 +71,8 @@ class Host(m.Runner):
         if args[:2] == ("image", "inspect"):
             return json.dumps([{"Id": "sha256:old" if args[-1] == "sha256:old" else "sha256:new",
                 "Config": {"Labels": {"io.uimori.managed": "true", "org.opencontainers.image.revision":
-                    "wrong" if self.fault == "labels" else self.args.commit}}}])
+                    "wrong" if self.fault == "labels" else self.args.commit,
+                    "io.uimori.codex-version": self.codex_version}}}])
         if args[0] == "compose":
             self.live_image = "sha256:old"; self.live_volume = "old"
         return ""
@@ -132,11 +135,20 @@ class OracleTransitions(unittest.TestCase):
             self.assertEqual(host.events.count(("docker", "build")), 1)
 
     def test_check_only_never_closes_stops_or_changes_application(self):
-        with self.host(check_only=True) as host:
+        with self.host(check_only=True, codex_version="1.0") as host:
+            environment = host.env.read_bytes()
             host.execute()
             self.assertEqual(host.summary["status"], "PASS")
             self.assertEqual(host.live_image, "sha256:old")
-            for event in [("control", "close"), ("data", "backup"), ("compose", "stop"), ("control", "smoke")]:
+            self.assertEqual(host.live_volume, "old")
+            self.assertEqual(host.env.read_bytes(), environment)
+            self.assertEqual(host.events.count(("docker", "build")), 1)
+            self.assertEqual(host.events.count(("probe", False)), 1)
+            self.assertEqual(host.events.count(("probe", True)), 1)
+            self.assertIn(("data", "snapshot"), host.events)
+            self.assertFalse(host.stopped or host.checked_out or host.candidate_started)
+            for event in [("control", "close"), ("data", "backup"), ("compose", "stop"),
+                          ("compose", "up"), ("control", "smoke"), ("git", "checkout")]:
                 self.assertNotIn(event, host.events)
 
     def test_prebuilt_image_is_not_rebuilt(self):

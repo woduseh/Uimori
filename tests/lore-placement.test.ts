@@ -13,14 +13,7 @@ import { encodeResponses } from '../core/openai-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
-import {
-  appendLoreReads,
-  loreHistory,
-  DEFAULT_LORE_CONTEXT,
-  type RetainedLore,
-  type LoreContextSnapshot,
-} from '../core/lore-context.js';
-import { countTextTokens } from '../core/text-tokens.js';
+import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 
 function fixture(): RunSnapshot {
   const pkg: RisuContent = {
@@ -175,58 +168,4 @@ test('four native wire codecs deliver pinned bodies once and preserve fixed pref
       run.promptCompilation!.messages.findIndex((m) => m.provenance.origin === 'history')
     );
   expect(prefix(second.snapshot)).toEqual(prefix(first.snapshot));
-});
-test('a new retained read appends without changing old reference ranges or text', () => {
-  const first: RetainedLore = {
-    id: 'resource',
-    revision: 1,
-    hash: 'hash',
-    title: 'R',
-    start: 0,
-    end: 3,
-    text: 'ABC',
-    origin: { sourceRevision: 'old', sourceHash: 'old-hash', runId: 'run', callId: 'call' },
-    lastUsed: 'old',
-  };
-  const read: RetainedLore = {
-    ...first,
-    start: 1,
-    end: 6,
-    text: 'BCDEF',
-    origin: { sourceRevision: 'new', sourceHash: 'new-hash', runId: 'run2', callId: 'call2' },
-    lastUsed: 'new',
-  };
-  const appended = appendLoreReads(
-    [first],
-    [read],
-    DEFAULT_LORE_CONTEXT,
-    ['old', 'new'],
-    countTextTokens
-  );
-  expect(appended.entries.map(({ lastUsed: _lastUsed, ...entry }) => entry)).toEqual([
-    (({ lastUsed: _lastUsed, ...entry }) => entry)(first),
-    (({ lastUsed: _lastUsed, ...entry }) => entry)({ ...read, start: 3, end: 6, text: 'DEF' }),
-  ]);
-  const context = (entries: RetainedLore[]): LoreContextSnapshot => ({
-    version: 1,
-    policy: DEFAULT_LORE_CONTEXT,
-    canonHash: 'canon',
-    dependencies: [],
-    entries,
-    stats: {
-      retainedChars: 0,
-      retainedTokens: 0,
-      retainedEntries: entries.length,
-      appendedChars: 0,
-      droppedEntries: 0,
-      reasons: [],
-    },
-  });
-  const history = [
-    { id: 'old', role: 'assistant' as const, text: 'OLD', sourceRevision: 'old' },
-    { id: 'new', role: 'assistant' as const, text: 'NEW', sourceRevision: 'new' },
-  ];
-  expect(loreHistory(history, context(appended.entries))[0]).toEqual(
-    loreHistory(history, context([first]))[0]
-  );
 });

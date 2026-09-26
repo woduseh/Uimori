@@ -1,3 +1,4 @@
+import { modelRequestFields } from '../core/model-request-fields.js';
 import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
 import type {
   AgentDefinition,
@@ -54,16 +55,12 @@ export function buildAgentProviderRequest(
   const controls = Object.fromEntries(sharedOptions.map(({ id, value }) => [id, value]));
   return {
     role: 'main',
-    modelId: target.modelId,
-    ...(target.providerOptions !== undefined
-      ? { providerOptions: structuredClone(target.providerOptions) }
-      : {}),
+    ...modelRequestFields(target),
     stable: {
       contract: `${CONTRACT}\n${CONTEXT_DERIVED_GUIDANCE}\n${CONTEXT_RETRIEVAL_GUIDANCE}\n${AUTHOR_NOTE_GUIDANCE}${input.outline ? `\nFor advice about the planned writing unit: ${OUTLINE_CONTRACT}` : ''}\n\nShared instructions:\n${collaboration.sharedInstructions}\n\nAdvisor instructions:\n${agent.instructions}`,
       tools: structuredClone(tools),
     },
     generation: generationFromModel(target),
-    pricingSnapshot: target.pricingSnapshot,
     contextBudget: contextBudgetForModel(target),
     input: {
       task: question,

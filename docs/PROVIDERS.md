@@ -50,6 +50,8 @@ Codex는 API 키를 입력하는 연결이 아니라 전용 실행기의 로그�
 
 ## 구현 경계
 
+`core/model-request-fields.ts`는 실행 스냅샷의 모델 ID·공급자 옵션·확정된 가격 스냅샷만 요청으로 옮겨요. 생성 옵션·문맥 예산·도구·저장과 실행 정책은 각 요청 생성부가 결정하며, 제목과 연결 테스트는 별도 정책을 유지해요.
+
 `server/provider-connections.ts`는 연결 입력·키 저장을, `server/credentials.ts`는 DB 키 읽기/쓰기를 맡아요. 프로토콜별 encoder와 transport는 모델 요청 형식과 응답 파싱을 맡아요. 자료 편집과 과거 백업 검증이 공급자 전송 경로에 개입하지 않아요. 실제 지원 옵션과 응답 품질은 해당 서비스에서 확인해야 해요.
 
 Anthropic Messages는 `anthropic-version: 2023-06-01`을 사용해요. Uimori 도구 이름은 공급자용 별칭으로 전송하며, 문맥 전환이나 사전 조언의 완료 이력도 현재 등록된 도구와 같은 별칭을 사용해요. 저장된 도구 이름·인수·결과와 호출 ID는 유지해요. 현재 도구 목록에서 제외한 사전 평가 이력은 원래의 유효한 이름으로 남기며, 이력을 전달하기 위해 도구를 새로 등록하거나 다시 실행하지 않아요. 이름과 JSON Schema 형식은 [공식 도구 정의 계약](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools)을 기준으로 확인했어요(2026-09-26).

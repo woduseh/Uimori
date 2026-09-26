@@ -1,3 +1,4 @@
+import { modelRequestFields } from '../core/model-request-fields.js';
 import { prepareNativeRisuTranslationPrompt } from './risu-native-preset.js';
 import {
   nativeRisuSnapshotNeedsRefresh,
@@ -221,12 +222,11 @@ export function sourceTimeContext(snapshot: RunSnapshot, kind: JobKind): SourceT
 
 function providerInput(
   input: AuxiliaryInput,
-  modelId: string,
+  modelFields: ReturnType<typeof modelRequestFields>,
   generation: ProviderRequest['generation'],
   opaqueState: Json | undefined,
   snapshot: RunSnapshot,
-  evaluation?: ReturnType<typeof createEvaluationToolSession>,
-  providerOptions?: ProviderRequest['providerOptions']
+  evaluation?: ReturnType<typeof createEvaluationToolSession>
 ): ProviderRequest {
   if (input.role === 'presentation') throw new AuxiliaryExecutionError('JEV_JUDGMENT_REQUIRED');
   const task =
@@ -247,7 +247,7 @@ function providerInput(
   const notes = input.role === 'translation' ? snapshot.story?.notes : undefined;
   return withNativeHostContext({
     role: input.role,
-    modelId,
+    ...modelFields,
     stable: {
       contract:
         (compilation ? '' : input.contract) +
@@ -263,7 +263,6 @@ function providerInput(
       ],
     },
     generation,
-    ...(providerOptions !== undefined ? { providerOptions: structuredClone(providerOptions) } : {}),
     ...(evaluation?.bootstrap.length
       ? {
           bootstrap: evaluation.bootstrap.map((item) => ({
@@ -467,15 +466,13 @@ export async function runAuxiliaryJob(
       const body: ProviderRequest = {
         ...providerInput(
           next,
-          target.modelId,
+          modelRequestFields(target),
           evaluation ? evaluation.generation(generation, completedToolResults) : generation,
           opaqueState,
           executionSnapshot,
-          evaluation,
-          target.providerOptions
+          evaluation
         ),
         contextBudget: contextBudgetForModel(target),
-        pricingSnapshot: target.pricingSnapshot,
       };
       const generationBinding = evaluation?.generationBinding(generation, completedToolResults);
       if (generationBinding) body.generationBinding = generationBinding;

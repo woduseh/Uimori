@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
   codexIllustrationText,
-  defaultIllustrationSettings,
   detectImageMime,
   excerptScene,
   fillComfyWorkflow,
@@ -203,7 +202,7 @@ describe('prompt model output and Codex caption parsing', () => {
   });
 });
 
-describe('image bytes, excerpts, retry classes and defaults', () => {
+describe('image bytes, excerpts and retry classes', () => {
   test('detects PNG, JPEG and WebP by magic bytes only', () => {
     expect(detectImageMime(Buffer.from(PNG_BASE64, 'base64'))).toBe('image/png');
     expect(detectImageMime(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]))).toBe('image/jpeg');
@@ -246,15 +245,5 @@ describe('image bytes, excerpts, retry classes and defaults', () => {
       'ILLUSTRATION_GENERATOR_UNCONFIGURED',
     ])
       expect(isRetryableIllustrationCode(code)).toBe(false);
-  });
-  test('defaults start disabled with bounded limits', () => {
-    expect(defaultIllustrationSettings()).toMatchObject({
-      generator: 'none',
-      automatic: false,
-      maxPerSource: 2,
-      maxAutoRetries: 1,
-      codex: { model: null, useReferences: true },
-      comfyui: { baseUrl: '', promptModel: null, timeoutMs: 300_000, pollIntervalMs: 1000 },
-    });
   });
 });

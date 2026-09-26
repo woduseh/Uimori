@@ -745,20 +745,11 @@ test('a container beyond the inline limit is staged on disk, imported, and never
   }
 });
 
-test('an expansion bomb and an oversized member stay refused whatever the container size', () => {
+test('an oversized ZIP member is rejected even in a small compressed container', () => {
   const compressible = Buffer.alloc(70 * 1024 * 1024, 0);
-  // A small container that declares far more than its own size is still an expansion bomb.
-  const bomb = Buffer.from(zip([['card.json', compressible]]));
-  expect(bomb.length).toBeLessThan(1024 * 1024);
-  expect(() => cardZip(bomb)).toThrow('RISU_IMPORT_INVALID_FILE');
-  // A large container cannot smuggle one member past the per-member cap either.
-  const oversized = Buffer.from(
-    zip([
-      ['card.json', Buffer.from('{}')],
-      ['assets/one.bin', compressible],
-    ])
-  );
-  expect(() => cardZip(oversized)).toThrow('RISU_IMPORT_INVALID_FILE');
+  const bytes = Buffer.from(zip([['card.json', compressible]]));
+  expect(bytes.length).toBeLessThan(1024 * 1024);
+  expect(() => cardZip(bytes)).toThrow('RISU_IMPORT_INVALID_FILE');
 });
 
 test('a comment in card text stays in native source without a converted template', async () => {

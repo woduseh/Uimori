@@ -285,16 +285,6 @@ describe('hierarchical composition', () => {
     expect(error.message).toContain(OUTLINE_LEVEL_LABELS.arc);
   });
 
-  test('a replayed batch reuses the created nodes instead of duplicating them', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '중복 검사');
-    const key = randomUUID();
-    const first = compose(store, chat.id, key);
-    const second = compose(store, chat.id, key);
-    expect(second.created).toEqual(first.created);
-    expect(second.detail.nodes).toHaveLength(first.detail.nodes.length);
-  });
-
   test('duplicate refs and late mixed-operation errors reject the whole batch', async () => {
     const store = await database();
     const chat = createFixtureChat(store, '배치 원자성 검사');

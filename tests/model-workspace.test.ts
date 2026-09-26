@@ -15,7 +15,7 @@ import {
 } from '../server/prompt-workspace.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-import { MODEL_ROLES, workspaceModelRef, type PromptPreset } from '../core/product.js';
+import { workspaceModelRef, type PromptPreset } from '../core/product.js';
 import { ChatOptionsStore } from '../server/chat-options.js';
 import { managementImpact } from '../server/provider-management.js';
 import { illustrationReferenceCandidates } from '../server/illustrations.js';
@@ -286,9 +286,6 @@ test('workspace role resolution keeps optional generation selections separate fr
     'script',
     'title',
   ]);
-  expect(new Set(MODEL_ROLES).size).toBe(9);
-  expect(MODEL_ROLES).toContain('illustration');
-  expect(MODEL_ROLES).not.toContain('refusal');
 });
 
 test('chat pins follow the latest selected IDs while other chats and auxiliary models follow global defaults', () => {

@@ -1,3 +1,4 @@
+import { modelRequestFields } from '../core/model-request-fields.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { PROMPT_COMPILER_VERSION } from '../core/risu-prompt.js';
@@ -90,9 +91,7 @@ export function createNativeRisuHost(
     const connection = authorize();
     const request: ProviderRequest = {
       role: 'script',
-      modelId: target.modelId,
-      pricingSnapshot: target.pricingSnapshot,
-      ...(target.providerOptions ? { providerOptions: target.providerOptions } : {}),
+      ...modelRequestFields(target),
       generation: generationFromModel(target),
       contextBudget: contextBudgetForModel(target),
       stable: { contract: '', tools: [] },

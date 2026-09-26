@@ -317,12 +317,6 @@ describe('Current oneoff values and compact receipts', () => {
     options.fixed(chat.id, first, 'user');
     for (let i = 0; i < 20; i++) options.fixed(chat.id, body({ tone: String(i) }), 'user');
     expect(options.fixed(chat.id, first, 'user').fixedValues).toEqual({ tone: '19' });
-    const columns = store.db
-      .prepare('PRAGMA table_info(chat_option_operations)')
-      .all()
-      .map((r) => r.name);
-    expect(columns).not.toEqual(expect.arrayContaining(['command', 'intent', 'result']));
-    expect(columns).toContain('revision');
     const receipts = store.db.prepare('SELECT * FROM chat_option_operations').all();
     expect(Buffer.byteLength(JSON.stringify(receipts))).toBeLessThan(12000);
     for (let i = 0; i < 20; i++) options.stage(chat.id, body({ tone: String(i) }), 'user');

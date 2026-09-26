@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -88,9 +88,18 @@ function fixtureRequest(options = {}) {
   return { calls, request };
 }
 
-test('trusted smoke uses one login POST and otherwise read-only same-origin GET requests', async () => {
+test('trusted smoke uses one login POST and otherwise read-only same-origin GET requests', async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'uimori-oracle-output-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const outputFile = path.join(directory, 'nested', 'summary.json');
   const fixture = fixtureRequest();
-  const summary = await runOracleSmoke({ origin, token, buildId, request: fixture.request });
+  const summary = await runOracleSmoke({
+    origin,
+    token,
+    buildId,
+    outputFile,
+    request: fixture.request,
+  });
   assert.equal(summary.status, 'PASS');
   assert.equal(summary.proof, 'HTTPS/API');
   assert.deepEqual(summary.requestCounts, { GET: 8, POST: 1 });
@@ -103,6 +112,7 @@ test('trusted smoke uses one login POST and otherwise read-only same-origin GET 
   assert.ok(fixture.calls.every((call) => !/export|backup|import|model|run/u.test(call.pathname)));
   assert.equal(JSON.stringify(summary).includes(token), false);
   assert.equal(JSON.stringify(summary).includes(session), false);
+  assert.deepEqual(JSON.parse(await readFile(outputFile, 'utf8')), summary);
 });
 
 test('smoke rejects non-HTTPS and non-origin inputs before issuing a request', async () => {
@@ -226,26 +236,6 @@ test('env reader accepts required values and rejects missing or duplicate keys',
     const missing = path.join(directory, 'missing.env');
     await writeFile(missing, `UIMORI_PUBLIC_ORIGIN=${origin}\n`);
     await assert.rejects(readAccessEnv(missing), /Missing environment key: UIMORI_ACCESS_TOKEN/u);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-test('output summary is durable and contains only deployment API proof', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'uimori-oracle-output-'));
-  const nested = path.join(directory, 'nested', 'summary.json');
-  try {
-    const fixture = fixtureRequest();
-    const summary = await runOracleSmoke({
-      origin,
-      token,
-      buildId,
-      outputFile: nested,
-      request: fixture.request,
-    });
-    assert.equal(summary.status, 'PASS');
-    assert.deepEqual(JSON.parse(await readFile(nested, 'utf8')), summary);
-    await mkdir(path.join(directory, 'still-usable'));
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
