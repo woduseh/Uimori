@@ -1164,7 +1164,9 @@ export function useStory() {
     selected,
     viewedBranch,
     readSource,
-    detail,
+    // Resolving the default branch may select a different saved page. Do not mount
+    // its provisional sources and start display workers before that page is loaded.
+    detail: readerCache.current?.key === readerQuery.current.key ? detail : null,
     library,
     libraryError,
     draft,

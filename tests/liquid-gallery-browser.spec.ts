@@ -1,5 +1,5 @@
-import { test, expect, type APIRequestContext } from '@playwright/test';
-import { randomUUID } from 'node:crypto';
+import { test, expect, type APIRequestContext, type Locator } from '@playwright/test';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
@@ -387,3 +387,376 @@ test('GALLERY square bot, tall persona, focus reading and failed image fallback'
     true
   );
 });
+
+// Opt-in measurements extend the existing synthetic browser runner, without timing gates.
+if (process.env.UIMORI_BENCHMARK === '1')
+  for (const sceneCount of [8, 30]) {
+    test(`PERF ${sceneCount} long manuscript reentry, past pages and saved translation switches`, async ({
+      page,
+      request,
+    }, info) => {
+      test.setTimeout(240000);
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      const imageResponse = await request.post('/api/package-image-blobs', {
+        data: {
+          base64: (
+            await sharp({ create: { width: 24, height: 24, channels: 4, background: '#618472' } })
+              .png()
+              .toBuffer()
+          ).toString('base64'),
+        },
+      });
+      expect(imageResponse.ok(), await imageResponse.text()).toBe(true);
+      const blob = await imageResponse.json();
+      const widget = `<style>.perf-panel{border:2px solid rgb(30, 80, 120);padding:8px}.perf-panel img{width:24px;height:24px}</style>
+<div class="perf-panel"><img src="${blob.url}" alt="Synthetic local tile"><button risu-trigger="perfChoice">Author choice</button><details><summary>Author notes</summary><input aria-label="Author draft" value="Preserved widget"></details></div>`;
+      const encoding = get_encoding('o200k_base');
+      const repeated = (unit: string, tokens: number) => {
+        let text = unit.repeat(Math.ceil(tokens / encoding.encode(unit).length));
+        while (encoding.encode(text).length < tokens) text += unit;
+        return text;
+      };
+      const original = `${widget}\n\n${repeated(`${passage}\n\n`, 7500)}\n\n그녀는 찻잔을 놓았다. “오늘은 여기서 기다릴게요.” 여행자는 창밖을 바라보았다.`;
+      const translated = `${widget}\n\n${repeated(
+        'The morning light reached the end of the bookshelf. Rain had stopped during the night. Whenever the breeze crossed the wet stone path, the drops left on the leaves shone like small stars.\n\n“Let us take our time today.” She closed the book and looked toward the open window. Her companion offered a warm cup of tea. Many stories remained untold, but neither of them needed to hurry.\n\n',
+        7500
+      )}`;
+      const entries = Array.from({ length: sceneCount }, (_, index) => ({
+        request: `Performance scene ${index + 1}`,
+        text: `${original}\n\nPERF_ORIGINAL_END_${index + 1}`,
+        translation: `${translated}\n\nPERF_TRANSLATION_END_${index + 1}`,
+      }));
+      const sizes = entries.map((entry) =>
+        Object.fromEntries(
+          (['text', 'translation'] as const).map((kind) => [
+            kind,
+            {
+              language: kind === 'text' ? 'ko' : 'en',
+              tokenizer: 'o200k_base',
+              utf16Chars: entry[kind].length,
+              utf8Bytes: Buffer.byteLength(entry[kind], 'utf8'),
+              tokens: encoding.encode(entry[kind]).length,
+              sha256: createHash('sha256').update(entry[kind]).digest('hex'),
+            },
+          ])
+        )
+      );
+      encoding.free();
+      const botResponse = await request.post('/api/content', {
+        data: {
+          kind: 'bot',
+          title: 'Synthetic reader performance',
+          description: '',
+          text: '',
+          loading: 'pinned',
+          relatedIds: [],
+          package: nativeContent(
+            {
+              name: 'Synthetic reader performance',
+              description: 'Synthetic measured story.',
+              extensions: {
+                risuai: {
+                  triggerscript: [
+                    {
+                      type: 'start',
+                      effect: [
+                        {
+                          type: 'triggerlua',
+                          code: "function perfChoice(id) setChatVar(id, 'choice', 'selected') end",
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            {
+              images: [
+                {
+                  id: 'tile',
+                  title: 'Synthetic local tile',
+                  description: '',
+                  blobHash: blob.hash,
+                  mime: blob.mime,
+                  allowedUse: 'inline',
+                },
+              ],
+            }
+          ),
+        },
+      });
+      expect(botResponse.ok(), await botResponse.text()).toBe(true);
+      const bot = await botResponse.json();
+      const imported = await request.post('/api/chats/import-transcript', {
+        data: {
+          idempotencyKey: randomUUID(),
+          transcript: {
+            format: 'uimori-chat-transcript',
+            version: 2,
+            exportedAt: new Date().toISOString(),
+            title: 'Measured long story',
+            packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+            notes: [],
+            entries,
+          },
+        },
+      });
+      expect(imported.ok(), await imported.text()).toBe(true);
+      const chat = (await imported.json()).chat;
+      const awayResponse = await request.post('/api/chats', {
+        data: { title: 'Away from measured story', botId: bot.id },
+      });
+      expect(awayResponse.ok(), await awayResponse.text()).toBe(true);
+      const away = await awayResponse.json();
+      const lastIndex = sceneCount - 1;
+      const latestStart = Math.floor(lastIndex / 5) * 5;
+      const pastStart = latestStart - 5;
+      const indexes = (start: number, end: number) =>
+        Array.from({ length: end - start }, (_, i) => start + i);
+      const before = await detail(request, chat.id);
+      const sources = entries.map(
+        (entry) => before.sources.find((source) => source.text === entry.text)!
+      );
+      expect(sources.every(Boolean)).toBe(true);
+      const variables = await (await request.get(`/api/chats/${chat.id}/variables`)).json();
+      const generationRequests: string[] = [],
+        errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      page.on('request', (value) => {
+        if (
+          value.method() === 'POST' &&
+          /\/(?:runs|translation|retranslate|retry|rejudge|risu-action)(?:\?|$)/u.test(value.url())
+        )
+          generationRequests.push(new URL(value.url()).pathname);
+      });
+      await page.addInitScript(() => {
+        localStorage.setItem('uimori:reading-language', 'original');
+        localStorage.setItem(
+          'uimori:readability',
+          JSON.stringify({ emphasis: 'subtle', dialogueBreaks: true })
+        );
+      });
+      await page.goto(`/?chat=${chat.id}&source=${sources[lastIndex].id}`);
+      await expect(
+        page.locator(`[data-source-id="${sources[lastIndex].id}"]`).getByTestId('source-text')
+      ).toContainText(`PERF_ORIGINAL_END_${sceneCount}`);
+      const sample = async (
+        action: Locator,
+        indexes: number[],
+        mode: 'original' | 'translation'
+      ) => {
+        await expect(action).toBeVisible();
+        await expect(action).toBeEnabled();
+        return action.evaluate(
+          (node, target) =>
+            new Promise<{
+              clickToReadyMs: number;
+              resources: {
+                path: string;
+                duration: number;
+                requestToFirstByteMs: number;
+                responseBodyMs: number;
+                transferBytes: number;
+                decodedBytes: number;
+              }[];
+              longTasks: { start: number; duration: number }[];
+              longTasksSupported: boolean;
+            }>((resolve, reject) => {
+              performance.clearResourceTimings();
+              const tasks: { start: number; duration: number }[] = [];
+              const supported = PerformanceObserver.supportedEntryTypes.includes('longtask');
+              const collect = (values: PerformanceEntry[]) => {
+                for (const value of values)
+                  tasks.push({ start: value.startTime, duration: value.duration });
+              };
+              const observer = supported
+                ? new PerformanceObserver((list) => collect(list.getEntries()))
+                : undefined;
+              observer?.observe({ type: 'longtask' });
+              const start = performance.now();
+              let frame = 0;
+              const timeout = setTimeout(() => {
+                cancelAnimationFrame(frame);
+                observer?.disconnect();
+                reject(new Error('Measured manuscript did not become ready'));
+              }, 30000);
+              const check = () => {
+                const ready = target.sources.every(({ id, marker }) => {
+                  const scene = document.querySelector(`[data-source-id="${id}"]`);
+                  const surface = scene?.querySelector(
+                    `[data-testid="${target.mode === 'original' ? 'source' : 'translation'}-text"] .risu-message-surface`
+                  );
+                  const content = surface?.shadowRoot?.querySelector('.risu-message-content');
+                  const image = content?.querySelector<HTMLImageElement>('.perf-panel img');
+                  const bounds = image?.getBoundingClientRect();
+                  const onScreen = bounds && bounds.bottom > 0 && bounds.top < innerHeight;
+                  return (
+                    content?.textContent?.includes(marker) &&
+                    image &&
+                    (!onScreen || (image.complete && image.naturalWidth > 0))
+                  );
+                });
+                if (!ready) {
+                  frame = requestAnimationFrame(check);
+                  return;
+                }
+                frame = requestAnimationFrame(() => {
+                  frame = requestAnimationFrame(() => {
+                    const end = performance.now();
+                    clearTimeout(timeout);
+                    if (observer) {
+                      collect(observer.takeRecords());
+                      observer.disconnect();
+                    }
+                    resolve({
+                      clickToReadyMs: end - start,
+                      longTasksSupported: supported,
+                      longTasks: tasks
+                        .filter((task) => task.start < end && task.start + task.duration > start)
+                        .map((task) => ({ start: task.start - start, duration: task.duration })),
+                      resources: performance
+                        .getEntriesByType('resource')
+                        .filter(
+                          (entry) =>
+                            entry.startTime >= start &&
+                            new URL(entry.name).pathname.startsWith('/api/')
+                        )
+                        .map((entry) => {
+                          const value = entry as PerformanceResourceTiming;
+                          return {
+                            path: new URL(value.name).pathname,
+                            duration: value.duration,
+                            requestToFirstByteMs: value.responseStart - value.requestStart,
+                            responseBodyMs: value.responseEnd - value.responseStart,
+                            transferBytes: value.transferSize,
+                            decodedBytes: value.decodedBodySize,
+                          };
+                        }),
+                    });
+                  });
+                });
+              };
+              (node as HTMLElement).click();
+              frame = requestAnimationFrame(check);
+            }),
+          {
+            mode,
+            sources: indexes.map((index) => ({
+              id: sources[index].id,
+              marker: `PERF_${mode === 'original' ? 'ORIGINAL' : 'TRANSLATION'}_END_${index + 1}`,
+            })),
+          }
+        );
+      };
+      const samples: {
+        iteration: number;
+        warmup: boolean;
+        actions: Record<string, Awaited<ReturnType<typeof sample>>>;
+      }[] = [];
+      for (let iteration = 0; iteration < 6; iteration++) {
+        await page.locator(`[data-chat-id="${away.id}"] .chat-link`).click();
+        await expect(page.getByTestId('source')).toHaveCount(0);
+        const reentry = await sample(
+          page.locator(`[data-chat-id="${chat.id}"] .chat-link`),
+          indexes(latestStart, sceneCount),
+          'original'
+        );
+        const past = await sample(
+          page
+            .getByRole('navigation', { name: '원고 구간', exact: true })
+            .getByRole('button', { name: '이전 원고', exact: true }),
+          indexes(pastStart, latestStart),
+          'original'
+        );
+        const scene = page.locator(`[data-source-id="${sources[pastStart].id}"]`);
+        const translation = await sample(
+          scene.getByRole('button', { name: '번역 보기', exact: true }),
+          [pastStart],
+          'translation'
+        );
+        const originalView = await sample(
+          scene.getByRole('button', { name: '원문 보기', exact: true }),
+          [pastStart],
+          'original'
+        );
+        const authored = scene.locator('.risu-message-content');
+        await expect(authored.locator('.perf-panel')).toHaveCSS('border-top-width', '2px');
+        await expect(
+          authored.getByRole('button', { name: 'Author choice', exact: true })
+        ).toHaveCount(1);
+        await expect(authored.getByLabel('Author draft', { exact: true })).toHaveValue(
+          'Preserved widget'
+        );
+        await expect(authored.locator('.reading-quote-break-before').first()).toBeAttached();
+        await expect(authored.locator('[data-quote-role="dialogue"]').first()).toHaveAttribute(
+          'data-emphasis',
+          'subtle'
+        );
+        samples.push({
+          iteration,
+          warmup: iteration === 0,
+          actions: { reentry, past, translation, original: originalView },
+        });
+        await page
+          .getByRole('navigation', { name: '원고 구간', exact: true })
+          .getByRole('button', { name: '최근 원고', exact: true })
+          .click();
+        await expect(
+          page.locator(`[data-source-id="${sources[lastIndex].id}"]`).getByTestId('source-text')
+        ).toContainText(`PERF_ORIGINAL_END_${sceneCount}`);
+      }
+      const after = await detail(request, chat.id);
+      expect(after.sources).toEqual(before.sources);
+      expect(after.jobs).toEqual(before.jobs);
+      expect(after.runs).toEqual(before.runs);
+      expect(after.attempts).toEqual(before.attempts);
+      expect(await (await request.get(`/api/chats/${chat.id}/variables`)).json()).toEqual(
+        variables
+      );
+      expect(generationRequests).toEqual([]);
+      expect(errors).toEqual([]);
+      await info.attach('long-reader-performance', {
+        contentType: 'application/json',
+        body: JSON.stringify(
+          {
+            method: {
+              warmups: 1,
+              measuredRepeats: 5,
+              tokenizer: 'o200k_base',
+              sceneCount,
+              clock:
+                'Browser performance.now; DOM click through two rendering opportunities after all target text and visible local images are ready',
+              timingGate: false,
+              limitations: [
+                'Synthetic transcript HTTP import and real app/browser/SQLite; no provider calls or private materials.',
+                'Resource Timing includes local queue/transport; request-to-first-byte is not isolated server CPU.',
+                'Long tasks are main-thread tasks of at least 50ms; zero entries does not mean zero work.',
+                'Frame checks inspect target text and add measurement overhead; this is not a compositor paint measurement.',
+                'Warm browser and OS caches; no physical mobile device, cold boot, remote network or retained-heap claim.',
+              ],
+            },
+            environment: {
+              node: process.version,
+              platform: process.platform,
+              arch: process.arch,
+              browser: await page.evaluate(() => ({
+                userAgent: navigator.userAgent,
+                hardwareConcurrency: navigator.hardwareConcurrency,
+                viewport: [innerWidth, innerHeight],
+                devicePixelRatio,
+              })),
+            },
+            content: sizes,
+            samples,
+            invariants: {
+              unchangedSourcesTranslationsRunsAttemptsVariables: true,
+              newGenerationRequests: 0,
+              nativeHtmlCssLocalImageButtonAndReadingQuotesPreserved: true,
+            },
+          },
+          null,
+          2
+        ),
+      });
+    });
+  }

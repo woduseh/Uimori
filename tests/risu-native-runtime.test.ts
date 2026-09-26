@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
+import { get_encoding } from 'tiktoken';
+import { NATIVE_LUA_LIMITS } from '../server/risu-native-lua-session.js';
 import type { RisuContentSource } from '../core/risu-native.js';
 import {
   executeRisuNative,
@@ -70,6 +72,80 @@ const input = (
 });
 
 describe('native Risu execution', () => {
+  it('round-trips long native history within unchanged JSON and Lua memory limits', async () => {
+    const tokenizer = get_encoding('o200k_base');
+    let text: string;
+    try {
+      const paragraph =
+        '미라는 비가 그친 부두에서 오래된 장부를 펼쳤다. 선장이 약속한 날짜와 창고지기가 기억하는 날짜는 달랐다. 그녀는 어느 쪽도 지우지 않고 두 진술 옆에 물음표를 남겼다.\n\n';
+      text = paragraph.repeat(Math.ceil(7500 / tokenizer.encode(paragraph, [], []).length));
+      const tokens = tokenizer.encode(text, [], []).length;
+      expect(tokens).toBeGreaterThanOrEqual(7350);
+      expect(tokens).toBeLessThanOrEqual(7800);
+    } finally {
+      tokenizer.free();
+    }
+    const escapes = '"\\\n\t\b\f\r\u0000\u001f한글🌊\ud800끝\udfff';
+    const messages = Array.from({ length: 30 }, (_, index) => ({
+      id: `long-scene-${index}`,
+      role: 'char' as const,
+      data: `장면 ${index}: ${escapes}\n${text}${escapes}`,
+    }));
+    expect(messages.reduce((sum, message) => sum + message.data.length, 0)).toBeGreaterThan(300000);
+    const invocation = {
+      ...input(
+        native([
+          lua(`listenEdit('editDisplay', function(id, value)
+        return value .. ':' .. tostring(getChatLength(id))
+      end)`),
+        ]),
+        'display'
+      ),
+      messages,
+      text: 'Visible',
+    };
+    expect(Buffer.byteLength(JSON.stringify(invocation))).toBeLessThan(
+      NATIVE_LUA_LIMITS.guestJsonBytes
+    );
+    const result = await executeRisuNative(invocation, { sessionKey: 'long-native-history' });
+    expect(result.text).toBe('Visible:30');
+    expect(result.messages).toEqual(messages);
+    expect(result.variables).toEqual({});
+  });
+
+  it('rejects guest JSON that exceeds the byte limit after escaping', async () => {
+    const count = 400000;
+    expect(count).toBeLessThan(NATIVE_LUA_LIMITS.guestJsonBytes);
+    expect(count * 6).toBeGreaterThan(NATIVE_LUA_LIMITS.guestJsonBytes);
+    await expect(
+      executeRisuNative(
+        input(
+          native([
+            lua(`function choose(id)
+        setChatVar(id, 'escaped', string.rep(string.char(0), ${count}))
+      end`),
+          ])
+        )
+      )
+    ).rejects.toThrow(/RISU_LUA_PROGRAM_/);
+  });
+
+  it.each(['128', '192, 175', '226, 130', '244, 144, 128, 128'])(
+    'rejects invalid UTF-8 bytes returned from Lua (%s)',
+    async (bytes) => {
+      await expect(
+        executeRisuNative(
+          input(
+            native([
+              lua(`function choose(id)
+          setChatVar(id, 'invalid', string.char(${bytes}))
+        end`),
+            ])
+          )
+        )
+      ).rejects.toThrow(/RISU_LUA_PROGRAM_/);
+    }
+  );
   it('preserves script locals across redraws with fresh snapshots and isolated chat sessions', async () => {
     const content = native([
       lua(`local count = 0
