@@ -9,11 +9,26 @@ import { nativeHistoryRevision } from './risu-native-run.js';
 export async function prepareNativeRisuRequest(
   snapshot: RunSnapshot,
   request: ProviderRequest,
-  options: NativeRisuExecutionOptions = {}
+  options: NativeRisuExecutionOptions & {
+    /** Position in this runMain entry; persisted positions replay without authored effects. */
+    requestOrdinal?: number;
+  } = {}
 ) {
   const receipt = snapshot.nativeRisuExecution,
     context = nativeRisuContext(snapshot);
   if (!receipt || !context || !request.prompt) return { snapshot, request };
+  const inputHash = createHash('sha256').update(JSON.stringify(request.prompt)).digest('hex');
+  const edits = receipt.requestEdits ?? [];
+  const ordinal = options.requestOrdinal ?? edits.length;
+  if (!Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal > edits.length)
+    throw new Error('RISU_NATIVE_REQUEST_REPLAY_MISMATCH');
+  const saved = edits[ordinal];
+  if (saved) {
+    if (saved.inputHash !== inputHash) throw new Error('RISU_NATIVE_REQUEST_REPLAY_MISMATCH');
+    const prompt = structuredClone(saved.prompt);
+    validateProviderPrompt(prompt);
+    return { snapshot, request: { ...request, prompt } };
+  }
   const result = await executeRisuNative(
     {
       ...context,
@@ -51,7 +66,6 @@ export async function prepareNativeRisuRequest(
     prompt.cachePlan = prompt.cachePlan.filter((anchor) => ids.has(anchor.afterMessageId));
   }
   validateProviderPrompt(prompt);
-  const inputHash = createHash('sha256').update(JSON.stringify(request.prompt)).digest('hex');
   return {
     request: { ...request, prompt },
     snapshot: {
@@ -66,7 +80,7 @@ export async function prepareNativeRisuRequest(
           receipt.historyRevision
         ),
         issues: [...new Set([...receipt.issues, ...result.warnings])],
-        requestEdits: [...(receipt.requestEdits ?? []), { inputHash, prompt }],
+        requestEdits: [...edits, { inputHash, prompt }],
       },
     },
   };

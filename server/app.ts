@@ -1109,7 +1109,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     flushPendingImageCleanup(store.db);
   }
   app.addHook('onListen', async () => {
-    for (const runId of recoveredRuns) execute(runId);
+    for (const runId of recoveredRuns) execute(runId, true);
     pumpJobs();
     pumpIllustrations();
   });

@@ -242,7 +242,7 @@ ${
   await expect
     .poll(() => app.store.run(run.id).status, { timeout: 6000 })
     .not.toMatch(/^(queued|running)$/u);
-  return { app, chat, run: observedExecution(app.store, run.id), calls, judged, output };
+  return { app, chat, run: observedExecution(app.store, run.id), calls, judged, output, runtime };
 }
 
 test.each([
@@ -315,6 +315,12 @@ test.each([
     expect(f.run.status).toBe(status);
     expect(f.run.snapshot.mainJudgmentThreshold).toBe(threshold);
     expect(f.run.snapshot.mainJudgment?.threshold).toBe(threshold);
+    expect(f.run.snapshot.mainJudgmentPending).toBeUndefined();
+    expect(
+      (await api(f.app, `/api/chats/${f.chat.id}/reader-runs`)).find(
+        (run: { id: string }) => run.id === f.run.id
+      ).canRejudge
+    ).toBe(false);
     expect(modelWorkspace(f.app.store).translationPolicy.judgment.threshold).toBe(0.9);
     expect(() =>
       validateMainJudgmentWire(
@@ -444,4 +450,77 @@ test('cancelled rejudgment cannot adopt a late successful verdict', async () => 
     db.close();
   }
   expect(f.calls).toHaveLength(1);
+});
+
+test('interrupted judgment recovery preserves the candidate and explicitly resumes only judgment', async () => {
+  const f = await fixture('Retained across server shutdown', 'failure', 8, true, 'recovery');
+  let started = false;
+  vi.stubGlobal('fetch', (_url: unknown, init?: RequestInit) => {
+    started = true;
+    return new Promise<Response>((_resolve, reject) => {
+      init!.signal!.addEventListener('abort', () => reject(new Error('Fixture aborted')), {
+        once: true,
+      });
+    });
+  });
+  const next = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: randomUUID() });
+  await expect.poll(() => started, { timeout: 6000 }).toBe(true);
+  await f.app.close();
+  const item = owned.at(-1)!;
+  item.app = undefined;
+  let recoveryCalls = 0;
+  vi.stubGlobal('fetch', (_url: unknown, init?: RequestInit) => {
+    recoveryCalls++;
+    expect(JSON.parse(String(init?.body)).state.response).toBe('Retained across server shutdown');
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          model: 'jev-latest',
+          answers: { explicitRefusal: { type: 'noul', noul: 0.1 } },
+        })
+      )
+    );
+  });
+  const reopened = await createApp({
+    dbPath: join(item.directory, 'test.sqlite'),
+    buildId: 'synthetic-main-judgment',
+    testMode: true,
+    codexRuntime: f.runtime,
+  });
+  item.app = reopened;
+  expect(reopened.store.run(next.id)).toMatchObject({
+    status: 'interrupted',
+    sourceRevision: null,
+    partialText: 'Retained across server shutdown',
+  });
+  expect(recoveryCalls).toBe(0);
+  expect(
+    (await api(reopened, `/api/chats/${f.chat.id}/reader-runs`)).find(
+      (run: { id: string }) => run.id === next.id
+    ).canRejudge
+  ).toBe(true);
+  const recovered = await api(reopened, `/api/runs/${next.id}/rejudge`, {
+    idempotencyKey: randomUUID(),
+  });
+  await expect
+    .poll(() => reopened.store.run(recovered.id).status, { timeout: 6000 })
+    .toBe('completed');
+  const completed = reopened.store.run(recovered.id);
+  expect(
+    (await api(reopened, `/api/chats/${f.chat.id}/reader-runs`)).find(
+      (run: { id: string }) => run.id === recovered.id
+    ).canRejudge
+  ).toBe(false);
+  expect(reopened.store.source(completed.sourceRevision!).text).toBe(
+    'Retained across server shutdown'
+  );
+  expect(f.calls).toHaveLength(1);
+  expect(recoveryCalls).toBe(1);
+  const variables = reopened.store.db
+    .prepare('SELECT values_json FROM chat_variable_states WHERE chat_id=?')
+    .get(f.chat.id)!;
+  expect(JSON.parse(String(variables.values_json))).toMatchObject({
+    inputCount: '1',
+    outputCount: '1',
+  });
 });

@@ -19,6 +19,44 @@ export function latestTranslation(store: Store, id: string): Job | null {
     .get(id) as { id: string } | undefined;
   return row ? store.job(row.id) : null;
 }
+
+/** Preserve a complete candidate before JEV without making it a completed translation. */
+export function stageTranslationJudgment(
+  store: Store,
+  id: string,
+  generation: number,
+  owner: string,
+  candidate: string,
+  pending: boolean
+): void {
+  store.transaction(() => {
+    const row = store.db
+      .prepare(
+        "SELECT source_revision,source_hash,chat_id FROM jobs WHERE id=? AND kind='translation' AND status='running' AND generation=? AND owner=?"
+      )
+      .get(id, generation, owner);
+    if (!row) throw new HttpError(409, 'Translation no longer owns candidate');
+    const source = store.source(String(row.source_revision));
+    if (source.hash !== row.source_hash || source.chatId !== row.chat_id)
+      throw new HttpError(409, 'Translation source changed');
+    store.db
+      .prepare(
+        'INSERT INTO job_results VALUES(?,?,?,?) ON CONFLICT(job_id) DO UPDATE SET generation=excluded.generation,result=excluded.result,created_at=excluded.created_at'
+      )
+      .run(
+        id,
+        generation,
+        JSON.stringify({
+          mock: false,
+          sourceRevision: source.id,
+          sourceHash: source.hash,
+          text: candidate,
+          ...(pending ? { judgmentPending: true } : {}),
+        }),
+        new Date().toISOString()
+      );
+  });
+}
 /** Revoke in-flight ownership; retention separately keeps the previous usable response. */
 function stopTranslations(store: Store, sourceId: string) {
   store.db

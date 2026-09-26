@@ -78,7 +78,7 @@ export function replayContextTool(
   state: ContextToolState
 ): { event: ToolEvent; switched?: RunSnapshot } {
   const saved = structuredClone(event);
-  if (saved.name === 'context.read') return { event: saved };
+  if (saved.denied || saved.name === 'context.read') return { event: saved };
   const result =
     saved.result && typeof saved.result === 'object' && !Array.isArray(saved.result)
       ? (saved.result as Record<string, unknown>)

@@ -12,11 +12,13 @@
 
 ## 복구 가능한 Anthropic Batch Run
 
-일반 실시간 provider 요청은 서버가 끊기면 결과를 확정할 수 없으므로 기존처럼 active Run을 `interrupted`로 바꿔 자동 재전송하지 않아요. 반면 main 모델의 Anthropic Batch 실행은 공급자 쪽 작업 ID가 살아 있으므로 `anthropic_batches`의 durable 상태가 있는 Run만 다시 `queued`로 되돌려 worker가 이어 받아요.
+일반 실시간 provider 요청은 서버가 끊기면 결과를 확정할 수 없으므로 기존처럼 active Run을 `interrupted`로 바꿔 자동 재전송하지 않아요. 반면 main 모델의 Anthropic Batch 실행은 `anthropic_batches`의 durable 상태가 있고 모든 외부 호출이 Batch 기록에 연결된 Run만 다시 `queued`로 되돌려 worker가 이어 받아요. 실시간 요약·판정·스크립트 모델 호출 등이 섞였으면 완료 기록이 있어도 자동 재진입하지 않아요. 원격 호출 완료와 로컬 재생 영수증 저장 사이의 중단을 구분할 수 없기 때문이에요. 안전하게 저장된 실시간 준비 호출이 있는 경우도 수동 확인 대상으로 남기는 보수적인 경계예요.
 
-복구 worker는 Run을 처음부터 임의 재실행하는 대신 같은 `runMain`을 재진입해 Batch 라운드 순서와 요청 해시를 대조해요. 이미 `batchId`가 있는 라운드는 생성 API를 다시 호출하지 않고 조회부터 시작하고, 이미 결과 JSONL을 회수한 라운드는 저장된 결과를 다시 decode해요. provider tool call 뒤에 저장된 `tool_events`도 replay receipt로 사용하므로 읽기·도우미·문맥 도구나 terminal 제출을 중복 실행하지 않아요. `context.new` 같은 상태성 도구는 저장된 checkpoint를 바탕으로 실행 중 상태만 복원하고 새 checkpoint를 만들지 않아요.
+복구 worker는 Run을 처음부터 임의 재실행하는 대신 같은 `runMain`을 재진입해 Batch 라운드 순서와 요청 해시를 대조해요. 이미 `batchId`가 있는 라운드는 생성 API를 다시 호출하지 않고 조회부터 시작하고, 이미 결과 JSONL을 회수한 라운드는 저장된 결과를 다시 decode해요. provider tool call 뒤에 저장된 `tool_events`도 replay receipt로 사용하므로 읽기·도우미·문맥 도구나 terminal 제출을 중복 실행하지 않아요. `context.new` 같은 상태성 도구는 저장된 checkpoint를 바탕으로 실행 중 상태만 복원하고 새 checkpoint를 만들지 않아요. 거절된 도구 기록은 상태 변경으로 재생하지 않아요. Lua `editRequest`는 저장된 요청 순번·입력 hash·수정 prompt를 대조해 재사용하며, 같은 입력이라도 정상 후속 라운드는 별도로 실행해요. 도구 후속 요청의 크기 추정에는 실제 전송된 수정 prompt를 사용하고, 추정을 위해 Lua를 추가 실행하지 않아요. 실제 전송은 해당 라운드의 수정 결과와 공급자 연결 조건을 다시 확인해요.
 
 새 Batch를 만들기 전에는 로컬 row를 `reserved`로 먼저 기록해요. `reserved` 상태는 아직 원격 생성 시도를 시작하지 않았으므로 재시작 후 안전하게 생성할 수 있어요. 원격 생성 시도 직전에 `creating`으로 바꾸며, `creating`인데 `batchId`가 없으면 응답 수신 전 서버가 끊긴 것인지 알 수 없으므로 자동 재전송하지 않아요. 중복 과금 방지가 자동 복구보다 우선이에요.
+
+재개가 승인된 Batch Run은 기존 응답 스트림을 새 writer에게 인계해요. 일반 실행은 같은 스트림을 중복 생성할 수 없고, 이전 writer는 더 이상 기록하거나 종료할 수 없어요. 본문 스트림은 사용자 취소를 `cancelled`, 서버 종료를 `interrupted`로 구분해요.
 
 성공해 source가 commit되면 복구에 필요했던 원본 Batch 결과 본문은 제거하고 Batch/attempt 식별 메타데이터만 남겨요.
 
