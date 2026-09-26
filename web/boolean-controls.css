@@ -88,3 +88,15 @@
   min-width: 0;
   min-height: var(--control-h);
 }
+@media (prefers-reduced-motion: no-preference) {
+  :root input.ui-switch[type="checkbox"][role="switch"] {
+    transition:
+      background-color var(--motion-fast) var(--motion-ease-out),
+      border-color var(--motion-fast) var(--motion-ease-out);
+  }
+  :root input.ui-switch[type="checkbox"][role="switch"]::before {
+    transition:
+      transform var(--motion-fast) var(--motion-ease-out),
+      background-color var(--motion-fast) var(--motion-ease-out);
+  }
+}
