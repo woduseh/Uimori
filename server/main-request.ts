@@ -1,3 +1,4 @@
+import { modelRequestFields } from '../core/model-request-fields.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { AGENT_CONTEXT_REFS_MAX, AGENT_DRAFT_CHARS_MAX } from '../core/agent-collaboration.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
@@ -174,11 +175,7 @@ export function buildMainProviderRequest(
   }
   const request: ProviderRequest = {
     role: 'main',
-    modelId: target.modelId,
-    pricingSnapshot: target.pricingSnapshot,
-    ...(target.providerOptions !== undefined
-      ? { providerOptions: structuredClone(target.providerOptions) }
-      : {}),
+    ...modelRequestFields(target),
     stable: {
       contract,
       tools: [

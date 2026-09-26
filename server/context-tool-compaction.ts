@@ -1,3 +1,4 @@
+import { modelRequestFields } from '../core/model-request-fields.js';
 import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
 import { CONTEXT_WINDOW_RESULT_TOOLS } from '../core/context-tools.js';
 import {
@@ -136,11 +137,7 @@ export async function compactToolReads(
   });
   const requestFor = (part: string): ProviderRequest => ({
     role: 'context',
-    modelId: target.modelId,
-    pricingSnapshot: target.pricingSnapshot,
-    ...(target.providerOptions !== undefined
-      ? { providerOptions: structuredClone(target.providerOptions) }
-      : {}),
+    ...modelRequestFields(target),
     generation,
     contextBudget: budget,
     stable: {
