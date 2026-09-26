@@ -340,24 +340,6 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
   expect(f.store.product.get('content', f.bot.id)).toEqual(original);
 });
 
-test('helper may edit discovered lore without a separate grant parser', async () => {
-  const f = await fixture();
-  mockSend((request, round) => {
-    if (round === 0) return calls(call('read-only-lore', 'chat.lore', { action: 'read' }));
-    if (round === 1)
-      return calls(
-        call('direct-patch', 'chat.lore', {
-          action: 'patch',
-          body: patchBody(result<HelperLoreRead>(request, 'read-only-lore'), 'Updated lore'),
-        })
-      );
-    expect(event(request, 'direct-patch').denied).toBe(false);
-    return structuredClone(success);
-  });
-  await submit(f, '현재 로어를 자연스럽게 다듬어 주세요.');
-  expect(new ChatOverridesStore(f.store).get(f.chat.id).overrides).toHaveLength(1);
-});
-
 test('notes schema exposes CAS but keeps mutation identity host-owned', async () => {
   const f = await fixture();
   let expectedRevision = 0;

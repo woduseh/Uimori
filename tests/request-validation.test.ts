@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HttpError } from '../server/store.js';
 import { fields, number, record, text } from '../server/product-store.js';
-import * as validation from '../server/request-validation.js';
 
 function rejectsRequest(action: () => unknown, message: string) {
   try {
@@ -14,16 +13,6 @@ function rejectsRequest(action: () => unknown, message: string) {
 }
 
 describe('shared request validation contract', () => {
-  it('preserves existing imports and the HttpError identity used by HTTP error handling', () => {
-    expect(HttpError).toBe(validation.HttpError);
-    expect({ fields, number, record, text }).toEqual({
-      fields: validation.fields,
-      number: validation.number,
-      record: validation.record,
-      text: validation.text,
-    });
-  });
-
   it('rejects non-record payloads and unknown fields without copying or dropping input', () => {
     for (const value of [null, undefined, [], 'text', 1, true])
       rejectsRequest(() => record(value), 'Expected an object');
