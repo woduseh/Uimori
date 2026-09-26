@@ -1336,9 +1336,14 @@ describe('model-driven working summary and window switch inside one main run', (
       string,
       any
     >;
+    // Historical tool calls must use the same provider name as the declared tool.
+    const switchTool = anthropic.tools.find((tool: any) =>
+      tool.description.startsWith('Host tool: context.new.')
+    );
+    expect(switchTool).toBeDefined();
     expect(anthropic.messages[0].content[0]).toMatchObject({
       type: 'tool_use',
-      name: 'context.new',
+      name: switchTool.name,
     });
     expect(anthropic.messages[1].content[0]).toMatchObject({ type: 'tool_result' });
     const vertex = encodeVertex({ ...request, modelId: VERTEX_GEMINI_MODEL_ID }).body as Record<
