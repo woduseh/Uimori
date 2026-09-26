@@ -38,10 +38,17 @@ describe('Risu content storage contract', () => {
       'stateView',
       'sourceSegments',
     ])
-      expect(() => validateRisuContent({ ...pkg, [field]: [] })).toThrow();
-    expect(() => validateRisuContent({ ...pkg, version: 1 })).toThrow(
-      'PACKAGE_VERSION_UNSUPPORTED'
-    );
+      expect(() => validateRisuContent({ ...pkg, [field]: [] })).toThrow('PACKAGE_INVALID_FIELDS');
+    expect(() =>
+      validateRisuContent({
+        ...pkg,
+        instructions: [{ id: 'old', target: 'main', text: 'Do not restore me' }],
+      })
+    ).toThrow('PACKAGE_INVALID_FIELDS');
+    const old = { ...pkg, version: 1 };
+    const before = structuredClone(old);
+    expect(() => validateRisuContent(old)).toThrow('PACKAGE_VERSION_UNSUPPORTED');
+    expect(old).toEqual(before);
     expect(() =>
       validateRisuContent({ ...pkg, nativeRisu: { ...pkg.nativeRisu, sourceHash: 'bad' } })
     ).toThrow();

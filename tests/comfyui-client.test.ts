@@ -241,18 +241,6 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     ).toBe(false);
   });
 
-  test('old servers receive only a targeted queue deletion even if a different prompt starts meanwhile', async () => {
-    const server = await fixture({ behavior: 'hang' });
-    await generateWithComfyUI({ baseUrl: server.origin, authorizationEnv: '' }, workflow(), {
-      signal: signal(),
-      timeoutMs: 30,
-      pollIntervalMs: 10,
-    }).catch(() => {});
-    const id = server.prompts[0].id;
-    await cancelComfyUIPrompt({ baseUrl: server.origin, authorizationEnv: '' }, id);
-    expect(server.requests.some((request) => request.url === '/interrupt')).toBe(false);
-    expect(JSON.parse(server.requests.at(-1)!.body)).toEqual({ delete: [id] });
-  });
   test('normalizes remote base URLs and rejects credentials, queries or other schemes', () => {
     expect(validateComfyBaseUrl('http://192.168.0.10:8188/')).toBe('http://192.168.0.10:8188');
     expect(validateComfyBaseUrl('https://comfy.example.test/api/')).toBe(

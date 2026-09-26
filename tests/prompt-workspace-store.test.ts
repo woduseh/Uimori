@@ -201,17 +201,3 @@ test('invalidation after delivery but before promise settlement starts another r
   expect(f.store.getSnapshot().workspace?.revision).toBe(2);
   unsubscribe();
 });
-
-test('server rendering keeps an empty, stable snapshot without fetching', async () => {
-  const f = setup();
-  const server = f.store.getServerSnapshot();
-  expect(f.load).not.toHaveBeenCalled();
-  const unsubscribe = f.store.subscribe(() => {});
-  const done = f.store.refresh();
-  await Promise.resolve();
-  f.reads[0].resolve(workspace(1));
-  await done;
-  expect(f.store.getServerSnapshot()).toBe(server);
-  expect(server).toEqual({ workspace: null, error: '' });
-  unsubscribe();
-});

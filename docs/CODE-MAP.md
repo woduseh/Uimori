@@ -13,7 +13,7 @@
 | DB schema, snapshot, one-time transfer | `server/database-schema.ts`, `server/database-backup.ts`, `scripts/transfer-personal-v1.mjs`, `scripts/legacy24-source.mjs` | [Data](DATA-MIGRATIONS.md) |
 | Execution, context and notes | `server/run-executor.ts`, `server/store.ts`, `server/execution-snapshot.ts`, `server/execution-retention.ts`, `server/context-planning.ts`, `server/story-notes.ts` | [Execution inputs](EXECUTION.md) |
 | Native Risu execution | `server/risu-native-runtime.ts`, `server/risu-native-lua-session.ts`, `server/risu-native-render.ts`, `server/risu-native-projection.ts` | [Risu import](RISU-IMPORT.md) |
-| Provider protocols | `core/provider-request.ts`, `core/provider-http.ts`, `core/*-protocol.ts` | [Providers](PROVIDERS.md) |
+| Model request fields and provider protocols | `core/model-request-fields.ts`, `core/provider-request.ts`, `core/provider-http.ts`, `core/*-protocol.ts` | [Providers](PROVIDERS.md) |
 | Composer translation and request copying | `core/input-translation.ts`, `server/input-translation.ts`, `web/useInputTranslation.ts`, `web/InputTranslation.tsx`, `web/RequestMessage.tsx` | [Input translation](INPUT-TRANSLATION.md) |
 | Reader and application | `web/useStory.ts`, `web/SourceReader.tsx`, `server/reader.ts`, `server/app.ts` | [Usage](USAGE.md) |
 | Tests and local verification | `tests/personal-workspace-*.test.ts`, `scripts/transfer-personal-v1.test.mjs`, `tests/` | [Development](DEVELOPMENT.md) |

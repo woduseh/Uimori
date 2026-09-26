@@ -1,3 +1,4 @@
+import { modelRequestFields } from './model-request-fields.js';
 import type { ModelRef, ModelSnapshot } from './product.js';
 import type { Json, ProviderRequest } from './transport.js';
 import { IMAGE_INPUT_MAX_BYTES } from './image-limits.js';
@@ -315,14 +316,10 @@ export function illustrationPromptRequest(
 ): ProviderRequest {
   return {
     role: 'illustration',
-    modelId: model.modelId,
+    ...modelRequestFields(model),
     stable: { contract: ILLUSTRATION_PROMPT_CONTRACT, tools: [] },
     generation,
     contextBudget: contextBudgetForModel(model),
-    pricingSnapshot: model.pricingSnapshot,
-    ...(model.providerOptions !== undefined
-      ? { providerOptions: structuredClone(model.providerOptions) }
-      : {}),
     input: {
       task: 'Write the illustration prompt JSON for this scene.',
       controls: { purpose: 'illustration-prompt', allowSkip: scene.allowSkip },

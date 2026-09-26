@@ -85,6 +85,7 @@ test('preserves ordered logical roles and explicit empty instructions while reje
   const built = buildCodexTurn(r),
     input = JSON.parse(built.inputText);
   expect(input.taskContract).toBe('');
+  expect(input.allowedTools).toEqual(r.stable.tools);
   expect(input.orderedMessages).toEqual(r.prompt.messages);
   r.prompt.messages[2].completion = 'prefill';
   expect(() => buildCodexTurn(r)).toThrow('CODEX_PROMPT_PREFILL_UNSUPPORTED');
@@ -104,11 +105,14 @@ test('decodes only advertised Uimori tool requests and rejects mixed, foreign, d
     encode('tools', 'mixed', [call]),
     encode('final', 'text', [call]),
     encode('tools', '', [call, call]),
-    encode('tools', '', [{ ...call, name: 'shell' }]),
     encode('tools', '', [{ ...call, argumentsJson: '[]' }]),
     '{}',
   ])
     expect(decodeCodexOutput(raw, r).status).toBe('error');
+  expect(decodeCodexOutput(encode('tools', '', [{ ...call, name: 'shell' }]), r)).toMatchObject({
+    status: 'error',
+    error: { code: 'CODEX_INVALID_TOOL_CALL' },
+  });
   r.input.results = [{ callId: 'a', result: {} }];
   expect(decodeCodexOutput(encode('tools', '', [call]), r).status).toBe('error');
   expect(decodeCodexOutput(encode('refused', 'Cannot'), request())).toMatchObject({
@@ -116,15 +120,4 @@ test('decodes only advertised Uimori tool requests and rejects mixed, foreign, d
     refusal: 'Cannot',
   });
   expect(decodeCodexOutput(encode('final', ''), request()).error?.code).toBe('EMPTY_COMPLETION');
-});
-
-test('passes declared Uimori tools and rejects undeclared JSON tool calls', () => {
-  const built = buildCodexTurn(request());
-  expect(JSON.parse(built.inputText).allowedTools).toEqual(request().stable.tools);
-  expect(
-    decodeCodexOutput(
-      encode('tools', '', [{ id: 'x', name: 'exec', argumentsJson: '{}' }]),
-      request()
-    ).error?.code
-  ).toBe('CODEX_INVALID_TOOL_CALL');
 });

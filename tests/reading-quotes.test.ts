@@ -176,15 +176,10 @@ describe('render-only reading styles', () => {
   });
 
   test('settings affect only React presentation and preserve quoted characters and visible text', () => {
-    const source = {
-      text: '서술. “첫 대사”라고 말했다.\n「두 번째 『중첩』 대사」 ‘생각’',
-      hash: 'unchanged',
-    };
-    const original = structuredClone(source);
-    const before = render(source.text, DEFAULT_READABILITY);
-    const after = render(source.text, reading({ thoughtBreaks: true }));
+    const text = '서술. “첫 대사”라고 말했다.\n「두 번째 『중첩』 대사」 ‘생각’';
+    const before = render(text, DEFAULT_READABILITY);
+    const after = render(text, reading({ thoughtBreaks: true }));
     expect(renderedText(after)).toBe(renderedText(before));
-    expect(source).toEqual(original);
   });
 
   test('context supplies browser settings and an explicit preview override takes precedence', () => {

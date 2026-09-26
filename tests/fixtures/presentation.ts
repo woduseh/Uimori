@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
-import type { AssetEntry, BlockScene, SourceBlock } from '../../core/auxiliary.js';
+import type { AssetEntry } from '../../core/auxiliary.js';
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 
-// Synthetic artwork and lexical cues for explicitly selected local test fixtures only.
+// Synthetic artwork for explicitly selected local test fixtures only.
 const artwork: Record<string, string> = {
   'mira-profile':
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240"><rect width="240" height="240" rx="32" fill="#203b51"/><circle cx="120" cy="95" r="42" fill="#d9b78d"/><path d="M45 240v-24a75 75 0 0 1 150 0v24" fill="#688fad"/><path d="M77 85a44 44 0 0 1 86 0l-20-24-30 16z" fill="#44343c"/><circle cx="104" cy="100" r="3"/><circle cx="136" cy="100" r="3"/></svg>',
@@ -45,50 +45,3 @@ export const BUILTIN_ASSETS: readonly AssetEntry[] = Object.freeze([
     uses: ['inline'],
   }),
 ]);
-export function builtinAssetSvg(ref: string): string | null {
-  return Object.hasOwn(artwork, ref) ? artwork[ref] : null;
-}
-
-/** Tiny lexical scene cues for the synthetic corpus; unknown stays unknown. */
-export function sourceScenes(
-  blocks: SourceBlock[],
-  assets: readonly AssetEntry[] = BUILTIN_ASSETS
-): BlockScene[] {
-  const contains = (text: string, cue: string) =>
-    text.toLocaleLowerCase('en').includes(cue.toLocaleLowerCase('en'));
-  return blocks.map((block) => {
-    const actorIds = [
-      ...new Set(
-        assets.flatMap((asset) =>
-          asset.actorId && contains(block.text, asset.actorId) ? [asset.actorId] : []
-        )
-      ),
-    ];
-    const clothing = [
-      ...new Set(
-        [
-          'blue coat',
-          'red cloak',
-          ...assets.flatMap((asset) => (asset.clothing ? [asset.clothing] : [])),
-        ].filter((cue) => contains(block.text, cue))
-      ),
-    ];
-    const locations = [
-      ...new Set(
-        assets.flatMap((asset) =>
-          asset.location &&
-          (contains(block.text, asset.location) ||
-            (asset.location === 'pier' && /\bharbor\b/iu.test(block.text)))
-            ? [asset.location]
-            : []
-        )
-      ),
-    ];
-    return {
-      anchor: block.anchor,
-      actorIds,
-      clothing,
-      location: locations.length === 1 ? locations[0] : null,
-    };
-  });
-}

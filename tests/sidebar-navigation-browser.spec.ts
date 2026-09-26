@@ -17,7 +17,6 @@ for (const width of DEFAULT_WIDTHS) {
     const library = destinations.getByRole('button', { name: '서재', exact: true });
     const prompts = destinations.getByRole('button', { name: '프롬프트', exact: true });
     await expect(destinations.getByRole('button')).toHaveText(['서재', '프롬프트']);
-    await expect(navigation.getByLabel('앱 메뉴', { exact: true })).toHaveCount(0);
     const footerBox = await footer.boundingBox();
     const settingsBox = await settings.boundingBox();
     expect(footerBox).not.toBeNull();

@@ -304,6 +304,65 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(`${prefix} Unsaved`);
 });
 
+test('SAVEACK prompt navigation preserves an accepted save when placement and summary refresh fail', async ({
+  page,
+  request,
+}) => {
+  const title = 'SAVEACK prompt ' + Date.now();
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  const panel = page.getByTestId('prompt-library');
+  const folder = await createFolder(page, panel, title + ' folder');
+  await chooseFolder(panel, folder.title);
+  await panel.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
+  const editor = page.getByTestId('prompt-editor');
+  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await editor.getByLabel('프롬프트 이름', { exact: true }).fill(title);
+
+  let failSave = true;
+  let saves = 0;
+  let placements = 0;
+  await page.route('**/api/resources/save', async (route) => {
+    saves++;
+    if (failSave) await route.fulfill({ status: 503, json: { error: 'Synthetic save failure' } });
+    else await route.continue();
+  });
+  await page.route('**/api/library/organization/move', async (route) => {
+    placements++;
+    await route.fulfill({ status: 503, json: { error: 'Synthetic placement failure' } });
+  });
+  await page.route('**/api/library?view=summary', (route) =>
+    route.fulfill({ status: 503, json: { error: 'Synthetic summary failure' } })
+  );
+
+  await editor.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
+  const guard = page.getByRole('alertdialog', { name: '미저장 프롬프트 확인', exact: true });
+  await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
+  await expect(guard.getByRole('alert')).toContainText('저장하지 못했어요');
+  await expect(editor.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(title);
+  expect(saves).toBe(1);
+  expect(placements).toBe(0);
+  const before = (await (await request.get('/api/library')).json()) as Library;
+  expect(before.promptPresets?.filter((item) => item.title === title)).toEqual([]);
+
+  failSave = false;
+  await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
+  await expect(guard).toBeHidden();
+  await expect(editor).toBeHidden();
+  const warning = page.getByRole('alert').filter({ hasText: '프롬프트는 저장됐어요.' });
+  await expect(warning).toContainText('폴더에 배치하지 못했어요.');
+  await expect(warning).toContainText('목록을 다시 불러오지 못했어요.');
+  const after = (await (await request.get('/api/library')).json()) as Library;
+  const saved = after.promptPresets?.filter((item) => item.title === title) ?? [];
+  expect(saved).toHaveLength(1);
+  expect(saved[0].revision).toBe(1);
+  expect(
+    (await organization(request)).items.find((item) => item.id === saved[0].id)?.folderId
+  ).not.toBe(folder.id);
+  expect(saves).toBe(2);
+  expect(placements).toBe(1);
+});
+
 test('LIBUI04 role selection creates a chat with the selected persona and module without reclassifying them', async ({
   page,
   request,

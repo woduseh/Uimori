@@ -41,6 +41,7 @@ describe('native content resource projection', () => {
     expect(bot).not.toHaveProperty('instructions');
     expect(pkg.nativeRisu.card.post_history_instructions).toBe('Global note {{user}}');
     expect(JSON.stringify(bot)).not.toContain('RETIRED_SYSTEM');
+    expect(JSON.stringify(bot)).not.toContain('Global note');
     expect(bot.pinned.some((r) => r.text === 'Optional lore')).toBe(false);
   });
   it('adds selected optional lore while leaving source and discoverable resources intact', () => {

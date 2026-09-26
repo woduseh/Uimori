@@ -1,3 +1,4 @@
+import { modelRequestFields } from '../core/model-request-fields.js';
 import { performance } from 'node:perf_hooks';
 import { HELPER_APP_TOOLS, HELPER_GATEWAY_TOOLS, describeHelperTools } from './helper-app-tools.js';
 import { HELPER_DATA_TOOLS, invokeDataTool } from './helper-data-tools.js';
@@ -781,11 +782,7 @@ export class HelperRuntime {
     const writing = task.snapshot.writing;
     return {
       role: 'helper',
-      modelId: target.modelId,
-      pricingSnapshot: target.pricingSnapshot,
-      ...(target.providerOptions !== undefined
-        ? { providerOptions: structuredClone(target.providerOptions) }
-        : {}),
+      ...modelRequestFields(target),
       generation: generationFromModel(target),
       contextBudget: contextBudgetForModel(target),
       stable: {
@@ -925,11 +922,7 @@ export class HelperRuntime {
         throw new Error('MODEL_CALL_BUDGET_EXHAUSTED');
       const requestFor = (part: string): ProviderRequest => ({
         role: 'context',
-        modelId: target.modelId,
-        pricingSnapshot: target.pricingSnapshot,
-        ...(target.providerOptions !== undefined
-          ? { providerOptions: structuredClone(target.providerOptions) }
-          : {}),
+        ...modelRequestFields(target),
         generation: policy.generation,
         contextBudget: contextBudgetForModel(target),
         stable: {

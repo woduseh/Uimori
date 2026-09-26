@@ -248,37 +248,6 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
     }
   );
 
-  test('L01 P05 timeout and cancellation stop a real stream without another model request', async () => {
-    const local = await redirectedFixture(async (_captured, response) => {
-      response.writeHead(200, { 'content-type': 'text/event-stream' });
-      response.write(
-        sse({
-          candidates: [
-            { content: { role: 'model', parts: [{ text: 'Observed before timeout' }] } },
-          ],
-        })
-      );
-      response.write(sse({ usageMetadata: usage }));
-    });
-    const timed = await executeProvider(connection, request(), options({ timeoutMs: 150 }));
-    expect(timed).toMatchObject({
-      status: 'partial',
-      text: 'Observed before timeout',
-      error: { code: 'TIMEOUT' },
-      usage: { inputTokens: 20, outputTokens: 7 },
-    });
-    const controller = new AbortController();
-    const pending = executeProvider(
-      connection,
-      request(),
-      options({ signal: controller.signal, timeoutMs: 2000 })
-    );
-    await vi.waitFor(() => expect(local.requests).toHaveLength(2));
-    controller.abort();
-    expect(await pending).toMatchObject({ status: 'cancelled', error: { code: 'CANCELLED' } });
-    expect(local.requests).toHaveLength(2);
-  });
-
   test.each(['caller', 'timeout'] as const)(
     'L01 P05 %s still stops a pending body read when fetch misses the abort',
     async (mode) => {

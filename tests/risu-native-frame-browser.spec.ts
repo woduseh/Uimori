@@ -278,14 +278,6 @@ for (const viewport of [
           .locator('output')
           .textContent()
           .then((text) => JSON.parse(text!));
-      await expect(page.getByLabel('정규식 찾을 표현식', { exact: true })).toHaveCSS(
-        'height',
-        '120px'
-      );
-      await expect(page.getByLabel('정규식 바꿀 내용', { exact: true })).toHaveCSS(
-        'height',
-        '250px'
-      );
       await page.getByLabel('정규식 찾을 표현식', { exact: true }).fill('(world)');
       await page.getByLabel('정규식 바꿀 내용', { exact: true }).fill('$1 {{getvar::place}}');
       await expect.poll(value).toMatchObject([

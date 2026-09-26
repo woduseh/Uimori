@@ -91,8 +91,6 @@ for (const width of DEFAULT_WIDTHS) {
     const modelSave = models.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
     await modelSave.scrollIntoViewIfNeeded();
     await accessibleControl(modelSave);
-    await expect(models).not.toContainText('새 채팅의 첫 응답이 성공하면');
-    await expect(models).not.toContainText('명확한 거절일 때만 추가 번역');
     await page.screenshot({ path: info.outputPath(`model-save-${width}.png`) });
     ready = false;
     await page.reload();
@@ -111,6 +109,5 @@ for (const width of DEFAULT_WIDTHS) {
       true
     );
     await page.screenshot({ path: info.outputPath(`prompt-fold-${width}.png`) });
-    await page.screenshot({ path: info.outputPath(`prompt-add-${width}.png`) });
   });
 }

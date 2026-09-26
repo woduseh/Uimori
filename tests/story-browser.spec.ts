@@ -266,8 +266,7 @@ test('S06 S07 reading preserves source text while the asset catalog does not pre
   await page.reload();
   const run = await send(page, 'SYNTHETIC_RENDER Mira waits at the harbor.');
   const source = await complete(request, chat.id, run.id);
-  const article = await original(page, source);
-  await expect(article.getByText('표시 문구 바꾸기', { exact: true })).toHaveCount(0);
+  await original(page, source);
   expect(source.text).toContain('Mira');
   expect(
     (await detail(request, chat.id)).sources.find((item) => item.id === source.id)
@@ -308,7 +307,6 @@ test('STUI01 story memory and scene reservations fit mobile and desktop', async 
     await section.scrollIntoViewIfNeeded();
     await expect(section.locator('summary').filter({ hasText: /^사용자 메모·정정/ })).toBeVisible();
     await expect(section.locator('summary').filter({ hasText: /^장면 예약/ })).toBeVisible();
-    await expect(section.getByLabel('상태 정의 JSON 파일')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );

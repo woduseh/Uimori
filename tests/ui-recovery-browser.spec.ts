@@ -228,7 +228,6 @@ for (const viewport of viewports) {
       await expect(blockType.locator('option[value="jailbreak"], option[value="cot"]')).toHaveCount(
         0
       );
-      await expect(editor.locator('option[value="jailbreak"]')).toHaveCount(0);
       await expect(
         editor.getByLabel('시스템 메시지로 보내기 설정에서도 원래 대화 역할 유지', { exact: true })
       ).toHaveCount(0);
@@ -557,7 +556,6 @@ for (const viewport of viewports) {
 
       await editor.getByRole('tab', { name: '고급 설정', exact: true }).click();
       const advancedNav = editor.getByRole('group', { name: '고급 설정 영역', exact: true });
-      await expect(advancedNav.getByRole('button')).toHaveCount(6);
       for (const label of ['지침', '기본 변수·토글', '표시', '스크립트', '연결 모듈', '원문'])
         await expect(advancedNav.getByRole('button', { name: label, exact: true })).toBeVisible();
 

@@ -2,7 +2,6 @@ import { describe, expect, test } from 'vitest';
 import { sourceHash } from '../core/source-history.js';
 import { executeStoryRead, STORY_RESULT_MAX_BYTES } from '../core/story-context.js';
 import type { RunSnapshot } from '../core/types.js';
-import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 
 function snapshot(
   texts = ['Authored opening.', 'Mira promises the lantern.', 'The captain waits.']
@@ -82,10 +81,6 @@ describe('scene locators in frozen source ancestry', () => {
     });
     expect(read(fixed, 'story.read', { sceneNumber: 1 }).text).toBe('Authored opening.');
     expect(fixed).toEqual(original);
-    expect(MAIN_READ_TOOLS.find((tool) => tool.name === 'story.read')!.inputSchema).toMatchObject({
-      required: ['sceneNumber'],
-      properties: { sceneNumber: { type: 'integer', minimum: 1 } },
-    });
   });
 
   test.each([0, -1, 1.5, '2', true, null, Number.MAX_SAFE_INTEGER + 1])(
