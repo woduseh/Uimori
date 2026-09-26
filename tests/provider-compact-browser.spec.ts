@@ -2,7 +2,7 @@ import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type Page } from '@playwright/test';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
-import { navigationAction, selectSettingsSection } from './ui-navigation.js';
+import { navigationAction, selectSettingsSection, revealProviderModel } from './ui-navigation.js';
 
 const connection: Connection = {
   id: 'compact-synthetic-connection',
@@ -105,6 +105,7 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   await openProviders(page);
   const editor = page.getByTestId('connection-editor');
   const search = editor.getByRole('searchbox', { name: '프로바이더·모델 검색' });
+  await revealProviderModel(page, model.title);
   const item = editor.getByRole('article', { name: model.title + ' 모델', exact: true });
   for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
@@ -165,7 +166,8 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   await editor.getByRole('button', { name: '검색 지우기', exact: true }).click();
   await expect(item).toBeVisible();
   await expect(item.getByText('진단과 상세', { exact: true })).toHaveCount(0);
-  await expect(item).not.toContainText(model.modelId);
+  // Model IDs became visible subtitles in 58a416e; keep the current compact-row contract.
+  await expect(item.getByText(model.modelId, { exact: true })).toBeVisible();
   await expect(item).not.toContainText('4096');
   await expect(item).not.toContainText('옵션 앱 확인');
   await expect(

@@ -13,12 +13,7 @@ import {
   observedCompletion,
 } from './fixtures/agent-collaboration.js';
 
-const _selectedRead = 'SELECTED_MAIN_READ: the copper door is locked.';
-const _omittedRead = 'UNSELECTED_MAIN_READ: the keeper has a silver key.';
 const selectedAdvice = 'SELECTED_A_ADVICE: the keeper could wait; this is proposed fiction.';
-const _omittedAdvice = 'UNSELECTED_C_ADVICE: an optional alternative for the main writer.';
-const _automaticDraft = 'UNSHARED_MAIN_PARTIAL_DRAFT: a bell rang.';
-const _explicitDraft = 'EXPLICIT_UNCOMMITTED_DRAFT: the keeper considers the door.';
 const finalText = 'The keeper stopped at the locked copper door.';
 
 test('identical explicit context caches failures; a changed reference or draft spends the shared advisor budget', async () => {

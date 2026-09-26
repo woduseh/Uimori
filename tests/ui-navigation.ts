@@ -4,11 +4,10 @@ import { expect, type APIRequestContext, type Locator, type Page } from '@playwr
 import type { PromptPreset, SavedPromptCombination } from '../core/product.js';
 
 export async function visibleNavigation(page: Page) {
-  let nav = page.getByTestId('bot-navigation').filter({ visible: true });
-  if (!(await nav.count())) {
-    await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
-    nav = page.getByTestId('bot-navigation').filter({ visible: true });
-  }
+  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+  const opener = page.getByRole('button', { name: '탐색 메뉴', exact: true });
+  await expect(nav.or(opener).first()).toBeVisible();
+  if (!(await nav.isVisible())) await opener.click();
   await expect(nav).toBeVisible();
   return nav;
 }

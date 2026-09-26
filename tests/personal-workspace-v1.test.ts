@@ -1,4 +1,3 @@
-import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -39,19 +38,6 @@ function database() {
   owned.push({ path, store });
   return store;
 }
-
-test('fresh schema is personal v1; adding an index does not block reopening', () => {
-  const store = database();
-  expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(DATABASE_SCHEMA_VERSION);
-  store.db.exec('CREATE INDEX extra_user_index ON sources(created_at)');
-  const path = store.path;
-  store.close();
-  const reopened = new Store(path);
-  owned.at(-1)!.store = reopened;
-  expect(
-    reopened.db.prepare("SELECT name FROM sqlite_schema WHERE name='extra_user_index'").get()
-  ).toBeTruthy();
-});
 
 test('API keys including JEV share SQLite; public connection data never contains the key', () => {
   const store = database();

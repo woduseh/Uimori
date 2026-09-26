@@ -329,8 +329,8 @@ test('valid generated translation caches with zero further attempts; identity co
     }
   );
   expect(store.job(job.id).status).toBe('completed');
-  expect(store.requestTranslation(s.id).status).toBe('completed');
   const count = store.product.attempts(s.chatId).length;
+  expect(store.requestTranslation(s.id)).toMatchObject({ id: job.id, status: 'completed' });
   expect(store.product.attempts(s.chatId)).toHaveLength(count);
   store.db
     .prepare(
