@@ -30,6 +30,7 @@ import { nativeRisuPresetPending, projectNativeRisuPresetProgram } from './risu-
 /** Pair each exact source version with its actual user request; never infer roles from prose. */
 export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): PromptHistoryMessage[] {
   const entries = snapshot.history;
+  if (!entries.length) return [];
   const sourceMessages = new Set<string>();
   // This fold needs exact provenance, not Reader paragraph anchors or translation revisions.
   // Keep the same original/selected-edit integrity checks without constructing those views.
