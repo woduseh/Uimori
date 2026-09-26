@@ -104,18 +104,6 @@ const sse = (...events: unknown[]) =>
   new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
     headers: { 'content-type': 'text/event-stream' },
   });
-const _completed = () =>
-  sse(
-    { type: 'text_delta', delta: 'OK' },
-    {
-      type: 'usage',
-      inputTokens: 12,
-      outputTokens: 1,
-      raw: { hidden: 'RAW_USAGE_MUST_NOT_SURVIVE' },
-    },
-    { type: 'opaque_state', state: 'OPAQUE_MUST_NOT_SURVIVE' },
-    { type: 'done', reason: 'stop' }
-  );
 const modelUpdate = (model: ModelPreset, overrides: Record<string, unknown> = {}) => ({
   title: model.title,
   connectionId: model.connectionId,

@@ -45,13 +45,6 @@ async function fixture() {
   };
 }
 const ref = (content: Content) => ({ id: content.id, revision: content.revision });
-function _titles(store: Store, botId: string, folderId: string | null) {
-  return store
-    .chats()
-    .filter((chat) => chat.botId === botId && chat.folderId === folderId)
-    .sort((a, b) => a.sortPosition! - b.sortPosition!)
-    .map((chat) => chat.title);
-}
 
 test('invalid and stale order anchors roll back every position and revision', async () => {
   const { store, bot, other } = await fixture();

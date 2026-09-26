@@ -48,6 +48,7 @@ test('wrong credentials never create a session and repeated attempts briefly bac
   const f = fixture();
   for (let i = 0; i < 10; i++) expect(() => f.sessions.login('wrong')).toThrow();
   expect(() => f.sessions.login(f.options.accessToken)).toThrow();
+  expect(f.db.prepare('SELECT count(*) AS n FROM access_sessions').get()!.n).toBe(0);
   f.time(60_001);
   expect(f.sessions.authenticated(f.sessions.login(f.options.accessToken).cookie)).toBe(true);
 });

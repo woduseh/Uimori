@@ -66,6 +66,15 @@ test.each(['json', 'binary'] as const)(
     });
     expect(b.maintenance).toHaveBeenCalledTimes(1);
     expect(b.session).not.toHaveBeenCalled();
+    b.maintenance.mockClear();
+    for (const [status, error] of [
+      [409, 'MAINTENANCE_CLOSED'],
+      [503, 'UNRELATED_FAILURE'],
+    ] as const) {
+      respond(status, { error });
+      await expect(request(mode)).rejects.toMatchObject({ status });
+      expect(b.maintenance).not.toHaveBeenCalled();
+    }
   }
 );
 

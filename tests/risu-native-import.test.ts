@@ -408,8 +408,11 @@ test('AVIF brand validation and GIF signatures cannot be confused with arbitrary
   const wrong = Buffer.from(avif);
   wrong.write('mp42', 16);
   expect(() => decodeImage('image/avif', wrong.toString('base64'))).toThrow('Invalid image bytes');
-  wrong.writeUInt32BE(128);
-  expect(() => decodeImage('image/avif', wrong.toString('base64'))).toThrow('Invalid image bytes');
+  const oversizedBox = Buffer.from(avif);
+  oversizedBox.writeUInt32BE(128);
+  expect(() => decodeImage('image/avif', oversizedBox.toString('base64'))).toThrow(
+    'Invalid image bytes'
+  );
   const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
   expect(decodeImage('image/gif', gif.toString('base64')).bytes).toEqual(gif);
   expect(() => decodeImage('image/avif', gif.toString('base64'))).toThrow('Invalid image bytes');

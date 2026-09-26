@@ -81,14 +81,12 @@ async function selectedSnapshot(attachments = 1, limit?: (policy: LoreContextPol
 }
 
 describe('local-token selection receipt accounting', () => {
-  it('recounts selected text with the real tokenizer without another request', async () => {
+  it('records selected-text token counts from one judgment request', async () => {
     const { snapshot, send } = await selectedSnapshot(2);
-    const before = structuredClone(snapshot);
     expect(snapshot.loreSelection!.entries.map((entry) => entry.judgment!.selectedTokens)).toEqual([
       countTextTokens(text),
       countTextTokens(text),
     ]);
-    expect(snapshot).toEqual(before);
     expect(send).toHaveBeenCalledTimes(1);
   });
 

@@ -1,4 +1,4 @@
-import { openProviderModel } from './ui-navigation.js';
+import { openProviderModel, navigationAction } from './ui-navigation.js';
 import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
@@ -59,10 +59,7 @@ const connectionBody = (item: Connection, changes: Record<string, unknown> = {})
 });
 async function settings(page: Page) {
   await page.goto('/');
-  const button = page.getByRole('button', { name: '설정', exact: true });
-  if (!(await button.isVisible()))
-    await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
-  await button.click();
+  await navigationAction(page, '설정');
   await selectSettingsSection(page, '프로바이더·모델');
   await expect(page.getByTestId('connection-editor')).toBeVisible();
 }
