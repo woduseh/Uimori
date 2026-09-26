@@ -1,4 +1,5 @@
 import { ThemeProvider, useThemes } from './ThemeContext.js';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { BotChatImportDialog } from './BotChatImportDialog.js';
@@ -1376,7 +1377,7 @@ function App() {
                     inputRef={s.input}
                     id="request"
                     data-uimori-part="composer-input"
-                    maxLength={4000}
+                    maxLength={REQUEST_TEXT_MAX_CHARS}
                     value={s.draft}
                     enterSend={enterSend}
                     onSelect={s.rememberCursor}

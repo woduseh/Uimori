@@ -3,6 +3,7 @@
  * Lives apart from `transport.ts` so executors can validate without importing the dispatcher.
  */
 import { GENERATION_KEYS, validateGenerationShape } from './model-capabilities.js';
+import { EXECUTION_INPUT_MAX_CHARS } from './content-limits.js';
 import { createHash } from 'node:crypto';
 import {
   validateProviderEndpoint,
@@ -180,8 +181,7 @@ export function validateRequest(value: unknown): ProviderRequest {
   }
   keys(value.stable, ['contract', 'tools']);
   // An explicitly selected empty prompt is distinct from using the application default.
-  if (typeof value.stable.contract !== 'string' || value.stable.contract.length > 200_000)
-    reject('INVALID_STRING');
+  if (typeof value.stable.contract !== 'string') reject('INVALID_STRING');
   if (!Array.isArray(value.stable.tools) || value.stable.tools.length > 128)
     reject('INVALID_TOOLS');
   const names = new Set<string>();
@@ -197,7 +197,7 @@ export function validateRequest(value: unknown): ProviderRequest {
     if (value.toolChoice !== 'auto' && !names.has(value.toolChoice)) reject('INVALID_TOOL_CHOICE');
   }
   keys(value.input, ['task', 'controls', 'source', 'catalog', 'results', 'history']);
-  string(value.input.task, 500_000);
+  string(value.input.task, EXECUTION_INPUT_MAX_CHARS);
   if (
     !object(value.input.controls) ||
     Object.entries(value.input.controls).some(
@@ -215,7 +215,7 @@ export function validateRequest(value: unknown): ProviderRequest {
   } catch {
     return reject('INVALID_JSON');
   }
-  if (encoded.length > 2_000_000) reject('REQUEST_TOO_LARGE');
+  if (encoded.length > EXECUTION_INPUT_MAX_CHARS) reject('REQUEST_TOO_LARGE');
   return JSON.parse(encoded) as ProviderRequest;
 }
 

@@ -180,7 +180,7 @@ export function AssetEditor({
             <input
               aria-label="이미지 이름"
               required
-              maxLength={160}
+              maxLength={200}
               value={value.title}
               onChange={(event) => setValue({ ...value, title: event.target.value })}
             />
@@ -190,7 +190,7 @@ export function AssetEditor({
             <input
               aria-label="이미지 설명"
               required
-              maxLength={1000}
+              maxLength={2000}
               value={value.description}
               onChange={(event) => setValue({ ...value, description: event.target.value })}
             />

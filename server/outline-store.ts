@@ -1,4 +1,5 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { deleteSceneCommand } from './chat-deletion.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
@@ -492,7 +493,7 @@ export class OutlineStore {
         const command = this.store.story.command(prior.id);
         if (
           body.request !== undefined &&
-          text(body.request, 'scene request', 4000) !== command.request
+          text(body.request, 'scene request', REQUEST_TEXT_MAX_CHARS) !== command.request
         )
           throw new HttpError(409, '집필 요청 키가 다른 내용에 사용됐어요.');
         return command;
@@ -504,7 +505,7 @@ export class OutlineStore {
         const command = this.store.story.command(node.progress.commandId);
         if (
           body.request !== undefined &&
-          text(body.request, 'scene request', 4000) !== command.request
+          text(body.request, 'scene request', REQUEST_TEXT_MAX_CHARS) !== command.request
         )
           throw new HttpError(409, '이 구성은 다른 요청문으로 이미 예약됐어요.');
         return command;
@@ -514,8 +515,7 @@ export class OutlineStore {
           ? [`${OUTLINE_LEVEL_LABELS[node.level]} 집필 요청: ${node.title}`, node.intent]
               .filter(Boolean)
               .join('\n')
-              .slice(0, 4000)
-          : text(body.request, 'scene request', 4000);
+          : text(body.request, 'scene request', REQUEST_TEXT_MAX_CHARS);
       const command = this.store.story.createCommand(node.chatId, {
         label: `${OUTLINE_LEVEL_LABELS[node.level]} ${node.title}`.slice(0, 120),
         request,

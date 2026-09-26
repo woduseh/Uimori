@@ -44,6 +44,52 @@ const profileBody = (p: ChatProfile) => ({
   routes: p.routes,
   image: p.image,
 });
+test('unfinished disabled collaboration can save with the surrounding prompt and remains disabled', () => {
+  const store = database();
+  const program = createDefaultRisuPrompt('Working main prompt');
+  program.collaboration = {
+    ...createAgentCollaboration(),
+    sharedControls: ['removed-option'],
+    agents: [{ ...createAgentDefinition('custom', 'draft'), title: '', instructions: '' }],
+  };
+  const saved = store.product.promptPreset({
+    title: 'Saved draft',
+    role: 'main',
+    program,
+  }) as PromptPreset;
+  expect(store.product.get<PromptPreset>('prompt-preset', saved.id).program).toEqual(program);
+  expect(() =>
+    store.product.promptPreset({
+      title: saved.title,
+      role: 'main',
+      program: { ...program, collaboration: { ...program.collaboration!, enabled: true } },
+    })
+  ).toThrow('AGENT_COLLABORATION_UNKNOWN_CONTROL');
+});
+
+test('legacy character limits are retired when saving a preset without changing its authored instructions', () => {
+  const store = database();
+  const program = createDefaultRisuPrompt('Main prompt');
+  const instructions = 'Long authored advisor guidance. '.repeat(2000);
+  program.collaboration = {
+    ...createAgentCollaboration(),
+    enabled: true,
+    sharedInstructions: instructions,
+    agents: [{ ...createAgentDefinition('custom', 'advisor'), instructions, maxOutputChars: 6000 }],
+  };
+  const saved = store.product.promptPreset({
+    title: 'Legacy collaboration',
+    role: 'main',
+    program,
+  }) as PromptPreset;
+  const loaded = store.product.get<PromptPreset>('prompt-preset', saved.id);
+  expect(loaded.program.collaboration!.sharedInstructions).toBe(instructions);
+  expect(loaded.program.collaboration!.agents[0].instructions).toBe(instructions);
+  expect(loaded.program.collaboration!.agents[0]).not.toHaveProperty('maxOutputChars');
+  expect(loaded.program.collaboration!.agents[0]).not.toHaveProperty('maxOutputTokens');
+  expect(program.collaboration.agents[0].maxOutputChars).toBe(6000);
+});
+
 function fixture() {
   const store = database(),
     product = store.product;

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { HelperScope, HelperEditor, HelperLimits } from '../core/helper.js';
 import type { HelperRuntime } from './helper-runtime.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
-import { HELPER_PERSONA_MAX_CHARS } from '../core/content-limits.js';
+import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
 export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   const store = runtime.workspace;
@@ -129,46 +129,52 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     '/api/helper/conversations/:id/tasks',
     (request) => store.tasks(request.params.id, request.query.before).map(publicTask)
   );
-  app.post<{ Params: { id: string } }>('/api/helper/conversations/:id/messages', (request) => {
-    const body = record(request.body);
-    fields(body, ['requestKey', 'text', 'editor', 'selection', 'retryOf']);
-    let editor: HelperEditor | undefined;
-    if (body.editor !== undefined) {
-      const input = record(body.editor);
-      fields(input, ['targetId', 'revision', 'title', 'kind', 'model']);
-      if (!['content', 'prompt-preset', 'prompt-workspace'].includes(input.kind))
-        throw new HttpError(400, 'Invalid editor kind');
-      editor = {
-        targetId: input.targetId === null ? null : text(input.targetId, 'resource ID', 100),
-        revision: input.revision === null ? null : number(input.revision, 'revision'),
-        title: text(input.title, 'editor title', 200, true),
-        kind: input.kind,
-        ...(input.model === undefined
-          ? {}
-          : { model: record(input.model) as import('../core/resource-editing.js').ResourceModel }),
-      };
+  app.post<{ Params: { id: string } }>(
+    '/api/helper/conversations/:id/messages',
+    { bodyLimit: 32 * 1024 * 1024 },
+    (request) => {
+      const body = record(request.body);
+      fields(body, ['requestKey', 'text', 'editor', 'selection', 'retryOf']);
+      let editor: HelperEditor | undefined;
+      if (body.editor !== undefined) {
+        const input = record(body.editor);
+        fields(input, ['targetId', 'revision', 'title', 'kind', 'model']);
+        if (!['content', 'prompt-preset', 'prompt-workspace'].includes(input.kind))
+          throw new HttpError(400, 'Invalid editor kind');
+        editor = {
+          targetId: input.targetId === null ? null : text(input.targetId, 'resource ID', 100),
+          revision: input.revision === null ? null : number(input.revision, 'revision'),
+          title: text(input.title, 'editor title', 200, true),
+          kind: input.kind,
+          ...(input.model === undefined
+            ? {}
+            : {
+                model: record(input.model) as import('../core/resource-editing.js').ResourceModel,
+              }),
+        };
+      }
+      return publicTask(
+        runtime.enqueue(
+          request.params.id,
+          text(body.requestKey, 'request key', 100),
+          text(body.text, 'helper message', REQUEST_TEXT_MAX_CHARS),
+          editor,
+          body.selection === undefined
+            ? undefined
+            : (() => {
+                const selection = record(body.selection);
+                fields(selection, ['sourceId', 'sourceHash', 'text']);
+                return {
+                  sourceId: text(selection.sourceId, 'source ID', 100),
+                  sourceHash: text(selection.sourceHash, 'source hash', 64),
+                  text: text(selection.text, 'selected text', REQUEST_TEXT_MAX_CHARS),
+                };
+              })(),
+          body.retryOf === undefined ? undefined : text(body.retryOf, 'retry task ID', 100)
+        )
+      );
     }
-    return publicTask(
-      runtime.enqueue(
-        request.params.id,
-        text(body.requestKey, 'request key', 100),
-        text(body.text, 'helper message', 100_000),
-        editor,
-        body.selection === undefined
-          ? undefined
-          : (() => {
-              const selection = record(body.selection);
-              fields(selection, ['sourceId', 'sourceHash', 'text']);
-              return {
-                sourceId: text(selection.sourceId, 'source ID', 100),
-                sourceHash: text(selection.sourceHash, 'source hash', 64),
-                text: text(selection.text, 'selected text', 100_000),
-              };
-            })(),
-        body.retryOf === undefined ? undefined : text(body.retryOf, 'retry task ID', 100)
-      )
-    );
-  });
+  );
   app.get<{ Params: { id: string } }>('/api/helper/tasks/:id', (request) =>
     publicTask(store.task(request.params.id))
   );

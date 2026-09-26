@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
-  AGENT_CONTEXT_CHARS_MAX,
   AGENT_CONTEXT_REFS_MAX,
-  AGENT_DRAFT_CHARS_MAX,
   type AgentConsultationContext,
   type AgentAdvice,
   type AdviceOrigin,
@@ -32,8 +30,6 @@ export function resolveAgentContext(
     (draft !== undefined && (typeof draft !== 'string' || !draft.trim()))
   )
     throw new AgentContextError('INVALID_ADVISOR_REQUEST');
-  if (typeof draft === 'string' && draft.length > AGENT_DRAFT_CHARS_MAX)
-    throw new AgentContextError('ADVISOR_CONTEXT_TOO_LARGE');
   const ids = (refs ?? []) as string[];
   if (!ids.length && draft === undefined) return undefined;
   const events = new Map(available.map((event) => [event.callId, event]));
@@ -53,9 +49,7 @@ export function resolveAgentContext(
       : {}),
   };
   const serialized = JSON.stringify(content);
-  // Reject oversized context intact; cutting a source or JSON record could change its meaning.
-  if (serialized.length > AGENT_CONTEXT_CHARS_MAX)
-    throw new AgentContextError('ADVISOR_CONTEXT_TOO_LARGE');
+  // Preserve complete references and drafts; the provider request enforces the model token budget.
   return { hash: createHash('sha256').update(serialized).digest('hex'), ...content };
 }
 

@@ -205,6 +205,66 @@ afterEach(() => {
 });
 
 describe('input context projection and durable summary calls', () => {
+  test('one token-fitting long exchange uses one summary call and preserves a fitting summary beyond the old character cap', async () => {
+    const longSource = 'a'.repeat(600_000) + 'SOURCE_END';
+    const source = await snapshot([longSource, 'Recent scene one.', 'Recent scene two.']);
+    const mergedSummary = 'Known fact [scene 1]:' + ' '.repeat(220_000) + 'SUMMARY_END';
+    const summaryModel = { ...model('summary-model'), inputTokenLimit: 1_000_000 };
+    const log = observed({ summaryModel });
+    vi.mocked(fetch).mockImplementation(async (_url, options) => {
+      const wire = JSON.parse(String(options?.body));
+      expect(estimateContextTokens(wire)).toBeLessThan(summaryModel.inputTokenLimit * 0.85);
+      return completed(mergedSummary);
+    });
+    const result = await prepareInputContext(source, log.hooks);
+    expect(log.wires).toHaveLength(1);
+    expect(result.usage.modelCalls).toBe(1);
+    const payload = (log.wires[0].body as { input: { source: SummaryPayload } }).input.source;
+    expect(payload.fragments.map((part) => part.text)).toEqual(
+      source.logicalHistory!.slice(0, 2).map((message) => message.text)
+    );
+    expect(payload.fragments[1]).toMatchObject({
+      offsetUtf16: 0,
+      totalUtf16: longSource.length,
+      text: longSource,
+    });
+    expect(result.snapshot.contextPlan).toMatchObject({
+      summary: mergedSummary,
+      compacted: [{ revision: 'source-0', hash: hash(longSource) }],
+      recentSourceRevisions: ['source-1', 'source-2'],
+    });
+    expect(result.snapshot.history).toEqual(source.history);
+    expect(() => validateContextPlan(result.snapshot)).not.toThrow();
+  });
+
+  test('preserves large native prompt text within the token budget without a summary call', async () => {
+    const source = await snapshot();
+    const paragraphs = ['a'.repeat(2_200_000), 'Keep the complete source.'];
+    source.profile!.models.main = { ...model(), inputTokenLimit: 1_000_000 };
+    source.contextPlan!.budget.inputTokenLimit = 1_000_000;
+    source.profile!.promptPresets!.main!.program = nativePrompt('', {
+      promptTemplate: [
+        ...paragraphs.map((text) => ({ type: 'plain', role: 'system', text })),
+        { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+      ],
+    });
+    await refreshNativeSnapshot(source);
+    const log = observed();
+    const result = await prepareInputContext(source, log.hooks);
+    const built = buildMainProviderRequest(result.snapshot);
+    expect(JSON.stringify(built.request).length).toBeGreaterThan(2_000_000);
+    expect(
+      built.request.prompt!.messages.slice(0, 2).map((message) => message.content[0].text)
+    ).toEqual(paragraphs);
+    expect(result.snapshot.contextPlan).toMatchObject({
+      status: 'ready',
+      summaryCalls: 0,
+      compacted: [],
+    });
+    expect(log.wires).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test.each([
     {
       consumerLimit: 65536,

@@ -5,7 +5,8 @@ import { join, relative, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as transport from '../core/transport.js';
 import { Store } from '../server/store.js';
-import { ChatTitleService } from '../server/chat-title.js';
+import { ChatTitleService, TITLE_EXCERPT_TOKENS } from '../server/chat-title.js';
+import { countTextTokens } from '../core/text-tokens.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { editSource } from '../server/source-editing.js';
@@ -21,7 +22,7 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true });
   }
 });
-function setup() {
+function setup(request = 'A scene', sourceText = 'A synthetic source.') {
   const path = mkdtempSync(join(tmpdir(), 'uimori-title-')),
     store = new Store(join(path, 'story.sqlite'));
   owned.push({ store, path });
@@ -61,7 +62,7 @@ function setup() {
   const run = store.createRun(
     chat.id,
     {
-      request: 'A scene',
+      request,
       expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       idempotencyKey: randomUUID(),
@@ -71,7 +72,7 @@ function setup() {
       parentRevision: chat.headRevision,
       settingsRevision: chat.settingsRevision,
       settings: chat.settings,
-      request: 'A scene',
+      request,
       history: [],
       resources: store.product.resources(chat.id, profile),
       profile,
@@ -80,7 +81,7 @@ function setup() {
   store.startRun(run.id);
   const source = store.completeRun(
     run.id,
-    'A synthetic source.',
+    sourceText,
     { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
     run.snapshot.settings
   );
@@ -136,6 +137,27 @@ test('one title request is journaled, bounded and never repeated after completio
   ]);
   new ChatTitleService(f.store, f.options).afterSource(f.run.id);
   expect(send).toHaveBeenCalledTimes(1);
+});
+test.each([
+  'A lantern at the river. '.repeat(400),
+  '강가에서 은빛 머리의 소녀가 등불을 흔들었다. 🌙 '.repeat(600),
+])('title context uses token previews and preserves stored text', async (sourceText) => {
+  const requestText = '푸른 옷을 입은 나그네의 다음 장면을 이어 주세요. '.repeat(500);
+  const f = setup(requestText, sourceText);
+  const send = mockSend();
+  f.service.afterSource(f.run.id);
+  await Promise.all(f.work);
+  expect(send).toHaveBeenCalledTimes(1);
+  const input = JSON.parse(send.mock.calls[0][1].input.task) as { request: string; source: string };
+  expect(countTextTokens(input.request)).toBeLessThanOrEqual(TITLE_EXCERPT_TOKENS.request);
+  expect(input.request.endsWith('\n[Remaining request text omitted]')).toBe(true);
+  expect(countTextTokens(input.source)).toBeLessThanOrEqual(TITLE_EXCERPT_TOKENS.source);
+  if (countTextTokens(sourceText) <= TITLE_EXCERPT_TOKENS.source)
+    expect(input.source).toBe(sourceText);
+  else expect(input.source.endsWith('\n[Remaining source text omitted]')).toBe(true);
+  expect(new TextDecoder().decode(new TextEncoder().encode(input.source))).toBe(input.source);
+  expect(f.store.run(f.run.id).request).toBe(requestText);
+  expect(f.store.source(f.source.id).text).toBe(sourceText);
 });
 test.each(['manual', 'source', 'cancel'] as const)(
   'late title cannot overwrite %s changes',

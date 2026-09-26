@@ -11,6 +11,7 @@ import type {
 const LIMIT_KEYS: (keyof NativeLuaWorkerLimits)[] = [
   'cpuMs',
   'guestJsonBytes',
+  'snapshotJsonBytes',
   'sourceBytes',
   'hostMethodChars',
   'hostCalls',
@@ -35,7 +36,7 @@ function validLimits(value: unknown): value is NativeLuaWorkerLimits {
 // section declares 256 initial / 32768 maximum pages. Restrict that declaration
 // before instantiation, solely in this fresh Worker, without changing the package.
 // A dependency with a different memory contract must be reviewed explicitly.
-function fixedMemoryBinary(source: BufferSource): Uint8Array<ArrayBuffer> {
+function fixedMemoryBinary(source: BufferSource, maximumBytes: number): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(
     source instanceof ArrayBuffer ? source : source.buffer,
     source instanceof ArrayBuffer ? 0 : source.byteOffset,
@@ -63,7 +64,15 @@ function fixedMemoryBinary(source: BufferSource): Uint8Array<ArrayBuffer> {
       const expected = [1, 1, 128, 2, 128, 128, 2];
       if (size !== expected.length || expected.some((value, i) => bytes[cursor + i] !== value))
         break;
-      const replacement = new Uint8Array([5, 6, 1, 1, 128, 2, 128, 2]);
+      const maximum: number[] = [];
+      let pages = Math.ceil(maximumBytes / 65_536);
+      do {
+        const part = pages % 128;
+        pages = Math.floor(pages / 128);
+        maximum.push(part + (pages ? 128 : 0));
+      } while (pages);
+      const section = [1, 1, 128, 2, ...maximum];
+      const replacement = new Uint8Array([5, section.length, ...section]);
       const result = new Uint8Array(start + replacement.length + bytes.length - end);
       result.set(bytes.subarray(0, start));
       result.set(replacement, start);
@@ -75,14 +84,14 @@ function fixedMemoryBinary(source: BufferSource): Uint8Array<ArrayBuffer> {
   throw new Error('LUA_WASM_MEMORY_CONTRACT');
 }
 
-async function createEngine() {
+async function createEngine(maximumBytes: number) {
   const original = WebAssembly.instantiate;
   let instantiated = false;
   WebAssembly.instantiate = (async (binary: BufferSource, imports?: WebAssembly.Imports) => {
     if (instantiated || binary instanceof WebAssembly.Module)
       throw new Error('LUA_WASM_MEMORY_CONTRACT');
     instantiated = true;
-    return original(fixedMemoryBinary(binary), imports);
+    return original(fixedMemoryBinary(binary, maximumBytes), imports);
   }) as typeof WebAssembly.instantiate;
   try {
     const engine = await new LuaFactory().createEngine({
@@ -120,15 +129,16 @@ local function tagged(kind, value)
 end
 local function object(value) return tagged('object', value) end
 local function array(value) return tagged('array', value) end
-local function encode(value)
+local function encode(value, maximum)
+  maximum = maximum or ${limits.guestJsonBytes}
   local chunks, size, nodes, seen = {}, 0, 0, {}
   local function emit(text)
     size = size + #text
-    if size > ${limits.guestJsonBytes} then error('JSON_SIZE', 0) end
+    if size > maximum then error('JSON_SIZE', 0) end
     chunks[#chunks + 1] = text
   end
   local function quote(text)
-    if #text > ${limits.guestJsonBytes} - size then error('JSON_SIZE', 0) end
+    if #text > maximum - size then error('JSON_SIZE', 0) end
     emit('"')
     local start = 1
     for at, code in utfcodes(text, true) do
@@ -194,8 +204,8 @@ local function encode(value)
   visit(value, 0)
   return concat(chunks)
 end
-local function decode(text)
-  if type(text) ~= 'string' or #text > ${limits.guestJsonBytes} then error('JSON_VALUE', 0) end
+local function decode(text, maximum)
+  if type(text) ~= 'string' or #text > (maximum or ${limits.guestJsonBytes}) then error('JSON_VALUE', 0) end
   local at, nodes = 1, 0
   local function bad() error('JSON_VALUE', 0) end
   local function ws()
@@ -304,21 +314,27 @@ local function decode(text)
   if at <= #text then bad() end
   return value
 end
-local api = decode(inputJSON)
+local api = decode(inputJSON, ${limits.snapshotJsonBytes})
 local calls, resultBytes = 0, 0
-api.json = {encode=encode, decode=decode, null=null, object=object, array=array}
+api.json = {encode=function(value) return encode(value) end, decode=function(text) return decode(text) end, null=null, object=object, array=array}
+api.snapshot = {
+  encode=function(value) return encode(value, ${limits.snapshotJsonBytes}) end,
+  decode=function(text) return decode(text, ${limits.snapshotJsonBytes}) end,
+}
 api.host = {call=function(method, args)
   if type(method) ~= 'string' or #method == 0 or #method > ${limits.hostMethodChars} then error('RISU_LUA_HOST_ARGUMENTS', 0) end
   calls = calls + 1
   if calls > ${limits.hostCalls} then error('RISU_LUA_HOST_CALL_LIMIT', 0) end
-  local ok, argsJSON = pcall(encode, args)
+  local snapshot = method == '__native.next' or method == 'cbs'
+  local maximum = snapshot and ${limits.snapshotJsonBytes} or ${limits.guestJsonBytes}
+  local ok, argsJSON = pcall(encode, args, maximum)
   if not ok then error('RISU_LUA_HOST_ARGUMENTS', 0) end
   local success, text, reset = yield(method, argsJSON)
   if not success then error(text, 0) end
   if reset then calls, resultBytes = 0, 0 end
-  resultBytes = resultBytes + #text
-  if #text > ${limits.guestJsonBytes} or resultBytes > ${limits.hostResultBytes} then error('RISU_LUA_HOST_RESULT_LIMIT', 0) end
-  return decode(text)
+  if not snapshot then resultBytes = resultBytes + #text end
+  if #text > maximum or resultBytes > ${limits.hostResultBytes} then error('RISU_LUA_HOST_RESULT_LIMIT', 0) end
+  return decode(text, maximum)
 end}
 local env = {
   api=api, _VERSION=_VERSION, assert=assert, error=error, ipairs=ipairs, next=next,
@@ -371,17 +387,32 @@ async function run() {
     typeof input.source !== 'string' ||
     typeof input.inputJSON !== 'string' ||
     Buffer.byteLength(input.source) > input.limits.sourceBytes ||
-    Buffer.byteLength(input.inputJSON) > input.limits.guestJsonBytes ||
+    Buffer.byteLength(input.inputJSON) > input.limits.snapshotJsonBytes ||
     !Array.isArray(input.hostErrorCodes)
   ) {
     fail('RISU_LUA_PROGRAM_INPUT_SIZE');
     return;
   }
   const limits = input.limits;
-  const engine = await createEngine();
+  // Keep Wasm bounded too, with space for the runtime outside the traced Lua allocator.
+  const engine = await createEngine(limits.luaMemoryBytes + 64 * 1024 * 1024);
   const global = engine.global;
   const lua = global.lua;
-  global.setMemoryMax(limits.luaMemoryBytes);
+  let allocatedLimit = 0;
+  const invocationBudget = (bytes: number) => {
+    const size = Buffer.byteLength(input.source) + bytes;
+    // JSON strings, decoded tables, full-chat copies and an encoded result coexist. Grow
+    // with the actual snapshot, retaining room for locals in this persistent VM.
+    allocatedLimit = Math.max(
+      allocatedLimit,
+      16 * 1024 * 1024 + 6 * (size + limits.guestJsonBytes)
+    );
+    global.setMemoryMax(Math.min(limits.luaMemoryBytes, allocatedLimit));
+    // The private Lua codecs share this CPU counter. Charge bounded serialization
+    // headroom by input size so long history alone does not exhaust the script budget.
+    return limits.cpuMs + Math.ceil(size / (1024 * 1024)) * 500;
+  };
+  let cpuRemaining = invocationBudget(Buffer.byteLength(input.inputJSON));
   for (const library of [
     LuaLibraries.Base,
     LuaLibraries.Coroutine,
@@ -396,7 +427,6 @@ async function run() {
   // The engine opens JS userdata metatables internally but no instance, function,
   // proxy, object, or global from that bridge is passed into this guest sandbox.
   const thread = global.newThread();
-  let cpuRemaining = limits.cpuMs;
   let deadline = 0;
   let timedOut = false;
   const hook = lua.module.addFunction((state: number) => {
@@ -459,7 +489,9 @@ async function run() {
     if (status.resultCount !== 2 || ++invocationCalls > limits.hostCalls)
       throw new Error('LUA_PROTOCOL');
     const method = stringAt(-2, limits.hostMethodChars);
-    const argsJson = stringAt(-1, limits.guestJsonBytes);
+    const snapshot = method === '__native.next' || method === 'cbs';
+    const maximum = snapshot ? limits.snapshotJsonBytes : limits.guestJsonBytes;
+    const argsJson = stringAt(-1, maximum);
     thread.pop(2);
     const id = ++hostId;
     const response = new Promise<NativeLuaHostReply>((resolve, reject) => {
@@ -480,18 +512,20 @@ async function run() {
     // Only the trusted host can begin another invocation in a persistent native session.
     // Guest RPC arguments cannot change the CPU allowance.
     if (result.ok && result.resetBudget === true) {
-      cpuRemaining = limits.cpuMs;
+      if (
+        typeof result.json !== 'string' ||
+        Buffer.byteLength(result.json) > limits.snapshotJsonBytes
+      )
+        throw new Error('LUA_PROTOCOL');
+      cpuRemaining = invocationBudget(Buffer.byteLength(result.json));
       timedOut = false;
       hostResultBytes = 0;
       invocationCalls = 0;
     }
     if (result.ok) {
       if (typeof result.json !== 'string') throw new Error('LUA_PROTOCOL');
-      hostResultBytes += Buffer.byteLength(result.json);
-      if (
-        Buffer.byteLength(result.json) > limits.guestJsonBytes ||
-        hostResultBytes > limits.hostResultBytes
-      ) {
+      if (!snapshot) hostResultBytes += Buffer.byteLength(result.json);
+      if (Buffer.byteLength(result.json) > maximum || hostResultBytes > limits.hostResultBytes) {
         thread.pushValue(false);
         thread.pushValue('RISU_LUA_HOST_RESULT_LIMIT');
       } else {

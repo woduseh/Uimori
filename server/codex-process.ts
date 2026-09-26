@@ -22,8 +22,10 @@ export interface CodexProcessOptions {
   env: NodeJS.ProcessEnv;
   timeoutMs?: number;
   experimentalApi?: boolean;
-  /** Line budget for stdio JSON; image turns carry base64 attachments and results. */
+  /** Incoming JSON line budget; image results can carry base64. */
   maxLineBytes?: number;
+  /** Outgoing buffered JSON budget; selected references can exceed one result image. */
+  maxWriteBytes?: number;
 }
 type Pending = { resolve(value: unknown): void; reject(error: Error): void; cleanup(): void };
 const MAX_LINE_BYTES = 8 * 1024 * 1024;
@@ -42,11 +44,16 @@ export class CodexProcess {
   private notifications = new Set<(method: string, params: unknown) => void>();
   private exits = new Set<() => void>();
   private readonly maxLineBytes: number;
+  private readonly maxWriteBytes: number;
   constructor(private readonly options: CodexProcessOptions) {
     const limit = options.maxLineBytes ?? MAX_LINE_BYTES;
     if (!Number.isSafeInteger(limit) || limit < 1024 || limit > 256 * 1024 * 1024)
       throw new CodexProcessError('CODEX_START_FAILED');
     this.maxLineBytes = limit;
+    const writeLimit = options.maxWriteBytes ?? limit;
+    if (!Number.isSafeInteger(writeLimit) || writeLimit < 1024 || writeLimit > 1024 * 1024 * 1024)
+      throw new CodexProcessError('CODEX_START_FAILED');
+    this.maxWriteBytes = writeLimit;
   }
 
   start(): Promise<void> {
@@ -150,10 +157,7 @@ export class CodexProcess {
     } catch {
       throw new CodexProcessError('CODEX_REQUEST_FAILED');
     }
-    if (
-      Buffer.byteLength(line) > this.maxLineBytes ||
-      this.child.stdin.writableLength > this.maxLineBytes
-    ) {
+    if (Buffer.byteLength(line) + this.child.stdin.writableLength > this.maxWriteBytes) {
       this.fail('CODEX_PROTOCOL_ERROR');
       throw new CodexProcessError('CODEX_PROTOCOL_ERROR');
     }

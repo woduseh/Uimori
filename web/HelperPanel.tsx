@@ -7,7 +7,7 @@ import type {
   HelperScope,
   HelperSelection,
 } from '../core/helper.js';
-import { HELPER_PERSONA_MAX_CHARS } from '../core/content-limits.js';
+import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { UI_HELPER_PERSONA } from './helper-persona.js';
 import { api, ApiError } from './api.js';
 import { RetryFailure } from './RetryFailure.js';
@@ -128,11 +128,7 @@ function storedSelection(scope: string): HelperSelection | null {
     return null;
   }
 }
-const quotedSelection = (selection: HelperSelection) =>
-  `원문 ${selection.sourceId}의 선택 부분:\n${selection.text
-    .split('\n')
-    .map((line) => `> ${line}`)
-    .join('\n')}\n\n`;
+const selectionRequest = '선택한 원문을 검토해 주세요.';
 
 export function HelperPanel(props: Props) {
   const sessions = useHelperSessions(props.open && props.ready !== false, props.scope);
@@ -259,14 +255,13 @@ export function HelperPanel(props: Props) {
       const value: HelperSelection = {
         sourceId: selected.sourceId,
         sourceHash: selected.sourceHash,
-        text: selected.text.slice(0, 20000),
+        text: selected.text,
       };
       setSelections((old) => ({ ...old, [key]: value }));
       saveLocal(`uimori:helper-selection:${key}`, JSON.stringify(value));
       setDrafts((old) => {
-        const text = [old[key] ?? local(`uimori:helper-input:${key}`), quotedSelection(value)]
-          .filter(Boolean)
-          .join('\n\n');
+        const previous = old[key] ?? local(`uimori:helper-input:${key}`) ?? '';
+        const text = previous.trim() ? previous : selectionRequest;
         saveLocal(`uimori:helper-input:${key}`, text);
         return { ...old, [key]: text };
       });
@@ -375,6 +370,14 @@ export function HelperPanel(props: Props) {
     setError('');
     data.setError('');
     try {
+      if (text.length > REQUEST_TEXT_MAX_CHARS)
+        throw new Error(
+          `요청은 ${REQUEST_TEXT_MAX_CHARS.toLocaleString()}자까지 보낼 수 있어요. 입력은 그대로 보존했어요.`
+        );
+      if (((saved?.selection ?? selection)?.text.length ?? 0) > REQUEST_TEXT_MAX_CHARS)
+        throw new Error(
+          `선택한 원문은 ${REQUEST_TEXT_MAX_CHARS.toLocaleString()}자까지 보낼 수 있어요. 선택과 입력은 그대로 보존했어요.`
+        );
       let request = saved;
       if (!request) {
         const before = getActiveEditorContext(),
@@ -826,7 +829,7 @@ export function HelperPanel(props: Props) {
                 <RequestMessage
                   runId={message.taskId}
                   request={message.text}
-                  maxLength={100000}
+                  maxLength={REQUEST_TEXT_MAX_CHARS}
                   editHint="수정한 요청으로 같은 자리에서 다시 시도해요."
                   disabled={branchMismatch || busy || Boolean(outbox)}
                   onSubmit={
@@ -936,7 +939,7 @@ export function HelperPanel(props: Props) {
             <button
               type="button"
               onClick={() => {
-                editDraft(draft.replace(quotedSelection(selection), '').trimStart());
+                if (draft === selectionRequest) editDraft('');
                 setSelections((old) => ({ ...old, [scopeKey]: null }));
                 saveLocal(`uimori:helper-selection:${scopeKey}`, null);
               }}
@@ -1035,7 +1038,7 @@ export function HelperPanel(props: Props) {
             value={draft}
             disabled={props.ready === false || !conversation}
             placeholder="도우미에게 요청하기"
-            maxLength={100000}
+            maxLength={REQUEST_TEXT_MAX_CHARS}
             onChange={(event) => editDraft(event.target.value)}
             onSend={() => void send()}
           />

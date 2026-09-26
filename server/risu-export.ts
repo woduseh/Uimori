@@ -8,7 +8,11 @@ import {
   stripDeprecatedRisuModuleFields,
   stripDeprecatedRisuPresetFields,
 } from '../core/risu-deprecated-fields.js';
-import { RISU_IMPORT_MAX_ASSETS } from '../core/risu-import.js';
+import {
+  RISU_IMPORT_MAX_ASSETS,
+  RISU_IMPORT_MAX_UPLOAD_BYTES,
+  risuImportExpandedLimit,
+} from '../core/risu-import.js';
 import type { ProductStore } from './product-store.js';
 import type { Store } from './store.js';
 import { assertLibraryVisible } from './library-deletion.js';
@@ -70,7 +74,7 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
       );
       if (blob.hash !== image.blobHash || blob.mime !== image.mime) return failAsset();
       const bytes = Buffer.from(blob.base64, 'base64');
-      exportLimit((total += bytes.length));
+      exportLimit((total += bytes.length), risuImportExpandedLimit(RISU_IMPORT_MAX_UPLOAD_BYTES));
       blobs.set(image.blobHash, bytes);
     }
     consumed.add(imageId);

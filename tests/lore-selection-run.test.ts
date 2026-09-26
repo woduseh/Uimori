@@ -4,6 +4,8 @@ import type { RunSnapshot } from '../core/types.js';
 import type { MainHooks } from '../server/model-runner.js';
 import { prepareLoreSelection } from '../server/lore-selection.js';
 import { projectLoreSelectionReceipt } from '../core/lore-selection.js';
+import { countTextTokens } from '../core/text-tokens.js';
+import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 const snapshot = (): RunSnapshot => ({
   chatId: 'lore-test',
   parentRevision: null,
@@ -48,6 +50,39 @@ const hooks = (): MainHooks => ({
   onToolEvent: vi.fn(),
   onAttemptStart: vi.fn(() => 'attempt'),
   onAttemptFinish: vi.fn(),
+});
+test('token budgets preserve long requests and catalogs without character-based cuts', async () => {
+  const input = snapshot();
+  input.request = 'Continue. '.repeat(600) + 'Respect the final direction.';
+  input.profile!.loreContext = {
+    ...DEFAULT_LORE_CONTEXT,
+    judgment: { ...DEFAULT_LORE_CONTEXT.judgment, maxInputTokens: 30_000 },
+  };
+  input.profile!.packages![0].lore[0].text = 'a'.repeat(200_001);
+  input.history = [{ revision: 'past', text: '기억할 장면 😀 '.repeat(2000) + '마지막 단서' }];
+  const send = vi.fn(
+    async (_url: unknown, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          model: 'jev-latest',
+          answers: { entry_0: { type: 'noul', noul: 0.9 } },
+          usage: { input_tokens: 100, output_tokens: 5 },
+        })
+      )
+  );
+  const result = await prepareLoreSelection(input, hooks(), {
+    reserveCalls: 1,
+    jev: { credential: () => 'synthetic-key', fetch: send },
+  });
+  expect(send).toHaveBeenCalledTimes(1);
+  const body = JSON.parse(String(send.mock.calls[0][1]!.body));
+  expect(body.state.request).toBe(input.request);
+  expect(body.state.entries[0].text).toBe(input.profile!.packages![0].lore[0].text);
+  expect(body.state.conversation[0].truncated).toBe(true);
+  expect(body.state.conversation[0].text.endsWith('마지막 단서')).toBe(true);
+  expect(countTextTokens(body.state.conversation[0].text)).toBeLessThanOrEqual(500);
+  expect(result.usage.modelCalls).toBe(1);
+  expect(result.snapshot.loreSelection!.entries[0].error).toBeUndefined();
 });
 test('reserves the writer call and never substitutes the context model', async () => {
   const input = snapshot();

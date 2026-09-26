@@ -32,6 +32,29 @@ const caseArgs = {
 };
 
 describe('provider-neutral evaluation tools', () => {
+  test('retains long evaluation directions and artifacts within the stored prose contract', () => {
+    const direction = 'Continue the requested scene. '.repeat(300);
+    const result = executeEvaluationTool(
+      {
+        id: 'long-case',
+        name: 'eval_create_case',
+        arguments: { ...caseArgs, requestedContinuationDirection: direction },
+      },
+      defaultEvaluationToolOptions(),
+      createEvaluationSession()
+    );
+    expect(result).toMatchObject({
+      denied: false,
+      result: { selectedContinuationDirection: direction },
+    });
+    const content = 'a'.repeat(500_001);
+    expect(
+      extractEvaluationArtifact(
+        { content, userFacingNotice: 'Separate notice' },
+        defaultEvaluationToolOptions()
+      ).text
+    ).toBe(content);
+  });
   test('ET01 exposes preset-selected tools and binds economized generation without changing later rounds', () => {
     const defaults = defaultEvaluationToolOptions();
     const definitions = evaluationToolDefinitions(defaults);

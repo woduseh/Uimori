@@ -1,5 +1,6 @@
 import { generationFromModel } from '../core/model-capabilities.js';
-import { AGENT_CONTEXT_REFS_MAX, AGENT_DRAFT_CHARS_MAX } from '../core/agent-collaboration.js';
+import { AGENT_CONTEXT_REFS_MAX } from '../core/agent-collaboration.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import {
   CONTEXT_CONTINUATION_GUIDANCE,
@@ -34,7 +35,7 @@ import {
   contextToolsEnabled,
 } from '../core/context-tools.js';
 
-export const STORY_SUBMIT_MAX_CHARS = 500_000;
+export const STORY_SUBMIT_MAX_CHARS = SOURCE_TEXT_MAX_CHARS;
 export const STORY_SUBMIT_TOOL: ProviderTool = {
   name: 'story.submit',
   description:
@@ -92,19 +93,19 @@ export function buildMainProviderRequest(
         {
           name: 'agents.consult',
           description:
-            'Ask a configured creative advisor when another perspective or source check would help your next decision. Supply the question. Optionally select completed advisor or main read tool call IDs from this run in contextRefs and provide an uncommitted draft excerpt in draft. The host passes the selected results with their sources and failure/truncation status; other working context is not automatically shared. Total selected context including draft is limited to 32000 characters. Follow-up questions share the run and per-advisor budgets; the same question with the same explicit context reuses its outcome. Use another advisor opinion as a proposal to examine, not established fact. You decide what to use and write the final prose.',
+            'Ask a configured creative advisor when another perspective or source check would help your next decision. Supply the question. Optionally select completed advisor or main read tool call IDs from this run in contextRefs and provide an uncommitted draft in draft. The host passes the selected results with their sources and failure/truncation status; other working context is not automatically shared. The complete input must fit the selected advisor model token budget; oversized input returns a correctable error without sending a model call or truncating the text. Follow-up questions share the run and per-advisor budgets; the same question with the same explicit context reuses its outcome. Use another advisor opinion as a proposal to examine, not established fact. You decide what to use and write the final prose.',
           inputSchema: {
             type: 'object',
             properties: {
               agentId: { type: 'string', enum: collaboration.agents.map((agent) => agent.id) },
-              question: { type: 'string', minLength: 1, maxLength: 8000 },
+              question: { type: 'string', minLength: 1 },
               contextRefs: {
                 type: 'array',
                 items: { type: 'string', minLength: 1, maxLength: 500 },
                 maxItems: AGENT_CONTEXT_REFS_MAX,
                 uniqueItems: true,
               },
-              draft: { type: 'string', minLength: 1, maxLength: AGENT_DRAFT_CHARS_MAX },
+              draft: { type: 'string', minLength: 1 },
             },
             required: ['agentId', 'question'],
             additionalProperties: false,

@@ -271,6 +271,7 @@ export async function runIllustrationJob(
             connection,
             {
               modelId: model.modelId,
+              contextBudget: contextBudgetForModel(model),
               reasoningEffort: model.reasoningEffort,
               developerInstructions: CODEX_ILLUSTRATION_INSTRUCTIONS,
               text: codexIllustrationText(context, references),
@@ -317,10 +318,7 @@ export async function runIllustrationJob(
         (onWire) =>
           executeProvider(
             transportConnection(connection),
-            {
-              ...illustrationPromptRequest(model, context, generationFromModel(model)),
-              contextBudget: contextBudgetForModel(model),
-            },
+            illustrationPromptRequest(model, context, generationFromModel(model)),
             {
               signal: hooks.signal,
               resolveCredential: hooks.resolveCredential,
@@ -337,6 +335,7 @@ export async function runIllustrationJob(
           code,
           code !== 'ILLUSTRATION_PROMPT_REFUSED' &&
             code !== 'ILLUSTRATION_CANCELLED' &&
+            code !== 'ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED' &&
             !/HTTP_4\d\d$/u.test(code)
         );
       }

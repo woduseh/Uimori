@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
+import sharp from 'sharp';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -12,6 +13,7 @@ import { cardZip, readCharacterCard } from '../server/character-card-file.js';
 import { readRisuPresetFile } from '../server/risu-preset-file.js';
 import { putImageBlob, putValidatedImageBlob } from '../server/package-images.js';
 import { decodeRPack, encodeRPack } from '../server/compat/risu/rpack.js';
+import { prepareRisuImport, applyRisuImport } from '../server/risu-import.js';
 import {
   addNativeRisuImage,
   removeNativeRisuImage,
@@ -187,6 +189,88 @@ test('export rejects missing or unsafe embedded assets without dropping them', (
   }
 });
 
+test('large imported images export and reimport within the same ZIP and module budgets', async () => {
+  const { store } = fixture();
+  const small = await sharp({ create: { width: 1, height: 1, channels: 3, background: '#123456' } })
+    .webp()
+    .toBuffer();
+  // Unknown RIFF chunks are valid WebP and stay intact when already-encoded assets are stored.
+  const images = [1, 2].map((fill) => {
+    const chunk = Buffer.alloc(8),
+      padding = Buffer.alloc(33 * 1024 * 1024, fill);
+    chunk.write('JUNK');
+    chunk.writeUInt32LE(padding.length, 4);
+    const bytes = Buffer.concat([small, chunk, padding]);
+    bytes.writeUInt32LE(bytes.length - 8, 4);
+    return bytes;
+  });
+  const data = {
+    name: 'Large image material',
+    description: '',
+    assets: images.map((_, index) => ({
+      name: index === 0 ? 'main' : `image-${index}`,
+      uri: `embeded://assets/${index}.webp`,
+      type: index === 0 ? 'icon' : 'other',
+      ext: 'webp',
+    })),
+  };
+  const files = new Map([
+    ['card.json', exportJson({ spec: 'chara_card_v3', data })],
+    ...images.map((bytes, index): [string, Buffer] => [`assets/${index}.webp`, bytes]),
+  ]);
+  const container = writeRisuZip(files);
+  const input = { name: 'large.charx', uploadId: 'large-memory-fixture' };
+  const preview = prepareRisuImport({ source: input }, () => container);
+  const applied = await applyRisuImport(
+    store,
+    {
+      source: input,
+      digest: preview.digest,
+      allowPartial: false,
+      idempotencyKey: 'large-roundtrip',
+    },
+    () => container
+  );
+  const saved = store.product.get<Content>('content', applied.receipt.items[0].id);
+  const exported = exportRisuContent(store.product, saved);
+  const read = readCharacterCard(
+    { name: exported.filename, uploadId: 'exported-memory-fixture' },
+    undefined,
+    () => exported.bytes
+  );
+  const reimported = analyzeNativeRisuImport(read);
+  expect(reimported.preview.summary.images).toBe(2);
+  expect(reimported.file.images.map((image) => image.hash)).toEqual(
+    saved.package.images!.map((image) => image.blobHash)
+  );
+  const members = cardZip(exported.bytes);
+  for (const [index, image] of images.entries())
+    expect(members.get(`assets/${index}.webp`)?.().equals(image)).toBe(true);
+  const module = writeEmbeddedRisuModule(
+    {
+      name: 'Large standalone module',
+      assets: images.map((_, index) => [`image-${index}`, '', 'webp']),
+    },
+    images
+  );
+  const moduleInput = readCharacterCard(
+    { name: 'large.risum', uploadId: 'module-memory-fixture' },
+    undefined,
+    () => module
+  );
+  expect(analyzeNativeRisuImport(moduleInput).preview.summary.images).toBe(2);
+});
+
+test('ZIP export keeps enough compression when expanded entries exceed the upload limit', () => {
+  const payload = Buffer.alloc(50 * 1024 * 1024, 1);
+  const files = new Map(Array.from({ length: 6 }, (_, index) => [`assets/${index}.bin`, payload]));
+  const exported = writeRisuZip(files);
+  expect(exported.length).toBeLessThanOrEqual(256 * 1024 * 1024);
+  const read = cardZip(exported);
+  expect(read.size).toBe(files.size);
+  for (const [name, bytes] of files) expect(read.get(name)?.().equals(bytes)).toBe(true);
+});
+
 function importedModule(store: Store, name: string, extra: Record<string, unknown> = {}) {
   const input = writeEmbeddedRisuModule(
     { name, description: '', lorebook: [], regex: [], trigger: [], ...extra },
@@ -290,4 +374,25 @@ test('saving and exporting a historical RISUP silently removes retired execution
 test('encoder is the inverse of the pinned Risu RPack codec for every byte', () => {
   const bytes = Buffer.from(Array.from({ length: 256 }, (_, index) => index));
   expect(decodeRPack(encodeRPack(bytes))).toEqual(bytes);
+});
+
+test('RISUP text uses the preset import budget instead of the smaller card JSON budget', () => {
+  const text = 'a'.repeat(9 * 1024 * 1024);
+  const output = exportRisuPrompt({
+    id: 'large-preset',
+    revision: 1,
+    title: 'Large preset',
+    role: 'main',
+    program: {
+      version: 1,
+      nativeRisuPreset: {
+        version: 1,
+        preset: {
+          promptTemplate: [{ type: 'plain', role: 'system', text }],
+        },
+      },
+    },
+  });
+  const read = readRisuPresetFile(source(output.bytes, output.filename));
+  expect((read.preset.promptTemplate as { text: string }[])[0].text).toBe(text);
 });

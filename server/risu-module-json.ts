@@ -1,4 +1,5 @@
 import { RISU_IMPORT_MAX_ASSETS, RISU_IMPORT_MAX_LORE_ENTRIES } from '../core/risu-import.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { HttpError, record, text } from './request-validation.js';
 
 /** One lore mapping for extracted projects and the canonical lore in CharX containers. */
@@ -29,7 +30,7 @@ export function moduleLoreEntries(lorebook: unknown) {
     );
     return {
       name: typeof entry.comment === 'string' ? entry.comment : '',
-      content: text(entry.content ?? '', 'lore content', 1_000_000, true),
+      content: text(entry.content ?? '', 'lore content', SOURCE_TEXT_MAX_CHARS, true),
       keys:
         typeof entry.key === 'string'
           ? entry.key

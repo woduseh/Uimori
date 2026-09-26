@@ -23,12 +23,16 @@ export function contextRoutes(app: FastifyInstance, store: Store, hooks: Context
     '/api/chats/:id/context',
     async (request) => detail(request.params.id, request.query.branchId)
   );
-  app.put<{ Params: { id: string } }>('/api/chats/:id/context/summary', async (request) => {
-    const body = record(request.body),
-      snapshot = await hooks.snapshot(request.params.id, body.branchId);
-    const value = store.context.edit(request.params.id, body, snapshot);
-    return value;
-  });
+  app.put<{ Params: { id: string } }>(
+    '/api/chats/:id/context/summary',
+    { bodyLimit: 16 * 1024 * 1024 },
+    async (request) => {
+      const body = record(request.body),
+        snapshot = await hooks.snapshot(request.params.id, body.branchId);
+      const value = store.context.edit(request.params.id, body, snapshot);
+      return value;
+    }
+  );
   app.post<{ Params: { id: string } }>('/api/chats/:id/context/compact', async (request) => {
     const body = record(request.body),
       job = store.context.schedule(

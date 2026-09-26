@@ -25,6 +25,6 @@ Uimori의 채팅·분기·사용자 메모·JEV 설정·이미지 위임 설정�
 
 `GET /api/content/:id/risu-export?expectedRevision=N`과 `GET /api/prompt-presets/:id/risu-export?expectedRevision=N`은 attachment 응답을 반환해요. UTF-8 파일명, `Cache-Control: no-store`, `X-Uimori-Revision`을 제공해요. `expectedRevision`이 최신 저장 버전과 다르면 409로 거절하며 숨긴 자료는 404예요. 예상 버전을 생략한 API 호출은 최신 저장 버전을 읽어요.
 
-출력은 최대 64 MiB, JSON은 최대 8 MiB, 자산은 최대 2,000개로 제한해요. ZIP 경로 탈출·중복 경로에 다른 데이터·누락된 이미지 연결은 거절해요. 저장 상태나 가져오기 원본 사본은 수정하지 않아요.
+CHARX·RISUM 출력은 가져오기와 같은 최대 256 MiB, 카드·모듈 JSON은 최대 8 MiB, 자산은 최대 2,000개예요. ZIP 개별 항목은 64 MiB이며 전체 확장 크기도 가져오기 예산을 따라요. 압축률이 너무 높으면 일부 항목만 무압축으로 기록해 다시 가져올 수 있는 크기를 맞춰요. 최종 파일·확장 예산을 함께 지킬 수 없으면 거절해요. RISUP는 프리셋 가져오기와 같은 24 MiB 파일·원문 처리 예산을 사용해요. ZIP 경로 탈출·중복 경로에 다른 데이터·누락된 이미지 연결은 거절해요. 저장 상태나 가져오기 원본 사본은 수정하지 않아요.
 
 관련 코드는 `server/risu-export.ts`, `server/risu-export-codec.ts`, `core/risu-deprecated-fields.ts`에 있어요. 에셋 편집은 `core/risu-native-assets.ts`, `web/NativeRisuAssetsEditor.tsx`에서 관리해요. `tests/risu-export.test.ts`는 저장 후 수정한 자료를 실제 카드·프리셋 importer에 다시 넣어 첫 메시지, 내장 모듈, 이미지, CBS·Lua 원문, 폐기 정책 및 버전 충돌을 검증해요. `tests/risu-native-assets.test.ts`는 추가·교체·제거 때 식별자와 원문 보존을 검증해요. 이 검증은 실제 RisuAI 앱에서 모든 스크립트를 실행했다는 의미는 아니에요.

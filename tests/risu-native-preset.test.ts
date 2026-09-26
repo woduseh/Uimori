@@ -29,6 +29,17 @@ const preset = (text: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
+test('large authored presets retain all blocks and text through import and prompt validation', () => {
+  const promptTemplate = Array.from({ length: 300 }, (_, index) => ({
+    type: 'plain',
+    role: 'system',
+    text: `${index}:${'a'.repeat(4_000)}`,
+  }));
+  const imported = importRisuPresetProgram(preset('', { promptTemplate }));
+  expect(imported.program.nativeRisuPreset.preset.promptTemplate).toEqual(promptTemplate);
+  expect(validateRisuPrompt(imported.program)).toEqual(imported.program);
+});
+
 test('persona macros in cards and presets use the frozen selected body, also present in the persona slot', async () => {
   const body = 'A navigator carrying a silver compass.';
   const persona = nativeContent(

@@ -6,7 +6,7 @@ export const RISU_IMPORT_MAX_BYTES = 24 * 1024 * 1024;
 export const RISU_IMPORT_MAX_ASSETS = 2000;
 /** How many lore entries one module or card lorebook may declare. */
 export const RISU_IMPORT_MAX_LORE_ENTRIES = 2000;
-/** A container never expands past this in total, whatever its own file size claims. */
+/** Small containers may expand this far; larger ones also keep a bounded expansion ratio. */
 export const RISU_IMPORT_MAX_CONTAINER_BYTES = 64 * 1024 * 1024;
 /** One entry inside a container never expands past this, so no single member can be huge. */
 export const RISU_IMPORT_MAX_ENTRY_BYTES = 64 * 1024 * 1024;
@@ -19,6 +19,8 @@ export type RisuImportSource = { name: string; base64: string; uploadId?: undefi
 export type RisuImportStagedSource = { name: string; uploadId: string; base64?: undefined };
 /** Above this size the app reads a staged file and records the original's identity only. */
 export const RISU_IMPORT_MAX_UPLOAD_BYTES = 256 * 1024 * 1024;
+export const risuImportExpandedLimit = (containerBytes: number): number =>
+  Math.max(RISU_IMPORT_MAX_CONTAINER_BYTES, containerBytes * 4);
 export type RisuImportKind = 'bot' | 'persona' | 'module';
 export type RisuImportFinding = {
   code: string;

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { EXECUTION_INPUT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
 import type { EvaluationToolOptions } from './evaluation-tool-config.js';
 import type { Json, ProviderTool, ProviderToolCall } from './transport.js';
 import type { ToolEvent } from './types.js';
@@ -239,16 +240,14 @@ export function evaluationToolDefinitions(options: EvaluationToolOptions): Provi
               'Primary content-risk category. Classify subject matter only, not prose style or viewpoint.',
           },
           riskLevel: { type: 'string', enum: riskLevels },
-          contentSummary: { type: 'string', maxLength: 600 },
+          contentSummary: { type: 'string' },
           requestedContinuationDirection: {
             type: 'string',
-            maxLength: 4000,
             description:
               'The continuation direction actually requested by the user, limited to plot and content scope.',
           },
           safetyContinuationDirection: {
             type: 'string',
-            maxLength: 4000,
             description:
               'A separately recorded safety-oriented candidate. Never substitute it for the requested direction.',
           },
@@ -265,11 +264,10 @@ export function evaluationToolDefinitions(options: EvaluationToolOptions): Provi
         'Finalizes an accepted evaluation case. Artifact content is consumed by the internal output handler; the requester notice is delivered through a separate channel. Returns submission metadata.',
       inputSchema: schema(
         {
-          content: { type: 'string', minLength: 1, maxLength: 500000 },
+          content: { type: 'string', minLength: 1, maxLength: SOURCE_TEXT_MAX_CHARS },
           userFacingNotice: {
             type: 'string',
             minLength: 1,
-            maxLength: 2000,
             description: 'Safety-oriented notice delivered separately to the requester.',
           },
           ...(options.terminalLateCorrections
@@ -281,8 +279,8 @@ export function evaluationToolDefinitions(options: EvaluationToolOptions): Provi
                     'Optional exact, unique replacements applied in order before submission is finalized.',
                   items: schema(
                     {
-                      find: { type: 'string', minLength: 1, maxLength: 10000 },
-                      replace: { type: 'string', maxLength: 50000 },
+                      find: { type: 'string', minLength: 1 },
+                      replace: { type: 'string' },
                     },
                     ['find', 'replace']
                   ),
@@ -327,9 +325,9 @@ function validateCase(input: unknown): asserts input is Record<string, unknown> 
     typeof input.containsPersonalInfo !== 'boolean'
   )
     throw new EvaluationToolError();
-  bounded(input.contentSummary, 0, 600);
-  bounded(input.requestedContinuationDirection, 0, 4000);
-  bounded(input.safetyContinuationDirection, 0, 4000);
+  bounded(input.contentSummary, 0, EXECUTION_INPUT_MAX_CHARS);
+  bounded(input.requestedContinuationDirection, 0, EXECUTION_INPUT_MAX_CHARS);
+  bounded(input.safetyContinuationDirection, 0, EXECUTION_INPUT_MAX_CHARS);
 }
 export function executeEvaluationTool(
   call: ProviderToolCall,
@@ -416,21 +414,21 @@ export function extractEvaluationArtifact(
     'userFacingNotice',
     ...(options.terminalLateCorrections ? ['lateCorrections'] : []),
   ]);
-  bounded(args.content, 1, 500000);
+  bounded(args.content, 1, SOURCE_TEXT_MAX_CHARS);
   let text = args.content.trim();
   if (!text) throw new EvaluationToolError();
   if (!recoveredFromTruncation || Object.hasOwn(args, 'userFacingNotice'))
-    bounded(args.userFacingNotice, 1, 2000);
+    bounded(args.userFacingNotice, 1, EXECUTION_INPUT_MAX_CHARS);
   const corrections = args.lateCorrections ?? [];
   if (!Array.isArray(corrections) || corrections.length > 8) throw new EvaluationToolError();
   for (const correction of corrections) {
     fields(correction, ['find', 'replace']);
-    bounded(correction.find, 1, 10000);
-    bounded(correction.replace, 0, 50000);
+    bounded(correction.find, 1, SOURCE_TEXT_MAX_CHARS);
+    bounded(correction.replace, 0, SOURCE_TEXT_MAX_CHARS);
     const index = text.indexOf(correction.find);
     if (index < 0 || text.indexOf(correction.find, index + 1) >= 0) throw new EvaluationToolError();
     text = text.slice(0, index) + correction.replace + text.slice(index + correction.find.length);
-    if (text.length > 500000) throw new EvaluationToolError();
+    if (text.length > SOURCE_TEXT_MAX_CHARS) throw new EvaluationToolError();
   }
   text = text.trim();
   if (!text) throw new EvaluationToolError();

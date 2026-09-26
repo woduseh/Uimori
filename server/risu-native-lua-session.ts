@@ -6,7 +6,8 @@ import type { NativeLuaWorkerLimits, NativeLuaWorkerMessage } from './risu-lua-p
 export const NATIVE_LUA_LIMITS: NativeLuaWorkerLimits = {
   cpuMs: 1_000,
   guestJsonBytes: 2 * 1024 * 1024,
-  sourceBytes: 1024 * 1024,
+  snapshotJsonBytes: 64 * 1024 * 1024,
+  sourceBytes: 16 * 1024 * 1024,
   hostMethodChars: 80,
   hostCalls: 128,
   hostPending: 1,
@@ -14,7 +15,7 @@ export const NATIVE_LUA_LIMITS: NativeLuaWorkerLimits = {
   valueDepth: 32,
   valueNodes: 100_000,
   valueEntries: 10_000,
-  luaMemoryBytes: 8 * 1024 * 1024,
+  luaMemoryBytes: 448 * 1024 * 1024,
 };
 type Host = (method: string, args: unknown, signal: AbortSignal) => Promise<unknown>;
 type Options = { signal?: AbortSignal; sessionKey?: string };
@@ -23,10 +24,11 @@ const sessions = new Map<string, Session>();
 const queues = new Map<string, Promise<unknown>>();
 let executing = 0;
 let queued = 0;
-const json = (value: unknown) => {
+const json = (value: unknown, snapshot = false) => {
   const encoded = JSON.stringify(value);
-  if (typeof encoded !== 'string' || Buffer.byteLength(encoded) > NATIVE_LUA_LIMITS.guestJsonBytes)
-    throw failure('RISU_NATIVE_VALUE_LIMIT');
+  const maximum = snapshot ? NATIVE_LUA_LIMITS.snapshotJsonBytes : NATIVE_LUA_LIMITS.guestJsonBytes;
+  if (typeof encoded !== 'string' || Buffer.byteLength(encoded) > maximum)
+    throw failure(snapshot ? 'RISU_NATIVE_SNAPSHOT_LIMIT' : 'RISU_NATIVE_VALUE_LIMIT');
   return encoded;
 };
 interface Invocation {
@@ -107,7 +109,10 @@ class Session {
       value.id !== this.hostId + 1 ||
       typeof value.method !== 'string' ||
       typeof value.argsJson !== 'string' ||
-      Buffer.byteLength(value.argsJson) > NATIVE_LUA_LIMITS.guestJsonBytes
+      Buffer.byteLength(value.argsJson) >
+        (['__native.next', 'cbs'].includes(value.method)
+          ? NATIVE_LUA_LIMITS.snapshotJsonBytes
+          : NATIVE_LUA_LIMITS.guestJsonBytes)
     )
       return this.dispose(failure('RISU_NATIVE_WORKER_PROTOCOL'));
     this.hostId = value.id;
@@ -133,7 +138,7 @@ class Session {
             type: 'host-result',
             id: value.id,
             ok: true,
-            json: json(result),
+            json: json(result, value.method === 'cbs'),
           });
       } catch (error) {
         current.hostFailure = error;
@@ -146,7 +151,7 @@ class Session {
           });
       } finally {
         this.pending = false;
-        if (!this.closed) this.watch(5_000);
+        if (!this.closed) this.watch(60_000);
       }
     })();
     this.work.add(operation);
@@ -168,7 +173,7 @@ class Session {
         controller: new AbortController(),
       };
       options.signal?.addEventListener('abort', abort, { once: true });
-      this.watch(5_000);
+      this.watch(60_000);
       try {
         if (!this.worker) {
           const compiled = new URL('./risu-lua-worker.js', import.meta.url);
@@ -180,13 +185,13 @@ class Session {
             env: {},
             workerData: {
               source: this.source,
-              inputJSON: json({ state: {}, input }),
+              inputJSON: json({ state: {}, input }, true),
               limits: NATIVE_LUA_LIMITS,
               hostErrorCodes: ['RISU_NATIVE_HOST_UNAVAILABLE'],
             },
             resourceLimits: {
-              maxOldGenerationSizeMb: 48,
-              maxYoungGenerationSizeMb: 8,
+              maxOldGenerationSizeMb: 256,
+              maxYoungGenerationSizeMb: 32,
               stackSizeMb: 2,
             },
           });
@@ -200,7 +205,7 @@ class Session {
             type: 'host-result',
             id: this.waitingId,
             ok: true,
-            json: json(input),
+            json: json(input, true),
             resetBudget: true,
           });
           this.waitingId = undefined;

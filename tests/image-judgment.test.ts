@@ -9,6 +9,7 @@ import {
   IMAGE_JUDGMENT_LIMITS,
 } from '../server/image-judgment.js';
 import { estimateContextTokens } from '../core/context-budget.js';
+import { countTextTokens } from '../core/text-tokens.js';
 import { JEV_MODEL } from '../server/jev-judgment.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { bundle, bridge, hooks } from './fixtures/translation-job.js';
@@ -200,5 +201,25 @@ describe('JEV-only existing image placement', () => {
     expect(state.evaluatedAssets).toBeGreaterThan(0);
     expect(state.evaluatedAssets).toBeLessThan(2000);
     expect(state.totalAssets).toBe(2000);
+  });
+  it('keeps inexpensive long blocks intact and marks token-bounded excerpts without editing the source', () => {
+    for (const text of [
+      'A lantern glows. '.repeat(100),
+      '강가에서 소녀가 등불을 흔든다. 🌙 '.repeat(200),
+    ]) {
+      const input = { ...source, text, hash: createHash('sha256').update(text).digest('hex') };
+      const request = imageJudgmentRequest(input, assets)!;
+      const state = request.state as { blocks: { text: string }[] };
+      expect(state.blocks).toHaveLength(1);
+      const excerpt = state.blocks[0].text;
+      expect(countTextTokens(excerpt)).toBeLessThanOrEqual(IMAGE_JUDGMENT_LIMITS.blockTokens);
+      if (countTextTokens(text) <= IMAGE_JUDGMENT_LIMITS.blockTokens) expect(excerpt).toBe(text);
+      else expect(excerpt.endsWith('\n[Remaining block text omitted]')).toBe(true);
+      expect(new TextDecoder().decode(new TextEncoder().encode(excerpt))).toBe(excerpt);
+      expect(input.text).toBe(text);
+      expect(estimateContextTokens({ model: JEV_MODEL, ...request })).toBeLessThanOrEqual(
+        IMAGE_JUDGMENT_LIMITS.inputTokens
+      );
+    }
   });
 });

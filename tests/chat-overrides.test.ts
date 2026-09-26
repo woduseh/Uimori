@@ -1,12 +1,13 @@
 import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { afterEach, expect, test } from 'vitest';
+import Fastify from 'fastify';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import { ChatOverridesStore } from '../server/chat-overrides.js';
+import { ChatOverridesStore, chatOverrideRoutes } from '../server/chat-overrides.js';
 import {
   chatOverrideHash,
   projectChatPackageCompilation,
@@ -154,6 +155,41 @@ const selector = (
   role: ContentAttachment['role'] = 'bot',
   modulePath: string[] = []
 ): ChatLoreSelector => ({ id: content.id, role, modulePath, loreId: 'lore-0', field: 'text' });
+
+test('HTTP lore edits preserve long Korean text within the stored prose budget', async () => {
+  const store = database();
+  const bot = save(store, 'Korean lore');
+  const chat = store.createChat('Long lore edit', { botId: bot.id });
+  const service = new ChatOverridesStore(store);
+  const state = service.get(chat.id);
+  const selected = state.attachments[0];
+  const value = '가'.repeat(400_000);
+  const input = {
+    selector: selector(bot),
+    value,
+    branchId: state.branchId,
+    expectedRevision: state.revision,
+    expectedHeadRevision: state.headRevision,
+    expectedProfileRevision: state.profileRevision,
+    expectedPackageRevision: selected.packageRevision,
+    expectedFieldHash: chatOverrideHash(selected.lore[0].text),
+    operationId: randomUUID(),
+  };
+  const app = Fastify();
+  chatOverrideRoutes(app, service);
+  try {
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/chats/${chat.id}/lore-overrides`,
+      payload: input,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().entry.value).toBe(value);
+    expect(service.get(chat.id).overrides[0].value).toBe(value);
+  } finally {
+    await app.close();
+  }
+});
 
 test('shared module lore with different link overrides keeps distinct request source boundaries', () => {
   const store = database(),

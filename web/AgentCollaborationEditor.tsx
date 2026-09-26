@@ -27,31 +27,24 @@ const toolScopes: { id: AgentDefinition['tools'][number]; label: string }[] = [
 const inRange = (value: number, min: number, max: number) =>
   Number.isSafeInteger(value) && value >= min && value <= max;
 
-/** Keep incomplete edits in the prompt draft, but never send them to the save endpoint. */
+/** Disabled settings may remain unfinished without blocking the surrounding prompt save. */
 export function agentCollaborationIssue(
   value: AgentCollaboration | undefined,
   controls: PromptControl[]
 ): string {
-  if (!value) return '';
+  if (!value?.enabled) return '';
   if (value.enabled && !value.agents.length)
     return '아래에서 템플릿을 골라 에이전트를 추가해 주세요. 추가한 뒤 저장할 수 있어요.';
   if (value.agents.length > 6) return '에이전트는 최대 6명까지 함께할 수 있어요.';
   if (!inRange(value.maxCalls, 1, 12)) return '전체 추가 호출 한도는 1~12회로 입력해 주세요.';
-  if (value.sharedInstructions.length > 30_000)
-    return '함께 따를 지침은 30,000자 이내로 적어 주세요.';
   if (value.sharedControls.length > 64) return '공유할 옵션은 최대 64개까지 선택할 수 있어요.';
   if (value.sharedControls.some((id) => !controls.some((control) => control.id === id)))
     return '공유할 옵션에서 삭제된 옵션의 선택을 해제해 주세요.';
   for (const [index, agent] of value.agents.entries()) {
     const name = agent.title.trim() || `${index + 1}번째 에이전트`;
     if (!agent.title.trim()) return `${name}의 이름을 입력해 주세요.`;
-    if (agent.title.length > 120) return '에이전트 이름은 120자 이내로 적어 주세요.';
-    if (agent.description.length > 2000) return `${name}의 역할 설명은 2,000자 이내로 적어 주세요.`;
     if (!agent.instructions.trim()) return `${name}의 지침을 입력해 주세요.`;
-    if (agent.instructions.length > 30_000) return `${name}의 지침은 30,000자 이내로 적어 주세요.`;
     if (!inRange(agent.maxCalls, 1, 6)) return `${name}의 호출 한도는 1~6회로 입력해 주세요.`;
-    if (!inRange(agent.maxOutputChars, 500, 20_000))
-      return `${name}의 최대 응답 길이는 500~20,000자로 입력해 주세요.`;
   }
   try {
     validateAgentCollaboration(
@@ -168,7 +161,7 @@ export function AgentCollaborationEditor({
             <div className="ac-settings">
               <details className="ac-limits">
                 <summary>
-                  <span>호출·응답 한도</span>
+                  <span>호출 한도</span>
                   <small>전체 추가 호출 {collaboration.maxCalls}회</small>
                 </summary>
                 <label className="ac-field ac-budget">
@@ -193,7 +186,6 @@ export function AgentCollaborationEditor({
                 <textarea
                   aria-label="함께 따를 지침"
                   rows={4}
-                  maxLength={30_000}
                   value={collaboration.sharedInstructions}
                   placeholder="모든 에이전트가 함께 고려할 창작 방향을 적어 주세요."
                   onChange={(event) => update({ sharedInstructions: event.target.value })}
@@ -306,7 +298,6 @@ export function AgentCollaborationEditor({
                             이름
                             <input
                               aria-label={`${agentLabel} 이름`}
-                              maxLength={120}
                               value={agent.title}
                               onChange={(event) =>
                                 updateAgent(agent.id, { title: event.target.value })
@@ -333,7 +324,6 @@ export function AgentCollaborationEditor({
                           역할 설명
                           <input
                             aria-label={`${agentLabel} 역할 설명`}
-                            maxLength={2000}
                             value={agent.description}
                             onChange={(event) =>
                               updateAgent(agent.id, { description: event.target.value })
@@ -344,7 +334,6 @@ export function AgentCollaborationEditor({
                           지침
                           <textarea
                             rows={6}
-                            maxLength={30_000}
                             aria-label={`${agentLabel} 지침`}
                             value={agent.instructions}
                             onChange={(event) =>
@@ -376,6 +365,9 @@ export function AgentCollaborationEditor({
                               </option>
                             ))}
                           </select>
+                          <small className="muted">
+                            선택한 모델의 입력·최대 출력 토큰 설정을 사용해요.
+                          </small>
                         </label>
                         <fieldset className="ac-options">
                           <legend>{agentLabel}의 추가 조회</legend>
@@ -414,22 +406,6 @@ export function AgentCollaborationEditor({
                               value={agent.maxCalls || ''}
                               onChange={(event) =>
                                 updateAgent(agent.id, { maxCalls: Number(event.target.value) })
-                              }
-                            />
-                          </label>
-                          <label className="ac-field">
-                            메인에게 전달할 최대 길이 · 글자 수
-                            <input
-                              type="number"
-                              min={500}
-                              max={20_000}
-                              step={1}
-                              aria-label={`${agentLabel} 최대 응답 길이`}
-                              value={agent.maxOutputChars || ''}
-                              onChange={(event) =>
-                                updateAgent(agent.id, {
-                                  maxOutputChars: Number(event.target.value),
-                                })
                               }
                             />
                           </label>

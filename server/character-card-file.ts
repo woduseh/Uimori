@@ -2,10 +2,10 @@ import { crc32, inflateRawSync } from 'node:zlib';
 import {
   RISU_IMPORT_MAX_ASSETS,
   RISU_IMPORT_MAX_BYTES,
-  RISU_IMPORT_MAX_CONTAINER_BYTES,
   RISU_IMPORT_MAX_ENTRY_BYTES,
   RISU_IMPORT_MAX_JSON_BYTES,
   RISU_IMPORT_MAX_ZIP_MEMBERS,
+  risuImportExpandedLimit,
   type RisuImportSource,
   type RisuImportStagedSource,
   type RisuImportKind,
@@ -22,7 +22,7 @@ const invalid = (): never => {
 /** Read bounded ZIP members in memory. No extraction, code execution, or remote assets. */
 export function cardZip(bytes: Buffer): Map<string, () => Buffer> {
   // A big container may declare its own contents; an expansion far beyond its size stays refused.
-  const totalLimit = Math.max(RISU_IMPORT_MAX_CONTAINER_BYTES, bytes.length * 4);
+  const totalLimit = risuImportExpandedLimit(bytes.length);
   let end = bytes.length - 22;
   for (; end >= Math.max(0, bytes.length - 65_557); end--)
     if (

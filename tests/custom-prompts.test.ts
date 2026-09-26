@@ -97,9 +97,10 @@ describe('full editable prompt boundaries', () => {
     expect(() => validateRequest({ ...value, stable: { ...value.stable, contract: 3 } })).toThrow(
       'INVALID_STRING'
     );
-    expect(() =>
+    expect(
       validateRequest({ ...value, stable: { ...value.stable, contract: 'x'.repeat(200001) } })
-    ).toThrow('INVALID_STRING');
+        .stable.contract
+    ).toBe('x'.repeat(200001));
     expect(() => validateRequest({ ...value, modelId: '' })).toThrow('INVALID_STRING');
   });
 });

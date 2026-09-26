@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { RunSnapshot } from '../core/types.js';
 import { canRecoverMainJudgment } from '../core/main-judgment-recovery.js';
 import { HttpError, text } from './request-validation.js';
@@ -86,7 +87,9 @@ export function retryRun(
       const branch = store.product.branch(chat.id);
       const profile = store.product.snapshot(chat.id);
       const request =
-        options.request === undefined ? original.request : text(options.request, 'request');
+        options.request === undefined
+          ? original.request
+          : text(options.request, 'request', REQUEST_TEXT_MAX_CHARS);
       const result = store.createRunInTransaction(
         chat.id,
         {

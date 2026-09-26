@@ -40,6 +40,12 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
     .click();
   const agent = collaboration.locator('.ac-agent').first();
   await expect(agent).toHaveAttribute('open', '');
+  const longInstructions = '장문 창작 지침을 온전히 보존해요. '.repeat(1800);
+  await agent.getByRole('textbox', { name: / 지침$/ }).fill(longInstructions);
+  await collaboration
+    .getByRole('textbox', { name: '함께 따를 지침', exact: true })
+    .fill(longInstructions);
+  await expect(agent.getByRole('spinbutton', { name: /최대 응답 길이/ })).toHaveCount(0);
   await agent.locator('summary').click();
   await expect(agent).not.toHaveAttribute('open', '');
   await collaboration.getByRole('button', { name: '선택 변경', exact: true }).click();
@@ -69,7 +75,10 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   expect(saved.program.collaboration).toMatchObject({
     maxCalls: 4,
     sharedControls: ['perspective'],
+    sharedInstructions: longInstructions,
+    agents: [{ instructions: longInstructions }],
   });
+  expect(saved.program.collaboration!.agents[0]).not.toHaveProperty('maxOutputChars');
   const connectionResponse = await request.post('/api/connections', {
     data: {
       title: 'No-call preview fixture',
@@ -133,6 +142,29 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
     await page.screenshot({ path: info.outputPath('agent-collaboration-412x915.png') });
     await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
   }
+  await agent.locator('summary').click();
+  await agent.getByRole('textbox', { name: / 지침$/ }).fill('');
+  await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
+  await collaboration.getByRole('switch', { name: '협업 사용' }).uncheck();
+  const disabledSave = page.waitForResponse(
+    (item) => /\/api\/resources\/save$/.test(item.url()) && item.request().method() === 'POST'
+  );
+  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  const disabledResponse = await disabledSave;
+  expect(disabledResponse.ok()).toBe(true);
+  expect((await disabledResponse.json()).saved.program.collaboration).toMatchObject({
+    enabled: false,
+    agents: [{ instructions: '' }],
+  });
+  await editor.getByRole('tab', { name: '협업', exact: true }).click();
+  await collaboration.getByRole('switch', { name: '협업 사용' }).check();
+  await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
+  await collaboration.getByRole('switch', { name: '협업 사용' }).uncheck();
+  const confirmedDisabledSave = page.waitForResponse(
+    (item) => /\/api\/resources\/save$/.test(item.url()) && item.request().method() === 'POST'
+  );
+  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  expect((await confirmedDisabledSave).ok()).toBe(true);
   // Saved presets keep their role. Check translation on a new draft through the normal UI.
   await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
   await expect(editor.getByLabel('프롬프트 역할', { exact: true })).toBeDisabled();

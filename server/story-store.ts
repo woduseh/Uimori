@@ -1,4 +1,5 @@
 import { HttpError, fields, text, record } from './request-validation.js';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Store, Source, Run } from './store.js';
 import type { StorySnapshot, StoryDetail, SceneCommand } from '../core/story.js';
@@ -86,7 +87,7 @@ export class StoryStore {
     fields(body, ['label', 'request', 'branchId', 'idempotencyKey']);
     const key = text(body.idempotencyKey, 'command key', 120);
     const label = text(body.label, 'command label', 120);
-    const request = text(body.request, 'scene request', 4000);
+    const request = text(body.request, 'scene request', REQUEST_TEXT_MAX_CHARS);
     const branch = this.store.product.branch(
       chatId,
       body.branchId === undefined ? undefined : text(body.branchId, 'branch', 100)

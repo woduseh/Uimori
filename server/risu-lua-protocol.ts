@@ -26,8 +26,10 @@ export type NativeLuaWorkerResultCode =
 export type NativeLuaWorkerLimits = {
   /** Guest CPU milliseconds, measured only while guest code runs. */
   readonly cpuMs: number;
-  /** UTF-8 cap on every JSON string crossing the guest boundary, in either direction. */
+  /** UTF-8 cap on an individual guest-authored JSON value or external host call. */
   readonly guestJsonBytes: number;
+  /** Whole conversation snapshots use a separate allocation guard, without truncating history. */
+  readonly snapshotJsonBytes: number;
   /** UTF-8 cap on the program source, behind core's own validation. */
   readonly sourceBytes: number;
   readonly hostMethodChars: number;

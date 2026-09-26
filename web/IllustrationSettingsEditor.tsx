@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshIcon } from './ui-icons.js';
 import type { Library, ModelRef } from '../core/product.js';
 import type { IllustrationSettings } from '../core/illustration.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
@@ -281,7 +282,7 @@ export function IllustrationSettingsEditor({
           <textarea
             aria-label="삽화 그림 지침"
             rows={3}
-            maxLength={2000}
+            maxLength={SOURCE_TEXT_MAX_CHARS}
             value={draft.styleGuidance}
             placeholder="예: 수채화, 부드러운 빛, 인물 중심 구성"
             onChange={(event) => change({ ...draft, styleGuidance: event.target.value })}
@@ -374,7 +375,7 @@ export function IllustrationSettingsEditor({
               <textarea
                 aria-label="ComfyUI 네거티브 프롬프트 지침"
                 rows={2}
-                maxLength={1000}
+                maxLength={SOURCE_TEXT_MAX_CHARS}
                 value={draft.comfyui.negativeGuidance}
                 placeholder="예: lowres, bad anatomy, text, watermark"
                 onChange={(event) =>

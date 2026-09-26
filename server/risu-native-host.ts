@@ -65,9 +65,7 @@ export function createNativeRisuHost(
     const args = record(raw);
     const prompt: unknown = args.prompt;
     const authored = typeof prompt === 'string' ? [{ role: 'user', content: prompt }] : prompt;
-    if (!Array.isArray(authored) || authored.length > 200 || !authored.length)
-      throw new Error('RISU_NATIVE_MODEL_PROMPT');
-    let size = 0;
+    if (!Array.isArray(authored) || !authored.length) throw new Error('RISU_NATIVE_MODEL_PROMPT');
     const messages = authored.map((raw, index) => {
       const item = record(raw),
         role = item.role === 'char' ? 'assistant' : item.role;
@@ -76,7 +74,6 @@ export function createNativeRisuHost(
         typeof item.content !== 'string'
       )
         throw new Error('RISU_NATIVE_MODEL_PROMPT');
-      size += item.content.length;
       return {
         id: `native:${index}`,
         role: role as 'system' | 'user' | 'assistant',
@@ -85,7 +82,6 @@ export function createNativeRisuHost(
         provenance: { blockId: `native:${index}`, origin: 'prompt' as const },
       };
     });
-    if (size > 500_000) throw new Error('RISU_NATIVE_MODEL_PROMPT_LIMIT');
     const authorize = () => {
       signal.throwIfAborted();
       if (store.run(runId).status !== 'running') throw new Error('RISU_NATIVE_ACTION_INACTIVE');

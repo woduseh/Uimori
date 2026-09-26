@@ -1,4 +1,5 @@
 import type { Json, ProviderTool } from './transport.js';
+import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
 import type { RunSnapshot } from './types.js';
 import { STORY_READ_NAMES } from './story-context.js';
 import { CONTEXT_RETRIEVAL_GUIDANCE, CONTEXT_SUMMARY_SEMANTICS } from './context-summary-policy.js';
@@ -7,7 +8,8 @@ import { CONTEXT_RETRIEVAL_GUIDANCE, CONTEXT_SUMMARY_SEMANTICS } from './context
 export const CONTEXT_TOOL_NAMES = ['context.read', 'context.write', 'context.new'] as const;
 export const CONTEXT_NOTICE_RATIO = 0.7;
 export const CONTEXT_URGENT_RATIO = 0.8;
-export const CONTEXT_SUMMARY_MAX_CHARS = 200_000;
+/** Storage allocation boundary; usable summary size is checked against model token budgets. */
+export const CONTEXT_SUMMARY_MAX_CHARS = SOURCE_TEXT_MAX_CHARS;
 export const CONTEXT_KEEP_RECENT_DEFAULT = 2;
 export const CONTEXT_KEEP_RECENT_MAX = 8;
 const summarySchema: Json = {

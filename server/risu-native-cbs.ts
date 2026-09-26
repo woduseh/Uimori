@@ -1,4 +1,5 @@
 import { createRisuCbs } from '../third_party/risuai/cad8595a/cbs-parser.js';
+import { EXECUTION_INPUT_MAX_CHARS } from '../core/content-limits.js';
 import { parseKeyValue, type Database } from '../third_party/risuai/cad8595a/cbs-support.js';
 import type { character, RisuModule } from '../third_party/risuai/cad8595a/types.js';
 import {
@@ -122,7 +123,7 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
     random: context.random ?? Math.random,
     findCharacterbyId: (id) => (id === native.sourceHash ? chara : null),
     unsupportedNames: new Set(),
-    maxOutputChars: 2_000_000,
+    maxOutputChars: EXECUTION_INPUT_MAX_CHARS,
     checkBudget: () => {
       if (Date.now() > deadline) throw new Error('RISU_NATIVE_CBS_TIMEOUT');
     },
@@ -134,7 +135,10 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
   return {
     issues,
     parse(text: string, role?: 'system' | 'user' | 'assistant'): string {
-      if (text.length > 2_000_000) throw new Error('RISU_NATIVE_TEXT_LIMIT');
+      if (text.length > EXECUTION_INPUT_MAX_CHARS) throw new Error('RISU_NATIVE_TEXT_LIMIT');
+      // Literal prose has no CBS effects. Avoid the character-by-character parser and its
+      // code-execution watchdog for large plain blocks; native aliases still go through it.
+      if (!/[{}#]|<(?:user|char|bot)>/iu.test(text)) return text;
       deadline = Date.now() + 500;
       const result = cbs.parse(stripRisuComments(text), {
         chatID: context.messageIndex ?? messages.length - 1,

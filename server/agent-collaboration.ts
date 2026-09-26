@@ -59,7 +59,7 @@ export function buildAgentProviderRequest(
       ? { providerOptions: structuredClone(target.providerOptions) }
       : {}),
     stable: {
-      contract: `${CONTRACT}\n${CONTEXT_DERIVED_GUIDANCE}\n${CONTEXT_RETRIEVAL_GUIDANCE}\n${AUTHOR_NOTE_GUIDANCE}${input.outline ? `\nFor advice about the planned writing unit: ${OUTLINE_CONTRACT}` : ''}\nKeep the final advice within ${agent.maxOutputChars} characters.\n\nShared instructions:\n${collaboration.sharedInstructions}\n\nAdvisor instructions:\n${agent.instructions}`,
+      contract: `${CONTRACT}\n${CONTEXT_DERIVED_GUIDANCE}\n${CONTEXT_RETRIEVAL_GUIDANCE}\n${AUTHOR_NOTE_GUIDANCE}${input.outline ? `\nFor advice about the planned writing unit: ${OUTLINE_CONTRACT}` : ''}\n\nShared instructions:\n${collaboration.sharedInstructions}\n\nAdvisor instructions:\n${agent.instructions}`,
       tools: structuredClone(tools),
     },
     generation: generationFromModel(target),
@@ -146,7 +146,10 @@ export function createAgentCollaboration(
     args: Record<string, unknown>,
     availableContext: readonly ToolEvent[] = []
   ): Promise<ToolEvent> => {
-    const invalid = (code: string): ToolEvent => ({
+    const invalid = (
+      code: string,
+      correction = 'Use a configured advisor and a nonempty question. contextRefs may select up to 8 completed advisor or main read call IDs from this run. Remove unavailable references or reduce the selected context.'
+    ): ToolEvent => ({
       callId,
       name: 'agents.consult',
       args: structuredClone(args),
@@ -154,8 +157,7 @@ export function createAgentCollaboration(
       errorKind: 'recoverable',
       result: {
         code,
-        correction:
-          'Use a configured advisor and a nonempty question. contextRefs may select up to 8 completed advisor or main read call IDs from this run. Remove unavailable references or reduce the selected context; a draft may contain at most 12000 characters.',
+        correction,
       },
     });
     const agent = config.agents.find((item) => item.id === args.agentId);
@@ -163,7 +165,6 @@ export function createAgentCollaboration(
       !agent ||
       typeof args.question !== 'string' ||
       !args.question.trim() ||
-      args.question.length > 8000 ||
       Object.keys(args).some(
         (key) => !['agentId', 'question', 'contextRefs', 'draft'].includes(key)
       )
@@ -194,9 +195,6 @@ export function createAgentCollaboration(
     const usage = emptyUsage();
     const evidence: AgentAdvice['evidence'] = [];
     const finish = (status: AgentAdvice['status'], error: string | null, text = ''): ToolEvent => {
-      const truncated = text.length > agent.maxOutputChars;
-      let bounded = text.slice(0, agent.maxOutputChars);
-      if (truncated && /[\uD800-\uDBFF]$/u.test(bounded)) bounded = bounded.slice(0, -1);
       const event: ToolEvent & { result: AgentAdvice } = {
         callId,
         name: 'agents.consult',
@@ -211,8 +209,8 @@ export function createAgentCollaboration(
           question,
           status,
           error,
-          text: bounded,
-          truncated,
+          text,
+          truncated: false,
           ...(consultationContext ? { contextHash: consultationContext.hash } : {}),
           usage: structuredClone(usage),
           evidence,
@@ -300,6 +298,11 @@ export function createAgentCollaboration(
           totalUsage.modelCalls++;
         },
       });
+      if (attempt === undefined && result.error?.code === 'INPUT_CONTEXT_LIMIT_EXCEEDED')
+        return invalid(
+          'ADVISOR_CONTEXT_TOO_LARGE',
+          `The complete advisor input exceeds the selected model's ${request.contextBudget!.inputTokenLimit} token input budget (o200k_base estimate, including request overhead). No additional model call was sent. Reduce the question, draft or selected references; the original text was not truncated.`
+        );
       if (attempt !== undefined) await hooks.onAttemptFinish(attempt, structuredClone(result));
       for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const) {
         const value = result.usage[key];

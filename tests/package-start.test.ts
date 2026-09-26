@@ -8,6 +8,7 @@ import { resolvePackageStart, validatePackageStarts } from '../core/package-star
 import type { Content } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 const owned: { store: Store; dir: string }[] = [];
 afterEach(() => {
   vi.restoreAllMocks();
@@ -81,9 +82,9 @@ test('native first and alternative greetings retain authored text with no indepe
 });
 
 test.each(['first', 'alternative'])(
-  'native %s greetings preserve authored text at the one-million-character limit',
+  'native %s greetings preserve authored text at the stored message limit',
   (kind) => {
-    const text = '가'.repeat(1_000_000);
+    const text = '가'.repeat(SOURCE_TEXT_MAX_CHARS);
     const pkg = nativeContent({
       first_mes: kind === 'first' ? text : 'First greeting',
       alternate_greetings: kind === 'alternative' ? [text] : [],
@@ -93,23 +94,30 @@ test.each(['first', 'alternative'])(
 );
 
 test('oversized greeting text has a distinct error from malformed authored starts', () => {
-  const start = { id: 'start-0', title: 'Opening', mode: 'authored', text: 'a'.repeat(1_000_001) };
+  const start = {
+    id: 'start-0',
+    title: 'Opening',
+    mode: 'authored',
+    text: 'a'.repeat(SOURCE_TEXT_MAX_CHARS + 1),
+  };
   expect(() => validatePackageStarts([start])).toThrow('PACKAGE_START_TEXT_TOO_LONG');
   expect(() => validatePackageStarts([{ ...start, text: null }])).toThrow(
     'PACKAGE_START_INVALID_TEXT'
   );
 });
 
-test('greetings retain the two-million-character combined JSON size limit', () => {
-  const starts = [
-    { id: 'start-0', title: 'First', mode: 'authored', text: 'a'.repeat(1_000_000) },
-    { id: 'start-1', title: 'Second', mode: 'authored', text: '' },
-  ];
-  starts[1].text = 'b'.repeat(2_000_000 - JSON.stringify(starts).length);
-  expect(JSON.stringify(starts)).toHaveLength(2_000_000);
-  expect(validatePackageStarts(starts)).toEqual(starts);
-  starts[1].text += 'b';
-  expect(() => validatePackageStarts(starts)).toThrow('PACKAGE_START_SIZE_LIMIT');
+test('alternative greetings remain selectable beyond the old count and combined size caps', () => {
+  const starts = Array.from({ length: 101 }, (_, index) => ({
+    id: `start-${index}`,
+    title: `Opening ${index}`,
+    mode: 'authored' as const,
+    text: `${index}:${'a'.repeat(21_000)}`,
+  }));
+  const validated = validatePackageStarts(starts);
+  expect(validated).toEqual(starts);
+  expect(
+    resolvePackageStart({ id: 'card', revision: 1, starts: validated }, 'start-100').text
+  ).toBe(starts[100].text);
 });
 
 test('greeting selection rejects stale ownership and subsequent attempts without adding a source', () => {

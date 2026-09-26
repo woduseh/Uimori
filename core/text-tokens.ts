@@ -41,3 +41,37 @@ export function countTextTokens(text: string): number {
   }
   return tokens;
 }
+
+/** A literal prefix/suffix for reference context, including any omission marker in its budget. */
+export function textTokenExcerpt(
+  text: string,
+  maxTokens: number,
+  options: { side?: 'start' | 'end'; marker?: string } = {}
+): { text: string; tokens: number; truncated: boolean } {
+  if (!Number.isSafeInteger(maxTokens) || maxTokens < 0)
+    throw new ProviderContractError('INVALID_CONTEXT_BUDGET');
+  const tokens = countTextTokens(text);
+  if (tokens <= maxTokens) return { text, tokens, truncated: false };
+  let marker = options.marker ?? '';
+  if (countTextTokens(marker) > maxTokens) marker = '';
+  const excerpt = (length: number) => {
+    let at = options.side === 'end' ? text.length - length : length;
+    if (
+      at > 0 &&
+      at < text.length &&
+      /[\uD800-\uDBFF]/u.test(text[at - 1]) &&
+      /[\uDC00-\uDFFF]/u.test(text[at])
+    )
+      at += options.side === 'end' ? 1 : -1;
+    return options.side === 'end' ? marker + text.slice(at) : text.slice(0, at) + marker;
+  };
+  let low = 0,
+    high = text.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (countTextTokens(excerpt(middle)) <= maxTokens) low = middle;
+    else high = middle - 1;
+  }
+  const result = excerpt(low);
+  return { text: result, tokens: countTextTokens(result), truncated: true };
+}

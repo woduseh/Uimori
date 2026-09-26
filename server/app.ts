@@ -1,4 +1,6 @@
 import { normalizeChatSettings } from '../core/chat-settings.js';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import { CONTEXT_SUMMARY_MAX_CHARS } from '../core/context-tools.js';
 import { createRunExecutor } from './run-executor.js';
 import { APP_VERSION } from './app-version.js';
 import { flushPendingImageCleanup } from './unused-data.js';
@@ -289,7 +291,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             {
               ...base,
               expectedRevision: number(args.expectedRevision, 'context revision', 0),
-              summary: text(args.summary, 'summary', 200000),
+              summary: text(args.summary, 'summary', CONTEXT_SUMMARY_MAX_CHARS),
             },
             snapshot
           );
@@ -544,7 +546,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       error instanceof NativeTransferError && /^NATIVE_TRANSFER_[A-Z0-9_]{1,100}$/.test(error.code);
     const startLimitCode =
       (error instanceof RisuContentError || error instanceof PackageStartError) &&
-      ['PACKAGE_START_TEXT_TOO_LONG', 'PACKAGE_START_SIZE_LIMIT'].includes(error.message);
+      error.message === 'PACKAGE_START_TEXT_TOO_LONG';
     const statusCode =
       error && typeof error === 'object' && 'statusCode' in error ? error.statusCode : undefined;
     const code =
@@ -802,80 +804,97 @@ export async function createApp(options: AppOptions): Promise<App> {
     publish(chat.id);
     return chat;
   });
-  app.post<{ Params: { id: string } }>('/api/chats/:id/runs', async (request) => {
-    const body: RecordBody = record(request.body);
-    fields(body, [
-      'request',
-      'expectedRevision',
-      'expectedSettingsRevision',
-      'idempotencyKey',
-      'branchId',
-      'expectedProfileRevision',
-      'loreContextReset',
-    ]);
-    if (body.loreContextReset !== undefined && typeof body.loreContextReset !== 'boolean')
-      throw new HttpError(400, 'Invalid lore context reset');
-    const command = {
-      ...(body.loreContextReset !== undefined
-        ? { loreContextReset: body.loreContextReset as boolean }
-        : {}),
-      request: text(body.request, 'request'),
-      expectedRevision:
-        body.expectedRevision === null ? null : text(body.expectedRevision, 'source revision', 100),
-      expectedSettingsRevision: number(body.expectedSettingsRevision, 'settings revision', 1, 1e9),
-      idempotencyKey: text(body.idempotencyKey, 'idempotency key', 120),
-      ...(body.branchId !== undefined ? { branchId: text(body.branchId, 'branch ID', 100) } : {}),
-      ...(body.expectedProfileRevision !== undefined
-        ? {
-            expectedProfileRevision: number(
-              body.expectedProfileRevision,
-              'profile revision',
-              1,
-              1e9
-            ),
-          }
-        : {}),
-    };
-    const result = store.createRun(request.params.id, command, (chat) => {
-      const profile = store.product.snapshot(chat.id);
-      requireModel(profile.models.main, 'main');
-      return {
-        chatId: chat.id,
-        parentRevision: chat.headRevision,
-        settingsRevision: chat.settingsRevision,
-        settings: chat.settings,
-        request: command.request,
-        history: store.history(chat.headRevision),
-        resources: store.product.resources(chat.id, profile),
-        ...(profile ? { profile } : {}),
-      } satisfies RunSnapshot;
-    });
-    if (result.created) {
-      publish(request.params.id);
-      if (result.run.status === 'queued') execute(result.run.id);
+  app.post<{ Params: { id: string } }>(
+    '/api/chats/:id/runs',
+    { bodyLimit: 16 * 1024 * 1024 },
+    async (request) => {
+      const body: RecordBody = record(request.body);
+      fields(body, [
+        'request',
+        'expectedRevision',
+        'expectedSettingsRevision',
+        'idempotencyKey',
+        'branchId',
+        'expectedProfileRevision',
+        'loreContextReset',
+      ]);
+      if (body.loreContextReset !== undefined && typeof body.loreContextReset !== 'boolean')
+        throw new HttpError(400, 'Invalid lore context reset');
+      const command = {
+        ...(body.loreContextReset !== undefined
+          ? { loreContextReset: body.loreContextReset as boolean }
+          : {}),
+        request: text(body.request, 'request', REQUEST_TEXT_MAX_CHARS),
+        expectedRevision:
+          body.expectedRevision === null
+            ? null
+            : text(body.expectedRevision, 'source revision', 100),
+        expectedSettingsRevision: number(
+          body.expectedSettingsRevision,
+          'settings revision',
+          1,
+          1e9
+        ),
+        idempotencyKey: text(body.idempotencyKey, 'idempotency key', 120),
+        ...(body.branchId !== undefined ? { branchId: text(body.branchId, 'branch ID', 100) } : {}),
+        ...(body.expectedProfileRevision !== undefined
+          ? {
+              expectedProfileRevision: number(
+                body.expectedProfileRevision,
+                'profile revision',
+                1,
+                1e9
+              ),
+            }
+          : {}),
+      };
+      const result = store.createRun(request.params.id, command, (chat) => {
+        const profile = store.product.snapshot(chat.id);
+        requireModel(profile.models.main, 'main');
+        return {
+          chatId: chat.id,
+          parentRevision: chat.headRevision,
+          settingsRevision: chat.settingsRevision,
+          settings: chat.settings,
+          request: command.request,
+          history: store.history(chat.headRevision),
+          resources: store.product.resources(chat.id, profile),
+          ...(profile ? { profile } : {}),
+        } satisfies RunSnapshot;
+      });
+      if (result.created) {
+        publish(request.params.id);
+        if (result.run.status === 'queued') execute(result.run.id);
+      }
+      return result.run;
     }
-    return result.run;
-  });
+  );
   app.get<{ Params: { id: string } }>('/api/runs/:id', async (request) =>
     store.run(request.params.id)
   );
   promptWorkspaceRoutes(app, store, publish);
   loreContextDefaultRoutes(app, store);
-  app.post<{ Params: { id: string } }>('/api/runs/:id/retry', async (request) => {
-    const body = record(request.body);
-    fields(body, ['idempotencyKey', 'request']);
-    const result = store.retryRun(
-      request.params.id,
-      text(body.idempotencyKey, 'idempotency key', 120),
-      (snapshot) => requireModel(snapshot.profile?.models.main, 'main'),
-      body.request === undefined ? undefined : text(body.request, 'request')
-    );
-    if (result.created) {
-      publish(result.run.chatId);
-      execute(result.run.id);
+  app.post<{ Params: { id: string } }>(
+    '/api/runs/:id/retry',
+    { bodyLimit: 16 * 1024 * 1024 },
+    async (request) => {
+      const body = record(request.body);
+      fields(body, ['idempotencyKey', 'request']);
+      const result = store.retryRun(
+        request.params.id,
+        text(body.idempotencyKey, 'idempotency key', 120),
+        (snapshot) => requireModel(snapshot.profile?.models.main, 'main'),
+        body.request === undefined
+          ? undefined
+          : text(body.request, 'request', REQUEST_TEXT_MAX_CHARS)
+      );
+      if (result.created) {
+        publish(result.run.chatId);
+        execute(result.run.id);
+      }
+      return result.run;
     }
-    return result.run;
-  });
+  );
   app.post<{ Params: { id: string } }>('/api/runs/:id/candidate', async (request) => {
     const body: RecordBody = record(request.body);
     fields(body, ['idempotencyKey', 'title']);

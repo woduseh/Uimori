@@ -26,6 +26,10 @@ const messages: Record<string, string> = {
   ILLUSTRATION_RESERVATION_FAILED: '삽화 작업을 예약하지 못했어요. 설정 → 삽화를 확인해 주세요.',
   ILLUSTRATION_PROMPT_REFUSED: '프롬프트 모델이 장면 설명 작성을 거절했어요.',
   ILLUSTRATION_PROMPT_INVALID: '프롬프트 모델의 응답을 해석할 수 없었어요.',
+  INPUT_CONTEXT_LIMIT_EXCEEDED:
+    '삽화 입력이 선택 모델의 토큰 예산을 넘었어요. 모델의 입력 예산이나 삽화 지침을 확인해 주세요. 저장한 지침과 원문은 그대로예요.',
+  ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED:
+    '프롬프트 입력이 선택 모델의 토큰 예산을 넘었어요. 모델의 입력 예산이나 삽화 지침을 확인해 주세요. 저장한 지침과 원문은 그대로예요.',
   CONNECTION_NOT_AUTHORIZED: '연결이 비활성화됐거나 설정이 바뀌었어요.',
   CODEX_IMAGE_NOT_GENERATED:
     'Codex가 이미지를 만들지 않았어요. 모델 선택과 Codex 로그인 상태를 확인하고 다시 요청해 주세요.',

@@ -91,8 +91,7 @@ function checkedBackup(value: unknown): ChatBackup {
     body.format !== CHAT_BACKUP_FORMAT ||
     body.version !== CHAT_BACKUP_VERSION ||
     !Array.isArray(body.chats) ||
-    !body.chats.length ||
-    body.chats.length > 1000
+    !body.chats.length
   )
     throw new HttpError(400, '개인 채팅 백업 파일을 확인해 주세요.');
   for (const raw of body.chats) {

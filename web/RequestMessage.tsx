@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { ArrowUp, Check, Copy, Pencil, RefreshCw, X } from 'lucide-react';
 import { IconButton } from './IconButton.js';
 import { SHEET_MEDIA } from './ActionMenu.js';
@@ -13,7 +14,7 @@ export function RequestMessage({
   onConfirm,
   onEditingChange,
   editHint = '수정한 요청으로 새 분기에서 생성해요.',
-  maxLength = 4000,
+  maxLength = REQUEST_TEXT_MAX_CHARS,
   compactActions = 'always',
 }: {
   editHint?: string;

@@ -19,9 +19,9 @@
 | --- | --- | --- |
 | 생성기 | `none` / `codex` / `comfyui` (`fixture`는 테스트 모드 전용) | 미지정이면 요청이 `ILLUSTRATION_GENERATOR_UNCONFIGURED`로 거절돼요. |
 | 자동 생성 | 켜기/끄기 | 새 본문 저장 직후 예약. 후보 응답(candidate)·작성된 도입문·포크 복사본은 예약하지 않아요. |
-| 장면당 최대 삽화 개수 | 1~8 | 이미지가 있는 완료 작업 + 진행 중 작업 수예요. 한 작업이 여러 이미지를 반환해도 1개로 세요. 최초 예약·수동 재요청·결과 회수 모두 현재 한도를 적용하며, 한도를 높이거나 기존 삽화를 삭제하면 다시 시도할 수 있어요. |
+| 장면당 최대 삽화 개수 | 1~8 | 이미지가 있는 완료 작업 + 진행 중 작업 수예요. 한 작업이 여러 이미지를 반환해도 1개로 세요. 최초 예약·수동 재요청에 현재 한도를 적용하며, 이미 생성한 ComfyUI 결과를 회수할 때는 한도를 적용하지 않아요. |
 | 자동 재요청 횟수 | 0~5 | 접수 전 연결 실패가 확인됐거나 원격 실행 실패가 확정된 경우 등 안전한 실패에만 적용해요. 전송 후 timeout·연결 단절·ComfyUI POST 5xx는 접수 불확실로 남기고 자동 재생성하지 않아요. 설정 오류·거절·사용량 한도도 바로 실패예요. |
-| 그림 지침 | 2,000자 | Codex에는 그대로, ComfyUI에는 프롬프트 모델에 전달해요. |
+| 그림 지침·제외 지침 | 각 200만 자 저장 경계 | 본문과 같은 저장 보호 한도예요. 모델에 보낼 수 있는지는 전체 요청의 입력 토큰 예산으로 판단하며, 지침을 조용히 자르거나 줄이기 위한 모델 호출은 하지 않아요. |
 
 한 장면에는 동시에 하나의 삽화 작업만 진행돼요(`ILLUSTRATION_ACTIVE`). 설정은 **예약 시점에 작업 안에 고정**되며, 저장을 바꿔도 진행 중인 작업과 과거 결과는 바뀌지 않아요. 새 삽화 생성이 실패해도 이전에 완료된 삽화는 그대로 남아요.
 
@@ -30,8 +30,9 @@
 - 표는 `illustration_settings`, `illustration_references`, `illustration_jobs`, `illustration_images`예요. 새 DB에서만 표를 만들고, 현재 DB는 [저장 구조 검증](DATA-MIGRATIONS.md) 뒤 그대로 열어요. 구형 DB를 보충하거나 변환하지 않아요.
 - 작업은 `source_revision`과 예약 당시 `source_hash`에 귀속돼요. 원문을 나중에 고쳐도 완료된 삽화는 요청 당시 장면의 것으로 그 응답 아래 남고 **수정 전 원문의 삽화**로 표시해요. 새 본문에 자동으로 다시 붙이지 않아요. 실행 시에는 예약 hash의 원문을 다시 읽어요(`sourceAtHash`).
 - 현재 장면 원문과 카드의 이미지 자료를 삽화 입력으로 사용해요. 원본 텍스트와 hash는 보존해요.
+- 삽화 모델에 보내는 참고 문맥만 장면 8,000·봇 2,000·페르소나 1,000 토큰까지 끝부분을 발췌해요. 로컬 `o200k_base` 추정치이며 생략된 앞부분은 `[Earlier text omitted]`로 표시해요. 원문 저장 한도나 출력 길이 제한이 아니며, 예산에 맞추기 위한 추가 모델 호출은 없어요.
 - 상태는 `queued → running → completed | failed | cancelled | interrupted`예요. 취소는 `generation`을 올려 늦게 도착한 결과를 버리고, 서버 재시작은 `running`을 `interrupted`로 바꾸며 자동 재생하지 않아요(`queued`는 다시 실행해요).
-- 이미지 bytes는 SQLite `illustration_images`에 PNG·JPEG·WebP 16MB 이하로 저장하고 `/api/illustration-images/:id`로 읽어요. 캡션·프롬프트·Codex의 revised prompt는 함께 저장해요. 자동 생략은 이미지 없는 `completed`이며 `diagnostic.skipped`에 이유를 남겨요.
+- 생성 결과는 업로드와 같은 64MiB 입력 한도를 사용하고 WebP 변환 뒤 공통 `image_blobs`에 저장해요. `illustration_images`는 이미지 참조를 보관하고 `/api/illustration-images/:id`로 읽어요. 캡션·프롬프트·Codex의 revised prompt는 함께 저장해요. 자동 생략은 이미지 없는 `completed`이며 `diagnostic.skipped`에 이유를 남겨요.
 - Reader(`GET /api/chats/:id/reader`)는 페이지 안 장면의 `illustrations`를 돌려 주고, SSE 이벤트 `illustration.*`는 해당 장면만 갱신해요. 작업 현황(`reader.activity`)에는 `kind: 'illustration'`으로 나타나며 `activeJobs` 계산에는 넣지 않아 본문 진행 표시를 막지 않아요.
 - 독립 채팅 복사와 개별 백업은 완료된 삽화만 가져와요. 진행 중인 생성·실패 작업·모델 호출 기록을 재생하지 않아요. 새 사본의 이미지 참조는 원본 채팅 삭제와 독립적이에요.
 - 참조 이미지는 예약 시 `{ref, role, title, mime, hash, url}`로 고정하고 실행 시 hash가 같은 bytes만 보내요. 사이에 삭제된 이미지는 빠지고 작업은 계속돼요.
@@ -40,7 +41,7 @@
 ## Codex 경로
 
 - 별도 Codex 프로세스에서 `thread/start` → `turn/start` 한 턴을 실행해요. 텍스트 판단 턴과 같은 cached 웹 검색·격리 JavaScript 계산에 `features.image_generation=true`를 추가해요. shell·파일·MCP·앱·외부 스킬의 환경 접근은 [Codex 실행 경계](CODEX.md)에 따라 제한해요. 텍스트 판단 턴에는 `features.image_generation=false`를 명시해 이미지 생성의 예약·귀속·저장을 삽화 경로에 유지해요.
-- 입력은 `{task, styleGuidance, characterNotes, illustrationInstructions, attachedReferences, scene}` JSON 텍스트와 참조 이미지(`{type:'image', url:'data:...'}`)예요. 장면은 끝에서 24,000자까지 보내요. 패키지의 `instructions.target: 'image'` 지침과 봇·페르소나 본문을 인물 참고로 함께 넣어요.
+- 입력은 `{task, styleGuidance, characterNotes, illustrationInstructions, attachedReferences, scene}` JSON 텍스트와 참조 이미지(`{type:'image', url:'data:...'}`)예요. 패키지의 `instructions.target: 'image'` 지침과 봇·페르소나 본문을 인물 참고로 함께 넣어요. 텍스트·메타데이터 전체는 선택 모델의 입력 토큰 예산을 보내기 전에 검사해요. 이미지 내용과 Codex 내부 도구 사용의 토큰 비용은 이 로컬 텍스트 추정에 포함되지 않아요.
 - 결과는 `item/completed`의 `imageGeneration` 항목에서 읽어요. `result`(base64)를 우선 쓰고, 비어 있으면 전용 Codex home 안의 `savedPath` 파일을 읽은 뒤 삭제해요. 최종 `agentMessage`는 `{caption}` JSON으로 제약해요.
 - 실패 코드: `CODEX_IMAGE_USAGE_LIMIT`(항목의 `failure.usageLimitExceeded`, 자동 재요청 없음), `CODEX_IMAGE_NOT_GENERATED`(이미지 항목 없음, 재요청 가능), 기존 Codex 코드(`CODEX_LOGIN_REQUIRED`, `CODEX_TURN_FAILED` 등).
 - 삽화 턴은 텍스트 턴의 동시 실행 슬롯과 별도 슬롯(동시 1개, 대기 8개)을 써요. Codex 로그인·프로바이더 권한은 텍스트 턴과 같은 검사를 거치며 attempt는 `role: 'illustration'`으로 기록하고 첨부 bytes는 attempt에 넣지 않아요.
@@ -50,6 +51,7 @@
 
 - 원격 주소는 `http://`·`https://`만 허용하고 인증 정보·쿼리를 포함할 수 없어요. 프록시 인증이 필요하면 서버 환경변수 이름을 **인증 헤더 환경변수**에 적어 두면 그 값을 `Authorization` 헤더로 보내요. 브라우저는 ComfyUI에 직접 접근하지 않아요.
 - 실행 순서: 프롬프트 모델 호출(장면 → `{prompt, negativePrompt, caption}` JSON, 자동 예약이면 `{decision:'skip', reason}` 허용) → 워크플로의 `{{prompt}}`·`{{negative}}`·`{{seed}}` 치환 → `POST /prompt` → `GET /history/{prompt_id}` 폴링 → `GET /view`로 이미지 다운로드.
+- 프롬프트 모델 요청 전체는 선택 모델의 입력 토큰 예산으로 검사해요. 예산을 넘으면 모델·렌더 요청 없이 실패하며 같은 입력을 자동 재시도하지 않아요. 모델이 만든 `prompt`·`negativePrompt`는 임의의 글자 수로 자르지 않고 워크플로에 전달해요. 캡션·생략 이유의 300자 표시는 유지해요.
 - 취소는 사용자의 명시 취소일 때만 원격에 닿아요. `POST /api/jobs/{prompt_id}/cancel`의 대상별 취소를 사용해요. 해당 API가 없는 서버(404/405)는 `POST /queue {delete:[id]}`로 대기 항목만 제거하고, 실행 중인 원격 렌더는 계속될 수 있어요. 전역 `/interrupt`는 호출하지 않아요. 서버 종료·timeout은 원격 취소를 보내지 않으며 로컬 generation 보호가 늦은 저장을 막아요.
 - **시간 초과(`COMFYUI_TIMEOUT`)는 원격 렌더를 건드리지 않아요.** 작업은 `prompt_id`를 보존한 채 실패로 남고, 삽화 카드의 **결과 확인**(`POST /api/illustrations/:id/reconcile`)이 `GET /history/{prompt_id}`를 한 번 읽어 끝난 결과를 저장해요. 결과 확인은 새로 그리지 않으며, 아직 결과가 없으면 이전 상태로 되돌려요. 서버 재시작으로 `interrupted`가 된 ComfyUI 작업도 같은 버튼으로 회수해요.
 - 워크플로는 API 형식(`노드 ID → {class_type, inputs}`)만 받아요. UI 형식(`nodes`/`links`)은 `COMFYUI_WORKFLOW_UI_FORMAT`으로 거절해요. 문자열 입력 안의 자리표시자만 바꾸고 노드 구조는 그대로예요. `{{seed}}`만 있는 문자열은 숫자로 바꿔요.

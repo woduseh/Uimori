@@ -31,7 +31,7 @@ import {
   CODEX_ENDPOINT,
   decodeCodexOutput,
 } from '../core/codex-protocol.js';
-import { assertContextBudget } from '../core/context-budget.js';
+import { assertContextBudget, type ContextBudget } from '../core/context-budget.js';
 import {
   ProviderContractError,
   type Json,
@@ -100,6 +100,7 @@ export type CodexExecutionOptions = ProviderExecutionOptions;
 /** One illustration turn: the official image generation tool renders, Uimori stores the bytes. */
 export type CodexImageRequest = {
   modelId: string;
+  contextBudget?: ContextBudget;
   reasoningEffort?: ModelGeneration['reasoningEffort'];
   developerInstructions: string;
   text: string;
@@ -145,6 +146,7 @@ type TurnPlan = {
   stablePrefix: string;
   config: Record<string, unknown>;
   maxLineBytes?: number;
+  maxWriteBytes?: number;
   allowedItems: readonly string[];
   onItem?: (item: Record<string, unknown>, method: 'item/started' | 'item/completed') => void;
 };
@@ -327,7 +329,7 @@ export const CODEX_ILLUSTRATION_CONFIG = {
   ...CODEX_RUNTIME_CONFIG,
   'features.image_generation': true,
 } as const;
-const ILLUSTRATION_LINE_BYTES = 64 * 1024 * 1024;
+const ILLUSTRATION_LINE_BYTES = 4 * Math.ceil(ILLUSTRATION_MAX_IMAGE_BYTES / 3) + 1024 * 1024;
 const TEXT_ITEMS = [
   'userMessage',
   'agentMessage',
@@ -416,7 +418,8 @@ export class CodexRuntime implements CodexRuntimeService {
   }
   private async process(
     config: Record<string, unknown> = CODEX_RUNTIME_CONFIG,
-    maxLineBytes?: number
+    maxLineBytes?: number,
+    maxWriteBytes?: number
   ): Promise<CodexProcess> {
     const launch = await this.launch();
     if (this.closed) error('CODEX_CLOSED');
@@ -438,6 +441,7 @@ export class CodexRuntime implements CodexRuntimeService {
       timeoutMs: 15_000,
       experimentalApi: true,
       ...(maxLineBytes ? { maxLineBytes } : {}),
+      ...(maxWriteBytes ? { maxWriteBytes } : {}),
     });
   }
   private async control(): Promise<CodexProcess> {
@@ -749,6 +753,18 @@ export class CodexRuntime implements CodexRuntimeService {
           if (method === 'item/completed' && item.type === 'imageGeneration') generated.push(item);
         },
       };
+      // This bounds text and request metadata; Codex owns the token cost of reference images/tools.
+      assertContextBudget(plan.descriptor, request.contextBudget);
+      // Count every selected attachment without relaxing the incoming result-frame limit.
+      // The envelope allowance covers IDs/config and small control requests buffered with a turn.
+      plan.maxWriteBytes =
+        1024 * 1024 +
+        Buffer.byteLength(JSON.stringify(plan.developerInstructions)) +
+        Buffer.byteLength(JSON.stringify(plan.outputSchema)) +
+        plan.input.reduce<number>(
+          (bytes, item) => bytes + Buffer.byteLength(JSON.stringify(item)) + 1,
+          0
+        );
     } catch (caught) {
       return result('error', emptyUsage(), {
         code: options.signal.aborted ? 'CANCELLED' : safeError(caught),
@@ -903,7 +919,7 @@ export class CodexRuntime implements CodexRuntimeService {
       await slots.acquire(signal, this.closed);
       slot = true;
       if (revision !== this.revision) error('CODEX_AUTH_CHANGED');
-      process = await this.process(plan.config, plan.maxLineBytes);
+      process = await this.process(plan.config, plan.maxLineBytes, plan.maxWriteBytes);
       if (revision !== this.revision || this.authAction) return fail('CODEX_AUTH_CHANGED', usage);
       this.active.add(process);
       signal.addEventListener('abort', stopOnAbort, { once: true });

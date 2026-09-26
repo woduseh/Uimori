@@ -114,6 +114,41 @@ const requests = (store: Store, chatId: string) =>
     .map((item) => store.run(store.source(item.revision).runId).request);
 
 describe('chat transcript export and import', () => {
+  test('an app-created backup preserves more than 500 notes when restored', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, 'Many short notes');
+    for (let index = 0; index < 501; index++)
+      store.story.notes.write(chat.id, {
+        text: `Preserved note ${index}`,
+        author: 'Writer',
+        expectedRevision: index,
+        expectedHeadRevision: null,
+        idempotencyKey: `note-${index}`,
+      });
+    const backup = exportChatBackup(store, chat.id);
+    expect(backup.chats[0].transcript.notes).toHaveLength(501);
+    const destination = await database();
+    const restored = await importChatBackup(destination, {
+      backup,
+      idempotencyKey: 'many-notes',
+    });
+    expect(exportChatTranscript(destination, restored.chat.id).notes).toEqual(
+      backup.chats[0].transcript.notes
+    );
+  });
+
+  test('transcripts admit long histories without an unrelated entry-count limit', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, 'Long history');
+    const transcript = exportChatTranscript(store, chat.id);
+    transcript.entries = Array.from({ length: 5001 }, (_, index) => ({
+      request: `Continue ${index}`,
+      text: `Scene ${index}`,
+      translation: null,
+    }));
+    expect(validateChatTranscript(transcript).entries).toEqual(transcript.entries);
+  });
+
   test('external memory remains attributed reference data through transcript, fork and backup', async () => {
     const store = await database();
     const chat = createFixtureChat(store, 'Imported memory fixture');

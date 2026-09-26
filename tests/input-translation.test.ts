@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as transport from '../core/transport.js';
 import { inputTranslationContract, inputTranslationTerms } from '../core/input-translation.js';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { withTranslationGuide } from '../core/translation-guide.js';
 import { createApp, type App } from '../server/app.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
@@ -172,6 +173,30 @@ test('language selection changes the contract; reference terms work both ways wi
   expect(inputTranslationTerms('A different request', terms)).toEqual([]);
 });
 
+test('a long draft and its translation keep their full text without extra model calls', async () => {
+  const f = await setup();
+  const draft = '작가 요청\n'.repeat(4000) + '끝까지 보존';
+  const translated = 'Author request\n'.repeat(4000) + 'KEEP THE END';
+  const send = mockSend({ ...success, text: translated });
+  const before = databaseState(f.app);
+  const response = await f.post({ ...payload, text: draft });
+  expect(response.statusCode, response.body).toBe(200);
+  expect(response.json()).toEqual({ text: translated, targetLanguage: 'en' });
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(send.mock.calls[0][1].input.task).draft).toBe(draft);
+  expect(databaseState(f.app)).toEqual(before);
+});
+
+test('the request-sized HTTP body reaches model selection without starting a call', async () => {
+  const f = await setup(false);
+  const send = mockSend();
+  // JSON escapes each null character to six bytes: the former 4 MiB body cap failed first.
+  const response = await f.post({ ...payload, text: '\0'.repeat(REQUEST_TEXT_MAX_CHARS) });
+  expect(response.statusCode, response.body).toBe(409);
+  expect(response.json()).toEqual({ error: 'MODEL_REQUIRED:translation' });
+  expect(send).not.toHaveBeenCalled();
+});
+
 test('no selected translation model gives actionable feedback and never falls back to another role', async () => {
   const f = await setup(false);
   const send = mockSend();
@@ -184,7 +209,7 @@ test('no selected translation model gives actionable feedback and never falls ba
 test.each([
   { ...payload, text: '' },
   { ...payload, text: ' '.repeat(10) },
-  { ...payload, text: 'x'.repeat(4001) },
+  { ...payload, text: 'x'.repeat(REQUEST_TEXT_MAX_CHARS + 1) },
   { ...payload, targetLanguage: 'unknown' },
   { ...payload, modelId: 'another-model' },
   { ...payload, branchId: 42 },
@@ -215,7 +240,7 @@ test.each([
     502,
     'INPUT_TRANSLATION_FAILED',
   ],
-  ['too long', { text: 'x'.repeat(4001) }, 422, 'INPUT_TRANSLATION_TOO_LONG'],
+  ['too long', { text: 'x'.repeat(REQUEST_TEXT_MAX_CHARS + 1) }, 422, 'INPUT_TRANSLATION_TOO_LONG'],
 ] as const)(
   'does not apply, truncate or automatically retry a %s result',
   async (_, delta, status, error) => {

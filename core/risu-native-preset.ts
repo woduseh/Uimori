@@ -67,7 +67,6 @@ export function validateNativeRisuPreset(value: unknown): NativeRisuPreset {
     Object.keys(item).some((key) => !['version', 'preset'].includes(key)) ||
     Object.keys(preset).some((key) => !allowed.has(key)) ||
     !Array.isArray(preset.promptTemplate) ||
-    preset.promptTemplate.length > 290 ||
     Object.keys(object(preset.promptSettings)).some((key) => !settingKeys.has(key))
   )
     throw new Error('RISU_NATIVE_PRESET_INVALID');
@@ -78,7 +77,6 @@ export function validateNativeRisuPreset(value: unknown): NativeRisuPreset {
   for (const key of ['regex', 'presetRegex'])
     if (preset[key] !== undefined && (!Array.isArray(preset[key]) || preset[key].length > 2000))
       throw new Error('RISU_NATIVE_PRESET_INVALID');
-  if (JSON.stringify(value).length > 750_000) throw new Error('RISU_NATIVE_PRESET_LIMIT');
   return structuredClone(value) as NativeRisuPreset;
 }
 

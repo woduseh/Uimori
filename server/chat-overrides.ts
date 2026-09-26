@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { FastifyInstance } from 'fastify';
 import {
   buildChatOverrideSnapshot,
@@ -32,7 +33,7 @@ const json = JSON.stringify;
 const hash = (value: unknown) => chatOverrideHash(json(value));
 const sourceId = (value: unknown) => (value === null ? null : text(value, 'source revision', 100));
 const maxField = (selector: ChatLoreSelector) =>
-  selector.field === 'text' ? 1_000_000 : selector.field === 'description' ? 2000 : 200;
+  selector.field === 'text' ? SOURCE_TEXT_MAX_CHARS : selector.field === 'description' ? 4000 : 200;
 
 export class ChatOverridesStore {
   constructor(readonly store: Store) {}
@@ -229,8 +230,6 @@ export class ChatOverridesStore {
           retired: false,
           createdAt: new Date().toISOString(),
         };
-        if (!prior && scoped.entries.filter((item) => !item.retired).length >= 1000)
-          throw new HttpError(400, '채팅 전용 로어 변경 한도를 넘었어요.');
       }
       const result = { revision: entry.revision, entry };
       this.store.db
@@ -280,7 +279,7 @@ export function chatOverrideRoutes(
     };
   app.patch<{ Params: { id: string } }>(
     '/api/chats/:id/lore-overrides',
-    { bodyLimit: 1_100_000 },
+    { bodyLimit: SOURCE_TEXT_MAX_CHARS * 6 + 16_384 },
     mutate('patch')
   );
   app.delete<{ Params: { id: string } }>('/api/chats/:id/lore-overrides', mutate('remove'));
