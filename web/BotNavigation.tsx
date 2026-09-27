@@ -1,3 +1,5 @@
+import type { ReaderTarget } from '../core/reader-target.js';
+import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { Dialog } from './Dialog.js';
 import { ActionMenu } from './ActionMenu.js';
 import type { useChatActivities } from './useChatActivities.js';
@@ -36,7 +38,7 @@ export type Props = {
   chats: Chat[];
   selected: string;
   destination: 'story' | 'library';
-  onSelect: (id: string) => void;
+  onSelect: (id: string, target?: ReaderTarget) => void;
   onNew: (bot: Content, folder?: ChatFolder) => void;
   onImportChat?: (bot: Content) => void;
   onLibrary: (tab: LibraryDestination) => void;
@@ -84,7 +86,6 @@ export function BotBranch(
     managementActions,
     activities,
   } = props;
-  const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [movingId, setMovingId] = useState<string | null>(null);
   const [folders, setFolders] = useState<ChatFolder[]>([]);
@@ -486,7 +487,6 @@ export function BotBranch(
               onClick={(event) => {
                 const menu = event.currentTarget.closest('details');
                 if (menu) menu.open = false;
-                setQuery('');
                 setSearching(true);
               }}
             >
@@ -560,37 +560,23 @@ export function BotBranch(
         onClose={() => setSearching(false)}
         className="bot-organize-dialog"
       >
-        <label className="story-search">
-          <SearchIcon size={16} />
-          <input
-            aria-label="채팅 검색"
-            placeholder="채팅 이름 검색"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+        {searching && (
+          <ManuscriptSearchPanel
+            initialScope="bot"
+            botId={botId}
+            chats={scoped}
+            library={library}
+            label="채팅 검색"
+            onChat={(id) => {
+              setSearching(false);
+              onSelect(id);
+            }}
+            onNavigate={(target) => {
+              setSearching(false);
+              onSelect(target.chatId, target);
+            }}
           />
-        </label>
-        <nav className="bot-search-results" aria-label="채팅 검색 결과">
-          {scoped
-            .filter((chat) => chat.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-            .map((chat) => (
-              <button
-                key={chat.id}
-                data-chat-id={chat.id}
-                onClick={() => {
-                  setSearching(false);
-                  onSelect(chat.id);
-                }}
-              >
-                <strong>{chat.title}</strong>
-                <small>
-                  {folders.find((folder) => folder.id === chat.folderId)?.title ?? '미분류'}
-                </small>
-              </button>
-            ))}
-          {!scoped.some((chat) =>
-            chat.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())
-          ) && <p>검색 결과가 없어요.</p>}
-        </nav>
+        )}
       </Dialog>
       <Dialog
         open={creating}

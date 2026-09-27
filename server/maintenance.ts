@@ -17,6 +17,7 @@ const ALWAYS_ADMITTED = new Set([
   '/api/maintenance',
   '/api/session',
   '/api/diagnostics/report',
+  '/api/search',
   '/api/test/control',
   '/api/runs/:id/cancel',
   '/api/runs/:id/skip-state-wait',

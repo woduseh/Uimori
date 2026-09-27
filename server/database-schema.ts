@@ -1,3 +1,4 @@
+import { initManuscriptSearch } from './search-schema.js';
 import { pruneSavedTextHistory } from './text-retention.js';
 import { migrateContextStorage } from './migrate-context-storage.js';
 import { pruneContextHistory } from './context-retention.js';
@@ -7,7 +8,7 @@ import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 
-export const DATABASE_SCHEMA_VERSION = 6;
+export const DATABASE_SCHEMA_VERSION = 7;
 const FORMAT = 'uimori-personal-v1';
 
 export class DatabaseSchemaError extends Error {
@@ -136,6 +137,7 @@ export function initializeDatabaseSchema(
       migrateUserData();
       pruneContextHistory(db);
     }
+    if (previous < 7) initManuscriptSearch(db);
     pruneSavedTextHistory(db);
     initDatabaseReadIndexes(db);
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}`);

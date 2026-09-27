@@ -1,3 +1,5 @@
+import type { ReaderTarget } from '../core/reader-target.js';
+import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen, Sprout } from 'lucide-react';
 import type { Content, Library } from '../core/product.js';
@@ -57,28 +59,13 @@ export function NavigationQuickActions({
 }: {
   chats: Chat[];
   library: Library | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, target?: ReaderTarget) => void;
   onLibrary: (tab: 'bot') => void;
   /** The collapsed rail shows the same two actions as icons. */
   compact?: boolean;
 }) {
   const [searching, setSearching] = useState(false);
-  const [query, setQuery] = useState('');
-  const botTitle = (chat: Chat) =>
-    library?.contents.find((bot) => bot.id === chat.botId)?.title ?? '';
-  const needle = query.trim().toLocaleLowerCase();
-  const matches = chats
-    .filter(
-      (chat) =>
-        !needle ||
-        chat.title.toLocaleLowerCase().includes(needle) ||
-        botTitle(chat).toLocaleLowerCase().includes(needle)
-    )
-    .sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''));
-  const openSearch = () => {
-    setQuery('');
-    setSearching(true);
-  };
+  const openSearch = () => setSearching(true);
   return (
     <div className={`navigation-quick-actions${compact ? ' compact' : ''}`}>
       {compact ? (
@@ -114,32 +101,21 @@ export function NavigationQuickActions({
         onClose={() => setSearching(false)}
         className="bot-organize-dialog"
       >
-        <label className="story-search">
-          <SearchIcon size={16} />
-          <input
-            aria-label="전체 채팅 검색"
-            placeholder="채팅 또는 봇 이름"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+        {searching && (
+          <ManuscriptSearchPanel
+            label="전체 채팅 검색"
+            chats={chats}
+            library={library}
+            onChat={(id) => {
+              setSearching(false);
+              onSelect(id);
+            }}
+            onNavigate={(target) => {
+              setSearching(false);
+              onSelect(target.chatId, target);
+            }}
           />
-        </label>
-        <nav className="bot-search-results" aria-label="채팅 검색 결과">
-          {matches.map((chat) => (
-            <button
-              key={chat.id}
-              type="button"
-              data-chat-id={chat.id}
-              onClick={() => {
-                setSearching(false);
-                onSelect(chat.id);
-              }}
-            >
-              <strong>{chat.title}</strong>
-              <small>{botTitle(chat)}</small>
-            </button>
-          ))}
-          {!matches.length && <p>검색 결과가 없어요.</p>}
-        </nav>
+        )}
       </Dialog>
     </div>
   );

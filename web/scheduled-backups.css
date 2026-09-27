@@ -1,0 +1,27 @@
+.scheduled-backups fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 16px;
+}
+.scheduled-backups fieldset > label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.scheduled-backups .archive-action-row {
+  gap: 14px;
+}
+.scheduled-backups .archive-action-row > label {
+  flex: 1 1 170px;
+  min-width: 0;
+}
+.scheduled-backups input[type="time"],
+.scheduled-backups input[type="number"] {
+  width: 100%;
+}
+.scheduled-backups details {
+  margin-top: 12px;
+}

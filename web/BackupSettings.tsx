@@ -1,3 +1,4 @@
+import './scheduled-backups.css';
 import { useEffect, useState } from 'react';
 import type { BackupSettings as Settings, BackupStatus } from '../core/backups.js';
 import { api } from './api.js';
@@ -76,7 +77,10 @@ export function BackupSettings({ onDirtyChange }: { onDirtyChange?: (dirty: bool
     }
   }
   return (
-    <section className="settings-card archive-management-card" aria-label="자동 백업">
+    <section
+      className="settings-card archive-management-card scheduled-backups"
+      aria-label="자동 백업"
+    >
       <header className="archive-card-heading">
         <h3>자동 백업</h3>
         <p className="muted">

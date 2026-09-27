@@ -1,3 +1,4 @@
+import { readerTargetFromUrl, readerTargetUrl, type ReaderTarget } from '../core/reader-target.js';
 import { readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
 import {
@@ -127,6 +128,9 @@ export function useStory() {
   const draftIdentity = useRef({ text: '', revision: 0 });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [readerTarget, setReaderTarget] = useState<ReaderTarget | null>(() =>
+    readerTargetFromUrl(location.search)
+  );
   const [loreResetDraft, setLoreResetDraft] = useState(false);
   const [submitting, setSubmitting] = useState<string[]>([]);
   const submitLocks = useRef(new Set<string>());
@@ -646,6 +650,22 @@ export function useStory() {
       ) {
         holdNavigationPosition(node, { kind: 'end' });
         latestIntent.current = null;
+      } else if (
+        readerTarget?.chatId === selected &&
+        readerTarget.sourceId === readSource &&
+        document.getElementById(`source-${readSource}`)
+      ) {
+        const element = document.getElementById(`source-${readSource}`)!;
+        const validHash =
+          !readerTarget.contentHash || element.dataset.contentHash === readerTarget.contentHash;
+        holdNavigationPosition(node, {
+          kind: 'source',
+          element,
+          ...(validHash && readerTarget.blockAnchor
+            ? { anchor: readerTarget.blockAnchor, offset: 0 }
+            : {}),
+        });
+        if (!validHash) setNotice('본문이 바뀌어 해당 장면의 시작으로 이동했어요.');
       } else if (sourceTarget && node.contains(sourceTarget)) {
         holdNavigationPosition(node, { kind: 'source', element: sourceTarget });
       } else {
@@ -664,7 +684,7 @@ export function useStory() {
       restoredView.current = viewKey;
     });
     return () => cancelAnimationFrame(frame);
-  }, [detail, selected, viewKey, readSource, destination, holdNavigationPosition]);
+  }, [detail, selected, viewKey, readSource, destination, holdNavigationPosition, readerTarget]);
   const setViewUrl = (chat: string, branchId = '', source = '') => {
     const params = new URLSearchParams({ chat });
     if (branchId) params.set('branch', branchId);
@@ -672,12 +692,14 @@ export function useStory() {
     history.pushState(null, '', `?${params}`);
   };
   const select = (id: string) => {
+    setReaderTarget(null);
     savePosition();
     rememberCursor();
     setViewUrl(id);
     navigate({ kind: 'chat', chat: id });
   };
   const chooseBranch = (id: string, source = '') => {
+    setReaderTarget(null);
     savePosition();
     rememberCursor();
     setViewUrl(selected, id, source);
@@ -685,6 +707,7 @@ export function useStory() {
     navigate({ kind: 'branch', branch: id, source });
   };
   const chooseSource = (id: string, toEnd = false) => {
+    setReaderTarget(null);
     cancelNavigationScroll.current?.();
     savePosition();
     navigate({ kind: 'source', source: id });
@@ -713,6 +736,27 @@ export function useStory() {
       });
     }
   };
+  const openTarget = (target: ReaderTarget) => {
+    cancelNavigationScroll.current?.();
+    savePosition();
+    rememberCursor();
+    setReaderTarget({ ...target });
+    try {
+      sessionStorage.setItem(`reader-mode:${target.sourceId}`, target.representation);
+    } catch {
+      /* Optional view cache. */
+    }
+    history.pushState(null, '', readerTargetUrl(target));
+    navigate({
+      kind: 'restore',
+      view: {
+        chat: target.chatId,
+        branch: target.branchId,
+        source: target.sourceId,
+        destination: 'story',
+      },
+    });
+  };
   const chooseLatest = () => {
     const last = detail?.reader.navigation.at(-1);
     if (last) chooseSource(last.id, true);
@@ -721,6 +765,7 @@ export function useStory() {
     const onPop = () => {
       savePosition();
       rememberCursor();
+      setReaderTarget(readerTargetFromUrl(location.search));
       navigate({ kind: 'restore', view: initialView() });
     };
     return subscribeAppHistory(onPop);
@@ -1212,6 +1257,8 @@ export function useStory() {
     select,
     chooseBranch,
     chooseSource,
+    openTarget,
+    readerTarget,
     chooseLatest,
     showLibrary,
     generate,

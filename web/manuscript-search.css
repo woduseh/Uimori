@@ -1,0 +1,50 @@
+.manuscript-search {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+.manuscript-search form {
+  display: grid;
+  gap: 10px;
+}
+.manuscript-search-input,
+.manuscript-search-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.manuscript-search-input input {
+  flex: 1;
+  min-width: 160px;
+}
+.manuscript-search-filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.manuscript-search-results {
+  display: grid;
+  gap: 16px;
+}
+.manuscript-search-results article {
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 10px;
+  min-width: 0;
+}
+.manuscript-search-results h4 {
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+.manuscript-search-results p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.manuscript-search-results article > div + div {
+  margin-top: 14px;
+}
+.manuscript-search-results mark {
+  background: color-mix(in srgb, #e6c45c 40%, transparent);
+  color: inherit;
+}
