@@ -19,6 +19,7 @@ services:
       UIMORI_HOST: 0.0.0.0
       UIMORI_PORT: "4310"
       UIMORI_DB: /data/uimori.sqlite
+      UIMORI_BACKUP_DIR: /backups
       UIMORI_PUBLIC_ORIGIN: ${UIMORI_PUBLIC_ORIGIN:?Set the exact HTTPS origin in .env.self-host}
       UIMORI_ACCESS_TOKEN: ${UIMORI_ACCESS_TOKEN:?Set a random access token of at least 32 characters}
     read_only: true
@@ -30,6 +31,7 @@ services:
       - no-new-privileges:true
     volumes:
       - data:/data
+      - backups:/backups
     # No host port: HTTPS traffic must enter through the proxy.
     healthcheck:
       test:
@@ -77,5 +79,7 @@ services:
           create_host_path: false
 
 volumes:
+  backups:
+    name: ${UIMORI_BACKUP_VOLUME:-uimori_backups}
   data:
     name: ${UIMORI_DATA_VOLUME:-uimori_data}

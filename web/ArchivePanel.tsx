@@ -1,3 +1,4 @@
+import { BackupSettings } from './BackupSettings.js';
 import { useEffect, useState } from 'react';
 import { ChatBackupImport } from './ChatBackupImport.js';
 import { ResourceBundleImport } from './ResourceBundleImport.js';
@@ -18,10 +19,11 @@ export function ArchivePanel({
   const [busy, setBusy] = useState(false);
   const [chatDirty, setChatDirty] = useState(false);
   const [resourceDirty, setResourceDirty] = useState(false);
+  const [backupDirty, setBackupDirty] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
-    onDirtyChange?.(busy || chatDirty || resourceDirty);
-  }, [busy, chatDirty, resourceDirty, onDirtyChange]);
+    onDirtyChange?.(busy || chatDirty || resourceDirty || backupDirty);
+  }, [busy, chatDirty, resourceDirty, backupDirty, onDirtyChange]);
   const Container = expanded ? 'section' : 'details';
   return (
     <Container
@@ -81,6 +83,7 @@ export function ArchivePanel({
           </p>
         )}
       </section>
+      <BackupSettings onDirtyChange={setBackupDirty} />
       <ResourceBundleImport onImported={onImported} onDirtyChange={setResourceDirty} />
       <ChatBackupImport onImported={onImported} onDirtyChange={setChatDirty} disabled={busy} />
     </Container>

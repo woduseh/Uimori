@@ -40,6 +40,7 @@ npm run dev
 | [서재와 프롬프트](docs/LIBRARY.md) · [항목 삭제](docs/DELETION.md) | 자료 분류·폴더·대표 이미지, 삭제 위치와 참조 보호 |
 | [Risu 원본 가져오기](docs/RISU-IMPORT.md) | `.charx` 카드·모듈·`.risup` 프롬프트 원본, CBS·Lua·정규식·CSS 실행과 지원 범위 |
 | [Risu 자료 내보내기](docs/RISU-EXPORT.md) | 저장한 카드·모듈·프롬프트를 CHARX·RISUM·RISUP으로 내보내기 |
+| [자동 백업](docs/AUTOMATIC-BACKUPS.md) | 한국 시간 일일 스냅샷, 검증·보관·다운로드 |
 | [문제 보고용 진단](docs/DIAGNOSTICS.md) | 원문·키를 제외한 보고서 미리보기와 다운로드 |
 | [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |
 | [프로바이더](docs/PROVIDERS.md) | Vertex, Responses·Chat 호환, Anthropic 실시간·Batch, Vercel, Codex 프로바이더와 선택형 평가 도구·합성 시험 |
