@@ -15,3 +15,5 @@ SQLite 온라인 스냅샷을 만들고 별도 Worker에서 `quick_check`, 외�
 API: `GET /api/backups`, `PUT /api/backups/settings`(expectedRevision), `POST /api/backups`(202), `GET /api/backups/:id/download`. 기존 `/api/backup` 다운로드도 유지해요. 경로를 요청으로 받지 않고 기존 작업실 인증·유지보수 게이트를 재사용해요.
 
 검증: `npm test -- tests/backup-service.test.ts tests/database-schema.test.ts tests/personal-workspace-flow.test.ts`. 임시 SQLite 사본의 재열기, 이미지·원문·설정 보존, 실패 후 retention, 일정·CAS·중복, API 인증과 유지보수를 검사해요. 실제 Docker 볼륨 전환과 운영 디스크 고장은 별도 운영 검증이에요.
+
+다른 탭과 설정 개정이 충돌하면 `다시 확인`으로 최신 설정과 개정을 불러와요. 미저장 변경을 버릴 때만 확인하고, 취소하면 작성 중인 설정을 유지해요.

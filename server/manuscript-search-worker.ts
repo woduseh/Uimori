@@ -135,9 +135,6 @@ function snippet(text: string, terms: string[]): SearchMatch['snippet'] {
 function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
   const terms = termsOf(query.query);
   if (!terms.length || terms.length > 16) throw new Error('SEARCH_QUERY_INVALID');
-  const revision = String(
-    db.prepare("SELECT value FROM app_metadata WHERE key='search-revision'").get()!.value
-  );
   const signature = hash(
     JSON.stringify({
       terms,
@@ -150,12 +147,7 @@ function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
   let after = 0;
   if (query.cursor) {
     const cursor = JSON.parse(Buffer.from(query.cursor, 'base64url').toString());
-    if (
-      cursor.signature !== signature ||
-      cursor.revision !== revision ||
-      !Number.isSafeInteger(cursor.after) ||
-      cursor.after < 0
-    )
+    if (cursor.signature !== signature || !Number.isSafeInteger(cursor.after) || cursor.after < 0)
       throw new Error('SEARCH_CURSOR_STALE');
     after = cursor.after;
   }
@@ -233,7 +225,7 @@ function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
   return {
     items,
     nextCursor: more
-      ? Buffer.from(JSON.stringify({ signature, revision, after })).toString('base64url')
+      ? Buffer.from(JSON.stringify({ signature, after })).toString('base64url')
       : null,
     coverage: more ? 'partial' : building ? 'building' : 'complete',
   };
@@ -243,11 +235,26 @@ try {
     const rows = db
       .prepare('SELECT source_id,revision FROM search_dirty_sources ORDER BY rowid LIMIT 8')
       .all();
-    const batch: SearchIndexBatch = rows.map((row) => ({
-      sourceId: String(row.source_id),
-      revision: Number(row.revision),
-      documents: currentDocuments(String(row.source_id)),
-    }));
+    const batch: SearchIndexBatch = [];
+    let bytes = 0;
+    // Bound both new FTS work and removal of old index text. One oversized scene must
+    // still progress; do not combine it with seven more large scenes in one write.
+    for (const row of rows) {
+      const sourceId = String(row.source_id);
+      const documents = currentDocuments(sourceId);
+      const oldBytes = Number(
+        db
+          .prepare(
+            'SELECT COALESCE(SUM(length(CAST(search_text AS BLOB))),0) AS n FROM search_documents WHERE source_id=?'
+          )
+          .get(sourceId)!.n
+      );
+      const size = oldBytes + documents.reduce((sum, doc) => sum + Buffer.byteLength(doc.text), 0);
+      if (batch.length && bytes + size > 256 * 1024) break;
+      batch.push({ sourceId, revision: Number(row.revision), documents });
+      bytes += size;
+      if (bytes >= 256 * 1024) break;
+    }
     parentPort!.postMessage({ result: batch });
   } else parentPort!.postMessage({ result: search(input.query!) });
 } catch (error) {

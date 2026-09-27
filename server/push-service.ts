@@ -1,3 +1,4 @@
+import { pushAllowed } from '../core/push.js';
 import { createHash, randomUUID } from 'node:crypto';
 import webPush from 'web-push';
 import type { FastifyInstance } from 'fastify';
@@ -209,13 +210,6 @@ export class PushService {
         controller.abort();
     }
   }
-  private allowed(kind: string, eventKey: string, choices: PushPreferences): boolean {
-    if (kind === 'test') return true;
-    if (kind === 'task-failed' && !choices.failures) return false;
-    if (eventKey.startsWith('translation:')) return choices.translation;
-    if (eventKey.startsWith('illustration:')) return choices.illustration;
-    return kind === 'task-failed' ? choices.failures : choices.main;
-  }
   private async deliver(): Promise<void> {
     if (!this.options.canSend() || this.closed) return;
     const db = this.store.db,
@@ -243,7 +237,7 @@ export class PushService {
       const choices = JSON.parse(String(row.preferences)) as PushPreferences;
       if (
         row.origin !== this.options.origin ||
-        !this.allowed(String(row.kind), String(row.event_key), choices)
+        !pushAllowed(String(row.kind), String(row.event_key), choices)
       ) {
         db.prepare("UPDATE push_outbox SET status='cancelled' WHERE id=?").run(row.id);
         continue;

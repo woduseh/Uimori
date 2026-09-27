@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BookmarkPlus, Pencil, Trash2 } from 'lucide-react';
 import type { Bookmark } from '../core/reading-state.js';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -6,6 +6,93 @@ import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { api } from './api.js';
 import './bookmarks.css';
+
+/** Registers only bookmark edits with the reader's existing editing boundary. */
+export const BookmarkEditingContext = createContext<(id: string, editing: boolean) => void>(
+  () => {}
+);
+function useBookmarkEditing(id: string, editing: boolean) {
+  const register = useContext(BookmarkEditingContext);
+  useLayoutEffect(() => {
+    if (!editing) return;
+    register(id, true);
+    return () => register(id, false);
+  }, [id, editing, register]);
+}
+
+function BookmarkEditor({
+  item,
+  onSaved,
+  onClose,
+}: {
+  item: Bookmark;
+  onSaved: (value: Bookmark) => void;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState(item.title);
+  const [note, setNote] = useState(item.note);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const dirty = title !== item.title || note !== item.note;
+  useBookmarkEditing(`bookmark:${item.id}`, dirty || busy);
+  function close() {
+    if (busy || (dirty && !window.confirm('저장하지 않은 책갈피 수정을 닫을까요?'))) return;
+    onClose();
+  }
+  return (
+    <Dialog open title="책갈피 편집" onClose={close} className="bookmark-dialog">
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (busy) return;
+          setBusy(true);
+          setError('');
+          try {
+            onSaved(
+              await api<Bookmark>(
+                `/bookmarks/${item.id}`,
+                { expectedRevision: item.revision, title, note },
+                'PATCH'
+              )
+            );
+          } catch (caught) {
+            setError((caught as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <fieldset disabled={busy}>
+          <label>
+            책갈피 이름
+            <input
+              value={title}
+              maxLength={200}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+          </label>
+          <label>
+            책갈피 메모
+            <textarea
+              value={note}
+              maxLength={4000}
+              rows={4}
+              onChange={(event) => setNote(event.target.value)}
+            />
+          </label>
+          <button type="submit" disabled={!title.trim() || !dirty}>
+            {busy ? '저장 중…' : '책갈피 변경 저장'}
+          </button>
+        </fieldset>
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+      </form>
+    </Dialog>
+  );
+}
 
 export function BookmarkButton({
   capture,
@@ -16,43 +103,38 @@ export function BookmarkButton({
   title: string;
   disabled?: boolean;
 }) {
-  const [draft, setDraft] = useState<{
-    id: string;
-    target: ReaderTarget;
-    title: string;
-    note: string;
-    quote: string;
-  } | null>(null);
+  const [saved, setSaved] = useState<Bookmark | null>(null);
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [saved, setSaved] = useState(false);
-  const initialTitle = useRef('');
-  function open() {
-    const location = capture();
-    if (!location) return;
-    initialTitle.current = title;
-    setDraft({ ...location, id: crypto.randomUUID(), title, note: '' });
-    setSaved(false);
-    setError('');
-  }
-  function close() {
-    if (busy) return;
-    if (
-      draft &&
-      (draft.title !== initialTitle.current || draft.note) &&
-      !window.confirm('저장하지 않은 책갈피 메모를 닫을까요?')
-    )
+  const pending = useRef<{
+    id: string;
+    title: string;
+    note: string;
+    target: ReaderTarget;
+    quote: string;
+  } | null>(null);
+  // The same creation ID survives a lost response; retrying must not create another bookmark.
+  const [boundaryId] = useState(() => `bookmark-save:${crypto.randomUUID()}`);
+  useBookmarkEditing(boundaryId, busy);
+  async function add() {
+    if (busy || disabled) return;
+    if (saved) {
+      setEditing(true);
       return;
-    setDraft(null);
-  }
-  async function save() {
-    if (!draft || busy) return;
+    }
+    if (!pending.current) {
+      const location = capture();
+      if (!location) return;
+      pending.current = { ...location, id: crypto.randomUUID(), title, note: '' };
+    }
     setBusy(true);
     setError('');
     try {
-      await api<Bookmark>(`/chats/${draft.target.chatId}/bookmarks`, draft);
-      setDraft(null);
-      setSaved(true);
+      setSaved(
+        await api<Bookmark>(`/chats/${pending.current.target.chatId}/bookmarks`, pending.current)
+      );
+      pending.current = null;
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -62,53 +144,32 @@ export function BookmarkButton({
   return (
     <>
       <IconButton
-        label={saved ? '책갈피 추가됨 · 다른 책갈피 추가' : '책갈피 추가'}
+        label={saved ? '책갈피 추가됨 · 메모 편집' : '책갈피 추가'}
         icon={BookmarkPlus}
         size={18}
         className="scene-action"
-        disabled={disabled}
-        onClick={open}
+        disabled={disabled || busy}
+        onClick={() => void add()}
       />
-      <Dialog open={!!draft} title="책갈피 추가" onClose={close} className="bookmark-dialog">
-        {draft && (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void save();
-            }}
-          >
-            <label>
-              책갈피 이름
-              <input
-                value={draft.title}
-                maxLength={200}
-                onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-              />
-            </label>
-            <label>
-              책갈피 메모
-              <textarea
-                value={draft.note}
-                maxLength={4000}
-                rows={4}
-                onChange={(event) => setDraft({ ...draft, note: event.target.value })}
-              />
-            </label>
-            {draft.quote && <blockquote>{draft.quote}</blockquote>}
-            {error && (
-              <p role="alert" className="error">
-                {error}
-              </p>
-            )}
-            <button type="submit" disabled={busy || !draft.title.trim()}>
-              {busy ? '저장 중…' : '책갈피 저장'}
-            </button>
-          </form>
-        )}
-      </Dialog>
+      {error && (
+        <span role="alert" className="error">
+          {error}
+        </span>
+      )}
+      {saved && editing && (
+        <BookmarkEditor
+          item={saved}
+          onSaved={(value) => {
+            setSaved(value);
+            setEditing(false);
+          }}
+          onClose={() => setEditing(false)}
+        />
+      )}
     </>
   );
 }
+
 export function BookmarkList({
   chatId,
   branchId,
@@ -124,8 +185,7 @@ export function BookmarkList({
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<Bookmark | null>(null);
   const [busy, setBusy] = useState(false);
-  const original = useRef<Bookmark | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: revision represents an explicit reload, not a saved bookmark revision.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: revision is an explicit reload.
   useEffect(() => {
     const controller = new AbortController();
     setLoaded(false);
@@ -147,34 +207,6 @@ export function BookmarkList({
       });
     return () => controller.abort();
   }, [chatId, branchId, revision]);
-  function close() {
-    if (busy) return;
-    if (
-      editing &&
-      (editing.title !== original.current?.title || editing.note !== original.current?.note) &&
-      !window.confirm('저장하지 않은 책갈피 수정을 닫을까요?')
-    )
-      return;
-    setEditing(null);
-  }
-  async function save() {
-    if (!editing || busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      const updated = await api<Bookmark>(
-        `/bookmarks/${editing.id}`,
-        { expectedRevision: editing.revision, title: editing.title, note: editing.note },
-        'PATCH'
-      );
-      setItems((old) => old.map((item) => (item.id === updated.id ? updated : item)));
-      setEditing(null);
-    } catch (caught) {
-      setError((caught as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   async function remove(item: Bookmark) {
     if (!window.confirm(`“${item.title}” 책갈피를 삭제할까요? 원고는 유지돼요.`)) return;
     setBusy(true);
@@ -201,7 +233,12 @@ export function BookmarkList({
       )}
       {items.map((item) => (
         <article key={item.id}>
-          <button type="button" className="bookmark-title" onClick={() => onNavigate(item.target)}>
+          <button
+            type="button"
+            className="bookmark-title"
+            disabled={busy}
+            onClick={() => onNavigate(item.target)}
+          >
             {item.title}
           </button>
           <small>{item.target.representation === 'translation' ? '번역' : '원문'}</small>
@@ -212,10 +249,7 @@ export function BookmarkList({
               label={`${item.title} 책갈피 편집`}
               icon={Pencil}
               disabled={busy}
-              onClick={() => {
-                original.current = item;
-                setEditing({ ...item });
-              }}
+              onClick={() => setEditing(item)}
             />
             <IconButton
               label={`${item.title} 책갈피 삭제`}
@@ -229,42 +263,17 @@ export function BookmarkList({
       <button type="button" disabled={busy} onClick={() => setRevision((value) => value + 1)}>
         책갈피 새로 고침
       </button>
-      <Dialog open={!!editing} title="책갈피 편집" onClose={close} className="bookmark-dialog">
-        {editing && (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void save();
-            }}
-          >
-            <label>
-              책갈피 이름
-              <input
-                maxLength={200}
-                value={editing.title}
-                onChange={(event) => setEditing({ ...editing, title: event.target.value })}
-              />
-            </label>
-            <label>
-              책갈피 메모
-              <textarea
-                maxLength={4000}
-                rows={4}
-                value={editing.note}
-                onChange={(event) => setEditing({ ...editing, note: event.target.value })}
-              />
-            </label>
-            {error && (
-              <p role="alert" className="error">
-                {error}
-              </p>
-            )}
-            <button type="submit" disabled={busy || !editing.title.trim()}>
-              책갈피 변경 저장
-            </button>
-          </form>
-        )}
-      </Dialog>
+      {editing && (
+        <BookmarkEditor
+          key={editing.id}
+          item={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(updated) => {
+            setItems((old) => old.map((item) => (item.id === updated.id ? updated : item)));
+            setEditing(null);
+          }}
+        />
+      )}
     </section>
   );
 }

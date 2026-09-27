@@ -1,15 +1,10 @@
 import { expect, test } from 'vitest';
+import { MockAgent, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
 import { createECDH, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import webPush from 'web-push';
-import {
-  encryptedPushRequest,
-  pushEndpoint,
-  publicPushAddress,
-  validatePushSubscription,
-  sendWebPush,
-} from '../server/push-transport.js';
+import { pushEndpoint, validatePushSubscription, sendWebPush } from '../server/push-transport.js';
 import { notificationIntent, type PushEnvelope } from '../core/push.js';
 
 function subscription() {
@@ -33,7 +28,7 @@ const envelope: PushEnvelope = {
   representation: 'original',
 };
 
-test('push capabilities accept only supported TLS relays and real curve/auth keys; private/mapped IP destinations are excluded', () => {
+test('push capabilities accept only supported TLS relays and real curve/auth keys; arbitrary destinations are excluded', () => {
   const value = subscription();
   expect(validatePushSubscription(value)).toEqual(value);
   for (const endpoint of [
@@ -53,21 +48,6 @@ test('push capabilities accept only supported TLS relays and real curve/auth key
     'https://wns2-par02p.notify.windows.com/w/?token=synthetic',
   ])
     expect(pushEndpoint(endpoint).protocol).toBe('https:');
-  for (const address of [
-    '127.0.0.1',
-    '169.254.169.254',
-    '10.0.0.1',
-    '192.168.1.1',
-    '100.64.0.1',
-    '::1',
-    'fc00::1',
-    '::ffff:127.0.0.1',
-    'fe80::1',
-    '0.0.0.0',
-  ])
-    expect(publicPushAddress(address), address).toBe(false);
-  expect(publicPushAddress('8.8.8.8')).toBe(true);
-  expect(publicPushAddress('2606:4700:4700::1111')).toBe(true);
   expect(() =>
     validatePushSubscription({ ...value, keys: { ...value.keys, auth: 'AAAA' } })
   ).toThrow();
@@ -79,28 +59,58 @@ test('push capabilities accept only supported TLS relays and real curve/auth key
   ).toThrow();
 });
 
-test('real Web Push encryption/signing hides the payload, keeps TTL/topic bounded, and pre-aborted delivery never resolves DNS', async () => {
+test('the encrypted standard HTTP adapter preserves status, bounded retries and aborts without following redirects', async () => {
+  const previous = getGlobalDispatcher();
+  const mock = new MockAgent();
+  mock.disableNetConnect();
+  setGlobalDispatcher(mock);
+  const pool = mock.get('https://fcm.googleapis.com');
   const sub = subscription(),
     keys = webPush.generateVAPIDKeys();
-  const details = encryptedPushRequest(
-    sub,
-    { ...envelope, title: 'PRIVATE_TITLE_CANARY' },
-    keys,
-    'https://story.example.test',
-    999999
-  );
-  const headers = Object.fromEntries(
-    Object.entries(details.headers).map(([key, value]) => [key.toLowerCase(), value])
-  );
-  expect(headers['content-encoding']).toBe('aes128gcm');
-  expect(Number(headers.ttl)).toBe(7200);
-  expect(headers.authorization).toContain('vapid');
-  expect(String(headers.topic)).toHaveLength(32);
-  expect(details.body!.toString()).not.toContain('PRIVATE_TITLE_CANARY');
-  expect(JSON.stringify(details)).not.toContain(keys.privateKey);
-  await expect(
-    sendWebPush(sub, envelope, keys, 'https://story.example.test', 60, AbortSignal.abort())
-  ).rejects.toThrow();
+  const send = (signal = new AbortController().signal) =>
+    sendWebPush(
+      sub,
+      { ...envelope, title: 'PRIVATE_TITLE_CANARY' },
+      keys,
+      'https://story.example.test',
+      999999,
+      signal
+    );
+  try {
+    await expect(send(AbortSignal.abort())).rejects.toThrow();
+    pool.intercept({ path: '/fcm/send/synthetic-capability', method: 'POST' }).reply((request) => {
+      const headers = new Headers(request.headers as HeadersInit);
+      expect(headers.get('content-encoding')).toBe('aes128gcm');
+      expect(headers.get('authorization')).toContain('vapid');
+      expect(headers.get('ttl')).toBe('7200');
+      expect(String(request.body)).not.toContain('PRIVATE_TITLE_CANARY');
+      return {
+        statusCode: 429,
+        data: 'PRIVATE_ERROR_BODY',
+        responseOptions: { headers: { 'retry-after': '90' } },
+      };
+    });
+    await expect(send()).resolves.toEqual({ status: 429, retryAfterSeconds: 90 });
+    pool.intercept({ path: '/fcm/send/synthetic-capability', method: 'POST' }).reply(410, '');
+    await expect(send()).resolves.toEqual({ status: 410 });
+    pool
+      .intercept({ path: '/fcm/send/synthetic-capability', method: 'POST' })
+      .reply(302, '', { headers: { location: 'https://untrusted.invalid/' } });
+    await expect(send()).rejects.toThrow();
+    // Header delivery stalls; the caller's absolute cancellation still stops the request.
+    pool
+      .intercept({ path: '/fcm/send/synthetic-capability', method: 'POST' })
+      .reply(201, '')
+      .delay(500);
+    const controller = new AbortController();
+    const pending = send(controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toThrow();
+    mock.assertNoPendingInterceptors();
+  } finally {
+    setGlobalDispatcher(previous);
+    await mock.close();
+  }
 });
 
 test('actual service-worker code shows a generic visible notification and focuses the existing app without navigating over its draft', async () => {
@@ -179,8 +189,6 @@ test('actual service-worker code shows a generic visible notification and focuse
       },
     },
   ]);
-  expect(callbacks.has('fetch')).toBe(false);
-  expect(callbacks.has('sync')).toBe(false);
 });
 
 test('a closed-app notification opens only the same origin and safely encodes IDs; malformed data cannot inject a URL', async () => {

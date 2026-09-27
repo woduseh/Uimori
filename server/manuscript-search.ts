@@ -117,6 +117,9 @@ export class ManuscriptSearch {
       const batch = await this.work<SearchIndexBatch>('index');
       if (this.closed || !this.writable()) return;
       this.store.transaction(() => {
+        const insert = this.store.db.prepare(
+          'INSERT INTO search_documents(source_id,chat_id,kind,content_hash,text,search_text) VALUES(?,?,?,?,?,?)'
+        );
         for (const item of batch) {
           const pending = this.store.db
             .prepare('SELECT revision FROM search_dirty_sources WHERE source_id=?')
@@ -125,9 +128,6 @@ export class ManuscriptSearch {
           this.store.db
             .prepare('DELETE FROM search_documents WHERE source_id=?')
             .run(item.sourceId);
-          const insert = this.store.db.prepare(
-            'INSERT INTO search_documents(source_id,chat_id,kind,content_hash,text,search_text) VALUES(?,?,?,?,?,?)'
-          );
           for (const doc of item.documents)
             insert.run(
               doc.sourceId,

@@ -1,7 +1,7 @@
 import { initPushSchema } from './push-schema.js';
 import { initUsageAccounting } from './usage-accounting.js';
 import { initReadingState } from './reading-state.js';
-import { initManuscriptSearch } from './search-schema.js';
+import { initManuscriptSearch, simplifySearchInvalidation } from './search-schema.js';
 import { pruneSavedTextHistory } from './text-retention.js';
 import { migrateContextStorage } from './migrate-context-storage.js';
 import { pruneContextHistory } from './context-retention.js';
@@ -11,7 +11,7 @@ import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 
-export const DATABASE_SCHEMA_VERSION = 10;
+export const DATABASE_SCHEMA_VERSION = 11;
 const FORMAT = 'uimori-personal-v1';
 
 export class DatabaseSchemaError extends Error {
@@ -144,6 +144,12 @@ export function initializeDatabaseSchema(
     if (previous < 8) initReadingState(db);
     if (previous < 9) initUsageAccounting(db);
     if (previous < 10) initPushSchema(db);
+    if (previous < 11) {
+      simplifySearchInvalidation(db);
+      db.exec(
+        'DROP TRIGGER IF EXISTS push_main_terminal; DROP TRIGGER IF EXISTS push_translation_terminal; DROP TRIGGER IF EXISTS push_illustration_terminal;'
+      );
+    }
     pruneSavedTextHistory(db);
     initDatabaseReadIndexes(db);
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}`);

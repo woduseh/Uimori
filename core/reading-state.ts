@@ -23,6 +23,7 @@ export type PortableBookmark = {
   representation: 'original' | 'translation';
   contentHash?: string;
   blockIndex?: number;
+  offsetRatio?: number;
   title: string;
   note: string;
   quote: string;

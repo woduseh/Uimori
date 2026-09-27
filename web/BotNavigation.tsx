@@ -564,7 +564,8 @@ export function BotBranch(
           <ManuscriptSearchPanel
             initialScope="bot"
             botId={botId}
-            chats={scoped}
+            chats={chats}
+            folders={folders}
             library={library}
             label="채팅 검색"
             onChat={(id) => {

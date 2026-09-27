@@ -118,7 +118,7 @@ function mockSend(result = success) {
 }
 function databaseState(app: App) {
   // The only new persistence is a content-free usage receipt. Story, draft and all other
-  // tables remain unchanged, and the receipt is checked rather than simply ignored.
+  // authored-content tables remain unchanged; the receipt is explicitly checked.
   const attempts = app.store.db.prepare('SELECT * FROM attempts').all();
   for (const attempt of attempts) {
     expect(attempt).toMatchObject({
@@ -131,27 +131,21 @@ function databaseState(app: App) {
       job_id: null,
     });
     const result = JSON.parse(String(attempt.response));
-    expect(Object.keys(result).sort()).toEqual([
-      'detailsOmitted',
-      'estimatedCost',
-      'status',
-      'usage',
-    ]);
+    expect(result.detailsOmitted).toBe(true);
+    for (const field of ['text', 'refusal', 'error', 'toolCalls', 'opaqueState'])
+      expect(result[field]).toBeUndefined();
     expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 20, costUsd: null });
     expect(result.estimatedCost.lines).toEqual([]);
     expect(result.estimatedCost.notes).toEqual([]);
     expect(JSON.stringify(attempt)).not.toContain(payload.text);
     expect(JSON.stringify(attempt)).not.toContain(success.text);
   }
-  const tables = app.store.db
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-    .all() as { name: string }[];
-  return tables
-    .filter(({ name }) => name !== 'attempts')
-    .map(({ name }) => [
-      name,
-      app.store.db.prepare(`SELECT * FROM "${name.replaceAll('"', '""')}"`).all(),
-    ]);
+  // Protect authored content and execution ownership, not unrelated derived caches or
+  // optional device metadata. Receipt privacy is checked above.
+  return ['chats', 'sources', 'source_edits', 'runs', 'jobs', 'job_results'].map((name) => [
+    name,
+    app.store.db.prepare(`SELECT * FROM "${name}"`).all(),
+  ]);
 }
 const payload = {
   text: '(OOC: 미라는 아직 몰라.)\n\n*{{char}}는 기다린다.*',

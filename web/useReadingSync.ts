@@ -1,20 +1,10 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { ReaderTarget } from '../core/reader-target.js';
 import type { ReadingPosition, ReadingPositions } from '../core/reading-state.js';
+import { browserClientId } from './browser-client.js';
 import { api } from './api.js';
 import { readReadingPosition } from './story-storage.js';
 
-export function readingClientId(): string {
-  try {
-    const saved = localStorage.getItem('uimori:reading-client');
-    if (saved && /^[a-f0-9-]{36}$/i.test(saved)) return saved;
-    const id = crypto.randomUUID();
-    localStorage.setItem('uimori:reading-client', id);
-    return id;
-  } catch {
-    return crypto.randomUUID();
-  }
-}
 /** Source/paragraph identity survives viewport and font-size differences; pixels stay local. */
 export function captureReaderLocation(
   reader: HTMLElement,
@@ -50,133 +40,111 @@ export function captureReaderLocation(
   };
 }
 
-type Scope = { revision: number; dirty: ReaderTarget | null; busy: boolean; loaded: boolean };
+/** Server checkpoints are optional. Never gate the reader or move an already-open page. */
 export function useReadingSync(options: {
   chatId: string;
   branchId: string;
-  explicitSource: string;
   reader: RefObject<HTMLDivElement | null>;
   storageKey: string;
-  onResume: (target: ReaderTarget, replace?: boolean) => void;
+  onResume: (target: ReaderTarget) => void;
   saveLocal: () => void;
 }) {
-  const [clientId] = useState(readingClientId);
+  const [clientId] = useState(browserClientId);
   const key = `${options.chatId}:${options.branchId}`;
   const current = useRef(options);
   current.current = options;
   const [state, setState] = useState<{
     key: string;
-    loaded: boolean;
     own: ReadingPosition | null;
     other: ReadingPosition | null;
     error: string;
-  }>({ key: '', loaded: false, own: null, other: null, error: '' });
-  const records = useRef(new Map<string, Scope>());
-  const remoteLoader = useRef<(() => Promise<void>) | null>(null);
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
+  }>({ key: '', own: null, other: null, error: '' });
+  const actions = useRef<{
+    key: string;
+    remember: (target: ReaderTarget) => void;
+    load: () => Promise<void>;
+  } | null>(null);
+  const pending = useRef<ReaderTarget | null>(null);
+  const remember = useCallback((target: ReaderTarget) => {
+    if (actions.current?.key === `${target.chatId}:${target.branchId}`)
+      actions.current.remember(target);
+    else pending.current = target;
   }, []);
-  // One activation owns its initial resume decision. Later visibility/online refreshes can only
-  // offer a new position, never move the viewport or replay an offline history of scroll events.
   useEffect(() => {
-    const { chatId, branchId, storageKey } = current.current;
+    const { chatId, branchId } = current.current;
     if (!chatId) return;
-    let alive = true;
-    let initial = true;
-    let interacted = false;
+    let alive = true,
+      loaded = false,
+      saving = false,
+      revision = 0;
+    let dirty: ReaderTarget | null = null;
     let userUntil = 0;
-    let resumedOther: string | null = null;
-    const scope = records.current.get(key) ?? {
-      revision: 0,
-      dirty: null,
-      busy: false,
-      loaded: false,
-    };
-    records.current.set(key, scope);
+    let loading: Promise<void> | null = null;
     const controller = new AbortController();
     const path = `/chats/${encodeURIComponent(chatId)}/reading-position`;
     const query = new URLSearchParams({ clientId, branchId });
-    const load = async () => {
-      try {
-        const value = await api<ReadingPositions>(
-          `${path}?${query}`,
-          undefined,
-          'GET',
-          AbortSignal.any([controller.signal, AbortSignal.timeout(5000)])
-        );
-        if (!alive) return;
-        scope.revision = Math.max(scope.revision, value.own?.revision ?? 0);
-        scope.loaded = true;
-        const ownLocal = readReadingPosition(storageKey);
-        const candidate = value.own ?? value.other;
-        if (
-          initial &&
-          !interacted &&
-          !current.current.explicitSource &&
-          !ownLocal?.source &&
-          candidate &&
-          document.visibilityState === 'visible'
-        ) {
-          if (!value.own) resumedOther = value.other?.updatedAt ?? null;
-          current.current.onResume(candidate.target, true);
+    const load = (): Promise<void> => {
+      if (loading) return loading;
+      loading = (async () => {
+        try {
+          const value = await api<ReadingPositions>(
+            `${path}?${query}`,
+            undefined,
+            'GET',
+            AbortSignal.any([controller.signal, AbortSignal.timeout(5000)])
+          );
+          if (!alive) return;
+          revision = Math.max(revision, value.own?.revision ?? 0);
+          loaded = true;
+          setState({ key, ...value, error: '' });
+        } catch {
+          if (alive)
+            setState((old) => ({
+              key,
+              own: old.key === key ? old.own : null,
+              other: null,
+              error: '읽기 위치 연결을 확인하지 못했어요. 이 기기의 위치는 계속 보존해요.',
+            }));
         }
-        initial = false;
-        setState({
-          key,
-          loaded: true,
-          own: value.own,
-          other: value.other?.updatedAt === resumedOther ? null : value.other,
-          error: '',
-        });
-      } catch {
-        if (alive) {
-          initial = false;
-          scope.loaded = false;
-          setState((old) => ({
-            key,
-            loaded: true,
-            own: old.key === key ? old.own : null,
-            other: null,
-            error: '읽기 위치 연결을 확인하지 못했어요. 이 기기의 위치는 계속 보존해요.',
-          }));
-        }
-      }
+      })().finally(() => {
+        loading = null;
+      });
+      return loading;
     };
     const save = async () => {
-      if (!scope.dirty || scope.busy || !scope.loaded) return;
-      const target = scope.dirty;
-      scope.dirty = null;
-      scope.busy = true;
-      const revision = scope.revision;
+      if (!dirty || saving || !loaded) return;
+      const target = dirty;
+      dirty = null;
+      saving = true;
       try {
+        // A stalled best-effort checkpoint must not hold later reading writes forever.
         const saved = await api<ReadingPosition>(
           path,
           { clientId, expectedRevision: revision, target },
-          'PUT'
+          'PUT',
+          AbortSignal.timeout(5000)
         );
-        scope.revision = saved.revision;
-        if (alive && mounted.current)
-          setState((old) => (old.key === key ? { ...old, own: saved, error: '' } : old));
+        revision = Math.max(revision, saved.revision);
+        if (alive) setState((old) => (old.key === key ? { ...old, own: saved, error: '' } : old));
       } catch {
-        // Refresh CAS state, not the rejected location; another real user scroll is needed to save again.
-        if (alive) {
-          scope.loaded = false;
-          await load();
-        }
+        // Unknown/CAS outcomes are reread, not blindly replayed. Keep only a newer user location.
+        loaded = false;
+        if (alive) await load();
       } finally {
-        scope.busy = false;
+        saving = false;
       }
     };
-    const intent = (event: Event) => {
+    const rememberTarget = (target: ReaderTarget) => {
+      dirty = target;
+      void (loaded
+        ? save()
+        : load().then(() => {
+            if (alive) return save();
+          }));
+    };
+    const input = (event: Event) => {
       const node = current.current.reader.current;
-      if (node && event.target instanceof Node && node.contains(event.target)) {
-        interacted = true;
-        userUntil = performance.now() + 2500;
-      }
+      if (node && event.composedPath().includes(node)) userUntil = performance.now() + 2500;
     };
     const keyboard = (event: KeyboardEvent) => {
       if (
@@ -185,7 +153,6 @@ export function useReadingSync(options: {
         event.target instanceof HTMLTextAreaElement
       )
         return;
-      interacted = true;
       userUntil = performance.now() + 2500;
     };
     const scroll = (event: Event) => {
@@ -197,7 +164,7 @@ export function useReadingSync(options: {
         document.visibilityState !== 'visible'
       )
         return;
-      scope.dirty = captureReaderLocation(node, chatId, branchId);
+      dirty = captureReaderLocation(node, chatId, branchId);
       current.current.saveLocal();
     };
     const visibility = () => {
@@ -210,14 +177,25 @@ export function useReadingSync(options: {
     const pagehide = () => {
       void save();
     };
-    remoteLoader.current = load;
-    void load();
+    actions.current = { key, remember: rememberTarget, load };
+    if (pending.current?.chatId === chatId && pending.current.branchId === branchId) {
+      dirty = pending.current;
+      pending.current = null;
+    }
+    void load().then(() => {
+      if (alive) return save();
+    });
     const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void save();
+      if (document.visibilityState !== 'visible' || !dirty) return;
+      if (loaded) void save();
+      else
+        void load().then(() => {
+          if (alive) return save();
+        });
     }, 10_000);
     document.addEventListener('scroll', scroll, true);
-    for (const type of ['wheel', 'touchstart', 'touchmove', 'pointerdown'])
-      document.addEventListener(type, intent, { capture: true, passive: true });
+    for (const type of ['wheel', 'touchmove', 'pointerdown'])
+      document.addEventListener(type, input, { capture: true, passive: true });
     document.addEventListener('keydown', keyboard, true);
     document.addEventListener('visibilitychange', visibility);
     addEventListener('online', online);
@@ -227,34 +205,37 @@ export function useReadingSync(options: {
       controller.abort();
       clearInterval(timer);
       void save();
-      if (remoteLoader.current === load) remoteLoader.current = null;
+      if (actions.current?.key === key) actions.current = null;
       document.removeEventListener('scroll', scroll, true);
-      for (const type of ['wheel', 'touchstart', 'touchmove', 'pointerdown'])
-        document.removeEventListener(type, intent, true);
+      for (const type of ['wheel', 'touchmove', 'pointerdown'])
+        document.removeEventListener(type, input, true);
       document.removeEventListener('keydown', keyboard, true);
       document.removeEventListener('visibilitychange', visibility);
       removeEventListener('online', online);
       removeEventListener('pagehide', pagehide);
     };
   }, [key, clientId]);
-  const loaded = state.key === key && state.loaded;
   const other =
-    loaded && state.other && (!state.own || state.other.updatedAt > state.own.updatedAt)
+    state.key === key && state.other && (!state.own || state.other.updatedAt > state.own.updatedAt)
       ? state.other
       : null;
+  const resume =
+    other ??
+    (state.key === key && !readReadingPosition(options.storageKey)?.source ? state.own : null);
   return {
-    ready: !options.chatId || !!options.explicitSource || loaded,
-    other,
+    remember,
+    other: resume,
+    resumeLabel: other ? '다른 기기에서 이어 읽기' : '저장된 위치에서 이어 읽기',
     error: state.key === key ? state.error : '',
     resumeOther: () => {
-      if (other) {
-        current.current.onResume(other.target);
+      if (resume) {
+        current.current.onResume(resume.target);
         setState((old) => ({ ...old, other: null }));
       }
     },
-    dismiss: () => setState((old) => ({ ...old, other: null, error: '' })),
+    dismiss: () => setState((old) => ({ ...old, own: null, other: null, error: '' })),
     refresh: () => {
-      void remoteLoader.current?.();
+      void actions.current?.load();
     },
   };
 }
