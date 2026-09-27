@@ -254,7 +254,14 @@ export function captureBookmarks(
   return listBookmarks(store, chatId, branchId).flatMap((item) => {
     const entry = indexes.get(item.target.sourceId);
     if (entry === undefined) return [];
-    const match = /^b-[a-f0-9]{10}-(\d+)-[a-f0-9]{10}$/.exec(item.target.blockAnchor ?? '');
+    const source =
+      item.target.representation === 'original' && item.target.blockAnchor
+        ? store.source(item.target.sourceId)
+        : null;
+    const blockIndex =
+      source && source.hash === item.target.contentHash
+        ? (source.blocks?.findIndex((block) => block.anchor === item.target.blockAnchor) ?? -1)
+        : -1;
     return [
       {
         entry,
@@ -263,7 +270,7 @@ export function captureBookmarks(
         note: item.note,
         quote: item.quote,
         ...(item.target.contentHash ? { contentHash: item.target.contentHash } : {}),
-        ...(match ? { blockIndex: Number(match[1]) } : {}),
+        ...(blockIndex >= 0 ? { blockIndex, offsetRatio: item.target.offsetRatio } : {}),
       },
     ];
   });
@@ -284,6 +291,7 @@ export function restoreBookmarks(
       'representation',
       'contentHash',
       'blockIndex',
+      'offsetRatio',
       'title',
       'note',
       'quote',
@@ -300,6 +308,14 @@ export function restoreBookmarks(
       (!Number.isSafeInteger(body.blockIndex) || Number(body.blockIndex) < 0)
     )
       throw new HttpError(400, '책갈피 문단을 확인해 주세요.');
+    if (
+      body.offsetRatio !== undefined &&
+      (typeof body.offsetRatio !== 'number' ||
+        !Number.isFinite(body.offsetRatio) ||
+        body.offsetRatio < 0 ||
+        body.offsetRatio > 1)
+    )
+      throw new HttpError(400, '읽기 위치를 확인해 주세요.');
     let anchor: string | undefined;
     // Original text retained exactly can preserve its paragraph after new source IDs are assigned.
     if (
@@ -317,7 +333,12 @@ export function restoreBookmarks(
         sourceId: source.id,
         representation: body.representation,
         ...(body.contentHash ? { contentHash: body.contentHash } : {}),
-        ...(anchor ? { blockAnchor: anchor } : {}),
+        ...(anchor
+          ? {
+              blockAnchor: anchor,
+              ...(body.offsetRatio !== undefined ? { offsetRatio: body.offsetRatio } : {}),
+            }
+          : {}),
       },
       title: body.title,
       note: body.note,

@@ -18,13 +18,11 @@ export function initManuscriptSearch(db: DatabaseSync) {
     CREATE TRIGGER IF NOT EXISTS search_document_update AFTER UPDATE OF search_text ON search_documents BEGIN
       INSERT INTO search_fts(search_fts,rowid,search_text) VALUES('delete',old.id,old.search_text);
       INSERT INTO search_fts(rowid,search_text) VALUES(new.id,new.search_text); END;
-    INSERT OR IGNORE INTO app_metadata(key,value) VALUES('search-revision','0');
   `);
   const invalidate = (source: string) => `
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=${source}
-      ON CONFLICT(source_id) DO UPDATE SET revision=revision+1;
-    UPDATE app_metadata SET value=CAST(value AS INTEGER)+1 WHERE key='search-revision';`;
+      ON CONFLICT(source_id) DO UPDATE SET revision=revision+1;`;
   for (const [table, source, events] of [
     ['sources', 'id', ['INSERT', 'UPDATE OF text,hash']],
     ['source_edits', 'source_id', ['INSERT', 'UPDATE', 'DELETE']],
@@ -46,11 +44,21 @@ export function initManuscriptSearch(db: DatabaseSync) {
   db.exec(`
     CREATE TRIGGER IF NOT EXISTS search_request_update AFTER UPDATE OF request ON runs BEGIN
       ${invalidate('new.source_revision')} END;
-    CREATE TRIGGER IF NOT EXISTS search_source_delete AFTER DELETE ON sources BEGIN
-      UPDATE app_metadata SET value=CAST(value AS INTEGER)+1 WHERE key='search-revision'; END;
-    CREATE TRIGGER IF NOT EXISTS search_branch_move AFTER UPDATE OF head_revision ON branches BEGIN
-      UPDATE app_metadata SET value=CAST(value AS INTEGER)+1 WHERE key='search-revision'; END;
+
   `);
   db.exec(`INSERT OR IGNORE INTO search_dirty_sources(source_id,revision) SELECT id,1 FROM sources
     WHERE NOT EXISTS(SELECT 1 FROM search_documents d WHERE d.source_id=sources.id);`);
+}
+
+/** Version 11 keeps per-source index invalidation but removes global pagination fences. */
+export function simplifySearchInvalidation(db: DatabaseSync) {
+  for (const row of db
+    .prepare("SELECT name FROM sqlite_schema WHERE type='trigger' AND name LIKE 'search_%'")
+    .all()) {
+    const name = String(row.name);
+    if (!name.startsWith('search_document_'))
+      db.exec(`DROP TRIGGER "${name.replaceAll('"', '""')}"`);
+  }
+  db.exec("DELETE FROM app_metadata WHERE key='search-revision'");
+  initManuscriptSearch(db);
 }

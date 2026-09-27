@@ -6,7 +6,7 @@ import type {
   SearchKind,
 } from '../core/manuscript-search.js';
 import type { Chat } from '../core/types.js';
-import type { Library } from '../core/product.js';
+import type { Library, ChatFolder } from '../core/product.js';
 import { api } from './api.js';
 import './manuscript-search.css';
 
@@ -21,6 +21,7 @@ export function ManuscriptSearchPanel({
   botId,
   chats = [],
   library,
+  folders = [],
   label = '원고 검색',
   onNavigate,
   onChat,
@@ -30,11 +31,13 @@ export function ManuscriptSearchPanel({
   botId?: string;
   chats?: Chat[];
   library?: Library | null;
+  folders?: ChatFolder[];
   label?: string;
   onNavigate: (target: ReaderTarget) => void;
   onChat?: (id: string) => void;
 }) {
   const [query, setQuery] = useState('');
+  const [titleLimit, setTitleLimit] = useState(30);
   const [scope, setScope] = useState(initialScope);
   const [kinds, setKinds] = useState<SearchKind[]>(['original', 'translation', 'request']);
   const [result, setResult] = useState<ManuscriptSearchResult | null>(null);
@@ -80,6 +83,7 @@ export function ManuscriptSearchPanel({
   useEffect(() => {
     currentRequest.current?.abort();
     setResult(null);
+    setTitleLimit(30);
     setError('');
     setBusy(false);
     if (composing || [...query.trim()].length < 3) return;
@@ -91,18 +95,16 @@ export function ManuscriptSearchPanel({
   }, [signature, composing]);
   useEffect(() => () => currentRequest.current?.abort(), []);
   const needle = query.trim().normalize('NFC').toLowerCase();
-  const titleMatches = chats
-    .filter(
-      (chat) =>
-        (!chatId || scope !== 'chat' || chat.id === chatId) &&
-        (!botId || scope !== 'bot' || chat.botId === botId) &&
-        (!needle ||
-          `${chat.title} ${library?.contents.find((item) => item.id === chat.botId)?.title ?? ''}`
-            .normalize('NFC')
-            .toLowerCase()
-            .includes(needle))
-    )
-    .slice(0, 30);
+  const titleMatches = chats.filter(
+    (chat) =>
+      (!chatId || scope !== 'chat' || chat.id === chatId) &&
+      (!botId || scope !== 'bot' || chat.botId === botId) &&
+      (!needle ||
+        `${chat.title} ${library?.contents.find((item) => item.id === chat.botId)?.title ?? ''}`
+          .normalize('NFC')
+          .toLowerCase()
+          .includes(needle))
+  );
   return (
     <section className="manuscript-search" aria-label="원고와 채팅 찾기">
       <form
@@ -118,6 +120,17 @@ export function ManuscriptSearchPanel({
             placeholder="제목·본문·번역·요청으로 찾기"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape' || event.nativeEvent.isComposing || event.keyCode === 229)
+                return;
+              const dialog = event.currentTarget.closest('dialog');
+              if (!dialog) return;
+              // Chromium's search input otherwise consumes Escape just to clear text,
+              // leaving the modal open and the underlying navigation inert.
+              event.preventDefault();
+              event.stopPropagation();
+              dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+            }}
             onCompositionStart={() => setComposing(true)}
             onCompositionEnd={() => setComposing(false)}
           />
@@ -157,7 +170,7 @@ export function ManuscriptSearchPanel({
         <details open>
           <summary>채팅 제목 {titleMatches.length}개</summary>
           <nav className="bot-search-results">
-            {titleMatches.map((chat) => (
+            {titleMatches.slice(0, titleLimit).map((chat) => (
               <button
                 type="button"
                 data-chat-id={chat.id}
@@ -165,10 +178,19 @@ export function ManuscriptSearchPanel({
                 onClick={() => onChat(chat.id)}
               >
                 <strong>{chat.title}</strong>
-                <small>{library?.contents.find((item) => item.id === chat.botId)?.title}</small>
+                <small>
+                  {scope === 'bot'
+                    ? (folders.find((item) => item.id === chat.folderId)?.title ?? '기본 위치')
+                    : library?.contents.find((item) => item.id === chat.botId)?.title}
+                </small>
               </button>
             ))}
           </nav>
+          {titleMatches.length > titleLimit && (
+            <button type="button" onClick={() => setTitleLimit((old) => old + 30)}>
+              채팅 제목 더 보기 · {titleMatches.length - titleLimit}개 남음
+            </button>
+          )}
         </details>
       )}
       {!needle && (

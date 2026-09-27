@@ -34,7 +34,6 @@ Uimori 프로젝트 소스의 라이선스는 **GNU Affero General Public Licens
 Optional browser completion notifications use `web-push` 3.6.7
 (<https://github.com/web-push-libs/web-push>), distributed under the **Mozilla
 Public License 2.0 (MPL-2.0)**, without modifying that package's source. Its
-license and notices remain in the installed package. Public-address validation
-uses `ipaddr.js` 2.5.0 (<https://github.com/whitequark/ipaddr.js>), distributed under
-the **MIT License**, with its package notices retained. These dependencies do
+license and notices remain in the installed package. HTTP delivery uses the runtime's standard fetch; Uimori no longer directly
+depends on an IP-address parsing library for this feature. These dependencies do
 not change Uimori's own license or the rights to user-created manuscripts.

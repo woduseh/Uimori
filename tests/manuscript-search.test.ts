@@ -107,13 +107,13 @@ test('a dirty source overlays the index immediately, including current translati
   expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 });
 
-test('pagination stays stable across index refresh, scopes isolate bots, and changed source cursors fail explicitly', async () => {
+test('pagination stays stable across index refresh, scopes isolate bots, and unrelated edits never restart a scoped search', async () => {
   const { store, search } = fixture();
   const chat = createFixtureChat(store, 'First');
   const first = completedSource(store, chat.id, '같은 이름 미카');
   const second = completedSource(store, chat.id, '같은 이름 미카 다시');
   const other = createFixtureChat(store, 'Other');
-  completedSource(store, other.id, '미카는 다른 이야기');
+  const otherSource = completedSource(store, other.id, '미카는 다른 이야기');
   const filter = query('미카', { scope: 'bot', botId: chat.botId, limit: 1 });
   const page = await search.search(filter);
   expect(page.items[0].target.sourceId).toBe(first.id);
@@ -125,10 +125,17 @@ test('pagination stays stable across index refresh, scopes isolate bots, and cha
   expect(
     (await search.search(query('미카', { scope: 'chat', chatId: other.id }))).items
   ).toHaveLength(1);
+  store.editSource(otherSource.id, { text: '미카의 다른 새 장면', expectedRevision: 0 });
+  expect(
+    (await search.search({ ...filter, cursor: page.nextCursor })).items[0].target.sourceId
+  ).toBe(second.id);
   store.editSource(first.id, { text: '달라진 이름', expectedRevision: 0 });
-  await expect(search.search({ ...filter, cursor: page.nextCursor })).rejects.toThrow(
-    'SEARCH_CURSOR_STALE'
-  );
+  expect(
+    (await search.search({ ...filter, cursor: page.nextCursor })).items[0].target.sourceId
+  ).toBe(second.id);
+  await expect(
+    search.search({ ...filter, query: '다른 검색', cursor: page.nextCursor })
+  ).rejects.toThrow('SEARCH_CURSOR_STALE');
 });
 
 test('a slow or cancelled search does not block writes and does not turn a partial scan into no matches', async () => {
@@ -173,4 +180,19 @@ test('common location URLs preserve IDs and mode, and POST search stays read-onl
   const response = await app.inject({ method: 'POST', url: '/api/search', payload: query('문장') });
   expect(response.statusCode, response.body).toBe(200);
   expect(app.store.db.prepare('SELECT count(*) AS n FROM search_documents').get()!.n).toBe(before);
+});
+
+test('large index updates make bounded progress rather than grouping eight oversized scenes', async () => {
+  const { store, search } = fixture();
+  const chat = createFixtureChat(store, 'Bounded indexing');
+  for (let index = 0; index < 3; index++)
+    completedSource(store, chat.id, `${'길게 쓴 원고. '.repeat(30000)}보라색우산`);
+  const count = () =>
+    Number(store.db.prepare('SELECT count(*) AS n FROM search_dirty_sources').get()!.n);
+  expect(count()).toBe(3);
+  await search.refreshBatch();
+  expect(count()).toBe(2);
+  expect((await search.search(query('보라색우산'))).items).toHaveLength(3);
+  await index(search, store);
+  expect((await search.search(query('보라색우산'))).items).toHaveLength(3);
 });

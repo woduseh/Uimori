@@ -4,7 +4,7 @@ import { Bell, BellOff } from 'lucide-react';
 import { DEFAULT_PUSH_PREFERENCES, type PushInfo, type PushPreferences } from '../core/push.js';
 import { api } from './api.js';
 import { pwaRegistration } from './pwa.js';
-import { readingClientId } from './useReadingSync.js';
+import { browserClientId } from './browser-client.js';
 
 function applicationKey(value: string): Uint8Array<ArrayBuffer> {
   const base64 = value.replaceAll('-', '+').replaceAll('_', '/');
@@ -21,7 +21,7 @@ const labels: [keyof PushPreferences, string][] = [
   ['showTitle', '잠금 화면에 채팅 제목 표시'],
 ];
 export function PushSettings() {
-  const [clientId] = useState(readingClientId);
+  const [clientId] = useState(browserClientId);
   const [info, setInfo] = useState<PushInfo | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

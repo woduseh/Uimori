@@ -157,3 +157,7 @@ Browser checks use Playwright's live list reporter and a JSON report. If a run i
 `core/fixture-provider.ts` exposes explicit fixture behavior separately from product chat settings. Unit tests pass options to `executeFixtureMain` or `MainHooks.fixture`; HTTP scenarios use `app.controls.fixture` or `/api/test/control` with `action: "fixture"`. The controls are exposed only in test mode, captured before execution waits, and never saved in chat settings or provider inputs. Normal generation still requires a configured model. Test settings conflicts with current `maxCalls`/`status`, not mock style fields.
 
 Storage regressions are grouped by their owner: reader projections, chat option receipts, execution retention, text retention, and database migrations. The storage measurement tools use `scripts/synthetic-story.mjs`; the pre-native loading runner has been removed.
+
+### 개인 작업실 기능의 검증 범위
+
+`npm run verify:personal-features`는 백업·검색·두 브라우저 이어 읽기·책갈피·사용량·설치를 확인해요. 선택형 알림은 `npm run verify:push`로 분리해 일반 원고 수정에서 PushManager/권한 시나리오까지 매번 반복하지 않아요. 공통 코드나 알림 경계가 바뀌면 해당 묶음을 함께 실행해요. 실제 휴대폰 Push 수신은 합성 브라우저 검증과 별도예요.

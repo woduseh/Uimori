@@ -59,3 +59,12 @@ export function notificationIntent(value: unknown): NotificationIntent | null {
     },
   };
 }
+
+/** Rechecked before dispatch as preferences may change while a notification is queued. */
+export function pushAllowed(kind: string, eventKey: string, choices: PushPreferences): boolean {
+  if (kind === 'test') return true;
+  if (kind === 'task-failed' && !choices.failures) return false;
+  if (eventKey.startsWith('translation:')) return choices.translation;
+  if (eventKey.startsWith('illustration:')) return choices.illustration;
+  return kind === 'task-failed' ? choices.failures : choices.main;
+}

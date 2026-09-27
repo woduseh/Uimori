@@ -139,34 +139,19 @@ export function uncertainAttemptResult(cancelled = false): ProviderResult {
  * usage_detached prevents finishAttempt from restoring any deleted/private request or output. */
 export function detachAttemptUsage(db: DatabaseSync, ids: string[]) {
   if (!ids.length) return;
-  const rows = db
-    .prepare(
-      `SELECT id,status,request,response FROM attempts WHERE id IN (SELECT value FROM json_each(?))`
-    )
-    .all(JSON.stringify(ids));
-  for (const row of rows) {
-    const request = row.status === 'running' ? usageOnlyWire(JSON.parse(String(row.request))) : {};
-    const response = row.response ? JSON.parse(String(row.response)) : null;
-    const numeric = response
-      ? {
-          status: row.status,
-          detailsOmitted: true,
-          estimatedCost: response.estimatedCost
-            ? {
-                status: response.estimatedCost.status,
-                usd: response.estimatedCost.usd,
-                subtotalUsd: response.estimatedCost.subtotalUsd,
-                lines: [],
-                notes: [],
-              }
-            : undefined,
-        }
-      : null;
-    db.prepare(`UPDATE attempts SET chat_id=NULL,run_id=NULL,job_id=NULL,usage_detached=1,
-      request=?,response=?,raw_usage=NULL,price_revision=NULL,error=NULL WHERE id=?`).run(
-      JSON.stringify(request),
-      numeric ? JSON.stringify(numeric) : null,
-      row.id
-    );
-  }
+  // SQLite discards payloads in place. Do not materialize megabytes of text in JS just
+  // to retain a handful of numbers. A running request needs only its frozen pricing.
+  db.prepare(`UPDATE attempts SET chat_id=NULL,run_id=NULL,job_id=NULL,usage_detached=1,
+    request=CASE WHEN status='running' AND json_valid(request) THEN
+      json_object('protocol',json_extract(request,'$.protocol'),'role',role,'modelId',model_id,
+        'pricingStartedAt',json_extract(request,'$.pricingStartedAt'),
+        'executionMode',json_extract(request,'$.executionMode'),
+        'pricingSnapshot',CASE WHEN json_type(request,'$.pricingSnapshot')='object' THEN
+          json_set(json_remove(json_extract(request,'$.pricingSnapshot'),'$.sourceUrl'),'$.notes',json('[]')) END)
+      ELSE '{}' END,
+    response=json_object('status',status,'detailsOmitted',json('true'),
+      'estimatedCost',json_object('status',estimate_status,'usd',estimated_usd,
+        'subtotalUsd',estimated_subtotal_usd,'lines',json('[]'),'notes',json('[]'))),
+    raw_usage=NULL,price_revision=NULL,error=NULL
+    WHERE id IN (SELECT value FROM json_each(?))`).run(JSON.stringify(ids));
 }

@@ -173,7 +173,11 @@ export function BackupSettings({ onDirtyChange }: { onDirtyChange?: (dirty: bool
           <button
             type="button"
             onClick={() => {
+              if (dirty && !window.confirm('작성 중인 백업 설정을 버리고 최신 설정을 불러올까요?'))
+                return;
               setError('');
+              setDraft(null);
+              setDirty(false);
               setReload((value) => value + 1);
             }}
           >

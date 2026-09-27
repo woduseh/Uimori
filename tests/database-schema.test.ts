@@ -1,3 +1,6 @@
+import { createFixtureChat } from './fixtures/chat.js';
+import { completedSource } from './fixtures/illustration.js';
+import { addBookmark, saveReadingPosition } from '../server/reading-state.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { ChatOptionsStore } from '../server/chat-options.js';
 import { vi } from 'vitest';
@@ -47,7 +50,7 @@ test('schema 5 upgrades by adding durable Anthropic Batch recovery storage', () 
   // Remove later accounting columns as well: a schema-5 database did not contain them.
   // Push is newer than the simulated historical schema and references the later accounting columns.
   old.exec(
-    'DROP TRIGGER push_main_terminal; DROP TRIGGER push_translation_terminal; DROP TRIGGER push_illustration_terminal; DROP TABLE push_outbox; DROP TABLE push_subscriptions;'
+    'DROP TRIGGER IF EXISTS push_main_terminal; DROP TRIGGER IF EXISTS push_translation_terminal; DROP TRIGGER IF EXISTS push_illustration_terminal; DROP TABLE push_outbox; DROP TABLE push_subscriptions;'
   );
   old.exec('DROP INDEX attempts_usage_period; DROP INDEX attempts_usage_model;');
   for (const column of [
@@ -286,4 +289,76 @@ describe('Prior schema 3 independent chat migration', () => {
         .sort()
     ).toEqual(ids);
   });
+});
+
+test('version-10 simplification removes obsolete triggers while retaining authored locations and pending notification capabilities', () => {
+  const path = file();
+  const current = new Store(path);
+  const chat = createFixtureChat(current, 'Migration keeps this story');
+  const source = completedSource(current, chat.id, 'Retained source text');
+  const target = {
+    chatId: chat.id,
+    branchId: `main:${chat.id}`,
+    sourceId: source.id,
+    representation: 'original' as const,
+  };
+  const mark = addBookmark(current, chat.id, {
+    id: randomUUID(),
+    target,
+    title: 'Keep',
+    note: 'My note',
+    quote: '',
+  });
+  saveReadingPosition(current, chat.id, { clientId: randomUUID(), expectedRevision: 0, target });
+  current.db
+    .prepare('INSERT INTO access_sessions VALUES(?,?)')
+    .run('synthetic-session', 'synthetic-authority');
+  current.db
+    .prepare(`INSERT INTO push_subscriptions(id,client_id,session_hash,endpoint,keys,preferences,origin,revision,created_at,updated_at)
+    VALUES('migration-sub','migration-client','synthetic-session','https://fcm.googleapis.com/fcm/send/fixture','{}','{}','https://fixture.invalid',1,'2026-09-28','2026-09-28')`)
+    .run();
+  current.db
+    .prepare(`INSERT INTO push_outbox(subscription_id,event_key,kind,next_at,expires_at,created_at)
+    VALUES('migration-sub','existing-delivery','test','2026-09-28','2026-09-29','2026-09-28')`)
+    .run();
+  // Reintroduce only the old metadata and trigger boundaries that version 11 replaces.
+  current.db.exec(`INSERT INTO app_metadata VALUES('search-revision','12');
+    CREATE TRIGGER search_head_move AFTER UPDATE OF head_revision ON branches BEGIN UPDATE app_metadata SET value='13' WHERE key='search-revision'; END;
+    CREATE TRIGGER push_main_terminal AFTER INSERT ON events BEGIN SELECT 1; END;
+    PRAGMA user_version=10;`);
+  current.close();
+  const upgraded = new Store(path);
+  try {
+    expect(databaseSchemaVersion(upgraded.db)).toBe(DATABASE_SCHEMA_VERSION);
+    expect(upgraded.source(source.id).text).toBe('Retained source text');
+    expect(upgraded.db.prepare('SELECT note FROM bookmarks WHERE id=?').get(mark.id)).toEqual({
+      note: 'My note',
+    });
+    expect(upgraded.db.prepare('SELECT count(*) AS n FROM reading_positions').get()!.n).toBe(1);
+    expect(upgraded.db.prepare('SELECT event_key,status FROM push_outbox').get()).toEqual({
+      event_key: 'existing-delivery',
+      status: 'pending',
+    });
+    expect(upgraded.db.prepare('SELECT count(*) AS n FROM access_sessions').get()!.n).toBe(1);
+    expect(
+      upgraded.db
+        .prepare(
+          "SELECT 1 FROM sqlite_schema WHERE type='trigger' AND name IN ('push_main_terminal','search_head_move')"
+        )
+        .get()
+    ).toBeUndefined();
+    expect(
+      upgraded.db.prepare("SELECT 1 FROM app_metadata WHERE key='search-revision'").get()
+    ).toBeUndefined();
+    upgraded.editSource(source.id, {
+      text: 'The updated source still invalidates its own index',
+      expectedRevision: 0,
+    });
+    expect(
+      upgraded.db.prepare('SELECT 1 FROM search_dirty_sources WHERE source_id=?').get(source.id)
+    ).toBeTruthy();
+    expect(upgraded.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  } finally {
+    upgraded.close();
+  }
 });

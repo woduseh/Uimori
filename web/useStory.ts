@@ -1,4 +1,4 @@
-import { useReadingSync } from './useReadingSync.js';
+import { captureReaderLocation, useReadingSync } from './useReadingSync.js';
 import { readerTargetFromUrl, readerTargetUrl, type ReaderTarget } from '../core/reader-target.js';
 import { readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
@@ -214,18 +214,15 @@ export function useStory() {
   const readingSync = useReadingSync({
     chatId: destination === 'story' ? selected : '',
     branchId: activeBranchId || `main:${selected}`,
-    explicitSource: readSource,
     reader,
     storageKey: `reading:${selected}:${storageBranch}`,
-    onResume: (target, replace) => openTarget(target, replace),
+    onResume: (target) => openTarget(target),
     saveLocal: () => savePosition(),
   });
-  const readerReady = useRef(readingSync.ready);
-  readerReady.current = readingSync.ready;
+  const explicitReadingIntent = useRef<{ chatId: string; sourceId: string } | null>(null);
   const refresh = useCallback(
     async (id: string, incremental = false) => {
       if (
-        !readerReady.current ||
         navigation.current.chat !== id ||
         readerQuery.current.chat !== id ||
         readerQuery.current.epoch !== navigation.current.epoch
@@ -467,7 +464,7 @@ export function useStory() {
   useEffect(() => {
     let alive = true;
     const epoch = view.epoch;
-    if (selected && destination === 'story' && readingSync.ready) {
+    if (selected && destination === 'story') {
       restoredView.current = '';
       // A repeated selection needs a fresh read, but can keep its already displayed page.
       if (readerCache.current?.key !== readerQuery.current.key) setDetail(null);
@@ -478,7 +475,7 @@ export function useStory() {
     return () => {
       alive = false;
     };
-  }, [selected, activeBranchId, readSource, destination, view.epoch, refresh, readingSync.ready]);
+  }, [selected, activeBranchId, readSource, destination, view.epoch, refresh]);
   const attachmentKey = [...(detail?.profile?.packageAttachments ?? [])].map(refValue).join(',');
   // biome-ignore lint/correctness/useExhaustiveDependencies: Current content reads follow IDs/revisions, library changes and chat switches, not SSE object identity.
   useEffect(() => {
@@ -526,10 +523,24 @@ export function useStory() {
           reader.current === node,
         () => {
           restoredView.current = viewKey;
+          const intent = explicitReadingIntent.current;
+          if (intent?.chatId === selected) {
+            const article = document.getElementById(`source-${intent.sourceId}`);
+            if (article && node.contains(article)) {
+              explicitReadingIntent.current = null;
+              const target = captureReaderLocation(
+                node,
+                selected,
+                activeBranchId || `main:${selected}`,
+                article
+              );
+              if (target) readingSync.remember(target);
+            }
+          }
         }
       );
     },
-    [selected, viewKey]
+    [selected, viewKey, activeBranchId, readingSync.remember]
   );
   const savePosition = useCallback(() => {
     const node = reader.current;
@@ -709,6 +720,7 @@ export function useStory() {
     history.pushState(null, '', `?${params}`);
   };
   const select = (id: string) => {
+    explicitReadingIntent.current = null;
     setReaderTarget(null);
     savePosition();
     rememberCursor();
@@ -724,6 +736,7 @@ export function useStory() {
     navigate({ kind: 'branch', branch: id, source });
   };
   const chooseSource = (id: string, toEnd = false) => {
+    explicitReadingIntent.current = { chatId: selected, sourceId: id };
     setReaderTarget(null);
     cancelNavigationScroll.current?.();
     savePosition();
@@ -754,6 +767,9 @@ export function useStory() {
     }
   };
   const openTarget = (target: ReaderTarget, replace = false) => {
+    explicitReadingIntent.current = replace
+      ? null
+      : { chatId: target.chatId, sourceId: target.sourceId };
     cancelNavigationScroll.current?.();
     savePosition();
     rememberCursor();

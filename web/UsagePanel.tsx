@@ -223,11 +223,6 @@ export function UsagePanel({
             </section>
           </div>
           <TotalsTable
-            label="일별"
-            exportUrl={exports('day')}
-            rows={report.days.map((item) => ({ ...item, id: item.day, label: item.day }))}
-          />
-          <TotalsTable
             label="모델별"
             exportUrl={exports('model')}
             rows={report.models.map((item) => ({
@@ -239,15 +234,23 @@ export function UsagePanel({
                 '연결 정보 없음',
             }))}
           />
-          <TotalsTable
-            label="용도별"
-            exportUrl={exports('kind')}
-            rows={report.kinds.map((item) => ({
-              ...item,
-              id: item.kind,
-              label: USAGE_KIND_LABELS[item.kind] ?? '용도 미분류',
-            }))}
-          />
+          <details className="usage-section">
+            <summary>일별·용도별 상세</summary>
+            <TotalsTable
+              label="일별"
+              exportUrl={exports('day')}
+              rows={report.days.map((item) => ({ ...item, id: item.day, label: item.day }))}
+            />
+            <TotalsTable
+              label="용도별"
+              exportUrl={exports('kind')}
+              rows={report.kinds.map((item) => ({
+                ...item,
+                id: item.kind,
+                label: USAGE_KIND_LABELS[item.kind] ?? '용도 미분류',
+              }))}
+            />
+          </details>
           {report.undated.calls > 0 && (
             <aside className="usage-coverage">
               <strong>시각 미확인 과거 호출 {number(report.undated.calls)}건</strong>

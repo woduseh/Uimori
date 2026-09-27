@@ -147,6 +147,7 @@ test('an earlier independent copy preserves only in-range bookmarks with new anc
   expect(markCopy.target.contentHash).toBe(copiedSource.hash);
   expect(markCopy.target.blockAnchor).toBe(copiedSource.blocks![0].anchor);
   expect(markCopy.target.blockAnchor).not.toBe(original.target.blockAnchor);
+  expect(markCopy.target.offsetRatio).toBe(original.target.offsetRatio);
   expect(
     store.db.prepare('SELECT count(*) AS n FROM reading_positions WHERE chat_id=?').get(clone.id)!.n
   ).toBe(0);

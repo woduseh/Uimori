@@ -1,3 +1,4 @@
+import { BookmarkEditingContext } from './Bookmarks.js';
 import type { NotificationIntent } from '../core/push.js';
 import { startPwa, subscribeNotificationNavigation } from './pwa.js';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -1012,9 +1013,9 @@ function App() {
               <aside className="reading-sync-notice" aria-label="읽기 위치 동기화">
                 {s.readingSync.other && (
                   <>
-                    <span>다른 기기에 더 최근의 읽기 위치가 있어요.</span>
+                    <span>저장된 읽기 위치가 있어요. 현재 화면은 그대로 유지해요.</span>
                     <button type="button" onClick={s.readingSync.resumeOther}>
-                      다른 기기에서 이어 읽기
+                      {s.readingSync.resumeLabel}
                     </button>
                   </>
                 )}
@@ -1869,7 +1870,7 @@ function App() {
   );
   return (
     <ReadingPreferencesContext value={reading.settings}>
-      {workspace}
+      <BookmarkEditingContext value={onSourceEditing}>{workspace}</BookmarkEditingContext>
       <Dialog
         open={nativeNotices.length > 0}
         title="카드 알림"

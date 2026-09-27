@@ -1,7 +1,4 @@
 import { createHash, ECDH } from 'node:crypto';
-import { Resolver } from 'node:dns/promises';
-import { request } from 'node:https';
-import ipaddr from 'ipaddr.js';
 import webPush from 'web-push';
 import type { PushEnvelope, PushSubscriptionData } from '../core/push.js';
 import { fields, record, HttpError } from './request-validation.js';
@@ -74,40 +71,6 @@ export function validatePushSubscription(value: unknown): PushSubscriptionData {
     },
   };
 }
-export function publicPushAddress(address: string): boolean {
-  try {
-    return ipaddr.process(address).range() === 'unicast';
-  } catch {
-    return false;
-  }
-}
-async function destination(
-  hostname: string,
-  signal: AbortSignal
-): Promise<{ address: string; family: 4 | 6 }> {
-  signal.throwIfAborted();
-  const resolver = new Resolver({ timeout: 2000, tries: 1 });
-  const cancel = () => resolver.cancel();
-  signal.addEventListener('abort', cancel, { once: true });
-  try {
-    const answers = await Promise.allSettled([
-      resolver.resolve4(hostname),
-      resolver.resolve6(hostname),
-    ]);
-    signal.throwIfAborted();
-    const addresses = answers.flatMap((answer, index) =>
-      answer.status === 'fulfilled'
-        ? answer.value.map((address) => ({ address, family: (index ? 6 : 4) as 4 | 6 }))
-        : []
-    );
-    if (!addresses.length || addresses.some((item) => !publicPushAddress(item.address)))
-      throw new Error('PUSH_DNS_UNAVAILABLE');
-    return addresses[0];
-  } finally {
-    signal.removeEventListener('abort', cancel);
-    resolver.cancel();
-  }
-}
 export function encryptedPushRequest(
   subscription: PushSubscriptionData,
   payload: PushEnvelope,
@@ -126,50 +89,32 @@ export function encryptedPushRequest(
     contentEncoding: 'aes128gcm',
   });
 }
-/** Encrypt/sign with the maintained Web Push library, then use a pinned public DNS address,
- * normal TLS validation, no redirects, and an absolute cancellation/deadline owned by the caller. */
+/** Web Push owns encryption/signing; the standard HTTP client owns DNS, TLS and sockets.
+ * The caller's absolute AbortSignal also cancels DNS/connection setup, unlike an idle timeout. */
 export const sendWebPush: PushSender = async (subscription, payload, keys, origin, ttl, signal) => {
-  const url = pushEndpoint(subscription.endpoint);
-  const pinned = await destination(url.hostname, signal);
-  const details = encryptedPushRequest(subscription, payload, keys, origin, ttl);
   signal.throwIfAborted();
-  return new Promise((resolve, reject) => {
-    const failure = () => reject(new Error('PUSH_TRANSPORT_FAILED'));
-    const req = request(
-      url,
-      {
-        method: 'POST',
-        headers: details.headers,
-        signal,
-        servername: url.hostname,
-        family: pinned.family,
-        lookup: (_host, _options, callback) => callback(null, pinned.address, pinned.family),
-      },
-      (response) => {
-        let bytes = 0;
-        response.on('data', (chunk: Buffer) => {
-          bytes += chunk.length;
-          if (bytes > 16 * 1024) req.destroy(new Error('PUSH_RESPONSE_TOO_LARGE'));
-        });
-        response.once('error', failure);
-        response.once('end', () => {
-          const raw = response.headers['retry-after'];
-          const delay =
-            typeof raw === 'string'
-              ? /^\d+$/.test(raw)
-                ? Number(raw)
-                : (Date.parse(raw) - Date.now()) / 1000
-              : NaN;
-          resolve({
-            status: response.statusCode ?? 0,
-            ...(Number.isFinite(delay)
-              ? { retryAfterSeconds: Math.max(1, Math.min(600, Math.ceil(delay))) }
-              : {}),
-          });
-        });
-      }
-    );
-    req.once('error', failure);
-    req.end(details.body);
+  const details = encryptedPushRequest(subscription, payload, keys, origin, ttl);
+  const response = await fetch(details.endpoint, {
+    method: 'POST',
+    headers: Object.fromEntries(
+      Object.entries(details.headers).map(([key, value]) => [key, String(value)])
+    ),
+    body: details.body ? new Uint8Array(details.body) : undefined,
+    redirect: 'error',
+    signal,
   });
+  // No provider body is needed or retained, including for errors. Close it immediately.
+  await response.body?.cancel();
+  const raw = response.headers.get('retry-after');
+  const delay = raw
+    ? /^\d+$/.test(raw)
+      ? Number(raw)
+      : (Date.parse(raw) - Date.now()) / 1000
+    : NaN;
+  return {
+    status: response.status,
+    ...(Number.isFinite(delay)
+      ? { retryAfterSeconds: Math.max(1, Math.min(600, Math.ceil(delay))) }
+      : {}),
+  };
 };

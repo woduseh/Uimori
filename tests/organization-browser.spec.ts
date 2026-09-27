@@ -255,9 +255,10 @@ test('ORG02 desktop compact rows support drag ordering, folder drops, collapse a
   const movedTitle = chats.find((chat) => chat.id === order[2])!.title;
   await openBotChatSearch(nav, owner.title);
   const search = page.getByRole('dialog', { name: '이 봇의 채팅 검색', exact: true });
-  await search.getByRole('textbox', { name: '채팅 검색', exact: true }).fill(movedTitle);
+  await search.getByRole('searchbox', { name: '채팅 검색', exact: true }).fill(movedTitle);
   await expect(search.locator(`[data-chat-id="${order[2]}"]`)).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(search).not.toBeVisible();
   await expect(moving).toHaveCount(0);
   await folderHeader.click();
   await page.reload();
@@ -481,7 +482,7 @@ for (const width of DEFAULT_WIDTHS) {
       .toEqual(manualOrder);
     await openBotChatSearch(nav, a.owner.title);
     const search = page.getByRole('dialog', { name: '이 봇의 채팅 검색', exact: true });
-    await search.getByRole('textbox', { name: '채팅 검색', exact: true }).fill('첫째');
+    await search.getByRole('searchbox', { name: '채팅 검색', exact: true }).fill('첫째');
     await expect(search.locator('[data-chat-id]')).toHaveCount(1);
     await expect(search.locator('[data-chat-id]')).toHaveAttribute('data-chat-id', a.chats[0].id);
     await expect(search.locator('[data-chat-id] small')).toHaveText(a.folder.title);
@@ -581,7 +582,9 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(search).toHaveCount(1);
     await search.click();
     const dialog = page.getByRole('dialog', { name: '전체 채팅 검색', exact: true });
-    await dialog.getByRole('textbox', { name: '전체 채팅 검색', exact: true }).fill(b.owner.title);
+    await dialog
+      .getByRole('searchbox', { name: '전체 채팅 검색', exact: true })
+      .fill(b.owner.title);
     await expect(dialog.locator('[data-chat-id]')).toHaveCount(3);
     await expect(dialog.locator('[data-chat-id] small').first()).toHaveText(b.owner.title);
     await dialog.locator(`[data-chat-id="${b.chats[1].id}"]`).click();

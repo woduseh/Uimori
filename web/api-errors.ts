@@ -5,7 +5,7 @@ type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const messages: Record<string, string> = {
   PUSH_SETTINGS_CHANGED: '다른 창에서 알림 설정이 바뀌었어요. 연결을 다시 확인한 뒤 변경해 주세요.',
-  SEARCH_CURSOR_STALE: '원고가 변경됐어요. 처음부터 다시 검색해 주세요.',
+  SEARCH_CURSOR_STALE: '검색 조건이 바뀌었어요. 처음부터 다시 검색해 주세요.',
   BACKUP_SETTINGS_CHANGED: '다른 창에서 백업 설정이 바뀌었어요. 백업 설정을 다시 열어 주세요.',
 
   INPUT_TRANSLATION_LANGUAGE_INVALID: '입력 번역 언어를 다시 선택해 주세요.',

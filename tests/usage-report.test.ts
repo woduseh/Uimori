@@ -207,7 +207,7 @@ test('version-eight upgrade uses only saved timestamps and attribution and does 
   const old = new DatabaseSync(join(entry.directory, 'app.sqlite'));
   // Push is newer than the simulated historical schema and references the later accounting columns.
   old.exec(
-    'DROP TRIGGER push_main_terminal; DROP TRIGGER push_translation_terminal; DROP TRIGGER push_illustration_terminal; DROP TABLE push_outbox; DROP TABLE push_subscriptions;'
+    'DROP TRIGGER IF EXISTS push_main_terminal; DROP TRIGGER IF EXISTS push_translation_terminal; DROP TRIGGER IF EXISTS push_illustration_terminal; DROP TABLE push_outbox; DROP TABLE push_subscriptions;'
   );
   old.exec('DROP INDEX attempts_usage_period; DROP INDEX attempts_usage_model;');
   for (const column of [

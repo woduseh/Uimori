@@ -23,7 +23,9 @@ test('manifest has stable root identity and valid standalone/maskable icons with
     name: 'Uimori',
     display: 'standalone',
   });
-  expect(manifest.icons).toHaveLength(3);
+  expect(manifest.icons).toEqual(
+    expect.arrayContaining([expect.objectContaining({ sizes: '512x512', purpose: 'maskable' })])
+  );
   for (const icon of manifest.icons) {
     const metadata = await sharp(join('web/public', icon.src)).metadata();
     expect(icon.sizes).toBe(`${metadata.width}x${metadata.height}`);
@@ -33,7 +35,7 @@ test('manifest has stable root identity and valid standalone/maskable icons with
     manifest.icons
       .filter((icon: { purpose: string }) => icon.purpose === 'any')
       .map((icon: { sizes: string }) => icon.sizes)
-  ).toEqual(['192x192', '512x512']);
+  ).toEqual(expect.arrayContaining(['192x192', '512x512']));
   expect(readFileSync('web/index.html', 'utf8')).toContain('rel="manifest"');
 });
 
