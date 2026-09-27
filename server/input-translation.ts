@@ -1,3 +1,4 @@
+import { uncertainAttemptResult } from './usage-accounting.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
 import type { FastifyInstance } from 'fastify';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -85,23 +86,39 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
         store.product.authorize(model.connection);
       };
       const work = (async () => {
-        authorize();
-        const result = await executeProvider(transportConnection(model.connection), input, {
-          ...options,
-          signal,
-          timeoutMs: TIMEOUT_MS,
-          beforeTurn: authorize,
-          onWire: authorize,
-        });
-        if (timeout.aborted) throw new HttpError(504, 'INPUT_TRANSLATION_TIMEOUT');
-        authorize();
-        if (result.status === 'refused' || result.refusal)
-          throw new HttpError(422, 'INPUT_TRANSLATION_REFUSED');
-        if (result.status !== 'completed' || result.toolCalls.length || !result.text.trim())
-          throw new HttpError(502, 'INPUT_TRANSLATION_FAILED');
-        if (result.text.length > REQUEST_TEXT_MAX_CHARS)
-          throw new HttpError(422, 'INPUT_TRANSLATION_TOO_LONG');
-        return { text: result.text, targetLanguage: language.code };
+        let attemptId: string | undefined;
+        let finished = false;
+        try {
+          authorize();
+          const result = await executeProvider(transportConnection(model.connection), input, {
+            ...options,
+            signal,
+            timeoutMs: TIMEOUT_MS,
+            beforeTurn: authorize,
+            onWire: (wire) => {
+              authorize();
+              attemptId = store.product.startAttempt(chatId, null, null, wire, {
+                kind: 'input-translation',
+                retainContent: false,
+              });
+            },
+          });
+          if (attemptId) store.product.finishAttempt(attemptId, result);
+          finished = true;
+          if (timeout.aborted) throw new HttpError(504, 'INPUT_TRANSLATION_TIMEOUT');
+          authorize();
+          if (result.status === 'refused' || result.refusal)
+            throw new HttpError(422, 'INPUT_TRANSLATION_REFUSED');
+          if (result.status !== 'completed' || result.toolCalls.length || !result.text.trim())
+            throw new HttpError(502, 'INPUT_TRANSLATION_FAILED');
+          if (result.text.length > REQUEST_TEXT_MAX_CHARS)
+            throw new HttpError(422, 'INPUT_TRANSLATION_TOO_LONG');
+          return { text: result.text, targetLanguage: language.code };
+        } catch (error) {
+          if (attemptId && !finished)
+            store.product.finishAttempt(attemptId, uncertainAttemptResult(signal.aborted));
+          throw error;
+        }
       })();
       // Integrate shutdown/maintenance accounting without persisting either version of the draft.
       options.track(

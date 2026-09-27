@@ -44,7 +44,21 @@ test('schema 5 upgrades by adding durable Anthropic Batch recovery storage', () 
   const current = new Store(path);
   current.close();
   const old = new DatabaseSync(path);
-  old.exec('DROP TABLE anthropic_batches; PRAGMA user_version=5');
+  // Remove later accounting columns as well: a schema-5 database did not contain them.
+  old.exec('DROP INDEX attempts_usage_period; DROP INDEX attempts_usage_model;');
+  for (const column of [
+    'started_at',
+    'usage_kind',
+    'is_synthetic',
+    'usage_detached',
+    'estimated_usd',
+    'estimated_subtotal_usd',
+    'estimate_status',
+  ])
+    old.exec(`ALTER TABLE attempts DROP COLUMN ${column}`);
+  old.exec(
+    "DELETE FROM app_metadata WHERE key='usage-coverage-since'; DROP TABLE anthropic_batches; PRAGMA user_version=5"
+  );
   old.close();
 
   const upgraded = new Store(path);

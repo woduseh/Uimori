@@ -117,20 +117,48 @@ function mockSend(result = success) {
     });
 }
 function databaseState(app: App) {
+  // The only new persistence is a content-free usage receipt. Story, draft and all other
+  // tables remain unchanged, and the receipt is checked rather than simply ignored.
+  const attempts = app.store.db.prepare('SELECT * FROM attempts').all();
+  for (const attempt of attempts) {
+    expect(attempt).toMatchObject({
+      usage_kind: 'input-translation',
+      usage_detached: 1,
+      request: '{}',
+      raw_usage: null,
+      error: null,
+      run_id: null,
+      job_id: null,
+    });
+    const result = JSON.parse(String(attempt.response));
+    expect(Object.keys(result).sort()).toEqual([
+      'detailsOmitted',
+      'estimatedCost',
+      'status',
+      'usage',
+    ]);
+    expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 20, costUsd: null });
+    expect(result.estimatedCost.lines).toEqual([]);
+    expect(result.estimatedCost.notes).toEqual([]);
+    expect(JSON.stringify(attempt)).not.toContain(payload.text);
+    expect(JSON.stringify(attempt)).not.toContain(success.text);
+  }
   const tables = app.store.db
     .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
     .all() as { name: string }[];
-  return tables.map(({ name }) => [
-    name,
-    app.store.db.prepare(`SELECT * FROM "${name.replaceAll('"', '""')}"`).all(),
-  ]);
+  return tables
+    .filter(({ name }) => name !== 'attempts')
+    .map(({ name }) => [
+      name,
+      app.store.db.prepare(`SELECT * FROM "${name.replaceAll('"', '""')}"`).all(),
+    ]);
 }
 const payload = {
   text: '(OOC: 미라는 아직 몰라.)\n\n*{{char}}는 기다린다.*',
   targetLanguage: 'en',
 };
 
-test('explicit input translation uses the selected model and spelling pairs, without any persistent write', async () => {
+test('explicit input translation uses the selected model and spelling pairs, without persisting either draft, while retaining numeric usage', async () => {
   const f = await setup();
   const send = mockSend();
   const before = databaseState(f.app);
@@ -139,6 +167,7 @@ test('explicit input translation uses the selected model and spelling pairs, wit
   expect(response.json()).toEqual({ text: success.text, targetLanguage: 'en' });
   expect(response.headers['cache-control']).toBe('no-store');
   expect(send).toHaveBeenCalledTimes(1);
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(1);
   const [connection, request] = send.mock.calls[0];
   expect(connection.id).toBe(f.connection.id);
   expect(request).toMatchObject({
@@ -183,6 +212,7 @@ test('a long draft and its translation keep their full text without extra model 
   expect(response.statusCode, response.body).toBe(200);
   expect(response.json()).toEqual({ text: translated, targetLanguage: 'en' });
   expect(send).toHaveBeenCalledTimes(1);
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(1);
   expect(JSON.parse(send.mock.calls[0][1].input.task).draft).toBe(draft);
   expect(databaseState(f.app)).toEqual(before);
 });
@@ -195,6 +225,7 @@ test('the request-sized HTTP body reaches model selection without starting a cal
   expect(response.statusCode, response.body).toBe(409);
   expect(response.json()).toEqual({ error: 'MODEL_REQUIRED:translation' });
   expect(send).not.toHaveBeenCalled();
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });
 
 test('no selected translation model gives actionable feedback and never falls back to another role', async () => {
@@ -204,6 +235,7 @@ test('no selected translation model gives actionable feedback and never falls ba
   expect(response.statusCode).toBe(409);
   expect(response.json()).toEqual({ error: 'MODEL_REQUIRED:translation' });
   expect(send).not.toHaveBeenCalled();
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });
 
 test.each([
@@ -219,6 +251,7 @@ test.each([
   const response = await f.post(body);
   expect(response.statusCode).toBe(400);
   expect(send).not.toHaveBeenCalled();
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });
 
 test('unknown or foreign branch cannot supply context to this translation', async () => {
@@ -227,6 +260,7 @@ test('unknown or foreign branch cannot supply context to this translation', asyn
   const response = await f.post({ ...payload, branchId: 'main:some-other-chat' });
   expect(response.statusCode).toBe(404);
   expect(send).not.toHaveBeenCalled();
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });
 
 test.each([
@@ -252,6 +286,7 @@ test.each([
     expect(response.statusCode, response.body).toBe(status);
     expect(response.json()).toEqual({ error });
     expect(send).toHaveBeenCalledTimes(1);
+    expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(1);
     expect(databaseState(f.app)).toEqual(before);
   }
 );

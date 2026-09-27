@@ -206,3 +206,94 @@ test('PWUI03 a new device resumes a saved scene; remote changes only offer a res
   await expect(list).not.toBeVisible();
   expect(new URL(page.url()).searchParams.get('source')).toBe(detail.sources[1].id);
 });
+
+test('PWUI04 real loopback usage receipts appear in period, model and purpose tables with unknown costs and CSV', async ({
+  page,
+  request,
+}, info) => {
+  const { loopbackProvider, writeSse } = await import('./fixtures/loopback-provider.js');
+  let calls = 0;
+  const provider = await loopbackProvider(async (_, response) => {
+    calls++;
+    await writeSse(response, [
+      { type: 'text_delta', delta: 'Synthetic connection response; never a paid model.' },
+      {
+        type: 'usage',
+        inputTokens: calls === 1 ? 1000 : null,
+        outputTokens: calls === 1 ? 100 : null,
+        costUsd: calls === 1 ? 0.25 : null,
+      },
+      { type: 'done', reason: 'stop' },
+    ]);
+  });
+  try {
+    const connectionResponse = await request.post('/api/connections', {
+      data: {
+        title: 'Personal usage loopback',
+        protocol: 'fixture-sse-v1',
+        endpoint: provider.endpoint,
+        enabled: true,
+      },
+    });
+    expect(connectionResponse.ok(), await connectionResponse.text()).toBe(true);
+    const connection = await connectionResponse.json();
+    const modelResponse = await request.post('/api/model-presets', {
+      data: {
+        title: 'Personal usage fixture',
+        connectionId: connection.id,
+        modelId: 'personal-usage-fixture',
+        maxOutputTokens: 64,
+        temperature: null,
+      },
+    });
+    expect(modelResponse.ok(), await modelResponse.text()).toBe(true);
+    const model = await modelResponse.json();
+    for (let index = 0; index < 2; index++) {
+      const admission = await request.post(`/api/provider-management/models/${model.id}/test`, {
+        data: { expectedRevision: model.revision, idempotencyKey: crypto.randomUUID() },
+      });
+      expect(admission.status(), await admission.text()).toBe(202);
+      const job = await admission.json();
+      await expect
+        .poll(
+          async () =>
+            (await (await request.get(`/api/provider-management/tests/${job.id}`)).json()).status
+        )
+        .toBe('completed');
+    }
+    expect(calls).toBe(2);
+    const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+    const report = await (await request.get(`/api/usage?from=${day}&to=${day}`)).json();
+    expect(
+      report.models.find((item: { modelId: string }) => item.modelId === model.modelId)
+    ).toMatchObject({ calls: 2, reportedUsd: 0.25, unknownCostCalls: 1, unknownInputCalls: 1 });
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '사용량');
+    const panel = page.getByRole('region', { name: '작업실 사용량', exact: true });
+    await panel.getByRole('button', { name: '오늘', exact: true }).click();
+    const row = panel.getByRole('row').filter({ hasText: 'personal-usage-fixture' });
+    await expect(row).toContainText('1,000');
+    await expect(row).toContainText('0.25');
+    await expect(row).toContainText('미확인');
+    await expect(panel.getByRole('row').filter({ hasText: '연결 테스트' })).toBeVisible();
+    const csvPath = await panel
+      .getByRole('link', { name: '모델별 CSV', exact: true })
+      .getAttribute('href');
+    const csv = await request.get(csvPath!);
+    expect(csv.ok()).toBe(true);
+    expect(await csv.text()).toContain('personal-usage-fixture');
+    expect(await csv.text()).not.toContain('Synthetic connection response');
+    for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await panel.scrollIntoViewIfNeeded();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true
+      );
+      await page.screenshot({ path: info.outputPath(`usage-${width}.png`) });
+    }
+    expect(calls).toBe(2);
+  } finally {
+    await provider.close();
+  }
+});

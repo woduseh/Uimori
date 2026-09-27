@@ -1,3 +1,4 @@
+import { usageRoutes } from './usage-report.js';
 import { readingStateRoutes } from './reading-state.js';
 import { ManuscriptSearch, manuscriptSearchRoutes } from './manuscript-search.js';
 import { BackupService, backupRoutes } from './backup-service.js';
@@ -600,6 +601,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   const manuscriptSearch = new ManuscriptSearch(store, () => admitted());
   manuscriptSearchRoutes(app, manuscriptSearch);
   readingStateRoutes(app, store);
+  usageRoutes(app, store);
   readerRoutes(app, store);
   helperRoutes(app, helper);
   chatOptionRoutes(app, store);
