@@ -62,7 +62,7 @@ export class ManuscriptSearch {
             new HttpError(
               message.error === 'SEARCH_CURSOR_STALE' ? 409 : 400,
               message.error === 'SEARCH_CURSOR_STALE'
-                ? '원고가 변경됐어요. 처음부터 다시 검색해 주세요.'
+                ? 'SEARCH_CURSOR_STALE'
                 : '검색을 완료하지 못했어요. 검색어나 범위를 확인해 주세요.'
             )
           );

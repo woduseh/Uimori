@@ -1,4 +1,5 @@
-import { startPwa } from './pwa.js';
+import type { NotificationIntent } from '../core/push.js';
+import { startPwa, subscribeNotificationNavigation } from './pwa.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ThemeProvider, useThemes } from './ThemeContext.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -527,6 +528,20 @@ function App() {
     setNewKey((old) => old + 1);
     setPanel('new');
   }
+  const [pendingNotification, setPendingNotification] = useState<NotificationIntent | null>(null);
+  const notificationBlocked = sourceEditing || optionsDirty || libraryDirty || panel === 'settings';
+  const notificationSelect = useRef((intent: NotificationIntent) => {
+    if (notificationBlocked) setPendingNotification(intent);
+    else select(intent.chatId, intent.target);
+  });
+  notificationSelect.current = (intent) => {
+    if (notificationBlocked) setPendingNotification(intent);
+    else select(intent.chatId, intent.target);
+  };
+  useEffect(
+    () => subscribeNotificationNavigation((intent) => notificationSelect.current(intent)),
+    []
+  );
   function select(id: string, target?: ReaderTarget) {
     const go = () => {
       if (target) s.openTarget(target);
@@ -923,6 +938,24 @@ function App() {
               )}
             </div>
           </header>
+        )}
+        {pendingNotification && (
+          <aside className="reading-sync-notice" aria-label="알림의 장면 이동">
+            <span>알림이 도착했어요. 현재 편집을 마친 뒤 해당 장면으로 이동할 수 있어요.</span>
+            <button
+              type="button"
+              disabled={notificationBlocked}
+              onClick={() => {
+                select(pendingNotification.chatId, pendingNotification.target);
+                setPendingNotification(null);
+              }}
+            >
+              알림으로 이동
+            </button>
+            <button type="button" onClick={() => setPendingNotification(null)}>
+              알림 이동 닫기
+            </button>
+          </aside>
         )}
         {s.destination === 'library' ? (
           <div className="destination-scroll">

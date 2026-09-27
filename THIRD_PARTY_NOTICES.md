@@ -28,3 +28,13 @@ Uimori 프로젝트 소스의 라이선스는 **GNU Affero General Public Licens
 프로젝트 소스 저장소는 [woduseh/Uimori](https://github.com/woduseh/Uimori)예요. 배포자는 실행·배포한 빌드와 일치하는 대응 소스, 로컬 수정 사항, 빌드·설치에 필요한 파일과 라이선스 고지를 제공해야 해요. 네트워크 이용자에게도 해당 소스를 받을 수 있는 안내를 쉽게 찾을 수 있게 제공해요. 다른 revision이나 미공개 변경을 포함하지 않은 저장소 링크만으로 배포본의 대응 소스가 제공됐다고 보지 않아요. 실제 절차는 [개인 서버 안내](docs/SELF-HOST.md#라이선스와-대응-소스)를 따라요.
 
 이 문서는 프로젝트가 채택한 배포 정책과 고지를 기록해요. 전체 의존성의 개별 고지를 대체하지 않으며, 배포 패키지에 포함한 npm·WASM 등 제3자 구성 요소의 라이선스와 고지도 함께 유지해요.
+
+## Web Push delivery dependencies
+
+Optional browser completion notifications use `web-push` 3.6.7
+(<https://github.com/web-push-libs/web-push>), distributed under the **Mozilla
+Public License 2.0 (MPL-2.0)**, without modifying that package's source. Its
+license and notices remain in the installed package. Public-address validation
+uses `ipaddr.js` 2.5.0 (<https://github.com/whitequark/ipaddr.js>), distributed under
+the **MIT License**, with its package notices retained. These dependencies do
+not change Uimori's own license or the rights to user-created manuscripts.

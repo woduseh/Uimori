@@ -1,3 +1,4 @@
+import { initPushSchema } from './push-schema.js';
 import { initUsageAccounting } from './usage-accounting.js';
 import { initReadingState } from './reading-state.js';
 import { initManuscriptSearch } from './search-schema.js';
@@ -10,7 +11,7 @@ import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 
-export const DATABASE_SCHEMA_VERSION = 9;
+export const DATABASE_SCHEMA_VERSION = 10;
 const FORMAT = 'uimori-personal-v1';
 
 export class DatabaseSchemaError extends Error {
@@ -142,6 +143,7 @@ export function initializeDatabaseSchema(
     if (previous < 7) initManuscriptSearch(db);
     if (previous < 8) initReadingState(db);
     if (previous < 9) initUsageAccounting(db);
+    if (previous < 10) initPushSchema(db);
     pruneSavedTextHistory(db);
     initDatabaseReadIndexes(db);
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}`);

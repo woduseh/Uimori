@@ -126,7 +126,9 @@ test('pagination stays stable across index refresh, scopes isolate bots, and cha
     (await search.search(query('미카', { scope: 'chat', chatId: other.id }))).items
   ).toHaveLength(1);
   store.editSource(first.id, { text: '달라진 이름', expectedRevision: 0 });
-  await expect(search.search({ ...filter, cursor: page.nextCursor })).rejects.toThrow('변경');
+  await expect(search.search({ ...filter, cursor: page.nextCursor })).rejects.toThrow(
+    'SEARCH_CURSOR_STALE'
+  );
 });
 
 test('a slow or cancelled search does not block writes and does not turn a partial scan into no matches', async () => {

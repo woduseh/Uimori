@@ -121,7 +121,7 @@ export class BackupService {
     fields(body, ['expectedRevision', 'enabled', 'hour', 'minute', 'retain']);
     const current = this.settings();
     if (body.expectedRevision !== current.revision)
-      throw new HttpError(409, '다른 창에서 백업 설정이 변경됐어요. 다시 열어 주세요.');
+      throw new HttpError(409, 'BACKUP_SETTINGS_CHANGED');
     if (typeof body.enabled !== 'boolean')
       throw new HttpError(400, '백업 사용 여부를 확인해 주세요.');
     for (const [key, maximum, minimum] of [

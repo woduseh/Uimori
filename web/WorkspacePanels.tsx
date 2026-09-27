@@ -1,3 +1,4 @@
+import { PushSettings } from './PushSettings.js';
 import { InstallApp } from './InstallApp.js';
 import { UsagePanel } from './UsagePanel.js';
 import { ThemeSettings } from './ThemeSettings.js';
@@ -449,7 +450,12 @@ export function AppSettingsPanel({
                     />
                   )}
                   {key === 'about' && <AppAbout />}
-                  {key === 'general' && <InstallApp />}
+                  {key === 'general' && (
+                    <>
+                      <InstallApp />
+                      <PushSettings />
+                    </>
+                  )}
                   {key === 'general' && (
                     <section className="settings-section">
                       <h3>
