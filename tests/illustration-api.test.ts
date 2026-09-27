@@ -1,3 +1,4 @@
+import { emptyIllustrationPreset } from '../core/illustration-presets.js';
 import sharp from 'sharp';
 import { afterEach, describe, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -319,20 +320,17 @@ describe('illustration API in test mode with the synthetic generator', () => {
       },
     ]);
     const current = await api<IllustrationSettings>('/api/illustration-settings');
-    const { revision, ...body } = current;
+    const { revision: _revision, ...body } = current;
     const invalid = await api(
-      '/api/illustration-settings',
+      '/api/resources/save',
       {
-        expectedRevision: revision,
-        ...body,
-        generator: 'comfyui',
-        comfyui: {
-          ...body.comfyui,
-          baseUrl: 'http://127.0.0.1:1',
-          workflow: '{"nodes":[],"links":[]}',
+        kind: 'illustration-preset',
+        model: {
+          ...emptyIllustrationPreset(),
+          comfyui: { workflow: '{"nodes":[],"links":[]}', negativeGuidance: '' },
         },
       },
-      'PUT',
+      'POST',
       400
     );
     expect(invalid.error).toBe('COMFYUI_WORKFLOW_UI_FORMAT');
@@ -340,16 +338,24 @@ describe('illustration API in test mode with the synthetic generator', () => {
     item.close = comfy.close;
     const accepted = await settings({
       generator: 'comfyui',
-      styleGuidance: '빛'.repeat(2001),
-      comfyui: {
-        ...body.comfyui,
-        baseUrl: `${comfy.origin}/`,
-        workflow: FIXTURE_WORKFLOW,
-        negativeGuidance: '글'.repeat(1001),
-      },
+      comfyui: { ...body.comfyui, baseUrl: `${comfy.origin}/` },
     });
     expect(accepted.comfyui.baseUrl).toBe(comfy.origin);
-    expect(await api('/api/illustration-settings')).toMatchObject({
+    const { saved: preset } = await api('/api/resources/save', {
+      kind: 'illustration-preset',
+      model: {
+        ...emptyIllustrationPreset(),
+        styleGuidance: '빛'.repeat(2001),
+        comfyui: { workflow: FIXTURE_WORKFLOW, negativeGuidance: '글'.repeat(1001) },
+      },
+    });
+    const catalog = await api('/api/illustration-presets');
+    await api('/api/illustration-presets/selection', {
+      scope: 'global',
+      presetId: preset.id,
+      expectedRevision: catalog.preferences.revision,
+    });
+    expect(await api(`/api/resources/illustration-preset/${preset.id}`)).toMatchObject({
       styleGuidance: '빛'.repeat(2001),
       comfyui: { negativeGuidance: '글'.repeat(1001) },
     });

@@ -1,3 +1,5 @@
+import { illustrationPresetCatalog, deleteIllustrationPreset } from './illustration-presets.js';
+import { emptyIllustrationPreset } from '../core/illustration-presets.js';
 import { themeCatalog, deleteTheme } from './themes.js';
 import { THEME_COLOR_KEYS, THEME_SLOTS, BUILTIN_THEMES, themeDefinition } from '../core/themes.js';
 import type { ProviderTool } from '../core/transport.js';
@@ -9,10 +11,25 @@ import { readResource, saveResource, undoResource } from './resource-service.js'
 import { deleteLibraryItem } from './library-deletion.js';
 import { record, number, text, HttpError } from './request-validation.js';
 
-const kind = { type: 'string', enum: ['content', 'prompt-preset', 'prompt-workspace', 'theme'] };
+const kind = {
+  type: 'string',
+  enum: ['content', 'prompt-preset', 'prompt-workspace', 'theme', 'illustration-preset'],
+};
 const string = { type: 'string' };
 const revision = { type: 'integer', minimum: 1 };
 export const RESOURCE_TOOLS: ProviderTool[] = [
+  {
+    name: 'illustration-preset.list',
+    description:
+      'List illustration preset names, revisions and selections. Read a recipe with resource.read kind=illustration-preset.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'illustration-preset.guide',
+    description:
+      'Read the portable illustration preset authoring contract. Saving and selecting are separate; this tool never generates images.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
   {
     name: 'theme.list',
     description:
@@ -64,7 +81,10 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: ['content', 'prompt-preset', 'theme'] },
+        kind: {
+          type: 'string',
+          enum: ['content', 'prompt-preset', 'theme', 'illustration-preset'],
+        },
         id: string,
         expectedRevision: revision,
       },
@@ -103,6 +123,24 @@ export function invokeResourceTool(
   name: string,
   args: Record<string, unknown>
 ): unknown {
+  if (name === 'illustration-preset.list') {
+    const catalog = illustrationPresetCatalog(store);
+    return {
+      ...catalog,
+      presets: catalog.presets.map(({ id, revision, title, description }) => ({
+        id,
+        revision,
+        title,
+        description,
+      })),
+    };
+  }
+  if (name === 'illustration-preset.guide')
+    return {
+      example: emptyIllustrationPreset(),
+      contract:
+        'Save with resource.save kind=illustration-preset. Required title, optional description and styleGuidance, comfyui: {workflow, negativeGuidance}. workflow is API-format JSON with {{prompt}}, {{negative}}, {{seed}} placeholders; an empty workflow is valid for Codex but cannot generate with ComfyUI. No provider IDs, credentials, automatic-generation policies or chat reference images belong here. Saving an in-use preset affects future reservations; existing jobs and retries keep frozen input. Saving a new preset does not select it. User selection priority: chat, bot, global. No image generation on save.',
+    };
   if (name === 'theme.list') return themeCatalog(store);
   if (name === 'theme.guide')
     return {
@@ -137,7 +175,11 @@ export function invokeResourceTool(
       })
     );
   }
-  if (!['content', 'prompt-preset', 'prompt-workspace', 'theme'].includes(String(args.kind)))
+  if (
+    !['content', 'prompt-preset', 'prompt-workspace', 'theme', 'illustration-preset'].includes(
+      String(args.kind)
+    )
+  )
     throw new HttpError(400, '자료 종류를 확인해 주세요.');
   const kind = args.kind as ResourceKind;
   const id = args.id == null ? null : text(args.id, 'resource ID', 100);
@@ -156,6 +198,8 @@ export function invokeResourceTool(
   if (!id || expectedRevision === undefined)
     throw new HttpError(400, '자료 ID와 개정 번호가 필요해요.');
   if (name === 'resource.undo') return summary(undoResource(store, kind, id, expectedRevision));
+  if (name === 'resource.delete' && kind === 'illustration-preset')
+    return deleteIllustrationPreset(store, id, expectedRevision);
   if (name === 'resource.delete' && kind === 'theme')
     return deleteTheme(store, id, expectedRevision);
   if (name === 'resource.delete' && (kind === 'content' || kind === 'prompt-preset'))

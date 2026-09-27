@@ -1,3 +1,5 @@
+import { effectiveIllustrationPreset } from './illustration-presets.js';
+import { illustrationPresetStamp } from '../core/illustration-presets.js';
 import { storeImage } from './image-storage.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
@@ -9,7 +11,6 @@ import type { PackageImageBlob } from './package-images.js';
 import { packageImages } from '../core/package-images.js';
 import { resolvePackageProfile } from './package-features.js';
 import type { Asset, Connection, ModelPreset, ModelRef } from '../core/product.js';
-import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import {
   defaultIllustrationSettings,
   ILLUSTRATION_GENERATORS,
@@ -77,47 +78,24 @@ export function validateIllustrationSettings(
   options: { revision: number; testMode?: boolean }
 ): IllustrationSettings {
   const b = record(value);
-  fields(b, [
-    'generator',
-    'automatic',
-    'maxPerSource',
-    'maxAutoRetries',
-    'styleGuidance',
-    'codex',
-    'comfyui',
-  ]);
+  fields(b, ['generator', 'automatic', 'maxPerSource', 'maxAutoRetries', 'codex', 'comfyui']);
   if (!ILLUSTRATION_GENERATORS.includes(b.generator)) throw new HttpError(400, 'Invalid generator');
   if (b.generator === 'fixture' && !options.testMode)
     throw new HttpError(400, 'Fixture generator requires test mode');
   const codex = record(b.codex);
   fields(codex, ['model', 'useReferences']);
   const comfyui = record(b.comfyui);
-  fields(comfyui, [
-    'baseUrl',
-    'authorizationEnv',
-    'workflow',
-    'timeoutMs',
-    'pollIntervalMs',
-    'promptModel',
-    'negativeGuidance',
-  ]);
+  fields(comfyui, ['baseUrl', 'authorizationEnv', 'timeoutMs', 'pollIntervalMs', 'promptModel']);
   const baseUrl = text(comfyui.baseUrl, 'ComfyUI address', 2000, true).trim();
   const authorizationEnv = text(comfyui.authorizationEnv, 'ComfyUI credential env', 128, true);
   if (authorizationEnv && !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(authorizationEnv))
     throw new HttpError(400, 'Invalid ComfyUI credential env');
-  const workflow = text(comfyui.workflow, 'ComfyUI workflow', 400_000, true);
-  try {
-    if (workflow.trim()) parseComfyWorkflow(workflow);
-  } catch (error) {
-    httpFromIllustration(error);
-  }
   return {
     revision: options.revision,
     generator: b.generator,
     automatic: boolean(b.automatic, 'automatic'),
     maxPerSource: number(b.maxPerSource, 'maxPerSource', 1, ILLUSTRATION_MAX_PER_SOURCE),
     maxAutoRetries: number(b.maxAutoRetries, 'maxAutoRetries', 0, ILLUSTRATION_MAX_AUTO_RETRIES),
-    styleGuidance: text(b.styleGuidance, 'style guidance', SOURCE_TEXT_MAX_CHARS, true),
     codex: {
       model: modelRef(codex.model, 'Codex illustration model'),
       useReferences: boolean(codex.useReferences, 'useReferences'),
@@ -133,16 +111,9 @@ export function validateIllustrationSettings(
           })()
         : '',
       authorizationEnv,
-      workflow,
       timeoutMs: number(comfyui.timeoutMs, 'ComfyUI timeout', 10_000, 1_800_000),
       pollIntervalMs: number(comfyui.pollIntervalMs, 'ComfyUI poll interval', 250, 10_000),
       promptModel: modelRef(comfyui.promptModel, 'illustration prompt model'),
-      negativeGuidance: text(
-        comfyui.negativeGuidance,
-        'negative guidance',
-        SOURCE_TEXT_MAX_CHARS,
-        true
-      ),
     },
   };
 }
@@ -350,6 +321,7 @@ export function projectIllustration(store: Store, row: IllustrationJobRow): Illu
     sourceHash: row.sourceHash,
     origin: row.origin,
     generator: row.input.generator,
+    ...(row.input.preset ? { preset: row.input.preset } : {}),
     status: row.status,
     attempt: row.attempt,
     maxAutoRetries: row.input.maxAutoRetries,
@@ -402,10 +374,12 @@ function frozenInput(
   settings: IllustrationSettings,
   options: ReserveOptions
 ): IllustrationJobInput {
+  const preset = effectiveIllustrationPreset(store, source.chatId);
   const base = {
+    preset: illustrationPresetStamp(preset),
     version: 1 as const,
     settingsRevision: settings.revision,
-    styleGuidance: settings.styleGuidance,
+    styleGuidance: preset.styleGuidance,
     maxAutoRetries: settings.maxAutoRetries,
   };
   if (settings.generator === 'codex') {
@@ -426,9 +400,9 @@ function frozenInput(
   }
   if (settings.generator === 'comfyui') {
     if (!settings.comfyui.baseUrl) throw new HttpError(409, 'COMFYUI_UNCONFIGURED');
-    if (!settings.comfyui.workflow.trim()) throw new HttpError(409, 'COMFYUI_WORKFLOW_MISSING');
+    if (!preset.comfyui.workflow.trim()) throw new HttpError(409, 'COMFYUI_WORKFLOW_MISSING');
     try {
-      parseComfyWorkflow(settings.comfyui.workflow);
+      parseComfyWorkflow(preset.comfyui.workflow);
     } catch (error) {
       httpFromIllustration(error, 409);
     }
@@ -444,10 +418,10 @@ function frozenInput(
       comfyui: {
         baseUrl: settings.comfyui.baseUrl,
         authorizationEnv: settings.comfyui.authorizationEnv,
-        workflow: settings.comfyui.workflow,
+        workflow: preset.comfyui.workflow,
         timeoutMs: settings.comfyui.timeoutMs,
         pollIntervalMs: settings.comfyui.pollIntervalMs,
-        negativeGuidance: settings.comfyui.negativeGuidance,
+        negativeGuidance: preset.comfyui.negativeGuidance,
         promptModel,
       },
     };
@@ -508,11 +482,13 @@ export function scheduleAutomaticIllustration(store: Store, source: Source): voi
     if (code === 'ILLUSTRATION_LIMIT_REACHED' || code === 'ILLUSTRATION_ACTIVE') return;
     const id = randomUUID(),
       time = now();
+    const preset = effectiveIllustrationPreset(store, source.chatId);
     const input: IllustrationJobInput = {
+      preset: illustrationPresetStamp(preset),
       version: 1,
       generator: settings.generator,
       settingsRevision: settings.revision,
-      styleGuidance: settings.styleGuidance,
+      styleGuidance: preset.styleGuidance,
       maxAutoRetries: settings.maxAutoRetries,
     };
     store.db
@@ -835,7 +811,6 @@ export function illustrationRoutes(
   app.get('/api/illustration-settings', async (_request, reply) =>
     reply.header('Cache-Control', 'no-store').send(illustrationSettings(store))
   );
-  // Both prose fields plus the workflow must fit even when JSON escapes every character.
   app.put('/api/illustration-settings', { bodyLimit: 32 * 1024 * 1024 }, async (request) => {
     const settings = updateIllustrationSettings(store, request.body, hooks.testMode);
     for (const chat of store.chats())

@@ -1,3 +1,14 @@
+import { IllustrationError } from './illustration-errors.js';
+export { IllustrationError } from './illustration-errors.js';
+export {
+  parseComfyWorkflow,
+  fillComfyWorkflow,
+  randomComfySeed,
+  COMFY_PLACEHOLDERS,
+  type ComfyWorkflow,
+  type ComfyWorkflowNode,
+} from './illustration-workflow.js';
+import type { IllustrationPresetStamp } from './illustration-presets.js';
 import { modelRequestFields } from './model-request-fields.js';
 import type { ModelRef, ModelSnapshot } from './product.js';
 import type { Json, ProviderRequest } from './transport.js';
@@ -28,19 +39,15 @@ export type IllustrationSettings = {
   maxPerSource: number;
   /** Automatic re-queues after a retryable failure; explicit retries are unlimited. */
   maxAutoRetries: number;
-  styleGuidance: string;
   codex: { model: ModelRef | null; useReferences: boolean };
   comfyui: {
     baseUrl: string;
     /** Server environment variable whose value is sent as the Authorization header. */
     authorizationEnv: string;
-    /** ComfyUI API-format workflow JSON text with {{prompt}}, {{negative}} and {{seed}} placeholders. */
-    workflow: string;
     timeoutMs: number;
     pollIntervalMs: number;
     /** Text model that turns the scene into an image prompt. Required for ComfyUI. */
     promptModel: ModelRef | null;
-    negativeGuidance: string;
   };
 };
 export function defaultIllustrationSettings(): IllustrationSettings {
@@ -50,16 +57,13 @@ export function defaultIllustrationSettings(): IllustrationSettings {
     automatic: false,
     maxPerSource: 2,
     maxAutoRetries: 1,
-    styleGuidance: '',
     codex: { model: null, useReferences: true },
     comfyui: {
       baseUrl: '',
       authorizationEnv: '',
-      workflow: '',
       timeoutMs: 300_000,
       pollIntervalMs: 1000,
       promptModel: null,
-      negativeGuidance: '',
     },
   };
 }
@@ -82,6 +86,7 @@ export type IllustrationJobInput = {
   version: 1;
   generator: ActiveIllustrationGenerator;
   settingsRevision: number;
+  preset?: IllustrationPresetStamp;
   styleGuidance: string;
   maxAutoRetries: number;
   codex?: { model: ModelSnapshot; references: FrozenIllustrationReference[] };
@@ -144,6 +149,7 @@ export type Illustration = {
   sourceHash: string;
   origin: 'automatic' | 'manual';
   generator: ActiveIllustrationGenerator;
+  preset?: IllustrationPresetStamp;
   status: IllustrationStatus;
   attempt: number;
   maxAutoRetries: number;
@@ -154,16 +160,6 @@ export type Illustration = {
   updatedAt: string;
 };
 
-export class IllustrationError extends Error {
-  constructor(
-    readonly code: string,
-    readonly retryable = false,
-    readonly diagnostic: Partial<Omit<IllustrationDiagnostic, 'attempts' | 'retries'>> = {}
-  ) {
-    super(code);
-    this.name = 'IllustrationError';
-  }
-}
 /** Only known-safe failures may start another render; a lost remote outcome is never replayed. */
 const retryableCodes = new Set([
   'COMFYUI_EXECUTION_FAILED',
@@ -218,78 +214,10 @@ export function excerptScene(
 }
 
 // ---------------------------------------------------------------------------
-// ComfyUI API-format workflow templates
+// Shared JSON response parsing
 // ---------------------------------------------------------------------------
-export type ComfyWorkflowNode = {
-  class_type: string;
-  inputs: Record<string, Json>;
-  [key: string]: Json;
-};
-export type ComfyWorkflow = Record<string, ComfyWorkflowNode>;
-export const COMFY_PLACEHOLDERS = {
-  prompt: '{{prompt}}',
-  negative: '{{negative}}',
-  seed: '{{seed}}',
-} as const;
 const isRecord = (value: unknown): value is Record<string, Json> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
-
-export function parseComfyWorkflow(text: string): ComfyWorkflow {
-  let value: unknown;
-  try {
-    value = JSON.parse(text.replace(/^\uFEFF/u, ''));
-  } catch {
-    throw new IllustrationError('COMFYUI_WORKFLOW_INVALID');
-  }
-  if (!isRecord(value) || !Object.keys(value).length)
-    throw new IllustrationError('COMFYUI_WORKFLOW_INVALID');
-  // The UI-format export ({nodes:[],links:[]}) cannot be queued through /prompt.
-  if (Array.isArray(value.nodes) || Array.isArray(value.links))
-    throw new IllustrationError('COMFYUI_WORKFLOW_UI_FORMAT');
-  for (const node of Object.values(value)) {
-    if (!isRecord(node) || typeof node.class_type !== 'string' || !isRecord(node.inputs))
-      throw new IllustrationError('COMFYUI_WORKFLOW_INVALID');
-  }
-  const serialized = JSON.stringify(value);
-  if (!serialized.includes(COMFY_PLACEHOLDERS.prompt))
-    throw new IllustrationError('COMFYUI_WORKFLOW_PROMPT_PLACEHOLDER_MISSING');
-  return structuredClone(value) as ComfyWorkflow;
-}
-/** Replaces placeholders inside string inputs only; node ids, class types and links stay intact. */
-export function fillComfyWorkflow(
-  workflow: ComfyWorkflow,
-  values: { prompt: string; negativePrompt: string; seed: number }
-): ComfyWorkflow {
-  if (!Number.isSafeInteger(values.seed) || values.seed < 0)
-    throw new IllustrationError('COMFYUI_WORKFLOW_INVALID');
-  const replaceString = (input: string): Json => {
-    if (input === COMFY_PLACEHOLDERS.seed) return values.seed;
-    return input
-      .split(COMFY_PLACEHOLDERS.prompt)
-      .join(values.prompt)
-      .split(COMFY_PLACEHOLDERS.negative)
-      .join(values.negativePrompt)
-      .split(COMFY_PLACEHOLDERS.seed)
-      .join(String(values.seed));
-  };
-  const fill = (value: Json): Json =>
-    typeof value === 'string'
-      ? replaceString(value)
-      : Array.isArray(value)
-        ? value.map(fill)
-        : isRecord(value)
-          ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, fill(item)]))
-          : value;
-  return Object.fromEntries(
-    Object.entries(structuredClone(workflow)).map(([id, node]) => [
-      id,
-      { ...node, inputs: fill(node.inputs) as Record<string, Json> },
-    ])
-  );
-}
-export function randomComfySeed(random: () => number = Math.random): number {
-  return Math.floor(random() * 2_147_483_647);
-}
 
 // ---------------------------------------------------------------------------
 // Prompt model stage (ComfyUI): scene → image prompt

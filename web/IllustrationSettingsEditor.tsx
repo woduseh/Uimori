@@ -1,9 +1,14 @@
-import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
+import { IllustrationPresetSettings } from './IllustrationPresetSettings.js';
+import type { IllustrationPresetScope } from '../core/illustration-presets.js';
+import {
+  useSettingsSaveHandler,
+  useSettingsSaveGroup,
+  type SettingsSaveRegistration,
+} from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshIcon } from './ui-icons.js';
 import type { Library, ModelRef } from '../core/product.js';
 import type { IllustrationSettings } from '../core/illustration.js';
-import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
@@ -26,7 +31,7 @@ type TestResult =
   | { ok: false; code: string; nodeErrors?: unknown };
 
 /** Global illustration settings. Frozen into each job at reservation; running jobs keep their copy. */
-export function IllustrationSettingsEditor({
+function IllustrationEnvironmentEditor({
   library,
   onDirtyChange,
   onSaveHandlerChange,
@@ -239,7 +244,11 @@ export function IllustrationSettingsEditor({
   };
   return (
     <section aria-label="삽화 설정" className="settings-section illustration-settings">
-      <p>완성된 장면의 삽화를 만들어요. 설정은 새 작업부터 적용해요.</p>
+      <h3>생성 환경·자동 생성</h3>
+      <p>
+        연결과 모델, 자동 생성 정책은 모든 프리셋에서 공통으로 사용해요. 설정은 새 작업부터
+        적용해요.
+      </p>
       <fieldset disabled={busy} className="control-grid">
         <label>
           삽화 생성기
@@ -277,17 +286,6 @@ export function IllustrationSettingsEditor({
           change({ ...draft, maxAutoRetries: value })
         )}
         <small className="full">일시적인 오류가 나면 설정한 횟수만큼 다시 시도해요.</small>
-        <label className="full">
-          그림 지침
-          <textarea
-            aria-label="삽화 그림 지침"
-            rows={3}
-            maxLength={SOURCE_TEXT_MAX_CHARS}
-            value={draft.styleGuidance}
-            placeholder="예: 수채화, 부드러운 빛, 인물 중심 구성"
-            onChange={(event) => change({ ...draft, styleGuidance: event.target.value })}
-          />
-        </label>
         {draft.generator === 'codex' && (
           <fieldset className="control-grid full">
             <legend>Codex</legend>
@@ -370,44 +368,6 @@ export function IllustrationSettingsEditor({
               change({ ...draft, comfyui: { ...draft.comfyui, promptModel: ref } })
             )}
             <small className="full">장면을 그림 설명으로 바꿀 모델이에요.</small>
-            <label className="full">
-              네거티브 프롬프트 지침
-              <textarea
-                aria-label="ComfyUI 네거티브 프롬프트 지침"
-                rows={2}
-                maxLength={SOURCE_TEXT_MAX_CHARS}
-                value={draft.comfyui.negativeGuidance}
-                placeholder="예: lowres, bad anatomy, text, watermark"
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    comfyui: { ...draft.comfyui, negativeGuidance: event.target.value },
-                  })
-                }
-              />
-            </label>
-            <label className="full">
-              워크플로 JSON (API 형식)
-              <textarea
-                aria-label="ComfyUI 워크플로 JSON"
-                rows={10}
-                value={draft.comfyui.workflow}
-                placeholder="ComfyUI에서 내보낸 API 형식 JSON을 넣어요."
-                onChange={(event) =>
-                  change({ ...draft, comfyui: { ...draft.comfyui, workflow: event.target.value } })
-                }
-              />
-            </label>
-            <details className="full">
-              <summary>워크플로 작성 도움말</summary>
-              <p>ComfyUI에서 API 형식으로 내보낸 JSON을 사용해요.</p>
-              <p>
-                문자열 입력의 {'{{prompt}}'}는 그림 설명, {'{{negative}}'}는 네거티브 프롬프트,
-                {'{{seed}}'}는 시드로 바뀌어요. 모델·해상도는 워크플로에서 정하고 SaveImage 노드의
-                이미지를 가져와요.
-              </p>
-              <p>인증 환경변수의 값은 Authorization 헤더로 보내요.</p>
-            </details>
             {numberField(
               '시간 제한 (초)',
               draft.comfyui.timeoutMs / 1000,
@@ -483,5 +443,43 @@ export function IllustrationSettingsEditor({
       {saveError && <p role="alert">{saveError} 초안은 유지했어요.</p>}
       <p role="status">{message || loadError}</p>
     </section>
+  );
+}
+
+const illustrationSections = ['presets', 'environment'] as const;
+export function IllustrationSettingsEditor({
+  library,
+  scope,
+  onDirtyChange,
+  onSaveHandlerChange,
+}: {
+  library: Library;
+  scope: IllustrationPresetScope;
+  onDirtyChange: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
+}) {
+  const [presetsDirty, setPresetsDirty] = useState(false);
+  const [environmentDirty, setEnvironmentDirty] = useState(false);
+  const group = useSettingsSaveGroup(illustrationSections);
+  useEffect(() => {
+    onDirtyChange(presetsDirty || environmentDirty);
+  }, [presetsDirty, environmentDirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
+  useSettingsSaveHandler(onSaveHandlerChange, () =>
+    group.save({ presets: presetsDirty, environment: environmentDirty })
+  );
+  return (
+    <>
+      <IllustrationPresetSettings
+        scope={scope}
+        onDirtyChange={setPresetsDirty}
+        onSaveHandlerChange={group.registrations.presets}
+      />
+      <IllustrationEnvironmentEditor
+        library={library}
+        onDirtyChange={setEnvironmentDirty}
+        onSaveHandlerChange={group.registrations.environment}
+      />
+    </>
   );
 }

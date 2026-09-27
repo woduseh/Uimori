@@ -1,7 +1,13 @@
+import type { IllustrationPreset, IllustrationPresetDefinition } from './illustration-presets.js';
 import type { Theme, ThemeDefinition } from './themes.js';
 import type { Content, PromptPreset, PromptWorkspace } from './product.js';
 
-export type ResourceKind = 'content' | 'prompt-preset' | 'prompt-workspace' | 'theme';
+export type ResourceKind =
+  | 'content'
+  | 'prompt-preset'
+  | 'prompt-workspace'
+  | 'theme'
+  | 'illustration-preset';
 export type ContentEditModel = Omit<Content, 'id' | 'revision' | 'coverImage' | 'hasPackage'>;
 export type PromptEditModel = Pick<PromptPreset, 'title' | 'role' | 'program' | 'values'>;
 export type WorkspaceEditModel = Pick<PromptWorkspace, 'main' | 'translation'>;
@@ -9,8 +15,9 @@ export type ResourceModel =
   | ContentEditModel
   | PromptEditModel
   | WorkspaceEditModel
-  | ThemeDefinition;
-export type SavedResource = Content | PromptPreset | PromptWorkspace | Theme;
+  | ThemeDefinition
+  | IllustrationPresetDefinition;
+export type SavedResource = Content | PromptPreset | PromptWorkspace | Theme | IllustrationPreset;
 export type EditorContext = {
   kind: ResourceKind;
   targetId: string | null;
@@ -21,8 +28,8 @@ export type EditorContext = {
 };
 export type ResourceSaveResult = { saved: SavedResource; created: boolean };
 export function editableResource(kind: ResourceKind, resource: SavedResource): ResourceModel {
-  if (kind === 'theme') {
-    const { id: _id, revision: _revision, ...model } = resource as Theme;
+  if (kind === 'theme' || kind === 'illustration-preset') {
+    const { id: _id, revision: _revision, ...model } = resource as Theme | IllustrationPreset;
     return model;
   }
   if (kind === 'prompt-workspace') {

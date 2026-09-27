@@ -87,6 +87,7 @@ function IllustrationCard({
   const retries = item.diagnostic?.retries.length ?? 0;
   const comfy = item.diagnostic?.comfyui;
   const hasDiagnostic =
+    !!item.preset ||
     !!comfy?.nodeErrors?.length ||
     !!comfy?.statusMessages?.length ||
     !!item.diagnostic?.prompt ||
@@ -200,6 +201,11 @@ function IllustrationCard({
       {hasDiagnostic && (
         <details className="illustration-diagnostic">
           <summary>생성 상세</summary>
+          {item.preset && (
+            <p>
+              프리셋 · {item.preset.title} · 개정 {item.preset.revision}
+            </p>
+          )}
           {retries > 0 && (
             <p>
               자동 재요청 {retries}회 · 한도 {item.maxAutoRetries}회

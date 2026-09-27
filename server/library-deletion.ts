@@ -1,3 +1,4 @@
+import { removeIllustrationPresetScope } from './illustration-presets.js';
 import { pruneUnusedData } from './unused-data.js';
 import { HttpError, fields, number, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
@@ -76,6 +77,7 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
         for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
       }
     }
+    if (kind === 'content') removeIllustrationPresetScope(store, 'bot', id);
     store.libraryOrganization.remove(kind, id);
     pruneUnusedData(store.db);
     return { deleted: true, id };
