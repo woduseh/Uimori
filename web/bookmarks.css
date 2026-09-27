@@ -1,0 +1,56 @@
+.bookmark-dialog form {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.bookmark-dialog input,
+.bookmark-dialog textarea {
+  width: 100%;
+}
+.bookmark-dialog blockquote,
+.bookmark-list blockquote {
+  font-size: 0.9em;
+  opacity: 0.8;
+  margin: 10px 0;
+  padding-inline-start: 12px;
+  border-inline-start: 2px solid currentColor;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.bookmark-list {
+  display: grid;
+  gap: 12px;
+}
+.bookmark-list article {
+  border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  padding-bottom: 12px;
+}
+.bookmark-list p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.bookmark-title {
+  text-align: start;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.bookmark-list small {
+  display: block;
+  opacity: 0.75;
+  margin-block: 6px;
+}
+.reading-sync-notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 16px;
+  font-size: 0.9em;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+}
+.bookmark-list blockquote {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

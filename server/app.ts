@@ -1,3 +1,4 @@
+import { readingStateRoutes } from './reading-state.js';
 import { ManuscriptSearch, manuscriptSearchRoutes } from './manuscript-search.js';
 import { BackupService, backupRoutes } from './backup-service.js';
 import { illustrationPresetRoutes } from './illustration-presets.js';
@@ -598,6 +599,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   backupRoutes(app, backups);
   const manuscriptSearch = new ManuscriptSearch(store, () => admitted());
   manuscriptSearchRoutes(app, manuscriptSearch);
+  readingStateRoutes(app, store);
   readerRoutes(app, store);
   helperRoutes(app, helper);
   chatOptionRoutes(app, store);

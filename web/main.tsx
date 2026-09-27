@@ -974,6 +974,29 @@ function App() {
           </div>
         ) : (
           <>
+            {(s.readingSync.other || s.readingSync.error) && (
+              <aside className="reading-sync-notice" aria-label="읽기 위치 동기화">
+                {s.readingSync.other && (
+                  <>
+                    <span>다른 기기에 더 최근의 읽기 위치가 있어요.</span>
+                    <button type="button" onClick={s.readingSync.resumeOther}>
+                      다른 기기에서 이어 읽기
+                    </button>
+                  </>
+                )}
+                {s.readingSync.error && (
+                  <>
+                    <span>{s.readingSync.error}</span>
+                    <button type="button" onClick={s.readingSync.refresh}>
+                      연결 다시 확인
+                    </button>
+                  </>
+                )}
+                <button type="button" onClick={s.readingSync.dismiss}>
+                  닫기
+                </button>
+              </aside>
+            )}
             <div
               className={`reader-stage ${showSceneNavigator && s.detail?.reader.navigation.length ? 'has-scenes' : ''}`}
             >

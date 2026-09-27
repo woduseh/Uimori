@@ -1,3 +1,4 @@
+import { useReadingSync } from './useReadingSync.js';
 import { readerTargetFromUrl, readerTargetUrl, type ReaderTarget } from '../core/reader-target.js';
 import { readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
@@ -210,9 +211,21 @@ export function useStory() {
           '',
     key: `${selected}:${activeBranchId}:${readSource}`,
   };
+  const readingSync = useReadingSync({
+    chatId: destination === 'story' ? selected : '',
+    branchId: activeBranchId || `main:${selected}`,
+    explicitSource: readSource,
+    reader,
+    storageKey: `reading:${selected}:${storageBranch}`,
+    onResume: (target, replace) => openTarget(target, replace),
+    saveLocal: () => savePosition(),
+  });
+  const readerReady = useRef(readingSync.ready);
+  readerReady.current = readingSync.ready;
   const refresh = useCallback(
     async (id: string, incremental = false) => {
       if (
+        !readerReady.current ||
         navigation.current.chat !== id ||
         readerQuery.current.chat !== id ||
         readerQuery.current.epoch !== navigation.current.epoch
@@ -454,7 +467,7 @@ export function useStory() {
   useEffect(() => {
     let alive = true;
     const epoch = view.epoch;
-    if (selected && destination === 'story') {
+    if (selected && destination === 'story' && readingSync.ready) {
       restoredView.current = '';
       // A repeated selection needs a fresh read, but can keep its already displayed page.
       if (readerCache.current?.key !== readerQuery.current.key) setDetail(null);
@@ -465,7 +478,7 @@ export function useStory() {
     return () => {
       alive = false;
     };
-  }, [selected, activeBranchId, readSource, destination, view.epoch, refresh]);
+  }, [selected, activeBranchId, readSource, destination, view.epoch, refresh, readingSync.ready]);
   const attachmentKey = [...(detail?.profile?.packageAttachments ?? [])].map(refValue).join(',');
   // biome-ignore lint/correctness/useExhaustiveDependencies: Current content reads follow IDs/revisions, library changes and chat switches, not SSE object identity.
   useEffect(() => {
@@ -662,7 +675,11 @@ export function useStory() {
           kind: 'source',
           element,
           ...(validHash && readerTarget.blockAnchor
-            ? { anchor: readerTarget.blockAnchor, offset: 0 }
+            ? {
+                anchor: readerTarget.blockAnchor,
+                ratio: readerTarget.offsetRatio ?? 0,
+                fallbackToSource: true,
+              }
             : {}),
         });
         if (!validHash) setNotice('본문이 바뀌어 해당 장면의 시작으로 이동했어요.');
@@ -736,7 +753,7 @@ export function useStory() {
       });
     }
   };
-  const openTarget = (target: ReaderTarget) => {
+  const openTarget = (target: ReaderTarget, replace = false) => {
     cancelNavigationScroll.current?.();
     savePosition();
     rememberCursor();
@@ -746,7 +763,8 @@ export function useStory() {
     } catch {
       /* Optional view cache. */
     }
-    history.pushState(null, '', readerTargetUrl(target));
+    if (replace) history.replaceState(null, '', readerTargetUrl(target));
+    else history.pushState(null, '', readerTargetUrl(target));
     navigate({
       kind: 'restore',
       view: {
@@ -1259,6 +1277,7 @@ export function useStory() {
     chooseSource,
     openTarget,
     readerTarget,
+    readingSync,
     chooseLatest,
     showLibrary,
     generate,
