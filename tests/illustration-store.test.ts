@@ -1,3 +1,6 @@
+import { fixtureIllustrationPreset } from './fixtures/illustration.js';
+import { emptyIllustrationPreset } from '../core/illustration-presets.js';
+import { saveResource } from '../server/resource-service.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import { Store } from '../server/store.js';
 import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
@@ -31,7 +34,6 @@ import {
   illustrationDatabases,
   PNG_BASE64,
 } from './fixtures/illustration.js';
-import { FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
 
 const databases = illustrationDatabases('uimori-illustration-store-');
 afterEach(() => databases.cleanup());
@@ -203,16 +205,21 @@ describe('illustration storage on the current schema', () => {
     const comfy = {
       ...body,
       generator: 'comfyui' as const,
-      comfyui: { ...body.comfyui, baseUrl: 'http://10.0.0.5:8188/', workflow: '{"nodes":[]}' },
+      comfyui: { ...body.comfyui, baseUrl: 'http://10.0.0.5:8188/' },
     };
     expect(
-      http(() => updateIllustrationSettings(store, { expectedRevision: 2, ...comfy }, true)).message
+      http(() =>
+        saveResource(store, {
+          kind: 'illustration-preset',
+          id: null,
+          model: {
+            ...emptyIllustrationPreset(),
+            comfyui: { workflow: '{"nodes":[]}', negativeGuidance: '' },
+          },
+        })
+      ).message
     ).toBe('COMFYUI_WORKFLOW_UI_FORMAT');
-    const valid = updateIllustrationSettings(
-      store,
-      { expectedRevision: 2, ...comfy, comfyui: { ...comfy.comfyui, workflow: FIXTURE_WORKFLOW } },
-      true
-    );
+    const valid = updateIllustrationSettings(store, { expectedRevision: 2, ...comfy }, true);
     expect(valid.comfyui.baseUrl).toBe('http://10.0.0.5:8188');
     expect(
       http(() =>
@@ -271,7 +278,8 @@ describe('illustration storage on the current schema', () => {
   test('reservation freezes the generator, allows one active job per response and enforces the per-response limit', () => {
     const store = databases.create();
     const { source } = chatWithSource(store);
-    const settings = fixtureSettings({ maxPerSource: 2, maxAutoRetries: 3, styleGuidance: 'ink' });
+    const preset = fixtureIllustrationPreset(store, { styleGuidance: 'ink' });
+    const settings = fixtureSettings({ maxPerSource: 2, maxAutoRetries: 3 });
     expect(
       http(() =>
         reserveIllustration(store, source, 'manual', {
@@ -289,6 +297,7 @@ describe('illustration storage on the current schema', () => {
     });
     expect(first).toMatchObject({ status: 'queued', origin: 'manual', attempt: 1, generation: 0 });
     expect(first.input).toEqual({
+      preset: { id: preset.id, revision: preset.revision, title: preset.title },
       version: 1,
       generator: 'fixture',
       settingsRevision: 1,

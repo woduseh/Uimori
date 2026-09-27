@@ -119,6 +119,8 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
         if (disposed) return false;
         for (const event of page) {
           if (event.seq <= cursor) continue;
+          if (event.kind === 'illustration-preset.updated')
+            window.dispatchEvent(new Event('uimori-illustration-presets-changed'));
           if (event.kind === 'theme.updated')
             window.dispatchEvent(new Event('uimori-themes-changed'));
           cursor = event.seq;

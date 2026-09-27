@@ -4,8 +4,8 @@ await runBrowserVerification({
   name: 'illustration',
   prefix: 'illustration-ui',
   scope:
-    'Synthetic scene illustrations: manual request from the scene menu, completed image display, failure retry, deletion, settings save and reload persistence',
-  files: ['tests/illustration-browser.spec.ts'],
+    'Synthetic scene illustrations: manual request from the scene menu, completed image display, failure retry, deletion, settings save and reload persistence, scoped preset authoring, import/export and conflict-safe editing',
+  files: ['tests/illustration-browser.spec.ts', 'tests/illustration-presets-browser.spec.ts'],
   timeout: 180000,
   limitations: [
     'The synthetic generator returns a fixed PNG; no Codex or ComfyUI call, image quality or reference fidelity is verified here.',

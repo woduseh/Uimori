@@ -1,3 +1,8 @@
+import {
+  emptyIllustrationPreset,
+  DEFAULT_ILLUSTRATION_PRESET_ID,
+} from '../core/illustration-presets.js';
+import { illustrationPresetCatalog } from '../server/illustration-presets.js';
 import { editableResource } from '../core/resource-editing.js';
 import { nativeDraftTitle } from './fixtures/native-content.js';
 import { describeHelperTools } from '../server/helper-app-tools.js';
@@ -508,4 +513,52 @@ test('resource saves leave real receipts so a later failure cannot offer a dupli
   });
   expect(retry.statusCode).toBe(409);
   expect(retry.body).toContain('HELPER_EFFECTS_ALREADY_COMMITTED');
+});
+
+test('helper app gateway discovers and authors illustration presets without selecting or generating them', async () => {
+  const f = await fixture('library');
+  let savedId = '';
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('list', 'app.call', { name: 'illustration-preset.list', arguments: {} }),
+        call('guide', 'app.call', { name: 'illustration-preset.guide', arguments: {} })
+      );
+    if (round === 1) {
+      expect(result<{ presets: unknown[] }>(request, 'list').presets).toHaveLength(1);
+      expect(result<{ example: unknown }>(request, 'guide').example).toEqual(
+        emptyIllustrationPreset()
+      );
+      return calls(
+        call('save', 'app.call', {
+          name: 'resource.save',
+          arguments: {
+            kind: 'illustration-preset',
+            model: { ...emptyIllustrationPreset('도우미 수채화'), styleGuidance: 'watercolor' },
+          },
+        })
+      );
+    }
+    savedId = result<{ id: string }>(request, 'save').id;
+    return structuredClone(success);
+  });
+  const task = await submit(
+    f,
+    '수채화 삽화 프리셋을 새로 만들어 저장해줘. 적용하거나 이미지를 생성하지는 마.'
+  );
+  const catalog = illustrationPresetCatalog(f.store);
+  expect(catalog.presets.find((item) => item.id === savedId)).toMatchObject({
+    title: '도우미 수채화',
+    styleGuidance: 'watercolor',
+  });
+  expect(catalog.preferences.defaultPresetId).toBe(DEFAULT_ILLUSTRATION_PRESET_ID);
+  expect(f.store.db.prepare('SELECT count(*) n FROM illustration_jobs').get()?.n).toBe(0);
+  expect(
+    f.store.db.prepare('SELECT count(*) n FROM helper_operations WHERE task_id=?').get(task.id)?.n
+  ).toBe(1);
+  expect(
+    f.workspace
+      .events(f.conversation.id)
+      .some((event) => event.kind === 'illustration-preset.updated')
+  ).toBe(true);
 });

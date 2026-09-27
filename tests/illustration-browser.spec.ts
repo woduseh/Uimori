@@ -161,7 +161,7 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
     revision: before.revision + 1,
   });
   // A concurrent save elsewhere is rejected by CAS; the stale draft stays until it reloads.
-  await settings(request, { styleGuidance: 'ink wash' });
+  await settings(request, { maxAutoRetries: 3 });
   await limit.fill('4');
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
   await expect(section.getByRole('alert').filter({ hasText: '초안은 유지했어요' })).toBeVisible();
@@ -182,7 +182,7 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await expect(limit).toHaveValue('4');
   await page.unroute('**/api/illustration-settings');
   await reloadDialog.getByRole('button', { name: '초안 버리고 불러오기' }).click();
-  await expect(section.getByLabel('삽화 그림 지침', { exact: true })).toHaveValue('ink wash');
+  await expect(section.getByLabel('자동 재요청 횟수', { exact: true })).toHaveValue('3');
   await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
   await page.screenshot({ path: info.outputPath('illustration-settings-mobile.png') });
 });
@@ -198,6 +198,8 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await selectSettingsSection(page, '삽화');
   const section = page.getByRole('region', { name: '삽화 설정', exact: true });
   await section.getByLabel('삽화 생성기', { exact: true }).selectOption('comfyui');
+  await page.getByRole('button', { name: '새 삽화 프리셋', exact: true }).click();
+  const presetEditor = page.getByRole('region', { name: '삽화 프리셋 편집기', exact: true });
   for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const label of [
@@ -205,7 +207,7 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
       'ComfyUI 네거티브 프롬프트 지침',
       'ComfyUI 워크플로 JSON',
     ]) {
-      const field = section.getByLabel(label, { exact: true });
+      const field = presetEditor.getByLabel(label, { exact: true });
       const bounds = await field.evaluate((node) => {
         const fieldset = node.closest('fieldset')!;
         const css = getComputedStyle(fieldset);
@@ -243,7 +245,7 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await section.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
   await expect(section.getByRole('status')).toContainText('설정을 불러오지 못했어요');
   await page.unroute('**/api/illustration-settings');
-  await section.getByLabel('삽화 그림 지침').fill('preserve draft');
+  await section.getByLabel('장면당 최대 삽화 개수').fill('5');
   await section.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
   const guard = page.getByRole('alertdialog', { name: '삽화 설정 다시 불러오기' });
   for (const width of DEFAULT_WIDTHS) {
@@ -254,5 +256,5 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   }
   await page.keyboard.press('Escape');
   await expect(guard).toBeHidden();
-  await expect(section.getByLabel('삽화 그림 지침')).toHaveValue('preserve draft');
+  await expect(section.getByLabel('장면당 최대 삽화 개수')).toHaveValue('5');
 });

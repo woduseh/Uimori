@@ -1,3 +1,4 @@
+import { removeIllustrationPresetScope } from './illustration-presets.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { HttpError, fields, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
@@ -118,6 +119,7 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
       .run(chatId);
     for (const table of chatTables)
       store.db.prepare(`DELETE FROM ${table} WHERE chat_id=?`).run(chatId);
+    removeIllustrationPresetScope(store, 'chat', chatId);
     store.db.prepare('DELETE FROM chats WHERE id=?').run(chatId);
     pruneUnusedData(store.db, imageCandidates);
     return { deleted: true };

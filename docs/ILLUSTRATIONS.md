@@ -6,12 +6,41 @@
 
 ## 사용 흐름
 
-1. **설정 → 삽화**에서 생성기를 고르고 저장해요.
+1. **설정 → 삽화 → 생성 환경·자동 생성**에서 생성기를 고르고 저장해요.
    - Codex: **설정 → 에이전트**에서 ChatGPT 구독으로 로그인한 뒤, Codex 프로바이더의 모델 프리셋을 **Codex 삽화 모델**로 선택해요.
-   - ComfyUI: 원격 PC의 주소(`http://192.168.0.10:8188` 같은 형식), ComfyUI에서 **Export (API)**로 저장한 워크플로 JSON, 장면을 그림 설명으로 옮기는 **프롬프트 모델**(어떤 텍스트 모델 프리셋이든 가능)을 지정해요. **ComfyUI 연결 확인** 버튼은 `GET /system_stats`만 호출해 버전·장치를 보여줘요.
+   - ComfyUI: 원격 PC의 주소(`http://192.168.0.10:8188` 같은 형식)와 장면을 그림 설명으로 옮기는 **프롬프트 모델**(어떤 텍스트 모델 프리셋이든 가능)을 지정해요. ComfyUI에서 **Export (API)**로 저장한 워크플로 JSON은 아래 설명의 **삽화 프리셋**에 저장하고 선택해요. **ComfyUI 연결 확인** 버튼은 `GET /system_stats`만 호출해 버전·장치를 보여줘요.
 2. 자동 생성을 켜면 새 본문이 저장될 때마다 장면당 삽화 1개를 예약해요. 자동 예약에서는 장면을 읽는 모델(Codex 또는 프롬프트 모델)이 그릴 순간이 없다고 판단하면 **생략**할 수 있고, 생략은 실패가 아니라 한 줄 안내로만 표시하며 개수 한도를 쓰지 않아요. 끄면 각 장면의 ⋯ 메뉴에서 **삽화 생성**을 눌러요. 직접 요청은 항상 그리려고 시도해요. 완료된 삽화가 있으면 **새 삽화 생성**으로 추가 삽화를 요청해요.
 3. 결과는 해당 장면 아래 삽화 영역에 표시돼요. 실패한 삽화는 원인 코드와 안내를 보여 주고 **다시 요청**·**삽화 삭제**를 제공해요. 진행 중인 삽화는 **취소**할 수 있어요.
 4. 채팅 설정 → 이미지의 **삽화 참조 이미지**에서 채팅에 등록한 이미지나 장착한 자료의 이미지를 **캐릭터 디자인** 또는 **그림체**로 지정해요. Codex 경로에서만 사용하며 ComfyUI에는 아직 보내지 않아요.
+
+## 삽화 프리셋
+
+**설정 → 삽화** 상단에서 프리셋을 만들고 편집·복제·삭제하거나 JSON으로 가져오기/내보내기를 할 수 있어요. 프리셋의 이름·설명·그림 지침은 공통이고, ComfyUI 워크플로 JSON·제외 지침은 ComfyUI에서만 사용해요. Codex 모델, ComfyUI 주소·인증·프롬프트 모델, 시간 제한·조회 주기와 자동 생성·개수·재요청 정책은 아래의 **생성 환경·자동 생성**에 남고 프리셋 전환으로 바뀌지 않아요. 캐릭터/그림체 참조 이미지는 기존처럼 채팅별로 관리해요.
+
+적용 범위는 **현재 채팅 → 현재 봇 → 작업실 기본 → 내장 기본** 순서예요. 채팅이나 봇에서 **상위 설정 따르기**를 누르면 해당 선택만 해제해요. 필드별 합성이 아니라 선택된 프리셋 하나 전체를 사용하므로, 선택한 프리셋에 ComfyUI 워크플로가 없으면 다른 프리셋의 워크플로를 몰래 가져오지 않고 `COMFYUI_WORKFLOW_MISSING`으로 안내해요. 내장 **기본**은 추가 그림 지침이 없는 읽기 전용 프리셋이고 복제해서 편집해요.
+
+**저장과 적용은 별개**예요. 새 프리셋 저장·가져오기는 선택이나 이미지 생성을 실행하지 않아요. 이미 사용 중인 프리셋을 편집하면 그 프리셋을 참조하는 채팅의 **다음 생성 예약부터** 새 내용이 반영돼요. 작업에는 프리셋 ID·이름·수정 번호와 실제 지침/워크플로를 함께 고정해요. 실행 도중 수정·삭제해도 진행 중인 작업과 과거 결과는 그대로예요. **다시 요청**은 기존 고정 입력을 사용하고, **새 삽화 생성**은 최신 선택을 사용해요. 새 작업의 **생성 상세**에서 사용한 프리셋 이름과 개정을 확인해요.
+
+프리셋 삭제 시 작업실 기본이었다면 내장 기본으로, 봇·채팅 선택은 상위 설정으로 돌아가요. 기존 삽화와 작업은 삭제하지 않아요. 별도 채팅 복사·개별 채팅 백업은 이 전역 카탈로그와 선택을 복제하지 않으며, 새 채팅은 해당 봇/작업실 기본을 따라요. 프리셋을 함께 옮기려면 별도로 내보내고 새 채팅에서 선택해요.
+
+파일 이름은 `이름.uimori-illustration.json`, 형식은 다음과 같아요.
+
+```json
+{
+  "format": "uimori-illustration-preset",
+  "version": 1,
+  "preset": {
+    "title": "수채화",
+    "description": "부드러운 빛과 종이 질감",
+    "styleGuidance": "watercolor, soft light, textured paper",
+    "comfyui": { "workflow": "", "negativeGuidance": "" }
+  }
+}
+```
+
+가져오기는 내용을 확인하고 저장하는 새 프리셋이며 이름이 같아도 기존 항목을 덮어쓰지 않아요. 로컬 프리셋 ID·모델 연결·인증 정보·자동 생성 정책은 포맷에 포함하지 않아요. 다만 **워크플로에 직접 넣은 비밀값·개인 경로는 그대로 들어가므로 공유 전에 확인해야 해요.** 상대 ComfyUI에도 필요한 모델·LoRA·커스텀 노드가 설치되어 있어야 하며 자동 설치하지 않아요. 파일은 16MiB, 워크플로 문자열은 400,000자, 그림/제외 지침은 각각 아래 저장 한도를 사용해요.
+
+저장과 선택은 각각 수정 번호를 비교해 다른 창의 변경을 덮어쓰지 않아요. 충돌이나 저장 실패 시 현재 입력을 유지하고 사본 저장 또는 최신 항목 재열기를 제공해요. 목록 새로고침도 편집 중인 입력을 덮어쓰지 않아요. 프리셋 편집의 미저장 입력은 현재 화면에만 있고, 브라우저 새로고침/종료 후 복구나 기기 간 동기화는 제공하지 않아요.
 
 ## 설정과 한도
 
@@ -27,7 +56,7 @@
 
 ## 저장과 표시 계약
 
-- 표는 `illustration_settings`, `illustration_references`, `illustration_jobs`, `illustration_images`예요. 새 DB에서만 표를 만들고, 현재 DB는 [저장 구조 검증](DATA-MIGRATIONS.md) 뒤 그대로 열어요. 구형 DB를 보충하거나 변환하지 않아요.
+- 실행 표는 `illustration_settings`, `illustration_references`, `illustration_jobs`, `illustration_images`예요. 프리셋은 공통 `versions`의 `illustration-preset` 자료이고 선택은 `app_metadata`의 `illustration-preset-preferences`예요. 새 테이블을 추가하지 않아요. 이전 전역 그림 지침·워크플로·제외 지침은 첫 실행 시 **기존 삽화 설정** 프리셋으로 한 번 옮기고 기본으로 선택해요. 실행 환경과 기존 작업 입력은 보존하며, 전환은 하나의 트랜잭션이고 재시작으로 중복되지 않아요. [데이터 형식](DATA-MIGRATIONS.md)을 참고해요.
 - 작업은 `source_revision`과 예약 당시 `source_hash`에 귀속돼요. 원문을 나중에 고쳐도 완료된 삽화는 요청 당시 장면의 것으로 그 응답 아래 남고 **수정 전 원문의 삽화**로 표시해요. 새 본문에 자동으로 다시 붙이지 않아요. 실행 시에는 예약 hash의 원문을 다시 읽어요(`sourceAtHash`).
 - 현재 장면 원문과 카드의 이미지 자료를 삽화 입력으로 사용해요. 원본 텍스트와 hash는 보존해요.
 - 삽화 모델에 보내는 참고 문맥만 장면 8,000·봇 2,000·페르소나 1,000 토큰까지 끝부분을 발췌해요. 로컬 `o200k_base` 추정치이며 생략된 앞부분은 `[Earlier text omitted]`로 표시해요. 원문 저장 한도나 출력 길이 제한이 아니며, 예산에 맞추기 위한 추가 모델 호출은 없어요.
@@ -63,7 +92,12 @@
 
 | 경로 | 설명 |
 | --- | --- |
-| `GET/PUT /api/illustration-settings` | 전역 설정. `PUT`은 `expectedRevision` CAS. |
+| `GET/PUT /api/illustration-settings` | 전역 실행 환경·정책. `PUT`은 `expectedRevision` CAS. 그림 지침·워크플로는 받지 않아요. |
+| `GET /api/illustration-presets` | 내장/저장 프리셋과 범위별 선택 목록. |
+| `POST /api/resources/save` | `kind: illustration-preset`, `model`, 편집이면 `id`·`expectedRevision`. 새 저장은 선택하지 않아요. |
+| `GET /api/resources/illustration-preset/:id`, `POST /api/resources/illustration-preset/:id/undo` | 읽기·직전 저장 되돌리기. |
+| `POST /api/illustration-presets/selection` | `{scope: global/bot/chat, targetId?, presetId: string/null, expectedRevision}`. 선택 수정 번호는 자료 수정 번호와 별개예요. |
+| `GET /api/illustration-presets/:id/export`, `DELETE /api/illustration-presets/:id` | 파일 내보내기·삭제. 삭제에는 `expectedRevision`이 필요해요. |
 | `POST /api/illustration-settings/comfyui/test` | `{baseUrl, authorizationEnv}`로 `system_stats` 확인. 실패는 502에 `{code, comfyui}` JSON. |
 | `GET/PUT /api/chats/:id/illustration-references` | 채팅별 참조 역할. 후보는 채팅 이미지와 장착 자료 이미지. |
 | `POST /api/sources/:id/illustrations` | 수동 예약. `expectedSourceHash`(선택). 테스트 모드에서만 `fixture` 옵션. |
@@ -76,7 +110,7 @@
 
 ## 검증
 
-`tests/illustration-*.test.ts`는 저장·실행·API 계약을, `tests/comfyui-client.test.ts`와 `tests/codex-image.test.ts`는 합성 공급자 응답을 확인해요. `npm run verify:illustration`은 생성·재요청·삭제·설정 충돌과 새로고침 후 표시를 검사해요. 검사 선택은 [DEVELOPMENT](DEVELOPMENT.md#verification)를 따라요.
+`tests/illustration-*.test.ts`는 저장·실행·API 계약을, `tests/comfyui-client.test.ts`와 `tests/codex-image.test.ts`는 합성 공급자 응답을 확인해요. `tests/illustration-presets.test.ts`는 범위별 선택·직전본 되돌리기·기존 설정 전환과 원자적 실패·고정 작업 입력을 확인해요. `npm run verify:illustration`은 생성·재요청·삭제·설정 충돌과 새로고침 후 표시, 프리셋 생성/복제/파일 왕복·충돌 시 사본 저장·미저장 편집 보호와 데스크톱/모바일 레이아웃을 검사해요. 검사 선택은 [DEVELOPMENT](DEVELOPMENT.md#verification)를 따라요.
 
 합성 검사는 실제 Codex 구독 사용량이나 ComfyUI 설치·워크플로 호환성을 입증하지 않아요. 실제 서비스 검증에서는 연결·이미지 저장·참조 반영·오류 표시를 확인하고, 유료 호출 여부와 사용한 모델·워크플로를 결과에 구분해요.
 

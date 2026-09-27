@@ -1,3 +1,13 @@
+import {
+  emptyIllustrationPreset,
+  type IllustrationPreset,
+  type IllustrationPresetDefinition,
+} from '../../core/illustration-presets.js';
+import { saveResource } from '../../server/resource-service.js';
+import {
+  selectIllustrationPreset,
+  illustrationPresetPreferences,
+} from '../../server/illustration-presets.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -92,3 +102,23 @@ export function fixtureSettings(
 }
 export const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==';
+
+export function fixtureIllustrationPreset(
+  store: Store,
+  overrides: Partial<Omit<IllustrationPresetDefinition, 'comfyui'>> & {
+    comfyui?: Partial<IllustrationPresetDefinition['comfyui']>;
+  } = {}
+) {
+  const base = emptyIllustrationPreset('Synthetic illustration preset');
+  const preset = saveResource(store, {
+    kind: 'illustration-preset',
+    id: null,
+    model: { ...base, ...overrides, comfyui: { ...base.comfyui, ...overrides.comfyui } },
+  }).saved as IllustrationPreset;
+  selectIllustrationPreset(store, {
+    scope: 'global',
+    presetId: preset.id,
+    expectedRevision: illustrationPresetPreferences(store).revision,
+  });
+  return preset;
+}

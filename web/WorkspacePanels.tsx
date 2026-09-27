@@ -557,6 +557,14 @@ export function AppSettingsPanel({
                   {key === 'illustrations' && state.library && (
                     <IllustrationSettingsEditor
                       library={state.library}
+                      scope={{
+                        chatId:
+                          state.destination === 'story' ? state.selected || undefined : undefined,
+                        botId:
+                          state.destination === 'story'
+                            ? state.chats.find((chat) => chat.id === state.selected)?.botId
+                            : undefined,
+                      }}
                       onDirtyChange={setIllustrationDirty}
                       onSaveHandlerChange={saveGroup.registrations.illustration}
                     />

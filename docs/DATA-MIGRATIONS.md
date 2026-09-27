@@ -48,3 +48,10 @@ npm run transfer:personal -- --source /absolute/old.sqlite --target /absolute/ne
 ### 채팅 실행 설정
 
 채팅 설정은 장면 해설 자동 생성(`status`)과 본문 작업 호출 한도(`maxCalls`)를 저장해요. 예전 DB·휴대용 백업의 `preset`, `mode`, `translation` 필드는 읽기·복원 경계에서 무시하고 이후 저장에서 제외해요. 별도 DB 재작성이나 스키마 번호 변경은 없으며 실제 번역 기능과 번역 정책은 유지해요.
+
+
+### 삽화 프리셋 초기화
+
+프리셋 도입 이전의 `illustration_settings`에 있던 `styleGuidance`, `comfyui.workflow`, `comfyui.negativeGuidance`는 첫 실행 때 **기존 삽화 설정** 자료로 한 번 옮겨 작업실 기본으로 선택해요. 비어 있었다면 내장 기본을 사용해요. 공통 `versions`와 `app_metadata`를 사용하므로 새 테이블이나 스키마 번호 변경은 없어요.
+
+세 필드는 전역 설정에서 제거하고 설정 수정 번호를 올려 이미 열려 있던 구형 편집기의 저장과 충돌시키며, 생성기·모델·연결 주소·인증·자동 생성 정책은 유지해요. 자료 생성·선택·전역 설정 변경은 하나의 트랜잭션이고 실패하면 전부 취소해요. `illustration-preset-preferences` 선택 행이 초기화 완료를 나타내므로 재시작하거나 옮긴 프리셋을 삭제해도 다시 만들어지지 않아요. 기존 삽화와 작업의 고정 입력은 다시 쓰지 않아요. 전체 DB 백업은 카탈로그와 선택을 포함하지만 프리셋 도입 전 앱으로의 다운그레이드는 지원하지 않아요. 사용·교환 계약은 [장면 삽화](ILLUSTRATIONS.md#삽화-프리셋)를 참고해요.

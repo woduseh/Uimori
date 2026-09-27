@@ -108,3 +108,8 @@ Manual conversation compaction indexes logical messages once and fits its known 
 ## Goal evaluation
 
 [Helper goal evaluation](HELPER-EVALUATION.md) fixes synthetic sources, allowed/forbidden changes and completion oracles before execution. Scripted provider checks verify transport and storage; they do not establish a real model's tool-selection or instruction-following quality.
+
+
+### Illustration presets
+
+Discover `illustration-preset.list` and `illustration-preset.guide` through `app.tools` and invoke them with `app.call`. The list returns compact names/revisions/descriptions and selections, not every workflow. Use `resource.read/save/undo/delete` with `kind: illustration-preset` for the authored model and the existing revision/operation receipt contract. A new save does not select a preset or generate an image. Editing a selected preset changes future reservations only; existing jobs and retries keep their frozen recipe. Provider credentials, model routing, automatic policies and per-chat reference images stay outside the preset. User-facing selection and portability are documented in [Illustrations](ILLUSTRATIONS.md#삽화-프리셋).

@@ -1,3 +1,4 @@
+import { initIllustrationPresets } from './illustration-presets.js';
 import { normalizeChatSettings } from '../core/chat-settings.js';
 import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
 import { migrateIndependentChats } from './migrate-independent-chats.js';
@@ -156,6 +157,7 @@ export class Store {
         }
       );
       // The maintenance row belongs to every boot, not only to a fresh database.
+      initIllustrationPresets(this);
       initMaintenance(this);
     } catch (error) {
       this.db.close();

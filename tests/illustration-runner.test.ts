@@ -1,3 +1,4 @@
+import { fixtureIllustrationPreset } from './fixtures/illustration.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
@@ -272,10 +273,11 @@ describe('illustration runner through the Codex image turn', () => {
       references: [{ ref: asset.id, role: 'character' }],
     });
     const model = codexModel(store);
+    fixtureIllustrationPreset(store, { styleGuidance: 'watercolor' });
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
         generator: 'codex',
-        styleGuidance: 'watercolor',
+
         codex: { model: { id: model.id }, useReferences: true },
       }),
     });
@@ -420,16 +422,22 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
       const comfy = await comfyUIFixture();
       cleanups.push(comfy.close);
       const guidance = '강가의 빛과 그림자, 그림 속 인물의 외모를 보존해 주세요. '.repeat(1000);
+      fixtureIllustrationPreset(store, {
+        styleGuidance: field === 'styleGuidance' ? guidance : '',
+        comfyui: {
+          workflow: FIXTURE_WORKFLOW,
+          negativeGuidance: field === 'negativeGuidance' ? guidance : '',
+        },
+      });
       const job = reserveIllustration(store, source, 'manual', {
         settings: fixtureSettings({
           generator: 'comfyui',
-          styleGuidance: field === 'styleGuidance' ? guidance : '',
+
           maxAutoRetries: 5,
           comfyui: {
             baseUrl: comfy.origin,
-            workflow: FIXTURE_WORKFLOW,
+
             promptModel: { id: model.id },
-            negativeGuidance: field === 'negativeGuidance' ? guidance : '',
           },
         }),
       });
@@ -463,17 +471,20 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
     );
     const comfy = await comfyUIFixture();
     cleanups.push(comfy.close);
+    fixtureIllustrationPreset(store, {
+      styleGuidance: 'watercolor',
+      comfyui: { workflow: FIXTURE_WORKFLOW, negativeGuidance: 'text' },
+    });
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
         generator: 'comfyui',
-        styleGuidance: 'watercolor',
+
         comfyui: {
           baseUrl: comfy.origin,
-          workflow: FIXTURE_WORKFLOW,
+
           promptModel: { id: model.id },
           timeoutMs: 5000,
           pollIntervalMs: 20,
-          negativeGuidance: 'text',
         },
       }),
     });
@@ -521,6 +532,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
     const { model } = await promptModel(store, () => reply);
     const rejecting = await comfyUIFixture({ behavior: 'reject' });
     cleanups.push(rejecting.close);
+    fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
     const base = (baseUrl: string) =>
       fixtureSettings({
         generator: 'comfyui',
@@ -528,7 +540,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
         maxPerSource: 6,
         comfyui: {
           baseUrl,
-          workflow: FIXTURE_WORKFLOW,
+
           promptModel: { id: model.id },
           timeoutMs: 5000,
           pollIntervalMs: 20,
@@ -597,6 +609,7 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
       authorization: 'Bearer callback-only',
     });
     cleanups.push(comfy.close);
+    fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
         generator: 'comfyui',
@@ -604,7 +617,7 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
         comfyui: {
           baseUrl: comfy.origin,
           authorizationEnv: 'CALLBACK_ONLY',
-          workflow: FIXTURE_WORKFLOW,
+
           promptModel: { id: model.id },
           timeoutMs: 1000,
           pollIntervalMs: 10,
@@ -639,13 +652,14 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
     const { provider, model } = await promptModel(store, () => reply);
     const comfy = await comfyUIFixture();
     cleanups.push(comfy.close);
+    fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
     const settings = fixtureSettings({
       generator: 'comfyui',
       automatic: true,
       maxPerSource: 2,
       comfyui: {
         baseUrl: comfy.origin,
-        workflow: FIXTURE_WORKFLOW,
+
         promptModel: { id: model.id },
         timeoutMs: 5000,
         pollIntervalMs: 20,
@@ -717,13 +731,14 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
     );
     const comfy = await comfyUIFixture({ delayPolls: 3 });
     cleanups.push(comfy.close);
+    fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
         generator: 'comfyui',
         maxAutoRetries: 2,
         comfyui: {
           baseUrl: comfy.origin,
-          workflow: FIXTURE_WORKFLOW,
+
           promptModel: { id: model.id },
           timeoutMs: 40,
           pollIntervalMs: 20,

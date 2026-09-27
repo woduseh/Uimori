@@ -62,6 +62,8 @@ const HELPER_READ_NAMES = new Set([
   'library.search',
   'library.read',
   'resource.read',
+  'illustration-preset.list',
+  'illustration-preset.guide',
   'theme.list',
   'theme.guide',
   'chat.list',
@@ -1010,6 +1012,7 @@ export class HelperRuntime {
     if (
       name.startsWith('resource.') ||
       name.startsWith('theme.') ||
+      name.startsWith('illustration-preset.') ||
       name === 'image.update-metadata'
     ) {
       const invoke = () => invokeResourceTool(this.store, name, args);
@@ -1017,10 +1020,10 @@ export class HelperRuntime {
         ? invoke()
         : this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, invoke);
       if (
-        args.kind === 'theme' &&
+        (args.kind === 'theme' || args.kind === 'illustration-preset') &&
         ['resource.save', 'resource.undo', 'resource.delete'].includes(name)
       )
-        this.workspace.event(task.conversationId, task.id, 'theme.updated');
+        this.workspace.event(task.conversationId, task.id, `${args.kind}.updated`);
       return result;
     }
     const scope = task.snapshot.scope;

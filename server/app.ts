@@ -1,3 +1,4 @@
+import { illustrationPresetRoutes } from './illustration-presets.js';
 import { normalizeChatSettings } from '../core/chat-settings.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { CONTEXT_SUMMARY_MAX_CHARS } from '../core/context-tools.js';
@@ -639,6 +640,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   resourceRoutes(app, store);
   themeRoutes(app, store);
+  illustrationPresetRoutes(app, store);
   inputTranslationRoutes(app, store, {
     signal: stopping.signal,
     resolveCredential,
