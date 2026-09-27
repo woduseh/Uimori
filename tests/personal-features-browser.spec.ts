@@ -297,3 +297,85 @@ test('PWUI04 real loopback usage receipts appear in period, model and purpose ta
     await provider.close();
   }
 });
+
+test('PWUI05 app installation is explicit, registers a cache-free worker and never prompts for notifications on load', async ({
+  page,
+  context,
+  request,
+}, info) => {
+  await page.addInitScript(() => {
+    Object.assign(window, { permissionCalls: 0, installCalls: 0 });
+    if ('Notification' in window)
+      Notification.requestPermission = async () => {
+        Object.assign(window, {
+          permissionCalls: Number(Reflect.get(window, 'permissionCalls')) + 1,
+        });
+        return 'denied';
+      };
+  });
+  const authoring: string[] = [];
+  page.on('request', (event) => {
+    if (
+      event.method() === 'POST' &&
+      /\/(?:runs|retry|retranslate)$/.test(new URL(event.url()).pathname)
+    )
+      authoring.push(event.url());
+  });
+  await page.goto('/');
+  const registration = await page.evaluate(async () => {
+    const value = await navigator.serviceWorker.ready;
+    return { scope: value.scope, script: value.active?.scriptURL, caches: await caches.keys() };
+  });
+  expect(new URL(registration.scope).pathname).toBe('/');
+  expect(new URL(registration.script!).pathname).toBe('/sw.js');
+  expect(registration.caches).toEqual([]);
+  const manifestUrl = await page.locator('link[rel="manifest"]').getAttribute('href');
+  const manifest = await (await request.get(manifestUrl!)).json();
+  expect(manifest).toMatchObject({ display: 'standalone', start_url: '/', id: '/' });
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '일반');
+  const panel = page.getByRole('region', { name: '앱 설치', exact: true });
+  await expect(panel).toContainText('서버 연결이 필요');
+  await page.evaluate(() => {
+    const event = new Event('beforeinstallprompt', { cancelable: true });
+    Object.assign(event, {
+      prompt: async () => {
+        Reflect.set(window, 'installCalls', Number(Reflect.get(window, 'installCalls')) + 1);
+      },
+      userChoice: Promise.resolve({ outcome: 'dismissed' }),
+    });
+    dispatchEvent(event);
+  });
+  await expect(panel.getByRole('button', { name: 'Uimori 설치', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => Reflect.get(window, 'installCalls'))).toBe(0);
+  await panel.getByRole('button', { name: 'Uimori 설치', exact: true }).click();
+  expect(await page.evaluate(() => Reflect.get(window, 'installCalls'))).toBe(1);
+  await expect(panel).toContainText('브라우저 메뉴');
+  expect(await page.evaluate(() => Reflect.get(window, 'permissionCalls'))).toBe(0);
+  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+    await page.setViewportSize({ width, height: 900 });
+    await panel.scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true
+    );
+    await page.screenshot({ path: info.outputPath(`pwa-install-${width}.png`) });
+  }
+  await context.setOffline(true);
+  const offline = await page.evaluate(async () => {
+    try {
+      await fetch('/api/session', { cache: 'no-store' });
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  expect(offline).toBe(true);
+  await context.setOffline(false);
+  expect(
+    await page.evaluate(async () =>
+      fetch('/api/session', { cache: 'no-store' }).then((response) => response.ok)
+    )
+  ).toBe(true);
+  expect(await page.evaluate(() => caches.keys())).toEqual([]);
+  expect(authoring).toEqual([]);
+});

@@ -1,3 +1,4 @@
+import { InstallApp } from './InstallApp.js';
 import { UsagePanel } from './UsagePanel.js';
 import { ThemeSettings } from './ThemeSettings.js';
 import { Palette } from 'lucide-react';
@@ -448,6 +449,7 @@ export function AppSettingsPanel({
                     />
                   )}
                   {key === 'about' && <AppAbout />}
+                  {key === 'general' && <InstallApp />}
                   {key === 'general' && (
                     <section className="settings-section">
                       <h3>

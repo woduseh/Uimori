@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import { usageRoutes } from './usage-report.js';
 import { readingStateRoutes } from './reading-state.js';
 import { ManuscriptSearch, manuscriptSearchRoutes } from './manuscript-search.js';
@@ -1121,7 +1122,17 @@ export async function createApp(options: AppOptions): Promise<App> {
     });
   }
   if (options.webRoot && existsSync(options.webRoot)) {
-    await app.register(fastifyStatic, { root: options.webRoot });
+    await app.register(fastifyStatic, {
+      root: options.webRoot,
+      setHeaders(response, path) {
+        const name = basename(path);
+        if (name === 'sw.js' || name === 'manifest.webmanifest') {
+          response.header('Cache-Control', 'no-cache');
+          response.header('X-Content-Type-Options', 'nosniff');
+          if (name === 'sw.js') response.header('Service-Worker-Allowed', '/');
+        }
+      },
+    });
     app.setNotFoundHandler((request, reply) =>
       request.url.startsWith('/api/')
         ? reply.code(404).send({ error: 'Not found' })
