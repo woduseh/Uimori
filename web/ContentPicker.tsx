@@ -125,10 +125,12 @@ export function ContentPicker({
       <span className="content-picker-copy">
         <strong title={content.title}>{content.title}</strong>
         {content.description && <small>{content.description}</small>}
-        <small className="content-picker-meta">
-          {roleTitles[libraryCategory(library, content)]}
-          {pinned ? ` · 현재 선택 v${content.revision}` : ''}
-        </small>
+        {(role !== 'persona' || pinned) && (
+          <small className="content-picker-meta">
+            {role !== 'persona' ? roleTitles[libraryCategory(library, content)] : ''}
+            {pinned ? `${role !== 'persona' ? ' · ' : ''}현재 선택 v${content.revision}` : ''}
+          </small>
+        )}
       </span>
       {reference(content) === value ? (
         <CheckIcon size={18} aria-hidden="true" />
