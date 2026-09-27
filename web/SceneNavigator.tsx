@@ -1,3 +1,5 @@
+import type { ReaderTarget } from '../core/reader-target.js';
+import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { BackIcon, ForwardIcon, DownIcon, ListIcon } from './ui-icons.js';
 import type { ReaderDetail } from '../core/types.js';
@@ -9,6 +11,7 @@ export function SceneNavigator({
   reader,
   target,
   onSelect,
+  onTarget,
   onLatest,
   compact = false,
   listOpen = false,
@@ -18,6 +21,7 @@ export function SceneNavigator({
   reader: RefObject<HTMLDivElement | null>;
   target: string;
   onSelect: (id: string) => void;
+  onTarget?: (target: ReaderTarget) => void;
   onLatest: () => void;
   /** Compact widths show previous/current/next above the composer; the header can also open the list. */
   compact?: boolean;
@@ -139,6 +143,20 @@ export function SceneNavigator({
   if (!entries.length) return null;
   const dialog = (
     <Dialog open={open} title="장면 목록" onClose={() => setOpen(false)} className="scene-dialog">
+      {onTarget && (
+        <details>
+          <summary>본문·번역 검색</summary>
+          <ManuscriptSearchPanel
+            initialScope="chat"
+            chatId={detail.chat.id}
+            botId={detail.chat.botId}
+            onNavigate={(target) => {
+              setOpen(false);
+              onTarget(target);
+            }}
+          />
+        </details>
+      )}
       <label className="scene-search">
         <input
           type="search"

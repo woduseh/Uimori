@@ -1,3 +1,4 @@
+import type { ReaderTarget } from '../core/reader-target.js';
 import { ThemeProvider, useThemes } from './ThemeContext.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { promptControls } from '../core/risu-prompt.js';
@@ -525,9 +526,10 @@ function App() {
     setNewKey((old) => old + 1);
     setPanel('new');
   }
-  function select(id: string) {
+  function select(id: string, target?: ReaderTarget) {
     const go = () => {
-      s.select(id);
+      if (target) s.openTarget(target);
+      else s.select(id);
       setPanel('');
     };
     if (libraryDirty && s.destination === 'library') {
@@ -1059,6 +1061,9 @@ function App() {
                               }
                               key={source.id}
                               source={source}
+                              readerTarget={
+                                s.readerTarget?.sourceId === source.id ? s.readerTarget : undefined
+                              }
                               index={index + (s.detail?.reader?.start ?? 0)}
                               sceneNumber={
                                 s.detail?.reader.navigation.find((item) => item.id === source.id)
@@ -1248,6 +1253,7 @@ function App() {
                   detail={s.detail}
                   reader={s.reader}
                   target={s.readSource}
+                  onTarget={(target) => select(target.chatId, target)}
                   onSelect={s.chooseSource}
                   onLatest={s.chooseLatest}
                   compact={compact}
