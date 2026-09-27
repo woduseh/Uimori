@@ -1,3 +1,4 @@
+import { startPwa } from './pwa.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ThemeProvider, useThemes } from './ThemeContext.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -1847,6 +1848,7 @@ function App() {
     </ReadingPreferencesContext>
   );
 }
+startPwa();
 createRoot(document.getElementById('root')!).render(
   <SessionGate>
     <MaintenanceBanner />
