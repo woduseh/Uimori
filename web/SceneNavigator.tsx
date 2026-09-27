@@ -1,3 +1,4 @@
+import { BookmarkList } from './Bookmarks.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
@@ -33,6 +34,7 @@ export function SceneNavigator({
   const [current, setCurrent] = useState(target || detail.reader.order[0] || '');
   const [awayFromBottom, setAwayFromBottom] = useState(false);
   const [ownOpen, setOwnOpen] = useState(false);
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
   const open = compact ? listOpen : ownOpen;
   const setOpen = (next: boolean) => {
     if (compact) onListOpenChange?.(next);
@@ -155,6 +157,21 @@ export function SceneNavigator({
               onTarget(target);
             }}
           />
+        </details>
+      )}
+      {onTarget && (
+        <details onToggle={(event) => setBookmarksOpen(event.currentTarget.open)}>
+          <summary>책갈피</summary>
+          {open && bookmarksOpen && (
+            <BookmarkList
+              chatId={detail.chat.id}
+              branchId={detail.branches?.find((branch) => branch.default)?.id}
+              onNavigate={(target) => {
+                setOpen(false);
+                onTarget(target);
+              }}
+            />
+          )}
         </details>
       )}
       <label className="scene-search">

@@ -103,3 +103,106 @@ test('PWUI02 backup settings, status, verified download and retention are reacha
     await page.screenshot({ path: info.outputPath(`backups-${width}.png`) });
   }
 });
+
+test('PWUI03 a new device resumes a saved scene; remote changes only offer a resume and bookmarks keep editable user notes', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, detail } = await createReadingChat(request, `이어 읽기 검증 ${Date.now()}`, 8);
+  const remoteId = crypto.randomUUID();
+  const target = (index: number) => ({
+    chatId: chat.id,
+    branchId: `main:${chat.id}`,
+    sourceId: detail.sources[index].id,
+    representation: 'original',
+    contentHash: detail.sources[index].hash,
+  });
+  const path = `/api/chats/${chat.id}/reading-position`;
+  expect(
+    (
+      await request.put(path, {
+        data: { clientId: remoteId, expectedRevision: 0, target: target(5) },
+      })
+    ).ok()
+  ).toBe(true);
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  await page.goto(`/?chat=${chat.id}`);
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('source'))
+    .toBe(detail.sources[5].id);
+  await expect(page.locator(`[data-source-id="${detail.sources[5].id}"]`)).toHaveAttribute(
+    'data-representation',
+    'original'
+  );
+  const localId = await page.evaluate(() => localStorage.getItem('uimori:reading-client'));
+  expect(
+    (
+      await request.put(path, {
+        data: { clientId: localId, expectedRevision: 0, target: target(5) },
+      })
+    ).ok()
+  ).toBe(true);
+  expect(
+    (
+      await request.put(path, {
+        data: { clientId: remoteId, expectedRevision: 1, target: target(1) },
+      })
+    ).ok()
+  ).toBe(true);
+  const previous = page.url();
+  await page.evaluate(() => dispatchEvent(new Event('online')));
+  const resume = page.getByRole('button', { name: '다른 기기에서 이어 읽기', exact: true });
+  await expect(resume).toBeVisible();
+  expect(page.url()).toBe(previous);
+  await resume.click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('source'))
+    .toBe(detail.sources[1].id);
+  const scene = page.locator(`[data-source-id="${detail.sources[1].id}"]`);
+  await scene.getByRole('button', { name: '책갈피 추가', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: '책갈피 추가', exact: true });
+  await editor.getByLabel('책갈피 이름').fill('비 오는 장면');
+  await editor.getByLabel('책갈피 메모').fill('이 대목에서 다시 이어 쓸 것');
+  await editor.getByRole('button', { name: '책갈피 저장', exact: true }).click();
+  await expect(editor).not.toBeVisible();
+  const bookmarks = await (await request.get(`/api/chats/${chat.id}/bookmarks`)).json();
+  expect(bookmarks).toHaveLength(1);
+  expect(bookmarks[0].target.sourceId).toBe(detail.sources[1].id);
+  await page
+    .getByRole('button', { name: '장면 목록 열기', exact: true })
+    .filter({ visible: true })
+    .first()
+    .click();
+  const list = page.getByRole('dialog', { name: '장면 목록', exact: true });
+  await list
+    .locator('summary')
+    .filter({ hasText: /^책갈피$/ })
+    .click();
+  await expect(list.getByRole('region', { name: '이 채팅의 책갈피' })).toContainText(
+    '이 대목에서 다시 이어 쓸 것'
+  );
+  await list.getByRole('button', { name: '비 오는 장면 책갈피 편집', exact: true }).click();
+  const edit = page.getByRole('dialog', { name: '책갈피 편집', exact: true });
+  await edit.getByLabel('책갈피 메모').fill('메모 수정 완료');
+  await edit.getByRole('button', { name: '책갈피 변경 저장', exact: true }).click();
+  await expect(edit).not.toBeVisible();
+  await expect(list).toContainText('메모 수정 완료');
+  await page.screenshot({ path: info.outputPath('bookmarks-desktop.png') });
+  await list.getByRole('button', { name: '비 오는 장면', exact: true }).click();
+  await expect(list).not.toBeVisible();
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page
+    .getByRole('button', { name: '장면 목록 열기', exact: true })
+    .filter({ visible: true })
+    .first()
+    .click();
+  const bookDisclosure = list.locator('summary').filter({ hasText: /^책갈피$/ });
+  if (!(await bookDisclosure.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
+    await bookDisclosure.click();
+  await expect(list.getByRole('button', { name: '비 오는 장면', exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('bookmarks-mobile.png') });
+  await list.getByRole('button', { name: '비 오는 장면', exact: true }).click();
+  await expect(list).not.toBeVisible();
+  expect(new URL(page.url()).searchParams.get('source')).toBe(detail.sources[1].id);
+});

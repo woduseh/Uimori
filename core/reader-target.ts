@@ -6,6 +6,7 @@ export type ReaderTarget = {
   representation: 'original' | 'translation';
   contentHash?: string;
   blockAnchor?: string;
+  offsetRatio?: number;
 };
 
 export function readerTargetUrl(target: ReaderTarget): string {
@@ -17,6 +18,7 @@ export function readerTargetUrl(target: ReaderTarget): string {
   });
   if (target.blockAnchor) params.set('anchor', target.blockAnchor);
   if (target.contentHash) params.set('contentHash', target.contentHash);
+  if (target.offsetRatio !== undefined) params.set('position', String(target.offsetRatio));
   return `?${params}`;
 }
 
@@ -30,6 +32,12 @@ export function readerTargetFromUrl(search: string): ReaderTarget | null {
     sourceId,
     branchId: params.get('branch') || `main:${chatId}`,
     representation: params.get('mode') === 'translation' ? 'translation' : 'original',
+    ...(params.has('position') &&
+    Number.isFinite(Number(params.get('position'))) &&
+    Number(params.get('position')) >= 0 &&
+    Number(params.get('position')) <= 1
+      ? { offsetRatio: Number(params.get('position')) }
+      : {}),
     ...(params.get('anchor') ? { blockAnchor: params.get('anchor')! } : {}),
     ...(params.get('contentHash') ? { contentHash: params.get('contentHash')! } : {}),
   };

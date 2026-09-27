@@ -1,3 +1,5 @@
+import { BookmarkButton } from './Bookmarks.js';
+import { captureReaderLocation } from './useReadingSync.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ThemeFrame } from './ThemeFrame.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
@@ -720,6 +722,30 @@ function SourceReaderContent({
             className="scene-action"
             disabled={!!editor || !!pending}
             onClick={(event) => openEditor(mode, event.currentTarget)}
+          />
+          <BookmarkButton
+            title={sceneNumber ? `장면 ${sceneNumber}` : '첫 메시지'}
+            disabled={!!editor || !!pending}
+            capture={() => {
+              const article = container.current;
+              const scrollport = article?.closest<HTMLElement>('[data-reader-scrollport]');
+              if (!article || !scrollport) return null;
+              const target = captureReaderLocation(
+                scrollport,
+                source.chatId,
+                branchId ?? `main:${source.chatId}`,
+                article
+              );
+              return target
+                ? {
+                    target,
+                    quote: (
+                      selectedReaderText(article) ||
+                      (mode === 'translation' ? translationText : source.text)
+                    ).slice(0, 300),
+                  }
+                : null;
+            }}
           />
           <ActionMenu label="장면 작업 메뉴" placement="top">
             {onAskHelper && (
