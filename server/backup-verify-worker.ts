@@ -2,7 +2,7 @@ import { parentPort, workerData } from 'node:worker_threads';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { stat, open } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 
 // Standalone worker: validation and hashing do not block model streaming or cancellation.
 const { path, maxSchema } = workerData as { path: string; maxSchema: number };
@@ -31,10 +31,4 @@ try {
 }
 const hash = createHash('sha256');
 for await (const chunk of createReadStream(path)) hash.update(chunk);
-const file = await open(path, 'r');
-try {
-  await file.sync();
-} finally {
-  await file.close();
-}
 parentPort!.postMessage({ schema, bytes: (await stat(path)).size, sha256: hash.digest('hex') });

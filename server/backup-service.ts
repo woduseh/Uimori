@@ -47,6 +47,16 @@ async function syncDirectory(path: string) {
     await handle.close();
   }
 }
+async function syncFile(path: string) {
+  // Windows requires a writable file handle for FlushFileBuffers/fsync semantics.
+  // Snapshot durability belongs to the creator; the verification worker stays read-only.
+  const handle = await open(path, 'r+');
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
 function verifySnapshot(
   path: string
 ): Promise<Pick<BackupManifest, 'schema' | 'bytes' | 'sha256'>> {
@@ -241,6 +251,7 @@ export class BackupService {
       const path = join(staging, 'uimori.sqlite');
       await createDatabaseSnapshot(this.store, path);
       await chmod(path, 0o600);
+      await syncFile(path);
       const verified = await verifySnapshot(path);
       const manifest: BackupManifest = {
         format: 'uimori-snapshot-v1',
