@@ -158,10 +158,11 @@ for (const [viewportName, viewport] of [
     await dialog.getByRole('button', { name: '시작 페르소나', exact: true }).click();
     const picker = page.getByRole('dialog', { name: '시작 페르소나', exact: true });
     await picker.getByRole('searchbox').fill(personaTitle);
-    await picker
+    const personaChoice = picker
       .getByRole('button')
-      .filter({ has: page.getByText(personaTitle, { exact: true }) })
-      .click();
+      .filter({ has: page.getByText(personaTitle, { exact: true }) });
+    await expect(personaChoice.locator('.content-picker-meta')).toHaveCount(0);
+    await personaChoice.click();
     await dialog.getByText('미리보기', { exact: true }).click();
     const frame = dialog.locator('.risu-message-surface');
     await expect(frame.locator('.risu-message-content')).toContainText(
