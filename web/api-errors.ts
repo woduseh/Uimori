@@ -4,6 +4,10 @@ import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-l
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const messages: Record<string, string> = {
+  PUSH_SETTINGS_CHANGED: '다른 창에서 알림 설정이 바뀌었어요. 연결을 다시 확인한 뒤 변경해 주세요.',
+  SEARCH_CURSOR_STALE: '원고가 변경됐어요. 처음부터 다시 검색해 주세요.',
+  BACKUP_SETTINGS_CHANGED: '다른 창에서 백업 설정이 바뀌었어요. 백업 설정을 다시 열어 주세요.',
+
   INPUT_TRANSLATION_LANGUAGE_INVALID: '입력 번역 언어를 다시 선택해 주세요.',
   INPUT_TRANSLATION_CANCELLED: '입력 번역이 중단됐어요.',
   INPUT_TRANSLATION_TIMEOUT: '입력 번역이 제한 시간 안에 끝나지 않았어요. 다시 시도해 주세요.',

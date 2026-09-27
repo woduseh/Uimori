@@ -40,7 +40,7 @@ npm run dev
 | [서재와 프롬프트](docs/LIBRARY.md) · [항목 삭제](docs/DELETION.md) | 자료 분류·폴더·대표 이미지, 삭제 위치와 참조 보호 |
 | [Risu 원본 가져오기](docs/RISU-IMPORT.md) | `.charx` 카드·모듈·`.risup` 프롬프트 원본, CBS·Lua·정규식·CSS 실행과 지원 범위 |
 | [Risu 자료 내보내기](docs/RISU-EXPORT.md) | 저장한 카드·모듈·프롬프트를 CHARX·RISUM·RISUP으로 내보내기 |
-| [앱 설치](docs/PWA.md) | PWA 설치, 아이콘과 캐시 없는 서비스 워커 |
+| [앱 설치·완료 알림](docs/PWA.md) | PWA 설치, 원고 캐시 없는 서비스 워커, 명시적 기기별 Web Push |
 | [작업실 사용량](docs/USAGE-REPORT.md) | 일별·모델별·용도별 호출·토큰·보고/추정 비용 |
 | [읽기 위치·책갈피](docs/READING-STATE.md) | 기기별 이어 읽기, 책갈피와 개인 백업 |
 | [원고 검색](docs/MANUSCRIPT-SEARCH.md) | 원문·번역·요청의 본문 검색과 장면 이동 |

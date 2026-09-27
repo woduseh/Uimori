@@ -66,6 +66,7 @@
     "dompurify": "3.4.15",
     "fastify": "5.12.3",
     "google-auth-library": "11.0.2",
+    "ipaddr.js": "2.5.0",
     "lucide-react": "1.41.0",
     "markdown-it": "15.0.2",
     "msgpackr": "1.11.8",
@@ -74,7 +75,8 @@
     "sharp": "0.35.4",
     "tiktoken": "1.0.22",
     "undici": "7.29.1",
-    "wasmoon": "1.16.0"
+    "wasmoon": "1.16.0",
+    "web-push": "3.6.7"
   },
   "devDependencies": {
     "@babel/parser": "7.29.9",
@@ -84,6 +86,7 @@
     "@types/node": "26.4.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
+    "@types/web-push": "3.6.4",
     "@vitejs/plugin-react": "6.1.1",
     "typescript": "7.0.2",
     "vite": "8.2.2",

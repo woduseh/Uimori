@@ -1,0 +1,11 @@
+.push-preferences {
+  display: grid;
+  gap: 12px;
+  margin-block: 16px;
+}
+.push-preferences > label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}

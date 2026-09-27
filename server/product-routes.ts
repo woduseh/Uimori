@@ -445,5 +445,5 @@ export function productRoutes(
       .type('application/vnd.sqlite3')
       .send(await databaseBackupStream(store))
   );
-  return { authenticated };
+  return { authenticated, sessionHash: (cookie?: string) => sessions.sessionHash(cookie) };
 }

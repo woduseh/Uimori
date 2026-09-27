@@ -1,3 +1,4 @@
+import { notificationIntent, type NotificationIntent } from '../core/push.js';
 type InstallPrompt = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -47,7 +48,40 @@ export async function promptInstall() {
   // The appinstalled event, not a possibly accepted prompt, confirms installation.
 }
 
+let notificationConsumer: ((intent: NotificationIntent) => void) | null = null;
+let pendingNotification: NotificationIntent | null = null;
+export function subscribeNotificationNavigation(consumer: (intent: NotificationIntent) => void) {
+  notificationConsumer = consumer;
+  if (pendingNotification) {
+    const pending = pendingNotification;
+    queueMicrotask(() => {
+      if (notificationConsumer === consumer && pendingNotification === pending) {
+        pendingNotification = null;
+        consumer(pending);
+      }
+    });
+  }
+  return () => {
+    if (notificationConsumer === consumer) notificationConsumer = null;
+  };
+}
+
 export function startPwa() {
+  if ('serviceWorker' in navigator)
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (!event.source || !('scriptURL' in event.source)) return;
+      const source = new URL(event.source.scriptURL);
+      if (
+        source.origin !== location.origin ||
+        source.pathname !== '/sw.js' ||
+        event.data?.type !== 'uimori:notification-open'
+      )
+        return;
+      const intent = notificationIntent(event.data.payload);
+      if (!intent) return;
+      if (notificationConsumer) notificationConsumer(intent);
+      else pendingNotification = intent;
+    });
   const standalone = matchMedia('(display-mode: standalone)');
   const installed = () =>
     standalone.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;

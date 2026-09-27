@@ -13,3 +13,39 @@ manifest의 앱 ID·시작 주소·scope는 `/`로 고정하고 개인 채팅·�
 검증: `tests/pwa.test.ts`(manifest·PNG·서비스워커 캐시/요청 비개입·정적 자원/인증), `npm run verify:personal-features`(실제 서비스워커 등록, 설치 버튼의 명시적 조작, 알림 권한 자동 요청 없음, 단절/재연결과 CacheStorage 비사용). 설치 대화상자의 사용자 수락을 모사한 검증은 실제 휴대폰 설치 검증을 대신하지 않아요.
 
 참고: [MDN 설치 조건](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable), [명시적 설치 UI](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt), [WebKit 홈 화면 앱](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/).
+
+## 작업 완료 알림
+
+**설정 → 일반 → 작업 완료 알림 → 이 기기에서 알림 받기**를 직접 눌러 켜요. 최초 기본값은 꺼짐이며, 켤 때 본문 생성 완료와 확인이 필요한 실패를 선택해요. 번역·삽화 알림과 채팅 제목 표시는 기본으로 꺼져 있어요. 원고 문장·이미지 미리보기·도구 결과는 Push payload에 넣지 않아요. 본문 완료 알림은 본문 저장 완료이지 번역·삽화까지 모두 끝났다는 뜻은 아니에요. 직접 취소·수동 원문/번역 저장·과거 자료 가져오기와 내부 도구 호출은 새 생성 완료로 알리지 않아요.
+
+Web Push는 **접속 토큰으로 로그인한 HTTPS 개인 서버**에서 제공해요. 로컬 무인증 모드에서도 PWA 설치는 가능하지만 원격 알림은 활성화하지 않아요. 브라우저 권한은 사용자 클릭 안에서만 요청하고 재방문·새로고침·GET 조회가 자동 구독하거나 다시 허락을 묻지 않아요. 권한을 거절한 경우 브라우저 사이트 설정에서 직접 바꿔요. iPhone·iPad는 지원 OS의 홈 화면 웹앱에서 확인해요.
+
+브라우저 Push 중계(지원되는 FCM/Mozilla/Apple/Windows Push)를 사용하며 자체 중계 서버·외부 큐·클라우드 계정을 새로 만들지 않아요. VAPID 키는 처음 명시적으로 준비할 때 DB에 한 번 만들고 재사용해요. 발송은 Web Push 표준의 암호화된 payload와 VAPID 인증을 사용해요. 중계 서비스는 발송 시간·크기 등의 전송 메타데이터를 볼 수 있으므로 완전히 서버 안에서만 처리되는 기능은 아니에요.
+
+### 완료와 발송은 분리돼요
+
+실제 작업 종료 event가 저장되는 트랜잭션에서 구독별 작은 발송 대기열을 남겨요. 이전 화면 조회·SSE 재접속·색인·사용량 조회로 알림을 다시 만들지 않아요. 한 프로세스가 최대 4개씩 처리하고, 보내기 직전에 현재 로그인과 선택 항목을 확인해요. 기본 알림은 `Uimori · 본문 생성이 완료됐어요`처럼 일반 문구만 보여요. 제목을 켠 경우에만 당시의 채팅 제목을 읽어 전송하고, 대기열에 제목·원고를 복사하지 않아요.
+
+중계 요청의 전체 제한은 10초이고 일시적 오류·429·5xx는 같은 이벤트를 최대 3회 시도해요. 대기 알림은 2시간 후 만료하고 테스트 알림은 2분만 유효해요. 오래된 작업을 무제한 재시도하지 않아요. 중계가 폐기된 구독을 404/410으로 응답하면 해당 구독을 제거해요. 발송 실패는 모델 재실행·번역 재생성·저장 취소를 만들지 않아요. 알림의 기준은 앱에 저장된 작업 상태예요.
+
+정확히 한 번 전달이나 OS의 즉시 수신을 보장하지 않아요. 네트워크 결과가 불확실한 재시도는 같은 이벤트 키·notification tag로 중복 표시를 완화해요. 서버 재시작은 이미 저장된 미발송 항목만 재개하고 과거 작업 전체를 다시 훑어 보내지 않아요. 정상적으로 종료된 발송 기록은 7일 후 정리해요.
+
+### 로그인과 편집 보호
+
+기기 식별자만으로 구독 권한을 주지 않고 **실제 access session**에 연결해요. 로그아웃과 접속 토큰 변경은 연결된 구독·대기열을 함께 해제해요. 알림 끄기는 서버 발송 중지부터 확정하며 브라우저 unsubscribe가 실패해도 서버 알림을 다시 켜지 않아요. 이미 중계로 전달된 알림을 취소하거나 OS 알림함에서 회수할 수는 없어요.
+
+알림을 누르면 같은 서버의 해당 채팅·장면·원문/번역으로 이동해요. 열린 창이 있으면 새로고침하지 않고 기존 앱에 이동 의도만 전달해요. 원고·설정 편집 중이라면 먼저 안내하고 편집을 마친 뒤 이동하게 해요. 다른 창이 없으면 새 창에서 기존 로그인 흐름을 사용해요. 알림 데이터가 제공한 임의 외부 URL을 열지 않아요.
+
+DB 백업에는 VAPID 비밀 키와 구독 capability도 포함되므로 비공개로 보관해요. 다른 HTTPS origin으로 복원하면 기존 origin의 구독은 정상 서버 시작 시 제거해요. 오래된 전체 DB를 복원하면 과거 로그인 상태도 복원될 수 있으므로 기존 로그아웃·권한 해제를 계속 유지해야 할 때는 접속 토큰을 변경하세요.
+
+### 검증 범위
+
+`tests/push-service.test.ts`는 실제 SQLite의 종료 event/원자적 큐·중복 방지·이전 작업 비재생·기본 개인정보 제외·현재 설정·기한/재시도·로그아웃/토큰 교체·다른 origin 복원을 검증해요. HTTPS 공개 모드의 실제 Fastify 인증·유지보수 API도 검사하고, 발송만 주입된 합성 sender로 처리해요.
+
+`tests/push-transport.test.ts`는 실제 Web Push 라이브러리의 암호화/VAPID 요청, key/endpoint/공용 주소 검증과 실제 service-worker 코드의 표시·기존 창 포커스·외부 URL 차단을 검사해요. 전송은 공개 DNS 주소로 고정하고 TLS 검증·응답 제한·리다이렉트 금지를 적용해요. 지원되지 않는 Push relay가 필요한 브라우저는 범위를 검토한 뒤 추가해야 해요.
+
+`npm run verify:personal-features`의 알림 UI 시나리오는 브라우저 권한/PushManager와 중계 API 응답을 합성해 명시 동의·설정 저장 실패·서버 해제·장면 이동·편집 보존을 검사해요. 서비스워커 자체는 실제 브라우저에서 등록해요. **물리적 휴대폰의 설치·잠금 화면 수신·절전/강제 종료 뒤 수신과 실 Push 중계 전달은 배포 후 별도 확인이 필요해요.** 테스트에서 외부 모델이나 실제 Push 중계를 호출하지 않아요.
+
+API: `GET /api/push?clientId=...`, `POST /api/push/prepare`, `POST/PUT/DELETE /api/push/subscription`, `POST /api/push/test`. 구독 수정은 기존 개정을 확인해요. GET과 구독 응답은 공개 VAPID 키·기기 상태·선택 항목만 반환하며 비밀 키·endpoint·암호화 capability는 반환하지 않아요.
+
+참고: [Web Push 암호화·VAPID 구현](https://github.com/web-push-libs/web-push), [WebKit의 명시적 동의와 홈 화면 Push](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/), [Mozilla Push 서비스](https://mozilla-push-service.readthedocs.io/en/latest/http.html).

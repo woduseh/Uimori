@@ -123,7 +123,7 @@ test('daily Korea time, stale settings and downtime catch-up do not create a bur
   });
   expect(() =>
     service.update({ expectedRevision: 0, enabled: false, hour: 3, minute: 0, retain: 7 })
-  ).toThrow('다른 창');
+  ).toThrow('BACKUP_SETTINGS_CHANGED');
   const future = new Date(Date.parse(saved.nextRunAt!) + 4 * 86400_000);
   service.tick(future);
   service.tick(future);

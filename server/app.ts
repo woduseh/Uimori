@@ -1,3 +1,5 @@
+import { PushService, pushRoutes } from './push-service.js';
+import type { PushSender } from './push-transport.js';
 import { basename } from 'node:path';
 import { usageRoutes } from './usage-report.js';
 import { readingStateRoutes } from './reading-state.js';
@@ -91,6 +93,7 @@ import type { RunSnapshot } from '../core/types.js';
 export type AppOptions = {
   dbPath: string;
   backupDirectory?: string;
+  pushSender?: PushSender;
   buildId: string;
   instanceId?: string;
   testMode?: boolean;
@@ -574,6 +577,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             : 'Request failed',
     });
   });
+  let pushService: PushService | undefined;
   const session = productRoutes(app, store, {
     maintenance: () => maintenanceStatus(store, forcedClosed),
     credentials,
@@ -592,9 +596,17 @@ export async function createApp(options: AppOptions): Promise<App> {
       subscribers.delete(chatId);
     },
     onAuthChanged: () => {
+      pushService?.revokeInactive();
       for (const chatId of subscribers.keys()) publish(chatId);
     },
   });
+  pushService = new PushService(store, {
+    origin: network.publicOrigin,
+    sessionHash: session.sessionHash,
+    canSend: () => admitted(),
+    sender: options.pushSender,
+  });
+  pushRoutes(app, pushService);
   const backups = new BackupService(store, options.buildId, options.backupDirectory, () =>
     admitted()
   );
@@ -1141,6 +1153,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   }
   app.addHook('preClose', async () => {
     stopping.abort(new Error('Server stopping'));
+    await pushService?.close();
     await backups.close();
     await manuscriptSearch.close();
     await codex.close();
@@ -1165,6 +1178,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   }
   app.addHook('onListen', async () => {
     if (!forcedClosed && !options.testMode) backups.listen();
+    if (!forcedClosed) pushService?.listen();
     if (!forcedClosed) manuscriptSearch.listen();
     for (const runId of recoveredRuns) execute(runId, true);
     pumpJobs();
