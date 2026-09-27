@@ -1,3 +1,4 @@
+import { BackupService, backupRoutes } from './backup-service.js';
 import { illustrationPresetRoutes } from './illustration-presets.js';
 import { normalizeChatSettings } from '../core/chat-settings.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -85,6 +86,7 @@ import type { RunSnapshot } from '../core/types.js';
 
 export type AppOptions = {
   dbPath: string;
+  backupDirectory?: string;
   buildId: string;
   instanceId?: string;
   testMode?: boolean;
@@ -589,6 +591,10 @@ export async function createApp(options: AppOptions): Promise<App> {
       for (const chatId of subscribers.keys()) publish(chatId);
     },
   });
+  const backups = new BackupService(store, options.buildId, options.backupDirectory, () =>
+    admitted()
+  );
+  backupRoutes(app, backups);
   readerRoutes(app, store);
   helperRoutes(app, helper);
   chatOptionRoutes(app, store);
@@ -1117,6 +1123,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   }
   app.addHook('preClose', async () => {
     stopping.abort(new Error('Server stopping'));
+    await backups.close();
     await codex.close();
     for (const listeners of subscribers.values())
       for (const response of listeners.keys()) response.end();
@@ -1138,6 +1145,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     flushPendingImageCleanup(store.db);
   }
   app.addHook('onListen', async () => {
+    if (!forcedClosed && !options.testMode) backups.listen();
     for (const runId of recoveredRuns) execute(runId, true);
     pumpJobs();
     pumpIllustrations();
