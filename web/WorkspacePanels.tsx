@@ -1,3 +1,4 @@
+import { UsagePanel } from './UsagePanel.js';
 import { ThemeSettings } from './ThemeSettings.js';
 import { Palette } from 'lucide-react';
 import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
@@ -304,6 +305,7 @@ export function AppSettingsPanel({
     { key: 'lore', label: '로어 문맥', icon: LibraryIcon },
     { key: 'agents', label: 'Codex 연결', icon: AgentIcon },
     { key: 'illustrations', label: '삽화', icon: IllustrationIcon },
+    { key: 'usage', label: '사용량', icon: DataIcon },
     { key: 'data', label: '데이터 관리', icon: DataIcon },
     { key: 'security', label: '접근 보안', icon: SecurityIcon },
     { key: 'about', label: '앱 정보·라이선스', icon: Info },
@@ -509,6 +511,7 @@ export function AppSettingsPanel({
                       </small>
                     </section>
                   )}
+                  {key === 'usage' && <UsagePanel connections={state.library?.connections} />}
                   {key === 'models' && state.library && (
                     <ModelWorkspaceEditor
                       library={state.library}

@@ -1,3 +1,4 @@
+import { detachAttemptUsage } from './usage-accounting.js';
 import { removeIllustrationPresetScope } from './illustration-presets.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { HttpError, fields, record } from './request-validation.js';
@@ -28,7 +29,6 @@ const chatTables = [
   'illustration_images',
   'illustration_jobs',
   'illustration_references',
-  'attempts',
   'jobs',
   'sources',
   'runs',
@@ -41,7 +41,7 @@ export function chatDeletionImpact(store: Store, chatId: string) {
   return {
     request: {},
     description:
-      '이 채팅의 원문·번역·메모·도우미와 작업 기록을 삭제해요. 독립 사본과 공통 자료는 유지돼요.',
+      '이 채팅의 원문·번역·메모·도우미와 작업 기록을 삭제해요. 독립 사본과 공통 자료는 유지돼요. 사용량 합계는 원문·요청 내용 없이 유지해요.',
   };
 }
 
@@ -117,6 +117,13 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
         'DELETE FROM context_job_attempts WHERE job_id IN (SELECT id FROM context_jobs WHERE chat_id=?)'
       )
       .run(chatId);
+    detachAttemptUsage(
+      store.db,
+      store.db
+        .prepare('SELECT id FROM attempts WHERE chat_id=?')
+        .all(chatId)
+        .map((row) => String(row.id))
+    );
     for (const table of chatTables)
       store.db.prepare(`DELETE FROM ${table} WHERE chat_id=?`).run(chatId);
     removeIllustrationPresetScope(store, 'chat', chatId);
