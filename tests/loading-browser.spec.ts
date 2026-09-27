@@ -153,7 +153,15 @@ test('LOADUI06 scene navigator respects focus and visibility settings across des
   const ids = seeded.sources.map((source) => source.id);
   const writes: string[] = [];
   page.on('request', (request) => {
-    if (request.url().includes('/api/') && !['GET', 'HEAD'].includes(request.method()))
+    const path = new URL(request.url()).pathname;
+    // Scene navigation now persists a device reading checkpoint. This case still owns
+    // the stronger contract that navigation/focus controls never mutate authored or
+    // execution data.
+    if (
+      path.includes('/api/') &&
+      !path.endsWith('/reading-position') &&
+      !['GET', 'HEAD'].includes(request.method())
+    )
       writes.push(`${request.method()} ${request.url()}`);
   });
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });

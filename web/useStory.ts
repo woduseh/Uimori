@@ -30,6 +30,16 @@ import {
 } from './reader-navigation-scroll.js';
 
 const lastWorkspaceKey = 'uimori:last-workspace';
+function semanticReaderTarget(search: string): ReaderTarget | null {
+  const params = new URLSearchParams(search);
+  // A bare ?source= URL chooses the reader page and must still allow this browser's
+  // finer sessionStorage position to win on reload. Search/bookmark/push targets carry
+  // semantic location metadata through readerTargetUrl(), including an explicit mode.
+  return ['mode', 'anchor', 'contentHash', 'position'].some((key) => params.has(key))
+    ? readerTargetFromUrl(search)
+    : null;
+}
+
 function initialView(restore = false) {
   const params = new URLSearchParams(location.search);
   let chat = params.get('chat') || '';
@@ -130,7 +140,7 @@ export function useStory() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [readerTarget, setReaderTarget] = useState<ReaderTarget | null>(() =>
-    readerTargetFromUrl(location.search)
+    semanticReaderTarget(location.search)
   );
   const [loreResetDraft, setLoreResetDraft] = useState(false);
   const [submitting, setSubmitting] = useState<string[]>([]);
@@ -799,7 +809,7 @@ export function useStory() {
     const onPop = () => {
       savePosition();
       rememberCursor();
-      setReaderTarget(readerTargetFromUrl(location.search));
+      setReaderTarget(semanticReaderTarget(location.search));
       navigate({ kind: 'restore', view: initialView() });
     };
     return subscribeAppHistory(onPop);
