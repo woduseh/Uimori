@@ -87,6 +87,9 @@ test('preserves ordered logical roles and explicit empty instructions while reje
   expect(input.taskContract).toBe('');
   expect(input.allowedTools).toEqual(r.stable.tools);
   expect(input.orderedMessages).toEqual(r.prompt.messages);
+  expect(input.outputTokenBudget).toBe(1000);
+  expect(input).not.toHaveProperty('outputTokenTarget');
+  expect(built.developerInstructions).toContain('soft capacity budget');
   r.prompt.messages[2].completion = 'prefill';
   expect(() => buildCodexTurn(r)).toThrow('CODEX_PROMPT_PREFILL_UNSUPPORTED');
   r.prompt.messages[2].completion = 'complete';
