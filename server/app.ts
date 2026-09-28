@@ -80,6 +80,7 @@ import { createPackageStart } from './package-start.js';
 import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
 import { VertexCredentialStore } from './vertex-credentials.js';
 import { JevCredentialStore } from './jev-credentials.js';
+import { codexContentWarningRoutes } from './codex-content-warning.js';
 import { jevProviderRoutes } from './jev-provider.js';
 import {
   CodexRuntime,
@@ -797,6 +798,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     authenticated: session.authenticated,
   });
   agentRuntimeRoutes(app, codex);
+  codexContentWarningRoutes(app, store, jevCredentials, stopping.signal);
   jevProviderRoutes(app, store, jevCredentials, {
     signal: stopping.signal,
     track,

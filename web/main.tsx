@@ -67,6 +67,7 @@ import { TurnActivity } from './TurnActivity.js';
 import { SessionGate } from './SessionGate.js';
 import { MaintenanceBanner } from './MaintenanceBanner.js';
 import { Dialog } from './Dialog.js';
+import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { BotNavigation, NavigationQuickActions, type ChatFolder } from './BotTreeNavigation.js';
 import { completePendingStoryProfile } from './pendingStory.js';
@@ -1615,6 +1616,8 @@ function App() {
           setPanel('settings');
         }}
       />
+      <CodexContentWarningDialog gate={s.codexWarning} />
+      <CodexContentWarningDialog gate={s.inputTranslation.codexWarning} />
       <Dialog
         open={!!pendingNavigation}
         title="편집 중인 자료"
