@@ -13,7 +13,7 @@ import type {
   ProviderUsage,
 } from './transport.js';
 import { nativeHostInstruction, planNativeMessages } from './provider-messages.js';
-import { validateModelOptions } from './model-capabilities.js';
+import { modelCapability, validateModelOptions } from './model-capabilities.js';
 import { planProviderCache } from './provider-cache.js';
 import { ProviderOptionsError, validateProviderOptions } from './provider-options.js';
 
@@ -384,6 +384,14 @@ export const openAIProtocol = {
 export function encodeResponses(request: ProviderRequest): { body: Json; context: OpenAITurn } {
   const prepared = prepare(request, 'openai-responses-turn-v1', 'openai-responses-v1');
   const { generation, aliases, schema, previous, fresh, plan, bootstrap } = prepared;
+  const cache = plan ? undefined : planProviderCache(request, 'openai-responses-v1');
+  const helperCachePoint =
+    request.role === 'helper' &&
+    generation?.cacheMode === 'automatic' &&
+    modelCapability('openai-responses-v1', request.modelId)?.cacheModes?.includes('explicit')
+      ? cache?.breakpoint
+      : undefined;
+  const requestLabel = 'Request data (JSON):\n';
   const bootstrapInput: Json[] = [];
   for (const item of bootstrap as Record<string, Json>[]) {
     bootstrapInput.push(
@@ -420,9 +428,20 @@ export function encodeResponses(request: ProviderRequest): { body: Json; context
               {
                 role: 'user',
                 content: [
+                  // Preserve a reusable tools/instructions prefix before the changing task data.
+                  ...(helperCachePoint
+                    ? [
+                        {
+                          type: 'input_text',
+                          text: requestLabel,
+                          [helperCachePoint.field]: helperCachePoint.value,
+                        },
+                      ]
+                    : []),
                   {
                     type: 'input_text',
-                    text: 'Request data (JSON):\n' + JSON.stringify(prepared.wireInput),
+                    text:
+                      (helperCachePoint ? '' : requestLabel) + JSON.stringify(prepared.wireInput),
                   },
                 ],
               },
@@ -439,7 +458,7 @@ export function encodeResponses(request: ProviderRequest): { body: Json; context
       ? { format: { type: 'json_schema', name: 'translation_result', strict: true, schema } }
       : {}),
   };
-  const cacheOptions = plan?.options ?? planProviderCache(request, 'openai-responses-v1').options;
+  const cacheOptions = plan?.options ?? cache?.options;
   const body: Json = {
     model: request.modelId,
     instructions: prepared.instructions,
