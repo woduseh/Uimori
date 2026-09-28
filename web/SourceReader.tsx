@@ -27,6 +27,8 @@ import { IconButton } from './IconButton.js';
 import { CopyIcon, EditIcon, IllustrationIcon, ImagesIcon, RefreshIcon } from './ui-icons.js';
 import { GitFork, Info, MessageCircleQuestion, ReceiptText, Save, X } from 'lucide-react';
 import { Dialog } from './Dialog.js';
+import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
+import { useCodexContentWarning } from './useCodexContentWarning.js';
 
 import { PackagePresentationIssues, usePackagePresentation } from './PackagePresentation.js';
 import './source-edit.css';
@@ -160,6 +162,7 @@ function SourceReaderContent({
     },
     [onEditingChange, source.id]
   );
+  const codexWarning = useCodexContentWarning();
   const mounted = useRef(true);
   useLayoutEffect(() => {
     mounted.current = true;
@@ -406,9 +409,18 @@ function SourceReaderContent({
     }
   };
   const viewTranslation = () => {
-    switchMode('translation');
-    if (validTranslation || (translation && activeJob(translation))) return;
+    if (validTranslation || (translation && activeJob(translation))) {
+      switchMode('translation');
+      return;
+    }
     void action('translation', async () => {
+      const proceed = await codexWarning.check(
+        `/sources/${source.id}/codex-content-preflight`,
+        {},
+        'translation'
+      );
+      if (!proceed || !mounted.current) return;
+      switchMode('translation');
       await api(`/sources/${source.id}/translation`, {});
       await refresh();
     });
@@ -471,6 +483,12 @@ function SourceReaderContent({
   // and the turn's task panel cancels a running translation. No extra confirmation step.
   const retranslate = () => {
     void action('translation', async () => {
+      const proceed = await codexWarning.check(
+        `/sources/${source.id}/codex-content-preflight`,
+        {},
+        'translation'
+      );
+      if (!proceed || !mounted.current) return;
       await api(`/sources/${source.id}/retranslate`, {});
       switchMode('translation');
       await refresh();
@@ -497,6 +515,7 @@ function SourceReaderContent({
       }
       data-uimori-part="scene"
     >
+      <CodexContentWarningDialog gate={codexWarning} />
       {latest && projected?.format === 'risu-html' && (
         <RisuInteractionDialog chatId={source.chatId} onError={onError} />
       )}

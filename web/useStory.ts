@@ -22,6 +22,7 @@ import { api, ApiError, definiteRejection, libraryChangedKey } from './api.js';
 import { requestChatFork } from './fork-request.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useInputTranslation } from './useInputTranslation.js';
+import { useCodexContentWarning } from './useCodexContentWarning.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { refValue } from './content-ref.js';
 import {
@@ -140,12 +141,15 @@ export function useStory() {
     semanticReaderTarget(location.search)
   );
   const [loreResetDraft, setLoreResetDraft] = useState(false);
+  const loreResetDraftRef = useRef(loreResetDraft);
+  loreResetDraftRef.current = loreResetDraft;
   const [submitting, setSubmitting] = useState<string[]>([]);
   const submitLocks = useRef(new Set<string>());
   const [requestActivities, setRequestActivities] = useState<Record<string, RequestActivity>>({});
   const [connected, setConnected] = useState(false);
   const [profileDirty, setProfileDirty] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
+  const codexWarning = useCodexContentWarning();
   useEffect(() => {
     if (destination === 'story' && (!selected || !detail)) return;
     try {
@@ -821,6 +825,25 @@ export function useStory() {
       expectedSettingsRevision: chat.settingsRevision,
       ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}),
     };
+    if (!previous && !payload.judgmentRecovery) {
+      const proceed = await codexWarning.check(
+        `/chats/${chat.id}/codex-content-preflight`,
+        {
+          role: 'main',
+          text: payload.request,
+          ...(payload.retryOf ? { retryRunId: payload.retryOf } : {}),
+        },
+        'main'
+      );
+      if (!proceed) return false;
+      if (
+        currentView.current !== sentView ||
+        navigation.current.epoch !== sentEpoch ||
+        (!retryRun && draftIdentity.current.text !== payload.request) ||
+        (!retryRun && loreResetDraftRef.current !== (payload.loreContextReset === true))
+      )
+        return false;
+    }
     const preserveDraft = !!retryRun || previous?.record.preserveDraft === true;
     const sentDraft = payload.request;
     const idempotencyKey = previous?.record.id ?? crypto.randomUUID();
@@ -1193,6 +1216,7 @@ export function useStory() {
     libraryError,
     draft,
     inputTranslation,
+    codexWarning,
     error,
     notice,
     connected,

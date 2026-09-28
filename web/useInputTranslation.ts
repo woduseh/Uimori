@@ -5,6 +5,7 @@ import {
   type InputTranslationResult,
 } from '../core/input-translation.js';
 import { api } from './api.js';
+import { useCodexContentWarning } from './useCodexContentWarning.js';
 
 type DraftIdentity = { key: string; epoch: number; revision: number; text: string };
 type Original = { id: string; text: string };
@@ -48,12 +49,15 @@ export function useInputTranslation(options: Options) {
   const current = useRef(options);
   current.current = options;
   const [language, setLanguage] = useState(initialLanguage);
+  const languageRef = useRef(language);
+  languageRef.current = language;
   const [original, setOriginal] = useState<Original | null>(() => readOriginal(options.draftKey));
   const originalRef = useRef({ key: options.draftKey, value: original });
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const pending = useRef<AbortController | null>(null);
+  const codexWarning = useCodexContentWarning();
 
   function cancel() {
     pending.current?.abort();
@@ -87,7 +91,23 @@ export function useInputTranslation(options: Options) {
     if (pending.current || !current.current.available()) return;
     const scope = current.current;
     const captured = scope.readDraft();
+    const selectedLanguage = languageRef.current;
     if (!captured.text.trim() || captured.key !== scope.draftKey) return;
+    const proceed = await codexWarning.check(
+      `/chats/${encodeURIComponent(scope.chatId)}/codex-content-preflight`,
+      { role: 'translation', text: captured.text },
+      'translation'
+    );
+    if (!proceed) return;
+    const latestBeforeSend = current.current.readDraft();
+    if (
+      latestBeforeSend.key !== captured.key ||
+      latestBeforeSend.epoch !== captured.epoch ||
+      latestBeforeSend.revision !== captured.revision ||
+      latestBeforeSend.text !== captured.text ||
+      languageRef.current !== selectedLanguage
+    )
+      return;
     const controller = new AbortController();
     pending.current = controller;
     setBusy(true);
@@ -96,7 +116,7 @@ export function useInputTranslation(options: Options) {
     try {
       const result = await api<InputTranslationResult>(
         `/chats/${encodeURIComponent(scope.chatId)}/input-translation`,
-        { text: captured.text, targetLanguage: language },
+        { text: captured.text, targetLanguage: selectedLanguage },
         'POST',
         controller.signal
       );
@@ -190,6 +210,7 @@ export function useInputTranslation(options: Options) {
     dismissCandidate: () => setCandidate(null),
     beginSend,
     accepted,
+    codexWarning,
   };
 }
 export type InputTranslationState = ReturnType<typeof useInputTranslation>;
