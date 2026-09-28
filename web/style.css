@@ -1559,7 +1559,15 @@ input[type="checkbox"] {
   border-right: 1px solid var(--line);
   overflow: auto;
 }
-.settings-navigation > button {
+.settings-search {
+  width: 100%;
+  margin-bottom: 14px;
+}
+.settings-navigation-list[hidden] {
+  display: none;
+}
+.settings-navigation-list > button,
+.settings-search-results > button {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1574,8 +1582,20 @@ input[type="checkbox"] {
   text-align: left;
   font-weight: 500;
 }
+.settings-search-results > button {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.settings-search-results small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.settings-search-results > p {
+  padding: 10px 14px;
+}
 @media (hover: hover) {
-  .settings-navigation > button:hover {
+  .settings-navigation-list > button:hover,
+  .settings-search-results > button:hover {
     background: var(--panel);
     color: var(--text);
   }
@@ -1640,7 +1660,8 @@ input[type="checkbox"] {
     border-right: 0;
     background: var(--panel);
   }
-  .settings-navigation > button {
+  .settings-navigation-list > button,
+  .settings-search-results > button {
     min-height: 56px;
     width: 100%;
     font-size: 16px;

@@ -252,6 +252,61 @@ test('SCUI01 settings list and details adapt at six widths with no overflow', as
   expect(errors).toEqual([]);
 });
 
+test('SCUISEARCH settings search opens real destinations without losing an unsaved provider draft', async ({
+  page,
+}, info) => {
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '프로바이더·모델');
+    await startProviderConnection(page);
+    await page.getByRole('button', { name: /OpenAI · Responses/ }).click();
+    const dialog = page.getByRole('dialog', { name: '설정', exact: true });
+    const name = page
+      .getByRole('form', { name: '프로바이더 편집 양식' })
+      .getByLabel('프로바이더 이름', { exact: true });
+    await name.fill('검색해도 남는 연결 초안');
+    if (width <= 760)
+      await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
+
+    const search = dialog.getByRole('searchbox', { name: '설정 검색', exact: true });
+    await search.fill('백업');
+    await expect(
+      dialog.locator('.settings-search-results').getByRole('button', { name: /백업·복원/ })
+    ).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`settings-search-${width}.png`) });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true
+    );
+    await search.fill('없는 설정 이름');
+    await expect(dialog.locator('.settings-search-results').getByRole('status')).toHaveText(
+      '검색 결과가 없어요.'
+    );
+    await search.fill('글자 크기');
+    await dialog
+      .locator('.settings-search-results')
+      .getByRole('button', { name: /원고 읽기/ })
+      .click();
+    await expect(dialog.locator('.settings-page[data-settings-section="general"]')).toBeVisible();
+    await expect(dialog.locator('[id$="-general-reading"]')).toBeFocused();
+    await selectSettingsSection(page, '프로바이더·모델');
+    await expect(name).toHaveValue('검색해도 남는 연결 초안');
+    if (width <= 760) {
+      await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
+      await expect(search).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true
+      );
+    }
+    await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
+    await page
+      .getByRole('alertdialog', { name: '미저장 설정 확인', exact: true })
+      .getByRole('button', { name: '초안 버리고 닫기', exact: true })
+      .click();
+  }
+});
+
 test('SCUI05 global lore defaults are saved and copied only to new chats', async ({
   page,
   request,
