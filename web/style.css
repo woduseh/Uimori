@@ -195,6 +195,7 @@ h1,
 h2,
 h3 {
   line-height: 1.45;
+  text-wrap: balance;
 }
 h1 {
   font-size: 24px;
@@ -704,6 +705,7 @@ input[type="checkbox"] {
 }
 .prose p {
   margin: 0 0 var(--reading-paragraph-gap, 1.35em);
+  text-wrap: pretty;
 }
 .prose h1 {
   font-size: 1.35em;
@@ -722,6 +724,7 @@ input[type="checkbox"] {
 .prose h5,
 .prose h6 {
   font-size: 1em;
+  text-wrap: balance;
 }
 .prose ul,
 .prose ol {
@@ -731,12 +734,14 @@ input[type="checkbox"] {
 .prose li {
   padding-left: 0.2em;
   margin: 0.4em 0;
+  text-wrap: pretty;
 }
 .prose blockquote {
   border-left: 3px solid var(--line);
   padding-left: 1em;
   margin: 1.4em 0;
   color: var(--muted);
+  text-wrap: pretty;
 }
 .prose pre {
   background: var(--panel);

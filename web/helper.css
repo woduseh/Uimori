@@ -63,6 +63,12 @@
   overflow-wrap: anywhere;
   line-height: var(--reading-line-height, 1.7);
 }
+.helper-prose :is(h1, h2, h3, h4, h5, h6) {
+  text-wrap: balance;
+}
+.helper-prose :is(p, li, blockquote) {
+  text-wrap: pretty;
+}
 .streaming-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
