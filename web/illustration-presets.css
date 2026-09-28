@@ -165,3 +165,48 @@
   order: 3;
   margin-left: auto;
 }
+
+.illustration-preset-editor textarea {
+  min-width: 0;
+  max-width: 100%;
+  resize: vertical;
+}
+.illustration-preset-editor .illustration-style-guidance {
+  min-height: 200px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.illustration-preset-disclosure {
+  min-width: 0;
+  border-top: 1px solid var(--line);
+}
+.illustration-preset-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 12px;
+  flex-wrap: wrap;
+}
+.illustration-preset-disclosure > summary small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.illustration-preset-help {
+  display: grid;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.illustration-preset-help pre {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}

@@ -200,6 +200,7 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await section.getByLabel('삽화 생성기', { exact: true }).selectOption('comfyui');
   await page.getByRole('button', { name: '새 삽화 프리셋', exact: true }).click();
   const presetEditor = page.getByRole('region', { name: '삽화 프리셋 편집기', exact: true });
+  await presetEditor.locator('summary').filter({ hasText: 'ComfyUI 설정' }).click();
   for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const label of [
