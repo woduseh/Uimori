@@ -128,7 +128,7 @@ test('HSESSION03 a delayed session creation does not replace a later user select
   }
 });
 
-test('HSESSION04 legacy helper input migrates and a later input survives panel and session navigation', async ({
+test('HSESSION04 current helper input survives reload and navigation without reading old local storage', async ({
   page,
   request,
 }) => {
@@ -148,11 +148,14 @@ test('HSESSION04 legacy helper input migrates and a later input survives panel a
   );
   await page.reload();
   await openHelper(page);
-  await expect(input).toHaveValue('이전 저장소의 초안');
-  await expect
-    .poll(() => page.evaluate((id) => localStorage.getItem(`uimori:helper-input:${id}`), first))
-    .toBeNull();
+  await expect(input).toHaveValue('');
+  expect(
+    await page.evaluate((id) => localStorage.getItem(`uimori:helper-input:${id}`), first)
+  ).toBe('이전 저장소의 초안');
   await input.fill('새로 입력한 원고');
+  await page.reload();
+  await openHelper(page);
+  await expect(input).toHaveValue('새로 입력한 원고');
   await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
   await expect(input).toHaveValue('');
   await picker.selectOption(first);

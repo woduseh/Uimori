@@ -105,7 +105,7 @@ Changes limited to Markdown under `docs/`, root README/AGENTS or LICENSE keep th
 
 Node versions in CI follow `.nvmrc`. Standard JSON test reports, file counts and shard times are uploaded for seven days; failures retain synthetic browser traces. Existing Windows test coverage and the separate Linux runtime checks are preserved. Compare comparable CI runs before changing shard counts or claiming a speedup; more machines reduce wall time but can increase total runner minutes.
 
-`npm run test:personal` exercises the personal-workspace contracts. `node --test scripts/transfer-personal-v1.test.mjs` verifies read-only schema-24 extraction after building. The removed transparent snapshot archive has no optimizer or DDL signature check.
+`npm run test:personal` exercises the personal-workspace contracts, including current backup and import behavior.
 
 Self-host checks print bounded named steps and retain failure traces for desktop and mobile contexts. They use disposable synthetic credentials, not production access. Each scenario creates its own required chat/model state and is selectable alone. Filling the composer occurs before session revocation; the subsequent conditional DOM click cannot wait for a composer already removed by the login gate.
 
@@ -144,7 +144,7 @@ Remove-Item Env:UIMORI_BENCHMARK
 
 This selects synthetic 8- and 30-scene workloads with roughly 7,500-token Korean originals and English translations, authored HTML/CSS, a local image and Lua button code. It records one warmup and five repetitions of re-entry, past-page navigation and saved original/translation switches in a desktop browser. Each Playwright JSON report includes the `long-reader-performance` attachment with exact text metrics, click-to-ready times, HTTP resource timings and main-thread long tasks. It verifies unchanged saved data and no new generation requests. The ready boundary is all target text plus visible images and two animation frames, not compositor paint; resource time includes local queue/transport and is not isolated server CPU. Timing values are observations, not pass thresholds. Reading preferences, themes and mobile layouts retain their separate functional browser checks.
 
-`tests/fixtures/personal-schema-13.sql` was captured from `29a9164` and includes a nonstandard singleton scope ID and an unanswered request. `personal-schema-14.sql` captures that data after the real schema-14 runtime migrated it. Migration tests load these old databases rather than relabeling a newly created database. `tests/database-schema.test.ts` and `tests/chat-ownership-migration.test.ts` check preserved user data, request replay, rollback and restart idempotence; `tests/text-retention.test.ts` and `tests/execution-retention.test.ts` check retained messages and execution payloads without a live provider. Chats own their state and head directly; runtime branch identifiers and the branch table are removed.
+`tests/database-schema.test.ts` checks fresh initialization, current DB reopening and refusal of unsupported files without changing their bytes. `tests/text-retention.test.ts` and `tests/execution-retention.test.ts` check retained messages and execution payloads without a live provider. Chats own their state and head directly; runtime branch identifiers and the branch table are removed.
 
 ### Interrupted browser runs
 
@@ -154,7 +154,7 @@ Browser checks use Playwright's live list reporter and a JSON report. If a run i
 
 `core/fixture-provider.ts` exposes explicit fixture behavior separately from product chat settings. Unit tests pass options to `executeFixtureMain` or `MainHooks.fixture`; HTTP scenarios use `app.controls.fixture` or `/api/test/control` with `action: "fixture"`. The controls are exposed only in test mode, captured before execution waits, and never saved in chat settings or provider inputs. Normal generation still requires a configured model. Test settings conflicts with current `maxCalls`/`status`, not mock style fields.
 
-Storage regressions are grouped by their owner: reader projections, chat option receipts, execution retention, text retention, and database migrations. The storage measurement tools use `scripts/synthetic-story.mjs`; the pre-native loading runner has been removed.
+Storage regressions are grouped by their owner: reader projections, chat option receipts, execution retention, text retention, and database initialization. The storage measurement tools use `scripts/synthetic-story.mjs`; the pre-native loading runner has been removed.
 
 ### 개인 작업실 기능의 검증 범위
 

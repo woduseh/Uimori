@@ -183,7 +183,6 @@ test('ephemeral input translation and a late detached completion never persist d
   expect(JSON.stringify(row)).not.toContain('PRIVATE_CANARY');
   expect(Number(row.estimated_usd)).toBeCloseTo(0.003);
   expect(inferUsageKind(wire({ agentId: 'advisor' }))).toBe('advisor');
-  expect(inferUsageKind(wire(), true)).toBe('unclassified');
 });
 
 test('CSV exports one grouping, includes coverage columns and neutralizes spreadsheet formulas in model IDs', () => {

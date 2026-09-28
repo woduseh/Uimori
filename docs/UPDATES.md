@@ -29,7 +29,7 @@ The Oracle runner's `--source-ref` currently accepts a branch, not a release tag
 
 Closing maintenance blocks new writes and worker claims. In-progress work can finish and save its results; reads, login, diagnostics, cancellation, and skipping remain available. Rejected writes return `503 MAINTENANCE_CLOSED`, and the browser retains its drafts.
 
-`UIMORI_MAINTENANCE=1` starts the app with DB admission/migration and reads, but without task recovery or workers. It is not a read-only SQLite open; validate a copy, not the only original DB. This boot mode cannot be reopened through the API. The implementation is in [maintenance.ts](../server/maintenance.ts) and [app.ts](../server/app.ts).
+`UIMORI_MAINTENANCE=1` starts the app with DB admission and reads, but without task recovery or workers. It is not a read-only SQLite open; validate a copy, not the only original DB. This boot mode cannot be reopened through the API. The implementation is in [maintenance.ts](../server/maintenance.ts) and [app.ts](../server/app.ts).
 
 ## Operator CLI
 
@@ -57,7 +57,7 @@ npm run update -- cancel --config .local/update.json --key update-2026-09-19
 
 ## Transition and recovery
 
-Empty and personal-v1 databases are supported. Opening a supported earlier personal-workspace DB upgrades it transactionally to the current schema; preserve its backup before starting the candidate. The supported versions are listed only in [data formats](DATA-MIGRATIONS.md#현재-버전). Other legacy formats still require the separate schema-24-to-personal-v1 transfer tool and a verified new database. The controller does not infer or reset unrelated formats. See [data formats](DATA-MIGRATIONS.md).
+Empty databases and the [current data format](DATA-MIGRATIONS.md#현재-버전) are supported. Older or unrelated formats are refused without changing their data. Keep old snapshots with an application version that supports them; completed one-time conversion tools are no longer included.
 
 The controller prepares the image, closes maintenance, waits for `activeWork` to reach zero, and stops the app. It archives the entire data volume, restores it into a new volume, and starts the candidate with `UIMORI_MAINTENANCE=1`. The candidate command checks for the app's ready event. It then changes `UIMORI_IMAGE` and `UIMORI_DATA_VOLUME` in the environment file, starts the Compose app service, checks `/api/session`, and reopens maintenance. Other environment settings, the previous volume, and the backup remain in place.
 

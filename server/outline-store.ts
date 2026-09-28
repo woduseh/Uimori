@@ -102,8 +102,6 @@ export function initOutlineWorkspace(db: DatabaseSync) {
       node_id TEXT NOT NULL REFERENCES outline_nodes(id) ON DELETE CASCADE,
       plan_hash TEXT NOT NULL, sources TEXT NOT NULL, partial INTEGER NOT NULL, created_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS outline_reviews_node ON outline_reviews(node_id,created_at);
-    INSERT OR IGNORE INTO outline_writings(id,node_id,command_id,created_at)
-      SELECT 'legacy:'||id,id,command_id,updated_at FROM outline_nodes WHERE command_id IS NOT NULL;
   `);
 }
 

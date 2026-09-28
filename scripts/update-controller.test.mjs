@@ -105,7 +105,7 @@ test('a full transition closes the gate, verifies a candidate and reopens once',
   }
 });
 
-test('a candidate that fails its migration probe restores the previous image and reopens', async () => {
+test('a candidate that fails its database probe restores the previous image and reopens', async () => {
   const { config, cleanup } = fixture();
   try {
     const runner = io({ probe: 'Error: DATABASE_INITIALIZATION_FAILED' });

@@ -83,7 +83,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 
 ## 저장과 표시 계약
 
-- 실행 표는 `illustration_settings`, `illustration_references`, `illustration_jobs`, `illustration_images`예요. 프리셋은 공통 `versions`의 `illustration-preset` 자료이고 선택은 `app_metadata`의 `illustration-preset-preferences`예요. 새 테이블을 추가하지 않아요. 이전 전역 그림 지침·워크플로·제외 지침은 첫 실행 시 **기존 삽화 설정** 프리셋으로 한 번 옮기고 기본으로 선택해요. 실행 환경과 기존 작업 입력은 보존하며, 전환은 하나의 트랜잭션이고 재시작으로 중복되지 않아요. [데이터 형식](DATA-MIGRATIONS.md)을 참고해요.
+- 실행 표는 `illustration_settings`, `illustration_references`, `illustration_jobs`, `illustration_images`예요. 프리셋은 공통 `versions`의 `illustration-preset` 자료이고 선택은 `app_metadata`의 `illustration-preset-preferences`예요. 선택을 저장하지 않은 새 작업실은 내장 기본 프리셋을 사용해요. 기존 프리셋·선택과 작업 입력은 유지하며, 부팅 시 옛 설정을 다시 변환하지 않아요. [데이터 형식](DATA-MIGRATIONS.md)을 참고해요.
 - 작업은 `source_revision`과 예약 당시 `source_hash`에 귀속돼요. 원문을 나중에 고쳐도 완료된 삽화는 요청 당시 장면의 것으로 그 응답 아래 남고 **수정 전 원문의 삽화**로 표시해요. 새 본문에 자동으로 다시 붙이지 않아요. 실행 시에는 예약 hash의 원문을 다시 읽어요(`sourceAtHash`).
 - 현재 장면 원문과 카드의 이미지 자료를 삽화 입력으로 사용해요. 원본 텍스트와 hash는 보존해요.
 - 삽화 모델에 보내는 참고 문맥만 장면 8,000·봇 2,000·페르소나 1,000 토큰까지 끝부분을 발췌해요. 로컬 `o200k_base` 추정치이며 생략된 앞부분은 `[Earlier text omitted]`로 표시해요. 원문 저장 한도나 출력 길이 제한이 아니며, 예산에 맞추기 위한 추가 모델 호출은 없어요.

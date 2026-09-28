@@ -926,17 +926,6 @@ function App() {
             </button>
           </aside>
         )}
-        {s.legacyLocalWarning && (
-          <aside className="reading-sync-notice" role="status" aria-label="이전 브라우저 기록">
-            <span>
-              이전 브라우저 기록 {s.legacyLocalWarning.count}개를 옮기지 못했어요. 원문은 그대로
-              보관했어요.
-            </span>
-            <button type="button" onClick={s.legacyLocalWarning.download}>
-              이전 기록 내려받기
-            </button>
-          </aside>
-        )}
         {s.destination === 'library' ? (
           <div className="destination-scroll">
             {libraryTab === 'prompts' ? (

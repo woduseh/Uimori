@@ -93,8 +93,8 @@ npm run release:oracle -- --config .local/oracle-release.json --cleanup-plan
 
 **운영 데이터 볼륨과 fresh 모드의 이전 볼륨은 자동 삭제하지 않아요.** PocketRisu, Tia Workspace, SSH/인증 파일, 개발 브랜치·worktree, 공유 Docker builder 캐시와 서버 전체 네트워크도 이 정리 대상이 아니에요. `docker system prune`, 전역 image/volume/builder prune을 실행하지 않아요.
 
-## 개인 작업실 v1 전환
+## 데이터 호환성과 초기화
 
-일반 업데이트는 운영 데이터 볼륨을 유지하고 앱의 명시적 forward migration만 실행해요. unrelated legacy DB는 자동 초기화하지 않아요. schema 24→개인 작업실 v1은 [별도 사용자 자료 복사 도구](DATA-MIGRATIONS.md)를 사용해요.
+일반 업데이트는 운영 데이터 볼륨을 유지해요. 앱은 [현재 데이터 형식](DATA-MIGRATIONS.md#현재-버전)만 열고 구형 DB는 변경 없이 거절해요. 완료된 일회성 변환 도구는 제공하지 않으며 구형 DB를 자동 초기화하지 않아요.
 
 `--fresh`는 새 볼륨에 기존 `<database>.vertex-credentials`와 `<database>.codex/auth.json`만 복사해요. 새 DB를 격리 부팅한 뒤 persisted maintenance를 닫고 전환하므로 검증 중 쓰기가 열리지 않아요. 이전 볼륨과 배포 전 백업은 보존하고, fresh 롤백은 이전 볼륨으로 돌아가며 새 사용자 자료를 이전 DB에 섞지 않아요.

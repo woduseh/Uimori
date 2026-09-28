@@ -39,7 +39,7 @@ test('current schema initializes and remains readable after an extra query index
     next.close();
   }
 });
-test.each([1, 12, DATABASE_SCHEMA_VERSION + 1, 24])(
+test.each([DATABASE_SCHEMA_VERSION - 1, DATABASE_SCHEMA_VERSION + 1])(
   'unsupported schema %s is refused before changing source bytes',
   (version) => {
     const path = file(),
@@ -53,18 +53,16 @@ test.each([1, 12, DATABASE_SCHEMA_VERSION + 1, 24])(
     expect(readFileSync(path)).toEqual(before);
   }
 );
-test.each([13])(
-  'a different format using supported number %s is refused without writes',
-  (version) => {
-    const path = file(),
-      db = new DatabaseSync(path);
-    db.exec(`CREATE TABLE unrelated(id TEXT); PRAGMA user_version=${version}`);
-    db.close();
-    const before = readFileSync(path);
-    expect(() => new Store(path)).toThrow(`DATABASE_FORMAT_MISMATCH:${version}`);
-    expect(readFileSync(path)).toEqual(before);
-  }
-);
+test('a different format using the current version is refused without writes', () => {
+  const version = DATABASE_SCHEMA_VERSION;
+  const path = file(),
+    db = new DatabaseSync(path);
+  db.exec(`CREATE TABLE unrelated(id TEXT); PRAGMA user_version=${version}`);
+  db.close();
+  const before = readFileSync(path);
+  expect(() => new Store(path)).toThrow(`DATABASE_FORMAT_MISMATCH:${version}`);
+  expect(readFileSync(path)).toEqual(before);
+});
 test('unversioned nonempty databases are not inferred or overwritten', () => {
   const db = new DatabaseSync(file());
   try {

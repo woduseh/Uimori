@@ -31,7 +31,7 @@ const ALWAYS_ADMITTED = new Set([
   '/api/helper/tasks/:id/cancel',
 ]);
 
-/** The schema migration owns the table; a boot only seeds the single row it expects. */
+/** Schema initialization owns the table; each boot ensures its maintenance row exists. */
 export function initMaintenance(store: Store) {
   if (!store.db.prepare('SELECT 1 FROM maintenance WHERE id=1').get())
     store.db

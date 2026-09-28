@@ -370,7 +370,7 @@ class Runner:
                     actual = self.summary["compatibilityProbe"]["database"].pop("columns")
                     self.summary["compatibilityProbe"]["columns"] = validate_columns(self.expected_columns, actual)
                 except Exception as error:
-                    raise RuntimeError(str(error) + " Existing database is incompatible with the candidate image. Use the separate personal-v1 transfer tool for schema 24; --fresh discards all app data/settings/API keys and retains only external login files.") from error
+                    raise RuntimeError(str(error) + " Existing database is incompatible with the candidate image. Preserve the existing volume and inspect the incompatibility before retrying; --fresh discards all app data/settings/API keys and retains only external login files.") from error
         with self.stage("ready-to-switch"):
             self.compose("config", "--quiet", cwd=self.candidate)
             if self.env.read_text() != self.old_env or self.routing() != self.old_routing or self.inspect()["Image"] != self.old_image:
