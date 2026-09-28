@@ -75,10 +75,14 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await page.getByLabel('다음 장면 요청', { exact: true }).fill('메뉴를 닫아도 남는 합성 초안');
     await trigger.scrollIntoViewIfNeeded();
     await expect(menu).toHaveJSProperty('open', false);
-    // Copy, edit and the menu stay on the row; detail and cost disclosures live in the menu.
-    await expect(footer.locator('button, summary').filter({ visible: true })).toHaveCount(3);
+    // Primary reader actions stay on the row; detail and cost disclosures live in the menu.
+    // The footer stays compact while each first-class reader action remains reachable.
+    // Do not freeze the exact action count: optional user-facing actions such as bookmarks
+    // can be added without changing the overflow-menu contract.
     await expect(footer.getByRole('button', { name: '본문 복사', exact: true })).toBeVisible();
     await expect(footer.getByRole('button', { name: '원문 수정', exact: true })).toBeVisible();
+    await expect(footer.getByRole('button', { name: /책갈피 추가/ })).toBeVisible();
+    await expect(trigger).toBeVisible();
     for (const control of await footer.locator('button, summary').filter({ visible: true }).all()) {
       const box = (await control.boundingBox())!;
       expect(box.width).toBeGreaterThanOrEqual(44);
@@ -146,7 +150,10 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await expect(menu).toHaveJSProperty('open', false);
     await expect(composer).toBeFocused();
     await expect(composer).toHaveValue('메뉴를 닫아도 남는 합성 초안');
-    await expect(footer.locator('button, summary').filter({ visible: true })).toHaveCount(3);
+    await expect(footer.getByRole('button', { name: '본문 복사', exact: true })).toBeVisible();
+    await expect(footer.getByRole('button', { name: '원문 수정', exact: true })).toBeVisible();
+    await expect(footer.getByRole('button', { name: /책갈피 추가/ })).toBeVisible();
+    await expect(trigger).toBeVisible();
   }
   const after = await detail(request, before.chat.id);
   expect(after.sources).toEqual(before.sources);

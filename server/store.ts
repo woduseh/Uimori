@@ -1,3 +1,4 @@
+import { enqueueTerminalNotification } from './push-events.js';
 import { initIllustrationPresets } from './illustration-presets.js';
 import { normalizeChatSettings } from '../core/chat-settings.js';
 import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
@@ -92,6 +93,7 @@ export class Store {
   readonly organization: ChatOrganizationStore;
   readonly libraryOrganization: LibraryOrganizationStore;
   private readonly ownership: DatabaseSync;
+  private notificationsReady = false;
   constructor(readonly path: string) {
     mkdirSync(dirname(path), { recursive: true });
     this.path = existsSync(path)
@@ -159,6 +161,7 @@ export class Store {
       // The maintenance row belongs to every boot, not only to a fresh database.
       initIllustrationPresets(this);
       initMaintenance(this);
+      this.notificationsReady = true;
     } catch (error) {
       this.db.close();
       this.ownership.close();
@@ -193,9 +196,17 @@ export class Store {
     }
   }
   event(chatId: string, kind: string, entityId: string) {
-    this.db
-      .prepare('INSERT INTO events(chat_id,kind,entity_id,at) VALUES(?,?,?,?)')
-      .run(chatId, kind, entityId, now());
+    const write = () => {
+      const at = now();
+      this.db
+        .prepare('INSERT INTO events(chat_id,kind,entity_id,at) VALUES(?,?,?,?)')
+        .run(chatId, kind, entityId, at);
+      // Historic migrations do not produce new notifications. Real completion and its
+      // delivery intent share the caller's transaction, or a small standalone one.
+      if (this.notificationsReady) enqueueTerminalNotification(this.db, chatId, kind, entityId, at);
+    };
+    if (this.db.isTransaction) write();
+    else this.transaction(write);
   }
   latestEventSequence(chatId: string): number {
     return Number(

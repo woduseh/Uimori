@@ -1,3 +1,4 @@
+import { detachAttemptUsage, helperUsageKind } from './usage-accounting.js';
 import { releaseCompletedHelperInputs } from './execution-retention.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type {
@@ -184,7 +185,7 @@ export class HelperWorkspace {
       workerActive: false,
       canDelete: activeTasks === 0 && unsettledAttempts === 0,
       description:
-        '이 도우미 대화의 메시지·작업·가정 장면·개인 요약을 삭제해요. 이미 저장한 본편·공통 자료와 다음 요청 옵션은 유지돼요. 진행 중인 작업은 먼저 중지해 주세요.',
+        '이 도우미 대화의 메시지·작업·가정 장면·개인 요약을 삭제해요. 이미 저장한 본편·공통 자료와 다음 요청 옵션은 유지돼요. 사용량 숫자는 내용 없이 유지해요. 진행 중인 작업은 먼저 중지해 주세요.',
     };
   }
   delete(id: string, expected: HelperConversationDeletion['request']) {
@@ -209,11 +210,13 @@ export class HelperWorkspace {
       for (const scopeKey of [`helper:${id}`, ...tasks.map((task) => `artifact:${task.id}`)])
         for (const table of ['context_heads', 'context_checkpoints'])
           this.store.db.prepare(`DELETE FROM ${table} WHERE scope_key=?`).run(scopeKey);
-      this.store.db
+      const attemptIds = this.store.db
         .prepare(
-          'DELETE FROM attempts WHERE id IN (SELECT x.attempt_id FROM helper_task_attempts x JOIN helper_tasks t ON t.id=x.task_id WHERE t.conversation_id=?)'
+          'SELECT x.attempt_id FROM helper_task_attempts x JOIN helper_tasks t ON t.id=x.task_id WHERE t.conversation_id=?'
         )
-        .run(id);
+        .all(id)
+        .map((row) => String(row.attempt_id));
+      detachAttemptUsage(this.store.db, attemptIds);
       this.store.db.prepare('DELETE FROM helper_conversations WHERE id=?').run(id);
       return { deleted: true as const };
     });
@@ -511,7 +514,8 @@ export class HelperWorkspace {
         scope.kind === 'chat' ? scope.chatId : null,
         null,
         null,
-        wire
+        wire,
+        { kind: helperUsageKind(purpose) }
       );
       this.store.db
         .prepare(

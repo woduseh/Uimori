@@ -1,6 +1,13 @@
 export type ReaderNavigationPosition =
   | { kind: 'end' }
-  | { kind: 'source'; element: HTMLElement; anchor?: string; offset?: number };
+  | {
+      kind: 'source';
+      element: HTMLElement;
+      anchor?: string;
+      offset?: number;
+      ratio?: number;
+      fallbackToSource?: boolean;
+    };
 
 /** Keep an explicit navigation target through asynchronous layout, until the user takes over. */
 export function retainReaderNavigation(
@@ -45,19 +52,21 @@ export function retainReaderNavigation(
     if (position.kind === 'end') node.scrollTop = node.scrollHeight;
     else {
       if (!node.contains(position.element)) return stop();
-      const target = position.anchor
+      const anchored = position.anchor
         ? [...position.element.querySelectorAll<HTMLElement>('[data-block-anchor]')].find(
             (item) =>
               item.offsetParent !== null &&
               item.dataset.blockAnchor?.split(' ').includes(position.anchor!)
           )
         : position.element;
+      const target = anchored ?? (position.fallbackToSource ? position.element : undefined);
       // A saved anchor can arrive after the surrounding article during native HTML projection.
       if (!target) return;
       node.scrollTop +=
         target.getBoundingClientRect().top -
         node.getBoundingClientRect().top -
-        (position.offset ?? 0);
+        (position.offset ?? 0) +
+        (anchored ? (position.ratio ?? 0) : 0) * target.getBoundingClientRect().height;
     }
     appliedTop = node.scrollTop;
     onApplied();

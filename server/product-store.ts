@@ -1,3 +1,5 @@
+import { inferUsageKind, usageOnlyWire, usageOnlyResult } from './usage-accounting.js';
+import type { UsageKind } from '../core/usage-report.js';
 import { compareModelDisplayOrder } from '../core/model-order.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { encodedImage, storeImage } from './image-storage.js';
@@ -882,10 +884,12 @@ export class ProductStore {
     chatId: string | null,
     runId: string | null,
     jobId: string | null,
-    request: WireRecord
+    request: WireRecord,
+    accounting?: { kind?: UsageKind; retainContent?: boolean }
   ) {
     const id = randomUUID();
-    const safe = structuredClone(request);
+    const numericOnly = accounting?.retainContent === false;
+    const safe = numericOnly ? usageOnlyWire(request) : structuredClone(request);
     if (
       safe.body &&
       typeof safe.body === 'object' &&
@@ -895,7 +899,7 @@ export class ProductStore {
       safe.body.opaqueState = '[provider continuation withheld]';
     this.db
       .prepare(
-        "INSERT INTO attempts(id,chat_id,run_id,job_id,role,connection_id,model_id,status,request) VALUES(?,?,?,?,?,?,?,'running',?)"
+        "INSERT INTO attempts(id,chat_id,run_id,job_id,role,connection_id,model_id,status,request,started_at,usage_kind,usage_detached) VALUES(?,?,?,?,?,?,?,'running',?,?,?,?)"
       )
       .run(
         id,
@@ -905,7 +909,10 @@ export class ProductStore {
         request.role,
         request.connectionId,
         request.modelId,
-        json(safe)
+        json(safe),
+        new Date().toISOString(),
+        accounting?.kind ?? inferUsageKind(request),
+        numericOnly ? 1 : 0
       );
     return id;
   }
@@ -933,7 +940,7 @@ export class ProductStore {
     return id;
   }
   finishAttempt(id: string, result: ProviderResult) {
-    const row = this.db.prepare('SELECT request FROM attempts WHERE id=?').get(id) as
+    const row = this.db.prepare('SELECT request,usage_detached FROM attempts WHERE id=?').get(id) as
       | Row
       | undefined;
     const request = row ? parse(row.request) : null;
@@ -972,17 +979,20 @@ export class ProductStore {
     };
     this.db
       .prepare(
-        "UPDATE attempts SET status=?,response=?,input_tokens=?,output_tokens=?,cost_usd=?,raw_usage=?,price_revision=?,error=? WHERE id=? AND status='running'"
+        "UPDATE attempts SET status=?,response=?,input_tokens=?,output_tokens=?,cost_usd=?,raw_usage=?,price_revision=?,error=?,estimated_usd=?,estimated_subtotal_usd=?,estimate_status=?,request=CASE WHEN usage_detached=1 THEN '{}' ELSE request END WHERE id=? AND status='running'"
       )
       .run(
         result.status,
-        json(safe),
+        json(row?.usage_detached ? usageOnlyResult(result, estimatedCost) : safe),
         result.usage.inputTokens,
         result.usage.outputTokens,
         result.usage.costUsd,
-        json(result.usage.raw),
-        result.usage.priceRevision,
-        result.error?.code ?? null,
+        row?.usage_detached ? null : json(result.usage.raw),
+        row?.usage_detached ? null : result.usage.priceRevision,
+        row?.usage_detached ? null : (result.error?.code ?? null),
+        estimatedCost.usd,
+        estimatedCost.subtotalUsd,
+        estimatedCost.status,
         id
       );
   }
@@ -996,7 +1006,7 @@ export class ProductStore {
     const id = randomUUID();
     this.db
       .prepare(
-        "INSERT INTO attempts(id,chat_id,run_id,job_id,role,connection_id,model_id,status,request) VALUES(?,?,?,?,?,'local-scripted','deterministic-fixture','mock',?)"
+        "INSERT INTO attempts(id,chat_id,run_id,job_id,role,connection_id,model_id,status,request,is_synthetic) VALUES(?,?,?,?,?,'local-scripted','deterministic-fixture','mock',?,1)"
       )
       .run(id, chatId, runId, jobId, role, json({ mock: true, input }));
     return id;
