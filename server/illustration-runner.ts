@@ -1,4 +1,5 @@
 import { processImage } from './image-processing.js';
+import { readRunSnapshot } from './run-projections.js';
 import {
   executeProvider,
   type ProviderResult,
@@ -182,7 +183,7 @@ export async function runIllustrationJob(
     attempts: [...(job.diagnostic?.attempts ?? [])],
     retries: [...(job.diagnostic?.retries ?? [])],
   };
-  const snapshot = store.run(source.runId).snapshot;
+  const snapshot = readRunSnapshot(store, source.runId);
   const progress = async () => {
     updateIllustrationDiagnostic(store, jobId, generation, owner, diagnostic);
     await hooks.onProgress?.();

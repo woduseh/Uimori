@@ -255,7 +255,7 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
   return (
     <section className="chat-variables" aria-label="카드 변수 편집">
       <header className="chat-variable-heading">
-        <strong>현재 분기</strong>
+        <strong>현재 채팅</strong>
         {view && (
           <small>
             재정의 {Object.keys(view.values).length}개 · 개정 {view.revision}
@@ -271,7 +271,7 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
         </button>
       </header>
       <p className="muted">
-        카드와 스크립트가 이 분기에서 함께 읽는 문자열 값이에요. 서재 원본은 바꾸지 않아요. 빈
+        카드와 스크립트가 이 채팅에서 함께 읽는 문자열 값이에요. 서재 원본은 바꾸지 않아요. 빈
         문자열도 값으로 저장하며, 키를 지우면 자료의 기본값을 다시 사용해요.
       </p>
       {loading && <p role="status">공유 변수를 읽고 있어요…</p>}
@@ -352,7 +352,7 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
                     <span className="chat-variable-identity">
                       <span className="chat-variable-key">{key}</span>
                       <span className="chat-variable-origin">
-                        {overridden ? '이 분기' : '기본값'}
+                        {overridden ? '이 채팅' : '기본값'}
                       </span>
                     </span>
                     <input

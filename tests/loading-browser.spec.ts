@@ -636,7 +636,7 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
       generated.push(request.url());
   });
   // Pin the view so implicit default-branch discovery cannot overlap the reconnect probe.
-  const branch = seeded.branches?.find((item) => item.default);
+  const branch = seeded.branch;
   expect(branch).toBeDefined();
   await page.goto(`/?chat=${seeded.chat.id}&branch=${encodeURIComponent(branch!.id)}`);
   await expect(articles(page)).toHaveCount(2);

@@ -9,7 +9,8 @@ import { verifiedRunLoreReads } from './lore-context.js';
 import { captureNativeMessageChanges } from './native-message-changes.js';
 import { releaseCompletedRunInputs, releaseCompletedJobInputs } from './execution-retention.js';
 import { retryRun as retryPersonalRun } from './run-retry.js';
-import { executionSnapshot, settleSnapshot } from './execution-snapshot.js';
+import { settleSnapshot } from './execution-snapshot.js';
+import { readRunSnapshot } from './run-projections.js';
 import { CredentialStore, initCredentials } from './credentials.js';
 import { DatabaseSync } from 'node:sqlite';
 import { initHelperWorkspace } from './helper-workspace.js';
@@ -153,8 +154,8 @@ export class Store {
           initChatOptions(this);
           initResponseStreams(this.db);
         },
-        () => {
-          migrateIndependentChats(this);
+        (branches) => {
+          migrateIndependentChats(this, branches);
           pruneUnusedData(this.db, null);
         }
       );
@@ -269,9 +270,7 @@ export class Store {
       this.db
         .prepare('INSERT INTO chats VALUES(?,?,NULL,1,?,?)')
         .run(id, title, json(settings), now());
-      this.db
-        .prepare('INSERT INTO branches VALUES(?,?,?,NULL,1,1)')
-        .run(`main:${id}`, id, '기본 분기');
+      this.db.prepare('INSERT INTO branches(id,chat_id) VALUES(?,?)').run(`main:${id}`, id);
       this.organization.create(id, organization);
     });
     return this.chat(id);
@@ -488,7 +487,7 @@ export class Store {
   run(id: string): Run {
     const row = this.db.prepare('SELECT * FROM runs WHERE id=?').get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Run not found');
-    const snapshot = executionSnapshot(this, parse(row.snapshot));
+    const snapshot = parse(row.snapshot) as RunSnapshot;
     // Until aggregate settlement, count durable attempts rather than prepared main inputs.
     // Extension/context calls have no model_inputs row; title generation is a separate task.
     const calls = row.usage
@@ -662,11 +661,7 @@ export class Store {
       )
       .run(source.id, json(usage), now(), id);
     controls?.fail('source-transaction');
-    this.db
-      .prepare('UPDATE branches SET head_revision=?,revision=revision+1 WHERE id=?')
-      .run(source.id, branch.id);
-    if (branch.default)
-      this.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(source.id, source.chatId);
+    this.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(source.id, source.chatId);
     for (const kind of ['status', 'image'] as const) {
       if (
         run.snapshot.packageStart?.mode === 'authored' ||
@@ -707,7 +702,7 @@ export class Store {
     ) {
       this.story.reserveSourceInTransaction(source, run);
       // Illustrations never block the source commit; reservation problems become visible jobs.
-      if (!run.snapshot.candidateOf) scheduleAutomaticIllustration(this, source);
+      scheduleAutomaticIllustration(this, source);
     }
     checkpointChatVariablesInTransaction(this, source.id, source.chatId, branch.id);
     retainCompletedLore(
@@ -1056,7 +1051,7 @@ export class Store {
         .all() as Row[]) {
         const source = this.sourceAtHash(row.source_revision, this.job(row.id).sourceHash);
         const snapshot = this.product.resolveJobPrompt(
-          this.run(source.runId).snapshot,
+          readRunSnapshot(this, source.runId),
           this.job(row.id).input
         );
         const live = !!snapshot.profile?.models[row.kind as 'translation' | 'status' | 'image'];
@@ -1121,7 +1116,7 @@ export class Store {
           return true;
         }),
       profile: this.product.profile(id),
-      branches: this.product.branches(id),
+      branch: this.product.branch(id),
       attempts: this.product.attempts(id),
       assets: mergedReaderAssets(this, id),
     };

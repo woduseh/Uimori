@@ -130,12 +130,6 @@ export const screens = [
     ready: { role: 'dialog', name: '작업 현황' },
   },
   {
-    id: 'branches',
-    title: '보관된 전개',
-    url: { ...chat, panel: 'branches' },
-    ready: { role: 'dialog', name: '보관된 전개' },
-  },
-  {
     id: 'reading-settings',
     title: '읽기 설정',
     url: { ...chat, panel: 'reading' },

@@ -130,7 +130,7 @@ test('CAS uses latest source edit hash and validates source chat ownership', () 
   ).toBe(1);
   const other = createFixtureChat(store, 'Other');
   const otherSource = append(store, other.id, store.product.branch(other.id).id);
-  store.db.prepare('UPDATE branches SET head_revision=? WHERE id=?').run(otherSource.id, branch.id);
+  store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(otherSource.id, chat.id);
   expect(() =>
     writeChatVariables(store, chat.id, branch.id, {
       ...command({}, 1),

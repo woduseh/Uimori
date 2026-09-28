@@ -260,7 +260,7 @@ export function ChatOptionSettings(props: Props) {
         <details className="chat-options-extra">
           <summary>다음 생성에만 적용</summary>
           <p className="muted">
-            여기서 지정한 옵션만 현재 분기의 다음 생성에 한 번 사용하고 해제해요.
+            여기서 지정한 옵션만 현재 채팅의 다음 생성에 한 번 사용하고 해제해요.
           </p>
           <fieldset className="chat-options-fields" disabled={disabled}>
             <SelectiveValues

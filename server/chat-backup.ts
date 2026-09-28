@@ -24,19 +24,13 @@ import { validateChatTranscript } from '../core/chat-transcript.js';
 import { validateChatVariableState } from '../core/chat-variables.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 
-/** Export each branch as an independent continuing conversation, with its resource dependencies. */
+/** Export the current chat as an independent continuing conversation, with its resources. */
 export function exportChatBackup(store: Store, chatId: string): ChatBackup {
   return store.transaction(() => {
     const chat = store.chat(chatId);
-    const branches = store.product
-      .branches(chatId)
-      .sort((a, b) => Number(b.default) - Number(a.default));
-    const chats = branches.map((branch) => {
-      const copy = captureChatCopy(store, chatId, branch.id);
-      if (!branch.default) copy.transcript.title += ` — ${branch.title}`;
-      if (copy.state.profile.pinned) delete copy.state.profile.pinned.mainModel;
-      return copy;
-    });
+    const copy = captureChatCopy(store, chatId);
+    if (copy.state.profile.pinned) delete copy.state.profile.pinned.mainModel;
+    const chats = [copy];
     const selected = new Map<string, { kind: 'content' | 'prompt-preset'; id: string }>();
     for (const copy of chats) {
       for (const ref of copy.transcript.packageAttachments)
@@ -123,7 +117,6 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
       chat: chats[0]!,
       chats,
       created: false,
-      branches: chats.length,
       sources: saved.sources,
       notices: original.notices,
     };
@@ -192,7 +185,6 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
       chat: chats[0]!,
       chats,
       created: true,
-      branches: chats.length,
       sources,
       notices: original.notices,
     };

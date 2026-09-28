@@ -4,7 +4,7 @@ type ConversationEntry =
   | { kind: 'source'; source: Source; index: number }
   | { kind: 'pending'; run: ReaderRun };
 
-/** Imported fork ranks are negative, so subsequent local admissions remain after preserved history. */
+/** Retries keep their first admitted request's place in the conversation. */
 export function readerRequestOrder(
   rows: ReadonlyMap<
     string,
@@ -12,7 +12,6 @@ export function readerRequestOrder(
       id: string;
       admissionOrder: number;
       retryOf?: string | null;
-      forkRequestOrder?: number | null;
     }
   >,
   id: string,
@@ -24,11 +23,7 @@ export function readerRequestOrder(
   const path: string[] = [];
   const seen = new Set<string>();
   while (row) {
-    if (
-      cache.has(row.id) ||
-      (Number.isSafeInteger(row.forkRequestOrder) && row.forkRequestOrder! < 0)
-    )
-      break;
+    if (cache.has(row.id)) break;
     if (!row.retryOf || seen.has(row.id)) break;
     seen.add(row.id);
     path.push(row.id);
@@ -36,12 +31,7 @@ export function readerRequestOrder(
     if (!previous) break;
     row = previous;
   }
-  const order = row
-    ? (cache.get(row.id) ??
-      (Number.isSafeInteger(row.forkRequestOrder) && row.forkRequestOrder! < 0
-        ? row.forkRequestOrder!
-        : row.admissionOrder))
-    : Number.MAX_SAFE_INTEGER;
+  const order = row ? (cache.get(row.id) ?? row.admissionOrder) : Number.MAX_SAFE_INTEGER;
   cache.set(id, order);
   for (const ancestor of path) cache.set(ancestor, order);
   return order;

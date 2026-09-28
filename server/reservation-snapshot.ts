@@ -90,13 +90,6 @@ export function freezeReservationSnapshot(
   if (reserved && options.sceneCommandId)
     frozen = freezeOutline(store, options.sceneCommandId, frozen);
   frozen = { ...frozen, logicalHistory: captureLogicalHistory(store, frozen) };
-  const previousNative = frozen.history.at(-1);
-  if (previousNative) {
-    const previous = store.run(store.source(previousNative.revision).runId).snapshot;
-    const revision =
-      previous.nativeRisuExecution?.historyRevision ?? previous.nativeRisuHistoryRevision;
-    if (revision) frozen.nativeRisuHistoryRevision = revision;
-  }
   if (options.purpose === 'preview-main' || options.purpose === 'preview-translation')
     frozen = { ...frozen, executionClock: options.executionClock() };
   // The model selection needs a provider call, which a reservation transaction must not make, so a

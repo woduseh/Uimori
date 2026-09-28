@@ -167,6 +167,20 @@ test('only successful main reads retain the exact observed range; search, denied
   expect(second.toolEvents).toEqual([]);
   expect(second.inputs).toEqual([]);
 });
+
+test('the next lore context uses retained state without reading the completed parent Run', async () => {
+  const f = fixture();
+  const first = (await queue(f)).run;
+  read(f, first, 2, 5);
+  const source = complete(f, first);
+  f.store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run('not JSON', first.id);
+  const next = freezeLoreContext(f.store, {
+    ...first.snapshot,
+    parentRevision: source.id,
+    history: f.store.history(source.id),
+  });
+  expect(next.loreContext?.entries.map((entry) => entry.text)).toEqual(['23456']);
+});
 test('overlapping reads append uncovered pieces, repeated use leaves the rendered old reference unchanged', async () => {
   const f = fixture(),
     a = (await queue(f)).run;

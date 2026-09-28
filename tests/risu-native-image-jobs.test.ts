@@ -5,6 +5,7 @@ import type { Content } from '../core/product.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { nativeImageDisplayText, nativeImageGuidance } from '../server/risu-native-images.js';
+import { readRunSnapshot } from '../server/run-projections.js';
 import { imageCatalog, latestImageJob, putImageBlob } from '../server/package-images.js';
 import { renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { nativeRisuContext } from '../server/risu-native-context.js';
@@ -81,7 +82,7 @@ function fixture() {
 test('validated image annotations use native boxes and placement without changing source or annotation receipts', async () => {
   const { store, chat } = fixture();
   const source = completedSource(store, chat.id, 'Mira smiles.\n\nThe afternoon stays quiet.');
-  const snapshot = store.run(source.runId!).snapshot;
+  const snapshot = readRunSnapshot(store, source.runId!);
   expect(await nativeImageGuidance(snapshot)).toContain('Outfit: school.');
   expect(
     await nativeImageGuidance({ ...snapshot, profile: { ...snapshot.profile!, image: false } })
@@ -167,7 +168,7 @@ test('native model output reserves the existing independent illustration queue a
 test('image guidance preserves outer CBS conditions and excludes surrounding story instructions', async () => {
   const { store, chat } = fixture();
   const source = completedSource(store, chat.id);
-  const snapshot = store.run(source.runId).snapshot;
+  const snapshot = readRunSnapshot(store, source.runId);
   const pkg = snapshot.profile!.packages!.find((entry) => entry.nativeRisu)!;
   const native = pkg.nativeRisu!;
   native.card.character_book = { entries: [] };

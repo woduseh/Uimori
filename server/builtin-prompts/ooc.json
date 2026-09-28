@@ -18,8 +18,7 @@
       "model": null,
       "trigger": "on-demand",
       "tools": ["knowledge", "notes", "story", "skills"],
-      "maxCalls": 3,
-      "maxOutputChars": 6000
+      "maxCalls": 3
     }
   ]
 }

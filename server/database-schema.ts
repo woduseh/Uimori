@@ -11,8 +11,9 @@ import { initDatabaseReadIndexes } from './database-performance.js';
 import { initIllustrations } from './illustrations.js';
 import { initOutline, initOutlineWorkspace } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
+import type { LegacyBranch } from './migrate-independent-chats.js';
 
-export const DATABASE_SCHEMA_VERSION = 13;
+export const DATABASE_SCHEMA_VERSION = 14;
 const FORMAT = 'uimori-personal-v1';
 
 export class DatabaseSchemaError extends Error {
@@ -52,7 +53,7 @@ export function databaseSchemaVersion(db: DatabaseSync): number {
 export function initializeDatabaseSchema(
   db: DatabaseSync,
   initializeFresh: () => void,
-  migrateUserData: () => void = () => {}
+  migrateUserData: (branches: LegacyBranch[]) => void = () => {}
 ): void {
   const previous = databaseSchemaVersion(db);
   if (previous === DATABASE_SCHEMA_VERSION) {
@@ -61,6 +62,29 @@ export function initializeDatabaseSchema(
   }
   db.exec('BEGIN IMMEDIATE; PRAGMA defer_foreign_keys=ON');
   try {
+    // Capture old heads before removing duplicate storage. Schema-4 conversion below
+    // copies every branch's user data before deleting any previous owner.
+    const legacyBranches =
+      previous > 0 && previous < 14
+        ? (db
+            .prepare(`SELECT id,chat_id AS chatId,title,head_revision AS headRevision,
+            is_default AS isDefault FROM branches ORDER BY chat_id,is_default DESC,id`)
+            .all() as LegacyBranch[])
+        : [];
+    if (previous > 0 && previous < 14) {
+      for (const branch of legacyBranches) {
+        if (!branch.isDefault) continue;
+        const chat = db.prepare('SELECT head_revision FROM chats WHERE id=?').get(branch.chatId);
+        if (!chat || chat.head_revision !== branch.headRevision)
+          throw new Error('DATABASE_CHAT_HEAD_MISMATCH');
+      }
+      db.exec(`DROP INDEX default_branch;
+        DROP TRIGGER IF EXISTS search_head_move;
+        ALTER TABLE branches DROP COLUMN title;
+        ALTER TABLE branches DROP COLUMN revision;
+        ALTER TABLE branches DROP COLUMN is_default;
+        ALTER TABLE branches DROP COLUMN head_revision;`);
+    }
     if (previous === 0) {
       initializeFresh();
       initIllustrations(db);
@@ -138,7 +162,7 @@ export function initializeDatabaseSchema(
     }
     if (previous > 0 && previous < 4) {
       migrateContextStorage(db);
-      migrateUserData();
+      migrateUserData(legacyBranches);
       pruneContextHistory(db);
     }
     if (previous < 7) initManuscriptSearch(db);
@@ -153,6 +177,8 @@ export function initializeDatabaseSchema(
     }
     if (previous < 13) initOutlineWorkspace(db);
     if (previous < 12) classifySavedEvaluationUsage(db);
+    if (previous > 0 && previous < 14)
+      db.exec('CREATE UNIQUE INDEX one_scope_per_chat ON branches(chat_id)');
     pruneSavedTextHistory(db);
     initDatabaseReadIndexes(db);
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}`);

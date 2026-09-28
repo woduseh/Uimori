@@ -1,5 +1,4 @@
 import { workspaceModelRef, type Connection, type ModelPreset } from '../core/product.js';
-import type { Run } from '../core/types.js';
 import {
   executeProvider,
   ProviderContractError,
@@ -22,6 +21,13 @@ type Options = Pick<
   signal: AbortSignal;
   track: (work: Promise<void>) => void;
   publish: (chatId: string) => void;
+};
+
+type TitleSource = {
+  id: string;
+  chatId: string;
+  request: string;
+  sourceRevision: string;
 };
 
 /** Optional one-shot helper. Its journal survives restarts; failures never replay. */
@@ -48,15 +54,12 @@ export class ChatTitleService {
   }
   afterSource(runId: string) {
     try {
-      const run = this.store.run(runId);
-      if (
-        run.status !== 'completed' ||
-        !run.sourceRevision ||
-        run.snapshot.packageStart?.mode === 'authored' ||
-        run.snapshot.candidateOf ||
-        run.snapshot.forkedFrom
-      )
-        return;
+      const run = this.store.db
+        .prepare(`SELECT id,chat_id AS chatId,request,source_revision AS sourceRevision,
+          json_extract(snapshot,'$.packageStart.mode') AS startMode
+          FROM runs WHERE id=? AND status='completed' AND source_revision IS NOT NULL`)
+        .get(runId) as (TitleSource & { startMode: string | null }) | undefined;
+      if (!run || run.startMode === 'authored') return;
       const chatId = run.chatId;
       if (
         !this.has(chatId, 'eligible') ||
@@ -75,14 +78,14 @@ export class ChatTitleService {
       // A title must never turn a successful source into a failed main execution.
     }
   }
-  private async generate(run: Run, controller: AbortController) {
+  private async generate(run: TitleSource, controller: AbortController) {
     const runId = run.id,
       chatId = run.chatId;
     let attempt: string | undefined;
     let result: ProviderResult | undefined;
     try {
       const ref = workspaceModelRef(promptWorkspace(this.store), 'title');
-      if (!ref || !run.sourceRevision) throw new ProviderContractError('TITLE_MODEL_UNSET');
+      if (!ref) throw new ProviderContractError('TITLE_MODEL_UNSET');
       this.store.product.assertAvailable('model', ref.id);
       const model = structuredClone(this.store.product.get<ModelPreset>('model', ref.id));
       const connection = structuredClone(

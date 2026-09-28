@@ -21,9 +21,7 @@ export function resolvePackageModules(
     {
       latestRevision: (id) => {
         const row = product.db
-          .prepare(
-            "SELECT revision FROM versions WHERE kind='content' AND id=? ORDER BY revision DESC LIMIT 1"
-          )
+          .prepare("SELECT revision FROM versions WHERE kind='content' AND id=?")
           .get(id) as { revision: number } | undefined;
         if (!row) throw new HttpError(404, 'content revision not found');
         return row.revision;

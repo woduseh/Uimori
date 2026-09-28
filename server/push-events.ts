@@ -35,7 +35,7 @@ export function enqueueTerminalNotification(
     prefix = 'run';
     kind = status === 'completed' ? 'main-completed' : 'task-failed';
     target = db
-      .prepare(`SELECT r.status,COALESCE(r.branch_id,(SELECT id FROM branches WHERE chat_id=r.chat_id AND is_default=1)) AS branch_id,
+      .prepare(`SELECT r.status,COALESCE(r.branch_id,(SELECT id FROM branches WHERE chat_id=r.chat_id)) AS branch_id,
       COALESCE(r.source_revision,r.parent_revision) AS source_id,0 AS generation,
       EXISTS(SELECT 1 FROM attempts a WHERE a.run_id=r.id AND a.is_synthetic=0) AS eligible
       FROM runs r WHERE r.id=? AND r.chat_id=?`)

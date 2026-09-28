@@ -60,7 +60,6 @@ export type ChatBackup = {
 export type ChatBackupImport = {
   chat: import('./types.js').Chat;
   created: boolean;
-  branches: number;
   sources: number;
   chats: import('./types.js').Chat[];
   notices: string[];

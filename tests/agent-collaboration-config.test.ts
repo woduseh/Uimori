@@ -134,19 +134,6 @@ describe('collaboration limits and references', () => {
     if (min > 0) rejects(make(''), 'INVALID_TEXT');
   });
 
-  test('legacy output character settings load without converting their value into tokens', () => {
-    for (const maxOutputChars of [0, 500, 6000, 20_000]) {
-      const legacy = config({ maxOutputChars });
-      expect(validateAgentCollaboration(legacy)).toEqual(config());
-      expect(legacy.agents[0].maxOutputChars).toBe(maxOutputChars);
-    }
-    for (const value of [-1, 1.5, NaN, '6000', null])
-      rejects(
-        { ...config(), agents: [{ ...config().agents[0], maxOutputChars: value }] },
-        'INVALID_LIMIT'
-      );
-  });
-
   test('agent IDs use bounded ASCII lowercase names and reject unsafe names', () => {
     for (const id of ['a', 'a0_-', `a${'b'.repeat(63)}`])
       expect(validateAgentCollaboration(config({ id })).agents[0].id).toBe(id);

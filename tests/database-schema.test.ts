@@ -1,4 +1,5 @@
 import { createFixtureChat } from './fixtures/chat.js';
+import { legacyScopeColumns } from './fixtures/legacy-scope.js';
 import { completedSource } from './fixtures/illustration.js';
 import { addBookmark, saveReadingPosition } from '../server/reading-state.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
@@ -47,6 +48,7 @@ test('schema 5 upgrades by adding durable Anthropic Batch recovery storage', () 
   const current = new Store(path);
   current.close();
   const old = new DatabaseSync(path);
+  legacyScopeColumns(old);
   // Remove later accounting columns as well: a schema-5 database did not contain them.
   // Push is newer than the simulated historical schema and references the later accounting columns.
   old.exec(
@@ -255,7 +257,7 @@ describe('Prior schema 3 independent chat migration', () => {
         .all()
         .map((r) => JSON.parse(String(r.result)).text)
     ).toEqual(expect.arrayContaining(['공통 첫 장면.', '기본 결말.']));
-    expect(copies.every((c) => store.product.branches(c.id).length === 1)).toBe(true);
+    expect(copies.every((c) => store.product.branch(c.id).chatId === c.id)).toBe(true);
     const helpers = new HelperWorkspace(store);
     expect(helpers.conversation(conversationId).scope).toMatchObject({ chatId: alternative.id });
     expect(store.db.prepare('SELECT text FROM helper_artifacts').get()!.text).toBe(artifactText);
@@ -322,6 +324,7 @@ test('version-10 simplification removes obsolete triggers while retaining author
     VALUES('migration-sub','existing-delivery','test','2026-09-28','2026-09-29','2026-09-28')`)
     .run();
   // Reintroduce only the old metadata and trigger boundaries that version 11 replaces.
+  legacyScopeColumns(current.db);
   current.db.exec(`INSERT INTO app_metadata VALUES('search-revision','12');
     CREATE TRIGGER search_head_move AFTER UPDATE OF head_revision ON branches BEGIN UPDATE app_metadata SET value='13' WHERE key='search-revision'; END;
     CREATE TRIGGER push_main_terminal AFTER INSERT ON events BEGIN SELECT 1; END;
@@ -386,6 +389,7 @@ test('schema 12 upgrade preserves authored plans and completed source associatio
   const before = current.db.prepare('SELECT id,title,intent,command_id FROM outline_nodes').all();
   current.close();
   const old = new DatabaseSync(path);
+  legacyScopeColumns(old);
   old.exec(
     'DROP TABLE outline_reviews; DROP TABLE outline_links; DROP TABLE outline_writings; PRAGMA user_version=12'
   );

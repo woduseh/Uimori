@@ -8,6 +8,7 @@ import { usageReport, usageCsv } from '../server/usage-report.js';
 import { detachAttemptUsage, inferUsageKind } from '../server/usage-accounting.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { legacyScopeColumns } from './fixtures/legacy-scope.js';
 import type { WireRecord, ProviderResult } from '../core/transport.js';
 
 const owned: { store: Store; directory: string }[] = [];
@@ -220,6 +221,7 @@ test('version-eight upgrade uses only saved timestamps and attribution and does 
     'estimate_status',
   ])
     old.exec(`ALTER TABLE attempts DROP COLUMN ${column}`);
+  legacyScopeColumns(old);
   old.exec("DELETE FROM app_metadata WHERE key='usage-coverage-since'; PRAGMA user_version=8;");
   old.close();
   entry.store = new Store(join(entry.directory, 'app.sqlite'));
@@ -295,6 +297,7 @@ test('version-eleven evaluation attribution is repaired from saved request tools
     }),
     result(0.3)
   );
+  legacyScopeColumns(store.db);
   store.db.exec("UPDATE attempts SET usage_kind='unclassified'; PRAGMA user_version=11;");
   const before = usageReport(store, query).totals;
   const entry = owned.at(-1)!;

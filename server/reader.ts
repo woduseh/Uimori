@@ -4,12 +4,9 @@ import type { Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
 import { illustrationsForSources } from './illustrations.js';
 import type { ReaderActivity } from '../core/types.js';
-import { branchTree } from '../core/reader-branch-tree.js';
 import { changedReaderSources, readerJobIds, readerPresentationRevisions } from './reader-data.js';
 import { providerRejection } from '../core/provider-rejection.js';
 import { readerRequestOrder } from '../core/reader-conversation.js';
-
-export { branchTree };
 
 /** The failing attempt's stored provider diagnostic, read only for 4xx failures being displayed. */
 export function attemptRejection(store: Store, column: 'run_id' | 'job_id', id: string) {
@@ -176,7 +173,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE COALESCE(json_extract(snapshot,'$.displayModelTitle'),json_extract(snapshot,'$.profile.models.main.title')) END AS modelTitle,json_extract(snapshot,'$.profile.models.main.executionMode') AS executionMode,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
-    json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
+    json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id) AS snapshot
     FROM runs
     WHERE runs.chat_id=? ${scope ? 'AND runs.id IN (SELECT value FROM json_each(?))' : ''} ORDER BY runs.created_at,runs.id`)
       .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as (Record<string, any> & {
@@ -284,9 +281,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   const indexRows = store.db
     .prepare(`SELECT id,rowid AS admissionOrder,json_extract(command,'$.retryOf') AS retryOf,source_revision AS sourceRevision,status,branch_id AS branchId,
     CASE WHEN id IN (SELECT value FROM json_each(?)) THEN request ELSE NULL END AS request,
-    json_extract(snapshot,'$.packageStart.mode') AS startMode,
-    json_extract(snapshot,'$.candidateOf') AS candidateOf,
-    json_extract(snapshot,'$.forkedFrom.requestOrder') AS forkRequestOrder
+    json_extract(snapshot,'$.packageStart.mode') AS startMode
     FROM runs WHERE chat_id=? ORDER BY created_at,id`)
     .all(JSON.stringify(chain.map((sourceId) => byId.get(sourceId)!.runId)), id) as {
     id: string;
@@ -295,8 +290,6 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     branchId: string | null;
     admissionOrder: number;
     retryOf: string | null;
-    candidateOf: string | null;
-    forkRequestOrder: number | null;
     request: string | null;
     startMode: string | null;
   }[];
@@ -319,7 +312,6 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         (run) =>
           (run.sourceRevision === null &&
             !superseded.has(run.id) &&
-            (run.branchId ? run.branchId === branch.id : branch.default) &&
             requestOrder(run.id) > previousOrder &&
             requestOrder(run.id) <= finalOrder) ||
           (run.sourceRevision !== null && pageIds.has(run.sourceRevision)) ||
@@ -330,12 +322,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   for (const run of runs) Object.assign(run, { requestOrder: requestOrder(run.id) });
   const pendingRunIds = runs
     .filter((run) => {
-      if (
-        run.sourceRevision ||
-        run.supersededBy ||
-        (run.snapshot.branchId ? run.snapshot.branchId !== branch.id : !branch.default)
-      )
-        return false;
+      if (run.sourceRevision || run.supersededBy) return false;
       return (
         ['queued', 'running'].includes(requestRows.get(run.id)?.status ?? '') ||
         (requestOrder(run.id) > previousOrder && requestOrder(run.id) <= finalOrder)
@@ -385,7 +372,6 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         event.kind.startsWith('job.') ||
         event.kind.startsWith('source.')
     );
-  const branches = store.product.branches(id);
   return {
     chat,
     runs,
@@ -396,19 +382,12 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
       sources.map((source) => source.id)
     ),
     profile: store.product.profile(id),
-    branches,
+    branch,
     ...(assetsChanged ? { assets: mergedReaderAssets(store, id, order) } : {}),
     reader: {
       navigation,
       presentationRevisions: readerPresentationRevisions(store, id, branch.id, order),
       pendingRunIds,
-      branchTree: branchTree(branches, new Map(rows.map((row) => [row.id, row.parentRevision]))),
-      latestBranchRuns: Object.fromEntries(
-        indexRows.filter((run) => run.branchId !== null).map((run) => [run.branchId!, run.id])
-      ),
-      candidateBranches: indexRows
-        .filter((run) => run.candidateOf !== null && run.branchId !== null)
-        .map((run) => run.branchId!),
       activity: readerActivity(store, id),
       responseActivity: readerActivity(store, id, order),
       headSourceHash: branch.headRevision

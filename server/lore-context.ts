@@ -36,20 +36,13 @@ function currentDependencies(store: Store, snapshot: RunSnapshot): boolean {
     return false;
   }
 }
-/** Source edits and changed ancestors invalidate all reads made under that context. */
-export function loreRunIsCurrent(store: Store, run: Run): boolean {
-  const retained = !run.snapshot.loreContext ? readLoreRetention(store, run) : undefined;
-  const context = retained?.context ?? run.snapshot.loreContext;
+/** Validate the run being committed while its frozen inputs and tool receipts still exist. */
+function loreRunIsCurrent(store: Store, run: Run): boolean {
   if (
     run.status !== 'completed' ||
     !run.sourceRevision ||
-    !context ||
-    !(retained
-      ? isDeepStrictEqual(
-          context.dependencies,
-          loreDependencies({ ...run.snapshot, history: store.history(run.parentRevision) })
-        )
-      : currentDependencies(store, run.snapshot))
+    !run.snapshot.loreContext ||
+    !currentDependencies(store, run.snapshot)
   )
     return false;
   try {
@@ -59,28 +52,19 @@ export function loreRunIsCurrent(store: Store, run: Run): boolean {
       original.chatId === run.chatId &&
       original.runId === run.id &&
       original.hash === current.hash &&
-      context.canonHash ===
+      run.snapshot.loreContext.canonHash ===
         store.story.notes.canonHash(store.story.notes.scope(run.chatId, run.parentRevision))
     );
   } catch {
     return false;
   }
 }
-/** Recompute each successful main read against its immutable source corpus; metadata search is never a receipt. */
+/** Verify the current run's main reads before its tool events are released. */
 export function verifiedRunLoreReads(store: Store, run: Run): RetainedLore[] {
   if (!loreRunIsCurrent(store, run)) return [];
-  if (!run.snapshot.loreContext) return structuredClone(readLoreRetention(store, run)?.reads ?? []);
   const source = store.sourceOriginal(run.sourceRevision!),
     resources = roleResources(run.snapshot),
     result: RetainedLore[] = [];
-  if (run.snapshot.forkedLoreReads) {
-    const receipt = run.snapshot.forkedLoreReads;
-    if (
-      receipt.canonHash === run.snapshot.loreContext!.canonHash &&
-      isDeepStrictEqual(receipt.dependencies, loreDependencies(run.snapshot))
-    )
-      result.push(...structuredClone(receipt.entries));
-  }
   for (const event of run.toolEvents) {
     if (event.denied || event.name !== 'knowledge.read') continue;
     try {
@@ -139,7 +123,7 @@ function allowedEntry(
     )
   );
 }
-/** Pure transition shared by runtime selection and historical archive validation. */
+/** Select retained reads against this run's frozen resources and source ancestry. */
 export function selectLoreContext(
   snapshot: RunSnapshot,
   input: {
@@ -228,14 +212,33 @@ export function freezeLoreContext(store: Store, snapshot: RunSnapshot): RunSnaps
   const canonHash = store.story.notes.canonHash(
     store.story.notes.scope(snapshot.chatId, snapshot.parentRevision)
   );
-  const parent = snapshot.parentRevision
-    ? store.run(store.source(snapshot.parentRevision).runId)
+  const retained = snapshot.parentRevision
+    ? readLoreRetention(
+        store,
+        snapshot.chatId,
+        snapshot.branchId ?? `main:${snapshot.chatId}`,
+        snapshot.parentRevision
+      )
     : undefined;
-  const parentEligible = !!parent && loreRunIsCurrent(store, parent);
+  let parentEligible = false;
+  if (retained && snapshot.parentRevision && currentDependencies(store, snapshot)) {
+    try {
+      const original = store.sourceOriginal(snapshot.parentRevision);
+      const current = store.source(snapshot.parentRevision);
+      parentEligible =
+        retained.sourceId === original.id &&
+        original.chatId === snapshot.chatId &&
+        retained.sourceHash === original.hash &&
+        original.hash === current.hash &&
+        isDeepStrictEqual(retained.context.dependencies, loreDependencies(snapshot).slice(0, -1));
+    } catch {
+      // A missing or changed parent cannot authorize retained text.
+    }
+  }
   return selectLoreContext(snapshot, {
     canonHash,
-    parent: parent && (readLoreRetention(store, parent)?.context ?? parent.snapshot.loreContext),
+    parent: retained?.context,
     parentEligible,
-    parentReads: parentEligible ? verifiedRunLoreReads(store, parent!) : [],
+    parentReads: retained && parentEligible ? retained.reads : [],
   });
 }

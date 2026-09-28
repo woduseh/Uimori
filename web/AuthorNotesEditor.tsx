@@ -135,7 +135,7 @@ export function AuthorNotesEditor({
       commandKey.current = { fingerprint: '', key: crypto.randomUUID() };
       setMessage(
         retired
-          ? '이 분기의 이후 요청에서 이 메모를 사용하지 않아요.'
+          ? '이 채팅의 이후 요청에서 이 메모를 사용하지 않아요.'
           : '메모를 저장했어요. 이후 요청부터 반영해요.'
       );
       await refresh();
@@ -314,7 +314,7 @@ export function AuthorNotesEditor({
       )}
       {retiring && (
         <div role="group" aria-label="메모 사용 중단 확인">
-          <p>이 분기의 이후 요청에서 이 메모를 제외해요. 이전 실행과 메모 이력은 보존해요.</p>
+          <p>이 채팅의 이후 요청에서 이 메모를 제외해요. 이전 실행과 메모 이력은 보존해요.</p>
           <blockquote>{retiring.text}</blockquote>
           <div className="form-actions">
             <button

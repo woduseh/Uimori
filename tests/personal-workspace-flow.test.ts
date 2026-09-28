@@ -266,7 +266,7 @@ test('independent copies and portable restores retain inline images, notes and c
   ).run;
   expect(next.parentRevision).toBe(restored.chat.headRevision);
   expect(next.snapshot.history[0]!.text).toContain('A scene');
-  expect(target.product.branches(restored.chat.id)).toHaveLength(1);
+  expect(target.product.branch(restored.chat.id).chatId).toBe(restored.chat.id);
 });
 
 test('full SQLite snapshot includes database keys and WebP bytes', async () => {

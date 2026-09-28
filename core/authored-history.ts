@@ -26,7 +26,6 @@ export function validateSourceOnlyTranscript(snapshot: RunSnapshot): void {
           'branchId',
           'executionClock',
           'transcriptImport',
-          'forkedFrom',
         ].includes(key)
     )
   )

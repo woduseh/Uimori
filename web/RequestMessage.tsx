@@ -13,7 +13,7 @@ export function RequestMessage({
   onSubmit,
   onConfirm,
   onEditingChange,
-  editHint = '수정한 요청으로 새 분기에서 생성해요.',
+  editHint = '수정한 요청으로 새 채팅에서 생성해요.',
   maxLength = REQUEST_TEXT_MAX_CHARS,
   compactActions = 'always',
 }: {

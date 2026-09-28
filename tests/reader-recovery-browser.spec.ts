@@ -77,7 +77,7 @@ test('READERREC pending request survives reload on the current chat branch', asy
   const chat = await (
     await postFixtureChat(request, { data: { title: 'Pending recovery' } })
   ).json();
-  const branch = (await (await request.get(`/api/chats/${chat.id}`)).json()).branches[0];
+  const branch = (await (await request.get(`/api/chats/${chat.id}`)).json()).branch;
   const commandKey = `command:${chat.id}`;
   await page.addInitScript(
     ({ commandKey, chat, branch }) => {

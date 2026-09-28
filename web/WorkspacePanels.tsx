@@ -148,7 +148,7 @@ export function TasksPanel({
           연결을 다시 확인하는 중이에요. 원격 작업의 상태는 아직 확정할 수 없어요.
         </p>
       )}
-      <ActivityDetails activities={detail.reader.activity ?? []} branchId={state.branch?.id} />
+      <ActivityDetails activities={detail.reader.activity ?? []} />
       {(!listed || listed.loading) && <p role="status">작업 목록을 불러오는 중이에요…</p>}
       {listed?.error && (
         <div role="alert">
@@ -185,12 +185,7 @@ export function TasksPanel({
                     type="button"
                     className="secondary"
                     onClick={() => {
-                      const branch =
-                        detail.branches?.find((item) => item.id === run.snapshot.branchId) ??
-                        detail.branches?.find((item) => item.default);
-                      if (branch && branch.id !== state.branch?.id)
-                        state.chooseBranch(branch.default ? '' : branch.id, run.sourceRevision!);
-                      else state.chooseSource(run.sourceRevision!);
+                      state.chooseSource(run.sourceRevision!);
                       onClose();
                     }}
                   >

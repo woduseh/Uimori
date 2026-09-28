@@ -123,6 +123,9 @@ function mockSend(before?: () => void, result = success, finish?: () => Promise<
 test('one title request is journaled, bounded and never repeated after completion or restart', async () => {
   const f = setup(),
     send = mockSend();
+  vi.spyOn(f.store, 'run').mockImplementation(() => {
+    throw new Error('Completed title source must not hydrate its Run');
+  });
   f.service.afterSource(f.run.id);
   f.service.afterSource(f.run.id);
   await Promise.all(f.work);

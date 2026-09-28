@@ -849,7 +849,7 @@ function App() {
                       type="button"
                       className="secondary"
                       aria-label="채팅 백업 내보내기"
-                      title="모든 분기·원문·자료·이미지·실행 기록을 새 채팅으로 복원할 수 있는 백업을 받아요"
+                      title="원문·자료·이미지·실행 기록을 새 채팅으로 복원할 수 있는 백업을 받아요"
                       onClick={() => {
                         const chatId = s.selected;
                         const title = s.chats.find((chat) => chat.id === chatId)?.title ?? 'chat';
@@ -870,7 +870,7 @@ function App() {
                       type="button"
                       className="secondary"
                       aria-label="채팅 포크"
-                      title="현재 분기의 마지막 장면까지 복사해서 새 채팅으로 이어가요"
+                      title="현재 채팅의 마지막 장면까지 복사해서 새 채팅으로 이어가요"
                       disabled={
                         !s.sources.length ||
                         s.forking.some((key) => key.startsWith(`${s.selected}:`))
@@ -1387,7 +1387,6 @@ function App() {
                   scope={s.viewKey}
                   activities={s.detail?.reader.activity ?? []}
                   request={s.requestActivity}
-                  branchId={s.branch?.id}
                   connected={s.connected}
                   onDetails={() => inspect('')}
                   seenRunIds={seenRuns}
@@ -1639,9 +1638,6 @@ function App() {
       <HelperPanel
         ready={s.destination !== 'story' || !s.selected || !!s.branch}
         modal={panelModal}
-        branches={s.detail?.branches ?? []}
-        detail={s.detail ?? undefined}
-        onBranchNavigate={s.chooseBranch}
         enterSend={enterSend}
         modelDescription={helperDescription}
         open={helperOpen}

@@ -1,4 +1,5 @@
 import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
+import { readRunSnapshot } from './run-projections.js';
 import { currentBotTranslationGuide } from './translation-guide.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
 import { validateTranslationArtifact } from './translation-artifacts.js';
@@ -123,7 +124,7 @@ export function requestTranslation(
     const automatic = profile?.imageTranslation !== false;
     const selection = automatic
       ? automaticImageSelection(store, {
-          ...store.run(source.runId).snapshot,
+          ...readRunSnapshot(store, source.runId),
           ...(profile ? { profile } : {}),
         })
       : undefined;
@@ -138,7 +139,7 @@ export function requestTranslation(
         : {}),
       translationPolicy: translationPolicy(workspace.translationPolicy),
     };
-    store.product.resolveJobPrompt(store.run(source.runId).snapshot, input);
+    store.product.resolveJobPrompt(readRunSnapshot(store, source.runId), input);
     const jobId = randomUUID();
     const time = new Date().toISOString();
     store.db
@@ -243,7 +244,7 @@ export function requestStatus(
         ? { statusModelSnapshot: store.product.modelSnapshot(selected.id, 'status') }
         : {}),
     };
-    store.product.resolveJobPrompt(store.run(source.runId).snapshot, input);
+    store.product.resolveJobPrompt(readRunSnapshot(store, source.runId), input);
     const jobId = randomUUID();
     const time = new Date().toISOString();
     store.db

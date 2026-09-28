@@ -177,9 +177,8 @@ export function useStory() {
   const latestIntent = useRef<{ epoch: number; source: string } | null>(null);
   const readerQuery = useRef({ chat: '', branch: '', source: '', key: '', epoch: 0 });
   const readerCache = useRef<{ key: string; detail: ReaderDetail } | null>(null);
-  // Bind an implicit default to the branch actually opened. Later default changes must not
-  // retarget reading, drafts, or an in-flight request in this viewing session.
-  const defaultView = useRef<{ chatId: string; branchId: string } | null>(null);
+  // Keep the resolved storage identity while a source-page refresh clears its content.
+  const currentScope = useRef<{ chatId: string; id: string } | null>(null);
   const navigate = useCallback((action: ReaderNavigationAction) => {
     const previous = navigation.current;
     const next = transitionReaderNavigation(previous, action);
@@ -187,27 +186,15 @@ export function useStory() {
     navigation.current = next;
     if (next.epoch !== previous.epoch) {
       restoredView.current = '';
-      if (action.kind !== 'source' && action.kind !== 'library') defaultView.current = null;
     }
     setView(next);
   }, []);
-  if (!viewedBranch && detail && defaultView.current?.chatId !== selected) {
-    const opened = detail.branches?.find((item) => item.default);
-    if (opened) defaultView.current = { chatId: selected, branchId: opened.id };
-  }
+  // Existing URLs can name the stored scope; the server validates it against this chat.
+  if (detail) currentScope.current = detail.branch;
   const activeBranchId =
-    viewedBranch || (defaultView.current?.chatId === selected ? defaultView.current.branchId : '');
-  // Keep the initial branch's existing storage address; every other branch uses its own ID.
-  // This identity is stable when either branch gains or loses the default flag.
+    viewedBranch || (currentScope.current?.chatId === selected ? currentScope.current.id : '');
+  // Preserve existing browser storage addresses, including historical non-main scope IDs.
   const storageBranch = activeBranchId === `main:${selected}` ? '' : activeBranchId;
-  const preserveDefaultView = useRef<(branchId: string) => void>(() => {});
-  preserveDefaultView.current = (branchId) => {
-    if (viewedBranch || navigation.current.chat !== selected) return;
-    navigate({ kind: 'bind-default', branch: branchId });
-    const url = new URL(location.href);
-    url.searchParams.set('branch', branchId);
-    history.replaceState(null, '', url);
-  };
   const savedPosition = readReadingPosition(`reading:${selected}:${storageBranch}`);
   readerQuery.current = {
     chat: selected,
@@ -222,8 +209,8 @@ export function useStory() {
     key: `${selected}:${activeBranchId}:${readSource}`,
   };
   const readingSync = useReadingSync({
-    chatId: destination === 'story' ? selected : '',
-    branchId: activeBranchId || `main:${selected}`,
+    chatId: destination === 'story' && activeBranchId ? selected : '',
+    branchId: activeBranchId,
     reader,
     storageKey: `reading:${selected}:${storageBranch}`,
     onResume: (target) => openTarget(target),
@@ -281,9 +268,6 @@ export function useStory() {
         readerQuery.current.key === query.key &&
         refreshVersion.current === version
       ) {
-        const nextDefault = value.branches?.find((item) => item.default);
-        if (query.branch && nextDefault && nextDefault.id !== query.branch)
-          preserveDefaultView.current(query.branch);
         const changed = new Set(value.sources.map((source) => source.id));
         const available = new Map(
           [...(cached?.sources ?? []), ...value.sources].map((source) => [source.id, source])
@@ -538,12 +522,7 @@ export function useStory() {
             const article = document.getElementById(`source-${intent.sourceId}`);
             if (article && node.contains(article)) {
               explicitReadingIntent.current = null;
-              const target = captureReaderLocation(
-                node,
-                selected,
-                activeBranchId || `main:${selected}`,
-                article
-              );
+              const target = captureReaderLocation(node, selected, activeBranchId, article);
               if (target) readingSync.remember(target);
             }
           }
@@ -613,9 +592,7 @@ export function useStory() {
     if (value) sessionStorage.setItem(`lore-reset:${draftKey}`, 'true');
     else sessionStorage.removeItem(`lore-reset:${draftKey}`);
   }
-  const branch =
-    detail?.branches?.find((item) => item.id === activeBranchId) ??
-    detail?.branches?.find((item) => item.default);
+  const branch = detail?.branch;
   const inputTranslation = useInputTranslation({
     draftKey,
     epoch: view.epoch,
@@ -636,14 +613,7 @@ export function useStory() {
       !sessionStorage.getItem(`pending-profile:${selected}`),
   });
   const sources = useMemo(() => detail?.sources ?? [], [detail]);
-  const visibleRuns =
-    detail?.runs.filter(
-      (run) =>
-        !run.supersededBy &&
-        (!branch ||
-          (!run.snapshot.branchId && branch.default) ||
-          run.snapshot.branchId === branch.id)
-    ) ?? [];
+  const visibleRuns = detail?.runs.filter((run) => !run.supersededBy) ?? [];
   const conversation = readerConversation(
     sources,
     (detail?.runs ?? []).filter(
@@ -736,14 +706,6 @@ export function useStory() {
     rememberCursor();
     setViewUrl(id);
     navigate({ kind: 'chat', chat: id });
-  };
-  const chooseBranch = (id: string, source = '') => {
-    setReaderTarget(null);
-    savePosition();
-    rememberCursor();
-    setViewUrl(selected, id, source);
-    sessionStorage.setItem(`branch:${selected}`, id);
-    navigate({ kind: 'branch', branch: id, source });
   };
   const chooseSource = (id: string, toEnd = false) => {
     explicitReadingIntent.current = { chatId: selected, sourceId: id };
@@ -954,15 +916,12 @@ export function useStory() {
         );
       if (
         payload.retryOf &&
-        admitted.snapshot.branchId &&
-        admitted.snapshot.branchId !== branch?.id &&
+        admitted.chatId !== chat.id &&
         currentView.current === sentView &&
         navigation.current.epoch === sentEpoch
       ) {
-        if (admitted.chatId !== chat.id) {
-          await loadChats();
-          select(admitted.chatId);
-        } else chooseBranch(admitted.snapshot.branchId);
+        await loadChats();
+        select(admitted.chatId);
       }
     } catch (error) {
       track(definiteRejection(error) ? 'failed' : 'uncertain');
@@ -1100,7 +1059,7 @@ export function useStory() {
         )
           throw new Error('현재 프롬프트와 옵션 정의가 일치하는 조합을 선택해 주세요.');
         if (pinnedPromptId) {
-          if (!branch) throw new Error('현재 채팅 분기를 확인해 주세요.');
+          if (!branch) throw new Error('현재 채팅을 다시 불러와 주세요.');
           const state = await api<ChatOptionState>(
             `/chats/${chatId}/options?branchId=${encodeURIComponent(branch.id)}`
           );
@@ -1299,7 +1258,6 @@ export function useStory() {
     editDraft,
     editLoreContextReset,
     select,
-    chooseBranch,
     chooseSource,
     openTarget,
     readerTarget,

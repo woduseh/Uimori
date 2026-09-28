@@ -7,12 +7,19 @@ import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
 
 type Row = Record<string, any>;
+export type LegacyBranch = {
+  id: string;
+  chatId: string;
+  title: string;
+  headRevision: string | null;
+  isDefault: number;
+};
 
 /** One-time transfer for the retired shared-branch graph. New chat IDs are intentional.
  * Every branch becomes a complete independent chat. User text, pending requests, helper
  * conversations, variables, images and authoring survive; replay diagnostics do not.
  */
-export function migrateIndependentChats(store: Store): void {
+export function migrateIndependentChats(store: Store, legacyBranches: LegacyBranch[]): void {
   const db = store.db;
   const owners = db
     .prepare('SELECT chat_id FROM branches GROUP BY chat_id HAVING COUNT(*)>1')
@@ -20,19 +27,22 @@ export function migrateIndependentChats(store: Store): void {
   const mapping: { original: string; chats: string[] }[] = [];
   for (const owner of owners) {
     const chat = store.chat(String(owner.chat_id)),
-      branches = store.product.branches(chat.id);
+      branches = legacyBranches.filter((branch) => branch.chatId === chat.id);
     // Capture all graphs before removing any old ownership rows.
-    const copies = branches.map((branch) => ({
-      branch,
-      copy: captureChatCopy(store, chat.id, branch.id),
-    }));
+    const copies = branches.map((branch) => {
+      // Only this transfer sees multiple scopes. Capture variables and head-scoped
+      // notes and overrides against the same historical head.
+      db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(branch.headRevision, chat.id);
+      return { branch, copy: captureChatCopy(store, chat.id, branch.id, branch.headRevision) };
+    });
+    db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(chat.headRevision, chat.id);
     const destinations: string[] = [];
     for (const { branch, copy } of copies) {
       const next = restoreChatCopy(
         store,
         copy,
         `schema4:${branch.id}`,
-        branch.default ? chat.title : `${chat.title} · ${branch.title}`
+        branch.isDefault ? chat.title : `${chat.title} · ${branch.title}`
       );
       destinations.push(next.id);
       const target = store.product.branch(next.id),
@@ -111,7 +121,7 @@ export function migrateIndependentChats(store: Store): void {
         .prepare(
           'SELECT id FROM helper_conversations WHERE chat_id=? AND (branch_id=? OR (branch_id IS NULL AND ?))'
         )
-        .all(chat.id, branch.id, Number(branch.default))) {
+        .all(chat.id, branch.id, branch.isDefault)) {
         const scope = { kind: 'chat', chatId: next.id, branchId: target.id },
           json = JSON.stringify(scope);
         db.prepare(
@@ -160,7 +170,7 @@ export function migrateIndependentChats(store: Store): void {
           `helper:${row.id}`
         );
       }
-      if (branch.default) {
+      if (branch.isDefault) {
         // Preserve even unused catalog images; only the deleted owner changes.
         db.prepare(
           "UPDATE assets SET chat_id=?,body=json_set(body,'$.chatId',?) WHERE chat_id=?"

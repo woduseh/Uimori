@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import type { HelperConversation, HelperConversationDeletion } from '../core/helper.js';
-import type { Branch } from '../core/product.js';
-import type { ReaderDetail } from '../core/types.js';
-import { branchLabel } from './storyLabels.js';
 import { api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
@@ -18,8 +15,6 @@ type Props = {
   unread: string[];
   conversation: HelperConversation | null;
   currentId: string | null;
-  branches: Branch[];
-  detail?: ReaderDetail;
   creating: boolean;
   busy: boolean;
   onSelect: (session: HelperConversation) => void;
@@ -84,11 +79,6 @@ export function HelperSessionBar(props: Props) {
       setWorking(false);
     }
   }
-  const currentScope = props.conversation?.scope;
-  const currentBranch =
-    currentScope?.kind === 'chat'
-      ? props.branches.find((item) => item.id === currentScope.branchId)
-      : null;
   return (
     <>
       <div className="helper-session-block">
@@ -107,16 +97,10 @@ export function HelperSessionBar(props: Props) {
                 세션을 불러오는 중…
               </option>
               {props.sessions.map((session) => {
-                const scope = session.scope;
-                const branch =
-                  scope.kind === 'chat'
-                    ? props.branches.find((item) => item.id === scope.branchId)
-                    : null;
                 return (
                   <option key={session.id} value={session.id}>
                     {props.unread.includes(session.id) ? '● ' : ''}
                     {session.title || '새 대화'}
-                    {branch && props.detail ? ` · ${branchLabel(branch, props.detail)}` : ''}
                     {session.activity?.running
                       ? ' · 진행 중'
                       : session.activity?.queued
@@ -162,11 +146,7 @@ export function HelperSessionBar(props: Props) {
           </ActionMenu>
         </div>
         <div className="helper-session-meta">
-          <span>
-            {props.conversation?.scope.kind === 'chat'
-              ? `이 채팅${currentBranch && props.detail ? ` · ${branchLabel(currentBranch, props.detail)}` : ''}`
-              : '서재 작업'}
-          </span>
+          <span>{props.conversation?.scope.kind === 'chat' ? '이 채팅' : '서재 작업'}</span>
           {props.unread.length > 0 && <strong>새 소식 {props.unread.length}</strong>}
         </div>
       </div>

@@ -96,7 +96,7 @@ export function ChatBackupImport({
       setUncertain(false);
       if (input.current) input.current.value = '';
       setMessage(
-        `“${result.chat.title}”을 새 채팅으로 가져왔어요. 분기 ${result.branches}개, 본문 ${result.sources}개를 복원했어요.`
+        `“${result.chat.title}”을 새 채팅으로 가져왔어요. 채팅 ${result.chats.length}개, 본문 ${result.sources}개를 복원했어요.`
       );
       await onImported().catch(() =>
         setError('채팅은 복원했어요. 목록을 새로 읽지 못했으니 새로고침해 주세요.')
@@ -147,7 +147,7 @@ export function ChatBackupImport({
       {selection && (
         <div className="archive-file-summary">
           <p>
-            {selection.backup.title} · 분기 {selection.backup.chats.length}개 · 본문{' '}
+            {selection.backup.title} · 채팅 {selection.backup.chats.length}개 · 본문{' '}
             {selection.backup.chats.reduce((sum, chat) => sum + chat.transcript.entries.length, 0)}
             개
           </p>

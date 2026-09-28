@@ -247,10 +247,7 @@ export type ProfileSnapshot = ChatProfile & {
 export type Branch = {
   id: string;
   chatId: string;
-  title: string;
   headRevision: string | null;
-  revision: number;
-  default: boolean;
 };
 export type Asset = {
   packageOwner?: {

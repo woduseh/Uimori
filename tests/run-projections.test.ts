@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import { readRunStatus, readRunSnapshot } from '../server/run-projections.js';
+import {
+  readRunStatus,
+  readRunSnapshot,
+  readStoredRunSnapshot,
+} from '../server/run-projections.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 const owned: { path: string; store: Store }[] = [];
@@ -52,6 +56,7 @@ test('completed rows have bounded metadata; explicit context reads reconstruct m
   expect(saved.settled).toBe(true);
   expect(saved.history).toEqual([]);
   expect(String(row.snapshot).length).toBeLessThan(5000);
+  expect(store.run(source.runId).snapshot).toEqual(readStoredRunSnapshot(store, source.runId));
   const context = readRunSnapshot(store, source.runId);
   expect(context.history).toHaveLength(1);
   expect(context.history[0]!.text).toBe('a'.repeat(20000));
