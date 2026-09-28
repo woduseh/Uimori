@@ -92,6 +92,27 @@ function next(input: ProviderRequest, result: ProviderResult): ProviderRequest {
 }
 
 describe('native Responses pure protocol (no live calls)', () => {
+  test('bootstrap uses registered aliases while retaining retired tool names and exact receipts', () => {
+    const input = request();
+    input.bootstrap = [
+      { callId: 'known', name: 'knowledge.read', args: { id: 'lore-1' }, result: 0, denied: false },
+      { callId: 'retired', name: 'context.new', args: {}, result: { saved: true }, denied: false },
+    ];
+    const original = structuredClone(input.bootstrap);
+    const body = record(encodeResponses(input).body);
+    expect(body.input.slice(0, 4)).toMatchObject([
+      {
+        type: 'function_call',
+        call_id: 'known',
+        name: 'tool_0_knowledge_read',
+        arguments: '{"id":"lore-1"}',
+      },
+      { type: 'function_call_output', call_id: 'known', output: '0' },
+      { type: 'function_call', call_id: 'retired', name: 'context.new', arguments: '{}' },
+      { type: 'function_call_output', call_id: 'retired', output: '{"saved":true}' },
+    ]);
+    expect(input.bootstrap).toEqual(original);
+  });
   test('keeps editable model, explicit zero/reasoning, optional tool semantics and collision-free aliases', () => {
     const input = request();
     const original = structuredClone(input);

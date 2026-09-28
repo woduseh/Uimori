@@ -391,7 +391,7 @@ export function encodeResponses(request: ProviderRequest): { body: Json; context
         type: 'function_call',
         id: `fc_${item.callId}`,
         call_id: item.callId,
-        name: item.name,
+        name: aliases.find((alias) => alias.name === item.name)?.providerName ?? item.name,
         arguments: JSON.stringify(item.args),
         status: 'completed',
       },

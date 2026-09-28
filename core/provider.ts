@@ -61,6 +61,7 @@ const budgetedCatalogLength = (catalog: MainInput['catalog']) => {
   return listed;
 };
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
+const KNOWLEDGE_SEARCH_CHARS = 24_000;
 export function roleResources(
   snapshot: RunSnapshot,
   role: 'main' | 'translation' | 'status' | 'image' = 'main'
@@ -345,26 +346,80 @@ export function executeTool(
     if (offset === null || limit === null || limit === 0) return denied('INVALID_ARGUMENTS');
 
     const terms = query.toLocaleLowerCase('en').split(/\s+/u).filter(Boolean);
-    const matches = scope.filter(
-      (item) =>
-        (action.name !== 'skills.list' || item.kind === 'skill') &&
-        terms.every((term) =>
-          `${item.title} ${item.description} ${item.text}`.toLocaleLowerCase('en').includes(term)
-        )
-    );
+    const matches = scope.filter((item) => {
+      if (action.name === 'skills.list' && item.kind !== 'skill') return false;
+      if (!terms.length) return true;
+      const metadataText = `${item.title} ${item.description}`.toLocaleLowerCase('en');
+      const body = item.text.toLocaleLowerCase('en');
+      return terms.every((term) => metadataText.includes(term) || body.includes(term));
+    });
     const allowedIds = new Set(scope.map((item) => item.id));
-    const items = matches
-      .slice(offset, offset + limit)
-      .map((item) => scopedMetadata(item, allowedIds));
+    // Locate excerpts in the original text: lowercasing can change UTF-16 length.
+    const patterns =
+      action.name === 'knowledge.search'
+        ? terms.map((term) => new RegExp(term.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'iu'))
+        : [];
+    const items: unknown[] = [];
+    const result = () => ({
+      items,
+      total: matches.length,
+      nextOffset: offset + items.length < matches.length ? offset + items.length : null,
+    });
+    for (const item of matches.slice(offset, offset + limit)) {
+      const entry: Record<string, unknown> = scopedMetadata(item, allowedIds);
+      const nextRead = {
+        name: item.kind === 'skill' ? 'skills.load' : 'knowledge.read',
+        arguments: {
+          ...(item.kind === 'skill' ? { id: item.id } : { ids: [item.id] }),
+          offset: 0,
+          limit: 4096,
+        },
+      };
+      let index = Infinity;
+      for (const pattern of patterns) {
+        const found = pattern.exec(item.text);
+        if (found) index = Math.min(index, found.index);
+      }
+      if (Number.isFinite(index)) {
+        let start = Math.max(0, index - 60);
+        if (start && /[\uDC00-\uDFFF]/u.test(item.text[start]!)) start--;
+        let end = Math.min(item.text.length, start + 240);
+        if (end < item.text.length && /[\uDC00-\uDFFF]/u.test(item.text[end]!)) end--;
+        entry.match = readResourceRange(item, start, end - start, role);
+        nextRead.arguments.offset = start;
+        entry.nextRead = nextRead;
+      }
+      if (
+        action.name === 'knowledge.search' &&
+        JSON.stringify({ ...result(), items: [entry] }).length > KNOWLEDGE_SEARCH_CHARS
+      ) {
+        const relatedIds = (entry.relatedIds ?? []) as string[];
+        entry.description = summary(item.description);
+        if (relatedIds.length) entry.relatedIds = relatedIds.slice(0, 20);
+        entry.metadataPreview = {
+          description: {
+            totalChars: item.description.length,
+            returnedChars: String(entry.description).length,
+          },
+          relatedIds: { total: relatedIds.length, returned: Math.min(20, relatedIds.length) },
+        };
+        entry.nextRead = nextRead;
+      }
+      items.push(entry);
+      if (
+        action.name === 'knowledge.search' &&
+        JSON.stringify(result()).length > KNOWLEDGE_SEARCH_CHARS
+      ) {
+        items.pop();
+        if (!items.length) return denied('RESULT_METADATA_TOO_LARGE');
+        break;
+      }
+    }
     return {
       ...action,
       args: { query, offset, limit },
       denied: false,
-      result: {
-        items,
-        total: matches.length,
-        nextOffset: offset + items.length < matches.length ? offset + items.length : null,
-      },
+      result: result(),
     };
   }
 

@@ -6,19 +6,12 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { estimateContextTokens } from '../core/context-budget.js';
 import {
-  CONTEXT_CONTINUATION_GUIDANCE,
   CONTEXT_RETRIEVAL_GUIDANCE,
   CONTEXT_SUMMARY_SEMANTICS,
 } from '../core/context-summary-policy.js';
 import { defaultProfile, type ModelSnapshot } from '../core/product.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json } from '../core/transport.js';
-import {
-  CONTEXT_TOOL_NAMES,
-  CONTEXT_TOOLS_CONTRACT,
-  contextToolsEnabled,
-  contextWindowStatus,
-} from '../core/context-tools.js';
 import { encodeResponses } from '../core/openai-protocol.js';
 import { buildCodexTurn } from '../core/codex-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
@@ -29,7 +22,6 @@ import {
   seedContextPlan,
   withContextProjection,
 } from '../server/context-planning.js';
-import { executeContextTool, type ContextPersistence } from '../server/context-tools.js';
 import { buildMainProviderRequest, encodeMainPreview } from '../server/main-request.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
 import { compactToolReads } from '../server/context-tool-compaction.js';
@@ -43,7 +35,7 @@ const chapters = Array.from({ length: 5 }, (_, index) =>
 const workingSummary =
   'WORKING_SUMMARY_CANARY: 미라와 선장의 관계는 3장에서 화해로 정리했고, 등불 약속은 아직 미해결이에요.';
 const finalText = '미라는 등불을 들고 부두 끝으로 걸어갔어요.';
-const model = (contextTools = true): ModelSnapshot => ({
+const model = (): ModelSnapshot => ({
   id: 'main-model',
   revision: 1,
   title: 'main-model',
@@ -52,7 +44,6 @@ const model = (contextTools = true): ModelSnapshot => ({
   inputTokenLimit: 16384,
   maxOutputTokens: 4096,
   temperature: null,
-  ...(contextTools ? { contextTools: true } : {}),
   connection: {
     id: 'connection-main',
     revision: 1,
@@ -65,8 +56,8 @@ const model = (contextTools = true): ModelSnapshot => ({
   },
 });
 /** A frozen main run input whose context plan is already prepared, as app.ts hands it to runMain. */
-async function snapshot(contextTools = true): Promise<RunSnapshot> {
-  const target = model(contextTools);
+async function snapshot(): Promise<RunSnapshot> {
+  const target = model();
   const history = chapters.map((text, index) => ({
     revision: `chapter-${index}`,
     text,
@@ -135,7 +126,7 @@ async function oversizedSnapshot(): Promise<RunSnapshot> {
   const fixed = await snapshot();
   fixed.profile!.models.main!.inputTokenLimit = 8192;
   fixed.profile!.contextModel = {
-    ...model(false),
+    ...model(),
     id: 'summary-model',
     modelId: 'fixture-summary',
     inputTokenLimit: 32768,
@@ -231,8 +222,6 @@ type Body = {
   bootstrap?: ToolEvent[];
   opaqueState?: Json;
 };
-const promptText = (body: Body) =>
-  body.prompt!.messages.flatMap((message) => message.content.map((part) => part.text)).join('\n');
 const projectedTokens = (fixed: RunSnapshot) => (events: ToolEvent[]) =>
   estimateContextTokens(
     encodeMainPreview(
@@ -240,30 +229,7 @@ const projectedTokens = (fixed: RunSnapshot) => (events: ToolEvent[]) =>
       fixed.profile!.models.main!
     ).body
   );
-function persistence(activated = true) {
-  const calls: { compacted: number; summary: string | null; own: unknown }[] = [];
-  let revision = 0;
-  const persist: ContextPersistence = (prepared, own) => {
-    revision++;
-    calls.push({
-      compacted: prepared.contextPlan!.compacted.length,
-      summary: prepared.contextPlan!.summary,
-      own,
-    });
-    return {
-      snapshot: {
-        ...prepared,
-        contextPlan: {
-          ...prepared.contextPlan!,
-          checkpoint: { id: `cp-${revision}`, revision, hash: `hash-${revision}` },
-        },
-      },
-      activated,
-    };
-  };
-  return { persist, calls };
-}
-function hooks(persist?: ContextPersistence) {
+function hooks() {
   const events: ToolEvent[] = [];
   const value: MainHooks = {
     signal: new AbortController().signal,
@@ -275,7 +241,6 @@ function hooks(persist?: ContextPersistence) {
     },
     onAttemptStart: () => 'attempt',
     onAttemptFinish: () => {},
-    ...(persist ? { persistContext: persist } : {}),
   };
   return { value, events };
 }
@@ -299,46 +264,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('model-driven working summary and window switch inside one main run', () => {
-  test('context.write accepts a long summary that fits tokens and reports token overflow separately', async () => {
-    const fixed = await snapshot();
-    const saved = persistence();
-    const state = { workingSummary: null as string | null, checkpoint: null };
-    const summary = 'Known fact:' + ' '.repeat(220_000) + 'KEEP_THE_END';
-    const options = {
-      state,
-      persist: saved.persist,
-      alone: true,
-      pendingResults: 0,
-      reservedBootstrap: 0,
-    };
-    const accepted = await executeContextTool(
-      fixed,
-      { callId: 'long-summary', name: 'context.write', args: { summary } },
-      options
-    );
-    expect(accepted.event.denied).toBe(false);
-    expect(state.workingSummary).toBe(summary);
-    expect(saved.calls).toHaveLength(1);
-    expect(saved.calls[0].summary).toBe(summary);
-    const rejected = await executeContextTool(
-      fixed,
-      {
-        callId: 'too-many-tokens',
-        name: 'context.write',
-        args: { summary: '가나다라마바사'.repeat(40_000) },
-      },
-      options
-    );
-    expect(rejected.event).toMatchObject({
-      denied: true,
-      result: { code: 'CONTEXT_FIXED_INPUT_TOO_LARGE' },
-    });
-    expect(saved.calls).toHaveLength(1);
-    expect(state.workingSummary).toBe(summary);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
+describe('host read compaction and provider continuation inside one main run', () => {
   test.each([
     {
       consumerLimit: 65536,
@@ -363,7 +289,7 @@ describe('model-driven working summary and window switch inside one main run', (
       fixed.contextPlan!.budget.inputTokenLimit = consumerLimit;
       fixed.profile!.models.main!.inputTokenLimit = consumerLimit;
       fixed.profile!.contextModel = {
-        ...model(false),
+        ...model(),
         id: 'summary-model',
         inputTokenLimit: summaryLimit,
         maxOutputTokens: output,
@@ -420,43 +346,42 @@ describe('model-driven working summary and window switch inside one main run', (
     }
   );
 
-  test('summary headroom includes retained source metadata and exact receipts in the actual fresh body', async () => {
+  test('summary headroom includes retained source metadata and exact historical receipts in the actual fresh body', async () => {
     const fixed = await fixedHeavySnapshot(),
-      log = hooks(persistence().persist),
-      // Fixture packets contain both logical messages and JSON data; reserve room for both reference copies.
+      log = hooks(),
       limit = measureMainContext(fixed).estimatedInputTokens + 4200;
     fixed.profile!.models.main!.inputTokenLimit = limit;
     fixed.contextPlan!.budget.inputTokenLimit = limit;
     delete fixed.promptCompilation;
     const original = structuredClone(fixed);
-    const bodies = script([
-      (_body, n) =>
-        toolTurn(
-          [
-            { id: 'exact-write-receipt', name: 'context.write', args: { summary: workingSummary } },
-            ...Array.from({ length: 6 }, (_, index) => ({
-              id: `metadata-read-${index}`,
-              name: 'story.read',
-              args: { sceneNumber: 1, offset: index * 200, limit: 1200 },
-            })),
-          ],
-          n
-        ),
-      () => completed(),
-      () => completed(),
-    ]);
-    const result = await runMain(fixed, log.value);
-    expect(result, JSON.stringify(result)).toMatchObject({
-      status: 'completed',
-      usage: { modelCalls: 3 },
-    });
-    expect(bodies.map((body) => body.role)).toEqual(['main', 'context', 'main']);
-    const history = bodies[2].input.source.completedToolHistory as { events: ToolEvent[] };
-    const receipt = log.events.find((event) => event.callId === 'exact-write-receipt')!;
-    expect(receipt.denied).toBe(false);
-    expect(history.events[0]).toEqual(receipt);
-    expect(history.events).toHaveLength(2);
-    const compacted = history.events[1].result as {
+    // A previously completed mutation is data here, never an executable main tool.
+    const receipt: ToolEvent = {
+      callId: 'exact-write-receipt',
+      name: 'context.write',
+      args: { summary: workingSummary },
+      result: { saved: true, checkpoint: { id: 'historical-checkpoint' } },
+      denied: false,
+    };
+    const reads = Array.from({ length: 6 }, (_, index) =>
+      executeTool(fixed, {
+        callId: `metadata-read-${index}`,
+        name: 'story.read',
+        args: { sceneNumber: 1, offset: index * 200, limit: 1200 },
+      })
+    );
+    const bodies = script([() => completed()]);
+    const events = await compactToolReads(
+      fixed,
+      [receipt, ...reads],
+      log.value,
+      { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      projectedTokens(fixed)
+    );
+    expect(bodies.map((body) => body.role)).toEqual(['context']);
+    expect(bodies[0].input.source.part).not.toContain(receipt.callId);
+    expect(events[0]).toEqual(receipt);
+    expect(events).toHaveLength(2);
+    const compacted = events[1].result as {
       summary: string;
       references: { name: string; args: Json; returned: Record<string, Json> }[];
     };
@@ -475,27 +400,24 @@ describe('model-driven working summary and window switch inside one main run', (
           },
         },
       });
-    const emptyBody = structuredClone(bodies[2]);
-    const emptyHistory = emptyBody.input.source.completedToolHistory as { events: ToolEvent[] };
-    (emptyHistory.events[1].result as { summary: string }).summary = '';
-    const fixedTokens = estimateContextTokens(
-      buildMainProviderRequest(fixed, { completedToolHistory: emptyHistory.events }).request
-    );
-    const goal = (bodies[1].input as unknown as { controls: { targetSummaryTokens: number } })
+    const emptyEvents = structuredClone(events);
+    (emptyEvents[1].result as { summary: string }).summary = '';
+    const fixedTokens = projectedTokens(fixed)(emptyEvents);
+    const goal = (bodies[0].input as unknown as { controls: { targetSummaryTokens: number } })
       .controls.targetSummaryTokens;
-    // Metadata consumes real room that the previous non-read-only estimate omitted.
     expect(fixedTokens).toBeGreaterThan(projectedTokens(fixed)([receipt]));
     expect(limit - fixedTokens).toBeGreaterThan(0);
     expect(goal).toBeLessThanOrEqual(limit - fixedTokens);
     expect(goal).toBeLessThan(
       Math.min(2048, Math.floor(limit / 8), limit - projectedTokens(fixed)([receipt]))
     );
-    expect(estimateContextTokens(bodies[2])).toBeLessThanOrEqual(limit);
-    expect(log.events.find((event) => event.name === 'context.compact')!.result).toMatchObject({
-      applied: true,
-    });
-    expect(bodies[2]).not.toHaveProperty('opaqueState');
-    expect(bodies[2].prompt!.messages.at(-1)!.content[0].text).toContain('read-results-compacted');
+    const fresh = encodeMainPreview(
+      buildMainProviderRequest(fixed, { completedToolHistory: events }).request,
+      fixed.profile!.models.main!
+    ).body as unknown as Body;
+    expect(estimateContextTokens(fresh)).toBeLessThanOrEqual(limit);
+    expect(fresh).not.toHaveProperty('opaqueState');
+    expect(fresh.prompt!.messages.at(-1)!.content[0].text).toContain('read-results-compacted');
     expect(fixed).toEqual(original);
   });
 
@@ -548,8 +470,7 @@ describe('model-driven working summary and window switch inside one main run', (
     const fixed = await fixedHeavySnapshot(true),
       target = fixed.profile!.models.main!,
       original = structuredClone(fixed),
-      saved = persistence(),
-      log = hooks(saved.persist),
+      log = hooks(),
       limit = fixed.contextPlan!.budget.inputTokenLimit;
     log.value.resolveCredential = () => 'SYNTHETIC_VERTEX_TOKEN';
     const vertexBodies: any[] = [],
@@ -590,11 +511,11 @@ describe('model-driven working summary and window switch inside one main run', (
         return reply([
           {
             functionCall: {
-              id: 'write-between-reads',
-              name: 'context.write',
-              args: { summary: workingSummary },
+              id: 'denied-between-reads',
+              name: 'story.read',
+              args: { sceneNumber: 999999 },
             },
-            thoughtSignature: 'WRITE_SIGNATURE',
+            thoughtSignature: 'DENIED_READ_SIGNATURE',
           },
         ]);
       if (vertexBodies.length === 3)
@@ -619,12 +540,14 @@ describe('model-driven working summary and window switch inside one main run', (
     expect(roles).toEqual(['main', 'context', 'main', 'main', 'context', 'main']);
     expect(vertexBodies).toHaveLength(4);
     expect(summaryBodies).toHaveLength(2);
-    expect(saved.calls).toHaveLength(1);
-    expect(log.events.filter((event) => event.name === 'context.write')).toHaveLength(1);
+    expect(log.events.find((event) => event.callId === 'denied-between-reads')).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+    });
     expect(summaryBodies[0].input.source.part).toContain('first-read');
     expect(summaryBodies[1].input.source.part).toContain('second-read');
     for (const body of summaryBodies)
-      expect(body.input.source.part).not.toContain('write-between-reads');
+      expect(body.input.source.part).not.toContain('denied-between-reads');
     const compactions = log.events
       .filter((event) => event.name === 'context.compact')
       .map(
@@ -644,7 +567,7 @@ describe('model-driven working summary and window switch inside one main run', (
     const firstResponse = responses(vertexBodies[1]).find((part: any) => part.id === 'first-read');
     expect(firstResponse).toMatchObject({
       name: 'story.read',
-      response: { text: expect.any(String), contextWindow: { inputTokenLimit: limit } },
+      response: { text: expect.any(String) },
     });
     for (const body of vertexBodies.slice(1)) {
       expect(JSON.stringify(body)).toContain('ORIGINAL_READ_SIGNATURE');
@@ -653,10 +576,10 @@ describe('model-driven working summary and window switch inside one main run', (
       expect(responses(body).find((part: any) => part.id === 'first-read')).toEqual(firstResponse);
       expect(estimateContextTokens(body)).toBeLessThanOrEqual(limit);
     }
-    expect(JSON.stringify(vertexBodies[2])).toContain('WRITE_SIGNATURE');
+    expect(JSON.stringify(vertexBodies[2])).toContain('DENIED_READ_SIGNATURE');
     expect(JSON.stringify(vertexBodies[3])).toContain('SECOND_READ_SIGNATURE');
     expect(
-      responses(vertexBodies[3]).filter((part: any) => part.name === 'context.write')
+      responses(vertexBodies[3]).filter((part: any) => part.id === 'denied-between-reads')
     ).toHaveLength(1);
     expect(target.connection.protocol).toBe('vertex-gemini-v1');
     expect(fixed).toEqual(original);
@@ -707,21 +630,15 @@ describe('model-driven working summary and window switch inside one main run', (
   });
 
   test.each(['completed', 'eof', 'call-limit', 'authorization-revoked'] as const)(
-    'accumulated reads are admitted before the next send; compaction %s preserves saved effects and originals',
+    'accumulated reads are admitted before the next send; compaction %s preserves originals',
     async (outcome) => {
       const fixed = await oversizedSnapshot();
-      fixed.settings.maxCalls = outcome === 'call-limit' ? 3 : 8;
+      fixed.settings.maxCalls = outcome === 'call-limit' ? 2 : 8;
       const original = structuredClone(fixed);
-      const saved = persistence(),
-        log = hooks(saved.persist);
+      const log = hooks();
       let revoked = false;
       log.value.authorize = (connection) => ({ ...connection, enabled: !revoked });
       const bodies = script([
-        (_body, n) =>
-          toolTurn(
-            [{ id: 'saved-once', name: 'context.write', args: { summary: workingSummary } }],
-            n
-          ),
         (_body, n) =>
           toolTurn(
             Array.from({ length: 4 }, (_, i) => ({
@@ -734,7 +651,6 @@ describe('model-driven working summary and window switch inside one main run', (
         (body) => {
           expect(body.role).toBe('context');
           expect(body.input.source.part).toContain('large-read-0');
-          expect(body.input.source.part).not.toContain('saved-once');
           revoked = outcome === 'authorization-revoked';
           return outcome === 'eof' ? sse({ type: 'text_delta', delta: 'Incomplete' }) : completed();
         },
@@ -744,13 +660,8 @@ describe('model-driven working summary and window switch inside one main run', (
           expect(body.input.results).toEqual([]);
           expect(body).not.toHaveProperty('bootstrap');
           const history = body.input.source.completedToolHistory as { events: ToolEvent[] };
-          expect(history.events).toHaveLength(2);
+          expect(history.events).toHaveLength(1);
           expect(history.events[0]).toMatchObject({
-            callId: 'saved-once',
-            name: 'context.write',
-            result: { saved: true, checkpoint: { id: 'cp-1' } },
-          });
-          expect(history.events[1]).toMatchObject({
             name: 'story.read',
             result: {
               kind: 'host-compacted-reads',
@@ -766,18 +677,14 @@ describe('model-driven working summary and window switch inside one main run', (
       ]);
       const result = await runMain(fixed, log.value);
       expect(fixed).toEqual(original);
-      expect(saved.calls).toHaveLength(1);
       expect(log.events.filter((event) => event.name === 'story.read')).toHaveLength(4);
-      expect(
-        log.events.find((event) => event.callId === 'large-read-3')!.result
-      ).not.toHaveProperty('contextWindow');
       if (outcome === 'completed') {
-        expect(result).toMatchObject({ status: 'completed', usage: { modelCalls: 4 } });
+        expect(result).toMatchObject({ status: 'completed', usage: { modelCalls: 3 } });
         expect(log.events.at(-1)).toMatchObject({ name: 'context.compact' });
         expect(
           (log.events.at(-1)!.result as { beforeTokens: number }).beforeTokens
         ).toBeGreaterThan(8192);
-        expect(bodies).toHaveLength(4);
+        expect(bodies).toHaveLength(3);
       } else {
         expect(result).toMatchObject({
           status: 'error',
@@ -788,7 +695,7 @@ describe('model-driven working summary and window switch inside one main run', (
                 ? 'CONNECTION_NOT_AUTHORIZED'
                 : 'CONTEXT_TOOL_COMPACTION_CALL_LIMIT',
         });
-        expect(bodies).toHaveLength(outcome === 'call-limit' ? 2 : 3);
+        expect(bodies).toHaveLength(outcome === 'call-limit' ? 1 : 2);
         expect(log.events.some((event) => event.name === 'context.compact')).toBe(
           outcome === 'authorization-revoked'
         );
@@ -801,8 +708,7 @@ describe('model-driven working summary and window switch inside one main run', (
     async (mode) => {
       const fixed = await oversizedSnapshot(),
         target = fixed.profile!.models.main!,
-        saved = persistence(),
-        log = hooks(saved.persist);
+        log = hooks();
       target.modelId = VERTEX_GEMINI_MODEL_ID;
       target.connection = {
         ...target.connection,
@@ -813,13 +719,6 @@ describe('model-driven working summary and window switch inside one main run', (
       };
       const original = structuredClone(fixed);
       log.value.resolveCredential = () => 'SYNTHETIC_VERTEX_TOKEN';
-      log.value.persistContext = (prepared, own) => {
-        if (mode === 'mixed' && saved.calls.length > 0)
-          expect(log.events.at(-1)!.callId).toBe(
-            saved.calls.length === 1 ? 'vertex-large-read' : 'fresh-read'
-          );
-        return saved.persist(prepared, own);
-      };
       const vertexBodies: any[] = [],
         summaryBodies: Body[] = [];
       const reply = (parts: unknown[]) =>
@@ -840,9 +739,9 @@ describe('model-driven working summary and window switch inside one main run', (
           ? [
               {
                 functionCall: {
-                  id: `${prefix}-write`,
-                  name: 'context.write',
-                  args: { summary: workingSummary },
+                  id: `${prefix}-denied`,
+                  name: 'story.read',
+                  args: { sceneNumber: 999999 },
                 },
               },
             ]
@@ -865,7 +764,7 @@ describe('model-driven working summary and window switch inside one main run', (
           summaryBodies.push(body);
           expect(body.role).toBe('context');
           expect(body.input.source.part).toContain('vertex-large-read');
-          expect(body.input.source.part).not.toContain('vertex-write');
+          expect(body.input.source.part).not.toContain('vertex-large-denied');
           return completed();
         }
         expect(String(url)).toBe(
@@ -873,28 +772,14 @@ describe('model-driven working summary and window switch inside one main run', (
         );
         vertexBodies.push(body);
         if (vertexBodies.length === 1)
-          return reply([
-            {
-              functionCall: {
-                id: 'vertex-write',
-                name: 'context.write',
-                args: { summary: workingSummary },
-              },
-              thoughtSignature: 'OLD_SIGNED_WRITE',
-            },
-          ]);
-        if (vertexBodies.length === 2) {
-          expect(JSON.stringify(body.contents)).toContain('OLD_SIGNED_WRITE');
           return reply(readParts('vertex-large', 16000, 'OLD_SIGNED_READ'));
-        }
         const text = JSON.stringify(body);
         expect(text).toContain('host-completed-tool-history');
-        expect(text).toContain('vertex-write');
         expect(text).toContain('host-compacted-reads');
-        expect(text).not.toContain('OLD_SIGNED_WRITE');
         expect(text).not.toContain('OLD_SIGNED_READ');
         expect(text).not.toContain('skip_thought_signature_validator');
-        if (vertexBodies.length === 3) {
+        if (mode === 'mixed') expect(text).toContain('vertex-large-denied');
+        if (vertexBodies.length === 2) {
           expect(
             body.contents.every((message: any) =>
               message.parts.every((part: any) => !part.functionCall && !part.functionResponse)
@@ -902,7 +787,7 @@ describe('model-driven working summary and window switch inside one main run', (
           ).toBe(true);
           return reply(readParts('fresh', 40, 'NEW_SIGNED_READ'));
         }
-        expect(vertexBodies).toHaveLength(4);
+        expect(vertexBodies).toHaveLength(3);
         expect(text).toContain('NEW_SIGNED_READ');
         expect(body.contents.at(-1).parts[0].functionResponse).toMatchObject({
           id: 'fresh-read',
@@ -911,498 +796,149 @@ describe('model-driven working summary and window switch inside one main run', (
         expect(body.contents.at(-1).parts).toHaveLength(
           mode === 'single' ? 1 : mode === 'batch' ? 2 : 3
         );
-        const windows = body.contents
-          .at(-1)
-          .parts.map((part: any) => part.functionResponse.response.contextWindow);
-        expect(
-          windows.every((window: any) => window.estimatedInputTokens >= estimateContextTokens(body))
-        ).toBe(true);
-        expect(
-          windows.every((window: any) => JSON.stringify(window) === JSON.stringify(windows[0]))
-        ).toBe(true);
         return reply([{ text: finalText }]);
       });
       const result = await runMain(fixed, log.value);
       expect(result).toMatchObject({
         status: 'completed',
         text: finalText,
-        usage: { modelCalls: 5 },
+        usage: { modelCalls: 4 },
       });
       expect(summaryBodies).toHaveLength(1);
-      expect(vertexBodies).toHaveLength(4);
-      expect(saved.calls).toHaveLength(mode === 'mixed' ? 3 : 1);
-      expect(log.events.filter((event) => event.name === 'story.read')).toHaveLength(
-        mode === 'single' ? 2 : 4
-      );
+      expect(vertexBodies).toHaveLength(3);
       expect(
-        log.events
-          .filter((event) => event.name === 'context.write')
-          .every((event) => !Object.hasOwn(event.result as object, 'contextWindow'))
-      ).toBe(true);
+        log.events.filter((event) => event.name === 'story.read' && !event.denied)
+      ).toHaveLength(mode === 'single' ? 2 : 4);
+      expect(log.events.filter((event) => event.denied)).toHaveLength(mode === 'mixed' ? 2 : 0);
       expect(fixed).toEqual(original);
     }
   );
 
-  test('repeated compaction retains more than eight exact receipts and prior read arguments as one reference envelope', async () => {
+  test('repeated compaction preserves exact historical receipts and read references, including after summary failure', async () => {
     const fixed = await oversizedSnapshot(),
-      saved = persistence(),
-      log = hooks(saved.persist);
-    // This case isolates repeated receipt/continuation preservation from summary chunking.
-    // Keep space for all exact receipts in the fixture's logical-message and JSON representations.
+      log = hooks();
     fixed.profile!.models.main!.inputTokenLimit = 16384;
     fixed.contextPlan!.budget.inputTokenLimit = 16384;
     fixed.profile!.contextModel!.inputTokenLimit = 65536;
     const original = structuredClone(fixed);
-    const largeReads = (prefix: string, offset: number) =>
-      Array.from({ length: 4 }, (_, i) => ({
-        id: `${prefix}-${i}`,
-        name: 'story.read',
-        args: { sceneNumber: i + 1, offset, limit: 16000 },
-      }));
-    const receipts = () => log.events.filter((event) => event.name === 'context.write');
-    const bodies = script([
-      (_body, n) =>
-        toolTurn(
-          Array.from({ length: 9 }, (_, i) => ({
-            id: `write-${i}`,
-            name: 'context.write',
-            args: { summary: `Saved ${i}` },
-          })),
-          n
-        ),
-      (_body, n) => toolTurn(largeReads('first-read', 0), n),
-      () => completed(),
-      (body, n) => {
-        expect(body.input.results).toEqual([]);
-        expect(body).not.toHaveProperty('bootstrap');
-        expect(body).not.toHaveProperty('opaqueState');
-        const history = body.input.source.completedToolHistory as { events: ToolEvent[] };
-        expect(history.events.filter((event) => event.name === 'context.write')).toEqual(
-          receipts()
-        );
-        return toolTurn(largeReads('second-read', 1), n);
+    // Historical receipts remain valid data after the model-facing tool is retired.
+    const receipts: ToolEvent[] = Array.from({ length: 9 }, (_, i) => ({
+      callId: `write-${i}`,
+      name: 'context.write',
+      args: { summary: `Saved ${i}` },
+      result: {
+        saved: true,
+        checkpoint: { id: `historical-${i}`, revision: i + 1, hash: `hash-${i}` },
       },
-      (body) => {
-        expect(body.input.source.part).toContain('host-compacted-reads');
-        expect(body.input.source.part).toContain('second-read-0');
-        expect(body.input.source.part).not.toContain('write-0');
-        return completed();
-      },
-      (body) => {
-        expect(body.input.results).toEqual([]);
-        expect(body).not.toHaveProperty('bootstrap');
-        expect(body).not.toHaveProperty('opaqueState');
-        const history = body.input.source.completedToolHistory as { events: ToolEvent[] };
-        expect(history.events).toHaveLength(10);
-        expect(history.events.filter((event) => event.name === 'context.write')).toEqual(
-          receipts()
-        );
-        expect(history.events.at(-1)!.result).toMatchObject({
-          references: [...largeReads('ignored', 0), ...largeReads('ignored', 1)].map(
-            ({ name, args }) => ({ name, args })
-          ),
-        });
-        const references = (
-          history.events.at(-1)!.result as {
-            references: { returned: { source: Json; sceneScope: Json } }[];
-          }
-        ).references;
-        const reads = log.events.filter((event) => event.name === 'story.read');
-        expect(references.map((reference) => reference.returned.source)).toEqual(
-          reads.map((event) => (event.result as { source: Json }).source)
-        );
-        expect(references.map((reference) => reference.returned.sceneScope)).toEqual(
-          reads.map((event) => (event.result as { sceneScope: Json }).sceneScope)
-        );
-        for (const [protocol, modelId] of [
-          ['vertex-gemini-v1', VERTEX_GEMINI_MODEL_ID],
-          ['openai-responses-v1', 'gpt-5.6'],
-          ['openai-chat-v1', 'gpt-5.6'],
-          ['anthropic-messages-v1', 'claude-sonnet-4-6'],
-        ] as const) {
-          const target = structuredClone(fixed);
-          target.profile!.models.main!.connection.protocol = protocol;
-          target.profile!.models.main!.modelId = modelId;
-          const request = buildMainProviderRequest(target, {
-            completedToolHistory: history.events,
-          }).request;
-          const encoded =
-            protocol === 'vertex-gemini-v1'
-              ? encodeVertex(request).body
-              : protocol === 'openai-responses-v1'
-                ? encodeResponses(request).body
-                : protocol === 'anthropic-messages-v1'
-                  ? encodeAnthropic(request).body
-                  : encodeChat(request).body;
-          const text = JSON.stringify(encoded);
-          expect(text).toContain('host-completed-tool-history');
-          expect(text).toContain('write-8');
-          expect(text).toContain('host-compacted-reads');
-          expect(request.input.results).toEqual([]);
-          expect(request).not.toHaveProperty('bootstrap');
-        }
-        // A completed call ID cannot replay a mutation after either reset.
-        return toolTurn([{ id: 'write-0', name: 'context.write', args: { summary: 'Replay' } }], 6);
-      },
-    ]);
-    const result = await runMain(fixed, log.value);
-    expect(bodies.map((body) => body.role)).toEqual([
-      'main',
-      'main',
-      'context',
-      'main',
-      'context',
-      'main',
-    ]);
-    expect(result).toMatchObject({
-      status: 'error',
-      error: 'DUPLICATE_TOOL_ID',
-      usage: { modelCalls: 6 },
-    });
-    expect(bodies).toHaveLength(6);
-    expect(saved.calls).toHaveLength(9);
-    expect(log.events.filter((event) => event.name === 'context.compact')).toHaveLength(2);
+      denied: false,
+    }));
+    const reads = (prefix: string, offset: number) =>
+      Array.from({ length: 4 }, (_, i) =>
+        executeTool(fixed, {
+          callId: `${prefix}-${i}`,
+          name: 'story.read',
+          args: { sceneNumber: i + 1, offset, limit: 16000 },
+        })
+      );
+    const firstReads = reads('first-read', 0),
+      secondReads = reads('second-read', 1),
+      usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      bodies = script([
+        () => completed(),
+        (body) => {
+          expect(body.input.source.part).toContain('host-compacted-reads');
+          expect(body.input.source.part).toContain('second-read-0');
+          return completed();
+        },
+        () => sse({ type: 'text_delta', delta: 'Incomplete summary' }),
+      ]);
+    const firstInput = [...receipts, ...firstReads],
+      preservedInput = structuredClone(firstInput);
+    const first = await compactToolReads(
+      fixed,
+      firstInput,
+      log.value,
+      usage,
+      projectedTokens(fixed)
+    );
+    expect(first.slice(0, 9)).toEqual(receipts);
+    const second = await compactToolReads(
+      fixed,
+      [...first, ...secondReads],
+      log.value,
+      usage,
+      projectedTokens(fixed)
+    );
+    expect(second).toHaveLength(10);
+    expect(second.slice(0, 9)).toEqual(receipts);
+    const references = (
+      second.at(-1)!.result as {
+        references: { name: string; args: Json; returned: { source: Json; sceneScope: Json } }[];
+      }
+    ).references;
+    const allReads = [...firstReads, ...secondReads];
+    expect(references.map(({ name, args }) => ({ name, args }))).toEqual(
+      allReads.map(({ name, args }) => ({ name, args }))
+    );
+    expect(references.map((reference) => reference.returned.source)).toEqual(
+      allReads.map((event) => (event.result as { source: Json }).source)
+    );
+    expect(references.map((reference) => reference.returned.sceneScope)).toEqual(
+      allReads.map((event) => (event.result as { sceneScope: Json }).sceneScope)
+    );
+    const failedInput = [...second, ...reads('failed-read', 2)],
+      beforeFailure = structuredClone(failedInput);
+    await expect(
+      compactToolReads(fixed, failedInput, log.value, usage, projectedTokens(fixed))
+    ).rejects.toThrow('CONTEXT_TOOL_COMPACTION_EOF');
+    expect(failedInput).toEqual(beforeFailure);
+    expect(firstInput).toEqual(preservedInput);
+    expect(bodies).toHaveLength(3);
+    for (const body of bodies) {
+      expect(body.role).toBe('context');
+      expect(body.input.source.part).not.toContain('write-0');
+      expect(body.input.source.part).not.toContain('write-8');
+    }
     expect(fixed).toEqual(original);
   });
 
-  test('list, write, switch alone, then read a compacted original through the new window', async () => {
-    const saved = persistence();
-    const log = hooks(saved.persist);
+  test('a completed read cannot execute again after automatic compaction', async () => {
+    const fixed = await oversizedSnapshot(),
+      original = structuredClone(fixed),
+      log = hooks();
     const bodies = script([
-      (_body, n) => toolTurn([{ id: 'c1', name: 'story.search', args: {} }], n),
-      (_body, n) =>
-        toolTurn([{ id: 'c2', name: 'context.write', args: { summary: workingSummary } }], n),
-      (_body, n) => toolTurn([{ id: 'c3', name: 'context.new', args: { keepRecent: 2 } }], n),
-      (_body, n) =>
-        toolTurn([{ id: 'c4', name: 'story.read', args: { sceneNumber: 1, limit: 40 } }], n),
-      () => completed(),
-    ]);
-    const result = await runMain(await snapshot(), log.value);
-    expect(result).toMatchObject({ status: 'completed', text: finalText });
-    expect(result.usage.modelCalls).toBe(5);
-    expect(bodies).toHaveLength(5);
-    const first = bodies[0];
-    expect(first.stable.tools.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining([...CONTEXT_TOOL_NAMES, 'story.search', 'story.read'])
-    );
-    expect(first.stable.contract).toContain(CONTEXT_TOOLS_CONTRACT);
-    expect(first.stable.contract).toContain(CONTEXT_SUMMARY_SEMANTICS);
-    expect(first.stable.contract).toContain(CONTEXT_RETRIEVAL_GUIDANCE);
-    expect(first.input.source.contextWindow).toMatchObject({
-      inputTokenLimit: 16384,
-      compactedExchanges: 0,
-      retainedExchanges: 5,
-    });
-    for (const chapter of chapters) expect(promptText(first)).toContain(chapter.slice(0, 16));
-    expect(first).not.toHaveProperty('opaqueState');
-    expect(bodies[1].opaqueState).toBe('OPAQUE_1');
-    expect(bodies[2].opaqueState).toBe('OPAQUE_2');
-    expect(log.events.map((event) => event.name)).toEqual([
-      'story.search',
-      'context.write',
-      'context.new',
-      'story.read',
-    ]);
-    expect(log.events[0].result).not.toHaveProperty('contextWindow');
-    const listed = bodies[1].input.results[0].result as {
-      results: { revision: string; compacted: boolean }[];
-      contextWindow: { estimatedInputTokens: number; inputTokenLimit: number; level: string };
-    };
-    expect(listed.results.map((item) => item.revision)).toEqual(
-      chapters.map((_, i) => `chapter-${i}`)
-    );
-    expect(listed.results.every((item) => !item.compacted)).toBe(true);
-    expect(listed.contextWindow.inputTokenLimit).toBe(16384);
-    expect(listed.contextWindow.estimatedInputTokens).toBeGreaterThan(0);
-    expect(listed.contextWindow.level).toBe('ok');
-    expect(log.events[1].result).toMatchObject({
-      saved: true,
-      summaryChars: workingSummary.length,
-      checkpoint: { id: 'cp-1' },
-      activated: true,
-    });
-    expect(log.events[1].result).not.toHaveProperty('contextWindow');
-    expect(bodies[2].input.results[1].result).toMatchObject({
-      contextWindow: { inputTokenLimit: 16384 },
-    });
-    expect(saved.calls[0]).toEqual({ compacted: 0, summary: workingSummary, own: null });
-    expect(log.events[2].result).toMatchObject({
-      switched: true,
-      compactedExchanges: 3,
-      retained: [
-        { sceneNumber: 4, revision: 'chapter-3', hash: hash(chapters[3]) },
-        { sceneNumber: 5, revision: 'chapter-4', hash: hash(chapters[4]) },
-      ],
-      sceneScope: {
-        chatId: (await snapshot()).chatId,
-        headRevision: 'chapter-4',
-        headHash: hash(chapters[4]),
-      },
-      droppedToolResults: 2,
-      checkpoint: { id: 'cp-2' },
-      contextWindow: { inputTokenLimit: 16384 },
-    });
-    expect(saved.calls[1]).toEqual({
-      compacted: 3,
-      summary: workingSummary,
-      own: { id: 'cp-1', revision: 1, hash: 'hash-1' },
-    });
-    // The new window is a fresh request: no continuation, no earlier results, one carried exchange.
-    const fresh = bodies[3];
-    expect(fresh).not.toHaveProperty('opaqueState');
-    expect(fresh.input.results).toEqual([]);
-    expect(fresh.bootstrap!.map((item) => item.name)).toEqual(['context.new']);
-    expect((fresh.bootstrap![0].result as { switched: boolean }).switched).toBe(true);
-    const text = promptText(fresh);
-    for (const index of [0, 1, 2]) expect(text).not.toContain(`CHAPTER_${index}_CANARY`);
-    for (const index of [3, 4]) expect(text).toContain(`CHAPTER_${index}_CANARY`);
-    expect(text).toContain(workingSummary);
-    expect(text).toContain('FIXED_INSTRUCTIONS_CANARY');
-    expect(text).toContain('CURRENT_REQUEST_CANARY');
-    expect(fresh.input.source.contextWindow).toMatchObject({
-      compactedExchanges: 3,
-      retainedExchanges: 2,
-      summaryChars: workingSummary.length,
-    });
-    expect(fresh.stable.tools.map((tool) => tool.name)).toEqual(
-      first.stable.tools.map((tool) => tool.name)
-    );
-    const reread = log.events[3].result as { text: string; source: { revision: string } };
-    expect(reread.source.revision).toBe('chapter-0');
-    expect(reread).toMatchObject({
-      sceneNumber: 1,
-      sceneScope: { headRevision: 'chapter-4', headHash: hash(chapters[4]) },
-    });
-    expect(chapters[0].startsWith(reread.text)).toBe(true);
-    expect(bodies[4].opaqueState).toBe('OPAQUE_4');
-    expect(bodies[4].input.results.map((event) => event.name)).toEqual(['story.read']);
-  });
-
-  test('a switch without any saved summary, or beside another call, is a recoverable denial', async () => {
-    const saved = persistence();
-    const log = hooks(saved.persist);
-    const rounds: ((body: Body, n: number) => Response)[] = [
-      (_body, n) => toolTurn([{ id: 'c1', name: 'context.new', args: {} }], n),
       (_body, n) =>
         toolTurn(
-          [
-            { id: 'c2', name: 'context.new', args: { summary: workingSummary } },
-            { id: 'c3', name: 'story.search', args: {} },
-          ],
+          Array.from({ length: 4 }, (_, i) => ({
+            id: `read-${i}`,
+            name: 'story.read',
+            args: { sceneNumber: i + 1, limit: 16000 },
+          })),
           n
         ),
       () => completed(),
-    ];
-    const bodies = script(rounds);
-    const fixed = await snapshot();
-    const result = await runMain(fixed, log.value);
-    expect(result.status).toBe('completed');
-    expect(log.events.map((event) => [event.name, event.denied])).toEqual([
-      ['context.new', true],
-      ['context.new', true],
-      ['story.search', false],
-    ]);
-    expect(log.events[0]).toMatchObject({
-      result: { code: 'SUMMARY_REQUIRED' },
-      errorKind: 'recoverable',
-    });
-    expect(log.events[1].result).toEqual({ code: 'CONTEXT_NEW_MUST_BE_ALONE' });
-    expect(saved.calls).toEqual([]);
-    expect(bodies[2].opaqueState).toBe('OPAQUE_2');
-    expect(bodies[2].input.results).toHaveLength(3);
-
-    // Batch recovery re-enters this same loop with durable receipts. A rejected window
-    // switch must remain rejected, preserving every request sent after that receipt.
-    const resumed = hooks(saved.persist);
-    resumed.value.replayToolEvents = structuredClone(log.events);
-    const replayBodies = script(rounds);
-    expect(await runMain(fixed, resumed.value)).toMatchObject({
-      status: 'completed',
-      text: finalText,
-    });
-    expect(replayBodies).toEqual(bodies);
-    expect(resumed.events).toEqual([]);
-    expect(saved.calls).toEqual([]);
-  });
-
-  test('a failed durable save is reported, never treated as saved, and the run continues', async () => {
-    const failing: ContextPersistence = () => {
-      throw new Error('disk full');
-    };
-    const log = hooks(failing);
-    script([
-      (_body, n) =>
-        toolTurn([{ id: 'c1', name: 'context.write', args: { summary: workingSummary } }], n),
-      (_body, n) => toolTurn([{ id: 'c2', name: 'context.read', args: {} }], n),
-      () => completed(),
-    ]);
-    const result = await runMain(await snapshot(), log.value);
-    expect(result.status).toBe('completed');
-    expect(log.events[0]).toMatchObject({
-      denied: true,
-      result: { code: 'CONTEXT_WRITE_FAILED' },
-      errorKind: 'recoverable',
-    });
-    expect(log.events[1].result).toMatchObject({
-      savedSummary: null,
-      windowSummary: null,
-      compacted: [],
-      retained: chapters.map((text, index) => ({
-        sceneNumber: index + 1,
-        revision: `chapter-${index}`,
-        hash: hash(text),
-      })),
-      checkpoint: null,
-    });
-  });
-
-  test('presets without the flag, evaluation presets and artifacts never register the tools', async () => {
-    const off = await snapshot(false);
-    expect(contextToolsEnabled(off)).toBe(false);
-    const built = buildMainProviderRequest(off).request;
-    expect(built.stable.tools.some((tool) => CONTEXT_TOOL_NAMES.includes(tool.name as never))).toBe(
-      false
-    );
-    expect(built.stable.contract).not.toContain(CONTEXT_TOOLS_CONTRACT);
-    expect(built.input.source).not.toHaveProperty('contextWindow');
-    const evaluated = await snapshot();
-    evaluated.profile!.models.main!.evaluationTools = {
-      contextMode: 'model-selected',
-      approvalReasoningMode: 'configured',
-      maximumToolRounds: 8,
-      terminalLateCorrections: false,
-      outputRecovery: true,
-    };
-    expect(contextToolsEnabled(evaluated)).toBe(false);
-    expect(contextToolsEnabled({ ...(await snapshot()), executionPurpose: 'artifact' })).toBe(
-      false
-    );
-    const log = hooks(persistence().persist);
-    script([
-      (_body, n) =>
-        toolTurn([{ id: 'c1', name: 'context.write', args: { summary: workingSummary } }], n),
-    ]);
-    const result = await runMain(off, log.value);
-    expect(result).toMatchObject({ status: 'error', error: 'READ_TOOL_DENIED' });
-    expect(log.events[0].denied).toBe(true);
-  });
-
-  test('window usage levels follow the documented 70/80 percent thresholds', async () => {
-    expect(contextWindowStatus(1000, 10000)).toEqual({
-      inputTokenLimit: 10000,
-      estimatedInputTokens: 1000,
-      usedRatio: 0.1,
-      level: 'ok',
-    });
-    expect(contextWindowStatus(7000, 10000)).toMatchObject({ level: 'notice', usedRatio: 0.7 });
-    expect(contextWindowStatus(7000, 10000).notice).toContain('context.new');
-    expect(contextWindowStatus(8400, 10000)).toMatchObject({ level: 'urgent', usedRatio: 0.84 });
-    expect(contextWindowStatus(8400, 10000).notice).toContain('85%');
-  });
-
-  test('the post-switch request is a valid fresh request for every native encoder', async () => {
-    const fixed = await snapshot();
-    const outcome = await executeContextTool(
-      fixed,
-      { callId: 'switch', name: 'context.new', args: { keepRecent: 1, summary: workingSummary } },
-      {
-        state: { workingSummary: null, checkpoint: null },
-        alone: true,
-        pendingResults: 3,
-        reservedBootstrap: 0,
-        persist: persistence().persist,
-      }
-    );
-    expect(outcome.switched).toBeDefined();
-    const readBack = await executeContextTool(
-      outcome.switched!,
-      { callId: 'read-back', name: 'context.read', args: {} },
-      {
-        state: { workingSummary, checkpoint: null },
-        alone: true,
-        pendingResults: 0,
-        reservedBootstrap: 0,
-      }
-    );
-    expect(readBack.event).toMatchObject({
-      denied: false,
-      result: {
-        savedSummary: workingSummary,
-        windowSummary: workingSummary,
-        sceneScope: {
-          chatId: fixed.chatId,
-          headRevision: 'chapter-4',
-          headHash: hash(chapters[4]),
-        },
-        compacted: chapters.slice(0, 4).map((text, index) => ({
-          sceneNumber: index + 1,
-          revision: `chapter-${index}`,
-          hash: hash(text),
-        })),
-        retained: [{ sceneNumber: 5, revision: 'chapter-4', hash: hash(chapters[4]) }],
+      (body, n) => {
+        expect(body).not.toHaveProperty('opaqueState');
+        expect(body.input.source.completedToolHistory).toBeDefined();
+        return toolTurn(
+          [{ id: 'read-0', name: 'story.read', args: { sceneNumber: 1, limit: 40 } }],
+          n
+        );
       },
+    ]);
+    expect(await runMain(fixed, log.value)).toMatchObject({
+      status: 'error',
+      error: 'DUPLICATE_TOOL_ID',
+      usage: { modelCalls: 3 },
     });
-    const preservedSnapshot = structuredClone(outcome.switched!);
-    const initial = buildMainProviderRequest(outcome.switched!).request;
-    expect(initial.input.source).not.toHaveProperty('requestContinuation');
-    const { request } = buildMainProviderRequest(outcome.switched!, {
-      segmentBootstrap: [outcome.event],
-    });
-    expect(request.prompt!.messages.slice(0, -1)).toEqual(initial.prompt!.messages);
-    expect(request.prompt!.messages.at(-1)).toMatchObject({
-      id: 'native.request-continuation',
-      role: 'user',
-      content: [{ type: 'text', text: expect.stringContaining(CONTEXT_CONTINUATION_GUIDANCE) }],
-    });
-    const notice = request.prompt!.messages.at(-1)!.content[0].text;
-    expect(notice).toContain('same-request-in-progress');
-    expect(notice).toContain('context-window-opened');
-    expect(notice).toContain('"callId":"switch","name":"context.new","denied":false');
-    expect(request.input.source).not.toHaveProperty('requestContinuation');
-    expect(request.bootstrap).toHaveLength(1);
-    expect(request.input.results).toEqual([]);
-    expect(request).not.toHaveProperty('opaqueState');
-    const responses = encodeResponses({ ...request, modelId: 'gpt-5.6' }).body as Record<
-      string,
-      any
-    >;
-    expect(JSON.stringify(responses.input)).toContain('context.new');
-    expect(JSON.stringify(responses.input)).toContain(workingSummary);
-    expect(JSON.stringify(responses.input)).not.toContain('CHAPTER_0_CANARY');
-    const chat = encodeChat({ ...request, modelId: 'gpt-5.6' }).body as Record<string, any>;
-    expect(JSON.stringify(chat.messages)).toContain(workingSummary);
-    const anthropic = encodeAnthropic({ ...request, modelId: 'claude-opus-5' }).body as Record<
-      string,
-      any
-    >;
-    // Historical tool calls must use the same provider name as the declared tool.
-    const switchTool = anthropic.tools.find((tool: any) =>
-      tool.description.startsWith('Host tool: context.new.')
-    );
-    expect(switchTool).toBeDefined();
-    expect(anthropic.messages[0].content[0]).toMatchObject({
-      type: 'tool_use',
-      name: switchTool.name,
-    });
-    expect(anthropic.messages[1].content[0]).toMatchObject({ type: 'tool_result' });
-    const vertex = encodeVertex({ ...request, modelId: VERTEX_GEMINI_MODEL_ID }).body as Record<
-      string,
-      any
-    >;
-    expect(JSON.stringify(vertex.contents)).toContain(workingSummary);
-    for (const messages of [responses.input, chat.messages, anthropic.messages, vertex.contents]) {
-      const encoded = JSON.stringify(messages);
-      // A completed step must remain after the original request in every fresh native window.
-      // Otherwise the original sequence can look like a newly issued request again.
-      expect(encoded.lastIndexOf('Host continuation for this in-flight request')).toBeGreaterThan(
-        encoded.lastIndexOf('CURRENT_REQUEST_CANARY')
-      );
-      expect(encoded.lastIndexOf('CURRENT_REQUEST_CANARY')).toBeGreaterThan(-1);
-    }
-    expect(outcome.switched).toEqual(preservedSnapshot);
+    expect(bodies.map((body) => body.role)).toEqual(['main', 'context', 'main']);
+    expect(log.events.filter((event) => event.name === 'story.read')).toHaveLength(4);
+    expect(log.events.filter((event) => event.name === 'context.compact')).toHaveLength(1);
+    expect(fixed).toEqual(original);
   });
+
   test('fresh read-compaction requests keep derived prose and exact receipts outside instructions on every codec', async () => {
-    const fixed = await snapshot(false);
+    const fixed = await snapshot();
     const original = structuredClone(fixed);
     const marker = 'DERIVED_CLAIM_ONLY: the keeper may distrust Mira; this is an interpretation.';
     const receipt: ToolEvent = {

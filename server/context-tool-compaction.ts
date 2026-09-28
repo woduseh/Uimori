@@ -1,6 +1,6 @@
 import { modelRequestFields } from '../core/model-request-fields.js';
 import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
-import { CONTEXT_WINDOW_RESULT_TOOLS } from '../core/context-tools.js';
+import { STORY_READ_NAMES } from '../core/story-context.js';
 import {
   CONTEXT_RETRIEVAL_GUIDANCE,
   CONTEXT_SUMMARY_SEMANTICS,
@@ -18,8 +18,14 @@ import { encodeMainPreview } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
 
 /** Only completed reads may be replaced. Mutation receipts and advisor outputs stay exact. */
-export const compactableRead = (event: ToolEvent) =>
-  !event.denied && event.name !== 'context.write' && CONTEXT_WINDOW_RESULT_TOOLS.has(event.name);
+const READ_TOOLS = new Set<string>([
+  ...STORY_READ_NAMES,
+  'knowledge.search',
+  'knowledge.read',
+  'skills.list',
+  'skills.load',
+]);
+export const compactableRead = (event: ToolEvent) => !event.denied && READ_TOOLS.has(event.name);
 
 const record = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' && !Array.isArray(value)

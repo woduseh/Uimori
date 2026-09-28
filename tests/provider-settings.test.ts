@@ -16,6 +16,10 @@ import {
   type ProviderProtocol,
 } from '../core/product.js';
 import type { Run } from '../core/types.js';
+import {
+  validateModelSnapshot,
+  validateProviderSettingVersion,
+} from '../server/provider-archive.js';
 import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 
 const roots: Record<ProviderProtocol, string> = {
@@ -128,6 +132,69 @@ const response = (value: unknown) =>
   new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } });
 
 describe('provider settings, catalogs and archive contracts', () => {
+  test('accepts old contextTools values without exposing or resaving the retired setting', async () => {
+    const app = await application();
+    const connection = await request<Connection>(
+      app,
+      '/connections',
+      connectionBody('fixture-sse-v1')
+    );
+    const model = await request<ModelPreset>(
+      app,
+      '/model-presets',
+      modelBody(connection, { contextTools: true })
+    );
+    expect(model).not.toHaveProperty('contextTools');
+    await request(app, '/model-presets', modelBody(connection, { contextTools: 'yes' }), 400);
+
+    // Existing SQLite and portable archive bodies may still carry the old option.
+    const legacy = { ...model, contextTools: true };
+    validateProviderSettingVersion({
+      kind: 'model',
+      id: model.id,
+      revision: model.revision,
+      body: JSON.stringify(legacy),
+    });
+    app.store.db
+      .prepare("UPDATE provider_settings SET body=? WHERE kind='model' AND id=?")
+      .run(JSON.stringify(legacy), model.id);
+    expect(app.store.product.get<ModelPreset>('model', model.id)).not.toHaveProperty(
+      'contextTools'
+    );
+    expect(
+      app.store.product.library().models.find((entry) => entry.id === model.id)
+    ).not.toHaveProperty('contextTools');
+    expect(app.store.product.modelSnapshot(model.id)).not.toHaveProperty('contextTools');
+    expect(validateModelSnapshot({ ...legacy, connection })).not.toHaveProperty('contextTools');
+    expect(
+      JSON.parse(
+        (
+          app.store.db
+            .prepare("SELECT body FROM provider_settings WHERE kind='model' AND id=?")
+            .get(model.id) as { body: string }
+        ).body
+      ).contextTools
+    ).toBe(true);
+
+    const updated = await request<ModelPreset>(
+      app,
+      `/model-presets/${model.id}`,
+      modelBody(connection, { expectedRevision: model.revision, contextTools: false }),
+      200,
+      'PUT'
+    );
+    expect(updated).not.toHaveProperty('contextTools');
+    expect(
+      JSON.parse(
+        (
+          app.store.db
+            .prepare("SELECT body FROM provider_settings WHERE kind='model' AND id=?")
+            .get(model.id) as { body: string }
+        ).body
+      )
+    ).not.toHaveProperty('contextTools');
+  });
+
   test('preserves absent native options, explicit false and protocol-specific generation settings', async () => {
     const app = await application();
     for (const protocol of native) {

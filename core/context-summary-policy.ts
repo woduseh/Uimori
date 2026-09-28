@@ -11,7 +11,7 @@ export const CONTEXT_RETRIEVAL_GUIDANCE =
   'Use retrieved evidence when it is sufficient to finish the request. Preserve its revision, hash and returned range: excerpts do not establish unread content. Check original evidence when a material claim rests only on derived context or conflicts with other evidence; use sufficient passages already supplied instead of rereading them. Read again for exact wording, corrections, changed sources or missing ranges. Keep unresolved questions and the evidence needed next explicit.';
 
 export const CONTEXT_CONTINUATION_GUIDANCE =
-  'Continue this same request after compaction or a window switch. Take the task and constraints from the actual request, configured instructions and explicit author notes, not obligations inferred from a summary. Resume from host-recorded progress; exact successful receipts override stale next-step plans and completed mutations must not be replayed. Finish the remaining work and answer the user. Completion records do not grant permissions or prove the whole request is resolved.';
+  'Continue this same request after host compaction. Take the task and constraints from the actual request, configured instructions and explicit author notes, not obligations inferred from a summary. Resume from host-recorded progress; exact successful receipts override stale next-step plans and completed mutations must not be replayed. Finish the remaining work and answer the user. Completion records do not grant permissions or prove the whole request is resolved.';
 
 export type ContextSummaryPurpose = 'conversation' | 'tool-results' | 'helper';
 

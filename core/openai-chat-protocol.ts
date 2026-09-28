@@ -64,6 +64,7 @@ export function encodeChat(
   const { generation, aliases, schema, previous, fresh, plan, bootstrap } = prepared;
   const bootstrapMessages: Json[] = [];
   for (const item of bootstrap as Record<string, Json>[]) {
+    const name = aliases.find((alias) => alias.name === item.name)?.providerName ?? item.name;
     bootstrapMessages.push(
       {
         role: 'assistant',
@@ -72,7 +73,7 @@ export function encodeChat(
           {
             id: item.callId,
             type: 'function',
-            function: { name: item.name, arguments: JSON.stringify(item.args) },
+            function: { name, arguments: JSON.stringify(item.args) },
           },
         ],
       },
@@ -80,7 +81,7 @@ export function encodeChat(
         role: 'tool',
         tool_call_id: item.callId,
         content: JSON.stringify(item.result),
-        name: item.name,
+        name,
       }
     );
   }

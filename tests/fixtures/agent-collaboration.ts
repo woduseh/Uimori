@@ -126,7 +126,6 @@ export async function fixture(
     maxCalls?: number;
     timeoutMs?: number;
     loreText?: string;
-    contextTools?: boolean;
     advisorInputTokenLimit?: number;
   } = {}
 ) {
@@ -239,7 +238,6 @@ export async function fixture(
     maxOutputTokens: 4096,
     temperature: null,
     timeoutMs: options.timeoutMs ?? 4000,
-    ...(options.contextTools ? { contextTools: true } : {}),
   });
   const advisorModel = await api<ModelPreset>(app, '/api/model-presets', {
     title: 'Synthetic advisor',

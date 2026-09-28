@@ -147,21 +147,7 @@ export function createRunExecutor({
             },
             onToolEvent: (event) => store.tool(id, event),
             replayToolEvents: run.toolEvents,
-            persistContext: (prepared, own) =>
-              store.transaction(() => {
-                if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
-                  throw new Error('Run cancelled');
-                const published = store.context.publishPrepared(
-                  store.context.rebase(prepared, own),
-                  { origin: 'model' }
-                );
-                const checkpoint = published.contextPlan?.checkpoint;
-                return {
-                  snapshot: published,
-                  activated: checkpoint ? store.context.checkpoint(checkpoint).activated : false,
-                };
-              }),
-
+            evaluationRunId: id,
             resolveCredential,
             executeAnthropicBatch: (connection, request, execution) =>
               anthropicBatch.execute(connection, request, execution),

@@ -1,4 +1,4 @@
-import { CONTEXT_SUMMARY_MAX_CHARS } from '../core/context-tools.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { pruneContextHistory } from './context-retention.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -125,18 +125,6 @@ export class ContextStore {
       return undefined;
     return { ...structuredClone(plan), checkpoint: ref(checkpoint) };
   }
-  /** A run that already activated its own checkpoint keeps activating later ones; a foreign head stays authoritative. */
-  rebase(snapshot: RunSnapshot, own: ContextCheckpointRef | null): RunSnapshot {
-    const base = snapshot.contextBase;
-    if (!base || !own) return snapshot;
-    const head = this.head(base.scopeKey);
-    if (head.checkpointId !== own.id) return snapshot;
-    return {
-      ...snapshot,
-      contextBase: { ...base, activeRevision: head.revision, checkpoint: own },
-    };
-  }
-
   publishPrepared(
     snapshot: RunSnapshot,
     options: { origin: ContextCheckpoint['origin']; activate?: boolean }
@@ -298,7 +286,7 @@ export class ContextStore {
       if (!snapshot.profile?.models.main) throw new HttpError(409, 'MODEL_REQUIRED:main');
       let prepared = this.prepareRun(snapshot, scopeKey);
       const previous = this.previous(prepared);
-      const summary = text(body.summary, 'summary', CONTEXT_SUMMARY_MAX_CHARS);
+      const summary = text(body.summary, 'summary', SOURCE_TEXT_MAX_CHARS);
       const compacted =
         previous?.compacted ??
         contextSourceRefs(prepared).slice(0, Math.max(0, prepared.history.length - 2));

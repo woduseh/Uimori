@@ -145,6 +145,19 @@ function fixture() {
 }
 
 describe('stored context checkpoint selection', () => {
+  test('reuses an existing model-origin checkpoint after model-facing context tools are retired', () => {
+    const f = fixture();
+    const published = f.store.context.publishPrepared(f.candidate(1, '기존 모델이 저장한 요약'), {
+      origin: 'model',
+    });
+    f.save(1, published);
+    expect(f.store.context.checkpoint(published.contextPlan!.checkpoint!)).toMatchObject({
+      origin: 'model',
+      activated: true,
+    });
+    expect(previousContextPlan(f.store, f.capture())).toEqual(published.contextPlan);
+  });
+
   test('uses only the captured active reference, even when an ancestor has a summary', () => {
     const f = fixture();
     delete f.snapshots[0].contextPlan;

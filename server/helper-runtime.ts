@@ -624,8 +624,7 @@ export class HelperRuntime {
         if (callIds.has(call.id)) throw new Error('DUPLICATE_TOOL_ID');
         callIds.add(call.id);
       }
-      let roundReadChars = 0;
-      for (const wireCall of calls) {
+      const executeCall = async (wireCall: ProviderResult['toolCalls'][number]) => {
         const toolStarted = performance.now();
         let call = wireCall;
         toolSignal.throwIfAborted();
@@ -768,70 +767,98 @@ export class HelperRuntime {
           if (!readOnly && (output as { outcome: string }).outcome === 'unknown')
             fatalError = error;
         }
-        const event: ToolEvent = {
-          callId: wireCall.id,
-          name: wireCall.name,
-          args: wireCall.arguments,
-          result: output,
+        return {
+          wireCall,
+          call,
+          output,
           denied,
-          ...(errorKind ? { errorKind } : {}),
+          errorKind,
+          fatalError,
+          elapsedMs: Math.round(performance.now() - toolStarted),
         };
-        const originalResultChars = JSON.stringify(event.result).length;
-        if (helperRead(event)) {
-          const providedChars = JSON.stringify(event).length;
-          if (
-            providedChars > MAX_HELPER_READ_CHARS ||
-            roundReadChars + providedChars > MAX_HELPER_ROUND_READ_CHARS
-          ) {
-            const args = record(call.arguments);
-            const nextRead =
-              call.name === 'resource.read'
-                ? { name: 'resource.read', arguments: { kind: args.kind, id: args.id } }
-                : call.name === 'chat.lore'
-                  ? {
-                      name: call.name,
-                      arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 },
-                    }
-                  : call.name === 'data.search' || call.name === 'data.read'
+      };
+      let roundReadChars = 0;
+      for (let index = 0; index < calls.length; ) {
+        const group = [calls[index++]];
+        // Only the isolated read-only data workers overlap. Every other tool is an ordering barrier.
+        if (
+          HELPER_DATA_TOOLS.some((tool) => tool.name === group[0].name) &&
+          index < calls.length &&
+          HELPER_DATA_TOOLS.some((tool) => tool.name === calls[index].name)
+        )
+          group.push(calls[index++]);
+        // Drain both reads even after cancellation; no child work survives into the next group.
+        const completed = await Promise.allSettled(group.map(executeCall));
+        for (const completion of completed) {
+          if (completion.status === 'rejected') throw completion.reason;
+          const preparationStarted = performance.now();
+          const { wireCall, call, fatalError, elapsedMs } = completion.value;
+          let { output, denied, errorKind } = completion.value;
+          const event: ToolEvent = {
+            callId: wireCall.id,
+            name: wireCall.name,
+            args: wireCall.arguments,
+            result: output,
+            denied,
+            ...(errorKind ? { errorKind } : {}),
+          };
+          const originalResultChars = JSON.stringify(event.result).length;
+          if (helperRead(event)) {
+            const providedChars = JSON.stringify(event).length;
+            if (
+              providedChars > MAX_HELPER_READ_CHARS ||
+              roundReadChars + providedChars > MAX_HELPER_ROUND_READ_CHARS
+            ) {
+              const args = record(call.arguments);
+              const nextRead =
+                call.name === 'resource.read'
+                  ? { name: 'resource.read', arguments: { kind: args.kind, id: args.id } }
+                  : call.name === 'chat.lore'
                     ? {
                         name: call.name,
-                        arguments: { ...args, limit: call.name === 'data.search' ? 5 : 1000 },
+                        arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 },
                       }
-                    : {
-                        name: 'data.search',
-                        arguments: {
-                          scope: call.name === 'editor.read' ? 'editor' : 'library',
-                          patterns: [],
-                          limit: 5,
-                        },
-                      };
-            event.result = {
-              error: 'HELPER_READ_TOO_LARGE',
-              returned: false,
-              originalResultChars,
-              guidance:
-                'This result was not supplied to the model or summarizer. Use the small resource overview and a narrower path, or paged data.search/read. If this round already returned several reads, request the remaining reads next round.',
-              nextRead,
-            };
-            event.denied = denied = true;
-            event.errorKind = errorKind = 'recoverable';
-            output = event.result;
+                    : call.name === 'data.search' || call.name === 'data.read'
+                      ? {
+                          name: call.name,
+                          arguments: { ...args, limit: call.name === 'data.search' ? 5 : 1000 },
+                        }
+                      : {
+                          name: 'data.search',
+                          arguments: {
+                            scope: call.name === 'editor.read' ? 'editor' : 'library',
+                            patterns: [],
+                            limit: 5,
+                          },
+                        };
+              event.result = {
+                error: 'HELPER_READ_TOO_LARGE',
+                returned: false,
+                originalResultChars,
+                guidance:
+                  'This result was not supplied to the model or summarizer. Use the small resource overview and a narrower path, or paged data.search/read. If this round already returned several reads, request the remaining reads next round.',
+                nextRead,
+              };
+              event.denied = denied = true;
+              event.errorKind = errorKind = 'recoverable';
+              output = event.result;
+            }
+            roundReadChars += JSON.stringify(event).length;
           }
-          roundReadChars += JSON.stringify(event).length;
+          returned.push(event);
+          this.workspace.event(task.conversationId, id, 'tool.finished', {
+            callId: wireCall.id,
+            name: call.name,
+            denied,
+            result: output,
+            originalResultChars,
+            providedResultChars: JSON.stringify(output).length,
+            elapsedMs: elapsedMs + Math.round(performance.now() - preparationStarted),
+            queueMs,
+            ...(errorKind ? { errorKind } : {}),
+          });
+          if (fatalError) throw fatalError;
         }
-        returned.push(event);
-        this.workspace.event(task.conversationId, id, 'tool.finished', {
-          callId: wireCall.id,
-          name: call.name,
-          denied,
-          result: output,
-          originalResultChars,
-          providedResultChars: JSON.stringify(output).length,
-          elapsedMs: Math.round(performance.now() - toolStarted),
-          queueMs,
-          ...(errorKind ? { errorKind } : {}),
-        });
-        if (fatalError) throw fatalError;
       }
       return returned;
     };

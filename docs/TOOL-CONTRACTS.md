@@ -8,7 +8,7 @@ The main writer and translation role use the shared definitions in `core/read-to
 
 | Tool | Contract |
 | --- | --- |
-| `knowledge.search {query?, offset?, limit?}` | Browse/search approved local references. |
+| `knowledge.search {query?, offset?, limit?}` | Browse/search approved local references. Body matches include a bounded original excerpt and a ready-to-use read request at the matching location. |
 | `knowledge.read {ids, offset?, limit?}` | Read one to sixteen references. A single read still uses a one-item `ids` array. Each item succeeds or fails independently and returns `nextOffset`. |
 | `skills.list {query?, offset?, limit?}` | Browse/search available writing guidance. |
 | `skills.load {id, offset?, limit?}` | Read one guidance resource. |
@@ -39,6 +39,8 @@ Helper `resource.read` accepts either one `path` or up to sixteen `paths` from o
 
 Main reference collections use `items` or `results`, `total`, and `nextOffset`. Text reads expose `totalChars`, the returned range, and `nextOffset`. A null `nextOffset` means no later page remains; it does not claim that an omitted earlier range was read.
 
+`knowledge.search` limits the complete result to 24,000 serialized characters. A body hit adds `match` with at most 240 original UTF-16 units, source identity and range, plus `nextRead` for the relevant `knowledge.read` or `skills.load` call. The first located term is an excerpt, not evidence of reading every matching term or the whole reference. Title/description-only matches and browsing keep metadata-only results. If one item's metadata would exceed the page budget, `metadataPreview` declares the reduced description/relations and a read request keeps the body reachable.
+
 Helper `data.read` has two distinct pagination dimensions: each item's `nextOffset` continues its text or field directory, while batch `nextIndex` points to unreturned refs. Resubmit `refs.slice(nextIndex)` rather than passing that index as a text offset. The helper's streaming search reports `complete` instead of an exact total. See [Helper tools](HELPER-TOOLS.md) for its page sizes and result budgets.
 
 Batch reads keep resource failures local to each entry, including a malformed helper ref. Invalid batch structure, such as a missing or empty array, still fails the call. Mistyped scene numbers and text offsets return correctable errors; corrupt frozen story sources are still denied, never silently read.
@@ -52,3 +54,13 @@ The helper derives mutation identity from the helper task ID and provider tool-c
 Reusing a completed tool-call ID is rejected by the helper loop. A new call ID is a new operation, not a semantic replay of a prior request. Existing-resource saves still use revision checks; identical new-resource creation requests with different call IDs are not automatically deduplicated.
 
 `app.tools -> app.call` remains intentional. It keeps the helper's native tool list and per-request schema tokens small while exposing exact operation schemas only when needed.
+
+## Execution boundaries
+
+Provider-native function calls remain the portable default. Responses, Chat, Anthropic and Vertex adapters preserve call identity and continuation data; the host executes the approved operations and returns their results. OpenAI bootstrap history uses the same wire alias as the registered tool, while an unregistered historical name remains unchanged.
+
+Do not equate a read-only purpose with independent execution. Writer reference reads operate synchronously on a frozen snapshot; wrapping them in promises does not parallelize that CPU work. `agents.consult` spends shared model/call budgets. Evaluation, artifact submission and app mutations retain their existing execution and receipt boundaries. The writer no longer receives `context.read/write/new`; context lifecycle belongs to the host. User-requested helper summary operations remain app operations.
+
+Programmatic Tool Calling is not currently enabled. OpenAI's hosted programs require `program`/`program_output` replay and matching `caller` on function results; Anthropic requires its code-execution/container continuation and server-tool handling. These are provider adapter responsibilities, not a reason to introduce a second app tool runtime. If a measured workload justifies PTC, enable it only for well-defined read operations and preserve the portable direct path. The mixed `app.call` gateway must not be classified as read-only.
+
+Current references: [OpenAI PTC](https://developers.openai.com/api/docs/guides/tools-programmatic-tool-calling), [Anthropic PTC](https://platform.claude.com/docs/en/agents-and-tools/tool-use/programmatic-tool-calling), [Vertex function calling](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/tools/function-calling). Provider-native code execution alone does not establish support for invoking Uimori functions from inside generated code.

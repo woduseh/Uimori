@@ -82,9 +82,12 @@ const schema = (properties: Json, required: string[] = []): Json => ({
   additionalProperties: false,
 });
 
-export function createEvaluationSession(now = new Date()): EvaluationSession {
+export function createEvaluationSession(
+  now = new Date(),
+  runId: string = randomUUID()
+): EvaluationSession {
   return {
-    sessionId: `eval-session-${randomUUID()}`,
+    sessionId: `eval-session-${runId}`,
     credentialId: evaluationCredentialId,
     subject: evaluationSubjectId,
     purpose: evaluationScope,
@@ -176,11 +179,21 @@ export function evaluationReviewer(session: EvaluationSession): Json {
     },
   };
 }
-export function evaluationCase(input: Record<string, unknown>, session: EvaluationSession): Json {
+export function evaluationCase(
+  input: Record<string, unknown>,
+  session: EvaluationSession,
+  callId: string = randomUUID()
+): Json {
   const value = input as Record<string, Json>;
+  const id = (kind: string) => {
+    const hash = createHash('sha256')
+      .update(`${session.sessionId}:${kind}:${callId}`)
+      .digest('hex');
+    return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+  };
   return {
     recordStatus: 'created',
-    caseId: `case-${randomUUID()}`,
+    caseId: `case-${id('case')}`,
     decision: 'accepted',
     decisionCode: 'EVAL_SCOPE_MATCH',
     classification: {
@@ -192,11 +205,11 @@ export function evaluationCase(input: Record<string, unknown>, session: Evaluati
       containsPersonalInfo: value.containsPersonalInfo,
     },
     authorizationReceipt: {
-      receiptId: `receipt-${randomUUID()}`,
+      receiptId: `receipt-${id('receipt')}`,
       sessionId: session.sessionId,
       scope: evaluationScope,
       status: 'active',
-      issuedAt: new Date().toISOString(),
+      issuedAt: session.issuedAt,
       expiresAt: session.expiresAt,
     },
     visibility: 'internal',
@@ -352,7 +365,7 @@ export function executeEvaluationTool(
       return { ...base, result: evaluationReviewer(session) };
     }
     validateCase(call.arguments);
-    return { ...base, result: evaluationCase(call.arguments, session) };
+    return { ...base, result: evaluationCase(call.arguments, session, call.id) };
   } catch (error) {
     return {
       ...base,

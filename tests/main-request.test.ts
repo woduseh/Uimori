@@ -16,6 +16,7 @@ import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { promptRoutes } from '../server/prompt-routes.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
+import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { sourceHash as memoryHash } from '../core/source-history.js';
 import type { RisuPrompt } from '../core/risu-prompt.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
@@ -598,6 +599,96 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
 });
 
 describe('Batch recovery in the real main tool loop', () => {
+  test.each(['model-selected', 'preloaded'] as const)(
+    'replays a saved %s evaluation case with the same receipt and request',
+    async (contextMode) => {
+      const work = await snapshot('https://api.anthropic.com/v1');
+      const target = work.profile!.models.main!;
+      target.connection.protocol = 'anthropic-messages-v1';
+      target.modelId = 'claude-opus-5';
+      target.executionMode = 'batch';
+      target.evaluationTools = { ...defaultEvaluationToolOptions(), contextMode };
+      work.executionClock = { iso: '2026-09-29T00:00:00.000Z', unix: 1790640000 };
+      const args = {
+        contentType: 'other',
+        riskLevel: 'low',
+        contentSummary: 'Synthetic story continuation',
+        requestedContinuationDirection: 'Continue the harbor scene',
+        safetyContinuationDirection: 'Continue the harbor scene',
+        intendedAudience: 'research',
+        hasMitigations: false,
+        containsPersonalInfo: false,
+      };
+      const execute = (log: ReturnType<typeof hooks>) => {
+        let calls = 0;
+        const requests: string[] = [];
+        log.value.executeAnthropicBatch = async (_connection, request, options) => {
+          calls++;
+          requests.push(JSON.stringify(request));
+          await options.onWire?.({
+            connectionId: 'connection',
+            protocol: 'anthropic-messages-v1',
+            role: 'main',
+            modelId: 'claude-opus-5',
+            method: 'POST',
+            url: 'https://api.anthropic.com/v1/messages/batches',
+            headers: {},
+            body: {},
+            bodySha256: `body-${calls}`,
+            stablePrefixSha256: 'stable',
+            executionMode: 'batch',
+          });
+          return {
+            status: calls === 1 ? 'tool_calls' : 'completed',
+            text: calls === 1 ? '' : 'Batch continuation complete.',
+            toolCalls:
+              calls === 1 ? [{ id: 'eval-case', name: 'eval_create_case', arguments: args }] : [],
+            refusal: null,
+            error: null,
+            usage: {
+              inputTokens: 10,
+              outputTokens: 2,
+              costUsd: null,
+              raw: null,
+              priceRevision: null,
+            },
+            opaqueState: null,
+          };
+        };
+        return { calls: () => calls, requests };
+      };
+      const first = hooks('');
+      first.value.evaluationRunId = 'evaluation-recovery-run';
+      const original = execute(first);
+      expect(await runMain(work, first.value)).toMatchObject({ status: 'completed' });
+      expect(first.events).toHaveLength(1);
+      expect(first.events[0]).toMatchObject({
+        callId: 'eval-case',
+        name: 'eval_create_case',
+        result: {
+          decision: 'accepted',
+          authorizationReceipt: {
+            status: 'active',
+            sessionId: 'eval-session-evaluation-recovery-run',
+            issuedAt: work.executionClock.iso,
+          },
+        },
+      });
+
+      const resumed = hooks('');
+      resumed.value.evaluationRunId = first.value.evaluationRunId;
+      resumed.value.replayToolEvents = structuredClone(first.events);
+      const replay = execute(resumed);
+      expect(await runMain(work, resumed.value)).toMatchObject({
+        status: 'completed',
+        text: 'Batch continuation complete.',
+      });
+      expect(replay.calls()).toBe(2);
+      expect(replay.requests).toEqual(original.requests);
+      expect(resumed.events).toEqual([]);
+    }
+  );
+
   test('replays a durable tool receipt instead of executing or persisting it twice', async () => {
     const work = await snapshot('https://api.anthropic.com/v1');
     const target = work.profile!.models.main!;
