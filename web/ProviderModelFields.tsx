@@ -398,9 +398,9 @@ export function ProviderModelFields({
         />
         <h4 className="provider-field-heading full">생성 설정</h4>
         <label>
-          {codex ? '출력 목표 토큰' : '최대 출력 토큰'}
+          {codex ? '출력 토큰 예산' : '최대 출력 토큰'}
           <input
-            aria-label={codex ? '출력 목표 토큰' : '최대 출력 토큰'}
+            aria-label={codex ? '출력 토큰 예산' : '최대 출력 토큰'}
             type="number"
             min={1}
             max={500000}
@@ -412,7 +412,12 @@ export function ProviderModelFields({
             <small>상한 {hints.maxOutputTokens.toLocaleString()} 토큰</small>
           )}
         </label>
-        {codex && <small className="full">출력 목표 토큰은 실제 출력량을 보장하지 않아요.</small>}
+        {codex && (
+          <small className="full">
+            소프트 예산이에요. 이 값을 채우려고 늘리지 않으며, 프롬프트에 분량 지시가 있으면 그
+            지시가 우선해요.
+          </small>
+        )}
         {hints && <ThinkingSelect hints={hints} value={value} onChange={update} />}
         {protocol === 'anthropic-messages-v1' && (
           <label>
