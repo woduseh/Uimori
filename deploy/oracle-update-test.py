@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location("oracle_runner", Path(__file__).with_name("oracle-update.py"))
 m = importlib.util.module_from_spec(spec)
@@ -113,6 +114,25 @@ class Host(m.Runner):
         assert self.live_image == image and self.live_volume == volume
 
 
+class CodexVersionTests(unittest.TestCase):
+    def test_exact_codex_version_is_pinned_without_network(self):
+        self.assertEqual(m.resolve_codex_version("0.157.1"), "0.157.1")
+        self.assertEqual(m.resolve_codex_version(""), "")
+        with self.assertRaises(RuntimeError):
+            m.resolve_codex_version("0.152.9")
+        with self.assertRaises(RuntimeError):
+            m.resolve_codex_version("next")
+
+    def test_latest_resolves_to_exact_stable_version(self):
+        with mock.patch.object(m, "latest_codex_version", return_value="0.157.1") as latest:
+            self.assertEqual(m.resolve_codex_version("latest"), "0.157.1")
+            latest.assert_called_once_with()
+
+    def test_missing_registry_version_is_rejected(self):
+        with self.assertRaises(RuntimeError):
+            m.validate_codex_version(None)
+
+
 class OracleTransitions(unittest.TestCase):
     @contextlib.contextmanager
     def host(self, **options):
@@ -135,7 +155,7 @@ class OracleTransitions(unittest.TestCase):
             self.assertEqual(host.events.count(("docker", "build")), 1)
 
     def test_check_only_never_closes_stops_or_changes_application(self):
-        with self.host(check_only=True, codex_version="1.0") as host:
+        with self.host(check_only=True, codex_version="1.0.0") as host:
             environment = host.env.read_bytes()
             host.execute()
             self.assertEqual(host.summary["status"], "PASS")

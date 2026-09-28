@@ -16,7 +16,7 @@ Uimori 서버에서 공식 Codex CLI의 App Server를 실행하고 개인 ChatGP
 `.env.self-host`에 다음을 추가하고 앱 이미지를 다시 빌드해요. 기본 이미지는 Codex를 설치하지 않아요.
 
 ```dotenv
-UIMORI_CODEX_VERSION=0.153.0
+UIMORI_CODEX_VERSION=latest
 UIMORI_CODEX_ENABLED=1
 ```
 
@@ -25,7 +25,7 @@ docker compose --env-file .env.self-host build app
 docker compose --env-file .env.self-host up -d
 ```
 
-이 선택적 빌드는 npm에서 지정한 공식 CLI 버전을 받아요. Compose의 `/data` volume에 DB와 별도로 전용 로그인 디렉터리 `/data/uimori.sqlite.codex`가 유지돼요. 일반 실행도 `UIMORI_DB`의 절대 경로 뒤에 `.codex`를 붙인 디렉터리를 사용해요. JSON 내보내기와 SQLite 백업에는 Codex 인증 파일이 포함되지 않아요. 서버를 옮기면 새 서버에서 다시 로그인하세요. 서버 파일 백업에 이 디렉터리를 포함한다면 인증 자료로 보호해야 해요. 기본 Compose의 단일 앱 프로세스, HTTPS, 접근 인증 조건을 유지해요.
+이 선택적 빌드는 npm에서 지정한 공식 CLI 버전을 받아요. `latest`는 npm의 stable dist-tag를 뜻해요. Oracle 배포 러너는 배포마다 `latest`를 조회한 뒤 `0.157.1` 같은 실제 버전 번호로 고정해서 이미지를 만들고 그 번호를 image label과 배포 기록에 남겨요. 따라서 다음 배포에서는 새 stable을 자동으로 따라가지만 이미 만들어진 이미지와 롤백 대상은 바뀌지 않아요. 완전한 재현성을 우선하면 `0.153.0`처럼 버전을 직접 고정해도 돼요. 일반 Compose 빌드에서도 `latest`를 사용할 수 있지만 Oracle 러너처럼 별도의 해석 기록은 남기지 않아요. Compose의 `/data` volume에 DB와 별도로 전용 로그인 디렉터리 `/data/uimori.sqlite.codex`가 유지돼요. 일반 실행도 `UIMORI_DB`의 절대 경로 뒤에 `.codex`를 붙인 디렉터리를 사용해요. JSON 내보내기와 SQLite 백업에는 Codex 인증 파일이 포함되지 않아요. 서버를 옮기면 새 서버에서 다시 로그인하세요. 서버 파일 백업에 이 디렉터리를 포함한다면 인증 자료로 보호해야 해요. 기본 Compose의 단일 앱 프로세스, HTTPS, 접근 인증 조건을 유지해요.
 
 Linux Docker의 실제 이미지 빌드·기동과 실계정 로그인·구독 모델 실행은 이 구현의 로컬 합성 검사로 확인되지 않아요.
 
