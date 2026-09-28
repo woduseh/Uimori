@@ -1168,6 +1168,10 @@ function parseRateLimits(value: unknown): CodexRuntimeStatus['limits'] {
             name: `${String(name).slice(0, 80)} · ${slot}`,
             usedPercent: Math.min(100, Math.max(0, window.usedPercent)),
             resetsAt: integer(window.resetsAt) ? window.resetsAt : null,
+            windowDurationMins:
+              integer(window.windowDurationMins) && window.windowDurationMins > 0
+                ? window.windowDurationMins
+                : null,
           });
       }
   return result;

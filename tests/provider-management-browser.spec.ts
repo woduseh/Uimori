@@ -1313,7 +1313,16 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
             }
           : null,
         planType: authenticated ? 'plus' : null,
-        limits: authenticated ? [{ name: '5시간', usedPercent: 25, resetsAt: 1800000000 }] : [],
+        limits: authenticated
+          ? [
+              {
+                name: 'codex · primary',
+                usedPercent: 25,
+                resetsAt: 1800000000,
+                windowDurationMins: 300,
+              },
+            ]
+          : [],
       },
     });
   });
@@ -1366,7 +1375,12 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   pending = false;
   await panel.getByRole('button', { name: 'Codex 상태 다시 확인' }).click();
   await expect(panel).toContainText('연결됨');
-  await expect(panel).toContainText('사용 25%');
+  const subscription = panel.getByRole('region', { name: 'Codex 구독 상태' });
+  await expect(subscription).toContainText('ChatGPT Plus');
+  await expect(subscription).toContainText('5시간 사용량');
+  await expect(subscription).toContainText('75% 남음');
+  await expect(subscription).toContainText('25% 사용');
+  await expect(panel.getByRole('list', { name: 'Codex 연결 단계' })).toHaveCount(0);
   if (visualReview)
     await page.screenshot({ path: info.outputPath('codex-subscription-settings-mobile.png') });
   await panel.getByRole('button', { name: '프로바이더·모델', exact: true }).click();
@@ -1388,7 +1402,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   expect(savedConnection).not.toHaveProperty('requestTier');
   await modelForm.getByLabel('모델 프리셋 이름', { exact: true }).fill('PMUI10 Codex 모델');
   await modelForm.getByLabel('모델 ID', { exact: true }).fill('synthetic-codex-model');
-  await modelForm.getByLabel('출력 목표 토큰', { exact: true }).fill('2048');
+  await modelForm.getByLabel('출력 토큰 예산', { exact: true }).fill('2048');
   await expect(modelForm.getByLabel('Temperature', { exact: true })).toBeHidden();
   await modelForm.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
   await expect(page.getByRole('region', { name: '등록한 모델 사용 방법' })).toContainText(

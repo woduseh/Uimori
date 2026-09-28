@@ -13,6 +13,99 @@
 .codex-agent-settings .provider-actions:empty {
   display: none;
 }
+.codex-account-card {
+  margin-top: 18px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 12px;
+}
+.codex-account-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.codex-connected-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 600;
+}
+.codex-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.codex-plan-badge {
+  flex: none;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.codex-limit-list {
+  display: grid;
+}
+.codex-limit-row {
+  min-width: 0;
+  padding: 16px 18px;
+}
+.codex-limit-row + .codex-limit-row {
+  border-top: 1px solid var(--line);
+}
+.codex-limit-heading,
+.codex-limit-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.codex-limit-heading strong {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.codex-limit-heading > span {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.codex-limit-meter {
+  height: 6px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface);
+}
+.codex-limit-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+.codex-limit-meta {
+  margin-top: 8px;
+  color: var(--muted);
+}
+.codex-limit-meta small {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.codex-limit-unavailable {
+  margin: 0;
+  padding: 16px 18px;
+}
+.codex-account-card + .provider-actions {
+  margin-top: 16px;
+}
 .codex-agent-help {
   margin-top: 20px;
 }
@@ -27,6 +120,18 @@
 @keyframes codex-agent-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+@media (max-width: 520px) {
+  .codex-account-summary {
+    align-items: flex-start;
+  }
+  .codex-limit-heading,
+  .codex-limit-meta {
+    gap: 8px;
+  }
+  .codex-limit-meta {
+    align-items: flex-start;
   }
 }
 @media (prefers-reduced-motion: reduce) {
