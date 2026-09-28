@@ -1,3 +1,4 @@
+import type { OutlineTarget } from '../core/outline.js';
 import type { FastifyInstance } from 'fastify';
 import type { HelperScope, HelperEditor, HelperLimits } from '../core/helper.js';
 import type { HelperRuntime } from './helper-runtime.js';
@@ -134,7 +135,22 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     { bodyLimit: 32 * 1024 * 1024 },
     (request) => {
       const body = record(request.body);
-      fields(body, ['requestKey', 'text', 'editor', 'selection', 'retryOf']);
+      fields(body, ['requestKey', 'text', 'editor', 'selection', 'retryOf', 'outline']);
+      let outline: OutlineTarget | undefined;
+      if (body.outline !== undefined) {
+        const selected = record(body.outline);
+        fields(selected, ['nodeId', 'expectedRevision', 'purpose']);
+        if (selected.purpose !== 'compose' && selected.purpose !== 'review')
+          throw new HttpError(400, 'Invalid outline purpose');
+        outline = {
+          nodeId: selected.nodeId === null ? null : text(selected.nodeId, 'outline ID', 100),
+          expectedRevision:
+            selected.expectedRevision === null
+              ? null
+              : number(selected.expectedRevision, 'outline revision'),
+          purpose: selected.purpose,
+        };
+      }
       let editor: HelperEditor | undefined;
       if (body.editor !== undefined) {
         const input = record(body.editor);
@@ -170,7 +186,8 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
                   text: text(selection.text, 'selected text', REQUEST_TEXT_MAX_CHARS),
                 };
               })(),
-          body.retryOf === undefined ? undefined : text(body.retryOf, 'retry task ID', 100)
+          body.retryOf === undefined ? undefined : text(body.retryOf, 'retry task ID', 100),
+          outline
         )
       );
     }

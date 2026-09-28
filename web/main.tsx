@@ -1,3 +1,4 @@
+import type { OutlineHelperRequest } from './outline-helper.js';
 import { BookmarkEditingContext } from './Bookmarks.js';
 import type { NotificationIntent } from '../core/push.js';
 import { startPwa, subscribeNotificationNavigation } from './pwa.js';
@@ -209,6 +210,7 @@ function App() {
     !!s.pendingRequest ||
     s.submitting.includes(s.viewKey);
   const [helperOpen, setHelperOpen] = useState(false);
+  const [outlineHelperRequest, setOutlineHelperRequest] = useState<OutlineHelperRequest>();
   const [helperSelection, setHelperSelection] = useState<{
     key: string;
     sourceId: string;
@@ -736,7 +738,7 @@ function App() {
   }
   const workspace = (
     <div
-      className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarHidden ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''} ${workspacePanelOpen ? (panelModal ? 'panel-overlay' : 'panel-docked') : ''}`}
+      className={`app-shell ${panel === 'outline' ? 'outline-active' : ''} ${focus ? 'focus-reading' : ''} ${sidebarHidden ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''} ${workspacePanelOpen ? (panelModal ? 'panel-overlay' : 'panel-docked') : ''}`}
     >
       {importBot && (
         <BotChatImportDialog
@@ -1644,6 +1646,8 @@ function App() {
         modelDescription={helperDescription}
         open={helperOpen}
         selection={helperSelection}
+        outlineRequest={outlineHelperRequest}
+        outlineWorkspace={panel === 'outline'}
         scope={
           s.destination === 'story' && s.selected && s.branch
             ? { kind: 'chat', chatId: s.selected, branchId: s.branch.id }
@@ -1802,21 +1806,37 @@ function App() {
           }}
         />
       )}
-      <Dialog
-        scopeKey={`${s.selected}:${s.viewedBranch}`}
-        open={panel === 'outline'}
-        title="계층형 구성"
-        onClose={() => setPanel('')}
-        wide
-      >
-        {panel === 'outline' && (
+      {panel === 'outline' && (
+        <div
+          className="outline-workspace-shell"
+          hidden={helperOpen && panelModal}
+          onKeyDown={(event) => {
+            if (
+              event.key === 'Escape' &&
+              !(event.target as Element).closest('details[open],dialog[open]')
+            ) {
+              event.preventDefault();
+              setPanel('');
+            }
+          }}
+        >
           <OutlinePanel
             key={`${s.detail?.chat.id}:${s.branch?.id}`}
             state={s}
             onClose={() => setPanel('')}
+            helperVisible={helperOpen}
+            onToggleHelper={() => {
+              setOptionsOpen(false);
+              setHelperOpen((value) => !value);
+            }}
+            onHelp={(request) => {
+              setOutlineHelperRequest(request);
+              setOptionsOpen(false);
+              setHelperOpen(true);
+            }}
           />
-        )}
-      </Dialog>
+        </div>
+      )}
 
       <Dialog
         scopeKey={s.selected}

@@ -1,74 +1,71 @@
-import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
+import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { OutlineDetail } from '../core/outline.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
+// This redesigned workspace is checked at its agreed narrow and desktop design widths.
+const WIDTHS = [390, 1440] as const;
 const COMPOSITION = [
   {
     op: 'create',
     ref: 'theme',
     level: 'theme',
-    title: '잊힌 이름을 되찾는 이야기',
-    intent: '기억을 빼앗긴 인물이 자기 이름을 되찾는 과정을 다뤄요.',
-  },
-  {
-    op: 'create',
-    ref: 'main',
-    parentRef: 'theme',
-    level: 'mainStory',
-    title: '이름 없는 사서',
-    intent: '사서가 도서관 지하에서 자기 이름이 적힌 장부를 찾아요.',
+    title: '감춰진 이름과 되찾는 선택',
+    intent:
+      '상대를 지키려는 거짓말은 누구의 선택권을 빼앗는가? 정답을 말하기보다 두 사람의 선택으로 탐구해요.',
   },
   {
     op: 'create',
     ref: 'arc',
-    parentRef: 'main',
+    parentRef: 'theme',
     level: 'arc',
-    title: '지하 서고의 발견',
-    intent: '결말에서 관장이 배신자로 드러나요. 이 사건에서는 아직 감추어요.',
+    title: '기억 보관소의 문',
+    intent: '잃어버린 기억을 찾아 보관소에 접근해요. 주인공이 숨기는 이유는 뒤에서 드러나요.',
   },
   {
     op: 'create',
     ref: 'ep1',
     parentRef: 'arc',
     level: 'episode',
-    title: '1화 잠긴 문',
-    intent: '사서가 지하 서고의 잠긴 문을 발견해요.',
+    title: '1화 · 열람권의 대가',
+    intent:
+      '### 이번 화의 역할\n두 사람이 처음으로 조건부 협력을 시작해요.\n\n### 남길 변화\n열람권을 얻지만 작은 의심이 생겨요. 담보의 정체는 아직 공개하지 않아요.\n\n### 멈출 지점\n보관소 문이 열리기 직전에 멈춰요.',
   },
   {
     op: 'create',
-    ref: 'beat1',
+    ref: 'beat',
     parentRef: 'ep1',
     level: 'beat',
-    title: '열쇠 없는 자물쇠',
-    intent: '자물쇠에 열쇠 구멍이 없다는 것을 알아채요.',
+    title: '답하지 않은 질문',
+    intent: '직원이 담보를 요구해요. 상대가 정체를 묻지만 주인공은 질문을 피합니다.',
   },
   {
     op: 'create',
     ref: 'ep2',
     parentRef: 'arc',
     level: 'episode',
-    title: '2화 장부의 첫 장',
-    intent: '문을 열고 장부의 첫 장을 읽어요.',
+    title: '2화 · 돌아온 출입증',
+    intent: '상대가 떠나지 않고 돌아왔다는 작은 징후를 남겨요.',
   },
 ];
-
-async function seed(request: APIRequestContext, width: number) {
-  const response = await postFixtureChat(request, { data: { title: `계층형 구성 합성 ${width}` } });
+async function seed(request: APIRequestContext, width: number, empty = false) {
+  const response = await postFixtureChat(request, {
+    data: { title: `기억 보관소 · 구성 작업실 ${width}` },
+  });
   expect(response.ok()).toBe(true);
   const chat: Chat = await response.json();
-  const applied = await request.post(`/api/chats/${chat.id}/outline`, {
-    data: { idempotencyKey: crypto.randomUUID(), operations: COMPOSITION },
-  });
-  expect(applied.ok(), await applied.text()).toBe(true);
+  if (!empty) {
+    const saved = await request.post(`/api/chats/${chat.id}/outline`, {
+      data: { idempotencyKey: crypto.randomUUID(), operations: COMPOSITION },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+  }
   return chat;
 }
-async function openOutline(page: Page, chatId: string) {
+async function open(page: Page, chatId: string, width: number) {
+  await page.setViewportSize({ width, height: 900 });
   await page.goto(`/?chat=${chatId}`);
-  return revealOutline(page);
-}
-async function revealOutline(page: Page) {
   await page.locator('.chat-menu').getByLabel('채팅 메뉴').click();
   await page
     .locator('.chat-menu .action-menu-body')
@@ -78,348 +75,318 @@ async function revealOutline(page: Page) {
   await expect(panel).toBeVisible();
   return panel;
 }
-const entry = (page: Page, title: string) =>
-  page
-    .locator('.outline-entry')
-    .filter({ has: page.locator(`:scope > .outline-row .outline-title:text-is("${title}")`) })
-    .first();
-function barrier() {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
+async function choose(page: Page, title: string, width: number) {
+  if (width < 760)
+    await page.locator('.outline-mobile-select select').selectOption({ label: `회차 · ${title}` });
+  else
+    await page
+      .locator('.outline-navigation .outline-title')
+      .getByText(title, { exact: true })
+      .click();
+  await expect(page.locator('.outline-detail-heading h3')).toHaveText(title);
 }
-
-for (const width of DEFAULT_WIDTHS) {
-  test(`OUTUI03 ${width} confirms a committed save after response loss without duplicate nodes or losing a later draft`, async ({
+async function sourceCount(request: APIRequestContext, chatId: string) {
+  const detail: ChatDetail = await (await request.get(`/api/chats/${chatId}`)).json();
+  return detail.sources.length;
+}
+for (const width of WIDTHS) {
+  test(`OUTUI01 ${width} approachable start, skipped levels and responsive editing preserve drafts`, async ({
     page,
     request,
-  }) => {
-    const chat = await seed(request, width);
-    await page.setViewportSize({ width, height: 900 });
-    let lost = false;
-    const bodies: unknown[] = [];
-    await page.route(`**/api/chats/${chat.id}/outline`, async (route) => {
-      if (route.request().method() !== 'POST') return route.continue();
-      bodies.push(route.request().postDataJSON());
-      const response = await route.fetch();
-      expect(response.ok()).toBe(true);
-      if (!lost) {
-        lost = true;
-        await route.abort('failed');
-      } else await route.fulfill({ response });
+  }, info) => {
+    const chat = await seed(request, width, true);
+    let modelRequests = 0;
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && /\/messages$|\/run$/.test(new URL(r.url()).pathname))
+        modelRequests++;
     });
-    let panel = await openOutline(page, chat.id);
-    await panel.getByRole('button', { name: '전체 주제 추가', exact: true }).click();
-    const form = panel.locator('> .outline-form');
-    await form.getByLabel('전체 주제 이름').fill('유실 응답의 주제');
-    await form.getByRole('button', { name: '추가', exact: true }).click();
-    await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toBeVisible();
-    await expect(form.getByLabel('전체 주제 이름')).toHaveValue('유실 응답의 주제');
-    await expect(form.getByLabel('전체 주제 이름')).toBeDisabled();
-    panel = await openOutline(page, chat.id); // A reload must keep the original request body.
-    await panel.getByRole('button', { name: '요청 결과 확인' }).click();
-    await expect(panel.locator('.outline-title:text-is("유실 응답의 주제")')).toHaveCount(1);
-    await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toHaveCount(0);
-    expect(bodies).toHaveLength(2);
-    expect(bodies[1]).toEqual(bodies[0]);
-    const saved: OutlineDetail = await (await request.get(`/api/chats/${chat.id}/outline`)).json();
-    expect(saved.nodes).toHaveLength(COMPOSITION.length + 1);
-
-    // Once POST succeeds its tree is authoritative even when a following GET would fail.
-    await page.unroute(`**/api/chats/${chat.id}/outline`);
-    let afterSaveReads = 0;
-    await page.route(`**/api/chats/${chat.id}/outline*`, async (route) => {
-      if (route.request().method() === 'GET') {
-        afterSaveReads++;
-        await route.fulfill({ status: 503, json: { error: 'fixture read unavailable' } });
-      } else await route.continue();
-    });
-    const target = entry(page, '2화 장부의 첫 장');
-    await target
-      .locator('> .outline-row')
-      .getByRole('button', { name: '구성 수정', exact: true })
-      .click();
-    await target.locator('.outline-form textarea').first().fill('POST로 확정한 새 의도');
-    await target
-      .locator('.outline-form')
-      .getByRole('button', { name: '저장', exact: true })
-      .click();
-    await expect(target.locator('> .outline-intent')).toHaveText('POST로 확정한 새 의도');
-    expect(afterSaveReads).toBe(0);
-    await page.unroute(`**/api/chats/${chat.id}/outline*`);
-    await target
-      .locator('> .outline-row')
-      .getByRole('button', { name: '구성 수정', exact: true })
-      .click();
-    await target.locator('.outline-form textarea').first().fill('닫아도 보존하는 미저장 의도');
-    await openOutline(page, chat.id);
-    const reopened = entry(page, '2화 장부의 첫 장');
-    await reopened
-      .locator('> .outline-row')
-      .getByRole('button', { name: '구성 수정', exact: true })
-      .click();
-    await expect(reopened.locator('.outline-form textarea').first()).toHaveValue(
-      '닫아도 보존하는 미저장 의도'
+    const panel = await open(page, chat.id, width);
+    await expect(
+      panel.getByRole('heading', { name: '작은 장면에서 시작해도 좋아요.' })
+    ).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`outline-empty-${width}.png`) });
+    await panel.getByRole('button', { name: '직접 추가', exact: true }).click();
+    const form = panel.locator('.outline-form');
+    await form.getByRole('combobox', { name: '수준', exact: true }).selectOption('episode');
+    await form.getByRole('textbox', { name: '이름', exact: true }).fill('한 회차에서 시작');
+    const intent = form.getByRole('textbox', { name: '구성 내용', exact: true });
+    await intent.pressSequentially('대화를 길게 나누되 관계를 급하게 진전시키지 않아요.');
+    await expect(intent).toBeFocused();
+    await form.getByRole('button', { name: '닫기 · 초안 보관' }).click();
+    await panel.getByRole('button', { name: '직접 추가', exact: true }).click();
+    await expect(form.getByRole('textbox', { name: '이름', exact: true })).toHaveValue(
+      '한 회차에서 시작'
     );
-    const current: OutlineDetail = await (
-      await request.get(`/api/chats/${chat.id}/outline`)
-    ).json();
-    const node = current.nodes.find((item) => item.title === '2화 장부의 첫 장')!;
+    await form.getByRole('button', { name: '추가', exact: true }).click();
+    await expect(panel.locator('.outline-detail-heading h3')).toHaveText('한 회차에서 시작');
+    const saved: OutlineDetail = await (await request.get(`/api/chats/${chat.id}/outline`)).json();
+    expect(saved.nodes).toHaveLength(1);
+    expect(saved.nodes[0]).toMatchObject({ parentId: null, level: 'episode' });
+    expect(modelRequests).toBe(0);
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await page.screenshot({ path: info.outputPath(`outline-standalone-dark-${width}.png`) });
+    expect(await panel.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.body.scrollWidth <= innerWidth)).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+  });
+
+  test(`OUTUI02 ${width} plan detail, brief preview and continuation use only selected unit`, async ({
+    page,
+    request,
+  }, info) => {
+    const chat = await seed(request, width);
+    let panel = await open(page, chat.id, width);
+    await choose(page, '1화 · 열람권의 대가', width);
+    await expect(panel.locator('.outline-intent-card')).toContainText('멈출 지점');
+    await page.screenshot({ path: info.outputPath(`outline-detail-light-${width}.png`) });
+    await panel.getByRole('button', { name: '이번 구성의 집필 맥락 보기' }).click();
+    await expect(panel.locator('.outline-brief')).toContainText('감춰진 이름과 되찾는 선택');
+    expect(await sourceCount(request, chat.id)).toBe(0);
+    await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
+    await panel
+      .getByLabel('추가 지시와 멈출 지점')
+      .fill('선택한 1화만 집필해요. 문이 열리기 직전에 멈춰요.');
+    await page.screenshot({ path: info.outputPath(`outline-writing-${width}.png`) });
+    await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
+    await expect(panel).toHaveCount(0);
+    await expect.poll(() => sourceCount(request, chat.id)).toBe(1);
+    panel = await open(page, chat.id, width);
+    await choose(page, '1화 · 열람권의 대가', width);
+    await expect(panel.locator('.outline-status-line')).toContainText('원문 1개 연결');
+    await panel.getByRole('button', { name: '이어 쓰기', exact: true }).click();
+    await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
+    await expect.poll(() => sourceCount(request, chat.id)).toBe(2);
+    const detail: OutlineDetail = await (await request.get(`/api/chats/${chat.id}/outline`)).json();
     expect(
-      (
-        await request.post(`/api/chats/${chat.id}/outline`, {
+      detail.nodes.find((node) => node.title === '1화 · 열람권의 대가')?.writings
+    ).toHaveLength(2);
+    expect(
+      detail.nodes
+        .filter((node) => node.title !== '1화 · 열람권의 대가')
+        .every((node) => !node.writings?.length)
+    ).toBe(true);
+  });
+
+  if (width === 390)
+    test(`OUTUI03 ${width} lost save acknowledgement replays once after reload and preserves unsaved content`, async ({
+      page,
+      request,
+    }) => {
+      const chat = await seed(request, width),
+        bodies: unknown[] = [];
+      await page.route(`**/api/chats/${chat.id}/outline`, async (route) => {
+        if (route.request().method() !== 'POST') return route.continue();
+        bodies.push(route.request().postDataJSON());
+        const response = await route.fetch();
+        expect(response.ok()).toBe(true);
+        if (bodies.length === 1) await route.abort('failed');
+        else await route.fulfill({ response });
+      });
+      let panel = await open(page, chat.id, width);
+      await choose(page, '1화 · 열람권의 대가', width);
+      await panel
+        .locator('.outline-intent-card')
+        .getByRole('button', { name: '편집', exact: true })
+        .click();
+      await panel
+        .getByRole('textbox', { name: '구성 내용', exact: true })
+        .fill('응답이 유실되어도 이 초안을 지켜요.');
+      await panel
+        .locator('.outline-form')
+        .getByRole('button', { name: '저장', exact: true })
+        .click();
+      await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toBeVisible();
+      panel = await open(page, chat.id, width);
+      await panel.getByRole('button', { name: '요청 결과 확인' }).click();
+      await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toHaveCount(0);
+      expect(bodies).toHaveLength(2);
+      expect(bodies[1]).toEqual(bodies[0]);
+      const saved: OutlineDetail = await (
+        await request.get(`/api/chats/${chat.id}/outline`)
+      ).json();
+      expect(saved.nodes.find((node) => node.title === '1화 · 열람권의 대가')).toMatchObject({
+        revision: 2,
+        intent: '응답이 유실되어도 이 초안을 지켜요.',
+      });
+    });
+
+  if (width === 1440)
+    test(`OUTUI04 ${width} a lost writer response is confirmed with original revisions, not another run`, async ({
+      page,
+      request,
+    }) => {
+      const chat = await seed(request, width),
+        bodies: unknown[] = [];
+      await page.route('**/api/scene-commands/*/run', async (route) => {
+        bodies.push(route.request().postDataJSON());
+        const response = await route.fetch();
+        expect(response.ok()).toBe(true);
+        if (bodies.length === 1) await route.abort('failed');
+        else await route.fulfill({ response });
+      });
+      let panel = await open(page, chat.id, width);
+      await choose(page, '1화 · 열람권의 대가', width);
+      await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
+      await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
+      await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toBeVisible();
+      await expect.poll(() => sourceCount(request, chat.id)).toBe(1);
+      panel = await open(page, chat.id, width);
+      await panel.getByRole('button', { name: '요청 결과 확인' }).click();
+      await expect(panel).toHaveCount(0);
+      expect(bodies).toHaveLength(2);
+      expect(bodies[1]).toEqual(bodies[0]);
+      expect(await sourceCount(request, chat.id)).toBe(1);
+    });
+
+  test(`OUTUI05 ${width} helper handoff preserves selected identity and draft without automatic model execution`, async ({
+    page,
+    request,
+  }, info) => {
+    const chat = await seed(request, width);
+    const panel = await open(page, chat.id, width);
+    await choose(page, '1화 · 열람권의 대가', width);
+    const messages: Record<string, unknown>[] = [];
+    await page.route('**/api/helper/conversations/*/messages', async (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      messages.push(route.request().postDataJSON());
+      await route.fulfill({ status: 409, json: { error: 'MODEL_REQUIRED:helper' } });
+    });
+    await panel.getByRole('button', { name: '상세화', exact: true }).click();
+    const helper = page.locator('#helper-panel');
+    await expect(helper).toBeVisible();
+    await expect(helper.locator('.helper-outline-selection')).toContainText('1화 · 열람권의 대가');
+    const composer = helper.locator('.helper-composer textarea').last();
+    await expect(composer).toHaveValue(/선택한 구성/);
+    await composer.fill('내가 미리 작성한 요청을 보존해줘.');
+    expect(messages).toHaveLength(0);
+    if (width === 1440) await expect(panel).toBeVisible();
+    else await expect(panel).toBeHidden();
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot({ path: info.outputPath(`outline-helper-dark-${width}.png`) });
+    await helper.getByRole('button', { name: '구성으로 돌아가기', exact: true }).click();
+    await expect(panel).toBeVisible();
+    await choose(page, '2화 · 돌아온 출입증', width);
+    await panel.getByRole('button', { name: '상세화', exact: true }).click();
+    await expect(helper.locator('.helper-outline-selection')).toContainText('2화 · 돌아온 출입증');
+    await expect(composer).toHaveValue('내가 미리 작성한 요청을 보존해줘.');
+    await composer.press('Control+Enter');
+    await expect.poll(() => messages.length).toBe(1);
+    const saved: OutlineDetail = await (await request.get(`/api/chats/${chat.id}/outline`)).json();
+    const selected = saved.nodes.find((node) => node.title === '2화 · 돌아온 출입증')!;
+    expect(messages[0].outline).toEqual({
+      nodeId: selected.id,
+      expectedRevision: selected.revision,
+      purpose: 'compose',
+    });
+    expect(await sourceCount(request, chat.id)).toBe(0);
+  });
+  if (width === 1440)
+    test(`OUTUI06 ${width} explicit review stays read-only, links its conversation and becomes stale after a plan edit`, async ({
+      page,
+      request,
+    }, info) => {
+      const chat = await seed(request, width);
+      const previous = await (await request.get('/api/model-workspace')).json();
+      // Unlike the main test-mode writer, the helper requires an explicitly selected model.
+      // Reuse the existing loopback transport peer; no product-only fixture path is introduced.
+      const peer = await loopbackProvider((wire, response) => {
+        const input = JSON.parse(wire.body);
+        const source = input.input.source.outline.sources[0];
+        return writeSse(response, [
+          {
+            type: 'text_delta',
+            delta: `현재 원문의 ${source.id}에서 제공된 ${source.start}–${source.end} 구간을 확인했어요. 이 답변은 UI 연결을 검증하는 합성 점검이에요.`,
+          },
+          { type: 'usage', inputTokens: 50, outputTokens: 30, costUsd: null },
+          { type: 'done', reason: 'stop' },
+        ]);
+      });
+      try {
+        const connectionResponse = await request.post('/api/connections', {
+          data: {
+            title: '구성 점검 합성 연결',
+            protocol: 'fixture-sse-v1',
+            endpoint: peer.endpoint,
+            enabled: true,
+          },
+        });
+        expect(connectionResponse.ok(), await connectionResponse.text()).toBe(true);
+        const modelResponse = await request.post('/api/model-presets', {
+          data: {
+            title: '구성 점검 합성 모델',
+            connectionId: (await connectionResponse.json()).id,
+            modelId: 'outline-review-fixture',
+            inputTokenLimit: 65536,
+            maxOutputTokens: 2048,
+            temperature: null,
+          },
+        });
+        expect(modelResponse.ok(), await modelResponse.text()).toBe(true);
+        const config = await request.put('/api/model-workspace', {
+          data: {
+            expectedRevision: previous.revision,
+            routes: previous.routes,
+            translationPolicy: previous.translationPolicy,
+            helperModel: { id: (await modelResponse.json()).id },
+          },
+        });
+        expect(config.ok(), await config.text()).toBe(true);
+        let panel = await open(page, chat.id, width);
+        await choose(page, '1화 · 열람권의 대가', width);
+        await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
+        await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
+        await expect.poll(() => sourceCount(request, chat.id)).toBe(1);
+        panel = await open(page, chat.id, width);
+        await choose(page, '1화 · 열람권의 대가', width);
+        await panel.getByRole('button', { name: '원문과 점검', exact: true }).click();
+        const helper = page.locator('#helper-panel');
+        await expect(helper.locator('.helper-outline-selection')).toContainText('읽기 전용');
+        await helper.locator('.helper-composer textarea').last().press('Control+Enter');
+        const current = async () =>
+          (
+            (await (await request.get(`/api/chats/${chat.id}/outline`)).json()) as OutlineDetail
+          ).nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
+        await expect.poll(async () => (await current()).latestReview?.status).toBe('completed');
+        expect(await sourceCount(request, chat.id)).toBe(1);
+        await helper.getByRole('button', { name: '구성으로 돌아가기', exact: true }).click();
+        await expect(panel.locator('.outline-review')).toContainText('점검 의견 있음');
+        const before = await current();
+        expect(before.latestReview?.sources).toHaveLength(1);
+        expect(before.latestReview?.stale).toBe(false);
+        expect(peer.requests).toHaveLength(1);
+        const saved = await request.post(`/api/chats/${chat.id}/outline`, {
           data: {
             idempotencyKey: crypto.randomUUID(),
             operations: [
               {
                 op: 'update',
-                id: node.id,
-                expectedRevision: node.revision,
-                intent: '다른 탭의 확정 의도',
+                id: before.id,
+                expectedRevision: before.revision,
+                intent: '점검 이후 사용자가 변경한 현재 계획',
               },
             ],
           },
-        })
-      ).ok()
-    ).toBe(true);
-    await reopened
-      .locator('.outline-form')
-      .getByRole('button', { name: '저장', exact: true })
-      .click();
-    await expect(page.locator('.outline-panel').getByRole('alert')).toBeVisible();
-    await expect(reopened.locator('.outline-form textarea').first()).toHaveValue(
-      '닫아도 보존하는 미저장 의도'
-    );
-    const afterConflict: OutlineDetail = await (
-      await request.get(`/api/chats/${chat.id}/outline`)
-    ).json();
-    expect(afterConflict.nodes.find((item) => item.id === node.id)?.intent).toBe(
-      '다른 탭의 확정 의도'
-    );
-    await reopened
-      .locator('.outline-form')
-      .getByRole('button', { name: '취소', exact: true })
-      .click();
-    // Closing a modal leaves its fetch alive. That late result must not clear a newer receipt.
-    const accepted = barrier();
-    const release = barrier();
-    const delivered = barrier();
-    const requests: { idempotencyKey: string }[] = [];
-    await page.route(`**/api/chats/${chat.id}/outline`, async (route) => {
-      if (route.request().method() !== 'POST') return route.continue();
-      requests.push(route.request().postDataJSON());
-      const index = requests.length;
-      const response = await route.fetch();
-      expect(response.ok()).toBe(true);
-      if (index === 1) {
-        accepted.resolve();
-        await release.promise;
-        await route.fulfill({ response });
-        delivered.resolve();
-      } else if (index === 3) await route.abort('failed');
-      else await route.fulfill({ response });
+        });
+        expect(saved.ok()).toBe(true);
+        await panel.getByRole('button', { name: '새로고침', exact: true }).click();
+        await expect(panel.locator('.outline-review')).toContainText('이후 변경됨');
+        await page.screenshot({ path: info.outputPath(`outline-review-${width}.png`) });
+        await panel.getByRole('button', { name: '도우미에서 점검 의견 보기' }).click();
+        await expect(helper).toBeVisible();
+        await expect(helper.locator('.helper-messages')).not.toBeEmpty();
+      } finally {
+        await peer.close();
+        const current = await (await request.get('/api/model-workspace')).json();
+        const restored = await request.put('/api/model-workspace', {
+          data: {
+            expectedRevision: current.revision,
+            routes: current.routes,
+            translationPolicy: current.translationPolicy,
+            helperModel: previous.helperModel ?? null,
+          },
+        });
+        expect(restored.ok(), await restored.text()).toBe(true);
+      }
     });
-    try {
-      await panel.getByRole('button', { name: '전체 주제 추가', exact: true }).click();
-      await panel.locator('> .outline-form').getByLabel('전체 주제 이름').fill('늦게 응답한 저장');
-      await panel
-        .locator('> .outline-form')
-        .getByRole('button', { name: '추가', exact: true })
-        .click();
-      await accepted.promise;
-      await page.getByRole('button', { name: '계층형 구성 닫기', exact: true }).click();
-      panel = await revealOutline(page);
-      await panel.getByRole('button', { name: '요청 결과 확인' }).click();
-      await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toHaveCount(0);
-      await panel.getByRole('button', { name: '전체 주제 추가', exact: true }).click();
-      await panel
-        .locator('> .outline-form')
-        .getByLabel('전체 주제 이름')
-        .fill('새 요청의 복구 기록');
-      await panel
-        .locator('> .outline-form')
-        .getByRole('button', { name: '추가', exact: true })
-        .click();
-      await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toBeVisible();
-      release.resolve();
-      await delivered.promise;
-      await page.evaluate(
-        () =>
-          new Promise<void>((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-          )
-      );
-      const pending = await page.evaluate(() =>
-        Object.keys(sessionStorage)
-          .filter((key) => key.startsWith('outline-pending:') && !key.includes(':draft:'))
-          .map((key) => JSON.parse(sessionStorage.getItem(key)!))
-      );
-      expect(pending).toEqual([
-        expect.objectContaining({
-          body: expect.objectContaining({ idempotencyKey: requests[2].idempotencyKey }),
-        }),
-      ]);
-      await panel.getByRole('button', { name: '요청 결과 확인' }).click();
-      await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toHaveCount(0);
-      await expect(panel.locator('.outline-title:text-is("새 요청의 복구 기록")')).toHaveCount(1);
-    } finally {
-      release.resolve();
-    }
-  });
-
-  test(`OUTUI04 ${width} confirms a lost run response after reload with the original revisions and no second run`, async ({
-    page,
-    request,
-  }) => {
-    const chat = await seed(request, width);
-    await page.setViewportSize({ width, height: 900 });
-    const bodies: unknown[] = [];
-    await page.route('**/api/scene-commands/*/run', async (route) => {
-      bodies.push(route.request().postDataJSON());
-      const response = await route.fetch();
-      expect(response.ok()).toBe(true);
-      if (bodies.length === 1) await route.abort('failed');
-      else await route.fulfill({ response });
-    });
-    await openOutline(page, chat.id);
-    await entry(page, '1화 잠긴 문').locator('> .outline-row .outline-write').click();
-    await expect(
-      page.locator('.outline-panel').getByRole('button', { name: '요청 결과 확인' })
-    ).toBeVisible();
-    await expect
-      .poll(async () => {
-        const detail: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
-        return detail.sources.length;
-      })
-      .toBe(1);
-    const panel = await openOutline(page, chat.id);
-    await expect(entry(page, '1화 잠긴 문').locator('> .outline-row .outline-progress')).toHaveText(
-      '집필 완료'
-    );
-    await panel.getByRole('button', { name: '요청 결과 확인' }).click();
-    await expect(panel).toHaveCount(0);
-    expect(bodies).toHaveLength(2);
-    expect(bodies[1]).toEqual(bodies[0]);
-    const detail: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
-    expect(detail.runs).toHaveLength(1);
-    expect(detail.sources).toHaveLength(1);
-  });
-
-  test(`OUTUI01 ${width} shows every composition level, its own plan and where writing is possible`, async ({
-    page,
-    request,
-  }, info) => {
-    const chat = await seed(request, width);
-    await page.setViewportSize({ width, height: 900 });
-    const panel = await openOutline(page, chat.id);
-
-    for (const [title, level] of [
-      ['잊힌 이름을 되찾는 이야기', '전체 주제'],
-      ['이름 없는 사서', '메인 스토리'],
-      ['지하 서고의 발견', '큰 사건'],
-      ['1화 잠긴 문', '회차'],
-      ['열쇠 없는 자물쇠', '작은 사건'],
-    ] as const) {
-      const row = entry(page, title).locator('> .outline-row');
-      await expect(row.locator('.outline-level')).toHaveText(level);
-      await expect(row.locator('.outline-progress')).toHaveText('구성만 있어요');
-    }
-    // The composed hierarchy is real nesting, not a flat list.
-    await expect(
-      entry(page, '지하 서고의 발견').locator('.outline-title:text-is("1화 잠긴 문")')
-    ).toBeVisible();
-    // Only a unit one request can write offers writing.
-    await expect(
-      entry(page, '지하 서고의 발견').locator('> .outline-row .outline-write')
-    ).toHaveCount(0);
-    await expect(entry(page, '1화 잠긴 문').locator('> .outline-row .outline-write')).toHaveCount(
-      1
-    );
-    await expect(
-      entry(page, '열쇠 없는 자물쇠').locator('> .outline-row .outline-write')
-    ).toHaveCount(1);
-    // Composing alone commits no prose.
-    await expect(page.getByTestId('source')).toHaveCount(0);
-
-    expect(await panel.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
-    expect(await page.evaluate(() => document.body.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: info.outputPath(`outline-panel-${width}.png`) });
-
-    // A user edit reaches the named target and leaves the rest of the composition alone.
-    const target = entry(page, '2화 장부의 첫 장');
-    await target.locator('> .outline-row').getByRole('button', { name: '구성 수정' }).click();
-    const intent = target.locator('.outline-form textarea').first();
-    await intent.fill('');
-    await intent.click();
-    // Typed one key at a time: the editor must keep focus and every character.
-    await intent.pressSequentially('관장 대신 조수가 찾아와요.');
-    await expect(intent).toBeFocused();
-    await expect(intent).toHaveValue('관장 대신 조수가 찾아와요.');
-    await target
-      .locator('> .outline-row')
-      .getByRole('button', { name: '이 구성 고정', exact: true })
-      .click();
-    await expect(
-      target.locator('> .outline-row').getByRole('button', { name: '고정 해제', exact: true })
-    ).toBeEnabled();
-    await expect(intent).toHaveValue('관장 대신 조수가 찾아와요.');
-    await target.locator('.outline-form').getByRole('button', { name: '저장' }).click();
-    await expect(target.locator('> .outline-intent')).toHaveText('관장 대신 조수가 찾아와요.');
-    await expect(entry(page, '1화 잠긴 문').locator('> .outline-intent')).toHaveText(
-      '사서가 지하 서고의 잠긴 문을 발견해요.'
-    );
-
-    // Adding a level below keeps the same typing guarantee and the level rule.
-    await target.locator('> .outline-row').getByRole('button', { name: '작은 사건 추가' }).click();
-    const added = target.locator('.outline-form').first();
-    await added.locator('input').click();
-    await added.locator('input').pressSequentially('장부의 첫 문장');
-    await expect(added.locator('input')).toBeFocused();
-    await added.getByRole('button', { name: '추가' }).click();
-    const beat = entry(page, '장부의 첫 문장');
-    await expect(beat.locator('> .outline-row .outline-level')).toHaveText('작은 사건');
-    await expect(target.locator('.outline-title:text-is("장부의 첫 문장")')).toBeVisible();
-  });
-
-  test(`OUTUI02 ${width} writes only the chosen unit and carries the upper intent into that request`, async ({
-    page,
-    request,
-  }, info) => {
-    const chat = await seed(request, width);
-    await page.setViewportSize({ width, height: 900 });
-    await openOutline(page, chat.id);
-    await entry(page, '1화 잠긴 문')
-      .locator('> .outline-row')
-      .getByRole('button', { name: '이 단위 집필' })
-      .click();
-    await expect(page.locator('.outline-panel')).toHaveCount(0);
-    await expect(page.getByTestId('source')).toHaveCount(1);
-
-    const detail: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
-    expect(detail.sources).toHaveLength(1);
-    const run = detail.runs.find((item) => item.sourceRevision === detail.sources[0].id);
-    expect(run?.request).toContain('1화 잠긴 문');
-    // Compilation is verified at execution time by the outline tests, not by retaining full inputs forever.
-    expect(run?.inputs).toEqual([]);
-
-    const composed = await openOutline(page, chat.id);
-    await expect(entry(page, '1화 잠긴 문').locator('> .outline-row .outline-progress')).toHaveText(
-      '집필 완료'
-    );
-    // A one-unit request never writes the other episodes.
-    await expect(
-      entry(page, '2화 장부의 첫 장').locator('> .outline-row .outline-progress')
-    ).toHaveText('구성만 있어요');
-    await page.screenshot({ path: info.outputPath(`outline-written-${width}.png`) });
-
-    const after: OutlineDetail = await (await request.get(`/api/chats/${chat.id}/outline`)).json();
-    expect(
-      after.nodes.filter((node) => node.progress.state === 'written').map((node) => node.title)
-    ).toEqual(['1화 잠긴 문']);
-    await composed.getByRole('button', { name: '집필한 원문 읽기' }).click();
-    await expect(page.locator('.outline-panel')).toHaveCount(0);
-    await expect(page.getByTestId('source')).toHaveCount(1);
-  });
 }

@@ -362,3 +362,50 @@ test('version-10 simplification removes obsolete triggers while retaining author
     upgraded.close();
   }
 });
+
+test('schema 12 upgrade preserves authored plans and completed source associations', () => {
+  // This test owns a temporary fixture database. No running app database is used.
+  const path = file(),
+    current = new Store(path);
+  const chat = createFixtureChat(current, '구성 보존');
+  const node = current.outline.apply(
+    chat.id,
+    {
+      idempotencyKey: 'old-plan',
+      operations: [
+        { op: 'create', level: 'episode', title: '기존 회차', intent: '원문과 구성 보존' },
+      ],
+    },
+    'user'
+  ).detail.nodes[0];
+  const source = completedSource(current, chat.id, '기존 원문 그대로');
+  const command = current.outline.sceneCommand(node.id, { idempotencyKey: 'old-command' });
+  current.db
+    .prepare("UPDATE scene_commands SET status='consumed',source_revision=? WHERE id=?")
+    .run(source.id, command.id);
+  const before = current.db.prepare('SELECT id,title,intent,command_id FROM outline_nodes').all();
+  current.close();
+  const old = new DatabaseSync(path);
+  old.exec(
+    'DROP TABLE outline_reviews; DROP TABLE outline_links; DROP TABLE outline_writings; PRAGMA user_version=12'
+  );
+  old.close();
+  const upgraded = new Store(path);
+  try {
+    expect(databaseSchemaVersion(upgraded.db)).toBe(DATABASE_SCHEMA_VERSION);
+    expect(
+      upgraded.db.prepare('SELECT id,title,intent,command_id FROM outline_nodes').all()
+    ).toEqual(before);
+    expect(upgraded.outline.node(node.id).writings).toMatchObject([{ sourceRevision: source.id }]);
+    expect(upgraded.source(source.id).text).toBe('기존 원문 그대로');
+    expect(upgraded.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    expect(upgraded.outline.sceneCommand(node.id, { idempotencyKey: 'old-command' }).id).toBe(
+      command.id
+    );
+  } finally {
+    upgraded.close();
+  }
+  const reopened = new Store(path);
+  expect(reopened.db.prepare('SELECT count(*) AS n FROM outline_writings').get()?.n).toBe(1);
+  reopened.close();
+});

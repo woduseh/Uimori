@@ -165,13 +165,13 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'outline.read',
     description:
-      "Read this chat branch's hierarchical composition: theme, main story, arcs, episodes and beats, with each item's exact id, revision, pinned flag and derived writing progress. Read before proposing or writing composition.",
+      "Read this chat branch's hierarchical composition: theme, main story, arcs, episodes and beats (levels may be skipped), with each item's exact id, revision, pinned flag and derived writing progress. Read before proposing or writing composition.",
     inputSchema: schema({}),
   },
   {
     name: 'outline.write',
     description:
-      "Apply composition changes the user requested: create, update, move or remove items. One call may build a whole tree by giving each new item a ref and naming its parent with parentRef; create a parent before the items that name it. This writes composition only, never story prose, and never marks anything as written. Update, move and remove need the item's exact current revision. User-requested edits may change pinned or written plans; active generation must finish before its plan is edited.",
+      "Apply composition changes the user requested: create, update, move or remove items. One call may build a whole tree by giving each new item a ref and naming its parent with parentRef; create a parent before the items that name it. Related IDs connect other plans in the same chat; read new IDs before linking. Fixed is an authored keep-condition for ordinary elaboration, not an edit lock. This writes composition only, never story prose, and never marks anything as written. Update, move and remove need the item's exact current revision. User-requested edits may change pinned or written plans; active generation must finish before its plan is edited.",
     inputSchema: schema(
       {
         operations: {
@@ -195,6 +195,7 @@ const TOOLS: ProviderTool[] = [
               id: str,
               expectedRevision: { type: 'integer', minimum: 1 },
               fixed: { type: 'boolean' },
+              relatedIds: { type: 'array', maxItems: 40, items: str },
             },
             required: ['op'],
             additionalProperties: false,
