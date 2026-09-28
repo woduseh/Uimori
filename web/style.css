@@ -1522,6 +1522,7 @@ input[type="checkbox"] {
 /* Settings keeps a stable workspace height; all dialogs share positioning and mobile sizing. */
 @media (min-width: 761px) {
   .app-dialog.settings-dialog {
+    width: min(1160px, calc(100vw - 48px));
     height: min(760px, calc(var(--app-height, 100dvh) - 48px));
   }
 }

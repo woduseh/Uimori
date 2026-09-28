@@ -81,7 +81,7 @@ test('PWUI02 backup settings, status, verified download and retention are reacha
   await panel.getByRole('button', { name: '백업 설정 저장', exact: true }).click();
   await expect(panel.getByRole('button', { name: '백업 설정 저장', exact: true })).toBeDisabled();
   await panel.getByRole('button', { name: '지금 백업', exact: true }).click();
-  await expect(panel).toContainText('마지막 성공:', { timeout: 30000 });
+  await expect(panel.locator('.backup-status')).toContainText('· 성공', { timeout: 30000 });
   const response = await request.get('/api/backups');
   const status = await response.json();
   expect(status.backups.length).toBeGreaterThan(0);
@@ -252,12 +252,14 @@ test('PWUI04 real loopback usage receipts appear in period, model and purpose ta
     await selectSettingsSection(page, '사용량');
     const panel = page.getByRole('region', { name: '작업실 사용량', exact: true });
     await panel.getByRole('button', { name: '오늘', exact: true }).click();
+    await panel.locator('summary').filter({ hasText: '모델별 상세' }).click();
     const row = panel.getByRole('row').filter({ hasText: 'personal-usage-fixture' });
     await expect(row).toContainText('1,000');
     await expect(row).toContainText('0.25');
     await expect(row).toContainText('미확인');
     await panel.locator('summary').filter({ hasText: '일별·용도별 상세' }).click();
     await expect(panel.getByRole('row').filter({ hasText: '연결 테스트' })).toBeVisible();
+    await panel.locator('summary[aria-label="CSV 내보내기"]').click();
     const csvPath = await panel
       .getByRole('link', { name: '모델별 CSV', exact: true })
       .getAttribute('href');
@@ -265,6 +267,7 @@ test('PWUI04 real loopback usage receipts appear in period, model and purpose ta
     expect(csv.ok()).toBe(true);
     expect(await csv.text()).toContain('personal-usage-fixture');
     expect(await csv.text()).not.toContain('Synthetic connection response');
+    await panel.locator('summary[aria-label="CSV 내보내기"]').press('Escape');
     for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
       await page.setViewportSize({ width, height: 1000 });
       await panel.scrollIntoViewIfNeeded();

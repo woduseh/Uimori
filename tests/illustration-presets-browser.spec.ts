@@ -74,12 +74,20 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
   await expect(section.locator('.illustration-preset-current')).toContainText(title);
   expect((await catalog(request)).preferences.chatPresets[chat.id]).toBeUndefined();
 
+  await section
+    .locator('summary')
+    .filter({ hasText: `${title} 프리셋 메뉴` })
+    .click();
   await section.getByRole('button', { name: `${title} 삽화 프리셋 복제`, exact: true }).click();
   await expect(editor.getByLabel('삽화 그림 지침')).toHaveValue(original.styleGuidance);
   await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
   await editor.getByRole('button', { name: '편집 닫기', exact: true }).click();
   const downloadPromise = page.waitForEvent('download');
+  await section
+    .locator('summary')
+    .filter({ hasText: `${title} 프리셋 메뉴` })
+    .click();
   await section.getByRole('button', { name: `${title} 삽화 프리셋 내보내기`, exact: true }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe(`${title}.uimori-illustration.json`);
@@ -115,6 +123,10 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
     );
     await page.screenshot({ path: info.outputPath(`illustration-presets-${width}.png`) });
   }
+  await section
+    .locator('summary')
+    .filter({ hasText: `${title} 프리셋 메뉴` })
+    .click();
   await section.getByRole('button', { name: `${title} 삽화 프리셋 삭제`, exact: true }).click();
   const confirm = page.getByRole('alertdialog', { name: '삽화 프리셋 삭제', exact: true });
   await expect(confirm).toContainText('기존 삽화는 유지');
@@ -144,7 +156,7 @@ test('IPUI02 stale edits are not overwritten and can be saved as a new copy', as
     },
   });
   const preset = (await response.json()).saved as IllustrationPreset;
-  await section.getByRole('button', { name: '프리셋 목록 새로고침' }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await section.getByRole('button', { name: `${title} 삽화 프리셋 편집`, exact: true }).click();
   await editor.getByLabel('삽화 그림 지침').fill('unsaved local direction');
   const remote = await request.post('/api/resources/save', {

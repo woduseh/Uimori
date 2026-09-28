@@ -70,7 +70,7 @@ test('SCUI04 recovery settings expose real build information and grouped data at
       } else if (section === '데이터 관리') {
         await expect(pane.getByRole('heading', { name: '백업 · 복원', exact: true })).toBeVisible();
         await expect(
-          pane.getByRole('button', { name: 'DB 스냅샷 다운로드', exact: true })
+          pane.getByRole('button', { name: '백업 다운로드', exact: true })
         ).toBeVisible();
         const restore = pane
           .locator('details')
@@ -279,7 +279,7 @@ test('SCUI05 global lore defaults are saved and copied only to new chats', async
   const nextLimit = original.maxRetainedTokens === 24_000 ? 20_000 : 24_000;
   await retained.fill(String(nextLimit));
   await section.getByRole('button', { name: '로어 문맥 기본값 저장', exact: true }).click();
-  await expect(section.getByRole('status')).toContainText('이후 만드는 새 채팅부터 사용해요');
+  await expect(section.getByRole('status')).toContainText('새 채팅부터 적용돼요');
   const secondResponse = await request.post('/api/chats', {
     data: { botId: bot.id, title: '기본값 변경 후 채팅' },
   });

@@ -9,3 +9,11 @@
   align-items: center;
   gap: 8px;
 }
+
+.push-options {
+  margin-top: 14px;
+}
+.push-options > summary {
+  color: var(--muted);
+  font-size: 0.875rem;
+}

@@ -244,3 +244,75 @@ test('CSV exports one grouping, includes coverage columns and neutralizes spread
   expect(csv.trim().split('\r\n')).toHaveLength(2);
   expect(csv).not.toContain('PRIVATE_CANARY');
 });
+
+test('version-eleven evaluation attribution is repaired from saved request tools only and keeps totals unchanged', () => {
+  const store = fixture();
+  const ids = [
+    add(
+      store,
+      null,
+      wire({
+        body: {
+          tools: [
+            { type: 'function', function: { name: 'eval_create_case' } },
+            { type: 'function', function: { name: 'eval_submit_artifact' } },
+          ],
+        },
+      }),
+      result(0.25)
+    ),
+    add(
+      store,
+      null,
+      wire({ body: { tools: [{ name: 'eval_create_case' }, { name: 'eval_submit_artifact' }] } }),
+      result(0.1)
+    ),
+    add(
+      store,
+      null,
+      wire({
+        body: {
+          tools: [
+            {
+              functionDeclarations: [
+                { name: 'eval_create_case' },
+                { name: 'eval_submit_artifact' },
+              ],
+            },
+          ],
+        },
+      }),
+      result(0.05)
+    ),
+  ];
+  const unknown = add(store, null, wire(), result(0.2));
+  const advisor = add(
+    store,
+    null,
+    wire({
+      agentId: 'advisor',
+      body: { tools: [{ name: 'eval_create_case' }, { name: 'eval_submit_artifact' }] },
+    }),
+    result(0.3)
+  );
+  store.db.exec("UPDATE attempts SET usage_kind='unclassified'; PRAGMA user_version=11;");
+  const before = usageReport(store, query).totals;
+  const entry = owned.at(-1)!;
+  store.close();
+  entry.store = new Store(join(entry.directory, 'app.sqlite'));
+  const report = usageReport(entry.store, query);
+  expect(report.totals).toEqual(before);
+  expect(report.kinds.find((row) => row.kind === 'writing')).toMatchObject({
+    calls: 3,
+    reportedUsd: 0.4,
+  });
+  for (const id of [unknown, advisor])
+    expect(
+      entry.store.db.prepare('SELECT usage_kind FROM attempts WHERE id=?').get(id)?.usage_kind
+    ).toBe('unclassified');
+  detachAttemptUsage(entry.store.db, ids);
+  expect(usageReport(entry.store, query).totals).toEqual(before);
+  entry.store.close();
+  entry.store = new Store(join(entry.directory, 'app.sqlite'));
+  expect(usageReport(entry.store, query)).toEqual(report);
+});

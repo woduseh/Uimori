@@ -35,12 +35,13 @@ export function ArchivePanel({
       <section className="settings-card archive-management-card" aria-label="백업과 복원">
         <header className="archive-card-heading">
           <h3>백업 · 복원</h3>
-          <p className="muted">작업실 전체 상태를 저장하거나 이전 백업으로 되돌려요.</p>
         </header>
         <div className="archive-action-row">
           <div>
             <strong>작업실 전체 백업</strong>
-            <p className="muted">자료·대화·이미지와 API 키를 저장해요. 개인 보관용 파일이에요.</p>
+            <p className="muted">
+              설정·원고·이미지를 저장해요. API 키가 포함된 개인 보관용 파일이에요.
+            </p>
           </div>
           <button
             type="button"
@@ -67,7 +68,7 @@ export function ArchivePanel({
             }}
           >
             <DownloadIcon size={18} aria-hidden="true" />
-            {busy ? '백업 준비 중…' : 'DB 스냅샷 다운로드'}
+            {busy ? '백업 준비 중…' : '백업 다운로드'}
           </button>
         </div>
         <details className="archive-restore-details">

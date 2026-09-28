@@ -2,7 +2,7 @@ import { PushSettings } from './PushSettings.js';
 import { InstallApp } from './InstallApp.js';
 import { UsagePanel } from './UsagePanel.js';
 import { ThemeSettings } from './ThemeSettings.js';
-import { Palette } from 'lucide-react';
+import { ChartNoAxesColumn, Palette } from 'lucide-react';
 import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
 import type { ReactNode } from 'react';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
@@ -307,7 +307,7 @@ export function AppSettingsPanel({
     { key: 'lore', label: '로어 문맥', icon: LibraryIcon },
     { key: 'agents', label: 'Codex 연결', icon: AgentIcon },
     { key: 'illustrations', label: '삽화', icon: IllustrationIcon },
-    { key: 'usage', label: '사용량', icon: DataIcon },
+    { key: 'usage', label: '사용량', icon: ChartNoAxesColumn },
     { key: 'data', label: '데이터 관리', icon: DataIcon },
     { key: 'security', label: '접근 보안', icon: SecurityIcon },
     { key: 'about', label: '앱 정보·라이선스', icon: Info },
@@ -451,10 +451,13 @@ export function AppSettingsPanel({
                   )}
                   {key === 'about' && <AppAbout />}
                   {key === 'general' && (
-                    <>
+                    <section className="settings-section settings-services" aria-label="앱과 알림">
+                      <h3>
+                        앱과 알림<span className="scope-badge">이 기기</span>
+                      </h3>
                       <InstallApp />
                       <PushSettings />
-                    </>
+                    </section>
                   )}
                   {key === 'general' && (
                     <section className="settings-section">
