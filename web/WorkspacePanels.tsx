@@ -2,7 +2,7 @@ import { PushSettings } from './PushSettings.js';
 import { InstallApp } from './InstallApp.js';
 import { UsagePanel } from './UsagePanel.js';
 import { ThemeSettings } from './ThemeSettings.js';
-import { ChartNoAxesColumn, Palette } from 'lucide-react';
+import { ChartNoAxesColumn, Palette, type LucideIcon } from 'lucide-react';
 import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
 import type { ReactNode } from 'react';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
@@ -245,6 +245,78 @@ const appSaveSections = [
   'themes',
 ] as const;
 
+type SettingsDestination = { label: string; terms: string; anchor?: string };
+type SettingsCategory = {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  terms?: string;
+  destinations?: SettingsDestination[];
+};
+
+const settingsCategories: SettingsCategory[] = [
+  {
+    key: 'general',
+    label: '일반',
+    icon: SettingsIcon,
+    destinations: [
+      { label: '앱과 알림', terms: '알림 푸시 설치 PWA', anchor: 'services' },
+      { label: '화면과 입력', terms: '화면 테마 Enter 보내기 도우미 패널 폭', anchor: 'display' },
+      {
+        label: '원고 읽기',
+        terms: '글자 크기 글꼴 본문 폭 행간 줄 간격 문단 간격 번역 보기',
+        anchor: 'reading',
+      },
+    ],
+  },
+  { key: 'themes', label: '테마·색상', icon: Palette, terms: '밝게 어둡게 CSS HTML' },
+  {
+    key: 'models',
+    label: '역할별 모델',
+    icon: ModelIcon,
+    terms:
+      '원문 작문 번역 도우미 문맥 요약 채팅 제목 장면 해설 확장 호출 스크립트 거절 판정 모델 선택',
+  },
+  { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon, terms: '프리셋 기본 옵션' },
+  {
+    key: 'connections',
+    label: '프로바이더·모델',
+    icon: ConnectionIcon,
+    terms: 'API 연결 키 주소 사고 강도 추론 강도 Reasoning Effort 생성 옵션',
+  },
+  { key: 'lore', label: '로어 문맥', icon: LibraryIcon, terms: '기본값 토큰 선별 예산' },
+  { key: 'agents', label: 'Codex 연결', icon: AgentIcon, terms: '로그인 실행기' },
+  { key: 'illustrations', label: '삽화', icon: IllustrationIcon, terms: '이미지 생성 ComfyUI' },
+  { key: 'usage', label: '사용량', icon: ChartNoAxesColumn, terms: '비용 토큰' },
+  {
+    key: 'data',
+    label: '데이터 관리',
+    icon: DataIcon,
+    destinations: [
+      {
+        label: '백업·복원',
+        terms: '자동 백업 시간 보관 개수 다운로드 복원 DB 자료 가져오기 채팅 가져오기',
+      },
+    ],
+    terms: '문제 보고용 진단',
+  },
+  { key: 'security', label: '접근 보안', icon: SecurityIcon, terms: '로그아웃 접속 해제 세션' },
+  { key: 'about', label: '앱 정보·라이선스', icon: Info, terms: '버전 빌드 저작권' },
+];
+
+function searchText(value: string) {
+  return value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '');
+}
+
+function matchesSearch(value: string, query: string) {
+  const text = searchText(value);
+  return query
+    .trim()
+    .split(/[\s/·-]+/)
+    .filter(Boolean)
+    .every((term) => text.includes(searchText(term)));
+}
+
 export function AppSettingsPanel({
   initialTab = 'general',
   state,
@@ -273,6 +345,7 @@ export function AppSettingsPanel({
   const [signingOut, setSigningOut] = useState(false);
   const [active, setActive] = useState(initialTab);
   const [visited, setVisited] = useState([initialTab]);
+  const [search, setSearch] = useState('');
   const compact = useCompactLayout();
   const [detail, setDetail] = useState(initialTab !== 'general');
   const [connectionDirty, setConnectionDirty] = useState(false);
@@ -296,27 +369,34 @@ export function AppSettingsPanel({
     illustrationDirty ||
     themeDirty;
   const root = useRef<HTMLElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
   const wasCompact = useRef(compact);
   const id = useId();
-  const categories = [
-    { key: 'general', label: '일반', icon: SettingsIcon },
-    { key: 'themes', label: '테마·색상', icon: Palette },
-    { key: 'models', label: '역할별 모델', icon: ModelIcon },
-    { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon },
-    { key: 'connections', label: '프로바이더·모델', icon: ConnectionIcon },
-    { key: 'lore', label: '로어 문맥', icon: LibraryIcon },
-    { key: 'agents', label: 'Codex 연결', icon: AgentIcon },
-    { key: 'illustrations', label: '삽화', icon: IllustrationIcon },
-    { key: 'usage', label: '사용량', icon: ChartNoAxesColumn },
-    { key: 'data', label: '데이터 관리', icon: DataIcon },
-    { key: 'security', label: '접근 보안', icon: SecurityIcon },
-    { key: 'about', label: '앱 정보·라이선스', icon: Info },
-  ];
-  const title = categories.find((item) => item.key === active)?.label ?? '일반';
+  const query = searchText(search).replace(/[\/·-]/g, '');
+  const results: { key: string; label: string; section: string; anchor?: string }[] = query
+    ? settingsCategories.flatMap((category) => {
+        if (matchesSearch(`${category.label} ${category.terms ?? ''}`, search))
+          return [{ key: category.key, label: category.label, section: '' }];
+        return (category.destinations ?? [])
+          .filter((destination) =>
+            matchesSearch(`${category.label} ${destination.label} ${destination.terms}`, search)
+          )
+          .map((destination) => ({
+            key: category.key,
+            label: destination.label,
+            section: category.label,
+            anchor: destination.anchor,
+          }));
+      })
+    : [];
+  const title = settingsCategories.find((item) => item.key === active)?.label ?? '일반';
   const showingDetail = !compact || detail;
   function backToList() {
     setDetail(false);
-    requestAnimationFrame(() => document.getElementById(`${id}-${active}-tab`)?.focus());
+    requestAnimationFrame(() => {
+      if (query) searchInput.current?.focus();
+      else document.getElementById(`${id}-${active}-tab`)?.focus();
+    });
   }
   const closeHistory = useSettingsHistory(() => {
     if (savingClose) return true;
@@ -362,12 +442,16 @@ export function AppSettingsPanel({
     addEventListener('beforeunload', guard);
     return () => removeEventListener('beforeunload', guard);
   }, [dirty]);
-  function select(key: string) {
+  function select(key: string, target?: string) {
     setActive(key);
     setDetail(true);
     setVisited((previous) => (previous.includes(key) ? previous : [...previous, key]));
-    if (compact)
-      requestAnimationFrame(() => document.getElementById(`${id}-${key}-panel`)?.focus());
+    if (compact || target)
+      requestAnimationFrame(() => {
+        const destination = document.getElementById(`${id}-${key}-${target ?? 'panel'}`);
+        destination?.focus({ preventScroll: true });
+        if (target && target !== 'panel') destination?.scrollIntoView({ block: 'start' });
+      });
   }
   return (
     <Dialog
@@ -387,46 +471,87 @@ export function AppSettingsPanel({
         <div
           className="settings-navigation"
           hidden={compact && detail}
-          role={compact ? 'navigation' : 'tablist'}
-          aria-label="설정 항목"
-          aria-orientation={compact ? undefined : 'vertical'}
-          onKeyDown={(event) => {
-            if (compact) return;
-            const index = categories.findIndex((item) => item.key === active);
-            const next =
-              event.key === 'Home'
-                ? 0
-                : event.key === 'End'
-                  ? categories.length - 1
-                  : ['ArrowDown', 'ArrowRight'].includes(event.key)
-                    ? (index + 1) % categories.length
-                    : ['ArrowUp', 'ArrowLeft'].includes(event.key)
-                      ? (index + categories.length - 1) % categories.length
-                      : -1;
-            if (next < 0) return;
-            event.preventDefault();
-            select(categories[next].key);
-            event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
-          }}
+          role="navigation"
+          aria-label="설정 탐색"
         >
-          {categories.map(({ key, label, icon: Icon }) => (
-            <button
-              type="button"
-              role={compact ? undefined : 'tab'}
-              key={key}
-              id={`${id}-${key}-tab`}
-              aria-controls={`${id}-${key}-panel`}
-              aria-selected={compact ? undefined : active === key}
-              tabIndex={compact || active === key ? 0 : -1}
-              onClick={() => select(key)}
-            >
-              <Icon size={18} aria-hidden="true" />
-              <span>{label}</span>
-            </button>
-          ))}
+          <input
+            ref={searchInput}
+            type="search"
+            className="settings-search"
+            aria-label="설정 검색"
+            placeholder="설정 검색"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <div
+            className="settings-navigation-list"
+            hidden={!!query}
+            role={compact ? undefined : 'tablist'}
+            aria-label={compact ? undefined : '설정 항목'}
+            aria-orientation={compact ? undefined : 'vertical'}
+            onKeyDown={(event) => {
+              if (compact) return;
+              const index = settingsCategories.findIndex((item) => item.key === active);
+              const next =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? settingsCategories.length - 1
+                    : ['ArrowDown', 'ArrowRight'].includes(event.key)
+                      ? (index + 1) % settingsCategories.length
+                      : ['ArrowUp', 'ArrowLeft'].includes(event.key)
+                        ? (index + settingsCategories.length - 1) % settingsCategories.length
+                        : -1;
+              if (next < 0) return;
+              event.preventDefault();
+              select(settingsCategories[next].key);
+              event.currentTarget
+                .querySelectorAll<HTMLButtonElement>('[role="tab"]')
+                [next]?.focus();
+            }}
+          >
+            {settingsCategories.map(({ key, label, icon: Icon }) => (
+              <button
+                type="button"
+                role={compact ? undefined : 'tab'}
+                key={key}
+                id={`${id}-${key}-tab`}
+                aria-controls={`${id}-${key}-panel`}
+                aria-selected={compact ? undefined : active === key}
+                tabIndex={compact || active === key ? 0 : -1}
+                onClick={() => select(key)}
+              >
+                <Icon size={18} aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+          {query && (
+            <div className="settings-search-results" aria-label="설정 검색 결과">
+              {results.length ? (
+                results.map(({ key, label, section, anchor }) => (
+                  <button
+                    type="button"
+                    key={`${key}-${label}`}
+                    onClick={() => {
+                      select(key, anchor ?? 'panel');
+                      setSearch('');
+                    }}
+                  >
+                    <span>{label}</span>
+                    {section && <small>{section}</small>}
+                  </button>
+                ))
+              ) : (
+                <p className="muted" role="status">
+                  검색 결과가 없어요.
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <div className="settings-pages" hidden={!showingDetail}>
-          {categories.map(({ key, label }) => (
+          {settingsCategories.map(({ key, label }) => (
             <section
               className="settings-page"
               data-settings-section={key}
@@ -451,7 +576,12 @@ export function AppSettingsPanel({
                   )}
                   {key === 'about' && <AppAbout />}
                   {key === 'general' && (
-                    <section className="settings-section settings-services" aria-label="앱과 알림">
+                    <section
+                      id={`${id}-general-services`}
+                      tabIndex={-1}
+                      className="settings-section settings-services"
+                      aria-label="앱과 알림"
+                    >
                       <h3>
                         앱과 알림<span className="scope-badge">이 기기</span>
                       </h3>
@@ -460,7 +590,11 @@ export function AppSettingsPanel({
                     </section>
                   )}
                   {key === 'general' && (
-                    <section className="settings-section">
+                    <section
+                      id={`${id}-general-display`}
+                      tabIndex={-1}
+                      className="settings-section"
+                    >
                       <h3>
                         화면과 입력
                         <span className="scope-badge">이 기기</span>
@@ -511,7 +645,11 @@ export function AppSettingsPanel({
                     </section>
                   )}
                   {key === 'general' && (
-                    <section className="settings-section">
+                    <section
+                      id={`${id}-general-reading`}
+                      tabIndex={-1}
+                      className="settings-section"
+                    >
                       <h3>
                         원고 읽기
                         <span className="scope-badge">이 기기</span>
