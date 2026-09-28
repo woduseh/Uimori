@@ -1,5 +1,5 @@
 import { DraftDiscardActions } from './DraftDiscardActions.js';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   Plus,
   Upload,
@@ -66,6 +66,15 @@ export function IllustrationPresetSettings({
   const [deleting, setDeleting] = useState<IllustrationPreset | null>(null);
   const [discard, setDiscard] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const editor = useRef<HTMLElement>(null);
+  const [workflowError, setWorkflowError] = useState('');
+  const editorId = useId();
+  function resetEditorDetails() {
+    setWorkflowError('');
+    editor.current?.querySelectorAll('details').forEach((details) => {
+      details.open = false;
+    });
+  }
   const locked = useRef(false);
   const alive = useRef(true);
   const epoch = useRef(0);
@@ -137,10 +146,31 @@ export function IllustrationPresetSettings({
   }
   async function save(asCopy = false): Promise<boolean> {
     if (!draft || (!dirty && !asCopy)) return true;
-    return action(async () => {
-      const model = validateIllustrationPreset(
+    setWorkflowError('');
+    setError('');
+    setNotice('');
+    let model: IllustrationPresetDefinition;
+    try {
+      model = validateIllustrationPreset(
         asCopy ? { ...draft.model, title: `${draft.model.title.slice(0, 97)} 사본` } : draft.model
       );
+    } catch (cause) {
+      const message = messageOf(cause);
+      setError(`${message} 편집 내용은 유지했어요.`);
+      if (cause instanceof Error && /^COMFYUI_WORKFLOW_|^ComfyUI 워크플로:/u.test(cause.message)) {
+        setWorkflowError(message);
+        requestAnimationFrame(() => {
+          const field = editor.current?.querySelector<HTMLTextAreaElement>(
+            '[aria-label="ComfyUI 워크플로 JSON"]'
+          );
+          const details = field?.closest('details');
+          if (details instanceof HTMLDetailsElement) details.open = true;
+          field?.focus();
+        });
+      }
+      return false;
+    }
+    return action(async () => {
       const { saved } = await api<{ saved: IllustrationPreset }>('/resources/save', {
         kind: 'illustration-preset',
         id: asCopy ? null : draft.id,
@@ -164,6 +194,7 @@ export function IllustrationPresetSettings({
       setError('현재 편집을 저장하거나 닫은 뒤 다른 프리셋을 열어 주세요.');
       return;
     }
+    resetEditorDetails();
     const isCopy = copy || !!preset?.id.startsWith('builtin:');
     const model = preset
       ? structuredClone(illustrationPresetDefinition(preset))
@@ -193,6 +224,7 @@ export function IllustrationPresetSettings({
       if (file.size > ILLUSTRATION_PRESET_FILE_MAX_BYTES)
         throw new Error('삽화 프리셋 파일은 16MiB 이하로 가져와 주세요.');
       const model = parseIllustrationPresetFile(JSON.parse(await file.text()));
+      resetEditorDetails();
       setDraft({ id: null, model });
       setBaseline('');
       setNotice('가져왔어요. 내용을 확인한 뒤 저장해 주세요.');
@@ -236,7 +268,7 @@ export function IllustrationPresetSettings({
       <div className="illustration-preset-heading">
         <div>
           <h3>삽화 프리셋</h3>
-          <p>그림 지침과 워크플로를 관리해요.</p>
+          <p>스타일과 표현 방식, 생성에 쓸 워크플로를 관리해요.</p>
         </div>
         <div className="illustration-preset-list-actions">
           <button
@@ -398,6 +430,7 @@ export function IllustrationPresetSettings({
       />
       {draft && (
         <section
+          ref={editor}
           className="settings-card illustration-preset-editor"
           aria-label="삽화 프리셋 편집기"
         >
@@ -424,7 +457,7 @@ export function IllustrationPresetSettings({
               />
             </label>
             <label className="full">
-              설명
+              설명 (선택)
               <input
                 aria-label="삽화 프리셋 설명"
                 value={draft.model.description}
@@ -436,58 +469,114 @@ export function IllustrationPresetSettings({
               그림 지침
               <textarea
                 aria-label="삽화 그림 지침"
-                rows={5}
+                aria-describedby={`${editorId}-style-help`}
+                className="illustration-style-guidance"
+                rows={8}
                 maxLength={SOURCE_TEXT_MAX_CHARS}
                 value={draft.model.styleGuidance}
-                placeholder="예: 수채화, 부드러운 빛, 인물 중심 구성"
+                placeholder="예: 차분한 색감, 부드러운 빛, 깔끔한 선화. 과도한 빛 번짐은 피해 주세요."
                 onChange={(event) => patch({ styleGuidance: event.target.value })}
               />
-            </label>
-            <fieldset className="control-grid full">
-              <legend>ComfyUI 전용</legend>
-              <small className="full">
-                Codex는 아래 설정을 사용하지 않아요. ComfyUI로 생성하려면 API 워크플로를 넣어
-                주세요.
+              <small id={`${editorId}-style-help`}>
+                스타일과 표현 조건, 피할 내용을 적어요. 자연어·목록·JSON을 사용할 수 있어요.
               </small>
-              <label className="full">
-                제외 지침
-                <textarea
-                  aria-label="ComfyUI 네거티브 프롬프트 지침"
-                  rows={3}
-                  maxLength={SOURCE_TEXT_MAX_CHARS}
-                  value={draft.model.comfyui.negativeGuidance}
-                  onChange={(event) =>
-                    patch({
-                      comfyui: { ...draft.model.comfyui, negativeGuidance: event.target.value },
-                    })
-                  }
-                />
-              </label>
-              <label className="full">
-                워크플로 JSON (API 형식)
-                <textarea
-                  aria-label="ComfyUI 워크플로 JSON"
-                  rows={10}
-                  maxLength={ILLUSTRATION_WORKFLOW_MAX_CHARS}
-                  value={draft.model.comfyui.workflow}
-                  placeholder="ComfyUI에서 내보낸 API 형식 JSON"
-                  onChange={(event) =>
-                    patch({ comfyui: { ...draft.model.comfyui, workflow: event.target.value } })
-                  }
-                />
-              </label>
-              <details className="full">
-                <summary>워크플로 작성·공유 도움말</summary>
+            </label>
+            <details className="full illustration-preset-disclosure">
+              <summary>작성 예시</summary>
+              <div className="illustration-preset-help">
                 <p>
-                  문자열 입력의 {'{{prompt}}'}는 그림 설명, {'{{negative}}'}는 제외 지침,{' '}
-                  {'{{seed}}'}는 시드로 바뀌어요. 모델·해상도는 워크플로에서 정해요.
+                  필요한 항목만 자유롭게 적어요. 아래 예시는 입력 내용에 자동으로 추가되지 않아요.
                 </p>
+                <pre>{`핵심 특징:
+- 차분한 색감
+- 부드러운 방향성 조명
+- 깔끔하고 섬세한 선화
+
+표현 방식:
+- 불투명한 재질은 뒤의 형태가 비치지 않게 한다.
+- 윤곽과 겹침을 또렷하게 표현한다.
+
+피할 표현:
+- 점처럼 깨지는 가장자리
+- 과도한 빛 번짐`}</pre>
+                <p>아티팩트 억제 지침은 원하는 표현을 설명할 뿐 결과를 보장하지 않아요.</p>
                 <p>
-                  상대 ComfyUI에도 같은 모델·LoRA·커스텀 노드가 필요해요. 워크플로 내용은 그대로
-                  내보내므로 직접 넣은 비밀값이나 개인 경로가 없는지 확인해 주세요.
+                  <strong>Anima 예시:</strong> 모델 전용 문법은 적용 대상을 명시해요.
                 </p>
-              </details>
-            </fieldset>
+                <pre>{`ComfyUI에서 Anima용 프롬프트를 작성할 때:
+단순한 외형은 태그로, 복잡한 관계와 표현 조건은 자연어로 설명한다.
+일반 태그에는 언더스코어 대신 공백을 사용한다.`}</pre>
+                <p>
+                  일반 스타일 JSON은 그림 지침에 붙여 넣고, ‘가져오기’에는 Uimori 프리셋 파일을
+                  사용해 주세요.
+                </p>
+              </div>
+            </details>
+            <details className="full illustration-preset-disclosure">
+              <summary>
+                ComfyUI 설정
+                <small>
+                  {draft.model.comfyui.workflow.trim() ? '워크플로 있음' : '워크플로 없음'}
+                </small>
+              </summary>
+              <fieldset className="control-grid">
+                <small className="full">
+                  Codex는 아래 설정을 사용하지 않아요. 워크플로 있음 표시는 입력 여부이며, 실제 실행
+                  호환성을 뜻하지 않아요.
+                </small>
+                <label className="full">
+                  추가 제외 지침
+                  <textarea
+                    aria-label="ComfyUI 네거티브 프롬프트 지침"
+                    aria-describedby={`${editorId}-negative-help`}
+                    rows={3}
+                    maxLength={SOURCE_TEXT_MAX_CHARS}
+                    value={draft.model.comfyui.negativeGuidance}
+                    onChange={(event) =>
+                      patch({
+                        comfyui: { ...draft.model.comfyui, negativeGuidance: event.target.value },
+                      })
+                    }
+                  />
+                  <small id={`${editorId}-negative-help`}>
+                    그림 지침의 ‘피할 표현’에 더할 내용이에요. 반영하려면 워크플로의 적절한 제외
+                    입력에 {'{{negative}}'}를 연결해 주세요.
+                  </small>
+                </label>
+                <label className="full">
+                  워크플로 JSON (API 형식)
+                  <textarea
+                    aria-label="ComfyUI 워크플로 JSON"
+                    aria-invalid={workflowError ? true : undefined}
+                    aria-describedby={workflowError ? `${editorId}-workflow-error` : undefined}
+                    rows={10}
+                    maxLength={ILLUSTRATION_WORKFLOW_MAX_CHARS}
+                    value={draft.model.comfyui.workflow}
+                    placeholder="ComfyUI에서 내보낸 API 형식 JSON"
+                    onChange={(event) => {
+                      setWorkflowError('');
+                      patch({ comfyui: { ...draft.model.comfyui, workflow: event.target.value } });
+                    }}
+                  />
+                  {workflowError && (
+                    <small id={`${editorId}-workflow-error`} className="error">
+                      {workflowError}
+                    </small>
+                  )}
+                </label>
+                <details className="full">
+                  <summary>워크플로 작성·공유 도움말</summary>
+                  <p>
+                    문자열 입력의 {'{{prompt}}'}는 그림 설명, {'{{negative}}'}는 제외 지침,{' '}
+                    {'{{seed}}'}는 시드로 바뀌어요. 모델·해상도는 워크플로에서 정해요.
+                  </p>
+                  <p>
+                    상대 ComfyUI에도 같은 모델·LoRA·커스텀 노드가 필요해요. 워크플로 내용은 그대로
+                    내보내므로 직접 넣은 비밀값이나 개인 경로가 없는지 확인해 주세요.
+                  </p>
+                </details>
+              </fieldset>
+            </details>
             <small className="full">
               저장하면 이 프리셋을 사용하는 채팅의 다음 생성부터 반영돼요. 진행 중인 작업과 기존
               삽화는 바뀌지 않아요.
