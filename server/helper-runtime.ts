@@ -29,7 +29,8 @@ import {
 } from '../core/context-summary-policy.js';
 import { sourceHash } from '../core/source-history.js';
 import { AUTHOR_NOTE_GUIDANCE } from '../core/notes.js';
-import { chatOverrideHash } from '../core/chat-overrides.js';
+import { RisuContentError } from '../core/risu-content.js';
+import { readHelperChatLore } from './helper-lore-read.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { executeTool } from '../core/provider.js';
 import {
@@ -120,6 +121,53 @@ function helperRead(event: ToolEvent) {
     (HELPER_READ_NAMES.has(String(name)) ||
       (['chat.lore', 'library.organize'].includes(String(name)) && args?.action === 'read'))
   );
+}
+
+function helperToolError(error: unknown, readOnly: boolean) {
+  const message = error instanceof Error ? error.message : 'HELPER_TOOL_FAILED';
+  const status =
+    error instanceof HttpError || error instanceof RisuContentError ? error.statusCode : undefined;
+  const code =
+    /^[A-Z][A-Z_]+/u.exec(message)?.[0] ??
+    (status === 409
+      ? 'SOURCE_CONFLICT'
+      : status === 400
+        ? 'INVALID_ARGUMENTS'
+        : 'HELPER_TOOL_FAILED');
+  const stopped =
+    status === 401 ||
+    status === 403 ||
+    /^(EDITOR_SAVE_REQUIRED|CURRENT_HELPER_TASK|HELPER_EFFECTS_ALREADY_COMMITTED|TASK_NOT_|ARTIFACT_JOB_LIMIT|MODEL_CALL_BUDGET)/u.test(
+      code
+    );
+  const retryMode = stopped
+    ? 'never'
+    : status === 409 || status === 404
+      ? 'refresh_then_retry'
+      : status === 400
+        ? 'correct_arguments'
+        : status === 413 || code === 'DATA_QUERY_TIMEOUT'
+          ? 'narrow_read'
+          : readOnly
+            ? 'never'
+            : 'inspect_outcome';
+  return {
+    error: message,
+    code,
+    recoverable: !['never', 'inspect_outcome'].includes(retryMode),
+    retryMode,
+    outcome: retryMode === 'inspect_outcome' ? 'unknown' : 'unchanged',
+    nextAction:
+      retryMode === 'refresh_then_retry'
+        ? 'Read the affected source or task state again in the same scope before changing the request.'
+        : retryMode === 'correct_arguments'
+          ? 'Correct the arguments using the discovered tool schema; do not repeat the same request.'
+          : retryMode === 'narrow_read'
+            ? 'Read fewer items or a smaller range in the same scope.'
+            : retryMode === 'inspect_outcome'
+              ? 'Inspect the task and committed effects before another write. Do not automatically replay it.'
+              : 'Stop this operation and explain the condition; do not repeat it unchanged.',
+  };
 }
 
 type HelperReadReference = { name: string; args: ToolEvent['args']; returned?: Json };
@@ -234,7 +282,9 @@ function completedReadReferences(previous: HelperReadReference[], events: ToolEv
     // A schema or a small exact editing field is useful working input, not prose to summarize away.
     const exact =
       (name === 'app.tools' && Array.isArray(args.names)) ||
-      ((name === 'resource.read' || name === 'editor.read') && typeof args.path === 'string');
+      ((name === 'resource.read' || name === 'editor.read') &&
+        (typeof args.path === 'string' || Array.isArray(args.paths))) ||
+      (name === 'chat.lore' && args.action === 'read' && args.selector !== undefined);
     const returned =
       event.result && typeof event.result === 'object'
         ? exact && JSON.stringify(event.result).length <= 8_000
@@ -564,7 +614,11 @@ export class HelperRuntime {
       onAttemptFinish: (attempt, result) => this.workspace.finishAttempt(id, attempt, result),
       onResponseProgress: (progress) => writer.progress({ ...progress, segment }),
     });
-    const executeCalls = async (calls: ProviderResult['toolCalls'], toolSignal = signal) => {
+    const executeCalls = async (
+      calls: ProviderResult['toolCalls'],
+      toolSignal = signal,
+      queueMs = 0
+    ) => {
       const returned: ToolEvent[] = [];
       for (const call of calls) {
         if (callIds.has(call.id)) throw new Error('DUPLICATE_TOOL_ID');
@@ -572,11 +626,13 @@ export class HelperRuntime {
       }
       let roundReadChars = 0;
       for (const wireCall of calls) {
+        const toolStarted = performance.now();
         let call = wireCall;
         toolSignal.throwIfAborted();
         let output: unknown,
           denied = false,
-          errorKind: ToolEvent['errorKind'];
+          errorKind: ToolEvent['errorKind'],
+          fatalError: unknown;
         try {
           if (call.name === 'app.call') {
             const envelope = record(call.arguments);
@@ -584,7 +640,7 @@ export class HelperRuntime {
               Object.keys(envelope).some((key) => !['name', 'arguments'].includes(key)) ||
               !HELPER_APP_TOOLS.some((tool) => tool.name === envelope.name)
             )
-              throw new Error('UNKNOWN_APP_TOOL');
+              throw new HttpError(400, 'UNKNOWN_APP_TOOL');
             call = { ...call, name: envelope.name, arguments: record(envelope.arguments) };
           }
           if (
@@ -696,12 +752,21 @@ export class HelperRuntime {
               operationId
             );
         } catch (error) {
+          toolSignal.throwIfAborted();
           denied = true;
-          errorKind = 'recoverable';
-          output = {
-            error: error instanceof Error ? error.message : 'HELPER_TOOL_FAILED',
-            recoverable: true,
-          };
+          const readOnly = helperRead({
+            callId: call.id,
+            name: call.name,
+            args: call.arguments,
+            result: null,
+            denied: false,
+          });
+          output = helperToolError(error, readOnly);
+          if ((output as { recoverable: boolean }).recoverable) errorKind = 'recoverable';
+          // Unexpected write failures may follow a committed effect. Stop this task;
+          // the existing receipt/status path decides whether another attempt is safe.
+          if (!readOnly && (output as { outcome: string }).outcome === 'unknown')
+            fatalError = error;
         }
         const event: ToolEvent = {
           callId: wireCall.id,
@@ -722,14 +787,24 @@ export class HelperRuntime {
             const nextRead =
               call.name === 'resource.read'
                 ? { name: 'resource.read', arguments: { kind: args.kind, id: args.id } }
-                : {
-                    name: 'data.search',
-                    arguments: {
-                      scope: call.name === 'editor.read' ? 'editor' : 'library',
-                      patterns: [],
-                      limit: 5,
-                    },
-                  };
+                : call.name === 'chat.lore'
+                  ? {
+                      name: call.name,
+                      arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 },
+                    }
+                  : call.name === 'data.search' || call.name === 'data.read'
+                    ? {
+                        name: call.name,
+                        arguments: { ...args, limit: call.name === 'data.search' ? 5 : 1000 },
+                      }
+                    : {
+                        name: 'data.search',
+                        arguments: {
+                          scope: call.name === 'editor.read' ? 'editor' : 'library',
+                          patterns: [],
+                          limit: 5,
+                        },
+                      };
             event.result = {
               error: 'HELPER_READ_TOO_LARGE',
               returned: false,
@@ -746,13 +821,17 @@ export class HelperRuntime {
         }
         returned.push(event);
         this.workspace.event(task.conversationId, id, 'tool.finished', {
+          callId: wireCall.id,
           name: call.name,
           denied,
           result: output,
           originalResultChars,
           providedResultChars: JSON.stringify(output).length,
+          elapsedMs: Math.round(performance.now() - toolStarted),
+          queueMs,
           ...(errorKind ? { errorKind } : {}),
         });
+        if (fatalError) throw fatalError;
       }
       return returned;
     };
@@ -906,6 +985,7 @@ export class HelperRuntime {
         };
         let nativeCalls = Promise.resolve();
         const nativeTool: CodexAgentExecutionOptions['onToolCall'] = (call, nativeSignal) => {
+          const queuedAt = performance.now();
           const pending = nativeCalls.then(async () => {
             nativeSignal.throwIfAborted();
             signal.throwIfAborted();
@@ -918,7 +998,8 @@ export class HelperRuntime {
                   arguments: asJson(record(call.arguments)) as Record<string, Json>,
                 },
               ],
-              AbortSignal.any([signal, nativeSignal])
+              AbortSignal.any([signal, nativeSignal]),
+              Math.round(performance.now() - queuedAt)
             );
             return {
               success: !event.denied && !event.errorKind,
@@ -1312,30 +1393,21 @@ export class HelperRuntime {
     if (name === 'chat.lore') {
       if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
       const service = new ChatOverridesStore(this.store);
-      if (args.action === 'read') {
-        const current = service.get(scope.chatId);
-        return {
-          ...current,
-          attachments: current.attachments.map((attachment) => ({
-            ...attachment,
-            lore: attachment.lore.map((entry) => ({
-              ...entry,
-              fieldHashes: {
-                title: chatOverrideHash(entry.title),
-                description: chatOverrideHash(entry.description),
-                text: chatOverrideHash(entry.text),
-              },
-            })),
-          })),
-        };
-      }
+      if (args.action === 'read') return readHelperChatLore(this.store, scope.chatId, args);
       if (args.action !== 'patch' && args.action !== 'remove')
         throw new HttpError(400, 'INVALID_LORE_ACTION');
       this.workspace.assertRunning(task.id);
       const body = { ...record(args.body), operationId };
-      return args.action === 'patch'
-        ? service.patch(scope.chatId, body, task.id)
-        : service.remove(scope.chatId, body, task.id);
+      const saved =
+        args.action === 'patch'
+          ? service.patch(scope.chatId, body, task.id)
+          : service.remove(scope.chatId, body, task.id);
+      return {
+        revision: saved.revision,
+        overrideId: saved.entry.id,
+        selector: saved.entry.selector,
+        retired: saved.entry.retired,
+      };
     }
     if (name === 'editor.read') return readHelperEditor(task.snapshot.editor, args);
     if (name === 'chat.rename' || name === 'chat.fork') {

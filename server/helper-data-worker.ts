@@ -27,6 +27,7 @@ type Document = Omit<DataRef, 'field' | 'hash'> & {
   fields: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 };
+type ReadSource = { doc: Document; fields: [string, string, boolean][] };
 const MAX_RESULT_CHARS = 16_000;
 const MAX_SEARCH_CHARS = 8_000;
 const PROTECTED_FIELDS = new Set(protectedFields);
@@ -676,7 +677,8 @@ function read(
   db: DatabaseSync,
   snapshot: HelperTaskSnapshot,
   value: unknown,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  sources: Map<string, ReadSource>
 ) {
   const ref = object(value) as DataRef;
   if (
@@ -692,14 +694,25 @@ function read(
     !/^[a-f0-9]{64}$/u.test(ref.hash)
   )
     throw new Error('DATA_REFERENCE_INVALID');
-  const doc = [
-    ...documents(db, snapshot, ref.scope, {
-      ids: [ref.id],
-      ...(ref.chatId ? { chatId: ref.chatId } : {}),
-    }),
-  ].find((d) => d.kind === ref.kind && d.id === ref.id && d.chatId === ref.chatId);
-  if (!doc) throw new Error('DATA_RESOURCE_UNAVAILABLE');
-  const all = [...fields(doc.fields)];
+  const key = JSON.stringify({
+    scope: ref.scope,
+    kind: ref.kind,
+    id: ref.id,
+    chatId: ref.chatId,
+  });
+  let source = sources.get(key);
+  if (!source) {
+    const doc = [
+      ...documents(db, snapshot, ref.scope, {
+        ids: [ref.id],
+        ...(ref.chatId ? { chatId: ref.chatId } : {}),
+      }),
+    ].find((d) => d.kind === ref.kind && d.id === ref.id && d.chatId === ref.chatId);
+    if (!doc) throw new Error('DATA_RESOURCE_UNAVAILABLE');
+    source = { doc, fields: [...fields(doc.fields)] };
+    sources.set(key, source);
+  }
+  const { doc, fields: all } = source;
   const selected = all.find(([path]) => path === ref.field);
   const text = ref.field === '' ? JSON.stringify(doc.fields) : selected?.[1];
   if (text === undefined) throw new Error('DATA_FIELD_UNAVAILABLE');
@@ -788,6 +801,8 @@ function runDataOperation(input: DataOperation): unknown {
     }
     if (input.name === 'data.search')
       return search(db, snapshot, { ...input.args, scope: scopes[0] });
+    // All refs share this read transaction; keep source reuse within this one request.
+    const sources = new Map<string, ReadSource>();
     const items: unknown[] = [];
     let size = 0;
     for (const ref of requestedRefs) {
@@ -795,7 +810,7 @@ function runDataOperation(input: DataOperation): unknown {
       try {
         item = {
           ref,
-          read: read(db, snapshot, ref, input.args),
+          read: read(db, snapshot, ref, input.args, sources),
         };
       } catch (error) {
         item = { ref, error: error instanceof Error ? error.message : 'DATA_READ_FAILED' };

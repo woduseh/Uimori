@@ -76,8 +76,8 @@ function locate(
   }
   return { exists: true, value, parent };
 }
-function bounded(result: unknown): unknown {
-  if (JSON.stringify(result).length > MAX_RESULT)
+function bounded(result: unknown, maximum = MAX_RESULT): unknown {
+  if (JSON.stringify(result).length > maximum)
     throw new HttpError(413, '읽기 결과가 커요. 더 작은 범위로 읽어 주세요.');
   return result;
 }
@@ -132,16 +132,50 @@ function sourceFor(content: Content) {
   };
 }
 export function readHelperResource(store: Store, kind: ResourceKind, id: string, args: JsonObject) {
+  const paths = args.paths;
+  if (paths !== undefined) {
+    if (args.path !== undefined) throw new HttpError(400, 'path와 paths 중 하나만 지정해 주세요.');
+    if (
+      !Array.isArray(paths) ||
+      !paths.length ||
+      paths.length > 16 ||
+      paths.some((path) => typeof path !== 'string' || path.length > MAX_PATH)
+    )
+      throw new HttpError(400, '읽을 경로를 1개에서 16개까지 지정해 주세요.');
+  }
   const saved = readResource(store, kind, id);
   const model = editableResource(kind, saved);
-  return readHelperModel(
-    kind,
-    id,
-    saved.revision,
-    'title' in saved ? saved.title : 'current',
-    model,
-    args
-  );
+  const read = (selection: JsonObject, maximum = MAX_RESULT) =>
+    readHelperModel(
+      kind,
+      id,
+      saved.revision,
+      'title' in saved ? saved.title : 'current',
+      model,
+      selection,
+      undefined,
+      maximum
+    );
+  if (paths === undefined) return read(args);
+  const items: unknown[] = [];
+  // An individual page must also fit when enclosed by the batch response.
+  const maximum = MAX_RESULT - JSON.stringify({ items: [], nextIndex: null }).length;
+  for (const path of paths) {
+    let item: unknown;
+    try {
+      item = read({ ...args, path }, maximum);
+    } catch (error) {
+      if (!(error instanceof HttpError)) throw error;
+      item = { path, error: error.message };
+    }
+    const candidate = {
+      items: [...items, item],
+      nextIndex: items.length + 1 < paths.length ? items.length + 1 : null,
+    };
+    if (JSON.stringify(candidate).length > MAX_RESULT) break;
+    items.push(item);
+  }
+  return bounded({ items, nextIndex: items.length < paths.length ? items.length : null });
 }
 
 /** Read the admitted editor model without replacing it with a later saved revision. */
@@ -165,7 +199,8 @@ function readHelperModel(
   title: string,
   model: ResourceModel,
   args: JsonObject,
-  inputOrigin?: string
+  inputOrigin?: string,
+  maximum = MAX_RESULT
 ) {
   const base = { kind, id, revision, ...(inputOrigin ? { inputOrigin } : {}) };
   const path = args.path === undefined ? undefined : text(args.path, 'path', MAX_PATH, true);
@@ -191,17 +226,20 @@ function readHelperModel(
         if (!(error instanceof HttpError && [400, 404].includes(error.statusCode))) throw error;
       }
     }
-    return bounded({
-      ...base,
-      title,
-      ...(source ? { source } : {}),
-      regions,
-      readyPaths,
-    });
+    return bounded(
+      {
+        ...base,
+        title,
+        ...(source ? { source } : {}),
+        regions,
+        readyPaths,
+      },
+      maximum
+    );
   }
   const segments = parts(path);
   const found = locate(model, segments);
-  if (!found.exists) return bounded({ ...base, path, exists: false });
+  if (!found.exists) return bounded({ ...base, path, exists: false }, maximum);
   const value = found.value;
   const head = { ...base, path, exists: true, type: type(value) };
   if (typeof value === 'string') {
@@ -220,7 +258,7 @@ function readHelperModel(
       textOffset: start,
       nextOffset: end < value.length ? end : null,
     });
-    if (start === value.length) return bounded(page(start));
+    if (start === value.length) return bounded(page(start), maximum);
     while (low <= high) {
       const middle = Math.floor((low + high) / 2);
       const end =
@@ -229,7 +267,7 @@ function readHelperModel(
         low = middle + 1;
         continue;
       }
-      if (JSON.stringify(page(end)).length <= MAX_RESULT) {
+      if (JSON.stringify(page(end)).length <= maximum) {
         best = end;
         low = middle + 1;
       } else high = middle - 1;
@@ -237,9 +275,9 @@ function readHelperModel(
     if (best === start && start + 1 < value.length && /[\uD800-\uDBFF]/u.test(value[start]!))
       best = start + 2;
     if (best === start) throw new HttpError(413, '읽기 결과가 커요. 더 좁은 경로를 지정해 주세요.');
-    return bounded(page(best));
+    return bounded(page(best), maximum);
   }
-  if (!object(value) && !Array.isArray(value)) return bounded({ ...head, value });
+  if (!object(value) && !Array.isArray(value)) return bounded({ ...head, value }, maximum);
   const fields = args.fields;
   if (
     fields !== undefined &&
@@ -269,19 +307,22 @@ function readHelperModel(
       [Array.isArray(value) ? 'items' : 'fields']: [...entries, next],
       nextOffset: index + 1 < keys.length ? index + 1 : null,
     };
-    if (JSON.stringify(candidate).length > MAX_RESULT) {
+    if (JSON.stringify(candidate).length > maximum) {
       if (!entries.length)
         throw new HttpError(413, '읽기 결과가 커요. 더 좁은 경로를 지정해 주세요.');
       break;
     }
     entries.push(next);
   }
-  return bounded({
-    ...head,
-    count: keys.length,
-    [Array.isArray(value) ? 'items' : 'fields']: entries,
-    nextOffset: index < keys.length ? index : null,
-  });
+  return bounded(
+    {
+      ...head,
+      count: keys.length,
+      [Array.isArray(value) ? 'items' : 'fields']: entries,
+      nextOffset: index < keys.length ? index : null,
+    },
+    maximum
+  );
 }
 
 function scalar(value: unknown): boolean {

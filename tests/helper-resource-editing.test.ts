@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import type { Content } from '../core/product.js';
 import { editableResource } from '../core/resource-editing.js';
 import { readHelperEditor } from '../server/helper-resource-editing.js';
@@ -11,6 +11,7 @@ import { fixtureBotInput } from './fixtures/chat.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const { store, path } of owned.splice(0)) {
     store.close();
     const inside = relative(tmpdir(), path);
@@ -315,6 +316,105 @@ test('overview tolerates a card without a character book', () => {
   expect(
     overview.regions.some((region: { path: string }) => region.path === overview.source.lorePath)
   ).toBe(false);
+});
+
+test('batched resource paths load one revision and preserve typed fields and local path errors', () => {
+  const { store, content } = fixture();
+  const base = { kind: 'content', id: content.id };
+  const entry = '/package/nativeRisu/card/character_book/entries/0';
+  const vendor = '/package/nativeRisu/card/extensions/vendor';
+  const edited = call(store, 'resource.patch', {
+    ...base,
+    expectedRevision: content.revision,
+    changes: [
+      { path: `${entry}/constant`, op: 'set', value: false },
+      { path: `${vendor}/sentinel`, op: 'set', value: 0 },
+    ],
+  });
+  const load = vi.spyOn(store.product, 'get');
+  const batch = call(store, 'resource.read', {
+    ...base,
+    paths: [entry, vendor, `${entry}/unknown/child`],
+    fields: ['constant', 'sentinel', 'missing'],
+  });
+  expect(load).toHaveBeenCalledTimes(1);
+  expect(batch.nextIndex).toBeNull();
+  expect(batch.items).toMatchObject([
+    {
+      ...base,
+      revision: edited.revision,
+      path: entry,
+      fields: [
+        { name: 'constant', exists: true, type: 'boolean', value: false },
+        { name: 'sentinel', exists: false },
+        { name: 'missing', exists: false },
+      ],
+    },
+    {
+      ...base,
+      revision: edited.revision,
+      path: vendor,
+      fields: [
+        { name: 'constant', exists: false },
+        { name: 'sentinel', exists: true, type: 'number', value: 0 },
+        { name: 'missing', exists: false },
+      ],
+    },
+    { path: `${entry}/unknown/child`, error: '자료 경로가 존재하지 않아요.' },
+  ]);
+  expect(() => call(store, 'resource.read', { ...base, path: entry, paths: [vendor] })).toThrow(
+    'path와 paths'
+  );
+  expect(store.product.get<Content>('content', content.id).revision).toBe(edited.revision);
+});
+
+test('batched resource reads keep the complete envelope bounded with separate path and text continuation', () => {
+  const { store, content } = fixture();
+  const base = { kind: 'content', id: content.id };
+  const paths = [
+    '/package/nativeRisu/card/character_book/entries/0/content',
+    '/package/nativeRisu/card/character_book/entries/1/content',
+  ];
+  const original = '\u0001'.repeat(5_000);
+  const edited = call(store, 'resource.patch', {
+    ...base,
+    expectedRevision: content.revision,
+    changes: [{ path: paths[0], op: 'set', value: original }],
+  });
+  const first = call(store, 'resource.read', { ...base, paths, textLimit: 10_000 });
+  expect(JSON.stringify(first).length).toBeLessThanOrEqual(24_000);
+  expect(first.nextIndex).toBe(1);
+  expect(first.items).toHaveLength(1);
+  expect(first.items[0]).toMatchObject({ path: paths[0], revision: edited.revision });
+  expect(first.items[0].nextOffset).toBeGreaterThan(0);
+  const single = call(store, 'resource.read', {
+    ...base,
+    paths: paths.slice(0, 1),
+    textLimit: 10_000,
+  });
+  expect(JSON.stringify(single).length).toBeLessThanOrEqual(24_000);
+  expect(single.items).toEqual(first.items);
+  expect(single.nextIndex).toBeNull();
+  const remaining = call(store, 'resource.read', {
+    ...base,
+    paths: paths.slice(first.nextIndex),
+    textLimit: 10_000,
+  });
+  expect(remaining).toMatchObject({
+    items: [{ path: paths[1], revision: edited.revision, text: 'Green forest.', nextOffset: null }],
+    nextIndex: null,
+  });
+  const continuation = call(store, 'resource.read', {
+    ...base,
+    paths: [paths[0]],
+    textOffset: first.items[0].nextOffset,
+    textLimit: 10_000,
+  });
+  expect(continuation).toMatchObject({
+    items: [{ path: paths[0], revision: edited.revision, nextOffset: null }],
+    nextIndex: null,
+  });
+  expect(first.items[0].text + continuation.items[0].text).toBe(original);
 });
 
 test('standalone module overview and patch use its authored lorebook', () => {

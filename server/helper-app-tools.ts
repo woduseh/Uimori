@@ -5,6 +5,7 @@ import { HELPER_SETTINGS_TOOLS } from './helper-settings-tools.js';
 import { HELPER_TASK_TOOLS } from './helper-task-tools.js';
 import { helperOptionTools } from './chat-options.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
+import { HttpError } from './request-validation.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',
@@ -16,6 +17,20 @@ const str: Json = { type: 'string' },
   integer: Json = { type: 'integer', minimum: 1 },
   revision: Json = { type: 'integer', minimum: 0 },
   itemId: Json = { type: 'string', minLength: 1, maxLength: 100 };
+const loreSelector = schema(
+  {
+    id: { type: 'string', minLength: 1, maxLength: 64 },
+    role: { type: 'string', enum: ['bot', 'persona', 'module'] },
+    modulePath: {
+      type: 'array',
+      maxItems: 20,
+      items: { type: 'string', minLength: 1, maxLength: 64 },
+    },
+    loreId: { type: 'string', minLength: 1, maxLength: 64 },
+    field: { type: 'string', enum: ['title', 'description', 'text'] },
+  },
+  ['id', 'role', 'modulePath', 'loreId', 'field']
+);
 const TOOLS: ProviderTool[] = [
   ...RESOURCE_TOOLS,
   ...HELPER_SETTINGS_TOOLS,
@@ -35,26 +50,18 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.lore',
     description:
-      'Read or edit an attachment-scoped lore override in this chat. Read first: use attachments[].scope plus lore[].id and field to form selector, and copy lore[].fieldHashes[field] as expectedFieldHash. Both mutations require body selector, expectedRevision and expectedHeadRevision. Patch additionally requires expectedProfileRevision, expectedPackageRevision, expectedFieldHash and value; omit those four fields for remove. The host supplies the current chat and mutation identity. Shared originals stay intact. Mutations require a user request for chat-only lore.',
+      'Read or edit a chat-only lore override. Read without selector for a paged items list (offset/limit); use item.scope plus item.id as loreId and a field to form selector. Read with selector for paged original and override text (textOffset/textLimit); never confuse an override with its shared original. Copy returned expected revision/hash fields into the patch body with selector and value. Missing originals are listed with originalMissing and read as original:null; they can still be removed using selector, expectedRevision and expectedHeadRevision. Mutations require a user request for chat-only lore; shared originals stay intact.',
     inputSchema: schema(
       {
         action: { type: 'string', enum: ['read', 'patch', 'remove'] },
+        selector: loreSelector,
+        offset: { type: 'integer', minimum: 0 },
+        limit: { type: 'integer', minimum: 1, maximum: 50 },
+        textOffset: { type: 'integer', minimum: 0 },
+        textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
         body: schema(
           {
-            selector: schema(
-              {
-                id: { type: 'string', minLength: 1, maxLength: 64 },
-                role: { type: 'string', enum: ['bot', 'persona', 'module'] },
-                modulePath: {
-                  type: 'array',
-                  maxItems: 20,
-                  items: { type: 'string', minLength: 1, maxLength: 64 },
-                },
-                loreId: { type: 'string', minLength: 1, maxLength: 64 },
-                field: { type: 'string', enum: ['title', 'description', 'text'] },
-              },
-              ['id', 'role', 'modulePath', 'loreId', 'field']
-            ),
+            selector: loreSelector,
             expectedRevision: revision,
             expectedHeadRevision: { type: ['string', 'null'], maxLength: 100 },
             expectedProfileRevision: integer,
@@ -287,7 +294,7 @@ export function describeHelperTools(
 ): { tools: ProviderTool[] } | ToolCatalog;
 export function describeHelperTools(args: Record<string, unknown>) {
   if (Object.keys(args).some((key) => !['names', 'query', 'offset'].includes(key)))
-    throw new Error('INVALID_ARGUMENTS');
+    throw new HttpError(400, 'INVALID_ARGUMENTS');
   if (args.names !== undefined) {
     if (
       !Array.isArray(args.names) ||
@@ -295,11 +302,11 @@ export function describeHelperTools(args: Record<string, unknown>) {
       args.names.length > 4 ||
       args.names.some((n) => typeof n !== 'string')
     )
-      throw new Error('INVALID_ARGUMENTS');
+      throw new HttpError(400, 'INVALID_ARGUMENTS');
     return {
       tools: args.names.map((name) => {
         const tool = HELPER_APP_TOOLS.find((t) => t.name === name);
-        if (!tool) throw new Error(`UNKNOWN_APP_TOOL:${String(name)}`);
+        if (!tool) throw new HttpError(400, `UNKNOWN_APP_TOOL:${String(name)}`);
         return tool;
       }),
     };
@@ -312,7 +319,7 @@ export function describeHelperTools(args: Record<string, unknown>) {
     !Number.isSafeInteger(offset) ||
     Number(offset) < 0
   )
-    throw new Error('INVALID_ARGUMENTS');
+    throw new HttpError(400, 'INVALID_ARGUMENTS');
   const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
   const found = HELPER_APP_TOOLS.filter((t) =>
     terms.every((term) => `${t.name} ${t.description}`.toLowerCase().includes(term))

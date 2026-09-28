@@ -151,12 +151,12 @@ test('a native turn abort reaches pending helper context work and prevents its l
   stopNative();
   await Promise.all(f.work);
   releaseLateResult();
-  const result = await pendingTool;
+  // Cancellation escapes the tool callback rather than becoming a recoverable result.
+  await expect(pendingTool).rejects.toThrow('Native turn timed out');
 
   expect(f.controller.signal.aborted).toBe(false);
   expect(consumerSignal.aborted).toBe(true);
   expect(runtime.workspace.task(task.id)).toMatchObject({ status: 'failed', error: 'TIMEOUT' });
-  expect(result).toMatchObject({ success: false });
   expect(save).not.toHaveBeenCalled();
 });
 

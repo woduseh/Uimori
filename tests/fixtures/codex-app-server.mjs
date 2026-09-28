@@ -17,6 +17,7 @@ let nextThread = 0;
 let nextTurn = 0;
 let loggedOut = mode === 'logged-out';
 let native;
+let hasDynamicTools = false;
 function nativeTool(index) {
   const { threadId, turnId } = native;
   const callId = 'call-' + index;
@@ -247,6 +248,7 @@ input.on('line', (line) => {
   }
   if (method === 'thread/start') {
     if (mode === 'thread-hang') return;
+    hasDynamicTools = Boolean(params.dynamicTools?.length);
     send({
       id,
       result: {
@@ -267,7 +269,7 @@ input.on('line', (line) => {
       params: { threadId, turn: { id: turnId, status: 'inProgress', items: [], error: null } },
     });
     if (mode !== 'early-completion') reply();
-    if (mode.startsWith('agent-')) {
+    if (mode.startsWith('agent-') && hasDynamicTools) {
       native = { threadId, turnId };
       send({
         method: 'item/completed',

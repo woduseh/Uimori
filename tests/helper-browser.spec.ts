@@ -42,6 +42,7 @@ async function harness(page: Page, seedCount = 0) {
   let nextSeq = 0,
     loseNext = false,
     eventReads = 0,
+    viewReads = 0,
     eventStreamReads = 0;
   const event = (view: View, task: HelperTaskView, kind: string) =>
     view.events.push({
@@ -202,7 +203,8 @@ async function harness(page: Page, seedCount = 0) {
         return route.fulfill({ json: view.conversation });
       }
       if (!kind) return route.fulfill({ json: view.conversation });
-      if (kind === 'view')
+      if (kind === 'view') {
+        viewReads++;
         return route.fulfill({
           json: {
             conversation: view.conversation,
@@ -211,6 +213,7 @@ async function harness(page: Page, seedCount = 0) {
             eventCursor: view.events.at(-1)?.seq ?? 0,
           },
         });
+      }
       if (kind === 'events') {
         eventReads++;
         return route.fulfill({
@@ -316,6 +319,9 @@ async function harness(page: Page, seedCount = 0) {
     heldStreams,
     get eventReads() {
       return eventReads;
+    },
+    get viewReads() {
+      return viewReads;
     },
     get eventStreamReads() {
       return eventStreamReads;
@@ -526,7 +532,7 @@ test('HELPUI11 an IndexedDB write failure retains the exact request for explicit
   await expect(input).toHaveValue('보내는 동안 남길 새 입력');
 });
 
-test('HELPUI02 cursor HTTP deltas stay sequential and queued followups recover one request key', async ({
+test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and recover one request key', async ({
   page,
   request,
 }) => {
@@ -558,6 +564,27 @@ test('HELPUI02 cursor HTTP deltas stay sequential and queued followups recover o
   await expect(panel.locator('.streaming-text')).toHaveText(`실제 공개 조각${continuation}`);
   expect(state.streamCursors.get(first.id)?.some((cursor) => cursor > 0)).toBe(true);
   expect(state.eventStreamReads).toBe(0);
+  const viewsBeforeDiagnostics = state.viewReads,
+    eventsBeforeDiagnostics = state.eventReads;
+  for (const kind of [
+    'tool.finished',
+    'input.measured',
+    'progress',
+    'context.compaction',
+    'context.segment',
+  ])
+    state.emit(kind);
+  // Consume the diagnostic page and a later poll, so a pending reload cannot pass unnoticed.
+  await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(eventsBeforeDiagnostics + 2);
+  expect(state.viewReads).toBe(viewsBeforeDiagnostics);
+  await expect(panel.locator('.streaming-text')).toHaveText(`실제 공개 조각${continuation}`);
+  const firstTaskStatus = panel.locator(`.helper-task[data-task-id="${first.id}"]`);
+  await firstTaskStatus.locator('summary').click();
+  first.usage = { ...first.usage, modelCalls: 2, inputTokens: 25 };
+  state.emit('attempt.finished');
+  state.emit('tool.finished');
+  await expect(firstTaskStatus).toContainText('실행 요청 2회 · 누적 입력 25');
+  expect(state.viewReads).toBe(viewsBeforeDiagnostics + 1);
   await input.fill('뒤이어 처리할 작업');
   await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
   const activity = panel.locator('[data-testid="helper-activity-status"]');
