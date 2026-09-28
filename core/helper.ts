@@ -40,6 +40,8 @@ export type HelperEditor = EditorContext;
 export type HelperSelection = { sourceId: string; sourceHash: string; text: string };
 export type HelperTaskSnapshot = {
   retryOf?: string;
+  /** Small selection receipt; not a copy of the plan text. */
+  outlineTarget?: import('./outline.js').OutlineTarget;
   requestGroupId?: string;
   scope: HelperScope;
   model: ModelSnapshot;
@@ -47,6 +49,7 @@ export type HelperTaskSnapshot = {
   writing?: RunSnapshot;
   editor?: HelperEditor;
   selection?: HelperSelection;
+  outline?: import('./outline.js').OutlineHelperContext;
   history: { id: string; role: 'user' | 'assistant'; text: string }[];
   context?: { activeRevision: number; checkpoint: ContextCheckpointRef | null };
   persona: string;

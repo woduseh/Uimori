@@ -1,3 +1,5 @@
+import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
+import type { OutlineTarget } from '../core/outline.js';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowUp, History, Square, X, Settings2 } from 'lucide-react';
 import { SaveIcon, SettingsIcon, CloseIcon } from './ui-icons.js';
@@ -47,6 +49,8 @@ type Props = {
   onBranchNavigate?: (branchId: string) => void;
   scope: HelperScope;
   selection?: HelperSelection & { key: string; scope?: HelperScope; conversationId?: string };
+  outlineRequest?: OutlineHelperRequest;
+  outlineWorkspace?: boolean;
   onClose: () => void;
   onModelSettings: () => void;
   /** Current global helper model, worded like the reader's main-model chip. */
@@ -60,6 +64,7 @@ type Outbox = {
   targetConversationId: string;
   editor?: HelperEditor;
   selection?: HelperSelection;
+  outline?: OutlineTarget;
 };
 const active = (task: HelperTaskView) => task.status === 'queued' || task.status === 'running';
 // The reader treats an explicit cancellation as a settled turn; the helper reads the same way.
@@ -128,6 +133,21 @@ function storedSelection(scope: string): HelperSelection | null {
     return null;
   }
 }
+type SelectedOutline = { target: OutlineTarget; title: string; request: string };
+function storedOutline(scope: string): SelectedOutline | null {
+  try {
+    const value = JSON.parse(
+      local(`uimori:helper-outline:${scope}`) ?? 'null'
+    ) as SelectedOutline | null;
+    return value &&
+      ['compose', 'review'].includes(value.target?.purpose) &&
+      typeof value.title === 'string'
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
 const selectionRequest = '선택한 원문을 검토해 주세요.';
 
 export function HelperPanel(props: Props) {
@@ -165,6 +185,9 @@ export function HelperPanel(props: Props) {
   );
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [outboxes, setOutboxes] = useState<Record<string, Outbox | null>>({});
+  const [outlineSelections, setOutlineSelections] = useState<
+    Record<string, SelectedOutline | null>
+  >({});
   const [selections, setSelections] = useState<Record<string, HelperSelection | null>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busyScopes, setBusyScopes] = useState<Record<string, boolean>>({});
@@ -195,6 +218,10 @@ export function HelperPanel(props: Props) {
   const outbox = outboxes[scopeKey] === undefined ? storedOutbox(scopeKey) : outboxes[scopeKey];
   const selection =
     selections[scopeKey] === undefined ? storedSelection(scopeKey) : selections[scopeKey];
+  const selectedOutline =
+    outlineSelections[scopeKey] === undefined
+      ? storedOutline(scopeKey)
+      : outlineSelections[scopeKey];
   const busy = busyScopes[scopeKey] ?? false;
   const error = errors[scopeKey] || data.error || sessions.error;
   const persona =
@@ -229,6 +256,45 @@ export function HelperPanel(props: Props) {
   };
   const selectSession = sessions.select;
   useEffect(() => {
+    const selected = props.outlineRequest;
+    if (!selected || appliedSelections.current.has(selected.key)) return;
+    let disposed = false;
+    void (async () => {
+      const owner = selected.conversationId
+        ? await api<HelperConversation>(
+            `/helper/conversations/${encodeURIComponent(selected.conversationId)}`
+          )
+        : await api<HelperConversation>('/helper/conversations', { scope: selected.scope });
+      if (disposed || appliedSelections.current.has(selected.key)) return;
+      if (JSON.stringify(owner.scope) !== JSON.stringify(selected.scope))
+        throw new Error('구성과 도우미 대화의 채팅이 달라요.');
+      appliedSelections.current.add(selected.key);
+      if (selected.target) {
+        setSelections((old) => ({ ...old, [owner.id]: null }));
+        saveLocal(`uimori:helper-selection:${owner.id}`, null);
+        const value = { target: selected.target, title: selected.title, request: selected.text };
+        setOutlineSelections((old) => ({ ...old, [owner.id]: value }));
+        saveLocal(`uimori:helper-outline:${owner.id}`, JSON.stringify(value));
+        setDrafts((old) => {
+          const previous = old[owner.id] ?? local(`uimori:helper-input:${owner.id}`) ?? '';
+          const next = previous.trim() ? previous : selected.text;
+          saveLocal(`uimori:helper-input:${owner.id}`, next);
+          return { ...old, [owner.id]: next };
+        });
+      }
+      selectSession(owner);
+    })().catch((cause) => {
+      if (!disposed) setErrors((old) => ({ ...old, [currentScope.current]: cause.message }));
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [props.outlineRequest, selectSession]);
+  const taskStamp = tasks.map((task) => `${task.id}:${task.status}`).join('|');
+  useEffect(() => {
+    dispatchEvent(new CustomEvent(OUTLINE_REFRESH_EVENT, { detail: taskStamp }));
+  }, [taskStamp]);
+  useEffect(() => {
     const selected = props.selection;
     if (!selected || appliedSelections.current.has(selected.key)) return;
     const target = selected.scope;
@@ -252,6 +318,8 @@ export function HelperPanel(props: Props) {
         throw new Error('선택한 원문과 도우미 세션의 분기가 달라요.');
       const key = owner.id;
       appliedSelections.current.add(selected.key);
+      setOutlineSelections((old) => ({ ...old, [key]: null }));
+      saveLocal(`uimori:helper-outline:${key}`, null);
       const value: HelperSelection = {
         sourceId: selected.sourceId,
         sourceHash: selected.sourceHash,
@@ -401,6 +469,7 @@ export function HelperPanel(props: Props) {
               }
             : {}),
           ...(selection ? { selection } : {}),
+          ...(selectedOutline ? { outline: selectedOutline.target } : {}),
         };
         setOutbox(owner, request);
       }
@@ -412,6 +481,7 @@ export function HelperPanel(props: Props) {
           text: request.text,
           ...(request.editor ? { editor: request.editor } : {}),
           ...(request.selection ? { selection: request.selection } : {}),
+          ...(request.outline ? { outline: request.outline } : {}),
         }
       );
       setOutbox(owner, null);
@@ -427,6 +497,13 @@ export function HelperPanel(props: Props) {
         if (JSON.stringify(existing ?? null) !== JSON.stringify(request.selection ?? null))
           return old;
         saveLocal(`uimori:helper-selection:${owner}`, null);
+        return { ...old, [owner]: null };
+      });
+      setOutlineSelections((old) => {
+        const existing = old[owner] === undefined ? storedOutline(owner) : old[owner];
+        if (JSON.stringify(existing?.target ?? null) !== JSON.stringify(request.outline ?? null))
+          return old;
+        saveLocal(`uimori:helper-outline:${owner}`, null);
         return { ...old, [owner]: null };
       });
       data.updateTask(task);
@@ -594,6 +671,20 @@ export function HelperPanel(props: Props) {
           <X size={20} />
         </button>
       </header>
+      {props.outlineWorkspace && (
+        <div className="outline-helper-return">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              closePanel.current();
+            }}
+          >
+            구성으로 돌아가기
+          </button>
+          <small>선택한 구성과 함께 작업해요.</small>
+        </div>
+      )}
       <HelperSessionBar
         sessions={sessions.sessions}
         unread={sessions.unread}
@@ -931,6 +1022,47 @@ export function HelperPanel(props: Props) {
             >
               초안 새로고침
             </button>
+          </div>
+        )}
+        {selectedOutline && (
+          <div className="helper-outline-selection">
+            <div>
+              <strong>
+                {selectedOutline.target.purpose === 'review' ? '원문 점검' : '구성'} ·{' '}
+                {selectedOutline.title}
+              </strong>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setOutlineSelections((old) => ({ ...old, [scopeKey]: null }));
+                  saveLocal(`uimori:helper-outline:${scopeKey}`, null);
+                  if (draft === selectedOutline.request) editDraft('');
+                }}
+              >
+                대상 해제
+              </button>
+            </div>
+            <small>
+              {selectedOutline.target.purpose === 'review'
+                ? '읽기 전용 비교예요. 이 요청에서는 계획·원문을 수정하지 않아요.'
+                : '선택한 구성을 이번 요청에만 함께 참고해요.'}
+            </small>
+            {draft !== selectedOutline.request && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  editDraft(
+                    draft.trim()
+                      ? `${draft}\n\n${selectedOutline.request}`
+                      : selectedOutline.request
+                  )
+                }
+              >
+                준비한 요청 덧붙이기
+              </button>
+            )}
           </div>
         )}
         {selection && (

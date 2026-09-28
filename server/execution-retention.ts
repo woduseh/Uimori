@@ -43,7 +43,7 @@ export function releaseCompletedJobInputs(db: DatabaseSync, jobId: string): void
 /** Successful helper conversation text is in helper_messages; failed requests keep retry inputs. */
 export function releaseCompletedHelperInputs(db: DatabaseSync, taskId: string): void {
   db.prepare(`UPDATE helper_tasks SET snapshot=json_set(json_remove(snapshot,
-    '$.writing','$.editor','$.selection','$.contextModel'),'$.history',json('[]'))
+    '$.writing','$.outline','$.editor','$.selection','$.contextModel'),'$.history',json('[]'))
     WHERE id=? AND status='completed'`).run(taskId);
   db.prepare(`UPDATE helper_events SET data=json_object('name',json_extract(data,'$.name'),
     'denied',json(CASE WHEN json_extract(data,'$.denied') THEN 'true' ELSE 'false' END),'errorKind',json_extract(data,'$.errorKind'),'detailsOmitted',json('true'))

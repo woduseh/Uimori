@@ -676,3 +676,232 @@ describe('Helper current view cursor', () => {
     ]);
   });
 });
+
+test('selected outline review allows evidence reads, rejects writes and retains only small review provenance', async () => {
+  const f = fixture(),
+    { chat, source } = chatWithSource(f.store, '원문 점검');
+  const node = f.store.outline.apply(
+    chat.id,
+    {
+      idempotencyKey: 'review-plan',
+      operations: [
+        { op: 'create', level: 'episode', title: '조용한 부두', intent: '미라가 배를 기다린다.' },
+      ],
+    },
+    'user'
+  ).detail.nodes[0];
+  f.store.db
+    .prepare('INSERT INTO outline_writings(id,node_id,source_id,created_at) VALUES(?,?,?,?)')
+    .run('test-source', node.id, source.id, new Date().toISOString());
+  const conversation = f.workspace.open({
+    kind: 'chat',
+    chatId: chat.id,
+    branchId: `main:${chat.id}`,
+  });
+  const requests: transport.ProviderRequest[] = [];
+  mockSend((request, _options, index): transport.ProviderResult => {
+    requests.push(request);
+    expect(request.stable.tools.map((tool) => tool.name)).toEqual([
+      'data.search',
+      'data.read',
+      'db.query',
+    ]);
+    if (index === 0)
+      return {
+        ...structuredClone(success),
+        status: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            id: 'read-evidence',
+            name: 'data.search',
+            arguments: { scope: 'current', ids: [source.id], patterns: ['Mira'] },
+          },
+          {
+            id: 'forbidden-save',
+            name: 'app.call',
+            arguments: {
+              name: 'outline.write',
+              arguments: {
+                operations: [
+                  {
+                    op: 'update',
+                    id: node.id,
+                    expectedRevision: node.revision,
+                    intent: '무단 변경',
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      };
+    return {
+      ...structuredClone(success),
+      text: `현재 원문의 ${source.id}에서 “Mira waited on the pier.”를 확인했어요.`,
+    };
+  });
+  const target = { nodeId: node.id, expectedRevision: node.revision, purpose: 'review' as const };
+  const task = f.runtime.enqueue(
+    conversation.id,
+    'review-selected',
+    '원문과 비교만 해줘',
+    undefined,
+    undefined,
+    undefined,
+    target
+  );
+  await Promise.all(f.work);
+  const input = (
+    requests[0].input.source as unknown as {
+      outline: import('../core/outline.js').OutlineHelperContext;
+    }
+  ).outline;
+  expect(input.sources).toEqual([
+    {
+      id: source.id,
+      hash: source.hash,
+      start: 0,
+      end: source.text.length,
+      total: source.text.length,
+      text: source.text,
+    },
+  ]);
+  expect(input.partial).toBe(false);
+  expect(requests[1].input.results).toMatchObject([
+    { name: 'data.search', denied: false },
+    { denied: true, result: { error: 'OUTLINE_REVIEW_READ_ONLY' } },
+  ]);
+  expect(JSON.stringify(requests[1].input.results)).toContain('Mira waited on the pier.');
+  expect(f.store.outline.node(node.id).intent).toBe(node.intent);
+  expect(f.workspace.task(task.id).status).toBe('completed');
+  expect(f.workspace.task(task.id).snapshot.outline).toBeUndefined();
+  expect(f.store.outline.latestReview(node.id)).toMatchObject({
+    taskId: task.id,
+    status: 'completed',
+    stale: false,
+    partial: false,
+  });
+  expect(
+    f.runtime.enqueue(
+      conversation.id,
+      'review-selected',
+      '원문과 비교만 해줘',
+      undefined,
+      undefined,
+      undefined,
+      target
+    ).id
+  ).toBe(task.id);
+  expect(requests).toHaveLength(2);
+  const { editSource } = await import('../server/source-editing.js');
+  editSource(f.store, source.id, {
+    expectedRevision: source.editRevision,
+    text: 'Mira had already left the pier.',
+  });
+  expect(f.store.outline.latestReview(node.id)?.stale).toBe(true);
+  const row = f.store.db
+    .prepare('SELECT sources FROM outline_reviews WHERE task_id=?')
+    .get(task.id);
+  expect(JSON.stringify(row)).not.toContain(source.text);
+  expect(
+    f.store.db.prepare('SELECT count(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+      ?.n
+  ).toBe(0);
+});
+
+test('outline selection scope and revisions are checked before a provider call; a requested keep-condition edit uses the real helper path', async () => {
+  const f = fixture(),
+    chat = createFixtureChat(f.store, '선택 대상'),
+    other = createFixtureChat(f.store, '다른 작품');
+  const node = f.store.outline.apply(
+    chat.id,
+    {
+      idempotencyKey: 'one',
+      operations: [{ op: 'create', level: 'episode', title: '같은 제목', intent: '원래 방향' }],
+    },
+    'user'
+  ).detail.nodes[0];
+  f.store.outline.apply(
+    chat.id,
+    {
+      idempotencyKey: 'pin',
+      operations: [{ op: 'update', id: node.id, expectedRevision: node.revision, fixed: true }],
+    },
+    'user'
+  );
+  const pinned = f.store.outline.node(node.id);
+  const conversation = f.workspace.open({
+    kind: 'chat',
+    chatId: chat.id,
+    branchId: `main:${chat.id}`,
+  });
+  const foreign = f.store.outline.apply(
+    other.id,
+    {
+      idempotencyKey: 'other',
+      operations: [{ op: 'create', level: 'episode', title: '같은 제목', intent: '' }],
+    },
+    'user'
+  ).detail.nodes[0];
+  const send = mockSend((_request, _options, index) =>
+    index === 0
+      ? {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          text: '',
+          toolCalls: [
+            {
+              id: 'change-condition',
+              name: 'app.call',
+              arguments: {
+                name: 'outline.write',
+                arguments: {
+                  operations: [
+                    {
+                      op: 'update',
+                      id: pinned.id,
+                      expectedRevision: pinned.revision,
+                      intent: '명시 요청으로 변경한 결말',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        }
+      : structuredClone(success)
+  );
+  expect(() =>
+    f.runtime.enqueue(conversation.id, 'wrong', '변경', undefined, undefined, undefined, {
+      nodeId: foreign.id,
+      expectedRevision: foreign.revision,
+      purpose: 'compose',
+    })
+  ).toThrow('OUTLINE_OUTSIDE_SCOPE');
+  expect(() =>
+    f.runtime.enqueue(conversation.id, 'stale', '변경', undefined, undefined, undefined, {
+      nodeId: node.id,
+      expectedRevision: node.revision,
+      purpose: 'compose',
+    })
+  ).toThrow('다시 선택');
+  expect(send).not.toHaveBeenCalled();
+  const task = f.runtime.enqueue(
+    conversation.id,
+    'change',
+    '이 유지 조건 자체를 새 결말로 바꿔줘',
+    undefined,
+    undefined,
+    undefined,
+    { nodeId: pinned.id, expectedRevision: pinned.revision, purpose: 'compose' }
+  );
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id).status).toBe('completed');
+  expect(f.store.outline.node(pinned.id)).toMatchObject({
+    fixed: true,
+    intent: '명시 요청으로 변경한 결말',
+  });
+  expect(f.store.outline.node(foreign.id).intent).toBe('');
+  expect(f.store.product.branch(chat.id).headRevision).toBeNull();
+});

@@ -17,8 +17,10 @@ export type CopiedMessageState = {
 export type ChatCopyAuthoring = {
   outline: Pick<
     import('./outline.js').OutlineNode,
-    'id' | 'parentId' | 'level' | 'position' | 'title' | 'intent' | 'fixed'
+    'id' | 'parentId' | 'level' | 'position' | 'title' | 'intent' | 'fixed' | 'relatedIds'
   >[];
+  /** Source associations, not execution status or receipts. */
+  outlineSources?: { nodeId: string; atIndex: number }[];
   options: Record<string, import('./risu-prompt.js').PromptValue>;
   lore: (Omit<
     import('./chat-overrides.js').ChatLoreOverride,

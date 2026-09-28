@@ -143,7 +143,7 @@ export function deleteSceneCommand(store: Store, id: string, value: unknown) {
         409,
         '실행 기록에 연결된 새 장면 요청이에요. 해당 분기 또는 채팅과 함께 삭제해 주세요.'
       );
-    if (store.db.prepare('SELECT 1 FROM outline_nodes WHERE command_id=?').get(id))
+    if (store.db.prepare('SELECT 1 FROM outline_writings WHERE command_id=?').get(id))
       throw new HttpError(
         409,
         '구성 항목에 연결된 새 장면 요청이에요. 구성에서 먼저 분리하거나 구성 항목을 삭제해 주세요.'

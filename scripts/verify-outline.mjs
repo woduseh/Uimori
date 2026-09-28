@@ -3,6 +3,6 @@ import { runBrowserVerification } from './browser-verification.mjs';
 await runBrowserVerification({
   name: 'outline',
   scope:
-    'Hierarchical composition: five levels, level rules, targeted edits and writing one designated unit at mobile and desktop widths; synthetic provider only',
+    'Composition workspace: skipped levels, scoped helper selection, deterministic briefs, continuation, recovery and read-only review at 390/1440px; synthetic provider only',
   files: ['tests/outline-browser.spec.ts'],
 });
