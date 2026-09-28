@@ -421,6 +421,65 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
   }
 });
 
+test('HELPUI10 a full localStorage keeps helper input in IndexedDB and still admits the request', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  let panel = await open(page);
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith('uimori:helper-')) throw new DOMException('Full', 'QuotaExceededError');
+      return original.call(this, key, value);
+    };
+  });
+  await panel.getByLabel('도우미에게 요청').fill('저장 공간이 가득 차도 남는 초안');
+  await page.reload();
+  panel = await open(page);
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('저장 공간이 가득 차도 남는 초안');
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith('uimori:helper-')) throw new DOMException('Full', 'QuotaExceededError');
+      return original.call(this, key, value);
+    };
+  });
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(state.posts[0].text).toBe('저장 공간이 가득 차도 남는 초안');
+});
+
+test('HELPUI11 an IndexedDB write failure retains the exact request for explicit sending', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page),
+    input = panel.getByLabel('도우미에게 요청');
+  await page.evaluate(() => {
+    const original = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (...args) {
+      if (this.name === 'uimori-editor-recovery' && args[1] === 'readwrite')
+        throw new DOMException('Disk full', 'QuotaExceededError');
+      return original.apply(this, args);
+    };
+  });
+  await input.fill('보관에 실패한 첫 요청');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect(panel.getByRole('button', { name: '보관 없이 보내기' })).toBeVisible();
+  expect(state.posts).toHaveLength(0);
+  await input.fill('보내는 동안 남길 새 입력');
+  await panel.getByRole('button', { name: '보관 없이 보내기' }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(state.posts[0].text).toBe('보관에 실패한 첫 요청');
+  await expect(input).toHaveValue('보내는 동안 남길 새 입력');
+});
+
 test('HELPUI02 cursor HTTP deltas stay sequential and queued followups recover one request key', async ({
   page,
   request,
@@ -672,7 +731,16 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
   await panel.getByLabel('도우미에게 요청').fill('새 요청 작성 중');
   await panel.getByRole('button', { name: '요청 편집', exact: true }).click();
   await panel.getByLabel('요청 수정 내용').fill('고친 요청');
+  state.loseNext();
   await panel.getByRole('button', { name: '수정한 요청 보내기', exact: true }).click();
+  await expect(panel.getByRole('button', { name: '접수 확인·다시 시도' })).toBeVisible();
+  const key = state.posts.at(-1)!.requestKey;
+  await page.reload();
+  panel = await open(page);
+  await expect(panel.getByRole('button', { name: '접수 확인·다시 시도' })).toBeVisible();
+  await panel.getByRole('button', { name: '접수 확인·다시 시도' }).click();
+  await expect.poll(() => state.posts.length).toBe(2);
+  expect(state.posts[1].requestKey).toBe(key);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('새 요청 작성 중');
   await expect(panel.getByRole('group', { name: '실패한 요청' })).toHaveCount(0);
   const retried = state.current().tasks[0];

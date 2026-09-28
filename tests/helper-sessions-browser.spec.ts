@@ -127,3 +127,37 @@ test('HSESSION03 a delayed session creation does not replace a later user select
     await page.unrouteAll({ behavior: 'wait' });
   }
 });
+
+test('HSESSION04 legacy helper input migrates and a later input survives panel and session navigation', async ({
+  page,
+  request,
+}) => {
+  const chat = (await (
+    await postFixtureChat(request, { data: { title: `초안 이전 ${randomUUID()}` } })
+  ).json()) as Chat;
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const panel = page.locator('#helper-panel'),
+    input = panel.getByLabel('도우미에게 요청');
+  await expect(input).toBeEnabled();
+  const picker = panel.getByLabel('도우미 세션 선택');
+  const first = await picker.inputValue();
+  await page.evaluate(
+    (id) => localStorage.setItem(`uimori:helper-input:${id}`, '이전 저장소의 초안'),
+    first
+  );
+  await page.reload();
+  await openHelper(page);
+  await expect(input).toHaveValue('이전 저장소의 초안');
+  await expect
+    .poll(() => page.evaluate((id) => localStorage.getItem(`uimori:helper-input:${id}`), first))
+    .toBeNull();
+  await input.fill('새로 입력한 원고');
+  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await expect(input).toHaveValue('');
+  await picker.selectOption(first);
+  await expect(input).toHaveValue('새로 입력한 원고');
+  await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+  await openHelper(page);
+  await expect(input).toHaveValue('새로 입력한 원고');
+});

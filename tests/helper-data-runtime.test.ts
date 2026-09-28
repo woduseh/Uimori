@@ -272,10 +272,12 @@ test('a native two-call fact lookup sends five stable tools, no full editor JSON
   reportMetrics('short-editor-fact', f, task, bodies);
 });
 
-test('native app gateway discovers schemas then reads and saves a bot without changing native tool aliases', async () => {
+test('native gateway patches one field of a 1.36M-character bot without sending its full source', async () => {
   const f = fixture();
+  const largeBody = 'Original large source. ' + 'preserved native detail 🌱 '.repeat(56_666);
+  expect(largeBody.length).toBeGreaterThan(1_360_000);
   const original = f.store.product.content(
-    fixtureBotInput('Original helper bot', 'Age: 27')
+    fixtureBotInput('Original helper bot', largeBody)
   ) as Content;
   const sameName = f.store.product.content(
     fixtureBotInput('Original helper bot', 'Age: 90; unrelated owner')
@@ -293,11 +295,17 @@ test('native app gateway discovers schemas then reads and saves a bot without ch
     if (round === 0)
       return answer(
         '',
-        [{ id: 'schemas', name: 'app.tools', args: { names: ['resource.read', 'resource.save'] } }],
+        [
+          {
+            id: 'schemas',
+            name: 'app.tools',
+            args: { names: ['resource.read', 'resource.patch'] },
+          },
+        ],
         wire
       );
     schemas = toolResult(wire, 'schemas').tools;
-    expect(schemas.map((t) => t.name)).toEqual(['resource.read', 'resource.save']);
+    expect(schemas.map((t) => t.name)).toEqual(['resource.read', 'resource.patch']);
     if (round === 1)
       return answer(
         '',
@@ -310,41 +318,77 @@ test('native app gateway discovers schemas then reads and saves a bot without ch
         ],
         wire
       );
-    const read = toolResult(wire, 'read') as Content;
-    if (round === 2)
+    const overview = toolResult(wire, 'read') as {
+      id: string;
+      revision: number;
+      source: { path: string };
+    };
+    if (round === 2) {
+      expect(overview).toMatchObject({ id: original.id, revision: original.revision });
+      expect(overview.source.path).toBe('/package/nativeRisu/card');
       return answer(
         '',
         [
           {
-            id: 'save',
+            id: 'name',
             name: 'app.call',
             args: {
-              name: 'resource.save',
+              name: 'resource.read',
+              arguments: { kind: 'content', id: original.id, path: `${overview.source.path}/name` },
+            },
+          },
+        ],
+        wire
+      );
+    }
+    const name = toolResult(wire, 'name') as { revision: number; text: string };
+    if (round === 3) {
+      expect(name).toMatchObject({ revision: original.revision, text: original.title });
+      return answer(
+        '',
+        [
+          {
+            id: 'patch',
+            name: 'app.call',
+            args: {
+              name: 'resource.patch',
               arguments: {
                 kind: 'content',
-                id: read.id,
-                expectedRevision: read.revision,
-                model: nativeDraftTitle(
-                  editableResource('content', read),
-                  'Renamed through gateway'
-                ),
+                id: original.id,
+                expectedRevision: name.revision,
+                changes: [
+                  {
+                    path: '/package/nativeRisu/card/name',
+                    op: 'set',
+                    value: 'Renamed through gateway',
+                  },
+                ],
               },
             },
           },
         ],
         wire
       );
-    expect(toolResult(wire, 'save')).toMatchObject({ id: original.id, revision: 2 });
+    }
+    expect(toolResult(wire, 'patch')).toMatchObject({
+      id: original.id,
+      revision: 2,
+      changedPaths: ['/package/nativeRisu/card/name'],
+    });
     return answer('Saved the requested name.');
   });
   const task = await f.run(
     `Rename only bot ${original.id} to Renamed through gateway and save it. Preserve every other authored field and the other bot with the same name.`
   );
   expect(task.status, task.error ?? '').toBe('completed');
-  expect(bodies).toHaveLength(4);
+  expect(bodies).toHaveLength(5);
   expect(bodies.every((b) => JSON.stringify(b.tools) === JSON.stringify(bodies[0].tools))).toBe(
     true
   );
+  for (const body of bodies) {
+    expect(body.model).toBe('synthetic-helper');
+    expect(JSON.stringify(body)).not.toContain('preserved native detail 🌱');
+  }
   expect(f.store.product.get<Content>('content', original.id)).toMatchObject({
     title: 'Renamed through gateway',
     revision: 2,
@@ -357,19 +401,24 @@ test('native app gateway discovers schemas then reads and saves a bot without ch
   expect(f.store.product.get<Content>('content', sameName.id)).toEqual(sameName);
   expect(unrelatedState()).toEqual(before);
   expect(
+    f.runtime.workspace
+      .events(f.conversation.id)
+      .filter((event) => event.taskId === task.id && event.kind === 'context.compaction')
+  ).toHaveLength(0);
+  expect(
     f.store.db.prepare('SELECT COUNT(*) n FROM helper_operations WHERE task_id=?').get(task.id)?.n
   ).toBe(1);
-  reportMetrics('authorized-single-field-save', f, task, bodies);
+  reportMetrics('authorized-large-bot-small-field-patch', f, task, bodies);
 });
 
 test('gateway read compaction retains an exact completed mutation and resumes with a fresh native continuation', async () => {
   const f = fixture(8192);
   const b = f.store.product.content(fixtureBotInput('Before', 'Age: 27.')) as Content;
+  const source = Array.from({ length: 2_000 }, (_, index) =>
+    index.toString(36).padStart(4, '0')
+  ).join(' ');
   const evidence = f.store.product.content(
-    fixtureBotInput(
-      'Large evidence',
-      'Age: 27.\n' + 'one two three four five six seven eight nine ten\n'.repeat(700)
-    )
+    fixtureBotInput('Large evidence', `Age: 27.\n${source}`)
   ) as Content;
   // A theme/list discovery read and an operation can share a model round. Reads compact; writes stay exact.
   let helperCalls = 0,
@@ -403,7 +452,15 @@ test('gateway read compaction retains an exact completed mutation and resumes wi
           {
             id: 'read-large',
             name: 'app.call',
-            args: { name: 'resource.read', arguments: { kind: 'content', id: evidence.id } },
+            args: {
+              name: 'resource.read',
+              arguments: {
+                kind: 'content',
+                id: evidence.id,
+                path: '/package/nativeRisu/card/description',
+                textLimit: 10_000,
+              },
+            },
           },
         ],
         wire

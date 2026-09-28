@@ -36,10 +36,15 @@ export type HelperStatus =
   | 'cancelled'
   | 'interrupted';
 export type HelperLimits = { totalCalls: number; helperCalls: number; artifacts: number };
-export type HelperEditor = EditorContext;
+export type HelperEditor = EditorContext & {
+  /** Saved references are resolved once at admission; device drafts remain analysis input. */
+  source?: 'saved' | 'unsaved';
+};
 export type HelperSelection = { sourceId: string; sourceHash: string; text: string };
 export type HelperTaskSnapshot = {
   retryOf?: string;
+  /** Kept after input cleanup so an admission retry cannot silently change its input. */
+  requestFingerprint?: string;
   /** Small selection receipt; not a copy of the plan text. */
   outlineTarget?: import('./outline.js').OutlineTarget;
   requestGroupId?: string;

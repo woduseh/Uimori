@@ -24,7 +24,7 @@ export const editorContextChanged = 'uimori-editor-context-changed';
 const changed = () => window.dispatchEvent(new Event(editorContextChanged));
 const activeSession = () =>
   (focused ? sessions.get(focused) : null) ?? [...sessions.values()].at(-1) ?? null;
-export type ActiveEditorContext = EditorContext & { editorKey: string };
+export type ActiveEditorContext = EditorContext & { editorKey: string; dirty: boolean };
 function context(session: ResourceEditorSession | null): ActiveEditorContext | null {
   const state = session?.snapshot();
   if (!session || !state?.ready) return null;
@@ -34,10 +34,12 @@ function context(session: ResourceEditorSession | null): ActiveEditorContext | n
     revision: state.document.baseRevision,
     title: 'title' in state.local.model ? state.local.model.title : '현재 프롬프트',
     editorKey: session.options.editorKey,
+    dirty: state.dirty,
     model: state.local.model,
   };
 }
 export const getActiveEditorContext = () => context(activeSession());
+export const captureActiveEditorContext = () => activeSession()?.captureForHelper() ?? null;
 export async function flushActiveEditor() {
   const session = activeSession();
   await session?.flush();
@@ -106,6 +108,7 @@ export function useResourceEditor(options: Options) {
     sessions.set(token, session);
     focused = token;
     changed();
+    const unsubscribe = session.subscribe(changed);
     void session.open().catch(() => {});
     const refresh = () => {
       void session.refresh().catch(() => {});
@@ -116,6 +119,7 @@ export function useResourceEditor(options: Options) {
       window.removeEventListener('focus', refresh);
       window.removeEventListener('uimori-helper-updated', refresh);
       sessions.delete(token);
+      unsubscribe();
       if (focused === token) focused = null;
       session.dispose();
       changed();

@@ -19,6 +19,8 @@ Explicit user notes are already pinned to the Run and delivered through the `not
 
 The helper's native data surface stays at five tools: `data.search`, `data.read`, `db.query`, `app.tools`, and `app.call`. `data.read` likewise always accepts `refs`, including a one-item array.
 
+Helper resource editing uses discovered `resource.read` overviews and exact typed paths, then `resource.patch` for native card/module fields. Resource revision checks, one-save undo and operation receipts remain owned by the existing resource service. This does not change complete UI or export models. See [Helper tools](HELPER-TOOLS.md#discovering-and-executing-app-operations) for pagination, result budgets and the limited patch operations.
+
 ## Schema portability
 
 Provider-visible tool roots are ordinary JSON Schema objects. Do not put `oneOf`, `anyOf`, or `allOf` at the root of a tool `inputSchema`. Providers support different JSON Schema subsets, and Anthropic rejects those root combiners for tool input schemas.

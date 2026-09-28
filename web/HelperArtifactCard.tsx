@@ -5,12 +5,21 @@ import type { HelperArtifact } from '../core/helper.js';
 import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
 import { PlainProse } from './Prose.js';
+import {
+  cachedHelperRecovery,
+  clearHelperRecoveryIf,
+  loadHelperRecovery,
+  registerHelperArtifactRecovery,
+  writeHelperRecovery,
+} from './helper-recovery.js';
 
 export type HelperArtifactView = HelperArtifact;
 type Draft = { revision: number; text: string; requestKey?: string };
 function storedDraft(key: string): Draft | null {
   try {
-    const value = JSON.parse(localStorage.getItem(key) ?? 'null') as Draft | null;
+    const value = JSON.parse(
+      cachedHelperRecovery(key.replace(/^uimori:/u, '')) ?? 'null'
+    ) as Draft | null;
     return value &&
       Number.isSafeInteger(value.revision) &&
       value.revision > 0 &&
@@ -26,17 +35,23 @@ function storedDraft(key: string): Draft | null {
 export function HelperArtifactCard({
   id,
   revision,
+  conversationId,
   onRevise,
   readOnly = false,
 }: {
   id: string;
   revision: number;
+  conversationId: string;
   readOnly?: boolean;
   onRevise: (artifact: HelperArtifactView) => void;
 }) {
   const storageKey = `uimori:helper-artifact-draft:${id}:${revision}`;
   const [artifact, setArtifact] = useState<HelperArtifactView>();
-  const [draft, setDraft] = useState<Draft | null>(() => storedDraft(storageKey));
+  const [draft, setDraft] = useState<Draft | null | undefined>(() =>
+    cachedHelperRecovery(storageKey.replace(/^uimori:/u, '')) === undefined
+      ? undefined
+      : storedDraft(storageKey)
+  );
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -45,10 +60,14 @@ export function HelperArtifactCard({
   const conflict = Boolean(draft && artifact && draft.revision !== artifact.revision);
   useEffect(() => {
     alive.current = true;
-    const restored = storedDraft(storageKey);
-    void api<HelperArtifactView>(
-      `/helper/artifacts/${encodeURIComponent(id)}?revision=${restored?.revision ?? revision}`
-    )
+    void loadHelperRecovery(storageKey.replace(/^uimori:/u, ''))
+      .then(() => {
+        const restored = storedDraft(storageKey);
+        setDraft((current) => (current === undefined ? restored : current));
+        return api<HelperArtifactView>(
+          `/helper/artifacts/${encodeURIComponent(id)}?revision=${restored?.revision ?? revision}`
+        );
+      })
       .then((value) => {
         if (alive.current) setArtifact(value);
       })
@@ -60,13 +79,17 @@ export function HelperArtifactCard({
     };
   }, [id, revision, storageKey]);
   useEffect(() => {
-    try {
-      if (draft) localStorage.setItem(storageKey, JSON.stringify(draft));
-      else localStorage.removeItem(storageKey);
-    } catch {
-      /* The open editor still retains its local draft. */
-    }
-  }, [draft, storageKey]);
+    if (!draft) return;
+    void registerHelperArtifactRecovery(conversationId, storageKey.replace(/^uimori:/u, '')).catch(
+      () => {}
+    );
+    void writeHelperRecovery(storageKey.replace(/^uimori:/u, ''), JSON.stringify(draft)).catch(
+      () => {
+        if (alive.current)
+          setError('초안을 이 기기에 보관하지 못했어요. 입력은 현재 화면에 남아 있어요.');
+      }
+    );
+  }, [draft, storageKey, conversationId]);
   async function latest() {
     const value = await api<HelperArtifactView>(`/helper/artifacts/${encodeURIComponent(id)}`);
     if (alive.current) setArtifact(value);
@@ -82,7 +105,7 @@ export function HelperArtifactCard({
       const requestKey = draft.requestKey ?? crypto.randomUUID();
       const pending = { ...draft, requestKey };
       try {
-        localStorage.setItem(storageKey, JSON.stringify(pending));
+        await writeHelperRecovery(storageKey.replace(/^uimori:/u, ''), JSON.stringify(pending));
       } catch {
         throw new Error(
           '편집 요청을 보관하지 못했어요. 브라우저 저장 공간을 확인한 뒤 다시 저장해 주세요.'
@@ -98,6 +121,12 @@ export function HelperArtifactCard({
         },
         'PATCH'
       );
+      void clearHelperRecoveryIf(
+        storageKey.replace(/^uimori:/u, ''),
+        JSON.stringify(pending)
+      ).catch(() => {
+        if (alive.current) setError('장면은 저장됐지만 이 기기의 복구 초안을 지우지 못했어요.');
+      });
       if (!alive.current) return;
       setArtifact(value);
       setDraft(null);
@@ -180,6 +209,11 @@ export function HelperArtifactCard({
                   disabled={busy}
                   onClick={() => {
                     setDraft(null);
+                    void writeHelperRecovery(storageKey.replace(/^uimori:/u, ''), null).catch(
+                      () => {
+                        if (alive.current) setError('취소한 초안을 이 기기에서 지우지 못했어요.');
+                      }
+                    );
                     setError('');
                   }}
                 >

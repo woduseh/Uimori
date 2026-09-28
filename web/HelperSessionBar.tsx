@@ -11,6 +11,7 @@ import { IconButton } from './IconButton.js';
 import { CheckIcon, CloseIcon, DeleteIcon, EditIcon, StopIcon } from './ui-icons.js';
 import { forgetHelperSession, type HelperSession } from './useHelperSessions.js';
 import type { HelperTaskView } from './useHelperConversation.js';
+import { deleteHelperSessionRecovery } from './helper-recovery.js';
 
 type Props = {
   sessions: HelperSession[];
@@ -33,6 +34,7 @@ export function HelperSessionBar(props: Props) {
   const [impact, setImpact] = useState<HelperConversationDeletion | null>(null);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
+  const [cleanupFailure, setCleanupFailure] = useState('');
   useEffect(() => {
     if (!deleting) return;
     let disposed = false;
@@ -168,6 +170,7 @@ export function HelperSessionBar(props: Props) {
           {props.unread.length > 0 && <strong>새 소식 {props.unread.length}</strong>}
         </div>
       </div>
+      {cleanupFailure && <p role="alert">{cleanupFailure}</p>}
       <Dialog
         open={!!rename}
         title="도우미 세션 이름 변경"
@@ -286,14 +289,12 @@ export function HelperSessionBar(props: Props) {
                 impact.request,
                 'DELETE'
               )
-                .then(() => {
+                .then(async () => {
                   forgetHelperSession(deleting);
-                  for (const prefix of ['helper-input', 'helper-outbox', 'helper-selection']) {
-                    try {
-                      localStorage.removeItem(`uimori:${prefix}:${deleting.id}`);
-                    } catch {
-                      /* The server deletion is complete. */
-                    }
+                  try {
+                    await deleteHelperSessionRecovery(deleting.id);
+                  } catch {
+                    setCleanupFailure('세션은 삭제됐지만 이 기기의 복구 초안을 지우지 못했어요.');
                   }
                   setDeleting(null);
                   props.onDelete();

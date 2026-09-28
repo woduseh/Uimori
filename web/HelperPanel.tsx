@@ -28,13 +28,19 @@ import { useHelperConversation, type HelperTaskView } from './useHelperConversat
 import { interceptAppHistory } from './app-history.js';
 import {
   editorContextChanged,
-  flushActiveEditor,
+  captureActiveEditorContext,
   getActiveEditorContext,
   refreshActiveEditor,
   type ActiveEditorContext,
 } from './resource-editor.js';
 import { useHelperSessions } from './useHelperSessions.js';
 import { HelperSessionBar } from './HelperSessionBar.js';
+import {
+  cachedHelperRecovery,
+  clearHelperRecoveryIf,
+  loadHelperRecovery,
+  writeHelperRecovery,
+} from './helper-recovery.js';
 import type { Branch } from '../core/product.js';
 import type { ReaderDetail } from '../core/types.js';
 import './helper.css';
@@ -88,21 +94,10 @@ const statusLabel: Record<string, string> = {
   interrupted: '작업이 중단됐어요',
 };
 function local(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
+  return cachedHelperRecovery(key.replace(/^uimori:/u, '')) ?? null;
 }
 function saveLocal(key: string, value: string | null) {
-  try {
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, value);
-    return true;
-  } catch {
-    /* The open panel still retains local input. */
-    return false;
-  }
+  void writeHelperRecovery(key.replace(/^uimori:/u, ''), value).catch(() => {});
 }
 function storedOutbox(scope: string): Outbox | null {
   try {
@@ -185,6 +180,9 @@ export function HelperPanel(props: Props) {
   );
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [outboxes, setOutboxes] = useState<Record<string, Outbox | null>>({});
+  const [unpersisted, setUnpersisted] = useState<Record<string, boolean>>({});
+  const [hydrated, setHydrated] = useState<Record<string, boolean>>({});
+  const [recoveryAttempt, setRecoveryAttempt] = useState(0);
   const [outlineSelections, setOutlineSelections] = useState<
     Record<string, SelectedOutline | null>
   >({});
@@ -237,6 +235,49 @@ export function HelperPanel(props: Props) {
   const shownPending = pending.filter((task) => !hiddenActivity.includes(task.id));
   const summarized = shownPending.find((task) => task.status === 'running') ?? shownPending[0];
   const setError = (message: string) => setErrors((old) => ({ ...old, [scopeKey]: message }));
+  useEffect(() => {
+    if (!scopeKey) return;
+    if (recoveryAttempt > 0) setErrors((old) => ({ ...old, [scopeKey]: '' }));
+    let disposed = false;
+    const restore = async () => {
+      const keys = ['helper-input', 'helper-outbox', 'helper-selection', 'helper-outline'];
+      try {
+        await Promise.all(keys.map((kind) => loadHelperRecovery(`${kind}:${scopeKey}`)));
+      } catch {
+        if (!disposed)
+          setErrors((old) => ({
+            ...old,
+            [scopeKey]: '이 기기의 도우미 초안을 읽지 못했어요. 다시 불러와 주세요.',
+          }));
+        return;
+      }
+      if (disposed) return;
+      setDrafts((old) =>
+        old[scopeKey] === undefined
+          ? { ...old, [scopeKey]: local(`uimori:helper-input:${scopeKey}`) ?? '' }
+          : old
+      );
+      setOutboxes((old) =>
+        old[scopeKey] === undefined ? { ...old, [scopeKey]: storedOutbox(scopeKey) } : old
+      );
+      setSelections((old) =>
+        old[scopeKey] === undefined ? { ...old, [scopeKey]: storedSelection(scopeKey) } : old
+      );
+      setOutlineSelections((old) =>
+        old[scopeKey] === undefined ? { ...old, [scopeKey]: storedOutline(scopeKey) } : old
+      );
+      setHydrated((old) => ({ ...old, [scopeKey]: true }));
+      setErrors((old) =>
+        old[scopeKey] === '이 기기의 도우미 초안을 읽지 못했어요. 다시 불러와 주세요.'
+          ? { ...old, [scopeKey]: '' }
+          : old
+      );
+    };
+    void restore();
+    return () => {
+      disposed = true;
+    };
+  }, [scopeKey, recoveryAttempt]);
   const editDraft = useCallback(
     (text: string) => {
       if (!scopeKey) return;
@@ -246,12 +287,6 @@ export function HelperPanel(props: Props) {
     [scopeKey]
   );
   const setOutbox = (key: string, value: Outbox | null) => {
-    const persisted = saveLocal(
-      `uimori:helper-outbox:${key}`,
-      value ? JSON.stringify(value) : null
-    );
-    if (value && !persisted)
-      throw new Error('요청을 보관하지 못했어요. 브라우저 저장 공간을 확인한 뒤 다시 보내 주세요.');
     setOutboxes((old) => ({ ...old, [key]: value }));
   };
   const selectSession = sessions.select;
@@ -269,6 +304,7 @@ export function HelperPanel(props: Props) {
       if (JSON.stringify(owner.scope) !== JSON.stringify(selected.scope))
         throw new Error('구성과 도우미 대화의 채팅이 달라요.');
       appliedSelections.current.add(selected.key);
+      await loadHelperRecovery(`helper-input:${owner.id}`).catch(() => null);
       if (selected.target) {
         setSelections((old) => ({ ...old, [owner.id]: null }));
         saveLocal(`uimori:helper-selection:${owner.id}`, null);
@@ -318,6 +354,7 @@ export function HelperPanel(props: Props) {
         throw new Error('선택한 원문과 도우미 세션의 분기가 달라요.');
       const key = owner.id;
       appliedSelections.current.add(selected.key);
+      await loadHelperRecovery(`helper-input:${key}`).catch(() => null);
       setOutlineSelections((old) => ({ ...old, [key]: null }));
       saveLocal(`uimori:helper-outline:${key}`, null);
       const value: HelperSelection = {
@@ -420,9 +457,10 @@ export function HelperPanel(props: Props) {
     observer.observe(content.current);
     return () => observer.disconnect();
   }, [props.open]);
-  async function send(saved?: Outbox): Promise<boolean> {
+  async function send(saved?: Outbox, withoutStorage = false): Promise<boolean> {
     if (
       props.ready === false ||
+      !hydrated[scopeKey] ||
       branchMismatch ||
       locks.current.has(scopeKey) ||
       (!saved && (!conversation || !draft.trim()))
@@ -433,10 +471,21 @@ export function HelperPanel(props: Props) {
       owner = scopeKey;
     if (saved && (saved.scope !== owner || saved.targetConversationId !== conversation?.id))
       return false;
+    // Capture before the first await, including pending raw editor fields.
+    let captured: ReturnType<typeof captureActiveEditorContext> = null;
+    if (!saved) {
+      try {
+        captured = captureActiveEditorContext();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : '편집 초안을 확인하지 못했어요.');
+        return false;
+      }
+    }
     locks.current.add(owner);
     setBusyScopes((old) => ({ ...old, [owner]: true }));
     setError('');
     data.setError('');
+    let pendingRequest: Outbox | undefined;
     try {
       if (text.length > REQUEST_TEXT_MAX_CHARS)
         throw new Error(
@@ -448,30 +497,30 @@ export function HelperPanel(props: Props) {
         );
       let request = saved;
       if (!request) {
-        const before = getActiveEditorContext(),
-          selected = await flushActiveEditor();
-        if ((before?.targetId ?? null) !== (selected?.targetId ?? null))
-          throw new Error('편집 대상이 바뀌었어요. 현재 초안을 확인한 뒤 다시 보내 주세요.');
         request = {
           requestKey: crypto.randomUUID(),
           text,
           scope: owner,
           targetConversationId: conversation!.id,
-          ...(selected
+          ...(captured
             ? {
-                editor: {
-                  targetId: selected.targetId,
-                  model: selected.model,
-                  revision: selected.revision,
-                  title: selected.title,
-                  kind: selected.kind,
-                },
+                editor: captured,
               }
             : {}),
           ...(selection ? { selection } : {}),
           ...(selectedOutline ? { outline: selectedOutline.target } : {}),
         };
-        setOutbox(owner, request);
+      }
+      setOutbox(owner, request);
+      pendingRequest = request;
+      if (!withoutStorage) {
+        try {
+          await writeHelperRecovery(`helper-outbox:${owner}`, JSON.stringify(request));
+          setUnpersisted((old) => ({ ...old, [owner]: false }));
+        } catch {
+          setUnpersisted((old) => ({ ...old, [owner]: true }));
+          throw new Error('요청을 보관하지 못했어요. 다시 시도하거나 보관 없이 보낼 수 있어요.');
+        }
       }
       const task = await api<HelperTaskView>(
         `/helper/conversations/${encodeURIComponent(request.targetConversationId)}/messages`,
@@ -485,34 +534,54 @@ export function HelperPanel(props: Props) {
         }
       );
       setOutbox(owner, null);
+      setUnpersisted((old) => ({ ...old, [owner]: false }));
+      void clearHelperRecoveryIf(`helper-outbox:${owner}`, JSON.stringify(request)).catch(() => {});
       if (!request.retryOf)
         setDrafts((old) => {
           const existing = old[owner] ?? local(`uimori:helper-input:${owner}`) ?? '';
           if (existing !== text) return old;
-          saveLocal(`uimori:helper-input:${owner}`, '');
+          void clearHelperRecoveryIf(`helper-input:${owner}`, text).catch(() => {});
           return { ...old, [owner]: '' };
         });
       setSelections((old) => {
         const existing = old[owner] === undefined ? storedSelection(owner) : old[owner];
         if (JSON.stringify(existing ?? null) !== JSON.stringify(request.selection ?? null))
           return old;
-        saveLocal(`uimori:helper-selection:${owner}`, null);
+        if (existing)
+          void clearHelperRecoveryIf(`helper-selection:${owner}`, JSON.stringify(existing)).catch(
+            () => {}
+          );
         return { ...old, [owner]: null };
       });
       setOutlineSelections((old) => {
         const existing = old[owner] === undefined ? storedOutline(owner) : old[owner];
         if (JSON.stringify(existing?.target ?? null) !== JSON.stringify(request.outline ?? null))
           return old;
-        saveLocal(`uimori:helper-outline:${owner}`, null);
+        if (existing)
+          void clearHelperRecoveryIf(`helper-outline:${owner}`, JSON.stringify(existing)).catch(
+            () => {}
+          );
         return { ...old, [owner]: null };
       });
       data.updateTask(task);
       if (currentScope.current === owner) following.current = true;
-      if (conversation) await data.refresh(conversation);
+      if (conversation)
+        void data.refresh(conversation).catch((cause) => {
+          setErrors((old) => ({
+            ...old,
+            [owner]: `요청은 접수됐지만 목록을 새로고침하지 못했어요: ${cause.message}`,
+          }));
+        });
       return true;
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status < 500 && ![408, 429].includes(cause.status))
+      if (cause instanceof ApiError && cause.status < 500 && ![408, 429].includes(cause.status)) {
         setOutbox(owner, null);
+        if (pendingRequest)
+          void clearHelperRecoveryIf(
+            `helper-outbox:${owner}`,
+            JSON.stringify(pendingRequest)
+          ).catch(() => {});
+      }
       setErrors((old) => ({
         ...old,
         [owner]: cause instanceof Error ? cause.message : '요청을 보내지 못했어요.',
@@ -554,12 +623,6 @@ export function HelperPanel(props: Props) {
       targetConversationId: conversation.id,
       retryOf: task.id,
     };
-    try {
-      setOutbox(scopeKey, request);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '요청을 보관하지 못했어요.');
-      return false;
-    }
     return send(request);
   }
   const taskStatus = (task: HelperTaskView) => (
@@ -939,6 +1002,7 @@ export function HelperPanel(props: Props) {
               )}
               {message.artifacts.map((artifact) => (
                 <HelperArtifactCard
+                  conversationId={conversation.id}
                   key={`${artifact.id}:${artifact.revision}`}
                   {...artifact}
                   readOnly={branchMismatch}
@@ -1082,12 +1146,17 @@ export function HelperPanel(props: Props) {
         )}
         {outbox && !busy && (
           <div className="helper-outbox" role="status">
-            <p>이전 요청의 접수 여부를 확인하지 못했어요. 같은 요청으로 다시 확인해요.</p>
+            <p>
+              {unpersisted[scopeKey]
+                ? '요청을 이 기기에 보관하지 못했어요. 같은 요청을 다시 보관하거나 바로 보낼 수 있어요.'
+                : '이전 요청의 접수 여부를 확인하지 못했어요. 같은 요청으로 다시 확인해요.'}
+            </p>
             <button
               type="button"
               className="secondary"
               disabled={
                 props.ready === false ||
+                !hydrated[scopeKey] ||
                 branchMismatch ||
                 !conversation ||
                 conversation.id !== outbox.targetConversationId
@@ -1096,6 +1165,22 @@ export function HelperPanel(props: Props) {
             >
               접수 확인·다시 시도
             </button>
+            {unpersisted[scopeKey] && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={
+                  props.ready === false ||
+                  !hydrated[scopeKey] ||
+                  branchMismatch ||
+                  !conversation ||
+                  conversation.id !== outbox.targetConversationId
+                }
+                onClick={() => void send(outbox, true)}
+              >
+                보관 없이 보내기
+              </button>
+            )}
           </div>
         )}
         {pending.length > 0 && (
@@ -1140,6 +1225,15 @@ export function HelperPanel(props: Props) {
                 >
                   <SettingsIcon size={18} aria-hidden="true" />
                   모델 설정{' '}
+                </button>
+              )}
+              {!hydrated[scopeKey] && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setRecoveryAttempt((old) => old + 1)}
+                >
+                  초안 다시 불러오기
                 </button>
               )}
               <button
@@ -1205,6 +1299,7 @@ export function HelperPanel(props: Props) {
               aria-label="도우미 요청 보내기"
               disabled={
                 props.ready === false ||
+                !hydrated[scopeKey] ||
                 branchMismatch ||
                 busy ||
                 data.loading ||

@@ -205,7 +205,7 @@ test.each([
   expect(() => f.store.product.searchLibrary(args)).toThrow(HttpError);
 });
 
-test('helper searches metadata then reads the discovered item without changing existing listing or read permissions', async () => {
+test('helper searches metadata, recovers from an oversized full read, and reads a scoped field', async () => {
   const f = fixture(),
     connection = f.store.product.connection({
       title: 'Synthetic helper',
@@ -295,9 +295,14 @@ test('helper searches metadata then reads the discovered item without changing e
       };
     }
     const results = request.input.results as unknown as ToolEvent[];
-    expect(results.every((event) => !event.denied && !event.errorKind)).toBe(true);
-    expect(results.find((event) => event.callId === 'default-list')!.result).toEqual(expected);
-    expect(results.find((event) => event.callId === 'explicit-list')!.result).toEqual(expected);
+    expect(results.find((event) => event.callId === 'default-list')).toMatchObject({
+      denied: false,
+      result: expected,
+    });
+    expect(results.find((event) => event.callId === 'explicit-list')).toMatchObject({
+      denied: false,
+      result: expected,
+    });
     const searched = results.find((event) => event.callId === 'search')!.result as ReturnType<
       Store['product']['searchLibrary']
     >;
@@ -315,16 +320,83 @@ test('helper searches metadata then reads the discovered item without changing e
         ],
       };
     }
-    expect(results).toHaveLength(4);
-    expect(results.find((event) => event.callId === 'full-body')!.result).toEqual(f.contents[0]);
+    expect(results.find((event) => event.callId === 'full-body')).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: {
+        error: 'HELPER_READ_TOO_LARGE',
+        returned: false,
+        originalResultChars: expect.any(Number),
+        nextRead: {
+          name: 'resource.read',
+          arguments: { kind: 'content', id: f.contents[0]!.id },
+        },
+      },
+    });
+    if (round < 4) expect(JSON.stringify(request)).not.toContain('Body 0. xxxxx');
+    if (round === 2)
+      return {
+        ...success,
+        status: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            id: 'overview',
+            name: 'app.call',
+            arguments: {
+              name: 'resource.read',
+              arguments: { kind: 'content', id: f.contents[0]!.id },
+            },
+          },
+        ],
+      };
+    const overview = results.find((event) => event.callId === 'overview')!.result as {
+      revision: number;
+      source: { path: string };
+    };
+    if (round === 3) {
+      expect(overview).toMatchObject({ revision: f.contents[0]!.revision });
+      return {
+        ...success,
+        status: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            id: 'small-field',
+            name: 'app.call',
+            arguments: {
+              name: 'resource.read',
+              arguments: {
+                kind: 'content',
+                id: f.contents[0]!.id,
+                path: `${overview.source.path}/description`,
+                textLimit: 512,
+              },
+            },
+          },
+        ],
+      };
+    }
+    expect(results.find((event) => event.callId === 'small-field')).toMatchObject({
+      denied: false,
+      result: {
+        revision: f.contents[0]!.revision,
+        path: '/package/nativeRisu/card/description',
+        text: expect.stringContaining('Body 0.'),
+        nextOffset: 512,
+      },
+    });
     return success;
   });
   const task = runtime.enqueue(conversation.id, randomUUID(), '자료 목록과 첫 자료를 읽고 알려줘');
   await Promise.all(work);
+  expect(runtime.workspace.task(task.id).status, runtime.workspace.task(task.id).error ?? '').toBe(
+    'completed'
+  );
   expect(runtime.workspace.task(task.id)).toMatchObject({
     status: 'completed',
     snapshot: {},
-    usage: { modelCalls: 3 },
+    usage: { modelCalls: 5 },
   });
-  expect(calls).toBe(3);
+  expect(calls).toBe(5);
 });

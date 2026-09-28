@@ -3,8 +3,6 @@ import {
   DEFAULT_ILLUSTRATION_PRESET_ID,
 } from '../core/illustration-presets.js';
 import { illustrationPresetCatalog } from '../server/illustration-presets.js';
-import { editableResource } from '../core/resource-editing.js';
-import { nativeDraftTitle } from './fixtures/native-content.js';
 import { describeHelperTools } from '../server/helper-app-tools.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -386,6 +384,34 @@ test('notes schema exposes CAS but keeps mutation identity host-owned', async ()
   expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM author_notes').get()).toEqual({ n: 1 });
 });
 
+test('resource schemas expose scoped reads and typed native patches without a model-owned identity', async () => {
+  const f = await fixture('library');
+  mockSend((request) => {
+    const read = definition(request, 'resource.read') as Record<string, any>;
+    const patch = definition(request, 'resource.patch') as Record<string, any>;
+    expect(read).toMatchObject({
+      required: ['kind', 'id'],
+      properties: {
+        path: { type: 'string' },
+        textOffset: { type: 'integer', minimum: 0 },
+        textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
+      },
+    });
+    expect(patch).toMatchObject({
+      required: ['kind', 'id', 'expectedRevision', 'changes'],
+      properties: {
+        changes: {
+          minItems: 1,
+          items: { properties: { op: { enum: ['set', 'replaceText'] } } },
+        },
+      },
+    });
+    expect(patch.properties).not.toHaveProperty('operationId');
+    return structuredClone(success);
+  });
+  await submit(f, '현재 자료를 고치는 도구 형식을 확인해줘');
+});
+
 test('library schema exposes folder CAS and item identity for a discovered read-create-move flow', async () => {
   const f = await fixture('library');
   mockSend((request, round) => {
@@ -473,19 +499,23 @@ test('app.call supplies distinct host identities without polluting model argumen
   expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM author_notes').get()).toEqual({ n: 2 });
 });
 
-test('resource saves leave real receipts so a later failure cannot offer a duplicate retry', async () => {
+test('resource patches leave real receipts so a later failure cannot offer a duplicate retry', async () => {
   const f = await fixture('library');
   const title = 'Saved before provider failure';
-  const model = nativeDraftTitle(editableResource('content', f.bot), title);
   mockSend((request, round) => {
     if (round === 0)
       return calls(
-        call('save-real', 'app.call', {
-          name: 'resource.save',
-          arguments: { kind: 'content', id: f.bot.id, expectedRevision: f.bot.revision, model },
+        call('patch-real', 'app.call', {
+          name: 'resource.patch',
+          arguments: {
+            kind: 'content',
+            id: f.bot.id,
+            expectedRevision: f.bot.revision,
+            changes: [{ path: '/package/nativeRisu/card/name', op: 'set', value: title }],
+          },
         })
       );
-    expect(result(request, 'save-real')).toMatchObject({
+    expect(result(request, 'patch-real')).toMatchObject({
       id: f.bot.id,
       revision: f.bot.revision + 1,
     });
