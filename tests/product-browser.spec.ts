@@ -196,19 +196,21 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     .toBe('completed');
   const saved = (await getDetail(request, chat.id)).runs.find((item) => item.id === run.id)!;
   expect(
-    saved.snapshot.profile?.packages?.find((pkg) => pkg.id === added.id)?.nativeRisu.card
+    run.snapshot.profile?.packages?.find((pkg) => pkg.id === added.id)?.nativeRisu.card
       .description
   ).toBe('Mira is a synthetic harbor keeper. Her compass is silver in this revision.');
   expect(saved.snapshot.profile?.packageAttachments).toEqual([
     owner,
     { id: added.id, revision: 2, role: 'module' },
   ]);
-  expect(saved.snapshot.profile?.promptPresets?.main?.values).toEqual({
+  expect(run.snapshot.profile?.promptPresets?.main?.values).toEqual({
     detail: '1',
     coNarration: '0',
   });
-  // Completed runs retain the selected prompt values in the frozen profile, while the
-  // full compiler payload is intentionally retired from durable execution snapshots.
+  // Admission captures current content and prompt values. Completed records retain
+  // attachment identity without rebuilding full content from today's library.
+  expect(saved.snapshot.profile?.packages).toBeUndefined();
+  expect(saved.snapshot.profile?.promptPresets).toBeUndefined();
   expect(saved.snapshot.promptCompilation).toBeUndefined();
   expect(saved.inputs).toEqual([]);
 });
