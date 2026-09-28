@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
+import { createReadingChat } from './fixtures/personal-workspace.js';
+import { navigationAction, visibleNavigation } from './ui-navigation.js';
 
 test('READERREC confirming an uncertain request never turns into cancelling its admitted run', async ({
   page,
@@ -84,6 +86,60 @@ test('READERREC invalid view caches do not prevent opening a saved conversation'
   }, chat.id);
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toHaveValue('살아 있는 초안');
+  expect(errors).toEqual([]);
+});
+
+test('READERREC failed view cache writes preserve library and chat navigation and saved drafts', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await createReadingChat(request, 'View cache write recovery', 2);
+  const other = await (
+    await request.post('/api/chats', {
+      data: { title: 'Other cache recovery chat', botId: chat.botId },
+    })
+  ).json();
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(page.getByTestId('source').first()).toBeVisible();
+  const draft = page.getByRole('textbox', { name: '다음 장면 요청' });
+  await draft.fill('화면 캐시 저장 실패에도 남을 초안');
+  await page.evaluate(() => {
+    const failed = new Set<string>();
+    Object.assign(window, { failedViewCacheWrites: failed });
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (this === sessionStorage && (key.startsWith('reading:') || key.startsWith('cursor:'))) {
+        failed.add(key.split(':')[0]);
+        throw new DOMException('Full', 'QuotaExceededError');
+      }
+      return setItem.call(this, key, value);
+    };
+  });
+  await navigationAction(page, '서재');
+  await expect(page.getByTestId('library-panel')).toBeVisible();
+  await expect(page).toHaveURL(/workspace=library/);
+  await page.goBack();
+  await expect(draft).toHaveValue('화면 캐시 저장 실패에도 남을 초안');
+  await (await visibleNavigation(page))
+    .getByRole('button', { name: other.title, exact: true })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`chat=${other.id}`));
+  await expect(draft).toHaveValue('');
+  await (await visibleNavigation(page))
+    .getByRole('button', { name: chat.title, exact: true })
+    .click();
+  await expect(draft).toHaveValue('화면 캐시 저장 실패에도 남을 초안');
+  expect(
+    await page.evaluate(() =>
+      [
+        ...(window as unknown as { failedViewCacheWrites: Set<string> }).failedViewCacheWrites,
+      ].sort()
+    )
+  ).toEqual(['cursor', 'reading']);
+  await page.reload();
+  await expect(draft).toHaveValue('화면 캐시 저장 실패에도 남을 초안');
   expect(errors).toEqual([]);
 });
 

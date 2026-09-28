@@ -23,6 +23,24 @@ const json = JSON.stringify;
 const now = () => new Date().toISOString();
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 
+function taskData(row: Row, completedEffects = 0): Omit<HelperTask, 'snapshot'> {
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    request: row.request,
+    status: row.status,
+    generation: row.generation,
+    error: row.error,
+    usage: JSON.parse(row.usage),
+    createdAt: row.created_at,
+    startedAt: row.started_at ?? null,
+    updatedAt: row.updated_at,
+    ...(completedEffects
+      ? { completedEffects: { count: completedEffects, labels: ['완료된 도우미 작업'] } }
+      : {}),
+  };
+}
+
 export function initHelperWorkspace(store: Store) {
   store.db.exec(`
     CREATE TABLE helper_conversations(id TEXT PRIMARY KEY,scope_key TEXT NOT NULL,creation_key TEXT NOT NULL,creation_hash TEXT NOT NULL,chat_id TEXT REFERENCES chats(id) ON DELETE CASCADE,scope TEXT NOT NULL,title TEXT NOT NULL,auto_title INTEGER NOT NULL,revision INTEGER NOT NULL,persona TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,limits TEXT NOT NULL DEFAULT '{"totalCalls":24,"helperCalls":12,"artifacts":1}',UNIQUE(scope_key,creation_key));
@@ -284,41 +302,54 @@ export class HelperWorkspace {
       | Row
       | undefined;
     if (!row) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
+    // Read receipts, never streamed tool output: the worker may stop before tool.finished.
     const completedEffects = ['failed', 'cancelled', 'interrupted'].includes(row.status)
-      ? this.completedEffects(id)
-      : undefined;
+      ? Number(
+          this.store.db
+            .prepare('SELECT count(*) AS n FROM helper_operations WHERE task_id=?')
+            .get(id)?.n ?? 0
+        )
+      : 0;
     return {
-      id: row.id,
-      conversationId: row.conversation_id,
-      request: row.request,
-      status: row.status,
-      generation: row.generation,
-      error: row.error,
-      usage: JSON.parse(row.usage),
-      createdAt: row.created_at,
-      startedAt: row.started_at ?? null,
-      updatedAt: row.updated_at,
+      ...taskData(row, completedEffects),
       snapshot: JSON.parse(row.snapshot),
-      ...(completedEffects?.count ? { completedEffects } : {}),
     };
   }
-  /** Read receipts, never streamed tool output: the worker may stop before tool.finished. */
-  private completedEffects(id: string) {
-    const count = Number(
-      this.store.db.prepare('SELECT count(*) AS n FROM helper_operations WHERE task_id=?').get(id)
-        ?.n ?? 0
-    );
-    return { count, labels: count ? ['완료된 도우미 작업'] : [] };
-  }
-  tasks(id: string, before?: string) {
-    this.conversation(id);
-    return (
-      this.store.db
-        .prepare(
-          `SELECT id FROM helper_tasks WHERE conversation_id=? ${before ? 'AND rowid < (SELECT rowid FROM helper_tasks WHERE id=? AND conversation_id=?)' : ''} ORDER BY rowid DESC LIMIT 50`
+  private readTaskSummaries(predicate: string, args: string[]) {
+    // Only the selected page crosses into JS. Receipt counts share one scan instead of
+    // loading a full reservation and querying completed effects for every task.
+    const rows = this.store.db
+      .prepare(
+        `WITH page AS (
+          SELECT t.rowid AS task_order,t.id,t.conversation_id,t.request,t.status,t.generation,
+            t.error,t.usage,t.created_at,t.started_at,t.updated_at,
+            json_extract(t.snapshot,'$.model.title') AS model_title
+          FROM helper_tasks t WHERE ${predicate} ORDER BY t.rowid DESC LIMIT 50
+        ), effects AS (
+          SELECT task_id,COUNT(*) AS count FROM helper_operations
+          WHERE task_id IN (SELECT id FROM page WHERE status IN ('failed','cancelled','interrupted'))
+          GROUP BY task_id
         )
-        .all(...(before ? [id, before, id] : [id])) as Row[]
-    ).map((r) => this.task(r.id));
+        SELECT page.*,COALESCE(effects.count,0) AS completed_effects
+        FROM page LEFT JOIN effects ON effects.task_id=page.id ORDER BY page.task_order DESC`
+      )
+      .all(...args) as Row[];
+    return rows.map((row) => ({
+      ...taskData(row, Number(row.completed_effects)),
+      modelTitle: row.model_title as string,
+    }));
+  }
+  taskSummary(id: string) {
+    const task = this.readTaskSummaries('t.id=?', [id])[0];
+    if (!task) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
+    return task;
+  }
+  taskSummaries(id: string, before?: string) {
+    this.conversation(id);
+    return this.readTaskSummaries(
+      `t.conversation_id=? ${before ? 'AND t.rowid < (SELECT rowid FROM helper_tasks WHERE id=? AND conversation_id=?)' : ''}`,
+      before ? [id, before, id] : [id]
+    );
   }
   existing(conversationId: string, key: string, request: string, retryOf?: string) {
     const row = this.store.db

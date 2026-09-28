@@ -35,6 +35,16 @@ const sealOutlineSnapshot = (outline: Omit<OutlineSnapshot, 'hash'>): OutlineSna
 type Row = Record<string, any>;
 const now = () => new Date().toISOString();
 const ACTIVE_RUN = ['queued', 'running'];
+const NODE_SELECT = `SELECT n.*,c.id AS progress_command_id,c.status AS progress_status,
+  c.run_id AS progress_run_id,c.source_revision AS progress_source_revision,r.status AS progress_run_status
+  FROM outline_nodes n LEFT JOIN scene_commands c ON c.id=n.command_id
+  LEFT JOIN runs r ON r.id=c.run_id`;
+const WRITINGS_SELECT = `SELECT DISTINCT w.node_id AS nodeId,s.id AS sourceRevision,
+  COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AS sourceHash,
+  w.created_at AS createdAt
+  FROM outline_writings w JOIN outline_nodes n ON n.id=w.node_id
+  LEFT JOIN scene_commands c ON c.id=w.command_id
+  JOIN sources s ON s.id=COALESCE(w.source_id,c.source_revision)`;
 /** One request's frozen input keeps a bounded amount of already-written history. */
 const WRITTEN_LIMIT = 40;
 const BATCH_LIMIT = 200;
@@ -255,30 +265,29 @@ export class OutlineStore {
   get db() {
     return this.store.db;
   }
-  private progress(commandId: string | null): OutlineProgress {
+  private progress(row: Row): OutlineProgress {
     const planned: OutlineProgress = {
       state: 'planned',
       commandId: null,
       runId: null,
       sourceRevision: null,
     };
-    if (!commandId) return planned;
-    const row = this.db.prepare('SELECT * FROM scene_commands WHERE id=?').get(commandId) as
-      | Row
-      | undefined;
-    if (!row) return planned;
-    const bound = { commandId, runId: row.run_id ?? null, sourceRevision: row.source_revision };
-    if (row.status === 'consumed' && row.source_revision)
-      return { ...bound, state: 'written', sourceRevision: row.source_revision };
-    if (row.status === 'failed') return { ...bound, state: 'failed' };
-    if (row.status === 'cancelled') return { ...bound, state: 'cancelled' };
-    if (!row.run_id) return { ...bound, state: 'scheduled' };
-    const run = this.db.prepare('SELECT status FROM runs WHERE id=?').get(row.run_id) as
-      | Row
-      | undefined;
-    return { ...bound, state: run && ACTIVE_RUN.includes(run.status) ? 'writing' : 'scheduled' };
+    if (!row.progress_command_id) return planned;
+    const bound = {
+      commandId: row.progress_command_id,
+      runId: row.progress_run_id ?? null,
+      sourceRevision: row.progress_source_revision,
+    };
+    if (row.progress_status === 'consumed' && row.progress_source_revision)
+      return { ...bound, state: 'written' };
+    if (row.progress_status === 'failed') return { ...bound, state: 'failed' };
+    if (row.progress_status === 'cancelled') return { ...bound, state: 'cancelled' };
+    return {
+      ...bound,
+      state: ACTIVE_RUN.includes(row.progress_run_status) ? 'writing' : 'scheduled',
+    };
   }
-  private map(row: Row): OutlineNode {
+  private map(row: Row, relatedIds: string[], writings: OutlineWriting[]): OutlineNode {
     return {
       id: row.id,
       chatId: row.chat_id,
@@ -289,53 +298,74 @@ export class OutlineStore {
       intent: row.intent,
       fixed: !!Number(row.fixed),
       revision: Number(row.revision),
-      progress: this.progress(row.command_id ?? null),
-      relatedIds: this.db
-        .prepare('SELECT related_id FROM outline_links WHERE node_id=? ORDER BY position')
-        .all(row.id)
-        .map((link) => String(link.related_id)),
-      writings: this.writings(row.id),
+      progress: this.progress(row),
+      relatedIds,
+      writings,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
   }
   node(id: string): OutlineNode {
-    const row = this.db.prepare('SELECT * FROM outline_nodes WHERE id=?').get(id) as
-      | Row
-      | undefined;
+    const row = this.db.prepare(`${NODE_SELECT} WHERE n.id=?`).get(id) as Row | undefined;
     if (!row) throw new HttpError(404, '구성 항목을 찾을 수 없어요.');
-    return this.map(row);
-  }
-  private chatRows(chatId: string): Row[] {
-    return this.db.prepare('SELECT * FROM outline_nodes WHERE chat_id=?').all(chatId) as Row[];
+    const relatedIds = this.db
+      .prepare('SELECT related_id FROM outline_links WHERE node_id=? ORDER BY position')
+      .all(id)
+      .map((link) => String(link.related_id));
+    return this.map(row, relatedIds, this.writings(id));
   }
   nodes(chatId: string): OutlineNode[] {
-    return outlineTree(this.chatRows(chatId).map((row) => this.map(row)));
+    const rows = this.db.prepare(`${NODE_SELECT} WHERE n.chat_id=?`).all(chatId) as Row[];
+    const links = new Map<string, string[]>();
+    for (const row of this.db
+      .prepare(`SELECT l.node_id,l.related_id FROM outline_links l
+        JOIN outline_nodes n ON n.id=l.node_id WHERE n.chat_id=? ORDER BY l.position`)
+      .all(chatId)) {
+      const id = String(row.node_id);
+      const related = links.get(id) ?? [];
+      related.push(String(row.related_id));
+      links.set(id, related);
+    }
+    const writings = new Map<string, OutlineWriting[]>();
+    for (const row of this.db
+      .prepare(`${WRITINGS_SELECT} WHERE n.chat_id=? ORDER BY w.created_at,w.id`)
+      .all(chatId) as OutlineWriting[]) {
+      const sources = writings.get(row.nodeId) ?? [];
+      sources.push(row);
+      writings.set(row.nodeId, sources);
+    }
+    return outlineTree(
+      rows.map((row) => this.map(row, links.get(row.id) ?? [], writings.get(row.id) ?? []))
+    );
   }
   detail(chatId: string): OutlineDetail {
     this.store.chat(chatId);
     const nodes = this.nodes(chatId);
+    const reviews = new Map(
+      this.db
+        .prepare(`SELECT r.*,t.status,t.conversation_id FROM outline_nodes n
+          JOIN outline_reviews r ON r.rowid=(SELECT latest.rowid FROM outline_reviews latest
+            WHERE latest.node_id=n.id ORDER BY latest.created_at DESC,latest.rowid DESC LIMIT 1)
+          JOIN helper_tasks t ON t.id=r.task_id WHERE n.chat_id=?`)
+        .all(chatId)
+        .map((row) => [String(row.node_id), row])
+    );
     return {
       chatId,
       nodes: nodes.map((node) => {
-        const review = this.latestReview(node.id, nodes);
-        return review ? { ...node, latestReview: review } : node;
+        const review = reviews.get(node.id);
+        return review ? { ...node, latestReview: this.mapReview(review, nodes) } : node;
       }),
     };
   }
 
   writings(nodeId: string): OutlineWriting[] {
     return this.db
-      .prepare(`SELECT DISTINCT w.node_id AS nodeId,s.id AS sourceRevision,
-      COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AS sourceHash,
-      w.created_at AS createdAt
-      FROM outline_writings w LEFT JOIN scene_commands c ON c.id=w.command_id
-      JOIN sources s ON s.id=COALESCE(w.source_id,c.source_revision)
-      WHERE w.node_id=? ORDER BY w.created_at,w.id`)
+      .prepare(`${WRITINGS_SELECT} WHERE w.node_id=? ORDER BY w.created_at,w.id`)
       .all(nodeId) as OutlineWriting[];
   }
   unitSources(id: string, nodes?: OutlineNode[]): OutlineWriting[] {
-    const node = this.node(id);
+    const node = nodes?.find((item) => item.id === id) ?? this.node(id);
     const all = nodes ?? this.nodes(node.chatId);
     const subtree = [node, ...this.descendants(all, id)];
     const unique = new Map<string, OutlineWriting>();
@@ -357,7 +387,7 @@ export class OutlineStore {
     });
   }
   planHash(id: string, nodes?: OutlineNode[]) {
-    const node = this.node(id);
+    const node = nodes?.find((item) => item.id === id) ?? this.node(id);
     return createHash('sha256')
       .update(plannedContent(outlineSelection(nodes ?? this.nodes(node.chatId))(id)))
       .digest('hex');
@@ -440,6 +470,10 @@ export class OutlineStore {
       JOIN helper_tasks t ON t.id=r.task_id WHERE r.node_id=? ORDER BY r.created_at DESC,r.rowid DESC LIMIT 1`)
       .get(id);
     if (!row) return null;
+    return this.mapReview(row, nodes);
+  }
+  private mapReview(row: Row, nodes?: OutlineNode[]): OutlineReview {
+    const id = String(row.node_id);
     const sources = JSON.parse(String(row.sources)) as OutlineReview['sources'];
     const current = this.unitSources(id, nodes);
     const stale =
