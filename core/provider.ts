@@ -136,7 +136,7 @@ export function buildMainInput(
     contract: '',
     task: snapshot.nativeRisuExecution?.request ?? snapshot.request,
     facts: [],
-    history: structuredClone(snapshot.history),
+    history: [],
     catalog: resources.map((item) => catalogEntry(item, allowedIds)),
     prefetch: [],
     tools: [...ALLOWED_TOOLS],
@@ -193,7 +193,7 @@ export function buildMainInput(
   input.tools.push(...STORY_READ_NAMES);
   if (snapshot.contextPlan) {
     const kept = new Set(snapshot.contextPlan.recentSourceRevisions);
-    input.history = structuredClone(input.history.filter((entry) => kept.has(entry.revision)));
+    input.history = input.history.filter((entry) => kept.has(entry.revision));
     input.contextSummary = conversationSummary(snapshot);
   }
   if (snapshot.outline) {

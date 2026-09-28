@@ -501,11 +501,16 @@ function* matchingExcerpts(
   expressions: RegExp[],
   mode: string,
   context: number,
-  paths: string[]
+  paths: string[],
+  documentsOnly: boolean
 ) {
   if (!expressions.length) {
     if (paths.length && ![...fields(doc.fields)].some(([field]) => selectedPath(field, paths)))
       return;
+    if (documentsOnly) {
+      yield null;
+      return;
+    }
     yield {
       ref: reference(doc, '', JSON.stringify(doc.fields)),
       title: doc.title,
@@ -539,6 +544,11 @@ function* matchingExcerpts(
         .sort((a, b) => a.index - b.index);
       const hit = found[0];
       if (!hit) break;
+      // Document discovery needs only existence, not a discarded hash, excerpt or line count.
+      if (documentsOnly) {
+        yield null;
+        return;
+      }
       const start = Math.max(0, hit.index - context);
       const end = Math.min(
         text.length,
@@ -639,7 +649,14 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
     )
       continue;
     inspected++;
-    const excerpts = matchingExcerpts(doc, expressions, mode, context, paths);
+    const excerpts = matchingExcerpts(
+      doc,
+      expressions,
+      mode,
+      context,
+      paths,
+      output === 'documents'
+    );
     const entries =
       output === 'documents'
         ? excerpts.next().done

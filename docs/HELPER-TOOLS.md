@@ -16,6 +16,8 @@ Whitespace-separated `query` terms must all match title/ID/kind or, in the libra
 
 Use `output:"documents"` to locate resources by a name mentioned in their contents, like a filenames-only grep: each matching document appears once without body excerpts. A failed title `query` does not prove that a resource is absent; remove that filter before searching spelling variants in `patterns`. Then pass the selected `ids` and search the requested fact with the default `output:"matches"`. `paths` optionally limits both modes to exact JSON Pointer fields or their children. Human-authored descriptions and lore are searched before extensions/assets; HTML and scripts remain explicitly searchable and are not silently excluded.
 
+Document-only discovery stops at the first qualifying hit without constructing unused excerpts, line counts or source-reference hashes. It keeps the same filters, ordering and pagination; exact match/read results still carry their original text and reference hashes.
+
 Document results retain their `scope` and, for chat sources, `chatId`. When narrowing `scope:"chats"` results, carry that identifier into the next search so a source stays associated with the selected chat. Other scopes do not accept a chat filter.
 
 The scopes are:

@@ -125,4 +125,10 @@ test('mistyped scene and range are correctable while corrupt source history stay
   const corrupt = invoke({ sceneNumber: 1 });
   expect(corrupt).toMatchObject({ denied: true, result: { code: 'RESOURCE_UNAVAILABLE' } });
   expect(corrupt).not.toHaveProperty('errorKind');
+  fixed.history[0].contentHash = undefined;
+  fixed.history[0].text = 'revised';
+  expect(invoke({ sceneNumber: 1 })).toMatchObject({
+    denied: false,
+    result: { text: 'revised', source: { hash: sourceHash('revised') } },
+  });
 });
