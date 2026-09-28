@@ -45,6 +45,7 @@
 [data-uimori-prose] {
   font-family: var(--reading-font-family, system-ui, sans-serif) !important;
   line-height: var(--reading-line-height, 1.9) !important;
+  text-wrap: pretty;
 }
 p[data-uimori-prose],
 li[data-uimori-prose] {
