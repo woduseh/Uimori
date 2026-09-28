@@ -50,7 +50,7 @@ npm run release:oracle -- --config .local/oracle-release.json --source-ref main
 | `--status --run-id <id>` | 지정한 실행 기록과 실제 운영 상태를 나란히 읽어요. 없는 실행은 `release: null`로 표시해요. |
 | `--fresh` | 명시적 초기화예요. 새 데이터 볼륨을 만들고 외부 로그인 파일만 복사해요. 기존 DB·설정·앱 API 키는 새 앱에 이어지지 않아요. |
 
-기본 경로는 Oracle에서 정확한 SHA를 한 번 빌드해요. 이후 모든 probe와 전환은 같은 immutable image ID를 사용해요. 이미지에는 `io.uimori.managed=true`, `org.opencontainers.image.revision=<전체 SHA>`, `io.uimori.codex-version=<설정값>` label이 있어야 해요. 새 registry나 멀티아키텍처 배포 체계를 만들지는 않아요. 외부 이미지도 이 label과 현재 Codex 빌드 설정이 일치해야 하며 실제 ARM64 부팅 검사를 통과해야 해요.
+기본 경로는 Oracle에서 정확한 SHA를 한 번 빌드해요. 이후 모든 probe와 전환은 같은 immutable image ID를 사용해요. `UIMORI_CODEX_VERSION=latest`이면 배포 시 npm의 stable dist-tag를 조회하고 실제 버전 번호로 고정해 빌드해요. 요청값과 해석된 버전을 배포 기록에 함께 남기므로 다음 배포는 새 stable을 따라가면서 현재 이미지와 롤백 대상은 immutable하게 유지돼요. 외부 `--image`를 명시하면 이미 검증된 이미지의 exact Codex label을 사용하며 다시 최신판으로 바꾸지 않아요. 이미지에는 `io.uimori.managed=true`, `org.opencontainers.image.revision=<전체 SHA>`, `io.uimori.codex-version=<실제 버전>` label이 있어야 해요. 새 registry나 멀티아키텍처 배포 체계를 만들지는 않아요. 외부 이미지도 이 label과 현재 Codex 빌드 설정이 일치해야 하며 실제 ARM64 부팅 검사를 통과해야 해요.
 
 로컬 `dist`를 다시 만들어 원격 빌드와 비교하지 않아요. 컨트롤러는 소스 build fingerprint를 계산하고, 실제 이미지에서 해당 fingerprint와 이미지 내부 manifest·artifact hash를 검증해요. Node와 최종 dist hash는 서버 기록에 남아요.
 

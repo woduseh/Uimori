@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 
 
 def arguments(argv=None):
@@ -73,6 +74,38 @@ def update_environment(text, image, volume):
 
 def protected_environment(text):
     return hashlib.sha256("\n".join(line for line in text.splitlines() if not re.match(r"\s*(?:" + "|".join(sorted(OWNED_ENV)) + r")=", line)).encode()).hexdigest()
+
+
+CODEX_MINIMUM_VERSION = (0, 153, 0)
+CODEX_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+
+
+def validate_codex_version(value):
+    if not isinstance(value, str) or not value:
+        raise RuntimeError("Codex version must be a supported stable version (>= 0.153.0)")
+    match = CODEX_VERSION_RE.fullmatch(value)
+    if not match or tuple(map(int, match.groups())) < CODEX_MINIMUM_VERSION:
+        raise RuntimeError("Codex version must be a supported stable version (>= 0.153.0)")
+    return value
+
+
+def latest_codex_version():
+    request = Request(
+        "https://registry.npmjs.org/@openai%2fcodex/latest",
+        headers={"Accept": "application/json", "User-Agent": "uimori-oracle-release"},
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            payload = json.load(response)
+    except Exception as error:
+        raise RuntimeError("Could not resolve the latest stable Codex version") from error
+    return validate_codex_version(payload.get("version") if isinstance(payload, dict) else None)
+
+
+def resolve_codex_version(value):
+    if not value:
+        return ""
+    return latest_codex_version() if value == "latest" else validate_codex_version(value)
 
 
 def validate_columns(expected, actual):
@@ -298,8 +331,10 @@ class Runner:
             if self.run("git", "rev-parse", "HEAD", cwd=self.candidate) != self.args.commit or self.run("git", "status", "--porcelain", cwd=self.candidate):
                 raise RuntimeError("Candidate checkout mismatch")
             image_ref = self.args.image or "uimori:candidate-" + self.args.commit
-            codex = self.old_config["services"]["app"].get("build", {}).get("args", {}).get("UIMORI_CODEX_VERSION", "") or ""
+            requested_codex = self.old_config["services"]["app"].get("build", {}).get("args", {}).get("UIMORI_CODEX_VERSION", "") or ""
+            codex = requested_codex
             if not self.args.image:
+                codex = resolve_codex_version(requested_codex)
                 self.docker("build", "--build-arg", "UIMORI_CODEX_VERSION=" + codex, "--build-arg", "UIMORI_REVISION=" + self.args.commit, "--tag", image_ref, str(self.candidate), timeout=900)
             if self.args.image:
                 try:
@@ -310,9 +345,16 @@ class Runner:
             labels = metadata.get("Config", {}).get("Labels", {}) or {}
             if labels.get("org.opencontainers.image.revision") != self.args.commit or labels.get("io.uimori.managed") != "true":
                 raise RuntimeError("Candidate image is not labelled for the verified source SHA")
-            if labels.get("io.uimori.codex-version", "") != codex:
+            labelled_codex = labels.get("io.uimori.codex-version", "")
+            if requested_codex == "latest" and self.args.image:
+                codex = validate_codex_version(labelled_codex)
+            elif labelled_codex != codex:
                 raise RuntimeError("Candidate Codex version differs from configured build settings")
-            self.summary["buildSettings"] = {"codexVersion": codex, "revision": self.args.commit}
+            self.summary["buildSettings"] = {
+                "codexVersion": codex,
+                "codexRequested": requested_codex,
+                "revision": self.args.commit,
+            }
             self.image = metadata["Id"]
             self.summary["image"] = self.image
         with self.stage("fresh-image-probe"):
