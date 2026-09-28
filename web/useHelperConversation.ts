@@ -12,6 +12,11 @@ type View = {
   hasOlderTasks: boolean;
 };
 const id = encodeURIComponent;
+const diagnosticEvent = (kind: string) =>
+  kind === 'tool.finished' ||
+  kind === 'input.measured' ||
+  kind === 'progress' ||
+  kind.startsWith('context.');
 
 /** Retains the current and recent conversations across panel hides; idle reads use event cursors. */
 export function useHelperConversation(open: boolean, conversationId: string | null) {
@@ -124,7 +129,8 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
           if (event.kind === 'theme.updated')
             window.dispatchEvent(new Event('uimori-themes-changed'));
           cursor = event.seq;
-          changed = true;
+          // Diagnostics advance the cursor without reloading unchanged conversation text.
+          if (!diagnosticEvent(event.kind)) changed = true;
           if (
             /^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
             event.kind === 'artifact.saved' ||

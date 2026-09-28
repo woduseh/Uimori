@@ -773,6 +773,9 @@ test('batch reads use one documented default for text and directory pages', asyn
   const directory = await readOne(f, listed.items[0].ref);
   expect(directory.fields).toHaveLength(20);
   expect(directory.nextOffset).toBe(20);
+  const mixed = await f.invoke('data.read', { refs: [ref, listed.items[0].ref] });
+  expect(mixed.items.map((item: any) => item.read)).toEqual([text, directory]);
+  expect(mixed.nextIndex).toBeNull();
 
   let remaining = Array.from({ length: 5 }, () => ref);
   let returned = 0;
@@ -792,11 +795,21 @@ test('malformed and stale refs do not discard valid batch reads', async () => {
   const found = await f.invoke('data.search', { patterns: ['27세'] });
   const ref = found.items[0].ref as DataRef;
   const batch = await f.invoke('data.read', {
-    refs: [null, { ...ref, hash: '0'.repeat(64) }, ref],
+    refs: [
+      null,
+      { ...ref, hash: '0'.repeat(64) },
+      ref,
+      { ...ref, revision: Number(ref.revision) + 1 },
+      { ...ref, chatId: null },
+      ref,
+    ],
   });
-  expect(batch.items).toHaveLength(3);
+  expect(batch.items).toHaveLength(6);
   expect(batch.items[0]).toMatchObject({ ref: null, error: 'DATA_OBJECT_REQUIRED' });
   expect(batch.items[1].error).toContain('DATA_SOURCE_CHANGED');
   expect(batch.items[2].read.text).toContain('27세');
+  expect(batch.items[3].error).toContain('DATA_SOURCE_CHANGED');
+  expect(batch.items[4].error).toBe('DATA_RESOURCE_UNAVAILABLE');
+  expect(batch.items[5].read).toEqual(batch.items[2].read);
   expect(batch.nextIndex).toBeNull();
 });

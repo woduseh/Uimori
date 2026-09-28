@@ -35,6 +35,8 @@ When a semantic condition cannot be represented portably without a union, keep t
 
 ## Pagination and results
 
+Helper `resource.read` accepts either one `path` or up to sixteen `paths` from one resource/revision. Batch `nextIndex` continues unreturned paths; per-item `nextOffset` continues text. `chat.lore` lists compact items by default and reads original/override field pages through a selector. Both contracts bound the complete serialized response; they do not send full editing models by default.
+
 Main reference collections use `items` or `results`, `total`, and `nextOffset`. Text reads expose `totalChars`, the returned range, and `nextOffset`. A null `nextOffset` means no later page remains; it does not claim that an omitted earlier range was read.
 
 Helper `data.read` has two distinct pagination dimensions: each item's `nextOffset` continues its text or field directory, while batch `nextIndex` points to unreturned refs. Resubmit `refs.slice(nextIndex)` rather than passing that index as a text offset. The helper's streaming search reports `complete` instead of an exact total. See [Helper tools](HELPER-TOOLS.md) for its page sizes and result budgets.

@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { ChatOverridesStore } from '../server/chat-overrides.js';
+import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { chatOverrideHash } from '../core/chat-overrides.js';
@@ -33,7 +34,10 @@ afterEach(async () => {
   }
   vi.restoreAllMocks();
 });
-async function fixture(kind: 'chat' | 'library' = 'chat') {
+async function fixture(
+  kind: 'chat' | 'library' = 'chat',
+  loreText = 'Original shared lore: Q7x-α9.'
+) {
   const path = mkdtempSync(join(tmpdir(), 'uimori-helper-tools-'));
   const app = await createApp({
     dbPath: join(path, 'test.sqlite'),
@@ -68,7 +72,7 @@ async function fixture(kind: 'chat' | 'library' = 'chat') {
       {
         comment: '항구',
         keys: ['원래 장소 설명'],
-        content: 'Original shared lore: Q7x-α9.',
+        content: loreText,
         constant: true,
         enabled: true,
       },
@@ -183,6 +187,7 @@ test('helper read events retain recoverable argument and missing-scene errors', 
         call('valid-list', 'story.search', {}),
         call('bad-args', 'story.read', { sceneNumber: 1, offset: -1 }),
         call('outside-source', 'story.read', { sceneNumber: 999 }),
+        call('bad-catalog', 'app.tools', { names: [] }),
         call('missing-reference', 'knowledge.read', { ids: [] })
       );
     expect(event(request, 'valid-list')).toMatchObject({ denied: false });
@@ -200,6 +205,10 @@ test('helper read events retain recoverable argument and missing-scene errors', 
       denied: true,
       errorKind: 'recoverable',
       result: { code: 'INVALID_ARGUMENTS' },
+    });
+    expect(event(request, 'bad-catalog')).toMatchObject({
+      denied: true,
+      result: { code: 'INVALID_ARGUMENTS', retryMode: 'correct_arguments', outcome: 'unchanged' },
     });
     // The fixture protocol has no Anthropic continuation. Its supported bootstrap
     // envelope still checks that these exact host events carry the native error flag.
@@ -238,23 +247,25 @@ test('helper read events retain recoverable argument and missing-scene errors', 
   expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM runs').get()).toEqual({ n: 0 });
 });
 
-type LoreRead = ReturnType<ChatOverridesStore['get']>;
-type HelperLoreRead = Omit<LoreRead, 'attachments'> & {
-  attachments: (Omit<LoreRead['attachments'][number], 'lore'> & {
-    lore: (LoreRead['attachments'][number]['lore'][number] & {
-      fieldHashes: Record<'title' | 'description' | 'text', string>;
-    })[];
-  })[];
+type HelperLoreRead = {
+  revision: number;
+  headRevision: string | null;
+  profileRevision: number;
+  items: {
+    scope: { id: string; role: string; modulePath: string[] };
+    id: string;
+    packageRevision: number;
+    fieldHashes: Record<'title' | 'description' | 'text', string>;
+  }[];
 };
 function patchBody(read: HelperLoreRead, value: string) {
-  const attachment = read.attachments[0],
-    lore = attachment.lore[0];
+  const lore = read.items[0];
   return {
-    selector: { ...attachment.scope, loreId: lore.id, field: 'text' },
+    selector: { ...lore.scope, loreId: lore.id, field: 'text' },
     expectedRevision: read.revision,
     expectedHeadRevision: read.headRevision,
     expectedProfileRevision: read.profileRevision,
-    expectedPackageRevision: attachment.packageRevision,
+    expectedPackageRevision: lore.packageRevision,
     expectedFieldHash: lore.fieldHashes.text,
     value,
   };
@@ -281,8 +292,8 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
     }
     if (round === 1) {
       first = result<HelperLoreRead>(request, 'lore-first');
-      const lore = first.attachments[0].lore[0];
-      expect(lore.fieldHashes).toEqual({
+      const lore = original.package!.lore[0];
+      expect(first.items[0].fieldHashes).toEqual({
         title: chatOverrideHash(lore.title),
         description: chatOverrideHash(lore.description),
         text: chatOverrideHash(lore.text),
@@ -300,10 +311,8 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
     }
     if (round === 3) {
       latest = result<HelperLoreRead>(request, 'lore-second');
-      expect(latest.attachments[0].lore[0].fieldHashes).toEqual(
-        first.attachments[0].lore[0].fieldHashes
-      );
-      expect(latest.attachments[0].lore[0].text).toBe(original.package!.lore[0].text);
+      expect(latest.items[0].fieldHashes).toEqual(first.items[0].fieldHashes);
+      expect(latest.items[0]).not.toHaveProperty('text');
       return calls(
         call('patch-second', 'chat.lore', {
           action: 'patch',
@@ -326,7 +335,11 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
     }
     expect(event(request, 'bad-hash')).toMatchObject({
       denied: true,
-      result: { error: '원본 로어 필드가 변경됐어요.' },
+      result: {
+        error: '원본 로어 필드가 변경됐어요.',
+        retryMode: 'refresh_then_retry',
+        outcome: 'unchanged',
+      },
     });
     return structuredClone(success);
   });
@@ -336,9 +349,169 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
   expect(state.overrides).toHaveLength(1);
   expect(state.overrides[0]).toMatchObject({
     value: 'Chat override two',
-    baseHash: first.attachments[0].lore[0].fieldHashes.text,
+    baseHash: first.items[0].fieldHashes.text,
   });
   expect(f.store.product.get('content', f.bot.id)).toEqual(original);
+});
+
+test('long chat lore stays paged through helper reads and saves with original field guards', async () => {
+  const authored = 'Long original: ' + '\n"\\💫'.repeat(10_000);
+  const f = await fixture('chat', authored);
+  let selector!: Record<string, unknown>;
+  mockSend((request, round) => {
+    if (round === 0) return calls(call('list', 'chat.lore', { action: 'read', limit: 1 }));
+    if (round === 1) {
+      const overview = result<HelperLoreRead>(request, 'list');
+      expect(JSON.stringify(overview).length).toBeLessThan(24000);
+      expect(overview.items[0]).not.toHaveProperty('text');
+      selector = { ...overview.items[0].scope, loreId: overview.items[0].id, field: 'text' };
+      return calls(
+        call('field', 'chat.lore', {
+          action: 'read',
+          selector,
+          textOffset: 100,
+          textLimit: 10000,
+        })
+      );
+    }
+    if (round === 2) {
+      const read = result<any>(request, 'field');
+      expect(JSON.stringify(read).length).toBeLessThanOrEqual(24000);
+      expect(read.original.text).toBe(
+        authored.slice(read.original.offset, read.original.nextOffset)
+      );
+      expect(read.original.nextOffset).toBeGreaterThan(read.original.offset);
+      expect(read.expectedFieldHash).toBe(chatOverrideHash(authored));
+      expect(read.override).toBeNull();
+      const {
+        expectedRevision,
+        expectedHeadRevision,
+        expectedProfileRevision,
+        expectedPackageRevision,
+        expectedFieldHash,
+      } = read;
+      return calls(
+        call('save', 'chat.lore', {
+          action: 'patch',
+          body: {
+            selector,
+            expectedRevision,
+            expectedHeadRevision,
+            expectedProfileRevision,
+            expectedPackageRevision,
+            expectedFieldHash,
+            value: 'Only this chat changes.',
+          },
+        })
+      );
+    }
+    if (round === 3) {
+      expect(JSON.stringify(result(request, 'save')).length).toBeLessThan(1000);
+      return calls(call('verify', 'chat.lore', { action: 'read', selector, textLimit: 100 }));
+    }
+    expect(result(request, 'verify')).toMatchObject({
+      original: { text: authored.slice(0, 100), totalChars: authored.length },
+      override: { text: 'Only this chat changes.', nextOffset: null, conflicts: [] },
+      expectedFieldHash: chatOverrideHash(authored),
+    });
+    return structuredClone(success);
+  });
+  await submit(f, '지정한 로어를 이 채팅에서만 수정해줘');
+  expect(f.store.product.get<Content>('content', f.bot.id).package.lore[0].text).toBe(authored);
+  expect(new ChatOverridesStore(f.store).get(f.chat.id).overrides[0].value).toBe(
+    'Only this chat changes.'
+  );
+});
+
+test('helper discovers and retires an override after its shared lore was removed', async () => {
+  const f = await fixture();
+  const service = new ChatOverridesStore(f.store);
+  const initial = service.get(f.chat.id);
+  const attachment = initial.attachments[0];
+  const lore = attachment.lore[0];
+  const selector = { ...attachment.scope, loreId: lore.id, field: 'text' };
+  const localText = 'Retained local lore. '.repeat(1600);
+  const saved = service.patch(
+    f.chat.id,
+    {
+      selector,
+      expectedRevision: initial.revision,
+      expectedHeadRevision: initial.headRevision,
+      expectedProfileRevision: initial.profileRevision,
+      expectedPackageRevision: attachment.packageRevision,
+      expectedFieldHash: chatOverrideHash(lore.text),
+      value: localText,
+      operationId: randomUUID(),
+    },
+    'synthetic-prior-edit'
+  );
+  invokeResourceTool(f.store, 'resource.patch', {
+    kind: 'content',
+    id: f.bot.id,
+    expectedRevision: f.bot.revision,
+    changes: [{ path: '/package/nativeRisu/card/character_book/entries/0', op: 'remove' }],
+  });
+  const shared = f.store.product.get<Content>('content', f.bot.id);
+  expect(shared.package.lore).toEqual([]);
+  expect(service.get(f.chat.id).conflicts).toMatchObject([{ kind: 'entry-missing' }]);
+  const appCall = (id: string, args: Record<string, unknown>) =>
+    call(id, 'app.call', { name: 'chat.lore', arguments: args });
+  mockSend((request, round) => {
+    if (round === 0) return calls(appCall('list', { action: 'read', limit: 1 }));
+    if (round === 1) {
+      const list = result<any>(request, 'list');
+      expect(JSON.stringify(list).length).toBeLessThanOrEqual(24000);
+      expect(list).toMatchObject({
+        total: 1,
+        nextOffset: null,
+        items: [
+          {
+            selector,
+            originalMissing: true,
+            overrideId: saved.entry.id,
+            conflicts: ['entry-missing'],
+          },
+        ],
+      });
+      return calls(appCall('read', { action: 'read', selector: list.items[0].selector }));
+    }
+    if (round === 2) {
+      const read = result<any>(request, 'read');
+      expect(JSON.stringify(read).length).toBeLessThanOrEqual(24000);
+      expect(read).toMatchObject({
+        original: null,
+        override: {
+          id: saved.entry.id,
+          totalChars: localText.length,
+          conflicts: ['entry-missing'],
+        },
+      });
+      expect(read.override.nextOffset).toBeGreaterThan(0);
+      expect(read.override.text).toBe(localText.slice(0, read.override.nextOffset));
+      expect(read).not.toHaveProperty('expectedProfileRevision');
+      expect(read).not.toHaveProperty('expectedPackageRevision');
+      expect(read).not.toHaveProperty('expectedFieldHash');
+      return calls(
+        appCall('remove', {
+          action: 'remove',
+          body: {
+            selector: read.selector,
+            expectedRevision: read.expectedRevision,
+            expectedHeadRevision: read.expectedHeadRevision,
+          },
+        })
+      );
+    }
+    expect(result(request, 'remove')).toMatchObject({
+      revision: saved.revision + 1,
+      selector,
+      retired: true,
+    });
+    return structuredClone(success);
+  });
+  await submit(f, '원본 로어가 없어진 채팅 전용 변경을 찾아 제거해줘');
+  expect(service.get(f.chat.id).overrides).toEqual([]);
+  expect(f.store.product.get('content', f.bot.id)).toEqual(shared);
 });
 
 test('notes schema exposes CAS but keeps mutation identity host-owned', async () => {

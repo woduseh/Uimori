@@ -135,7 +135,13 @@ describe('Completed execution payload retention', () => {
     for (let i = 0; i < 5; i++)
       workspace.event(conversation.id, task.id, 'tool.finished', {
         name: 'resource.read',
+        callId: `read-${i}`,
         denied: false,
+        errorKind: null,
+        originalResultChars: 262155,
+        providedResultChars: 512,
+        elapsedMs: 10 + i,
+        queueMs: i,
         result,
       });
     const updates = workspace.events(conversation.id, 0, 'updates');
@@ -157,12 +163,20 @@ describe('Completed execution payload retention', () => {
         .all()
         .map((r) => r.name)
     ).not.toContain('snapshot');
-    expect(
-      workspace
-        .events(conversation.id)
-        .filter((e) => e.kind === 'tool.finished')
-        .every((e) => (e.data as { detailsOmitted?: boolean }).detailsOmitted)
-    ).toBe(true);
+    const toolEvents = workspace.events(conversation.id).filter((e) => e.kind === 'tool.finished');
+    expect(toolEvents.map((e) => e.data)).toEqual(
+      Array.from({ length: 5 }, (_, i) => ({
+        name: 'resource.read',
+        callId: `read-${i}`,
+        denied: false,
+        errorKind: null,
+        originalResultChars: 262155,
+        providedResultChars: 512,
+        elapsedMs: 10 + i,
+        queueMs: i,
+        detailsOmitted: true,
+      }))
+    );
     expect(Buffer.byteLength(JSON.stringify(workspace.events(conversation.id)))).toBeLessThan(6000);
     expect(
       Buffer.byteLength(

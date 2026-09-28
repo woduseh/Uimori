@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import {
   closeSync,
@@ -395,6 +396,10 @@ export class CodexRuntime implements CodexRuntimeService {
   private installation?: Promise<{ command: string; args: string[] }>;
   private active = new Set<CodexProcess>();
   private readonly textSlots: Slots;
+  // Native parents keep their process while awaiting host tools. One reserved
+  // child slot lets those tools use a text model without waiting on the parent.
+  private readonly childTextSlots = new Slots(1, 32);
+  private readonly hostToolContext = new AsyncLocalStorage<{ active: boolean }>();
   private readonly imageSlots = new Slots(1, 8);
   private closed = false;
   private closing?: Promise<void>;
@@ -419,10 +424,11 @@ export class CodexRuntime implements CodexRuntimeService {
     this.textSlots = new Slots(options.maxConcurrent ?? 2, 32);
   }
   private get occupied(): number {
-    return this.textSlots.occupied + this.imageSlots.occupied;
+    return this.textSlots.occupied + this.childTextSlots.occupied + this.imageSlots.occupied;
   }
   private rejectWaiting(code: string): void {
     this.textSlots.rejectWaiting(code);
+    this.childTextSlots.rejectWaiting(code);
     this.imageSlots.rejectWaiting(code);
   }
 
@@ -722,7 +728,8 @@ export class CodexRuntime implements CodexRuntimeService {
     } catch (caught) {
       return failure(options.signal.aborted ? 'CANCELLED' : safeError(caught));
     }
-    const outcome = await this.runTurn(connection, plan, options, this.textSlots);
+    const slots = this.hostToolContext.getStore()?.active ? this.childTextSlots : this.textSlots;
+    const outcome = await this.runTurn(connection, plan, options, slots);
     if (!outcome.ok) return failure(outcome.code, outcome.usage);
     return { ...decodeCodexOutput(outcome.output, request), usage: outcome.usage };
   }
@@ -1157,14 +1164,17 @@ export class CodexRuntime implements CodexRuntimeService {
           handle: async (call) => {
             if (ended || toolSignal.aborted) return error('CANCELLED');
             activeTools++;
+            const context = { active: true };
             try {
-              const result = await onToolCall(
-                {
-                  name: names.get(call.tool)!,
-                  arguments: call.arguments as Json,
-                  callId: call.callId,
-                },
-                toolSignal
+              const result = await this.hostToolContext.run(context, () =>
+                onToolCall(
+                  {
+                    name: names.get(call.tool)!,
+                    arguments: call.arguments as Json,
+                    callId: call.callId,
+                  },
+                  toolSignal
+                )
               );
               if (ended || toolSignal.aborted) return error('CANCELLED');
               return {
@@ -1176,6 +1186,7 @@ export class CodexRuntime implements CodexRuntimeService {
               rejectTurn(caught);
               throw caught;
             } finally {
+              context.active = false;
               activeTools--;
             }
           },

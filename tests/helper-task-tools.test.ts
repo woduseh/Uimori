@@ -233,20 +233,32 @@ test('a helper retry replaces only one failed task and makes the old task inelig
   f.store.db
     .prepare('INSERT INTO helper_task_attempts(task_id,attempt_id,purpose,segment) VALUES(?,?,?,1)')
     .run(previous.id, attemptId, 'helper');
-  f.store.db
-    .prepare(
-      "INSERT INTO helper_events(conversation_id,task_id,kind,data) VALUES(?,?,'tool.finished',?)"
-    )
-    .run(
-      conversation.id,
-      previous.id,
-      JSON.stringify({
-        name: 'data.read',
-        originalResultChars: 12000,
-        providedResultChars: 1000,
-        result: 'private source body',
-      })
-    );
+  for (const event of [
+    {
+      name: 'data.read',
+      originalResultChars: 12000,
+      providedResultChars: 1000,
+      elapsedMs: 35,
+      queueMs: 4,
+      result: 'private source body',
+    },
+    {
+      name: 'task.inspect',
+      originalResultChars: 600,
+      providedResultChars: 600,
+      elapsedMs: 0,
+      queueMs: 0,
+    },
+  ])
+    f.workspace.event(conversation.id, previous.id, 'tool.finished', event);
+  expect(f.invoke('task.inspect', 'helper', previous.id)).toMatchObject({
+    diagnostics: { toolResultSizes: { calls: 2, timedCalls: 2, elapsedMs: 35, queueMs: 4 } },
+  });
+  f.workspace.event(conversation.id, previous.id, 'tool.finished', {
+    name: 'data.read',
+    originalResultChars: 120,
+    providedResultChars: 100,
+  });
   expect(f.invoke('task.inspect', 'helper', previous.id)).toMatchObject({
     status: 'failed',
     error: 'PROVIDER_FAILED',
@@ -261,10 +273,32 @@ test('a helper retry replaces only one failed task and makes the old task inelig
         },
       ],
       toolResultSizes: {
-        calls: 1,
-        originalChars: 12000,
-        providedChars: 1000,
-        byTool: [{ name: 'data.read', calls: 1, originalChars: 12000, providedChars: 1000 }],
+        calls: 3,
+        originalChars: 12720,
+        providedChars: 1700,
+        timedCalls: 2,
+        elapsedMs: null,
+        queueMs: null,
+        byTool: [
+          {
+            name: 'data.read',
+            calls: 2,
+            originalChars: 12120,
+            providedChars: 1100,
+            timedCalls: 1,
+            elapsedMs: null,
+            queueMs: null,
+          },
+          {
+            name: 'task.inspect',
+            calls: 1,
+            originalChars: 600,
+            providedChars: 600,
+            timedCalls: 1,
+            elapsedMs: 0,
+            queueMs: 0,
+          },
+        ],
       },
     },
   });
@@ -376,10 +410,15 @@ test('a failed helper receipt rolls back a run retry before any main provider ca
       poll++
     )
       await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(workspace.task(taskId).status).toBe('completed');
+    expect(workspace.task(taskId)).toMatchObject({ status: 'failed', error: 'RECEIPT_FAIL' });
     expect(store.db.prepare('SELECT COUNT(*) AS n FROM runs').get()).toEqual({ n: 1 });
     expect(store.run(original.id).status).toBe('failed');
-    expect(providerRoles).toEqual(['helper', 'helper']);
+    expect(providerRoles).toEqual(['helper']);
+    expect(
+      workspace.events(conversation.id).find((event) => event.kind === 'tool.finished')?.data
+    ).toMatchObject({
+      result: { recoverable: false, retryMode: 'inspect_outcome', outcome: 'unknown' },
+    });
     expect(store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations').get()).toEqual({ n: 0 });
   } finally {
     await app.close();

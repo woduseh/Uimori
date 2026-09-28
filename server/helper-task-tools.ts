@@ -49,6 +49,14 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
 
 type Kind = 'run' | 'job' | 'illustration' | 'helper';
 type Row = Record<string, any>;
+type ToolMetrics = {
+  calls: number;
+  originalChars: number;
+  providedChars: number;
+  timedCalls: number;
+  elapsedMs: number | null;
+  queueMs: number | null;
+};
 type TaskView = {
   kind: Kind;
   id: string;
@@ -74,11 +82,8 @@ type TaskView = {
       internalModelCalls: number | null;
       unknownInternalModelCallAttempts: number;
     }[];
-    toolResultSizes: {
-      calls: number;
-      originalChars: number;
-      providedChars: number;
-      byTool: { name: string; calls: number; originalChars: number; providedChars: number }[];
+    toolResultSizes: ToolMetrics & {
+      byTool: (ToolMetrics & { name: string })[];
     };
   };
   canCancel: boolean;
@@ -140,25 +145,46 @@ function helperDiagnostics(store: Store, id: string): NonNullable<TaskView['diag
        WHERE h.task_id=? GROUP BY h.purpose ORDER BY h.purpose`
     )
     .all(id) as Row[];
-  const toolTotals = store.db
-    .prepare(
-      `SELECT COUNT(*) AS calls,
-        COALESCE(SUM(json_extract(data,'$.originalResultChars')),0) AS original_chars,
-        COALESCE(SUM(json_extract(data,'$.providedResultChars')),0) AS provided_chars
-       FROM helper_events WHERE task_id=? AND kind='tool.finished'
-         AND json_type(data,'$.providedResultChars')='integer'`
-    )
-    .get(id) as Row;
   const tools = store.db
     .prepare(
       `SELECT json_extract(data,'$.name') AS name,COUNT(*) AS calls,
         COALESCE(SUM(json_extract(data,'$.originalResultChars')),0) AS original_chars,
-        COALESCE(SUM(json_extract(data,'$.providedResultChars')),0) AS provided_chars
+        COALESCE(SUM(json_extract(data,'$.providedResultChars')),0) AS provided_chars,
+        SUM(CASE WHEN json_type(data,'$.elapsedMs') IN ('integer','real') THEN 1 ELSE 0 END) AS timed_calls,
+        SUM(json_extract(data,'$.elapsedMs')) AS elapsed_ms,
+        SUM(CASE WHEN json_type(data,'$.queueMs') IN ('integer','real') THEN 1 ELSE 0 END) AS queued_calls,
+        SUM(json_extract(data,'$.queueMs')) AS queue_ms
        FROM helper_events WHERE task_id=? AND kind='tool.finished'
          AND json_type(data,'$.providedResultChars')='integer'
-       GROUP BY name ORDER BY original_chars DESC,name LIMIT 12`
+       GROUP BY name ORDER BY original_chars DESC,name`
     )
     .all(id) as Row[];
+  const byTool = tools.map((item) => ({
+    name: String(item.name),
+    calls: Number(item.calls),
+    originalChars: Number(item.original_chars),
+    providedChars: Number(item.provided_chars),
+    timedCalls: Number(item.timed_calls),
+    // Legacy events have no timing; an incomplete sum must not look like the full duration.
+    elapsedMs: item.timed_calls === item.calls ? Number(item.elapsed_ms) : null,
+    queueMs: item.queued_calls === item.calls ? Number(item.queue_ms) : null,
+  }));
+  const toolTotals = byTool.reduce<ToolMetrics>(
+    (total, item) => ({
+      calls: total.calls + item.calls,
+      originalChars: total.originalChars + item.originalChars,
+      providedChars: total.providedChars + item.providedChars,
+      timedCalls: total.timedCalls + item.timedCalls,
+      elapsedMs:
+        total.elapsedMs === null || item.elapsedMs === null
+          ? null
+          : total.elapsedMs + item.elapsedMs,
+      queueMs:
+        total.queueMs === null || item.queueMs === null ? null : total.queueMs + item.queueMs,
+    }),
+    { calls: 0, originalChars: 0, providedChars: 0, timedCalls: 0, elapsedMs: 0, queueMs: 0 }
+  );
+  if (!toolTotals.calls) toolTotals.elapsedMs = toolTotals.queueMs = null;
   return {
     attemptsByPurpose: attempts.map((item) => ({
       purpose: String(item.purpose),
@@ -171,15 +197,8 @@ function helperDiagnostics(store: Store, id: string): NonNullable<TaskView['diag
       unknownInternalModelCallAttempts: Number(item.calls) - Number(item.reported_internal),
     })),
     toolResultSizes: {
-      calls: Number(toolTotals.calls),
-      originalChars: Number(toolTotals.original_chars),
-      providedChars: Number(toolTotals.provided_chars),
-      byTool: tools.map((item) => ({
-        name: String(item.name),
-        calls: Number(item.calls),
-        originalChars: Number(item.original_chars),
-        providedChars: Number(item.provided_chars),
-      })),
+      ...toolTotals,
+      byTool: byTool.slice(0, 12),
     },
   };
 }

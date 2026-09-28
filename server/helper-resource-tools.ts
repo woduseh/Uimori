@@ -46,13 +46,19 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
   {
     name: 'resource.read',
     description:
-      'Read a compact resource overview, then follow JSON Pointer paths into its authored fields. Object and array pages list paths and exact small scalar values; long text uses textOffset/textLimit and nextOffset. A missing optional field returns exists:false with its patchable path. Revision is required for resource.patch.',
+      'Read a compact resource overview, then follow JSON Pointer paths into its authored fields. Use path for one read or paths for 1-16 reads of the same resource revision, never both. Batch items keep individual results/errors; resubmit paths.slice(nextIndex) for unreturned paths. Shared fields/offset/limit and textOffset/textLimit apply to every path; each item nextOffset continues its own page. Object and array pages list paths and exact small scalar values. A missing optional field returns exists:false with its patchable path. The complete response stays within 24000 serialized characters. Revision is required for resource.patch.',
     inputSchema: {
       type: 'object',
       properties: {
         kind,
         id: string,
         path: string,
+        paths: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 16,
+          items: { type: 'string', maxLength: 1024 },
+        },
         fields: { type: 'array', items: string, maxItems: 50 },
         offset: { type: 'integer', minimum: 0 },
         limit: { type: 'integer', minimum: 1, maximum: 50 },

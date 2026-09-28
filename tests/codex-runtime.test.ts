@@ -13,7 +13,12 @@ import {
 } from '../server/codex-runtime.js';
 import { CodexProcess } from '../server/codex-process.js';
 import { buildCodexTurn } from '../core/codex-protocol.js';
-import { ProviderContractError, type ProviderRequest, type WireRecord } from '../core/transport.js';
+import {
+  ProviderContractError,
+  type ProviderRequest,
+  type ProviderResult,
+  type WireRecord,
+} from '../core/transport.js';
 
 const fixture = resolve('tests/fixtures/codex-app-server.mjs');
 const connection = {
@@ -198,6 +203,77 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     ).toMatchObject({ status: 'error', error: { code: 'WRITE_OUTCOME_UNKNOWN' } });
     expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
   });
+  it.each([false, true])(
+    'reserves bounded child capacity for two native parents (cancel waiting child: %s)',
+    async (cancelWaiting) => {
+      const { runtime } = setup('agent-normal');
+      const parents = [new AbortController(), new AbortController()];
+      const childResults: ProviderResult[] = [];
+      const onChildWire = vi.fn();
+      const onOrdinaryWire = vi.fn();
+      let arrivals = 0;
+      let waitingParent: AbortController | undefined;
+      let releaseParents!: () => void;
+      const bothParents = new Promise<void>((resolve) => {
+        releaseParents = resolve;
+      });
+      let releaseChild!: () => void;
+      const firstChildGate = new Promise<void>((resolve) => {
+        releaseChild = resolve;
+      });
+      let childRequests = 0;
+      const executions = parents.map((controller) =>
+        runtime.executeAgent(connection, agentRequest(), {
+          signal: controller.signal,
+          timeoutMs: 10_000,
+          onToolCall: async (call, signal) => {
+            if (call.callId === 'call-1') {
+              if (++arrivals === 2) releaseParents();
+              await bothParents;
+              if (++childRequests === 2) waitingParent = controller;
+              const child = await runtime.execute(connection, request(), {
+                signal,
+                timeoutMs: 5000,
+                onWire: onChildWire,
+                beforeTurn: () =>
+                  onChildWire.mock.calls.length === 1 ? firstChildGate : undefined,
+              });
+              childResults.push(child);
+              if (child.status !== 'completed') throw new Error('Nested child failed');
+            }
+            return { success: true, text: 'Synthetic child finished.' };
+          },
+        })
+      );
+      await vi.waitFor(() => {
+        expect(childRequests).toBe(2);
+        expect(onChildWire).toHaveBeenCalledTimes(1);
+      });
+      // An unrelated call cannot borrow the reserved capacity while both parents run.
+      const ordinary = runtime.execute(connection, request(), {
+        signal: new AbortController().signal,
+        timeoutMs: 5000,
+        onWire: onOrdinaryWire,
+      });
+      expect(onOrdinaryWire).not.toHaveBeenCalled();
+      if (cancelWaiting) {
+        waitingParent!.abort();
+        await vi.waitFor(() => expect(childResults).toHaveLength(1));
+        expect(childResults[0].status).toBe('cancelled');
+        expect(onChildWire).toHaveBeenCalledTimes(1);
+      }
+      releaseChild();
+      const results = await Promise.all(executions);
+      expect(results.map((result) => result.status).sort()).toEqual(
+        cancelWaiting ? ['cancelled', 'completed'] : ['completed', 'completed']
+      );
+      expect(childResults.map((result) => result.status).sort()).toEqual(
+        cancelWaiting ? ['cancelled', 'completed'] : ['completed', 'completed']
+      );
+      expect(await ordinary).toMatchObject({ status: 'completed', text: 'A synthetic scene.' });
+      expect(onChildWire).toHaveBeenCalledTimes(cancelWaiting ? 1 : 2);
+    }
+  );
   it('starts disabled without creating credentials and rejects shell wrapper configuration', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'uimori-codex-runtime-test-'));
     roots.push(dir);
