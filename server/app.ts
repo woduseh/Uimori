@@ -105,7 +105,7 @@ export type AppOptions = {
   vertexRequestTier?: 'standard' | 'flex';
   codex?: CodexRuntimeOptions;
   codexRuntime?: CodexRuntimeService;
-  /** Boots with writes closed and no worker start: a candidate only proves migration and reads. */
+  /** Boots with writes closed and no worker start: a candidate only proves DB admission and reads. */
   maintenance?: boolean;
 };
 export type App = FastifyInstance & { store: Store; controls: Controls };
@@ -1164,7 +1164,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   // Authentication answers first; a maintenance gate never tells an anonymous caller the state.
   maintenanceRoutes(app, store, { forcedClosed, activeWork: () => work.size });
-  // A maintenance boot proves migration and reads only: it neither recovers nor starts work.
+  // A maintenance boot proves DB admission and reads only: it neither recovers nor starts work.
   pruneUploads(store.path);
   let recoveredRuns: string[] = [];
   if (!forcedClosed) {

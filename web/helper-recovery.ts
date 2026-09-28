@@ -1,33 +1,10 @@
-import {
-  deleteRecoveryIfModel,
-  readRecovery,
-  writeRecovery,
-  writeRecoveryIfAbsent,
-} from './editor-recovery.js';
+import { deleteRecoveryIfModel, readRecovery, writeRecovery } from './editor-recovery.js';
 
 // Keep the latest text across panel unmounts. The existing editor database owns disk storage.
 const values = new Map<string, string | null>();
 const writes = new Map<string, Promise<void>>();
 const registrations = new Map<string, Promise<void>>();
-const prefix = 'uimori:';
 const diskKey = (key: string) => `helper:${key}`;
-
-function legacy(key: string) {
-  try {
-    return localStorage.getItem(prefix + key);
-  } catch {
-    return null;
-  }
-}
-
-function removeLegacy(key: string, expected?: string | null) {
-  try {
-    const old = localStorage.getItem(prefix + key);
-    if (expected === undefined || old === expected) localStorage.removeItem(prefix + key);
-  } catch {
-    // IndexedDB or memory still owns the current value.
-  }
-}
 
 export function cachedHelperRecovery(key: string): string | null | undefined {
   return values.get(key);
@@ -40,37 +17,11 @@ export async function loadHelperRecovery(key: string): Promise<string | null> {
   try {
     stored = await readRecovery<string>(diskKey(key));
   } catch {
-    // Never overwrite an unknown disk value with a legacy draft after a failed read.
-    const old = legacy(key);
-    if (old === null) throw new Error('복구 저장소를 읽지 못했어요.');
-    if (!values.has(key)) values.set(key, old);
-    return values.get(key) ?? null;
+    throw new Error('복구 저장소를 읽지 못했어요.');
   }
   if (values.has(key)) return values.get(key) ?? null;
-  if (stored) {
-    values.set(key, stored.model);
-    // A different legacy value may be an independent, unsaved draft. Preserve it.
-    if (legacy(key) === stored.model) removeLegacy(key, stored.model);
-    return stored.model;
-  }
-  const old = legacy(key);
-  if (old === null) {
-    values.set(key, null);
-    return null;
-  }
-  values.set(key, old);
-  try {
-    const adopted = await writeRecoveryIfAbsent(diskKey(key), {
-      revision: null,
-      model: old,
-      rawFields: {},
-    });
-    if (values.get(key) === old) values.set(key, adopted.model);
-    if (adopted.model === old) removeLegacy(key, old);
-  } catch {
-    // Keep both in memory and the legacy location for a later migration attempt.
-  }
-  return values.get(key) ?? null;
+  values.set(key, stored?.model ?? null);
+  return stored?.model ?? null;
 }
 
 /** Memory updates first; callers needing durable admission await the transaction. */
@@ -104,7 +55,6 @@ export async function clearHelperRecoveryIf(key: string, expected: string): Prom
     throw cause;
   }
   if (values.get(key) === expected) values.set(key, remaining?.model ?? null);
-  if (!remaining) removeLegacy(key, expected);
 }
 
 export async function deleteHelperSessionRecovery(id: string): Promise<void> {
@@ -120,7 +70,6 @@ export async function deleteHelperSessionRecovery(id: string): Promise<void> {
       artifactIndex,
     ].map(async (key) => {
       await writeHelperRecovery(key, null);
-      removeLegacy(key);
     })
   );
 }

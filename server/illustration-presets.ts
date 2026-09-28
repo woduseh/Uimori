@@ -5,7 +5,6 @@ import {
   BUILTIN_ILLUSTRATION_PRESET,
   DEFAULT_ILLUSTRATION_PRESET_ID,
   defaultIllustrationPresetPreferences,
-  emptyIllustrationPreset,
   illustrationPresetFile,
   illustrationPresetIds,
   validateIllustrationPreset,
@@ -27,38 +26,6 @@ function writePreferences(store: Store, p: IllustrationPresetPreferences) {
     )
     .run(preferenceKey, JSON.stringify(next));
   return next;
-}
-/** One atomic lift of the old visual fields. Jobs and credentials are never rewritten. No DDL. */
-export function initIllustrationPresets(store: Store) {
-  if (store.db.prepare('SELECT 1 FROM app_metadata WHERE key=?').get(preferenceKey)) return;
-  store.transaction(() => {
-    const row = store.db.prepare('SELECT body FROM illustration_settings WHERE id=1').get();
-    const saved = row ? JSON.parse(String(row.body)) : {};
-    const { styleGuidance = '', comfyui = {}, ...runtime } = saved;
-    const { workflow = '', negativeGuidance = '', ...environment } = comfyui;
-    const preferences = defaultIllustrationPresetPreferences();
-    if (styleGuidance || workflow || negativeGuidance) {
-      // These values were already accepted by the previous application. Preserve them verbatim.
-      const preset = store.product.save('illustration-preset', {
-        ...emptyIllustrationPreset('기존 삽화 설정'),
-        description: '프리셋 도입 전의 그림 지침과 ComfyUI 워크플로를 보존한 설정이에요.',
-        styleGuidance,
-        comfyui: { workflow, negativeGuidance },
-      }) as IllustrationPreset;
-      preferences.defaultPresetId = preset.id;
-    }
-    if ('styleGuidance' in saved || 'workflow' in comfyui || 'negativeGuidance' in comfyui) {
-      store.db
-        .prepare('UPDATE illustration_settings SET body=? WHERE id=1')
-        .run(
-          JSON.stringify({ ...runtime, revision: (saved.revision ?? 1) + 1, comfyui: environment })
-        );
-    }
-    // The preferences row doubles as the one-time initialization marker, even after preset deletion.
-    store.db
-      .prepare('INSERT INTO app_metadata(key,value) VALUES(?,?)')
-      .run(preferenceKey, JSON.stringify(preferences));
-  });
 }
 export function readIllustrationPreset(store: Store, id: string): IllustrationPreset {
   return id === DEFAULT_ILLUSTRATION_PRESET_ID

@@ -72,8 +72,7 @@ function readDraft(key: string): Draft | null {
       (pending.expectedSourceHash === null || typeof pending.expectedSourceHash === 'string') &&
       pendingValues &&
       draftValues &&
-      JSON.stringify(pendingValues) === JSON.stringify(draftValues) &&
-      !Object.hasOwn(pending, 'branchId')
+      JSON.stringify(pendingValues) === JSON.stringify(draftValues)
     )
       draft.pending = pending;
     return draft;

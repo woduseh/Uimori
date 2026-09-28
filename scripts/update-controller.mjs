@@ -284,7 +284,10 @@ export async function runUpdate({ config: raw, requestKey, io }) {
       config.image,
     ]);
     if (!probe.includes('"event":"ready"'))
-      throw new UpdateError('candidate', 'The candidate did not finish migration and read health');
+      throw new UpdateError(
+        'candidate',
+        'The candidate did not finish DB admission and read health'
+      );
     record('candidate', 'done', { volume: candidateVolume });
     if (cancelled()) throw new UpdateError('candidate', 'Cancelled before the switch');
 

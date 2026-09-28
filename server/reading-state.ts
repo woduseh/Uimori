@@ -218,11 +218,6 @@ export function captureBookmarks(
   chatId: string,
   sourceIds: string[]
 ): PortableBookmark[] {
-  // Older migrations can copy chats before this newer table has been introduced.
-  if (
-    !store.db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='bookmarks'").get()
-  )
-    return [];
   const indexes = new Map(sourceIds.map((id, index) => [id, index]));
   return listBookmarks(store, chatId).flatMap((item) => {
     const entry = indexes.get(item.target.sourceId);

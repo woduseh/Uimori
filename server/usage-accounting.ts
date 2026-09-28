@@ -3,10 +3,7 @@ import type { UsageKind } from '../core/usage-report.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import type { CostEstimate } from '../core/pricing-types.js';
 
-export function inferUsageKind(
-  wire: Pick<WireRecord, 'role'> & Partial<WireRecord>,
-  archived = false
-): UsageKind {
+export function inferUsageKind(wire: Pick<WireRecord, 'role'> & Partial<WireRecord>): UsageKind {
   if (
     wire.judgment ||
     wire.protocol === 'typesafe-systemone-v1' ||
@@ -17,7 +14,7 @@ export function inferUsageKind(
   if (wire.nativeScript) return 'script';
   switch (wire.role) {
     case 'main':
-      return archived ? 'unclassified' : 'writing';
+      return 'writing';
     case 'translation':
       return 'translation';
     case 'context':
@@ -36,56 +33,6 @@ export function inferUsageKind(
     default:
       return 'unclassified';
   }
-}
-export function initUsageAccounting(db: DatabaseSync) {
-  db.exec(`ALTER TABLE attempts ADD COLUMN started_at TEXT;
-    ALTER TABLE attempts ADD COLUMN usage_kind TEXT NOT NULL DEFAULT 'unclassified';
-    ALTER TABLE attempts ADD COLUMN is_synthetic INTEGER NOT NULL DEFAULT 0;
-    ALTER TABLE attempts ADD COLUMN usage_detached INTEGER NOT NULL DEFAULT 0;
-    ALTER TABLE attempts ADD COLUMN estimated_usd REAL;
-    ALTER TABLE attempts ADD COLUMN estimated_subtotal_usd REAL;
-    ALTER TABLE attempts ADD COLUMN estimate_status TEXT;
-    CREATE INDEX attempts_usage_period ON attempts(is_synthetic,started_at);
-    CREATE INDEX attempts_usage_model ON attempts(connection_id,model_id,started_at);
-    UPDATE attempts SET
-      started_at=CASE WHEN json_valid(request) THEN strftime('%Y-%m-%dT%H:%M:%fZ',json_extract(request,'$.pricingStartedAt')) END,
-      is_synthetic=(status='mock'),
-      estimated_usd=CASE WHEN json_valid(response) AND json_type(response,'$.estimatedCost.usd') IN ('integer','real') THEN json_extract(response,'$.estimatedCost.usd') END,
-      estimated_subtotal_usd=CASE WHEN json_valid(response) AND json_type(response,'$.estimatedCost.subtotalUsd') IN ('integer','real') THEN json_extract(response,'$.estimatedCost.subtotalUsd') END,
-      estimate_status=CASE WHEN json_valid(response) THEN json_extract(response,'$.estimatedCost.status') END;
-  `);
-  // Before this schema, connection tests kept a separate bounded journal. Import only
-  // its proven send receipts; older or already-pruned tests cannot be reconstructed.
-  db.exec(`INSERT INTO attempts(id,role,connection_id,model_id,status,request,response,input_tokens,output_tokens,cost_usd,
-    started_at,usage_kind,usage_detached,estimated_usd,estimated_subtotal_usd,estimate_status)
-    SELECT 'connection-test:'||id,'main',json_extract(body,'$.connectionId'),json_extract(body,'$.providerModelId'),status,'{}',
-      json_object('detailsOmitted',json('true'),'estimatedCost',json_object('status',json_extract(body,'$.estimatedCost.status'),'usd',json_extract(body,'$.estimatedCost.usd'),'subtotalUsd',json_extract(body,'$.estimatedCost.subtotalUsd'),'lines',json('[]'),'notes',json('[]'))),
-      json_extract(body,'$.usage.inputTokens'),json_extract(body,'$.usage.outputTokens'),json_extract(body,'$.usage.costUsd'),
-      strftime('%Y-%m-%dT%H:%M:%fZ',sent_at),'connection-test',1,
-      json_extract(body,'$.estimatedCost.usd'),json_extract(body,'$.estimatedCost.subtotalUsd'),json_extract(body,'$.estimatedCost.status')
-    FROM provider_connection_tests WHERE sent_at IS NOT NULL AND json_valid(body)
-      AND json_type(body,'$.connectionId')='text' AND json_type(body,'$.providerModelId')='text';`);
-  // Read only attribution fields, not full retained prompts. Missing old evidence stays unknown.
-  const rows = db
-    .prepare(`SELECT a.id,a.role,a.connection_id,a.model_id,
-    CASE WHEN json_valid(a.request) THEN json_object('protocol',json_extract(a.request,'$.protocol'),'agentId',json_extract(a.request,'$.agentId'),
-      'judgment',json_extract(a.request,'$.judgment'),'nativeScript',json_extract(a.request,'$.nativeScript'),'detailsOmitted',json_extract(a.request,'$.detailsOmitted')) ELSE '{}' END AS metadata,
-    h.purpose FROM attempts a LEFT JOIN helper_task_attempts h ON h.attempt_id=a.id`)
-    .all();
-  for (const row of rows) {
-    if (String(row.id).startsWith('connection-test:')) continue;
-    const meta = JSON.parse(String(row.metadata));
-    const inferred = row.purpose
-      ? helperUsageKind(String(row.purpose))
-      : inferUsageKind(
-          { ...meta, role: row.role, connectionId: row.connection_id },
-          !!meta.detailsOmitted
-        );
-    db.prepare('UPDATE attempts SET usage_kind=? WHERE id=?').run(inferred, row.id);
-  }
-  db.prepare("INSERT OR IGNORE INTO app_metadata(key,value) VALUES('usage-coverage-since',?)").run(
-    new Date().toISOString()
-  );
 }
 export function helperUsageKind(purpose: string): UsageKind {
   if (purpose.includes('context') || purpose.includes('compaction')) return 'summary';

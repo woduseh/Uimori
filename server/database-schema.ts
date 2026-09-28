@@ -1,5 +1,4 @@
 import { initPushSchema } from './push-schema.js';
-import { initUsageAccounting } from './usage-accounting.js';
 import { initReadingState } from './reading-state.js';
 import { initManuscriptSearch } from './search-schema.js';
 import type { DatabaseSync } from 'node:sqlite';
@@ -7,7 +6,6 @@ import { initDatabaseReadIndexes } from './database-performance.js';
 import { initIllustrations } from './illustrations.js';
 import { initOutline, initOutlineWorkspace } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
-import { migrateChatOwnership } from './migrate-chat-ownership.js';
 
 export const DATABASE_SCHEMA_VERSION = 15;
 const FORMAT = 'uimori-personal-v1';
@@ -22,7 +20,7 @@ export class DatabaseSchemaError extends Error {
   }
 }
 
-/** Reject unsupported input before WAL, schema writes or attempted conversion. */
+/** Reject unsupported input before WAL or schema writes. */
 export function databaseSchemaVersion(db: DatabaseSync): number {
   const version = Number(db.prepare('PRAGMA user_version').get()!.user_version);
   if (version === 0) {
@@ -30,7 +28,7 @@ export function databaseSchemaVersion(db: DatabaseSync): number {
       throw new Error('This is not an empty Uimori database. Choose a new DB path.');
     return 0;
   }
-  if (![13, 14, DATABASE_SCHEMA_VERSION].includes(version))
+  if (version !== DATABASE_SCHEMA_VERSION)
     throw new DatabaseSchemaError('DATABASE_VERSION_UNSUPPORTED', version);
   const marker = db
     .prepare("SELECT 1 FROM sqlite_schema WHERE name='app_metadata' AND type='table'")
@@ -43,24 +41,20 @@ export function databaseSchemaVersion(db: DatabaseSync): number {
   return version;
 }
 
-/** Current schema plus one atomic conversion of the two supported prior releases. */
+/** Initialize an empty database; existing databases must already use the current format. */
 export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () => void): void {
   const previous = databaseSchemaVersion(db);
   if (previous === DATABASE_SCHEMA_VERSION) {
     initDatabaseReadIndexes(db);
     return;
   }
-  // Rebuilding composite keys must not run ON DELETE CASCADE on retained rows.
-  // Foreign keys are checked before commit and enforcement is always restored.
-  if (previous !== 0) db.exec('PRAGMA foreign_keys=OFF');
   try {
     db.exec('BEGIN IMMEDIATE');
-    if (previous === 0) {
-      initializeFresh();
-      initIllustrations(db);
-      initOutline(db);
-      initLoreContextDefaults(db);
-      db.exec(`
+    initializeFresh();
+    initIllustrations(db);
+    initOutline(db);
+    initLoreContextDefaults(db);
+    db.exec(`
         CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
         CREATE TABLE resource_undo(kind TEXT NOT NULL,id TEXT NOT NULL,saved_revision INTEGER NOT NULL,model TEXT NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE image_blobs(hash TEXT PRIMARY KEY,mime TEXT NOT NULL,bytes BLOB NOT NULL);
@@ -74,23 +68,19 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
         CREATE TABLE anthropic_batches(attempt_id TEXT PRIMARY KEY REFERENCES attempts(id),run_id TEXT NOT NULL REFERENCES runs(id),ordinal INTEGER NOT NULL,batch_id TEXT UNIQUE,custom_id TEXT NOT NULL,request_sha256 TEXT NOT NULL,status TEXT NOT NULL,result TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(run_id,ordinal));
         CREATE INDEX anthropic_batches_run ON anthropic_batches(run_id,ordinal);
       `);
-      db.prepare('INSERT INTO app_metadata VALUES(?,?)').run('format', FORMAT);
-      initManuscriptSearch(db);
-      initReadingState(db);
-      initUsageAccounting(db);
-      initPushSchema(db);
-      initOutlineWorkspace(db);
-    } else {
-      migrateChatOwnership(db, previous);
-    }
+    db.prepare('INSERT INTO app_metadata VALUES(?,?)').run('format', FORMAT);
+    db.prepare('INSERT INTO app_metadata VALUES(?,?)').run(
+      'usage-coverage-since',
+      new Date().toISOString()
+    );
+    initManuscriptSearch(db);
+    initReadingState(db);
+    initPushSchema(db);
+    initOutlineWorkspace(db);
     initDatabaseReadIndexes(db);
-    if (db.prepare('PRAGMA foreign_key_check').all().length)
-      throw new Error('DATABASE_MIGRATION_FOREIGN_KEY');
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}; COMMIT`);
   } catch (error) {
     if (db.isTransaction) db.exec('ROLLBACK');
     throw error;
-  } finally {
-    db.exec('PRAGMA foreign_keys=ON');
   }
 }

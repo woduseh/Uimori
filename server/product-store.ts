@@ -119,7 +119,9 @@ export class ProductStore {
         CREATE TABLE profiles (chat_id TEXT PRIMARY KEY REFERENCES chats(id),body TEXT NOT NULL);
         CREATE TABLE prompt_workspace (id INTEGER PRIMARY KEY CHECK(id=1),body TEXT NOT NULL);
         CREATE TABLE library_hidden (kind TEXT NOT NULL,id TEXT NOT NULL,PRIMARY KEY(kind,id));
-        CREATE TABLE attempts (id TEXT PRIMARY KEY,chat_id TEXT REFERENCES chats(id),run_id TEXT REFERENCES runs(id),job_id TEXT REFERENCES jobs(id),role TEXT NOT NULL,connection_id TEXT NOT NULL,model_id TEXT NOT NULL,status TEXT NOT NULL,request TEXT NOT NULL,response TEXT,input_tokens INTEGER,output_tokens INTEGER,cost_usd REAL,raw_usage TEXT,price_revision TEXT,error TEXT);
+        CREATE TABLE attempts (id TEXT PRIMARY KEY,chat_id TEXT REFERENCES chats(id),run_id TEXT REFERENCES runs(id),job_id TEXT REFERENCES jobs(id),role TEXT NOT NULL,connection_id TEXT NOT NULL,model_id TEXT NOT NULL,status TEXT NOT NULL,request TEXT NOT NULL,response TEXT,input_tokens INTEGER,output_tokens INTEGER,cost_usd REAL,raw_usage TEXT,price_revision TEXT,error TEXT,started_at TEXT,usage_kind TEXT NOT NULL DEFAULT 'unclassified',is_synthetic INTEGER NOT NULL DEFAULT 0,usage_detached INTEGER NOT NULL DEFAULT 0,estimated_usd REAL,estimated_subtotal_usd REAL,estimate_status TEXT);
+        CREATE INDEX attempts_usage_period ON attempts(is_synthetic,started_at);
+        CREATE INDEX attempts_usage_model ON attempts(connection_id,model_id,started_at);
         CREATE TABLE assets (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),body TEXT NOT NULL,hash TEXT NOT NULL REFERENCES image_blobs(hash));
         CREATE TABLE source_edits(source_id TEXT NOT NULL REFERENCES sources(id),revision INTEGER NOT NULL,text TEXT NOT NULL,hash TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(source_id,revision));
       `);

@@ -45,27 +45,6 @@ export async function writeRecovery<T>(key: string, value?: RecoveryBuffer<T>): 
   });
 }
 
-/** Atomic legacy migration: an existing buffer from another tab takes precedence. */
-export async function writeRecoveryIfAbsent<T>(
-  key: string,
-  value: RecoveryBuffer<T>
-): Promise<RecoveryBuffer<T>> {
-  const db = await open();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction('buffers', 'readwrite');
-    const buffers = transaction.objectStore('buffers');
-    const request = buffers.get(key);
-    let result = value;
-    request.onsuccess = () => {
-      if (request.result !== undefined) result = request.result;
-      else buffers.put(value, key);
-    };
-    transaction.oncomplete = () => resolve(result);
-    transaction.onerror = () => reject(transaction.error);
-    transaction.onabort = () => reject(transaction.error ?? new Error('복구 저장이 중단됐어요.'));
-  });
-}
-
 /** Exact-value cleanup never deletes a newer buffer written by another tab. */
 export async function deleteRecoveryIfModel<T>(
   key: string,

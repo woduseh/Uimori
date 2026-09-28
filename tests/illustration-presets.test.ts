@@ -17,7 +17,6 @@ import {
   effectiveIllustrationPreset,
   illustrationPresetCatalog,
   illustrationPresetPreferences,
-  initIllustrationPresets,
   readIllustrationPreset,
   selectIllustrationPreset,
 } from '../server/illustration-presets.js';
@@ -293,90 +292,6 @@ test('ComfyUI freezes the selected workflow with the global environment, and aut
     .prepare("SELECT id FROM illustration_jobs WHERE source_revision=? AND status='queued'")
     .get(second.id)!;
   expect(illustrationJob(store, String(queued.id)).input.preset?.id).toBe(preset.id);
-});
-
-function legacySettings(store: Store) {
-  const runtime = illustrationSettings(store);
-  const legacy = {
-    ...runtime,
-    revision: 17,
-    generator: 'comfyui',
-    automatic: true,
-    styleGuidance: '기존 그림 지침\n'.repeat(500),
-    comfyui: {
-      ...runtime.comfyui,
-      baseUrl: 'http://private.example:8188',
-      authorizationEnv: 'PRIVATE_AUTH',
-      workflow: FIXTURE_WORKFLOW,
-      negativeGuidance: '기존 제외 지침',
-    },
-  };
-  store.db.prepare('DELETE FROM app_metadata WHERE key=?').run('illustration-preset-preferences');
-  store.db
-    .prepare('UPDATE illustration_settings SET body=? WHERE id=1')
-    .run(JSON.stringify(legacy));
-  return legacy;
-}
-
-test('one-time conversion preserves old visuals, runtime settings and existing jobs exactly; restart does not duplicate or reset', () => {
-  const store = databases.create();
-  const { source } = chatWithSource(store);
-  const job = reserveIllustration(store, source, 'manual', {
-    settings: fixtureSettings(),
-    testMode: true,
-  });
-  const before = JSON.stringify(job.input);
-  const legacy = legacySettings(store);
-  initIllustrationPresets(store);
-  const preset = effectiveIllustrationPreset(store, source.chatId);
-  expect(preset).toMatchObject({
-    title: '기존 삽화 설정',
-    styleGuidance: legacy.styleGuidance,
-    comfyui: {
-      workflow: legacy.comfyui.workflow,
-      negativeGuidance: legacy.comfyui.negativeGuidance,
-    },
-  });
-  const runtime = illustrationSettings(store);
-  expect(runtime).toMatchObject({
-    revision: 18,
-    generator: 'comfyui',
-    automatic: true,
-    comfyui: { baseUrl: legacy.comfyui.baseUrl, authorizationEnv: 'PRIVATE_AUTH' },
-  });
-  expect(runtime).not.toHaveProperty('styleGuidance');
-  expect(runtime.comfyui).not.toHaveProperty('workflow');
-  expect(JSON.stringify(illustrationJob(store, job.id).input)).toBe(before);
-  store.close();
-  const reopened = new Store(store.path);
-  try {
-    expect(illustrationPresetCatalog(reopened).presets).toHaveLength(2);
-    expect(effectiveIllustrationPreset(reopened, source.chatId).id).toBe(preset.id);
-    expect(illustrationSettings(reopened)).toEqual(runtime);
-    expect(JSON.stringify(illustrationJob(reopened, job.id).input)).toBe(before);
-    deleteIllustrationPreset(reopened, preset.id, preset.revision);
-    initIllustrationPresets(reopened);
-    expect(illustrationPresetCatalog(reopened).presets).toHaveLength(1);
-    expect(reopened.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  } finally {
-    reopened.close();
-  }
-});
-
-test('conversion is atomic when saving its completion marker fails', () => {
-  const store = databases.create();
-  const legacy = legacySettings(store);
-  store.db.exec(
-    "CREATE TRIGGER fail_preset_marker BEFORE INSERT ON app_metadata WHEN NEW.key='illustration-preset-preferences' BEGIN SELECT RAISE(ABORT, 'synthetic marker failure'); END;"
-  );
-  expect(() => initIllustrationPresets(store)).toThrow('synthetic marker failure');
-  expect(
-    JSON.parse(String(store.db.prepare('SELECT body FROM illustration_settings').get()?.body))
-  ).toEqual(legacy);
-  expect(store.product.all('illustration-preset')).toEqual([]);
-  store.db.exec('DROP TRIGGER fail_preset_marker');
-  initIllustrationPresets(store);
-  expect(store.product.all('illustration-preset')).toHaveLength(1);
 });
 
 test('deleting a chat removes only its selection and keeps the shared recipe', () => {

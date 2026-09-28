@@ -28,11 +28,6 @@ import {
   retainReaderNavigation,
   type ReaderNavigationPosition,
 } from './reader-navigation-scroll.js';
-import {
-  convertLegacyLocalState,
-  downloadUnconvertedLocalState,
-  type LocalConversionWarning,
-} from './legacy-local-conversion.js';
 
 const lastWorkspaceKey = 'uimori:last-workspace';
 function semanticReaderTarget(search: string): ReaderTarget | null {
@@ -100,9 +95,8 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
     )
       return null;
     if (
-      Object.hasOwn(payload, 'branchId') ||
-      (payload.expectedProfileRevision !== undefined &&
-        !Number.isInteger(payload.expectedProfileRevision))
+      payload.expectedProfileRevision !== undefined &&
+      !Number.isInteger(payload.expectedProfileRevision)
     )
       return null;
     if (
@@ -128,12 +122,7 @@ function clearCommand(key: string, id: string) {
 type Position = ReadingPosition;
 export function useStory() {
   const { workspace: promptWorkspace } = usePromptWorkspace();
-  const [startup] = useState(() => {
-    const view = initialView(true);
-    return { view, warnings: convertLegacyLocalState(view.chat ? [view.chat] : []) };
-  });
-  const initial = startup.view;
-  const [localWarnings, setLocalWarnings] = useState<LocalConversionWarning[]>(startup.warnings);
+  const [initial] = useState(() => initialView(true));
   const [chats, setChats] = useState<Chat[]>([]);
   const [view, setView] = useState<ReaderNavigation>(() => ({ ...initial, epoch: 0 }));
   const navigation = useRef(view);
@@ -172,11 +161,6 @@ export function useStory() {
     }
   }, [destination, selected, detail]);
   useEffect(() => {
-    const url = new URL(location.href);
-    if (url.searchParams.has('branch')) {
-      url.searchParams.delete('branch');
-      history.replaceState(history.state, '', url);
-    }
     if (initial.chat && !location.search && !location.hash)
       history.replaceState(null, '', `?${new URLSearchParams({ chat: initial.chat })}`);
   }, [initial]);
@@ -319,23 +303,12 @@ export function useStory() {
     [refresh]
   );
   const chatsRequest = useRef(0);
-  const localConversionDone = useRef(false);
   const loadChats = useCallback(async () => {
     const request = ++chatsRequest.current;
     const selectedAtRequest = navigation.current.chat,
       epoch = navigation.current.epoch;
     const chats = await api<Chat[]>('/chats');
     if (chatsRequest.current !== request) return;
-    if (!localConversionDone.current) {
-      localConversionDone.current = true;
-      const warnings = convertLegacyLocalState(chats.map((chat) => chat.id));
-      setLocalWarnings((old) => [
-        ...old,
-        ...warnings.filter(
-          (item) => !old.some((prior) => prior.storage === item.storage && prior.key === item.key)
-        ),
-      ]);
-    }
     setChats(chats);
     if (
       selectedAtRequest &&
@@ -779,11 +752,6 @@ export function useStory() {
       rememberCursor();
       setReaderTarget(semanticReaderTarget(location.search));
       navigate({ kind: 'restore', view: initialView() });
-      const url = new URL(location.href);
-      if (url.searchParams.has('branch')) {
-        url.searchParams.delete('branch');
-        history.replaceState(history.state, '', url);
-      }
     };
     return subscribeAppHistory(onPop);
   }, [savePosition, rememberCursor, navigate]);
@@ -1210,12 +1178,6 @@ export function useStory() {
         }
       : undefined);
   return {
-    legacyLocalWarning: localWarnings.length
-      ? {
-          count: localWarnings.length,
-          download: () => downloadUnconvertedLocalState(localWarnings),
-        }
-      : null,
     promptWorkspace,
     currentPrompt,
     pinnedPromptRevision: pinnedPrompt?.revision,
