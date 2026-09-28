@@ -27,6 +27,8 @@ export function sourceSceneAnchors(scope: SourceScope): SourceSceneAnchor[] {
   }));
 }
 export const sourceHash = (text: string): string => createHash('sha256').update(text).digest('hex');
+// Source objects bound the cache lifetime; changed text is rehashed and supplied hashes are still checked.
+const validatedHashes = new WeakMap<SourceHistoryItem, { text: string; hash: string }>();
 const fail = (code: string): never => {
   throw new Error(`STORY_${code}`);
 };
@@ -37,9 +39,12 @@ export function validateSourceHistory(scope: SourceScope) {
     if (!item.revision?.trim() || typeof item.text !== 'string' || seen.has(item.revision))
       return fail('INVALID_HISTORY');
     seen.add(item.revision);
-    const contentHash = sourceHash(item.text);
+    const cached = validatedHashes.get(item);
+    const contentHash = cached && cached.text === item.text ? cached.hash : sourceHash(item.text);
     if (item.contentHash !== undefined && item.contentHash !== contentHash)
       fail('SOURCE_HASH_MISMATCH');
+    if (cached?.text !== item.text)
+      validatedHashes.set(item, { text: item.text, hash: contentHash });
     return { ...item, contentHash };
   });
 }
