@@ -15,6 +15,50 @@ const runtimeErrors: Record<string, string> = {
   CODEX_LOGIN_REQUIRED: 'ChatGPT 구독으로 Codex에 로그인해 주세요.',
 };
 
+type CodexLimit = CodexRuntimeStatus['limits'][number];
+
+const planNames: Record<string, string> = {
+  free: 'Free',
+  go: 'Go',
+  plus: 'Plus',
+  pro: 'Pro',
+  team: 'Team',
+  business: 'Business',
+  enterprise: 'Enterprise',
+  edu: 'Edu',
+};
+
+function codexPlanLabel(plan: string | null): string {
+  if (!plan) return 'ChatGPT 구독';
+  const normalized = plan.trim();
+  return `ChatGPT ${planNames[normalized.toLowerCase()] ?? normalized}`;
+}
+
+function codexLimitLabel(limit: CodexLimit): string {
+  const minutes = limit.windowDurationMins;
+  if (minutes === 10_080) return '주간 사용량';
+  if (minutes === 1_440) return '일일 사용량';
+  if (minutes && minutes % 1_440 === 0) return `${minutes / 1_440}일 사용량`;
+  if (minutes && minutes % 60 === 0) return `${minutes / 60}시간 사용량`;
+  if (minutes) return `${minutes}분 사용량`;
+  const name = limit.name.replace(/\s*·\s*(?:primary|secondary)$/iu, '').trim();
+  return name && name.toLowerCase() !== 'codex' ? `${name} 사용량` : 'Codex 사용량';
+}
+
+function codexResetLabel(resetsAt: number): { short: string; full: string } {
+  const date = new Date(resetsAt * 1000);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  const short = new Intl.DateTimeFormat('ko-KR', {
+    ...(sameYear ? {} : { year: 'numeric' }),
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+  return { short, full: date.toLocaleString('ko-KR') };
+}
+
 /** Authentication remains in the server's dedicated official Codex runtime. */
 export function CodexAgentSettings({
   active = true,
@@ -114,17 +158,17 @@ export function CodexAgentSettings({
         <p role="status">{error ? '상태 확인 실패' : '상태 확인 중…'}</p>
       ) : (
         <>
-          <p role="status" className="codex-agent-status">
-            {!status.available
-              ? '서버 설정 필요'
-              : status.authenticated && status.authMode === 'chatgpt'
-                ? '연결됨'
+          {!(status.authenticated && status.authMode === 'chatgpt') && (
+            <p role="status" className="codex-agent-status">
+              {!status.available
+                ? '서버 설정 필요'
                 : status.authMode === 'apikey'
                   ? '구독 로그인 필요'
                   : status.login
                     ? '로그인 대기 중'
                     : '로그인 필요'}
-          </p>
+            </p>
+          )}
           {!status.available ? (
             <p>
               {(status.error && runtimeErrors[status.error]) ||
@@ -137,36 +181,32 @@ export function CodexAgentSettings({
               {runtimeErrors[status.error] ?? 'Codex 실행 환경을 확인해 주세요.'}
             </p>
           ) : null}
-          <ol className="codex-connection-steps" aria-label="Codex 연결 단계">
-            <li>
-              <strong>서버 준비</strong>
-              <p>
-                {status.available
-                  ? '서버 실행 환경이 준비됐어요.'
-                  : '서버 관리자가 실행 환경을 설정해야 해요. 아래 연결 도움말을 확인해 주세요.'}
-              </p>
-            </li>
-            <li>
-              <strong>로그인</strong>
-              <p>
-                {status.authenticated && status.authMode === 'chatgpt'
-                  ? 'ChatGPT 구독으로 로그인했어요.'
-                  : status.login
+          {!(status.authenticated && status.authMode === 'chatgpt') && (
+            <ol className="codex-connection-steps" aria-label="Codex 연결 단계">
+              <li>
+                <strong>서버 준비</strong>
+                <p>
+                  {status.available
+                    ? '서버 실행 환경이 준비됐어요.'
+                    : '서버 관리자가 실행 환경을 설정해야 해요. 아래 연결 도움말을 확인해 주세요.'}
+                </p>
+              </li>
+              <li>
+                <strong>로그인</strong>
+                <p>
+                  {status.login
                     ? '로그인 페이지에 아래 코드를 입력해 주세요.'
                     : status.available
                       ? '이 서버에서 사용할 ChatGPT 계정으로 로그인해요.'
                       : '서버가 준비되면 로그인할 수 있어요.'}
-              </p>
-            </li>
-            <li>
-              <strong>연결 확인</strong>
-              <p>
-                {status.authenticated && status.authMode === 'chatgpt'
-                  ? '연결 상태와 확인된 사용량을 표시해요.'
-                  : '로그인 완료 후 연결 상태와 사용량을 확인해요.'}
-              </p>
-            </li>
-          </ol>
+                </p>
+              </li>
+              <li>
+                <strong>연결 확인</strong>
+                <p>로그인 완료 후 연결 상태와 사용량을 확인해요.</p>
+              </li>
+            </ol>
+          )}
           {status.login && (
             <div className="compact-card" role="region" aria-label="Codex 로그인 코드">
               <strong>로그인 코드</strong>
@@ -183,17 +223,48 @@ export function CodexAgentSettings({
               <small>페이지에 코드를 입력해 주세요. 로그인 완료를 자동으로 확인해요.</small>
             </div>
           )}
-          {status.planType && <p>구독: {status.planType}</p>}
-          {status.limits.length > 0 && (
-            <ul aria-label="Codex 구독 사용량">
-              {status.limits.map((limit, index) => (
-                <li key={`${limit.name}-${index}`}>
-                  {limit.name} · 사용 {limit.usedPercent}%
-                  {limit.resetsAt !== null &&
-                    ` · 초기화 ${new Date(limit.resetsAt * 1000).toLocaleString()}`}
-                </li>
-              ))}
-            </ul>
+          {status.authenticated && status.authMode === 'chatgpt' && (
+            <section className="settings-card codex-account-card" aria-label="Codex 구독 상태">
+              <header className="codex-account-summary">
+                <span className="codex-connected-status" role="status">
+                  <span className="codex-status-dot" aria-hidden="true" />
+                  연결됨
+                </span>
+                <span className="codex-plan-badge">{codexPlanLabel(status.planType)}</span>
+              </header>
+              {status.limits.length > 0 ? (
+                <div className="codex-limit-list" aria-label="Codex 구독 사용량">
+                  {status.limits.map((limit, index) => {
+                    const usedPercent = Math.round(limit.usedPercent);
+                    const remainingPercent = Math.max(0, 100 - usedPercent);
+                    const reset = limit.resetsAt === null ? null : codexResetLabel(limit.resetsAt);
+                    return (
+                      <div className="codex-limit-row" key={`${limit.name}-${index}`}>
+                        <div className="codex-limit-heading">
+                          <strong>{codexLimitLabel(limit)}</strong>
+                          <span>{remainingPercent}% 남음</span>
+                        </div>
+                        <div className="codex-limit-meter" aria-hidden="true">
+                          <span style={{ width: `${remainingPercent}%` }} />
+                        </div>
+                        <div className="codex-limit-meta">
+                          {reset ? (
+                            <small title={reset.full}>{reset.short} 초기화</small>
+                          ) : (
+                            <small>초기화 시각 미확인</small>
+                          )}
+                          <small>{usedPercent}% 사용</small>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="codex-limit-unavailable muted">
+                  연결은 정상이에요. 현재 사용량 정보는 제공되지 않아요.
+                </p>
+              )}
+            </section>
           )}
           <div className="provider-actions">
             {status.available &&

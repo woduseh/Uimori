@@ -101,7 +101,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       authenticated: true,
       authMode: 'chatgpt',
       planType: 'plus',
-      limits: [{ usedPercent: 12 }],
+      limits: [{ usedPercent: 12, windowDurationMins: 300 }],
     });
     expect(JSON.stringify(status)).not.toMatch(/synthetic@example|SECRET|auth\.json/);
     expect(await runtime.catalog()).toMatchObject([

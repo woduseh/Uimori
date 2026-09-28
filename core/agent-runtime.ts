@@ -6,5 +6,10 @@ export type CodexRuntimeStatus = {
   error: string | null;
   login: { id: string; verificationUrl: string; userCode: string } | null;
   planType: string | null;
-  limits: { name: string; usedPercent: number; resetsAt: number | null }[];
+  limits: {
+    name: string;
+    usedPercent: number;
+    resetsAt: number | null;
+    windowDurationMins: number | null;
+  }[];
 };
