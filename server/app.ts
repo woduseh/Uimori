@@ -7,8 +7,7 @@ import { ManuscriptSearch, manuscriptSearchRoutes } from './manuscript-search.js
 import { BackupService, backupRoutes } from './backup-service.js';
 import { illustrationPresetRoutes } from './illustration-presets.js';
 import { normalizeChatSettings } from '../core/chat-settings.js';
-import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { CONTEXT_SUMMARY_MAX_CHARS } from '../core/context-tools.js';
+import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createRunExecutor } from './run-executor.js';
 import { APP_VERSION } from './app-version.js';
 import { flushPendingImageCleanup } from './unused-data.js';
@@ -417,7 +416,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             {
               ...base,
               expectedRevision: number(args.expectedRevision, 'context revision', 0),
-              summary: text(args.summary, 'summary', CONTEXT_SUMMARY_MAX_CHARS),
+              summary: text(args.summary, 'summary', SOURCE_TEXT_MAX_CHARS),
             },
             snapshot
           );

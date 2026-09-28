@@ -52,7 +52,6 @@ export const modelOptionKeys = [
   'executionMode',
   'timeoutMs',
   'evaluationTools',
-  'contextTools',
   'inputTokenLimit',
   'providerOptions',
 ];
@@ -108,7 +107,6 @@ export function validateModelGeneration(value: Row, protocol?: Connection['proto
     } catch {
       throw new HttpError(400, 'Invalid evaluation tool options');
     }
-  if (value.contextTools !== undefined) boolean(value.contextTools);
   if (value.providerOptions !== undefined) {
     try {
       validateProviderOptions(value.providerOptions);
@@ -244,6 +242,8 @@ export function validateProviderSettingVersion(row: Row): void {
       'maxOutputTokens',
       'temperature',
       ...modelOptionKeys,
+      // Accept archived presets from releases that offered this switch.
+      'contextTools',
       'enabled',
       'displayOrder',
       'pricing',
@@ -258,6 +258,7 @@ export function validateProviderSettingVersion(row: Row): void {
         ? undefined
         : choice(body.capabilityProtocol, [...PROVIDER_PROTOCOLS], 'model protocol')
     );
+    if (body.contextTools !== undefined) boolean(body.contextTools);
     validateModelMetadata(body);
   } else throw new HttpError(400, 'Invalid archive version kind');
 }
@@ -291,5 +292,6 @@ export function validateModelSnapshot(value: unknown): ModelSnapshot {
     )
       throw new HttpError(400, 'Pricing snapshot model mismatch');
   }
-  return structuredClone(snapshot) as ModelSnapshot;
+  const { contextTools: _retired, ...current } = snapshot;
+  return structuredClone(current) as ModelSnapshot;
 }

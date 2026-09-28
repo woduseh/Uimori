@@ -785,17 +785,6 @@ export function ProviderModelFields({
             모델이 원고를 검토하고 교정하도록 도와요. 추가 호출이 발생할 수 있어요.
           </small>
         </fieldset>
-        <fieldset className="editor-fields full">
-          <legend>문맥 도구</legend>
-          <ToggleRow
-            label="이 모델 프리셋에 문맥 메모·전환 도구 사용"
-            checked={value.contextToolsEnabled}
-            onChange={(contextToolsEnabled) => update({ contextToolsEnabled })}
-          />
-          <small className="full">
-            본문 모델이 작업 내용을 요약하고 문맥을 정리해요. 평가 도구와 함께 사용할 수 없어요.
-          </small>
-        </fieldset>
         <h4 className="provider-field-heading full">요금</h4>
         <ModelPricingEditor
           value={value}

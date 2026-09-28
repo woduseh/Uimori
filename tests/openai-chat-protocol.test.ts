@@ -126,6 +126,33 @@ function called(input = request()) {
 }
 
 describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
+  test('bootstrap uses registered aliases while retaining retired tool names and exact receipts', () => {
+    const input = request();
+    input.bootstrap = [
+      { callId: 'known', name: 'knowledge.read', args: { id: 'lore-1' }, result: 0, denied: false },
+      { callId: 'retired', name: 'context.new', args: {}, result: { saved: true }, denied: false },
+    ];
+    const original = structuredClone(input.bootstrap);
+    const body = record(encodeChat(input).body);
+    expect(body.messages.slice(1, 5)).toMatchObject([
+      {
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'known',
+            function: { name: 'tool_0_knowledge_read', arguments: '{"id":"lore-1"}' },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: 'known', name: 'tool_0_knowledge_read', content: '0' },
+      {
+        role: 'assistant',
+        tool_calls: [{ id: 'retired', function: { name: 'context.new', arguments: '{}' } }],
+      },
+      { role: 'tool', tool_call_id: 'retired', name: 'context.new', content: '{"saved":true}' },
+    ]);
+    expect(input.bootstrap).toEqual(original);
+  });
   test('Vercel Sol sends Flex and preserves the selected tier across tool continuation', () => {
     const input = request();
     input.modelId = 'openai/gpt-5.6-sol';

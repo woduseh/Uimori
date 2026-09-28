@@ -8,7 +8,6 @@ import type { RunSnapshot } from '../core/types.js';
 import { validateProviderPrompt } from '../core/risu-prompt.js';
 import { nativeHostContextText, NATIVE_HOST_CONTEXT_ID } from '../core/provider-messages.js';
 import { ProviderContractError, type ProviderRequest, type Json } from '../core/transport.js';
-import { contextWindowReference } from '../core/context-tools.js';
 import { agentSharedOptions } from './agent-shared-options.js';
 
 const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
@@ -52,9 +51,6 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
       ...(input.notes && !used.has('notes') ? { notes: input.notes } : {}),
       ...(input.outline && !used.has('outline') ? { outline: input.outline } : {}),
       ...(input.catalogPage ? { catalogPage: input.catalogPage } : {}),
-      ...(contextWindowReference(snapshot) !== undefined
-        ? { contextWindow: contextWindowReference(snapshot) }
-        : {}),
     }),
     catalog: json(input.catalog),
     ...(!snapshot.promptCompilation ? { history: json(input.history) } : {}),

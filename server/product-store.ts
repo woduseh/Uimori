@@ -90,6 +90,11 @@ import { validateLoreContextPolicy } from '../core/lore-context.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
+function currentModelFields<T>(kind: string, value: T): T {
+  if (kind !== 'model') return value;
+  const { contextTools: _retired, ...model } = value as Row;
+  return model as T;
+}
 export const modelRef = (v: unknown): ModelRef => {
   const b = record(v);
   fields(b, ['id']);
@@ -136,7 +141,7 @@ export class ProductStore {
             : 'SELECT v.body FROM versions v WHERE kind=? AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id'
         )
         .all(kind) as Row[]
-    ).map((r) => parse(r.body));
+    ).map((r) => currentModelFields(kind, parse(r.body)));
   }
   libraryMetadata(): {
     contents: Pick<Content, 'id' | 'revision' | 'title' | 'kind'>[];
@@ -182,7 +187,7 @@ export class ProductStore {
         .get(kind, id) as Row | undefined;
       if (!row || (revision !== undefined && revision !== row.revision))
         throw new HttpError(404, 'Setting not found');
-      return parse(row.body);
+      return currentModelFields(kind, parse(row.body));
     }
     const r = (
       revision === undefined
@@ -214,7 +219,7 @@ export class ProductStore {
     const prior = id ? this.get<Row & ContentRef>(kind, id) : null;
     if (prior && prior.revision !== expected) throw new HttpError(409, 'Revision conflict');
     const result: Row & ContentRef = {
-      ...value,
+      ...currentModelFields(kind, value),
       id: id ?? createId ?? randomUUID(),
       revision: (prior?.revision ?? 0) + 1,
     };
@@ -430,11 +435,13 @@ export class ProductStore {
       'maxOutputTokens',
       'temperature',
       ...modelOptionKeys,
+      'contextTools', // Accepted from older clients; never saved.
       'enabled',
       'displayOrder',
       'pricing',
       'expectedRevision',
     ]);
+    if (b.contextTools !== undefined) boolean(b.contextTools);
     const expectedRevision = id ? number(b.expectedRevision, 'revision') : undefined;
     const current = id ? this.get<ModelPreset>('model', id) : undefined;
     if (current && current.revision !== expectedRevision)
@@ -469,7 +476,6 @@ export class ProductStore {
       ...(b.evaluationTools !== undefined
         ? { evaluationTools: validateEvaluationToolOptions(b.evaluationTools) }
         : {}),
-      ...(b.contextTools === true ? { contextTools: true } : {}),
       ...(b.providerOptions !== undefined
         ? { providerOptions: structuredClone(b.providerOptions) }
         : {}),

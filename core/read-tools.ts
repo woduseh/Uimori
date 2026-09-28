@@ -10,7 +10,7 @@ export const KNOWLEDGE_SKILL_TOOLS: ProviderTool[] = [
   {
     name: 'knowledge.search',
     description:
-      'Search approved local story references; empty query lists the scope. Returns metadata and pagination.',
+      'Search approved local story references; empty query lists the scope. Returns metadata and pagination within 24000 serialized characters; an oversized metadata item uses an explicit metadataPreview with original counts. Body matches also include a short exact excerpt with source/range and nextRead for a direct read around that hit; metadata-only matches have no excerpt. The excerpt can answer a narrow fact, but does not cover the complete reference or every matching term. Follow nextOffset for more references, or the supplied nextRead for context around a hit.',
     inputSchema: {
       type: 'object',
       properties: { query: { type: 'string', maxLength: 512 }, ...pagination(100) },

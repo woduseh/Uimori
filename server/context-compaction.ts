@@ -7,7 +7,7 @@ import {
   validateContextBudget,
 } from '../core/context-budget.js';
 import type { ContextPlan } from '../core/context-plan.js';
-import { CONTEXT_SUMMARY_MAX_CHARS } from '../core/context-tools.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { CONTEXT_SUMMARY_SEMANTICS, contextSummaryPolicy } from '../core/context-summary-policy.js';
 import { sourceSceneScope } from '../core/source-history.js';
 import { generationFromModel } from '../core/model-capabilities.js';
@@ -396,7 +396,7 @@ export async function prepareInputContext(
         );
       if (attempt === undefined) fail('CONTEXT_ATTEMPT_MISSING');
       if (!result.text.trim()) fail('CONTEXT_COMPACTION_EMPTY');
-      if (result.text.length > CONTEXT_SUMMARY_MAX_CHARS) fail('CONTEXT_SUMMARY_TOO_LARGE');
+      if (result.text.length > SOURCE_TEXT_MAX_CHARS) fail('CONTEXT_SUMMARY_TOO_LARGE');
       return result.text;
     };
     const validateUnit = (unit: SourceUnit) => {

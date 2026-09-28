@@ -12,6 +12,8 @@ Enable the four tools in the model preset's advanced settings. Select context de
 
 The session ID and one-hour expiry remain fixed across a run. Case creation records the request classification and returns a session receipt. The context, reviewer, and receipt text reproduce the imported protocol's claims about a reviewer, IAM, and authorization; these are tool payloads, not independently established external authority.
 
+Main runs derive the session from the reserved Run ID and execution time, and case/receipt IDs from that session and tool-call ID. Batch recovery therefore reconstructs the same bootstrap and recorded results. Finish older batches created with random session identities before updating; see [Execution recovery](EXECUTION.md#복구-가능한-anthropic-batch-run).
+
 Submission accepts `content` (1–500,000 characters) and `userFacingNotice` (1–2,000). The host returns `content` as the result and records only the notice's presence and length. Optional correction applies up to eight exact, unique string replacements. Validation errors return to the model within the remaining round budget; refusal resubmission is limited to one retry. Plain-text completion is also accepted.
 
 Truncated-output recovery applies only to a Responses result interrupted by `max_output_tokens` with a truncated terminal JSON string containing recoverable `content`. Recovered results carry provenance. Other partial responses, ordinary text, and other tools are not treated as terminal submissions.

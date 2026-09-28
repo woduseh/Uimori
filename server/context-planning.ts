@@ -1,4 +1,4 @@
-import { CONTEXT_SUMMARY_MAX_CHARS } from '../core/context-tools.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 export { contextDependencyKey } from './context-dependency.js';
 import { contextDependencyKey } from './context-dependency.js';
 import { countTextTokens } from '../core/text-tokens.js';
@@ -182,7 +182,7 @@ export function validateContextPlan(snapshot: RunSnapshot): void {
     (plan.summary !== null &&
       (typeof plan.summary !== 'string' ||
         !plan.summary.trim() ||
-        plan.summary.length > CONTEXT_SUMMARY_MAX_CHARS)) ||
+        plan.summary.length > SOURCE_TEXT_MAX_CHARS)) ||
     (plan.compacted.length > 0 && !plan.summary) ||
     !Number.isSafeInteger(plan.summaryCalls) ||
     plan.summaryCalls < 0 ||

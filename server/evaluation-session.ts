@@ -17,13 +17,16 @@ import type { ProviderResult } from '../core/transport.js';
 
 export function createEvaluationToolSession(
   target: (ModelPreset & { connection: unknown }) | undefined,
-  timeoutMs?: number
+  timeoutMs?: number,
+  run?: { id: string; issuedAt: string }
 ) {
   if (!target?.evaluationTools) return undefined;
   const options = validateEvaluationToolOptions(
     target.evaluationTools ?? defaultEvaluationToolOptions()
   );
-  const session = createEvaluationSession();
+  const session = run
+    ? createEvaluationSession(new Date(run.issuedAt), run.id)
+    : createEvaluationSession();
   const duration = timeoutMs ?? target.timeoutMs ?? 600_000;
   if (!Number.isSafeInteger(duration) || duration < 1 || duration > 1_800_000)
     throw new Error('INVALID_TIMEOUT');

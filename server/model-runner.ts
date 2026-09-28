@@ -1,13 +1,6 @@
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
 import { estimateContextTokens } from '../core/context-budget.js';
-import {
-  CONTEXT_TOOL_NAMES,
-  CONTEXT_WINDOW_RESULT_TOOLS,
-  contextToolsEnabled,
-  contextWindowStatus,
-  type ContextWindowStatus,
-} from '../core/context-tools.js';
 import { executeTool } from '../core/provider.js';
 import { executeFixtureMain, type FixtureGeneration } from '../core/fixture-provider.js';
 import type { Connection } from '../core/product.js';
@@ -31,12 +24,6 @@ import {
   storySubmissionEnabled,
   STORY_SUBMIT_MAX_CHARS,
 } from './main-request.js';
-import {
-  executeContextTool,
-  replayContextTool,
-  type ContextPersistence,
-  type ContextToolState,
-} from './context-tools.js';
 import { createAgentCollaboration } from './agent-collaboration.js';
 import { compactableRead, compactToolReads } from './context-tool-compaction.js';
 
@@ -61,9 +48,8 @@ export type MainHooks = {
   onToolEvent: (event: ToolEvent) => void | Promise<void>;
   /** Durable tool receipts used only when resuming a recoverable Batch Run. */
   replayToolEvents?: readonly ToolEvent[];
-  /** Durable owner of model-written context checkpoints; absent owners deny context.write/new. */
-  persistContext?: ContextPersistence;
-
+  /** Stable reservation identity for evaluation tool receipts during Batch recovery. */
+  evaluationRunId?: string;
   timeoutMs?: number;
   vertexRequestTier?: 'standard' | 'flex';
   authorize: (connection: Connection) => Connection | Promise<Connection>;
@@ -95,26 +81,24 @@ function addUsage(total: Usage, result: ProviderResult) {
 
 /** One server-owned main run. A transport error/partial/refusal is terminal, never an implicit retry. */
 export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<MainResult> {
-  // Reassigned only at a model-requested window boundary; every segment is one frozen projection.
-  let fixed = attachMainHostContext(structuredClone(snapshot));
+  const fixed = attachMainHostContext(structuredClone(snapshot));
   if (hooks.reserveCalls) fixed.settings.maxCalls -= hooks.reserveCalls;
   const target = fixed.profile?.models.main;
   if (!target) {
     const result = await executeFixtureMain(fixed, hooks, hooks.fixture);
     return { status: 'completed', ...result, error: null };
   }
-  const contextTools = contextToolsEnabled(fixed);
-  const contextState: ContextToolState = {
-    workingSummary: fixed.contextPlan?.summary ?? null,
-    checkpoint: fixed.contextPlan?.checkpoint ?? null,
-  };
-  let segmentBootstrap: ToolEvent[] = [];
   let completedToolHistory: ToolEvent[] = [];
   let lastUnhelpfulRead: string | undefined;
-  const resultWindows = new Map<string, ContextWindowStatus>();
   const results: ToolEvent[] = [];
   const correction = createToolCorrectionPolicy();
-  const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
+  const evaluation = createEvaluationToolSession(
+    target,
+    hooks.timeoutMs,
+    hooks.evaluationRunId && fixed.executionClock
+      ? { id: hooks.evaluationRunId, issuedAt: fixed.executionClock.iso }
+      : undefined
+  );
   const maxCalls = fixed.settings.maxCalls;
   const mainCallLimit = evaluation ? Math.min(maxCalls, evaluation.maxCalls) : maxCalls;
   let mainCalls = 0;
@@ -155,7 +139,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   if (!Number.isSafeInteger(maxCalls) || maxCalls < 1) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
   const collaboration = createAgentCollaboration(fixed, hooks, usage);
   await collaboration?.prepare();
-  // Explicit cross-advisor references outlive provider compaction and context.new. Keep the
+  // Explicit cross-advisor references outlive provider compaction. Keep the
   // original completed receipts separate from the mutable projection sent to the main model.
   const advisorContext = new Map(
     (collaboration?.bootstrap ?? []).map((event) => [event.callId, structuredClone(event)])
@@ -188,12 +172,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       const fresh = freshHistory !== undefined;
       const history = freshHistory ?? completedToolHistory;
       return buildMainProviderRequest(fixed, {
-        results: (fresh ? [] : results).map((event) => {
-          const contextWindow = resultWindows.get(event.callId);
-          return contextWindow
-            ? { ...event, result: { ...(event.result as Record<string, unknown>), contextWindow } }
-            : event;
-        }),
+        results: fresh ? [] : results,
         ...(evaluation
           ? {
               evaluation: {
@@ -207,7 +186,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           : {}),
         ...(!fresh && opaqueState !== undefined ? { opaqueState } : {}),
         ...(collaboration ? { agentBootstrap: collaboration.bootstrap } : {}),
-        ...(!fresh && segmentBootstrap.length ? { segmentBootstrap } : {}),
         ...(history.length ? { completedToolHistory: history } : {}),
       });
     };
@@ -228,7 +206,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         return fail('CONTEXT_TOOL_COMPACTION_NO_PROGRESS');
       if (before > inputLimit * 0.85 && latestRead !== lastUnhelpfulRead) {
         try {
-          const history = [...completedToolHistory, ...segmentBootstrap, ...results];
+          const history = [...completedToolHistory, ...results];
           const compacted = await compactToolReads(fixed, history, hooks, usage, (projection) =>
             estimateContextTokens(preview(build(projection).request).body)
           );
@@ -255,9 +233,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
             // Discard opaque continuation only after adopting the replacement history.
             opaqueState = undefined;
             results.length = 0;
-            resultWindows.clear();
             completedToolHistory = compacted;
-            segmentBootstrap = [];
             lastUnhelpfulRead = undefined;
             built = candidate;
           } else {
@@ -344,9 +320,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       };
     // Validate the whole turn before executing: repeated IDs cannot alias earlier tool results.
     const callIds = new Set(
-      [...results, ...(collaboration?.bootstrap ?? []), ...segmentBootstrap].map(
-        (event) => event.callId
-      )
+      [...results, ...(collaboration?.bootstrap ?? [])].map((event) => event.callId)
     );
     for (const call of result.toolCalls) {
       if (callIds.has(call.id) || completedCallIds.has(call.id)) return fail('DUPLICATE_TOOL_ID');
@@ -441,8 +415,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       return { status: 'completed', text: submitted.artifact.text, error: null, usage };
     }
     opaqueState = result.opaqueState;
-    let boundary: { snapshot: RunSnapshot; event: ToolEvent } | undefined;
-    const batchStart = results.length;
     for (const call of result.toolCalls) {
       if (hooks.signal.aborted) return fail('CANCELLED');
       // Transport only decodes. Exact frozen bindings separate state actions from read permissions.
@@ -452,10 +424,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       if (saved) {
         if (call.name === 'agents.consult' && collaboration) {
           event = collaboration.replay(saved);
-        } else if (contextTools && (CONTEXT_TOOL_NAMES as readonly string[]).includes(call.name)) {
-          const outcome = replayContextTool(fixed, saved, contextState);
-          event = outcome.event;
-          if (outcome.switched) boundary = { snapshot: outcome.switched, event };
         } else if (
           evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
         ) {
@@ -467,16 +435,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         }
       } else if (call.name === 'agents.consult' && collaboration) {
         event = await collaboration.consult(call.id, call.arguments, [...advisorContext.values()]);
-      } else if (contextTools && (CONTEXT_TOOL_NAMES as readonly string[]).includes(call.name)) {
-        const outcome = await executeContextTool(fixed, action, {
-          state: contextState,
-          alone: result.toolCalls.length === 1,
-          pendingResults: results.length,
-          reservedBootstrap: collaboration?.bootstrap.length ?? 0,
-          persist: hooks.persistContext,
-        });
-        event = outcome.event;
-        if (outcome.switched) boundary = { snapshot: outcome.switched, event };
       } else
         event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
           ? evaluation.execute(call)
@@ -488,44 +446,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       if (!saved) await hooks.onToolEvent(structuredClone(event));
       const outcome = correction(event, call.arguments);
       if (outcome === 'denied') return fail('READ_TOOL_DENIED');
-    }
-    if (contextTools && !boundary) {
-      const batch = results
-        .slice(batchStart)
-        .filter(
-          (event) =>
-            !event.denied &&
-            CONTEXT_WINDOW_RESULT_TOOLS.has(event.name) &&
-            event.result &&
-            typeof event.result === 'object' &&
-            !Array.isArray(event.result)
-        );
-      if (batch.length) {
-        // Native continuation validation needs every pending result. Only the completed batch
-        // receives new wire annotations; durable receipts and prior continuation results stay fixed.
-        const measure = () => estimateContextTokens(preview(build().request).body);
-        const reserve = 128 * batch.length;
-        const annotate = (tokens: number) => {
-          const status = contextWindowStatus(tokens, fixed.contextPlan!.budget.inputTokenLimit);
-          for (const event of batch) resultWindows.set(event.callId, status);
-        };
-        const projected = measure() + reserve;
-        annotate(projected);
-        // Include the actual annotations with a bounded second measurement, not a fixed-point loop.
-        const annotated = measure();
-        if (annotated > projected) annotate(annotated + reserve);
-      }
-    }
-    if (boundary) {
-      // A new window is a fresh provider request: no opaque continuation, no prior results.
-      // The completed context.new exchange is the only carried-over tool history.
-      fixed = boundary.snapshot;
-      results.length = 0;
-      resultWindows.clear();
-      opaqueState = undefined;
-      segmentBootstrap = [structuredClone(boundary.event)];
-      completedToolHistory = [];
-      lastUnhelpfulRead = undefined;
     }
   }
 }

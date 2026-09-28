@@ -1,4 +1,4 @@
-import { runDataProcess } from '../server/helper-data-tools.js';
+import * as dataTools from '../server/helper-data-tools.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -204,6 +204,184 @@ const requestData = (wire: any) =>
       .content.replace(/^Request data \(JSON\):\n/, '')
   );
 
+test('independent helper data reads overlap in pairs while results, budgets and mutations retain call order', async () => {
+  const f = fixture();
+  const releases: (() => void)[] = [];
+  const gates = [0, 1].map(() => new Promise<void>((resolve) => releases.push(resolve)));
+  const started: number[] = [],
+    finished: number[] = [];
+  let inFlight = 0,
+    maxInFlight = 0;
+  vi.spyOn(dataTools, 'invokeDataTool').mockImplementation(async () => {
+    const index = started.length;
+    started.push(index);
+    maxInFlight = Math.max(maxInFlight, ++inFlight);
+    try {
+      if (index < gates.length) await gates[index];
+      if (index === 4) throw new Error('DATA_QUERY_TIMEOUT: narrow the query');
+      return {
+        index,
+        text: index < 3 ? 'r'.repeat(24_000) : 'after the write',
+        folders: f.store.libraryOrganization.snapshot().folders.length,
+      };
+    } finally {
+      finished.push(index);
+      inFlight--;
+    }
+  });
+  const revision = f.store.libraryOrganization.snapshot().revision;
+  const bodies = provider((wire, round) => {
+    if (round === 0)
+      return answer(
+        '',
+        [
+          { id: 'first', name: 'data.search', args: { patterns: ['first'] } },
+          { id: 'second', name: 'db.query', args: { sql: 'SELECT 2' } },
+          {
+            id: 'third',
+            name: 'data.read',
+            args: {
+              refs: [
+                {
+                  scope: 'library',
+                  kind: 'content',
+                  id: 'fixture',
+                  revision: 1,
+                  field: '',
+                  hash: '',
+                },
+              ],
+            },
+          },
+          {
+            id: 'write',
+            name: 'app.call',
+            args: {
+              name: 'library.organize',
+              arguments: {
+                action: 'create-folder',
+                body: { expectedRevision: revision, category: 'bot', title: 'After reads' },
+              },
+            },
+          },
+          { id: 'after', name: 'data.search', args: { patterns: ['after'] } },
+          { id: 'failed-read', name: 'db.query', args: { sql: 'SELECT 5' } },
+        ],
+        wire
+      );
+    expect(
+      wire.messages
+        .filter((item: any) => item.role === 'tool')
+        .map((item: any) => item.tool_call_id)
+    ).toEqual(['first', 'second', 'third', 'write', 'after', 'failed-read']);
+    expect(toolResult(wire, 'first')).toMatchObject({ index: 0, folders: 0 });
+    expect(toolResult(wire, 'second')).toMatchObject({ index: 1, folders: 0 });
+    expect(toolResult(wire, 'third')).toMatchObject({
+      error: 'HELPER_READ_TOO_LARGE',
+      returned: false,
+    });
+    expect(toolResult(wire, 'write').folders).toHaveLength(1);
+    expect(toolResult(wire, 'after')).toMatchObject({ index: 3, folders: 1 });
+    expect(toolResult(wire, 'failed-read')).toMatchObject({
+      code: 'DATA_QUERY_TIMEOUT',
+      retryMode: 'narrow_read',
+      outcome: 'unchanged',
+    });
+    return answer('Reads finished and the requested folder was saved.');
+  });
+  const running = f.run('Read the requested sources, create a folder, then check again.');
+  try {
+    await vi.waitFor(() => expect([...started]).toEqual([0, 1]));
+    releases[1]();
+    await vi.waitFor(() => expect(finished).toEqual([1]));
+    expect(started).toEqual([0, 1]);
+    expect(f.store.libraryOrganization.snapshot().folders).toHaveLength(0);
+    releases[0]();
+    const task = await running;
+    expect(task.status, task.error ?? '').toBe('completed');
+    expect(maxInFlight).toBe(2);
+    expect(bodies).toHaveLength(2);
+    expect(
+      f.runtime.workspace
+        .events(f.conversation.id)
+        .filter((item) => item.kind === 'tool.finished')
+        .map((item) => (item.data as { callId: string }).callId)
+    ).toEqual(['first', 'second', 'third', 'write', 'after', 'failed-read']);
+    expect(f.store.libraryOrganization.snapshot().folders.map((folder) => folder.title)).toEqual([
+      'After reads',
+    ]);
+  } finally {
+    for (const release of releases) release();
+    await running;
+  }
+});
+
+test('cancelling a helper data pair drains both reads before stopping and never starts its following mutation', async () => {
+  const f = fixture();
+  const aborted: number[] = [],
+    close: (() => void)[] = [];
+  vi.spyOn(dataTools, 'invokeDataTool').mockImplementation(
+    (_store, _task, _name, _args, signal) => {
+      const index = close.length;
+      return new Promise((_resolve, reject) => {
+        close.push(() => reject(new Error('CANCELLED')));
+        signal!.addEventListener(
+          'abort',
+          () => {
+            aborted.push(index);
+            if (index === 0) close[index]();
+          },
+          { once: true }
+        );
+      });
+    }
+  );
+  const revision = f.store.libraryOrganization.snapshot().revision;
+  const bodies = provider((wire) =>
+    answer(
+      '',
+      [
+        { id: 'first', name: 'data.search', args: { patterns: ['first'] } },
+        { id: 'second', name: 'db.query', args: { sql: 'SELECT 2' } },
+        {
+          id: 'write',
+          name: 'app.call',
+          args: {
+            name: 'library.organize',
+            arguments: {
+              action: 'create-folder',
+              body: { expectedRevision: revision, category: 'bot', title: 'Must not exist' },
+            },
+          },
+        },
+      ],
+      wire
+    )
+  );
+  const task = f.runtime.enqueue(f.conversation.id, randomUUID(), 'Read then create the folder.');
+  let settled = false;
+  const completion = Promise.all(f.work).then(() => {
+    settled = true;
+  });
+  try {
+    await vi.waitFor(() => expect(close).toHaveLength(2));
+    f.runtime.cancel(task.id);
+    await vi.waitFor(() => expect(aborted).toEqual([0, 1]));
+    expect(settled).toBe(false);
+    expect(f.store.libraryOrganization.snapshot().folders).toHaveLength(0);
+    close[1]();
+    await completion;
+    expect(f.runtime.workspace.task(task.id).status).toBe('cancelled');
+    expect(bodies).toHaveLength(1);
+    expect(f.store.db.prepare('SELECT count(*) AS n FROM helper_operations').get()?.n).toBe(0);
+    expect(f.store.libraryOrganization.snapshot().folders).toHaveLength(0);
+  } finally {
+    f.runtime.cancel(task.id);
+    for (const stop of close) stop();
+    await completion;
+  }
+});
+
 test('a native two-call fact lookup sends five stable tools, no full editor JSON, and bounded exact evidence', async () => {
   const f = fixture();
   const body =
@@ -255,7 +433,7 @@ test('a native two-call fact lookup sends five stable tools, no full editor JSON
       (m) => typeof m.attemptId === 'string' && m.preparationMs >= 0 && m.compactionMs === 0
     )
   ).toBe(true);
-  const queried = (await runDataProcess({
+  const queried = (await dataTools.runDataProcess({
     path: f.store.path,
     taskId: task.id,
     name: 'db.query',
