@@ -2,6 +2,7 @@ import { OUTLINE_PLANNING_GUIDANCE, OUTLINE_REVIEW_GUIDANCE } from '../core/outl
 import type { OutlineTarget } from '../core/outline.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
 import { performance } from 'node:perf_hooks';
+import { availableParallelism } from 'node:os';
 import { HELPER_APP_TOOLS, HELPER_GATEWAY_TOOLS, describeHelperTools } from './helper-app-tools.js';
 import { HELPER_DATA_TOOLS, invokeDataTool } from './helper-data-tools.js';
 import { invokeResourceTool } from './helper-resource-tools.js';
@@ -778,22 +779,35 @@ export class HelperRuntime {
         };
       };
       let roundReadChars = 0;
+      const readConcurrency = Math.min(4, availableParallelism());
       for (let index = 0; index < calls.length; ) {
         const group = [calls[index++]];
         // Only the isolated read-only data workers overlap. Every other tool is an ordering barrier.
-        if (
+        while (
           HELPER_DATA_TOOLS.some((tool) => tool.name === group[0].name) &&
           index < calls.length &&
           HELPER_DATA_TOOLS.some((tool) => tool.name === calls[index].name)
         )
           group.push(calls[index++]);
-        // Drain both reads even after cancellation; no child work survives into the next group.
-        const completed = await Promise.allSettled(group.map(executeCall));
+        const completed: Awaited<ReturnType<typeof executeCall>>[] = [];
+        let next = 0;
+        // A finished reader takes the next call immediately, without waiting for its slower sibling.
+        const workers = await Promise.allSettled(
+          Array.from({ length: Math.min(readConcurrency, group.length) }, async () => {
+            while (next < group.length) {
+              toolSignal.throwIfAborted();
+              const position = next++;
+              completed[position] = await executeCall(group[position]);
+            }
+          })
+        );
+        // Drain active reads on cancellation before leaving the group or crossing a write boundary.
+        const failed = workers.find((worker) => worker.status === 'rejected');
+        if (failed?.status === 'rejected') throw failed.reason;
         for (const completion of completed) {
-          if (completion.status === 'rejected') throw completion.reason;
           const preparationStarted = performance.now();
-          const { wireCall, call, fatalError, elapsedMs } = completion.value;
-          let { output, denied, errorKind } = completion.value;
+          const { wireCall, call, fatalError, elapsedMs } = completion;
+          let { output, denied, errorKind } = completion;
           const event: ToolEvent = {
             callId: wireCall.id,
             name: wireCall.name,

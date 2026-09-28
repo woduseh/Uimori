@@ -16,6 +16,12 @@ import type { ProviderTool } from '../core/transport.js';
 import type { Content } from '../core/product.js';
 import type { HelperTask } from '../core/helper.js';
 
+// A two-CPU host leaves queued reads in these scenarios, independently of the CI machine.
+vi.mock('node:os', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:os')>()),
+  availableParallelism: () => 2,
+}));
+
 const owned: { store: Store; path: string; work: Promise<void>[]; controller: AbortController }[] =
   [];
 afterEach(async () => {
@@ -204,7 +210,7 @@ const requestData = (wire: any) =>
       .content.replace(/^Request data \(JSON\):\n/, '')
   );
 
-test('independent helper data reads overlap in pairs while results, budgets and mutations retain call order', async () => {
+test('independent helper data reads refill a free slot while results, budgets and mutations retain call order', async () => {
   const f = fixture();
   const releases: (() => void)[] = [];
   const gates = [0, 1].map(() => new Promise<void>((resolve) => releases.push(resolve)));
@@ -293,8 +299,8 @@ test('independent helper data reads overlap in pairs while results, budgets and 
   try {
     await vi.waitFor(() => expect([...started]).toEqual([0, 1]));
     releases[1]();
-    await vi.waitFor(() => expect(finished).toEqual([1]));
-    expect(started).toEqual([0, 1]);
+    await vi.waitFor(() => expect([...finished]).toEqual([1, 2]));
+    expect(started).toEqual([0, 1, 2]);
     expect(f.store.libraryOrganization.snapshot().folders).toHaveLength(0);
     releases[0]();
     const task = await running;
@@ -316,7 +322,7 @@ test('independent helper data reads overlap in pairs while results, budgets and 
   }
 });
 
-test('cancelling a helper data pair drains both reads before stopping and never starts its following mutation', async () => {
+test('cancelling helper reads drains active work without starting queued reads or its following mutation', async () => {
   const f = fixture();
   const aborted: number[] = [],
     close: (() => void)[] = [];
@@ -343,6 +349,7 @@ test('cancelling a helper data pair drains both reads before stopping and never 
       [
         { id: 'first', name: 'data.search', args: { patterns: ['first'] } },
         { id: 'second', name: 'db.query', args: { sql: 'SELECT 2' } },
+        { id: 'queued', name: 'data.search', args: { patterns: ['must not start'] } },
         {
           id: 'write',
           name: 'app.call',
@@ -371,6 +378,7 @@ test('cancelling a helper data pair drains both reads before stopping and never 
     expect(f.store.libraryOrganization.snapshot().folders).toHaveLength(0);
     close[1]();
     await completion;
+    expect(close).toHaveLength(2);
     expect(f.runtime.workspace.task(task.id).status).toBe('cancelled');
     expect(bodies).toHaveLength(1);
     expect(f.store.db.prepare('SELECT count(*) AS n FROM helper_operations').get()?.n).toBe(0);
