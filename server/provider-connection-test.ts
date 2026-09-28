@@ -1,3 +1,4 @@
+import { uncertainAttemptResult } from './usage-accounting.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
@@ -208,6 +209,7 @@ export function providerConnectionTestRoutes(
             const timeout = AbortSignal.timeout(CONNECTION_TEST_TIMEOUT_MS);
             const signal = AbortSignal.any([options.signal, timeout]);
             let result: ProviderResult | undefined;
+            let attemptId: string | undefined;
             let boundaryError: string | undefined;
             const authorize = () => {
               if (signal.aborted)
@@ -234,10 +236,14 @@ export function providerConnectionTestRoutes(
                 resolveCredential: options.resolveCredential,
                 executeCodex: options.executeCodex,
                 beforeTurn: authorize,
-                onWire: () => {
+                onWire: (wire) => {
                   try {
                     authorize();
                     journal.sent(id);
+                    attemptId = store.product.startAttempt(null, null, null, wire, {
+                      kind: 'connection-test',
+                      retainContent: false,
+                    });
                     authorize();
                   } catch (error) {
                     boundaryError =
@@ -306,6 +312,12 @@ export function providerConnectionTestRoutes(
                     }
                   : nullUsage(),
               });
+            } finally {
+              if (attemptId)
+                store.product.finishAttempt(
+                  attemptId,
+                  result ?? uncertainAttemptResult(signal.aborted)
+                );
             }
           })()
         );

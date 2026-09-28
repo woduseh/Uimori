@@ -1,3 +1,5 @@
+import { captureReaderLocation, useReadingSync } from './useReadingSync.js';
+import { readerTargetFromUrl, readerTargetUrl, type ReaderTarget } from '../core/reader-target.js';
 import { readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
 import {
@@ -28,6 +30,16 @@ import {
 } from './reader-navigation-scroll.js';
 
 const lastWorkspaceKey = 'uimori:last-workspace';
+function semanticReaderTarget(search: string): ReaderTarget | null {
+  const params = new URLSearchParams(search);
+  // A bare ?source= URL chooses the reader page and must still allow this browser's
+  // finer sessionStorage position to win on reload. Search/bookmark/push targets carry
+  // semantic location metadata through readerTargetUrl(), including an explicit mode.
+  return ['mode', 'anchor', 'contentHash', 'position'].some((key) => params.has(key))
+    ? readerTargetFromUrl(search)
+    : null;
+}
+
 function initialView(restore = false) {
   const params = new URLSearchParams(location.search);
   let chat = params.get('chat') || '';
@@ -127,6 +139,9 @@ export function useStory() {
   const draftIdentity = useRef({ text: '', revision: 0 });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [readerTarget, setReaderTarget] = useState<ReaderTarget | null>(() =>
+    semanticReaderTarget(location.search)
+  );
   const [loreResetDraft, setLoreResetDraft] = useState(false);
   const [submitting, setSubmitting] = useState<string[]>([]);
   const submitLocks = useRef(new Set<string>());
@@ -206,6 +221,15 @@ export function useStory() {
           '',
     key: `${selected}:${activeBranchId}:${readSource}`,
   };
+  const readingSync = useReadingSync({
+    chatId: destination === 'story' ? selected : '',
+    branchId: activeBranchId || `main:${selected}`,
+    reader,
+    storageKey: `reading:${selected}:${storageBranch}`,
+    onResume: (target) => openTarget(target),
+    saveLocal: () => savePosition(),
+  });
+  const explicitReadingIntent = useRef<{ chatId: string; sourceId: string } | null>(null);
   const refresh = useCallback(
     async (id: string, incremental = false) => {
       if (
@@ -509,10 +533,24 @@ export function useStory() {
           reader.current === node,
         () => {
           restoredView.current = viewKey;
+          const intent = explicitReadingIntent.current;
+          if (intent?.chatId === selected) {
+            const article = document.getElementById(`source-${intent.sourceId}`);
+            if (article && node.contains(article)) {
+              explicitReadingIntent.current = null;
+              const target = captureReaderLocation(
+                node,
+                selected,
+                activeBranchId || `main:${selected}`,
+                article
+              );
+              if (target) readingSync.remember(target);
+            }
+          }
         }
       );
     },
-    [selected, viewKey]
+    [selected, viewKey, activeBranchId, readingSync.remember]
   );
   const savePosition = useCallback(() => {
     const node = reader.current;
@@ -646,6 +684,26 @@ export function useStory() {
       ) {
         holdNavigationPosition(node, { kind: 'end' });
         latestIntent.current = null;
+      } else if (
+        readerTarget?.chatId === selected &&
+        readerTarget.sourceId === readSource &&
+        document.getElementById(`source-${readSource}`)
+      ) {
+        const element = document.getElementById(`source-${readSource}`)!;
+        const validHash =
+          !readerTarget.contentHash || element.dataset.contentHash === readerTarget.contentHash;
+        holdNavigationPosition(node, {
+          kind: 'source',
+          element,
+          ...(validHash && readerTarget.blockAnchor
+            ? {
+                anchor: readerTarget.blockAnchor,
+                ratio: readerTarget.offsetRatio ?? 0,
+                fallbackToSource: true,
+              }
+            : {}),
+        });
+        if (!validHash) setNotice('본문이 바뀌어 해당 장면의 시작으로 이동했어요.');
       } else if (sourceTarget && node.contains(sourceTarget)) {
         holdNavigationPosition(node, { kind: 'source', element: sourceTarget });
       } else {
@@ -664,7 +722,7 @@ export function useStory() {
       restoredView.current = viewKey;
     });
     return () => cancelAnimationFrame(frame);
-  }, [detail, selected, viewKey, readSource, destination, holdNavigationPosition]);
+  }, [detail, selected, viewKey, readSource, destination, holdNavigationPosition, readerTarget]);
   const setViewUrl = (chat: string, branchId = '', source = '') => {
     const params = new URLSearchParams({ chat });
     if (branchId) params.set('branch', branchId);
@@ -672,12 +730,15 @@ export function useStory() {
     history.pushState(null, '', `?${params}`);
   };
   const select = (id: string) => {
+    explicitReadingIntent.current = null;
+    setReaderTarget(null);
     savePosition();
     rememberCursor();
     setViewUrl(id);
     navigate({ kind: 'chat', chat: id });
   };
   const chooseBranch = (id: string, source = '') => {
+    setReaderTarget(null);
     savePosition();
     rememberCursor();
     setViewUrl(selected, id, source);
@@ -685,6 +746,8 @@ export function useStory() {
     navigate({ kind: 'branch', branch: id, source });
   };
   const chooseSource = (id: string, toEnd = false) => {
+    explicitReadingIntent.current = { chatId: selected, sourceId: id };
+    setReaderTarget(null);
     cancelNavigationScroll.current?.();
     savePosition();
     navigate({ kind: 'source', source: id });
@@ -713,6 +776,31 @@ export function useStory() {
       });
     }
   };
+  const openTarget = (target: ReaderTarget, replace = false) => {
+    explicitReadingIntent.current = replace
+      ? null
+      : { chatId: target.chatId, sourceId: target.sourceId };
+    cancelNavigationScroll.current?.();
+    savePosition();
+    rememberCursor();
+    setReaderTarget({ ...target });
+    try {
+      sessionStorage.setItem(`reader-mode:${target.sourceId}`, target.representation);
+    } catch {
+      /* Optional view cache. */
+    }
+    if (replace) history.replaceState(null, '', readerTargetUrl(target));
+    else history.pushState(null, '', readerTargetUrl(target));
+    navigate({
+      kind: 'restore',
+      view: {
+        chat: target.chatId,
+        branch: target.branchId,
+        source: target.sourceId,
+        destination: 'story',
+      },
+    });
+  };
   const chooseLatest = () => {
     const last = detail?.reader.navigation.at(-1);
     if (last) chooseSource(last.id, true);
@@ -721,6 +809,7 @@ export function useStory() {
     const onPop = () => {
       savePosition();
       rememberCursor();
+      setReaderTarget(semanticReaderTarget(location.search));
       navigate({ kind: 'restore', view: initialView() });
     };
     return subscribeAppHistory(onPop);
@@ -1212,6 +1301,9 @@ export function useStory() {
     select,
     chooseBranch,
     chooseSource,
+    openTarget,
+    readerTarget,
+    readingSync,
     chooseLatest,
     showLibrary,
     generate,

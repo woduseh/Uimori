@@ -6,6 +6,11 @@ import { postFixtureChat } from './fixtures/chat.js';
 const original = '(OOC: 미라는 아직 진실을 몰라.)\n\n*{{char}}는 기다린다.*';
 const translated = '(OOC: Mira does not know the truth yet.)\n\n*{{char}} waits.*';
 const endpoint = '**/api/chats/*/input-translation';
+async function clipboardText(page: Page) {
+  // The Windows system clipboard exposes text line endings as CRLF. Persisted request
+  // equality is asserted separately, so normalize only this OS boundary for comparison.
+  return (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n');
+}
 const composer = (page: Page) => page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
 const translate = (page: Page) => page.getByRole('button', { name: '입력 번역', exact: true });
 const send = (page: Page) => page.getByRole('button', { name: '원문 생성', exact: true });
@@ -195,10 +200,11 @@ for (const width of [360, 412, 1440]) {
       await page.evaluate((id) => sessionStorage.getItem(`input-translation:draft:${id}`), chat.id)
     ).toBeNull();
     const copy = page.getByRole('button', { name: '요청 복사', exact: true });
-    await copy.focus();
-    await page.keyboard.press('Enter');
+    // Clipboard APIs are user-gesture sensitive on some desktop browsers. A real click
+    // proves the product copy path; keyboard button semantics are covered by native button behavior.
+    await copy.click();
     await expect(page.getByRole('button', { name: '요청 복사됨', exact: true })).toBeVisible();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(finalText);
+    expect(await clipboardText(page)).toBe(finalText);
     await page.screenshot({ path: info.outputPath(`request-copy-${width}.png`) });
     expect(calls).toHaveLength(2);
     expect(calls[0]).toMatchObject({
@@ -458,7 +464,7 @@ test('ICOPY full stored input is copied, not transformed or collapsed text, even
     await expect(copy).toBeEnabled();
     await copy.click();
     await expect(source.getByRole('button', { name: '요청 복사됨', exact: true })).toBeVisible();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(raw);
+    expect(await clipboardText(page)).toBe(raw);
     const after = await detail(request, chat.id);
     expect(
       after.runs.map((run) => ({ id: run.id, request: run.request, status: run.status }))
@@ -483,7 +489,7 @@ test('ICOPY clipboard failures do not report success and a collapsed request sti
   await expect(source.locator('.request-preview')).toBeVisible();
   const copy = source.getByRole('button', { name: '요청 복사', exact: true });
   await copy.click();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(raw);
+  expect(await clipboardText(page)).toBe(raw);
   await expect(copy).toBeVisible();
   await page.evaluate(() =>
     Object.defineProperty(navigator, 'clipboard', {

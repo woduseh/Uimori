@@ -30,7 +30,7 @@ COPY --from=build /app/LICENSE /app/THIRD_PARTY_NOTICES.md ./
 COPY --from=build /app/third_party ./third_party
 COPY --from=build /app/dist ./dist
 # An empty named volume receives this directory's initial content and ownership.
-RUN mkdir -p /data && touch /data/.uimori-data && chown -R node:node /data
+RUN mkdir -p /data /backups && touch /data/.uimori-data /backups/.uimori-backups && chown -R node:node /data /backups
 USER node
 EXPOSE 4310
 CMD ["node", "dist/server/index.js"]

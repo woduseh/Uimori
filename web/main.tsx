@@ -1,3 +1,7 @@
+import { BookmarkEditingContext } from './Bookmarks.js';
+import type { NotificationIntent } from '../core/push.js';
+import { startPwa, subscribeNotificationNavigation } from './pwa.js';
+import type { ReaderTarget } from '../core/reader-target.js';
 import { ThemeProvider, useThemes } from './ThemeContext.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { promptControls } from '../core/risu-prompt.js';
@@ -525,9 +529,24 @@ function App() {
     setNewKey((old) => old + 1);
     setPanel('new');
   }
-  function select(id: string) {
+  const [pendingNotification, setPendingNotification] = useState<NotificationIntent | null>(null);
+  const notificationBlocked = sourceEditing || optionsDirty || libraryDirty || panel === 'settings';
+  const notificationSelect = useRef((intent: NotificationIntent) => {
+    if (notificationBlocked) setPendingNotification(intent);
+    else select(intent.chatId, intent.target);
+  });
+  notificationSelect.current = (intent) => {
+    if (notificationBlocked) setPendingNotification(intent);
+    else select(intent.chatId, intent.target);
+  };
+  useEffect(
+    () => subscribeNotificationNavigation((intent) => notificationSelect.current(intent)),
+    []
+  );
+  function select(id: string, target?: ReaderTarget) {
     const go = () => {
-      s.select(id);
+      if (target) s.openTarget(target);
+      else s.select(id);
       setPanel('');
     };
     if (libraryDirty && s.destination === 'library') {
@@ -921,6 +940,24 @@ function App() {
             </div>
           </header>
         )}
+        {pendingNotification && (
+          <aside className="reading-sync-notice" aria-label="알림의 장면 이동">
+            <span>알림이 도착했어요. 현재 편집을 마친 뒤 해당 장면으로 이동할 수 있어요.</span>
+            <button
+              type="button"
+              disabled={notificationBlocked}
+              onClick={() => {
+                select(pendingNotification.chatId, pendingNotification.target);
+                setPendingNotification(null);
+              }}
+            >
+              알림으로 이동
+            </button>
+            <button type="button" onClick={() => setPendingNotification(null)}>
+              알림 이동 닫기
+            </button>
+          </aside>
+        )}
         {s.destination === 'library' ? (
           <div className="destination-scroll">
             {libraryTab === 'prompts' ? (
@@ -972,6 +1009,29 @@ function App() {
           </div>
         ) : (
           <>
+            {(s.readingSync.other || s.readingSync.error) && (
+              <aside className="reading-sync-notice" aria-label="읽기 위치 동기화">
+                {s.readingSync.other && (
+                  <>
+                    <span>저장된 읽기 위치가 있어요. 현재 화면은 그대로 유지해요.</span>
+                    <button type="button" onClick={s.readingSync.resumeOther}>
+                      {s.readingSync.resumeLabel}
+                    </button>
+                  </>
+                )}
+                {s.readingSync.error && (
+                  <>
+                    <span>{s.readingSync.error}</span>
+                    <button type="button" onClick={s.readingSync.refresh}>
+                      연결 다시 확인
+                    </button>
+                  </>
+                )}
+                <button type="button" onClick={s.readingSync.dismiss}>
+                  닫기
+                </button>
+              </aside>
+            )}
             <div
               className={`reader-stage ${showSceneNavigator && s.detail?.reader.navigation.length ? 'has-scenes' : ''}`}
             >
@@ -1059,6 +1119,9 @@ function App() {
                               }
                               key={source.id}
                               source={source}
+                              readerTarget={
+                                s.readerTarget?.sourceId === source.id ? s.readerTarget : undefined
+                              }
                               index={index + (s.detail?.reader?.start ?? 0)}
                               sceneNumber={
                                 s.detail?.reader.navigation.find((item) => item.id === source.id)
@@ -1248,6 +1311,7 @@ function App() {
                   detail={s.detail}
                   reader={s.reader}
                   target={s.readSource}
+                  onTarget={(target) => select(target.chatId, target)}
                   onSelect={s.chooseSource}
                   onLatest={s.chooseLatest}
                   compact={compact}
@@ -1806,7 +1870,7 @@ function App() {
   );
   return (
     <ReadingPreferencesContext value={reading.settings}>
-      {workspace}
+      <BookmarkEditingContext value={onSourceEditing}>{workspace}</BookmarkEditingContext>
       <Dialog
         open={nativeNotices.length > 0}
         title="카드 알림"
@@ -1818,6 +1882,7 @@ function App() {
     </ReadingPreferencesContext>
   );
 }
+startPwa();
 createRoot(document.getElementById('root')!).render(
   <SessionGate>
     <MaintenanceBanner />

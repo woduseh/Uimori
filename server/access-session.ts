@@ -41,15 +41,19 @@ export class AccessSessions {
     return value && isSha256Hex(value) ? value : undefined;
   }
 
-  authenticated(cookie?: string): boolean {
-    if (!this.required) return true;
+  /** Host-only authority for attached capabilities such as Push subscriptions. */
+  sessionHash(cookie?: string): string | null {
     const token = this.token(cookie);
-    return (
-      !!token &&
-      !!this.db
-        .prepare('SELECT 1 FROM access_sessions WHERE token_hash=? AND authority_hash=?')
-        .get(digest(token).toString('hex'), this.authority.toString('hex'))
-    );
+    if (!token) return null;
+    const hash = digest(token).toString('hex');
+    return this.db
+      .prepare('SELECT 1 FROM access_sessions WHERE token_hash=? AND authority_hash=?')
+      .get(hash, this.authority.toString('hex'))
+      ? hash
+      : null;
+  }
+  authenticated(cookie?: string): boolean {
+    return !this.required || this.sessionHash(cookie) !== null;
   }
 
   checkLoginAllowed(): void {

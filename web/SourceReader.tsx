@@ -1,3 +1,6 @@
+import { BookmarkButton } from './Bookmarks.js';
+import { captureReaderLocation } from './useReadingSync.js';
+import type { ReaderTarget } from '../core/reader-target.js';
 import { ThemeFrame } from './ThemeFrame.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
 import { displayTranslationJob } from './translation-display.js';
@@ -33,6 +36,7 @@ type ReaderMode = 'original' | 'translation';
 /** Scene header pieces the activity panel places inside its summary row. */
 type SceneHeaderSlots = { leading: ReactNode; badges: ReactNode };
 type ReaderProps = {
+  readerTarget?: ReaderTarget;
   branchId?: string;
   source: Source;
   index: number;
@@ -124,6 +128,7 @@ function latestTranslation(source: Source, jobs: Job[]) {
     .at(0);
 }
 function SourceReaderContent({
+  readerTarget,
   source,
   index,
   sceneNumber,
@@ -208,6 +213,18 @@ function SourceReaderContent({
   const [mode, setMode] = useState<ReaderMode>(() =>
     initialMode(source.id, !!displayTranslation?.result)
   );
+  const appliedTarget = useRef<ReaderTarget | undefined>(undefined);
+  const targetTranslationAvailable = !!displayTranslation?.result;
+  useLayoutEffect(() => {
+    if (appliedTarget.current === readerTarget) return;
+    appliedTarget.current = readerTarget;
+    if (readerTarget?.sourceId === source.id)
+      setMode(
+        readerTarget.representation === 'translation' && targetTranslationAvailable
+          ? 'translation'
+          : 'original'
+      );
+  }, [readerTarget, source.id, targetTranslationAvailable]);
   const [editor, setEditor] = useState<ReaderMode | null>(null);
   const editorOrigin = useRef<EditorOrigin | undefined>(undefined);
   const restoreEditor = useRef(false);
@@ -477,6 +494,10 @@ function SourceReaderContent({
       id={`source-${source.id}`}
       data-testid="source"
       data-source-id={source.id}
+      data-representation={mode}
+      data-content-hash={
+        mode === 'translation' ? displayTranslation?.translationLayout?.textHash : source.hash
+      }
       data-uimori-part="scene"
     >
       {latest && projected?.format === 'risu-html' && (
@@ -701,6 +722,30 @@ function SourceReaderContent({
             className="scene-action"
             disabled={!!editor || !!pending}
             onClick={(event) => openEditor(mode, event.currentTarget)}
+          />
+          <BookmarkButton
+            title={sceneNumber ? `장면 ${sceneNumber}` : '첫 메시지'}
+            disabled={!!editor || !!pending}
+            capture={() => {
+              const article = container.current;
+              const scrollport = article?.closest<HTMLElement>('[data-reader-scrollport]');
+              if (!article || !scrollport) return null;
+              const target = captureReaderLocation(
+                scrollport,
+                source.chatId,
+                branchId ?? `main:${source.chatId}`,
+                article
+              );
+              return target
+                ? {
+                    target,
+                    quote: (
+                      selectedReaderText(article) ||
+                      (mode === 'translation' ? translationText : source.text)
+                    ).slice(0, 300),
+                  }
+                : null;
+            }}
           />
           <ActionMenu label="장면 작업 메뉴" placement="top">
             {onAskHelper && (

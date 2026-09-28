@@ -35,6 +35,7 @@ const codex = {
 };
 const app = await createApp({
   dbPath,
+  backupDirectory: process.env.UIMORI_BACKUP_DIR,
   buildId,
   instanceId,
   ...access,

@@ -1,0 +1,103 @@
+.scheduled-backups fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+.backup-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.backup-heading h3,
+.backup-heading p {
+  margin: 0;
+}
+.backup-heading p {
+  margin-top: 6px;
+  font-size: 0.875rem;
+}
+.backup-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.backup-fields label {
+  min-width: 0;
+}
+.backup-fields label > small {
+  display: inline;
+  color: var(--muted);
+  font-weight: 400;
+}
+.backup-fields input {
+  width: 100%;
+  min-width: 0;
+}
+.backup-status {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-block: 4px;
+  font-size: 0.875rem;
+}
+.backup-status > div {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 12px;
+}
+.backup-status dt {
+  color: var(--muted);
+}
+.backup-status dd {
+  margin: 0;
+}
+.backup-status small,
+.backup-list small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-block: 8px;
+}
+.backup-actions .settings-save-button {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.backup-list,
+.backup-empty {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.backup-list summary > span {
+  color: var(--muted);
+  margin-left: 6px;
+}
+.backup-list .archive-action-row {
+  padding-block: 12px;
+  gap: 12px;
+}
+.backup-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.backup-empty {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+@media (max-width: 480px) {
+  .backup-fields {
+    grid-template-columns: 1fr;
+  }
+}

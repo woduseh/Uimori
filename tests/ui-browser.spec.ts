@@ -1661,9 +1661,7 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
       .getByLabel('프로바이더 이름', { exact: true })
       .fill('SYNTHETIC unsaved connection');
     await selectSettingsSection(page, '데이터 관리');
-    await expect(
-      dialog.getByRole('button', { name: 'DB 스냅샷 다운로드', exact: true })
-    ).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '백업 다운로드', exact: true })).toBeVisible();
     await expect(dialog.getByLabel('프로바이더 이름', { exact: true })).not.toBeVisible();
     await selectSettingsSection(page, '앱 정보·라이선스');
     await expect(dialog.getByTestId('app-build-id')).toBeVisible();

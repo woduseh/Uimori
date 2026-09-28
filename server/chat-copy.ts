@@ -1,3 +1,4 @@
+import { captureBookmarks, restoreBookmarks } from './reading-state.js';
 import { captureChatAuthoring, restoreChatAuthoring } from './chat-copy-authoring.js';
 import {
   captureCopiedMessages,
@@ -61,6 +62,12 @@ export function captureChatCopy(
   return {
     transcript,
     state: {
+      bookmarks: captureBookmarks(
+        store,
+        chatId,
+        branch.id,
+        history.map((source) => source.revision)
+      ),
       variables,
       checkpoints,
       messages,
@@ -120,6 +127,13 @@ export function restoreChatCopy(
     if (copy.state.authoring)
       restoreChatAuthoring(store, chatId, branch.id, history, copy.state.authoring);
     if (copy.state.messages) restoreCopiedMessages(store, copy.state.messages, history);
+    restoreBookmarks(
+      store,
+      chatId,
+      branch.id,
+      history.map((source) => source.revision),
+      copy.state.bookmarks
+    );
     for (const image of copy.illustrations) {
       const source = history[image.entry];
       if (!source) throw new HttpError(400, '삽화의 메시지가 없어요.');

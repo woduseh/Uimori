@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "Uimori",
+  "short_name": "Uimori",
+  "description": "나만의 이야기를 읽고 이어 쓰는 개인 작업실",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8faf6",
+  "theme_color": "#465b42",
+  "icons": [
+    { "src": "/icons/app-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/app-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    {
+      "src": "/icons/app-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

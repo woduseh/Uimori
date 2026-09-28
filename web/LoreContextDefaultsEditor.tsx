@@ -57,7 +57,7 @@ export function LoreContextDefaultsEditor({
       );
       setSaved(accepted);
       setDraft(structuredClone(accepted));
-      setMessage('로어 문맥 기본값을 저장했어요. 이후 만드는 새 채팅부터 사용해요.');
+      setMessage('저장했어요. 새 채팅부터 적용돼요.');
       return true;
     } catch (caught) {
       setError((caught as Error).message);
@@ -80,9 +80,7 @@ export function LoreContextDefaultsEditor({
     );
   return (
     <section className="settings-section" aria-label="로어 문맥 기본값">
-      <p className="muted">
-        새 채팅을 만들 때 이 값을 복사해요. 이미 만든 채팅의 정책과 과거 실행은 바뀌지 않아요.
-      </p>
+      <p className="muted">새 채팅의 기본값이에요. 기존 채팅은 바뀌지 않아요.</p>
       <fieldset disabled={busy} className="control-grid">
         <LoreContextPolicyEditor
           value={policyOf(draft)}
@@ -92,18 +90,19 @@ export function LoreContextDefaultsEditor({
           }}
           onPendingChange={setInvalid}
           defaults={DEFAULT_LORE_CONTEXT}
-          resetLabel="초기값 적용"
+          resetLabel="초기값으로 되돌리기"
           profileRevision={draft.revision}
+          footerAction={
+            <SaveButton
+              type="button"
+              label="로어 문맥 기본값 저장"
+              text="저장"
+              aria-busy={busy}
+              disabled={!dirty || invalid || busy}
+              onClick={save}
+            />
+          }
         />
-        <div className="form-actions settings-save-actions full">
-          <SaveButton
-            type="button"
-            label="로어 문맥 기본값 저장"
-            aria-busy={busy}
-            disabled={!dirty || invalid}
-            onClick={save}
-          />
-        </div>
       </fieldset>
       {message && <p role="status">{message}</p>}
       {error && (

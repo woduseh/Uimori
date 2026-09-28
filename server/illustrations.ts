@@ -1,3 +1,4 @@
+import { detachAttemptUsage } from './usage-accounting.js';
 import { effectiveIllustrationPreset } from './illustration-presets.js';
 import { illustrationPresetStamp } from '../core/illustration-presets.js';
 import { storeImage } from './image-storage.js';
@@ -737,11 +738,15 @@ function assertIllustrationSlot(store: Store, sourceId: string) {
 function deleteIllustrationAttempts(store: Store, jobs: Row[]) {
   for (const job of jobs) {
     const ids = parse(job.diagnostic)?.attempts ?? [];
-    store.db
+    const existing = store.db
       .prepare(
-        "DELETE FROM attempts WHERE chat_id=? AND role='illustration' AND run_id IS NULL AND job_id IS NULL AND id IN (SELECT value FROM json_each(?))"
+        "SELECT id FROM attempts WHERE chat_id=? AND role='illustration' AND run_id IS NULL AND job_id IS NULL AND id IN (SELECT value FROM json_each(?))"
       )
-      .run(job.chat_id, json(ids));
+      .all(job.chat_id, json(ids));
+    detachAttemptUsage(
+      store.db,
+      existing.map((row) => String(row.id))
+    );
   }
 }
 /** Bumping the generation makes a late worker result fall through owner checks. */
