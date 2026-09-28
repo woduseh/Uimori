@@ -1,6 +1,6 @@
 import './push-settings.css';
 import { useEffect, useState } from 'react';
-import { Bell, BellOff } from 'lucide-react';
+import { Bell, BellOff, RefreshCw, Send } from 'lucide-react';
 import { DEFAULT_PUSH_PREFERENCES, type PushInfo, type PushPreferences } from '../core/push.js';
 import { api } from './api.js';
 import { pwaRegistration } from './pwa.js';
@@ -101,7 +101,7 @@ export function PushSettings() {
         preferences: prepared.device?.preferences ?? DEFAULT_PUSH_PREFERENCES,
       });
       setInfo(saved);
-      setNotice('이 기기의 알림을 켰어요. 원고 문장은 알림으로 보내지 않아요.');
+      setNotice('알림을 켰어요.');
     } catch (caught) {
       setError(
         (caught as Error).message || '알림을 켜지 못했어요. 연결과 브라우저 권한을 확인해 주세요.'
@@ -123,7 +123,7 @@ export function PushSettings() {
         'DELETE'
       );
       setInfo(saved);
-      setNotice('이 기기로 보내는 서버 알림을 껐어요.');
+      setNotice('알림을 껐어요.');
       try {
         const registration = await navigator.serviceWorker.getRegistration('/');
         const subscription = await registration?.pushManager.getSubscription();
@@ -174,98 +174,93 @@ export function PushSettings() {
       setBusy(false);
     }
   }
+  const enabled = !!info?.device;
+  const available = supported && info?.available;
+  const recheck = () => setRefresh((value) => value + 1);
   return (
-    <section className="settings-card push-settings" aria-label="작업 완료 알림">
-      <h3>
-        <Bell size={18} aria-hidden="true" /> 작업 완료 알림
-      </h3>
-      <p>
-        이 기기에서 직접 허용한 경우에만 알림을 보내요. 브라우저의 Push 중계를 이용하며, 기본
-        알림에는 채팅 제목과 원고를 넣지 않아요.
-      </p>
+    <section className="settings-service push-settings" aria-label="작업 완료 알림">
+      <div className="settings-service-row">
+        <div className="settings-service-copy">
+          <h4>작업 완료 알림</h4>
+          <p className="muted">작업이 끝나면 이 기기로 알려드려요.</p>
+          {available && (
+            <small role="status">{enabled ? '이 기기의 알림 켜짐' : '이 기기의 알림 꺼짐'}</small>
+          )}
+        </div>
+        {available &&
+          (enabled ? (
+            <button type="button" disabled={busy} onClick={() => void disable()}>
+              <BellOff size={16} aria-hidden="true" /> 알림 끄기
+            </button>
+          ) : permission === 'denied' ? (
+            <button type="button" disabled={busy} onClick={recheck}>
+              <RefreshCw size={16} aria-hidden="true" /> 권한 다시 확인
+            </button>
+          ) : (
+            <button type="button" disabled={busy} onClick={() => void enable()}>
+              <Bell size={16} aria-hidden="true" /> {busy ? '연결 중…' : '알림 켜기'}
+            </button>
+          ))}
+      </div>
       {!supported && (
         <p className="muted">
-          이 환경에서는 Web Push를 사용할 수 없어요. 지원되는 브라우저의 HTTPS 주소 또는 홈 화면에
-          설치한 앱에서 확인해 주세요.
+          이 환경에서는 알림을 지원하지 않아요. HTTPS 또는 설치된 앱에서 확인해 주세요.
         </p>
       )}
       {info && !info.available && <p className="muted">{info.reason}</p>}
-      {supported && info?.available && (
-        <>
-          <p role="status">{info.device ? '이 기기의 서버 알림 켜짐' : '이 기기의 알림 꺼짐'}</p>
-          {permission === 'denied' && (
-            <p className="muted">
-              브라우저에서 알림이 차단돼 있어요. 사이트 알림 권한을 직접 변경한 뒤 다시 확인해
-              주세요.
-            </p>
-          )}
-          {info.device ? (
-            <>
-              <div className="push-preferences">
-                {labels.map(([key, label]) => (
-                  <label key={key}>
-                    <input
-                      type="checkbox"
-                      checked={info.device!.preferences[key]}
-                      disabled={busy}
-                      onChange={(event) => void change(key, event.target.checked)}
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-              <div className="archive-action-row">
-                <button
-                  type="button"
-                  disabled={busy || permission !== 'granted'}
-                  onClick={() => void test()}
-                >
-                  테스트 알림 보내기
-                </button>
-                <button type="button" disabled={busy} onClick={() => void disable()}>
-                  <BellOff size={16} aria-hidden="true" /> 이 기기 알림 끄기
-                </button>
-              </div>
-              {permission !== 'granted' && (
-                <button
-                  type="button"
-                  disabled={busy || permission === 'denied'}
-                  onClick={() => void enable()}
-                >
-                  브라우저 알림 다시 연결
-                </button>
-              )}
-            </>
-          ) : (
+      {available && permission === 'denied' && (
+        <p className="muted">브라우저의 사이트 설정에서 알림을 허용해 주세요.</p>
+      )}
+      {available && info.device && (
+        <details className="push-options">
+          <summary>알림 옵션</summary>
+          <div className="push-preferences">
+            {labels.map(([key, label]) => (
+              <label key={key}>
+                <input
+                  type="checkbox"
+                  checked={info.device!.preferences[key]}
+                  disabled={busy}
+                  onChange={(event) => void change(key, event.target.checked)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <small className="muted">원고 내용은 보내지 않으며, 로그아웃하면 알림이 해제돼요.</small>
+          <div className="settings-service-actions">
+            {permission !== 'granted' && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={permission === 'denied' ? recheck : () => void enable()}
+              >
+                <RefreshCw size={16} aria-hidden="true" />
+                {permission === 'denied' ? '권한 다시 확인' : '알림 다시 연결'}
+              </button>
+            )}
             <button
               type="button"
-              disabled={busy || permission === 'denied'}
-              onClick={() => void enable()}
+              disabled={busy || permission !== 'granted'}
+              onClick={() => void test()}
             >
-              {busy ? '알림 연결 중…' : '이 기기에서 알림 받기'}
+              <Send size={16} aria-hidden="true" /> 테스트 알림 보내기
             </button>
-          )}
-          {info.device?.lastError && <p role="status">{info.device.lastError}</p>}
-        </>
+          </div>
+        </details>
       )}
+      {info?.device?.lastError && <p role="status">{info.device.lastError}</p>}
       {notice && <p role="status">{notice}</p>}
       {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
+        <div className="settings-service-error">
+          <p role="alert" className="error">
+            {error}
+          </p>
+          <button type="button" disabled={busy} onClick={recheck}>
+            <RefreshCw size={16} aria-hidden="true" /> 알림 연결 다시 확인
+          </button>
+        </div>
       )}
-      <button
-        type="button"
-        className="secondary"
-        disabled={busy}
-        onClick={() => setRefresh((value) => value + 1)}
-      >
-        알림 연결 다시 확인
-      </button>
-      <p className="muted">
-        로그아웃하면 이 로그인에 연결된 알림도 해제돼요. 취소한 작업과 내부 도구 호출은 알리지
-        않아요. 알림 지연·미수신 때는 앱에 저장된 작업 상태를 확인해 주세요.
-      </p>
     </section>
   );
 }

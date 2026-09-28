@@ -1,3 +1,4 @@
+import { classifySavedEvaluationUsage } from './evaluation-usage-migration.js';
 import { initPushSchema } from './push-schema.js';
 import { initUsageAccounting } from './usage-accounting.js';
 import { initReadingState } from './reading-state.js';
@@ -11,7 +12,7 @@ import { initIllustrations } from './illustrations.js';
 import { initOutline } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 
-export const DATABASE_SCHEMA_VERSION = 11;
+export const DATABASE_SCHEMA_VERSION = 12;
 const FORMAT = 'uimori-personal-v1';
 
 export class DatabaseSchemaError extends Error {
@@ -150,6 +151,7 @@ export function initializeDatabaseSchema(
         'DROP TRIGGER IF EXISTS push_main_terminal; DROP TRIGGER IF EXISTS push_translation_terminal; DROP TRIGGER IF EXISTS push_illustration_terminal;'
       );
     }
+    if (previous < 12) classifySavedEvaluationUsage(db);
     pruneSavedTextHistory(db);
     initDatabaseReadIndexes(db);
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}`);

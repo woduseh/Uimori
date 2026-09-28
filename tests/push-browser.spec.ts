@@ -119,12 +119,13 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
   await expect(panel).toContainText('이 기기의 알림 꺼짐');
   expect(await page.evaluate(() => Reflect.get(window, 'pushPermissionCalls'))).toBe(0);
   expect(prepareCalls).toBe(0);
-  await panel.getByRole('button', { name: '이 기기에서 알림 받기', exact: true }).click();
-  await expect(panel).toContainText('이 기기의 서버 알림 켜짐');
+  await panel.getByRole('button', { name: '알림 켜기', exact: true }).click();
+  await expect(panel).toContainText('이 기기의 알림 켜짐');
   expect(await page.evaluate(() => Reflect.get(window, 'pushPermissionCalls'))).toBe(1);
   expect(await page.evaluate(() => Reflect.get(window, 'pushSubscribeCalls'))).toBe(1);
   expect(prepareCalls).toBe(1);
   expect(subscribeCalls).toBe(1);
+  await panel.locator('summary').filter({ hasText: '알림 옵션' }).click();
   await expect(panel.getByLabel('본문 생성 완료', { exact: true })).toBeChecked();
   await expect(panel.getByLabel('번역 완료·실패', { exact: true })).not.toBeChecked();
   const title = panel.getByLabel('잠금 화면에 채팅 제목 표시', { exact: true });
@@ -144,11 +145,13 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
     );
     await page.screenshot({ path: info.outputPath(`push-settings-${width}.png`) });
   }
-  await panel.getByRole('button', { name: '이 기기 알림 끄기', exact: true }).click();
+  await panel.getByRole('button', { name: '알림 끄기', exact: true }).click();
   await expect(panel).toContainText('이 기기의 알림 꺼짐');
   await expect(panel).toContainText('서버 알림은 껐어요.');
   expect(disabled).toBe(true);
-  await panel.getByRole('button', { name: '알림 연결 다시 확인', exact: true }).click();
+  await page.reload();
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '일반');
   await expect(panel).toContainText('이 기기의 알림 꺼짐');
   expect(subscribeCalls).toBe(1);
 });

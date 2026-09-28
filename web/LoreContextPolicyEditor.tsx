@@ -1,5 +1,6 @@
 import { Switch } from './BooleanControls.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { RotateCcw, RefreshCw } from 'lucide-react';
 import {
   DEFAULT_LORE_CONTEXT,
   LORE_TOKEN_ESTIMATOR,
@@ -107,6 +108,7 @@ export function LoreContextPolicyEditor({
   reset = false,
   defaults = DEFAULT_LORE_CONTEXT,
   resetLabel = '전역 기본값 적용',
+  footerAction,
 }: {
   value?: LoreContextPolicy;
   onChange: (value: LoreContextPolicy) => void;
@@ -118,6 +120,7 @@ export function LoreContextPolicyEditor({
   reset?: boolean;
   defaults?: LoreContextPolicy | null;
   resetLabel?: string;
+  footerAction?: ReactNode;
 }) {
   const effective = value ?? DEFAULT_LORE_CONTEXT,
     serialized = JSON.stringify(effective);
@@ -206,28 +209,21 @@ export function LoreContextPolicyEditor({
   }
   return (
     <section className="lore-context-panel full" aria-label="로어 문맥 정책">
-      <h3>로어 사용</h3>
-      <p className="muted">
-        모델이 실제로 읽은 구간을 다음 생성에 이어 사용해요. 처음 읽은 이력 위치에 두며, 예산이 차면
-        오래 사용하지 않은 자료부터 정리해요.
-      </p>
-      <label className="check">
+      <div className="lore-context-heading">
+        <div>
+          <h3>로어 사용</h3>
+          <p className="muted">조회한 로어를 다음 생성에서도 유지해요.</p>
+        </div>
         <Switch
           aria-label="조회한 로어를 다음 생성에 유지"
           checked={draft.enabled}
           onChange={(event) => change({ ...draft, enabled: event.target.checked })}
         />
-        조회한 로어를 다음 생성에 유지
-      </label>
-      <p className="muted">
-        로어 관련성 판단 · JEV · 실제 연결 상태는 전체 연결 설정에서 확인할 수 있어요.
-      </p>
+      </div>
       <details className="lore-context-advanced">
         <summary>선별 기준과 용량</summary>
         <h4>문맥 유지 한도</h4>
-        <p className="muted">
-          렌더링된 로어 본문을 로컬 o200k_base로 추정해요. 저장 후 다음 실행부터 적용돼요.
-        </p>
+        <p className="muted">로어를 유지할 최대 크기를 정해요.</p>
         <div className="lore-context-policy-grid">
           {tokenFields.map((field) => (
             <label key={field.key}>
@@ -285,53 +281,38 @@ export function LoreContextPolicyEditor({
         </div>
         <details className="lore-context-units">
           <summary>단위와 예산 설명</summary>
+          <p className="muted">토큰은 로컬 추정값으로, 모델의 실제 사용량과 다를 수 있어요.</p>
           <p className="muted">
-            Jev는 선택 로어의 관련성을 한 번에 판단해요. 상시 로어와 카드의 명시적 조건은 유지해요.
-            토큰 수는 호스트 추정값이에요. 프로바이더·모델 등록의 JEV 판단에서 API 키를 연결하고
-            테스트할 수 있어요. 작문·문맥 요약 모델은 바뀌지 않아요.
+            조회 로어는 한도에 맞춰 정리하고, 고정 자료는 초과 시 자르지 않고 알려요.
           </p>
           <p className="muted">
-            토큰 예산은 로컬 o200k_base로 렌더링된 본문을 계산해요. 자료마다 JSON 따옴표나 10%
-            여유분을 더하지 않으며, 전체 요청 검사의 여유분은 별도로 유지해요. 원격 토큰 계산은 하지
-            않아요. 모델별 실제 토큰 수나 청구량과 다를 수 있어요.
-          </p>
-          <p className="muted">
-            고정 자료가 토큰 한도를 넘으면 임의로 자르지 않고 알려요. 전체 모델 입력 한도와
-            저장·파싱 용량 제한은 별도예요.
-          </p>
-          <p className="muted">
-            사용자가 만든 Risu 프롬프트의 역할·순서·캐시 기준은 그대로 사용해요. 이 설정이 사용자
-            프롬프트를 다시 배치하지 않아요.
+            관련성 판단은 JEV를 사용해요. 전체 입력 한도와 프롬프트 배치는 별도예요.
           </p>
         </details>
-        {validation && (
-          <p className="error" role="alert">
-            {validation} 입력한 초안은 유지돼요.
-          </p>
-        )}
-        <div className="lore-context-actions">
-          <button
-            type="button"
-            className="secondary"
-            disabled={!defaults}
-            onClick={() => {
-              if (defaults) change(draftOf(defaults));
-            }}
-          >
-            {resetLabel}
-          </button>
-          {validation && (
-            <button type="button" className="ghost" onClick={() => setDraft(draftOf(effective))}>
-              마지막 유효값으로 되돌리기
-            </button>
-          )}
-        </div>
       </details>
       {validation && (
         <p className="error" role="alert">
           선별 기준과 용량의 입력을 확인해 주세요. {validation}
         </p>
       )}
+      <div className="lore-context-actions settings-form-footer">
+        <button
+          type="button"
+          className="secondary"
+          disabled={!defaults}
+          onClick={() => {
+            if (defaults) change(draftOf(defaults));
+          }}
+        >
+          <RotateCcw size={16} aria-hidden="true" /> {resetLabel}
+        </button>
+        {validation && (
+          <button type="button" className="ghost" onClick={() => change(draftOf(effective))}>
+            <RotateCcw size={16} aria-hidden="true" /> 마지막 유효값으로 되돌리기
+          </button>
+        )}
+        {footerAction}
+      </div>
       {chatId && (
         <details className="lore-context-preview">
           <summary>다음 생성의 로어 미리보기</summary>
@@ -351,6 +332,7 @@ export function LoreContextPolicyEditor({
             disabled={busy || !policy}
             onClick={() => void showPreview()}
           >
+            <RefreshCw size={16} aria-hidden="true" />{' '}
             {busy ? '로어 미리보기 구성 중…' : '로어 미리보기 갱신'}
           </button>
           {preview && (

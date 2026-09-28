@@ -1,6 +1,18 @@
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Upload, Download, Copy, Trash2, RefreshCw } from 'lucide-react';
+import {
+  Plus,
+  Upload,
+  Download,
+  Copy,
+  Trash2,
+  RefreshCw,
+  Check,
+  Pencil,
+  RotateCcw,
+  Save,
+  X,
+} from 'lucide-react';
 import {
   emptyIllustrationPreset,
   illustrationPresetDefinition,
@@ -18,7 +30,7 @@ import {
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { api, ApiError, saveDownload } from './api.js';
 import { Dialog } from './Dialog.js';
-import { IconButton } from './IconButton.js';
+import { ActionMenu } from './ActionMenu.js';
 import { illustrationErrorMessage } from './illustration-labels.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './illustration-presets.css';
@@ -46,6 +58,11 @@ export function IllustrationPresetSettings({
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [notice, setNotice] = useState('');
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(''), 4500);
+    return () => clearTimeout(timer);
+  }, [notice]);
   const [deleting, setDeleting] = useState<IllustrationPreset | null>(null);
   const [discard, setDiscard] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -134,7 +151,9 @@ export function IllustrationPresetSettings({
       setDraft({ id: saved.id, revision: saved.revision, model: accepted });
       setBaseline(JSON.stringify(accepted));
       setNotice(
-        '프리셋을 저장했어요. 사용 중인 프리셋은 다음 생성부터 반영되고, 새 프리셋은 적용 버튼으로 선택해요.'
+        draft.id && !asCopy
+          ? '저장했어요. 다음 생성부터 적용돼요.'
+          : '저장했어요. 사용할 범위에 적용해 주세요.'
       );
       await refresh(true);
     });
@@ -176,9 +195,7 @@ export function IllustrationPresetSettings({
       const model = parseIllustrationPresetFile(JSON.parse(await file.text()));
       setDraft({ id: null, model });
       setBaseline('');
-      setNotice(
-        '새 프리셋으로 가져왔어요. 내용을 확인하고 저장해 주세요. 기존 항목과 생성 환경은 바뀌지 않아요.'
-      );
+      setNotice('가져왔어요. 내용을 확인한 뒤 저장해 주세요.');
     });
   }
   if (!catalog)
@@ -209,7 +226,7 @@ export function IllustrationPresetSettings({
         expectedRevision: p.revision,
       });
       await refresh(true);
-      setNotice('삽화 프리셋 선택을 저장했어요. 새 생성 요청부터 적용해요.');
+      setNotice('프리셋을 변경했어요. 다음 생성부터 적용돼요.');
     });
   return (
     <section
@@ -219,16 +236,27 @@ export function IllustrationPresetSettings({
       <div className="illustration-preset-heading">
         <div>
           <h3>삽화 프리셋</h3>
-          <p>그림 지침과 워크플로를 저장하고, 이야기마다 다른 연출을 선택해요.</p>
+          <p>그림 지침과 워크플로를 관리해요.</p>
         </div>
-        <IconButton
-          icon={RefreshCw}
-          label="프리셋 목록 새로고침"
-          disabled={busy}
-          onClick={() => void refresh()}
-        />
+        <div className="illustration-preset-list-actions">
+          <button
+            className="primary"
+            aria-label="새 삽화 프리셋"
+            disabled={busy || dirty}
+            onClick={() => edit()}
+          >
+            <Plus size={16} aria-hidden="true" /> 새 프리셋
+          </button>
+          <button
+            aria-label="프리셋 가져오기"
+            disabled={busy || dirty}
+            onClick={() => input.current?.click()}
+          >
+            <Upload size={16} aria-hidden="true" /> 가져오기
+          </button>
+        </div>
       </div>
-      <div className="settings-card illustration-preset-toolbar">
+      <div className="illustration-preset-toolbar">
         <label>
           적용 범위
           <select
@@ -244,12 +272,14 @@ export function IllustrationPresetSettings({
         </label>
         {target !== 'global' && (
           <button disabled={busy || dirty || !selectedId} onClick={() => void choose(null)}>
-            상위 설정 따르기
+            <RotateCcw size={16} aria-hidden="true" /> 상위 설정 따르기
           </button>
         )}
-        <p className="illustration-preset-current">
+        <p
+          className="illustration-preset-current"
+          title="채팅 → 봇 → 작업실 순으로 적용해요. 새 생성부터 사용돼요."
+        >
           {scope.chatId ? '현재 채팅' : '작업실 기본'} · <strong>{effective.title}</strong>
-          <small>채팅 → 봇 → 작업실 순으로 적용해요.</small>
         </p>
       </div>
       {(error || loadError) && (
@@ -257,7 +287,16 @@ export function IllustrationPresetSettings({
           {error || loadError}
         </p>
       )}
-      <p role="status">{notice}</p>
+      {loadError && (
+        <button onClick={() => void refresh()}>
+          <RefreshCw size={16} aria-hidden="true" /> 다시 불러오기
+        </button>
+      )}
+      {notice && (
+        <p className="settings-feedback" role="status">
+          {notice}
+        </p>
+      )}
       <div className="illustration-preset-grid" aria-label="저장된 삽화 프리셋">
         {catalog.presets.map((preset) => (
           <article
@@ -271,11 +310,19 @@ export function IllustrationPresetSettings({
               disabled={busy || dirty}
               onClick={() => void choose(preset.id)}
             >
-              <strong>
-                {preset.title}
-                {selectedId === preset.id ? ' · 선택됨' : ''}
-              </strong>
-              <span>{preset.description || '사용자 삽화 프리셋'}</span>
+              <div className="illustration-preset-title">
+                <strong>{preset.title}</strong>
+                {selectedId === preset.id && (
+                  <span className="illustration-preset-selected">
+                    <Check size={14} aria-hidden="true" /> 선택됨
+                  </span>
+                )}
+              </div>
+              <span>
+                {preset.id.startsWith('builtin:')
+                  ? '장면과 캐릭터를 따라 그려요.'
+                  : preset.description || '사용자 삽화 프리셋'}
+              </span>
               <small>
                 {preset.comfyui.workflow.trim()
                   ? 'Codex · ComfyUI 워크플로 포함'
@@ -288,64 +335,67 @@ export function IllustrationPresetSettings({
                 aria-label={`${preset.title} 삽화 프리셋 편집`}
                 onClick={() => edit(preset)}
               >
-                {preset.id.startsWith('builtin:') ? '복제해서 편집' : '편집'}
+                {preset.id.startsWith('builtin:') ? (
+                  <Copy size={16} aria-hidden="true" />
+                ) : (
+                  <Pencil size={16} aria-hidden="true" />
+                )}
+                {preset.id.startsWith('builtin:') ? '복제 후 편집' : '편집'}
               </button>
-              {!preset.id.startsWith('builtin:') && (
-                <IconButton
-                  icon={Copy}
-                  label={`${preset.title} 삽화 프리셋 복제`}
-                  disabled={busy || dirty}
-                  onClick={() => edit(preset, true)}
-                />
-              )}
-              <IconButton
-                icon={Download}
-                label={`${preset.title} 삽화 프리셋 내보내기`}
-                disabled={busy}
-                onClick={() => {
-                  void action(async () => {
-                    saveDownload(
-                      `${preset.title}.uimori-illustration.json`,
-                      illustrationPresetFile(preset)
-                    );
-                  });
-                }}
-              />
-              {!preset.id.startsWith('builtin:') && (
-                <IconButton
-                  icon={Trash2}
-                  label={`${preset.title} 삽화 프리셋 삭제`}
-                  disabled={busy || dirty}
+              <ActionMenu label={`${preset.title} 프리셋 메뉴`} viewport>
+                {!preset.id.startsWith('builtin:') && (
+                  <button
+                    disabled={busy || dirty}
+                    aria-label={`${preset.title} 삽화 프리셋 복제`}
+                    onClick={() => edit(preset, true)}
+                  >
+                    <Copy size={16} aria-hidden="true" /> 복제
+                  </button>
+                )}
+                <button
+                  disabled={busy}
+                  aria-label={`${preset.title} 삽화 프리셋 내보내기`}
                   onClick={() => {
-                    setError('');
-                    setDeleting(preset);
+                    void action(async () =>
+                      saveDownload(
+                        `${preset.title}.uimori-illustration.json`,
+                        illustrationPresetFile(preset)
+                      )
+                    );
                   }}
-                />
-              )}
+                >
+                  <Download size={16} aria-hidden="true" /> 내보내기
+                </button>
+                {!preset.id.startsWith('builtin:') && (
+                  <button
+                    disabled={busy || dirty}
+                    className="danger"
+                    aria-label={`${preset.title} 삽화 프리셋 삭제`}
+                    onClick={() => {
+                      setError('');
+                      setDeleting(preset);
+                    }}
+                  >
+                    <Trash2 size={16} aria-hidden="true" /> 삭제
+                  </button>
+                )}
+              </ActionMenu>
             </div>
           </article>
         ))}
       </div>
-      <div className="illustration-preset-actions">
-        <button className="primary" disabled={busy || dirty} onClick={() => edit()}>
-          <Plus size={16} /> 새 삽화 프리셋
-        </button>
-        <button disabled={busy || dirty} onClick={() => input.current?.click()}>
-          <Upload size={16} /> 프리셋 가져오기
-        </button>
-        <input
-          ref={input}
-          type="file"
-          accept=".json"
-          hidden
-          aria-label="삽화 프리셋 파일"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = '';
-            if (file) void importFile(file);
-          }}
-        />
-      </div>
+      <input
+        ref={input}
+        type="file"
+        accept=".json"
+        hidden
+        aria-label="삽화 프리셋 파일"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) void importFile(file);
+        }}
+      />
       {draft && (
         <section
           className="settings-card illustration-preset-editor"
@@ -448,16 +498,20 @@ export function IllustrationPresetSettings({
                 disabled={!dirty || conflict || deleted}
                 onClick={() => void save()}
               >
-                프리셋 저장
+                <Save size={16} aria-hidden="true" /> 프리셋 저장
               </button>
-              {draft.id && <button onClick={() => void save(true)}>사본으로 저장</button>}
+              {draft.id && (
+                <button onClick={() => void save(true)}>
+                  <Copy size={16} aria-hidden="true" /> 사본으로 저장
+                </button>
+              )}
               <button
                 onClick={() => {
                   if (dirty) setDiscard(true);
                   else setDraft(null);
                 }}
               >
-                편집 닫기
+                <X size={16} aria-hidden="true" /> 편집 닫기
               </button>
             </div>
           </fieldset>
@@ -519,7 +573,7 @@ export function IllustrationPresetSettings({
                   if (draft?.id === deleting.id) setDraft(null);
                   setDeleting(null);
                   await refresh(true);
-                  setNotice('프리셋을 삭제했어요. 기존 삽화와 실행 중인 작업은 유지했어요.');
+                  setNotice('프리셋을 삭제했어요.');
                 });
             }}
           >
