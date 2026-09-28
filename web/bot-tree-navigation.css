@@ -25,10 +25,12 @@
 .sidebar-destinations {
   display: grid;
   gap: 4px;
-  margin: 0 0 20px;
+  margin: 0;
 }
-.sidebar-destinations .selected {
-  background: var(--accent-soft);
+/* Navigation selection uses the same understated fill as the current chat. */
+.bot-navigation .nav-button[aria-current="page"],
+.bot-navigation .nav-button[aria-current="page"]:hover:not(:disabled) {
+  background: var(--nav-item-selected);
   font-weight: 600;
 }
 .navigation-quick-actions {
@@ -56,6 +58,7 @@
   align-items: center;
   min-width: 0;
   gap: 2px;
+  border-radius: 8px;
 }
 .bot-tree-section-heading > .bot-folder-toggle,
 .bot-tree-folder-heading > .bot-folder-toggle {
@@ -63,7 +66,7 @@
   min-width: 0;
 }
 .bot-tree-folder-contents {
-  padding-left: 16px;
+  padding-left: var(--nav-indent);
 }
 .bot-tree-folder {
   margin-bottom: 6px;
