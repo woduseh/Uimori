@@ -558,6 +558,64 @@ describe('native Responses pure protocol (no live calls)', () => {
     }
   );
 
+  test.each([undefined, 'explicit', 'automatic', 'disabled'] as const)(
+    'helper cache %s reuses stable instructions without changing request text or continuation',
+    (cacheMode) => {
+      const input = request();
+      input.role = 'helper';
+      input.modelId = 'gpt-5.6-sol';
+      input.generation = {
+        maxOutputTokens: 8192,
+        temperature: null,
+        ...(cacheMode ? { cacheMode } : {}),
+      };
+      const original = structuredClone(input);
+      const run = first(input);
+      const wire = record(run.body);
+      const parts = wire.input[0].content;
+      const { results: _results, ...data } = input.input;
+      expect(parts.map((part: any) => part.text).join('')).toBe(
+        'Request data (JSON):\n' + JSON.stringify(data)
+      );
+      if (cacheMode === 'automatic') {
+        expect(parts[0]).toEqual({
+          type: 'input_text',
+          text: 'Request data (JSON):\n',
+          prompt_cache_breakpoint: { mode: 'explicit' },
+        });
+        expect(parts[1]).not.toHaveProperty('prompt_cache_breakpoint');
+        const changed = structuredClone(input);
+        changed.input.task = 'A different task.';
+        changed.input.source = { text: 'Different source.' };
+        const other = record(encodeResponses(changed).body);
+        expect(other.instructions).toBe(wire.instructions);
+        expect(other.tools).toEqual(wire.tools);
+        expect(other.input[0].content[0]).toEqual(parts[0]);
+        expect(other.input[0].content[1]).not.toEqual(parts[1]);
+      } else {
+        expect(parts).toHaveLength(1);
+        expect(parts[0]).not.toHaveProperty('prompt_cache_breakpoint');
+      }
+      run.decoder.accept(terminal([call()]));
+      const replay = record(encodeResponses(next(input, run.decoder.finish())).body);
+      expect(replay.input[0]).toEqual(wire.input[0]);
+      expect(input).toEqual(original);
+    }
+  );
+
+  test.each(['gpt-5.4', 'custom-responses-model'])(
+    'helper automatic caching does not assume explicit support for %s',
+    (modelId) => {
+      const input = request();
+      input.role = 'helper';
+      input.modelId = modelId;
+      input.generation!.cacheMode = 'automatic';
+      const wire = record(encodeResponses(input).body);
+      expect(wire.prompt_cache_options).toEqual({ mode: 'implicit' });
+      expect(JSON.stringify(wire)).not.toContain('prompt_cache_breakpoint');
+    }
+  );
+
   test('never mistakes content disguised as a reasoning setting for safe diagnostics', () => {
     const body: Json = {
       reasoning: { effort: 'PRIVATE_THOUGHT' },
