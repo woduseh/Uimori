@@ -196,8 +196,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     .toBe('completed');
   const saved = (await getDetail(request, chat.id)).runs.find((item) => item.id === run.id)!;
   expect(
-    run.snapshot.profile?.packages?.find((pkg) => pkg.id === added.id)?.nativeRisu.card
-      .description
+    run.snapshot.profile?.packages?.find((pkg) => pkg.id === added.id)?.nativeRisu.card.description
   ).toBe('Mira is a synthetic harbor keeper. Her compass is silver in this revision.');
   expect(saved.snapshot.profile?.packageAttachments).toEqual([
     owner,
