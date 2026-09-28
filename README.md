@@ -2,7 +2,7 @@
 
 긴 원고를 읽고 다음 장면을 이어 쓰는 개인용 창작 웹앱이에요. 봇별 채팅·폴더, Risu 원본 봇·페르소나·모듈, 프롬프트와 모델의 독립 설정, 원문·번역 편집, 독립 채팅 복사, 이야기 기억과 백업을 제공해요.
 
-현재 릴리스는 **`v0.3.1`**이에요. 개인용 초기 개발 릴리스이며, 기능과 데이터 형식은 앞으로 바뀔 수 있어요. 주요 변경과 알려진 제한은 [릴리스 노트](docs/releases/v0.3.1.md)에 정리했어요. Risu 원본의 저장·편집·실행 범위는 [가져오기 안내](docs/RISU-IMPORT.md), 설치와 업데이트의 현재 제한은 [업데이트 안내](docs/UPDATES.md)를 확인해요.
+현재 릴리스는 **`v0.4.0`**이에요. 구성·집필 작업실, 설정 검색, 부분 편집과 설정·작업 제어를 수행하는 도우미, Codex 네이티브 도우미 실행을 제공해요. 개인용 초기 개발 릴리스이며 기능과 데이터 형식은 앞으로 바뀔 수 있어요. 이번 버전은 **빈 DB와 스키마 15만 지원**하므로 이전 릴리스에서 업데이트할 때는 [릴리스 노트](docs/releases/v0.4.0.md)의 데이터 호환성을 먼저 확인해요. Risu 원본의 저장·편집·실행 범위는 [가져오기 안내](docs/RISU-IMPORT.md), 설치와 업데이트 절차는 [업데이트 안내](docs/UPDATES.md)를 참고해요.
 
 개인 ChatGPT 구독으로 에이전트를 실행하려면 [Codex 연결 안내](docs/CODEX.md)를 따라 서버 실행기를 준비하고 **설정 → Codex 연결**에서 로그인해요.
 
@@ -11,7 +11,7 @@
 Node **24.14 이상 24.x**, npm, Chrome 또는 Edge가 필요해요. SQLite는 Node에 포함된 기능을 사용해요.
 
 ```powershell
-git clone --branch v0.3.1 --single-branch https://github.com/woduseh/Uimori.git
+git clone --branch v0.4.0 --single-branch https://github.com/woduseh/Uimori.git
 cd Uimori
 npm ci
 npm run dev
@@ -26,7 +26,7 @@ npm run dev
 
 ## 개인 Linux 서버에서 사용
 
-[Self-host 안내](docs/SELF-HOST.md)에 Docker Compose와 Nginx HTTPS 구성이 있어요. 도메인·인증서·접속 토큰을 설정하면 PC와 휴대폰에서 같은 작업실에 접속할 수 있어요. SQLite는 영구 volume에 저장해요. 업데이트 CLI와 앱 내 Update UI의 지원 차이는 [업데이트 안내](docs/UPDATES.md)를 확인해요.
+[Self-host 안내](docs/SELF-HOST.md)에 Docker Compose와 Nginx HTTPS 구성이 있어요. 도메인·인증서·접속 토큰을 설정하면 PC와 휴대폰에서 같은 작업실에 접속할 수 있어요. SQLite는 영구 volume에 저장해요. 지원하는 수동 업데이트 절차는 [업데이트 안내](docs/UPDATES.md)를 확인해요.
 
 ## 버전 확인과 업데이트
 
@@ -36,7 +36,9 @@ npm run dev
 
 | 문서 | 내용 |
 | --- | --- |
-| [사용 안내](docs/USAGE.md) | 봇별 채팅·폴더, 패키지, 프롬프트·창작 프리셋, 번역·포크, 백업 |
+| [사용 안내](docs/USAGE.md) | 봇별 채팅·폴더, 설정 검색, 프롬프트·창작 프리셋, 번역·독립 채팅 복사, 백업 |
+| [구성·집필 작업실](docs/OUTLINE.md) | 계층형 구성, 관련 계획 연결, 선택한 단위 집필과 원문 점검 |
+| [도우미 도구](docs/HELPER-TOOLS.md) · [Codex 연결](docs/CODEX.md) | 부분 조회·편집, 설정·작업 제어와 네이티브 실행 |
 | [서재와 프롬프트](docs/LIBRARY.md) · [항목 삭제](docs/DELETION.md) | 자료 분류·폴더·대표 이미지, 삭제 위치와 참조 보호 |
 | [Risu 원본 가져오기](docs/RISU-IMPORT.md) | `.charx` 카드·모듈·`.risup` 프롬프트 원본, CBS·Lua·정규식·CSS 실행과 지원 범위 |
 | [Risu 자료 내보내기](docs/RISU-EXPORT.md) | 저장한 카드·모듈·프롬프트를 CHARX·RISUM·RISUP으로 내보내기 |
@@ -55,7 +57,7 @@ npm run dev
 
 ## 데이터와 접속
 
-- 기본 DB는 `.local/uimori.sqlite`예요. 빈 DB와 [현재 데이터 형식](docs/DATA-MIGRATIONS.md#현재-버전)만 열며 구형 DB는 변경 없이 거절해요. 옛 백업은 당시 앱 버전과 함께 보관해요. [DB와 자료 교환 형식](docs/DATA-MIGRATIONS.md) 테스트용 개발 DB를 초기화하려면 서버 종료 후 `npm run reset:dev`를 실행해요.
+- 기본 DB는 `.local/uimori.sqlite`예요. 빈 DB와 [현재 데이터 형식](docs/DATA-MIGRATIONS.md#현재-버전)만 열며 구형 DB는 변경 없이 거절해요. 옛 백업은 당시 앱 버전과 함께 보관해요. 테스트용 개발 DB를 초기화하려면 서버 종료 후 `npm run reset:dev`를 실행해요.
 - **설정 → 데이터 관리 → 내보내기와 복원**에서 SQLite 백업을 저장해요. 개별 자료와 채팅은 새 사본으로 가져올 수 있어요. [백업·격리 DB 사용법](docs/USAGE.md)
 - 기본은 `127.0.0.1` 로컬 모드이며 `UIMORI_ACCESS_TOKEN` 인증을 선택할 수 있어요. 개인 서버 모드는 `UIMORI_PUBLIC_ORIGIN`에 HTTPS 주소 하나를 지정하고 32자 이상 접속 토큰을 필수로 사용해요. `UIMORI_HOST`로 수신 주소를 정하며 외부 수신은 개인 서버 모드에서만 허용해요. [접속 조건](docs/SELF-HOST.md#프록시와-접속-조건)
 - 프로바이더 API 키와 JEV 키는 앱에서 입력하고 DB에 저장해요. 전체 SQLite 백업에는 키와 이미지가 포함돼요. 사용자 DB와 실행 산출물은 Git에서 제외해요.

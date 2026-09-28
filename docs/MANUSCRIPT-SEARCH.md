@@ -12,6 +12,6 @@
 
 API: `POST /api/search`의 `{query,scope,chatId?,botId?,kinds,cursor?,limit?}`. 기본 20개, 최대 50개 결과. 응답의 `nextCursor`, `coverage`를 확인해요. 요청은 읽기 전용이며 유지보수 중에도 동작해요. 서버가 정한 DB만 Worker에서 읽고 API는 SQL·파일 경로를 받지 않아요. Worker의 전체 실행 제한과 동시 실행 한도가 있어요. 시간 제한을 넘으면 원고 쓰기는 막지 않고 검색 범위를 줄이도록 안내해요.
 
-`ReaderTarget`은 채팅·분기·장면·원문/번역·hash·선택 문단을 함께 이동시키는 공통 계약이에요. 본문 hash가 바뀌면 잘못된 문단 대신 해당 장면 시작으로 이동해요. 검색문이나 원문 인용은 URL에 넣지 않아요.
+`ReaderTarget`은 채팅·장면·원문/번역·hash·선택 문단을 함께 이동시키는 공통 계약이에요. 본문 hash가 바뀌면 잘못된 문단 대신 해당 장면 시작으로 이동해요. 검색문이나 원문 인용은 URL에 넣지 않아요.
 
 검증: `tests/manuscript-search.test.ts`(한/일 짧은 문자열·FTS·문구/기호·수정/번역/삭제·범위·페이지·취소·유지보수), `tests/personal-features-browser.spec.ts`(실제 검색과 장면 이동·작은 화면). 동적 스크립트 표시와 형태소·의미 검색은 지원 범위가 아니에요.

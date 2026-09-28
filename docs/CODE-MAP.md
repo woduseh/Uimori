@@ -8,6 +8,7 @@
 | Helper grep, partial reads and SQL | `server/helper-data-tools.ts`, `server/helper-data-worker.ts` | [Helper tools](HELPER-TOOLS.md) |
 | Model-facing read/tool contracts | `core/read-tools.ts`, `core/story-read-tools.ts`, `core/provider.ts`, `server/helper-data-tools.ts`, `server/helper-app-tools.ts` | [Tool contracts](TOOL-CONTRACTS.md) |
 | Provider/key configuration | `server/provider-connections.ts`, `server/credentials.ts`, `server/jev-credentials.ts`, `server/vertex-credentials.ts` | [Providers](PROVIDERS.md) |
+| Codex App Server connection and native turns | `core/codex-protocol.ts`, `server/codex-process.ts`, `server/codex-runtime.ts` | [Codex](CODEX.md) |
 | Illustration presets, scoped selection and frozen recipes | `core/illustration-presets.ts`, `core/illustration-workflow.ts`, `server/illustration-presets.ts`, `server/illustrations.ts`, `web/IllustrationPresetSettings.tsx` | [Illustrations](ILLUSTRATIONS.md) |
 | Image conversion/storage/metadata | `server/image-processing.ts`, `server/image-storage.ts`, `server/asset-metadata.ts`, `web/ImageMetadataFields.tsx` | [Library](LIBRARY.md) |
 | Independent copies and retries | `server/chat-copy.ts`, `server/chat-fork.ts`, `server/run-retry.ts`, `server/chat-media.ts` | [Chat backup](CHAT-BACKUP.md) |

@@ -128,7 +128,7 @@ Browser/self-host and tooling runners perform bounded local artifact retention a
 
 `npm run reset:dev` deletes only this checkout's default `.local/uimori.sqlite` and its SQLite sidecars. Existing backups and older database files remain untouched. Stop the server first. The command rejects an in-use database or unsafe paths and does not reset an arbitrary `UIMORI_DB`.
 
-Empty databases initialize at schema 15. Personal-v1 schemas 13 and 14 upgrade once to chat-owned state; unsupported versions and unrelated formats are rejected before schema writes. Use disposable databases for development. Current data formats and this boundary are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).
+Empty databases initialize at schema 15. Existing databases must already use schema 15 and the `uimori-personal-v1` format; older or future versions and unrelated formats are rejected before schema writes. No in-app upgrade from schemas 13 or 14 remains. Use disposable databases for development. Current data formats and this boundary are documented in [DATA-MIGRATIONS](DATA-MIGRATIONS.md).
 
 Manual storage measurements use `scripts/synthetic-story.mjs` and current transcript-v2 import, not obsolete package shapes or cumulative completed snapshots. After building, run `node --expose-gc scripts/measure-context-storage.mjs` or `node scripts/measure-transcript-import.mjs --counts=10,100`. These are synthetic measurements, not CI timing gates.
 
