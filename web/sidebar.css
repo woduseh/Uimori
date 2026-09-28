@@ -54,8 +54,15 @@
 .sidebar-rail > .sidebar-app-actions > .icon-button {
   width: 100%;
 }
-.sidebar-rail .icon-button[aria-current="page"] {
-  background: var(--accent-soft);
+@media (hover: hover) {
+  .sidebar-rail .icon-button:hover:not(:disabled) {
+    background: var(--nav-item-hover);
+    filter: none;
+  }
+}
+.sidebar-rail .icon-button[aria-current="page"],
+.sidebar-rail .icon-button[aria-current="page"]:hover:not(:disabled) {
+  background: var(--nav-item-selected);
   color: var(--text);
 }
 /* The collapse control belongs to the panel it closes. */

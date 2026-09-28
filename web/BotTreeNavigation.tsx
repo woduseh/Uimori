@@ -472,36 +472,38 @@ export function BotNavigation(
         >
           봇<ExpandIcon size={14} className={view.open.section ? 'expanded' : ''} />
         </button>
-        <ActionMenu label="봇 목록 메뉴" viewport>
-          <label>
-            봇 정렬 기준
-            <select
-              aria-label="봇 정렬 기준"
-              value={view.sort}
-              onChange={(event) =>
-                setView((current) => ({
-                  ...current,
-                  sort: event.target.value === 'manual' ? 'manual' : 'recent',
-                }))
-              }
+        <div className="bot-row-actions">
+          <ActionMenu label="봇 목록 메뉴" viewport>
+            <label>
+              봇 정렬 기준
+              <select
+                aria-label="봇 정렬 기준"
+                value={view.sort}
+                onChange={(event) =>
+                  setView((current) => ({
+                    ...current,
+                    sort: event.target.value === 'manual' ? 'manual' : 'recent',
+                  }))
+                }
+              >
+                <option value="recent">최근 채팅 활동순</option>
+                <option value="manual">수동 정렬</option>
+              </select>
+            </label>
+            <button
+              onClick={() => {
+                setTitle('');
+                setEditing('new');
+              }}
             >
-              <option value="recent">최근 채팅 활동순</option>
-              <option value="manual">수동 정렬</option>
-            </select>
-          </label>
-          <button
-            onClick={() => {
-              setTitle('');
-              setEditing('new');
-            }}
-          >
-            <FolderAddIcon size={16} />새 봇 폴더
-          </button>
-          <button onClick={() => onLibrary('bot')}>
-            <LibraryIcon size={16} />
-            서재에서 관리
-          </button>
-        </ActionMenu>
+              <FolderAddIcon size={16} />새 봇 폴더
+            </button>
+            <button onClick={() => onLibrary('bot')}>
+              <LibraryIcon size={16} />
+              서재에서 관리
+            </button>
+          </ActionMenu>
+        </div>
       </div>
       <div className="bot-navigation-scroll">
         {view.open.section && (
@@ -526,26 +528,28 @@ export function BotNavigation(
                       <FolderIcon size={16} />
                       <span>{entry.title}</span>
                     </button>
-                    <ActionMenu label={`${entry.title} 봇 폴더 메뉴`} viewport>
-                      <button
-                        onClick={() => {
-                          setEditing(entry.folder!);
-                          setTitle(entry.title);
-                        }}
-                      >
-                        <EditIcon size={18} aria-hidden="true" />
-                        폴더 이름 변경
-                      </button>
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          void mutate(`/library/folders/${entry.folder!.id}`, {}, 'DELETE')
-                        }
-                      >
-                        폴더 해제 · 봇 유지
-                      </button>
-                      {ordering(entry, roots)}
-                    </ActionMenu>
+                    <div className="bot-row-actions">
+                      <ActionMenu label={`${entry.title} 봇 폴더 메뉴`} viewport>
+                        <button
+                          onClick={() => {
+                            setEditing(entry.folder!);
+                            setTitle(entry.title);
+                          }}
+                        >
+                          <EditIcon size={18} aria-hidden="true" />
+                          폴더 이름 변경
+                        </button>
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            void mutate(`/library/folders/${entry.folder!.id}`, {}, 'DELETE')
+                          }
+                        >
+                          폴더 해제 · 봇 유지
+                        </button>
+                        {ordering(entry, roots)}
+                      </ActionMenu>
+                    </div>
                   </div>
                   {view.open[entry.key] && (
                     <div className="bot-tree-folder-contents">

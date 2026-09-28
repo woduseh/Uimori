@@ -1,4 +1,8 @@
 .bot-navigation {
+  /* Local navigation tones follow the active theme without changing its public palette. */
+  --nav-item-hover: color-mix(in srgb, var(--hover) 55%, var(--nav));
+  --nav-item-selected: color-mix(in srgb, var(--accent-soft) 80%, var(--nav));
+  --nav-indent: 16px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -18,6 +22,31 @@
 }
 .sidebar-app-actions > .nav-button {
   min-width: 0;
+}
+.bot-navigation .nav-button {
+  gap: 12px;
+  border-radius: 8px;
+}
+.bot-navigation .nav-button > svg {
+  width: 20px;
+  height: 20px;
+}
+@media (hover: hover) {
+  .bot-navigation .nav-button:hover:not(:disabled) {
+    background: var(--nav-item-hover);
+  }
+}
+/* Keep keyboard outlines inside independently scrolling rows instead of clipping them. */
+.bot-navigation
+:is(
+  .nav-button,
+  .chat-link,
+  .bot-folder-toggle,
+  .bot-branch-toggle,
+  .icon-button,
+  .action-menu > summary
+):focus-visible {
+  outline-offset: -2px;
 }
 .nav-progress svg {
   animation: bot-working 1.2s linear infinite;
@@ -89,12 +118,15 @@
 }
 .bot-folder-heading {
   min-height: 32px;
-  border-radius: 6px;
+  border-radius: 8px;
   gap: 2px;
 }
 @media (hover: hover) {
-  .bot-folder-heading:hover {
-    background: var(--hover);
+  .bot-folder-heading:hover,
+  .bot-branch-heading:hover,
+  .bot-tree-folder-heading:hover,
+  .bot-tree-section-heading:hover {
+    background: var(--nav-item-hover);
   }
 }
 .bot-folder-toggle {
@@ -134,13 +166,17 @@
   pointer-events: none;
 }
 .bot-chat-item:focus-within .bot-row-actions,
-.bot-folder-heading:focus-within .bot-row-actions {
+.bot-folder-heading:focus-within .bot-row-actions,
+.bot-tree-folder-heading:focus-within .bot-row-actions,
+.bot-tree-section-heading:focus-within .bot-row-actions {
   opacity: 1;
   pointer-events: auto;
 }
 @media (hover: hover) {
   .bot-chat-item:hover .bot-row-actions,
-  .bot-folder-heading:hover .bot-row-actions {
+  .bot-folder-heading:hover .bot-row-actions,
+  .bot-tree-folder-heading:hover .bot-row-actions,
+  .bot-tree-section-heading:hover .bot-row-actions {
     opacity: 1;
     pointer-events: auto;
   }
@@ -167,7 +203,7 @@
 .bot-chat-list {
   display: grid;
   gap: 1px;
-  padding-left: 18px;
+  padding-left: var(--nav-indent);
 }
 /* Unfiled chats sit flat at the top without a heading or indentation. */
 .bot-folder-unfiled > .bot-chat-list {
@@ -184,16 +220,16 @@
   min-width: 0;
   height: 34px;
   padding: 0 3px 0 0;
-  border-radius: 6px;
+  border-radius: 8px;
   gap: 2px;
 }
 @media (hover: hover) {
   .bot-chat-item:hover {
-    background: var(--hover);
+    background: var(--nav-item-hover);
   }
 }
 .bot-chat-item.selected {
-  background: var(--surface-raised);
+  background: var(--nav-item-selected);
 }
 .bot-chat-item .chat-link {
   display: flex;
@@ -343,7 +379,7 @@
   justify-content: center;
   gap: 8px;
 }
-@media (hover: none), (pointer: coarse) {
+@media (max-width: 1023px), (hover: none), (pointer: coarse) {
   .bot-row-actions {
     opacity: 1;
     pointer-events: auto;
@@ -426,16 +462,17 @@
 }
 .bot-branch-heading {
   min-height: var(--control-h);
+  border-radius: 8px;
   gap: 2px;
 }
 .bot-branch-toggle {
   display: flex;
   align-items: center;
   border-color: transparent;
-  gap: 5px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
-  padding: 4px 2px;
+  padding: 4px 6px;
   background: transparent;
   color: var(--text);
   text-align: left;
@@ -486,7 +523,7 @@
   padding: 0;
 }
 .bot-branch-chats {
-  padding-left: 16px;
+  padding-left: var(--nav-indent);
 }
 .bot-row-actions:has(details[open]) {
   opacity: 1;
@@ -521,7 +558,7 @@
   color: var(--muted);
   -webkit-line-clamp: 1;
 }
-@media (hover: none), (pointer: coarse) {
+@media (max-width: 1023px), (hover: none), (pointer: coarse) {
   /* Declared after the unconditional rule above so the bot row menu is reachable. */
   .bot-branch-actions {
     opacity: 1;

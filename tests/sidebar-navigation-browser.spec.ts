@@ -1,6 +1,12 @@
 import { MOBILE_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
-import { expect, test } from '@playwright/test';
-import { visibleNavigation } from './ui-navigation.js';
+import { expect, test, type APIRequestContext } from '@playwright/test';
+import { fixtureBotInput } from './fixtures/chat.js';
+import {
+  navigationAction,
+  openHelper,
+  selectSettingsSection,
+  visibleNavigation,
+} from './ui-navigation.js';
 
 for (const width of DEFAULT_WIDTHS) {
   test(`SIDENAV01 settings and direct workspace navigation stay accessible at ${width}px`, async ({
@@ -73,3 +79,169 @@ for (const width of DEFAULT_WIDTHS) {
     expect(errors).toEqual([]);
   });
 }
+
+async function sidebarFixture(request: APIRequestContext) {
+  const created = await request.post('/api/content', {
+    data: fixtureBotInput('밤의 도서관 · 긴 이름의 이야기'),
+  });
+  expect(created.ok()).toBe(true);
+  const bot = await created.json();
+  const folderResponse = await request.post(`/api/bots/${bot.id}/folders`, {
+    data: { title: '이어 쓰는 장면' },
+  });
+  expect(folderResponse.ok()).toBe(true);
+  const chatFolder = await folderResponse.json();
+  const chats = [];
+  for (const [title, folderId] of [
+    ['비가 그친 뒤 도서관에서 이어지는 아주 긴 대화 제목', chatFolder.id],
+    ['새벽의 짧은 이야기', null],
+  ]) {
+    const response = await request.post('/api/chats', { data: { title, botId: bot.id, folderId } });
+    expect(response.ok()).toBe(true);
+    chats.push(await response.json());
+  }
+  const original = await (await request.get('/api/library/organization')).json();
+  const response = await request.post('/api/library/folders', {
+    data: {
+      expectedRevision: original.revision,
+      category: 'bot',
+      title: '아주 긴 이름의 도시 판타지 모음',
+    },
+  });
+  expect(response.ok()).toBe(true);
+  const organization = await response.json();
+  const folder = organization.folders.find(
+    (item: { id: string }) => !original.folders.some((old: { id: string }) => old.id === item.id)
+  );
+  expect(
+    (
+      await request.post('/api/library/organization/move', {
+        data: {
+          expectedRevision: organization.revision,
+          category: 'bot',
+          folderId: folder.id,
+          items: [{ kind: 'content', id: bot.id }],
+        },
+      })
+    ).ok()
+  ).toBe(true);
+  return { bot, folder, chat: chats[0], other: chats[1] };
+}
+
+test('SIDENAV02 sidebar states keep titles steady and keyboard menus reachable without changing collapsed or docked layout', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const fixture = await sidebarFixture(request);
+  await page.goto(`/?chat=${fixture.chat.id}`);
+  const nav = await visibleNavigation(page);
+  const folder = nav.locator(`[data-bot-folder-id="${fixture.folder.id}"]`);
+  const folderToggle = folder.getByRole('button', {
+    name: `${fixture.folder.title} 봇 폴더`,
+    exact: true,
+  });
+  const trigger = folder.getByLabel(`${fixture.folder.title} 봇 폴더 메뉴`, { exact: true });
+  const actions = trigger.locator('..').locator('..');
+  const selected = nav.locator(`[data-chat-id="${fixture.chat.id}"]`);
+  const other = nav.locator(`[data-chat-id="${fixture.other.id}"]`);
+  await expect(
+    selected.getByRole('button', { name: fixture.chat.title, exact: true })
+  ).toHaveAttribute('aria-current', 'page');
+  for (const theme of ['dark', 'light']) {
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '일반');
+    await page.getByLabel('앱 화면 테마', { exact: true }).selectOption(theme);
+    await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+    await page.mouse.move(900, 90);
+    const titleBox = await folderToggle.boundingBox();
+    const selection = await selected.evaluate((node) => getComputedStyle(node).backgroundColor);
+    await other.hover();
+    expect(await other.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(
+      selection
+    );
+    await selected.hover();
+    expect(await selected.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(
+      selection
+    );
+    await folderToggle.hover();
+    await expect(actions).toHaveCSS('opacity', '1');
+    expect(await folderToggle.boundingBox()).toEqual(titleBox);
+    await page.mouse.move(900, 90);
+    await expect(actions).toHaveCSS('opacity', '0');
+    await folderToggle.focus();
+    await page.keyboard.press('Tab');
+    await expect(trigger).toBeFocused();
+    await expect(actions).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Enter');
+    const menu = folder.locator('.bot-tree-folder-heading .action-menu-body');
+    await expect(menu).toBeVisible();
+    await page.mouse.move(900, 90);
+    await expect(actions).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Escape');
+    await expect(trigger).toBeFocused();
+    await expect(menu).toBeHidden();
+    expect(await folderToggle.boundingBox()).toEqual(titleBox);
+    expect(await nav.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`sidebar-polish-${theme}.png`) });
+  }
+  const labels = ['새 채팅', '전체 채팅 검색', '서재', '프롬프트'];
+  const positions = await Promise.all(
+    labels.map(
+      async (name) => (await nav.getByRole('button', { name, exact: true }).boundingBox())!.y
+    )
+  );
+  await nav.getByRole('button', { name: '좌측 패널 접기', exact: true }).click();
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '56px');
+  for (const [index, name] of labels.entries()) {
+    const box = (await nav.getByRole('button', { name, exact: true }).boundingBox())!;
+    expect(Math.abs(box.y - positions[index])).toBeLessThanOrEqual(1);
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  }
+  await page.screenshot({ path: info.outputPath('sidebar-polish-rail.png') });
+  await page.reload();
+  await expect(nav.getByRole('button', { name: '좌측 패널 펼치기', exact: true })).toBeVisible();
+  await nav.getByRole('button', { name: '좌측 패널 펼치기', exact: true }).click();
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '248px');
+  await expect(selected).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openHelper(page);
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '56px');
+  await page.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '248px');
+});
+
+test.describe('touch sidebar', () => {
+  test.use({ hasTouch: true });
+  test('SIDENAV03 folder menus stay visible and usable on phone and touch desktop', async ({
+    page,
+    request,
+  }, info) => {
+    const fixture = await sidebarFixture(request);
+    for (const width of [MOBILE_WIDTH, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/?chat=${fixture.chat.id}`);
+      const nav = await visibleNavigation(page);
+      const folder = nav.locator(`[data-bot-folder-id="${fixture.folder.id}"]`);
+      const trigger = folder.getByLabel(`${fixture.folder.title} 봇 폴더 메뉴`, { exact: true });
+      const actions = trigger.locator('..').locator('..');
+      await expect(actions).toHaveCSS('opacity', '1');
+      const box = (await trigger.boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      await trigger.tap();
+      const menu = folder.locator('.bot-tree-folder-heading .action-menu-body');
+      await expect(menu).toBeVisible();
+      const menuBox = (await menu.boundingBox())!;
+      expect(menuBox.x).toBeGreaterThanOrEqual(0);
+      expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width);
+      await page.screenshot({ path: info.outputPath(`sidebar-folder-menu-touch-${width}.png`) });
+      await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
+      await expect(actions).toHaveCSS('opacity', '1');
+      expect(await nav.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`sidebar-polish-touch-${width}.png`) });
+    }
+  });
+});

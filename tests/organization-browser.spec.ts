@@ -451,6 +451,7 @@ for (const width of DEFAULT_WIDTHS) {
       .getByLabel(`${a.owner.title} 봇 폴더 이동`, { exact: true })
       .selectOption(shared.id);
     await expect(branches).toHaveCount(2);
+    await nav.locator('.bot-tree-section-heading').hover();
     await nav.getByLabel('봇 목록 메뉴', { exact: true }).click();
     await nav.getByLabel('봇 정렬 기준', { exact: true }).selectOption('manual');
     await page.keyboard.press('Escape');
@@ -466,6 +467,7 @@ for (const width of DEFAULT_WIDTHS) {
       nodes.map((node) => node.getAttribute('data-bot-id'))
     );
     expect(manualOrder[1]).toBe(firstId);
+    await nav.locator('.bot-tree-section-heading').hover();
     await nav.getByLabel('봇 목록 메뉴', { exact: true }).click();
     await nav.getByLabel('봇 정렬 기준', { exact: true }).selectOption('recent');
     await expect(branches.first()).toHaveAttribute('data-bot-id', b.owner.id);
