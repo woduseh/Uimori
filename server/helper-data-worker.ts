@@ -2,8 +2,9 @@ import { DatabaseSync, constants, type SQLInputValue } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import type { HelperTaskSnapshot } from '../core/helper.js';
+import protectedFields from './helper-native-protected-fields.json' with { type: 'json' };
 
-// Only Node builtins are runtime imports: this entry also runs under Node's TS stripping in tests.
+// Node builtins and JSON keep this entry runnable under Node's TS stripping in tests.
 export type DataScope = 'current' | 'library' | 'chats' | 'editor';
 export type DataRef = {
   scope: DataScope;
@@ -29,6 +30,7 @@ type Document = Omit<DataRef, 'field' | 'hash'> & {
 };
 const MAX_RESULT_CHARS = 16_000;
 const MAX_SEARCH_CHARS = 8_000;
+const PROTECTED_FIELDS = new Set(protectedFields);
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const fold = (value: string) => value.normalize('NFKC').toLocaleLowerCase('en');
 const object = (value: unknown): Record<string, any> => {
@@ -421,7 +423,11 @@ function editTarget(doc: Document, field: string, stringValue: boolean) {
     doc.scope !== 'library' ||
     !['bot', 'persona', 'module'].includes(doc.kind) ||
     !stringValue ||
-    !/^\/(?:card|module)\//u.test(field)
+    !/^\/(?:card|module)\//u.test(field) ||
+    field
+      .slice(1)
+      .split('/')
+      .some((part) => PROTECTED_FIELDS.has(part.replaceAll('~1', '/').replaceAll('~0', '~')))
   )
     return undefined;
   return {
@@ -625,11 +631,14 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
           ? []
           : [
               {
+                scope: doc.scope,
                 kind: doc.kind,
                 id: doc.id,
                 revision: doc.revision,
                 title: doc.title,
                 origin: doc.origin,
+                ...(doc.chatId ? { chatId: doc.chatId } : {}),
+                ...(doc.branchId ? { branchId: doc.branchId } : {}),
                 ...(doc.metadata ? { metadata: doc.metadata } : {}),
               },
             ]

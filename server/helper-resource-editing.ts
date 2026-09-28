@@ -8,19 +8,12 @@ import type { Content } from '../core/product.js';
 import type { Store } from './store.js';
 import { HttpError, number, text } from './request-validation.js';
 import { readResource, saveResource } from './resource-service.js';
+import protectedFields from './helper-native-protected-fields.json' with { type: 'json' };
 
 const MAX_RESULT = 24_000;
 const MAX_PATH = 1_024;
 const MAX_TEXT = 10_000;
-const FORBIDDEN = new Set([
-  '__proto__',
-  'constructor',
-  'prototype',
-  'id',
-  'sourceHash',
-  'assets',
-  'imageId',
-]);
+const FORBIDDEN = new Set(protectedFields);
 type JsonObject = Record<string, unknown>;
 type Change = {
   path: string;

@@ -217,6 +217,67 @@ test('document discovery and narrow matches edit one age without sending repeate
   expect((after.package.nativeRisu.card.extensions as any).risuai.backgroundHTML).toBe(background);
 });
 
+test('module string excerpts can be patched while protected native paths remain readable', async () => {
+  const f = fixture();
+  const input = fixtureBotInput('Harbor module');
+  input.package.nativeRisu.card = {};
+  const protectedFields = Object.fromEntries(
+    ['id', 'sourceHash', 'assets', 'imageId', '__proto__', 'constructor', 'prototype'].map(
+      (key) => [key, `protected sentinel ${key}`]
+    )
+  );
+  input.package.nativeRisu.module = {
+    name: 'Harbor module',
+    lorebook: [{ comment: 'Harbor', key: 'dock', content: 'The west harbor opens at dawn.' }],
+    extensions: { vendor: protectedFields },
+  };
+  const saved = f.store.product.content({ ...input, kind: 'module' }) as Content;
+  const found = await f.invoke('data.search', {
+    scope: 'library',
+    ids: [saved.id],
+    patterns: ['west harbor'],
+    paths: ['/module/lorebook'],
+  });
+  expect(found.items).toHaveLength(1);
+  const hit = found.items[0];
+  expect(hit.editTarget).toEqual({
+    kind: 'content',
+    id: saved.id,
+    expectedRevision: saved.revision,
+    path: '/package/nativeRisu/module/lorebook/0/content',
+  });
+  const protectedHits = await f.invoke('data.search', {
+    scope: 'library',
+    ids: [saved.id],
+    patterns: ['protected sentinel'],
+    paths: ['/module/extensions/vendor'],
+    limit: 20,
+  });
+  expect(protectedHits.items).toHaveLength(Object.keys(protectedFields).length);
+  expect(protectedHits.items.every((item: any) => item.editTarget === undefined)).toBe(true);
+  const protectedRead = await readOne(f, protectedHits.items[0].ref);
+  expect(protectedRead.text).toContain('protected sentinel');
+  expect(protectedRead.editTarget).toBeUndefined();
+
+  const { path, ...target } = hit.editTarget;
+  invokeResourceTool(f.store, 'resource.patch', {
+    ...target,
+    changes: [
+      {
+        path,
+        op: 'replaceText',
+        oldText: 'west harbor',
+        newText: 'north harbor',
+      },
+    ],
+  });
+  const after = f.store.product.get<Content>('content', saved.id);
+  expect(after.package.nativeRisu.module?.lorebook).toMatchObject([
+    { content: 'The north harbor opens at dawn.' },
+  ]);
+  expect(after.package.nativeRisu.module?.extensions).toMatchObject({ vendor: protectedFields });
+});
+
 test('matches later occurrences in one long field, with deterministic search pagination and exact original offsets', async () => {
   const f = fixture();
   bot(
@@ -609,6 +670,32 @@ test('live chat grep and SQL follow each actual ancestry and preserve scene numb
   ).toBe(true);
   const read = await readOne(f, found.items[2].ref);
   expect(read.text).toContain('0-2');
+  const discovered = await f.invoke('data.search', {
+    scope: 'chats',
+    output: 'documents',
+    patterns: ['나이'],
+    limit: 10,
+  });
+  expect(discovered.items).toHaveLength(6);
+  const selected = discovered.items.find(
+    (item: any) => item.chatId === chats[1].id && item.metadata.sceneNumber === 2
+  );
+  expect(selected).toMatchObject({ scope: 'chats', chatId: chats[1].id });
+  expect(selected.branchId).toBeTypeOf('string');
+  const narrowed = await f.invoke('data.search', {
+    scope: selected.scope,
+    chatId: selected.chatId,
+    branchId: selected.branchId,
+    ids: [selected.id],
+    patterns: ['나이'],
+  });
+  expect(narrowed.items).toHaveLength(1);
+  expect(narrowed.items[0].ref).toMatchObject({
+    id: selected.id,
+    chatId: selected.chatId,
+    branchId: selected.branchId,
+  });
+  expect((await readOne(f, narrowed.items[0].ref)).text).toContain('기록 1-1');
   const counts = await f.invoke('db.query', {
     sql: 'SELECT chat_id,COUNT(*) n FROM agent_messages GROUP BY chat_id ORDER BY chat_id',
   });
