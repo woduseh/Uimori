@@ -89,12 +89,39 @@ def plan_gc(root, live, containers, images):
 
 def apply_plan(plan, root, docker, remove=shutil.rmtree):
     warnings, removed = [], {"images": [], "directories": []}
+    remaining_images = set(plan["images"])
     for image in plan["images"]:
+        if image not in remaining_images:
+            continue
+        failure = None
         try:
             docker("image", "rm", image)  # No --force: newly referenced images cannot be removed.
-            removed["images"].append(image)
         except Exception as error:
-            warnings.append("Image cleanup failed: " + image + " (" + type(error).__name__ + ")")
+            failure = error
+        try:
+            current_images = set(docker("image", "ls", "-aq", "--no-trunc").split())
+        except Exception as inventory_error:
+            # A successful rm is enough evidence for this image, but without a fresh inventory
+            # we cannot infer whether Docker also reclaimed another planned image.
+            if failure is None:
+                removed["images"].append(image)
+            else:
+                warnings.append("Image cleanup failed: " + image + " (" + type(failure).__name__
+                                + "; inventory " + type(inventory_error).__name__ + ")")
+            remaining_images.discard(image)
+            continue
+        # Removing one tagged image can make other untagged parent/intermediate images disappear.
+        # Treat those already-absent planned IDs as successfully reclaimed instead of retrying a
+        # stale plan and reporting Docker's "No such image" as a cleanup failure.
+        vanished = remaining_images - current_images
+        for candidate in plan["images"]:
+            if candidate in vanished:
+                removed["images"].append(candidate)
+                remaining_images.discard(candidate)
+        if image in current_images:
+            detail = type(failure).__name__ if failure is not None else "still present"
+            warnings.append("Image cleanup failed: " + image + " (" + detail + "; image still exists)")
+            remaining_images.discard(image)
     for name in plan["directories"]:
         directory = Path(name)
         try:
