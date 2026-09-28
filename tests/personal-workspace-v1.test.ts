@@ -121,18 +121,36 @@ test('helper resource tools can directly create and edit outside any selected ed
     kind: 'content',
     model: fixtureBotInput('Helper bot', 'body'),
   }) as { id: string; revision: number };
-  const current = invokeResourceTool(store, 'resource.read', {
+  const overview = invokeResourceTool(store, 'resource.read', {
     kind: 'content',
     id: saved.id,
-  }) as import('../core/product.js').Content;
-  expect(current.title).toBe('Helper bot');
-  invokeResourceTool(store, 'resource.save', {
-    kind: 'content',
-    id: current.id,
-    expectedRevision: current.revision,
-    model: nativeDraftTitle(editableResource('content', current), 'Updated'),
+  }) as { id: string; revision: number; title: string; source: { path: string } };
+  expect(overview).toMatchObject({
+    id: saved.id,
+    revision: saved.revision,
+    title: 'Helper bot',
+    source: { path: '/package/nativeRisu/card' },
   });
-  expect(store.product.get<typeof current>('content', current.id).title).toBe('Updated');
+  const name = invokeResourceTool(store, 'resource.read', {
+    kind: 'content',
+    id: saved.id,
+    path: `${overview.source.path}/name`,
+  }) as { revision: number; text: string };
+  expect(name).toMatchObject({ revision: saved.revision, text: 'Helper bot' });
+  const patched = invokeResourceTool(store, 'resource.patch', {
+    kind: 'content',
+    id: saved.id,
+    expectedRevision: name.revision,
+    changes: [{ path: `${overview.source.path}/name`, op: 'set', value: 'Updated' }],
+  });
+  expect(patched).toMatchObject({
+    id: saved.id,
+    revision: saved.revision + 1,
+    changedPaths: ['/package/nativeRisu/card/name'],
+  });
+  const current = store.product.get<import('../core/product.js').Content>('content', saved.id);
+  expect(current).toMatchObject({ title: 'Updated', text: 'body' });
+  expect(current.package.nativeRisu.card).toMatchObject({ name: 'Updated', description: 'body' });
 });
 
 test('WebP intake preserves dimensions and alpha; already-WebP data is not re-encoded', async () => {
