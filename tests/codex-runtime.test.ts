@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { CodexRuntime, codexEnvironment, codexExecutable } from '../server/codex-runtime.js';
+import { CodexProcess } from '../server/codex-process.js';
+import { buildCodexTurn } from '../core/codex-protocol.js';
 import { ProviderContractError, type ProviderRequest, type WireRecord } from '../core/transport.js';
 
 const fixture = resolve('tests/fixtures/codex-app-server.mjs');
@@ -181,6 +184,8 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       },
     });
     const start = records().find((row) => row.method === 'thread/start').params;
+    expect(start).not.toHaveProperty('baseInstructions');
+    expect(wire?.body).not.toHaveProperty('baseInstructions');
     expect(start).toMatchObject({
       environments: [],
       selectedCapabilityRoots: [],
@@ -205,6 +210,77 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     );
     expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
     expect(JSON.stringify(wire)).not.toMatch(/fixture-thread|auth\.json|synthetic@example/);
+  });
+  it('sends helper base instructions in the thread request and records the same prefix', async () => {
+    const { runtime, records } = setup();
+    const helper = { ...request(), role: 'helper' as const };
+    const built = buildCodexTurn(helper);
+    let wire: WireRecord | undefined;
+    const result = await runtime.execute(connection, helper, {
+      signal: new AbortController().signal,
+      onWire: (value) => {
+        wire = value;
+      },
+    });
+    expect(result.status).toBe('completed');
+    const start = records().find((row) => row.method === 'thread/start').params;
+    expect(start.baseInstructions).toBe(built.baseInstructions);
+    expect(start.developerInstructions).toBe(built.developerInstructions);
+    expect(wire?.body).toMatchObject({ baseInstructions: built.baseInstructions });
+    expect(wire?.stablePrefixSha256).toBe(
+      createHash('sha256')
+        .update(JSON.stringify([built.baseInstructions, built.developerInstructions]))
+        .digest('hex')
+    );
+  });
+  it('retains reported total and last token details without inventing missing numbers', async () => {
+    const { runtime } = setup();
+    const onNotification = CodexProcess.prototype.onNotification;
+    const intercept = vi
+      .spyOn(CodexProcess.prototype, 'onNotification')
+      .mockImplementation(function (this: CodexProcess, listener) {
+        return onNotification.call(this, (method, params) => {
+          if (method !== 'thread/tokenUsage/updated') return listener(method, params);
+          const event = params as { threadId: string; turnId: string };
+          listener(method, {
+            ...event,
+            tokenUsage: {
+              total: {
+                totalTokens: 130,
+                inputTokens: 100,
+                cachedInputTokens: 40,
+                cacheWriteInputTokens: 6,
+                outputTokens: 30,
+                reasoningOutputTokens: 12,
+              },
+              last: { inputTokens: 100, cachedInputTokens: 20, outputTokens: 30 },
+            },
+          });
+        });
+      });
+    try {
+      const result = await runtime.execute(connection, request(), {
+        signal: new AbortController().signal,
+      });
+      expect(result.usage).toMatchObject({ inputTokens: 100, outputTokens: 30 });
+      expect(result.usage.raw).toEqual({
+        kind: 'codex-agent-turn',
+        modelCalls: null,
+        tokenUsage: {
+          total: {
+            totalTokens: 130,
+            inputTokens: 100,
+            cachedInputTokens: 40,
+            cacheWriteInputTokens: 6,
+            outputTokens: 30,
+            reasoningOutputTokens: 12,
+          },
+          last: { inputTokens: 100, cachedInputTokens: 20, outputTokens: 30 },
+        },
+      });
+    } finally {
+      intercept.mockRestore();
+    }
   });
   it('does not execute when durable attempt recording fails', async () => {
     const { runtime, records } = setup();

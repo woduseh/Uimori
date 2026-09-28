@@ -66,7 +66,7 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
   {
     name: 'resource.patch',
     description:
-      'Edit existing native card/module authored fields with the latest resource revision. Use paths returned by resource.read. Set a simple typed value (including small scalar arrays such as lore keys), or replace a literal string that occurs exactly once. Applies all changes together with one undo. Projection fields such as package.lore/body/starts are read only.',
+      'Edit existing native card/module authored fields with the latest resource revision. Use resource.read paths or a library search/read editTarget. An exact excerpt with editTarget is sufficient for replaceText; no overview or whole-field read is required. Set a simple typed value (including scalar arrays such as lore keys), or replace a literal string that occurs exactly once. Applies all changes together with one undo. Projection fields such as package.lore/body/starts are read only.',
     inputSchema: {
       type: 'object',
       properties: {

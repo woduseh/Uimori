@@ -27,13 +27,15 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
   {
     name: 'data.search',
     description:
-      'Grep authored bot/persona/module/prompt text, chat originals, notes or captured editor fields. Returns exact matched excerpts and data.read references, never whole editor JSON. query filters title/ID; patterns search each text field (any/all, case-insensitive literal by default). Empty patterns list documents. current = frozen current chat, library/chats = live, editor = captured saved or unsaved input, distinguished by origin. Default: editor when supplied, otherwise current chat or library. Follow nextOffset; absence from a search is not proof of absence.',
+      'Find authored resources with output="documents" (one document per result, no body), then grep selected IDs with output="matches" (default). query filters title/ID only: if a name is absent there, retry without query using patterns for aliases in the body. For a saved bot edit, use scope="library", output="documents", patterns:["Hinano","히나노"] to find IDs, then ids:[id], patterns:["Age:"], optionally paths:["/card/description"] for exact excerpts. paths accepts JSON Pointer fields or subtree prefixes; omitted paths keep HTML/scripts searchable. Matches default to five and page under an 8k serialized-character budget; follow nextOffset. A library native string hit includes editTarget for resource.patch replaceText with a unique exact oldText; do not read the full field if the excerpt suffices. Numeric/boolean fields need a typed resource.read; current and editor refs are not saved-resource edit targets. current = frozen chat, library/chats = live, editor = captured input. Default scope is editor when supplied, otherwise current chat or library. No-match is not proof of absence.',
     inputSchema: {
       type: 'object',
       properties: {
         scope: { type: 'string', enum: ['current', 'library', 'chats', 'editor'] },
+        output: { type: 'string', enum: ['documents', 'matches'] },
         query: str,
         patterns: list,
+        paths: { type: 'array', maxItems: 16, items: str },
         match: { type: 'string', enum: ['any', 'all'] },
         regex: { type: 'boolean' },
         kinds: list,
@@ -50,7 +52,7 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
   {
     name: 'data.read',
     description:
-      'Read one to 16 refs from search. Always pass refs, including a one-item array for a single read. Copy references unchanged. Each item returns its own result/error; follow nextIndex for unread refs. Empty field gives a paged field directory; choose a returned ref for exact text. Text offset/limit are UTF-16 units; directory offset/limit count fields. Changed revision/hash requires searching again. For edits use app.call resource.read for small typed fields, then resource.patch; do not reconstruct a whole resource from text excerpts.',
+      'Read one to 16 refs from search. Always pass refs, including a one-item array. Copy references unchanged. Each item returns its own result/error; follow nextIndex for unread refs. Empty field gives a paged field directory. Text offset/limit are UTF-16 units; directory offset/limit count fields. Changed revision/hash requires searching again. Exact library native string reads include editTarget for resource.patch replaceText; use a unique literal excerpt without reconstructing the whole resource. For typed or missing fields use app.call resource.read before resource.patch.',
     inputSchema: {
       type: 'object',
       properties: {

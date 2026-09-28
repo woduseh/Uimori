@@ -32,6 +32,7 @@ Linux Docker의 실제 이미지 빌드·기동과 실계정 로그인·구독 �
 ## 실행 계약과 한계
 
 - App Server `initialize`, `account/*`, `model/list`, `thread/start`, `turn/start`를 사용해요. 각 판단 요청은 새 ephemeral thread와 별도 프로세스로 실행하며 opaque continuation은 저장하지 않아요.
+- 도우미(`helper`)는 `thread/start.baseInstructions`로 짧은 Uimori 전용 지침을 지정해 모델의 기본 코딩 지침을 대체해요. 같은 값이 요청 descriptor와 stable-prefix 해시에 포함돼요. 다른 역할과 삽화의 지침·내장 도구 설정은 기존대로예요. 로컬 입력 추정에는 Codex 내부 도구 설명과 추가 문맥이 모두 포함되지는 않으므로 실제 공급자 입력 토큰과 차이가 있을 수 있어요.
 - 전용 Codex home과 빈 임시 작업 폴더를 사용해요. 기존 사용자 home/config와 서버의 provider API 키 환경변수를 넘기지 않아요. `environments: []`, `selectedCapabilityRoots: []`, read-only/never 정책은 유지해요. 내장 도구 전체 금지는 제거하고 `web_search=cached`와 `features.code_mode=true`로 검색과 격리된 JavaScript 계산을 사용할 수 있게 해요. 실제 도구 제공 여부는 설치된 CLI·모델에 따라 달라요.
 - Codex는 JSON으로 최종 응답 또는 허용된 Uimori 도구 요청을 반환해요. Uimori 자료 조회·검증·저장은 기존 하네스가 담당하고, 내장 도구 이름을 이 JSON에 넣어 실행시키지는 않아요. 각 역할의 기존 원문/hash/revision·취소·작업 귀속 계약을 유지해요. 내장 검색·계산의 중간 결과, 계획, 진행 메시지는 본문으로 저장하지 않으며 `final_answer`만 채택해요. phase가 없는 구형 응답은 후속 작업이 없을 때 마지막 메시지를 최종 후보로 사용해요.
 - 삽화 턴은 같은 검색·계산 도구에 `features.image_generation=true`를 더해 `imageGeneration` 항목을 받아요. 결과 base64 또는 전용 home의 `savedPath` 파일만 읽어요. 텍스트 턴에는 이미지 결과의 예약·귀속·저장 계약이 없으므로 이미지 생성은 계속 삽화 전용이에요. 삽화는 별도 동시 실행 슬롯(1개)을 써요.
@@ -39,6 +40,7 @@ Linux Docker의 실제 이미지 빌드·기동과 실계정 로그인·구독 �
 - `reasoningEffort`와 timeout을 전달해요. `maxOutputTokens`는 Codex 입력의 `outputTokenBudget`으로 전달하는 소프트 용량 예산이에요. 요청된 응답 길이나 공급자의 강제 상한이 아니며, 이 값을 채우려고 출력을 늘리지 않아요. 프롬프트에 단어 수 같은 명시적 분량 지시가 있으면 그 지시를 우선해요. temperature는 허용하지 않아요. 구조화 출력은 항상 외부 JSON envelope로 검증하며 내부 역할별 결과 검증도 유지해요.
 - 전송 전에 RPC attempt를 기록해요. 동시 실행은 2개, 대기는 최대 32개이며 취소할 수 있어요. Uimori는 재시작·전송 실패·불확실한 실행을 자동 재생하지 않아요. 다만 공식 CLI 내부의 통신 재시도 정책은 Uimori가 제어하지 못해요. 0.153은 내장 OpenAI provider의 retry 설정 덮어쓰기를 거절하므로 내부 재시도 0회나 upstream exactly-once는 보장하지 않아요. 기존 하네스의 명시적 재요청 및 정상 종료된 결과에 대한 제한된 재시도는 별도 판단 요청으로 기록돼요.
 - 한 attempt는 Codex 판단 작업 하나이며 Codex 내부 모델 호출 수와 같지 않아요. 응답에 토큰 사용량이 있으면 기록하지만 실제 비용과 내부 호출 수는 `null`이에요. Vertex의 USD 예산을 Codex 구독 예산으로 해석하지 않아요. 연결 완료 화면은 공식 계정 한도의 최근 조회값과 윈도 길이를 사용해 남은 비율·초기화 시각을 표시하며, 연결 전의 단계 안내는 완료 후 접어 상태 카드로 대체해요.
+- 공급자가 보고한 `tokenUsage.total`과 `last`의 입력·캐시·출력·추론 토큰은 숫자만 raw usage에 보존해요. 기존 입력·출력 합계에는 total 값을 쓰며, 캐시 토큰을 별도로 더하지 않아요. 공급자가 주지 않은 수치는 0으로 채우지 않아요.
 
 ### 내장 도구의 남은 경계
 
