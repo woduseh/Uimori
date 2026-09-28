@@ -156,7 +156,7 @@ test('explicit input translation uses the selected model and spelling pairs, wit
   const f = await setup();
   const send = mockSend();
   const before = databaseState(f.app);
-  const response = await f.post({ ...payload, branchId: f.store.product.branch(f.chat.id).id });
+  const response = await f.post(payload);
   expect(response.statusCode, response.body).toBe(200);
   expect(response.json()).toEqual({ text: success.text, targetLanguage: 'en' });
   expect(response.headers['cache-control']).toBe('no-store');
@@ -238,21 +238,11 @@ test.each([
   { ...payload, text: 'x'.repeat(REQUEST_TEXT_MAX_CHARS + 1) },
   { ...payload, targetLanguage: 'unknown' },
   { ...payload, modelId: 'another-model' },
-  { ...payload, branchId: 42 },
 ])('invalid input is rejected before calling the model (case %#)', async (body) => {
   const f = await setup();
   const send = mockSend();
   const response = await f.post(body);
   expect(response.statusCode).toBe(400);
-  expect(send).not.toHaveBeenCalled();
-  expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
-});
-
-test('unknown or foreign branch cannot supply context to this translation', async () => {
-  const f = await setup();
-  const send = mockSend();
-  const response = await f.post({ ...payload, branchId: 'main:some-other-chat' });
-  expect(response.statusCode).toBe(404);
   expect(send).not.toHaveBeenCalled();
   expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });

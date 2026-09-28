@@ -50,7 +50,6 @@ export function readerJobIds(store: Pick<Store, 'db'>, sourceId: string, sourceH
 export function readerPresentationRevisions(
   store: Pick<Store, 'db'>,
   chatId: string,
-  branchId: string,
   sourceIds: string[]
 ): Record<string, string> {
   const shared = store.db
@@ -58,9 +57,9 @@ export function readerPresentationRevisions(
       SELECT COALESCE(MAX(seq),0) AS revision FROM events WHERE chat_id=? AND kind GLOB 'source.*'
       UNION ALL SELECT COALESCE(MAX(seq),0) FROM events WHERE chat_id=? AND kind GLOB 'asset.*'
       UNION ALL SELECT COALESCE(MAX(seq),0) FROM events WHERE chat_id=? AND kind IN ('profile.updated','prompt-workspace.updated')
-      UNION ALL SELECT COALESCE(MAX(seq),0) FROM events WHERE chat_id=? AND kind='chat.variables.changed' AND entity_id=?
+      UNION ALL SELECT COALESCE(MAX(seq),0) FROM events WHERE chat_id=? AND kind='chat.variables.changed'
     )`)
-    .get(chatId, chatId, chatId, chatId, branchId) as { revision: number };
+    .get(chatId, chatId, chatId, chatId) as { revision: number };
   const images = store.db
     .prepare(`SELECT j.source_revision AS sourceId,MAX(e.seq) AS revision
     FROM events e JOIN jobs j ON j.id=e.entity_id

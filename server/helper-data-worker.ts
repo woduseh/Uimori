@@ -14,7 +14,6 @@ export type DataRef = {
   field: string;
   hash: string;
   chatId?: string;
-  branchId?: string;
 };
 export type DataOperation = {
   path: string;
@@ -94,18 +93,18 @@ function installViews(db: DatabaseSync) {
       FROM versions v WHERE v.kind='prompt-preset' AND NOT EXISTS
         (SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id);
     CREATE TEMP VIEW agent_chats AS
-      SELECT c.id,c.title,c.created_at,b.id branch_id,c.head_revision,
+      SELECT c.id,c.title,c.created_at,c.head_revision,
         json_extract(p.body,'$.packageAttachments') attachments
-      FROM chats c JOIN branches b ON b.chat_id=c.id LEFT JOIN profiles p ON p.chat_id=c.id;
+      FROM chats c LEFT JOIN profiles p ON p.chat_id=c.id;
     CREATE TEMP VIEW agent_messages AS
-      WITH RECURSIVE ancestry(chat_id,branch_id,head_revision,id,depth) AS (
-        SELECT b.chat_id,b.id,c.head_revision,c.head_revision,0
-        FROM branches b JOIN chats c ON c.id=b.chat_id WHERE c.head_revision IS NOT NULL
-        UNION ALL SELECT a.chat_id,a.branch_id,a.head_revision,s.parent_revision,a.depth+1
+      WITH RECURSIVE ancestry(chat_id,head_revision,id,depth) AS (
+        SELECT c.id,c.head_revision,c.head_revision,0
+        FROM chats c WHERE c.head_revision IS NOT NULL
+        UNION ALL SELECT a.chat_id,a.head_revision,s.parent_revision,a.depth+1
         FROM ancestry a JOIN sources s ON s.id=a.id WHERE s.parent_revision IS NOT NULL
       )
-      SELECT s.id,a.chat_id,a.branch_id,a.head_revision,s.hash,s.created_at,
-        row_number() OVER (PARTITION BY a.branch_id ORDER BY a.depth DESC) scene_number,
+      SELECT s.id,a.chat_id,a.head_revision,s.hash,s.created_at,
+        row_number() OVER (PARTITION BY a.chat_id ORDER BY a.depth DESC) scene_number,
         r.request,s.text FROM ancestry a JOIN sources s ON s.id=a.id JOIN runs r ON r.id=s.run_id;
     CREATE TEMP VIEW agent_helper_inputs AS
       SELECT seq,task_id, json_extract(data,'$.attemptId') attempt_id,
@@ -137,8 +136,7 @@ function query(db: DatabaseSync, args: Record<string, unknown>) {
   only(args, ['sql', 'params', 'limit']);
   if (args.sql === undefined)
     return {
-      scope:
-        'live database; all chats. Filter chat_id/branch_id explicitly. No draft or inferred facts.',
+      scope: 'live database; all chats. Filter chat_id explicitly. No draft or inferred facts.',
       views: VIEW_NAMES.map((name) => ({
         name,
         columns: db
@@ -173,7 +171,6 @@ function query(db: DatabaseSync, args: Record<string, unknown>) {
     versions: ['kind', 'id', 'revision', 'body'],
     library_hidden: ['kind', 'id'],
     chats: ['id', 'title', 'created_at', 'head_revision'],
-    branches: ['chat_id', 'id'],
     profiles: ['chat_id', 'body'],
     sources: ['id', 'parent_revision', 'chat_id', 'hash', 'created_at', 'text', 'run_id'],
     runs: ['id', 'request'],
@@ -282,7 +279,7 @@ function* documents(
   if (scope === 'current') {
     const writing = snapshot.writing;
     if (!writing) throw new Error('DATA_CURRENT_CHAT_REQUIRED: use library or editor scope');
-    const common = { scope, chatId: writing.chatId, branchId: writing.branchId };
+    const common = { scope, chatId: writing.chatId };
     for (const pkg of writing.profile?.packages ?? []) {
       if (!accepts(pkg.id)) continue;
       const kind =
@@ -406,17 +403,15 @@ function* documents(
     return;
   }
   const chatId = args.chatId === undefined ? undefined : string(args.chatId);
-  const branchId = args.branchId === undefined ? undefined : string(args.branchId);
   const conditions = [
     chatId ? 'm.chat_id=?' : '',
-    branchId ? 'm.branch_id=?' : '',
     ids.length ? `m.id IN (${ids.map(() => '?').join(',')})` : '',
   ].filter(Boolean);
   const rows = db
     .prepare(
-      `SELECT m.*,c.title FROM agent_messages m JOIN chats c ON c.id=m.chat_id ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY m.chat_id,m.branch_id,m.scene_number`
+      `SELECT m.*,c.title FROM agent_messages m JOIN chats c ON c.id=m.chat_id ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY m.chat_id,m.scene_number`
     )
-    .iterate(...(chatId ? [chatId] : []), ...(branchId ? [branchId] : []), ...ids);
+    .iterate(...(chatId ? [chatId] : []), ...ids);
   for (const row of rows)
     yield {
       scope,
@@ -425,7 +420,6 @@ function* documents(
       revision: String(row.hash),
       title: `${row.title} / Scene ${row.scene_number}`,
       chatId: String(row.chat_id),
-      branchId: String(row.branch_id),
       origin: 'live-chat-source',
       metadata: { sceneNumber: Number(row.scene_number), headRevision: row.head_revision },
       fields: { request: row.request, text: row.text },
@@ -574,7 +568,6 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
     'kinds',
     'ids',
     'chatId',
-    'branchId',
     'offset',
     'limit',
     'context',
@@ -585,8 +578,7 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
   ) as DataScope;
   if (!['current', 'library', 'chats', 'editor'].includes(scope))
     throw new Error('DATA_SCOPE_INVALID');
-  if (scope !== 'chats' && (args.chatId !== undefined || args.branchId !== undefined))
-    throw new Error('DATA_USE_CHATS_SCOPE');
+  if (scope !== 'chats' && args.chatId !== undefined) throw new Error('DATA_USE_CHATS_SCOPE');
   const output = string(args.output, 'matches');
   if (!['matches', 'documents'].includes(output)) throw new Error('DATA_OUTPUT_INVALID');
   const patterns = strings(args.patterns, 8);
@@ -624,7 +616,6 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
     ...(scope === 'current'
       ? {
           chatId: snapshot.writing?.chatId,
-          branchId: snapshot.writing?.branchId,
           headRevision: snapshot.writing?.parentRevision,
         }
       : {}),
@@ -661,7 +652,6 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
                 title: doc.title,
                 origin: doc.origin,
                 ...(doc.chatId ? { chatId: doc.chatId } : {}),
-                ...(doc.branchId ? { branchId: doc.branchId } : {}),
                 ...(doc.metadata ? { metadata: doc.metadata } : {}),
               },
             ]
@@ -692,8 +682,7 @@ function read(
   if (
     !['current', 'library', 'chats', 'editor'].includes(ref.scope) ||
     Object.keys(ref).some(
-      (key) =>
-        !['scope', 'kind', 'id', 'revision', 'field', 'hash', 'chatId', 'branchId'].includes(key)
+      (key) => !['scope', 'kind', 'id', 'revision', 'field', 'hash', 'chatId'].includes(key)
     ) ||
     typeof ref.kind !== 'string' ||
     !['string', 'number'].includes(typeof ref.revision) ||
@@ -707,15 +696,8 @@ function read(
     ...documents(db, snapshot, ref.scope, {
       ids: [ref.id],
       ...(ref.chatId ? { chatId: ref.chatId } : {}),
-      ...(ref.branchId ? { branchId: ref.branchId } : {}),
     }),
-  ].find(
-    (d) =>
-      d.kind === ref.kind &&
-      d.id === ref.id &&
-      d.chatId === ref.chatId &&
-      d.branchId === ref.branchId
-  );
+  ].find((d) => d.kind === ref.kind && d.id === ref.id && d.chatId === ref.chatId);
   if (!doc) throw new Error('DATA_RESOURCE_UNAVAILABLE');
   const all = [...fields(doc.fields)];
   const selected = all.find(([path]) => path === ref.field);

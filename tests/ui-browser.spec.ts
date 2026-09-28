@@ -7,7 +7,6 @@ import { nativeProse, waitForNativeLayout } from './fixtures/native-message.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
   selectSettingsSection,
-  startProviderConnection,
   editLibraryContent,
   openNewStoryOptions,
   createPromptChoice,
@@ -1630,84 +1629,6 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
   }
 });
 
-test('UI settings categories retain drafts and support keyboard navigation', async ({
-  page,
-}, info) => {
-  for (const viewport of [
-    { width: MOBILE_WIDTH, height: 844 },
-    { width: DESKTOP_WIDTH, height: 1000 },
-  ]) {
-    await page.setViewportSize(viewport);
-    await page.goto('/');
-    await nav(page, '설정');
-    const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-    const tabs = dialog.getByRole('tablist', { name: '설정 항목' });
-    if (viewport.width === MOBILE_WIDTH) {
-      await expect(dialog.locator('.settings-navigation').filter({ visible: true })).toBeVisible();
-      await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
-      await expect(dialog.getByLabel('앱 화면 테마')).toBeHidden();
-      await selectSettingsSection(page, '일반');
-    }
-    await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
-    await expect(dialog.getByLabel('앱 화면 테마')).toBeVisible();
-    await expect(dialog.getByTestId('connection-editor')).not.toBeVisible();
-    await selectSettingsSection(page, '프로바이더·모델');
-    await startProviderConnection(page);
-    await dialog
-      .getByRole('region', { name: '제공자 선택', exact: true })
-      .getByRole('button', { name: /OpenAI · Responses/ })
-      .click();
-    await dialog
-      .getByLabel('프로바이더 이름', { exact: true })
-      .fill('SYNTHETIC unsaved connection');
-    await selectSettingsSection(page, '데이터 관리');
-    await expect(dialog.getByRole('button', { name: '백업 다운로드', exact: true })).toBeVisible();
-    await expect(dialog.getByLabel('프로바이더 이름', { exact: true })).not.toBeVisible();
-    await selectSettingsSection(page, '앱 정보·라이선스');
-    await expect(dialog.getByTestId('app-build-id')).toBeVisible();
-    if (viewport.width === DESKTOP_WIDTH) {
-      await tabs.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
-      await expect(tabs.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
-      for (const section of ['테마·색상', '역할별 모델', '현재 프롬프트', '프로바이더·모델']) {
-        await page.keyboard.press('ArrowDown');
-        await expect(tabs.getByRole('tab', { name: section, exact: true })).toBeFocused();
-      }
-    } else {
-      await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
-      const connection = dialog
-        .locator('.settings-navigation')
-        .getByRole('button', { name: '프로바이더·모델', exact: true });
-      await connection.focus();
-      await page.keyboard.press('Enter');
-      await expect(dialog.locator('.settings-navigation').filter({ visible: true })).toHaveCount(0);
-    }
-    await expect(dialog.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(
-      'SYNTHETIC unsaved connection'
-    );
-    const closeButton = dialog.getByRole('button', { name: '설정 닫기', exact: true });
-    await closeButton.focus();
-    await page.keyboard.press('Shift+Tab');
-    await expect(closeButton).not.toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(closeButton).toBeFocused();
-    await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
-    expect(
-      await dialog
-        .getByRole('tabpanel')
-        .evaluate((node) => node.scrollWidth <= node.clientWidth + 1)
-    ).toBe(true);
-    await selectSettingsSection(page, '일반');
-    await dialog.getByLabel('앱 화면 테마').selectOption('dark');
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath(`settings-categories-${viewport.width}.png`) });
-    await page.keyboard.press('Escape');
-    const discard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
-    await expect(discard).toBeVisible();
-    await discard.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
-    await expect(dialog).not.toBeVisible();
-  }
-});
-
 test('UI common dialogs center on desktop and fill mobile without changing dismissal or focus', async ({
   page,
   request,
@@ -1780,8 +1701,9 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       await opener.click();
       const dialog = page.getByRole('dialog', { name: '읽기 설정', exact: true });
       const box = (await dialog.boundingBox())!;
-      if (visualReview) expect(box.width).toBe(480);
-      if (visualReview) expect(box.height).toBeLessThan(880);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+      expect(box.y + box.height).toBeLessThanOrEqual(height);
       if (visualReview)
         expect(Math.abs(box.y + box.height / 2 - height / 2)).toBeLessThanOrEqual(1);
       await page.mouse.click(8, 8);

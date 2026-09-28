@@ -9,14 +9,12 @@ export const promptOptionOwner = (prompt: { presetId?: string }): string =>
 export type PendingChatOptions = {
   id: string;
   chatId: string;
-  branchId: string;
   binding: OptionBinding;
   values: OptionValues;
   createdAt: string;
 };
 export type ChatOptionState = {
   chatId: string;
-  branchId: string;
   revision: number;
   binding: OptionBinding;
   workspaceRevision: number;

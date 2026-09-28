@@ -80,7 +80,7 @@ export function createPackageStart(
       request = text(record(JSON.parse(prior.command)).request, 'request', REQUEST_TEXT_MAX_CHARS);
     } else {
       const chat = store.chat(chatId);
-      const profile = chatVariableProfile(store, chatId, store.product.branch(chatId).id);
+      const profile = chatVariableProfile(store, chatId);
       const attachment = profile?.packageAttachments?.find(
         (item) =>
           item.role === 'bot' &&
@@ -117,7 +117,6 @@ export function createPackageStart(
         const snapshot: RunSnapshot = {
           chatId,
           parentRevision: null,
-          branchId: `main:${chatId}`,
           settingsRevision: chat.settingsRevision,
           settings: chat.settings,
           request,

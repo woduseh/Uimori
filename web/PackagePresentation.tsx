@@ -6,7 +6,6 @@ export type PackagePresentation = {
   sourceHash: string;
   format: 'plain-text' | 'risu-html';
   nativeAction?: {
-    branchId: string;
     expectedHeadRevision: string;
     expectedHeadHash: string;
     expectedVariableRevision: number;
@@ -22,10 +21,9 @@ export function usePackagePresentation(
   source: Source,
   translation: Job | undefined,
   enabled: boolean,
-  refreshKey: string,
-  branchId?: string
+  refreshKey: string
 ) {
-  const sourceIdentity = `${source.chatId}:${branchId ?? ''}:${source.id}`;
+  const sourceIdentity = `${source.chatId}:${source.id}`;
   const identity = `${sourceIdentity}:${source.hash}:${translation?.id ?? ''}:${translation?.revision ?? 0}:${translation?.status ?? ''}`;
   const key = `${identity}:${refreshKey}`;
   const sequence = useRef(0);
@@ -43,7 +41,7 @@ export function usePackagePresentation(
     void (async () => {
       try {
         const response = await fetch(
-          `/api/chats/${encodeURIComponent(source.chatId)}/sources/${encodeURIComponent(source.id)}/presentation${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ''}`,
+          `/api/chats/${encodeURIComponent(source.chatId)}/sources/${encodeURIComponent(source.id)}/presentation`,
           { signal: controller.signal }
         );
         if (!response.ok) {
@@ -88,7 +86,6 @@ export function usePackagePresentation(
     source.hash,
     translation?.id,
     translation?.revision,
-    branchId,
   ]);
   if (!enabled || result?.sourceIdentity !== sourceIdentity) return;
   if (result.identity === identity) return { ...result, pending: result.key !== key };

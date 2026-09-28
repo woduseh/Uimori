@@ -27,8 +27,6 @@ test.each([
   [400, 'PACKAGE_START_TEXT_TOO_LONG', '2,000,000자'],
   [400, 'CHAT_TRANSCRIPT_INVALID_REQUEST', '요청 문장'],
   [400, 'CHAT_TRANSCRIPT_UNSUPPORTED_VERSION', '앱의 버전'],
-  [400, 'CHAT_BACKUP_UNSUPPORTED_VERSION', '앱의 버전'],
-  [400, 'CHAT_BACKUP_TOO_LARGE', '허용 크기'],
   [409, 'MODEL_REQUIRED:translation-refusal', '번역 거절 판정'],
   [409, 'MODEL_REQUIRED:helper', '도우미 모델'],
   [409, 'HELPER_EFFECTS_ALREADY_COMMITTED', '남은 작업만 새 요청'],
@@ -58,10 +56,6 @@ test('only recognized revision errors are described as a concurrent save', async
       code: 'REVISION_CONFLICT',
       message: expect.stringContaining('다른 요청이 먼저'),
     });
-  expect(await rejected(409, 'BEHAVIOR_STATE_STALE')).toMatchObject({
-    code: 'BEHAVIOR_STATE_STALE',
-    message: expect.stringContaining('다른 요청이 먼저'),
-  });
   const unknown = await rejected(409, 'INTERNAL_PATH:C:/private/provider-credential');
   expect(unknown.code).toBeNull();
   expect(unknown.message).toContain('현재 상태');

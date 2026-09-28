@@ -13,7 +13,6 @@ import {
 
 const snapshot = (summary: string): RunSnapshot => ({
   chatId: 'scope-chat',
-  branchId: 'branch-a',
   parentRevision: 'scene-3',
   settingsRevision: 1,
   settings: { status: false, maxCalls: 8 },
@@ -28,7 +27,7 @@ const snapshot = (summary: string): RunSnapshot => ({
     version: 1,
     status: 'ready',
     budget: { inputTokenLimit: 8192, estimator: 'o200k_base-v1' },
-    dependencyKey: 'scope-chat:branch-a',
+    dependencyKey: 'scope-chat',
     estimatedInputTokens: 1000,
     compacted: [
       { revision: 'scene-1', hash: 'hash-1' },
@@ -59,7 +58,7 @@ describe('derived context provenance (host mechanics, not model semantic accurac
       kind: 'derived-conversation-summary',
       text,
       checkpoint: original.contextPlan!.checkpoint,
-      scope: { chatId: 'scope-chat', branchId: 'branch-a' },
+      scope: { chatId: 'scope-chat' },
       covered: {
         count: 2,
         through: { revision: 'scene-2', hash: 'hash-2', viewHash: 'visible-range' },
@@ -182,7 +181,6 @@ describe('derived context provenance (host mechanics, not model semantic accurac
       evidence: [],
       source: {
         chatId: 'scope-chat',
-        branchId: 'branch-a',
         parentRevision: 'scene-3',
         prompt: { id: 'prompt', revision: 1 },
       },

@@ -11,7 +11,6 @@ export function conversationSummary(snapshot: RunSnapshot) {
     checkpoint: plan.checkpoint ?? null,
     scope: {
       chatId: snapshot.chatId,
-      ...(snapshot.branchId ? { branchId: snapshot.branchId } : {}),
     },
     covered: { count: plan.compacted.length, through: plan.compacted.at(-1) ?? null },
   });

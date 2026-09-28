@@ -27,12 +27,12 @@ export class StoryStore {
   }
   initFresh() {
     this.db.exec(
-      `CREATE TABLE scene_commands(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),branch_id TEXT NOT NULL REFERENCES branches(id),request_key TEXT NOT NULL,label TEXT NOT NULL,request TEXT NOT NULL,status TEXT NOT NULL,run_id TEXT REFERENCES runs(id),source_revision TEXT REFERENCES sources(id),UNIQUE(chat_id,request_key));`
+      `CREATE TABLE scene_commands(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),request_key TEXT NOT NULL,label TEXT NOT NULL,request TEXT NOT NULL,status TEXT NOT NULL,run_id TEXT REFERENCES runs(id),source_revision TEXT REFERENCES sources(id),UNIQUE(chat_id,request_key));`
     );
     this.notes.initFresh();
   }
   prepare(snapshot: RunSnapshot): StorySnapshot | undefined {
-    this.store.product.branch(snapshot.chatId, snapshot.branchId);
+    this.store.chat(snapshot.chatId);
     const scope = { chatId: snapshot.chatId, history: snapshot.history },
       notes = this.notes.entries(scope);
     return notes.length
@@ -50,20 +50,19 @@ export class StoryStore {
   reserveSourceInTransaction(source: Source, run: Run) {
     this.finishCommandInTransaction(run.id, 'consumed', source.id);
   }
-  detail(chatId: string, branchId?: string): StoryDetail {
-    const branch = this.store.product.branch(chatId, branchId),
-      scope = this.notes.scope(chatId, branch.headRevision);
+  detail(chatId: string): StoryDetail {
+    const scope = this.notes.scope(chatId, this.store.chat(chatId).headRevision);
     return {
       notes: this.notes.entries(scope),
       notesRevision: this.notes.revision(chatId),
-      commands: this.commands(chatId, branch.id),
+      commands: this.commands(chatId),
     };
   }
-  commands(chatId: string, branchId: string): SceneCommand[] {
+  commands(chatId: string): SceneCommand[] {
     return (
       this.db
-        .prepare('SELECT id FROM scene_commands WHERE chat_id=? AND branch_id=? ORDER BY rowid')
-        .all(chatId, branchId) as Row[]
+        .prepare('SELECT id FROM scene_commands WHERE chat_id=? ORDER BY rowid')
+        .all(chatId) as Row[]
     ).map((row) => this.command(row.id));
   }
   command(id: string): SceneCommand {
@@ -74,7 +73,6 @@ export class StoryStore {
     return {
       id: row.id,
       chatId: row.chat_id,
-      branchId: row.branch_id,
       label: row.label,
       request: row.request,
       status: row.status,
@@ -84,28 +82,25 @@ export class StoryStore {
   }
   createCommand(chatId: string, value: unknown): SceneCommand {
     const body = record(value);
-    fields(body, ['label', 'request', 'branchId', 'idempotencyKey']);
+    fields(body, ['label', 'request', 'idempotencyKey']);
     const key = text(body.idempotencyKey, 'command key', 120);
     const label = text(body.label, 'command label', 120);
     const request = text(body.request, 'scene request', REQUEST_TEXT_MAX_CHARS);
-    const branch = this.store.product.branch(
-      chatId,
-      body.branchId === undefined ? undefined : text(body.branchId, 'branch', 100)
-    );
+    this.store.chat(chatId);
     return this.store.transaction(() => {
       const prior = this.db
         .prepare('SELECT id FROM scene_commands WHERE chat_id=? AND request_key=?')
         .get(chatId, key) as Row | undefined;
       if (prior) {
         const saved = this.command(prior.id);
-        if (saved.label !== label || saved.request !== request || saved.branchId !== branch.id)
+        if (saved.label !== label || saved.request !== request)
           throw new HttpError(409, 'Command key reused');
         return saved;
       }
       const id = randomUUID();
       this.db
-        .prepare("INSERT INTO scene_commands VALUES(?,?,?,?,?,?,'pending',NULL,NULL)")
-        .run(id, chatId, branch.id, key, label, request);
+        .prepare("INSERT INTO scene_commands VALUES(?,?,?,?,?,'pending',NULL,NULL)")
+        .run(id, chatId, key, label, request);
       this.store.event(chatId, 'scene.command.created', id);
       return this.command(id);
     });
@@ -115,7 +110,6 @@ export class StoryStore {
     const run = this.store.run(runId);
     if (
       command.chatId !== run.chatId ||
-      command.branchId !== run.snapshot.branchId ||
       command.request !== run.request ||
       command.status === 'consumed' ||
       (command.status === 'cancelled' && !command.runId) ||

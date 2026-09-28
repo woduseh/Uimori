@@ -38,15 +38,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
     { bodyLimit: EXECUTION_INPUT_MAX_CHARS },
     async (request) => {
       const b = record(request.body);
-      fields(b, [
-        'program',
-        'request',
-        'values',
-        'branchId',
-        'role',
-        'loreContext',
-        'loreContextReset',
-      ]);
+      fields(b, ['program', 'request', 'values', 'role', 'loreContext', 'loreContextReset']);
       const role = b.role ?? 'main';
       if (!['main', 'translation'].includes(role)) throw new HttpError(400, 'Invalid prompt role');
       if (b.loreContextReset !== undefined && typeof b.loreContextReset !== 'boolean')
@@ -54,14 +46,10 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
       if (role !== 'main' && (b.loreContext !== undefined || b.loreContextReset !== undefined))
         throw new HttpError(400, 'Lore context preview requires the main role');
       const chat = store.chat(request.params.id);
-      const branch = store.product.branch(
-        chat.id,
-        b.branchId === undefined ? undefined : text(b.branchId, 'branch ID', 100)
-      );
       const profile = store.product.snapshot(
         chat.id,
         role as 'main' | 'translation',
-        branch.headRevision
+        chat.headRevision
       ) ?? {
         ...defaultProfile(chat.id),
         models: {},
@@ -92,14 +80,13 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
       }
       const base: RunSnapshot = {
         chatId: chat.id,
-        parentRevision: branch.headRevision,
+        parentRevision: chat.headRevision,
         settingsRevision: chat.settingsRevision,
         settings: chat.settings,
         request: text(b.request, 'preview request', REQUEST_TEXT_MAX_CHARS),
-        history: store.history(branch.headRevision),
+        history: store.history(chat.headRevision),
         resources: store.product.resources(chat.id, profile),
         profile,
-        branchId: branch.id,
         ...(b.loreContextReset ? { loreContextReset: true } : {}),
       };
       let snapshot = freezeReservationSnapshot(store, base, {
@@ -123,15 +110,15 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
       if (role === 'translation') {
         // Existing originals use their frozen source-time context, exactly as a job does.
         // An empty conversation has only explicit preview data; nothing is persisted.
-        const source = branch.headRevision
-          ? store.source(branch.headRevision)
+        const source = chat.headRevision
+          ? store.source(chat.headRevision)
           : {
               id: 'preview-source',
               chatId: chat.id,
               text: snapshot.request,
               hash: createHash('sha256').update(snapshot.request).digest('hex'),
             };
-        const frozen = branch.headRevision
+        const frozen = chat.headRevision
           ? structuredClone(
               readRunSnapshot(store, (source as import('../core/types.js').Source).runId)
             )
@@ -178,7 +165,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           'Translate the complete source according to the selected prompt. Return the translated text only.'
         )!;
         previewSource = {
-          kind: branch.headRevision ? 'stored' : 'synthetic',
+          kind: chat.headRevision ? 'stored' : 'synthetic',
           sourceRevision: source.id,
           sourceHash: source.hash,
         };

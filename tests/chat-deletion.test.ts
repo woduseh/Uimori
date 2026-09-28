@@ -29,29 +29,27 @@ async function fixture() {
   owned.push({ directory, store });
   return store;
 }
-async function run(store: Store, chatId: string, branchId = `main:${chatId}`, finish = true) {
-  const branch = store.product.branch(chatId, branchId),
-    chat = store.chat(chatId),
+async function run(store: Store, chatId: string, finish = true) {
+  const chat = store.chat(chatId),
     profile = {
       ...store.product.snapshot(chatId),
-      variableState: readChatVariables(store, chatId, branch.id),
+      variableState: readChatVariables(store, chatId),
     };
   const created = store.createRun(
     chatId,
     {
       request: 'Synthetic',
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       idempotencyKey: crypto.randomUUID(),
-      branchId,
     },
     (current) => ({
       chatId,
-      parentRevision: branch.headRevision,
+      parentRevision: chat.headRevision,
       settingsRevision: current.settingsRevision,
       settings: current.settings,
       request: 'Synthetic',
-      history: store.history(branch.headRevision),
+      history: store.history(chat.headRevision),
       resources: store.product.resources(chatId, profile),
       profile,
     })
@@ -71,7 +69,7 @@ async function run(store: Store, chatId: string, branchId = `main:${chatId}`, fi
 test('active run or outstanding provider attempt blocks deletion until completion', async () => {
   const store = await fixture(),
     chat = createFixtureChat(store, 'Busy');
-  const pending = (await run(store, chat.id, undefined, false)).run;
+  const pending = (await run(store, chat.id, false)).run;
   expect(() => deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request)).toThrow(
     '진행 중'
   );

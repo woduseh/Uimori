@@ -77,9 +77,7 @@ async function fixture(kind: 'chat' | 'library' = 'chat') {
   const bot = store.product.content(input) as Content;
   const chat = createFixtureChat(store, 'Synthetic chat', { botId: bot.id });
   const scope =
-    kind === 'chat'
-      ? { kind, chatId: chat.id, branchId: 'main:' + chat.id }
-      : { kind, workId: 'helper-tool-contracts' };
+    kind === 'chat' ? { kind, chatId: chat.id } : { kind, workId: 'helper-tool-contracts' };
   const opened = await app.inject({
     method: 'POST',
     url: '/api/helper/conversations',

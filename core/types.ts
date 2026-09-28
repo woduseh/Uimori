@@ -94,7 +94,7 @@ export type RunSnapshot = {
   executionClock?: { iso: string; unix: number };
   logicalHistory?: import('./risu-prompt.js').PromptHistoryMessage[];
   nativeRisuHistoryRevision?: string;
-  /** Optional, permission-bound conversation read set; never filled from today's branch on replay. */
+  /** Optional, permission-bound conversation read set; never filled from today's chat on replay. */
   promptCompilation?: import('./risu-prompt.js').PromptCompilation;
   /** Frozen model choice for the packages in model mode; a replay projects it, never reselects. */
   loreSelection?: import('./lore-selection.js').LoreSelectionReceipt;
@@ -109,7 +109,6 @@ export type RunSnapshot = {
     contentHash?: string;
   }[];
   resources: Resource[];
-  branchId?: string;
   profile?: import('./product.js').ProfileSnapshot;
   /** Rejudge the preserved response without invoking the writer or input hooks. */
   judgmentRecovery?: true;
@@ -197,7 +196,6 @@ export type Job = {
     sourceRevision: string;
     sourceHash: string;
     blocks?: { anchor: string; text: string }[];
-    segments?: { anchors: string[]; text: string }[];
     annotations?: {
       blockAnchor: string;
       assetRef: string;
@@ -222,7 +220,6 @@ export type ChatDetail = {
   sources: Source[];
   jobs: Job[];
   profile?: import('./product.js').ChatProfile;
-  branch: import('./product.js').Branch;
   attempts?: import('./product.js').Attempt[];
   assets?: import('./product.js').Asset[];
 };
@@ -240,7 +237,7 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
     unknownCount: number;
     attemptCount: number;
   };
-  snapshot: Pick<RunSnapshot, 'branchId' | 'loreContextReset'>;
+  snapshot: Pick<RunSnapshot, 'loreContextReset'>;
   contextSummary?: {
     status: 'pending' | 'ready' | 'failed';
     inputTokenLimit: number;
@@ -275,7 +272,6 @@ export type ReaderActivity = {
   updatedAt: string;
   startedAt: string;
   finishedAt: string | null;
-  branchId: string | null;
   sourceRevision: string | null;
   generation: number;
 };

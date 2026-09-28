@@ -172,11 +172,9 @@ export function BookmarkButton({
 
 export function BookmarkList({
   chatId,
-  branchId,
   onNavigate,
 }: {
   chatId: string;
-  branchId?: string;
   onNavigate: (target: ReaderTarget) => void;
 }) {
   const [items, setItems] = useState<Bookmark[]>([]);
@@ -189,12 +187,7 @@ export function BookmarkList({
   useEffect(() => {
     const controller = new AbortController();
     setLoaded(false);
-    void api<Bookmark[]>(
-      `/chats/${chatId}/bookmarks?${new URLSearchParams(branchId ? { branchId } : {})}`,
-      undefined,
-      'GET',
-      controller.signal
-    )
+    void api<Bookmark[]>(`/chats/${chatId}/bookmarks`, undefined, 'GET', controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) {
           setItems(value);
@@ -206,7 +199,7 @@ export function BookmarkList({
         if (!controller.signal.aborted) setError(caught.message);
       });
     return () => controller.abort();
-  }, [chatId, branchId, revision]);
+  }, [chatId, revision]);
   async function remove(item: Bookmark) {
     if (!window.confirm(`“${item.title}” 책갈피를 삭제할까요? 원고는 유지돼요.`)) return;
     setBusy(true);

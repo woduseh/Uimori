@@ -51,7 +51,7 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   // The scope each selection was made under. A selection survives until the reader moves to
-  // another branch; after that the panel resolves the session belonging to the branch on screen.
+  // another chat; after that the panel resolves the session belonging to the chat on screen.
   const selectionScopes = useRef(new Map<string, string>());
   const viewedScope = useRef(scopeKey);
   viewedScope.current = scopeKey;

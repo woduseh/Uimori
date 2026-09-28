@@ -100,13 +100,6 @@
   border-bottom: 1px solid var(--line);
   padding-bottom: 10px;
 }
-.chat-option-selection {
-  min-height: var(--control-h);
-  font-size: 13px;
-}
-.chat-option-selection > span {
-  overflow-wrap: anywhere;
-}
 .chat-option-value {
   border: 0;
   padding: 0;
@@ -209,9 +202,6 @@
 }
 .chat-option-values dd {
   margin: 0;
-}
-.chat-options-revocations {
-  margin-top: 16px;
 }
 .chat-options-body {
   overflow: auto;

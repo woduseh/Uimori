@@ -15,15 +15,15 @@ export function initReadingState(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS reading_positions(
       client_id TEXT NOT NULL,chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
-      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-      target TEXT NOT NULL,revision INTEGER NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(client_id,chat_id,branch_id));
-    CREATE INDEX IF NOT EXISTS reading_position_recent ON reading_positions(chat_id,branch_id,updated_at DESC);
+      source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+      target TEXT NOT NULL,revision INTEGER NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(client_id,chat_id));
+    CREATE INDEX IF NOT EXISTS reading_position_recent ON reading_positions(chat_id,updated_at DESC);
     CREATE TABLE IF NOT EXISTS bookmarks(
       id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
-      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+      source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
       target TEXT NOT NULL,title TEXT NOT NULL,note TEXT NOT NULL,quote TEXT NOT NULL,revision INTEGER NOT NULL,
       created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
-    CREATE INDEX IF NOT EXISTS bookmarks_chat ON bookmarks(chat_id,branch_id,created_at,id);
+    CREATE INDEX IF NOT EXISTS bookmarks_chat ON bookmarks(chat_id,created_at,id);
   `);
 }
 const bounded = (value: unknown, max: number, name: string, empty = false) => {
@@ -42,7 +42,6 @@ export function validateReaderTarget(store: Store, chatId: string, value: unknow
   const body = record(value);
   fields(body, [
     'chatId',
-    'branchId',
     'sourceId',
     'representation',
     'contentHash',
@@ -50,12 +49,12 @@ export function validateReaderTarget(store: Store, chatId: string, value: unknow
     'offsetRatio',
   ]);
   if (body.chatId !== chatId) throw new HttpError(400, '다른 채팅의 읽기 위치예요.');
-  const branch = store.product.branch(chatId, text(body.branchId, 'branch', 120));
+  const chat = store.chat(chatId);
   const sourceId = text(body.sourceId, 'source', 120);
   const member = store.db
     .prepare(`WITH RECURSIVE chain(id) AS (SELECT ? UNION SELECT s.parent_revision FROM sources s JOIN chain c ON c.id=s.id WHERE s.parent_revision IS NOT NULL)
     SELECT 1 FROM chain c JOIN sources s ON s.id=c.id WHERE c.id=? AND s.chat_id=?`)
-    .get(branch.headRevision, sourceId, chatId);
+    .get(chat.headRevision, sourceId, chatId);
   if (!member) throw new HttpError(404, '현재 채팅에서 그 장면을 찾지 못했어요.');
   if (!['original', 'translation'].includes(String(body.representation)))
     throw new HttpError(400, '읽기 모드를 확인해 주세요.');
@@ -74,7 +73,6 @@ export function validateReaderTarget(store: Store, chatId: string, value: unknow
     throw new HttpError(400, '읽기 위치를 확인해 주세요.');
   return {
     chatId,
-    branchId: branch.id,
     sourceId,
     representation: body.representation as ReaderTarget['representation'],
     ...(body.contentHash !== undefined ? { contentHash: String(body.contentHash) } : {}),
@@ -94,26 +92,21 @@ function position(row: Record<string, unknown> | undefined): ReadingPosition | n
       }
     : null;
 }
-export function readingPositions(
-  store: Store,
-  chatId: string,
-  clientId: string,
-  branchId?: string
-): ReadingPositions {
+export function readingPositions(store: Store, chatId: string, clientId: string): ReadingPositions {
   const id = client(clientId);
-  const branch = store.product.branch(chatId, branchId || undefined);
+  store.chat(chatId);
   return {
     own: position(
       store.db
-        .prepare('SELECT * FROM reading_positions WHERE chat_id=? AND branch_id=? AND client_id=?')
-        .get(chatId, branch.id, id)
+        .prepare('SELECT * FROM reading_positions WHERE chat_id=? AND client_id=?')
+        .get(chatId, id)
     ),
     other: position(
       store.db
         .prepare(
-          'SELECT * FROM reading_positions WHERE chat_id=? AND branch_id=? AND client_id!=? ORDER BY updated_at DESC,client_id LIMIT 1'
+          'SELECT * FROM reading_positions WHERE chat_id=? AND client_id!=? ORDER BY updated_at DESC,client_id LIMIT 1'
         )
-        .get(chatId, branch.id, id)
+        .get(chatId, id)
     ),
   };
 }
@@ -123,7 +116,7 @@ export function saveReadingPosition(store: Store, chatId: string, value: unknown
   const clientId = client(body.clientId);
   return store.transaction(() => {
     const target = validateReaderTarget(store, chatId, body.target);
-    const old = readingPositions(store, chatId, clientId, target.branchId).own;
+    const old = readingPositions(store, chatId, clientId).own;
     if (
       !Number.isSafeInteger(body.expectedRevision) ||
       body.expectedRevision !== (old?.revision ?? 0)
@@ -137,17 +130,9 @@ export function saveReadingPosition(store: Store, chatId: string, value: unknown
     ).toISOString();
     const revision = (old?.revision ?? 0) + 1;
     store.db
-      .prepare(`INSERT INTO reading_positions(client_id,chat_id,branch_id,source_id,target,revision,updated_at) VALUES(?,?,?,?,?,?,?)
-      ON CONFLICT(client_id,chat_id,branch_id) DO UPDATE SET source_id=excluded.source_id,target=excluded.target,revision=excluded.revision,updated_at=excluded.updated_at`)
-      .run(
-        clientId,
-        chatId,
-        target.branchId,
-        target.sourceId,
-        JSON.stringify(target),
-        revision,
-        now
-      );
+      .prepare(`INSERT INTO reading_positions(client_id,chat_id,source_id,target,revision,updated_at) VALUES(?,?,?,?,?,?)
+      ON CONFLICT(client_id,chat_id) DO UPDATE SET source_id=excluded.source_id,target=excluded.target,revision=excluded.revision,updated_at=excluded.updated_at`)
+      .run(clientId, chatId, target.sourceId, JSON.stringify(target), revision, now);
     return { clientId, revision, updatedAt: now, target };
   });
 }
@@ -163,11 +148,11 @@ function bookmark(row: Record<string, unknown>): Bookmark {
     updatedAt: String(row.updated_at),
   };
 }
-export function listBookmarks(store: Store, chatId: string, branchId?: string): Bookmark[] {
-  const branch = store.product.branch(chatId, branchId);
+export function listBookmarks(store: Store, chatId: string): Bookmark[] {
+  store.chat(chatId);
   return store.db
-    .prepare('SELECT * FROM bookmarks WHERE chat_id=? AND branch_id=? ORDER BY created_at,id')
-    .all(chatId, branch.id)
+    .prepare('SELECT * FROM bookmarks WHERE chat_id=? ORDER BY created_at,id')
+    .all(chatId)
     .map(bookmark);
 }
 export function addBookmark(store: Store, chatId: string, value: unknown): Bookmark {
@@ -194,20 +179,9 @@ export function addBookmark(store: Store, chatId: string, value: unknown): Bookm
     const now = new Date().toISOString();
     store.db
       .prepare(
-        'INSERT INTO bookmarks(id,chat_id,branch_id,source_id,target,title,note,quote,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,1,?,?)'
+        'INSERT INTO bookmarks(id,chat_id,source_id,target,title,note,quote,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,1,?,?)'
       )
-      .run(
-        id,
-        chatId,
-        target.branchId,
-        target.sourceId,
-        JSON.stringify(target),
-        title,
-        note,
-        quote,
-        now,
-        now
-      );
+      .run(id, chatId, target.sourceId, JSON.stringify(target), title, note, quote, now, now);
     return bookmark(store.db.prepare('SELECT * FROM bookmarks WHERE id=?').get(id)!);
   });
 }
@@ -242,16 +216,15 @@ export function updateBookmark(
 export function captureBookmarks(
   store: Store,
   chatId: string,
-  branchId: string,
   sourceIds: string[]
 ): PortableBookmark[] {
-  // Old shared-branch migrations can copy chats before this newer table has been introduced.
+  // Older migrations can copy chats before this newer table has been introduced.
   if (
     !store.db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='bookmarks'").get()
   )
     return [];
   const indexes = new Map(sourceIds.map((id, index) => [id, index]));
-  return listBookmarks(store, chatId, branchId).flatMap((item) => {
+  return listBookmarks(store, chatId).flatMap((item) => {
     const entry = indexes.get(item.target.sourceId);
     if (entry === undefined) return [];
     const source =
@@ -278,7 +251,6 @@ export function captureBookmarks(
 export function restoreBookmarks(
   store: Store,
   chatId: string,
-  branchId: string,
   sourceIds: string[],
   values: unknown
 ) {
@@ -329,7 +301,6 @@ export function restoreBookmarks(
       id: randomUUID(),
       target: {
         chatId,
-        branchId,
         sourceId: source.id,
         representation: body.representation,
         ...(body.contentHash ? { contentHash: body.contentHash } : {}),
@@ -347,18 +318,20 @@ export function restoreBookmarks(
   }
 }
 export function readingStateRoutes(app: FastifyInstance, store: Store) {
-  app.get<{ Params: { id: string }; Querystring: { clientId: string; branchId?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: { clientId: string } }>(
     '/api/chats/:id/reading-position',
-    (request) =>
-      readingPositions(store, request.params.id, request.query.clientId, request.query.branchId)
+    (request) => {
+      fields(record(request.query), ['clientId']);
+      return readingPositions(store, request.params.id, request.query.clientId);
+    }
   );
   app.put<{ Params: { id: string } }>('/api/chats/:id/reading-position', (request) =>
     saveReadingPosition(store, request.params.id, request.body)
   );
-  app.get<{ Params: { id: string }; Querystring: { branchId?: string } }>(
-    '/api/chats/:id/bookmarks',
-    (request) => listBookmarks(store, request.params.id, request.query.branchId)
-  );
+  app.get<{ Params: { id: string } }>('/api/chats/:id/bookmarks', (request) => {
+    fields(record(request.query), []);
+    return listBookmarks(store, request.params.id);
+  });
   app.post<{ Params: { id: string } }>('/api/chats/:id/bookmarks', (request) =>
     addBookmark(store, request.params.id, request.body)
   );

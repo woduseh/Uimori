@@ -15,15 +15,14 @@ type Props = {
   library: Library | null;
   disabled: boolean;
   chatId?: string;
-  branchId?: string;
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange: (busy: boolean) => void;
 };
 export function ChatPromptOptions(props: Props) {
-  const contextKey = props.chatId && props.branchId ? `${props.chatId}:${props.branchId}` : '';
+  const contextKey = props.chatId ?? '';
   const [scope, setScope] = useState<'global' | 'chat'>('chat');
-  const [contexts, setContexts] = useState<{ key: string; chatId: string; branchId: string }[]>([]);
+  const [contexts, setContexts] = useState<{ key: string; chatId: string }[]>([]);
   const [dirtyScopes, setDirtyScopes] = useState<Record<string, boolean>>({});
   const [busyScopes, setBusyScopes] = useState<Record<string, boolean>>({});
   const reportDirty = useCallback((key: string, value: boolean) => {
@@ -35,15 +34,14 @@ export function ChatPromptOptions(props: Props) {
   const globalDirty = useCallback((value: boolean) => reportDirty('global', value), [reportDirty]);
   const globalBusy = useCallback((value: boolean) => reportBusy('global', value), [reportBusy]);
   useEffect(() => {
-    if (!props.open || !contextKey || !props.chatId || !props.branchId) return;
-    const chatId = props.chatId,
-      branchId = props.branchId;
+    if (!props.open || !contextKey || !props.chatId) return;
+    const chatId = props.chatId;
     setContexts((current) =>
       current.some((item) => item.key === contextKey)
         ? current
-        : [...current, { key: contextKey, chatId, branchId }]
+        : [...current, { key: contextKey, chatId }]
     );
-  }, [props.open, contextKey, props.chatId, props.branchId]);
+  }, [props.open, contextKey, props.chatId]);
   useEffect(
     () => props.onDirtyChange(Object.values(dirtyScopes).some(Boolean)),
     [dirtyScopes, props.onDirtyChange]
@@ -206,7 +204,7 @@ function ChatScopeEditor({
   onDirtyChange,
   onBusyChange,
 }: {
-  context: { key: string; chatId: string; branchId: string };
+  context: { key: string; chatId: string };
   active: boolean;
   visible: boolean;
   disabled: boolean;
@@ -233,7 +231,6 @@ function ChatScopeEditor({
     >
       <ChatOptionSettings
         chatId={context.chatId}
-        branchId={context.branchId}
         active={active}
         disabled={disabled}
         workspaceRevision={workspaceRevision}

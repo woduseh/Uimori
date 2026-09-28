@@ -278,7 +278,7 @@ async function helperFixture(page: Page, before: ChatDetail) {
   const time = new Date().toISOString();
   const conversation: HelperConversation = {
     id: randomUUID(),
-    scope: { kind: 'chat', chatId: before.chat.id, branchId: before.branch.id },
+    scope: { kind: 'chat', chatId: before.chat.id },
     title: '합성 읽기 도우미',
     revision: 1,
     persona: helperPersona,

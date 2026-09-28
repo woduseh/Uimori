@@ -152,7 +152,7 @@ function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
     after = cursor.after;
   }
   const scope =
-    query.scope === 'chat' ? 'AND b.chat_id=?' : query.scope === 'bot' ? 'AND o.bot_id=?' : '';
+    query.scope === 'chat' ? 'AND c.id=?' : query.scope === 'bot' ? 'AND o.bot_id=?' : '';
   const params: (string | number)[] =
     query.scope === 'chat' ? [query.chatId!] : query.scope === 'bot' ? [query.botId!] : [];
   const long = terms.filter((term) => [...term].length >= 3);
@@ -165,14 +165,14 @@ function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
   params.push(after);
   if (long.length) params.push(long.map((term) => `"${term.replaceAll('"', '""')}"`).join(' AND '));
   const rows = db
-    .prepare(`WITH RECURSIVE visible(chat_id,branch_id,source_id) AS (
-    SELECT b.chat_id,b.id,c.head_revision FROM branches b JOIN chats c ON c.id=b.chat_id JOIN chat_organization o ON o.chat_id=b.chat_id
+    .prepare(`WITH RECURSIVE visible(chat_id,source_id) AS (
+    SELECT c.id,c.head_revision FROM chats c JOIN chat_organization o ON o.chat_id=c.id
       WHERE c.head_revision IS NOT NULL ${scope}
-    UNION SELECT v.chat_id,v.branch_id,s.parent_revision FROM visible v JOIN sources s ON s.id=v.source_id WHERE s.parent_revision IS NOT NULL
+    UNION SELECT v.chat_id,s.parent_revision FROM visible v JOIN sources s ON s.id=v.source_id WHERE s.parent_revision IS NOT NULL
   ), numbered AS (
     SELECT v.*,s.rowid AS ordinal,c.title,o.bot_id,
       SUM(CASE WHEN json_extract(r.snapshot,'$.packageStart.mode')='authored' THEN 0 ELSE 1 END)
-        OVER(PARTITION BY v.chat_id,v.branch_id ORDER BY s.rowid) AS scene_number
+        OVER(PARTITION BY v.chat_id ORDER BY s.rowid) AS scene_number
     FROM visible v JOIN sources s ON s.id=v.source_id JOIN runs r ON r.id=s.run_id
       JOIN chats c ON c.id=v.chat_id JOIN chat_organization o ON o.chat_id=c.id
   ) SELECT v.* FROM numbered v WHERE v.ordinal>? ${fts} ORDER BY v.ordinal LIMIT 201`)
@@ -208,7 +208,6 @@ function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
         sceneNumber: Number(row.scene_number),
         target: {
           chatId: String(row.chat_id),
-          branchId: String(row.branch_id),
           sourceId,
           representation: chosen.kind === 'translation' ? 'translation' : 'original',
           ...(chosen.kind !== 'request' ? { contentHash: chosen.contentHash } : {}),

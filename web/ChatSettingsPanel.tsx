@@ -218,8 +218,7 @@ export function ChatSettingsPanel({
   }, [compact]);
   const detail = state.detail;
   const library = state.library;
-  const branchId = state.branch?.id;
-  const packageScope = `${state.selected}:${branchId ?? ''}`;
+  const packageScope = state.selected;
   const packageAvailabilityKey = `${detail?.profile?.revision ?? 0}:${detail?.reader.cursor ?? 0}`;
   const previousPackageScope = useRef(packageScope);
   useEffect(() => {
@@ -229,13 +228,9 @@ export function ChatSettingsPanel({
       setPackageFeatures(false);
     }
     void packageAvailabilityKey;
-    const query = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
     let hasDraft = false;
     try {
-      hasDraft =
-        sessionStorage.getItem(
-          `uimori:chat-variable-draft:${state.selected}:${branchId ?? 'current'}`
-        ) !== null;
+      hasDraft = sessionStorage.getItem(`uimori:chat-variable-draft:${state.selected}`) !== null;
     } catch {
       // The server-owned feature checks still work when browser draft storage is unavailable.
     }
@@ -244,7 +239,7 @@ export function ChatSettingsPanel({
         values: Record<string, string>;
         defaults: Record<string, string>;
         variableDefaultsError?: string;
-      }>(`/chats/${encodeURIComponent(state.selected)}/variables${query}`),
+      }>(`/chats/${encodeURIComponent(state.selected)}/variables`),
     ]).then(([variableResult]) => {
       if (!current) return;
       const variables = variableResult.status === 'fulfilled' ? variableResult.value : null;
@@ -261,7 +256,7 @@ export function ChatSettingsPanel({
     return () => {
       current = false;
     };
-  }, [branchId, packageAvailabilityKey, packageScope, state.selected]);
+  }, [packageAvailabilityKey, packageScope, state.selected]);
   const visibleCategories = categories.filter((item) => item.id !== 'packages' || packageFeatures);
   return (
     <Dialog
@@ -314,7 +309,6 @@ export function ChatSettingsPanel({
             {detail?.profile && library && (
               <ProfileEditor
                 ownerBotId={detail.chat.botId}
-                branchId={state.branch?.id}
                 profile={detail.profile}
                 library={library}
                 activeTab={profileTab}
@@ -334,8 +328,7 @@ export function ChatSettingsPanel({
                 <StoryPanel
                   chatId={state.selected}
                   refreshKey={state.detail?.reader.cursor ?? 0}
-                  branchId={detail.branch.id}
-                  headRevision={detail.branch.headRevision}
+                  headRevision={detail.chat.headRevision}
                   settingsRevision={detail.chat.settingsRevision}
                   profileRevision={detail.profile?.revision}
                   active={active === 'story' && showingDetail}
@@ -404,7 +397,6 @@ export function ChatSettingsPanel({
                       <ChatVariables
                         key={packageScope}
                         chatId={state.selected}
-                        branchId={branchId}
                         refreshKey={state.detail?.reader.cursor ?? 0}
                         onChange={() => {
                           void state.refresh(state.selected);

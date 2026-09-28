@@ -12,16 +12,15 @@ export type LoreRetentionState = {
 export function readLoreRetention(
   store: Store,
   chatId: string,
-  branchId: string,
   sourceId: string
 ): LoreRetentionState | undefined {
   const row = store.db
-    .prepare('SELECT body FROM chat_lore_state WHERE chat_id=? AND branch_id=? AND source_id=?')
-    .get(chatId, branchId, sourceId);
+    .prepare('SELECT body FROM chat_lore_state WHERE chat_id=? AND source_id=?')
+    .get(chatId, sourceId);
   return row ? (JSON.parse(String(row.body)) as LoreRetentionState) : undefined;
 }
 
-/** One active state per branch; old provider packets are not needed to remember successful reads. */
+/** One active state per chat; old provider packets are not needed to remember successful reads. */
 export function retainCompletedLore(
   store: Store,
   run: Run,
@@ -36,12 +35,7 @@ export function retainCompletedLore(
     reads,
   };
   store.db
-    .prepare(`INSERT INTO chat_lore_state(chat_id,branch_id,source_id,body) VALUES(?,?,?,?)
-    ON CONFLICT(chat_id,branch_id) DO UPDATE SET source_id=excluded.source_id,body=excluded.body`)
-    .run(
-      run.chatId,
-      run.snapshot.branchId ?? `main:${run.chatId}`,
-      source.id,
-      JSON.stringify(body)
-    );
+    .prepare(`INSERT INTO chat_lore_state(chat_id,source_id,body) VALUES(?,?,?)
+    ON CONFLICT(chat_id) DO UPDATE SET source_id=excluded.source_id,body=excluded.body`)
+    .run(run.chatId, source.id, JSON.stringify(body));
 }

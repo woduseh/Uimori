@@ -511,7 +511,6 @@ test('current scope retains reservation facts, complete old prose, source roles,
     text = '과거 인물의 나이는 알려지지 않았다.';
   const writing: RunSnapshot = {
     chatId: 'chat-A',
-    branchId: 'branch-A',
     parentRevision: 'scene-A',
     settingsRevision: 1,
     settings: { status: false, maxCalls: 16 },
@@ -740,11 +739,9 @@ test('live chat grep and SQL follow each actual ancestry and preserve scene numb
     (item: any) => item.chatId === chats[1].id && item.metadata.sceneNumber === 2
   );
   expect(selected).toMatchObject({ scope: 'chats', chatId: chats[1].id });
-  expect(selected.branchId).toBeTypeOf('string');
   const narrowed = await f.invoke('data.search', {
     scope: selected.scope,
     chatId: selected.chatId,
-    branchId: selected.branchId,
     ids: [selected.id],
     patterns: ['나이'],
   });
@@ -752,7 +749,6 @@ test('live chat grep and SQL follow each actual ancestry and preserve scene numb
   expect(narrowed.items[0].ref).toMatchObject({
     id: selected.id,
     chatId: selected.chatId,
-    branchId: selected.branchId,
   });
   expect((await readOne(f, narrowed.items[0].ref)).text).toContain('기록 1-1');
   const counts = await f.invoke('db.query', {

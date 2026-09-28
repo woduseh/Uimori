@@ -25,7 +25,6 @@ export type AgentAdvice = AdviceOrigin & {
   basedOn: AdviceOrigin[];
   source: {
     chatId: string;
-    branchId?: string;
     parentRevision: string | null;
     prompt: { id: string; revision: number };
   };
@@ -64,50 +63,27 @@ function fail(code: string): never {
   throw new AgentCollaborationError(`AGENT_COLLABORATION_${code}`);
 }
 
-/** Read only enumerable own data properties; accessors are rejected without invoking them. */
+/** JSON fields; imported prompts validate their object boundary before calling this. */
 function record(
   value: unknown,
   fields: readonly string[],
   optional: readonly string[] = []
 ): Record<string, unknown> {
-  if (
-    value === null ||
-    typeof value !== 'object' ||
-    Array.isArray(value) ||
-    ![Object.prototype, null].includes(Object.getPrototypeOf(value))
-  )
-    fail('INVALID_FIELDS');
-  const keys = Reflect.ownKeys(value);
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) fail('INVALID_FIELDS');
+  const keys = Object.keys(value);
   if (fields.some((key) => !Object.hasOwn(value, key))) fail('INVALID_FIELDS');
   const result: Record<string, unknown> = {};
   for (const key of keys) {
-    if (
-      typeof key !== 'string' ||
-      unsafeIds.has(key) ||
-      (!fields.includes(key) && !optional.includes(key))
-    )
+    if (unsafeIds.has(key) || (!fields.includes(key) && !optional.includes(key)))
       fail('INVALID_FIELDS');
-    const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
-    if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) fail('INVALID_FIELDS');
-    result[key] = descriptor.value;
+    result[key] = (value as Record<string, unknown>)[key];
   }
   return result;
 }
 
 function list(value: unknown, max: number): unknown[] {
   if (!Array.isArray(value) || value.length > max) fail('INVALID_LIST');
-  if (
-    Object.getPrototypeOf(value) !== Array.prototype ||
-    Reflect.ownKeys(value).length !== value.length + 1
-  )
-    fail('INVALID_LIST');
-  const result: unknown[] = [];
-  for (let index = 0; index < value.length; index++) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) fail('INVALID_LIST');
-    result.push(descriptor.value);
-  }
-  return result;
+  return [...value];
 }
 
 function text(value: unknown, min: number): string {

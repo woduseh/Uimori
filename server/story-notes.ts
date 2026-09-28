@@ -66,13 +66,12 @@ export class StoryNotes {
   canonHash(scope: SourceScope): string {
     return sourceHash(JSON.stringify(this.entries(scope).sort((a, b) => a.id.localeCompare(b.id))));
   }
-  /** A replacement/retirement is anchored at the current branch, preserving sibling visibility. */
+  /** A replacement/retirement is anchored at the current chat head. */
   write(chatId: string, value: unknown): { note: AuthorNote; revision: number } {
     const body = record(value);
     fields(body, [
       'text',
       'author',
-      'branchId',
       'expectedRevision',
       'idempotencyKey',
       'replacesId',
@@ -103,12 +102,12 @@ export class StoryNotes {
       }
       if (this.revision(chatId) !== expectedRevision)
         throw new HttpError(409, '메모가 변경됐어요. 새로고침한 뒤 다시 적용해 주세요.');
-      const branch = this.store.product.branch(chatId, body.branchId);
-      if (body.expectedHeadRevision !== branch.headRevision)
+      const chat = this.store.chat(chatId);
+      if (body.expectedHeadRevision !== chat.headRevision)
         throw new HttpError(409, '메모를 붙일 원문이 변경됐어요. 최신 원문을 확인해 주세요.');
-      const scope = this.scope(chatId, branch.headRevision);
+      const scope = this.scope(chatId, chat.headRevision);
       if (replacesId && !this.entries(scope).some((note) => note.id === replacesId))
-        throw new HttpError(409, 'Note no longer available in this branch');
+        throw new HttpError(409, 'Note no longer available in this chat');
       const anchor = scope.history.at(-1);
       let note: AuthorNote;
       try {

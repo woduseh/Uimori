@@ -55,17 +55,15 @@ test('new chats leave automatic status off until explicitly enabled', async () =
   ).toEqual({ count: 0 });
 });
 
-function source(store: Store, chatId: string, text = 'Synthetic paragraph.', branchId?: string) {
-  const chat = store.chat(chatId),
-    branch = store.product.branch(chatId, branchId);
+function source(store: Store, chatId: string, text = 'Synthetic paragraph.') {
+  const chat = store.chat(chatId);
   const run = store.createRun(
     chatId,
     {
       request: 'Synthetic request',
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       idempotencyKey: randomUUID(),
-      branchId,
     },
     (current) => ({
       chatId,
@@ -88,12 +86,11 @@ function source(store: Store, chatId: string, text = 'Synthetic paragraph.', bra
 function readerSourceBatch(store: Store, chatId: string, texts: string[]) {
   // This scale case checks persisted reader projection, not prompt compilation.
   // Seed typed run snapshots once per source, retaining their complete ancestry;
-  // source hashing, branch updates and auxiliary reservations still use the host.
+  // source hashing, chat head updates and auxiliary reservations still use the host.
   const chat = store.chat(chatId),
-    branch = store.product.branch(chatId),
-    history: RunSnapshot['history'] = store.history(branch.headRevision);
+    history: RunSnapshot['history'] = store.history(chat.headRevision);
   const insert = store.db.prepare(
-    "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,'running',?,?,?,?,?,?,?)"
+    "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at) VALUES(?,?,?,'running',?,?,?,?,?,?)"
   );
   return store.transaction(() =>
     texts.map((text, index) => {
@@ -109,7 +106,6 @@ function readerSourceBatch(store: Store, chatId: string, texts: string[]) {
         request: 'Synthetic request',
         history,
         resources: [],
-        branchId: branch.id,
       };
       insert.run(
         runId,
@@ -122,11 +118,9 @@ function readerSourceBatch(store: Store, chatId: string, texts: string[]) {
           request: snapshot.request,
           expectedRevision: parentRevision,
           expectedSettingsRevision: chat.settingsRevision,
-          branchId: branch.id,
         }),
         time,
-        time,
-        branch.id
+        time
       );
       store.event(chatId, 'run.queued', runId);
       store.event(chatId, 'run.running', runId);
@@ -396,7 +390,6 @@ test('activity remains page independent and retains active work beyond the termi
       'updatedAt',
       'startedAt',
       'finishedAt',
-      'branchId',
       'sourceRevision',
       'generation',
       'sourceHash',
@@ -597,25 +590,21 @@ describe('Reader projection and retry costs', () => {
       },
     }).chat;
     const sources = store.history(chat.headRevision).map((item) => store.source(item.revision));
-    const branch = store.product.branch(chat.id);
-    return { owner, store, chat, sources, branch };
+    return { owner, store, chat, sources };
   }
 
-  test('display revisions ignore progress and unrelated branch variables, but track authored changes', () => {
-    const { store, chat, branch, sources } = fixture();
+  test('display revisions ignore progress but track authored changes', () => {
+    const { store, chat, sources } = fixture();
     const read = () =>
       readerPresentationRevisions(
         store,
         chat.id,
-        branch.id,
         sources.map((s) => s.id)
       );
     const initial = read();
     for (const kind of ['run.usage', 'run.running', 'job.queued', 'job.running', 'chat.renamed'])
       store.event(chat.id, kind, 'synthetic-progress');
-    store.event(chat.id, 'chat.variables.changed', 'another-branch');
-    expect(read()).toEqual(initial);
-    store.event(chat.id, 'chat.variables.changed', branch.id);
+    store.event(chat.id, 'chat.variables.changed', chat.id);
     const variables = read();
     expect(variables).not.toEqual(initial);
     store.event(chat.id, 'source.edited', sources[0]!.id);
@@ -641,17 +630,16 @@ describe('Reader projection and retry costs', () => {
   });
 
   test('reader hydrates the visible retry, while the task history still contains superseded failures', () => {
-    const { store, chat, branch } = fixture();
+    const { store, chat } = fixture();
     const insert =
-      store.db.prepare(`INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id)
-    VALUES(?,?,?,'failed',?,?,?,?,?,?,?)`);
+      store.db.prepare(`INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at)
+    VALUES(?,?,?,'failed',?,?,?,?,?,?)`);
     store.transaction(() => {
       for (let i = 0; i < 120; i++) {
         const id = `failed-${i}`;
         const time = new Date(Date.now() + i).toISOString();
         const snapshot = {
           chatId: chat.id,
-          branchId: branch.id,
           parentRevision: chat.headRevision,
           request: 'Retry',
           settings: chat.settings,
@@ -668,8 +656,7 @@ describe('Reader projection and retry costs', () => {
           id,
           JSON.stringify(i ? { retryOf: `failed-${i - 1}` } : {}),
           time,
-          time,
-          branch.id
+          time
         );
       }
     });

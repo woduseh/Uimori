@@ -245,7 +245,7 @@ test.describe('actual local native Risu cards', () => {
   }
 
   for (const sample of cases) {
-    test(`${sample.id} original first-screen controls survive selection, reload, branch and a local writing turn`, async ({
+    test(`${sample.id} original first-screen controls survive selection, reload, chat copy and a local writing turn`, async ({
       page,
     }, info) => {
       const file = join(sampleRoot!, ...sample.path);
@@ -298,11 +298,14 @@ test.describe('actual local native Risu cards', () => {
       const imported = (await applied.json()) as RisuImportResult;
       const chat = imported.chat!;
       expect(chat).not.toBeNull();
-      const main = app.store.product.branch(chat.id);
-      const forkResponse = await request.post(`/api/chats/${chat.id}/branches`, {
-        data: { title: 'Acceptance alternative', fromRevision: main.headRevision },
+      const forkResponse = await request.post(`/api/chats/${chat.id}/fork`, {
+        data: {
+          title: 'Acceptance alternative',
+          fromRevision: app.store.chat(chat.id).headRevision,
+          idempotencyKey: `${sample.id}-acceptance-copy`,
+        },
       });
-      expect(forkResponse.ok(), 'Fork before choosing').toBe(true);
+      expect(forkResponse.ok(), 'Copy before choosing').toBe(true);
       const fork = (await forkResponse.json()) as { id: string };
       await settledFrame(page);
       if (visualReview)
@@ -382,7 +385,7 @@ test.describe('actual local native Risu cards', () => {
           // The authored panel deliberately scrolls within its max-height viewport.
           await languageButton.evaluate((element) => element.scrollIntoView({ block: 'nearest' }));
           await clickAuthored(page, language.action, '.settings-side-panel-cw');
-          expect(readChatVariables(app.store, chat.id, main.id).values.lang).toBe(language.value);
+          expect(readChatVariables(app.store, chat.id).values.lang).toBe(language.value);
           await expect(frame.locator('.cwhs-panel-header')).toContainText(language.title);
           await expect(
             frame.locator(`.cwhs-panel-container [risu-trigger="${language.action}"]`)
@@ -403,10 +406,10 @@ test.describe('actual local native Risu cards', () => {
         if (choice) await clickAuthored(page, choice);
       };
       await choose(sample.choices[0]);
-      expect(readChatVariables(app.store, chat.id, main.id).values).toMatchObject(sample.expected);
+      expect(readChatVariables(app.store, chat.id).values).toMatchObject(sample.expected);
       await page.reload();
       await settledFrame(page);
-      expect(readChatVariables(app.store, chat.id, main.id).values).toMatchObject(sample.expected);
+      expect(readChatVariables(app.store, chat.id).values).toMatchObject(sample.expected);
       if ('images' in sample) {
         const images = page.locator('.risu-message-surface').first().locator('img');
         await expect.poll(() => images.count()).toBeGreaterThanOrEqual(sample.images);
@@ -447,12 +450,10 @@ test.describe('actual local native Risu cards', () => {
         await page.screenshot({ path: info.outputPath(`${sample.id}-mobile-selected.png`) });
       await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
 
-      await page.goto(
-        `${origin}/?chat=${encodeURIComponent(chat.id)}&branch=${encodeURIComponent(fork.id)}`
-      );
+      await page.goto(`${origin}/?chat=${encodeURIComponent(fork.id)}`);
       await choose(sample.choices[1]);
-      expect(readChatVariables(app.store, chat.id, fork.id).values).toMatchObject(sample.alternate);
-      expect(readChatVariables(app.store, chat.id, main.id).values).toMatchObject(sample.expected);
+      expect(readChatVariables(app.store, fork.id).values).toMatchObject(sample.alternate);
+      expect(readChatVariables(app.store, chat.id).values).toMatchObject(sample.expected);
 
       const current = app.store.chat(chat.id);
       app.store.settings(chat.id, current.settingsRevision, {
@@ -461,9 +462,7 @@ test.describe('actual local native Risu cards', () => {
         status: false,
         maxCalls: 8,
       });
-      await page.goto(
-        `${origin}/?chat=${encodeURIComponent(chat.id)}&branch=${encodeURIComponent(main.id)}`
-      );
+      await page.goto(`${origin}/?chat=${encodeURIComponent(chat.id)}`);
       const marker = `${sample.id}_CONTINUE`;
       await page.getByLabel('다음 장면 요청', { exact: true }).fill(marker);
       const running = page.waitForResponse(
@@ -502,7 +501,7 @@ test.describe('actual local native Risu cards', () => {
       await expect(renderedResponse).toBeInViewport({ timeout: 10_000 });
       if (visualReview)
         await page.screenshot({ path: info.outputPath(`${sample.id}-response.png`) });
-      expect(readChatVariables(app.store, chat.id, fork.id).values).toMatchObject(sample.alternate);
+      expect(readChatVariables(app.store, fork.id).values).toMatchObject(sample.alternate);
       // This fixture intercepts external assets for deterministic local execution.
       // The personal-card renderer no longer promises iframe-level network isolation.
       await info.attach('intercepted-external-origins', {

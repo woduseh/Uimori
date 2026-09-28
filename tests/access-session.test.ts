@@ -1,5 +1,8 @@
 import { afterEach, expect, test } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { AccessSessions } from '../server/access-session.js';
 import { initCredentials } from '../server/credentials.js';
 
@@ -43,6 +46,29 @@ test('logout affects only the selected device; changing the access token revokes
   expect(
     new AccessSessions(f.db, { ...f.options, accessToken: 'new-test-only-key' }).authenticated(b)
   ).toBe(false);
+});
+test('a logged-in device survives database reopen and can still be revoked', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-access-reopen-'));
+  const path = join(directory, 'sessions.sqlite');
+  let db = new DatabaseSync(path);
+  try {
+    initCredentials(db);
+    const options = {
+      accessToken: 'local-only-test-access-token'.repeat(2),
+      publicOrigin: 'https://workspace.example',
+      now: () => 0,
+    };
+    const cookie = new AccessSessions(db, options).login(options.accessToken).cookie;
+    db.close();
+    db = new DatabaseSync(path);
+    const reopened = new AccessSessions(db, { ...options, now: () => 10 ** 13 });
+    expect(reopened.authenticated(cookie)).toBe(true);
+    reopened.logout(cookie);
+    expect(reopened.authenticated(cookie)).toBe(false);
+  } finally {
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 test('wrong credentials never create a session and repeated attempts briefly back off', () => {
   const f = fixture();

@@ -46,14 +46,14 @@ export class ContextStore {
       CREATE TABLE context_checkpoints(id TEXT PRIMARY KEY,scope_key TEXT NOT NULL,chat_id TEXT REFERENCES chats(id),revision INTEGER NOT NULL,hash TEXT NOT NULL,origin TEXT NOT NULL,plan TEXT NOT NULL,created_at TEXT NOT NULL,activated INTEGER NOT NULL);
       CREATE TABLE context_heads(scope_key TEXT PRIMARY KEY,chat_id TEXT REFERENCES chats(id),revision INTEGER NOT NULL,checkpoint_id TEXT REFERENCES context_checkpoints(id));
       CREATE TABLE context_commands(scope_key TEXT NOT NULL,chat_id TEXT NOT NULL REFERENCES chats(id),request_key TEXT NOT NULL,command_hash TEXT NOT NULL,revision INTEGER NOT NULL,PRIMARY KEY(scope_key,request_key));
-      CREATE TABLE context_jobs(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),branch_id TEXT NOT NULL REFERENCES branches(id),request_key TEXT NOT NULL,command TEXT NOT NULL,status TEXT NOT NULL,snapshot TEXT,checkpoint TEXT,error TEXT,noop INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(chat_id,request_key));
-      CREATE UNIQUE INDEX one_active_context_job ON context_jobs(branch_id) WHERE status IN ('queued','running');
+      CREATE TABLE context_jobs(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),request_key TEXT NOT NULL,command TEXT NOT NULL,status TEXT NOT NULL,snapshot TEXT,checkpoint TEXT,error TEXT,noop INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(chat_id,request_key));
+      CREATE UNIQUE INDEX one_active_context_job ON context_jobs(chat_id) WHERE status IN ('queued','running');
       CREATE TABLE context_job_attempts(job_id TEXT NOT NULL REFERENCES context_jobs(id),attempt_id TEXT NOT NULL UNIQUE REFERENCES attempts(id),PRIMARY KEY(job_id,attempt_id));
     `);
   }
-  scope(chatId: string, branchId?: string) {
-    const branch = this.store.product.branch(chatId, branchId);
-    return { scopeKey: `chat:${chatId}:${branch.id}`, branch };
+  scope(chatId: string) {
+    const chat = this.store.chat(chatId);
+    return { scopeKey: `chat:${chatId}`, chat };
   }
   private head(scopeKey: string) {
     const row = this.db.prepare('SELECT * FROM context_heads WHERE scope_key=?').get(scopeKey) as
@@ -94,10 +94,7 @@ export class ContextStore {
     if (!row) throw new HttpError(400, 'CONTEXT_CHECKPOINT_MISSING');
     return this.checkpoint(row);
   }
-  prepareRun(
-    snapshot: RunSnapshot,
-    scopeKey = this.scope(snapshot.chatId, snapshot.branchId).scopeKey
-  ): RunSnapshot {
+  prepareRun(snapshot: RunSnapshot, scopeKey = this.scope(snapshot.chatId).scopeKey): RunSnapshot {
     const seeded = seedContextPlan(snapshot);
     const head = this.head(scopeKey);
     return {
@@ -171,8 +168,8 @@ export class ContextStore {
       };
       delete checkpoint.plan.checkpoint;
       const head = this.head(base.scopeKey);
-      const branch = this.store.product.branch(snapshot.chatId, snapshot.branchId);
-      const currentSources = this.store.history(branch.headRevision);
+      const chat = this.store.chat(snapshot.chatId);
+      const currentSources = this.store.history(chat.headRevision);
       const unchanged = isDeepStrictEqual(
         currentSources.slice(0, snapshot.history.length).map((s) => [s.revision, s.contentHash]),
         snapshot.history.map((s) => [s.revision, s.contentHash])
@@ -210,25 +207,23 @@ export class ContextStore {
     });
   }
   /** Active metadata and its validated checkpoint, without loading UI history or job snapshots. */
-  current(chatId: string, branchId?: string) {
-    return this.currentState(chatId, this.scope(chatId, branchId));
+  current(chatId: string) {
+    return this.currentState(chatId, this.scope(chatId));
   }
-  private currentState(chatId: string, { scopeKey, branch }: ReturnType<ContextStore['scope']>) {
+  private currentState(chatId: string, { scopeKey, chat }: ReturnType<ContextStore['scope']>) {
     const head = this.head(scopeKey);
     const checkpoint = head.checkpointId ? this.byId(head.checkpointId) : null;
     let usable = false;
     if (checkpoint) {
       try {
-        const chat = this.store.chat(chatId),
-          profile = this.store.product.snapshot(chatId, 'inspect', branch.headRevision);
+        const profile = this.store.product.snapshot(chatId, 'inspect', chat.headRevision);
         let current: RunSnapshot = {
           chatId,
-          branchId: branch.id,
-          parentRevision: branch.headRevision,
+          parentRevision: chat.headRevision,
           settingsRevision: chat.settingsRevision,
           settings: chat.settings,
           request: '',
-          history: this.store.history(branch.headRevision),
+          history: this.store.history(chat.headRevision),
           resources: this.store.product.resources(chatId, profile),
           profile,
         };
@@ -250,7 +245,7 @@ export class ContextStore {
       scopeKey,
       activeRevision: head.revision,
       notesRevision: this.store.story.notes.revision(chatId),
-      headRevision: branch.headRevision,
+      headRevision: chat.headRevision,
       checkpoint,
       usable,
       invalidReason:
@@ -259,16 +254,14 @@ export class ContextStore {
           : null,
     };
   }
-  detail(chatId: string, branchId?: string) {
-    const scope = this.scope(chatId, branchId);
+  detail(chatId: string) {
+    const scope = this.scope(chatId);
     return {
       ...this.currentState(chatId, scope),
       jobs: (
         this.db
-          .prepare(
-            'SELECT id FROM context_jobs WHERE chat_id=? AND branch_id=? ORDER BY rowid DESC LIMIT 10'
-          )
-          .all(chatId, scope.branch.id) as Row[]
+          .prepare('SELECT id FROM context_jobs WHERE chat_id=? ORDER BY rowid DESC LIMIT 10')
+          .all(chatId) as Row[]
       ).map((row) => {
         const { snapshot: _input, ...status } = this.job(row.id, false);
         return status;
@@ -276,36 +269,30 @@ export class ContextStore {
     };
   }
   private expected(chatId: string, body: Row) {
-    const { scopeKey, branch } = this.scope(chatId, body.branchId);
+    const { scopeKey, chat } = this.scope(chatId);
     if (
-      body.expectedHeadRevision !== branch.headRevision ||
+      body.expectedHeadRevision !== chat.headRevision ||
       number(body.expectedRevision, 'context revision', 0) !== this.head(scopeKey).revision
     )
       throw new HttpError(
         409,
         '문맥이나 원문이 변경됐어요. 최신 내용을 확인한 뒤 다시 적용해 주세요.'
       );
-    return { scopeKey, branch };
+    return { scopeKey, chat };
   }
   edit(chatId: string, value: unknown, snapshot: RunSnapshot) {
     const body = record(value);
-    fields(body, [
-      'branchId',
-      'expectedRevision',
-      'expectedHeadRevision',
-      'idempotencyKey',
-      'summary',
-    ]);
+    fields(body, ['expectedRevision', 'expectedHeadRevision', 'idempotencyKey', 'summary']);
     const key = text(body.idempotencyKey, 'request key', 120);
     const digest = createHash('sha256').update(JSON.stringify(body)).digest('hex');
     return this.store.transaction(() => {
-      const { scopeKey } = this.scope(chatId, body.branchId);
+      const { scopeKey } = this.scope(chatId);
       const receipt = this.db
         .prepare('SELECT command_hash FROM context_commands WHERE scope_key=? AND request_key=?')
         .get(scopeKey, key);
       if (receipt) {
         if (receipt.command_hash !== digest) throw new HttpError(409, 'Context request key reused');
-        return this.detail(chatId, body.branchId);
+        return this.detail(chatId);
       }
       this.expected(chatId, body);
       if (!snapshot.profile?.models.main) throw new HttpError(409, 'MODEL_REQUIRED:main');
@@ -332,12 +319,12 @@ export class ContextStore {
         .prepare('INSERT INTO context_commands VALUES(?,?,?,?,?)')
         .run(scopeKey, chatId, key, digest, revision);
       pruneContextHistory(this.db);
-      return this.detail(chatId, body.branchId);
+      return this.detail(chatId);
     });
   }
   schedule(chatId: string, value: unknown, snapshot: RunSnapshot): ContextJob {
     const body = record(value);
-    fields(body, ['branchId', 'expectedRevision', 'expectedHeadRevision', 'idempotencyKey']);
+    fields(body, ['expectedRevision', 'expectedHeadRevision', 'idempotencyKey']);
     const key = text(body.idempotencyKey, 'request key', 120),
       command = JSON.stringify(body);
     return this.store.transaction(() => {
@@ -348,26 +335,23 @@ export class ContextStore {
         if (existing.command !== command) throw new HttpError(409, 'Context request key reused');
         return this.job(existing.id);
       }
-      const { scopeKey, branch } = this.expected(chatId, body);
+      const { scopeKey } = this.expected(chatId, body);
       if (!snapshot.profile?.models.main) throw new HttpError(409, 'MODEL_REQUIRED:main');
       if (
         this.db
-          .prepare(
-            "SELECT 1 FROM context_jobs WHERE branch_id=? AND status IN ('queued','running')"
-          )
-          .get(branch.id)
+          .prepare("SELECT 1 FROM context_jobs WHERE chat_id=? AND status IN ('queued','running')")
+          .get(chatId)
       )
         throw new HttpError(409, '문맥 정리가 이미 진행 중이에요.');
       const id = randomUUID(),
         time = new Date().toISOString();
       this.db
         .prepare(
-          "INSERT INTO context_jobs(id,chat_id,branch_id,request_key,command,status,snapshot,created_at,updated_at) VALUES(?,?,?,?,?,'queued',?,?,?)"
+          "INSERT INTO context_jobs(id,chat_id,request_key,command,status,snapshot,created_at,updated_at) VALUES(?,?,?,?,'queued',?,?,?)"
         )
         .run(
           id,
           chatId,
-          branch.id,
           key,
           command,
           JSON.stringify(this.prepareRun(snapshot, scopeKey)),
@@ -381,14 +365,13 @@ export class ContextStore {
   job(id: string, includeInput = true): ContextJob {
     const row = this.db
       .prepare(
-        `SELECT id,chat_id,branch_id,status,checkpoint,error,noop,created_at,updated_at,${includeInput ? 'snapshot' : 'NULL'} AS snapshot FROM context_jobs WHERE id=?`
+        `SELECT id,chat_id,status,checkpoint,error,noop,created_at,updated_at,${includeInput ? 'snapshot' : 'NULL'} AS snapshot FROM context_jobs WHERE id=?`
       )
       .get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Context job not found');
     return {
       id: row.id,
       chatId: row.chat_id,
-      branchId: row.branch_id,
       status: row.status,
       snapshot: parse(row.snapshot),
       checkpoint: parse(row.checkpoint),

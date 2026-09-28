@@ -4,7 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { Store, HttpError } from '../server/store.js';
+import { Store } from '../server/store.js';
+import { HttpError } from '../server/request-validation.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
@@ -41,12 +42,11 @@ async function database() {
 function turn(store: Store, chatId: string, request: string, value: string) {
   const chat = store.chat(chatId);
   const profile = store.product.snapshot(chatId);
-  const branch = store.product.branch(chatId);
   const run = store.createRun(
     chatId,
     {
       request,
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       idempotencyKey: randomUUID(),
     },
@@ -100,7 +100,6 @@ function authoredChat(store: Store) {
   store.story.notes.write(chat.id, {
     text: 'Keep the narrator formal.',
     author: 'user',
-    branchId: `main:${chat.id}`,
     expectedRevision: 0,
     expectedHeadRevision: first.id,
     idempotencyKey: 'note-1',
@@ -158,7 +157,6 @@ describe('chat transcript export and import', () => {
       author: '가져온 자료',
       kind: 'imported-memory',
       origin,
-      branchId: `main:${chat.id}`,
       expectedRevision: 0,
       expectedHeadRevision: null,
       idempotencyKey: 'historical-memory',

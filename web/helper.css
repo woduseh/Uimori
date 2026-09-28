@@ -319,14 +319,14 @@
   }
 }
 
-.helper-branch-notice {
+.helper-scope-notice {
   padding: 10px 16px;
   font-size: 13px;
   line-height: 1.6;
   background: var(--accent-soft);
   border-bottom: 1px solid var(--line);
 }
-.helper-branch-notice p {
+.helper-scope-notice p {
   margin: 0 0 8px;
 }
 .helper-work-selector {

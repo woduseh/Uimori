@@ -10,7 +10,6 @@ export function settleSnapshot(snapshot: RunSnapshot): RunSnapshot {
     mainJudgmentThreshold: snapshot.mainJudgmentThreshold,
     displayModelTitle: snapshot.profile?.models.main?.title ?? snapshot.displayModelTitle,
     chatId: snapshot.chatId,
-    branchId: snapshot.branchId,
     parentRevision: snapshot.parentRevision,
     request: snapshot.request,
     settingsRevision: snapshot.settingsRevision,

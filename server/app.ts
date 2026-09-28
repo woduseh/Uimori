@@ -281,11 +281,9 @@ export async function createApp(options: AppOptions): Promise<App> {
       context: async (task, name, args, hooks, operationId) => {
         const scope = task.snapshot.scope;
         if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
-        if (name === 'context.read')
-          return readHelperChatContext(store, scope.chatId, scope.branchId);
+        if (name === 'context.read') return readHelperChatContext(store, scope.chatId);
         const key = `helper:${task.id}:${operationId}`;
         const base = {
-          branchId: scope.branchId,
           expectedHeadRevision: task.snapshot.writing!.parentRevision,
           idempotencyKey: key,
         };
@@ -296,7 +294,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             author: '사용자 도우미 요청',
           });
         const snapshot = await prepareNativeRisuReadOnly(
-          helperWritingSnapshot(store, scope.chatId, scope.branchId, 'context'),
+          helperWritingSnapshot(store, scope.chatId, 'context'),
           'context'
         );
         if (name === 'context.edit')
@@ -626,11 +624,8 @@ export async function createApp(options: AppOptions): Promise<App> {
   contextRoutes(app, store, {
     signal: stopping.signal,
     track,
-    snapshot: (chatId, branchId) =>
-      prepareNativeRisuReadOnly(
-        helperWritingSnapshot(store, chatId, store.product.branch(chatId, branchId).id, 'context'),
-        'context'
-      ),
+    snapshot: (chatId) =>
+      prepareNativeRisuReadOnly(helperWritingSnapshot(store, chatId, 'context'), 'context'),
     execute: async (job, signal) => {
       const snapshot = job.snapshot;
       if (!snapshot) throw new HttpError(409, 'CONTEXT_INPUT_MISSING');
@@ -846,7 +841,6 @@ export async function createApp(options: AppOptions): Promise<App> {
         'expectedRevision',
         'expectedSettingsRevision',
         'idempotencyKey',
-        'branchId',
         'expectedProfileRevision',
         'loreContextReset',
       ]);
@@ -868,7 +862,6 @@ export async function createApp(options: AppOptions): Promise<App> {
           1e9
         ),
         idempotencyKey: text(body.idempotencyKey, 'idempotency key', 120),
-        ...(body.branchId !== undefined ? { branchId: text(body.branchId, 'branch ID', 100) } : {}),
         ...(body.expectedProfileRevision !== undefined
           ? {
               expectedProfileRevision: number(

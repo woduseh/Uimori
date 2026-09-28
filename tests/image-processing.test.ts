@@ -26,6 +26,22 @@ test('animated GIF keeps both frames, timing and loop when stored as WebP', asyn
   expect(converted.hash).toBe(createHash('sha256').update(converted.bytes).digest('hex'));
 });
 
+test('PNG intake keeps image dimensions and transparency in WebP', async () => {
+  const png = await sharp({
+    create: {
+      width: 128,
+      height: 96,
+      channels: 4,
+      background: { r: 120, g: 30, b: 80, alpha: 0.5 },
+    },
+  })
+    .png()
+    .toBuffer();
+  const converted = await processImage(png);
+  const metadata = await sharp(converted.bytes).metadata();
+  expect(metadata).toMatchObject({ format: 'webp', width: 128, height: 96, hasAlpha: true });
+});
+
 test('repeated WebP intake is byte-identical rather than another lossy encoding', async () => {
   const original = await sharp({
     create: { width: 24, height: 16, channels: 4, background: '#aaccdd88' },

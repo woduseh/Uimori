@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import Fastify from 'fastify';
 import { Store } from '../server/store.js';
 import {
   addBookmark,
@@ -10,6 +11,7 @@ import {
   listBookmarks,
   saveReadingPosition,
   readingPositions,
+  readingStateRoutes,
 } from '../server/reading-state.js';
 import { captureChatCopy, restoreChatCopy } from '../server/chat-copy.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
@@ -36,7 +38,6 @@ afterEach(() => {
 function target(source: Source): ReaderTarget {
   return {
     chatId: source.chatId,
-    branchId: `main:${source.chatId}`,
     sourceId: source.id,
     representation: 'original',
     contentHash: source.hash,
@@ -87,7 +88,7 @@ test('device-local last positions use CAS, accept backwards reading, and reject 
     saveReadingPosition(store, chat.id, {
       clientId: b,
       expectedRevision: 0,
-      target: { ...target(other), chatId: chat.id, branchId: `main:${chat.id}` },
+      target: { ...target(other), chatId: chat.id },
     })
   ).toThrow();
   expect(store.db.prepare('SELECT count(*) AS n FROM reading_positions').get()!.n).toBe(1);
@@ -123,6 +124,37 @@ test('bookmarks preserve snapshots through edits, deduplicate an acknowledged cr
   expect(store.source(source.id).text).toBe('Changed scene');
 });
 
+test('reading endpoints reject removed branch fields and queries', async () => {
+  const store = fixture();
+  const chat = createFixtureChat(store, 'One head');
+  const source = completedSource(store, chat.id, 'A paragraph');
+  const app = Fastify();
+  readingStateRoutes(app, store);
+  try {
+    const clientId = randomUUID();
+    expect(
+      (await app.inject(`/api/chats/${chat.id}/reading-position?clientId=${clientId}&branchId=old`))
+        .statusCode
+    ).toBe(400);
+    expect((await app.inject(`/api/chats/${chat.id}/bookmarks?branchId=old`)).statusCode).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: `/api/chats/${chat.id}/reading-position`,
+          payload: {
+            clientId,
+            expectedRevision: 0,
+            target: { ...target(source), branchId: 'old' },
+          },
+        })
+      ).statusCode
+    ).toBe(400);
+  } finally {
+    await app.close();
+  }
+});
+
 test('an earlier independent copy preserves only in-range bookmarks with new anchors and no reading positions', () => {
   const store = fixture();
   const chat = createFixtureChat(store, 'Independent');
@@ -135,7 +167,7 @@ test('an earlier independent copy preserves only in-range bookmarks with new anc
     expectedRevision: 0,
     target: target(second),
   });
-  const copied = captureChatCopy(store, chat.id, undefined, first.id);
+  const copied = captureChatCopy(store, chat.id, first.id);
   expect(copied.state.bookmarks).toHaveLength(1);
   expect(copied.state.bookmarks![0]).toMatchObject({ entry: 0, title: 'Earlier', blockIndex: 0 });
   const clone = restoreChatCopy(store, copied, 'copy-marks');

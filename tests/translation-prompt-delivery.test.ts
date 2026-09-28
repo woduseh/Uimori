@@ -101,32 +101,38 @@ async function capture(value: AuxiliaryBundle) {
 const occurrences = (value: unknown, marker: string) =>
   JSON.stringify(value).split(marker).length - 1;
 
-test.each<ProviderProtocol>([
+const deliveryProtocols: ProviderProtocol[] = [
   'openai-responses-v1',
   'openai-chat-v1',
   'anthropic-messages-v1',
   'vertex-gemini-v1',
   'codex-app-server-v1',
-])(
-  'authored translation delivers source, reference context and catalog once through %s',
-  async (protocol) => {
-    const value = seed(programs());
-    const request = await capture(value);
-    expect(request.input.source).toMatchObject({
-      sourceRevision: value.source.id,
-      sourceHash: value.source.hash,
-    });
-    const model = structuredClone(value.snapshot.profile!.models.translation!);
-    model.connection.protocol = protocol;
-    model.connection.endpoint =
-      protocol === 'codex-app-server-v1' ? 'codex://local' : 'https://synthetic.invalid';
-    model.modelId =
-      protocol === 'anthropic-messages-v1'
-        ? 'claude-opus-5'
-        : protocol === 'vertex-gemini-v1'
-          ? 'gemini-3.8-flash'
-          : 'gpt-6-astra';
-    const wire = encodeMainPreview({ ...request, modelId: model.modelId }, model);
+];
+
+function encodedBody(request: ProviderRequest, value: AuxiliaryBundle, protocol: ProviderProtocol) {
+  const model = structuredClone(value.snapshot.profile!.models.translation!);
+  model.connection.protocol = protocol;
+  model.connection.endpoint =
+    protocol === 'codex-app-server-v1' ? 'codex://local' : 'https://synthetic.invalid';
+  model.modelId =
+    protocol === 'anthropic-messages-v1'
+      ? 'claude-opus-5'
+      : protocol === 'vertex-gemini-v1'
+        ? 'gemini-3.8-flash'
+        : 'gpt-6-astra';
+  return encodeMainPreview({ ...request, modelId: model.modelId }, model).body;
+}
+
+test('authored translation assembles frozen source, references and notes once', async () => {
+  const value = seed(programs());
+  const request = await capture(value);
+  expect(request.input.source).toMatchObject({
+    sourceRevision: value.source.id,
+    sourceHash: value.source.hash,
+  });
+  // The request retains receipt metadata; each wire must deliver the assembled content once.
+  for (const protocol of deliveryProtocols) {
+    const body = encodedBody(request, value, protocol);
     for (const marker of [
       'SOURCE_ONCE',
       'Mira has not learned the keeper identity.',
@@ -134,15 +140,14 @@ test.each<ProviderProtocol>([
       'The identity remains unknown.',
       'Observatory glossary',
     ])
-      expect(occurrences(wire.body, marker), marker).toBe(1);
+      expect(occurrences(body, marker), `${protocol}: ${marker}`).toBe(1);
     // The one note object retains both its text and matching declaration.text for provenance.
-    expect(occurrences(wire.body, 'AUTHOR_NOTE_ONCE')).toBe(2);
-    expect(JSON.stringify(wire.body)).not.toContain('EXCLUDED_OTHER_CHAT');
-    // The context slot still carries the frozen source-time context, without segment knowledge.
-    expect(JSON.stringify(wire.body)).toContain('instructionRevision');
-    expect(JSON.stringify(wire.body)).not.toContain('actorKnowledge');
+    expect(occurrences(body, 'AUTHOR_NOTE_ONCE'), protocol).toBe(2);
+    expect(JSON.stringify(body), protocol).not.toContain('EXCLUDED_OTHER_CHAT');
+    expect(JSON.stringify(body), protocol).toContain('instructionRevision');
+    expect(JSON.stringify(body), protocol).not.toContain('actorKnowledge');
   }
-);
+});
 
 test('default translation uses slot data once and still receives frozen author notes as fallback', async () => {
   const value = seed();
@@ -167,53 +172,34 @@ const explicitBotGuide = {
   ],
 };
 for (const variant of ['default', 'hermeneia', 'no-context-slot'] as const) {
-  test.each<ProviderProtocol>([
-    'openai-responses-v1',
-    'openai-chat-v1',
-    'anthropic-messages-v1',
-    'vertex-gemini-v1',
-    'codex-app-server-v1',
-  ])(
-    `bot translation guide is literal and delivered once (${variant}) through %s`,
-    async (protocol) => {
-      const program =
-        variant === 'default'
-          ? undefined
-          : variant === 'hermeneia'
-            ? builtinPromptTemplate('hermeneia')!.program
-            : nativePrompt(
-                'Translate.',
-                {
-                  promptTemplate: [
-                    { type: 'plain', role: 'system', text: 'Translate the supplied source.' },
-                    {
-                      type: 'plain',
-                      role: 'user',
-                      text: 'Translate the source in the host payload.',
-                    },
-                  ],
-                },
-                'translation'
-              );
-      const value = seed(program);
-      value.snapshot.translationGuide = structuredClone(explicitBotGuide);
-      const request = await capture(value);
-      const model = structuredClone(value.snapshot.profile!.models.translation!);
-      model.connection.protocol = protocol;
-      model.connection.endpoint =
-        protocol === 'codex-app-server-v1' ? 'codex://local' : 'https://synthetic.invalid';
-      model.modelId =
-        protocol === 'anthropic-messages-v1'
-          ? 'claude-opus-5'
-          : protocol === 'vertex-gemini-v1'
-            ? 'gemini-3.8-flash'
-            : 'gpt-6-astra';
-      const wire = encodeMainPreview({ ...request, modelId: model.modelId }, model);
-      expect(occurrences(wire.body, 'BOT_GUIDE_ONCE')).toBe(1);
-      expect(occurrences(wire.body, 'BOT_TERM_ONCE')).toBe(1);
-      expect(JSON.stringify(wire.body)).toContain('{{setvar::unwanted::1}}');
-      expect(occurrences(wire.body, 'SOURCE_ONCE')).toBe(1);
-      expect(JSON.stringify(wire.body)).not.toContain('EXCLUDED_OTHER_CHAT');
-    }
-  );
+  test(`bot translation guide is literal and delivered once (${variant})`, async () => {
+    const program =
+      variant === 'default'
+        ? undefined
+        : variant === 'hermeneia'
+          ? builtinPromptTemplate('hermeneia')!.program
+          : nativePrompt(
+              'Translate.',
+              {
+                promptTemplate: [
+                  { type: 'plain', role: 'system', text: 'Translate the supplied source.' },
+                  {
+                    type: 'plain',
+                    role: 'user',
+                    text: 'Translate the source in the host payload.',
+                  },
+                ],
+              },
+              'translation'
+            );
+    const value = seed(program);
+    value.snapshot.translationGuide = structuredClone(explicitBotGuide);
+    const request = await capture(value);
+    const delivered = encodedBody(request, value, 'codex-app-server-v1');
+    expect(occurrences(delivered, 'BOT_GUIDE_ONCE')).toBe(1);
+    expect(occurrences(delivered, 'BOT_TERM_ONCE')).toBe(1);
+    expect(JSON.stringify(delivered)).toContain('{{setvar::unwanted::1}}');
+    expect(occurrences(delivered, 'SOURCE_ONCE')).toBe(1);
+    expect(JSON.stringify(delivered)).not.toContain('EXCLUDED_OTHER_CHAT');
+  });
 }

@@ -1,6 +1,5 @@
 export type ReaderView = Readonly<{
   chat: string;
-  branch: string;
   source: string;
   destination: 'story' | 'library';
 }>;
@@ -23,7 +22,7 @@ export function transitionReaderNavigation(
   const epoch = current.epoch + 1;
   switch (action.kind) {
     case 'chat':
-      return { chat: action.chat, branch: '', source: '', destination: 'story', epoch };
+      return { chat: action.chat, source: '', destination: 'story', epoch };
     case 'source':
       return { ...current, source: action.source, epoch };
     case 'library':
@@ -31,7 +30,7 @@ export function transitionReaderNavigation(
     case 'restore':
       return { ...action.view, epoch };
     case 'chat-deleted':
-      return { chat: '', branch: '', source: '', destination: 'library', epoch };
+      return { chat: '', source: '', destination: 'library', epoch };
     case 'rebase-source':
       return { ...current, source: action.source };
   }

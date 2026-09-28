@@ -8,16 +8,6 @@ import path from 'node:path';
  * logic runs without either. The app's own maintenance gate owns admission; this controller
  * owns the image, the volume and the point of no return.
  */
-export const STAGES = [
-  'prepare',
-  'close',
-  'drain',
-  'stop',
-  'backup',
-  'candidate',
-  'switch',
-  'reopen',
-];
 /** Automatic rollback is allowed only while no user write has been accepted on the new image. */
 const CUTOVER = 'switch';
 const NAME = /^[a-z0-9][a-z0-9_.-]{0,62}$/iu;

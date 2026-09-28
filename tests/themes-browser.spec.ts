@@ -1,8 +1,15 @@
 import { fixtureBotInput } from './fixtures/chat.js';
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { DEFAULT_THEME_TEMPLATE, emptyTheme, themeFile } from '../core/themes.js';
+import { navigationAction, selectSettingsSection } from './ui-navigation.js';
+
+async function openThemes(page: Page, url = '/') {
+  await page.goto(url);
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '테마·색상');
+}
 
 for (const width of [1440, 412]) {
   test(`THEMES ${width} palette, custom editor, persistence and portable import`, async ({
@@ -12,7 +19,7 @@ for (const width of [1440, 412]) {
     await page.setViewportSize({ width, height: 1000 });
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto('/?panel=settings&section=themes');
+    await openThemes(page);
     await expect(page.getByRole('button', { name: '서재 테마 적용', exact: true })).toBeVisible();
     await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('light');
     await page.getByRole('button', { name: '미드나이트 테마 적용', exact: true }).click();
@@ -62,7 +69,7 @@ for (const width of [1440, 412]) {
           .evaluate((e) => getComputedStyle(e).getPropertyValue('--accent').trim())
       )
       .toBe('#663399');
-    await page.goto('/?panel=settings&section=themes');
+    await openThemes(page);
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: `${name} 내보내기`, exact: true }).click();
     const file = await downloadPromise;
@@ -98,7 +105,7 @@ test('THEMES slot/CSS switches preserve author input and recover from invalid or
   request,
 }, info) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('/?panel=settings&section=themes');
+  await openThemes(page);
   await page.getByRole('button', { name: '숲 테마 적용', exact: true }).click();
   await page.getByText('현재 테마로 예문 보기', { exact: true }).click();
   const sample = page.locator('.theme-sample');
@@ -138,7 +145,7 @@ test('THEMES slot/CSS switches preserve author input and recover from invalid or
   await expect(page.locator('#root')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:forest');
   await expect(input).toHaveValue('keep me');
-  await page.goto('/?theme-safe=1&panel=settings&section=themes');
+  await openThemes(page, '/?theme-safe=1');
   await expect(page.locator('#root')).toBeVisible();
   await page.getByRole('button', { name: '숲 테마 적용', exact: true }).click();
   for (const theme of [saved.saved, hidden.saved])
@@ -148,7 +155,7 @@ test('THEMES slot/CSS switches preserve author input and recover from invalid or
 test('THEMES invalid import leaves selection untouched and closing dirty editor requires a decision', async ({
   page,
 }) => {
-  await page.goto('/?panel=settings&section=themes');
+  await openThemes(page);
   await page.getByRole('button', { name: '숲 테마 적용', exact: true }).click();
   const invalid = themeFile(emptyTheme('Bad layout'));
   invalid.theme.templateHtml = '<div>bad</div>';
@@ -182,8 +189,7 @@ test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard
   });
   expect(chatResponse.ok()).toBe(true);
   const chat = await chatResponse.json();
-  const url = `/?chat=${chat.id}&panel=settings&section=themes`;
-  await page.goto(url);
+  await openThemes(page, `/?chat=${chat.id}`);
   const scope = page.getByLabel('테마 적용 범위', { exact: true });
   await expect(scope.locator('option[value="bot"]')).toBeAttached();
   await scope.selectOption('global');

@@ -161,12 +161,11 @@ describe('Small library summaries and option receipts', () => {
         })),
       },
     }).chat;
-    const branch = store.product.branch(chat.id);
-    return { store, chat, branch };
+    return { store, chat };
   }
 
   test('library summary never contains preset programs and variable retries never overwrite current values', () => {
-    const { store, chat, branch } = fixture();
+    const { store, chat } = fixture();
     const presets = Array.from({ length: 8 }, (_, i) =>
       store.product.promptPreset({
         title: 'Preset ' + i,
@@ -179,8 +178,8 @@ describe('Small library summaries and option receipts', () => {
     expect(summary.promptPresets!.every((p) => !('program' in p))).toBe(true);
     expect(Buffer.byteLength(JSON.stringify(summary))).toBeLessThan(16000);
     expect(store.product.get('prompt-preset', presets[0].id)).toHaveProperty('program');
-    const source = store.source(branch.headRevision!);
-    let first: Parameters<typeof writeChatVariables>[3] | undefined;
+    const source = store.source(chat.headRevision!);
+    let first: Parameters<typeof writeChatVariables>[2] | undefined;
     for (let i = 0; i < 10; i++) {
       const command = {
         expectedRevision: i,
@@ -189,9 +188,9 @@ describe('Small library summaries and option receipts', () => {
         values: { large: 'v'.repeat(32000), iteration: String(i) },
       };
       first ??= command;
-      writeChatVariables(store, chat.id, branch.id, command);
+      writeChatVariables(store, chat.id, command);
     }
-    expect(writeChatVariables(store, chat.id, branch.id, first!).values.iteration).toBe('9');
+    expect(writeChatVariables(store, chat.id, first!).values.iteration).toBe('9');
     expect(
       Buffer.byteLength(
         JSON.stringify(store.db.prepare('SELECT * FROM chat_variable_journal').all())

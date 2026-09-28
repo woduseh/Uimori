@@ -32,7 +32,6 @@ const chatTables = [
   'jobs',
   'sources',
   'runs',
-  'branches',
 ];
 
 /** Describe the selected chat. Unrelated diagnostic events cannot invalidate its deletion. */

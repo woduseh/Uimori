@@ -13,7 +13,6 @@ import { HttpError } from './request-validation.js';
 export function captureChatAuthoring(
   store: Store,
   chatId: string,
-  branchId: string,
   history: readonly SourceHistoryItem[]
 ): ChatCopyAuthoring {
   const profile = store.product.profile(chatId);
@@ -23,7 +22,7 @@ export function captureChatAuthoring(
     profile.packageAttachments ?? [],
     history.at(-1)?.revision ?? null
   );
-  const nodes = store.outline.nodes(chatId, branchId);
+  const nodes = store.outline.nodes(chatId);
   return {
     outline: nodes.map(({ id, parentId, level, position, title, intent, fixed, relatedIds }) => ({
       id,
@@ -41,7 +40,7 @@ export function captureChatAuthoring(
         return atIndex < 0 ? [] : [{ nodeId: node.id, atIndex }];
       })
     ),
-    options: new ChatOptionsStore(store).get(chatId, branchId).fixedValues,
+    options: new ChatOptionsStore(store).get(chatId).fixedValues,
     lore: overrides.entries
       .filter((entry) => !entry.retired)
       .map(
@@ -87,7 +86,6 @@ export function remapChatAuthoring(
 export function restoreChatAuthoring(
   store: Store,
   chatId: string,
-  branchId: string,
   history: readonly SourceHistoryItem[],
   authoring: ChatCopyAuthoring
 ): void {
@@ -133,12 +131,11 @@ export function restoreChatAuthoring(
     if (node.parentId && !ids.has(node.parentId))
       throw new HttpError(400, '이야기 구성의 상위 항목이 없어요.');
     store.db
-      .prepare(`INSERT INTO outline_nodes(id,chat_id,branch_id,parent_id,level,position,title,intent,fixed,revision,command_id,request_key,created_at,updated_at)
-      VALUES(?,?,?,?,?,?,?,?,?,1,NULL,NULL,?,?)`)
+      .prepare(`INSERT INTO outline_nodes(id,chat_id,parent_id,level,position,title,intent,fixed,revision,command_id,request_key,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,1,NULL,NULL,?,?)`)
       .run(
         ids.get(node.id)!,
         chatId,
-        branchId,
         node.parentId ? ids.get(node.parentId)! : null,
         node.level,
         node.position,
@@ -158,7 +155,7 @@ export function restoreChatAuthoring(
     store.db
       .prepare('INSERT INTO outline_writings(id,node_id,source_id,created_at) VALUES(?,?,?,?)')
       .run(randomUUID(), ids.get(link.nodeId)!, history[link.atIndex].revision, at);
-  const options = new ChatOptionsStore(store).get(chatId, branchId);
+  const options = new ChatOptionsStore(store).get(chatId);
   const controls = options.controls ?? [];
   const values = Object.fromEntries(
     Object.entries(authoring.options).filter(([key]) =>

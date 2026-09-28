@@ -1,5 +1,7 @@
-import { DESKTOP_WIDTH } from './browser-viewports.js';
+import viewportWidths from '../../fixtures/browser-viewports.json' with { type: 'json' };
 import type { Page } from '@playwright/test';
+
+const DESKTOP_WIDTH = viewportWidths.desktop;
 
 /** Screen measurements and usability checks documented in the gallery reference. */
 export const metricSource = 'docs/UI-GALLERY.md#metrics';

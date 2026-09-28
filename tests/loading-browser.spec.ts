@@ -453,7 +453,7 @@ test('LOADUI01 bounded pages, previous/next, deep links and reload preserve read
   await expect(reader).toBeVisible();
   await settledNativeSources(page, ids.slice(5, 10));
   // Reenter through the real sidebar with no explicit source in the URL. Resolving
-  // the default branch must not briefly mount and transform the first page.
+  // the saved chat must not briefly mount and transform the first page.
   await page.locator(`[data-chat-id="${empty.id}"] .chat-link`).click();
   await expect(
     page.getByRole('heading', { name: '첫 장면을 들려주세요.', exact: true })
@@ -635,10 +635,7 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
     if (request.method() === 'POST' && /\/runs(?:\?|$)/.test(request.url()))
       generated.push(request.url());
   });
-  // Pin the view so implicit default-branch discovery cannot overlap the reconnect probe.
-  const branch = seeded.branch;
-  expect(branch).toBeDefined();
-  await page.goto(`/?chat=${seeded.chat.id}&branch=${encodeURIComponent(branch!.id)}`);
+  await page.goto(`/?chat=${seeded.chat.id}`);
   await expect(articles(page)).toHaveCount(2);
   await expect(page.getByText('연결을 다시 확인하는 중이에요.', { exact: true })).toHaveCount(0);
   await context.setOffline(true);

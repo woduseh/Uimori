@@ -131,7 +131,6 @@ export function ActivityStatus({
     runId: item.id,
     sourceRevision: item.sourceRevision,
     sourceHash: item.sourceHash,
-    branchId: item.branchId,
     generation: item.generation,
     superseded: item.superseded,
     executionUncertain: item.executionUncertain,

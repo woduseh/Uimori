@@ -109,39 +109,34 @@ end
   return { store, chatId };
 }
 function actionBody(store: Store, chatId: string, name: string, key: string) {
-  const branch = store.product.branch(chatId),
-    head = store.source(branch.headRevision!);
+  const head = store.source(store.chat(chatId).headRevision!);
   return {
     kind: 'trigger',
     name,
-    branchId: branch.id,
     expectedHeadRevision: head.id,
     expectedHeadHash: head.hash,
-    expectedVariableRevision: readChatVariables(store, chatId, branch.id).revision,
+    expectedVariableRevision: readChatVariables(store, chatId).revision,
     idempotencyKey: key,
   };
 }
 
 async function appendNativeSource(store: Store, chatId: string, text: string) {
-  const chat = store.chat(chatId),
-    branch = store.product.branch(chatId);
+  const chat = store.chat(chatId);
   const { run } = store.createRun(
     chatId,
     {
       request: `Continue ${text}`,
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
-      branchId: branch.id,
       idempotencyKey: text,
     },
     () => ({
       chatId,
-      branchId: branch.id,
-      parentRevision: branch.headRevision,
+      parentRevision: chat.headRevision,
       request: `Continue ${text}`,
       settingsRevision: chat.settingsRevision,
       settings: chat.settings,
-      history: store.history(branch.headRevision),
+      history: store.history(chat.headRevision),
       profile: store.product.snapshot(chatId),
       resources: [],
     })
@@ -258,25 +253,22 @@ test('native choices feed the next prompt and output variables commit with the s
     first,
     actionBody(store, chatId, 'choose', 'choose-run')
   );
-  const branch = store.product.branch(chatId),
-    chat = store.chat(chatId);
+  const chat = store.chat(chatId);
   const created = store.createRun(
     chatId,
     {
       request: 'Continue',
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       idempotencyKey: 'continue',
-      branchId: branch.id,
     },
     () => ({
       chatId,
-      branchId: branch.id,
-      parentRevision: branch.headRevision,
+      parentRevision: chat.headRevision,
       request: 'Continue',
       settingsRevision: chat.settingsRevision,
       settings: chat.settings,
-      history: store.history(branch.headRevision),
+      history: store.history(chat.headRevision),
       profile: store.product.snapshot(chatId),
       resources: [],
     })
@@ -298,31 +290,54 @@ test('native choices feed the next prompt and output variables commit with the s
     chat.settings
   );
   expect(saved.text).toBe('Story OUTPUT');
-  expect(readChatVariables(store, chatId, branch.id).values.finished).toBe('yes');
+  expect(readChatVariables(store, chatId).values.finished).toBe('yes');
   expect(await prepareNativeRisuRun(output)).toBe(output);
+});
+
+test('a legacy native action receipt conflicts without executing the action again', async () => {
+  const { store, chatId } = await setup();
+  const first = store.chat(chatId).headRevision!;
+  const body = actionBody(store, chatId, 'choose', 'legacy-receipt');
+  await applyNativeRisuAction(store, chatId, first, body);
+  const receipt = store.db
+    .prepare('SELECT id,snapshot FROM runs WHERE chat_id=? AND request_key=?')
+    .get(chatId, 'native-action:legacy-receipt')!;
+  const snapshot = JSON.parse(String(receipt.snapshot));
+  snapshot.nativeRisuAuthored.commandHash = 'legacy-branch-scoped-command';
+  store.db
+    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+    .run(JSON.stringify(snapshot), receipt.id);
+  const head = store.chat(chatId).headRevision;
+  const sources = store.db
+    .prepare('SELECT COUNT(*) AS count FROM sources WHERE chat_id=?')
+    .get(chatId);
+  await expect(applyNativeRisuAction(store, chatId, first, body)).rejects.toThrow(
+    'RISU_NATIVE_ACTION_REPLAY_CONFLICT'
+  );
+  expect(store.chat(chatId).headRevision).toBe(head);
+  expect(
+    store.db.prepare('SELECT COUNT(*) AS count FROM sources WHERE chat_id=?').get(chatId)
+  ).toEqual(sources);
 });
 
 test('unprepared failed native runs require a fresh retry instead of an unrepeatable candidate', async () => {
   const { store, chatId } = await setup();
-  const chat = store.chat(chatId),
-    branch = store.product.branch(chatId);
+  const chat = store.chat(chatId);
   const created = store.createRun(
     chatId,
     {
       request: 'Continue',
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
-      branchId: branch.id,
       idempotencyKey: 'unfinished',
     },
     () => ({
       chatId,
-      branchId: branch.id,
-      parentRevision: branch.headRevision,
+      parentRevision: chat.headRevision,
       request: 'Continue',
       settingsRevision: chat.settingsRevision,
       settings: chat.settings,
-      history: store.history(branch.headRevision),
+      history: store.history(chat.headRevision),
       profile: store.product.snapshot(chatId),
       resources: [],
     })
@@ -383,7 +398,7 @@ test('native input dialog resumes the suspended invocation and rejects duplicate
       ).statusCode
     ).toBe(200);
     await invocation;
-    const variables = readChatVariables(store, chatId, store.product.branch(chatId).id);
+    const variables = readChatVariables(store, chatId);
     expect(variables.values).toMatchObject({ name: 'Writer', selected: '1' });
   } finally {
     await app.close();

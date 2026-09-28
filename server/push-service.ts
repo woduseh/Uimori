@@ -257,7 +257,6 @@ export class PushService {
         kind: row.kind as PushEnvelope['kind'],
         tag: `uimori-${createHash('sha256').update(String(row.event_key)).digest('hex').slice(0, 24)}`,
         chatId: row.chat_id == null ? null : String(row.chat_id),
-        branchId: row.branch_id == null ? null : String(row.branch_id),
         sourceId: row.source_id == null ? null : String(row.source_id),
         representation: row.representation === 'translation' ? 'translation' : 'original',
         ...(typeof title === 'string' ? { title: title.slice(0, 120) } : {}),

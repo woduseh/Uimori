@@ -8,7 +8,7 @@ import {
   validateChatVariableCommand,
   chatVariablesPending,
 } from './chat-variables.js';
-import { fields, record, text } from './request-validation.js';
+import { fields, record } from './request-validation.js';
 import type { Store } from './store.js';
 
 export function chatVariableRoutes(
@@ -16,10 +16,10 @@ export function chatVariableRoutes(
   store: Store,
   publish: (chatId: string) => void
 ) {
-  const view = (chatId: string, branchId: string, saved?: ChatVariableState) => {
-    const branch = store.product.branch(chatId, branchId);
-    const state = saved ?? readChatVariables(store, chatId, branch.id);
-    const profile = chatVariableProfile(store, chatId, branch.id);
+  const view = (chatId: string, saved?: ChatVariableState) => {
+    const chat = store.chat(chatId);
+    const state = saved ?? readChatVariables(store, chatId);
+    const profile = chatVariableProfile(store, chatId);
     const defaults = resolveTemplateVariableContext(
       profile ? { ...profile, variableState: undefined } : undefined
     );
@@ -30,8 +30,8 @@ export function chatVariableRoutes(
       ...state,
       defaults: defaults.variables ?? {},
       resolved: resolved.variables ?? {},
-      sourceHash: branch.headRevision ? store.source(branch.headRevision).hash : null,
-      pending: chatVariablesPending(store, chatId, branch.id),
+      sourceHash: chat.headRevision ? store.source(chat.headRevision).hash : null,
+      pending: chatVariablesPending(store, chatId),
       ...(resolved.variableDefaultsError || defaults.variableDefaultsError
         ? {
             variableDefaultsError: resolved.variableDefaultsError ?? defaults.variableDefaultsError,
@@ -39,37 +39,14 @@ export function chatVariableRoutes(
         : {}),
     };
   };
-  app.get<{ Params: { id: string }; Querystring: { branchId?: string } }>(
-    '/api/chats/:id/variables',
-    (request) => {
-      const branch = store.product.branch(request.params.id, request.query.branchId);
-      return view(request.params.id, branch.id);
-    }
+  app.get<{ Params: { id: string } }>('/api/chats/:id/variables', (request) =>
+    view(request.params.id)
   );
-  app.put<{ Params: { id: string }; Querystring: { branchId?: string } }>(
-    '/api/chats/:id/variables',
-    (request) => {
-      const body = record(request.body);
-      fields(body, [
-        'branchId',
-        'expectedRevision',
-        'expectedSourceHash',
-        'idempotencyKey',
-        'values',
-      ]);
-      const { branchId, ...command } = body;
-      const branch = store.product.branch(
-        request.params.id,
-        branchId === undefined ? request.query.branchId : text(branchId, 'branch ID', 100)
-      );
-      const state = writeChatVariables(
-        store,
-        request.params.id,
-        branch.id,
-        validateChatVariableCommand(command)
-      );
-      publish(request.params.id);
-      return view(request.params.id, branch.id, state);
-    }
-  );
+  app.put<{ Params: { id: string } }>('/api/chats/:id/variables', (request) => {
+    const body = record(request.body);
+    fields(body, ['expectedRevision', 'expectedSourceHash', 'idempotencyKey', 'values']);
+    const state = writeChatVariables(store, request.params.id, validateChatVariableCommand(body));
+    publish(request.params.id);
+    return view(request.params.id, state);
+  });
 }

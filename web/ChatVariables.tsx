@@ -12,7 +12,6 @@ type VariableView = ChatVariableState & {
   variableDefaultsError?: string;
 };
 type SaveBody = {
-  branchId?: string;
   expectedRevision: number;
   expectedSourceHash: string | null;
   idempotencyKey: string;
@@ -26,7 +25,6 @@ type Draft = {
 };
 type Props = {
   chatId: string;
-  branchId?: string;
   refreshKey?: unknown;
   onChange?: () => void;
 };
@@ -75,7 +73,7 @@ function readDraft(key: string): Draft | null {
       pendingValues &&
       draftValues &&
       JSON.stringify(pendingValues) === JSON.stringify(draftValues) &&
-      (pending.branchId === undefined || typeof pending.branchId === 'string')
+      !Object.hasOwn(pending, 'branchId')
     )
       draft.pending = pending;
     return draft;
@@ -89,10 +87,10 @@ function rememberDraft(key: string, value: Draft | null) {
   else sessionStorage.removeItem(key);
 }
 
-/** Current-branch overrides are an explicit user edit. Background refreshes only update the
+/** Chat overrides are an explicit user edit. Background refreshes only update the
  * comparison base; they never adopt, discard, or replay the draft. */
-export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props) {
-  const storageKey = `uimori:chat-variable-draft:${chatId}:${branchId ?? 'current'}`;
+export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
+  const storageKey = `uimori:chat-variable-draft:${chatId}`;
   const [view, setView] = useState<VariableView | null>(null);
   const [draft, setDraft] = useState<Draft | null>(() => readDraft(storageKey));
   const [loading, setLoading] = useState(true);
@@ -106,7 +104,7 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
   const readEpoch = useRef(0);
   const saving = useRef(false);
   const endpoint = `/chats/${encodeURIComponent(chatId)}/variables`;
-  const readEndpoint = endpoint + (branchId ? `?branchId=${encodeURIComponent(branchId)}` : '');
+  const readEndpoint = endpoint;
   const load = useCallback(async () => {
     const epoch = ++readEpoch.current;
     setLoading(true);
@@ -164,7 +162,6 @@ export function ChatVariables({ chatId, branchId, refreshKey, onChange }: Props)
     const body: SaveBody =
       draft.pending ??
       ({
-        ...(branchId ? { branchId } : {}),
         expectedRevision: draft.revision,
         expectedSourceHash: draft.sourceHash,
         idempotencyKey: crypto.randomUUID(),

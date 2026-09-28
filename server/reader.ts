@@ -1,4 +1,4 @@
-import { HttpError } from './request-validation.js';
+import { fields, HttpError, record } from './request-validation.js';
 import { validateTranslationArtifact } from './translation-artifacts.js';
 import type { Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
@@ -37,12 +37,12 @@ function readerActivity(
       : "SELECT * FROM activity WHERE status IN ('queued','running') UNION ALL SELECT * FROM recent ORDER BY createdAt,id";
   const rows = store.db
     .prepare(`WITH activity AS (
-    SELECT id,'main' AS kind,status,created_at AS createdAt,updated_at AS updatedAt,branch_id AS branchId,source_revision AS sourceRevision,0 AS generation,NULL AS sourceHash,CASE WHEN source_revision IS NULL THEN EXISTS(SELECT 1 FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id) ELSE 0 END AS superseded,(status='interrupted' OR COALESCE(error,'') LIKE '%PROVIDER_UNCERTAIN%') AS executionUncertain FROM runs WHERE chat_id=?
+    SELECT id,'main' AS kind,status,created_at AS createdAt,updated_at AS updatedAt,source_revision AS sourceRevision,0 AS generation,NULL AS sourceHash,CASE WHEN source_revision IS NULL THEN EXISTS(SELECT 1 FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id) ELSE 0 END AS superseded,(status='interrupted' OR COALESCE(error,'') LIKE '%PROVIDER_UNCERTAIN%') AS executionUncertain FROM runs WHERE chat_id=?
     UNION ALL
-    SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,r.branch_id,j.source_revision,j.generation,j.source_hash,CASE WHEN j.kind='translation' AND j.status IN ('failed','partial','stale') AND COALESCE(j.error,'') NOT LIKE '%PROVIDER_UNCERTAIN%' THEN EXISTS(SELECT 1 FROM jobs newer WHERE newer.chat_id=j.chat_id AND newer.source_revision=j.source_revision AND newer.source_hash=j.source_hash AND newer.kind='translation' AND newer.status='completed' AND (newer.revision,newer.created_at,newer.id) > (j.revision,j.created_at,j.id)) ELSE 0 END,(j.status='interrupted' OR COALESCE(j.error,'') LIKE '%PROVIDER_UNCERTAIN%') FROM jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
+    SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,j.source_revision,j.generation,j.source_hash,CASE WHEN j.kind='translation' AND j.status IN ('failed','partial','stale') AND COALESCE(j.error,'') NOT LIKE '%PROVIDER_UNCERTAIN%' THEN EXISTS(SELECT 1 FROM jobs newer WHERE newer.chat_id=j.chat_id AND newer.source_revision=j.source_revision AND newer.source_hash=j.source_hash AND newer.kind='translation' AND newer.status='completed' AND (newer.revision,newer.created_at,newer.id) > (j.revision,j.created_at,j.id)) ELSE 0 END,(j.status='interrupted' OR COALESCE(j.error,'') LIKE '%PROVIDER_UNCERTAIN%') FROM jobs j JOIN sources s ON s.id=j.source_revision
       WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
     UNION ALL
-    SELECT j.id,'illustration',j.status,j.created_at,j.updated_at,r.branch_id,j.source_revision,j.generation,j.source_hash,0,(j.status='interrupted') FROM illustration_jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
+    SELECT j.id,'illustration',j.status,j.created_at,j.updated_at,j.source_revision,j.generation,j.source_hash,0,(j.status='interrupted') FROM illustration_jobs j
       WHERE j.chat_id=?
 
   ), recent AS (SELECT * FROM activity WHERE status NOT IN ('queued','running') ORDER BY updatedAt DESC,id DESC LIMIT 30)
@@ -173,7 +173,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE COALESCE(json_extract(snapshot,'$.displayModelTitle'),json_extract(snapshot,'$.profile.models.main.title')) END AS modelTitle,json_extract(snapshot,'$.profile.models.main.executionMode') AS executionMode,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
-    json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id) AS snapshot
+    json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset')) AS snapshot
     FROM runs
     WHERE runs.chat_id=? ${scope ? 'AND runs.id IN (SELECT value FROM json_each(?))' : ''} ORDER BY runs.created_at,runs.id`)
       .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as (Record<string, any> & {
@@ -211,8 +211,8 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
 
 /** Read projection only. Frozen execution records remain available through detail/run APIs. */
 export function readerDetail(store: Store, id: string, query: Record<string, string | undefined>) {
+  fields(record(query), ['source', 'since', 'known']);
   const chat = store.chat(id);
-  const branch = store.product.branch(id, query.branch || undefined);
   const rows = store.db
     .prepare(
       'SELECT id,parent_revision AS parentRevision,run_id AS runId FROM sources WHERE chat_id=?'
@@ -221,7 +221,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   const byId = new Map(rows.map((row) => [row.id, row]));
   const chain: string[] = [];
   const seen = new Set<string>();
-  let head = branch.headRevision;
+  let head = chat.headRevision;
   while (head && !seen.has(head)) {
     seen.add(head);
     const row = byId.get(head);
@@ -232,7 +232,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   chain.reverse();
   const limit = 5;
   let start = query.source ? chain.indexOf(query.source) : 0;
-  if (start < 0) throw new HttpError(404, 'Source is not in this branch');
+  if (start < 0) throw new HttpError(404, 'Source is not in this chat');
   start = Math.floor(start / limit) * limit;
   const order = chain.slice(start, start + limit);
   const cursor = Number(
@@ -276,10 +276,10 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         return rejection ? { ...job, rejection } : job;
       });
   });
-  // One metadata scan serves navigation, selection and branch labels. Off-branch requests
-  // and off-page execution diagnostics need not be materialized for the reader.
+  // One metadata scan serves navigation and selection. Off-page execution diagnostics
+  // need not be materialized for the reader.
   const indexRows = store.db
-    .prepare(`SELECT id,rowid AS admissionOrder,json_extract(command,'$.retryOf') AS retryOf,source_revision AS sourceRevision,status,branch_id AS branchId,
+    .prepare(`SELECT id,rowid AS admissionOrder,json_extract(command,'$.retryOf') AS retryOf,source_revision AS sourceRevision,status,
     CASE WHEN id IN (SELECT value FROM json_each(?)) THEN request ELSE NULL END AS request,
     json_extract(snapshot,'$.packageStart.mode') AS startMode
     FROM runs WHERE chat_id=? ORDER BY created_at,id`)
@@ -287,7 +287,6 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     id: string;
     sourceRevision: string | null;
     status: string;
-    branchId: string | null;
     admissionOrder: number;
     retryOf: string | null;
     request: string | null;
@@ -330,7 +329,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     })
     .map((run) => run.id);
   const runsById = new Map(indexRows.map((run) => [run.id, run]));
-  // Requests label the branch's complete index without loading off-page source bodies.
+  // Requests label the chat's complete index without loading off-page source bodies.
   // Authored starts have no user request; never substitute generated or hidden content.
   let sceneNumber = 0;
   const navigation = chain.map((sourceId) => {
@@ -382,21 +381,20 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
       sources.map((source) => source.id)
     ),
     profile: store.product.profile(id),
-    branch,
     ...(assetsChanged ? { assets: mergedReaderAssets(store, id, order) } : {}),
     reader: {
       navigation,
-      presentationRevisions: readerPresentationRevisions(store, id, branch.id, order),
+      presentationRevisions: readerPresentationRevisions(store, id, order),
       pendingRunIds,
       activity: readerActivity(store, id),
       responseActivity: readerActivity(store, id, order),
-      headSourceHash: branch.headRevision
+      headSourceHash: chat.headRevision
         ? ((
             store.db
               .prepare(
                 'SELECT COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AS hash FROM sources s WHERE s.id=?'
               )
-              .get(branch.headRevision) as { hash: string } | undefined
+              .get(chat.headRevision) as { hash: string } | undefined
           )?.hash ?? null)
         : null,
       activeJobs,

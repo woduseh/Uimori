@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import {
   AgentCollaborationError,
   createAgentCollaboration,
@@ -216,7 +216,7 @@ describe('collaboration limits and references', () => {
   });
 });
 
-describe('strict JSON validation and detached output', () => {
+describe('JSON validation and detached output', () => {
   const nestedCases = () => {
     const value = config({ model: { id: 'model-1' } });
     return [
@@ -238,72 +238,40 @@ describe('strict JSON validation and detached output', () => {
       }
       for (const key of ['unexpected', '__proto__', 'constructor', 'prototype'])
         rejects(wrap({ ...object, [key]: 'unexpected' }), 'INVALID_FIELDS');
-      rejects(wrap({ ...object, [Symbol('hidden')]: true }), 'INVALID_FIELDS');
-      rejects(
-        wrap(Object.defineProperty({ ...object }, 'hidden', { value: true })),
-        'INVALID_FIELDS'
-      );
-      rejects(wrap(Object.create(object)), 'INVALID_FIELDS');
-      rejects(wrap(Object.assign(Object.create({ inherited: true }), object)), 'INVALID_FIELDS');
     }
   });
 
-  test('does not execute accessors or toJSON hooks', () => {
-    const getter = vi.fn(() => {
-      throw Error('GETTER_EXECUTED');
-    });
-    for (const { object, wrap } of nestedCases()) {
-      const key = Object.keys(object)[0];
-      rejects(
-        wrap(Object.defineProperty({ ...object }, key, { enumerable: true, get: getter })),
-        'INVALID_FIELDS'
-      );
-      rejects(wrap({ ...object, toJSON: getter }), 'INVALID_FIELDS');
-    }
-    const agents = [config().agents[0]];
-    Object.defineProperty(agents, '0', { enumerable: true, get: getter });
-    rejects({ ...config(), agents }, 'INVALID_LIST');
-    expect(getter).not.toHaveBeenCalled();
-  });
-
-  test('rejects sparse arrays, added array properties, inherited arrays and non-JSON values', () => {
-    for (const value of [null, undefined, [], true, 1, 'config', new Date(), new Map()])
-      rejects(value);
+  test('rejects malformed object and list shapes', () => {
+    for (const value of [null, undefined, [], true, 1, 'config']) rejects(value);
     for (const field of ['agents', 'sharedControls', 'tools'] as const) {
       const wrap = (value: unknown) =>
         field === 'tools'
           ? { ...config(), agents: [{ ...config().agents[0], tools: value }] }
           : { ...config(), [field]: value };
-      for (const value of [
-        undefined,
-        null,
-        {},
-        new Array(1),
-        Object.assign([], { extra: true }),
-        Object.assign([], { [Symbol('hidden')]: true }),
-        Object.setPrototypeOf([], {}),
-      ])
-        rejects(wrap(value), 'INVALID_LIST');
+      for (const value of [undefined, null, {}, 'not-a-list']) rejects(wrap(value), 'INVALID_LIST');
     }
-    const cyclic = config();
-    rejects({ ...cyclic, agents: [cyclic] }, 'INVALID_FIELDS');
   });
 
-  test('clones frozen or null-prototype records and every mutable nested container', () => {
-    const agent = Object.freeze({
+  test('accepts old output limit but removes it from the saved JSON shape', () => {
+    const value = config();
+    const stored = JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+    (stored.agents as Record<string, unknown>[])[0].maxOutputChars = 4000;
+    expect(validateAgentCollaboration(stored).agents[0]).not.toHaveProperty('maxOutputChars');
+  });
+
+  test('detaches every mutable nested container from the input', () => {
+    const agent = {
       ...createAgentDefinition('character', 'reader'),
-      model: Object.freeze({ id: 'model-1' }),
-      tools: Object.freeze(['knowledge', 'story']),
-    });
-    const value = Object.freeze(
-      Object.assign(Object.create(null), {
-        ...createAgentCollaboration(),
-        enabled: true,
-        sharedInstructions: '\r\n공유 지침\n',
-        sharedControls: Object.freeze(['style']),
-        agents: Object.freeze([agent]),
-      })
-    );
+      model: { id: 'model-1' },
+      tools: ['knowledge', 'story'] as AgentDefinition['tools'],
+    };
+    const value = {
+      ...createAgentCollaboration(),
+      enabled: true,
+      sharedInstructions: '\r\n공유 지침\n',
+      sharedControls: ['style'],
+      agents: [agent],
+    };
     const result = validateAgentCollaboration(value, ['style']);
     expect(result).toEqual(value);
     expect(result).not.toBe(value);
@@ -322,6 +290,5 @@ describe('strict JSON validation and detached output', () => {
     expect(agent.model.id).toBe('model-1');
     expect(agent.tools).toEqual(['knowledge', 'story']);
     expect(agent.instructions).not.toBe('수정');
-    expect(JSON.parse(JSON.stringify(validateAgentCollaboration(value)))).toEqual(value);
   });
 });

@@ -16,12 +16,10 @@ import { successfulTranslation } from './translation-artifacts.js';
 export function exportChatTranscript(
   store: Store,
   chatId: string,
-  branchId?: string,
   throughSource?: string | null
 ): ChatTranscript {
   const chat = store.chat(chatId);
-  const branch = store.product.branch(chatId, branchId);
-  const head = throughSource === undefined ? branch.headRevision : throughSource;
+  const head = throughSource === undefined ? chat.headRevision : throughSource;
   const history = store.history(head);
   const profile = store.product.profile(chatId);
   if (history.some((item) => store.source(item.revision).chatId !== chatId))
@@ -108,7 +106,6 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
       image: profile.image,
     });
     const frozen = store.product.snapshot(chat.id);
-    const branchId = store.product.branch(chat.id).id;
     const notesAt = (at: number | null, head: string | null) => {
       for (const [index, note] of transcript.notes.entries())
         if (note.atIndex === at)
@@ -117,7 +114,6 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
             author: note.author,
             kind: note.kind,
             ...(note.kind === 'imported-memory' ? { origin: note.origin } : {}),
-            branchId,
             expectedRevision: store.story.notes.revision(chat.id),
             expectedHeadRevision: head,
             idempotencyKey: `import-note:${index}`,

@@ -59,18 +59,16 @@ function chat(store: Store) {
   });
   return created.id;
 }
-function queued(store: Store, chatId: string, request = 'Continue.', branchId?: string): Run {
+function queued(store: Store, chatId: string, request = 'Continue.'): Run {
   const current = store.chat(chatId);
   const profile = store.product.snapshot(chatId);
-  const branch = store.product.branch(chatId, branchId);
   return store.createRun(
     chatId,
     {
       request,
-      expectedRevision: branch.headRevision,
+      expectedRevision: current.headRevision,
       expectedSettingsRevision: current.settingsRevision,
       idempotencyKey: randomUUID(),
-      ...(branchId ? { branchId } : {}),
     },
     (selected) =>
       ({

@@ -72,7 +72,6 @@ import { BotNavigation, NavigationQuickActions, type ChatFolder } from './BotTre
 import { completePendingStoryProfile } from './pendingStory.js';
 import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
-import { usePanelDeepLink } from './usePanelDeepLink.js';
 import { ActivityStatus } from './ActivityStatus.js';
 import { modelLabel } from './storyLabels.js';
 import './style.css';
@@ -228,7 +227,7 @@ function App() {
   const sourceEditing = editingSources.length > 0;
   const optionsButton = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<Panel>('');
-  // biome-ignore lint/correctness/useExhaustiveDependencies: A new chat or branch starts with the list closed and nothing seen yet.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A new chat starts with the list closed and nothing seen yet.
   useEffect(() => {
     setSceneList(false);
     setSeenRuns([]);
@@ -246,39 +245,6 @@ function App() {
   const [initialModules, setInitialModules] = useState<Content[]>([]);
   const [moduleToUse, setModuleToUse] = useState<Content | null>(null);
   const [libraryTab, setLibraryTab] = useState<'bot' | 'persona' | 'module' | 'prompts'>('bot');
-  usePanelDeepLink(!s.selected || s.detail?.chat.id === s.selected, (link) => {
-    if (link.destination === 'library') {
-      if (['bot', 'persona', 'module', 'prompts'].includes(link.tab))
-        setLibraryTab(link.tab as typeof libraryTab);
-      s.showLibrary();
-    }
-    const chatSections: ChatSettingsSection[] = [
-      'characters',
-      'prompts',
-      'models',
-      'story',
-      'images',
-      'runtime',
-    ];
-    const appSections = [
-      'general',
-      'themes',
-      'models',
-      'prompts',
-      'connections',
-      'agents',
-      'illustrations',
-      'data',
-      'security',
-    ];
-    const panels: Panel[] = ['navigation', 'new', 'tasks', 'reading', 'outline'];
-    if (link.panel === 'story')
-      openChatSettings(chatSections.find((section) => section === link.section) ?? undefined);
-    else if (link.panel === 'settings') {
-      if (appSections.includes(link.section)) setSettingsTab(link.section);
-      setPanel('settings');
-    } else if ((panels as string[]).includes(link.panel)) setPanel(link.panel as Panel);
-  });
   const [libraryListRequest, setLibraryListRequest] = useState(0);
   const errorScope = `${s.destination}:${libraryTab}:${s.viewKey}`;
   const previousErrorScope = useRef(errorScope);
@@ -960,6 +926,17 @@ function App() {
             </button>
           </aside>
         )}
+        {s.legacyLocalWarning && (
+          <aside className="reading-sync-notice" role="status" aria-label="이전 브라우저 기록">
+            <span>
+              이전 브라우저 기록 {s.legacyLocalWarning.count}개를 옮기지 못했어요. 원문은 그대로
+              보관했어요.
+            </span>
+            <button type="button" onClick={s.legacyLocalWarning.download}>
+              이전 기록 내려받기
+            </button>
+          </aside>
+        )}
         {s.destination === 'library' ? (
           <div className="destination-scroll">
             {libraryTab === 'prompts' ? (
@@ -1089,7 +1066,7 @@ function App() {
                       )}
                       <ReaderPages
                         detail={s.detail}
-                        head={s.branch?.headRevision ?? null}
+                        head={s.detail?.chat.headRevision ?? null}
                         onSelect={s.chooseSource}
                       />
                       {s.conversation.map((entry) => {
@@ -1097,7 +1074,6 @@ function App() {
                           const { source, index } = entry;
                           return (
                             <SourceReader
-                              branchId={s.branch?.id}
                               latest={source.id === s.sources.at(-1)?.id}
                               onModelSettings={() => {
                                 setSettingsTab('models');
@@ -1165,7 +1141,7 @@ function App() {
                               onAskHelper={(sourceId, text) => {
                                 setOptionsOpen(false);
                                 setHelperOpen(true);
-                                if (s.selected && s.branch)
+                                if (s.selected)
                                   setHelperSelection({
                                     key: crypto.randomUUID(),
                                     sourceId,
@@ -1175,12 +1151,10 @@ function App() {
                                       selectedHelperSession({
                                         kind: 'chat',
                                         chatId: s.selected,
-                                        branchId: s.branch.id,
                                       }) ?? undefined,
                                     scope: {
                                       kind: 'chat',
                                       chatId: s.selected,
-                                      branchId: s.branch.id,
                                     },
                                   });
                               }}
@@ -1198,7 +1172,6 @@ function App() {
                                       jobs={s.detail!.jobs}
                                       activities={s.detail!.reader.responseActivity ?? []}
                                       connected={s.connected}
-                                      branchId={s.branch?.id}
                                       revision={s.detail!.reader.cursor}
                                       refresh={() => s.refresh(s.selected)}
                                       onError={s.setError}
@@ -1246,7 +1219,6 @@ function App() {
                                 jobs={[]}
                                 activities={s.detail!.reader.activity ?? []}
                                 connected={s.connected}
-                                branchId={s.branch?.id}
                                 revision={s.detail!.reader.cursor}
                                 refresh={() => s.refresh(s.selected)}
                                 onError={s.setError}
@@ -1299,7 +1271,7 @@ function App() {
                       })}
                       <ReaderPages
                         detail={s.detail}
-                        head={s.branch?.headRevision ?? null}
+                        head={s.detail?.chat.headRevision ?? null}
                         onSelect={s.chooseSource}
                         end
                       />
@@ -1611,7 +1583,6 @@ function App() {
       <ChatPromptOptions
         modal={panelModal}
         chatId={s.selected || undefined}
-        branchId={s.branch?.id}
         open={optionsOpen && s.destination === 'story' && !!s.selected}
         workspace={s.promptWorkspace}
         promptRevision={`${s.detail?.profile?.revision ?? 0}:${s.pinnedPromptRevision ?? 0}`}
@@ -1636,7 +1607,7 @@ function App() {
         onBusyChange={setOptionsBusy}
       />
       <HelperPanel
-        ready={s.destination !== 'story' || !s.selected || !!s.branch}
+        ready={s.destination !== 'story' || !s.selected || !!s.detail}
         modal={panelModal}
         enterSend={enterSend}
         modelDescription={helperDescription}
@@ -1645,8 +1616,8 @@ function App() {
         outlineRequest={outlineHelperRequest}
         outlineWorkspace={panel === 'outline'}
         scope={
-          s.destination === 'story' && s.selected && s.branch
-            ? { kind: 'chat', chatId: s.selected, branchId: s.branch.id }
+          s.destination === 'story' && s.selected && s.detail
+            ? { kind: 'chat', chatId: s.selected }
             : { kind: 'library', workId: `library:${libraryTab}` }
         }
         onClose={() => setHelperOpen(false)}
@@ -1817,7 +1788,7 @@ function App() {
           }}
         >
           <OutlinePanel
-            key={`${s.detail?.chat.id}:${s.branch?.id}`}
+            key={s.detail?.chat.id}
             state={s}
             onClose={() => setPanel('')}
             helperVisible={helperOpen}

@@ -8,7 +8,6 @@ import { api, ApiError } from './api.js';
 import './story.css';
 type PanelProps = {
   chatId: string;
-  branchId: string;
   headRevision: string | null;
   settingsRevision: number;
   profileRevision?: number;
@@ -41,12 +40,11 @@ function useScope(key: string) {
 }
 
 export function StoryPanel(props: PanelProps) {
-  return <StoryPanelEditor key={`${props.chatId}/${props.branchId}`} {...props} />;
+  return <StoryPanelEditor key={props.chatId} {...props} />;
 }
 
 function StoryPanelEditor({
   chatId,
-  branchId,
   headRevision,
   settingsRevision,
   profileRevision,
@@ -59,7 +57,7 @@ function StoryPanelEditor({
   refreshKey,
 }: PanelProps) {
   const capture = useScope(
-    JSON.stringify([chatId, branchId, headRevision, settingsRevision, profileRevision])
+    JSON.stringify([chatId, headRevision, settingsRevision, profileRevision])
   );
   const [detail, setDetail] = useState<StoryDetail | null>(null);
   const request = useRef(0);
@@ -94,7 +92,7 @@ function StoryPanelEditor({
     const valid = capture(),
       sequence = ++request.current;
     try {
-      const result = await api<StoryDetail>(`${base}/story?branchId=${id(branchId)}`);
+      const result = await api<StoryDetail>(`${base}/story`);
       if (!valid() || sequence !== request.current) return;
       setDetail(result);
     } catch (caught) {
@@ -106,12 +104,12 @@ function StoryPanelEditor({
     actionLock.current = false;
     setBusy(false);
     setDetail(null);
-  }, [chatId, branchId, headRevision, settingsRevision, profileRevision]);
+  }, [chatId, headRevision, settingsRevision, profileRevision]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Reload on scope changes or reactivation; render-local load must not replace drafts on every render.
   useEffect(() => {
     if (active) void load();
-  }, [active, chatId, branchId, headRevision, settingsRevision, profileRevision, refreshKey]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Pending snapshots and branch/head changes restart polling; local edits keep the existing timer.
+  }, [active, chatId, headRevision, settingsRevision, profileRevision, refreshKey]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Pending snapshots and head changes restart polling; local edits keep the existing timer.
   useEffect(() => {
     if (
       !active ||
@@ -123,7 +121,7 @@ function StoryPanelEditor({
       void load();
     }, 1500);
     return () => clearInterval(timer);
-  }, [active, detail, chatId, branchId, headRevision]);
+  }, [active, detail, chatId, headRevision]);
   async function act(path: string, body: unknown = {}, success?: () => void, method = 'POST') {
     if (actionLock.current) return false;
     const valid = capture();
@@ -185,7 +183,7 @@ function StoryPanelEditor({
       return false;
     return act(
       `${base}/scene-commands`,
-      { label: commandLabel, request: commandText, branchId, idempotencyKey: commandKey.current },
+      { label: commandLabel, request: commandText, idempotencyKey: commandKey.current },
       () => {
         setCommandLabel('');
         setCommandText('');
@@ -212,7 +210,6 @@ function StoryPanelEditor({
       {message && <p role="status">{message}</p>}
       <ContextPanel
         chatId={chatId}
-        branchId={branchId}
         headRevision={headRevision}
         notes={detail?.notes}
         notesRevision={detail?.notesRevision}

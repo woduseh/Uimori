@@ -168,7 +168,6 @@ function authoredState(f: ReturnType<typeof fixture>) {
   return [
     'versions',
     'chats',
-    'branches',
     'profiles',
     'sources',
     'source_edits',
@@ -627,7 +626,6 @@ test('selected ID distinguishes same-name bots and reserved chat, live library a
   const conversation = f.runtime.workspace.open({
     kind: 'chat',
     chatId: chat.id,
-    branchId: `main:${chat.id}`,
   });
   const editor = {
     kind: 'content' as const,
@@ -898,7 +896,6 @@ test('an entire selected passage reaches the native helper without keyword retri
   const conversation = f.runtime.workspace.open({
     kind: 'chat',
     chatId: chat.id,
-    branchId: `main:${chat.id}`,
   });
   const before = authoredState(f);
   const bodies = provider((wire) => {

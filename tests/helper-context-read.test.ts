@@ -56,8 +56,7 @@ async function fixture() {
     routes: { ...workspace.routes, main: { id: model.id } },
     translationPolicy: workspace.translationPolicy,
   });
-  const chat = createFixtureChat(store, 'Synthetic context read history'),
-    branch = store.product.branch(chat.id);
+  const chat = createFixtureChat(store, 'Synthetic context read history');
   for (let index = 0; index < 4; index++) {
     const current = store.chat(chat.id),
       request = `Synthetic request ${index}`;
@@ -88,13 +87,12 @@ async function fixture() {
     );
   }
   const snapshot = await prepareNativeRisuReadOnly(
-    helperWritingSnapshot(store, chat.id, branch.id, 'context'),
+    helperWritingSnapshot(store, chat.id, 'context'),
     'context'
   );
   const saved = store.context.edit(
     chat.id,
     {
-      branchId: branch.id,
       expectedRevision: 0,
       expectedHeadRevision: snapshot.parentRevision,
       idempotencyKey: 'active-summary',
@@ -104,12 +102,12 @@ async function fixture() {
   );
   let historyCount = 0,
     jobCount = 0;
-  const read = () => readHelperChatContext(store, chat.id, branch.id);
+  const read = () => readHelperChatContext(store, chat.id);
   // Populate complete validated candidates and cancelled jobs outside all measured regions.
   // They never activate, so the current model-visible state remains identical as history grows.
   async function addHistory(count: number, jobs: number) {
     const current = await prepareNativeRisuReadOnly(
-      helperWritingSnapshot(store, chat.id, branch.id, 'context'),
+      helperWritingSnapshot(store, chat.id, 'context'),
       'context'
     );
     store.transaction(() => {
@@ -137,7 +135,6 @@ async function fixture() {
         const job = store.context.schedule(
           chat.id,
           {
-            branchId: branch.id,
             expectedRevision: saved.activeRevision,
             expectedHeadRevision: current.parentRevision,
             idempotencyKey: `historical-job-${jobCount}`,
@@ -149,7 +146,7 @@ async function fixture() {
       }
     });
   }
-  return { store, chatId: chat.id, branchId: branch.id, saved, read, addHistory };
+  return { store, chatId: chat.id, saved, read, addHistory };
 }
 
 function decodedRead(store: Store, read: () => ReturnType<typeof readHelperChatContext>) {
@@ -189,17 +186,16 @@ test('helper reads decode one active checkpoint as large history grows while the
     const current = decodedRead(f.store, f.read);
     expect(current).toEqual(baseline);
   }
-  const { jobs, ...metadata } = f.store.context.detail(f.chatId, f.branchId);
+  const { jobs, ...metadata } = f.store.context.detail(f.chatId);
   expect(jobs).toHaveLength(Math.min(cancelledJobs, 10));
   expect(jobs.every((job) => !('snapshot' in job))).toBe(true);
-  expect(f.store.context.current(f.chatId, f.branchId)).toEqual(metadata);
+  expect(f.store.context.current(f.chatId)).toEqual(metadata);
 });
 
 test('active-only reads recheck current notes and preserve active checkpoint hash validation', async () => {
   const f = await fixture(),
     before = f.read();
   f.store.story.notes.write(f.chatId, {
-    branchId: f.branchId,
     expectedRevision: before.notesRevision,
     expectedHeadRevision: before.headRevision,
     idempotencyKey: 'new-correction',
@@ -207,7 +203,7 @@ test('active-only reads recheck current notes and preserve active checkpoint has
     text: 'The old derived promise was corrected by the user.',
   });
   const after = f.read(),
-    { jobs: _jobs, ...metadata } = f.store.context.detail(f.chatId, f.branchId);
+    { jobs: _jobs, ...metadata } = f.store.context.detail(f.chatId);
   expect(after.checkpoint).toEqual(before.checkpoint);
   expect(after).toMatchObject({
     activeRevision: before.activeRevision,
@@ -216,7 +212,7 @@ test('active-only reads recheck current notes and preserve active checkpoint has
   });
   expect(after.invalidReason).toBeTruthy();
   expect(after.notes).toHaveLength(1);
-  expect(f.store.context.current(f.chatId, f.branchId)).toEqual(metadata);
+  expect(f.store.context.current(f.chatId)).toEqual(metadata);
   f.store.db
     .prepare("UPDATE context_checkpoints SET plan=json_set(plan,'$.summary',?) WHERE id=?")
     .run('Corrupted active summary', before.checkpoint!.id);

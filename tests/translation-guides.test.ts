@@ -161,14 +161,17 @@ test('guide survives restart, native projection, independent resource and chat b
   const chat = story(source, original);
   const bundle = exportResourceBundle(source, [{ kind: 'content', id: original.id }]);
   const target = database();
-  const imported = importResourceBundle(target, {
+  const bundleInput = {
     file: bundle,
     digest: inspectBundle(bundle).digest,
     idempotencyKey: randomUUID(),
-  });
+  };
+  const imported = importResourceBundle(target, bundleInput);
   const copy = target.product.get<Content>('content', imported.items[0].id);
   expect(copy.id).not.toBe(original.id);
+  expect(copy.text).toBe(original.text);
   expect(readTranslationGuide(copy.package.nativeRisu.card)).toEqual(guide);
+  expect(importResourceBundle(target, bundleInput)).toEqual({ ...imported, created: false });
   const portable = await importChatBackup(target, {
     backup: exportChatBackup(source, chat.id),
     idempotencyKey: randomUUID(),

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { postFixtureChat } from './fixtures/chat.js';
 
 test('READERREC confirming an uncertain request never turns into cancelling its admitted run', async ({
@@ -70,47 +71,50 @@ test('READERREC confirming an uncertain request never turns into cancelling its 
   expect((await (await request.get(`/api/chats/${chat.id}`)).json()).runs).toHaveLength(1);
 });
 
-test('READERREC pending request survives reload on the current chat branch', async ({
+test('READERREC converts an old pending request once and keeps its admission key through reload', async ({
   page,
   request,
 }) => {
   const chat = await (
     await postFixtureChat(request, { data: { title: 'Pending recovery' } })
   ).json();
-  const branch = (await (await request.get(`/api/chats/${chat.id}`)).json()).branch;
+  const oldScope = `main:${chat.id}`;
+  const oldKey = `command:${chat.id}:${oldScope}`;
   const commandKey = `command:${chat.id}`;
   await page.addInitScript(
-    ({ commandKey, chat, branch }) => {
+    ({ oldKey, chat, oldScope }) => {
       sessionStorage.setItem(
-        commandKey,
+        oldKey,
         JSON.stringify({
           id: 'pending-synthetic-command',
           payload: JSON.stringify({
             request: '보존된 이전 요청',
-            branchId: branch.id,
+            branchId: oldScope,
             expectedRevision: null,
             expectedSettingsRevision: chat.settingsRevision,
           }),
         })
       );
     },
-    { commandKey, chat, branch }
+    { oldKey, chat, oldScope }
   );
   const payloads: unknown[] = [];
   await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
     payloads.push(route.request().postDataJSON());
     await route.abort('failed');
   });
-  await page.goto(`/?chat=${chat.id}`);
+  await page.goto(`/?chat=${chat.id}&branch=${encodeURIComponent(oldScope)}`);
+  await expect(page).not.toHaveURL(/branch=/u);
   await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), oldKey)).toBeNull();
   await page.reload();
   await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
   await expect.poll(() => payloads.length).toBe(1);
   expect(payloads[0]).toMatchObject({
     request: '보존된 이전 요청',
-    branchId: branch.id,
     idempotencyKey: 'pending-synthetic-command',
   });
+  expect(payloads[0]).not.toHaveProperty('branchId');
   expect(await page.evaluate((key) => sessionStorage.getItem(key), commandKey)).not.toBeNull();
 });
 
@@ -129,6 +133,45 @@ test('READERREC invalid view caches do not prevent opening a saved conversation'
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toHaveValue('살아 있는 초안');
   expect(errors).toEqual([]);
+});
+
+test('READERREC keeps conflicting local drafts and lets the user download the untouched record', async ({
+  page,
+  request,
+}) => {
+  const chat = await (
+    await postFixtureChat(request, { data: { title: 'Local draft collision' } })
+  ).json();
+  await page.addInitScript((id) => {
+    sessionStorage.setItem(`draft:${id}`, '현재 초안');
+    sessionStorage.setItem(`draft:${id}:main:${id}`, '이전 분기 초안');
+  }, chat.id);
+  let submissions = 0;
+  page.on('request', (item) => {
+    if (item.method() === 'POST' && item.url().endsWith(`/chats/${chat.id}/runs`)) submissions++;
+  });
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toHaveValue('현재 초안');
+  await expect(
+    page.getByText('이전 브라우저 기록 1개를 옮기지 못했어요.', { exact: false })
+  ).toBeVisible();
+  const downloadEvent = page.waitForEvent('download');
+  await page.getByRole('button', { name: '이전 기록 내려받기' }).click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe('uimori-previous-browser-records.json');
+  const saved = JSON.parse(readFileSync((await download.path())!, 'utf8'));
+  expect(saved.records).toEqual([
+    {
+      storage: 'session',
+      key: `draft:${chat.id}:main:${chat.id}`,
+      reason: 'conflict',
+      value: '이전 분기 초안',
+    },
+  ]);
+  expect(
+    await page.evaluate((id) => sessionStorage.getItem(`draft:${id}:main:${id}`), chat.id)
+  ).toBe('이전 분기 초안');
+  expect(submissions).toBe(0);
 });
 
 test('READERREC failed command persistence prevents generation and preserves the draft', async ({

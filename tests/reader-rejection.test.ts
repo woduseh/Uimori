@@ -35,13 +35,12 @@ async function setup() {
   return app;
 }
 function newRun(store: Store, chatId: string) {
-  const chat = store.chat(chatId),
-    branch = store.product.branch(chatId);
+  const chat = store.chat(chatId);
   const run = store.createRun(
     chatId,
     {
       request: 'Synthetic request',
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       idempotencyKey: randomUUID(),
     },

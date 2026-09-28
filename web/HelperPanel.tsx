@@ -148,11 +148,8 @@ export function HelperPanel(props: Props) {
   const data = useHelperConversation(props.open && props.ready !== false, sessions.currentId);
   const conversation = data.current?.conversation ?? null;
   const scope = conversation?.scope ?? props.scope;
-  const branchMismatch =
-    scope.kind === 'chat' &&
-    (props.scope.kind !== 'chat' ||
-      scope.chatId !== props.scope.chatId ||
-      scope.branchId !== props.scope.branchId);
+  const scopeMismatch =
+    scope.kind === 'chat' && (props.scope.kind !== 'chat' || scope.chatId !== props.scope.chatId);
   const messages = (data.current?.messages ?? [])
     .filter((message) => !message.latestTaskId || message.latestTaskId === message.taskId)
     .sort((a, b) =>
@@ -452,7 +449,7 @@ export function HelperPanel(props: Props) {
     if (
       props.ready === false ||
       !hydrated[scopeKey] ||
-      branchMismatch ||
+      scopeMismatch ||
       locks.current.has(scopeKey) ||
       (!saved && (!conversation || !draft.trim()))
     )
@@ -596,7 +593,7 @@ export function HelperPanel(props: Props) {
   async function retry(task: HelperTaskView, text = task.request) {
     if (
       props.ready === false ||
-      branchMismatch ||
+      scopeMismatch ||
       !conversation ||
       outbox ||
       busy ||
@@ -663,7 +660,7 @@ export function HelperPanel(props: Props) {
           <RetryFailure
             status={task.status}
             error={task.error}
-            disabled={branchMismatch || busy || Boolean(outbox)}
+            disabled={scopeMismatch || busy || Boolean(outbox)}
             onRetry={task.completedEffects ? undefined : () => void retry(task)}
             onSettings={props.onModelSettings}
             onDetails={() => setTaskHistory({ taskId: task.id })}
@@ -756,8 +753,8 @@ export function HelperPanel(props: Props) {
           void sessions.reload().catch((cause) => setError(cause.message));
         }}
       />
-      {branchMismatch && scope.kind === 'chat' && (
-        <div className="helper-branch-notice" role="status">
+      {scopeMismatch && scope.kind === 'chat' && (
+        <div className="helper-scope-notice" role="status">
           <p>현재 채팅과 다른 도우미 기록이에요. 새 요청과 변경은 현재 채팅의 세션에서 진행해요.</p>
         </div>
       )}
@@ -858,7 +855,7 @@ export function HelperPanel(props: Props) {
             title="도우미 설정 저장"
             disabled={
               props.ready === false ||
-              branchMismatch ||
+              scopeMismatch ||
               savingPersona ||
               persona.revision !== conversation.revision ||
               persona.limits.totalCalls < 2 ||
@@ -869,7 +866,7 @@ export function HelperPanel(props: Props) {
               persona.limits.artifacts > 10
             }
             onClick={() => {
-              if (props.ready === false || branchMismatch) return;
+              if (props.ready === false || scopeMismatch) return;
               setSavingPersona(true);
               void api<HelperConversation>(
                 `/helper/conversations/${conversation.id}`,
@@ -964,7 +961,7 @@ export function HelperPanel(props: Props) {
                   request={message.text}
                   maxLength={REQUEST_TEXT_MAX_CHARS}
                   editHint="수정한 요청으로 같은 자리에서 다시 시도해요."
-                  disabled={branchMismatch || busy || Boolean(outbox)}
+                  disabled={scopeMismatch || busy || Boolean(outbox)}
                   onSubmit={
                     taskMap.get(message.taskId) &&
                     !active(taskMap.get(message.taskId)!) &&
@@ -984,7 +981,7 @@ export function HelperPanel(props: Props) {
                   conversationId={conversation.id}
                   key={`${artifact.id}:${artifact.revision}`}
                   {...artifact}
-                  readOnly={branchMismatch}
+                  readOnly={scopeMismatch}
                   onRevise={(value) => {
                     editDraft(
                       `가정 장면 ${value.id} 개정 ${value.revision}을 다음과 같이 수정해줘: `
@@ -1136,7 +1133,7 @@ export function HelperPanel(props: Props) {
               disabled={
                 props.ready === false ||
                 !hydrated[scopeKey] ||
-                branchMismatch ||
+                scopeMismatch ||
                 !conversation ||
                 conversation.id !== outbox.targetConversationId
               }
@@ -1151,7 +1148,7 @@ export function HelperPanel(props: Props) {
                 disabled={
                   props.ready === false ||
                   !hydrated[scopeKey] ||
-                  branchMismatch ||
+                  scopeMismatch ||
                   !conversation ||
                   conversation.id !== outbox.targetConversationId
                 }
@@ -1279,7 +1276,7 @@ export function HelperPanel(props: Props) {
               disabled={
                 props.ready === false ||
                 !hydrated[scopeKey] ||
-                branchMismatch ||
+                scopeMismatch ||
                 busy ||
                 data.loading ||
                 !conversation ||

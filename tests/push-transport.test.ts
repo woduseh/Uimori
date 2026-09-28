@@ -23,7 +23,6 @@ const envelope: PushEnvelope = {
   kind: 'main-completed',
   tag: 'uimori-stable-task',
   chatId: 'chat-1',
-  branchId: 'main:chat-1',
   sourceId: 'source-1',
   representation: 'original',
 };
@@ -183,7 +182,6 @@ test('actual service-worker code shows a generic visible notification and focuse
       type: 'uimori:notification-open',
       payload: {
         chatId: 'chat-1',
-        branchId: 'main:chat-1',
         sourceId: 'source-1',
         representation: 'original',
       },

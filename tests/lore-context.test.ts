@@ -81,20 +81,19 @@ function update(f: ReturnType<typeof fixture>, changes: Partial<ChatProfile>) {
 }
 async function queue(
   f: ReturnType<typeof fixture>,
-  options: { loreContextReset?: boolean; branchId?: string; idempotencyKey?: string } = {}
+  options: { loreContextReset?: boolean; idempotencyKey?: string } = {}
 ) {
   const { store, chat } = f,
     current = store.chat(chat.id),
     profile = store.product.snapshot(chat.id)!;
-  const branch = store.product.branch(chat.id, options.branchId),
-    command = {
-      request: 'Continue synthetic scene',
-      expectedRevision: branch.headRevision,
-      expectedSettingsRevision: current.settingsRevision,
-      expectedProfileRevision: profile.revision,
-      idempotencyKey: randomUUID(),
-      ...options,
-    };
+  const command = {
+    request: 'Continue synthetic scene',
+    expectedRevision: current.headRevision,
+    expectedSettingsRevision: current.settingsRevision,
+    expectedProfileRevision: profile.revision,
+    idempotencyKey: randomUUID(),
+    ...options,
+  };
   const result = store.createRun(chat.id, command, (c) => ({
     chatId: c.id,
     parentRevision: c.headRevision,

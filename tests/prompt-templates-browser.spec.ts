@@ -58,8 +58,38 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
     [DESKTOP_WIDTH, 'hermeneia', 'Hermēneía', 'translation'],
   ] as const) {
     await page.setViewportSize({ width, height: 1000 });
+    if (width === MOBILE_WIDTH) {
+      const actions = [
+        panel.getByRole('button', { name: '프롬프트 가져오기', exact: true }),
+        panel.getByRole('button', { name: '현재 프롬프트 설정', exact: true }),
+        panel.getByRole('button', { name: '기본 프롬프트', exact: true }),
+        panel.getByRole('button', { name: '새 프롬프트', exact: true }).first(),
+      ];
+      const search = panel.getByRole('searchbox', { name: '프롬프트 검색', exact: true });
+      for (const control of [...actions, search]) await expect(control).toBeInViewport();
+      const boxes = await Promise.all(actions.map((control) => control.boundingBox()));
+      const searchBox = await search.boundingBox();
+      expect(Math.max(...boxes.map((box) => box!.y))).toBeLessThan(
+        Math.min(...boxes.map((box) => box!.y + box!.height))
+      );
+      expect(searchBox!.y).toBeGreaterThanOrEqual(
+        Math.min(...boxes.map((box) => box!.y + box!.height))
+      );
+      expect(
+        await panel
+          .locator('.library-toolbar')
+          .evaluate((node) => node.scrollWidth <= node.clientWidth + 1)
+      ).toBe(true);
+    }
     await panel.getByRole('button', { name: '기본 프롬프트', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '기본 프롬프트', exact: true });
+    if (width === MOBILE_WIDTH) {
+      const bounds = await dialog.boundingBox();
+      expect(bounds!.x).toBeLessThanOrEqual(1);
+      expect(bounds!.y).toBeLessThanOrEqual(1);
+      expect(bounds!.width).toBeGreaterThanOrEqual(MOBILE_WIDTH - 1);
+      expect(bounds!.height).toBeGreaterThanOrEqual(999);
+    }
     await expect(dialog.getByRole('listitem')).toHaveCount(5);
     await expect(dialog.getByRole('heading', { level: 3 })).toHaveText(titles);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(

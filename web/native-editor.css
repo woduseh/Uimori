@@ -210,12 +210,6 @@
   grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
   gap: 20px;
 }
-.native-setting-group {
-  display: grid;
-  gap: 20px;
-  padding-top: 24px;
-  border-top: 1px solid var(--line);
-}
 .native-advanced {
   border-top: 1px solid var(--line);
   padding-top: 16px;
@@ -480,10 +474,6 @@
   flex-direction: row;
   flex-wrap: nowrap;
 }
-.prompt-editor-heading .prompt-save-scope {
-  order: -1;
-  flex: none;
-}
 .prompt-editor-heading .prompt-management-menu > .action-menu-body {
   top: calc(100% + 4px);
   bottom: auto;
@@ -502,9 +492,6 @@
   .library-page-editing .library-content-editor > .library-detail-heading {
     padding: 8px 16px;
     gap: 8px;
-  }
-  .prompt-editor-heading .prompt-save-scope {
-    display: none;
   }
   .prompt-editor-heading > h2,
   .library-page-editing .library-content-editor > .library-detail-heading > h2 {
@@ -542,24 +529,7 @@
 .native-editor > .section-navigation > button[aria-selected="true"] {
   background: transparent;
 }
-.editor-draft-status-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.editor-draft-dialog {
-  width: min(720px, 100%);
-}
 @media (max-width: 760px) {
-  .editor-draft-status-button {
-    padding-inline: 8px;
-  }
-  .editor-draft-status-button > span {
-    display: none;
-  }
   .prompt-editor .native-editor textarea {
     font-size: 16px;
   }

@@ -213,12 +213,7 @@ export function freezeLoreContext(store: Store, snapshot: RunSnapshot): RunSnaps
     store.story.notes.scope(snapshot.chatId, snapshot.parentRevision)
   );
   const retained = snapshot.parentRevision
-    ? readLoreRetention(
-        store,
-        snapshot.chatId,
-        snapshot.branchId ?? `main:${snapshot.chatId}`,
-        snapshot.parentRevision
-      )
+    ? readLoreRetention(store, snapshot.chatId, snapshot.parentRevision)
     : undefined;
   let parentEligible = false;
   if (retained && snapshot.parentRevision && currentDependencies(store, snapshot)) {

@@ -42,7 +42,6 @@ export type OutlineProgress = {
 export type OutlineNode = {
   id: string;
   chatId: string;
-  branchId: string;
   parentId: string | null;
   level: OutlineLevel;
   position: number;
@@ -86,7 +85,7 @@ export type OutlineHelperContext = {
   partial: boolean;
 };
 
-export type OutlineDetail = { chatId: string; branchId: string; nodes: OutlineNode[] };
+export type OutlineDetail = { chatId: string; nodes: OutlineNode[] };
 
 /** Frozen composition for one writing run: the applied upper intent and the target's own plan. */
 export type OutlineSnapshotNode = {
@@ -103,7 +102,7 @@ export type OutlineSnapshot = {
   path: OutlineSnapshotNode[];
   /** The target's direct children only; deeper levels stay out of one request's input. */
   children: OutlineSnapshotNode[];
-  /** Sibling units already written on this branch, so the request knows what precedes it. */
+  /** Sibling units already written in this chat, so the request knows what precedes it. */
   written: { id: string; level: OutlineLevel; title: string; sourceRevision: string }[];
   related?: OutlineSnapshotNode[];
   /** Actual existing source references for this unit and its descendants, never planned events. */

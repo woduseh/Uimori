@@ -64,7 +64,7 @@ export function freezeReservationSnapshot(
   }
 
   if (reserved && base.profile) {
-    new ChatOptionsStore(store).freeze(base.profile, base.branchId!, options.runId);
+    new ChatOptionsStore(store).freeze(base.profile, options.runId);
     const roots =
       base.profile.chatOverrides?.roots ??
       store.product.profile(base.chatId).packageAttachments ??
@@ -74,8 +74,7 @@ export function freezeReservationSnapshot(
     else delete base.profile.chatOverrides;
   }
   if (base.profile && !translationPreview) {
-    const branchId = base.branchId ?? store.product.branch(base.chatId).id;
-    base = { ...base, profile: chatVariableProfile(store, base.chatId, branchId, base.profile) };
+    base = { ...base, profile: chatVariableProfile(store, base.chatId, base.profile) };
     if ((reserved || base.profile?.variableState) && base.profile?.packageAttachments?.length)
       base.resources = [
         ...base.resources.filter((resource) => !resource.id.startsWith('package:')),

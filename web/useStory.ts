@@ -28,6 +28,11 @@ import {
   retainReaderNavigation,
   type ReaderNavigationPosition,
 } from './reader-navigation-scroll.js';
+import {
+  convertLegacyLocalState,
+  downloadUnconvertedLocalState,
+  type LocalConversionWarning,
+} from './legacy-local-conversion.js';
 
 const lastWorkspaceKey = 'uimori:last-workspace';
 function semanticReaderTarget(search: string): ReaderTarget | null {
@@ -53,7 +58,6 @@ function initialView(restore = false) {
   }
   return {
     chat,
-    branch: params.get('branch') || '',
     source: params.get('source') || '',
     destination:
       chat && params.get('workspace') !== 'library' ? ('story' as const) : ('library' as const),
@@ -67,7 +71,6 @@ type RunPayload = {
   request: string;
   expectedRevision: string | null;
   expectedSettingsRevision: number;
-  branchId?: string;
   expectedProfileRevision?: number;
 };
 type PendingCommand = { payload: string; id: string; preserveDraft?: boolean; startedAt?: string };
@@ -97,7 +100,7 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
     )
       return null;
     if (
-      (payload.branchId !== undefined && typeof payload.branchId !== 'string') ||
+      Object.hasOwn(payload, 'branchId') ||
       (payload.expectedProfileRevision !== undefined &&
         !Number.isInteger(payload.expectedProfileRevision))
     )
@@ -125,11 +128,16 @@ function clearCommand(key: string, id: string) {
 type Position = ReadingPosition;
 export function useStory() {
   const { workspace: promptWorkspace } = usePromptWorkspace();
-  const [initial] = useState(() => initialView(true));
+  const [startup] = useState(() => {
+    const view = initialView(true);
+    return { view, warnings: convertLegacyLocalState(view.chat ? [view.chat] : []) };
+  });
+  const initial = startup.view;
+  const [localWarnings, setLocalWarnings] = useState<LocalConversionWarning[]>(startup.warnings);
   const [chats, setChats] = useState<Chat[]>([]);
   const [view, setView] = useState<ReaderNavigation>(() => ({ ...initial, epoch: 0 }));
   const navigation = useRef(view);
-  const { chat: selected, branch: viewedBranch, source: readSource, destination } = view;
+  const { chat: selected, source: readSource, destination } = view;
   const [loadedDetail, setDetail] = useState<ReaderDetail | null>(null);
   const [library, setLibrary] = useState<Library | null>(null);
   const [libraryError, setLibraryError] = useState('');
@@ -164,6 +172,11 @@ export function useStory() {
     }
   }, [destination, selected, detail]);
   useEffect(() => {
+    const url = new URL(location.href);
+    if (url.searchParams.has('branch')) {
+      url.searchParams.delete('branch');
+      history.replaceState(history.state, '', url);
+    }
     if (initial.chat && !location.search && !location.hash)
       history.replaceState(null, '', `?${new URLSearchParams({ chat: initial.chat })}`);
   }, [initial]);
@@ -175,10 +188,8 @@ export function useStory() {
   const restoredView = useRef('');
   const cancelNavigationScroll = useRef<(() => void) | null>(null);
   const latestIntent = useRef<{ epoch: number; source: string } | null>(null);
-  const readerQuery = useRef({ chat: '', branch: '', source: '', key: '', epoch: 0 });
+  const readerQuery = useRef({ chat: '', source: '', key: '', epoch: 0 });
   const readerCache = useRef<{ key: string; detail: ReaderDetail } | null>(null);
-  // Keep the resolved storage identity while a source-page refresh clears its content.
-  const currentScope = useRef<{ chatId: string; id: string } | null>(null);
   const navigate = useCallback((action: ReaderNavigationAction) => {
     const previous = navigation.current;
     const next = transitionReaderNavigation(previous, action);
@@ -189,30 +200,22 @@ export function useStory() {
     }
     setView(next);
   }, []);
-  // Existing URLs can name the stored scope; the server validates it against this chat.
-  if (detail) currentScope.current = detail.branch;
-  const activeBranchId =
-    viewedBranch || (currentScope.current?.chatId === selected ? currentScope.current.id : '');
-  // Preserve existing browser storage addresses, including historical non-main scope IDs.
-  const storageBranch = activeBranchId === `main:${selected}` ? '' : activeBranchId;
-  const savedPosition = readReadingPosition(`reading:${selected}:${storageBranch}`);
+  const savedPosition = readReadingPosition(`reading:${selected}`);
   readerQuery.current = {
     chat: selected,
     epoch: view.epoch,
-    branch: activeBranchId,
     source:
-      !activeBranchId && !readSource
+      !selected && !readSource
         ? ''
         : (savedPosition?.target === readSource ? savedPosition?.source : readSource) ||
           savedPosition?.source ||
           '',
-    key: `${selected}:${activeBranchId}:${readSource}`,
+    key: `${selected}:${readSource}`,
   };
   const readingSync = useReadingSync({
-    chatId: destination === 'story' && activeBranchId ? selected : '',
-    branchId: activeBranchId,
+    chatId: destination === 'story' ? selected : '',
     reader,
-    storageKey: `reading:${selected}:${storageBranch}`,
+    storageKey: `reading:${selected}`,
     onResume: (target) => openTarget(target),
     saveLocal: () => savePosition(),
   });
@@ -229,10 +232,7 @@ export function useStory() {
       const epoch = navigation.current.epoch;
       const query = readerQuery.current;
       const cached = readerCache.current?.key === query.key ? readerCache.current.detail : null;
-      const params = new URLSearchParams({
-        branch: query.branch,
-        source: cached?.reader?.order[0] || query.source,
-      });
+      const params = new URLSearchParams({ source: cached?.reader?.order[0] || query.source });
       if (incremental && cached?.reader) {
         params.set('since', String(cached.reader.cursor));
         params.set('known', cached.reader.order.join(','));
@@ -252,7 +252,7 @@ export function useStory() {
           readerQuery.current.key !== query.key
         )
           return;
-        const rebasedParams = new URLSearchParams({ branch: query.branch });
+        const rebasedParams = new URLSearchParams();
         value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
         replacementSource =
           value.reader.navigation[Math.min(cached.reader.start, value.reader.navigation.length - 1)]
@@ -295,9 +295,8 @@ export function useStory() {
         let cacheKey = query.key;
         if (replacementSource !== undefined) {
           restoredView.current = '';
-          const storageBranch = query.branch === `main:${id}` ? '' : query.branch;
-          sessionStorage.removeItem(`reading:${id}:${storageBranch}`);
-          cacheKey = `${id}:${query.branch}:${replacementSource}`;
+          sessionStorage.removeItem(`reading:${id}`);
+          cacheKey = `${id}:${replacementSource}`;
           readerQuery.current = { ...query, source: replacementSource, key: cacheKey };
           navigate({ kind: 'rebase-source', source: replacementSource });
           const url = new URL(location.href);
@@ -320,12 +319,23 @@ export function useStory() {
     [refresh]
   );
   const chatsRequest = useRef(0);
+  const localConversionDone = useRef(false);
   const loadChats = useCallback(async () => {
     const request = ++chatsRequest.current;
     const selectedAtRequest = navigation.current.chat,
       epoch = navigation.current.epoch;
     const chats = await api<Chat[]>('/chats');
     if (chatsRequest.current !== request) return;
+    if (!localConversionDone.current) {
+      localConversionDone.current = true;
+      const warnings = convertLegacyLocalState(chats.map((chat) => chat.id));
+      setLocalWarnings((old) => [
+        ...old,
+        ...warnings.filter(
+          (item) => !old.some((prior) => prior.storage === item.storage && prior.key === item.key)
+        ),
+      ]);
+    }
     setChats(chats);
     if (
       selectedAtRequest &&
@@ -338,7 +348,7 @@ export function useStory() {
       readerCache.current = null;
       setDetail(null);
       const url = new URL(location.href);
-      for (const key of ['chat', 'branch', 'source']) url.searchParams.delete(key);
+      for (const key of ['chat', 'source']) url.searchParams.delete(key);
       history.replaceState(null, '', url);
     }
   }, [navigate]);
@@ -469,7 +479,7 @@ export function useStory() {
     return () => {
       alive = false;
     };
-  }, [selected, activeBranchId, readSource, destination, view.epoch, refresh]);
+  }, [selected, readSource, destination, view.epoch, refresh]);
   const attachmentKey = [...(detail?.profile?.packageAttachments ?? [])].map(refValue).join(',');
   // biome-ignore lint/correctness/useExhaustiveDependencies: Current content reads follow IDs/revisions, library changes and chat switches, not SSE object identity.
   useEffect(() => {
@@ -489,8 +499,8 @@ export function useStory() {
       alive = false;
     };
   }, [attachmentKey, library, selected]);
-  const viewKey = `${selected}:${storageBranch}`;
-  const draftKey = `draft:${selected}${storageBranch ? `:${storageBranch}` : ''}`;
+  const viewKey = selected;
+  const draftKey = `draft:${selected}`;
   currentDraftKey.current = draftKey;
   currentView.current = viewKey;
   // biome-ignore lint/correctness/useExhaustiveDependencies: Leaving this navigation scope releases its resize observer, even before new content mounts.
@@ -522,14 +532,14 @@ export function useStory() {
             const article = document.getElementById(`source-${intent.sourceId}`);
             if (article && node.contains(article)) {
               explicitReadingIntent.current = null;
-              const target = captureReaderLocation(node, selected, activeBranchId, article);
+              const target = captureReaderLocation(node, selected, article);
               if (target) readingSync.remember(target);
             }
           }
         }
       );
     },
-    [selected, viewKey, activeBranchId, readingSync.remember]
+    [selected, viewKey, readingSync.remember]
   );
   const savePosition = useCallback(() => {
     const node = reader.current;
@@ -587,17 +597,15 @@ export function useStory() {
     sessionStorage.setItem(draftKey, value);
   }
   function editLoreContextReset(value: boolean) {
-    if (readCommand(commandStorageKey(selected, storageBranch))) return;
+    if (readCommand(commandStorageKey(selected))) return;
     setLoreResetDraft(value);
     if (value) sessionStorage.setItem(`lore-reset:${draftKey}`, 'true');
     else sessionStorage.removeItem(`lore-reset:${draftKey}`);
   }
-  const branch = detail?.branch;
   const inputTranslation = useInputTranslation({
     draftKey,
     epoch: view.epoch,
     chatId: selected,
-    branchId: branch?.id,
     readDraft: () => ({
       ...draftIdentity.current,
       key: currentDraftKey.current,
@@ -609,7 +617,7 @@ export function useStory() {
       navigation.current.destination === 'story' &&
       navigation.current.chat === selected &&
       !submitLocks.current.has(viewKey) &&
-      !readCommand(commandStorageKey(selected, activeBranchId)) &&
+      !readCommand(commandStorageKey(selected)) &&
       !sessionStorage.getItem(`pending-profile:${selected}`),
   });
   const sources = useMemo(() => detail?.sources ?? [], [detail]);
@@ -693,9 +701,8 @@ export function useStory() {
     });
     return () => cancelAnimationFrame(frame);
   }, [detail, selected, viewKey, readSource, destination, holdNavigationPosition, readerTarget]);
-  const setViewUrl = (chat: string, branchId = '', source = '') => {
+  const setViewUrl = (chat: string, source = '') => {
     const params = new URLSearchParams({ chat });
-    if (branchId) params.set('branch', branchId);
     if (source) params.set('source', source);
     history.pushState(null, '', `?${params}`);
   };
@@ -714,7 +721,7 @@ export function useStory() {
     savePosition();
     navigate({ kind: 'source', source: id });
     latestIntent.current = toEnd ? { epoch: navigation.current.epoch, source: id } : null;
-    setViewUrl(selected, viewedBranch, id);
+    setViewUrl(selected, id);
     if (id === readSource) {
       const key = currentView.current;
       const epoch = navigation.current.epoch;
@@ -757,7 +764,6 @@ export function useStory() {
       kind: 'restore',
       view: {
         chat: target.chatId,
-        branch: target.branchId,
         source: target.sourceId,
         destination: 'story',
       },
@@ -773,6 +779,11 @@ export function useStory() {
       rememberCursor();
       setReaderTarget(semanticReaderTarget(location.search));
       navigate({ kind: 'restore', view: initialView() });
+      const url = new URL(location.href);
+      if (url.searchParams.has('branch')) {
+        url.searchParams.delete('branch');
+        history.replaceState(history.state, '', url);
+      }
     };
     return subscribeAppHistory(onPop);
   }, [savePosition, rememberCursor, navigate]);
@@ -800,7 +811,7 @@ export function useStory() {
     profileDirty ||
     !detail ||
     !!sessionStorage.getItem(`pending-profile:${selected}`) ||
-    !!readCommand(commandStorageKey(selected, activeBranchId));
+    !!readCommand(commandStorageKey(selected));
   async function generate(
     retryRunId?: string,
     editedRequest?: string,
@@ -819,7 +830,7 @@ export function useStory() {
     const sentKey = draftKey;
     const sentView = viewKey;
     const sentEpoch = navigation.current.epoch;
-    const commandKey = commandStorageKey(chat.id, activeBranchId);
+    const commandKey = commandStorageKey(chat.id);
     const previous = readCommand(commandKey);
     // Recovering an uncertain admission reuses its key even if SSE already shows a running run.
     if ((!previous && activeRun()) || (retryRunId && (reuseBlocked || !canReuseRun(retryRunId))))
@@ -836,9 +847,8 @@ export function useStory() {
       ...((retryRun ? retryRun.snapshot.loreContextReset : loreResetDraft)
         ? { loreContextReset: true }
         : {}),
-      expectedRevision: branch ? branch.headRevision : chat.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
-      ...(branch ? { branchId: branch.id } : {}),
       ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}),
     };
     const preserveDraft = !!retryRun || previous?.record.preserveDraft === true;
@@ -1059,10 +1069,7 @@ export function useStory() {
         )
           throw new Error('현재 프롬프트와 옵션 정의가 일치하는 조합을 선택해 주세요.');
         if (pinnedPromptId) {
-          if (!branch) throw new Error('현재 채팅을 다시 불러와 주세요.');
-          const state = await api<ChatOptionState>(
-            `/chats/${chatId}/options?branchId=${encodeURIComponent(branch.id)}`
-          );
+          const state = await api<ChatOptionState>(`/chats/${chatId}/options`);
           if (
             state.binding.owner !== `preset:${pinnedPromptId}` ||
             !matchesPromptCombination(
@@ -1074,7 +1081,6 @@ export function useStory() {
           )
             throw new Error('채팅의 작문 프롬프트가 바뀌었어요. 옵션 조합을 다시 확인해 주세요.');
           await api(`/chats/${chatId}/options/fixed`, {
-            branchId: branch.id,
             expectedRevision: state.revision,
             operationId: crypto.randomUUID(),
             binding: state.binding,
@@ -1163,7 +1169,7 @@ export function useStory() {
     (detail.profile.packageAttachments ?? []).every((ref) =>
       allContents.some((item) => refValue(item) === refValue(ref))
     );
-  const pendingCommand = selected ? readCommand(commandStorageKey(selected, activeBranchId)) : null;
+  const pendingCommand = selected ? readCommand(commandStorageKey(selected)) : null;
   const pendingRequest = pendingCommand?.payload.request ?? null;
   const pendingEditedRunId = pendingCommand?.payload.editedRequest
     ? pendingCommand.payload.retryOf
@@ -1204,16 +1210,20 @@ export function useStory() {
         }
       : undefined);
   return {
+    legacyLocalWarning: localWarnings.length
+      ? {
+          count: localWarnings.length,
+          download: () => downloadUnconvertedLocalState(localWarnings),
+        }
+      : null,
     promptWorkspace,
     currentPrompt,
     pinnedPromptRevision: pinnedPrompt?.revision,
     requestActivity,
     chats,
     selected,
-    viewedBranch,
     readSource,
-    // Resolving the default branch may select a different saved page. Do not mount
-    // its provisional sources and start display workers before that page is loaded.
+    // Do not mount provisional sources before the selected page is loaded.
     detail: readerCache.current?.key === readerQuery.current.key ? detail : null,
     library,
     libraryError,
@@ -1235,7 +1245,6 @@ export function useStory() {
     profileAsset,
     tasks,
     pendingProfile,
-    branch,
     sources,
     visibleRuns,
     conversation,

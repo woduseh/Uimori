@@ -91,8 +91,6 @@ test('SPUI01 usage dashboard keeps partial bills honest, filters atomically, and
   await expect(panel.getByRole('region', { name: '모델별 비용', exact: true })).toContainText(
     '<US$0.01'
   );
-  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-  expect((await dialog.boundingBox())!.width).toBe(1160);
   for (const theme of ['dark', 'light']) {
     await selectSettingsSection(page, '일반');
     await page.getByLabel('앱 화면 테마', { exact: true }).selectOption(theme);

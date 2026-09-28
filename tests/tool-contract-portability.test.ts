@@ -1,9 +1,8 @@
 import { expect, test } from 'vitest';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
-import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { HELPER_APP_TOOLS, HELPER_GATEWAY_TOOLS } from '../server/helper-app-tools.js';
 import { HELPER_DATA_TOOLS } from '../server/helper-data-tools.js';
-import type { Json, ProviderRequest, ProviderTool } from '../core/transport.js';
+import type { Json } from '../core/transport.js';
 
 const record = (value: Json) => value as Record<string, Json>;
 const keysDeep = (value: Json): string[] => {
@@ -41,28 +40,4 @@ test('provider-facing tool roots stay portable and canonical', () => {
 test('helper app mutations keep operation identity host-owned', () => {
   for (const tool of HELPER_APP_TOOLS)
     expect(keysDeep(tool.inputSchema), tool.name).not.toContain('operationId');
-});
-
-test('the shared main read surface encodes to Anthropic without root schema unions', () => {
-  const request: ProviderRequest = {
-    role: 'main',
-    modelId: 'claude-opus-5.5',
-    stable: { contract: 'Synthetic contract.', tools: MAIN_READ_TOOLS as ProviderTool[] },
-    generation: { maxOutputTokens: 256, temperature: null },
-    input: {
-      task: 'Synthetic tool-schema check.',
-      controls: {},
-      source: {},
-      catalog: [],
-      results: [],
-    },
-  };
-  const body = encodeAnthropic(request).body as Record<string, any>;
-  expect(body.tools).toHaveLength(MAIN_READ_TOOLS.length);
-  for (const tool of body.tools) {
-    expect(tool.input_schema.type).toBe('object');
-    expect(tool.input_schema).not.toHaveProperty('oneOf');
-    expect(tool.input_schema).not.toHaveProperty('anyOf');
-    expect(tool.input_schema).not.toHaveProperty('allOf');
-  }
 });

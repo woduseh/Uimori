@@ -37,21 +37,17 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
     { bodyLimit: 16 * 1024 * 1024 },
     async (request, reply): Promise<InputTranslationResult> => {
       const body = record(request.body);
-      fields(body, ['text', 'targetLanguage', 'branchId']);
+      fields(body, ['text', 'targetLanguage']);
       const draft = text(body.text, 'input translation text', REQUEST_TEXT_MAX_CHARS);
       const language = inputTranslationLanguage(body.targetLanguage);
       if (!language) throw new HttpError(400, 'INPUT_TRANSLATION_LANGUAGE_INVALID');
       const chatId = request.params.id;
-      store.chat(chatId);
-      const branch = store.product.branch(
-        chatId,
-        body.branchId === undefined ? undefined : text(body.branchId, 'branchId', 200)
-      );
+      const chat = store.chat(chatId);
       const selected = workspaceModelRef(promptWorkspace(store), 'translation');
       if (!selected) throw new HttpError(409, 'MODEL_REQUIRED:translation');
       const model = store.product.modelSnapshot(selected.id, 'translation');
       const guide = currentBotTranslationGuide(store, chatId);
-      const source = branch.headRevision ? store.source(branch.headRevision) : undefined;
+      const source = chat.headRevision ? store.source(chat.headRevision) : undefined;
       const input: ProviderRequest = {
         role: 'translation',
         ...modelRequestFields(model),

@@ -36,7 +36,6 @@ function fixture() {
   input.package.nativeRisu.card.extensions = { risuai: { defaultVariables: 'mood=calm' } };
   const bot = store.product.content(input) as Content;
   const chat = createFixtureChat(store, 'Synthetic variable flow', { botId: bot.id });
-  const branch = store.product.branch(chat.id);
   const url = `/api/chats/${chat.id}/variables`;
   const reserve = async () =>
     prepareNativeFixtureRun(
@@ -45,7 +44,7 @@ function fixture() {
         chat.id,
         {
           request: 'Synthetic request',
-          expectedRevision: store.product.branch(chat.id).headRevision,
+          expectedRevision: store.chat(chat.id).headRevision,
           expectedSettingsRevision: store.chat(chat.id).settingsRevision,
           idempotencyKey: randomUUID(),
         },
@@ -64,7 +63,7 @@ function fixture() {
         }
       ).run
     );
-  return { store, app, chat, branch, bot, url, reserve };
+  return { store, app, chat, bot, url, reserve };
 }
 const noUsage = { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null };
 
@@ -74,7 +73,7 @@ test('independent rewrites start from the copied checkpoint rather than later va
   expect(old.snapshot.profile).not.toHaveProperty('variableState');
   f.store.startRun(old.id);
   const source = f.store.completeRun(old.id, 'Historical source', noUsage, old.snapshot.settings);
-  const current = readChatVariables(f.store, f.chat.id, f.branch.id);
+  const current = readChatVariables(f.store, f.chat.id);
   const saved = await f.app.inject({
     method: 'PUT',
     url: f.url,
@@ -86,13 +85,13 @@ test('independent rewrites start from the copied checkpoint rather than later va
     },
   });
   expect(saved.statusCode, saved.body).toBe(200);
-  expect(readChatVariables(f.store, f.chat.id, f.branch.id)).toEqual({
+  expect(readChatVariables(f.store, f.chat.id)).toEqual({
     revision: current.revision + 1,
     values: { mood: 'later' },
   });
   const candidate = f.store.candidate(old.id, randomUUID(), 'Historical inputs').run;
   expect(candidate.snapshot.profile).not.toHaveProperty('variableState');
-  expect(readChatVariables(f.store, candidate.chatId, candidate.snapshot.branchId!)).toEqual({
+  expect(readChatVariables(f.store, candidate.chatId)).toEqual({
     revision: 0,
     values: {},
   });

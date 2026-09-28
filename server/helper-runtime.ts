@@ -111,7 +111,6 @@ const READ_METADATA_VALUES = new Set([
   'sourceKind',
   'sceneNumber',
   'chatId',
-  'branchId',
   'headRevision',
   'headHash',
   'numbering',
@@ -251,23 +250,20 @@ type Options = Pick<
 export function helperWritingSnapshot(
   store: Store,
   chatId: string,
-  branchId: string,
   purpose: 'artifact' | 'context' = 'artifact'
 ): RunSnapshot {
   const chat = store.chat(chatId),
-    branch = store.product.branch(chatId, branchId);
-  const profile = store.product.snapshot(chatId, 'inspect', branch.headRevision);
-  new ChatOptionsStore(store).freeze(profile, branch.id);
+    profile = store.product.snapshot(chatId, 'inspect', chat.headRevision);
+  new ChatOptionsStore(store).freeze(profile);
   const iso = new Date().toISOString();
   const snapshot: RunSnapshot = {
     ...(purpose === 'artifact' ? { executionPurpose: 'artifact' as const } : {}),
     chatId,
-    branchId: branch.id,
-    parentRevision: branch.headRevision,
+    parentRevision: chat.headRevision,
     settingsRevision: chat.settingsRevision,
     settings: structuredClone(chat.settings),
     request: '도우미의 작품 문맥 조회',
-    history: store.history(branch.headRevision),
+    history: store.history(chat.headRevision),
     resources: store.product.resources(chatId, profile),
     profile,
     executionClock: { iso, unix: Math.floor(Date.parse(iso) / 1000) },
@@ -334,7 +330,7 @@ export class HelperRuntime {
     if (selection) {
       if (scope.kind !== 'chat') throw new HttpError(403, 'SELECTION_OUTSIDE_SCOPE');
       const source = this.store
-        .history(this.store.product.branch(scope.chatId, scope.branchId).headRevision)
+        .history(this.store.chat(scope.chatId).headRevision)
         .find((item) => item.revision === selection.sourceId);
       if (!source || (source.contentHash ?? sourceHash(source.text)) !== selection.sourceHash)
         throw new HttpError(409, '선택한 원문이 변경됐어요. 다시 선택해 주세요.');
@@ -344,7 +340,6 @@ export class HelperRuntime {
       outlineTarget && scope.kind === 'chat'
         ? this.store.outline.helperContext(
             scope.chatId,
-            scope.branchId,
             outlineTarget,
             contextBudgetForModel(model).inputTokenLimit
           )
@@ -376,7 +371,7 @@ export class HelperRuntime {
             }
           : {}),
         ...(scope.kind === 'chat'
-          ? { writing: helperWritingSnapshot(this.store, scope.chatId, scope.branchId) }
+          ? { writing: helperWritingSnapshot(this.store, scope.chatId) }
           : {}),
         ...(editor ? { editor } : {}),
         ...(selection ? { selection } : {}),
@@ -721,11 +716,13 @@ export class HelperRuntime {
               .update(`${task.id}\0${wireCall.id}`)
               .digest('hex');
             const dataTool = HELPER_DATA_TOOLS.some((tool) => tool.name === call.name);
+            if (Object.hasOwn(arguments_, 'branchId'))
+              throw new HttpError(400, 'Unknown helper target field');
             const targeted =
-              !dataTool && (arguments_.chatId !== undefined || arguments_.branchId !== undefined)
+              !dataTool && arguments_.chatId !== undefined
                 ? this.targetTask(task, arguments_)
                 : task;
-            const { chatId: _chatId, branchId: _branchId, ...appArgs } = arguments_;
+            const { chatId: _chatId, ...appArgs } = arguments_;
             const toolArgs = dataTool ? arguments_ : appArgs;
             const editor = task.snapshot.editor;
             const editsResource =
@@ -1124,16 +1121,13 @@ export class HelperRuntime {
       args.chatId === undefined && current.kind === 'chat'
         ? current.chatId
         : text(args.chatId, 'chat ID', 100);
-    const branch = this.store.product.branch(
-      chatId,
-      args.branchId === undefined ? undefined : text(args.branchId, 'branch ID', 100)
-    );
+    this.store.chat(chatId);
     return {
       ...task,
       snapshot: {
         ...task.snapshot,
-        scope: { kind: 'chat', chatId, branchId: branch.id },
-        writing: helperWritingSnapshot(this.store, chatId, branch.id, 'context'),
+        scope: { kind: 'chat', chatId },
+        writing: helperWritingSnapshot(this.store, chatId, 'context'),
       },
     };
   }
@@ -1171,12 +1165,11 @@ export class HelperRuntime {
     if (name === 'chat.read') {
       if (scope.kind !== 'chat')
         throw new HttpError(400, 'chat.list로 채팅을 찾고 chatId를 지정해 주세요.');
-      const branch = this.store.product.branch(scope.chatId, scope.branchId);
+      const chat = this.store.chat(scope.chatId);
       return {
-        chat: this.store.chat(scope.chatId),
-        branch,
+        chat,
         messages: this.store
-          .history(branch.headRevision)
+          .history(chat.headRevision)
           .map(({ revision, contentHash }) => ({ id: revision, hash: contentHash })),
       };
     }
@@ -1186,7 +1179,7 @@ export class HelperRuntime {
       if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
       const service = new ChatOverridesStore(this.store);
       if (args.action === 'read') {
-        const current = service.get(scope.chatId, scope.branchId);
+        const current = service.get(scope.chatId);
         return {
           ...current,
           attachments: current.attachments.map((attachment) => ({
@@ -1205,7 +1198,7 @@ export class HelperRuntime {
       if (args.action !== 'patch' && args.action !== 'remove')
         throw new HttpError(400, 'INVALID_LORE_ACTION');
       this.workspace.assertRunning(task.id);
-      const body = { ...record(args.body), branchId: scope.branchId, operationId };
+      const body = { ...record(args.body), operationId };
       return args.action === 'patch'
         ? service.patch(scope.chatId, body, task.id)
         : service.remove(scope.chatId, body, task.id);
@@ -1251,13 +1244,12 @@ export class HelperRuntime {
     }
     if (name === 'outline.read' || name === 'outline.write') {
       if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
-      if (name === 'outline.read') return this.store.outline.detail(scope.chatId, scope.branchId);
+      if (name === 'outline.read') return this.store.outline.detail(scope.chatId);
       this.workspace.assertRunning(task.id);
       return this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, () =>
         this.store.outline.apply(
           scope.chatId,
           {
-            branchId: scope.branchId,
             operations: args.operations,
             idempotencyKey: `helper:${task.id}:${operationId}`,
           },

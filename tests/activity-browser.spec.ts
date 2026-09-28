@@ -20,7 +20,6 @@ function activity(
     startedAt: iso(-12000),
     updatedAt: iso(0),
     finishedAt: status === 'running' ? null : iso(0),
-    branchId: null,
     sourceRevision: null,
     generation: 1,
   };

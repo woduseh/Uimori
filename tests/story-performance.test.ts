@@ -121,7 +121,7 @@ function addArchived(store: Store, chatId: string, start: number, end: number) {
       const text = `Unrelated archived candidate ${index}. ${'Unselected source text. '.repeat(40)}`;
       store.db
         .prepare(
-          "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,source_revision,created_at,updated_at,branch_id) VALUES(?,?,NULL,'completed',?,?,?,?,?,?,?,?)"
+          "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,source_revision,created_at,updated_at) VALUES(?,?,NULL,'completed',?,?,?,?,?,?,?)"
         )
         .run(
           runId,
@@ -132,8 +132,7 @@ function addArchived(store: Store, chatId: string, start: number, end: number) {
           '{}',
           id,
           time,
-          time,
-          `main:${chatId}`
+          time
         );
       store.db
         .prepare(

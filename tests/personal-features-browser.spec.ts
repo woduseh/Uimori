@@ -120,7 +120,7 @@ test('PWUI03 real scene navigation syncs to another device without gating its ma
     .poll(() => new URL(page.url()).searchParams.get('source'))
     .toBe(detail.sources[5].id);
   const clientId = await page.evaluate(() => localStorage.getItem('uimori:reading-client'));
-  const path = `/api/chats/${chat.id}/reading-position?${new URLSearchParams({ clientId: clientId!, branchId: `main:${chat.id}` })}`;
+  const path = `/api/chats/${chat.id}/reading-position?${new URLSearchParams({ clientId: clientId! })}`;
   // Observe a real UI write; never seed the checkpoint with a preparatory PUT.
   await expect
     .poll(async () => (await (await request.get(path)).json()).own?.target.sourceId)

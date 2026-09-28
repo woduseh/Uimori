@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { buildMainInput, CATALOG_SUMMARY_CHARS } from '../core/provider.js';
+import { buildMainInput } from '../core/provider.js';
 import { PROMPT_COMPILER_VERSION } from '../core/risu-prompt.js';
 import { NATIVE_HOST_CONTEXT_ID, nativeHostContextText } from '../core/provider-messages.js';
 import { attachMainHostContext, requestInput } from '../server/main-host-context.js';
@@ -18,18 +18,17 @@ const bound: Connection = {
   catalog: [],
   catalogError: null,
 };
-const lore = (index: number): Resource => ({
-  id: `lore-${index}`,
+const lore: Resource = {
+  id: 'lore',
   chatId: 'version-chat',
   kind: 'lore',
   revision: 1,
-  title: `Reference ${index}`,
-  description: `Synthetic catalog description ${index}. `.repeat(20),
-  text: `Local fictional body ${index}.`,
+  title: 'Reference',
+  description: 'Synthetic catalog description.',
+  text: 'Local fictional body.',
   sourceKind: 'module',
   loading: 'discoverable',
-  loreContext: { placement: 'scene', group: 'harbor', order: index },
-});
+};
 function snapshot(resources: Resource[]): RunSnapshot {
   return {
     chatId: 'version-chat',
@@ -60,15 +59,12 @@ const hostText = (compiled: RunSnapshot) =>
   compiled.promptCompilation!.messages.find((message) => message.id === NATIVE_HOST_CONTEXT_ID)!
     .content[0].text;
 
-test('the current native compiler uses a compact reference catalog', () => {
-  const many = Array.from({ length: 120 }, (_, index) => lore(index));
-  const current = compileSnapshotPrompt(snapshot(many));
+test('the current native compiler keeps host context and version across request building', () => {
+  const input = snapshot([lore]);
+  const current = compileSnapshotPrompt(input);
   expect(current.promptCompilation!.compilerVersion).toBe(PROMPT_COMPILER_VERSION);
-  expect(PROMPT_COMPILER_VERSION).toBe('risu-native-prompt-2');
-  const compact = buildMainInput(snapshot(many));
+  const compact = buildMainInput(input);
   expect(hostText(current)).toBe(nativeHostContextText({ input: requestInput(current, compact) }));
-  expect(compact.catalog[0].description).toHaveLength(CATALOG_SUMMARY_CHARS);
-  expect(compact.catalog[0]).not.toHaveProperty('loreContext');
   expect(attachMainHostContext(current)).toEqual(current);
   expect(buildMainProviderRequest(current).request.prompt!.compilerVersion).toBe(
     PROMPT_COMPILER_VERSION

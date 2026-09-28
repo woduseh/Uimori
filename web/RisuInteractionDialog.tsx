@@ -10,11 +10,9 @@ type Interaction = {
 };
 export function RisuInteractionDialog({
   chatId,
-  branchId,
   onError,
 }: {
   chatId: string;
-  branchId?: string;
   onError: (error: string) => void;
 }) {
   const [item, setItem] = useState<Interaction>();
@@ -25,7 +23,7 @@ export function RisuInteractionDialog({
     const load = async () => {
       try {
         const result = await api<{ interactions: Interaction[] }>(
-          `/chats/${chatId}/risu-interactions${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ''}`
+          `/chats/${chatId}/risu-interactions`
         );
         if (active)
           setItem((current) =>
@@ -41,7 +39,7 @@ export function RisuInteractionDialog({
       active = false;
       clearInterval(timer);
     };
-  }, [chatId, branchId]);
+  }, [chatId]);
   useEffect(() => {
     if (item?.id) setValue('');
   }, [item?.id]);

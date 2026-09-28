@@ -20,7 +20,7 @@ export function nativeRisuSessionKey(snapshot: RunSnapshot): string {
     attachment,
     native.sourceHash,
   ]);
-  return `native:${snapshot.chatId}:${snapshot.branchId ?? 'main'}:${createHash('sha256').update(JSON.stringify(revisions)).digest('hex')}`;
+  return `native:${snapshot.chatId}:${createHash('sha256').update(JSON.stringify(revisions)).digest('hex')}`;
 }
 
 export function nativeRisuPackages(snapshot: RunSnapshot) {

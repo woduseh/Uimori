@@ -165,7 +165,6 @@ export function SceneNavigator({
           {open && bookmarksOpen && (
             <BookmarkList
               chatId={detail.chat.id}
-              branchId={detail.branch.id}
               onNavigate={(target) => {
                 setOpen(false);
                 onTarget(target);

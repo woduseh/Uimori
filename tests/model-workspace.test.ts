@@ -422,7 +422,7 @@ test('deleted or disabled pins block new main work while profile repair and glob
   select(store, global.id);
   pin(store, chat.id, { mainModel: { id: local.id }, mainPromptPresetId: preset.id });
   const first = complete(store, chat.id);
-  const prepared = helperWritingSnapshot(store, chat.id, `main:${chat.id}`, 'context');
+  const prepared = helperWritingSnapshot(store, chat.id, 'context');
   prepared.contextPlan = {
     ...prepared.contextPlan!,
     status: 'ready',
@@ -471,7 +471,6 @@ test('changing a pin invalidates pending options and preserves the pending draft
   options.stage(
     chat.id,
     {
-      branchId: state.branchId,
       expectedRevision: state.revision,
       binding: state.binding,
       values: { detail: '1' },

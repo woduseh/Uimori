@@ -64,6 +64,7 @@ test('short Korean/Japanese names, phrases and literal operators work before and
         text
       ).toEqual([source.id]);
       expect(result.items[0].sceneNumber).toBe(1);
+      expect(result.items[0].target).not.toHaveProperty('branchId');
     }
     for (const text of [
       '없는단어',
@@ -161,7 +162,6 @@ test('common location URLs preserve IDs and mode, and POST search stays read-onl
   const source = completedSource(store, chat.id, '검증할 문장');
   const target = {
     chatId: chat.id,
-    branchId: `main:${chat.id}`,
     sourceId: source.id,
     representation: 'original' as const,
     contentHash: source.hash,

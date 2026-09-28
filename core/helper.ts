@@ -3,9 +3,7 @@ import type { ModelSnapshot } from './product.js';
 import type { RunSnapshot, Usage } from './types.js';
 import type { ContextCheckpointRef } from './context-plan.js';
 
-export type HelperScope =
-  | { kind: 'chat'; chatId: string; branchId: string }
-  | { kind: 'library'; workId: string };
+export type HelperScope = { kind: 'chat'; chatId: string } | { kind: 'library'; workId: string };
 export type HelperConversation = {
   id: string;
   scope: HelperScope;

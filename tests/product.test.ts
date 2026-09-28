@@ -104,7 +104,6 @@ function queuedRun(
   chatId: string,
   request = 'Synthetic scene',
   options: {
-    branchId?: string;
     expectedRevision?: string | null;
     expectedProfileRevision?: number;
     idempotencyKey?: string;
@@ -112,7 +111,7 @@ function queuedRun(
 ) {
   const chat = store.chat(chatId);
   const captured = product.snapshot(chatId);
-  const head = product.branch(chatId, options.branchId).headRevision;
+  const head = chat.headRevision;
   return store.createRun(
     chatId,
     {

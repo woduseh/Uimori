@@ -14,8 +14,8 @@ const refs = (history: HelperTaskSnapshot['history']) =>
   history.map((message) => ({ revision: message.id, hash: hash([message.role, message.text]) }));
 
 /** Model reads need the active reference once, without the UI's checkpoint and job history. */
-export function readHelperChatContext(store: Store, chatId: string, branchId: string) {
-  const current = store.context.current(chatId, branchId),
+export function readHelperChatContext(store: Store, chatId: string) {
+  const current = store.context.current(chatId),
     checkpoint = current.checkpoint;
   return {
     scopeKey: current.scopeKey,

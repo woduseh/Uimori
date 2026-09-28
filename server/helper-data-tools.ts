@@ -18,7 +18,6 @@ const reference = {
     field: str,
     hash: str,
     chatId: str,
-    branchId: str,
   },
   required: ['scope', 'kind', 'id', 'revision', 'field', 'hash'],
   additionalProperties: false,
@@ -27,7 +26,7 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
   {
     name: 'data.search',
     description:
-      'Search authored fields with literal patterns (or regex:true). output="documents" returns one result per document without body; select IDs, then use output="matches" (default) for exact excerpts. Whitespace-separated query terms all match title/ID/kind or library category (including prompt main/translation), not body; remove a failed title filter before trying aliases in patterns. paths limits JSON Pointer fields or subtrees; omit it to search all fields, including HTML/scripts. For scope="chats", copy chatId/branchId when narrowing results. Follow nextOffset; default five results, 8k serialized-character budget. Editable library strings include editTarget for resource.patch replaceText with a unique exact oldText; no full-field reread is needed if the excerpt suffices. Non-string saved edits need typed resource.read; captured editor structure is paged by workspace.read kind=editor. current = frozen chat, library/chats = live, editor = captured input. Default scope is editor when supplied, otherwise current chat or library. No-match is not proof of absence.',
+      'Search authored fields with literal patterns (or regex:true). output="documents" returns one result per document without body; select IDs, then use output="matches" (default) for exact excerpts. Whitespace-separated query terms all match title/ID/kind or library category (including prompt main/translation), not body; remove a failed title filter before trying aliases in patterns. paths limits JSON Pointer fields or subtrees; omit it to search all fields, including HTML/scripts. For scope="chats", copy chatId when narrowing results. Follow nextOffset; default five results, 8k serialized-character budget. Editable library strings include editTarget for resource.patch replaceText with a unique exact oldText; no full-field reread is needed if the excerpt suffices. Non-string saved edits need typed resource.read; captured editor structure is paged by workspace.read kind=editor. current = frozen chat, library/chats = live, editor = captured input. Default scope is editor when supplied, otherwise current chat or library. No-match is not proof of absence.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -41,7 +40,6 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
         kinds: list,
         ids: { type: 'array', maxItems: 50, items: str },
         chatId: str,
-        branchId: str,
         offset: { type: 'integer', minimum: 0 },
         limit: { type: 'integer', minimum: 1, maximum: 50 },
         context: { type: 'integer', minimum: 0, maximum: 1200 },
@@ -67,7 +65,7 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
   {
     name: 'db.query',
     description:
-      'Read-only SQL SELECT/CTE over agent_resources, agent_chats, agent_messages, agent_usage, agent_helper_inputs. Omit sql to read schemas/examples. Use for joins, filters and counts, not full resource dumps. Live database across chats: filter chat_id/branch_id explicitly. Positional ? params, row/cell/output bounds and a 3-second execution deadline. No mutations, credentials or arbitrary filesystem access; save through app.call.',
+      'Read-only SQL SELECT/CTE over agent_resources, agent_chats, agent_messages, agent_usage, agent_helper_inputs. Omit sql to read schemas/examples. Use for joins, filters and counts, not full resource dumps. Live database across chats: filter chat_id explicitly. Positional ? params, row/cell/output bounds and a 3-second execution deadline. No mutations, credentials or arbitrary filesystem access; save through app.call.',
     inputSchema: {
       type: 'object',
       properties: {

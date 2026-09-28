@@ -225,7 +225,7 @@ export type ChatProfile = {
   packageAttachments?: import('./risu-content.js').ContentAttachment[];
 };
 export type ProfileSnapshot = ChatProfile & {
-  /** Branch overrides frozen at reservation; absent in historical snapshots. */
+  /** Chat overrides frozen at reservation; absent in historical snapshots. */
   variableState?: import('./chat-variables.js').ChatVariableState;
   chatOptions?: import('./chat-options.js').ChatOptionResolution;
   /** Text-only per-link projection; the original packages below remain revision-exact. */
@@ -243,11 +243,6 @@ export type ProfileSnapshot = ChatProfile & {
   packages?: import('./risu-content.js').RisuContent[];
   models: Partial<Record<TaskRole, ModelSnapshot>>;
   promptPresets?: Partial<Record<PromptRole, PromptPreset>>;
-};
-export type Branch = {
-  id: string;
-  chatId: string;
-  headRevision: string | null;
 };
 export type Asset = {
   packageOwner?: {

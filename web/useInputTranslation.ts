@@ -13,7 +13,6 @@ type Options = {
   draftKey: string;
   epoch: number;
   chatId: string;
-  branchId?: string;
   readDraft: () => DraftIdentity;
   writeDraft: (text: string) => void;
   available: () => boolean;
@@ -97,7 +96,7 @@ export function useInputTranslation(options: Options) {
     try {
       const result = await api<InputTranslationResult>(
         `/chats/${encodeURIComponent(scope.chatId)}/input-translation`,
-        { text: captured.text, targetLanguage: language, branchId: scope.branchId },
+        { text: captured.text, targetLanguage: language },
         'POST',
         controller.signal
       );

@@ -10,7 +10,6 @@ export type StorySnapshot = {
 export type SceneCommand = {
   id: string;
   chatId: string;
-  branchId: string;
   label: string;
   request: string;
   status: 'pending' | 'consumed' | 'failed' | 'cancelled';

@@ -86,15 +86,9 @@ function profile(store: Store, chatId: string, roots: ContentAttachment[]) {
     packageAttachments: roots,
   });
 }
-function patch(
-  store: Store,
-  chatId: string,
-  selector: ChatLoreSelector,
-  value: string,
-  branchId?: string
-) {
+function patch(store: Store, chatId: string, selector: ChatLoreSelector, value: string) {
   const service = new ChatOverridesStore(store),
-    state = service.get(chatId, branchId);
+    state = service.get(chatId);
   const selected = state.attachments.find(
     (item) =>
       item.scope.id === selector.id &&
@@ -105,7 +99,6 @@ function patch(
   const input = {
     selector,
     value,
-    branchId: state.branchId,
     expectedRevision: state.revision,
     expectedHeadRevision: state.headRevision,
     expectedProfileRevision: state.profileRevision,
@@ -115,27 +108,24 @@ function patch(
   };
   return { service, input, result: service.patch(chatId, input, requestId) };
 }
-function run(store: Store, chatId: string, branchId?: string) {
-  const chat = store.chat(chatId),
-    branch = store.product.branch(chatId, branchId);
-  // Intentionally start from the default-head profile: createRun must scope overrides to the chosen branch.
+function run(store: Store, chatId: string) {
+  const chat = store.chat(chatId);
   const frozen = store.product.snapshot(chatId);
   return store.createRun(
     chatId,
     {
       request: 'Continue synthetic story',
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
-      branchId: branch.id,
       idempotencyKey: randomUUID(),
     },
     () => ({
       chatId,
-      parentRevision: branch.headRevision,
+      parentRevision: chat.headRevision,
       settings: chat.settings,
       settingsRevision: chat.settingsRevision,
       request: 'Continue synthetic story',
-      history: store.history(branch.headRevision),
+      history: store.history(chat.headRevision),
       resources: store.product.resources(chatId, frozen),
       profile: frozen,
     })
@@ -167,7 +157,6 @@ test('HTTP lore edits preserve long Korean text within the stored prose budget',
   const input = {
     selector: selector(bot),
     value,
-    branchId: state.branchId,
     expectedRevision: state.revision,
     expectedHeadRevision: state.headRevision,
     expectedProfileRevision: state.profileRevision,

@@ -4,6 +4,7 @@ import { test, expect } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import type { PromptWorkspace } from '../core/product.js';
 
 test(
@@ -266,6 +267,55 @@ test('PWS03 failed autosaves preserve consecutive local changes and protect exte
   );
   expect((await (await request.get('/api/prompt-workspace')).json()).main.values.tone).toBe(
     '다른 창 변경'
+  );
+});
+
+test('PWS04 shared workspace load failures recover in model and prompt settings', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  let ready = false;
+  await page.route('**/api/prompt-workspace', async (route) => {
+    if (ready) await route.continue();
+    else
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: '합성 일시 오류' }),
+      });
+  });
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '역할별 모델');
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  const reload = settings.getByRole('button', { name: '다시 불러오기', exact: true });
+  await expect(reload).toHaveAccessibleName(/\S/u);
+  const reloadBox = await reload.boundingBox();
+  expect(reloadBox!.width).toBeGreaterThanOrEqual(44);
+  expect(reloadBox!.height).toBeGreaterThanOrEqual(44);
+  ready = true;
+  await reload.click();
+  const models = settings.getByRole('region', { name: '역할별 모델 설정', exact: true });
+  await expect(models).toBeVisible();
+  const modelSave = models.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
+  await modelSave.scrollIntoViewIfNeeded();
+  const saveBox = await modelSave.boundingBox();
+  expect(saveBox!.width).toBeGreaterThanOrEqual(44);
+  expect(saveBox!.height).toBeGreaterThanOrEqual(44);
+
+  ready = false;
+  await page.reload();
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '현재 프롬프트');
+  await expect(reload).toBeVisible();
+  ready = true;
+  await reload.click();
+  const prompts = settings.getByRole('region', { name: '현재 프롬프트 설정' });
+  await expect(prompts.getByLabel('현재 프롬프트 프리셋', { exact: true })).toBeVisible();
+  await expect(prompts.getByTestId('prompt-composer')).toHaveCount(0);
+  await expect(prompts.getByRole('button', { name: '현재 설정 저장', exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+    true
   );
 });
 

@@ -8,10 +8,9 @@ Use it for a broad visual review when useful. Gallery success means capture, jou
 
 Results are under `output/playwright/gallery-<timestamp>-<id>/`: screenshots, the `index.html` contact sheet, `metrics.json`, `journey.json`, `captures.json`, and `summary.json`. The summary records execution status, build identity, and metric results. `npm run cleanup` handles owned artifacts.
 
-- [Screens](../scripts/gallery/screens.mjs) define routes, readiness, actions, themes, viewports, and measurements.
+- [Screens](../scripts/gallery/screens.mjs) define routes, visible navigation steps, readiness, actions, themes, viewports, and measurements.
 - [Journeys](../scripts/gallery/journey.mjs) define interaction sequences and count clicks, fills, menu opens, and key presses.
 - [Steps](../scripts/gallery/steps.mjs) define locator and action syntax; [seed data](../scripts/gallery/seed.mjs) supplies route placeholders.
-- [Panel deep links](../web/usePanelDeepLink.ts) open otherwise inaccessible screens on test-mode servers.
 
 ## Metrics
 

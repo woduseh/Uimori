@@ -175,6 +175,7 @@ export async function captureGallery({
           const started = Date.now();
           try {
             await page.goto(resolveUrl(baseUrl, screen.url, ids), { waitUntil: 'load' });
+            for (const step of screen.enter ?? []) await runStep(page, step, ids);
             await locatorFor(page, screen.ready ?? { css: 'header.workspace-header' }, ids).waitFor(
               {
                 state: 'visible',

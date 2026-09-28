@@ -102,7 +102,6 @@ export function LoreContextPolicyEditor({
   onChange,
   onPendingChange,
   chatId,
-  branchId,
   profileRevision,
   request = '',
   reset = false,
@@ -114,7 +113,6 @@ export function LoreContextPolicyEditor({
   onChange: (value: LoreContextPolicy) => void;
   onPendingChange?: (dirty: boolean) => void;
   chatId?: string;
-  branchId?: string;
   profileRevision: number;
   request?: string;
   reset?: boolean;
@@ -165,7 +163,6 @@ export function LoreContextPolicyEditor({
   const previewRequest = request.trim() ? request : '현재 로어 문맥을 확인해요.';
   const fingerprint = JSON.stringify({
       chatId,
-      branchId,
       profileRevision,
       policy,
       request: previewRequest,
@@ -193,7 +190,6 @@ export function LoreContextPolicyEditor({
         request: previewRequest,
         role: 'main',
         loreContext: policy,
-        ...(branchId ? { branchId } : {}),
         ...(reset ? { loreContextReset: true } : {}),
       });
       if (sequence.current === version && latest.current === source)
