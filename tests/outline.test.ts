@@ -752,6 +752,135 @@ describe('hierarchical composition', () => {
     });
   });
 
+  test('large detail reads preserve source and review projections without queries per node', async () => {
+    const { HelperWorkspace } = await import('../server/helper-workspace.js');
+    const store = await database();
+    const chat = createFixtureChat(store, '구성 일괄 조회');
+    compose(store, chat.id);
+    const initial = store.outline.nodes(chat.id);
+    const episode = initial.find((node) => node.title === '1화 잠긴 문')!;
+    const beat = initial.find((node) => node.parentId === episode.id)!;
+    const second = initial.find((node) => node.title === '2화 장부의 첫 장')!;
+    const third = initial.find((node) => node.title === '3화 관장의 방문')!;
+    store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [
+          {
+            op: 'update',
+            id: episode.id,
+            expectedRevision: episode.revision,
+            relatedIds: [third.id, second.id],
+          },
+        ],
+      },
+      'user'
+    );
+    const command = store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID() });
+    const { run, source } = write(store, chat.id, command.id, '문은 잠겨 있었다.');
+    store.outline.sceneCommand(second.id, { idempotencyKey: randomUUID() });
+    // Imported source links can share an existing source with a child unit.
+    store.db
+      .prepare(`INSERT INTO outline_writings(id,node_id,source_id,created_at)
+      VALUES(?,?,?,?)`)
+      .run(randomUUID(), beat.id, source.id, source.createdAt);
+    const conversation = new HelperWorkspace(store).open({ kind: 'chat', chatId: chat.id });
+    const time = '2026-01-01T00:00:00.000Z';
+    const review = (nodeId: string, status = 'completed', partial = false) => {
+      const taskId = randomUUID();
+      const sources = store.outline.unitSources(nodeId).map((item) => ({
+        id: item.sourceRevision,
+        hash: item.sourceHash,
+        start: 0,
+        end: source.text.length,
+        total: source.text.length,
+      }));
+      store.db
+        .prepare(`INSERT INTO helper_tasks(id,conversation_id,request_key,request,status,
+        snapshot,usage,created_at,updated_at) VALUES(?,?,?,'review',?,'{}','{}',?,?)`)
+        .run(taskId, conversation.id, taskId, status, time, time);
+      store.db
+        .prepare('INSERT INTO outline_reviews VALUES(?,?,?,?,?,?)')
+        .run(
+          taskId,
+          nodeId,
+          store.outline.planHash(nodeId),
+          JSON.stringify(sources),
+          Number(partial),
+          time
+        );
+      return taskId;
+    };
+    for (const node of initial) review(node.id);
+    const latestTask = review(episode.id, 'cancelled', true);
+    const prepare = vi.spyOn(store.db, 'prepare');
+    const small = store.outline.detail(chat.id);
+    const smallReads = prepare.mock.calls.length;
+    expect(small.nodes.map((node) => node.id)).toEqual(initial.map((node) => node.id));
+    expect(small.nodes.find((node) => node.id === episode.id)).toMatchObject({
+      relatedIds: [third.id, second.id],
+      progress: {
+        state: 'written',
+        commandId: command.id,
+        runId: run.id,
+        sourceRevision: source.id,
+      },
+      latestReview: {
+        taskId: latestTask,
+        status: 'cancelled',
+        partial: true,
+        stale: false,
+        sources: [{ id: source.id, hash: source.hash }],
+      },
+    });
+    expect(small.nodes.find((node) => node.id === second.id)?.progress.state).toBe('scheduled');
+    expect(small.nodes.find((node) => node.id === third.id)?.progress.state).toBe('planned');
+    const added = store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: Array.from({ length: 200 }, (_, index) => ({
+          op: 'create',
+          level: 'theme',
+          title: `추가 계획 ${index}`,
+          intent: '',
+        })),
+      },
+      'user'
+    ).created;
+    for (const node of added) review(node.id);
+    const other = createFixtureChat(store, '다른 채팅');
+    compose(store, other.id);
+    prepare.mockClear();
+    const large = store.outline.detail(chat.id);
+    expect(prepare.mock.calls.length).toBe(smallReads);
+    expect(large.nodes).toHaveLength(207);
+    expect(large.nodes.slice(0, 7)).toEqual(small.nodes);
+    expect(large.nodes.slice(7).every((node) => node.latestReview?.stale === false)).toBe(true);
+    const edited = store.editSource(source.id, {
+      expectedRevision: store.source(source.id).editRevision ?? 0,
+      text: '문은 열려 있었다.',
+    });
+    prepare.mockClear();
+    const changed = store.outline.detail(chat.id);
+    expect(prepare.mock.calls.length).toBe(smallReads);
+    const current = changed.nodes.find((node) => node.id === episode.id)!;
+    expect(current.writings?.[0].sourceHash).toBe(edited.hash);
+    expect(current.latestReview).toMatchObject({ taskId: latestTask, stale: true });
+    expect(store.outline.unitSources(episode.id, changed.nodes)).toHaveLength(1);
+    expect(current.latestReview).toEqual(store.outline.latestReview(episode.id));
+    for (const status of ['failed', 'cancelled', 'pending']) {
+      store.db
+        .prepare('UPDATE scene_commands SET status=?,source_revision=NULL WHERE id=?')
+        .run(status, command.id);
+      store.db.prepare("UPDATE runs SET status='queued' WHERE id=?").run(run.id);
+      expect(
+        store.outline.detail(chat.id).nodes.find((node) => node.id === episode.id)?.progress.state
+      ).toBe(status === 'pending' ? 'writing' : status);
+    }
+  });
+
   test('writing one episode carries the upper intent into the real generation input', async () => {
     const store = await database();
     const chat = chatWithMainModel(store, '집필 연결 검사');

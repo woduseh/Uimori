@@ -21,6 +21,13 @@ function optionalCache(key: string): Record<string, unknown> | null {
     return null;
   }
 }
+export function writeViewCache(key: `reading:${string}` | `cursor:${string}`, value: object) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Disposable reading and cursor caches must not block navigation.
+  }
+}
 export function readReadingPosition(key: string): ReadingPosition | null {
   const value = optionalCache(key);
   return value &&

@@ -44,7 +44,6 @@ export function useReadingSync(options: {
   reader: RefObject<HTMLDivElement | null>;
   storageKey: string;
   onResume: (target: ReaderTarget) => void;
-  saveLocal: () => void;
 }) {
   const [clientId] = useState(browserClientId);
   const key = options.chatId;
@@ -161,7 +160,6 @@ export function useReadingSync(options: {
       )
         return;
       dirty = captureReaderLocation(node, chatId);
-      current.current.saveLocal();
     };
     const visibility = () => {
       if (document.visibilityState === 'hidden') void save();

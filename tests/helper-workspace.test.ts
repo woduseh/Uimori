@@ -299,6 +299,124 @@ function snapshot(f: ReturnType<typeof fixture>): HelperTaskSnapshot {
     limits: { totalCalls: 24, helperCalls: 12, artifacts: 1 },
   };
 }
+
+test('public helper task pages preserve summaries and receipts without loading reservations per row', async () => {
+  const f = fixture();
+  const app = Fastify();
+  helperRoutes(app, f.runtime);
+  const largeHistory = 'Private frozen helper history. '.repeat(2000);
+  const ids: string[] = [];
+  f.store.transaction(() => {
+    for (let index = 0; index < 55; index++) {
+      const task = f.workspace.enqueue(f.conversation.id, `page-${index}`, `요청 ${index}`, {
+        ...snapshot(f),
+        model: { ...f.store.product.modelSnapshot(f.model.id), title: `예약 당시 모델 ${index}` },
+        history: [{ id: 'frozen-message', role: 'user', text: largeHistory }],
+      });
+      ids.push(task.id);
+      f.workspace.start(task.id, 'page-owner');
+      if (index % 2 === 0) {
+        f.workspace.operation(task.id, `saved-${index}`, {}, () => ({ saved: true }));
+        f.workspace.operation(task.id, `saved-again-${index}`, {}, () => ({ saved: true }));
+      } else {
+        f.workspace.event(f.conversation.id, task.id, 'tool.finished', { saved: true });
+      }
+      f.store.db.prepare("UPDATE helper_tasks SET status='completed' WHERE id=?").run(task.id);
+    }
+    ids.forEach((id, index) => {
+      const status =
+        index === 54
+          ? 'running'
+          : ['queued', 'completed', 'failed', 'cancelled', 'interrupted'][index % 5];
+      f.store.db
+        .prepare('UPDATE helper_tasks SET status=?,error=?,created_at=?,started_at=? WHERE id=?')
+        .run(
+          status,
+          status === 'failed' ? 'UNEXPECTED_EOF' : null,
+          `2030-01-01T00:00:${String(59 - index).padStart(2, '0')}.000Z`,
+          status === 'queued' ? null : '2030-01-01T00:01:00.000Z',
+          id
+        );
+    });
+  });
+  const other = f.workspace.create(f.conversation.scope, 'other-page');
+  const otherTask = f.workspace.enqueue(other.id, 'other', '다른 대화', snapshot(f));
+  const project = (task: ReturnType<typeof f.workspace.task>) => {
+    const { snapshot: reserved, ...view } = task;
+    return { ...view, modelTitle: reserved.model.title };
+  };
+  const expected = ids
+    .slice(-50)
+    .reverse()
+    .map((id) => project(f.workspace.task(id)));
+  const before = expected.at(-1)!.id;
+  const expectedOlder = ids
+    .slice(0, 5)
+    .reverse()
+    .map((id) => project(f.workspace.task(id)));
+  expect(expected.map((task) => task.id)).toEqual(ids.slice(-50).reverse());
+  expect(expectedOlder.map((task) => task.id)).toEqual(ids.slice(0, 5).reverse());
+
+  const prepare = f.store.db.prepare.bind(f.store.db);
+  const returnedRows: Record<string, unknown>[] = [];
+  const queries = vi.spyOn(f.store.db, 'prepare').mockImplementation((sql) => {
+    const statement = prepare(sql);
+    const all = statement.all.bind(statement);
+    vi.spyOn(statement, 'all').mockImplementation((...args) => {
+      const rows = all(...args);
+      returnedRows.push(...rows);
+      return rows;
+    });
+    return statement;
+  });
+  try {
+    const page = await app.inject({
+      url: `/api/helper/conversations/${f.conversation.id}/tasks`,
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.json()).toEqual(expected);
+    expect(queries.mock.calls.length).toBeLessThanOrEqual(3);
+    expect(returnedRows).toHaveLength(50);
+    expect(returnedRows.every((row) => !('snapshot' in row))).toBe(true);
+    expect(JSON.stringify(returnedRows)).not.toContain(largeHistory);
+    for (const task of page.json()) {
+      const index = ids.indexOf(task.id);
+      if (['failed', 'cancelled', 'interrupted'].includes(task.status) && index % 2 === 0)
+        expect(task.completedEffects).toEqual({ count: 2, labels: ['완료된 도우미 작업'] });
+      else expect(task).not.toHaveProperty('completedEffects');
+    }
+
+    const older = await app.inject({
+      url: `/api/helper/conversations/${f.conversation.id}/tasks?before=${before}`,
+    });
+    expect(older.json()).toEqual(expectedOlder);
+    const view = await app.inject({
+      url: `/api/helper/conversations/${f.conversation.id}/view`,
+    });
+    expect(view.statusCode).toBe(200);
+    expect(view.json().tasks).toEqual(expected);
+    const failed = expected.find((task) => task.completedEffects)!;
+    const detail = await app.inject({ url: `/api/helper/tasks/${failed.id}` });
+    expect(detail.json()).toEqual(failed);
+    for (const cursor of ['missing-task', otherTask.id]) {
+      const outside = await app.inject({
+        url: `/api/helper/conversations/${f.conversation.id}/tasks?before=${cursor}`,
+      });
+      expect(outside.json()).toEqual([]);
+    }
+    for (const url of [
+      '/api/helper/conversations/missing-conversation/tasks',
+      '/api/helper/conversations/missing-conversation/view',
+      '/api/helper/tasks/missing-task',
+    ]) {
+      expect((await app.inject({ url })).statusCode).toBe(404);
+    }
+    expect(f.workspace.task(ids[0]).snapshot.history[0].text).toBe(largeHistory);
+  } finally {
+    await app.close();
+  }
+});
+
 test('library-only helper has durable attempts, idempotent submission and no main run', async () => {
   const f = fixture(),
     send = mockSend();
@@ -459,7 +577,7 @@ test('a saved change survives an explanation EOF and prevents whole-request retr
       retryOf: previous.id,
     })
   ).toThrow('HELPER_EFFECTS_ALREADY_COMMITTED');
-  expect(reopened.tasks(conversation.id)).toHaveLength(1);
+  expect(reopened.taskSummaries(conversation.id)).toHaveLength(1);
 });
 
 test('a rolled-back operation does not block retry or claim a completed change', () => {
@@ -599,7 +717,7 @@ test('helper retries retain attempts but project the latest response at the orig
   expect(visible[0].text).toBe('수정한 요청');
   expect(visible[0].requestGroupId).toBe(first.id);
   expect(visible[0].requestOrder).toBe(messages[0].requestOrder);
-  expect(reloaded.tasks(f.conversation.id)).toHaveLength(3);
+  expect(reloaded.taskSummaries(f.conversation.id)).toHaveLength(3);
   expect(reloaded.task(first.id).status).toBe('failed');
 });
 
@@ -639,11 +757,11 @@ test('all helper sessions share two execution slots while each session preserves
     const name = String(request.input.task);
     calls.push(name);
     const activeTask = f.workspace
-      .tasks(name.startsWith('A') ? a.id : name.startsWith('B') ? b.id : c.id)
+      .taskSummaries(name.startsWith('A') ? a.id : name.startsWith('B') ? b.id : c.id)
       .find((task) => task.status === 'running')!;
     histories.set(
       name,
-      activeTask.snapshot.history.map((message) => message.text)
+      f.workspace.task(activeTask.id).snapshot.history.map((message) => message.text)
     );
     live++;
     peak = Math.max(peak, live);
@@ -808,7 +926,7 @@ test('the helper message route preserves full-length Korean requests and selecte
       },
     });
     expect(over.statusCode).toBe(400);
-    expect(f.workspace.tasks(conversation.id)).toHaveLength(1);
+    expect(f.workspace.taskSummaries(conversation.id)).toHaveLength(1);
   } finally {
     await app.close();
   }

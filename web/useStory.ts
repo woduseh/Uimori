@@ -11,6 +11,7 @@ import {
   commandStorageKey,
   readReadingPosition,
   readDraftCursor,
+  writeViewCache,
   type ReadingPosition,
 } from './story-storage.js';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -205,7 +206,6 @@ export function useStory() {
     reader,
     storageKey: `reading:${selected}`,
     onResume: (target) => openTarget(target),
-    saveLocal: () => savePosition(),
   });
   const explicitReadingIntent = useRef<{ chatId: string; sourceId: string } | null>(null);
   const refresh = useCallback(
@@ -540,7 +540,7 @@ export function useStory() {
       offset: block ? block.getBoundingClientRect().top - box.top : 0,
       top: node.scrollTop,
     };
-    sessionStorage.setItem(`reading:${viewKey}`, JSON.stringify(position));
+    writeViewCache(`reading:${viewKey}`, position);
   }, [selected, viewKey, readSource]);
   useLayoutEffect(() => {
     const text = sessionStorage.getItem(draftKey) || '';
@@ -565,10 +565,7 @@ export function useStory() {
   const rememberCursor = useCallback(() => {
     const node = input.current;
     if (node)
-      sessionStorage.setItem(
-        `cursor:${draftKey}`,
-        JSON.stringify({ start: node.selectionStart, end: node.selectionEnd })
-      );
+      writeViewCache(`cursor:${draftKey}`, { start: node.selectionStart, end: node.selectionEnd });
   }, [draftKey]);
   function editDraft(value: string) {
     draftIdentity.current = { text: value, revision: draftIdentity.current.revision + 1 };

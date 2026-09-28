@@ -71,7 +71,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       eventCursor,
       conversation: store.conversation(id),
       messages: store.messages(id),
-      tasks: store.tasks(id).map(publicTask),
+      tasks: store.taskSummaries(id),
     };
   });
   app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) => {
@@ -124,7 +124,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   );
   app.get<{ Params: { id: string }; Querystring: { before?: string } }>(
     '/api/helper/conversations/:id/tasks',
-    (request) => store.tasks(request.params.id, request.query.before).map(publicTask)
+    (request) => store.taskSummaries(request.params.id, request.query.before)
   );
   app.post<{ Params: { id: string } }>(
     '/api/helper/conversations/:id/messages',
@@ -196,7 +196,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     }
   );
   app.get<{ Params: { id: string } }>('/api/helper/tasks/:id', (request) =>
-    publicTask(store.task(request.params.id))
+    store.taskSummary(request.params.id)
   );
   app.post<{ Params: { id: string } }>('/api/helper/tasks/:id/cancel', (request) =>
     publicTask(runtime.cancel(request.params.id))
