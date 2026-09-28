@@ -17,9 +17,9 @@ The main writer and translation role use the shared definitions in `core/read-to
 
 Explicit user notes are already pinned to the Run and delivered through the `notes` prompt slot or host context. There is no separate `notes.list/read` model API.
 
-The helper's native data surface stays at five tools: `data.search`, `data.read`, `db.query`, `app.tools`, and `app.call`. `data.read` likewise always accepts `refs`, including a one-item array.
+The helper exposes five Uimori tools: `data.search`, `data.read`, `db.query`, `app.tools`, and `app.call`. Codex registers them as native dynamic tools within one turn. `data.read` always accepts `refs`, including a one-item array.
 
-Helper resource editing uses discovered `resource.read` overviews and exact typed paths, then `resource.patch` for native card/module fields. Resource revision checks, one-save undo and operation receipts remain owned by the existing resource service. This does not change complete UI or export models. See [Helper tools](HELPER-TOOLS.md#discovering-and-executing-app-operations) for pagination, result budgets and the limited patch operations.
+Helper resource editing uses discovered `resource.read` overviews and exact typed paths, then `resource.patch` for native card/module fields and existing native preset text/options. `set` accepts simple typed fields and the complete card/module translation guide at the returned `translationGuidePath`; indexed `insert`/`remove` remain limited to lore entries and guide terms. Resource revision checks, one-save undo and operation receipts remain owned by the existing resource service. This does not change complete UI or export models. See [Helper tools](HELPER-TOOLS.md#discovering-and-executing-app-operations) for pagination and result budgets.
 
 ## Schema portability
 
