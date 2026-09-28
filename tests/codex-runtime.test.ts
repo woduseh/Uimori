@@ -4,7 +4,13 @@ import { rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { CodexRuntime, codexEnvironment, codexExecutable } from '../server/codex-runtime.js';
+import {
+  CodexRuntime,
+  codexEnvironment,
+  codexExecutable,
+  type CodexAgentRequest,
+  type CodexAgentExecutionOptions,
+} from '../server/codex-runtime.js';
 import { CodexProcess } from '../server/codex-process.js';
 import { buildCodexTurn } from '../core/codex-protocol.js';
 import { ProviderContractError, type ProviderRequest, type WireRecord } from '../core/transport.js';
@@ -23,6 +29,15 @@ const request = (): ProviderRequest => ({
   input: { task: 'Synthetic request', controls: {} },
 });
 const output = JSON.stringify({ kind: 'final', text: 'A synthetic scene.', toolCalls: [] });
+const agentRequest = (): CodexAgentRequest => ({
+  modelId: 'gpt-5.4',
+  developerInstructions: 'Read and revise the draft through the provided tools.',
+  text: 'Revise the saved draft.',
+  tools: [
+    { name: 'data.search', description: 'Find saved data', inputSchema: { type: 'object' } },
+    { name: 'app.call', description: 'Apply an edit', inputSchema: { type: 'object' } },
+  ],
+});
 const instances: CodexRuntime[] = [],
   roots: string[] = [];
 function setup(mode = 'normal', extra: NodeJS.ProcessEnv = {}, maxConcurrent?: number) {
@@ -60,6 +75,134 @@ afterEach(async () => {
 });
 
 describe('official Codex runtime boundary using a synthetic stdio executable', () => {
+  it('keeps host tool results and plain assistant final output inside one native turn', async () => {
+    const { runtime, records } = setup('agent-normal');
+    const onToolCall = vi.fn<CodexAgentExecutionOptions['onToolCall']>(async () => ({
+      success: true,
+      text: 'host result',
+    }));
+    const onProgress = vi.fn();
+    const onCommentary = vi.fn();
+    const result = await runtime.executeAgent(connection, agentRequest(), {
+      signal: new AbortController().signal,
+      onToolCall,
+      onProgress,
+      onCommentary,
+    });
+    expect(result).toMatchObject({
+      status: 'completed',
+      text: 'Saved the draft.',
+      toolCalls: [],
+      usage: { inputTokens: 200, outputTokens: 60, raw: { modelCalls: null } },
+    });
+    expect(onToolCall.mock.calls.map(([call]) => call)).toEqual([
+      { name: 'data.search', callId: 'call-1', arguments: { query: 'saved draft' } },
+      { name: 'app.call', callId: 'call-2', arguments: { id: 'draft-1', value: 'revised' } },
+    ]);
+    expect(onProgress.mock.calls.map(([value]) => value)).toEqual([
+      { text: 'Saved ', offset: 6 },
+      { text: 'the draft.', offset: 16 },
+    ]);
+    expect(onCommentary).toHaveBeenCalledExactlyOnceWith('Checking the draft.');
+    expect(records().filter((row) => row.method === 'thread/start')).toHaveLength(1);
+    expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
+    expect(records().find((row) => row.method === 'turn/start').params).not.toHaveProperty(
+      'outputSchema'
+    );
+    expect(
+      records()
+        .find((row) => row.method === 'thread/start')
+        .params.dynamicTools.map((tool: { name: string }) => tool.name)
+    ).toEqual(['uimori_data_search', 'uimori_app_call']);
+    expect(records().find((row) => row.method === 'thread/start').params.dynamicTools).toEqual([
+      {
+        type: 'function',
+        name: 'uimori_data_search',
+        description: 'Find saved data',
+        inputSchema: { type: 'object' },
+      },
+      {
+        type: 'function',
+        name: 'uimori_app_call',
+        description: 'Apply an edit',
+        inputSchema: { type: 'object' },
+      },
+    ]);
+    expect(records().filter((row) => row.id === 'tool-2')).toEqual([
+      {
+        id: 'tool-2',
+        result: { contentItems: [{ type: 'inputText', text: 'host result' }], success: true },
+      },
+    ]);
+  });
+  it.each(['agent-wrong-thread', 'agent-wrong-turn', 'agent-unknown-tool'])(
+    'rejects %s before invoking a host tool',
+    async (mode) => {
+      const { runtime } = setup(mode);
+      const onToolCall = vi.fn(async () => ({ success: true, text: 'should not run' }));
+      expect(
+        await runtime.executeAgent(connection, agentRequest(), {
+          signal: new AbortController().signal,
+          onToolCall,
+        })
+      ).toMatchObject({ status: 'error', error: { code: 'CODEX_TOOL_NOT_ALLOWED' } });
+      expect(onToolCall).not.toHaveBeenCalled();
+    }
+  );
+  it('never replays a duplicate tool call or a turn that exited after a write', async () => {
+    for (const mode of ['agent-duplicate', 'agent-exit-after-write']) {
+      const { runtime, records } = setup(mode);
+      const calls: string[] = [];
+      const result = await runtime.executeAgent(connection, agentRequest(), {
+        signal: new AbortController().signal,
+        onToolCall: async ({ callId }) => {
+          calls.push(callId);
+          return { success: true, text: 'saved' };
+        },
+      });
+      expect(result.status).toBe('error');
+      expect(new Set(calls).size).toBe(calls.length);
+      expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
+      if (mode === 'agent-exit-after-write') expect(calls).toEqual(['call-1', 'call-2']);
+    }
+  });
+  it('interrupts cancellation and suppresses a late host response without replay', async () => {
+    const { runtime, records } = setup('agent-normal');
+    const controller = new AbortController();
+    let release!: () => void;
+    let toolSignal: AbortSignal | undefined;
+    const onToolCall = vi.fn(async (_call, signal: AbortSignal) => {
+      toolSignal = signal;
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return { success: true, text: 'late saved result' };
+    });
+    const result = runtime.executeAgent(connection, agentRequest(), {
+      signal: controller.signal,
+      onToolCall,
+    });
+    await vi.waitFor(() => expect(onToolCall).toHaveBeenCalledTimes(1));
+    controller.abort();
+    expect(await result).toMatchObject({ status: 'cancelled' });
+    expect(toolSignal?.aborted).toBe(true);
+    release();
+    await Promise.resolve();
+    expect(records().filter((row) => row.method === 'turn/interrupt')).toHaveLength(1);
+    expect(records().filter((row) => row.id === 'tool-1')).toHaveLength(0);
+  });
+  it('retains a thrown host error without requesting another model turn', async () => {
+    const { runtime, records } = setup('agent-normal');
+    expect(
+      await runtime.executeAgent(connection, agentRequest(), {
+        signal: new AbortController().signal,
+        onToolCall: async () => {
+          throw new ProviderContractError('WRITE_OUTCOME_UNKNOWN');
+        },
+      })
+    ).toMatchObject({ status: 'error', error: { code: 'WRITE_OUTCOME_UNKNOWN' } });
+    expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
+  });
   it('starts disabled without creating credentials and rejects shell wrapper configuration', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'uimori-codex-runtime-test-'));
     roots.push(dir);

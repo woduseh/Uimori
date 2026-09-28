@@ -128,7 +128,7 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     expect(result.images).toHaveLength(1);
   }, 30_000);
 
-  it('adds image generation alongside native utilities and returns only decoded image bytes and the caption', async () => {
+  it('uses an image-only turn and returns decoded image bytes, a caption and numeric usage diagnostics', async () => {
     const { runtime, records } = setup('image-native');
     const wires: WireRecord[] = [];
     const result = await runtime.generateImage(
@@ -148,10 +148,16 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     expect(result.revisedPrompt).toBe('fixture revised prompt');
     expect(result.text).toBe('{"caption":"강 위의 등불"}');
     expect(result.usage).toMatchObject({ inputTokens: 100, outputTokens: 30, costUsd: null });
+    expect(result.usage.raw).toMatchObject({
+      itemCounts: { agentMessage: 2, imageGeneration: 1 },
+      tokenUsageUpdates: 1,
+    });
     const threadStart = records().find((entry) => entry.method === 'thread/start');
     expect(threadStart.params.config['features.image_generation']).toBe(true);
-    expect(threadStart.params.config['features.code_mode']).toBe(true);
-    expect(threadStart.params.config.web_search).toBe('cached');
+    expect(threadStart.params.config['features.code_mode']).toBe(false);
+    expect(threadStart.params.config.web_search).toBe('disabled');
+    expect(threadStart.params.baseInstructions).toContain('image_gen.imagegen');
+    expect(threadStart.params.baseInstructions.length).toBeLessThan(500);
     expect(threadStart.params.config['features.shell_tool']).toBe(false);
     expect(threadStart.params.environments).toEqual([]);
     const turnStart = records().find((entry) => entry.method === 'turn/start');
@@ -162,6 +168,10 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     expect(turnStart.params.outputSchema).toEqual(CODEX_ILLUSTRATION_OUTPUT_SCHEMA);
     expect(wires).toHaveLength(1);
     expect(wires[0].role).toBe('illustration');
+    expect(wires[0].body).toMatchObject({
+      baseInstructions: threadStart.params.baseInstructions,
+      builtinTools: { codeMode: false, webSearch: 'disabled' },
+    });
     expect(JSON.stringify(wires[0].body)).not.toContain(PNG_BASE64);
     expect((wires[0].body as { attachments: unknown[] }).attachments).toEqual([
       {

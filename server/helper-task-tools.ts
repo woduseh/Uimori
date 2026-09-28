@@ -1,0 +1,373 @@
+import type { Json, ProviderTool } from '../core/transport.js';
+import type { HelperTask } from '../core/helper.js';
+import type { HelperRuntime } from './helper-runtime.js';
+import { HttpError, choice, fields, number, record, text } from './request-validation.js';
+import type { Store } from './store.js';
+
+const id: Json = { type: 'string', minLength: 1, maxLength: 100 };
+const kind: Json = { type: 'string', enum: ['run', 'job', 'illustration', 'helper'] };
+const schema: Json = {
+  type: 'object',
+  properties: { kind, id },
+  required: ['kind', 'id'],
+  additionalProperties: false,
+};
+
+export const HELPER_TASK_TOOLS: ProviderTool[] = [
+  {
+    name: 'task.list',
+    description:
+      'Find recent task IDs, including queued work with no provider attempt yet. Defaults to active work in the current chat; a library helper without a chat sees all work. Returns only kind, ID, chat ID, status, auxiliary kind and update time.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        chatId: id,
+        status: { type: 'string', enum: ['active', 'failed', 'all'] },
+        limit: { type: 'integer', minimum: 1, maximum: 20 },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'task.inspect',
+    description:
+      'Inspect one known run, auxiliary job, illustration job or helper task by exact ID. Returns compact status, error, usage and available actions without manuscript or execution snapshots.',
+    inputSchema: schema,
+  },
+  {
+    name: 'task.cancel',
+    description:
+      'Cancel one known active task after the user requests it. Running provider work is aborted by its existing owner. Cannot cancel this helper task.',
+    inputSchema: schema,
+  },
+  {
+    name: 'task.retry',
+    description:
+      'Retry one known eligible task after the user requests it. A run retry may fork a new chat; returns its new task and chat IDs. Cannot retry this helper task or replay committed helper effects.',
+    inputSchema: schema,
+  },
+];
+
+type Kind = 'run' | 'job' | 'illustration' | 'helper';
+type Row = Record<string, any>;
+type TaskView = {
+  kind: Kind;
+  id: string;
+  chatId?: string;
+  conversationId?: string;
+  jobKind?: string;
+  status: string;
+  error: string | null;
+  usage: {
+    modelCalls: number;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    costUsd: number | null;
+  } | null;
+  diagnostics?: {
+    attemptsByPurpose: {
+      purpose: string;
+      usage: NonNullable<TaskView['usage']>;
+      unknownInputCalls: number;
+      unknownOutputCalls: number;
+      unknownCostCalls: number;
+      /** A native turn can hide several model calls; null is unknown, never one call. */
+      internalModelCalls: number | null;
+      unknownInternalModelCallAttempts: number;
+    }[];
+    toolResultSizes: {
+      calls: number;
+      originalChars: number;
+      providedChars: number;
+      byTool: { name: string; calls: number; originalChars: number; providedChars: number }[];
+    };
+  };
+  canCancel: boolean;
+  canRetry: boolean;
+  retryBlock?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TaskControlActions = {
+  cancelRun: (id: string) => void;
+  retryRun: (id: string, key: string) => { id: string };
+  cancelJob: (id: string) => void;
+  retryJob: (id: string) => { id: string };
+  cancelIllustration: (id: string) => void;
+  retryIllustration: (id: string) => void;
+  cancelHelper: (id: string) => void;
+  retryHelper: (previous: HelperTask, key: string) => { id: string };
+};
+
+function row(store: Store, query: string, id: string): Row {
+  const found = store.db.prepare(query).get(id) as Row | undefined;
+  if (!found) throw new HttpError(404, 'TASK_NOT_FOUND');
+  return found;
+}
+
+const ATTEMPT_TOTALS = `COUNT(*) AS calls,
+  COALESCE(SUM(CASE WHEN input_tokens>=0 THEN input_tokens ELSE 0 END),0) AS known_input,
+  COALESCE(SUM(CASE WHEN output_tokens>=0 THEN output_tokens ELSE 0 END),0) AS known_output,
+  COALESCE(SUM(CASE WHEN cost_usd>=0 THEN cost_usd ELSE 0 END),0) AS known_cost,
+  COALESCE(SUM(input_tokens IS NULL OR input_tokens<0),0) AS unknown_input,
+  COALESCE(SUM(output_tokens IS NULL OR output_tokens<0),0) AS unknown_output,
+  COALESCE(SUM(cost_usd IS NULL OR cost_usd<0),0) AS unknown_cost`;
+
+function projectedUsage(aggregate: Row): NonNullable<TaskView['usage']> {
+  const calls = Number(aggregate.calls);
+  return {
+    modelCalls: calls,
+    inputTokens: calls && !aggregate.unknown_input ? Number(aggregate.known_input) : null,
+    outputTokens: calls && !aggregate.unknown_output ? Number(aggregate.known_output) : null,
+    costUsd: calls && !aggregate.unknown_cost ? Number(aggregate.known_cost) : null,
+  };
+}
+
+function attemptUsage(store: Store, column: 'run_id' | 'job_id', id: string) {
+  const aggregate = store.db
+    .prepare(`SELECT ${ATTEMPT_TOTALS} FROM attempts WHERE ${column}=? AND role!='title'`)
+    .get(id) as Row;
+  return projectedUsage(aggregate);
+}
+
+function helperDiagnostics(store: Store, id: string): NonNullable<TaskView['diagnostics']> {
+  const attempts = store.db
+    .prepare(
+      `SELECT h.purpose,${ATTEMPT_TOTALS},
+        COALESCE(SUM(CASE WHEN json_type(a.raw_usage,'$.modelCalls') IN ('integer','real') THEN json_extract(a.raw_usage,'$.modelCalls') ELSE 0 END),0) AS known_internal,
+        COALESCE(SUM(json_type(a.raw_usage,'$.modelCalls') IN ('integer','real')),0) AS reported_internal
+       FROM helper_task_attempts h JOIN attempts a ON a.id=h.attempt_id
+       WHERE h.task_id=? GROUP BY h.purpose ORDER BY h.purpose`
+    )
+    .all(id) as Row[];
+  const toolTotals = store.db
+    .prepare(
+      `SELECT COUNT(*) AS calls,
+        COALESCE(SUM(json_extract(data,'$.originalResultChars')),0) AS original_chars,
+        COALESCE(SUM(json_extract(data,'$.providedResultChars')),0) AS provided_chars
+       FROM helper_events WHERE task_id=? AND kind='tool.finished'
+         AND json_type(data,'$.providedResultChars')='integer'`
+    )
+    .get(id) as Row;
+  const tools = store.db
+    .prepare(
+      `SELECT json_extract(data,'$.name') AS name,COUNT(*) AS calls,
+        COALESCE(SUM(json_extract(data,'$.originalResultChars')),0) AS original_chars,
+        COALESCE(SUM(json_extract(data,'$.providedResultChars')),0) AS provided_chars
+       FROM helper_events WHERE task_id=? AND kind='tool.finished'
+         AND json_type(data,'$.providedResultChars')='integer'
+       GROUP BY name ORDER BY original_chars DESC,name LIMIT 12`
+    )
+    .all(id) as Row[];
+  return {
+    attemptsByPurpose: attempts.map((item) => ({
+      purpose: String(item.purpose),
+      usage: projectedUsage(item),
+      unknownInputCalls: Number(item.unknown_input),
+      unknownOutputCalls: Number(item.unknown_output),
+      unknownCostCalls: Number(item.unknown_cost),
+      internalModelCalls:
+        Number(item.reported_internal) !== Number(item.calls) ? null : Number(item.known_internal),
+      unknownInternalModelCallAttempts: Number(item.calls) - Number(item.reported_internal),
+    })),
+    toolResultSizes: {
+      calls: Number(toolTotals.calls),
+      originalChars: Number(toolTotals.original_chars),
+      providedChars: Number(toolTotals.provided_chars),
+      byTool: tools.map((item) => ({
+        name: String(item.name),
+        calls: Number(item.calls),
+        originalChars: Number(item.original_chars),
+        providedChars: Number(item.provided_chars),
+      })),
+    },
+  };
+}
+
+function listTasks(store: Store, current: HelperTask, args: Record<string, unknown>) {
+  fields(record(args), ['chatId', 'status', 'limit']);
+  const status =
+    args.status === undefined
+      ? 'active'
+      : choice(args.status, ['active', 'failed', 'all'], 'task status');
+  const limit = args.limit === undefined ? 10 : number(args.limit, 'task limit', 1, 20);
+  const chatId =
+    args.chatId === undefined
+      ? current.snapshot.scope.kind === 'chat'
+        ? current.snapshot.scope.chatId
+        : null
+      : text(args.chatId, 'chat ID', 100);
+  if (chatId) store.chat(chatId);
+  const tasks = store.db
+    .prepare(
+      `SELECT kind,id,chatId,status,jobKind,updatedAt FROM (
+      SELECT 'run' AS kind,id,chat_id AS chatId,status,NULL AS jobKind,updated_at AS updatedAt FROM runs
+      UNION ALL SELECT 'job',id,chat_id,status,kind,updated_at FROM jobs
+      UNION ALL SELECT 'illustration',id,chat_id,status,NULL,updated_at FROM illustration_jobs
+      UNION ALL SELECT 'helper',t.id,c.chat_id,t.status,NULL,t.updated_at
+        FROM helper_tasks t JOIN helper_conversations c ON c.id=t.conversation_id
+    ) WHERE (? IS NULL OR chatId=?)
+      AND (?='all' OR (?='active' AND status IN ('queued','running'))
+        OR (?='failed' AND status IN ('failed','interrupted','partial','cancelled','refused','stale')))
+    ORDER BY updatedAt DESC,id DESC LIMIT ?`
+    )
+    .all(chatId, chatId, status, status, status, limit) as Row[];
+  return { status, ...(chatId ? { chatId } : {}), tasks };
+}
+
+function inspect(store: Store, currentTaskId: string, target: Kind, id: string): TaskView {
+  if (target === 'helper') {
+    const task = row(
+      store,
+      "SELECT id,conversation_id,status,error,usage,created_at,updated_at,COALESCE(json_extract(snapshot,'$.requestGroupId'),id) AS request_group FROM helper_tasks WHERE id=?",
+      id
+    );
+    const self = id === currentTaskId;
+    const eligible = ['failed', 'cancelled', 'interrupted'].includes(task.status);
+    const committed =
+      eligible &&
+      Number(
+        store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(id)?.n
+      ) > 0;
+    const latest = eligible
+      ? (
+          store.db
+            .prepare(
+              "SELECT id FROM helper_tasks WHERE conversation_id=? AND COALESCE(json_extract(snapshot,'$.requestGroupId'),id)=? ORDER BY rowid DESC LIMIT 1"
+            )
+            .get(task.conversation_id, task.request_group) as { id: string } | undefined
+        )?.id === id
+      : false;
+    return {
+      kind: target,
+      id,
+      conversationId: task.conversation_id,
+      status: task.status,
+      error: task.error,
+      usage: JSON.parse(String(task.usage)),
+      diagnostics: helperDiagnostics(store, id),
+      canCancel: !self && ['queued', 'running'].includes(task.status),
+      canRetry: !self && eligible && !committed && latest,
+      ...(self
+        ? { retryBlock: 'CURRENT_HELPER_TASK' }
+        : committed
+          ? { retryBlock: 'HELPER_EFFECTS_ALREADY_COMMITTED' }
+          : eligible && !latest
+            ? { retryBlock: 'HELPER_ALREADY_RETRIED' }
+            : {}),
+      createdAt: task.created_at,
+      updatedAt: task.updated_at,
+    };
+  }
+  if (target === 'run') {
+    const run = row(
+      store,
+      "SELECT id,chat_id,status,error,created_at,updated_at,usage,json_extract(snapshot,'$.packageStart.mode') AS start_mode,json_extract(snapshot,'$.nativeRisuAuthored') AS native_authored FROM runs WHERE id=?",
+      id
+    );
+    const active = ['queued', 'running'].includes(run.status);
+    const authored = run.start_mode === 'authored' || !!run.native_authored;
+    const usage = run.usage ? JSON.parse(String(run.usage)) : attemptUsage(store, 'run_id', id);
+    return {
+      kind: target,
+      id,
+      chatId: run.chat_id,
+      status: run.status,
+      error: run.error,
+      usage,
+      canCancel: active,
+      canRetry: !active && !authored,
+      ...(authored ? { retryBlock: 'AUTHORED_START' } : {}),
+      createdAt: run.created_at,
+      updatedAt: run.updated_at,
+    };
+  }
+  if (target === 'job') {
+    const job = row(
+      store,
+      'SELECT id,chat_id,kind,status,error,created_at,updated_at FROM jobs WHERE id=?',
+      id
+    );
+    const active = ['queued', 'running'].includes(job.status);
+    const eligible = ['failed', 'partial', 'interrupted', 'cancelled'].includes(job.status);
+    return {
+      kind: target,
+      id,
+      chatId: job.chat_id,
+      jobKind: job.kind,
+      status: job.status,
+      error: job.error,
+      usage: attemptUsage(store, 'job_id', id),
+      canCancel: active,
+      canRetry: eligible,
+      createdAt: job.created_at,
+      updatedAt: job.updated_at,
+    };
+  }
+  const illustration = row(
+    store,
+    'SELECT id,chat_id,status,error,created_at,updated_at FROM illustration_jobs WHERE id=?',
+    id
+  );
+  const active = ['queued', 'running'].includes(illustration.status);
+  const eligible = ['failed', 'cancelled', 'interrupted'].includes(illustration.status);
+  return {
+    kind: target,
+    id,
+    chatId: illustration.chat_id,
+    status: illustration.status,
+    error: illustration.error,
+    usage: projectedUsage(
+      store.db
+        .prepare(
+          `SELECT ${ATTEMPT_TOTALS} FROM attempts
+       WHERE id IN (SELECT value FROM json_each((SELECT diagnostic FROM illustration_jobs WHERE id=?),'$.attempts'))`
+        )
+        .get(id) as Row
+    ),
+    canCancel: active,
+    canRetry: eligible,
+    createdAt: illustration.created_at,
+    updatedAt: illustration.updated_at,
+  };
+}
+
+export function invokeTaskTool(
+  store: Store,
+  helper: HelperRuntime,
+  current: HelperTask,
+  name: string,
+  args: Record<string, unknown>,
+  operationId: string,
+  actions: TaskControlActions
+) {
+  if (name === 'task.list') return listTasks(store, current, args);
+  fields(record(args), ['kind', 'id']);
+  const target = choice(args.kind, ['run', 'job', 'illustration', 'helper'], 'task kind');
+  const targetId = text(args.id, 'task ID', 100);
+  const before = inspect(store, current.id, target, targetId);
+  if (name === 'task.inspect') return before;
+  if (target === 'helper' && targetId === current.id)
+    throw new HttpError(409, 'CURRENT_HELPER_TASK');
+  if (name === 'task.cancel') {
+    if (!before.canCancel) throw new HttpError(409, 'TASK_NOT_CANCELLABLE');
+    if (target === 'run') actions.cancelRun(targetId);
+    else if (target === 'job') actions.cancelJob(targetId);
+    else if (target === 'illustration') actions.cancelIllustration(targetId);
+    else actions.cancelHelper(targetId);
+    return inspect(store, current.id, target, targetId);
+  }
+  if (name !== 'task.retry') throw new HttpError(400, 'UNKNOWN_HELPER_TOOL');
+  if (!before.canRetry) throw new HttpError(409, before.retryBlock ?? 'TASK_NOT_RETRYABLE');
+  let newId = targetId;
+  if (target === 'run')
+    newId = actions.retryRun(targetId, `helper:${current.id}:${operationId}`).id;
+  else if (target === 'job') newId = actions.retryJob(targetId).id;
+  else if (target === 'illustration') actions.retryIllustration(targetId);
+  else {
+    const previous = helper.workspace.task(targetId);
+    newId = actions.retryHelper(previous, `helper:${current.id}:${operationId}`).id;
+  }
+  return { previousTaskId: targetId, task: inspect(store, current.id, target, newId) };
+}

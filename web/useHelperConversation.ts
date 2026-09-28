@@ -127,7 +127,8 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
           changed = true;
           if (
             /^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
-            event.kind === 'artifact.saved'
+            event.kind === 'artifact.saved' ||
+            event.kind === 'settings.updated'
           )
             notify = true;
         }

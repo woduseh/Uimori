@@ -31,6 +31,7 @@ import { Store } from './store.js';
 import { readRunSnapshot } from './run-projections.js';
 import { ChatTitleService } from './chat-title.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
+import { invokeTaskTool } from './helper-task-tools.js';
 import { readHelperChatContext } from './helper-context.js';
 import { helperRoutes } from './helper-routes.js';
 import { contextRoutes } from './context-routes.js';
@@ -68,7 +69,13 @@ import { NativeTransferError } from '../core/native-transfer-validation.js';
 import { diagnosticReportRoutes } from './diagnostic-report.js';
 import { packageFeatureRoutes } from './package-features.js';
 import { reconcileIllustrationJob, runIllustrationJob } from './illustration-runner.js';
-import { illustrationJob, illustrationRoutes, queuedIllustrations } from './illustrations.js';
+import {
+  cancelIllustration,
+  illustrationJob,
+  illustrationRoutes,
+  queuedIllustrations,
+  retryIllustration,
+} from './illustrations.js';
 import { createPackageStart } from './package-start.js';
 import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
 import { VertexCredentialStore } from './vertex-credentials.js';
@@ -82,6 +89,7 @@ import {
 import { agentRuntimeRoutes } from './agent-runtime-routes.js';
 import {
   ProviderContractError,
+  type ProviderConnection,
   type ProviderExecutionOptions,
   type WireRecord,
 } from '../core/transport.js';
@@ -130,21 +138,22 @@ export async function createApp(options: AppOptions): Promise<App> {
   const credentials = new VertexCredentialStore(store.db);
   const jevCredentials = new JevCredentialStore(store.db);
   const codex = options.codexRuntime ?? new CodexRuntime(options.dbPath, options.codex);
+  const authorizeCodex = (connection: ProviderConnection) => {
+    const current = store.product.get<Connection>('connection', connection.id);
+    if (
+      !current.enabled ||
+      current.protocol !== connection.protocol ||
+      current.endpoint !== connection.endpoint ||
+      current.credentialRef !== connection.credentialRef
+    )
+      throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
+  };
   const executeCodex: NonNullable<ProviderExecutionOptions['executeCodex']> = (
     connection,
     request,
     execution
   ) => {
-    const authorize = () => {
-      const current = store.product.get<Connection>('connection', connection.id);
-      if (
-        !current.enabled ||
-        current.protocol !== connection.protocol ||
-        current.endpoint !== connection.endpoint ||
-        current.credentialRef !== connection.credentialRef
-      )
-        throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
-    };
+    const authorize = () => authorizeCodex(connection);
     authorize();
     return codex.execute(connection, request, {
       ...execution,
@@ -273,11 +282,113 @@ export async function createApp(options: AppOptions): Promise<App> {
 
     resolveCredential,
     executeCodex,
+    executeCodexAgent: (connection, request, execution) => {
+      authorizeCodex(connection);
+      return codex.executeAgent(connection, request, {
+        ...execution,
+        beforeTurn: async () => {
+          authorizeCodex(connection);
+          await execution.beforeTurn?.();
+        },
+        onWire: async (wire) => {
+          authorizeCodex(connection);
+          await execution.onWire?.(wire);
+          authorizeCodex(connection);
+        },
+      });
+    },
     vertexRequestTier: options.vertexRequestTier,
     signal: stopping.signal,
     track,
     streams,
     services: {
+      task: (task, name, args, operationId) => {
+        const afterCommit: (() => void)[] = [];
+        const invoke = () =>
+          invokeTaskTool(store, helper, task, name, args, operationId, {
+            cancelRun: (id) => {
+              const run = store.finishRun(id, 'cancelled', 'Run cancelled');
+              afterCommit.push(() => {
+                runs.get(id)?.abort(new Error('Run cancelled'));
+                publish(run.chatId);
+              });
+            },
+            retryRun: (id, key) => {
+              const result = store.retryRun(id, key, (snapshot) =>
+                requireModel(snapshot.profile?.models.main, 'main')
+              );
+              if (result.created) {
+                afterCommit.push(() => {
+                  publish(result.run.chatId);
+                  execute(result.run.id);
+                });
+              }
+              return { id: result.run.id };
+            },
+            cancelJob: (id) => {
+              const job = store.cancelJob(id);
+              afterCommit.push(() => {
+                jobControllers.get(id)?.abort(new Error('Job cancelled'));
+                publish(job.chatId);
+              });
+            },
+            retryJob: (id) => {
+              const job = store.retryJob(id, requireJobModel);
+              afterCommit.push(() => {
+                publish(job.chatId);
+                pumpJobs();
+              });
+              return { id: job.id };
+            },
+            cancelIllustration: (id) => {
+              const job = cancelIllustration(store, id);
+              afterCommit.push(() => {
+                illustrationControllers.get(id)?.abort(new Error('Illustration cancelled'));
+                publish(job.chatId);
+              });
+            },
+            retryIllustration: (id) => {
+              const job = retryIllustration(store, id);
+              afterCommit.push(() => {
+                publish(job.chatId);
+                pumpIllustrations();
+              });
+            },
+            cancelHelper: (id) => {
+              helper.workspace.cancel(id);
+              afterCommit.push(() => {
+                helper.cancel(id);
+              });
+            },
+            retryHelper: (previous, key) => {
+              const retried = helper.enqueue(
+                previous.conversationId,
+                key,
+                previous.request,
+                previous.snapshot.editor,
+                previous.snapshot.selection,
+                previous.id,
+                previous.snapshot.outlineTarget,
+                false
+              );
+              afterCommit.push(() => {
+                helper.pump();
+              });
+              return { id: retried.id };
+            },
+          });
+        const result =
+          name === 'task.inspect' || name === 'task.list'
+            ? invoke()
+            : helper.workspace.operation(
+                task.id,
+                `${task.id}:${operationId}`,
+                { name, args },
+                invoke
+              );
+        for (const effect of afterCommit) effect();
+        return result;
+      },
       context: async (task, name, args, hooks, operationId) => {
         const scope = task.snapshot.scope;
         if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
@@ -297,6 +408,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           helperWritingSnapshot(store, scope.chatId, 'context'),
           'context'
         );
+        hooks.signal.throwIfAborted();
         if (name === 'context.edit')
           return store.context.edit(
             scope.chatId,

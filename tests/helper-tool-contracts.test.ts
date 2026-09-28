@@ -400,7 +400,7 @@ test('resource schemas expose scoped reads and typed native patches without a mo
       properties: {
         changes: {
           minItems: 1,
-          items: { properties: { op: { enum: ['set', 'replaceText'] } } },
+          items: { properties: { op: { enum: ['set', 'replaceText', 'insert', 'remove'] } } },
         },
       },
     });

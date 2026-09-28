@@ -361,9 +361,11 @@ export function useStory() {
     };
     addEventListener('storage', onStorage);
     addEventListener('focus', refreshLibrary);
+    addEventListener('uimori-helper-updated', refreshLibrary);
     return () => {
       removeEventListener('storage', onStorage);
       removeEventListener('focus', refreshLibrary);
+      removeEventListener('uimori-helper-updated', refreshLibrary);
       libraryRequest.current++;
     };
   }, [loadLibrary]);

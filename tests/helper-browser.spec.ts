@@ -11,6 +11,7 @@ import type {
 import type { ResponseStreamPage } from '../core/response-stream.js';
 import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
+import type { ModelWorkspace } from '../core/product.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { navigationAction, openSourceActions } from './ui-navigation.js';
 import { openHelper } from './ui-navigation.js';
@@ -328,6 +329,16 @@ async function harness(page: Page, seedCount = 0) {
       loseNext = true;
     },
     current: () => [...views.values()].at(-1)!,
+    emit(kind: string) {
+      const view = [...views.values()].at(-1)!;
+      view.events.push({
+        seq: ++nextSeq,
+        conversationId: view.conversation.id,
+        taskId: null,
+        kind,
+        data: null,
+      });
+    },
     progress(task: HelperTaskView, text: string, offset: number) {
       const value = streams.get(task.id)!;
       value.chunks.push({
@@ -375,6 +386,40 @@ async function open(page: Page) {
   await expect(panel.getByText('대화를 불러오는 중…', { exact: true })).toHaveCount(0);
   return panel;
 }
+
+test('HELPUI12 helper settings event refreshes an open model editor without replacing its draft', async ({
+  page,
+  request,
+}) => {
+  const state = await harness(page);
+  await page.goto('/');
+  await navigationAction(page, '서재');
+  const panel = await open(page);
+  await panel.getByRole('button', { name: '도우미 말투 설정' }).click();
+  await panel.getByRole('button', { name: /^현재 도우미 모델/ }).click();
+  const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
+  await expect(editor).toBeVisible();
+  await editor.locator('.task-behavior-settings > summary').click();
+  const draft = editor.getByLabel('번역 작업 호출 한도', { exact: true });
+  await draft.fill('9');
+
+  const before = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
+  const changed = await request.put('/api/model-workspace', {
+    data: {
+      expectedRevision: before.revision,
+      routes: before.routes,
+      mainJudgmentEnabled: before.mainJudgmentEnabled,
+      mainJudgmentThreshold: before.mainJudgmentThreshold,
+      translationPolicy: { ...before.translationPolicy, maxCalls: 12 },
+    },
+  });
+  expect(changed.ok()).toBe(true);
+  state.emit('settings.updated');
+
+  await expect(editor.getByRole('alert')).toContainText('초안은 유지했어요');
+  await expect(draft).toHaveValue('9');
+  await expect(editor.getByRole('button', { name: '역할별 모델 설정 저장' })).toBeDisabled();
+});
 
 test(`HELPUI01 helper panel preserves separate input, reading position and Back behavior at ${MOBILE_WIDTH}/${DESKTOP_WIDTH}`, async ({
   page,

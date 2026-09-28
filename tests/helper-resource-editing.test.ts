@@ -334,6 +334,7 @@ test('standalone module overview and patch use its authored lorebook', () => {
   expect(overview.source).toEqual({
     path: '/package/nativeRisu/module',
     lorePath: '/package/nativeRisu/module/lorebook',
+    translationGuidePath: '/package/nativeRisu/module/extensions/uimori/translationGuide',
   });
   const updated = call(store, 'resource.patch', {
     kind: 'content',
@@ -351,4 +352,179 @@ test('standalone module overview and patch use its authored lorebook', () => {
   expect(saved.package.lore[0]?.text).toBe('Revised port.');
   expect(saved.package.nativeRisu.card).toEqual({});
   expect(saved.package.nativeRisu.module?.extensions).toEqual({ vendor: { unchanged: true } });
+});
+
+test('creates a guide and edits one term without changing adjacent native fields', () => {
+  const { store, content } = fixture();
+  const guide = '/package/nativeRisu/card/extensions/uimori/translationGuide';
+  const created = call(store, 'resource.patch', {
+    kind: 'content',
+    id: content.id,
+    expectedRevision: content.revision,
+    changes: [
+      { path: guide, op: 'set', value: { instructions: 'Keep the harbor name.', terms: [] } },
+    ],
+  });
+  const inserted = call(store, 'resource.patch', {
+    kind: 'content',
+    id: content.id,
+    expectedRevision: created.revision,
+    changes: [
+      { path: `${guide}/terms/0`, op: 'insert', value: { source: 'Harbor', target: '항구' } },
+    ],
+  });
+  const edited = call(store, 'resource.patch', {
+    kind: 'content',
+    id: content.id,
+    expectedRevision: inserted.revision,
+    changes: [{ path: `${guide}/terms/0/target`, op: 'set', value: '해항' }],
+  });
+  const saved = store.product.get<Content>('content', content.id);
+  expect((saved.package.nativeRisu.card.extensions as any).uimori.translationGuide).toEqual({
+    instructions: 'Keep the harbor name.',
+    terms: [{ source: 'Harbor', target: '해항' }],
+  });
+  expect(saved.package.nativeRisu.card.extensions).toMatchObject({
+    risuai: { other: 'keep' },
+    vendor: { sentinel: 17 },
+  });
+  expect(() =>
+    call(store, 'resource.patch', {
+      kind: 'content',
+      id: content.id,
+      expectedRevision: edited.revision,
+      changes: [{ path: guide, op: 'set', value: { instructions: '', terms: [] } }],
+    })
+  ).toThrow('개별 필드');
+  const removed = call(store, 'resource.patch', {
+    kind: 'content',
+    id: content.id,
+    expectedRevision: edited.revision,
+    changes: [{ path: `${guide}/terms/0`, op: 'remove' }],
+  });
+  expect(
+    call(store, 'resource.read', {
+      kind: 'content',
+      id: content.id,
+      path: `${guide}/terms`,
+    })
+  ).toMatchObject({ revision: removed.revision, count: 0, items: [] });
+});
+
+test('inserting and removing lore preserves authored neighbors and refreshes the projection', () => {
+  const { store, content } = fixture();
+  const entries = '/package/nativeRisu/card/character_book/entries';
+  const inserted = call(store, 'resource.patch', {
+    kind: 'content',
+    id: content.id,
+    expectedRevision: content.revision,
+    changes: [
+      {
+        path: `${entries}/1`,
+        op: 'insert',
+        value: {
+          comment: 'River',
+          keys: ['river'],
+          content: 'River crossing.',
+          enabled: true,
+          extensions: { vendor: { placement: 'keep' } },
+        },
+      },
+    ],
+  });
+  let saved = store.product.get<Content>('content', content.id);
+  expect(
+    (saved.package.nativeRisu.card.character_book as any).entries.map((entry: any) => entry.comment)
+  ).toEqual(['Harbor', 'River', 'Forest']);
+  expect(saved.package.lore.map((entry) => entry.title)).toContain('River');
+  expect(() =>
+    call(store, 'resource.patch', {
+      kind: 'content',
+      id: content.id,
+      expectedRevision: content.revision,
+      changes: [{ path: `${entries}/0`, op: 'remove' }],
+    })
+  ).toThrow('저장된 자료가 변경됐어요');
+  const removed = call(store, 'resource.patch', {
+    kind: 'content',
+    id: content.id,
+    expectedRevision: inserted.revision,
+    changes: [{ path: `${entries}/1`, op: 'remove' }],
+  });
+  saved = store.product.get<Content>('content', content.id);
+  expect((saved.package.nativeRisu.card.character_book as any).entries).toEqual(
+    (content.package.nativeRisu.card.character_book as any).entries
+  );
+  expect(saved.package.lore.map((entry) => entry.title)).not.toContain('River');
+  expect(removed.changedPaths).toEqual([`${entries}/1`]);
+});
+
+test('preset native text and option declarations patch through normal preset validation', () => {
+  const path = mkdtempSync(join(tmpdir(), 'uimori-resource-edit-'));
+  const store = new Store(join(path, 'preset.sqlite'));
+  owned.push({ store, path });
+  const preset = store.product.promptPreset({
+    title: 'Draft',
+    role: 'main',
+    text: 'Original instruction.',
+  });
+  const blocks = '/program/nativeRisuPreset/preset/promptTemplate';
+  const block = call(store, 'resource.read', {
+    kind: 'prompt-preset',
+    id: preset.id,
+    path: blocks,
+    limit: 1,
+  }).items[0].path as string;
+  const source = call(store, 'resource.read', {
+    kind: 'prompt-preset',
+    id: preset.id,
+    path: block,
+  });
+  const textField = source.fields.find((field: any) => field.name === 'text');
+  expect(textField).toBeDefined();
+  const edited = call(store, 'resource.patch', {
+    kind: 'prompt-preset',
+    id: preset.id,
+    expectedRevision: preset.revision,
+    changes: [
+      { path: textField.path, op: 'replaceText', oldText: 'Original', newText: 'Revised' },
+      {
+        path: '/program/nativeRisuPreset/preset/customPromptTemplateToggle',
+        op: 'set',
+        value: 'tone=Tone=text',
+      },
+    ],
+  });
+  const saved = store.product.get<any>('prompt-preset', preset.id);
+  expect(saved.revision).toBe(edited.revision);
+  expect((saved.program.nativeRisuPreset.preset.promptTemplate as any[])[0].text).toContain(
+    'Revised instruction.'
+  );
+  expect(saved.program.nativeRisuPreset.preset.customPromptTemplateToggle).toBe('tone=Tone=text');
+  expect(saved.values).toHaveProperty('tone');
+});
+
+test('first lore insertion creates the missing card book without replacing native source', () => {
+  const { store } = fixture();
+  const input = fixtureBotInput('New lore owner');
+  input.package.nativeRisu.card.character_book = null;
+  input.package.nativeRisu.card.extensions = { vendor: { keep: true } };
+  const content = store.product.content(input) as Content;
+  const inserted = call(store, 'resource.patch', {
+    kind: 'content',
+    id: content.id,
+    expectedRevision: content.revision,
+    changes: [
+      {
+        path: '/package/nativeRisu/card/character_book/entries/0',
+        op: 'insert',
+        value: { comment: 'First', keys: ['first'], content: 'First fact.', enabled: true },
+      },
+    ],
+  });
+  const saved = store.product.get<Content>('content', content.id);
+  expect(inserted.revision).toBe(content.revision + 1);
+  expect((saved.package.nativeRisu.card.character_book as any).entries).toHaveLength(1);
+  expect(saved.package.nativeRisu.card.extensions).toEqual({ vendor: { keep: true } });
+  expect(saved.package.lore[0]?.text).toBe('First fact.');
 });

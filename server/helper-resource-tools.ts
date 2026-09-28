@@ -66,7 +66,7 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
   {
     name: 'resource.patch',
     description:
-      'Edit existing native card/module authored fields with the latest resource revision. Use resource.read paths or an editTarget from data.search/read in library scope. An exact excerpt with editTarget is sufficient for replaceText; no overview or whole-field read is required. Set a simple typed value (including scalar arrays such as lore keys), or replace a literal string that occurs exactly once. Applies all changes together with one undo. Projection fields such as package.lore/body/starts are read only.',
+      'Edit existing native card/module or prompt-preset authored fields with the latest revision. Use resource.read paths or a library editTarget. set changes a simple typed field, including native prompt text/options and preset values; replaceText changes one unique literal excerpt. To create a missing card/module translation guide, set source.translationGuidePath from resource.read to {instructions:string,terms:[{source:string,target:string,note?:string}]}; edit its fields afterward. insert/remove use an indexed path only in card character_book/entries, module lorebook, or translationGuide/terms. Insert one entry object or remove the indexed entry. A missing card book or module lorebook is created on first insert. All changes save together with one undo. Projection fields such as package.lore/body/starts are read only.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -80,7 +80,7 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
             type: 'object',
             properties: {
               path: string,
-              op: { type: 'string', enum: ['set', 'replaceText'] },
+              op: { type: 'string', enum: ['set', 'replaceText', 'insert', 'remove'] },
               value: {},
               oldText: string,
               newText: string,

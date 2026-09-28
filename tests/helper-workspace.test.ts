@@ -79,6 +79,87 @@ const success: transport.ProviderResult = {
   opaqueState: null,
 };
 
+test('a native turn abort reaches pending helper context work and prevents its late save', async () => {
+  const f = fixture();
+  const connection = f.store.product.connection({
+    title: 'Native helper',
+    protocol: 'codex-app-server-v1',
+    endpoint: 'codex://local',
+    enabled: true,
+  });
+  const model = f.store.product.model({
+    title: 'Native helper',
+    connectionId: connection.id,
+    modelId: 'synthetic-helper',
+    temperature: null,
+    maxOutputTokens: 1024,
+  });
+  const selected = modelWorkspace(f.store);
+  updateModelWorkspace(f.store, {
+    expectedRevision: selected.revision,
+    routes: selected.routes,
+    translationPolicy: selected.translationPolicy,
+    helperModel: { id: model.id },
+  });
+  const nativeController = new AbortController();
+  let enter!: (signal: AbortSignal) => void;
+  let releaseLateResult!: () => void;
+  let stopNative!: () => void;
+  const entered = new Promise<AbortSignal>((resolve) => {
+    enter = resolve;
+  });
+  const lateResult = new Promise<void>((resolve) => {
+    releaseLateResult = resolve;
+  });
+  const nativeStopped = new Promise<void>((resolve) => {
+    stopNative = resolve;
+  });
+  const save = vi.fn();
+  let pendingTool: Promise<{ success: boolean; text: string }> | undefined;
+  const runtime = new HelperRuntime(f.store, {
+    owner: 'native-cancellation-test',
+    signal: f.controller.signal,
+    track: (work) => f.work.push(work),
+    streams: f.streams,
+    executeCodexAgent: async (_connection, _request, options) => {
+      pendingTool = options.onToolCall(
+        {
+          callId: 'pending-context',
+          name: 'app.call',
+          arguments: { name: 'context.compact', arguments: { expectedRevision: 0 } },
+        },
+        nativeController.signal
+      );
+      await nativeStopped;
+      return { ...success, status: 'error', text: '', error: { code: 'TIMEOUT' } };
+    },
+    services: {
+      context: async (_task, _name, _args, hooks) => {
+        enter(hooks.signal);
+        await lateResult;
+        hooks.signal.throwIfAborted();
+        save();
+        return { saved: true };
+      },
+    },
+  });
+  const chat = createFixtureChat(f.store, 'Native cancellation');
+  const conversation = runtime.workspace.open({ kind: 'chat', chatId: chat.id });
+  const task = runtime.enqueue(conversation.id, 'native-timeout', '문맥을 압축해줘.');
+  const consumerSignal = await entered;
+  nativeController.abort(new Error('Native turn timed out'));
+  stopNative();
+  await Promise.all(f.work);
+  releaseLateResult();
+  const result = await pendingTool;
+
+  expect(f.controller.signal.aborted).toBe(false);
+  expect(consumerSignal.aborted).toBe(true);
+  expect(runtime.workspace.task(task.id)).toMatchObject({ status: 'failed', error: 'TIMEOUT' });
+  expect(result).toMatchObject({ success: false });
+  expect(save).not.toHaveBeenCalled();
+});
+
 test('saved editor references freeze at admission and identical retries survive later saves and cleanup', async () => {
   const f = fixture();
   const saved = f.store.product.content(fixtureBotInput('접수할 자료', '원래 본문'));
