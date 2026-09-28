@@ -93,15 +93,64 @@ class GarbageCollection(unittest.TestCase):
         calls = []
         def docker(*args):
             calls.append(args)
-            self.images = [item for item in self.images if item["Id"] != args[-1]]
+            if args[:2] == ("image", "rm"):
+                self.images = [item for item in self.images if item["Id"] != args[-1]]
+                return ""
+            if args == ("image", "ls", "-aq", "--no-trunc"):
+                return "\n".join(item["Id"] for item in self.images)
+            raise AssertionError(args)
         outcome = gc.apply_plan(self.plan(), self.root, docker)
         self.assertEqual(outcome["status"], "PASS")
-        self.assertEqual(calls, [("image", "rm", "obsolete")])
+        self.assertEqual(calls, [
+            ("image", "rm", "obsolete"),
+            ("image", "ls", "-aq", "--no-trunc"),
+        ])
         self.assertFalse(obsolete.exists())
         self.assertTrue((self.current / "private/data/uimori.sqlite").is_file())
         next_plan = self.plan()
         self.assertEqual(next_plan["images"], [])
         self.assertEqual(next_plan["directories"], [])
+
+    def test_cascading_docker_reclamation_is_success_not_a_stale_plan_warning(self):
+        self.images.extend([image("obsolete-a"), image("obsolete-b")])
+        plan = {"images": ["obsolete-a", "obsolete-b"], "directories": []}
+        calls = []
+        def docker(*args):
+            calls.append(args)
+            if args == ("image", "rm", "obsolete-a"):
+                self.images = [item for item in self.images
+                               if item["Id"] not in {"obsolete-a", "obsolete-b"}]
+                return ""
+            if args == ("image", "ls", "-aq", "--no-trunc"):
+                return "\n".join(item["Id"] for item in self.images)
+            raise AssertionError(args)
+        outcome = gc.apply_plan(plan, self.root, docker)
+        self.assertEqual(outcome["status"], "PASS")
+        self.assertEqual(outcome["removed"]["images"], ["obsolete-a", "obsolete-b"])
+        self.assertEqual(outcome["warnings"], [])
+        self.assertEqual(calls, [
+            ("image", "rm", "obsolete-a"),
+            ("image", "ls", "-aq", "--no-trunc"),
+        ])
+
+    def test_missing_image_after_failed_rm_is_reclaimed_but_present_image_warns(self):
+        self.images.extend([image("gone"), image("busy")])
+        plan = {"images": ["gone", "busy"], "directories": []}
+        def docker(*args):
+            if args == ("image", "rm", "gone"):
+                self.images = [item for item in self.images if item["Id"] != "gone"]
+                raise RuntimeError("No such image")
+            if args == ("image", "rm", "busy"):
+                raise RuntimeError("image is referenced")
+            if args == ("image", "ls", "-aq", "--no-trunc"):
+                return "\n".join(item["Id"] for item in self.images)
+            raise AssertionError(args)
+        outcome = gc.apply_plan(plan, self.root, docker)
+        self.assertEqual(outcome["status"], "WARN")
+        self.assertIn("gone", outcome["removed"]["images"])
+        self.assertEqual(len(outcome["warnings"]), 1)
+        self.assertIn("busy", outcome["warnings"][0])
+        self.assertIn("image still exists", outcome["warnings"][0])
 
     def test_cleanup_errors_are_warnings_and_new_active_state_prevents_removal(self):
         obsolete = self.record("obsolete", 10)
@@ -109,7 +158,10 @@ class GarbageCollection(unittest.TestCase):
         record = json.loads((obsolete / "oracle-summary.json").read_text())
         record["status"] = "RUNNING"
         (obsolete / "oracle-summary.json").write_text(json.dumps(record))
-        def unavailable(*_): raise OSError("image in use")
+        def unavailable(*args):
+            if args == ("image", "ls", "-aq", "--no-trunc"):
+                return "\n".join(item["Id"] for item in self.images)
+            raise OSError("image in use")
         outcome = gc.apply_plan(plan, self.root, unavailable)
         self.assertEqual(outcome["status"], "WARN")
         self.assertTrue(obsolete.exists())
