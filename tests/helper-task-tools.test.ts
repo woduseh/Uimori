@@ -5,7 +5,6 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { HelperTask } from '../core/helper.js';
 import { createApp } from '../server/app.js';
-import type { HelperRuntime } from '../server/helper-runtime.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { invokeTaskTool, type TaskControlActions } from '../server/helper-task-tools.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
@@ -29,7 +28,6 @@ function fixture() {
   const store = new Store(join(path, 'story.sqlite'));
   owned.push({ store, path });
   const workspace = new HelperWorkspace(store);
-  const helper = { workspace } as HelperRuntime;
   const current = {
     id: 'current-helper',
     snapshot: { scope: { kind: 'library', workId: 'test' } },
@@ -52,16 +50,19 @@ function fixture() {
     cancelHelper: (id) => {
       workspace.cancel(id);
     },
-    retryHelper: (previous, key) => ({
-      id: workspace.enqueue(previous.conversationId, key, previous.request, {
-        ...previous.snapshot,
-        retryOf: previous.id,
-      }).id,
-    }),
+    retryHelper: (id, key) => {
+      const previous = workspace.task(id);
+      return {
+        id: workspace.enqueue(previous.conversationId, key, previous.request, {
+          ...previous.snapshot,
+          retryOf: previous.id,
+        }).id,
+      };
+    },
   };
   const invoke = (name: string, kind: string, id: string, operationId = randomUUID()) =>
-    invokeTaskTool(store, helper, current, name, { kind, id }, operationId, actions);
-  return { store, workspace, helper, current, actions, invoke };
+    invokeTaskTool(store, current, name, { kind, id }, operationId, actions);
+  return { store, workspace, current, actions, invoke };
 }
 
 function queuedRun(store: Store, chatId: string) {
@@ -157,15 +158,7 @@ test('task.list finds queued work before any provider attempt and scopes to the 
   expect(
     f.store.db.prepare('SELECT COUNT(*) AS n FROM attempts WHERE run_id=?').get(queued.id)
   ).toEqual({ n: 0 });
-  const listed = invokeTaskTool(
-    f.store,
-    f.helper,
-    f.current,
-    'task.list',
-    {},
-    'list',
-    f.actions
-  ) as {
+  const listed = invokeTaskTool(f.store, f.current, 'task.list', {}, 'list', f.actions) as {
     status: string;
     chatId: string;
     tasks: { id: string; kind: string; status: string }[];

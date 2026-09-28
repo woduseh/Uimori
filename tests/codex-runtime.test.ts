@@ -109,11 +109,6 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     expect(records().find((row) => row.method === 'turn/start').params).not.toHaveProperty(
       'outputSchema'
     );
-    expect(
-      records()
-        .find((row) => row.method === 'thread/start')
-        .params.dynamicTools.map((tool: { name: string }) => tool.name)
-    ).toEqual(['uimori_data_search', 'uimori_app_call']);
     expect(records().find((row) => row.method === 'thread/start').params.dynamicTools).toEqual([
       {
         type: 'function',

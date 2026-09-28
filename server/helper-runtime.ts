@@ -744,17 +744,7 @@ export class HelperRuntime {
           }
           roundReadChars += JSON.stringify(event).length;
         }
-        results.push(event);
         returned.push(event);
-        if (helperRead(event)) {
-          const hash = createHash('sha256')
-            .update(JSON.stringify([event.name, event.args, event.result]))
-            .digest('hex');
-          if (!readData.has(hash)) {
-            readData.add(hash);
-            readRevision++;
-          }
-        }
         this.workspace.event(task.conversationId, id, 'tool.finished', {
           name: call.name,
           denied,
@@ -960,7 +950,20 @@ export class HelperRuntime {
           return;
         }
         opaqueState = result.opaqueState ?? undefined;
-        await executeCalls(result.toolCalls);
+        // Native Codex owns its tool history. Only the external provider loop
+        // needs a second copy and read-change tracking for host compaction.
+        const completed = await executeCalls(result.toolCalls);
+        results.push(...completed);
+        for (const event of completed) {
+          if (!helperRead(event)) continue;
+          const hash = createHash('sha256')
+            .update(JSON.stringify([event.name, event.args, event.result]))
+            .digest('hex');
+          if (!readData.has(hash)) {
+            readData.add(hash);
+            readRevision++;
+          }
+        }
       }
     } catch (error) {
       writer.flush();
