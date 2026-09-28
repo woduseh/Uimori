@@ -51,6 +51,10 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
   await editor
     .getByLabel('삽화 그림 지침', { exact: true })
     .fill('watercolor, soft light, textured paper');
+  const comfySettings = editor.locator('summary').filter({ hasText: 'ComfyUI 설정' });
+  await expect(editor.getByLabel('ComfyUI 워크플로 JSON', { exact: true })).toBeHidden();
+  await expect(comfySettings).toContainText('워크플로 없음');
+  await comfySettings.click();
   await editor
     .getByLabel('ComfyUI 네거티브 프롬프트 지침', { exact: true })
     .fill('text, watermark');
@@ -198,9 +202,15 @@ test('IPUI03 invalid recipes never save and the close guard preserves failed dra
   await section.getByRole('button', { name: '새 삽화 프리셋', exact: true }).click();
   const title = `저장 검증 ${Date.now().toString(36).slice(-5)}`;
   await editor.getByLabel('삽화 프리셋 이름').fill(title);
+  const comfySettings = editor.locator('summary').filter({ hasText: 'ComfyUI 설정' });
+  await comfySettings.click();
   await editor.getByLabel('ComfyUI 워크플로 JSON').fill('{"nodes":[]}');
+  await comfySettings.click();
   await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   await expect(section.getByRole('alert')).toBeVisible();
+  await expect(editor.getByLabel('ComfyUI 워크플로 JSON')).toBeVisible();
+  await expect(editor.getByLabel('ComfyUI 워크플로 JSON')).toBeFocused();
+  await expect(editor.getByLabel('ComfyUI 워크플로 JSON')).toHaveAttribute('aria-invalid', 'true');
   expect((await catalog(request)).presets).toHaveLength(count);
   await editor.getByLabel('ComfyUI 워크플로 JSON').fill('');
   await editor.getByLabel('삽화 그림 지침').fill('preserved user direction');
