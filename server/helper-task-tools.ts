@@ -1,6 +1,5 @@
 import type { Json, ProviderTool } from '../core/transport.js';
 import type { HelperTask } from '../core/helper.js';
-import type { HelperRuntime } from './helper-runtime.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -97,7 +96,7 @@ export type TaskControlActions = {
   cancelIllustration: (id: string) => void;
   retryIllustration: (id: string) => void;
   cancelHelper: (id: string) => void;
-  retryHelper: (previous: HelperTask, key: string) => { id: string };
+  retryHelper: (id: string, key: string) => { id: string };
 };
 
 function row(store: Store, query: string, id: string): Row {
@@ -335,7 +334,6 @@ function inspect(store: Store, currentTaskId: string, target: Kind, id: string):
 
 export function invokeTaskTool(
   store: Store,
-  helper: HelperRuntime,
   current: HelperTask,
   name: string,
   args: Record<string, unknown>,
@@ -365,9 +363,6 @@ export function invokeTaskTool(
     newId = actions.retryRun(targetId, `helper:${current.id}:${operationId}`).id;
   else if (target === 'job') newId = actions.retryJob(targetId).id;
   else if (target === 'illustration') actions.retryIllustration(targetId);
-  else {
-    const previous = helper.workspace.task(targetId);
-    newId = actions.retryHelper(previous, `helper:${current.id}:${operationId}`).id;
-  }
+  else newId = actions.retryHelper(targetId, `helper:${current.id}:${operationId}`).id;
   return { previousTaskId: targetId, task: inspect(store, current.id, target, newId) };
 }

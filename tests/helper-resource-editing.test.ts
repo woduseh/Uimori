@@ -388,18 +388,32 @@ test('creates a guide and edits one term without changing adjacent native fields
     risuai: { other: 'keep' },
     vendor: { sentinel: 17 },
   });
-  expect(() =>
-    call(store, 'resource.patch', {
-      kind: 'content',
-      id: content.id,
-      expectedRevision: edited.revision,
-      changes: [{ path: guide, op: 'set', value: { instructions: '', terms: [] } }],
-    })
-  ).toThrow('개별 필드');
-  const removed = call(store, 'resource.patch', {
+  const replaced = call(store, 'resource.patch', {
     kind: 'content',
     id: content.id,
     expectedRevision: edited.revision,
+    changes: [
+      {
+        path: guide,
+        op: 'set',
+        value: {
+          instructions: 'Use the revised spelling.',
+          terms: [{ source: 'Harbor', target: '항만' }],
+        },
+      },
+    ],
+  });
+  expect(
+    (store.product.get<Content>('content', content.id).package.nativeRisu.card.extensions as any)
+      .uimori.translationGuide
+  ).toEqual({
+    instructions: 'Use the revised spelling.',
+    terms: [{ source: 'Harbor', target: '항만' }],
+  });
+  const removed = call(store, 'resource.patch', {
+    kind: 'content',
+    id: content.id,
+    expectedRevision: replaced.revision,
     changes: [{ path: `${guide}/terms/0`, op: 'remove' }],
   });
   expect(
@@ -518,7 +532,7 @@ test('first lore insertion creates the missing card book without replacing nativ
       {
         path: '/package/nativeRisu/card/character_book/entries/0',
         op: 'insert',
-        value: { comment: 'First', keys: ['first'], content: 'First fact.', enabled: true },
+        value: { comment: 'First', content: 'First fact.', constant: true, enabled: true },
       },
     ],
   });

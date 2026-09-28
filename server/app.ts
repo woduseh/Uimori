@@ -305,7 +305,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       task: (task, name, args, operationId) => {
         const afterCommit: (() => void)[] = [];
         const invoke = () =>
-          invokeTaskTool(store, helper, task, name, args, operationId, {
+          invokeTaskTool(store, task, name, args, operationId, {
             cancelRun: (id) => {
               const run = store.finishRun(id, 'cancelled', 'Run cancelled');
               afterCommit.push(() => {
@@ -360,7 +360,8 @@ export async function createApp(options: AppOptions): Promise<App> {
                 helper.cancel(id);
               });
             },
-            retryHelper: (previous, key) => {
+            retryHelper: (id, key) => {
+              const previous = helper.workspace.task(id);
               const retried = helper.enqueue(
                 previous.conversationId,
                 key,

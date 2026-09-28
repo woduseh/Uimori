@@ -5,7 +5,6 @@ import {
   type ResourceModel,
 } from '../core/resource-editing.js';
 import type { Content } from '../core/product.js';
-import { validateTranslationGuide } from '../core/translation-guide.js';
 import type { HelperEditor } from '../core/helper.js';
 import type { Store } from './store.js';
 import { HttpError, number, text } from './request-validation.js';
@@ -405,32 +404,30 @@ export function patchHelperResource(
         throw new HttpError(400, '목록 인덱스를 확인해 주세요.');
       if (change.op === 'insert') {
         if (!object(change.value)) throw new HttpError(400, '새 항목 객체가 필요해요.');
-        if (list === 'terms') {
-          validateTranslationGuide({ instructions: '', terms: [change.value] });
-        } else if (
-          typeof change.value.content !== 'string' ||
-          (parentSegments[2] === 'card' &&
-            (!Array.isArray(change.value.keys) ||
-              change.value.keys.some((key) => typeof key !== 'string')))
-        ) {
-          throw new HttpError(400, '로어 항목의 내용과 키를 확인해 주세요.');
-        }
+        if (list === 'lore' && typeof change.value.content !== 'string')
+          throw new HttpError(400, '로어 항목의 내용을 확인해 주세요.');
         parent.value.splice(index, 0, structuredClone(change.value));
       } else parent.value.splice(index, 1);
       changedPaths.push(change.path);
       continue;
     }
     if (kind === 'content' && change.op === 'set' && guidePath(segments)) {
+      if (!object(change.value)) throw new HttpError(400, '번역 지침 객체가 필요해요.');
       const document =
         segments[2] === 'card'
           ? (model as Content).package.nativeRisu.card
           : (model as Content).package.nativeRisu.module!;
+      if (document.extensions != null && !object(document.extensions))
+        throw new HttpError(400, '기존 확장 필드를 확인해 주세요.');
       const extensions = object(document.extensions) ? document.extensions : {};
+      if (extensions.uimori != null && !object(extensions.uimori))
+        throw new HttpError(400, '기존 Uimori 확장 필드를 확인해 주세요.');
       const uimori = object(extensions.uimori) ? extensions.uimori : {};
-      if (uimori.translationGuide !== undefined)
-        throw new HttpError(400, '기존 번역 지침은 개별 필드를 수정해 주세요.');
-      const guide = validateTranslationGuide(change.value);
-      document.extensions = { ...extensions, uimori: { ...uimori, translationGuide: guide } };
+      if (isDeepStrictEqual(uimori.translationGuide, change.value)) continue;
+      document.extensions = {
+        ...extensions,
+        uimori: { ...uimori, translationGuide: structuredClone(change.value) },
+      };
       changedPaths.push(change.path);
       continue;
     }

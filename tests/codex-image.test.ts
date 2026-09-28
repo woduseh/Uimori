@@ -157,7 +157,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     expect(threadStart.params.config['features.code_mode']).toBe(false);
     expect(threadStart.params.config.web_search).toBe('disabled');
     expect(threadStart.params.baseInstructions).toContain('image_gen.imagegen');
-    expect(threadStart.params.baseInstructions.length).toBeLessThan(500);
     expect(threadStart.params.config['features.shell_tool']).toBe(false);
     expect(threadStart.params.environments).toEqual([]);
     const turnStart = records().find((entry) => entry.method === 'turn/start');

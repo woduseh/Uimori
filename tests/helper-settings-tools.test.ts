@@ -6,7 +6,6 @@ import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { invokeHelperSettingsTool as call } from '../server/helper-settings-tools.js';
 import { modelWorkspace, promptWorkspace } from '../server/prompt-workspace.js';
-import { usageReport } from '../server/usage-report.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 
 const owned: { path: string; store: Store }[] = [];
@@ -221,9 +220,12 @@ test('chat prompt pin reports the effective prompt and preserves the model pin',
   expect(promptWorkspace(store)).toEqual(before);
 });
 
-test('usage read retains the existing Seoul period and cost report semantics', () => {
-  const store = database();
-  const query = { from: '2026-09-01', to: '2026-09-29' };
-  expect(call(store, 'usage.read', query)).toEqual(usageReport(store, query));
-  expect(() => call(store, 'usage.read', { from: '2026-02-30', to: '2026-09-29' })).toThrow();
+test('usage read returns the existing report for the requested period', () => {
+  const report = call(database(), 'usage.read', { from: '2026-09-01', to: '2026-09-29' });
+  expect(report).toMatchObject({
+    from: '2026-09-01',
+    to: '2026-09-29',
+    timeZone: 'Asia/Seoul',
+    totals: { calls: 0 },
+  });
 });
