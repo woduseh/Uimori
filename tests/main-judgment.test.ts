@@ -132,6 +132,9 @@ async function fixture(
         usage: { inputTokens: 11, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
       };
     },
+    executeAgent: async () => {
+      throw new Error('Unexpected executeAgent');
+    },
   };
   const owner = {
     directory: await mkdtemp(join(tmpdir(), 'uimori-main-judgment-')),

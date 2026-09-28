@@ -941,8 +941,7 @@ test('an oversized captured editor is paged before its source reaches a provider
   const log = script(f, (request) => {
     expect(request.role).toBe('helper');
     helperCalls++;
-    if (helperCalls === 1)
-      return tools(tool('editor-overview', 'workspace.read', { kind: 'editor' }));
+    if (helperCalls === 1) return tools(tool('editor-overview', 'editor.read', {}));
     if (helperCalls === 2) {
       expect(events(request)).toContainEqual(
         expect.objectContaining({
@@ -957,8 +956,7 @@ test('an oversized captured editor is paged before its source reaches a provider
         })
       );
       return tools(
-        tool('editor-field', 'workspace.read', {
-          kind: 'editor',
+        tool('editor-field', 'editor.read', {
           path: '/package/nativeRisu/card/description',
           textLimit: 80,
         })
@@ -988,7 +986,7 @@ test('an oversized captured editor is paged before its source reaches a provider
     .events(f.conversation.id)
     .find((event) => event.taskId === task.id && event.kind === 'tool.finished');
   expect(finished?.data).toMatchObject({
-    name: 'workspace.read',
+    name: 'editor.read',
     originalResultChars: expect.any(Number),
     providedResultChars: expect.any(Number),
   });

@@ -624,7 +624,7 @@ export function HelperPanel(props: Props) {
       >
         <p>모델 · {task.modelTitle}</p>
         <p>
-          모델 호출 {task.usage.modelCalls}회 · 누적 입력 {task.usage.inputTokens ?? '미확인'} /
+          실행 요청 {task.usage.modelCalls}회 · 누적 입력 {task.usage.inputTokens ?? '미확인'} /
           출력 {task.usage.outputTokens ?? '미확인'} 토큰
         </p>
         {task.error && <p className="error">{task.error}</p>}
@@ -1006,7 +1006,7 @@ export function HelperPanel(props: Props) {
         onClose={() => setTaskHistory(null)}
       >
         <div className="activity-notification-toolbar">
-          <p>대화에는 최신 시도를 표시해요. 이전 시도와 호출 수는 여기에 남아요.</p>
+          <p>대화에는 최신 시도를 표시해요. 이전 시도와 실행 요청 수는 여기에 남아요.</p>
           {taskHistory?.taskId && (
             <button type="button" className="secondary" onClick={() => setTaskHistory({})}>
               전체 작업 보기
@@ -1023,7 +1023,7 @@ export function HelperPanel(props: Props) {
                     <time dateTime={task.createdAt}>
                       {new Date(task.createdAt).toLocaleString()}
                     </time>{' '}
-                    · 호출 {task.usage.modelCalls}회
+                    · 실행 요청 {task.usage.modelCalls}회
                     {taskElapsed(task, now) && ` · ${taskElapsed(task, now)}`}
                   </small>
                 </div>

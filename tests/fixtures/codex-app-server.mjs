@@ -16,6 +16,67 @@ let clientInfo;
 let nextThread = 0;
 let nextTurn = 0;
 let loggedOut = mode === 'logged-out';
+let native;
+function nativeTool(index) {
+  const { threadId, turnId } = native;
+  const callId = 'call-' + index;
+  const tool = index === 1 ? 'uimori_data_search' : 'uimori_app_call';
+  const args = index === 1 ? { query: 'saved draft' } : { id: 'draft-1', value: 'revised' };
+  const item = { type: 'dynamicToolCall', id: callId, tool, arguments: args, status: 'inProgress' };
+  send({ method: 'item/started', params: { threadId, turnId, item } });
+  const params = { threadId, turnId, callId, namespace: null, tool, arguments: args };
+  if (mode === 'agent-wrong-thread') params.threadId = 'other-thread';
+  if (mode === 'agent-wrong-turn') params.turnId = 'other-turn';
+  if (mode === 'agent-unknown-tool') params.tool = 'shell';
+  send({ id: 'tool-' + index, method: 'item/tool/call', params });
+  if (mode === 'agent-duplicate') send({ id: 'tool-duplicate', method: 'item/tool/call', params });
+}
+function nativeResponse(request) {
+  const { threadId, turnId } = native;
+  if (request.error) return;
+  const index = request.id === 'tool-1' ? 1 : 2;
+  send({
+    method: 'item/completed',
+    params: {
+      threadId,
+      turnId,
+      item: {
+        type: 'dynamicToolCall',
+        id: 'call-' + index,
+        tool: index === 1 ? 'uimori_data_search' : 'uimori_app_call',
+        status: 'completed',
+        ...request.result,
+      },
+    },
+  });
+  const total = { inputTokens: index * 100, outputTokens: index * 30 };
+  send({
+    method: 'thread/tokenUsage/updated',
+    params: { threadId, turnId, tokenUsage: { total } },
+  });
+  // Repeated totals are a snapshot, not another charge/model-call.
+  send({
+    method: 'thread/tokenUsage/updated',
+    params: { threadId, turnId, tokenUsage: { total } },
+  });
+  if (index === 1) return nativeTool(2);
+  if (mode === 'agent-exit-after-write') return process.exit(1);
+  const item = { type: 'agentMessage', id: 'agent-final', phase: 'final_answer', text: '' };
+  send({ method: 'item/started', params: { threadId, turnId, item } });
+  for (const delta of ['Saved ', 'the draft.'])
+    send({
+      method: 'item/agentMessage/delta',
+      params: { threadId, turnId, itemId: item.id, delta },
+    });
+  send({
+    method: 'item/completed',
+    params: { threadId, turnId, item: { ...item, text: 'Saved the draft.' } },
+  });
+  send({
+    method: 'turn/completed',
+    params: { threadId, turn: { id: turnId, status: 'completed', error: null } },
+  });
+}
 input.on('line', (line) => {
   const request = JSON.parse(line);
   if (process.env.UIMORI_CODEX_FIXTURE_LOG) {
@@ -44,6 +105,7 @@ input.on('line', (line) => {
     return;
   }
   if (!method) {
+    if (native) return nativeResponse(request);
     send({ method: 'fixture/clientResponse', params: request });
     return;
   }
@@ -205,6 +267,24 @@ input.on('line', (line) => {
       params: { threadId, turn: { id: turnId, status: 'inProgress', items: [], error: null } },
     });
     if (mode !== 'early-completion') reply();
+    if (mode.startsWith('agent-')) {
+      native = { threadId, turnId };
+      send({
+        method: 'item/completed',
+        params: {
+          threadId,
+          turnId,
+          item: {
+            type: 'agentMessage',
+            id: 'commentary',
+            phase: 'commentary',
+            text: 'Checking the draft.',
+          },
+        },
+      });
+      nativeTool(1);
+      return;
+    }
     if (mode === 'turn-hang') return;
     if (mode === 'turn-exit') {
       process.stderr.write('SECRET_AUTH_TOKEN');
@@ -251,7 +331,7 @@ input.on('line', (line) => {
               : 'INTERNAL_INTERMEDIATE_TEXT',
           phase: mode === 'duplicate-final' ? 'final_answer' : null,
         });
-      if (['native-tools', 'native-without-final', 'image-native'].includes(mode)) {
+      if (['native-tools', 'native-without-final'].includes(mode)) {
         for (const item of [
           {
             type: 'webSearch',

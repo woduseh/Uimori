@@ -1,6 +1,8 @@
 import type { Json, ProviderTool } from '../core/transport.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { RESOURCE_TOOLS } from './helper-resource-tools.js';
+import { HELPER_SETTINGS_TOOLS } from './helper-settings-tools.js';
+import { HELPER_TASK_TOOLS } from './helper-task-tools.js';
 import { helperOptionTools } from './chat-options.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 
@@ -16,6 +18,8 @@ const str: Json = { type: 'string' },
   itemId: Json = { type: 'string', minLength: 1, maxLength: 100 };
 const TOOLS: ProviderTool[] = [
   ...RESOURCE_TOOLS,
+  ...HELPER_SETTINGS_TOOLS,
+  ...HELPER_TASK_TOOLS,
   {
     name: 'chat.list',
     description: 'List available chats and their current heads.',
@@ -65,21 +69,17 @@ const TOOLS: ProviderTool[] = [
     ),
   },
   {
-    name: 'workspace.read',
+    name: 'editor.read',
     description:
-      'Read current workspace and chat settings, or a compact overview of the captured device editor input. For editor structure and exact typed values, follow JSON Pointer path pages; long text uses textOffset/textLimit. For ordinary draft facts use data.search/read with scope=editor. The saved/unsaved input origin is returned. Never claims image understanding.',
-    inputSchema: schema(
-      {
-        kind: { type: 'string', enum: ['settings', 'editor'] },
-        path: str,
-        fields: { type: 'array', items: str, maxItems: 50 },
-        offset: { type: 'integer', minimum: 0 },
-        limit: { type: 'integer', minimum: 1, maximum: 50 },
-        textOffset: { type: 'integer', minimum: 0 },
-        textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
-      },
-      ['kind']
-    ),
+      'Read a compact overview of the captured device editor input. For structure and exact typed values, follow JSON Pointer path pages; long text uses textOffset/textLimit. For ordinary draft facts use data.search/read with scope=editor. The saved/unsaved input origin is returned. Never claims image understanding.',
+    inputSchema: schema({
+      path: str,
+      fields: { type: 'array', items: str, maxItems: 50 },
+      offset: { type: 'integer', minimum: 0 },
+      limit: { type: 'integer', minimum: 1, maximum: 50 },
+      textOffset: { type: 'integer', minimum: 0 },
+      textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
+    }),
   },
   {
     name: 'chat.rename',
@@ -225,6 +225,8 @@ const TOOLS: ProviderTool[] = [
 ];
 /** Context selects default IDs, never a permission boundary. */
 const chatToolNames = new Set([
+  'settings.read',
+  'settings.update',
   'chat.read',
   'chat.lore',
   'chat.rename',

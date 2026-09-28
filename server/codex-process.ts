@@ -28,6 +28,19 @@ export interface CodexProcessOptions {
   maxWriteBytes?: number;
 }
 type Pending = { resolve(value: unknown): void; reject(error: Error): void; cleanup(): void };
+type DynamicToolRequest = {
+  threadId: string;
+  turnId: string;
+  callId: string;
+  tool: string;
+  arguments: unknown;
+};
+type DynamicToolHandler = {
+  threadId: string;
+  turnId(): string | undefined;
+  toolNames: readonly string[];
+  handle(request: DynamicToolRequest): Promise<unknown>;
+};
 const MAX_LINE_BYTES = 8 * 1024 * 1024;
 const MAX_PENDING = 64;
 
@@ -43,6 +56,8 @@ export class CodexProcess {
   private pending = new Map<number, Pending>();
   private notifications = new Set<(method: string, params: unknown) => void>();
   private exits = new Set<() => void>();
+  private dynamicTools?: DynamicToolHandler;
+  private toolRequests = new Set<string>();
   private readonly maxLineBytes: number;
   private readonly maxWriteBytes: number;
   constructor(private readonly options: CodexProcessOptions) {
@@ -139,6 +154,14 @@ export class CodexProcess {
       this.notifications.delete(listener);
     };
   }
+  /** A task-scoped allowlist, never a generic server-request or environment-tool handler. */
+  onDynamicToolCall(handler: DynamicToolHandler): () => void {
+    if (this.dynamicTools) throw new CodexProcessError('CODEX_REQUEST_FAILED');
+    this.dynamicTools = handler;
+    return () => {
+      if (this.dynamicTools === handler) this.dynamicTools = undefined;
+    };
+  }
   onExit(listener: () => void): () => void {
     if (this.closed) {
       queueMicrotask(listener);
@@ -193,7 +216,43 @@ export class CodexProcess {
       if (typeof record.method !== 'string') throw new Error();
       if ('id' in record) {
         if (typeof record.id !== 'number' && typeof record.id !== 'string') throw new Error();
-        // No approvals, shell, filesystem, credentials, or dynamic tools are granted here.
+        const handler = this.dynamicTools;
+        const params = record.params;
+        if (record.method === 'item/tool/call' && handler && params && typeof params === 'object') {
+          const call = params as Record<string, unknown>;
+          if (
+            call.threadId === handler.threadId &&
+            typeof call.turnId === 'string' &&
+            call.turnId === handler.turnId() &&
+            typeof call.callId === 'string' &&
+            call.callId.length > 0 &&
+            call.callId.length <= 300 &&
+            call.namespace == null &&
+            typeof call.tool === 'string' &&
+            handler.toolNames.includes(call.tool) &&
+            'arguments' in call &&
+            !this.toolRequests.has(call.callId)
+          ) {
+            this.toolRequests.add(call.callId);
+            const id = record.id;
+            void Promise.resolve()
+              .then(() => handler.handle(call as DynamicToolRequest))
+              .then((result) => {
+                // Closing or unsubscribing invalidates results from already-running host work.
+                if (!this.closed && this.dynamicTools === handler) this.write({ id, result });
+              })
+              .catch(() => {
+                if (!this.closed && this.dynamicTools === handler)
+                  this.write({
+                    id,
+                    error: { code: -32603, message: 'Client tool request failed' },
+                  });
+              })
+              .catch(() => this.fail('CODEX_PROTOCOL_ERROR'));
+            return;
+          }
+        }
+        // No approvals, shell, filesystem, credentials, or unregistered tools are granted here.
         this.write({
           id: record.id,
           error: { code: -32601, message: 'Client request not supported' },
@@ -240,6 +299,8 @@ export class CodexProcess {
     }
     this.exits.clear();
     this.notifications.clear();
+    this.dynamicTools = undefined;
+    this.toolRequests.clear();
   }
   close(): Promise<void> {
     return (this.closing ??= new Promise<void>((resolve) => {

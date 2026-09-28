@@ -4,7 +4,7 @@ Uimori 서버에서 공식 Codex CLI의 App Server를 실행하고 개인 ChatGP
 
 ## 준비와 로그인
 
-1. 서버에 공식 Codex CLI **0.153.0 이상**을 설치해요. 현재 프로바이더 계약은 설치된 0.153.0에서 생성한 공식 schema를 기준으로 구현했어요. 버전을 올릴 때는 아래 사전 검사를 다시 실행하세요.
+1. 서버에 공식 Codex CLI를 설치해요. 기본 연결은 **0.153.0 이상**을 요구하며, 도우미의 native 도구 프로토콜은 실제 배포된 **0.158.0**에서 생성한 experimental schema로 확인했어요. 이전 버전의 native 도우미 호환성까지 검증한 것은 아니에요. 설치·업데이트 후 아래 사전 검사로 해당 바이너리의 계약을 확인하세요.
 2. 서버 환경에 `UIMORI_CODEX_ENABLED=1`을 설정하고 앱을 시작해요. 기본값은 비활성이에요. PATH의 네이티브 실행 파일과 일반적인 npm 설치를 탐색해요. 자동 탐색이 안 되면 `UIMORI_CODEX_EXECUTABLE`에 실제 `codex`/`codex.exe`의 절대 경로를 지정해요. `.cmd`, `.bat`, `.ps1` 래퍼나 명령 문자열은 허용하지 않아요.
 3. **설정 → 에이전트 → ChatGPT로 Codex 로그인**을 눌러요. 표시된 코드를 공식 `https://auth.openai.com/codex/device` 페이지에 직접 입력해요. 로그인은 공식 Codex 프로세스가 처리해요. 계정에서 device-code 로그인을 허용해야 하며 Uimori는 토큰 붙여넣기나 기존 CLI 로그인 가져오기를 제공하지 않아요.
 4. **프로바이더·모델 등록**에서 **Codex · ChatGPT 구독** 프로바이더를 저장하고 모델 목록을 조회해 프리셋을 저장해요. 각 기능의 모델 선택에서 해당 프리셋을 선택해요. 모델 목록 조회는 생성 요청을 보내지 않아요.
@@ -31,20 +31,20 @@ Linux Docker의 실제 이미지 빌드·기동과 실계정 로그인·구독 �
 
 ## 실행 계약과 한계
 
-- App Server `initialize`, `account/*`, `model/list`, `thread/start`, `turn/start`를 사용해요. 각 판단 요청은 새 ephemeral thread와 별도 프로세스로 실행하며 opaque continuation은 저장하지 않아요.
-- 도우미(`helper`)는 `thread/start.baseInstructions`로 짧은 Uimori 전용 지침을 지정해 모델의 기본 코딩 지침을 대체해요. 같은 값이 요청 descriptor와 stable-prefix 해시에 포함돼요. 다른 역할과 삽화의 지침·내장 도구 설정은 기존대로예요. 로컬 입력 추정에는 Codex 내부 도구 설명과 추가 문맥이 모두 포함되지는 않으므로 실제 공급자 입력 토큰과 차이가 있을 수 있어요.
+- App Server `initialize`, `account/*`, `model/list`, `thread/start`, `turn/start`를 사용해요. 본문·번역·상태 계산·문맥 정리 등 일반 역할은 판단 요청마다 새 ephemeral thread와 별도 프로세스를 사용해요. 도우미는 **작업 하나를 하나의 thread/turn**에서 끝까지 실행하고, 도구 결과를 같은 턴에 돌려줘 Codex가 다음 판단을 이어 가요. 작업 간 native thread 재개 정보나 opaque continuation은 저장하지 않아요.
+- 도우미(`helper`)는 `thread/start.baseInstructions`로 짧은 Uimori 전용 지침을 지정해 모델의 기본 코딩 지침을 대체해요. 초기 요청에 작업·이전 대화·자료 범위와 등록된 도구를 전달해요. 도우미의 초기 이력이 입력 예산을 넘으면 Uimori가 시작 전에 문맥 정리를 수행할 수 있어요. native 턴이 시작된 뒤 도구 결과를 받을 때마다 Uimori가 이력을 다시 묶거나 새 턴을 만들지는 않으며, 턴 내부 진행·문맥 정리는 Codex가 담당해요. 로컬 입력 추정에는 Codex 내부 도구 설명과 추가 문맥이 모두 포함되지는 않으므로 실제 공급자 입력 토큰과 차이가 있을 수 있어요.
 - 전용 Codex home과 빈 임시 작업 폴더를 사용해요. 기존 사용자 home/config와 서버의 provider API 키 환경변수를 넘기지 않아요. `environments: []`, `selectedCapabilityRoots: []`, read-only/never 정책은 유지해요. 내장 도구 전체 금지는 제거하고 `web_search=cached`와 `features.code_mode=true`로 검색과 격리된 JavaScript 계산을 사용할 수 있게 해요. 실제 도구 제공 여부는 설치된 CLI·모델에 따라 달라요.
-- Codex는 JSON으로 최종 응답 또는 허용된 Uimori 도구 요청을 반환해요. Uimori 자료 조회·검증·저장은 기존 하네스가 담당하고, 내장 도구 이름을 이 JSON에 넣어 실행시키지는 않아요. 각 역할의 기존 원문/hash/revision·취소·작업 귀속 계약을 유지해요. 내장 검색·계산의 중간 결과, 계획, 진행 메시지는 본문으로 저장하지 않으며 `final_answer`만 채택해요. phase가 없는 구형 응답은 후속 작업이 없을 때 마지막 메시지를 최종 후보로 사용해요.
-- 삽화 턴은 같은 검색·계산 도구에 `features.image_generation=true`를 더해 `imageGeneration` 항목을 받아요. 결과 base64 또는 전용 home의 `savedPath` 파일만 읽어요. 텍스트 턴에는 이미지 결과의 예약·귀속·저장 계약이 없으므로 이미지 생성은 계속 삽화 전용이에요. 삽화는 별도 동시 실행 슬롯(1개)을 써요.
+- 일반 역할은 JSON envelope로 최종 응답 또는 허용된 Uimori 도구 요청을 반환해요. 도우미는 이 envelope 대신 experimental `dynamicTools`에 `type: "function"` 도구를 등록하고 `item/tool/call` 요청에 `contentItems`/`success`를 응답해요. 도구 이름은 Responses API 제약에 맞는 `uimori_…` 이름으로 전송하고 호스트에서는 원래 이름으로 복원해요. Uimori 자료 조회·검증·저장은 기존 호스트 도구가 담당하며 원문/hash/revision·취소·작업 귀속 계약을 유지해요. 도우미 최종 응답은 일반 텍스트예요. `final_answer`의 공개 텍스트를 스트리밍하고 commentary는 별도 진행 이벤트로 기록해 최종 답변과 섞지 않아요. 내장 검색·계산의 중간 결과와 계획은 본문으로 저장하지 않아요. phase가 없는 구형 응답은 후속 작업이 없을 때 마지막 메시지를 최종 후보로 사용해요.
+- 삽화 턴은 짧은 이미지 전용 base instructions와 `features.image_generation=true`를 사용하고 검색·code mode는 비활성화해요. 선택한 모델·추론 수준·참고 이미지와 역할 순서는 유지하며 `imageGeneration` 결과의 base64 또는 전용 home의 `savedPath` 파일만 읽어요. 텍스트 턴에는 이미지 결과의 예약·귀속·저장 계약이 없으므로 이미지 생성은 계속 삽화 전용이에요. 삽화는 별도 동시 실행 슬롯(1개)을 써요.
 - RisuPrompt의 논리적 역할·순서·빈 메시지를 JSON으로 전달해요. Codex 자체 지침이 추가되므로 native API message role과 동일한 처리는 보장하지 않아요. assistant prefill과 필수 cache는 실행 전에 거절해요.
-- `reasoningEffort`와 timeout을 전달해요. `maxOutputTokens`는 Codex 입력의 `outputTokenBudget`으로 전달하는 소프트 용량 예산이에요. 요청된 응답 길이나 공급자의 강제 상한이 아니며, 이 값을 채우려고 출력을 늘리지 않아요. 프롬프트에 단어 수 같은 명시적 분량 지시가 있으면 그 지시를 우선해요. temperature는 허용하지 않아요. 구조화 출력은 항상 외부 JSON envelope로 검증하며 내부 역할별 결과 검증도 유지해요.
+- `reasoningEffort`와 timeout을 전달해요. 일반 역할의 `maxOutputTokens`는 Codex 입력의 `outputTokenBudget`으로 전달하는 소프트 용량 예산이에요. 요청된 응답 길이나 공급자의 강제 상한이 아니며, 이 값을 채우려고 출력을 늘리지 않아요. 프롬프트에 단어 수 같은 명시적 분량 지시가 있으면 그 지시를 우선해요. temperature는 허용하지 않아요. 일반 역할의 구조화 출력과 내부 역할별 결과 검증은 유지하며, native 도우미에는 최종 JSON envelope나 `outputSchema`를 강제하지 않아요.
 - 전송 전에 RPC attempt를 기록해요. 동시 실행은 2개, 대기는 최대 32개이며 취소할 수 있어요. Uimori는 재시작·전송 실패·불확실한 실행을 자동 재생하지 않아요. 다만 공식 CLI 내부의 통신 재시도 정책은 Uimori가 제어하지 못해요. 0.153은 내장 OpenAI provider의 retry 설정 덮어쓰기를 거절하므로 내부 재시도 0회나 upstream exactly-once는 보장하지 않아요. 기존 하네스의 명시적 재요청 및 정상 종료된 결과에 대한 제한된 재시도는 별도 판단 요청으로 기록돼요.
-- 한 attempt는 Codex 판단 작업 하나이며 Codex 내부 모델 호출 수와 같지 않아요. 응답에 토큰 사용량이 있으면 기록하지만 실제 비용과 내부 호출 수는 `null`이에요. Vertex의 USD 예산을 Codex 구독 예산으로 해석하지 않아요. 연결 완료 화면은 공식 계정 한도의 최근 조회값과 윈도 길이를 사용해 남은 비율·초기화 시각을 표시하며, 연결 전의 단계 안내는 완료 후 접어 상태 카드로 대체해요.
-- 공급자가 보고한 `tokenUsage.total`과 `last`의 입력·캐시·출력·추론 토큰은 숫자만 raw usage에 보존해요. 기존 입력·출력 합계에는 total 값을 쓰며, 캐시 토큰을 별도로 더하지 않아요. 공급자가 주지 않은 수치는 0으로 채우지 않아요.
+- 한 attempt는 호스트가 시작한 Codex 턴 하나이며 내부 모델 호출 수와 같지 않아요. native 도우미는 여러 도구·모델 판단을 수행해도 한 attempt로 기록하고, 시작 전 문맥 정리 호출은 별도예요. 도우미의 호출 예산·사용량에 기록되는 호스트 요청 횟수는 내부 샘플링 횟수의 상한이나 측정값이 아니에요. 실제 비용과 내부 모델 호출 수는 `null`로 남기고, 턴 전체 timeout·취소와 호스트 도구 권한을 적용해요. Vertex의 USD 예산을 Codex 구독 예산으로 해석하지 않아요. 연결 완료 화면은 공식 계정 한도의 최근 조회값과 윈도 길이를 사용해 남은 비율·초기화 시각을 표시하며, 연결 전의 단계 안내는 완료 후 접어 상태 카드로 대체해요.
+- 공급자가 보고한 `tokenUsage.total`과 `last`의 입력·캐시·출력·추론 토큰은 숫자만 raw usage에 보존해요. 입력·출력 합계는 가장 최근 total 스냅샷으로 갱신하며, 반복된 업데이트나 캐시 토큰을 다시 더하지 않아요. 공급자가 주지 않은 수치는 0으로 채우지 않아요. 삽화 raw usage에는 완료 항목 종류별 횟수(`itemCounts`)와 사용량 이벤트 횟수(`tokenUsageUpdates`)도 보존해요. 이 진단 숫자는 내부 모델 호출 수를 뜻하지 않으며 이미지 바이트나 도구 내용은 포함하지 않아요.
 
 ### 내장 도구의 남은 경계
 
-터미널·파일 읽기/쓰기·Node REPL·로컬 이미지 보기·브라우저/컴퓨터 제어·앱/MCP·외부 스킬·지속 메모·내장 하위 에이전트·추가 권한 요청은 제공하지 않아요. 이들은 호스트 파일·인증·외부 변경 권한, Uimori의 저장·협업·문맥 관리와 연결되므로 검색·계산과 같은 범위가 아니에요. `code_mode`는 Node REPL과 다른 V8 JavaScript 실행기예요. 등록된 도구만 호출하고 Node·파일·네트워크 API 및 모듈 import를 제공하지 않는 계약을 사용해요. Uimori 도구는 native registry에 등록하지 않고 JSON envelope로만 처리하므로 code mode에서 직접 저장 권한을 얻지 못해요. 지원하지 않는 승인/동적 도구 요청과 호스트 환경 도구 이벤트는 기존대로 실패 처리해요.
+터미널·파일 읽기/쓰기·Node REPL·로컬 이미지 보기·브라우저/컴퓨터 제어·앱/MCP·외부 스킬·지속 메모·내장 하위 에이전트·추가 권한 요청은 제공하지 않아요. 이들은 호스트 파일·인증·외부 변경 권한, Uimori의 저장·협업·문맥 관리와 연결되므로 검색·계산과 같은 범위가 아니에요. `code_mode`는 Node REPL과 다른 V8 JavaScript 실행기예요. 등록된 도구만 호출하고 Node·파일·네트워크 API 및 모듈 import를 제공하지 않는 계약을 사용해요. native 도우미에 등록된 Uimori 도구도 호스트의 자료 범위·검증·저장 권한을 그대로 거쳐요. 서버는 현재 thread/turn과 등록된 도구 이름만 받아들이고 중복 call ID를 거절해요. 지원하지 않는 승인 요청·미등록 도구·호스트 환경 도구 이벤트는 실패 처리해요. 취소된 작업의 늦은 도구 결과는 전달하지 않고, 호스트 쓰기 중 던져진 오류는 재시도를 유도하는 도구 결과로 바꾸지 않아요.
 
 read-only만으로는 서버 파일과 전용 인증 파일의 읽기를 격리하지 못하므로 환경 도구는 별도 실행 환경·읽기 범위 없이는 제공하지 않아요. 실행 설정과 이벤트 경계는 `core/codex-protocol.ts`, `server/codex-runtime.ts`에서 관리해요. `code_mode` 설정을 허용해도 설치 패키지의 실행기 제공 여부에 따라 실제 계산이 불가능할 수 있어요. 합성 stdio 검사는 설치 CLI의 도구 실행이나 플랫폼 sandbox 실증을 대신하지 않아요.
 
@@ -52,12 +52,12 @@ read-only만으로는 서버 파일과 전용 인증 파일의 읽기를 격리�
 
 ```powershell
 npx vitest run tests/codex-process.test.ts tests/codex-runtime.test.ts tests/codex-protocol.test.ts tests/codex-image.test.ts tests/codex-integration.test.ts
-# 설치된 CLI 연결만 확인: 새 빈 인증 폴더, 로그인/모델 호출 없음
+# 설치된 CLI 초기화와 experimental 도구 schema 확인: 새 빈 인증 폴더, 로그인/모델 호출 없음
 $env:UIMORI_CODEX_PREFLIGHT='1'
 npx vitest run tests/codex-installed.test.ts
 Remove-Item Env:UIMORI_CODEX_PREFLIGHT
 ```
 
-설치 사전 검사 결과는 `output/codex-preflight/summary.json`에 남아요. 합성 stdio 검사는 인증 취소·오류 가림·정상 이벤트·시간 초과·종료 경합·내장 도구 진행과 최종 응답 분리·환경/승인 경계·대기 취소·attempt 선기록을 확인해요. 앱 통합 검사는 6개 역할과 등록 제안, export/import, 비활성 프로바이더 및 인증/Origin 경계를 확인해요. `npm run verify:providers`에는 390px의 Codex 설정·모의 로그인·취소·연결 해제 검사가 포함돼요. 이 검사들은 실제 구독 모델 응답 품질·소모량을 입증하지 않아요.
+설치 사전 검사 결과는 `output/codex-preflight/summary.json`에 남아요. 실제 바이너리 버전과 빈 인증 상태를 기록하고 `generate-json-schema --experimental`에서 `dynamicTools`의 function 형식, `item/tool/call` 요청, 텍스트 도구 응답 계약을 확인해요. schema 적합성은 실제 모델의 도구 선택·실행 성공과는 별도예요. 합성 stdio 검사는 인증 취소·오류 가림·정상 이벤트·시간 초과·종료 경합·내장 도구 진행과 최종 응답 분리·환경/승인 경계·대기 취소·attempt 선기록·한 턴 안의 연속 도구 호출·중복 호출 차단·취소 후 늦은 응답을 확인해요. 앱 통합 검사는 일반 역할과 native 도우미, 등록 제안, export/import, 비활성 프로바이더 및 인증/Origin 경계를 확인해요. `npm run verify:providers`에는 390px의 Codex 설정·모의 로그인·취소·연결 해제 검사가 포함돼요. 이 검사들은 실제 구독 모델 응답 품질·소모량을 입증하지 않아요.
 
 공식 계약: [App Server](https://learn.chatgpt.com/docs/app-server), [인증](https://learn.chatgpt.com/docs/auth), [설정 schema](https://learn.chatgpt.com/config-schema.json).

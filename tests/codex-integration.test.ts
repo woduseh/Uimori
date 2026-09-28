@@ -1,4 +1,4 @@
-import { setFixtureModelRoutes } from './fixtures/chat.js';
+import { createFixtureChat, setFixtureModelRoutes } from './fixtures/chat.js';
 import { backup } from 'node:sqlite';
 import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
@@ -11,6 +11,9 @@ import { createApp, type App } from '../server/app.js';
 import type { CodexRuntimeService } from '../server/codex-runtime.js';
 import type { ProviderRequest, ProviderResult } from '../core/transport.js';
 import { translationFixtureSlot } from './fixtures/translation-job.js';
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import { HelperWorkspace } from '../server/helper-workspace.js';
+import type { HelperConversation, HelperTask } from '../core/helper.js';
 
 const owned: { directory: string; app?: App }[] = [];
 afterEach(async () => {
@@ -71,6 +74,9 @@ test('runtime HTTP routes enforce authentication and Origin and redact failures 
     catalog: async () => [],
     execute: async () => {
       throw new Error('Unexpected execute');
+    },
+    executeAgent: async () => {
+      throw new Error('Unexpected executeAgent');
     },
     generateImage: async () => {
       throw new Error('Unexpected generateImage');
@@ -223,6 +229,9 @@ test('app routes every agent role through Codex and keeps source results and rec
         opaqueState: null,
       } satisfies ProviderResult;
     },
+    executeAgent: async () => {
+      throw new Error('Unexpected executeAgent');
+    },
   };
   const item = {
     directory: await mkdtemp(join(tmpdir(), 'uimori-codex-integration-')),
@@ -374,4 +383,168 @@ test('app routes every agent role through Codex and keeps source results and rec
     'The keeper opened the gate.'
   );
   expect(restored.store.product.attempts(chat.id)).toEqual(app.store.product.attempts(chat.id));
+});
+
+test('Codex helper calls app tools within one native turn and persists one setting change', async () => {
+  let selectedModelId = '';
+  const state = async () => ({
+    available: true,
+    authenticated: true,
+    authMode: 'chatgpt' as const,
+    error: null,
+    login: null,
+    planType: null,
+    limits: [],
+  });
+  const legacyExecute = vi.fn(async () => {
+    throw new Error('Legacy helper execute must not run');
+  });
+  const nativeExecute = vi.fn<CodexRuntimeService['executeAgent']>(
+    async (connection, request, options) => {
+      expect(request.tools.map((tool) => tool.name)).toContain('app.call');
+      expect(request.tools.map((tool) => tool.name)).toContain('app.tools');
+      expect(JSON.parse(request.text)).toHaveProperty('source');
+      await options.beforeTurn?.();
+      const body = { method: 'turn/start', role: 'helper', model: request.modelId };
+      await options.onWire?.({
+        connectionId: connection.id,
+        protocol: connection.protocol,
+        role: 'helper',
+        modelId: request.modelId,
+        method: 'RPC',
+        url: 'codex://local',
+        headers: {},
+        body,
+        bodySha256: hash(body),
+        stablePrefixSha256: hash(request.developerInstructions),
+      });
+      const signal = options.signal;
+      const tool = async (callId: string, name: string, args: Record<string, unknown>) => {
+        const response = await options.onToolCall(
+          { name, arguments: JSON.parse(JSON.stringify(args)), callId },
+          signal
+        );
+        expect(response.success, response.text).toBe(true);
+        return JSON.parse(response.text);
+      };
+      const catalog = await tool('discover', 'app.tools', {
+        names: ['settings.read', 'settings.update'],
+      });
+      expect(catalog.tools.map((item: { name: string }) => item.name)).toEqual([
+        'settings.read',
+        'settings.update',
+      ]);
+      const before = await tool('read-before', 'app.call', {
+        name: 'settings.read',
+        arguments: {},
+      });
+      expect(before.global.models.main).toBeNull();
+      const selectedId = selectedModelId;
+      const update = await tool('update', 'app.call', {
+        name: 'settings.update',
+        arguments: {
+          setting: 'global.mainModel',
+          expectedRevision: before.global.revision,
+          value: selectedId,
+        },
+      });
+      expect(update.revision).toBe(before.global.revision + 1);
+      const after = await tool('read-after', 'app.call', {
+        name: 'settings.read',
+        arguments: {},
+      });
+      expect(after.global.models.main).toEqual({ id: selectedId });
+      return {
+        status: 'completed',
+        text: '설정을 적용했어요.',
+        toolCalls: [],
+        refusal: null,
+        error: null,
+        usage: {
+          inputTokens: 20,
+          outputTokens: 8,
+          costUsd: null,
+          raw: { modelCalls: null },
+          priceRevision: null,
+        },
+        opaqueState: null,
+      } satisfies ProviderResult;
+    }
+  );
+  const runtime: CodexRuntimeService = {
+    status: state,
+    login: state,
+    cancelLogin: state,
+    logout: state,
+    catalog: async () => [],
+    execute: legacyExecute,
+    executeAgent: nativeExecute,
+    generateImage: async () => {
+      throw new Error('Unexpected image generation');
+    },
+    close: async () => {},
+  };
+  const item = {
+    directory: await mkdtemp(join(tmpdir(), 'uimori-codex-integration-')),
+  } as (typeof owned)[number];
+  owned.push(item);
+  const app = await createApp({
+    dbPath: join(item.directory, 'helper.sqlite'),
+    buildId: 'codex-helper-synthetic',
+    instanceId: randomUUID(),
+    testMode: true,
+    codexRuntime: runtime,
+  });
+  item.app = app;
+  await app.ready();
+  const connection = app.store.product.connection({
+    title: 'Codex helper',
+    protocol: 'codex-app-server-v1',
+    endpoint: 'codex://local',
+    enabled: true,
+  });
+  const model = app.store.product.model({
+    title: 'Codex helper',
+    connectionId: connection.id,
+    modelId: 'synthetic-helper',
+    maxOutputTokens: 1024,
+    temperature: null,
+  });
+  selectedModelId = model.id;
+  const selected = modelWorkspace(app.store);
+  updateModelWorkspace(app.store, {
+    expectedRevision: selected.revision,
+    routes: selected.routes,
+    translationPolicy: selected.translationPolicy,
+    helperModel: { id: model.id },
+  });
+  const chat = createFixtureChat(app.store, 'Native helper');
+  const opened = (await api(app, '/api/helper/conversations', {
+    scope: { kind: 'chat', chatId: chat.id },
+  })) as HelperConversation;
+  const priorEvents = app.store.latestEventSequence(chat.id);
+  const submitted = (await api(app, `/api/helper/conversations/${opened.id}/messages`, {
+    requestKey: randomUUID(),
+    text: '기본 작문 모델을 선택해줘.',
+  })) as HelperTask;
+  const workspace = new HelperWorkspace(app.store);
+  await expect
+    .poll(() => workspace.task(submitted.id).status, { timeout: 6000 })
+    .not.toMatch(/^(queued|running)$/);
+  const task = workspace.task(submitted.id);
+  expect(task.status, task.error ?? 'helper task failed').toBe('completed');
+  expect(task.usage).toMatchObject({ modelCalls: 1, inputTokens: 20, outputTokens: 8 });
+  expect(modelWorkspace(app.store).routes.main).toEqual({ id: model.id });
+  expect(
+    app.store.db
+      .prepare(
+        "SELECT count(*) AS n FROM events WHERE chat_id=? AND seq>? AND kind='prompt-workspace.updated'"
+      )
+      .get(chat.id, priorEvents)
+  ).toEqual({ n: 1 });
+  expect(
+    app.store.db.prepare('SELECT count(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 1 });
+  expect(nativeExecute).toHaveBeenCalledTimes(1);
+  expect(legacyExecute).not.toHaveBeenCalled();
 });

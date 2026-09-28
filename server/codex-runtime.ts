@@ -111,6 +111,23 @@ export type CodexRuntimeOptions = {
   launch?: { command: string; args: string[]; env?: NodeJS.ProcessEnv };
 };
 export type CodexExecutionOptions = ProviderExecutionOptions;
+export type CodexAgentRequest = {
+  modelId: string;
+  contextBudget?: ContextBudget;
+  reasoningEffort?: ModelGeneration['reasoningEffort'];
+  baseInstructions?: string;
+  developerInstructions: string;
+  text: string;
+  tools: { name: string; description: string; inputSchema: Json }[];
+};
+export type CodexAgentExecutionOptions = CodexExecutionOptions & {
+  onToolCall(
+    call: { name: string; arguments: Json; callId: string },
+    signal: AbortSignal
+  ): Promise<{ success: boolean; text: string }>;
+  /** Intermediate public assistant messages, separate from final-answer streaming. */
+  onCommentary?: (text: string) => void | Promise<void>;
+};
 /** One illustration turn: the official image generation tool renders, Uimori stores the bytes. */
 export type CodexImageRequest = {
   modelId: string;
@@ -141,6 +158,11 @@ export interface CodexRuntimeService {
     request: ProviderRequest,
     options: CodexExecutionOptions
   ): Promise<ProviderResult>;
+  executeAgent(
+    connection: ProviderConnection,
+    request: CodexAgentRequest,
+    options: CodexAgentExecutionOptions
+  ): Promise<ProviderResult>;
   generateImage(
     connection: ProviderConnection,
     request: CodexImageRequest,
@@ -155,7 +177,7 @@ type TurnPlan = {
   baseInstructions?: string;
   developerInstructions: string;
   input: Json[];
-  outputSchema: Json;
+  outputSchema?: Json;
   /** Attempt record body; never carries attachment bytes or image results. */
   descriptor: Json;
   stablePrefix: string;
@@ -163,6 +185,10 @@ type TurnPlan = {
   maxLineBytes?: number;
   maxWriteBytes?: number;
   allowedItems: readonly string[];
+  dynamicTools?: { type: 'function'; name: string; description: string; inputSchema: Json }[];
+  onToolCall?: CodexAgentExecutionOptions['onToolCall'];
+  toolNames?: Map<string, string>;
+  onCommentary?: CodexAgentExecutionOptions['onCommentary'];
   onItem?: (item: Record<string, unknown>, method: 'item/started' | 'item/completed') => void;
 };
 type TurnOutcome =
@@ -339,11 +365,15 @@ export const CODEX_RUNTIME_CONFIG = {
   'features.unbounded_connection_retries': false,
   'features.image_generation': false,
 } as const;
-/** Illustration turns add image generation while retaining the same native utility tools. */
+/** Illustration turns expose only image generation; they do not need search or code mode. */
 export const CODEX_ILLUSTRATION_CONFIG = {
   ...CODEX_RUNTIME_CONFIG,
+  web_search: 'disabled',
+  'features.code_mode': false,
   'features.image_generation': true,
 } as const;
+const IMAGE_BASE_INSTRUCTIONS =
+  'Create the requested illustration. Call image_gen.imagegen once for one image unless the supplied instructions allow an automatic skip. Follow the art direction and the order and roles of reference images described in the request. After generation, return only the requested caption JSON.';
 const ILLUSTRATION_LINE_BYTES = 4 * Math.ceil(ILLUSTRATION_MAX_IMAGE_BYTES / 3) + 1024 * 1024;
 const TEXT_ITEMS = [
   'userMessage',
@@ -696,6 +726,82 @@ export class CodexRuntime implements CodexRuntimeService {
     if (!outcome.ok) return failure(outcome.code, outcome.usage);
     return { ...decodeCodexOutput(outcome.output, request), usage: outcome.usage };
   }
+  /** One native task: Codex owns its reasoning/tool loop and receives each host result in place. */
+  async executeAgent(
+    connection: ProviderConnection,
+    request: CodexAgentRequest,
+    options: CodexAgentExecutionOptions
+  ): Promise<ProviderResult> {
+    if (options.signal.aborted) return failure('CANCELLED');
+    if (this.authAction || this.loginValue) return failure('CODEX_BUSY');
+    let plan: TurnPlan;
+    try {
+      assertCodexConnection(connection);
+      if (!boundedString(request.modelId)) error('CODEX_INVALID_MODEL');
+      const toolNames = new Map<string, string>();
+      const dynamicTools = request.tools.map((tool) => {
+        const name = `uimori_${tool.name.replace(/[^a-zA-Z0-9_-]/gu, '_')}`;
+        if (!boundedString(tool.name, 57) || name.length > 64 || toolNames.has(name))
+          error('CODEX_INVALID_TOOLS');
+        toolNames.set(name, tool.name);
+        return {
+          type: 'function' as const,
+          name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+        };
+      });
+      const descriptor: Json = {
+        method: 'turn/start',
+        role: 'helper',
+        model: request.modelId,
+        ...(request.reasoningEffort ? { effort: request.reasoningEffort } : {}),
+        ...(request.baseInstructions ? { baseInstructions: request.baseInstructions } : {}),
+        developerInstructions: request.developerInstructions,
+        input: [{ type: 'text', text: request.text }],
+        dynamicTools,
+        builtinTools: CODEX_BUILTIN_TOOLS,
+        environmentAccess: false,
+        ephemeral: true,
+        nativeAgentLoop: true,
+      };
+      assertContextBudget(descriptor, request.contextBudget);
+      plan = {
+        role: 'helper',
+        modelId: request.modelId,
+        effort: request.reasoningEffort,
+        baseInstructions: request.baseInstructions,
+        developerInstructions: request.developerInstructions,
+        input: [{ type: 'text', text: request.text, text_elements: [] }],
+        descriptor,
+        stablePrefix: JSON.stringify([
+          request.baseInstructions ?? '',
+          request.developerInstructions,
+          dynamicTools,
+        ]),
+        config: CODEX_RUNTIME_CONFIG,
+        allowedItems: [...TEXT_ITEMS, 'dynamicToolCall'],
+        dynamicTools,
+        toolNames,
+        onToolCall: options.onToolCall,
+        onCommentary: options.onCommentary,
+      };
+    } catch (caught) {
+      return failure(options.signal.aborted ? 'CANCELLED' : safeError(caught));
+    }
+    const outcome = await this.runTurn(connection, plan, options, this.textSlots);
+    if (!outcome.ok) return failure(outcome.code, outcome.usage);
+    if (!outcome.output.trim()) return failure('CODEX_INVALID_OUTPUT', outcome.usage);
+    return {
+      status: 'completed',
+      text: outcome.output,
+      toolCalls: [],
+      refusal: null,
+      error: null,
+      usage: outcome.usage,
+      opaqueState: null,
+    };
+  }
   async generateImage(
     connection: ProviderConnection,
     request: CodexImageRequest,
@@ -738,6 +844,7 @@ export class CodexRuntime implements CodexRuntimeService {
         role: 'illustration',
         modelId: request.modelId,
         effort: request.reasoningEffort,
+        baseInstructions: IMAGE_BASE_INSTRUCTIONS,
         developerInstructions: request.developerInstructions,
         input: [
           { type: 'text', text: request.text, text_elements: [] },
@@ -755,15 +862,16 @@ export class CodexRuntime implements CodexRuntimeService {
           model: request.modelId,
           ...(request.reasoningEffort ? { effort: request.reasoningEffort } : {}),
           developerInstructions: request.developerInstructions,
+          baseInstructions: IMAGE_BASE_INSTRUCTIONS,
           input: [{ type: 'text', text: request.text }],
           attachments,
           outputSchema: request.outputSchema,
           imageGeneration: true,
-          builtinTools: CODEX_BUILTIN_TOOLS,
+          builtinTools: { codeMode: false, webSearch: 'disabled' },
           environmentAccess: false,
           ephemeral: true,
         },
-        stablePrefix: request.developerInstructions,
+        stablePrefix: JSON.stringify([IMAGE_BASE_INSTRUCTIONS, request.developerInstructions]),
         config: CODEX_ILLUSTRATION_CONFIG,
         maxLineBytes: ILLUSTRATION_LINE_BYTES,
         allowedItems: [...TEXT_ITEMS, 'imageGeneration'],
@@ -909,7 +1017,27 @@ export class CodexRuntime implements CodexRuntimeService {
       turnId: string | undefined,
       slot = false;
     let offNotification = () => {},
-      offExit = () => {};
+      offExit = () => {},
+      offTools = () => {};
+    const toolAbort = new AbortController();
+    const toolSignal = AbortSignal.any([signal, toolAbort.signal]);
+    let ended = false;
+    let activeTools = 0;
+    let progress = Promise.resolve();
+    let progressError: unknown;
+    let progressText = '';
+    const messagePhases = new Map<string, unknown>();
+    const completedItems = new Set<string>();
+    const itemCounts: Record<string, number> = {};
+    let tokenUsageUpdates = 0;
+    const recordImageDiagnostics = () => {
+      if (plan.role === 'illustration')
+        usage.raw = {
+          ...(object(usage.raw) ? (usage.raw as Record<string, Json>) : {}),
+          itemCounts: { ...itemCounts },
+          tokenUsageUpdates,
+        };
+    };
     let usage = emptyUsage(),
       output = '',
       outputItem: string | undefined,
@@ -974,6 +1102,7 @@ export class CodexRuntime implements CodexRuntimeService {
           selectedCapabilityRoots: [],
           ...(plan.baseInstructions ? { baseInstructions: plan.baseInstructions } : {}),
           developerInstructions: plan.developerInstructions,
+          ...(plan.dynamicTools ? { dynamicTools: plan.dynamicTools } : {}),
           config: plan.config,
         },
         { signal }
@@ -987,16 +1116,78 @@ export class CodexRuntime implements CodexRuntimeService {
         error('CODEX_INVALID_THREAD');
       threadId = (started as { thread: { id: string } }).thread.id;
       let resolveTurn: () => void;
+      let rejectCallbacks: (reason: unknown) => void = () => {};
+      const stopped = new Promise<never>((_, reject) => {
+        rejectCallbacks = reject;
+      });
+      void stopped.catch(() => {});
       const completed = new Promise<void>((resolve, reject) => {
         resolveTurn = resolve;
-        rejectTurn = reject;
+        rejectTurn = (reason) => {
+          ended = true;
+          toolAbort.abort();
+          rejectCallbacks(reason);
+          reject(reason);
+        };
       });
+      const emitProgress = (text: string) => {
+        if (!plan.dynamicTools || !text || ended || toolSignal.aborted) return;
+        if (progressText.length + text.length > 2_000_000) {
+          rejectTurn(new ProviderContractError('CODEX_INVALID_OUTPUT'));
+          return;
+        }
+        progressText += text;
+        const offset = progressText.length;
+        progress = progress
+          .then(async () => {
+            if (!toolSignal.aborted) await options.onProgress?.({ text, offset });
+          })
+          .catch((caught) => {
+            progressError = caught;
+            rejectTurn(caught);
+          });
+      };
+      if (plan.onToolCall && plan.toolNames) {
+        const onToolCall = plan.onToolCall;
+        const names = plan.toolNames;
+        offTools = process.onDynamicToolCall({
+          threadId,
+          turnId: () => turnId,
+          toolNames: [...names.keys()],
+          handle: async (call) => {
+            if (ended || toolSignal.aborted) return error('CANCELLED');
+            activeTools++;
+            try {
+              const result = await onToolCall(
+                {
+                  name: names.get(call.tool)!,
+                  arguments: call.arguments as Json,
+                  callId: call.callId,
+                },
+                toolSignal
+              );
+              if (ended || toolSignal.aborted) return error('CANCELLED');
+              return {
+                contentItems: [{ type: 'inputText', text: result.text }],
+                success: result.success,
+              };
+            } catch (caught) {
+              // A thrown host operation may already have committed; never turn it into a retry hint.
+              rejectTurn(caught);
+              throw caught;
+            } finally {
+              activeTools--;
+            }
+          },
+        });
+      }
       // Attach the rejection handler before issuing RPC: completion may precede its reply.
       void completed.catch(() => {});
       offExit = process.onExit(() =>
         rejectTurn(new ProviderContractError('CODEX_EXECUTION_INTERRUPTED'))
       );
       offNotification = process.onNotification((method, params) => {
+        if (ended) return;
         if (method === 'uimori/unsupportedRequest') {
           rejectTurn(new ProviderContractError('CODEX_TOOL_NOT_ALLOWED'));
           return;
@@ -1008,6 +1199,7 @@ export class CodexRuntime implements CodexRuntimeService {
             'thread/tokenUsage/updated',
             'item/started',
             'item/completed',
+            'item/agentMessage/delta',
           ].includes(method)
         )
           return;
@@ -1021,6 +1213,15 @@ export class CodexRuntime implements CodexRuntimeService {
           return;
         }
         turnId ??= eventTurn;
+        if (method === 'item/agentMessage/delta' && plan.dynamicTools) {
+          if (
+            typeof params.itemId === 'string' &&
+            messagePhases.get(params.itemId) === 'final_answer' &&
+            typeof params.delta === 'string'
+          )
+            emitProgress(params.delta);
+          return;
+        }
         if (
           method === 'thread/tokenUsage/updated' &&
           object(params.tokenUsage) &&
@@ -1042,12 +1243,42 @@ export class CodexRuntime implements CodexRuntimeService {
               ...(Object.keys(recorded).length ? { tokenUsage: recorded } : {}),
             },
           };
+          tokenUsageUpdates++;
+          recordImageDiagnostics();
         }
         if ((method === 'item/started' || method === 'item/completed') && object(params.item)) {
           const item = params.item;
           if (!plan.allowedItems.includes(String(item.type))) {
             rejectTurn(new ProviderContractError('CODEX_TOOL_NOT_ALLOWED'));
             return;
+          }
+          if (
+            method === 'item/completed' &&
+            boundedString(item.id) &&
+            !completedItems.has(item.id)
+          ) {
+            completedItems.add(item.id);
+            const type = String(item.type);
+            itemCounts[type] = (itemCounts[type] ?? 0) + 1;
+            recordImageDiagnostics();
+          }
+          if (plan.dynamicTools && item.type === 'agentMessage' && boundedString(item.id)) {
+            if (method === 'item/started') messagePhases.set(item.id, item.phase);
+            if (
+              method === 'item/completed' &&
+              item.phase === 'commentary' &&
+              typeof item.text === 'string'
+            ) {
+              const text = item.text;
+              progress = progress
+                .then(async () => {
+                  if (!toolSignal.aborted) await plan.onCommentary?.(text);
+                })
+                .catch((caught) => {
+                  progressError = caught;
+                  rejectTurn(caught);
+                });
+            }
           }
           // Native work and commentary are intermediate. A phase-less message is
           // only a legacy final candidate until a later activity supersedes it.
@@ -1089,7 +1320,8 @@ export class CodexRuntime implements CodexRuntimeService {
           if (
             !object(params.turn) ||
             params.turn.status !== 'completed' ||
-            params.turn.error != null
+            params.turn.error != null ||
+            activeTools > 0
           )
             rejectTurn(
               new ProviderContractError(
@@ -1098,7 +1330,16 @@ export class CodexRuntime implements CodexRuntimeService {
                   : 'CODEX_TURN_FAILED'
               )
             );
-          else resolveTurn!();
+          else {
+            const finalText = outputItem ? output : legacyOutput;
+            if (plan.dynamicTools && !finalText.startsWith(progressText)) {
+              rejectTurn(new ProviderContractError('PUBLIC_TEXT_CHANGED'));
+              return;
+            }
+            emitProgress(finalText.slice(progressText.length));
+            ended = true;
+            resolveTurn!();
+          }
         }
       });
       signal.addEventListener('abort', aborted, { once: true });
@@ -1110,7 +1351,7 @@ export class CodexRuntime implements CodexRuntimeService {
           threadId,
           model: plan.modelId,
           input: plan.input,
-          outputSchema: plan.outputSchema,
+          ...(plan.outputSchema ? { outputSchema: plan.outputSchema } : {}),
           approvalPolicy: 'never',
           sandboxPolicy: { type: 'readOnly', networkAccess: false },
           ...(plan.effort ? { effort: plan.effort } : {}),
@@ -1126,7 +1367,10 @@ export class CodexRuntime implements CodexRuntimeService {
         error('CODEX_EVENT_MISMATCH');
       turnId = (turn as { turn: { id: string } }).turn.id;
       await completed;
+      await Promise.race([progress, stopped]);
+      if (progressError) throw progressError;
       if (signal.aborted || revision !== this.revision) return fail(abortCode(), usage);
+      if (toolSignal.aborted) return fail('CODEX_EXECUTION_INTERRUPTED', usage);
       return { ok: true, output: outputItem ? output : legacyOutput, usage };
     } catch (caught) {
       return fail(
@@ -1134,14 +1378,18 @@ export class CodexRuntime implements CodexRuntimeService {
         usage
       );
     } finally {
+      const interrupted = toolSignal.aborted;
+      ended = true;
+      toolAbort.abort();
       signal.removeEventListener('abort', aborted);
       signal.removeEventListener('abort', stopOnAbort);
       offNotification();
       offExit();
+      offTools();
       if (process) {
         // Closing the isolated process prevents a late or uncertain turn being reused.
         // A request can already be executing upstream; it is never replayed here.
-        if (signal.aborted) await stopProcess();
+        if (interrupted) await stopProcess();
         else await process.close();
         this.active.delete(process);
       }
