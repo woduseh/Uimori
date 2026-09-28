@@ -6,6 +6,10 @@ import { join } from 'node:path';
 import type { Content } from '../core/product.js';
 import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 import { Store } from '../server/store.js';
+import { saveResource, undoResource } from '../server/resource-service.js';
+import { editableResource } from '../core/resource-editing.js';
+import { fixtureBotInput } from './fixtures/chat.js';
+import { nativeDraftTitle } from './fixtures/native-content.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
 const opened: { store: Store; directory: string }[] = [];
@@ -146,6 +150,35 @@ test('revision conflicts preserve the saved version and incoming native data', (
   expect(() => store.product.content(incoming, saved.id)).toThrow('Revision conflict');
   expect(incoming).toEqual(before);
   expect(store.product.get<Content>('content', saved.id)).toEqual(saved);
+});
+
+test('repeated ordinary saves keep only the latest undo and reject a stale revision', () => {
+  const store = database();
+  const initial = saveResource(store, {
+    kind: 'content',
+    id: null,
+    model: fixtureBotInput('Before', 'Long source '.repeat(1000)),
+  }).saved as Content;
+  let saved = initial;
+  for (let index = 0; index < 12; index++)
+    saved = saveResource(store, {
+      kind: 'content',
+      id: saved.id,
+      expectedRevision: saved.revision,
+      model: nativeDraftTitle(editableResource('content', saved), `Change ${index}`),
+    }).saved as Content;
+  expect(store.db.prepare('SELECT count(*) AS n FROM resource_undo').get()!.n).toBe(1);
+  expect(() =>
+    saveResource(store, {
+      kind: 'content',
+      id: initial.id,
+      expectedRevision: initial.revision,
+      model: editableResource('content', initial),
+    })
+  ).toThrow();
+  expect((undoResource(store, 'content', saved.id, saved.revision).saved as Content).title).toBe(
+    'Change 10'
+  );
 });
 
 test('in-transaction saves remain owned by the caller transaction', () => {

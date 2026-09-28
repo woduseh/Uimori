@@ -210,7 +210,6 @@ for (const width of [360, 412, 1440]) {
     expect(calls[0]).toMatchObject({
       text: original,
       targetLanguage: 'en',
-      branchId: `main:${chat.id}`,
     });
     expect(errors).toEqual([]);
   });

@@ -53,7 +53,7 @@ type Draft = {
 };
 type Brief = { expectedRevision: number; planHash: string; outline: OutlineSnapshot };
 type Pending =
-  | { kind: 'apply'; body: { branchId?: string; idempotencyKey: string; operations: unknown[] } }
+  | { kind: 'apply'; body: { idempotencyKey: string; operations: unknown[] } }
   | {
       kind: 'write';
       nodeId: string;
@@ -106,10 +106,9 @@ export function OutlinePanel({
   helperVisible: boolean;
   onToggleHelper: () => void;
 }) {
-  const chatId = state.detail?.chat.id ?? '',
-    branchId = state.branch?.id;
-  const prefix = `outline-workspace:${chatId}:${branchId ?? 'main'}`;
-  const pendingKey = `outline-pending:${chatId}:${branchId ?? 'main'}`;
+  const chatId = state.detail?.chat.id ?? '';
+  const prefix = `outline-workspace:${chatId}`;
+  const pendingKey = `outline-pending:${chatId}`;
   const [outline, setOutline] = useState<OutlineDetail | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     stored(`${prefix}:selected`, null)
@@ -141,18 +140,15 @@ export function OutlinePanel({
     if (!chatId) return;
     const generation = ++loadGeneration.current;
     try {
-      const value = await api<OutlineDetail>(
-        `/chats/${chatId}/outline${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ''}`
-      );
+      const value = await api<OutlineDetail>(`/chats/${chatId}/outline`);
       if (mounted.current && generation === loadGeneration.current) setOutline(value);
     } catch (cause) {
       if (mounted.current && generation === loadGeneration.current)
         setError((cause as Error).message);
     }
-  }, [chatId, branchId]);
+  }, [chatId]);
   useEffect(() => {
     mounted.current = true;
-    void load();
     heading.current?.focus();
     const refresh = () => void load();
     addEventListener(OUTLINE_REFRESH_EVENT, refresh);
@@ -164,11 +160,11 @@ export function OutlinePanel({
       removeEventListener('focus', refresh);
     };
   }, [load]);
-  // Source edits and completed writer runs update the existing reader cursor.
+  // Refresh writer changes and helper results when the outline is visible again.
   const cursor = state.detail?.reader.cursor;
   useEffect(() => {
-    if (cursor !== undefined) void load();
-  }, [cursor, load]);
+    if (cursor !== undefined && !helperVisible) void load();
+  }, [cursor, helperVisible, load]);
   useEffect(() => {
     if (!outline || (selectedId && outline.nodes.some((node) => node.id === selectedId))) return;
     setSelectedId(
@@ -313,7 +309,7 @@ export function OutlinePanel({
     if (disabled) return;
     void send({
       kind: 'apply',
-      body: { branchId, idempotencyKey: crypto.randomUUID(), operations },
+      body: { idempotencyKey: crypto.randomUUID(), operations },
     });
   };
   async function prepareWriting(previewOnly = false) {
@@ -351,7 +347,7 @@ export function OutlinePanel({
         expectedPlanHash: brief.planHash,
       },
       body: {
-        expectedRevision: state.branch?.headRevision ?? state.detail.chat.headRevision,
+        expectedRevision: state.detail.chat.headRevision,
         expectedSettingsRevision: state.detail.chat.settingsRevision,
         ...(state.detail.profile ? { expectedProfileRevision: state.detail.profile.revision } : {}),
         idempotencyKey: crypto.randomUUID(),
@@ -374,10 +370,9 @@ export function OutlinePanel({
     );
   }
   function help(purpose: 'compose' | 'review', node: OutlineNode | null = selected) {
-    if (!branchId) return;
     onHelp({
       key: crypto.randomUUID(),
-      scope: { kind: 'chat', chatId, branchId },
+      scope: { kind: 'chat', chatId },
       target: { nodeId: node?.id ?? null, expectedRevision: node?.revision ?? null, purpose },
       title: node?.title ?? '새 이야기 구성',
       text:
@@ -1064,10 +1059,9 @@ export function OutlinePanel({
                         type="button"
                         className="secondary"
                         onClick={() =>
-                          branchId &&
                           onHelp({
                             key: crypto.randomUUID(),
-                            scope: { kind: 'chat', chatId, branchId },
+                            scope: { kind: 'chat', chatId },
                             conversationId: review.conversationId,
                             title: '점검 대화',
                             text: '',

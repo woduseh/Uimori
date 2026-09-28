@@ -58,8 +58,6 @@ const messages: Record<string, string> = {
   EDITOR_WORKSPACE_UNAVAILABLE: '선택한 편집 초안을 사용할 수 없어요. 편집기를 다시 열어 주세요.',
   DRAFT_UNAPPLIED_FIELDS: '미적용 초안을 검증하고 적용한 뒤 저장해 주세요.',
   DRAFT_DISCARDED: '편집 초안이 폐기됐어요. 새 초안을 열어 주세요.',
-  DRAFT_BACKUP_REBASE_REQUIRED:
-    '백업에서 가져온 전역 프롬프트 초안이에요. 현재 저장본과 비교한 뒤 초안을 유지하거나 저장본을 불러오는 방식으로 다시 연결해 주세요.',
   CHAT_TRANSCRIPT_UNSUPPORTED_VERSION:
     '이 버전의 본문 파일은 가져올 수 없어요. 파일을 내보낸 앱과 현재 앱의 버전을 확인해 주세요.',
   CHAT_TRANSCRIPT_BOT_REQUIRED: '본문을 가져올 봇을 선택해 주세요.',
@@ -71,41 +69,8 @@ const messages: Record<string, string> = {
     '본문 파일의 요청 문장이 허용 길이를 넘었거나 형식이 잘못됐어요.',
   CHAT_TRANSCRIPT_INVALID_TEXT: '본문 파일에 비어 있거나 허용 길이를 넘은 응답이 있어요.',
   CHAT_TRANSCRIPT_INVALID_TRANSLATION: '본문 파일의 번역 형식이나 길이를 확인해 주세요.',
-  CHAT_BACKUP_UNSUPPORTED_VERSION:
-    '이 버전의 채팅 백업은 가져올 수 없어요. 백업을 내보낸 앱과 현재 앱의 버전을 확인해 주세요.',
-  CHAT_BACKUP_TOO_LARGE:
-    '채팅 백업이 허용 크기를 넘었어요. 백업 크기와 앱의 가져오기 한도를 확인해 주세요.',
-  CHAT_BACKUP_IMPORT_CONFLICT:
-    '같은 가져오기 요청에 다른 백업이 선택됐어요. 파일을 다시 선택한 뒤 가져와 주세요.',
-  CHAT_BACKUP_LIBRARY_CONFLICT:
-    '같은 ID와 개정 번호의 자료 내용이 현재 서재와 달라요. 기존 자료를 덮어쓰지 않았어요. 충돌한 자료를 확인한 뒤 다른 작업공간에 가져와 주세요.',
   CONTEXT_FIXED_INPUT_TOO_LARGE:
     '고정된 입력만으로 모델의 문맥 한도를 넘었어요. 프롬프트·첨부 자료를 줄이거나 입력 한도가 더 큰 모델을 선택해 주세요.',
-  BEHAVIOR_STATE_STALE: '다른 요청이 먼저 반영됐어요. 최신 내용을 확인한 뒤 다시 시도해 주세요.',
-  BEHAVIOR_UPGRADE_PREVIEW_EXPIRED: '변경 내용 확인이 만료됐어요. 다시 계산한 뒤 적용해 주세요.',
-  BEHAVIOR_UPGRADE_NOT_REQUIRED: '이미 최신 상태 정의를 사용하고 있어요. 상태를 새로 읽어 주세요.',
-  BEHAVIOR_UPGRADE_PROGRAM_UNAVAILABLE: '이 자료에는 사용할 수 있는 상태 변환 코드가 없어요.',
-  BEHAVIOR_PACKAGE_STALE: '자료가 다시 변경됐어요. 창을 닫고 최신 자료에서 다시 확인해 주세요.',
-  BEHAVIOR_PROGRAM_CONTEXT_CHANGED:
-    '계산 중 자료나 채팅 상태가 바뀌어 결과를 반영하지 않았어요. 최신 상태에서 다시 실행해 주세요.',
-  BEHAVIOR_RUN_ACTIVE: '이 채팅에서 요청이 진행 중이에요. 완료 후 행동을 다시 실행해 주세요.',
-  EXTENSION_CANCELLED: '코드 계산을 취소했어요. 상태는 바꾸지 않았어요.',
-  EXTENSION_OPERATION_ACTIVE:
-    '이 자료의 코드 작업이 이미 진행 중이에요. 결과를 기다리거나 해당 작업을 취소해 주세요.',
-  EXTENSION_OPERATION_NOT_FOUND: '자료 코드 작업을 찾지 못했어요. 채팅의 상태를 새로 읽어 주세요.',
-  EXTENSION_OPERATION_FAILED: '자료 코드 작업을 완료하지 못했어요. 기존 상태와 채팅은 유지돼요.',
-  EXTENSION_INTERRUPTED: '서버가 중단돼 자료 코드 작업을 멈췄어요. 자동으로 다시 실행하지 않아요.',
-  BEHAVIOR_PROGRAM_ABORTED: '코드 계산을 취소했어요. 상태는 바꾸지 않았어요.',
-  BEHAVIOR_PROGRAM_BUSY: '다른 코드 계산이 진행 중이에요. 잠시 후 다시 실행해 주세요.',
-  BEHAVIOR_PROGRAM_FAILED:
-    '자료의 코드 계산에 실패했어요. 상태는 유지되며 채팅은 계속할 수 있어요.',
-  BEHAVIOR_PROGRAM_RUNTIME_FAILED:
-    '코드 실행을 완료하지 못했어요. 상태는 유지되며 채팅은 계속할 수 있어요.',
-  BEHAVIOR_PROGRAM_TIMEOUT: '자료의 코드 계산이 제한 시간을 넘었어요. 상태는 바꾸지 않았어요.',
-  BEHAVIOR_PROGRAM_INPUT_SIZE:
-    '코드에 전달할 상태와 입력이 실행 한도를 넘었어요. 상태는 바꾸지 않았어요.',
-  BEHAVIOR_PROGRAM_OUTPUT_SIZE: '코드 계산 결과가 실행 한도를 넘었어요. 상태는 바꾸지 않았어요.',
-  BEHAVIOR_PROGRAM_RESULT_VALUE: '코드가 반환한 결과의 형식이 맞지 않아요. 상태는 바꾸지 않았어요.',
 };
 for (const suffix of [
   'INVALID',
@@ -122,17 +87,6 @@ for (const suffix of [
 ])
   messages[`CHAT_TRANSCRIPT_${suffix}`] =
     '본문 파일의 형식이 올바르지 않아요. 파일 내용을 확인해 주세요.';
-for (const suffix of [
-  'INVALID_FORMAT',
-  'INVALID_TIME',
-  'INVALID_COLLECTION',
-  'MISSING_FIELD',
-  'INVALID_FIELD',
-  'INVALID_CHAT',
-  'INVALID_GRAPH',
-])
-  messages[`CHAT_BACKUP_${suffix}`] =
-    '채팅 백업의 형식이나 채팅 구성이 올바르지 않아요. 백업 파일을 확인해 주세요.';
 
 const settingErrors = new Set([
   'Model disabled',

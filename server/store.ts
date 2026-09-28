@@ -2,8 +2,6 @@ import { enqueueTerminalNotification } from './push-events.js';
 import { initIllustrationPresets } from './illustration-presets.js';
 import { normalizeChatSettings } from '../core/chat-settings.js';
 import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
-import { migrateIndependentChats } from './migrate-independent-chats.js';
-import { pruneUnusedData } from './unused-data.js';
 import { retainCompletedLore } from './lore-retention-state.js';
 import { verifiedRunLoreReads } from './lore-context.js';
 import { captureNativeMessageChanges } from './native-message-changes.js';
@@ -35,7 +33,6 @@ import { promptWorkspace } from './prompt-workspace.js';
 import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
 import { isSourceOnlyTranscript } from '../core/authored-history.js';
 import { HttpError, text } from './request-validation.js';
-export { HttpError } from './request-validation.js';
 import { StoryStore } from './story-store.js';
 import { OutlineStore } from './outline-store.js';
 import { ChatOrganizationStore } from './chat-organization.js';
@@ -125,13 +122,11 @@ export class Store {
       this.context = new ContextStore(this);
       this.organization = new ChatOrganizationStore(this);
       this.libraryOrganization = new LibraryOrganizationStore(this);
-      initializeDatabaseSchema(
-        this.db,
-        () => {
-          this.db.exec(`
+      initializeDatabaseSchema(this.db, () => {
+        this.db.exec(`
       CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, head_revision TEXT, settings_revision INTEGER NOT NULL, settings TEXT NOT NULL, created_at TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), parent_revision TEXT, status TEXT NOT NULL, request TEXT NOT NULL, snapshot TEXT NOT NULL, request_key TEXT NOT NULL, command TEXT NOT NULL, source_revision TEXT, error TEXT, usage TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, branch_id TEXT REFERENCES branches(id), partial_text TEXT, UNIQUE(chat_id,request_key));
-      CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_branch ON runs(branch_id) WHERE status IN ('queued','running');
+      CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), parent_revision TEXT, status TEXT NOT NULL, request TEXT NOT NULL, snapshot TEXT NOT NULL, request_key TEXT NOT NULL, command TEXT NOT NULL, source_revision TEXT, error TEXT, usage TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, partial_text TEXT, UNIQUE(chat_id,request_key));
+      CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_chat ON runs(chat_id) WHERE status IN ('queued','running');
       CREATE INDEX runs_chat_activity ON runs(chat_id,created_at DESC);
       CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), run_id TEXT NOT NULL UNIQUE REFERENCES runs(id), parent_revision TEXT REFERENCES sources(id), text TEXT NOT NULL, hash TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), source_revision TEXT NOT NULL REFERENCES sources(id), source_hash TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('translation','status','image')), status TEXT NOT NULL, generation INTEGER NOT NULL DEFAULT 0, owner TEXT, input TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, UNIQUE(source_revision,kind,revision));
@@ -143,22 +138,17 @@ export class Store {
       CREATE TABLE provider_connection_tests (id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, model_id TEXT NOT NULL, model_revision INTEGER NOT NULL, status TEXT NOT NULL, sent_at TEXT, body TEXT NOT NULL);
       CREATE UNIQUE INDEX one_active_connection_test_per_model ON provider_connection_tests(model_id) WHERE status='running';
       `);
-          initCredentials(this.db);
-          this.product.initFresh();
-          this.story.initFresh();
-          this.context.initFresh();
-          this.organization.init();
-          this.libraryOrganization.init();
-          initHelperWorkspace(this);
-          initChatOverrides(this);
-          initChatOptions(this);
-          initResponseStreams(this.db);
-        },
-        (branches) => {
-          migrateIndependentChats(this, branches);
-          pruneUnusedData(this.db, null);
-        }
-      );
+        initCredentials(this.db);
+        this.product.initFresh();
+        this.story.initFresh();
+        this.context.initFresh();
+        this.organization.init();
+        this.libraryOrganization.init();
+        initHelperWorkspace(this);
+        initChatOverrides(this);
+        initChatOptions(this);
+        initResponseStreams(this.db);
+      });
       // The maintenance row belongs to every boot, not only to a fresh database.
       initIllustrationPresets(this);
       initMaintenance(this);
@@ -270,7 +260,6 @@ export class Store {
       this.db
         .prepare('INSERT INTO chats VALUES(?,?,NULL,1,?,?)')
         .run(id, title, json(settings), now());
-      this.db.prepare('INSERT INTO branches(id,chat_id) VALUES(?,?)').run(`main:${id}`, id);
       this.organization.create(id, organization);
     });
     return this.chat(id);
@@ -352,7 +341,6 @@ export class Store {
       expectedRevision: string | null;
       expectedSettingsRevision: number;
       idempotencyKey: string;
-      branchId?: string;
       expectedProfileRevision?: number;
       sceneCommandId?: string;
       loreContextReset?: boolean;
@@ -375,14 +363,10 @@ export class Store {
     const prior = this.db
       .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
       .get(chatId, command.idempotencyKey) as Row | undefined;
-    // A replay keeps the branch originally resolved for an omitted branch ID.
-    const resolvedBranchId =
-      command.branchId ?? (prior ? parse(prior.command).branchId : this.product.branch(chatId).id);
     const canonical = json({
       request: command.request,
       expectedRevision: command.expectedRevision,
       expectedSettingsRevision: command.expectedSettingsRevision,
-      branchId: resolvedBranchId,
       expectedProfileRevision: command.expectedProfileRevision,
       ...(command.sceneCommandId ? { sceneCommandId: command.sceneCommandId } : {}),
       ...(command.packageStart ? { packageStart: command.packageStart } : {}),
@@ -396,8 +380,7 @@ export class Store {
       return { run: this.run(prior.id), created: false };
     }
     const chat = this.chat(chatId);
-    const branch = this.product.branch(chatId, resolvedBranchId);
-    if (branch.headRevision !== command.expectedRevision)
+    if (chat.headRevision !== command.expectedRevision)
       throw new HttpError(409, 'Source revision conflict');
     if (chat.settingsRevision !== command.expectedSettingsRevision)
       throw new HttpError(409, 'Settings revision conflict');
@@ -408,13 +391,13 @@ export class Store {
       throw new HttpError(409, 'Profile revision conflict');
     if (
       this.db
-        .prepare("SELECT id FROM runs WHERE branch_id=? AND status IN ('queued','running')")
-        .get(branch.id)
+        .prepare("SELECT id FROM runs WHERE chat_id=? AND status IN ('queued','running')")
+        .get(chatId)
     )
       throw new HttpError(409, 'A run already owns this head');
     const id = randomUUID();
     const time = now();
-    const captured = snapshot({ ...chat, headRevision: branch.headRevision });
+    const captured = snapshot(chat);
     const base = {
       ...captured,
       ...(isSourceOnlyTranscript(captured)
@@ -427,7 +410,6 @@ export class Store {
           }),
       ...(command.loreContextReset ? { loreContextReset: true } : {}),
       executionClock: { iso: time, unix: Math.floor(Date.parse(time) / 1000) },
-      branchId: branch.id,
     };
     // Authored openings and transcript imports commit their exact text; nothing is prepared for a model.
     const authored =
@@ -443,7 +425,7 @@ export class Store {
     const status = 'queued';
     this.db
       .prepare(
-        'INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)'
+        'INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)'
       )
       .run(
         id,
@@ -455,8 +437,7 @@ export class Store {
         command.idempotencyKey,
         canonical,
         time,
-        time,
-        branch.id
+        time
       );
     if (command.sceneCommandId) this.story.bindCommandInTransaction(command.sceneCommandId, id);
     this.event(chatId, `run.${status}`, id);
@@ -614,7 +595,7 @@ export class Store {
       this.completeRunInTransaction(id, text, usage, settings, controls)
     );
   }
-  /** Provider completion and authored openings share source/branch CAS and source hashing. */
+  /** Provider completion and authored openings share source/chat CAS and source hashing. */
   completeRunInTransaction(
     id: string,
     text: string,
@@ -624,8 +605,8 @@ export class Store {
   ): Source {
     const run = this.run(id);
     if (run.status !== 'running') throw new HttpError(409, 'Run no longer owns completion');
-    const branch = this.product.branch(run.chatId, run.snapshot.branchId);
-    if (branch.headRevision !== run.parentRevision)
+    const chat = this.chat(run.chatId);
+    if (chat.headRevision !== run.parentRevision)
       throw new HttpError(409, 'Source revision changed');
     const source: Source = {
       id: randomUUID(),
@@ -638,9 +619,9 @@ export class Store {
     };
     const native = run.snapshot.nativeRisuExecution;
     if (native)
-      writeChatVariablesInTransaction(this, run.chatId, branch.id, {
+      writeChatVariablesInTransaction(this, run.chatId, {
         expectedRevision: native.beforeVariableRevision,
-        expectedSourceHash: branch.headRevision ? this.source(branch.headRevision).hash : null,
+        expectedSourceHash: chat.headRevision ? this.source(chat.headRevision).hash : null,
         idempotencyKey: `native-run:${run.id}`,
         values: native.output?.variables ?? native.variables,
       });
@@ -704,7 +685,7 @@ export class Store {
       // Illustrations never block the source commit; reservation problems become visible jobs.
       scheduleAutomaticIllustration(this, source);
     }
-    checkpointChatVariablesInTransaction(this, source.id, source.chatId, branch.id);
+    checkpointChatVariablesInTransaction(this, source.id, source.chatId);
     retainCompletedLore(
       this,
       run,
@@ -1116,7 +1097,6 @@ export class Store {
           return true;
         }),
       profile: this.product.profile(id),
-      branch: this.product.branch(id),
       attempts: this.product.attempts(id),
       assets: mergedReaderAssets(this, id),
     };

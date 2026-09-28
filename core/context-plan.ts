@@ -35,7 +35,6 @@ export type ContextCheckpoint = ContextCheckpointRef & {
 export type ContextJob = {
   id: string;
   chatId: string;
-  branchId: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
   snapshot: import('./types.js').RunSnapshot | null;
   checkpoint: ContextCheckpointRef | null;

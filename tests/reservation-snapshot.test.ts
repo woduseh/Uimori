@@ -45,7 +45,6 @@ function phases() {
   const calls: string[] = [];
   const base: RunSnapshot = {
     chatId: 'chat',
-    branchId: 'branch',
     parentRevision: 'source-2',
     settingsRevision: 8,
     settings: { status: false, maxCalls: 16 },
@@ -93,19 +92,15 @@ function phases() {
       },
     },
   } as unknown as Store;
-  vi.spyOn(ChatOptionsStore.prototype, 'freeze').mockImplementation((_profile, branchId, runId) => {
-    expect(branchId).toBe('branch');
+  vi.spyOn(ChatOptionsStore.prototype, 'freeze').mockImplementation((_profile, runId) => {
     expect(runId).toBe('run');
     calls.push('consume-options');
   });
-  vi.spyOn(variables, 'chatVariableProfile').mockImplementation(
-    (_store, chatId, branchId, profile) => {
-      expect(chatId).toBe('chat');
-      expect(branchId).toBe('branch');
-      calls.push('variables');
-      return profile!;
-    }
-  );
+  vi.spyOn(variables, 'chatVariableProfile').mockImplementation((_store, chatId, profile) => {
+    expect(chatId).toBe('chat');
+    calls.push('variables');
+    return profile!;
+  });
   vi.spyOn(overrides, 'freezeChatOverrides').mockImplementation(
     (_store, _profile, _roots, head) => {
       expect(head).toBe(base.parentRevision);
@@ -207,7 +202,6 @@ test.each<{
       'settings',
       'settingsRevision',
       'request',
-      'branchId',
       'parentRevision',
     ] as const)
       expect(result[field]).toEqual(fixed[field]);
@@ -257,7 +251,6 @@ test('helper callers apply fixed options before resources and preserve pending o
   service.fixed(
     chat.id,
     {
-      branchId: initial.branchId,
       expectedRevision: initial.revision,
       binding: initial.binding,
       values: { tone: 'bold' },
@@ -269,7 +262,6 @@ test('helper callers apply fixed options before resources and preserve pending o
   service.stage(
     chat.id,
     {
-      branchId: fixed.branchId,
       expectedRevision: fixed.revision,
       binding: fixed.binding,
       values: { tone: 'warm' },
@@ -286,7 +278,7 @@ test('helper callers apply fixed options before resources and preserve pending o
     return resources(chatId, profile);
   });
   for (const purpose of ['artifact', 'context'] as const) {
-    const result = helperWritingSnapshot(store, chat.id, fixed.branchId, purpose);
+    const result = helperWritingSnapshot(store, chat.id, purpose);
     expect(result.profile?.chatOptions).toMatchObject({ values: { tone: 'bold' }, pendingIds: [] });
     expect(result.executionPurpose).toBe(purpose === 'artifact' ? 'artifact' : undefined);
     expect(result.promptCompilation).toBeUndefined();

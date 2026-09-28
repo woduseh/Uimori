@@ -38,37 +38,30 @@ function groupMessages(messages: NativeRisuMessage[]): NativeRisuMessage[][] {
   if (pending.length) groups.push(pending);
   return groups;
 }
-
-/** Current branch context; the source package revision remains the one the reader rendered. */
-export function nativeSourceSnapshot(
-  store: Store,
-  chatId: string,
-  sourceId: string,
-  branchId?: string
-) {
-  const branch = store.product.branch(chatId, branchId);
-  const history = store.history(branch.headRevision);
+/** Current chat context; the source package revision remains the one the reader rendered. */
+export function nativeSourceSnapshot(store: Store, chatId: string, sourceId: string) {
+  const chat = store.chat(chatId);
+  const history = store.history(chat.headRevision);
   if (!history.some((entry) => entry.revision === sourceId))
-    throw new HttpError(409, 'RISU_NATIVE_SOURCE_OUTSIDE_BRANCH');
+    throw new HttpError(409, 'RISU_NATIVE_SOURCE_OUTSIDE_CHAT');
   const source = store.source(sourceId);
   if (source.chatId !== chatId) throw new HttpError(404, 'Source not found');
   const own = readRunSnapshot(store, source.runId);
   const snapshot: RunSnapshot = {
     ...own,
-    profile: chatVariableProfile(store, chatId, branch.id, own.profile),
+    profile: chatVariableProfile(store, chatId, own.profile),
     history,
-    parentRevision: branch.headRevision,
-    branchId: branch.id,
+    parentRevision: chat.headRevision,
   };
-  // Reading a later button uses the live branch, not the variables captured before generation.
+  // Reading a later button uses live chat variables, not those captured before generation.
   delete snapshot.nativeRisuExecution;
   snapshot.logicalHistory = captureLogicalHistory(store, snapshot);
-  return { source, snapshot, branch, variables: readChatVariables(store, chatId, branch.id) };
+  return { source, snapshot, variables: readChatVariables(store, chatId) };
 }
 
 /**
  * Reserve before executing. A lost HTTP response or a restart never replays an uncertain script.
- * Changed messages get new source identities; other branches keep their original sources.
+ * Changed messages get new source identities.
  */
 export async function applyNativeRisuAction(
   store: Store,
@@ -86,7 +79,6 @@ export async function applyNativeRisuAction(
 ) {
   const body = record(value);
   fields(body, [
-    'branchId',
     'kind',
     'name',
     'expectedHeadRevision',
@@ -94,7 +86,6 @@ export async function applyNativeRisuAction(
     'expectedVariableRevision',
     'idempotencyKey',
   ]);
-  const branchId = body.branchId === undefined ? undefined : text(body.branchId, 'branch id', 100);
   const kind = body.kind;
   if (kind !== 'trigger' && kind !== 'button') throw new HttpError(400, 'RISU_NATIVE_ACTION_KIND');
   const name = text(body.name, 'action name', 300);
@@ -104,7 +95,6 @@ export async function applyNativeRisuAction(
   const expectedVariableRevision = number(body.expectedVariableRevision, 'variables revision', 0);
   const commandHash = digest({
     sourceId,
-    branchId,
     kind,
     name,
     expectedHeadRevision,
@@ -122,15 +112,15 @@ export async function applyNativeRisuAction(
       throw new HttpError(409, `RISU_NATIVE_ACTION_${run.status.toUpperCase()}`);
     return { created: false, runId: run.id };
   }
-  const captured = nativeSourceSnapshot(store, chatId, sourceId, branchId);
+  const captured = nativeSourceSnapshot(store, chatId, sourceId);
   const context = nativeRisuContext(captured.snapshot);
   if (!context) throw new HttpError(400, 'RISU_NATIVE_CARD_REQUIRED');
   const check = () => {
-    const branch = store.product.branch(chatId, captured.branch.id);
+    const chat = store.chat(chatId);
     if (
-      branch.headRevision !== expectedHeadRevision ||
+      chat.headRevision !== expectedHeadRevision ||
       store.source(expectedHeadRevision).hash !== expectedHeadHash ||
-      readChatVariables(store, chatId, branch.id).revision !== expectedVariableRevision
+      readChatVariables(store, chatId).revision !== expectedVariableRevision
     )
       throw new HttpError(409, 'RISU_NATIVE_ACTION_STATE_CHANGED');
   };
@@ -141,8 +131,7 @@ export async function applyNativeRisuAction(
       chatId,
       {
         request: '',
-        expectedRevision: branchHead(captured.snapshot),
-        branchId: captured.branch.id,
+        expectedRevision: captured.snapshot.parentRevision,
         expectedSettingsRevision: chat.settingsRevision,
         expectedProfileRevision: store.product.profile(chatId).revision,
         idempotencyKey: key,
@@ -234,7 +223,6 @@ export async function applyNativeRisuAction(
         const chat = store.chat(chatId);
         const snapshot: RunSnapshot = {
           chatId,
-          branchId: captured.branch.id,
           parentRevision: head,
           settingsRevision: chat.settingsRevision,
           settings: chat.settings,
@@ -265,7 +253,6 @@ export async function applyNativeRisuAction(
             {
               request,
               expectedRevision: head,
-              branchId: captured.branch.id,
               expectedSettingsRevision: chat.settingsRevision,
               idempotencyKey: `${key}:${index}`,
             },
@@ -274,10 +261,10 @@ export async function applyNativeRisuAction(
           id = added.run.id;
           store.startRun(id);
         }
-        // Last checkpoint carries the action's final variables. Earlier retained/copy sources
-        // are immutable and cannot be used to resurrect a future state on another branch.
+        // Last checkpoint carries the action's final variables. Earlier sources are immutable
+        // and cannot be used to resurrect a future variable state.
         if (index === next.length - 1)
-          writeChatVariablesInTransaction(store, chatId, captured.branch.id, {
+          writeChatVariablesInTransaction(store, chatId, {
             expectedRevision: expectedVariableRevision,
             expectedSourceHash: head ? store.source(head).hash : null,
             idempotencyKey: `${key}:variables`,
@@ -309,5 +296,3 @@ export async function applyNativeRisuAction(
     throw error;
   }
 }
-
-const branchHead = (snapshot: RunSnapshot) => snapshot.parentRevision;

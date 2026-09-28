@@ -1,5 +1,5 @@
-export function commandStorageKey(chatId: string, branchId: string) {
-  return `command:${chatId}${branchId && branchId !== `main:${chatId}` ? `:${branchId}` : ''}`;
+export function commandStorageKey(chatId: string) {
+  return `command:${chatId}`;
 }
 
 export type ReadingPosition = {

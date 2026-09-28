@@ -24,14 +24,14 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.read',
     description:
-      'Read a chat, its current branch and message IDs. Set chatId to work with any chat, including from the library.',
+      'Read a chat, its current head and message IDs. Set chatId to work with any chat, including from the library.',
     inputSchema: schema({ chatId: itemId }),
   },
   ...helperOptionTools,
   {
     name: 'chat.lore',
     description:
-      'Read or edit an attachment-scoped lore override in this chat. Read first: use attachments[].scope plus lore[].id and field to form selector, and copy lore[].fieldHashes[field] as expectedFieldHash. Both mutations require body selector, expectedRevision and expectedHeadRevision. Patch additionally requires expectedProfileRevision, expectedPackageRevision, expectedFieldHash and value; omit those four fields for remove. The host supplies the branch and mutation identity. Shared originals stay intact. Mutations require a user request for chat-only lore.',
+      'Read or edit an attachment-scoped lore override in this chat. Read first: use attachments[].scope plus lore[].id and field to form selector, and copy lore[].fieldHashes[field] as expectedFieldHash. Both mutations require body selector, expectedRevision and expectedHeadRevision. Patch additionally requires expectedProfileRevision, expectedPackageRevision, expectedFieldHash and value; omit those four fields for remove. The host supplies the current chat and mutation identity. Shared originals stay intact. Mutations require a user request for chat-only lore.',
     inputSchema: schema(
       {
         action: { type: 'string', enum: ['read', 'patch', 'remove'] },
@@ -151,7 +151,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'outline.read',
     description:
-      "Read this chat branch's hierarchical composition: theme, main story, arcs, episodes and beats (levels may be skipped), with each item's exact id, revision, pinned flag and derived writing progress. Read before proposing or writing composition.",
+      "Read this chat's hierarchical composition: theme, main story, arcs, episodes and beats (levels may be skipped), with each item's exact id, revision, pinned flag and derived writing progress. Read before proposing or writing composition.",
     inputSchema: schema({}),
   },
   {
@@ -194,7 +194,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'notes.write',
     description:
-      'Save a user note or correction after a user request. Read context.read for notesRevision and use it as body.expectedRevision. Supply body.text for a new note; add replacesId to replace a discovered note. To retire one, supply replacesId and retired:true instead of text. The host supplies the current branch, source anchor, user attribution and mutation identity; do not supply them yourself.',
+      'Save a user note or correction after a user request. Read context.read for notesRevision and use it as body.expectedRevision. Supply body.text for a new note; add replacesId to replace a discovered note. To retire one, supply replacesId and retired:true instead of text. The host supplies the current chat head, source anchor, user attribution and mutation identity; do not supply them yourself.',
     inputSchema: schema(
       {
         body: schema(
@@ -245,14 +245,12 @@ export const HELPER_APP_TOOLS: ProviderTool[] = [...TOOLS, ...MAIN_READ_TOOLS].m
   return {
     ...tool,
     description:
-      tool.description +
-      ' Optional chatId/branchId select another chat; omission uses the current chat.',
+      tool.description + ' Optional chatId selects another chat; omission uses the current chat.',
     inputSchema: {
       ...input,
       properties: {
         ...(input.properties as Record<string, Json>),
         chatId: itemId,
-        branchId: itemId,
       },
     },
   };

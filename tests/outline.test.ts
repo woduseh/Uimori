@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { createFixtureChat } from './fixtures/chat.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
-import { Store, type HttpError } from '../server/store.js';
+import { Store } from '../server/store.js';
+import type { HttpError } from '../server/request-validation.js';
 
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { OUTLINE_CONTRACT, OUTLINE_LEVEL_LABELS } from '../core/outline.js';
@@ -154,17 +155,15 @@ const find = (store: Store, chatId: string, title: string) => {
 function reserve(store: Store, chatId: string, commandId: string, key = randomUUID()) {
   const chat = store.chat(chatId);
   const profile = store.product.snapshot(chatId);
-  const branch = store.product.branch(chatId);
   const command = store.story.command(commandId);
   return store.createRun(
     chatId,
     {
       request: command.request,
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       expectedProfileRevision: store.product.profile(chatId).revision,
       idempotencyKey: key,
-      branchId: command.branchId,
       sceneCommandId: command.id,
     },
     (current) =>
@@ -199,13 +198,13 @@ describe('hierarchical composition', () => {
     const store = await database();
     const chat = createFixtureChat(store, '즉흥 집필 검사');
     const request = '미라가 지도를 살펴보는 장면을 써 주세요.';
-    const branch = store.product.branch(chat.id);
+    const current = store.chat(chat.id);
     const profile = store.product.snapshot(chat.id);
     const run = store.createRun(
       chat.id,
       {
         request,
-        expectedRevision: branch.headRevision,
+        expectedRevision: current.headRevision,
         expectedSettingsRevision: store.chat(chat.id).settingsRevision,
         expectedProfileRevision: store.product.profile(chat.id).revision,
         idempotencyKey: randomUUID(),
@@ -231,14 +230,14 @@ describe('hierarchical composition', () => {
     );
     // No composition exists, so nothing is frozen and no composition input is required.
     expect(observedExecution(store, run.id).snapshot.outline).toBeUndefined();
-    expect(store.product.branch(chat.id).headRevision).toBe(source.id);
+    expect(store.chat(chat.id).headRevision).toBe(source.id);
     expect(store.outline.detail(chat.id).nodes).toEqual([]);
   });
 
   test('composes five levels without writing any prose', async () => {
     const store = await database();
     const chat = createFixtureChat(store, '구성 검사');
-    const before = store.product.branch(chat.id).headRevision;
+    const before = store.chat(chat.id).headRevision;
     const { detail, created } = compose(store, chat.id);
     expect(created).toHaveLength(7);
     expect(detail.nodes.map((node) => node.level)).toEqual([
@@ -254,7 +253,7 @@ describe('hierarchical composition', () => {
     expect(detail.nodes.filter((node) => node.parentId === arc.id)).toHaveLength(3);
     // Composition alone never counts as written and never commits story text.
     expect(detail.nodes.every((node) => node.progress.state === 'planned')).toBe(true);
-    expect(store.product.branch(chat.id).headRevision).toBe(before);
+    expect(store.chat(chat.id).headRevision).toBe(before);
     expect(store.chat(chat.id).headRevision).toBe(before);
   });
 
@@ -785,7 +784,7 @@ describe('hierarchical composition', () => {
     expect(request.stable.contract).toContain(OUTLINE_CONTRACT);
 
     // One request writes exactly one source, and only its own unit becomes written.
-    expect(store.product.branch(chat.id).headRevision).toBe(source.id);
+    expect(store.chat(chat.id).headRevision).toBe(source.id);
     const nodes = store.outline.detail(chat.id).nodes;
     expect(nodes.find((node) => node.id === episode.id)?.progress).toMatchObject({
       state: 'written',
@@ -924,7 +923,7 @@ describe('hierarchical composition', () => {
       fixed: true,
       intent: '명시 요청으로 결말 변경',
     });
-    expect(store.product.branch(chat.id).headRevision).toBeNull();
+    expect(store.chat(chat.id).headRevision).toBeNull();
   });
 
   test('continuation keeps each actual source and preserves parent-child association without semantic completion', async () => {
@@ -1115,7 +1114,7 @@ describe('hierarchical composition', () => {
       store.outline.sceneCommand(second.id, { idempotencyKey: randomUUID() }).id,
       '두 번째 원문'
     );
-    const copy = captureChatCopy(store, chat.id, undefined, one.source.id);
+    const copy = captureChatCopy(store, chat.id, one.source.id);
     expect(copy.state.authoring?.outlineSources).toHaveLength(1);
     const restored = restoreChatCopy(store, copy, randomUUID(), '독립 사본');
     const copiedFirst = find(store, restored.id, first.title),

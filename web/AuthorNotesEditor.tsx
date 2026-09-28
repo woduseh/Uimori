@@ -5,7 +5,6 @@ import type { AuthorNote, ImportedMemoryOrigin } from '../core/notes.js';
 import { ApiError } from './api.js';
 
 type AuthorNoteCommand = {
-  branchId: string;
   expectedHeadRevision: string | null;
   expectedRevision: number;
   idempotencyKey: string;
@@ -28,7 +27,6 @@ type NoteDraft = {
 
 /** User-authored instructions remain separate from derived summaries and fictional events. */
 export function AuthorNotesEditor({
-  branchId,
   headRevision,
   notes,
   revision,
@@ -39,7 +37,6 @@ export function AuthorNotesEditor({
   onSaveHandlerChange,
   disabled = false,
 }: {
-  branchId: string;
   headRevision: string | null;
   notes: AuthorNote[];
   revision: number;
@@ -111,7 +108,6 @@ export function AuthorNotesEditor({
     )
       return false;
     const command = {
-      branchId,
       expectedRevision: value.revision,
       expectedHeadRevision: value.headRevision,
       text: retired ? '' : value.text,

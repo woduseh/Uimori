@@ -7,21 +7,18 @@ import {
 
 const original: ReaderNavigation = Object.freeze({
   chat: 'A',
-  branch: 'branch-A',
   source: 'source-A',
   destination: 'story',
   epoch: 4,
 });
 
-test('changing chats atomically releases the previous branch and source', () => {
+test('changing chats atomically releases the previous source', () => {
   expect(move(original, { kind: 'chat', chat: 'B' })).toEqual({
     chat: 'B',
-    branch: '',
     source: '',
     destination: 'story',
     epoch: 5,
   });
-  expect(original.branch).toBe('branch-A');
   expect(original.source).toBe('source-A');
 });
 
@@ -37,22 +34,21 @@ test('history restoration replaces all address fields but never rewinds intent',
   expect(
     move(original, {
       kind: 'restore',
-      view: { chat: 'B', branch: 'B1', source: 'B2', destination: 'library' },
+      view: { chat: 'B', source: 'B2', destination: 'library' },
     })
-  ).toEqual({ chat: 'B', branch: 'B1', source: 'B2', destination: 'library', epoch: 5 });
+  ).toEqual({ chat: 'B', source: 'B2', destination: 'library', epoch: 5 });
 });
 
 test('deleting a chat releases its whole address', () => {
   expect(move(original, { kind: 'chat-deleted' })).toEqual({
     chat: '',
-    branch: '',
     source: '',
     destination: 'library',
     epoch: 5,
   });
 });
 
-test('rebasing native authored output preserves reader intent and the branch', () => {
+test('rebasing native authored output preserves the chat and reader intent', () => {
   expect(move(original, { kind: 'rebase-source', source: 'replacement' })).toEqual({
     ...original,
     source: 'replacement',
@@ -81,7 +77,6 @@ test('consecutive synchronous transitions consume the preceding complete state',
   const next = sequence.reduce(move, original);
   expect(next).toEqual({
     chat: 'B',
-    branch: '',
     source: 'B-source',
     destination: 'library',
     epoch: 7,

@@ -22,7 +22,18 @@ export const journeys = [
   {
     id: 'first-chat',
     title: '서재의 봇에서 첫 채팅, 이어가기, 포크까지',
-    url: { destination: 'library', tab: 'bot' },
+    url: {},
+    enter: [
+      { click: { label: '탐색 메뉴' }, when: 'compact' },
+      {
+        click: { role: 'button', name: '서재', within: { role: 'dialog', name: '탐색' } },
+        when: 'compact',
+      },
+      {
+        click: { role: 'button', name: '서재', within: { testid: 'bot-navigation' } },
+        when: 'wide',
+      },
+    ],
     ready: { testid: 'library-panel' },
     steps: [
       { id: 'library', title: '서재 · 봇 탭', actions: [] },
@@ -123,6 +134,7 @@ export async function captureJourneys({
       const started = Date.now();
       try {
         await page.goto(resolveUrl(baseUrl, journey.url, ids), { waitUntil: 'load' });
+        for (const step of journey.enter ?? []) await runStep(page, step, ids);
         await locatorFor(page, journey.ready ?? { css: 'header.workspace-header' }, ids).waitFor({
           state: 'visible',
           timeout: 10_000,

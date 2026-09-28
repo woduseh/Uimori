@@ -113,25 +113,8 @@
   padding-left: 20px;
   margin: 0;
 }
-.lore-placement-fields {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-.lore-placement-fields legend {
-  padding: 0 6px;
-  font-size: 12px;
-}
-.lore-placement-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 10px;
-}
 @media (max-width: 640px) {
-  .lore-context-policy-grid,
-  .lore-placement-row {
+  .lore-context-policy-grid {
     grid-template-columns: minmax(0, 1fr);
   }
   .lore-context-actions > button {

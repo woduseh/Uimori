@@ -28,7 +28,7 @@ const now = () => new Date().toISOString();
 export function initChatOptions(store: Store): void {
   store.db.exec(`
     CREATE TABLE chat_prompt_options(chat_id TEXT PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,revision INTEGER NOT NULL,body TEXT NOT NULL);
-    CREATE TABLE chat_option_pending(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,body TEXT NOT NULL,UNIQUE(chat_id,branch_id));
+    CREATE TABLE chat_option_pending(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL UNIQUE REFERENCES chats(id) ON DELETE CASCADE,body TEXT NOT NULL);
     CREATE TABLE chat_option_operations(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,request_id TEXT NOT NULL,command_hash TEXT NOT NULL,revision INTEGER NOT NULL,created_at TEXT NOT NULL);
   `);
 }
@@ -113,20 +113,17 @@ export class ChatOptionsStore {
     this.store.event(chatId, 'options.updated', chatId);
     return revision;
   }
-  private pending(chatId: string, branchId: string): PendingChatOptions[] {
+  private pending(chatId: string): PendingChatOptions[] {
     return (
       this.store.db
-        .prepare(
-          'SELECT body FROM chat_option_pending WHERE chat_id=? AND branch_id=? ORDER BY rowid'
-        )
-        .all(chatId, branchId) as Row[]
+        .prepare('SELECT body FROM chat_option_pending WHERE chat_id=? ORDER BY rowid')
+        .all(chatId) as Row[]
     ).map((row) => JSON.parse(String(row.body)) as PendingChatOptions);
   }
 
-  get(chatId: string, branchId?: string): ChatOptionState {
+  get(chatId: string): ChatOptionState {
     const profile = this.store.product.profile(chatId);
-    const branch = this.store.product.branch(chatId, branchId),
-      workspace = chatPromptWorkspace(this.store, profile.pinned),
+    const workspace = chatPromptWorkspace(this.store, profile.pinned),
       controls = effectiveRisuControls(
         resolvePackageProfile(this.store.product, profile),
         workspace.main.program
@@ -134,7 +131,7 @@ export class ChatOptionsStore {
       binding = optionBinding(workspace.main, controls),
       saved = this.saved(chatId);
     const compatible = !saved.binding || isDeepStrictEqual(saved.binding, binding);
-    const pending = this.pending(chatId, branch.id);
+    const pending = this.pending(chatId);
     const conflicts: string[] = [];
     if (!compatible && Object.keys(saved.values).length)
       conflicts.push(
@@ -148,7 +145,6 @@ export class ChatOptionsStore {
     }
     return {
       chatId,
-      branchId: branch.id,
       revision: saved.revision,
       binding,
       workspaceRevision: workspace.revision,
@@ -169,14 +165,11 @@ export class ChatOptionsStore {
     apply: (body: Record<string, unknown>, state: ChatOptionState) => void
   ): ChatOptionState {
     const body = record(value);
-    fields(body, ['branchId', 'expectedRevision', 'operationId', ...allowed]);
+    fields(body, ['expectedRevision', 'operationId', ...allowed]);
     const operationId = text(body.operationId, 'operation ID', 100);
     text(requestId, 'request ID', 200);
     const revision = number(body.expectedRevision, 'options revision', 0, Number.MAX_SAFE_INTEGER);
-    const branch = this.store.product.branch(
-      chatId,
-      body.branchId === undefined ? undefined : text(body.branchId, 'branch ID', 100)
-    );
+    this.store.chat(chatId);
     const commandHash = hash({ action, chatId, body });
     return this.store.transaction(() => {
       const prior = this.store.db
@@ -190,13 +183,13 @@ export class ChatOptionsStore {
         )
           conflict('옵션 요청 키가 다른 작업에 사용됐어요.');
         // A retry acknowledges the earlier write without reapplying it or showing stale settings.
-        return this.get(chatId, branch.id);
+        return this.get(chatId);
       }
-      const state = this.get(chatId, branch.id);
+      const state = this.get(chatId);
       if (state.revision !== revision)
         conflict('채팅 옵션이 변경됐어요. 입력은 유지하고 최신 설정을 확인해 주세요.');
       apply(body, state);
-      const result = this.get(chatId, branch.id);
+      const result = this.get(chatId);
       this.store.db
         .prepare('INSERT INTO chat_option_operations VALUES(?,?,?,?,?,?)')
         .run(operationId, chatId, requestId, commandHash, result.revision, now());
@@ -223,20 +216,17 @@ export class ChatOptionsStore {
       const values = valuesFor(state.controls ?? state.program, body.values);
       if (!Object.keys(values).length)
         throw new HttpError(400, '한 개 이상의 옵션을 선택해 주세요.');
-      this.store.db
-        .prepare('DELETE FROM chat_option_pending WHERE chat_id=? AND branch_id=?')
-        .run(chatId, state.branchId);
+      this.store.db.prepare('DELETE FROM chat_option_pending WHERE chat_id=?').run(chatId);
       const pending: PendingChatOptions = {
         id: randomUUID(),
         chatId,
-        branchId: state.branchId,
         binding: state.binding,
         values,
         createdAt: now(),
       };
       this.store.db
-        .prepare('INSERT INTO chat_option_pending VALUES(?,?,?,?)')
-        .run(pending.id, chatId, state.branchId, json(pending));
+        .prepare('INSERT INTO chat_option_pending VALUES(?,?,?)')
+        .run(pending.id, chatId, json(pending));
       this.bump(chatId);
     });
   }
@@ -257,11 +247,11 @@ export class ChatOptionsStore {
     );
   }
 
-  freeze(profile: ProfileSnapshot, branchId: string, runId?: string): void {
+  freeze(profile: ProfileSnapshot, runId?: string): void {
     const preset = profile.promptPresets?.main,
       ref = profile.prompts?.main;
     if (!preset || !ref) return;
-    const state = this.get(profile.chatId, branchId);
+    const state = this.get(profile.chatId);
     if (
       !isDeepStrictEqual(frozenOptionBinding(profile), state.binding) ||
       profile.promptWorkspaceRevision !== state.workspaceRevision
@@ -355,25 +345,18 @@ export function invokeHelperOptions(
   const service = new ChatOptionsStore(store);
   if (name === 'options.read') {
     fields(record(value), []);
-    return helperOptionState(service.get(scope.chatId, scope.branchId));
+    return helperOptionState(service.get(scope.chatId));
   }
   if (name !== 'options.oneoff') throw new HttpError(400, 'Unknown option tool');
   new HelperWorkspace(store).assertRunning(task.id);
-  return helperOptionState(
-    service.stage(
-      scope.chatId,
-      { ...record(value), branchId: scope.branchId, operationId },
-      task.id
-    )
-  );
+  return helperOptionState(service.stage(scope.chatId, { ...record(value), operationId }, task.id));
 }
 
 export function chatOptionRoutes(app: FastifyInstance, store: Store): void {
   const service = new ChatOptionsStore(store);
   const requestId = (body: unknown) => 'ui:' + text(record(body).operationId, 'operation ID', 100);
-  app.get<{ Params: { id: string }; Querystring: { branchId?: string } }>(
-    '/api/chats/:id/options',
-    (request) => service.get(request.params.id, request.query.branchId)
+  app.get<{ Params: { id: string } }>('/api/chats/:id/options', (request) =>
+    service.get(request.params.id)
   );
   app.post<{ Params: { id: string } }>('/api/chats/:id/options/fixed', (request) =>
     service.fixed(request.params.id, request.body, requestId(request.body))

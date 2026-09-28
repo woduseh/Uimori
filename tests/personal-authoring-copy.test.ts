@@ -46,12 +46,10 @@ test('independent chat copies and portable restores keep authored plans and scop
       entries: [{ request: 'Begin', text: 'The story begins.', translation: null }],
     },
   }).chat;
-  const branch = store.product.branch(chat.id);
   const outline = new OutlineStore(store);
   outline.apply(
     chat.id,
     {
-      branchId: branch.id,
       idempotencyKey: randomUUID(),
       operations: [
         { op: 'create', level: 'theme', title: 'Reconciliation', intent: 'Reunite the siblings' },
@@ -63,7 +61,6 @@ test('independent chat copies and portable restores keep authored plans and scop
   outline.apply(
     chat.id,
     {
-      branchId: branch.id,
       idempotencyKey: randomUUID(),
       operations: [
         { op: 'update', id: createdPlan.id, expectedRevision: createdPlan.revision, fixed: true },
@@ -72,7 +69,7 @@ test('independent chat copies and portable restores keep authored plans and scop
     'user'
   );
   const service = new ChatOverridesStore(store),
-    state = service.get(chat.id, branch.id);
+    state = service.get(chat.id);
   const attachment = state.attachments[0],
     lore = attachment.lore[0];
   service.patch(
@@ -80,7 +77,6 @@ test('independent chat copies and portable restores keep authored plans and scop
     {
       selector: { ...attachment.scope, loreId: lore.id, field: 'text' },
       value: 'A quiet mountain town',
-      branchId: branch.id,
       expectedRevision: state.revision,
       expectedHeadRevision: state.headRevision,
       expectedProfileRevision: state.profileRevision,

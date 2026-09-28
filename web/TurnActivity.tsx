@@ -22,7 +22,6 @@ type Props = {
   jobs: Job[];
   activities: ReaderActivity[];
   connected: boolean;
-  branchId?: string;
   revision: number;
   refresh: () => Promise<void>;
   onError: (message: string) => void;
@@ -43,7 +42,6 @@ function TurnActivityContent({
   jobs,
   activities,
   connected,
-  branchId,
   revision,
   refresh,
   onError,
@@ -79,13 +77,7 @@ function TurnActivityContent({
   const related = activities.filter((item) =>
     item.kind === 'main' ? item.id === run.id : !!source && item.sourceRevision === source.id
   );
-  const context = related
-    .filter(
-      (item) =>
-        item.kind === 'context' &&
-        (!item.branchId || item.branchId === (branchId ?? run.snapshot.branchId))
-    )
-    .at(-1);
+  const context = related.filter((item) => item.kind === 'context').at(-1);
   // Illustrations attach to the response text; the reader strip owns their actions.
   const illustrations = related.filter((item) => item.kind === 'illustration');
   const entries = [

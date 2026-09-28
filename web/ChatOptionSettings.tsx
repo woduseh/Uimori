@@ -13,7 +13,6 @@ import { PromptControlFields } from './PromptControlFields.js';
 type Values = Record<string, PromptValue>;
 type Props = {
   chatId: string;
-  branchId: string;
   active: boolean;
   disabled: boolean;
   workspaceRevision?: number;
@@ -73,9 +72,7 @@ export function ChatOptionSettings(props: Props) {
       const version = ++requestVersion.current;
       setLoading(true);
       try {
-        const state = await api<ChatOptionState>(
-          `${path}?branchId=${encodeURIComponent(props.branchId)}`
-        );
+        const state = await api<ChatOptionState>(path);
         if (version !== requestVersion.current) return;
         const draft = current.current;
         setLatest(state);
@@ -108,7 +105,7 @@ export function ChatOptionSettings(props: Props) {
         if (version === requestVersion.current) setLoading(false);
       }
     },
-    [path, props.branchId]
+    [path]
   );
   useEffect(() => {
     if (!props.active || props.disabled) return;
@@ -198,7 +195,6 @@ export function ChatOptionSettings(props: Props) {
       kind,
       path: `${path}/${suffix}`,
       body: {
-        branchId: props.branchId,
         expectedRevision: base.revision,
         operationId: crypto.randomUUID(),
         ...input,

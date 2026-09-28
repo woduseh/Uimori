@@ -40,11 +40,6 @@ function context(session: ResourceEditorSession | null): ActiveEditorContext | n
 }
 export const getActiveEditorContext = () => context(activeSession());
 export const captureActiveEditorContext = () => activeSession()?.captureForHelper() ?? null;
-export async function flushActiveEditor() {
-  const session = activeSession();
-  await session?.flush();
-  return context(session);
-}
 export async function discardActiveEditor(editorKey?: string) {
   const session = editorKey
     ? [...sessions.values()].find((item) => item.options.editorKey === editorKey)

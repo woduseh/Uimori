@@ -7,7 +7,7 @@ import type { Store } from './store.js';
 export type ContextRouteHooks = {
   signal: AbortSignal;
   track: (work: Promise<void>) => void;
-  snapshot: (chatId: string, branchId?: string) => RunSnapshot | Promise<RunSnapshot>;
+  snapshot: (chatId: string) => RunSnapshot | Promise<RunSnapshot>;
   execute: (job: ContextJob, signal: AbortSignal) => Promise<RunSnapshot>;
 };
 /** Standalone user operations; provider execution is injected by the application owner. */
@@ -15,20 +15,19 @@ export function contextRoutes(app: FastifyInstance, store: Store, hooks: Context
   const active = new Map<string, AbortController>();
   store.context.recover();
   const publicJob = ({ snapshot: _snapshot, ...job }: ContextJob) => job;
-  const detail = (chatId: string, branchId?: string) => {
-    const value = store.context.detail(chatId, branchId);
+  const detail = (chatId: string) => {
+    const value = store.context.detail(chatId);
     return value;
   };
-  app.get<{ Params: { id: string }; Querystring: { branchId?: string } }>(
-    '/api/chats/:id/context',
-    async (request) => detail(request.params.id, request.query.branchId)
+  app.get<{ Params: { id: string } }>('/api/chats/:id/context', async (request) =>
+    detail(request.params.id)
   );
   app.put<{ Params: { id: string } }>(
     '/api/chats/:id/context/summary',
     { bodyLimit: 16 * 1024 * 1024 },
     async (request) => {
       const body = record(request.body),
-        snapshot = await hooks.snapshot(request.params.id, body.branchId);
+        snapshot = await hooks.snapshot(request.params.id);
       const value = store.context.edit(request.params.id, body, snapshot);
       return value;
     }
@@ -38,7 +37,7 @@ export function contextRoutes(app: FastifyInstance, store: Store, hooks: Context
       job = store.context.schedule(
         request.params.id,
         body,
-        await hooks.snapshot(request.params.id, body.branchId)
+        await hooks.snapshot(request.params.id)
       );
     if (job.status === 'queued' && !active.has(job.id) && !hooks.signal.aborted) {
       const controller = new AbortController();

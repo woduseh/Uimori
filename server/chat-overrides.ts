@@ -86,23 +86,22 @@ export class ChatOverridesStore {
       headHash: scoped.headHash,
     });
   }
-  get(chatId: string, branchId?: string) {
-    const branch = this.store.product.branch(chatId, branchId),
+  get(chatId: string) {
+    const chat = this.store.chat(chatId),
       profile = this.store.product.profile(chatId);
     const roots = profile.packageAttachments ?? [],
       resolved = resolvePackageProfile(this.store.product, profile);
-    const scoped = this.scoped(chatId, branch.headRevision);
+    const scoped = this.scoped(chatId, chat.headRevision);
     const snapshot = buildChatOverrideSnapshot(
       resolved,
       roots,
       this.revision(chatId),
       scoped.valid,
-      { headRevision: branch.headRevision, headHash: scoped.headHash }
+      { headRevision: chat.headRevision, headHash: scoped.headHash }
     );
     return {
       chatId,
-      branchId: branch.id,
-      headRevision: branch.headRevision,
+      headRevision: chat.headRevision,
       headHash: scoped.headHash,
       revision: snapshot.revision,
       profileRevision: profile.revision,
@@ -132,7 +131,6 @@ export class ChatOverridesStore {
     const body = record(value);
     fields(body, [
       'selector',
-      'branchId',
       'expectedRevision',
       'expectedHeadRevision',
       'operationId',
@@ -159,15 +157,12 @@ export class ChatOverridesStore {
           throw new HttpError(409, 'Override operation ID reused');
         return JSON.parse(String(receipt.result)) as ChatOverrideResult;
       }
-      const branch = this.store.product.branch(
-        chatId,
-        body.branchId === undefined ? undefined : text(body.branchId, 'branch ID', 100)
-      );
+      const chat = this.store.chat(chatId);
       if (this.revision(chatId) !== expectedRevision)
         throw new HttpError(409, '채팅 전용 로어가 바뀌었어요. 최신 변경을 확인해 주세요.');
-      if (branch.headRevision !== expectedHead)
+      if (chat.headRevision !== expectedHead)
         throw new HttpError(409, '로어 변경을 붙일 원문이 바뀌었어요. 최신 원문을 확인해 주세요.');
-      const scoped = this.scoped(chatId, branch.headRevision),
+      const scoped = this.scoped(chatId, chat.headRevision),
         prior = scoped.entries.find(
           (entry) => chatLoreKey(entry.selector) === chatLoreKey(selector)
         );
@@ -179,7 +174,7 @@ export class ChatOverridesStore {
           id: randomUUID(),
           revision: expectedRevision + 1,
           retired: true,
-          atSource: branch.headRevision,
+          atSource: chat.headRevision,
           atHash: scoped.headHash,
           createdAt: new Date().toISOString(),
         };
@@ -225,7 +220,7 @@ export class ChatOverridesStore {
           baseValue,
           baseHash: chatOverrideHash(baseValue),
           value: text(body.value, 'lore text', maxField(selector), true),
-          atSource: branch.headRevision,
+          atSource: chat.headRevision,
           atHash: scoped.headHash,
           retired: false,
           createdAt: new Date().toISOString(),
@@ -266,9 +261,8 @@ export function chatOverrideRoutes(
   service: ChatOverridesStore,
   publish: (chatId: string) => void = () => {}
 ): void {
-  app.get<{ Params: { id: string }; Querystring: { branchId?: string } }>(
-    '/api/chats/:id/lore-overrides',
-    async (request) => service.get(request.params.id, request.query.branchId)
+  app.get<{ Params: { id: string } }>('/api/chats/:id/lore-overrides', async (request) =>
+    service.get(request.params.id)
   );
   const mutate =
     (action: 'patch' | 'remove') => async (request: { params: { id: string }; body: unknown }) => {

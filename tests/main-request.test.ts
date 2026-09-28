@@ -208,13 +208,13 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     const fake = {
       chat: () => ({
         id: work.chatId,
+        headRevision: work.parentRevision,
         settingsRevision: work.settingsRevision,
         settings: work.settings,
       }),
       history: () => [],
       product: {
         snapshot: () => structuredClone(work.profile),
-        branch: () => ({ id: 'branch-1', headRevision: null }),
         resources: () => [],
       },
       native: { snapshot: () => undefined },
@@ -241,7 +241,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       },
     });
     expect(response.statusCode).toBe(200);
-    expect(variables).toHaveBeenCalledWith(fake, work.chatId, 'branch-1');
+    expect(variables).toHaveBeenCalledWith(fake, work.chatId);
     expect(response.json().provider.body).toEqual(expected.body);
     expect(server.requests).toHaveLength(0);
     const log = hooks(server.origin),

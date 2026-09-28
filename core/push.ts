@@ -36,7 +36,6 @@ export type PushEnvelope = {
     | 'test';
   tag: string;
   chatId: string | null;
-  branchId: string | null;
   sourceId: string | null;
   representation: 'original' | 'translation';
   title?: string;
@@ -54,7 +53,6 @@ export function notificationIntent(value: unknown): NotificationIntent | null {
     target: {
       chatId: body.chatId,
       sourceId: body.sourceId,
-      branchId: id(body.branchId) ? body.branchId : `main:${body.chatId}`,
       representation: body.representation === 'translation' ? 'translation' : 'original',
     },
   };

@@ -7,9 +7,8 @@ export function outlineRoutes(
   store: Store,
   hooks: { publish: (chatId: string) => void }
 ) {
-  app.get<{ Params: { id: string }; Querystring: { branchId?: string } }>(
-    '/api/chats/:id/outline',
-    async (request) => store.outline.detail(request.params.id, request.query.branchId)
+  app.get<{ Params: { id: string } }>('/api/chats/:id/outline', async (request) =>
+    store.outline.detail(request.params.id)
   );
   app.get<{ Params: { id: string } }>('/api/outline-nodes/:id/brief', (request) =>
     store.outline.preview(request.params.id)

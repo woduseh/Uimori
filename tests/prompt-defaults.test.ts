@@ -81,102 +81,107 @@ function snapshot(protocol: ProviderProtocol): RunSnapshot {
   };
 }
 describe('single prompt program defaults at real native encoder boundaries', () => {
-  test.each(protocols)(
-    '%s keeps default main references and compiles explicit instructions through the same path',
-    async (protocol) => {
-      const seed = snapshot(protocol);
-      for (const custom of [false, true]) {
-        if (custom)
-          seed.profile!.promptPresets = {
-            main: {
-              id: 'prompt',
-              revision: 1,
-              title: 'Simple',
-              role: 'main',
-              program: createDefaultRisuPrompt('Literal {{char}}'),
-            },
-          };
-        const built = buildMainProviderRequest(await prepareNativeRisuRun(seed));
-        const before = structuredClone(built.request.prompt);
-        const preview = encodeMainPreview(built.request, seed.profile!.models.main!);
-        expect(built.request.stable.contract).toBe(
-          '\n' + CONTEXT_DERIVED_GUIDANCE + '\n' + CONTEXT_RETRIEVAL_GUIDANCE
-        );
-        for (const guidance of [CONTEXT_DERIVED_GUIDANCE, CONTEXT_RETRIEVAL_GUIDANCE])
-          expect(JSON.stringify(preview.body).split(guidance)).toHaveLength(2);
-        expect(built.request.prompt!.messages[0].content[0].text).toBe(
-          custom ? 'Literal Character' : DEFAULT_MAIN_PROMPT
-        );
-        expect(JSON.stringify(preview.body)).toContain('Pinned module evidence.');
-        expect(JSON.stringify(preview.body).split('Pinned module evidence.')).toHaveLength(2);
-        expect(JSON.stringify(preview.body)).toContain('package:module:module:body');
-        expect(built.request.prompt).toEqual(before);
-      }
-    }
-  );
-  test.each(protocols)(
-    '%s compiles default translation with source-time references without replaying main turns',
-    (protocol) => {
-      const seed = snapshot(protocol),
-        source = {
-          id: 'source',
-          chatId: seed.chatId,
-          text: 'Quiet harbor.',
-          hash: createHash('sha256').update('Quiet harbor.').digest('hex'),
-        };
-      seed.history = [{ revision: 'main-history', text: 'MAIN HISTORY MUST NOT LEAK' }];
-      const input = translationInput(source, sourceTimeContext(seed, 'translation'), seed);
-      const compilation = compileTranslationPrompt(input, seed, 'Translate this chunk.')!;
-      // Match production assembly: encoders receive already-finalized user-role references.
-      const request: ProviderRequest = withNativeHostContext({
-        role: 'translation',
-        modelId: seed.profile!.models.translation!.modelId,
-        generation: { maxOutputTokens: 1024, temperature: null },
-        stable: { contract: '', tools: [] },
-        prompt: {
-          compilerVersion: compilation.compilerVersion,
-          messages: compilation.messages,
-          cachePlan: compilation.cachePlan,
-          values: compilation.values,
-        },
-        input: {
-          task: 'Translate this chunk.',
-          controls: {},
-          source: {
-            sourceRevision: source.id,
-            sourceHash: source.hash,
-            outputSchema: JSON.parse(JSON.stringify(input.outputSchema)),
+  test('default and explicit main instructions assemble with the same frozen references', async () => {
+    const seed = snapshot('openai-responses-v1');
+    let request: ProviderRequest | undefined;
+    for (const custom of [false, true]) {
+      if (custom)
+        seed.profile!.promptPresets = {
+          main: {
+            id: 'prompt',
+            revision: 1,
+            title: 'Simple',
+            role: 'main',
+            program: createDefaultRisuPrompt('Literal {{char}}'),
           },
-          results: [],
+        };
+      const built = buildMainProviderRequest(await prepareNativeRisuRun(seed));
+      request = built.request;
+      expect(built.request.stable.contract).toBe(
+        '\n' + CONTEXT_DERIVED_GUIDANCE + '\n' + CONTEXT_RETRIEVAL_GUIDANCE
+      );
+      expect(built.request.prompt!.messages[0].content[0].text).toBe(
+        custom ? 'Literal Character' : DEFAULT_MAIN_PROMPT
+      );
+    }
+    // Encoding is protocol-specific, but it does not reassemble the prompt.
+    const beforeEncoding = structuredClone(request!);
+    for (const protocol of protocols) {
+      const target = snapshot(protocol).profile!.models.main!;
+      const preview = encodeMainPreview({ ...request!, modelId: target.modelId }, target);
+      for (const guidance of [CONTEXT_DERIVED_GUIDANCE, CONTEXT_RETRIEVAL_GUIDANCE])
+        expect(JSON.stringify(preview.body).split(guidance), protocol).toHaveLength(2);
+      expect(JSON.stringify(preview.body).split('Pinned module evidence.'), protocol).toHaveLength(
+        2
+      );
+      expect(JSON.stringify(preview.body), protocol).toContain('package:module:module:body');
+    }
+    expect(request).toEqual(beforeEncoding);
+  });
+  test('default translation compiles source-time references without main turns', () => {
+    const seed = snapshot('openai-responses-v1'),
+      source = {
+        id: 'source',
+        chatId: seed.chatId,
+        text: 'Quiet harbor.',
+        hash: createHash('sha256').update('Quiet harbor.').digest('hex'),
+      };
+    seed.history = [{ revision: 'main-history', text: 'MAIN HISTORY MUST NOT LEAK' }];
+    const input = translationInput(source, sourceTimeContext(seed, 'translation'), seed);
+    const compilation = compileTranslationPrompt(input, seed, 'Translate this chunk.')!;
+    // Match production assembly: encoders receive already-finalized user-role references.
+    const request: ProviderRequest = withNativeHostContext({
+      role: 'translation',
+      modelId: seed.profile!.models.translation!.modelId,
+      generation: { maxOutputTokens: 1024, temperature: null },
+      stable: { contract: '', tools: [] },
+      prompt: {
+        compilerVersion: compilation.compilerVersion,
+        messages: compilation.messages,
+        cachePlan: compilation.cachePlan,
+        values: compilation.values,
+      },
+      input: {
+        task: 'Translate this chunk.',
+        controls: {},
+        source: {
+          sourceRevision: source.id,
+          sourceHash: source.hash,
+          outputSchema: JSON.parse(JSON.stringify(input.outputSchema)),
         },
-      });
+        results: [],
+      },
+    });
+    expect(compilation.messages[0].content[0].text).toBe(DEFAULT_TRANSLATION_PROMPT);
+    expect(compilation.messages.filter((m) => m.provenance.origin === 'history')).toHaveLength(0);
+    expect(compilation.messages.filter((m) => m.provenance.origin === 'current')).toHaveLength(1);
+    const hostMessages = request.prompt!.messages.filter(
+      (message) => message.id === NATIVE_HOST_CONTEXT_ID
+    );
+    expect(hostMessages).toHaveLength(1);
+    expect(hostMessages[0].role).toBe('user');
+    expect(hostMessages[0].content[0].text).toContain(source.hash);
+    expect(compilation.messages.some((message) => message.id === 'outputSchema')).toBe(false);
+    for (const protocol of protocols) {
+      const target = snapshot(protocol).profile!.models.translation!;
+      const wireRequest = { ...request, modelId: target.modelId };
       const body =
         protocol === 'vertex-gemini-v1'
-          ? encodeVertex(request).body
+          ? encodeVertex(wireRequest).body
           : protocol === 'anthropic-messages-v1'
-            ? encodeAnthropic(request).body
+            ? encodeAnthropic(wireRequest).body
             : protocol === 'openai-responses-v1'
-              ? encodeResponses(request).body
-              : encodeChat(request, protocol).body;
-      expect(compilation.messages[0].content[0].text).toBe(DEFAULT_TRANSLATION_PROMPT);
-      expect(compilation.messages.filter((m) => m.provenance.origin === 'history')).toHaveLength(0);
-      expect(compilation.messages.filter((m) => m.provenance.origin === 'current')).toHaveLength(1);
-      const hostMessages = request.prompt!.messages.filter(
-        (message) => message.id === NATIVE_HOST_CONTEXT_ID
-      );
-      expect(hostMessages).toHaveLength(1);
-      expect(hostMessages[0].role).toBe('user');
-      expect(hostMessages[0].content[0].text).toContain(source.hash);
-      expect(JSON.stringify(body).split(source.hash)).toHaveLength(2);
-      expect(JSON.stringify(body).split(source.text)).toHaveLength(2);
-      expect(compilation.messages.some((message) => message.id === 'outputSchema')).toBe(false);
+              ? encodeResponses(wireRequest).body
+              : encodeChat(wireRequest, protocol).body;
+      expect(JSON.stringify(body).split(source.hash), protocol).toHaveLength(2);
+      expect(JSON.stringify(body).split(source.text), protocol).toHaveLength(2);
       if (protocol === 'vertex-gemini-v1') {
-        const mapped = planNativeMessages(request, protocol)!;
+        const mapped = planNativeMessages(wireRequest, protocol)!;
         expect(mapped.messages).toHaveLength(1);
         expect((mapped.messages[0] as { parts: unknown[] }).parts).toHaveLength(
           request.prompt!.messages.filter((m) => m.role === 'user').length
         );
       }
     }
-  );
+  });
 });

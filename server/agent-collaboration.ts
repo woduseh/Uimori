@@ -213,7 +213,6 @@ export function createAgentCollaboration(
           evidence,
           source: {
             chatId: snapshot.chatId,
-            ...(snapshot.branchId ? { branchId: snapshot.branchId } : {}),
             parentRevision: snapshot.parentRevision,
             prompt: {
               id: snapshot.profile!.promptPresets!.main!.id,

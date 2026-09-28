@@ -1,6 +1,6 @@
 import { evaluationFail, inspectRuntimeValue, PromptBudget } from './prompt-values.js';
 
-/** Branch-owned overrides. Missing keys continue to resolve from authored defaults. */
+/** Chat-owned overrides. Missing keys continue to resolve from authored defaults. */
 export interface ChatVariableState {
   revision: number;
   values: Record<string, string>;

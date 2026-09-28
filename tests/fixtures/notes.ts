@@ -4,14 +4,13 @@ import type { Store } from '../../server/store.js';
 export function writeNote(
   store: Store,
   chatId: string,
-  body: { text: string; author: string; branchId?: string; retired?: true },
+  body: { text: string; author: string; retired?: true },
   replacesId?: string
 ) {
-  const branch = store.product.branch(chatId, body.branchId);
+  const chat = store.chat(chatId);
   return store.story.notes.write(chatId, {
     ...body,
-    branchId: branch.id,
-    expectedHeadRevision: branch.headRevision,
+    expectedHeadRevision: chat.headRevision,
     expectedRevision: store.story.notes.revision(chatId),
     idempotencyKey: randomUUID(),
     ...(replacesId ? { replacesId } : {}),

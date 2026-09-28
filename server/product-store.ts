@@ -36,7 +36,6 @@ import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import type { Store } from './store.js';
-export { fields, number, record, text } from './request-validation.js';
 import {
   defaultProfile,
   workspaceModelRef,
@@ -51,7 +50,6 @@ import {
   type Connection,
   type ModelPreset,
   type Library,
-  type Branch,
   type Asset,
   type Attempt,
 } from '../core/product.js';
@@ -119,7 +117,6 @@ export class ProductStore {
         CREATE TABLE versions (kind TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE provider_settings (kind TEXT NOT NULL CHECK(kind IN ('connection','model')),id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE profiles (chat_id TEXT PRIMARY KEY REFERENCES chats(id),body TEXT NOT NULL);
-        CREATE TABLE branches (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL UNIQUE REFERENCES chats(id));
         CREATE TABLE prompt_workspace (id INTEGER PRIMARY KEY CHECK(id=1),body TEXT NOT NULL);
         CREATE TABLE library_hidden (kind TEXT NOT NULL,id TEXT NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE attempts (id TEXT PRIMARY KEY,chat_id TEXT REFERENCES chats(id),run_id TEXT REFERENCES runs(id),job_id TEXT REFERENCES jobs(id),role TEXT NOT NULL,connection_id TEXT NOT NULL,model_id TEXT NOT NULL,status TEXT NOT NULL,request TEXT NOT NULL,response TEXT,input_tokens INTEGER,output_tokens INTEGER,cost_usd REAL,raw_usage TEXT,price_revision TEXT,error TEXT);
@@ -515,12 +512,7 @@ export class ProductStore {
   modelSnapshot(id: string, role?: string, authorize = true): ModelSnapshot {
     try {
       this.assertAvailable('model', id);
-      // New executions use the current contract; stored settings and historical snapshots stay intact.
-      const {
-        capabilityRevision: _retiredRevision,
-        displayOrder: _displayOrder,
-        ...model
-      } = this.get<ModelPreset & { capabilityRevision?: unknown }>('model', id);
+      const { displayOrder: _displayOrder, ...model } = this.get<ModelPreset>('model', id);
       if (authorize && model.enabled === false) throw new HttpError(403, 'Model disabled');
       this.assertAvailable('connection', model.connectionId);
       const connection = this.get<Connection>('connection', model.connectionId);
@@ -813,16 +805,6 @@ export class ProductStore {
       throw new HttpError(403, 'Connection disabled or authority changed');
     return structuredClone(connection);
   }
-  /** Stable execution identity; the chat owns its only current source head. */
-  branch(chatId: string, id?: string): Branch {
-    const b = this.db
-      .prepare(`SELECT b.id,b.chat_id,c.head_revision FROM branches b JOIN chats c ON c.id=b.chat_id
-        WHERE b.chat_id=?${id === undefined ? '' : ' AND b.id=?'}`)
-      .get(...(id === undefined ? [chatId] : [chatId, id])) as Row | undefined;
-    if (!b) throw new HttpError(404, 'Branch not found');
-    return { id: b.id, chatId: b.chat_id, headRevision: b.head_revision };
-  }
-
   startAttempt(
     chatId: string | null,
     runId: string | null,

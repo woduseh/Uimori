@@ -102,16 +102,15 @@ test('successful request repeats with current settings in an independent chat an
     routes: { ...profile.routes, main: { id: model.id } },
     image: false,
   });
-  const branch = store.product.branch(chat.id);
+  const originalChat = store.chat(chat.id);
   const retry = store.retryRun(selected.run.id, 'repeat-once');
   expect(retry.created).toBe(true);
   expect(retry.run.id).not.toBe(selected.run.id);
   expect(retry.run.request).toBe(selected.run.request);
   expect(retry.run.chatId).not.toBe(chat.id);
   expect(store.source(retry.run.parentRevision!).text).toBe(first.source.text);
-  expect(retry.run.snapshot.branchId).toBeTypeOf('string');
-  expect(retry.run.snapshot.branchId).not.toBe(selected.run.snapshot.branchId);
-  expect(store.product.branch(chat.id)).toEqual(branch);
+  expect(retry.run.snapshot.chatId).toBe(retry.run.chatId);
+  expect(store.chat(chat.id)).toEqual(originalChat);
   expect(retry.run.snapshot).toMatchObject({
     settings: { maxCalls: 12 },
     profile: {
@@ -135,11 +134,11 @@ test('successful request repeats with current settings in an independent chat an
     created: false,
     run: retry.run,
   });
-  expect(store.product.branch(chat.id)).toEqual(branch);
+  expect(store.chat(chat.id)).toEqual(originalChat);
   expect(store.retryRun(first.run.id, 'repeat-once').run.id).not.toBe(retry.run.id);
 });
 
-test('failed retry after the original head advances branches at its original parent', () => {
+test('failed retry after the original head advances copies a chat at its original parent', () => {
   const store = database(),
     chat = createFixtureChat(store, 'Historical failure');
   const original = queued(store, chat.id);
@@ -147,7 +146,8 @@ test('failed retry after the original head advances branches at its original par
   const later = complete(store, chat.id, 'Later response');
   const retry = store.retryRun(original.id, 'historical-retry').run;
   expect(retry.parentRevision).toBe(original.parentRevision);
-  expect(retry.snapshot.branchId).not.toBe(original.snapshot.branchId);
+  expect(retry.chatId).not.toBe(original.chatId);
+  expect(retry.snapshot.chatId).toBe(retry.chatId);
   expect(retry.snapshot.history).toEqual([]);
   expect(store.chat(chat.id).headRevision).toBe(later.source.id);
 });

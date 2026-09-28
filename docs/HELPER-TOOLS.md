@@ -16,7 +16,7 @@ Whitespace-separated `query` terms must all match title/ID/kind or, in the libra
 
 Use `output:"documents"` to locate resources by a name mentioned in their contents, like a filenames-only grep: each matching document appears once without body excerpts. A failed title `query` does not prove that a resource is absent; remove that filter before searching spelling variants in `patterns`. Then pass the selected `ids` and search the requested fact with the default `output:"matches"`. `paths` optionally limits both modes to exact JSON Pointer fields or their children. Human-authored descriptions and lore are searched before extensions/assets; HTML and scripts remain explicitly searchable and are not silently excluded.
 
-Document results retain their `scope` and, for chat sources, `chatId` and `branchId`. When narrowing `scope:"chats"` results, carry those identifiers into the next search so a source stays associated with the selected chat. Other scopes do not accept chat/branch filters.
+Document results retain their `scope` and, for chat sources, `chatId`. When narrowing `scope:"chats"` results, carry that identifier into the next search so a source stays associated with the selected chat. Other scopes do not accept a chat filter.
 
 The scopes are:
 
@@ -24,7 +24,7 @@ The scopes are:
 | --- | --- |
 | `current` | This helper task's reserved chat packages, source ancestry, user requests, notes, and chat overrides. Includes original prose that may have been compacted out of a model window. |
 | `library` | Current visible library originals, with their current revisions. |
-| `chats` | Live original sources in actual chat/branch ancestries. Optional `chatId`/`branchId` filters select the target. |
+| `chats` | Live original sources in chat ancestries. An optional `chatId` filter selects the target. |
 | `editor` | Editor input captured at admission: either the exact saved revision or an unsaved device draft. Returned origin distinguishes them. |
 
 The default is `editor` when captured editor input is available, otherwise `current` for a chat helper and `library` for a library helper. A clean editor sends only an ID/revision; admission checks that revision and freezes its saved model. A dirty editor sends its prepared device input. Specify the scope when comparing that reservation with live library data. The initial helper context includes identifiers and names without full editor JSON or all source bodies. Current selection is a convenience, not a permission boundary. Unsaved input can be analyzed; writes to that same stored resource require saving the device draft first. Other resources remain usable.
@@ -61,7 +61,7 @@ Call `db.query` without `sql` to discover actual view columns and examples. The 
 | `agent_usage` | Provider-reported attempt usage, role, model, helper task/purpose/segment. |
 | `agent_helper_inputs` | Small per-helper-attempt input estimates and preparation timings. |
 
-Use positional `?` parameters and explicit chat/branch filters for scoped questions. SQL is live cross-chat data, not the helper's frozen reservation or an unsaved editor. `agent_messages.request` is the stored run request, not a claim to reproduce every later native script projection.
+Use positional `?` parameters and explicit chat filters for scoped questions. SQL is live cross-chat data, not the helper's frozen reservation or an unsaved editor. `agent_messages.request` is the stored run request, not a claim to reproduce every later native script projection.
 
 ```json
 {"sql":"SELECT id,title,revision FROM agent_resources WHERE kind=? ORDER BY title LIMIT 20","params":["bot"]}

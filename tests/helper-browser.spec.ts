@@ -134,10 +134,7 @@ async function harness(page: Page, seedCount = 0) {
             const scope = view.conversation.scope;
             return (
               scope.kind === url.searchParams.get('kind') &&
-              (scope.kind === 'library' ||
-                (scope.chatId === url.searchParams.get('chatId') &&
-                  (!url.searchParams.has('branchId') ||
-                    scope.branchId === url.searchParams.get('branchId'))))
+              (scope.kind === 'library' || scope.chatId === url.searchParams.get('chatId'))
             );
           })
           .map((view) => ({
@@ -408,6 +405,8 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
   for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 844 });
     await open(page);
+    if (width === DESKTOP_WIDTH)
+      await expect(page.getByRole('button', { name: '도우미 열기', exact: true })).toBeHidden();
     await expect(input).toHaveValue('도우미 입력 초안');
     const box = await panel.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
@@ -418,6 +417,8 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
     await page.screenshot({ path: info.outputPath(`helper-panel-${width}.png`) });
     await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
     await expect(panel).toBeHidden();
+    if (width === DESKTOP_WIDTH)
+      await expect(page.getByRole('button', { name: '도우미 열기', exact: true })).toBeVisible();
   }
 });
 
@@ -661,16 +662,13 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
   await page.goto(`/?chat=${chat.id}`);
   const article = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
   // A session deleted in another window must not break the source-to-helper entry point.
-  await page.evaluate(
-    ({ chatId, branchId }) => {
-      const scope = { kind: 'chat', chatId, branchId };
-      localStorage.setItem(
-        `uimori:helper-session-scope:${JSON.stringify(scope)}`,
-        'deleted-helper-session'
-      );
-    },
-    { chatId: chat.id, branchId: saved.branch.id }
-  );
+  await page.evaluate((chatId) => {
+    const scope = { kind: 'chat', chatId };
+    localStorage.setItem(
+      `uimori:helper-session-scope:${JSON.stringify(scope)}`,
+      'deleted-helper-session'
+    );
+  }, chat.id);
   await openSourceActions(article);
   await article.getByRole('button', { name: '도우미에게 물어보기' }).click();
   const panel = page.locator('#helper-panel');

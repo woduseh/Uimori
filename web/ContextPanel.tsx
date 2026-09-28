@@ -22,7 +22,6 @@ const origins = {
 /** Mounted across scope refreshes so a new source or event never discards a local editor. */
 export function ContextPanel({
   chatId,
-  branchId,
   headRevision,
   notes,
   notesRevision,
@@ -35,7 +34,6 @@ export function ContextPanel({
   onSaveHandlerChange,
 }: {
   chatId: string;
-  branchId: string;
   headRevision: string | null;
   notes?: AuthorNote[];
   notesRevision?: number;
@@ -61,7 +59,7 @@ export function ContextPanel({
   const readSequence = useRef(0);
   const actionLock = useRef(false);
   const scope = useRef({ key: '', generation: 0 });
-  const scopeKey = JSON.stringify([chatId, branchId, headRevision]);
+  const scopeKey = JSON.stringify([chatId, headRevision]);
   if (scope.current.key !== scopeKey)
     scope.current = { key: scopeKey, generation: scope.current.generation + 1 };
   const notesCache = useRef({ notes: notes ?? [], revision: notesRevision ?? 0 });
@@ -99,7 +97,7 @@ export function ContextPanel({
     const generation = scope.current.generation;
     const sequence = ++readSequence.current;
     try {
-      const result = await api<ContextDetail>(`${base}?branchId=${id(branchId)}`);
+      const result = await api<ContextDetail>(base);
       if (
         !alive.current ||
         generation !== scope.current.generation ||
@@ -120,7 +118,7 @@ export function ContextPanel({
   // biome-ignore lint/correctness/useExhaustiveDependencies: Scope/event changes refresh server data without resetting editor state or depending on render-local callbacks.
   useEffect(() => {
     if (active) void load();
-  }, [active, chatId, branchId, headRevision, refreshKey]);
+  }, [active, chatId, headRevision, refreshKey]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Only a running compact job needs periodic refresh; editing and hidden panels do not restart its timer.
   useEffect(() => {
     if (!active || !working) return;
@@ -128,7 +126,7 @@ export function ContextPanel({
       void load();
     }, 1000);
     return () => clearInterval(timer);
-  }, [active, working?.id, chatId, branchId, headRevision]);
+  }, [active, working?.id, chatId, headRevision]);
   function keyed(command: Record<string, unknown>) {
     const fingerprint = JSON.stringify(command);
     if (commandKey.current.fingerprint !== fingerprint)
@@ -168,7 +166,6 @@ export function ContextPanel({
     }
   }
   const command = () => ({
-    branchId,
     expectedRevision: detail!.activeRevision,
     expectedHeadRevision: headRevision,
   });
@@ -188,7 +185,6 @@ export function ContextPanel({
     return write(
       `${base}/summary`,
       keyed({
-        branchId,
         expectedRevision: draft.revision,
         expectedHeadRevision: draft.headRevision,
         summary: draft.text,
@@ -391,7 +387,6 @@ export function ContextPanel({
         </>
       )}
       <AuthorNotesEditor
-        branchId={branchId}
         headRevision={headRevision}
         notes={notesCache.current.notes}
         revision={notesCache.current.revision}

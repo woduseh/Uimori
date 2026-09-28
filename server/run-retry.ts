@@ -42,19 +42,19 @@ export function retryRun(
       throw new HttpError(409, 'Original run is still active');
     if (original.snapshot.packageStart?.mode === 'authored' || original.snapshot.nativeRisuAuthored)
       throw new HttpError(409, '작성된 시작문은 생성 요청이 아니에요. 새 장면을 요청해 주세요.');
-    const sourceBranch = store.product.branch(original.chatId, original.snapshot.branchId);
+    const originalChat = store.chat(original.chatId);
     let run: Run;
     if (options.judgmentOnly) {
       if (!canRecoverMainJudgment(original))
         throw new HttpError(409, '보존된 본문의 판정 실패만 다시 판정할 수 있어요.');
-      if (sourceBranch.headRevision !== original.parentRevision)
+      if (originalChat.headRevision !== original.parentRevision)
         throw new HttpError(409, '이야기가 이미 진행됐어요. 현재 내용에서 새 요청을 보내 주세요.');
       const id = randomUUID(),
         at = new Date().toISOString();
       const snapshot = { ...original.snapshot, judgmentRecovery: true };
       store.db
-        .prepare(`INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id)
-        VALUES(?,?,?,'queued',?,?,?,?,?,?,?)`)
+        .prepare(`INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at)
+        VALUES(?,?,?,'queued',?,?,?,?,?,?)`)
         .run(
           id,
           original.chatId,
@@ -64,8 +64,7 @@ export function retryRun(
           key,
           command,
           at,
-          at,
-          sourceBranch.id
+          at
         );
       store.event(original.chatId, 'run.queued', id);
       run = store.run(id);
@@ -73,17 +72,15 @@ export function retryRun(
       const copied =
         options.alwaysCopy ||
         !!original.sourceRevision ||
-        sourceBranch.headRevision !== original.parentRevision;
+        originalChat.headRevision !== original.parentRevision;
       const chat = copied
         ? forkChat(store, original.chatId, {
             fromRevision: original.parentRevision,
-            branchId: sourceBranch.id,
             title:
               options.title ?? `${store.chat(original.chatId).title} · 새 이야기`.slice(0, 200),
             idempotencyKey: createHash('sha256').update(requestKey).digest('hex'),
           })
         : store.chat(original.chatId);
-      const branch = store.product.branch(chat.id);
       const profile = store.product.snapshot(chat.id);
       const request =
         options.request === undefined
@@ -93,8 +90,7 @@ export function retryRun(
         chat.id,
         {
           request,
-          branchId: branch.id,
-          expectedRevision: branch.headRevision,
+          expectedRevision: chat.headRevision,
           expectedSettingsRevision: chat.settingsRevision,
           expectedProfileRevision: profile.revision,
           idempotencyKey: key,
@@ -104,7 +100,6 @@ export function retryRun(
         (current) => {
           const snapshot: RunSnapshot = {
             chatId: chat.id,
-            branchId: branch.id,
             request,
             parentRevision: current.headRevision,
             settingsRevision: current.settingsRevision,

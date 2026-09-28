@@ -1,4 +1,4 @@
-import { HttpError } from './request-validation.js';
+import { fields, HttpError, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { successfulTranslation, validateTranslationArtifact } from './translation-artifacts.js';
@@ -8,9 +8,10 @@ import { nativeImageDisplayText } from './risu-native-images.js';
 import { readRunSnapshot } from './run-projections.js';
 
 export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
-  app.get<{ Params: { id: string; sourceId: string }; Querystring: { branchId?: string } }>(
+  app.get<{ Params: { id: string; sourceId: string }; Querystring: Record<string, unknown> }>(
     '/api/chats/:id/sources/:sourceId/presentation',
     async (request) => {
+      fields(record(request.query), []);
       store.chat(request.params.id);
       const source = store.source(request.params.sourceId);
       if (source.chatId !== request.params.id) throw new HttpError(404, 'Source not found');
@@ -29,7 +30,7 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
         };
       }
       if (snapshot.profile?.packages?.some((pkg) => pkg.nativeRisu)) {
-        const live = nativeSourceSnapshot(store, source.chatId, source.id, request.query.branchId);
+        const live = nativeSourceSnapshot(store, source.chatId, source.id);
         const own = snapshot;
         const first = own.packageStart?.mode === 'authored' || own.nativeRisuAuthored?.greeting;
         const messages = first
@@ -69,7 +70,7 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
             ...(imageTranslation?.text ? { nativeTranslationText: imageTranslation.text } : {}),
           }
         );
-        const head = live.branch.headRevision!;
+        const head = live.snapshot.parentRevision!;
         return {
           ...presentation,
           issues: [
@@ -80,7 +81,6 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
           translationId: translation ? job!.id : null,
           translationRevision: translation ? (job!.revision ?? 0) : null,
           nativeAction: {
-            branchId: live.branch.id,
             expectedHeadRevision: head,
             expectedHeadHash: store.source(head).hash,
             expectedVariableRevision: live.variables.revision,

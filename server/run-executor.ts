@@ -239,8 +239,7 @@ export function createRunExecutor({
             if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
               throw new Error('CONTEXT_CANCELLED');
             if (
-              store.product.branch(run.chatId, run.snapshot.branchId).headRevision !==
-                run.parentRevision ||
+              store.chat(run.chatId).headRevision !== run.parentRevision ||
               JSON.stringify(contextSourceRefs(run.snapshot)) !==
                 JSON.stringify(
                   contextSourceRefs({
@@ -371,7 +370,6 @@ export function createRunExecutor({
               );
               priorUsage = mergeUsage(priorUsage, prepared.usage);
               hooks.initialUsage = structuredClone(priorUsage);
-              prepared.snapshot.branchId = executionSnapshot.branchId;
               store.transaction(() => {
                 assertCurrent();
                 prepared.snapshot = store.context.publishPrepared(prepared.snapshot, {

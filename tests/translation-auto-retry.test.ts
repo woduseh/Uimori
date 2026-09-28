@@ -108,32 +108,80 @@ describe('shared Jev translation refusal judgment', () => {
       result: { text: seed.judgmentRecovery, mock: false },
     });
   });
+  test('preserves a long candidate and rejects tampered judgment receipts', async () => {
+    const threshold = 0.9;
+    const candidate = '번역 후보 원문 ' + '가😀'.repeat(4000) + 'PRIVATE_TAIL';
+    const server = await fixture((_request, response) => chat(response, candidate));
+    const seed = bundle('SOURCE_MUST_NOT_REACH_JUDGMENT');
+    native(seed, server.endpoint);
+    seed.translationPolicy = {
+      judgment: { threshold },
+      maxRetries: 0,
+      maxCalls: 4,
+    };
+    const observed = hooks(server.origin),
+      send = vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        expect(body.state).toEqual({ response: candidate });
+        expect(Object.keys(body.questions)).toEqual(['explicitRefusal']);
+        expect(String(init?.body)).not.toContain('SOURCE_MUST_NOT_REACH_JUDGMENT');
+        return answer(0.58);
+      });
+    const result = await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', {
+      ...observed.options,
+      jev: { credential: () => 'test-key', fetch: send },
+    });
+    expect(result).toMatchObject({ status: 'completed', error: null, result: { text: candidate } });
+    expect(server.requests).toHaveLength(1);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(observed.wire[1]).toMatchObject({
+      role: 'translation',
+      protocol: 'typesafe-systemone-v1',
+      judgment: { kind: 'translation-refusal' },
+    });
+    const judgmentWire = observed.wire[1];
+    expect(() =>
+      validateTranslationJudgmentWire(seed.source.hash, { threshold }, judgmentWire)
+    ).not.toThrow();
+    expect(translationJudgmentInputHash(seed.source.hash, candidate, { threshold })).not.toBe(
+      translationJudgmentInputHash(seed.source.hash, candidate + 'changed tail', { threshold })
+    );
+    for (const field of ['response', 'questions', 'bodyHash', 'questionsHash'] as const) {
+      const changed = structuredClone(judgmentWire);
+      const body = changed.body as {
+        state: { response: string };
+        questions: Record<string, unknown>;
+      };
+      if (field === 'response') body.state.response += 'changed tail';
+      if (field === 'questions')
+        body.questions.extra = { type: 'noul', instructions: 'Another question' };
+      if (field === 'bodyHash') changed.bodySha256 = '0'.repeat(64);
+      else
+        changed.bodySha256 = createHash('sha256')
+          .update(JSON.stringify(changed.body))
+          .digest('hex');
+      if (field === 'questionsHash') changed.stablePrefixSha256 = '0'.repeat(64);
+      expect(() =>
+        validateTranslationJudgmentWire(seed.source.hash, { threshold }, changed)
+      ).toThrow('TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
+    }
+    expect(observed.finishes).toHaveLength(2);
+    expect(JSON.stringify(observed.wire)).not.toContain('test-key');
+  });
   test.each([
-    [0.05, 0.9, 'completed', null],
-    [0.58, 0.9, 'completed', null],
     [0.899, 0.9, 'completed', null],
     [0.9, 0.9, 'failed', 'TRANSLATION_REFUSAL_RETRIES_EXHAUSTED'],
     [0.58, 0.58, 'failed', 'TRANSLATION_REFUSAL_RETRIES_EXHAUSTED'],
   ] as const)(
-    'preserves the candidate for refusal %s / threshold %s with outcome %s',
+    'uses the configured refusal threshold: %s / %s',
     async (refusal, threshold, status, error) => {
-      const candidate = '번역 후보 원문 ' + '가😀'.repeat(4000) + 'PRIVATE_TAIL';
+      const candidate = '보존할 번역';
       const server = await fixture((_request, response) => chat(response, candidate));
-      const seed = bundle('SOURCE_MUST_NOT_REACH_JUDGMENT');
+      const seed = bundle();
       native(seed, server.endpoint);
-      seed.translationPolicy = {
-        judgment: { threshold },
-        maxRetries: 0,
-        maxCalls: 4,
-      };
-      const observed = hooks(server.origin),
-        send = vi.fn(async (_url: unknown, init?: RequestInit) => {
-          const body = JSON.parse(String(init?.body));
-          expect(body.state).toEqual({ response: candidate });
-          expect(Object.keys(body.questions)).toEqual(['explicitRefusal']);
-          expect(String(init?.body)).not.toContain('SOURCE_MUST_NOT_REACH_JUDGMENT');
-          return answer(refusal);
-        });
+      seed.translationPolicy = { judgment: { threshold }, maxRetries: 0, maxCalls: 4 };
+      const observed = hooks(server.origin);
+      const send = vi.fn(async () => answer(refusal));
       const result = await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', {
         ...observed.options,
         jev: { credential: () => 'test-key', fetch: send },
@@ -141,39 +189,6 @@ describe('shared Jev translation refusal judgment', () => {
       expect(result).toMatchObject({ status, error, result: { text: candidate } });
       expect(server.requests).toHaveLength(1);
       expect(send).toHaveBeenCalledTimes(1);
-      expect(observed.wire[1]).toMatchObject({
-        role: 'translation',
-        protocol: 'typesafe-systemone-v1',
-        judgment: { kind: 'translation-refusal' },
-      });
-      const judgmentWire = observed.wire[1];
-      expect(() =>
-        validateTranslationJudgmentWire(seed.source.hash, { threshold }, judgmentWire)
-      ).not.toThrow();
-      expect(translationJudgmentInputHash(seed.source.hash, candidate, { threshold })).not.toBe(
-        translationJudgmentInputHash(seed.source.hash, candidate + 'changed tail', { threshold })
-      );
-      for (const field of ['response', 'questions', 'bodyHash', 'questionsHash'] as const) {
-        const changed = structuredClone(judgmentWire);
-        const body = changed.body as {
-          state: { response: string };
-          questions: Record<string, unknown>;
-        };
-        if (field === 'response') body.state.response += 'changed tail';
-        if (field === 'questions')
-          body.questions.extra = { type: 'noul', instructions: 'Another question' };
-        if (field === 'bodyHash') changed.bodySha256 = '0'.repeat(64);
-        else
-          changed.bodySha256 = createHash('sha256')
-            .update(JSON.stringify(changed.body))
-            .digest('hex');
-        if (field === 'questionsHash') changed.stablePrefixSha256 = '0'.repeat(64);
-        expect(() =>
-          validateTranslationJudgmentWire(seed.source.hash, { threshold }, changed)
-        ).toThrow('TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
-      }
-      expect(observed.finishes).toHaveLength(2);
-      expect(JSON.stringify(observed.wire)).not.toContain('test-key');
     }
   );
   test.each([3, 4])(

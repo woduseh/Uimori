@@ -36,23 +36,21 @@ async function database() {
   owned.push({ directory, store });
   return store;
 }
-function source(store: Store, chatId: string, value: string, branchId?: string) {
+function source(store: Store, chatId: string, value: string) {
   const chat = store.chat(chatId);
-  const branch = store.product.branch(chatId, branchId);
   const profile = {
     ...store.product.snapshot(chatId),
-    variableState: readChatVariables(store, chatId, branch.id),
+    variableState: readChatVariables(store, chatId),
   };
   const request = 'Synthetic source, no model request';
   const run = store.createRun(
     chatId,
     {
       request,
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       expectedProfileRevision: store.product.profile(chatId).revision,
       idempotencyKey: randomUUID(),
-      ...(branchId ? { branchId } : {}),
     },
     (current) =>
       ({
@@ -86,6 +84,13 @@ describe('independent stored-story fork without generation', () => {
     const body = { fromRevision: first.id, idempotencyKey: 'stable-command' };
     const a = forkChat(store, chat.id, body);
     const b = forkChat(store, chat.id, { ...body, idempotencyKey: 'second-command' });
+    const copied = store.history(a.headRevision);
+    expect(a.id).not.toBe(chat.id);
+    expect(copied.map((item) => item.text)).toEqual(['First scene.']);
+    expect(copied[0]!.revision).not.toBe(first.id);
+    expect(
+      store.db.prepare('SELECT count(*) AS n FROM attempts WHERE chat_id=?').get(a.id)!.n
+    ).toBe(0);
     expect([a.title, b.title]).toEqual(['Names (사본)', 'Names (사본)']);
     expect(forkChat(store, chat.id, body)).toEqual(a);
     expect(() => forkChat(store, chat.id, { ...body, fromRevision: second.id })).toThrow(

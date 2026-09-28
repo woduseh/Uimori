@@ -60,7 +60,6 @@ function activity(
     updatedAt: now,
     startedAt: now,
     finishedAt: status === 'running' ? null : now,
-    branchId: null,
     sourceRevision,
     generation: 1,
   };

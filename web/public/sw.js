@@ -16,7 +16,6 @@ function targetOf(value) {
   if (!value || typeof value !== 'object' || !identifier(value.chatId)) return null;
   return {
     chatId: value.chatId,
-    branchId: identifier(value.branchId) ? value.branchId : `main:${value.chatId}`,
     sourceId: identifier(value.sourceId) ? value.sourceId : null,
     representation: value.representation === 'translation' ? 'translation' : 'original',
   };
@@ -50,7 +49,6 @@ self.addEventListener('notificationclick', (event) => {
   if (target) {
     url.searchParams.set('chat', target.chatId);
     if (target.sourceId) {
-      url.searchParams.set('branch', target.branchId);
       url.searchParams.set('source', target.sourceId);
       url.searchParams.set('mode', target.representation);
     }

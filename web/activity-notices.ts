@@ -10,7 +10,6 @@ export type ActivityNoticeItem = {
   runId: string;
   sourceRevision?: string | null;
   sourceHash?: string | null;
-  branchId?: string | null;
   generation?: number;
   superseded?: boolean;
   executionUncertain?: boolean;
@@ -41,7 +40,6 @@ export function translationResolved(item: ActivityNoticeItem, items: ActivityNot
         !next.executionUncertain &&
         next.sourceRevision === item.sourceRevision &&
         next.sourceHash === item.sourceHash &&
-        next.branchId === item.branchId &&
         Date.parse(next.startedAt) > Date.parse(item.startedAt)
     )
   );

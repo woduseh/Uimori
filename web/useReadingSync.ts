@@ -9,7 +9,6 @@ import { readReadingPosition } from './story-storage.js';
 export function captureReaderLocation(
   reader: HTMLElement,
   chatId: string,
-  branchId: string,
   article?: HTMLElement
 ): ReaderTarget | null {
   const top = reader.getBoundingClientRect().top + 12;
@@ -25,7 +24,6 @@ export function captureReaderLocation(
   const anchor = block?.dataset.blockAnchor?.split(' ')[0];
   return {
     chatId,
-    branchId,
     sourceId: source.dataset.sourceId,
     representation: source.dataset.representation === 'translation' ? 'translation' : 'original',
     ...(source.dataset.contentHash ? { contentHash: source.dataset.contentHash } : {}),
@@ -43,14 +41,13 @@ export function captureReaderLocation(
 /** Server checkpoints are optional. Never gate the reader or move an already-open page. */
 export function useReadingSync(options: {
   chatId: string;
-  branchId: string;
   reader: RefObject<HTMLDivElement | null>;
   storageKey: string;
   onResume: (target: ReaderTarget) => void;
   saveLocal: () => void;
 }) {
   const [clientId] = useState(browserClientId);
-  const key = `${options.chatId}:${options.branchId}`;
+  const key = options.chatId;
   const current = useRef(options);
   current.current = options;
   const [state, setState] = useState<{
@@ -66,12 +63,11 @@ export function useReadingSync(options: {
   } | null>(null);
   const pending = useRef<ReaderTarget | null>(null);
   const remember = useCallback((target: ReaderTarget) => {
-    if (actions.current?.key === `${target.chatId}:${target.branchId}`)
-      actions.current.remember(target);
+    if (actions.current?.key === target.chatId) actions.current.remember(target);
     else pending.current = target;
   }, []);
   useEffect(() => {
-    const { chatId, branchId } = current.current;
+    const { chatId } = current.current;
     if (!chatId) return;
     let alive = true,
       loaded = false,
@@ -82,7 +78,7 @@ export function useReadingSync(options: {
     let loading: Promise<void> | null = null;
     const controller = new AbortController();
     const path = `/chats/${encodeURIComponent(chatId)}/reading-position`;
-    const query = new URLSearchParams({ clientId, branchId });
+    const query = new URLSearchParams({ clientId });
     const load = (): Promise<void> => {
       if (loading) return loading;
       loading = (async () => {
@@ -164,7 +160,7 @@ export function useReadingSync(options: {
         document.visibilityState !== 'visible'
       )
         return;
-      dirty = captureReaderLocation(node, chatId, branchId);
+      dirty = captureReaderLocation(node, chatId);
       current.current.saveLocal();
     };
     const visibility = () => {
@@ -178,7 +174,7 @@ export function useReadingSync(options: {
       void save();
     };
     actions.current = { key, remember: rememberTarget, load };
-    if (pending.current?.chatId === chatId && pending.current.branchId === branchId) {
+    if (pending.current?.chatId === chatId) {
       dirty = pending.current;
       pending.current = null;
     }

@@ -43,8 +43,7 @@ describe('Completed execution payload retention', () => {
       },
     }).chat;
     const sources = store.history(chat.headRevision).map((item) => store.source(item.revision));
-    const branch = store.product.branch(chat.id);
-    return { owner, store, chat, sources, branch };
+    return { owner, store, chat, sources };
   }
 
   test('completed auxiliary diagnostics are released without dropping dependent image selection', () => {

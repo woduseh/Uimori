@@ -28,17 +28,15 @@ function fixture() {
   const chat = createFixtureChat(store, 'Synthetic history');
   return { store, chat };
 }
-function append(store: Store, chatId: string, text: string, branchId?: string) {
-  const chat = store.chat(chatId),
-    branch = store.product.branch(chatId, branchId);
+function append(store: Store, chatId: string, text: string) {
+  const chat = store.chat(chatId);
   const run = store.createRun(
     chatId,
     {
       request: 'Synthetic history',
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       idempotencyKey: randomUUID(),
-      branchId: branch.id,
     },
     (current) => ({
       chatId,
@@ -48,7 +46,6 @@ function append(store: Store, chatId: string, text: string, branchId?: string) {
       settings: current.settings,
       history: store.history(current.headRevision),
       resources: [],
-      branchId: branch.id,
     })
   ).run;
   store.startRun(run.id);

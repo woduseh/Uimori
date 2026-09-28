@@ -52,7 +52,6 @@ type Props = {
   onError: (message: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   chatId?: string;
-  branchId?: string;
 };
 const draftFor = (role: PromptRole, preset?: PromptPreset): Draft => ({
   source: preset ? keyOf(preset) : 'builtin',

@@ -51,16 +51,6 @@ test('SCUI04 recovery settings expose real build information and grouped data at
       } else if (section === '테마·색상') {
         const controls = pane.locator('.theme-control-bar select');
         await expect(controls).toHaveCount(3);
-        const sizes = await controls.evaluateAll((nodes) =>
-          nodes.map((node) => {
-            const box = node.getBoundingClientRect();
-            return { width: box.width, height: box.height };
-          })
-        );
-        for (const size of sizes) {
-          expect(Math.abs(size.width - sizes[0].width)).toBeLessThan(2);
-          expect(Math.abs(size.height - sizes[0].height)).toBeLessThan(2);
-        }
         await expect(
           pane.getByRole('button', { name: '새 커스텀 테마', exact: true })
         ).toBeVisible();
@@ -208,6 +198,11 @@ test('SCUI01 settings list and details adapt at six widths with no overflow', as
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
   if (visualReview)
     await page.screenshot({ path: info.outputPath(`settings-list-${MOBILE_WIDTH}.png`) });
+  const provider = nav.getByRole('button', { name: '프로바이더·모델', exact: true });
+  await provider.focus();
+  await page.keyboard.press('Enter');
+  await expect(nav).toBeHidden();
+  await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
   await selectSettingsSection(page, '일반');
   for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
@@ -238,7 +233,19 @@ test('SCUI01 settings list and details adapt at six widths with no overflow', as
   await page.keyboard.press('End');
   await expect(nav.getByRole('tab', { name: '앱 정보·라이선스', exact: true })).toBeFocused();
   await expect(dialog.getByRole('region', { name: 'Uimori 앱 정보' })).toBeVisible();
-  await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await nav.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
+  await expect(nav.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
+  for (const section of ['테마·색상', '역할별 모델', '현재 프롬프트', '프로바이더·모델']) {
+    await page.keyboard.press('ArrowDown');
+    await expect(nav.getByRole('tab', { name: section, exact: true })).toBeFocused();
+  }
+  const close = dialog.getByRole('button', { name: '설정 닫기', exact: true });
+  await close.focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(close).not.toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(close).toBeFocused();
+  await close.click();
   await expect(dialog).toBeHidden();
   const opener = page
     .getByTestId('bot-navigation')

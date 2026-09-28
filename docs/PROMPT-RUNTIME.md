@@ -37,7 +37,7 @@ RISUP 가져오기는 프롬프트 관련 필드만 선택해요. API 키·연�
 
 `tests/risu-native-prompt-composition.test.ts`, `tests/risu-native-preset.test.ts`, `tests/risu-native-semantics.test.ts`는 실제 vendor CBS, 평가 순서, 글로벌노트 교체, 예시 역할, 토글, 슬롯, 대화 범위, 캐시, 폐기 옵션의 실행·부작용 차단과 영수증 일치를 확인해요. `tests/risu-retired-execution.test.ts`는 과거 원본에서 시작하는 새 작업의 재투영을 확인해요. `tests/chat-options.test.ts`는 합산 토글의 채팅 선택·예약·백업 경계를 확인해요. `tests/risu-preset-import.test.ts`는 프롬프트만 가져오는 경계와 저장을 확인해요. 이 검사는 실제 공급자의 창작·번역 품질을 판정하지 않아요.
 
-실제 로컬 자료를 명시적으로 검증할 때는 `UIMORI_RISU_LOCAL_CARDS`에 CHARX 경로 JSON 배열, `UIMORI_RISU_SAMPLE_PRESET`에 프리셋 경로를 지정하고 `tests/risu-native-local-compatibility.test.ts`를 실행해요. 이 검사는 원문을 로그에 남기지 않고 첫 메시지·대체 메시지 렌더, 알려진 원본 버튼, 현재 요청·출력 처리와 원본 파일 해시 불변을 확인해요. 브라우저는 기존 `UIMORI_RISU_SAMPLE_ROOT`와 선택적 프리셋 경로를 사용해 `scripts/verify-risu-native-samples.mjs`로 실행하며 `--grep`은 검증 범위를 명시적으로 좁혀요. 데스크톱·모바일에서 선택, 재열기, 분기 격리와 다음 턴을 로컬 모의 공급자로 확인해요. `--visual`일 때만 개인 자료가 렌더된 스크린샷을 git 제외 검증 폴더에 저장하며, HTTP 본문이 담기는 trace는 저장하지 않아요.
+실제 로컬 자료를 명시적으로 검증할 때는 `UIMORI_RISU_LOCAL_CARDS`에 CHARX 경로 JSON 배열, `UIMORI_RISU_SAMPLE_PRESET`에 프리셋 경로를 지정하고 `tests/risu-native-local-compatibility.test.ts`를 실행해요. 이 검사는 원문을 로그에 남기지 않고 첫 메시지·대체 메시지 렌더, 알려진 원본 버튼, 현재 요청·출력 처리와 원본 파일 해시 불변을 확인해요. 브라우저는 기존 `UIMORI_RISU_SAMPLE_ROOT`와 선택적 프리셋 경로를 사용해 `scripts/verify-risu-native-samples.mjs`로 실행하며 `--grep`은 검증 범위를 명시적으로 좁혀요. 데스크톱·모바일에서 선택, 재열기, 독립적으로 복사한 채팅의 변수 격리와 다음 턴을 로컬 모의 공급자로 확인해요. `--visual`일 때만 개인 자료가 렌더된 스크린샷을 git 제외 검증 폴더에 저장하며, HTTP 본문이 담기는 trace는 저장하지 않아요.
 
 ## 출처를 보존하는 요청 컨텍스트
 

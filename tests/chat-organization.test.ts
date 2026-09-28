@@ -208,7 +208,6 @@ test('creation selects ownership and later attachments never infer a new owner',
   expect(() => store.createChat('Missing owner')).toThrow('owning bot');
   expect(() => store.createChat('Removed sentinel', { botId: '__legacy__' })).toThrow();
   expect(store.chats()).toHaveLength(0);
-  expect(store.db.prepare('SELECT COUNT(*) AS n FROM branches').get()).toMatchObject({ n: 0 });
   const explicit = store.createChat('Owned', { botId: bot.id });
   attach(store, explicit.id, [ref(bot)]);
   expect(() => attach(store, explicit.id, [ref(other)])).toThrow('owning bot');

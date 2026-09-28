@@ -73,6 +73,11 @@ for (const viewport of [
       await expect(dialog.getByLabel('이미지 이름', { exact: true })).toHaveValue(
         '접어도 유지할 이미지 이름'
       );
+      const imageAdd = dialog.getByRole('button', { name: '이미지 등록', exact: true });
+      await expect(imageAdd).toHaveAttribute('aria-label', '이미지 등록');
+      const imageAddBox = await imageAdd.boundingBox();
+      expect(imageAddBox?.width).toBeGreaterThanOrEqual(44);
+      expect(imageAddBox?.height).toBeGreaterThanOrEqual(44);
       await dialog.getByLabel('이미지 이름', { exact: true }).fill('');
       await manager.locator(':scope > summary').click();
       const image = dialog.getByRole('switch', { name: '원문 이미지 자동 배치', exact: true });
@@ -88,6 +93,20 @@ for (const viewport of [
       await expect(
         dialog.getByRole('combobox', { name: '이 채팅의 작문 프롬프트', exact: true })
       ).toBeVisible();
+      const workspaceResponse = await request.get('/api/prompt-workspace');
+      expect(workspaceResponse.ok()).toBe(true);
+      const workspace = await workspaceResponse.json();
+      const prompt = dialog.getByRole('combobox', {
+        name: '이 채팅의 작문 프롬프트',
+        exact: true,
+      });
+      await expect(prompt.locator('option').first()).toHaveText(
+        `전역 따르기 · ${workspace.main.title}`
+      );
+      const inherited = dialog
+        .locator('.settings-inherited')
+        .filter({ hasText: '전체 채팅 설정에서 사용하는 프롬프트' });
+      await expect(inherited.locator('dd')).toHaveText(workspace.translation.title);
       await selectChatSettingsSection(page, '기억·로어');
       await expect(dialog.getByLabel('조회 로어 토큰 한도', { exact: true })).toHaveValue('');
       await expect(dialog.getByLabel('Jev 관련성 기준', { exact: true })).toHaveValue('0.7');
@@ -98,7 +117,12 @@ for (const viewport of [
           response.url().endsWith(`/chats/${chat.id}/profile`) &&
           response.request().method() === 'PUT'
       );
-      await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
+      const saveButton = dialog.getByRole('button', { name: '채팅 설정 저장', exact: true });
+      await expect(saveButton).toHaveAttribute('aria-label', '채팅 설정 저장');
+      const saveBox = await saveButton.boundingBox();
+      expect(saveBox?.width).toBeGreaterThanOrEqual(44);
+      expect(saveBox?.height).toBeGreaterThanOrEqual(44);
+      await saveButton.click();
       expect((await saved).ok()).toBe(true);
       const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
       expect(detail.profile.loreContext.judgment.threshold).toBe(0.7);

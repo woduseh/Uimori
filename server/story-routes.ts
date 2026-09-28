@@ -12,9 +12,8 @@ export function storyRoutes(
     execute: (runId: string) => void;
   }
 ) {
-  app.get<{ Params: { id: string }; Querystring: { branchId?: string } }>(
-    '/api/chats/:id/story',
-    async (request) => store.story.detail(request.params.id, request.query.branchId)
+  app.get<{ Params: { id: string } }>('/api/chats/:id/story', async (request) =>
+    store.story.detail(request.params.id)
   );
   app.post<{ Params: { id: string } }>(
     '/api/chats/:id/scene-commands',
@@ -46,7 +45,6 @@ export function storyRoutes(
         body.expectedRevision === null ? null : text(body.expectedRevision, 'source', 100),
       expectedSettingsRevision: number(body.expectedSettingsRevision, 'settings revision'),
       idempotencyKey: text(body.idempotencyKey, 'request key', 120),
-      branchId: scene.branchId,
       sceneCommandId: scene.id,
       ...(body.expectedProfileRevision === undefined
         ? {}

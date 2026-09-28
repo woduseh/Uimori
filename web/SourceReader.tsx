@@ -37,7 +37,6 @@ type ReaderMode = 'original' | 'translation';
 type SceneHeaderSlots = { leading: ReactNode; badges: ReactNode };
 type ReaderProps = {
   readerTarget?: ReaderTarget;
-  branchId?: string;
   source: Source;
   index: number;
   sceneNumber?: number;
@@ -54,7 +53,7 @@ type ReaderProps = {
   retryDisabled?: boolean;
   onEditingChange?: (sourceId: string, editing: boolean) => void;
   request?: string;
-  /** The newest scene of the branch keeps its request actions standing on narrow widths. */
+  /** The newest scene keeps its request actions standing on narrow widths. */
   latest?: boolean;
   onEditRequest?: (text: string) => Promise<boolean>;
   onCheckRequest?: () => Promise<boolean>;
@@ -154,7 +153,6 @@ function SourceReaderContent({
   activity,
   hasPackages,
   presentationRefreshKey,
-  branchId,
 }: ReaderProps) {
   const onRequestEditing = useCallback(
     (editing: boolean) => {
@@ -186,8 +184,7 @@ function SourceReaderContent({
     source,
     displayTranslation,
     hasPackages === true,
-    String(presentationRefreshKey ?? ''),
-    branchId
+    String(presentationRefreshKey ?? '')
   );
   const projected = presentation?.data;
   const nativeAction = async (kind: 'trigger' | 'button', name: string) => {
@@ -501,7 +498,7 @@ function SourceReaderContent({
       data-uimori-part="scene"
     >
       {latest && projected?.format === 'risu-html' && (
-        <RisuInteractionDialog chatId={source.chatId} branchId={branchId} onError={onError} />
+        <RisuInteractionDialog chatId={source.chatId} onError={onError} />
       )}
       <ThemeFrame>
         <div slot="request" data-uimori-part="request">
@@ -729,8 +726,8 @@ function SourceReaderContent({
             capture={() => {
               const article = container.current;
               const scrollport = article?.closest<HTMLElement>('[data-reader-scrollport]');
-              if (!article || !scrollport || !branchId) return null;
-              const target = captureReaderLocation(scrollport, source.chatId, branchId, article);
+              if (!article || !scrollport) return null;
+              const target = captureReaderLocation(scrollport, source.chatId, article);
               return target
                 ? {
                     target,

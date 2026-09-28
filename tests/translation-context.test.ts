@@ -44,14 +44,9 @@ function database() {
   owned.push({ store, dir });
   return store;
 }
-function source(
-  store: Store,
-  chatId: string,
-  text = 'Mira spoke softly to Captain Arlen.',
-  branchId?: string
-) {
+function source(store: Store, chatId: string, text = 'Mira spoke softly to Captain Arlen.') {
   const chat = store.chat(chatId);
-  const head = store.product.branch(chatId, branchId).headRevision;
+  const head = chat.headRevision;
   const run = store.createRun(
     chatId,
     {
@@ -59,7 +54,6 @@ function source(
       expectedRevision: head,
       expectedSettingsRevision: chat.settingsRevision,
       idempotencyKey: randomUUID(),
-      ...(branchId ? { branchId } : {}),
     },
     (c) => ({
       chatId,

@@ -400,7 +400,7 @@ test('unsupported future database refuses startup without rewriting translation 
   db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION + 1};`);
   db.close();
   expect(() => new Store(path)).toThrow(
-    `Database version ${DATABASE_SCHEMA_VERSION + 1} is not the personal-v1 format`
+    `DATABASE_VERSION_UNSUPPORTED:${DATABASE_SCHEMA_VERSION + 1}`
   );
   const original = new DatabaseSync(path, { readOnly: true });
   try {

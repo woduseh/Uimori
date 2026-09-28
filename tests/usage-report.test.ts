@@ -2,13 +2,11 @@ import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { Store } from '../server/store.js';
 import { usageReport, usageCsv } from '../server/usage-report.js';
 import { detachAttemptUsage, inferUsageKind } from '../server/usage-accounting.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { createFixtureChat } from './fixtures/chat.js';
-import { legacyScopeColumns } from './fixtures/legacy-scope.js';
 import type { WireRecord, ProviderResult } from '../core/transport.js';
 
 const owned: { store: Store; directory: string }[] = [];
@@ -188,53 +186,6 @@ test('ephemeral input translation and a late detached completion never persist d
   expect(inferUsageKind(wire(), true)).toBe('unclassified');
 });
 
-test('version-eight upgrade uses only saved timestamps and attribution and does not recreate missing history', () => {
-  const store = fixture();
-  const chat = createFixtureChat(store, 'Old ledger');
-  const id = add(store, chat.id, wire(), result(0.7));
-  const undated = add(
-    store,
-    chat.id,
-    wire({ pricingStartedAt: undefined, agentId: 'reviewer' }),
-    result(0.2)
-  );
-  store.db
-    .prepare(
-      "UPDATE attempts SET request=json_set(request,'$.detailsOmitted',json('true')) WHERE id=?"
-    )
-    .run(id);
-  const entry = owned.at(-1)!;
-  store.close();
-  const old = new DatabaseSync(join(entry.directory, 'app.sqlite'));
-  // Push is newer than the simulated historical schema and references the later accounting columns.
-  old.exec(
-    'DROP TRIGGER IF EXISTS push_main_terminal; DROP TRIGGER IF EXISTS push_translation_terminal; DROP TRIGGER IF EXISTS push_illustration_terminal; DROP TABLE push_outbox; DROP TABLE push_subscriptions;'
-  );
-  old.exec('DROP INDEX attempts_usage_period; DROP INDEX attempts_usage_model;');
-  for (const column of [
-    'started_at',
-    'usage_kind',
-    'is_synthetic',
-    'usage_detached',
-    'estimated_usd',
-    'estimated_subtotal_usd',
-    'estimate_status',
-  ])
-    old.exec(`ALTER TABLE attempts DROP COLUMN ${column}`);
-  legacyScopeColumns(old);
-  old.exec("DELETE FROM app_metadata WHERE key='usage-coverage-since'; PRAGMA user_version=8;");
-  old.close();
-  entry.store = new Store(join(entry.directory, 'app.sqlite'));
-  const report = usageReport(entry.store, query);
-  expect(report.totals).toMatchObject({ calls: 1, reportedUsd: 0.7 });
-  expect(report.kinds[0].kind).toBe('unclassified');
-  expect(report.undated).toMatchObject({ calls: 1, reportedUsd: 0.2 });
-  expect(
-    entry.store.db.prepare('SELECT usage_kind FROM attempts WHERE id=?').get(undated)!.usage_kind
-  ).toBe('advisor');
-  expect(entry.store.chat(chat.id).title).toBe(chat.title);
-});
-
 test('CSV exports one grouping, includes coverage columns and neutralizes spreadsheet formulas in model IDs', () => {
   const store = fixture();
   add(store, null, wire({ modelId: '=HYPERLINK("https://example.invalid")' }), result(0));
@@ -245,77 +196,4 @@ test('CSV exports one grouping, includes coverage columns and neutralizes spread
   expect(csv).toContain('"비용 미확인 호출"');
   expect(csv.trim().split('\r\n')).toHaveLength(2);
   expect(csv).not.toContain('PRIVATE_CANARY');
-});
-
-test('version-eleven evaluation attribution is repaired from saved request tools only and keeps totals unchanged', () => {
-  const store = fixture();
-  const ids = [
-    add(
-      store,
-      null,
-      wire({
-        body: {
-          tools: [
-            { type: 'function', function: { name: 'eval_create_case' } },
-            { type: 'function', function: { name: 'eval_submit_artifact' } },
-          ],
-        },
-      }),
-      result(0.25)
-    ),
-    add(
-      store,
-      null,
-      wire({ body: { tools: [{ name: 'eval_create_case' }, { name: 'eval_submit_artifact' }] } }),
-      result(0.1)
-    ),
-    add(
-      store,
-      null,
-      wire({
-        body: {
-          tools: [
-            {
-              functionDeclarations: [
-                { name: 'eval_create_case' },
-                { name: 'eval_submit_artifact' },
-              ],
-            },
-          ],
-        },
-      }),
-      result(0.05)
-    ),
-  ];
-  const unknown = add(store, null, wire(), result(0.2));
-  const advisor = add(
-    store,
-    null,
-    wire({
-      agentId: 'advisor',
-      body: { tools: [{ name: 'eval_create_case' }, { name: 'eval_submit_artifact' }] },
-    }),
-    result(0.3)
-  );
-  legacyScopeColumns(store.db);
-  store.db.exec("UPDATE attempts SET usage_kind='unclassified'; PRAGMA user_version=11;");
-  const before = usageReport(store, query).totals;
-  const entry = owned.at(-1)!;
-  store.close();
-  entry.store = new Store(join(entry.directory, 'app.sqlite'));
-  const report = usageReport(entry.store, query);
-  expect(report.totals).toEqual(before);
-  expect(report.kinds.find((row) => row.kind === 'writing')).toMatchObject({
-    calls: 3,
-    reportedUsd: 0.4,
-  });
-  for (const id of [unknown, advisor])
-    expect(
-      entry.store.db.prepare('SELECT usage_kind FROM attempts WHERE id=?').get(id)?.usage_kind
-    ).toBe('unclassified');
-  detachAttemptUsage(entry.store.db, ids);
-  expect(usageReport(entry.store, query).totals).toEqual(before);
-  entry.store.close();
-  entry.store = new Store(join(entry.directory, 'app.sqlite'));
-  expect(usageReport(entry.store, query)).toEqual(report);
 });

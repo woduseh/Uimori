@@ -78,9 +78,9 @@ function plannedContent(selection: OutlineSelection) {
 /** Create current tables during fresh database initialization. */
 export function initOutline(db: DatabaseSync) {
   db.exec(`
-    CREATE TABLE IF NOT EXISTS outline_nodes (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), branch_id TEXT NOT NULL REFERENCES branches(id), parent_id TEXT REFERENCES outline_nodes(id), level TEXT NOT NULL, position INTEGER NOT NULL, title TEXT NOT NULL, intent TEXT NOT NULL, fixed INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL, command_id TEXT REFERENCES scene_commands(id), request_key TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(chat_id,request_key));
-    CREATE INDEX IF NOT EXISTS outline_nodes_branch ON outline_nodes(chat_id,branch_id,parent_id,position);
-    CREATE TABLE IF NOT EXISTS outline_batches (chat_id TEXT NOT NULL REFERENCES chats(id), branch_id TEXT NOT NULL REFERENCES branches(id), request_key TEXT NOT NULL, authority TEXT NOT NULL, operations TEXT NOT NULL, created TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(chat_id,request_key));
+    CREATE TABLE IF NOT EXISTS outline_nodes (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), parent_id TEXT REFERENCES outline_nodes(id), level TEXT NOT NULL, position INTEGER NOT NULL, title TEXT NOT NULL, intent TEXT NOT NULL, fixed INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL, command_id TEXT REFERENCES scene_commands(id), request_key TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(chat_id,request_key));
+    CREATE INDEX IF NOT EXISTS outline_nodes_chat ON outline_nodes(chat_id,parent_id,position);
+    CREATE TABLE IF NOT EXISTS outline_batches (chat_id TEXT NOT NULL REFERENCES chats(id), request_key TEXT NOT NULL, authority TEXT NOT NULL, operations TEXT NOT NULL, created TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(chat_id,request_key));
   `);
 }
 
@@ -251,7 +251,7 @@ export function parseOutlineOperations(value: unknown): OutlineOperation[] {
   });
 }
 
-/** Composition is owned by one chat branch, exactly like the scene commands it schedules. */
+/** Composition is owned by one chat, exactly like the scene commands it schedules. */
 export class OutlineStore {
   constructor(readonly store: Store) {}
   get db() {
@@ -284,7 +284,6 @@ export class OutlineStore {
     return {
       id: row.id,
       chatId: row.chat_id,
-      branchId: row.branch_id,
       parentId: row.parent_id ?? null,
       level: row.level,
       position: Number(row.position),
@@ -309,20 +308,17 @@ export class OutlineStore {
     if (!row) throw new HttpError(404, '구성 항목을 찾을 수 없어요.');
     return this.map(row);
   }
-  private branchRows(chatId: string, branchId: string): Row[] {
-    return this.db
-      .prepare('SELECT * FROM outline_nodes WHERE chat_id=? AND branch_id=?')
-      .all(chatId, branchId) as Row[];
+  private chatRows(chatId: string): Row[] {
+    return this.db.prepare('SELECT * FROM outline_nodes WHERE chat_id=?').all(chatId) as Row[];
   }
-  nodes(chatId: string, branchId: string): OutlineNode[] {
-    return outlineTree(this.branchRows(chatId, branchId).map((row) => this.map(row)));
+  nodes(chatId: string): OutlineNode[] {
+    return outlineTree(this.chatRows(chatId).map((row) => this.map(row)));
   }
-  detail(chatId: string, branchId?: string): OutlineDetail {
-    const branch = this.store.product.branch(chatId, branchId);
-    const nodes = this.nodes(chatId, branch.id);
+  detail(chatId: string): OutlineDetail {
+    this.store.chat(chatId);
+    const nodes = this.nodes(chatId);
     return {
       chatId,
-      branchId: branch.id,
       nodes: nodes.map((node) => {
         const review = this.latestReview(node.id, nodes);
         return review ? { ...node, latestReview: review } : node;
@@ -342,7 +338,7 @@ export class OutlineStore {
   }
   unitSources(id: string, nodes?: OutlineNode[]): OutlineWriting[] {
     const node = this.node(id);
-    const all = nodes ?? this.nodes(node.chatId, node.branchId);
+    const all = nodes ?? this.nodes(node.chatId);
     const subtree = [node, ...this.descendants(all, id)];
     const unique = new Map<string, OutlineWriting>();
     for (const item of subtree)
@@ -353,7 +349,7 @@ export class OutlineStore {
     const node = this.node(id);
     for (const relatedId of ids) {
       const related = this.node(relatedId);
-      if (relatedId === id || related.chatId !== node.chatId || related.branchId !== node.branchId)
+      if (relatedId === id || related.chatId !== node.chatId)
         throw new HttpError(400, '같은 채팅의 다른 구성만 참고할 수 있어요.');
     }
     this.db.prepare('DELETE FROM outline_links WHERE node_id=?').run(id);
@@ -365,12 +361,12 @@ export class OutlineStore {
   planHash(id: string, nodes?: OutlineNode[]) {
     const node = this.node(id);
     return createHash('sha256')
-      .update(plannedContent(outlineSelection(nodes ?? this.nodes(node.chatId, node.branchId))(id)))
+      .update(plannedContent(outlineSelection(nodes ?? this.nodes(node.chatId))(id)))
       .digest('hex');
   }
   preview(id: string) {
     const node = this.node(id),
-      nodes = this.nodes(node.chatId, node.branchId);
+      nodes = this.nodes(node.chatId);
     const { path, children, related } = outlineSelection(nodes)(id);
     return {
       expectedRevision: node.revision,
@@ -387,7 +383,6 @@ export class OutlineStore {
   }
   helperContext(
     chatId: string,
-    branchId: string,
     target: OutlineTarget,
     inputTokenLimit: number
   ): OutlineHelperContext {
@@ -397,8 +392,7 @@ export class OutlineStore {
       return { target, brief: null, sources: [], partial: false };
     }
     const node = this.node(target.nodeId);
-    if (node.chatId !== chatId || node.branchId !== branchId)
-      throw new HttpError(403, 'OUTLINE_OUTSIDE_SCOPE');
+    if (node.chatId !== chatId) throw new HttpError(403, 'OUTLINE_OUTSIDE_SCOPE');
     if (node.revision !== target.expectedRevision)
       throw new HttpError(409, '선택한 구성이 변경됐어요. 다시 선택해 주세요.');
     const brief = this.preview(node.id).outline;
@@ -489,12 +483,12 @@ export class OutlineStore {
     if (node.progress.state === 'writing')
       throw new HttpError(409, '진행 중인 원문 생성을 먼저 취소해 주세요.');
   }
-  private siblingPosition(chatId: string, branchId: string, parentId: string | null): number {
+  private siblingPosition(chatId: string, parentId: string | null): number {
     const row = this.db
       .prepare(
-        `SELECT COALESCE(MAX(position),-1) AS position FROM outline_nodes WHERE chat_id=? AND branch_id=? AND parent_id IS ${parentId === null ? 'NULL' : '?'}`
+        `SELECT COALESCE(MAX(position),-1) AS position FROM outline_nodes WHERE chat_id=? AND parent_id IS ${parentId === null ? 'NULL' : '?'}`
       )
-      .get(...([chatId, branchId, ...(parentId === null ? [] : [parentId])] as string[])) as Row;
+      .get(...([chatId, ...(parentId === null ? [] : [parentId])] as string[])) as Row;
     return Number(row.position) + 1;
   }
   apply(
@@ -503,39 +497,32 @@ export class OutlineStore {
     authority: OutlineAuthority
   ): { detail: OutlineDetail; created: { ref?: string; id: string }[] } {
     const body = record(value);
-    fields(body, ['branchId', 'operations', 'idempotencyKey']);
+    fields(body, ['operations', 'idempotencyKey']);
     const key = text(body.idempotencyKey, 'outline key', 120);
     const operations = parseOutlineOperations(body.operations);
 
     return this.store.transaction(() => {
-      const branch = this.store.product.branch(
-        chatId,
-        body.branchId === undefined ? undefined : text(body.branchId, 'branch', 100)
-      );
+      this.store.chat(chatId);
       const canonical = JSON.stringify(operations);
       const prior = this.db
         .prepare('SELECT * FROM outline_batches WHERE chat_id=? AND request_key=?')
         .get(chatId, key) as Row | undefined;
       if (prior) {
-        if (
-          prior.branch_id !== branch.id ||
-          prior.authority !== authority ||
-          prior.operations !== canonical
-        )
+        if (prior.authority !== authority || prior.operations !== canonical)
           throw new HttpError(409, '구성 요청 키가 다른 내용이나 권한에 사용됐어요.');
-        return { detail: this.detail(chatId, branch.id), created: JSON.parse(prior.created) };
+        return { detail: this.detail(chatId), created: JSON.parse(prior.created) };
       }
       const pending = this.db
         .prepare(
-          "SELECT n.id,n.command_id FROM outline_nodes n JOIN scene_commands c ON c.id=n.command_id WHERE n.chat_id=? AND n.branch_id=? AND c.status='pending' AND c.run_id IS NULL"
+          "SELECT n.id,n.command_id FROM outline_nodes n JOIN scene_commands c ON c.id=n.command_id WHERE n.chat_id=? AND c.status='pending' AND c.run_id IS NULL"
         )
-        .all(chatId, branch.id) as { id: string; command_id: string }[];
-      const before = pending.length ? outlineSelection(this.nodes(chatId, branch.id)) : null;
+        .all(chatId) as { id: string; command_id: string }[];
+      const before = pending.length ? outlineSelection(this.nodes(chatId)) : null;
       const created: { ref?: string; id: string }[] = [];
       const refs = new Map<string, string>();
       const time = now();
       for (const operation of operations) {
-        const live = () => this.nodes(chatId, branch.id);
+        const live = () => this.nodes(chatId);
         if (operation.op === 'create') {
           const parentId =
             operation.parentRef !== undefined
@@ -546,7 +533,7 @@ export class OutlineStore {
               : (operation.parentId ?? null);
           if (parentId !== null) {
             const parent = this.node(parentId);
-            if (parent.chatId !== chatId || parent.branchId !== branch.id)
+            if (parent.chatId !== chatId)
               throw new HttpError(400, '다른 채팅의 상위 구성 항목이에요.');
             if (!outlineParentAllowed(parent.level, operation.level))
               throw new HttpError(
@@ -558,15 +545,14 @@ export class OutlineStore {
           const id = randomUUID();
           this.db
             .prepare(
-              'INSERT INTO outline_nodes(id,chat_id,branch_id,parent_id,level,position,title,intent,fixed,revision,command_id,request_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,0,1,NULL,?,?,?)'
+              'INSERT INTO outline_nodes(id,chat_id,parent_id,level,position,title,intent,fixed,revision,command_id,request_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,0,1,NULL,?,?,?)'
             )
             .run(
               id,
               chatId,
-              branch.id,
               parentId,
               operation.level,
-              operation.position ?? this.siblingPosition(chatId, branch.id, parentId),
+              operation.position ?? this.siblingPosition(chatId, parentId),
               operation.title,
               operation.intent,
               null,
@@ -579,8 +565,7 @@ export class OutlineStore {
           continue;
         }
         const node = this.node(operation.id);
-        if (node.chatId !== chatId || node.branchId !== branch.id)
-          throw new HttpError(400, '다른 분기의 구성 항목이에요.');
+        if (node.chatId !== chatId) throw new HttpError(400, '다른 채팅의 구성 항목이에요.');
         if (node.revision !== operation.expectedRevision)
           throw new HttpError(409, '구성이 변경됐어요. 최신 구성을 확인한 뒤 다시 시도해 주세요.');
         if (operation.op === 'update') {
@@ -638,7 +623,7 @@ export class OutlineStore {
         }
       }
       if (before) {
-        const after = outlineSelection(this.nodes(chatId, branch.id));
+        const after = outlineSelection(this.nodes(chatId));
         for (const item of pending) {
           // Explicit node removal already deletes its unexecuted command.
           const current = after(item.id);
@@ -648,11 +633,11 @@ export class OutlineStore {
       }
       this.db
         .prepare(
-          'INSERT INTO outline_batches(chat_id,branch_id,request_key,authority,operations,created,created_at) VALUES(?,?,?,?,?,?,?)'
+          'INSERT INTO outline_batches(chat_id,request_key,authority,operations,created,created_at) VALUES(?,?,?,?,?,?)'
         )
-        .run(chatId, branch.id, key, authority, canonical, JSON.stringify(created), time);
+        .run(chatId, key, authority, canonical, JSON.stringify(created), time);
       this.store.event(chatId, 'outline.updated', chatId);
-      return { detail: this.detail(chatId, branch.id), created };
+      return { detail: this.detail(chatId), created };
     });
   }
 
@@ -722,7 +707,6 @@ export class OutlineStore {
       const command = this.store.story.createCommand(node.chatId, {
         label: `${OUTLINE_LEVEL_LABELS[node.level]} ${node.title}`.slice(0, 120),
         request,
-        branchId: node.branchId,
         idempotencyKey: key,
       });
       this.db
@@ -750,7 +734,7 @@ export class OutlineStore {
       )
       .get(sceneCommandId) as Row | undefined;
     if (!row) return undefined;
-    const nodes = this.nodes(row.chat_id, row.branch_id);
+    const nodes = this.nodes(row.chat_id);
     const target = nodes.find((item) => item.id === row.id);
     if (!target) return undefined;
     const command = this.store.story.command(sceneCommandId);

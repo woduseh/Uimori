@@ -56,9 +56,7 @@ export async function runStep(page, step, ids) {
     const { text, ...locator } = step.fill;
     await locatorFor(page, locator, ids).fill(substitute(text, ids));
   } else if (step.click) {
-    const target = locatorFor(page, step.click, ids);
-    await target.scrollIntoViewIfNeeded();
-    await target.click();
+    await locatorFor(page, step.click, ids).click();
   } else if (step.menu) {
     const label = menuLabels[step.menu] ?? substitute(step.menu, ids);
     const summary = page.getByLabel(label, { exact: true });

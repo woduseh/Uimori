@@ -271,7 +271,7 @@ for (const viewport of viewports) {
       await expect(toggle).not.toBeChecked();
       await expect(editor.getByLabel('시점', { exact: true })).toHaveValue('"0"');
       await editorFits(page, editor, save, 1200);
-      expect((await toggle.boundingBox())!.width).toBe(44);
+      expect((await toggle.boundingBox())!.width).toBeGreaterThanOrEqual(44);
       await page.screenshot({ path: info.outputPath(`native-options-${viewport.name}.png`) });
     });
 

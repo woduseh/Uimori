@@ -6,7 +6,6 @@ import { HttpError, record } from './request-validation.js';
 export type NativeInteraction = {
   id: string;
   runId: string;
-  branchId: string;
   kind: 'input' | 'select' | 'confirm';
   prompt: string;
   choices?: string[];
@@ -25,10 +24,9 @@ const entries = (store: Store) => {
   }
   return map;
 };
-const visible = ({ id, runId, branchId, kind, prompt, choices }: Pending): NativeInteraction => ({
+const visible = ({ id, runId, kind, prompt, choices }: Pending): NativeInteraction => ({
   id,
   runId,
-  branchId,
   kind,
   prompt,
   ...(choices ? { choices } : {}),
@@ -76,7 +74,6 @@ export function requestNativeInteraction(
       id,
       runId,
       chatId: run.chatId,
-      branchId: run.snapshot.branchId!,
       kind,
       prompt: kind === 'select' ? '항목을 선택해 주세요.' : (decoded as string),
       ...(kind === 'select' ? { choices: decoded as string[] } : {}),
@@ -90,17 +87,14 @@ export function requestNativeInteraction(
 }
 
 export function nativeInteractionRoutes(app: FastifyInstance, store: Store) {
-  app.get<{ Params: { id: string }; Querystring: { branchId?: string } }>(
-    '/api/chats/:id/risu-interactions',
-    async (request) => {
-      const branch = store.product.branch(request.params.id, request.query.branchId);
-      return {
-        interactions: [...entries(store).values()]
-          .filter((entry) => entry.chatId === request.params.id && entry.branchId === branch.id)
-          .map(visible),
-      };
-    }
-  );
+  app.get<{ Params: { id: string } }>('/api/chats/:id/risu-interactions', async (request) => {
+    store.chat(request.params.id);
+    return {
+      interactions: [...entries(store).values()]
+        .filter((entry) => entry.chatId === request.params.id)
+        .map(visible),
+    };
+  });
   app.post<{ Params: { id: string; interactionId: string } }>(
     '/api/chats/:id/risu-interactions/:interactionId',
     async (request) => {

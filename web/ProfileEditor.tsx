@@ -33,13 +33,11 @@ export function ProfileEditor({
   initialTab = 'characters',
   activeTab,
   hideNavigation = false,
-  branchId,
   ownerBotId,
   nextRequest = '',
   loreContextReset = false,
 }: {
   ownerBotId?: string;
-  branchId?: string;
   profile: ChatProfile;
   library: Library;
   onSaved: () => Promise<void>;
@@ -277,7 +275,6 @@ export function ProfileEditor({
                 onChange={(loreContext) => change({ ...value, loreContext })}
                 onPendingChange={setLorePending}
                 chatId={profile.chatId}
-                branchId={branchId}
                 profileRevision={value.revision}
                 request={nextRequest}
                 reset={loreContextReset}

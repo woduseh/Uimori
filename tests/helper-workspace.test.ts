@@ -250,7 +250,6 @@ test('real transport executes requested outline writing without generating prose
   const conversation = f.workspace.open({
     kind: 'chat',
     chatId: chat.id,
-    branchId: `main:${chat.id}`,
   });
   const bodies: transport.ProviderRequest[] = [];
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => {
@@ -333,7 +332,6 @@ test('a saved change survives an explanation EOF and prevents whole-request retr
   const conversation = f.workspace.open({
     kind: 'chat',
     chatId: chat.id,
-    branchId: `main:${chat.id}`,
   });
   const send = mockSend((_request, _options, index) =>
     index === 0
@@ -655,7 +653,6 @@ test('selected prose appears once in the current request and survives into the n
   const conversation = f.workspace.open({
     kind: 'chat',
     chatId: source.chatId,
-    branchId: `main:${source.chatId}`,
   });
   const calls: transport.ProviderRequest[] = [];
   mockSend((request) => {
@@ -705,7 +702,6 @@ test('the helper message route preserves full-length Korean requests and selecte
   const conversation = f.workspace.open({
     kind: 'chat',
     chatId: source.chatId,
-    branchId: `main:${source.chatId}`,
   });
   const message = '나'.repeat(REQUEST_TEXT_MAX_CHARS - 1) + '끝';
   const selection = { sourceId: source.id, sourceHash: current.hash, text: selectedText };
@@ -800,7 +796,6 @@ test('selected outline review allows evidence reads, rejects writes and retains 
   const conversation = f.workspace.open({
     kind: 'chat',
     chatId: chat.id,
-    branchId: `main:${chat.id}`,
   });
   const requests: transport.ProviderRequest[] = [];
   mockSend((request, _options, index): transport.ProviderResult => {
@@ -938,7 +933,6 @@ test('outline selection scope and revisions are checked before a provider call; 
   const conversation = f.workspace.open({
     kind: 'chat',
     chatId: chat.id,
-    branchId: `main:${chat.id}`,
   });
   const foreign = f.store.outline.apply(
     other.id,
@@ -1007,5 +1001,5 @@ test('outline selection scope and revisions are checked before a provider call; 
     intent: '명시 요청으로 변경한 결말',
   });
   expect(f.store.outline.node(foreign.id).intent).toBe('');
-  expect(f.store.product.branch(chat.id).headRevision).toBeNull();
+  expect(f.store.chat(chat.id).headRevision).toBeNull();
 });

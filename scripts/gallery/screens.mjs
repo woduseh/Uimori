@@ -1,8 +1,8 @@
 import browserWidths from '../../fixtures/browser-viewports.json' with { type: 'json' };
 const { mobile: MOBILE_WIDTH, desktop: DESKTOP_WIDTH } = browserWidths;
 // One entry per screen or modal the gallery captures. `url` values starting with `$` are
-// replaced from the seed result (see seed.mjs). Steps run after the page is ready; the step
-// vocabulary is documented in steps.mjs;
+// replaced from the seed result (see seed.mjs). Entry steps open the screen, then readiness
+// is checked; regular steps run afterward. The step vocabulary is documented in steps.mjs;
 // measurements are documented in docs/UI-GALLERY.md#metrics.
 
 export const viewports = {
@@ -15,23 +15,74 @@ export const defaultMetrics = ['overflow', 'touch-44', 'min-font'];
 const chat = { chat: '$chat.main' };
 const inMenu = { css: 'details[open] .action-menu-body' };
 const inHeader = { css: 'header.workspace-header' };
+const drawer = { role: 'dialog', name: '탐색' };
+const appDialog = { role: 'dialog', name: '설정' };
+const chatDialog = { role: 'dialog', name: '채팅 설정' };
+const libraryTabs = { role: 'tablist', name: '서재 분류' };
+const openLibrary = [
+  { click: { label: '탐색 메뉴' }, when: 'compact' },
+  { click: { role: 'button', name: '서재', within: drawer }, when: 'compact' },
+  { click: { role: 'button', name: '서재', within: { testid: 'bot-navigation' } }, when: 'wide' },
+];
+const openPrompts = [
+  { click: { label: '탐색 메뉴' }, when: 'compact' },
+  { click: { role: 'button', name: '프롬프트', within: drawer }, when: 'compact' },
+  {
+    click: { role: 'button', name: '프롬프트', within: { testid: 'bot-navigation' } },
+    when: 'wide',
+  },
+];
+const appLabels = {
+  general: '일반',
+  themes: '테마·색상',
+  models: '역할별 모델',
+  prompts: '현재 프롬프트',
+  connections: '프로바이더·모델',
+  agents: 'Codex 연결',
+  illustrations: '삽화',
+  data: '데이터 관리',
+  security: '접근 보안',
+};
+const chatLabels = {
+  characters: '대화 구성',
+  prompts: '프롬프트·모델',
+  models: '프롬프트·모델',
+  story: '기억·로어',
+  images: '이미지',
+  runtime: '자동 작업',
+};
 
 const chatSettings = (section, title) => ({
   id: `chat-settings-${section}`,
   title: `채팅 설정 · ${title}`,
-  url: { ...chat, panel: 'story', section },
+  url: chat,
+  enter: [
+    { menu: 'chat', when: 'compact' },
+    { click: { role: 'button', name: '채팅 설정', within: inMenu }, when: 'compact' },
+    { click: { label: '채팅 설정' }, when: 'wide' },
+    { click: { role: 'button', name: chatLabels[section], within: chatDialog }, when: 'compact' },
+    { click: { role: 'tab', name: chatLabels[section], within: chatDialog }, when: 'wide' },
+  ],
   ready: { role: 'dialog', name: '채팅 설정' },
 });
 const appSettings = (section, title) => ({
   id: `settings-${section}`,
   title: `설정 · ${title}`,
-  url: { panel: 'settings', section },
+  url: {},
+  enter: [
+    { click: { label: '탐색 메뉴' }, when: 'compact' },
+    { click: { role: 'button', name: '설정', within: drawer }, when: 'compact' },
+    { click: { role: 'button', name: '설정', within: { testid: 'bot-navigation' } }, when: 'wide' },
+    { click: { role: 'button', name: appLabels[section], within: appDialog }, when: 'compact' },
+    { click: { role: 'tab', name: appLabels[section], within: appDialog }, when: 'wide' },
+  ],
   ready: { role: 'dialog', name: '설정' },
 });
 const library = (tab, title) => ({
   id: `library-${tab}`,
   title: `서재 · ${title}`,
-  url: { destination: 'library', tab },
+  url: {},
+  enter: [...openLibrary, { click: { role: 'tab', name: title, within: libraryTabs } }],
   ready: { testid: 'library-panel' },
 });
 
@@ -73,9 +124,9 @@ export const screens = [
   },
   {
     id: 'chat-earlier-scene',
-    title: '이전 장면 읽기 (최신 장면으로 버튼)',
+    title: '이전 장면 링크로 읽기',
     url: { ...chat, source: '$source.first' },
-    ready: { role: 'button', name: '최신 장면으로' },
+    ready: { testid: 'source-text' },
     metrics: ['header-controls', 'composer-dock', 'body-share', ...defaultMetrics],
   },
   {
@@ -120,38 +171,44 @@ export const screens = [
   {
     id: 'new-chat',
     title: '새 채팅',
-    url: { panel: 'new' },
+    url: {},
+    enter: [...openLibrary, { click: { role: 'button', name: '$bot.main.title 새 채팅' } }],
     ready: { role: 'dialog', name: '새 채팅' },
   },
   {
     id: 'tasks',
     title: '작업 현황',
-    url: { ...chat, panel: 'tasks' },
+    url: chat,
+    enter: [{ menu: 'chat' }, { click: { role: 'button', name: '작업 현황', within: inMenu } }],
     ready: { role: 'dialog', name: '작업 현황' },
   },
   {
     id: 'reading-settings',
     title: '읽기 설정',
-    url: { ...chat, panel: 'reading' },
+    url: chat,
+    enter: [{ menu: 'chat' }, { click: { role: 'button', name: '읽기 설정', within: inMenu } }],
     ready: { role: 'dialog', name: '읽기 설정' },
   },
   {
     id: 'outline',
     title: '계층형 구성',
-    url: { ...chat, panel: 'outline' },
-    ready: { role: 'dialog', name: '계층형 구성' },
+    url: chat,
+    enter: [{ menu: 'chat' }, { click: { role: 'button', name: '계층형 구성', within: inMenu } }],
+    ready: { css: 'section.outline-panel' },
   },
   {
     id: 'navigation-drawer',
     title: '모바일 탐색 드로어',
-    url: { ...chat, panel: 'navigation' },
+    url: chat,
+    enter: [{ click: { label: '탐색 메뉴' } }],
     ready: { role: 'dialog', name: '탐색' },
     viewports: ['mobile'],
   },
   {
     id: 'navigation-chat-menu',
     title: '모바일 탐색 드로어 · 채팅 행 ⋯',
-    url: { ...chat, panel: 'navigation' },
+    url: chat,
+    enter: [{ click: { label: '탐색 메뉴' } }],
     ready: { role: 'dialog', name: '탐색' },
     steps: [{ menu: '$chat.main.title 채팅 메뉴' }],
     viewports: ['mobile'],
@@ -166,30 +223,29 @@ export const screens = [
     viewports: ['desktop'],
     metrics: ['menu-in-viewport', ...defaultMetrics],
   },
-  {
-    id: 'sidebar-app-menu',
-    title: '사이드바 앱 메뉴',
-    url: chat,
-    ready: { testid: 'source-text' },
-    steps: [{ menu: 'app' }],
-    viewports: ['desktop'],
-    metrics: ['menu-in-viewport', ...defaultMetrics],
-  },
   library('bot', '봇'),
   library('persona', '페르소나'),
   library('module', '모듈'),
-  { ...library('prompts', '프롬프트'), ready: { testid: 'prompt-library' } },
+  {
+    id: 'library-prompts',
+    title: '서재 · 프롬프트',
+    url: {},
+    enter: openPrompts,
+    ready: { testid: 'prompt-library' },
+  },
   {
     id: 'library-detail',
     title: '서재 · 자료 상세',
-    url: { destination: 'library', tab: 'bot' },
+    url: {},
+    enter: openLibrary,
     ready: { testid: 'library-panel' },
     steps: [{ click: { role: 'button', name: '$bot.long.title 상세 보기' } }],
   },
   {
     id: 'library-item-menu',
     title: '서재 · 자료 행 ⋯',
-    url: { destination: 'library', tab: 'bot' },
+    url: {},
+    enter: openLibrary,
     ready: { testid: 'library-panel' },
     steps: [{ menu: '$bot.main.title 메뉴' }],
     metrics: ['menu-in-viewport', ...defaultMetrics],

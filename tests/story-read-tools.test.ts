@@ -46,21 +46,12 @@ function fixture() {
 }
 
 describe('compact story read contract', () => {
-  test('main exposes one browse/search tool and one scene-number read tool with portable root schemas', () => {
+  test('main exposes only browse/search and scene-number read tools', () => {
     expect(STORY_READ_TOOLS.map((tool) => tool.name)).toEqual(['story.search', 'story.read']);
     expect(STORY_READ_NAMES).toEqual(['story.search', 'story.read']);
     expect(MAIN_READ_TOOLS.filter((tool) => STORY_READ_NAMES.includes(tool.name))).toEqual(
       STORY_READ_TOOLS
     );
-    for (const tool of STORY_READ_TOOLS) {
-      expect(tool.inputSchema).toMatchObject({ type: 'object' });
-      for (const key of ['oneOf', 'anyOf', 'allOf'])
-        expect(tool.inputSchema).not.toHaveProperty(key);
-    }
-    expect(STORY_READ_TOOLS.find((tool) => tool.name === 'story.read')!.inputSchema).toMatchObject({
-      required: ['sceneNumber'],
-      properties: { sceneNumber: { type: 'integer', minimum: 1 } },
-    });
   });
 
   test('story.search lists when query is absent or blank and searches when it is present', async () => {

@@ -66,7 +66,6 @@ export function executionContext(
       : {}),
     chat: {
       id: snapshot.chatId,
-      branchId: snapshot.branchId ?? `main:${snapshot.chatId}`,
       turnIndex: snapshot.history.length,
       parentRevision: snapshot.parentRevision,
     },

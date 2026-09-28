@@ -1,12 +1,3 @@
-import { createFixtureChat } from './fixtures/chat.js';
-import { legacyScopeColumns } from './fixtures/legacy-scope.js';
-import { completedSource } from './fixtures/illustration.js';
-import { addBookmark, saveReadingPosition } from '../server/reading-state.js';
-import { HelperWorkspace } from '../server/helper-workspace.js';
-import { ChatOptionsStore } from '../server/chat-options.js';
-import { vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
-import { describe } from 'vitest';
 import { afterEach, expect, test } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -18,95 +9,62 @@ import {
   databaseSchemaVersion,
   initializeDatabaseSchema,
 } from '../server/database-schema.js';
-
 const paths: string[] = [];
 afterEach(() => {
   for (const path of paths.splice(0)) rmSync(path, { recursive: true, force: true });
 });
 function file() {
-  const directory = mkdtempSync(join(tmpdir(), 'uimori-schema-v1-'));
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-schema-'));
   paths.push(directory);
   return join(directory, 'app.sqlite');
 }
-
-test('personal current schema initializes and remains readable after an extra query index', () => {
-  const path = file();
-  const first = new Store(path);
+test('current schema initializes and remains readable after an extra query index', () => {
+  const path = file(),
+    first = new Store(path);
   expect(databaseSchemaVersion(first.db)).toBe(DATABASE_SCHEMA_VERSION);
   first.db.exec('CREATE INDEX optional_user_index ON sources(created_at)');
   first.close();
   const next = new Store(path);
-  expect(databaseSchemaVersion(next.db)).toBe(DATABASE_SCHEMA_VERSION);
-  expect(
-    next.db.prepare("SELECT name FROM sqlite_schema WHERE name='optional_user_index'").get()
-  ).toBeTruthy();
-  next.close();
+  try {
+    expect(databaseSchemaVersion(next.db)).toBe(DATABASE_SCHEMA_VERSION);
+    expect(
+      next.db.prepare("SELECT name FROM sqlite_schema WHERE name='optional_user_index'").get()
+    ).toBeTruthy();
+    expect(
+      next.db
+        .prepare("SELECT name FROM sqlite_schema WHERE name='branches' OR sql LIKE '%branch_id%'")
+        .all()
+    ).toEqual([]);
+  } finally {
+    next.close();
+  }
 });
-
-test('schema 5 upgrades by adding durable Anthropic Batch recovery storage', () => {
-  const path = file();
-  const current = new Store(path);
-  current.close();
-  const old = new DatabaseSync(path);
-  legacyScopeColumns(old);
-  // Remove later accounting columns as well: a schema-5 database did not contain them.
-  // Push is newer than the simulated historical schema and references the later accounting columns.
-  old.exec(
-    'DROP TRIGGER IF EXISTS push_main_terminal; DROP TRIGGER IF EXISTS push_translation_terminal; DROP TRIGGER IF EXISTS push_illustration_terminal; DROP TABLE push_outbox; DROP TABLE push_subscriptions;'
-  );
-  old.exec('DROP INDEX attempts_usage_period; DROP INDEX attempts_usage_model;');
-  for (const column of [
-    'started_at',
-    'usage_kind',
-    'is_synthetic',
-    'usage_detached',
-    'estimated_usd',
-    'estimated_subtotal_usd',
-    'estimate_status',
-  ])
-    old.exec(`ALTER TABLE attempts DROP COLUMN ${column}`);
-  old.exec(
-    "DELETE FROM app_metadata WHERE key='usage-coverage-since'; DROP TABLE anthropic_batches; PRAGMA user_version=5"
-  );
-  old.close();
-
-  const upgraded = new Store(path);
-  expect(databaseSchemaVersion(upgraded.db)).toBe(DATABASE_SCHEMA_VERSION);
-  expect(
-    upgraded.db
-      .prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='anthropic_batches'")
-      .get()
-  ).toEqual({ name: 'anthropic_batches' });
-  upgraded.close();
-});
-
-test.each([DATABASE_SCHEMA_VERSION + 1, 23, 24])(
-  'opening another schema %s leaves its bytes untouched',
+test.each([1, 12, DATABASE_SCHEMA_VERSION + 1, 24])(
+  'unsupported schema %s is refused before changing source bytes',
   (version) => {
     const path = file(),
       db = new DatabaseSync(path);
     db.exec(
-      `CREATE TABLE retained(text TEXT); INSERT INTO retained VALUES('original'); PRAGMA user_version=${version}`
+      `CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT); INSERT INTO app_metadata VALUES('format','uimori-personal-v1'); CREATE TABLE retained(text TEXT); INSERT INTO retained VALUES('original'); PRAGMA user_version=${version}`
     );
     db.close();
     const before = readFileSync(path);
-    expect(() => new Store(path)).toThrow(
-      `Database version ${version} is not the personal-v1 format`
-    );
+    expect(() => new Store(path)).toThrow(`DATABASE_VERSION_UNSUPPORTED:${version}`);
     expect(readFileSync(path)).toEqual(before);
   }
 );
-
-test('an old database that also used numeric version 1 is not mistaken for personal v1', () => {
-  const path = file(),
-    db = new DatabaseSync(path);
-  db.exec('CREATE TABLE unrelated(id TEXT); PRAGMA user_version=1');
-  db.close();
-  const before = readFileSync(path);
-  expect(() => new Store(path)).toThrow('DATABASE_FORMAT_MISMATCH:1');
-  expect(readFileSync(path)).toEqual(before);
-});
-
+test.each([13])(
+  'a different format using supported number %s is refused without writes',
+  (version) => {
+    const path = file(),
+      db = new DatabaseSync(path);
+    db.exec(`CREATE TABLE unrelated(id TEXT); PRAGMA user_version=${version}`);
+    db.close();
+    const before = readFileSync(path);
+    expect(() => new Store(path)).toThrow(`DATABASE_FORMAT_MISMATCH:${version}`);
+    expect(readFileSync(path)).toEqual(before);
+  }
+);
 test('unversioned nonempty databases are not inferred or overwritten', () => {
   const db = new DatabaseSync(file());
   try {
@@ -116,7 +74,6 @@ test('unversioned nonempty databases are not inferred or overwritten', () => {
     db.close();
   }
 });
-
 test('failed fresh initialization rolls back its tables and version', () => {
   const db = new DatabaseSync(file());
   try {
@@ -133,283 +90,4 @@ test('failed fresh initialization rolls back its tables and version', () => {
   } finally {
     db.close();
   }
-});
-
-describe('Prior schema 1 migration', () => {
-  const owned: { store: Store; path: string }[] = [];
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    for (const item of owned.splice(0)) {
-      item.store.close();
-      rmSync(item.path, { recursive: true, force: true });
-    }
-  });
-
-  test('real prior schema-1 output upgrades with original text, translation and oneoff semantics intact', () => {
-    const path = mkdtempSync(join(tmpdir(), 'uimori-real-migration-'));
-    const db = new DatabaseSync(join(path, 'app.sqlite'));
-    db.exec('PRAGMA foreign_keys=OFF');
-    db.exec(readFileSync(new URL('./fixtures/personal-schema-1.sql', import.meta.url), 'utf8'));
-    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    expect(db.prepare('PRAGMA user_version').get()?.user_version).toBe(1);
-    expect(db.prepare('SELECT count(*) AS n FROM helper_delegations').get()?.n).toBe(1);
-    const original = db.prepare('SELECT id,text FROM sources ORDER BY id').all();
-    const translations = db.prepare('SELECT job_id,result FROM job_results ORDER BY job_id').all();
-    db.close();
-    const owner = { store: new Store(join(path, 'app.sqlite')), path };
-    owned.push(owner);
-    const store = owner.store,
-      chat = store.chats()[0]!;
-    const options = new ChatOptionsStore(store),
-      state = options.get(chat.id);
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(
-      DATABASE_SCHEMA_VERSION
-    );
-    expect(store.db.prepare('SELECT id,text FROM sources ORDER BY id').all()).toEqual(original);
-    expect(store.db.prepare('SELECT job_id,result FROM job_results ORDER BY job_id').all()).toEqual(
-      translations
-    );
-    expect(state.fixedValues).toEqual({ tone: 'bold' });
-    expect(state.pending.map((p) => p.values)).toEqual([{ tone: 'warm' }]);
-    expect(state.pending[0]).not.toHaveProperty('headHash');
-    const request = {
-      request: 'Continue',
-      expectedRevision: chat.headRevision,
-      expectedSettingsRevision: chat.settingsRevision,
-      branchId: state.branchId,
-      idempotencyKey: randomUUID(),
-    };
-    const run = store.createRun(chat.id, request, (c) => ({
-      chatId: c.id,
-      parentRevision: c.headRevision,
-      settings: c.settings,
-      settingsRevision: c.settingsRevision,
-      request: request.request,
-      history: store.history(c.headRevision),
-      resources: [],
-      profile: store.product.snapshot(c.id),
-    }));
-    expect(run.run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'warm' });
-    expect(options.get(chat.id).pending).toEqual([]);
-    expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    store.close();
-    owner.store = new Store(join(path, 'app.sqlite'));
-    expect(owner.store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(
-      DATABASE_SCHEMA_VERSION
-    );
-  });
-});
-
-describe('Prior schema 3 independent chat migration', () => {
-  const owners: { store: Store; path: string }[] = [];
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    for (const { store, path } of owners.splice(0)) {
-      store.close();
-      rmSync(path, { recursive: true, force: true });
-    }
-  });
-
-  test('real previous schema 3 converts shared branches once while preserving independent user data', () => {
-    const path = mkdtempSync(join(tmpdir(), 'uimori-final-migration-'));
-    const db = new DatabaseSync(join(path, 'app.sqlite'));
-    db.exec('PRAGMA foreign_keys=OFF');
-    db.exec(readFileSync(new URL('./fixtures/personal-schema-3.sql', import.meta.url), 'utf8'));
-    expect(db.prepare('PRAGMA user_version').get()?.user_version).toBe(3);
-    const originalId = String(
-      db.prepare("SELECT id FROM chats WHERE title='Legacy shared story'").get()!.id
-    );
-    const standaloneId = String(
-      db.prepare("SELECT id FROM chats WHERE title='Standalone unchanged'").get()!.id
-    );
-    const conversationId = String(db.prepare('SELECT id FROM helper_conversations').get()!.id);
-    const artifactText = db.prepare('SELECT text FROM helper_artifacts').get()!.text;
-    db.close();
-    const owner = { path, store: new Store(join(path, 'app.sqlite')) };
-    owners.push(owner);
-    const store = owner.store;
-    expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(
-      DATABASE_SCHEMA_VERSION
-    );
-    expect(() => store.chat(originalId)).toThrow('Chat not found');
-    expect(store.chat(standaloneId).title).toBe('Standalone unchanged');
-    expect(store.context.current(standaloneId)).toMatchObject({
-      usable: true,
-      checkpoint: { plan: { summary: 'Standalone current summary.' } },
-    });
-    const copies = store.chats().filter((c) => c.id !== standaloneId);
-    expect(copies).toHaveLength(2);
-    const alternative = copies.find((c) => c.title.includes('Alternative'))!;
-    const original = copies.find((c) => c.id !== alternative.id)!;
-    expect(store.history(original.headRevision).map((s) => s.text)).toEqual([
-      'Shared first scene.',
-      'Default ending.',
-    ]);
-    expect(store.history(alternative.headRevision).map((s) => s.text)).toEqual([
-      'Shared first scene.',
-      'Alternative ending.',
-    ]);
-    expect(
-      store.db
-        .prepare('SELECT result FROM job_results')
-        .all()
-        .map((r) => JSON.parse(String(r.result)).text)
-    ).toEqual(expect.arrayContaining(['공통 첫 장면.', '기본 결말.']));
-    expect(copies.every((c) => store.product.branch(c.id).chatId === c.id)).toBe(true);
-    const helpers = new HelperWorkspace(store);
-    expect(helpers.conversation(conversationId).scope).toMatchObject({ chatId: alternative.id });
-    expect(store.db.prepare('SELECT text FROM helper_artifacts').get()!.text).toBe(artifactText);
-    expect(helpers.messages(conversationId).map((m) => m.text)).toEqual(
-      expect.arrayContaining(['Preserve this helper question', 'Preserved helper answer.'])
-    );
-    const options = new ChatOptionsStore(store).get(alternative.id);
-    expect(options.pending.map((p) => p.values)).toEqual([{ tone: 'quiet' }]);
-    expect(
-      store.story.notes
-        .entries({ chatId: alternative.id, history: store.history(alternative.headRevision) })
-        .map((n) => n.text)
-    ).toContain('Only this route has the silver key.');
-    expect(
-      store.db
-        .prepare('SELECT values_json FROM chat_variable_states WHERE chat_id=?')
-        .get(alternative.id)?.values_json
-    ).toBe('{"choice":"alternate"}');
-    expect(store.db.prepare('SELECT count(*) AS n FROM assets').get()?.n).toBe(1);
-    expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    const ids = store
-      .chats()
-      .map((c) => c.id)
-      .sort();
-    store.close();
-    owner.store = new Store(join(path, 'app.sqlite'));
-    expect(
-      owner.store
-        .chats()
-        .map((c) => c.id)
-        .sort()
-    ).toEqual(ids);
-  });
-});
-
-test('version-10 simplification removes obsolete triggers while retaining authored locations and pending notification capabilities', () => {
-  const path = file();
-  const current = new Store(path);
-  const chat = createFixtureChat(current, 'Migration keeps this story');
-  const source = completedSource(current, chat.id, 'Retained source text');
-  const target = {
-    chatId: chat.id,
-    branchId: `main:${chat.id}`,
-    sourceId: source.id,
-    representation: 'original' as const,
-  };
-  const mark = addBookmark(current, chat.id, {
-    id: randomUUID(),
-    target,
-    title: 'Keep',
-    note: 'My note',
-    quote: '',
-  });
-  saveReadingPosition(current, chat.id, { clientId: randomUUID(), expectedRevision: 0, target });
-  current.db
-    .prepare('INSERT INTO access_sessions VALUES(?,?)')
-    .run('synthetic-session', 'synthetic-authority');
-  current.db
-    .prepare(`INSERT INTO push_subscriptions(id,client_id,session_hash,endpoint,keys,preferences,origin,revision,created_at,updated_at)
-    VALUES('migration-sub','migration-client','synthetic-session','https://fcm.googleapis.com/fcm/send/fixture','{}','{}','https://fixture.invalid',1,'2026-09-28','2026-09-28')`)
-    .run();
-  current.db
-    .prepare(`INSERT INTO push_outbox(subscription_id,event_key,kind,next_at,expires_at,created_at)
-    VALUES('migration-sub','existing-delivery','test','2026-09-28','2026-09-29','2026-09-28')`)
-    .run();
-  // Reintroduce only the old metadata and trigger boundaries that version 11 replaces.
-  legacyScopeColumns(current.db);
-  current.db.exec(`INSERT INTO app_metadata VALUES('search-revision','12');
-    CREATE TRIGGER search_head_move AFTER UPDATE OF head_revision ON branches BEGIN UPDATE app_metadata SET value='13' WHERE key='search-revision'; END;
-    CREATE TRIGGER push_main_terminal AFTER INSERT ON events BEGIN SELECT 1; END;
-    PRAGMA user_version=10;`);
-  current.close();
-  const upgraded = new Store(path);
-  try {
-    expect(databaseSchemaVersion(upgraded.db)).toBe(DATABASE_SCHEMA_VERSION);
-    expect(upgraded.source(source.id).text).toBe('Retained source text');
-    expect(upgraded.db.prepare('SELECT note FROM bookmarks WHERE id=?').get(mark.id)).toEqual({
-      note: 'My note',
-    });
-    expect(upgraded.db.prepare('SELECT count(*) AS n FROM reading_positions').get()!.n).toBe(1);
-    expect(upgraded.db.prepare('SELECT event_key,status FROM push_outbox').get()).toEqual({
-      event_key: 'existing-delivery',
-      status: 'pending',
-    });
-    expect(upgraded.db.prepare('SELECT count(*) AS n FROM access_sessions').get()!.n).toBe(1);
-    expect(
-      upgraded.db
-        .prepare(
-          "SELECT 1 FROM sqlite_schema WHERE type='trigger' AND name IN ('push_main_terminal','search_head_move')"
-        )
-        .get()
-    ).toBeUndefined();
-    expect(
-      upgraded.db.prepare("SELECT 1 FROM app_metadata WHERE key='search-revision'").get()
-    ).toBeUndefined();
-    upgraded.editSource(source.id, {
-      text: 'The updated source still invalidates its own index',
-      expectedRevision: 0,
-    });
-    expect(
-      upgraded.db.prepare('SELECT 1 FROM search_dirty_sources WHERE source_id=?').get(source.id)
-    ).toBeTruthy();
-    expect(upgraded.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  } finally {
-    upgraded.close();
-  }
-});
-
-test('schema 12 upgrade preserves authored plans and completed source associations', () => {
-  // This test owns a temporary fixture database. No running app database is used.
-  const path = file(),
-    current = new Store(path);
-  const chat = createFixtureChat(current, '구성 보존');
-  const node = current.outline.apply(
-    chat.id,
-    {
-      idempotencyKey: 'old-plan',
-      operations: [
-        { op: 'create', level: 'episode', title: '기존 회차', intent: '원문과 구성 보존' },
-      ],
-    },
-    'user'
-  ).detail.nodes[0];
-  const source = completedSource(current, chat.id, '기존 원문 그대로');
-  const command = current.outline.sceneCommand(node.id, { idempotencyKey: 'old-command' });
-  current.db
-    .prepare("UPDATE scene_commands SET status='consumed',source_revision=? WHERE id=?")
-    .run(source.id, command.id);
-  const before = current.db.prepare('SELECT id,title,intent,command_id FROM outline_nodes').all();
-  current.close();
-  const old = new DatabaseSync(path);
-  legacyScopeColumns(old);
-  old.exec(
-    'DROP TABLE outline_reviews; DROP TABLE outline_links; DROP TABLE outline_writings; PRAGMA user_version=12'
-  );
-  old.close();
-  const upgraded = new Store(path);
-  try {
-    expect(databaseSchemaVersion(upgraded.db)).toBe(DATABASE_SCHEMA_VERSION);
-    expect(
-      upgraded.db.prepare('SELECT id,title,intent,command_id FROM outline_nodes').all()
-    ).toEqual(before);
-    expect(upgraded.outline.node(node.id).writings).toMatchObject([{ sourceRevision: source.id }]);
-    expect(upgraded.source(source.id).text).toBe('기존 원문 그대로');
-    expect(upgraded.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    expect(upgraded.outline.sceneCommand(node.id, { idempotencyKey: 'old-command' }).id).toBe(
-      command.id
-    );
-  } finally {
-    upgraded.close();
-  }
-  const reopened = new Store(path);
-  expect(reopened.db.prepare('SELECT count(*) AS n FROM outline_writings').get()?.n).toBe(1);
-  reopened.close();
 });

@@ -135,8 +135,8 @@ for (const width of DEFAULT_WIDTHS) {
     expect(edited.chatId).toBe(copiedChatId);
     expect(edited.parentRevision).toBeNull();
     expect(edited.request).toBe('수정한 합성 요청');
-    expect(edited.snapshot.branchId).not.toBe(run.snapshot.branchId);
-    expect(new URL(page.url()).searchParams.get('branch')).toBeNull();
+    expect(edited.snapshot.chatId).toBe(copiedChatId);
+    expect(run.snapshot.chatId).toBe(chat.id);
     expect(after.sources.find((item) => item.id === before.sources[0].id)).toEqual(
       before.sources[0]
     );

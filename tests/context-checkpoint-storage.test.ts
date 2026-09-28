@@ -93,7 +93,7 @@ function fixture() {
     const time = new Date(index * 1000).toISOString();
     store.db
       .prepare(
-        "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,source_revision,created_at,updated_at,branch_id) VALUES(?,?,?,'completed',?,?,?,?,?,?,?,?)"
+        "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,source_revision,created_at,updated_at) VALUES(?,?,?,'completed',?,?,?,?,?,?,?)"
       )
       .run(
         runId,
@@ -105,8 +105,7 @@ function fixture() {
         '{}',
         sourceId,
         time,
-        time,
-        `main:${chat.id}`
+        time
       );
     store.db
       .prepare('INSERT INTO sources VALUES(?,?,?,?,?,?,?)')
@@ -228,7 +227,7 @@ describe('stored context checkpoint selection', () => {
       const f = fixture();
       f.checkpoint(1, '검증한 요약');
       const captured = f.capture();
-      if (part === 'scope') captured.contextBase!.scopeKey += ':other-branch';
+      if (part === 'scope') captured.contextBase!.scopeKey += ':other-chat';
       else if (part === 'revision') captured.contextBase!.checkpoint!.revision++;
       else captured.contextBase!.checkpoint![part] = 'missing-or-altered';
       expect(() => previousContextPlan(f.store, captured)).toThrow(
@@ -349,17 +348,13 @@ describe('Current checkpoint lifetime', () => {
         })),
       },
     }).chat;
-    const branch = store.product.branch(chat.id);
     const snapshot = () =>
-      prepareNativeRisuReadOnly(
-        helperWritingSnapshot(store, chat.id, branch.id, 'context'),
-        'context'
-      );
-    return { store, chat, branch, model, helper, bot, snapshot };
+      prepareNativeRisuReadOnly(helperWritingSnapshot(store, chat.id, 'context'), 'context');
+    return { store, chat, model, helper, bot, snapshot };
   }
 
   test('current summaries do not retain full inputs or detail receipts after repeated jobs and edits', async () => {
-    const { store, chat, branch, snapshot } = fixture(4);
+    const { store, chat, snapshot } = fixture(4);
     for (let i = 0; i < 2; i++) {
       const input = await snapshot(),
         current = store.context.current(chat.id);
@@ -367,7 +362,7 @@ describe('Current checkpoint lifetime', () => {
         chat.id,
         {
           expectedRevision: current.activeRevision,
-          expectedHeadRevision: branch.headRevision,
+          expectedHeadRevision: chat.headRevision,
           idempotencyKey: randomUUID(),
         },
         input
@@ -386,7 +381,7 @@ describe('Current checkpoint lifetime', () => {
       expect(detail.jobs.every((j) => !('snapshot' in j))).toBe(true);
       const body = {
         expectedRevision: detail.activeRevision,
-        expectedHeadRevision: branch.headRevision,
+        expectedHeadRevision: chat.headRevision,
         idempotencyKey: randomUUID(),
         summary: 'Edited ' + i,
       };
@@ -416,12 +411,12 @@ describe('Current checkpoint lifetime', () => {
   });
 
   test('unrelated helper and translation settings do not invalidate the main summary', async () => {
-    const { store, chat, branch, helper, snapshot } = fixture();
+    const { store, chat, helper, snapshot } = fixture();
     store.context.edit(
       chat.id,
       {
         expectedRevision: 0,
-        expectedHeadRevision: branch.headRevision,
+        expectedHeadRevision: chat.headRevision,
         idempotencyKey: 'summary',
         summary: 'A factual source summary.',
       },

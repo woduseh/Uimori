@@ -6,7 +6,8 @@ import { afterEach, expect, test } from 'vitest';
 import type { RunSnapshot, Usage } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { Controls } from '../server/controls.js';
-import { HttpError, Store } from '../server/store.js';
+import { HttpError } from '../server/request-validation.js';
+import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { directory: string; store: Store }[] = [];
@@ -43,12 +44,11 @@ function fixture() {
 function queued(store: Store, chatId: string) {
   const chat = store.chat(chatId);
   const captured = store.product.snapshot(chatId);
-  const branch = store.product.branch(chatId);
   return store.createRun(
     chatId,
     {
       request: 'Continue the synthetic story.',
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       idempotencyKey: randomUUID(),
     },
@@ -122,7 +122,7 @@ test('cancellation and recovery preserve staged text without publishing source o
   store.startRun(interrupted.id);
   store.stageRunOutput(interrupted.id, 'Text received before server stop');
   const variableStates = store.db
-    .prepare('SELECT * FROM chat_variable_states ORDER BY chat_id,branch_id')
+    .prepare('SELECT * FROM chat_variable_states ORDER BY chat_id')
     .all();
 
   expect(rawRun(store, run.id)).toEqual({
@@ -145,9 +145,9 @@ test('cancellation and recovery preserve staged text without publishing source o
     usage: null,
   });
   expect(store.db.prepare('SELECT count(*) AS count FROM sources').get()).toEqual({ count: 0 });
-  expect(
-    store.db.prepare('SELECT * FROM chat_variable_states ORDER BY chat_id,branch_id').all()
-  ).toEqual(variableStates);
+  expect(store.db.prepare('SELECT * FROM chat_variable_states ORDER BY chat_id').all()).toEqual(
+    variableStates
+  );
   expect(store.db.prepare('SELECT count(*) AS count FROM chat_variable_outputs').get()).toEqual({
     count: 0,
   });

@@ -17,21 +17,12 @@ import { readChatVariables } from './chat-variables.js';
 import { HttpError } from './request-validation.js';
 
 /** Capture user-visible state through a selected source. No future notes/variables leak into an old copy. */
-export function captureChatCopy(
-  store: Store,
-  chatId: string,
-  branchId?: string,
-  sourceId?: string | null
-): ChatCopy {
+export function captureChatCopy(store: Store, chatId: string, sourceId?: string | null): ChatCopy {
   const chat = store.chat(chatId);
-  const branch = store.product.branch(chatId, branchId);
-  const head = sourceId === undefined ? branch.headRevision : sourceId;
+  const head = sourceId === undefined ? chat.headRevision : sourceId;
   if (head && store.source(head).chatId !== chatId) throw new HttpError(400, 'Source outside chat');
   const history = store.history(head);
-  const transcript = independentTranscriptMedia(
-    store,
-    exportChatTranscript(store, chatId, branch.id, head)
-  );
+  const transcript = independentTranscriptMedia(store, exportChatTranscript(store, chatId, head));
   const profile = store.product.profile(chatId);
   const checkpoints = history.map((source) => {
     const row = store.db
@@ -40,8 +31,8 @@ export function captureChatCopy(
     return row ? validateChatVariableState(JSON.parse(String(row.body))) : null;
   });
   const variables =
-    head === branch.headRevision
-      ? readChatVariables(store, chatId, branch.id)
+    head === chat.headRevision
+      ? readChatVariables(store, chatId)
       : (checkpoints.at(-1) ?? { revision: 0, values: {} });
   const messages = captureCopiedMessages(store, history);
   mapCopiedMessageTexts(messages, (text) => independentTextMedia(store, text));
@@ -65,13 +56,12 @@ export function captureChatCopy(
       bookmarks: captureBookmarks(
         store,
         chatId,
-        branch.id,
         history.map((source) => source.revision)
       ),
       variables,
       checkpoints,
       messages,
-      authoring: captureChatAuthoring(store, chatId, branch.id, history),
+      authoring: captureChatAuthoring(store, chatId, history),
       settings: chat.settings,
       profile: {
         image: profile.image,
@@ -99,8 +89,7 @@ export function restoreChatCopy(
     });
     if (!imported.created) return imported.chat;
     const chatId = imported.chat.id;
-    const branch = store.product.branch(chatId);
-    const history = store.history(branch.headRevision);
+    const history = store.history(imported.chat.headRevision);
     if (copy.state.checkpoints.length !== history.length)
       throw new HttpError(400, '채팅 상태와 메시지 수가 맞지 않아요.');
     const variables = validateChatVariableState(copy.state.variables);
@@ -121,16 +110,14 @@ export function restoreChatCopy(
           .run(source.revision, JSON.stringify(validateChatVariableState(checkpoint)));
     }
     store.db
-      .prepare(`INSERT INTO chat_variable_states(chat_id,branch_id,revision,values_json) VALUES(?,?,?,?)
-      ON CONFLICT(chat_id,branch_id) DO UPDATE SET revision=excluded.revision,values_json=excluded.values_json`)
-      .run(chatId, branch.id, variables.revision, JSON.stringify(variables.values));
-    if (copy.state.authoring)
-      restoreChatAuthoring(store, chatId, branch.id, history, copy.state.authoring);
+      .prepare(`INSERT INTO chat_variable_states(chat_id,revision,values_json) VALUES(?,?,?)
+      ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,values_json=excluded.values_json`)
+      .run(chatId, variables.revision, JSON.stringify(variables.values));
+    if (copy.state.authoring) restoreChatAuthoring(store, chatId, history, copy.state.authoring);
     if (copy.state.messages) restoreCopiedMessages(store, copy.state.messages, history);
     restoreBookmarks(
       store,
       chatId,
-      branch.id,
       history.map((source) => source.revision),
       copy.state.bookmarks
     );

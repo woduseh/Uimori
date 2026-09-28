@@ -12,10 +12,10 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     return { ...view, modelTitle: snapshot.model.title };
   };
   const publicArtifact = (artifact: ReturnType<typeof store.artifact>) => artifact;
-  app.get<{ Querystring: { kind?: string; chatId?: string; branchId?: string } }>(
+  app.get<{ Querystring: { kind?: string; chatId?: string } }>(
     '/api/helper/conversations',
     (request) => {
-      const { kind, chatId, branchId } = request.query;
+      const { kind, chatId } = request.query;
       if (kind !== 'library' && kind !== 'chat')
         throw new HttpError(400, 'Helper scope kind required');
       return store.list(
@@ -24,7 +24,6 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
           : {
               kind,
               chatId: text(chatId, 'chat ID', 100),
-              ...(branchId === undefined ? {} : { branchId: text(branchId, 'branch ID', 100) }),
             }
       );
     }
@@ -33,15 +32,12 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     const input = record(value);
     let scope: HelperScope;
     if (input.kind === 'chat') {
-      fields(input, ['kind', 'chatId', 'branchId']);
+      fields(input, ['kind', 'chatId']);
       const chatId = text(input.chatId, 'chat ID', 100);
+      runtime.store.chat(chatId);
       scope = {
         kind: 'chat',
         chatId,
-        branchId: runtime.store.product.branch(
-          chatId,
-          input.branchId === undefined ? undefined : text(input.branchId, 'branch ID', 100)
-        ).id,
       };
     } else {
       fields(input, ['kind', 'workId']);

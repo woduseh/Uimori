@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HttpError } from '../server/store.js';
-import { fields, number, record, text } from '../server/product-store.js';
+import { HttpError, fields, number, record, text } from '../server/request-validation.js';
 
 function rejectsRequest(action: () => unknown, message: string) {
   try {

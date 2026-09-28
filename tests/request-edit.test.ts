@@ -73,7 +73,6 @@ test('edited request copies history before the response using current settings a
   expect(store.source(edited.run.parentRevision!).text).toBe(ancestor.source.text);
   expect(edited.run.snapshot.settings.maxCalls).toBe(12);
   expect(edited.run.snapshot.history.map((entry) => entry.text)).toEqual(['Ancestor']);
-  expect(edited.run.snapshot.branchId).not.toBe(original.run.snapshot.branchId);
   expect(store.chat(chat.id).headRevision).toBe(later.source.id);
   expect(store.run(original.run.id)).toEqual(before);
   expect(store.history(later.source.id).map((entry) => entry.text)).toEqual([

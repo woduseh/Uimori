@@ -55,10 +55,9 @@ function fixture() {
     service = new ChatOptionsStore(store);
   return { store, chat, service };
 }
-function input(f: ReturnType<typeof fixture>, values: OptionValues, branchId?: string) {
-  const state = f.service.get(f.chat.id, branchId);
+function input(f: ReturnType<typeof fixture>, values: OptionValues) {
+  const state = f.service.get(f.chat.id);
   return {
-    branchId: state.branchId,
     expectedRevision: state.revision,
     binding: state.binding,
     values,
@@ -76,13 +75,11 @@ function stage(f: ReturnType<typeof fixture>, values: OptionValues) {
 }
 
 function command(f: ReturnType<typeof fixture>) {
-  const chat = f.store.chat(f.chat.id),
-    branch = f.store.product.branch(chat.id);
+  const chat = f.store.chat(f.chat.id);
   return {
     request: 'Synthetic continuation',
-    expectedRevision: branch.headRevision,
+    expectedRevision: chat.headRevision,
     expectedSettingsRevision: chat.settingsRevision,
-    branchId: branch.id,
     idempotencyKey: randomUUID(),
   };
 }
@@ -197,7 +194,7 @@ test('definition changes block pending choices and never silently apply old fixe
   f.service.cancel(
     f.chat.id,
     state.pending[0].id,
-    { expectedRevision: state.revision, branchId: state.branchId, operationId: randomUUID() },
+    { expectedRevision: state.revision, operationId: randomUUID() },
     requestId
   );
   expect(run(f).run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'calm', detail: '1' });
@@ -244,8 +241,7 @@ describe('Current oneoff values and compact receipts', () => {
       },
     }).chat;
     const sources = store.history(chat.headRevision).map((item) => store.source(item.revision));
-    const branch = store.product.branch(chat.id);
-    return { owner, store, chat, sources, branch };
+    return { owner, store, chat, sources };
   }
 
   function optionsFor(store: Store, chatId: string) {
@@ -264,7 +260,6 @@ describe('Current oneoff values and compact receipts', () => {
     const body = (values: Record<string, string>) => {
       const state = options.get(chatId);
       return {
-        branchId: state.branchId,
         expectedRevision: state.revision,
         binding: state.binding,
         values,
@@ -275,13 +270,13 @@ describe('Current oneoff values and compact receipts', () => {
   }
 
   test('oneoff settings survive source edits and consume once without reading manuscript history', () => {
-    const { store, chat, branch } = fixture();
+    const { store, chat } = fixture();
     const { options, body } = optionsFor(store, chat.id);
     const history = vi.spyOn(store, 'history');
     const requested = body({ tone: 'warm' });
     options.stage(chat.id, requested, 'user');
     expect(history).not.toHaveBeenCalled();
-    const source = store.source(branch.headRevision!);
+    const source = store.source(chat.headRevision!);
     store.editSource(source.id, {
       text: source.text + ' A correction.',
       expectedRevision: source.editRevision ?? 0,
@@ -289,18 +284,17 @@ describe('Current oneoff values and compact receipts', () => {
     expect(options.get(chat.id).conflicts).toEqual([]);
     const command = {
       request: 'Continue',
-      expectedRevision: branch.headRevision,
+      expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
-      branchId: branch.id,
       idempotencyKey: randomUUID(),
     };
     const run = store.createRun(chat.id, command, (c) => ({
       chatId: c.id,
-      parentRevision: branch.headRevision,
+      parentRevision: chat.headRevision,
       request: command.request,
       settingsRevision: c.settingsRevision,
       settings: c.settings,
-      history: store.history(branch.headRevision),
+      history: store.history(chat.headRevision),
       resources: [],
       profile: store.product.snapshot(c.id),
     }));
@@ -326,7 +320,7 @@ describe('Current oneoff values and compact receipts', () => {
     options.cancel(
       chat.id,
       state.pending[0]!.id,
-      { branchId: state.branchId, expectedRevision: state.revision, operationId: randomUUID() },
+      { expectedRevision: state.revision, operationId: randomUUID() },
       'user'
     );
     expect(store.db.prepare('SELECT count(*) AS n FROM chat_option_pending').get()?.n).toBe(0);

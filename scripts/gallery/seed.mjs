@@ -28,18 +28,6 @@ const requests = [
   '저녁, 첫눈이 내리고 마지막 필름을 써요.',
 ];
 
-const packageOf = (id, title, body) => ({
-  version: 2,
-  id,
-  revision: 1,
-  title,
-  description: '합성 갤러리 자료',
-  body,
-  lore: [],
-  controls: [],
-  transforms: [],
-});
-
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function seedGallery(baseUrl, { log = () => {} } = {}) {
@@ -54,7 +42,7 @@ export async function seedGallery(baseUrl, { log = () => {} } = {}) {
     return text ? JSON.parse(text) : null;
   };
   const warnings = [];
-  const content = (kind, title, description, text, pkg) =>
+  const content = (kind, title, description, text) =>
     call('POST', '/api/content', {
       kind,
       title,
@@ -62,22 +50,19 @@ export async function seedGallery(baseUrl, { log = () => {} } = {}) {
       text,
       loading: 'pinned',
       relatedIds: [],
-      ...(pkg ? { package: pkg } : {}),
     });
 
   const bot = await content(
     'bot',
     '등대지기 미라',
     '북쪽 바닷가 등대를 지키는 화자',
-    '북쪽 바닷가의 등대지기.',
-    packageOf('gallery-mira', '등대지기 미라', '북쪽 바닷가의 등대지기.')
+    '북쪽 바닷가의 등대지기.'
   );
   const longBot = await content(
     'bot',
     '골목 서점의 주인 하윤과 비 오는 날에만 문을 여는 서점의 아주 긴 이름',
     '긴 한글 이름이 목록·사이드바·상세에서 어떻게 접히는지 보기 위한 봇',
-    '골목 서점의 주인.',
-    packageOf('gallery-hayun', '골목 서점의 주인 하윤', '골목 서점의 주인.')
+    '골목 서점의 주인.'
   );
   const persona = await content(
     'persona',
@@ -95,9 +80,8 @@ export async function seedGallery(baseUrl, { log = () => {} } = {}) {
   const quietChat = async (botId, title) => {
     const chat = await call('POST', '/api/chats', { botId, title });
     await call('PATCH', `/api/chats/${chat.id}/settings`, {
-      ...chat.settings,
       status: false,
-      translation: false,
+      maxCalls: chat.settings.maxCalls,
       expectedSettingsRevision: chat.settingsRevision,
     });
     return chat;

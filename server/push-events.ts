@@ -3,7 +3,6 @@ import { pushAllowed, type PushEnvelope, type PushPreferences } from '../core/pu
 
 type Target = {
   status: string;
-  branch_id: string | null;
   source_id: string | null;
   generation: number;
   eligible: number;
@@ -35,7 +34,7 @@ export function enqueueTerminalNotification(
     prefix = 'run';
     kind = status === 'completed' ? 'main-completed' : 'task-failed';
     target = db
-      .prepare(`SELECT r.status,COALESCE(r.branch_id,(SELECT id FROM branches WHERE chat_id=r.chat_id)) AS branch_id,
+      .prepare(`SELECT r.status,
       COALESCE(r.source_revision,r.parent_revision) AS source_id,0 AS generation,
       EXISTS(SELECT 1 FROM attempts a WHERE a.run_id=r.id AND a.is_synthetic=0) AS eligible
       FROM runs r WHERE r.id=? AND r.chat_id=?`)
@@ -44,7 +43,7 @@ export function enqueueTerminalNotification(
     prefix = 'translation';
     kind = status === 'completed' ? 'translation-completed' : 'task-failed';
     target = db
-      .prepare(`SELECT j.status,r.branch_id,j.source_revision AS source_id,j.generation,
+      .prepare(`SELECT j.status,j.source_revision AS source_id,j.generation,
       (EXISTS(SELECT 1 FROM attempts a WHERE a.job_id=j.id AND a.is_synthetic=0)
       AND EXISTS(SELECT 1 FROM job_results jr WHERE jr.job_id=j.id AND COALESCE(json_extract(jr.result,'$.manual'),0)=0)) AS eligible
       FROM jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
@@ -55,7 +54,7 @@ export function enqueueTerminalNotification(
     prefix = 'illustration';
     kind = status === 'completed' ? 'illustration-completed' : 'task-failed';
     target = db
-      .prepare(`SELECT j.status,r.branch_id,j.source_revision AS source_id,j.generation,
+      .prepare(`SELECT j.status,j.source_revision AS source_id,j.generation,
       EXISTS(SELECT 1 FROM illustration_images i WHERE i.job_id=j.id) AS eligible
       FROM illustration_jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
       WHERE j.id=? AND j.chat_id=?
@@ -69,8 +68,8 @@ export function enqueueTerminalNotification(
       : `${prefix}:${entityId}:${target.generation}:${status}`;
   const expiresAt = new Date(Date.parse(at) + 2 * 3600_000).toISOString();
   const insert =
-    db.prepare(`INSERT INTO push_outbox(subscription_id,event_key,chat_id,branch_id,source_id,kind,representation,next_at,expires_at,created_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(subscription_id,event_key) DO NOTHING`);
+    db.prepare(`INSERT INTO push_outbox(subscription_id,event_key,chat_id,source_id,kind,representation,next_at,expires_at,created_at)
+    VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(subscription_id,event_key) DO NOTHING`);
   for (const subscription of subscriptions) {
     if (
       pushAllowed(kind, eventKey, JSON.parse(String(subscription.preferences)) as PushPreferences)
@@ -79,7 +78,6 @@ export function enqueueTerminalNotification(
         subscription.id,
         eventKey,
         chatId,
-        target.branch_id,
         target.source_id,
         kind,
         representation,

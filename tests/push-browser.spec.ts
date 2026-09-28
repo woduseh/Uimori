@@ -187,7 +187,6 @@ test('PWUI07 a worker notification focuses a semantic scene without reloading; a
     },
     {
       chatId: next.chat.id,
-      branchId: `main:${next.chat.id}`,
       sourceId: next.detail.sources[1].id,
       representation: 'translation',
     }
@@ -228,7 +227,6 @@ test('PWUI07 a worker notification focuses a semantic scene without reloading; a
     },
     {
       chatId: first.chat.id,
-      branchId: `main:${first.chat.id}`,
       sourceId: first.detail.sources[0].id,
       representation: 'original',
     }

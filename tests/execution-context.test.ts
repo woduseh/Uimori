@@ -7,7 +7,6 @@ function snapshot(): RunSnapshot {
   const pkg = nativeContent({ name: 'Ari', description: 'Card description' });
   return {
     chatId: 'chat',
-    branchId: 'branch',
     parentRevision: null,
     settingsRevision: 1,
     settings: { status: false, maxCalls: 4 },

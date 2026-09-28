@@ -39,10 +39,8 @@ test('shared composer grows at narrow widths and resets after clearing', async (
   const created = await postFixtureChat(request, { data: { title: '입력창 크기 합성 검사' } });
   expect(created.ok()).toBe(true);
   const chat = await created.json();
-  const observerErrors: string[] = [];
-  page.on('pageerror', (error) => {
-    if (/ResizeObserver/u.test(error.message)) observerErrors.push(error.message);
-  });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await page.goto(`/?chat=${chat.id}`);
   const input = page.getByRole('textbox', { name: '다음 장면 요청' });
@@ -69,7 +67,30 @@ test('shared composer grows at narrow widths and resets after clearing', async (
   await expect
     .poll(async () => input.evaluate((node) => node.getBoundingClientRect().height))
     .toBeLessThanOrEqual(48);
-  expect(observerErrors).toEqual([]);
+  await input.fill('아직 보내지 않은 합성 요청');
+  await expect(input).toBeInViewport();
+  const model = page.getByRole('button', { name: /^현재 본문 모델/ });
+  const submit = page.getByRole('button', { name: '원문 생성', exact: true });
+  for (const button of [model, submit]) {
+    await expect(button).toBeInViewport();
+    expect(
+      await button.evaluate((node) => {
+        const box = node.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return hit === node || node.contains(hit);
+      })
+    ).toBe(true);
+  }
+  const persona = page.getByRole('button', { name: '빠른 페르소나', exact: true });
+  await expect(persona).toHaveCount(0);
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+  await expect(page.getByRole('button', { name: '창작 옵션', exact: true })).toBeVisible();
+  await expect(persona).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(input).toHaveValue('아직 보내지 않은 합성 요청');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect((await (await request.get(`/api/chats/${chat.id}`)).json()).runs).toHaveLength(0);
+  expect(errors).toEqual([]);
 });
 
 test('shared composer shrinks nonempty drafts in main and helper without width oscillation', async ({

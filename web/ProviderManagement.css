@@ -105,7 +105,6 @@
   color: var(--muted);
 }
 .provider-draft-note,
-.provider-impact,
 .provider-next-step {
   border: 1px solid var(--line);
   border-radius: 9px;
@@ -116,7 +115,6 @@
   min-width: 0;
 }
 .provider-draft-note p,
-.provider-impact p,
 .provider-next-step p {
   margin: 0;
 }

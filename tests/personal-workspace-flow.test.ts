@@ -17,6 +17,7 @@ import { imageJobInput } from '../server/package-images.js';
 import { imageJudgmentRequest } from '../server/image-judgment.js';
 import { processImage } from '../server/image-processing.js';
 import { readImage, storeImage } from '../server/image-storage.js';
+import { JevCredentialStore } from '../server/jev-credentials.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 import { forkChat } from '../server/chat-fork.js';
@@ -236,6 +237,7 @@ test('independent copies and portable restores retain inline images, notes and c
   );
   source.db.prepare('DELETE FROM assets WHERE id=?').run(asset.id);
   const file = exportChatBackup(source, copy.id);
+  expect(file).not.toHaveProperty('records');
   const target = database();
   const restored = await importChatBackup(target, { backup: file, idempotencyKey: randomUUID() });
   expect(target.source(restored.chat.headRevision!).text).toContain(image.hash);
@@ -266,7 +268,6 @@ test('independent copies and portable restores retain inline images, notes and c
   ).run;
   expect(next.parentRevision).toBe(restored.chat.headRevision);
   expect(next.snapshot.history[0]!.text).toContain('A scene');
-  expect(target.product.branch(restored.chat.id).chatId).toBe(restored.chat.id);
 });
 
 test('full SQLite snapshot includes database keys and WebP bytes', async () => {
@@ -277,7 +278,10 @@ test('full SQLite snapshot includes database keys and WebP bytes', async () => {
     endpoint: 'http://192.168.1.50:8080/v1',
     apiKey: 'private-key-for-test',
   });
-  store.credentials.set('jev', 'private-jev-test-key');
+  const jev = new JevCredentialStore(store.db);
+  jev.update(0, 'private-jev-test-key');
+  expect(jev.resolve()).toBe('private-jev-test-key');
+  expect(JSON.stringify(jev.status())).not.toContain('private-jev-test-key');
   const image = await processImage(
     await sharp({ create: { width: 8, height: 8, channels: 3, background: '#669999' } })
       .png()
@@ -291,6 +295,7 @@ test('full SQLite snapshot includes database keys and WebP bytes', async () => {
   owner.store = restored;
   expect(restored.credentials.get(connection.credentialRef)).toBe('private-key-for-test');
   expect(restored.credentials.get('jev')).toBe('private-jev-test-key');
+  expect(new JevCredentialStore(restored.db).resolve()).toBe('private-jev-test-key');
   expect(readImage(restored.db, image.hash).bytes.equals(image.bytes)).toBe(true);
 });
 
