@@ -50,6 +50,20 @@ const object = (v: unknown): v is Record<string, unknown> =>
 const boundedString = (v: unknown, max = 300): v is string =>
   typeof v === 'string' && !!v.trim() && v.length <= max;
 const integer = (v: unknown): v is number => Number.isSafeInteger(v) && Number(v) >= 0;
+const tokenUsageBreakdown = (value: unknown): Record<string, number> | undefined => {
+  if (!object(value)) return undefined;
+  const result: Record<string, number> = {};
+  for (const name of [
+    'totalTokens',
+    'inputTokens',
+    'cachedInputTokens',
+    'cacheWriteInputTokens',
+    'outputTokens',
+    'reasoningOutputTokens',
+  ])
+    if (integer(value[name])) result[name] = value[name];
+  return Object.keys(result).length ? result : undefined;
+};
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 /** Bound allocation before decoding; Buffer.from alone silently accepts malformed base64. */
 function decodeIllustrationBase64(value: unknown): Buffer | undefined {
@@ -138,6 +152,7 @@ type TurnPlan = {
   role: ProviderRole;
   modelId: string;
   effort?: string;
+  baseInstructions?: string;
   developerInstructions: string;
   input: Json[];
   outputSchema: Json;
@@ -663,11 +678,14 @@ export class CodexRuntime implements CodexRuntimeService {
         role: request.role,
         modelId: request.modelId,
         effort: request.generation?.reasoningEffort,
+        baseInstructions: built.baseInstructions,
         developerInstructions: built.developerInstructions,
         input: [{ type: 'text', text: built.inputText, text_elements: [] }],
         outputSchema: built.outputSchema,
         descriptor,
-        stablePrefix: built.developerInstructions,
+        stablePrefix: built.baseInstructions
+          ? JSON.stringify([built.baseInstructions, built.developerInstructions])
+          : built.developerInstructions,
         config: CODEX_RUNTIME_CONFIG,
         allowedItems: TEXT_ITEMS,
       };
@@ -954,6 +972,7 @@ export class CodexRuntime implements CodexRuntimeService {
           sandbox: 'read-only',
           environments: [],
           selectedCapabilityRoots: [],
+          ...(plan.baseInstructions ? { baseInstructions: plan.baseInstructions } : {}),
           developerInstructions: plan.developerInstructions,
           config: plan.config,
         },
@@ -1007,11 +1026,21 @@ export class CodexRuntime implements CodexRuntimeService {
           object(params.tokenUsage) &&
           object(params.tokenUsage.total)
         ) {
-          const value = params.tokenUsage.total;
+          const total = tokenUsageBreakdown(params.tokenUsage.total);
+          const last = tokenUsageBreakdown(params.tokenUsage.last);
+          const recorded = {
+            ...(total ? { total } : {}),
+            ...(last ? { last } : {}),
+          };
           usage = {
             ...emptyUsage(),
-            inputTokens: integer(value.inputTokens) ? value.inputTokens : null,
-            outputTokens: integer(value.outputTokens) ? value.outputTokens : null,
+            inputTokens: total?.inputTokens ?? null,
+            outputTokens: total?.outputTokens ?? null,
+            raw: {
+              kind: 'codex-agent-turn',
+              modelCalls: null,
+              ...(Object.keys(recorded).length ? { tokenUsage: recorded } : {}),
+            },
           };
         }
         if ((method === 'item/started' || method === 'item/completed') && object(params.item)) {

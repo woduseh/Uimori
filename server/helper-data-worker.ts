@@ -28,6 +28,7 @@ type Document = Omit<DataRef, 'field' | 'hash'> & {
   metadata?: Record<string, unknown>;
 };
 const MAX_RESULT_CHARS = 16_000;
+const MAX_SEARCH_CHARS = 8_000;
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const fold = (value: string) => value.normalize('NFKC').toLocaleLowerCase('en');
 const object = (value: unknown): Record<string, any> => {
@@ -56,9 +57,9 @@ const strings = (value: unknown, max: number): string[] => {
   return value.map((item) => string(item));
 };
 const pointer = (key: string) => key.replaceAll('~', '~0').replaceAll('/', '~1');
-function* fields(value: unknown, path = ''): Generator<[string, string]> {
+function* fields(value: unknown, path = ''): Generator<[string, string, boolean]> {
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    yield [path, String(value)];
+    yield [path, String(value), typeof value === 'string'];
   } else if (value && typeof value === 'object') {
     for (const [key, child] of Object.entries(value))
       yield* fields(child, `${path}/${pointer(key)}`);
@@ -415,6 +416,21 @@ function reference(doc: Document, field: string, text: string): DataRef {
   const { title: _title, origin: _origin, fields: _fields, metadata: _metadata, ...ref } = doc;
   return { ...ref, field, hash: sha(text) };
 }
+function editTarget(doc: Document, field: string, stringValue: boolean) {
+  if (
+    doc.scope !== 'library' ||
+    !['bot', 'persona', 'module'].includes(doc.kind) ||
+    !stringValue ||
+    !/^\/(?:card|module)\//u.test(field)
+  )
+    return undefined;
+  return {
+    kind: 'content',
+    id: doc.id,
+    expectedRevision: doc.revision,
+    path: `/package/nativeRisu${field}`,
+  };
+}
 // Adjust only surrogate boundaries, never normalize source text or invent offsets.
 function boundary(text: string, offset: number) {
   return offset > 0 &&
@@ -430,13 +446,16 @@ function excerpt(
   text: string,
   start: number,
   end: number,
-  ref = reference(doc, field, text)
+  ref = reference(doc, field, text),
+  stringValue = false
 ) {
   start = boundary(text, start);
   end = boundary(text, end);
   if (end <= start && start < text.length) end = Math.min(text.length, start + 2);
+  const target = editTarget(doc, field, stringValue);
   return {
     ref,
+    ...(target ? { editTarget: target } : {}),
     ...(doc.metadata ? { metadata: doc.metadata } : {}),
     title: doc.title,
     origin: doc.origin,
@@ -448,9 +467,27 @@ function excerpt(
     nextOffset: end < text.length ? end : null,
   };
 }
+const fieldPriority = (path: string) =>
+  /^\/(?:card|module)\/(?:description|personality|scenario)(?:\/|$)/u.test(path)
+    ? 0
+    : /^\/(?:card\/character_book\/entries|module\/lorebook)(?:\/|$)/u.test(path)
+      ? 1
+      : /^\/(?:card|module)\/(?:extensions|assets)(?:\/|$)/u.test(path)
+        ? 3
+        : 2;
+const selectedPath = (field: string, paths: string[]) =>
+  !paths.length || paths.some((path) => field === path || field.startsWith(`${path}/`));
 /** Each page contains distinct matching windows, including later hits in the same long field. */
-function* matchingExcerpts(doc: Document, expressions: RegExp[], mode: string, context: number) {
+function* matchingExcerpts(
+  doc: Document,
+  expressions: RegExp[],
+  mode: string,
+  context: number,
+  paths: string[]
+) {
   if (!expressions.length) {
+    if (paths.length && ![...fields(doc.fields)].some(([field]) => selectedPath(field, paths)))
+      return;
     yield {
       ref: reference(doc, '', JSON.stringify(doc.fields)),
       title: doc.title,
@@ -460,7 +497,10 @@ function* matchingExcerpts(doc: Document, expressions: RegExp[], mode: string, c
     };
     return;
   }
-  for (const [field, text] of fields(doc.fields)) {
+  const searchable = [...fields(doc.fields)]
+    .filter(([field]) => selectedPath(field, paths))
+    .sort(([left], [right]) => fieldPriority(left) - fieldPriority(right));
+  for (const [field, text, stringValue] of searchable) {
     if (
       mode === 'all' &&
       expressions.some((expression) => {
@@ -489,7 +529,7 @@ function* matchingExcerpts(doc: Document, expressions: RegExp[], mode: string, c
       );
       ref ??= reference(doc, field, text);
       yield {
-        ...excerpt(doc, field, text, start, end, ref),
+        ...excerpt(doc, field, text, start, end, ref, stringValue),
         matchRange: { start: hit.index, end: hit.index + hit[0].length },
       };
       // Advancing by code point also terminates zero-width Unicode expressions at a surrogate pair.
@@ -502,8 +542,10 @@ function* matchingExcerpts(doc: Document, expressions: RegExp[], mode: string, c
 function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<string, unknown>) {
   only(args, [
     'scope',
+    'output',
     'query',
     'patterns',
+    'paths',
     'match',
     'regex',
     'kinds',
@@ -522,8 +564,21 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
     throw new Error('DATA_SCOPE_INVALID');
   if (scope !== 'chats' && (args.chatId !== undefined || args.branchId !== undefined))
     throw new Error('DATA_USE_CHATS_SCOPE');
+  const output = string(args.output, 'matches');
+  if (!['matches', 'documents'].includes(output)) throw new Error('DATA_OUTPUT_INVALID');
   const patterns = strings(args.patterns, 8);
   if (patterns.some((p) => !p.trim())) throw new Error('DATA_EMPTY_PATTERN');
+  const paths = strings(args.paths, 16);
+  if (
+    paths.some(
+      (path) =>
+        !path.startsWith('/') ||
+        path.endsWith('/') ||
+        path.includes('//') ||
+        /~(?![01])/u.test(path)
+    )
+  )
+    throw new Error('DATA_PATH_INVALID');
   if (args.regex !== undefined && typeof args.regex !== 'boolean')
     throw new Error('DATA_REGEX_INVALID');
   const mode = string(args.match, 'any');
@@ -533,37 +588,16 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
   );
   const kinds = strings(args.kinds, 8);
   const offset = number(args.offset, 0, 1_000_000),
-    limit = number(args.limit, 10, 50, 1),
+    limit = number(args.limit, 5, 50, 1),
     context = number(args.context, 160, 1200);
   const query = fold(string(args.query));
   const items: unknown[] = [];
   let matches = 0,
     inspected = 0,
-    resultChars = 0,
     more = false;
-  outer: for (const doc of documents(db, snapshot, scope, args)) {
-    if (kinds.length && !kinds.includes(doc.kind)) continue;
-    if (query && !fold(`${doc.title} ${doc.id} ${doc.kind}`).includes(query)) continue;
-    inspected++;
-    for (const item of matchingExcerpts(doc, expressions, mode, context)) {
-      if (matches++ < offset) continue;
-      if (items.length >= limit) {
-        more = true;
-        break outer;
-      }
-      const size = JSON.stringify(item).length;
-      if (resultChars + size > MAX_RESULT_CHARS) {
-        if (!items.length) throw new Error('DATA_RESULT_TOO_LARGE: narrow the query');
-        more = true;
-        break outer;
-      }
-      items.push(item);
-      resultChars += size;
-    }
-  }
-
-  return {
+  const response = (page: unknown[], hasMore: boolean) => ({
     scope,
+    output,
     ...(scope === 'current'
       ? {
           chatId: snapshot.writing?.chatId,
@@ -571,13 +605,50 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
           headRevision: snapshot.writing?.parentRevision,
         }
       : {}),
-    items,
+    items: page,
     inspectedDocuments: inspected,
-    complete: !more,
-    nextOffset: more ? offset + items.length : null,
+    complete: !hasMore,
+    nextOffset: hasMore ? offset + page.length : null,
     semantics:
-      'Matches are paged non-overlapping windows; all-mode requires every pattern in the same field, not necessarily the same excerpt. Match/excerpt offsets refer to exact original text. Matches are not proof of unread content. current uses this task reservation; library/chats are live originals; editor is unsaved. No-match is not proof that a fact is absent. Use another pattern or read the relevant fields.',
-  };
+      output === 'documents'
+        ? 'One result per matching document, without source text. Query filters title/ID/kind; patterns search selected fields. Follow nextOffset, then search a selected ID with a narrow pattern for exact evidence.'
+        : 'Matches are paged non-overlapping windows; all-mode requires every pattern in the same field, not necessarily the same excerpt. Match/excerpt offsets refer to exact original text. Matches are not proof of unread content. current uses this task reservation; library/chats are live originals; editor is captured input. No-match is not proof that a fact is absent. Use another pattern or read the relevant fields.',
+  });
+  outer: for (const doc of documents(db, snapshot, scope, args)) {
+    if (kinds.length && !kinds.includes(doc.kind)) continue;
+    if (query && !fold(`${doc.title} ${doc.id} ${doc.kind}`).includes(query)) continue;
+    inspected++;
+    const excerpts = matchingExcerpts(doc, expressions, mode, context, paths);
+    const entries =
+      output === 'documents'
+        ? excerpts.next().done
+          ? []
+          : [
+              {
+                kind: doc.kind,
+                id: doc.id,
+                revision: doc.revision,
+                title: doc.title,
+                origin: doc.origin,
+                ...(doc.metadata ? { metadata: doc.metadata } : {}),
+              },
+            ]
+        : excerpts;
+    for (const item of entries) {
+      if (matches++ < offset) continue;
+      if (items.length >= limit) {
+        more = true;
+        break outer;
+      }
+      if (JSON.stringify(response([...items, item], true)).length > MAX_SEARCH_CHARS) {
+        if (!items.length) throw new Error('DATA_RESULT_TOO_LARGE: narrow the query');
+        more = true;
+        break outer;
+      }
+      items.push(item);
+    }
+  }
+  return response(items, more);
 }
 function read(
   db: DatabaseSync,
@@ -615,8 +686,8 @@ function read(
   );
   if (!doc) throw new Error('DATA_RESOURCE_UNAVAILABLE');
   const all = [...fields(doc.fields)];
-  const text =
-    ref.field === '' ? JSON.stringify(doc.fields) : all.find(([path]) => path === ref.field)?.[1];
+  const selected = all.find(([path]) => path === ref.field);
+  const text = ref.field === '' ? JSON.stringify(doc.fields) : selected?.[1];
   if (text === undefined) throw new Error('DATA_FIELD_UNAVAILABLE');
   if (doc.revision !== ref.revision || sha(text) !== ref.hash)
     throw new Error('DATA_SOURCE_CHANGED: search again for the current reference');
@@ -650,7 +721,15 @@ function read(
   }
   if (offset > text.length) throw new Error('DATA_RANGE_INVALID');
   const limit = number(args.limit, 4000, 10_000, 1);
-  return excerpt(doc, ref.field, text, offset, Math.min(text.length, offset + limit));
+  return excerpt(
+    doc,
+    ref.field,
+    text,
+    offset,
+    Math.min(text.length, offset + limit),
+    ref,
+    selected?.[2]
+  );
 }
 function runDataOperation(input: DataOperation): unknown {
   const db = new DatabaseSync(input.path, { readOnly: true, allowExtension: false });

@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { runDataProcess } from '../server/helper-data-tools.js';
+import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import type { DataOperation, DataRef } from '../server/helper-data-worker.js';
 import { fixtureBotInput, createFixtureChat } from './fixtures/chat.js';
 import type { HelperTaskSnapshot } from '../core/helper.js';
@@ -82,7 +83,10 @@ async function readOne(
 
 test('grep returns authored excerpts once, supports two-character Korean queries, and reads exact ranges', async () => {
   const f = fixture(),
-    b = bot(f);
+    b = bot(
+      f,
+      'Name: 하린\n나이: 27세\n직업: 기록관\n' + '먼 배경. '.repeat(900) + 'unread-marker'
+    );
   const result = await f.invoke('data.search', {
     scope: 'library',
     query: '하린',
@@ -94,7 +98,13 @@ test('grep returns authored excerpts once, supports two-character Korean queries
   expect(hit.text).toContain('나이: 27세');
   expect(hit.origin).toBe('live-library-original');
   expect(hit.ref).toMatchObject({ id: b.id, kind: 'bot', field: '/card/description', revision: 1 });
-  expect(JSON.stringify(result)).not.toContain('nativeRisu');
+  expect(hit.editTarget).toEqual({
+    kind: 'content',
+    id: b.id,
+    expectedRevision: b.revision,
+    path: '/package/nativeRisu/card/description',
+  });
+  expect(JSON.stringify(result)).not.toContain('unread-marker');
   const read = await readOne(f, hit.ref, {
     offset: hit.matchRange.start,
     limit: 6,
@@ -102,6 +112,109 @@ test('grep returns authored excerpts once, supports two-character Korean queries
   expect(read.text).toBe('나이: 27');
   expect(read.ref.hash).toBe(hash(b.package.nativeRisu.card.description as string));
   expect(read.range.start).toBe(hit.matchRange.start);
+  expect(read.editTarget).toEqual(hit.editTarget);
+});
+
+test('document discovery and narrow matches edit one age without sending repeated HTML', async () => {
+  const f = fixture();
+  const input = fixtureBotInput('Fujimiya Hinano', 'Hinano is Age: 14.');
+  const { extensions: _old, ...card } = input.package.nativeRisu.card;
+  const background = '<section>Hinano recurring background.</section>'.repeat(500);
+  input.package.nativeRisu.card = {
+    extensions: { risuai: { backgroundHTML: background } },
+    ...card,
+    ageNumber: 14,
+  };
+  const saved = f.store.product.content(input) as Content;
+  expect(background.length).toBeGreaterThan(20_000);
+  const missedTitle = await f.invoke('data.search', {
+    scope: 'library',
+    output: 'documents',
+    query: '히나노',
+    patterns: ['Hinano', '히나노'],
+  });
+  expect(missedTitle.items).toEqual([]);
+  const documents = await f.invoke('data.search', {
+    scope: 'library',
+    output: 'documents',
+    patterns: ['Hinano', '히나노'],
+  });
+  expect(documents.items).toMatchObject([{ id: saved.id, kind: 'bot', revision: saved.revision }]);
+  expect(JSON.stringify(documents)).not.toContain('backgroundHTML');
+  expect(JSON.stringify(documents).length).toBeLessThan(8_000);
+
+  const broad = await f.invoke('data.search', {
+    scope: 'library',
+    ids: [saved.id],
+    patterns: ['Hinano'],
+    limit: 20,
+    context: 150,
+  });
+  expect(broad.items[0].ref.field).toBe('/card/description');
+  expect(JSON.stringify(broad).length).toBeLessThanOrEqual(8_000);
+  expect(broad.complete).toBe(false);
+  expect(broad.nextOffset).toBeGreaterThan(0);
+  const narrow = await f.invoke('data.search', {
+    scope: 'library',
+    ids: [saved.id],
+    patterns: ['Hinano'],
+    paths: ['/card/description'],
+  });
+  expect(narrow.items.map((item: any) => item.ref.field)).toEqual(['/card/description']);
+  expect(narrow.complete).toBe(true);
+  const numberHit = await f.invoke('data.search', {
+    scope: 'library',
+    ids: [saved.id],
+    patterns: ['14'],
+    paths: ['/card/ageNumber'],
+  });
+  expect(numberHit.items[0].ref.field).toBe('/card/ageNumber');
+  expect(numberHit.items[0].editTarget).toBeUndefined();
+  const htmlOnly = await f.invoke('data.search', {
+    scope: 'library',
+    ids: [saved.id],
+    patterns: ['Hinano'],
+    paths: ['/card/extensions'],
+    limit: 1,
+  });
+  expect(htmlOnly.items[0].ref.field).toContain('/card/extensions/');
+  expect(htmlOnly.complete).toBe(false);
+  await expect(f.invoke('data.search', { paths: ['card/description'] })).rejects.toThrow(
+    'DATA_PATH_INVALID'
+  );
+  await expect(f.invoke('data.search', { paths: ['/'] })).rejects.toThrow('DATA_PATH_INVALID');
+
+  const age = await f.invoke('data.search', {
+    scope: 'library',
+    ids: [saved.id],
+    patterns: ['Age:'],
+  });
+  expect(age.items).toHaveLength(1);
+  expect(age.items[0].text).toContain('Age: 14');
+  expect(age.items[0].editTarget).toEqual({
+    kind: 'content',
+    id: saved.id,
+    expectedRevision: saved.revision,
+    path: '/package/nativeRisu/card/description',
+  });
+  const receipt = invokeResourceTool(f.store, 'resource.patch', {
+    kind: age.items[0].editTarget.kind,
+    id: age.items[0].editTarget.id,
+    expectedRevision: age.items[0].editTarget.expectedRevision,
+    changes: [
+      {
+        path: age.items[0].editTarget.path,
+        op: 'replaceText',
+        oldText: 'Age: 14',
+        newText: 'Age: 15',
+      },
+    ],
+  }) as { revision: number; changedPaths: string[] };
+  expect(receipt.revision).toBe(saved.revision + 1);
+  expect(receipt.changedPaths).toEqual(['/package/nativeRisu/card/description']);
+  const after = f.store.product.get<Content>('content', saved.id);
+  expect(after.package.nativeRisu.card.description).toBe('Hinano is Age: 15.');
+  expect((after.package.nativeRisu.card.extensions as any).risuai.backgroundHTML).toBe(background);
 });
 
 test('matches later occurrences in one long field, with deterministic search pagination and exact original offsets', async () => {
@@ -260,6 +373,7 @@ test('live references detect a later revision while unsaved editor input is sepa
   expect(unsaved.scope).toBe('editor');
   expect(unsaved.items[0].text).toContain('29세');
   expect(unsaved.items[0].origin).toBe('unsaved-device-editor');
+  expect(unsaved.items[0].editTarget).toBeUndefined();
   expect(
     (await f.invoke('data.search', { scope: 'library', patterns: ['나이'] })).items[0].text
   ).toContain('27세');

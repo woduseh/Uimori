@@ -411,6 +411,107 @@ test('native gateway patches one field of a 1.36M-character bot without sending 
   reportMetrics('authorized-large-bot-small-field-patch', f, task, bodies);
 });
 
+test('document discovery and an exact age excerpt patch a large bot without reading repeated background HTML', async () => {
+  const f = fixture();
+  const description = 'Name: Hinano\nAge: 14\n' + 'Unrelated background details. '.repeat(2_000);
+  const html = '<span>Hinano BACKGROUND_HTML_SENTINEL 14</span>'.repeat(1_000);
+  const input = fixtureBotInput('Fujimiya Hinano', description);
+  const { extensions, ...card } = input.package.nativeRisu.card;
+  input.package.nativeRisu.card = {
+    extensions: { ...(extensions as Record<string, unknown>), risuai: { backgroundHTML: html } },
+    ...card,
+  };
+  const original = f.store.product.content(input) as Content;
+  const bodies = provider((wire, round) => {
+    if (round === 0)
+      return answer(
+        '',
+        [
+          {
+            id: 'locate',
+            name: 'data.search',
+            args: {
+              scope: 'library',
+              output: 'documents',
+              patterns: ['Hinano', '히나노'],
+              limit: 20,
+            },
+          },
+          { id: 'schema', name: 'app.tools', args: { names: ['resource.patch'] } },
+        ],
+        wire
+      );
+    const found = toolResult(wire, 'locate');
+    expect(found.items).toHaveLength(1);
+    expect(found.items[0]).toMatchObject({ id: original.id, title: 'Fujimiya Hinano' });
+    expect(JSON.stringify(found)).not.toContain('BACKGROUND_HTML_SENTINEL');
+    if (round === 1)
+      return answer(
+        '',
+        [
+          {
+            id: 'age',
+            name: 'data.search',
+            args: {
+              scope: 'library',
+              ids: [found.items[0].id],
+              patterns: ['Age:'],
+              context: 40,
+            },
+          },
+        ],
+        wire
+      );
+    const hits = toolResult(wire, 'age');
+    expect(hits.items).toHaveLength(1);
+    const hit = hits.items[0];
+    expect(hit.text).toContain('Age: 14');
+    expect(hit.editTarget).toEqual({
+      kind: 'content',
+      id: original.id,
+      expectedRevision: original.revision,
+      path: '/package/nativeRisu/card/description',
+    });
+    if (round === 2) {
+      const { path, ...target } = hit.editTarget;
+      return answer(
+        '',
+        [
+          {
+            id: 'edit',
+            name: 'app.call',
+            args: {
+              name: 'resource.patch',
+              arguments: {
+                ...target,
+                changes: [{ path, op: 'replaceText', oldText: 'Age: 14', newText: 'Age: 15' }],
+              },
+            },
+          },
+        ],
+        wire
+      );
+    }
+    expect(toolResult(wire, 'edit')).toMatchObject({ id: original.id, revision: 2 });
+    return answer('Changed only Age: 14 to Age: 15.');
+  });
+  const task = await f.run('Find Hinano and change only Age: 14 to Age: 15.');
+  expect(task.status, task.error ?? '').toBe('completed');
+  expect(bodies).toHaveLength(4);
+  expect(bodies.every((body) => body.model === 'synthetic-helper')).toBe(true);
+  for (const body of bodies) expect(JSON.stringify(body)).not.toContain('BACKGROUND_HTML_SENTINEL');
+  const saved = f.store.product.get<Content>('content', original.id);
+  expect(saved.revision).toBe(original.revision + 1);
+  expect(saved.package.nativeRisu.card).toEqual({
+    ...original.package.nativeRisu.card,
+    description: description.replace('Age: 14', 'Age: 15'),
+  });
+  expect(
+    f.store.db.prepare('SELECT COUNT(*) n FROM helper_operations WHERE task_id=?').get(task.id)?.n
+  ).toBe(1);
+  reportMetrics('grep-discovery-age-literal-patch', f, task, bodies);
+});
+
 test('gateway read compaction retains an exact completed mutation and resumes with a fresh native continuation', async () => {
   const f = fixture(8192);
   const b = f.store.product.content(fixtureBotInput('Before', 'Age: 27.')) as Content;

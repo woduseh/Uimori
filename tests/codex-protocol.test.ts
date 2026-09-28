@@ -1,5 +1,10 @@
 import { expect, test, vi } from 'vitest';
-import { buildCodexTurn, CODEX_ENDPOINT, decodeCodexOutput } from '../core/codex-protocol.js';
+import {
+  buildCodexDescriptor,
+  buildCodexTurn,
+  CODEX_ENDPOINT,
+  decodeCodexOutput,
+} from '../core/codex-protocol.js';
 import { executeProvider, validateConnection, type ProviderRequest } from '../core/transport.js';
 
 const connection = {
@@ -95,6 +100,19 @@ test('preserves ordered logical roles and explicit empty instructions while reje
   r.prompt.messages[2].completion = 'complete';
   r.prompt.cachePlan = [{ blockId: 'b0', afterMessageId: 'm0', policy: 'require' }];
   expect(() => buildCodexTurn(r)).toThrow('CODEX_PROMPT_CACHE_UNSUPPORTED');
+});
+
+test('only helper decisions replace Codex base instructions in the recorded request', () => {
+  const helper = { ...request(), role: 'helper' as const };
+  const built = buildCodexTurn(helper);
+  expect(built.baseInstructions).toContain('single-user creative-writing app');
+  expect(built.baseInstructions).toContain('do not automatically repeat a write');
+  expect(buildCodexDescriptor(helper, built)).toMatchObject({
+    baseInstructions: built.baseInstructions,
+    developerInstructions: built.developerInstructions,
+  });
+  expect(buildCodexTurn(request())).not.toHaveProperty('baseInstructions');
+  expect(buildCodexDescriptor(request())).not.toHaveProperty('baseInstructions');
 });
 
 test('decodes only advertised Uimori tool requests and rejects mixed, foreign, duplicate, and malformed output', () => {
