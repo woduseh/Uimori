@@ -130,7 +130,7 @@ test('before advisors run in order with scoped reads, selected models and explic
     {
       collaboration: collaboration({
         agents: [
-          agent('advisor', { trigger: 'before', maxOutputChars: 500 }),
+          agent('advisor', { trigger: 'before' }),
           agent('second', { trigger: 'before', tools: [] }),
         ],
       }),

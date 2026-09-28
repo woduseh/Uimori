@@ -819,7 +819,6 @@ describe('M1 real HTTP application boundaries', () => {
     });
     expect(duplicate.id).toBe(sibling.id);
     expect(sibling.chatId).not.toBe(chat.id);
-    expect(app.store.run(sibling.id).snapshot.candidateOf).toBeUndefined();
     expect(app.store.chat(chat.id).headRevision).toBe(completed.sourceRevision);
     expect(provider.requests).toHaveLength(4);
     expect(app.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);

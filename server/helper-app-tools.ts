@@ -24,7 +24,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.read',
     description:
-      'Read a chat, its branches and message IDs. Set chatId to work with any chat, including from the library.',
+      'Read a chat, its current branch and message IDs. Set chatId to work with any chat, including from the library.',
     inputSchema: schema({ chatId: itemId }),
   },
   ...helperOptionTools,
@@ -67,33 +67,19 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'workspace.read',
     description:
-      'Read current workspace settings, library metadata or the current device editor input. Prefer library.search when finding an item by name or category. Never claims image understanding.',
-    inputSchema: schema({
-      kind: { type: 'string', enum: ['settings', 'library', 'editor'] },
-    }),
-  },
-  {
-    name: 'library.search',
-    description:
-      'Prefer this tool to find library items by name, ID or category (bot/persona/module/main/translation). Searches latest visible metadata only, never body text. All whitespace-separated query terms must match after NFKC normalization and case folding. An empty query lists a page. Follow nextOffset for more matches, then pass an item id and kind to library.read for its full body.',
+      'Read current workspace and chat settings, or a compact overview of the captured device editor input. For editor structure and exact typed values, follow JSON Pointer path pages; long text uses textOffset/textLimit. For ordinary draft facts use data.search/read with scope=editor. The saved/unsaved input origin is returned. Never claims image understanding.',
     inputSchema: schema(
       {
-        query: { type: 'string', maxLength: 200 },
-        kind: { type: 'string', enum: ['content', 'prompt-preset'] },
+        kind: { type: 'string', enum: ['settings', 'editor'] },
+        path: str,
+        fields: { type: 'array', items: str, maxItems: 50 },
         offset: { type: 'integer', minimum: 0 },
-        limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+        limit: { type: 'integer', minimum: 1, maximum: 50 },
+        textOffset: { type: 'integer', minimum: 0 },
+        textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
       },
-      ['query']
+      ['kind']
     ),
-  },
-  {
-    name: 'library.read',
-    description:
-      'Read a library item using an ID and kind discovered in library.search or workspace.read. Text metadata and native editor JSON only.',
-    inputSchema: schema({ id: str, kind: { type: 'string', enum: ['content', 'prompt-preset'] } }, [
-      'id',
-      'kind',
-    ]),
   },
   {
     name: 'chat.rename',

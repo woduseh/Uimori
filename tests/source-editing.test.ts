@@ -1,5 +1,5 @@
 import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
-import { readStoredRunSnapshot } from '../server/run-projections.js';
+import { readRunSnapshot, readStoredRunSnapshot } from '../server/run-projections.js';
 import { rejudgeTranslation, stageTranslationJudgment } from '../server/source-editing.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { DatabaseSync } from 'node:sqlite';
@@ -295,7 +295,7 @@ test('source editing invalidates jobs and preserves both old and new snapshot hi
   const store = database();
   const s = source(store);
   const child = source(store, s.chatId);
-  const before = store.run(child.runId).snapshot;
+  const before = readRunSnapshot(store, child.runId);
   const job = store.requestTranslation(s.id);
   const active = store.claimJob(job.id, 'owner', {})!;
   const edited = store.editSource(s.id, { text: ' Updated \n\n Source ', expectedRevision: 0 });

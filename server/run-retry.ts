@@ -52,7 +52,6 @@ export function retryRun(
       const id = randomUUID(),
         at = new Date().toISOString();
       const snapshot = { ...original.snapshot, judgmentRecovery: true };
-      delete snapshot.candidateOf;
       store.db
         .prepare(`INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id)
         VALUES(?,?,?,'queued',?,?,?,?,?,?,?)`)

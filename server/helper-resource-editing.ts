@@ -5,6 +5,7 @@ import {
   type ResourceModel,
 } from '../core/resource-editing.js';
 import type { Content } from '../core/product.js';
+import type { HelperEditor } from '../core/helper.js';
 import type { Store } from './store.js';
 import { HttpError, number, text } from './request-validation.js';
 import { readResource, saveResource } from './resource-service.js';
@@ -131,10 +132,43 @@ function sourceFor(content: Content) {
 export function readHelperResource(store: Store, kind: ResourceKind, id: string, args: JsonObject) {
   const saved = readResource(store, kind, id);
   const model = editableResource(kind, saved);
-  const base = { kind, id, revision: saved.revision };
+  return readHelperModel(
+    kind,
+    id,
+    saved.revision,
+    'title' in saved ? saved.title : 'current',
+    model,
+    args
+  );
+}
+
+/** Read the admitted editor model without replacing it with a later saved revision. */
+export function readHelperEditor(editor: HelperEditor | undefined, args: JsonObject) {
+  if (!editor?.model) return null;
+  return readHelperModel(
+    editor.kind,
+    editor.targetId ?? 'unsaved',
+    editor.revision,
+    editor.title,
+    editor.model,
+    args,
+    editor.source === 'saved' ? 'saved-editor-reservation' : 'unsaved-device-editor'
+  );
+}
+
+function readHelperModel(
+  kind: ResourceKind,
+  id: string,
+  revision: number | null,
+  title: string,
+  model: ResourceModel,
+  args: JsonObject,
+  inputOrigin?: string
+) {
+  const base = { kind, id, revision, ...(inputOrigin ? { inputOrigin } : {}) };
   const path = args.path === undefined ? undefined : text(args.path, 'path', MAX_PATH, true);
   if (path === undefined) {
-    const source = kind === 'content' ? sourceFor(saved as Content) : null;
+    const source = kind === 'content' ? sourceFor(model as Content) : null;
     const readyPaths = source
       ? [source.path, source.lorePath, `${source.path}/extensions`]
       : kind === 'prompt-preset'
@@ -144,7 +178,7 @@ export function readHelperResource(store: Store, kind: ResourceKind, id: string,
       descriptor(joined('', key), (model as JsonObject)[key])
     );
     if (source) {
-      const native = (saved as Content).package.nativeRisu;
+      const native = (model as Content).package.nativeRisu;
       regions.push(
         descriptor(source.path, source.path.endsWith('/module') ? native.module : native.card)
       );
@@ -157,7 +191,7 @@ export function readHelperResource(store: Store, kind: ResourceKind, id: string,
     }
     return bounded({
       ...base,
-      title: 'title' in saved ? saved.title : 'current',
+      title,
       ...(source ? { source } : {}),
       regions,
       readyPaths,

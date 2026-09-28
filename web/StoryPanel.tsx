@@ -228,7 +228,7 @@ function StoryPanelEditor({
         <details>
           <summary>장면 예약 {detail.commands.length}개</summary>
           <p>
-            이 분기에서 실행할 장면을 예약해요. 원고가 성공적으로 완성되면 사용 완료로 표시해요.
+            이 채팅에서 실행할 장면을 예약해요. 원고가 성공적으로 완성되면 사용 완료로 표시해요.
           </p>
           <ul className="story-records">
             {detail.commands.map((command) => (
@@ -270,7 +270,7 @@ function StoryPanelEditor({
                   title={command.label}
                   label="예약 삭제"
                   disabled={busy}
-                  description="아직 실행하지 않은 장면 예약을 영구 삭제해요. 실행 기록에 연결된 예약은 해당 분기·채팅과 함께 삭제해야 해요."
+                  description="아직 실행하지 않은 장면 예약을 영구 삭제해요. 실행 기록에 연결된 예약은 해당 채팅과 함께 삭제해야 해요."
                   onError={onError}
                   onDeleted={async () => {
                     await load();

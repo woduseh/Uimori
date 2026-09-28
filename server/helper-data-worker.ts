@@ -82,24 +82,25 @@ function authored(model: Record<string, any>): Record<string, unknown> {
 function installViews(db: DatabaseSync) {
   db.exec(`
     CREATE TEMP VIEW agent_resources AS
-      SELECT v.id,v.revision,json_extract(v.body,'$.kind') kind,json_extract(v.body,'$.title') title,
+      SELECT v.id,v.revision,json_extract(v.body,'$.kind') kind,json_extract(v.body,'$.kind') category,json_extract(v.body,'$.title') title,
         json_extract(v.body,'$.description') description,
         json_object('card',json_extract(v.body,'$.package.nativeRisu.card'),
                     'module',json_extract(v.body,'$.package.nativeRisu.module')) document
       FROM versions v WHERE v.kind='content' AND NOT EXISTS
         (SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id)
       UNION ALL
-      SELECT v.id,v.revision,'prompt',json_extract(v.body,'$.title'),'Saved prompt',
+      SELECT v.id,v.revision,'prompt',json_extract(v.body,'$.role'),json_extract(v.body,'$.title'),'Saved prompt',
         json_object('program',json_extract(v.body,'$.program'),'values',json_extract(v.body,'$.values'))
       FROM versions v WHERE v.kind='prompt-preset' AND NOT EXISTS
         (SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id);
     CREATE TEMP VIEW agent_chats AS
-      SELECT c.id,c.title,c.created_at,b.id branch_id,b.head_revision,
+      SELECT c.id,c.title,c.created_at,b.id branch_id,c.head_revision,
         json_extract(p.body,'$.packageAttachments') attachments
       FROM chats c JOIN branches b ON b.chat_id=c.id LEFT JOIN profiles p ON p.chat_id=c.id;
     CREATE TEMP VIEW agent_messages AS
       WITH RECURSIVE ancestry(chat_id,branch_id,head_revision,id,depth) AS (
-        SELECT chat_id,id,head_revision,head_revision,0 FROM branches WHERE head_revision IS NOT NULL
+        SELECT b.chat_id,b.id,c.head_revision,c.head_revision,0
+        FROM branches b JOIN chats c ON c.id=b.chat_id WHERE c.head_revision IS NOT NULL
         UNION ALL SELECT a.chat_id,a.branch_id,a.head_revision,s.parent_revision,a.depth+1
         FROM ancestry a JOIN sources s ON s.id=a.id WHERE s.parent_revision IS NOT NULL
       )
@@ -171,8 +172,8 @@ function query(db: DatabaseSync, args: Record<string, unknown>) {
   const columns: Record<string, readonly string[]> = {
     versions: ['kind', 'id', 'revision', 'body'],
     library_hidden: ['kind', 'id'],
-    chats: ['id', 'title', 'created_at'],
-    branches: ['chat_id', 'id', 'head_revision'],
+    chats: ['id', 'title', 'created_at', 'head_revision'],
+    branches: ['chat_id', 'id'],
     profiles: ['chat_id', 'body'],
     sources: ['id', 'parent_revision', 'chat_id', 'hash', 'created_at', 'text', 'run_id'],
     runs: ['id', 'request'],
@@ -356,23 +357,34 @@ function* documents(
   }
   if (scope === 'library') {
     const kinds = strings(args.kinds, 8);
+    const metadataOnly =
+      args.output === 'documents' &&
+      !strings(args.patterns, 8).length &&
+      !strings(args.paths, 16).length;
     const conditions = [
       ids.length ? `id IN (${ids.map(() => '?').join(',')})` : '',
       kinds.length ? `kind IN (${kinds.map(() => '?').join(',')})` : '',
     ].filter(Boolean);
-    const query = fold(string(args.query));
+    const queryTerms = fold(string(args.query)).trim().split(/\s+/u).filter(Boolean);
     // A title/ID filter should not transfer unrelated authored documents into this process.
     // Keep the unfiltered traversal as one query instead of adding a lookup per document.
-    const document = query
-      ? db.prepare('SELECT document FROM agent_resources WHERE kind=? AND id=?')
-      : undefined;
+    const document =
+      queryTerms.length && !metadataOnly
+        ? db.prepare('SELECT document FROM agent_resources WHERE kind=? AND id=?')
+        : undefined;
     const rows = db
       .prepare(
-        `SELECT ${query ? 'id,revision,kind,title' : '*'} FROM agent_resources ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY kind,id`
+        `SELECT ${metadataOnly || queryTerms.length ? 'id,revision,kind,category,title' : '*'} FROM agent_resources ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY kind,id`
       )
       .iterate(...ids, ...kinds);
     for (const row of rows) {
-      if (query && !fold(`${row.title} ${row.id} ${row.kind}`).includes(query)) continue;
+      if (
+        queryTerms.length &&
+        !queryTerms.every((term) =>
+          fold(`${row.title} ${row.id} ${row.kind} ${row.category}`).includes(term)
+        )
+      )
+        continue;
       yield {
         scope,
         kind: String(row.kind),
@@ -380,10 +392,15 @@ function* documents(
         revision: Number(row.revision),
         title: String(row.title),
         origin: 'live-library-original',
-        fields: {
-          title: row.title,
-          ...JSON.parse(String(document ? document.get(row.kind, row.id)?.document : row.document)),
-        },
+        metadata: { category: String(row.category) },
+        fields: metadataOnly
+          ? { title: row.title }
+          : {
+              title: row.title,
+              ...JSON.parse(
+                String(document ? document.get(row.kind, row.id)?.document : row.document)
+              ),
+            },
       };
     }
     return;
@@ -596,7 +613,7 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
   const offset = number(args.offset, 0, 1_000_000),
     limit = number(args.limit, 5, 50, 1),
     context = number(args.context, 160, 1200);
-  const query = fold(string(args.query));
+  const queryTerms = fold(string(args.query)).trim().split(/\s+/u).filter(Boolean);
   const items: unknown[] = [];
   let matches = 0,
     inspected = 0,
@@ -622,7 +639,13 @@ function search(db: DatabaseSync, snapshot: HelperTaskSnapshot, args: Record<str
   });
   outer: for (const doc of documents(db, snapshot, scope, args)) {
     if (kinds.length && !kinds.includes(doc.kind)) continue;
-    if (query && !fold(`${doc.title} ${doc.id} ${doc.kind}`).includes(query)) continue;
+    if (
+      queryTerms.length &&
+      !queryTerms.every((term) =>
+        fold(`${doc.title} ${doc.id} ${doc.kind} ${doc.metadata?.category ?? ''}`).includes(term)
+      )
+    )
+      continue;
     inspected++;
     const excerpts = matchingExcerpts(doc, expressions, mode, context, paths);
     const entries =

@@ -25,18 +25,6 @@ test('changing chats atomically releases the previous branch and source', () => 
   expect(original.source).toBe('source-A');
 });
 
-test('branch selection preserves chat and takes the chosen source, including an empty source', () => {
-  expect(move(original, { kind: 'branch', branch: 'other', source: '' })).toEqual({
-    ...original,
-    branch: 'other',
-    source: '',
-    epoch: 5,
-  });
-  expect(move(original, { kind: 'branch', branch: 'other', source: 'selected' }).source).toBe(
-    'selected'
-  );
-});
-
 test('visiting the library retains the reading address without retaining the old intent', () => {
   expect(move(original, { kind: 'library' })).toEqual({
     ...original,
@@ -64,18 +52,6 @@ test('deleting a chat releases its whole address', () => {
   });
 });
 
-test('binding the opened default is address reconciliation, not a new navigation', () => {
-  const implicit = { ...original, branch: '' };
-  expect(move(implicit, { kind: 'bind-default', branch: 'opened' })).toEqual({
-    ...implicit,
-    branch: 'opened',
-  });
-});
-
-test('late default reconciliation cannot replace an explicit branch', () => {
-  expect(move(original, { kind: 'bind-default', branch: 'different' })).toBe(original);
-});
-
 test('rebasing native authored output preserves reader intent and the branch', () => {
   expect(move(original, { kind: 'rebase-source', source: 'replacement' })).toEqual({
     ...original,
@@ -99,13 +75,13 @@ test('same-source clicks still supersede pending navigation', () => {
 test('consecutive synchronous transitions consume the preceding complete state', () => {
   const sequence: ReaderNavigationAction[] = [
     { kind: 'chat', chat: 'B' },
-    { kind: 'branch', branch: 'B-branch', source: 'B-source' },
+    { kind: 'source', source: 'B-source' },
     { kind: 'library' },
   ];
   const next = sequence.reduce(move, original);
   expect(next).toEqual({
     chat: 'B',
-    branch: 'B-branch',
+    branch: '',
     source: 'B-source',
     destination: 'library',
     epoch: 7,

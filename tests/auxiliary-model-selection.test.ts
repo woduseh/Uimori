@@ -1,4 +1,4 @@
-import { readStoredRunSnapshot } from '../server/run-projections.js';
+import { readRunSnapshot, readStoredRunSnapshot } from '../server/run-projections.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -59,9 +59,9 @@ test('new auxiliary reservations use current generation models while JEV judgmen
     { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
     run.snapshot.settings
   );
-  const priorRun = store.run(run.id);
+  const priorSnapshot = readRunSnapshot(store, run.id);
   const persisted = readStoredRunSnapshot(store, run.id);
-  expect(priorRun.snapshot.profile?.models).toEqual({});
+  expect(priorSnapshot.profile?.models).toEqual({});
   const connection = store.product.connection({
     title: 'Synthetic Vertex connection',
     protocol: 'vertex-gemini-v1',
@@ -94,8 +94,8 @@ test('new auxiliary reservations use current generation models while JEV judgmen
   });
   const translation = store.requestTranslation(source.id);
   const status = store.requestStatus(source.id, source.hash, null);
-  const imageInput = frozenImageSelection(store, priorRun.snapshot);
-  const imageSnapshot = store.product.resolveJobPrompt(priorRun.snapshot, imageInput);
+  const imageInput = frozenImageSelection(store, priorSnapshot);
+  const imageSnapshot = store.product.resolveJobPrompt(priorSnapshot, imageInput);
   const bridge = auxiliaryBridge(store, new Controls(), new AbortController().signal);
   const translationBundle = await bridge.load(translation.id);
   const statusBundle = await bridge.load(status.id);

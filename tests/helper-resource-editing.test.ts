@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import type { Content } from '../core/product.js';
+import { editableResource } from '../core/resource-editing.js';
+import { readHelperEditor } from '../server/helper-resource-editing.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import { Store } from '../server/store.js';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -48,6 +50,57 @@ function fixture(large = false) {
 }
 const call = (store: Store, name: string, args: Record<string, unknown>) =>
   invokeResourceTool(store, name, args) as Record<string, any>;
+
+test('captured unsaved editor uses bounded typed paths while preserving its original revision', () => {
+  const { store, content } = fixture(true);
+  const model = editableResource('content', content);
+  const draft = model as Record<string, any>;
+  draft.package.nativeRisu.card.description = 'Unsaved fact. ' + 'draft '.repeat(12_000);
+  draft.package.nativeRisu.card.character_book = null;
+  draft.package.nativeRisu.card.extensions.vendor = { enabled: false, count: 0, empty: [] };
+  const editor = {
+    kind: 'content' as const,
+    targetId: content.id,
+    revision: content.revision,
+    title: content.title,
+    source: 'unsaved' as const,
+    model,
+  };
+  const overview = readHelperEditor(editor, { kind: 'editor' }) as Record<string, any>;
+  expect(JSON.stringify(overview).length).toBeLessThan(24_000);
+  expect(overview).toMatchObject({
+    id: content.id,
+    revision: content.revision,
+    inputOrigin: 'unsaved-device-editor',
+    source: { path: '/package/nativeRisu/card' },
+  });
+  const path = '/package/nativeRisu/card';
+  expect(readHelperEditor(editor, { path: `${path}/character_book` })).toMatchObject({
+    type: 'null',
+    value: null,
+  });
+  const fields = readHelperEditor(editor, {
+    path: `${path}/extensions/vendor`,
+    fields: ['enabled', 'count', 'empty'],
+  }) as Record<string, any>;
+  expect(fields.fields.map(({ value }: { value: unknown }) => value)).toEqual([false, 0, []]);
+  const first = readHelperEditor(editor, { path: `${path}/description`, textLimit: 20 }) as Record<
+    string,
+    any
+  >;
+  expect(first.text.startsWith('Unsaved fact.')).toBe(true);
+  expect(first.nextOffset).toBe(20);
+  expect(JSON.stringify(first)).not.toContain(
+    'draft draft draft draft draft draft draft draft draft draft'
+  );
+  store.product.content(
+    { ...fixtureBotInput('Later saved value', 'Saved fact'), expectedRevision: content.revision },
+    content.id
+  );
+  expect(
+    (readHelperEditor(editor, { path: `${path}/description`, textLimit: 20 }) as any).text
+  ).toBe(first.text);
+});
 
 test('small native edit of a 1.36m character card preserves source and refreshes projection with one undo', () => {
   const { store, content } = fixture(true);

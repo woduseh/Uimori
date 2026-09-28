@@ -335,67 +335,61 @@ export function createRunExecutor({
             }
             if (executionSnapshot.contextPlan) {
               assertCurrent();
-              const reuse =
-                executionSnapshot.candidateOf &&
-                executionSnapshot.contextPlan.status === 'ready' &&
-                executionSnapshot.promptCompilation;
-              if (!reuse) {
-                const prepared = await prepareInputContext(
-                  executionSnapshot,
-                  {
-                    ...hooks,
-                    reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
-                    authorize: (connection) => {
-                      assertCurrent();
-                      return store.product.authorize(connection);
-                    },
-                    onAttemptStart: (wire) => {
-                      assertCurrent();
-                      return hooks.onAttemptStart(wire);
-                    },
-                    onProgress: (plan) => {
-                      store.transaction(() => {
-                        assertCurrent();
-                        const current = store.run(id);
-                        store.db.prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?').run(
-                          JSON.stringify(
-                            persistedContextSnapshot(current.snapshot, {
-                              ...executionSnapshot,
-                              contextPlan: plan,
-                            })
-                          ),
-                          new Date().toISOString(),
-                          id
-                        );
-                        store.event(run.chatId, 'run.context.updated', id);
-                      });
-                      publish(run.chatId);
-                    },
+              const prepared = await prepareInputContext(
+                executionSnapshot,
+                {
+                  ...hooks,
+                  reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
+                  authorize: (connection) => {
+                    assertCurrent();
+                    return store.product.authorize(connection);
                   },
-                  previousContextPlan(store, executionSnapshot)
-                );
-                priorUsage = mergeUsage(priorUsage, prepared.usage);
-                hooks.initialUsage = structuredClone(priorUsage);
-                prepared.snapshot.branchId = executionSnapshot.branchId;
-                store.transaction(() => {
-                  assertCurrent();
-                  prepared.snapshot = store.context.publishPrepared(prepared.snapshot, {
-                    origin: 'automatic',
-                  });
-                  validateContextPlan(prepared.snapshot);
-                  store.db
-                    .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
-                    .run(
-                      JSON.stringify(
-                        persistedContextSnapshot(store.run(id).snapshot, prepared.snapshot)
-                      ),
-                      new Date().toISOString(),
-                      id
-                    );
-                  store.event(run.chatId, 'run.context.updated', id);
+                  onAttemptStart: (wire) => {
+                    assertCurrent();
+                    return hooks.onAttemptStart(wire);
+                  },
+                  onProgress: (plan) => {
+                    store.transaction(() => {
+                      assertCurrent();
+                      const current = store.run(id);
+                      store.db.prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?').run(
+                        JSON.stringify(
+                          persistedContextSnapshot(current.snapshot, {
+                            ...executionSnapshot,
+                            contextPlan: plan,
+                          })
+                        ),
+                        new Date().toISOString(),
+                        id
+                      );
+                      store.event(run.chatId, 'run.context.updated', id);
+                    });
+                    publish(run.chatId);
+                  },
+                },
+                previousContextPlan(store, executionSnapshot)
+              );
+              priorUsage = mergeUsage(priorUsage, prepared.usage);
+              hooks.initialUsage = structuredClone(priorUsage);
+              prepared.snapshot.branchId = executionSnapshot.branchId;
+              store.transaction(() => {
+                assertCurrent();
+                prepared.snapshot = store.context.publishPrepared(prepared.snapshot, {
+                  origin: 'automatic',
                 });
-                executionSnapshot = prepared.snapshot;
-              }
+                validateContextPlan(prepared.snapshot);
+                store.db
+                  .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
+                  .run(
+                    JSON.stringify(
+                      persistedContextSnapshot(store.run(id).snapshot, prepared.snapshot)
+                    ),
+                    new Date().toISOString(),
+                    id
+                  );
+                store.event(run.chatId, 'run.context.updated', id);
+              });
+              executionSnapshot = prepared.snapshot;
             }
             // Native preparation invalidates the old compilation even when a fixture has no
             // model/context plan. Persist the exact prepared prompt before any writer input.

@@ -71,11 +71,16 @@ test('legacy character limits are retired when saving a preset without changing 
   const store = database();
   const program = createDefaultRisuPrompt('Main prompt');
   const instructions = 'Long authored advisor guidance. '.repeat(2000);
+  const legacyAgent = {
+    ...createAgentDefinition('custom', 'advisor'),
+    instructions,
+    maxOutputChars: 'obsolete-setting',
+  };
   program.collaboration = {
     ...createAgentCollaboration(),
     enabled: true,
     sharedInstructions: instructions,
-    agents: [{ ...createAgentDefinition('custom', 'advisor'), instructions, maxOutputChars: 6000 }],
+    agents: [legacyAgent],
   };
   const saved = store.product.promptPreset({
     title: 'Legacy collaboration',
@@ -87,7 +92,7 @@ test('legacy character limits are retired when saving a preset without changing 
   expect(loaded.program.collaboration!.agents[0].instructions).toBe(instructions);
   expect(loaded.program.collaboration!.agents[0]).not.toHaveProperty('maxOutputChars');
   expect(loaded.program.collaboration!.agents[0]).not.toHaveProperty('maxOutputTokens');
-  expect(program.collaboration.agents[0].maxOutputChars).toBe(6000);
+  expect(legacyAgent.maxOutputChars).toBe('obsolete-setting');
 });
 
 function fixture() {

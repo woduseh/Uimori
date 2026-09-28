@@ -108,9 +108,8 @@ function TurnActivityContent({
     const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
   }, [running]);
-  const mainLabel = run.snapshot.forkedFrom
-    ? '복사한 원고'
-    : run.packageStart?.mode === 'authored'
+  const mainLabel =
+    run.packageStart?.mode === 'authored'
       ? '작성된 도입문'
       : run.status === 'running'
         ? run.executionMode === 'batch'

@@ -63,7 +63,7 @@ export function RunTaskDetails({
   return (
     <div className="run-task-details">
       <div className="task-heading">
-        <strong>{run.snapshot.forkedFrom ? '복사한 원고' : `원문 ${labels[run.status]}`}</strong>
+        <strong>{`원문 ${labels[run.status]}`}</strong>
         <small>
           {run.packageStart?.mode === 'authored'
             ? '작성된 도입문 · 모델 호출 없음'

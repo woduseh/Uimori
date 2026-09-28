@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { Store, type Job, type Source } from '../server/store.js';
+import { readRunSnapshot } from '../server/run-projections.js';
 import { splitSource, validatePresentation } from '../core/auxiliary.js';
 import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
@@ -384,7 +385,7 @@ test('representative portraits and profile-only assets never enter the placement
     location: '',
     allowedUse: 'profile',
   });
-  expect(imageCatalog(imageJobInput(store, store.run(source.runId).snapshot))).toHaveLength(0);
+  expect(imageCatalog(imageJobInput(store, readRunSnapshot(store, source.runId)))).toHaveLength(0);
   translate(store, source);
   expect(images(store, source)).toHaveLength(0);
 });

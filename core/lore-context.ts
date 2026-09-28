@@ -93,13 +93,6 @@ export type LoreContextSnapshot = {
     reasons: string[];
   };
 };
-/** A fork copies verified read receipts, never the original model/tool execution log. */
-export type ForkedLoreReads = {
-  version: 1;
-  canonHash: string;
-  dependencies: LoreDependency[];
-  entries: RetainedLore[];
-};
 const sameResource = (a: RetainedLore, b: RetainedLore) =>
   a.id === b.id && a.revision === b.revision && a.hash === b.hash;
 /** Preserve old slices and their positions; append only uncovered parts of new reads. */

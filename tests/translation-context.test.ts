@@ -1,4 +1,5 @@
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import { readRunSnapshot } from '../server/run-projections.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { writeNote } from './fixtures/notes.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
@@ -141,7 +142,7 @@ test('SQLite scopes prior wording to frozen ancestry/hash and excludes future, s
     expectedSourceHash: first.hash,
   });
   const target = source(store, chat.id);
-  const snapshot = store.run(target.runId).snapshot;
+  const snapshot = readRunSnapshot(store, target.runId);
   const future = source(store, chat.id);
   store.editTranslation(future.id, {
     text: 'FUTURE',
@@ -334,7 +335,7 @@ test('translation tools support empty memory with disabled indexing, bounded pag
     expectedSourceHash: first.hash,
   });
   const target = source(store, chat.id);
-  const fixed = store.run(target.runId).snapshot;
+  const fixed = readRunSnapshot(store, target.runId);
   const refs = translationReferences(store, fixed);
   const read = translationReader(fixed, refs);
   refs[0].text = 'later';
@@ -473,7 +474,7 @@ test('translation searches and reads frozen bot/persona/modules even when absent
     image: false,
   });
   const target = source(store, chat.id);
-  const fixed = store.run(target.runId).snapshot;
+  const fixed = readRunSnapshot(store, target.runId);
   for (let i = 0; i < contents.length; i++) {
     const entry = contents[i];
     const resourceId = `package:${entry.id}:${['bot', 'persona', 'module', 'module'][i]}:body`;

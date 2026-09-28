@@ -729,13 +729,8 @@ function SourceReaderContent({
             capture={() => {
               const article = container.current;
               const scrollport = article?.closest<HTMLElement>('[data-reader-scrollport]');
-              if (!article || !scrollport) return null;
-              const target = captureReaderLocation(
-                scrollport,
-                source.chatId,
-                branchId ?? `main:${source.chatId}`,
-                article
-              );
+              if (!article || !scrollport || !branchId) return null;
+              const target = captureReaderLocation(scrollport, source.chatId, branchId, article);
               return target
                 ? {
                     target,

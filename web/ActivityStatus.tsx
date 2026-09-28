@@ -52,7 +52,6 @@ export function elapsedLabel(start: string, end: number) {
   return seconds < 60 ? `${seconds}초` : `${Math.floor(seconds / 60)}분 ${seconds % 60}초`;
 }
 function message(item: Item) {
-  const prefix = item.otherBranch ? '다른 분기 · ' : '';
   const name = doneNames[item.kind] ?? '작업';
   const status =
     item.status === 'sending'
@@ -78,7 +77,7 @@ function message(item: Item) {
                         : item.status === 'stale'
                           ? `${name} 자료 변경 · 확인 필요`
                           : `${name} 실패`;
-  return prefix + status;
+  return status;
 }
 
 /** Status feedback only; hiding never changes or cancels server work. */
@@ -86,7 +85,6 @@ export function ActivityStatus({
   chatId,
   activities,
   request,
-  branchId,
   connected,
   onDetails,
   scope,
@@ -95,7 +93,6 @@ export function ActivityStatus({
   chatId: string;
   activities: ReaderActivity[];
   request?: RequestActivity;
-  branchId?: string;
   connected: boolean;
   onDetails: () => void;
   scope: string;
@@ -131,7 +128,6 @@ export function ActivityStatus({
     startedAt: request?.runId === item.id ? request.startedAt : item.startedAt,
     finishedAt: item.finishedAt,
     kind: item.kind,
-    otherBranch: !!item.branchId && !!branchId && item.branchId !== branchId,
     runId: item.id,
     sourceRevision: item.sourceRevision,
     sourceHash: item.sourceHash,
@@ -148,7 +144,6 @@ export function ActivityStatus({
       startedAt: request.startedAt,
       finishedAt: null,
       kind: 'request',
-      otherBranch: false,
       runId: request.runId ?? request.id,
     });
   const serialized = JSON.stringify(items);
@@ -169,7 +164,7 @@ export function ActivityStatus({
   // An older settled result belongs to its response. Keep active work and uncertain
   // admission visible, but do not let old failures replace the current turn's result.
   const latestMainStart = items
-    .filter((item) => !item.otherBranch && ['main', 'request'].includes(item.kind))
+    .filter((item) => ['main', 'request'].includes(item.kind))
     .reduce((latest, item) => Math.max(latest, Date.parse(item.startedAt) || 0), 0);
   useEffect(() => {
     const snapshot = JSON.parse(serialized) as Item[];
@@ -229,8 +224,7 @@ export function ActivityStatus({
   const visibleNotices = unresolvedNotices.filter(
     (notice) =>
       (notice.item.status === 'uncertain' ||
-        (!notice.item.otherBranch &&
-          (Date.parse(notice.item.startedAt) || 0) >= latestMainStart)) &&
+        (Date.parse(notice.item.startedAt) || 0) >= latestMainStart) &&
       (notice.expiresAt === null || notice.expiresAt > now) &&
       !acknowledged.includes(notice.item.acknowledgementKey) &&
       !(success(notice.item.status) && hidden.includes(notice.item.key)) &&
@@ -257,9 +251,7 @@ export function ActivityStatus({
   const candidates = [...running, ...visibleNotices.map((notice) => notice.item)];
   const expanded = candidates.filter((item) => !hidden.includes(item.key));
   const item =
-    expanded.find(
-      (item) => active(item.status) && !item.otherBranch && ['main', 'request'].includes(item.kind)
-    ) ??
+    expanded.find((item) => active(item.status) && ['main', 'request'].includes(item.kind)) ??
     expanded.find((item) => active(item.status)) ??
     expanded.toSorted((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
   const connectionIssue = !connected && running.length > 0;
@@ -357,13 +349,7 @@ export function ActivityStatus({
   );
 }
 
-export function ActivityDetails({
-  activities,
-  branchId,
-}: {
-  activities: ReaderActivity[];
-  branchId?: string;
-}) {
+export function ActivityDetails({ activities }: { activities: ReaderActivity[] }) {
   const [now, setNow] = useState(Date.now);
   const running = activities.filter((item) => active(item.status));
   useEffect(() => {
@@ -386,7 +372,6 @@ export function ActivityDetails({
                 status: item.status,
                 startedAt: item.startedAt,
                 finishedAt: item.finishedAt,
-                otherBranch: !!branchId && !!item.branchId && item.branchId !== branchId,
                 runId: item.id,
               })}
             </span>

@@ -28,6 +28,7 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
+import { readRunSnapshot } from './run-projections.js';
 import { ChatTitleService } from './chat-title.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
 import { readHelperChatContext } from './helper-context.js';
@@ -120,7 +121,10 @@ export async function createApp(options: AppOptions): Promise<App> {
   const requireJobModel = (id: string) => {
     const job = store.job(id);
     const source = store.sourceAtHash(job.sourceRevision, job.sourceHash);
-    const snapshot = store.product.resolveJobPrompt(store.run(source.runId).snapshot, job.input);
+    const snapshot = store.product.resolveJobPrompt(
+      readRunSnapshot(store, source.runId),
+      job.input
+    );
     if (job.kind !== 'image') requireModel(snapshot.profile?.models[job.kind], job.kind);
   };
   const credentials = new VertexCredentialStore(store.db);
@@ -382,7 +386,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             chatId = queued.chatId;
             const source = store.sourceAtHash(queued.sourceRevision, queued.sourceHash);
             const snapshot = store.product.resolveJobPrompt(
-              store.run(source.runId).snapshot,
+              readRunSnapshot(store, source.runId),
               queued.input
             );
             if (

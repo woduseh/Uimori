@@ -61,7 +61,7 @@ export function managementImpact(
       if (!selected) {
         const row = store.db
           .prepare(
-            "SELECT json_extract(body,'$.program.collaboration.agents') AS agents FROM versions WHERE kind='prompt-preset' AND id=? ORDER BY revision DESC LIMIT 1"
+            "SELECT json_extract(body,'$.program.collaboration.agents') AS agents FROM versions WHERE kind='prompt-preset' AND id=?"
           )
           .get(chat.mainPromptPresetId) as { agents: string | null } | undefined;
         const agents = JSON.parse(row?.agents ?? '[]') as { id: string; model?: ModelRef | null }[];

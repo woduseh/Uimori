@@ -14,6 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import { readerActivities, readerDetail, readerRuns } from '../server/reader.js';
 import { Store } from '../server/store.js';
+import { readRunSnapshot } from '../server/run-projections.js';
 import type { RunSnapshot } from '../core/types.js';
 
 const owned: { app: App; directory: string }[] = [];
@@ -150,7 +151,7 @@ test('100-source HTTP reader pages retain order while execution snapshot and ful
     chat.id,
     Array.from({ length: 100 }, (_, i) => `Synthetic source ${i}.`)
   );
-  const frozen = store.run(sources[99].runId).snapshot;
+  const frozen = readRunSnapshot(store, sources[99].runId);
   const full = store.detail(chat.id);
   expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   let next: string | null = null;
@@ -197,7 +198,7 @@ test('100-source HTTP reader pages retain order while execution snapshot and ful
   expect(taskResponse.statusCode).toBe(200);
   expect(taskResponse.json()).toHaveLength(100);
   expect(taskResponse.json()).toEqual(JSON.parse(JSON.stringify(readerRuns(store, chat.id))));
-  expect(store.run(sources[99].runId).snapshot).toEqual(frozen);
+  expect(readRunSnapshot(store, sources[99].runId)).toEqual(frozen);
   expect(frozen.history).toHaveLength(99);
   expect(frozen.history).toEqual(
     sources.slice(0, -1).map((item) => ({

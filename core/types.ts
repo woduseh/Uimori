@@ -90,7 +90,6 @@ export type RunSnapshot = {
   contextBase?: import('./context-plan.js').ContextBase;
   loreContext?: import('./lore-context.js').LoreContextSnapshot;
   loreContextReset?: boolean;
-  forkedLoreReads?: import('./lore-context.js').ForkedLoreReads;
   packageStart?: import('./package-start.js').PackageStartSnapshot;
   executionClock?: { iso: string; unix: number };
   logicalHistory?: import('./risu-prompt.js').PromptHistoryMessage[];
@@ -112,17 +111,10 @@ export type RunSnapshot = {
   resources: Resource[];
   branchId?: string;
   profile?: import('./product.js').ProfileSnapshot;
-  candidateOf?: string;
   /** Rejudge the preserved response without invoking the writer or input hooks. */
   judgmentRecovery?: true;
   /** Translation-job metadata captured at admission, never used to construct a writing request. */
   translationGuide?: import('./translation-guide.js').BotTranslationGuide | null;
-  forkedFrom?: {
-    chatId: string;
-    runId: string;
-    sourceRevision: string | null;
-    requestOrder?: number;
-  };
   /** The source was read from a chat transcript file as authored history; no model was called. */
   transcriptImport?: { index: number; storage?: 'source-only-v1' };
   story?: import('./story.js').StorySnapshot;
@@ -230,7 +222,7 @@ export type ChatDetail = {
   sources: Source[];
   jobs: Job[];
   profile?: import('./product.js').ChatProfile;
-  branches?: import('./product.js').Branch[];
+  branch: import('./product.js').Branch;
   attempts?: import('./product.js').Attempt[];
   assets?: import('./product.js').Asset[];
 };
@@ -248,7 +240,7 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
     unknownCount: number;
     attemptCount: number;
   };
-  snapshot: Pick<RunSnapshot, 'branchId' | 'candidateOf' | 'forkedFrom' | 'loreContextReset'>;
+  snapshot: Pick<RunSnapshot, 'branchId' | 'loreContextReset'>;
   contextSummary?: {
     status: 'pending' | 'ready' | 'failed';
     inputTokenLimit: number;
@@ -289,19 +281,6 @@ export type ReaderActivity = {
 };
 export type ReaderNavigationItem = { id: string; number: number; label: string; opening?: true };
 
-/** Branches placed by where their source chains diverge; `branches` itself stores no parent. */
-export type BranchTreeNode = {
-  id: string;
-  /** Indentation level: how many fork points this branch sits below. */
-  depth: number;
-  /** Last source shared with the sibling it diverged from, null while a branch has no scene. */
-  forkSourceId: string | null;
-  /** 1-based position of the fork source within this branch. */
-  forkIndex: number | null;
-  /** Scenes this branch does not share with the sibling it diverged from. */
-  ownScenes: number;
-  totalScenes: number;
-};
 export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
   /** Current page, active runs and latest visible source-less responses; full task history is fetched separately. */
   runs: ReaderRun[];
@@ -311,11 +290,6 @@ export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
     navigation: ReaderNavigationItem[];
     /** Source-less turns belonging to this page, plus active work. */
     pendingRunIds?: string[];
-    /** Candidate creation order is independent of the visible Run page. */
-    candidateBranches?: string[];
-    latestBranchRuns?: Record<string, string>;
-    /** Display order is the walk itself; the list is already sorted. */
-    branchTree?: BranchTreeNode[];
     activity?: ReaderActivity[];
     responseActivity?: ReaderActivity[];
     presentationRevisions: Record<string, string>;

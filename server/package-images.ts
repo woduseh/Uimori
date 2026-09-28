@@ -1,4 +1,5 @@
 import { processImageUpload } from './image-processing.js';
+import { readRunSnapshot } from './run-projections.js';
 import { storeImage, readImage } from './image-storage.js';
 import { assertPackageImageReferences } from './package-image-references.js';
 import { HttpError, fields, isSha256Hex, record, text } from './request-validation.js';
@@ -402,7 +403,7 @@ export function requestImages(store: Store, sourceId: string, value: unknown) {
       isDeepStrictEqual(record(job.input).imageTarget, target)
     )
       return job;
-    const snapshot = store.run(source.runId).snapshot;
+    const snapshot = readRunSnapshot(store, source.runId);
     const profile = store.product.snapshot(source.chatId, 'image');
     return reserveImageJob(
       store,

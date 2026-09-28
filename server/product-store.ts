@@ -20,7 +20,6 @@ import {
   text,
 } from './request-validation.js';
 import { resolveModelPricing } from '../core/model-pricing.js';
-import { HOST_LIST_PAGE_DEFAULT, HOST_LIST_PAGE_MAX, pageSlice } from '../core/paging.js';
 import { estimateCost } from '../core/pricing-estimate.js';
 import { translationPolicy } from '../core/translation-settings.js';
 import {
@@ -120,8 +119,7 @@ export class ProductStore {
         CREATE TABLE versions (kind TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE provider_settings (kind TEXT NOT NULL CHECK(kind IN ('connection','model')),id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE profiles (chat_id TEXT PRIMARY KEY REFERENCES chats(id),body TEXT NOT NULL);
-        CREATE TABLE branches (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),title TEXT NOT NULL,head_revision TEXT REFERENCES sources(id),revision INTEGER NOT NULL,is_default INTEGER NOT NULL);
-        CREATE UNIQUE INDEX default_branch ON branches(chat_id) WHERE is_default=1;
+        CREATE TABLE branches (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL UNIQUE REFERENCES chats(id));
         CREATE TABLE prompt_workspace (id INTEGER PRIMARY KEY CHECK(id=1),body TEXT NOT NULL);
         CREATE TABLE library_hidden (kind TEXT NOT NULL,id TEXT NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE attempts (id TEXT PRIMARY KEY,chat_id TEXT REFERENCES chats(id),run_id TEXT REFERENCES runs(id),job_id TEXT REFERENCES jobs(id),role TEXT NOT NULL,connection_id TEXT NOT NULL,model_id TEXT NOT NULL,status TEXT NOT NULL,request TEXT NOT NULL,response TEXT,input_tokens INTEGER,output_tokens INTEGER,cost_usd REAL,raw_usage TEXT,price_revision TEXT,error TEXT);
@@ -136,7 +134,7 @@ export class ProductStore {
         .prepare(
           isProviderSetting(kind)
             ? 'SELECT body FROM provider_settings v WHERE kind=? AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id'
-            : 'SELECT v.body FROM versions v WHERE kind=? AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id'
+            : 'SELECT v.body FROM versions v WHERE kind=? AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id'
         )
         .all(kind) as Row[]
     ).map((r) => parse(r.body));
@@ -153,7 +151,6 @@ export class ProductStore {
         json_extract(v.body,'$.kind') AS kind,
         json_extract(v.body,'$.role') AS role
       FROM versions v WHERE v.kind=?
-        AND v.revision=(SELECT MAX(n.revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id)
         AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id)
       ORDER BY v.id
     `);
@@ -171,46 +168,6 @@ export class ProductStore {
         role,
       })),
     };
-  }
-  searchLibrary(value: unknown) {
-    const body = record(value);
-    fields(body, ['query', 'kind', 'offset', 'limit']);
-    const fold = (value: string) => value.normalize('NFKC').toLocaleLowerCase('en');
-    const terms = fold(text(body.query, 'library query', 200, true))
-      .trim()
-      .split(/\s+/u)
-      .filter(Boolean);
-    const kind =
-      body.kind === undefined
-        ? undefined
-        : choice(body.kind, ['content', 'prompt-preset'], 'library kind');
-    const offset =
-      body.offset === undefined
-        ? 0
-        : number(body.offset, 'library offset', 0, Number.MAX_SAFE_INTEGER);
-    const limit =
-      body.limit === undefined
-        ? HOST_LIST_PAGE_DEFAULT
-        : number(body.limit, 'library limit', 1, HOST_LIST_PAGE_MAX);
-    const metadata = this.libraryMetadata();
-    const found = [
-      ...metadata.contents.map(({ kind, ...item }) => ({
-        ...item,
-        kind: 'content' as const,
-        category: kind,
-      })),
-      ...metadata.prompts.map(({ role, ...item }) => ({
-        ...item,
-        kind: 'prompt-preset' as const,
-        category: role,
-      })),
-    ].filter((item) => {
-      if (kind !== undefined && item.kind !== kind) return false;
-      const searchable = fold(`${item.title} ${item.id} ${item.category}`);
-      return terms.every((term) => searchable.includes(term));
-    });
-    const page = pageSlice(found, offset, limit);
-    return { items: page.items, total: page.total, offset, nextOffset: page.nextOffset };
   }
   isHidden(kind: string, id: string): boolean {
     return !!this.db.prepare('SELECT 1 FROM library_hidden WHERE kind=? AND id=?').get(kind, id);
@@ -230,11 +187,7 @@ export class ProductStore {
     }
     const r = (
       revision === undefined
-        ? this.db
-            .prepare(
-              'SELECT body FROM versions WHERE kind=? AND id=? ORDER BY revision DESC LIMIT 1'
-            )
-            .get(kind, id)
+        ? this.db.prepare('SELECT body FROM versions WHERE kind=? AND id=?').get(kind, id)
         : this.db
             .prepare('SELECT body FROM versions WHERE kind=? AND id=? AND revision=?')
             .get(kind, id, revision)
@@ -860,24 +813,14 @@ export class ProductStore {
       throw new HttpError(403, 'Connection disabled or authority changed');
     return structuredClone(connection);
   }
-  branches(chatId: string): Branch[] {
-    return (
-      this.db
-        .prepare('SELECT * FROM branches WHERE chat_id=? ORDER BY is_default DESC,id')
-        .all(chatId) as Row[]
-    ).map((r) => ({
-      id: r.id,
-      chatId: r.chat_id,
-      title: r.title,
-      headRevision: r.head_revision,
-      revision: r.revision,
-      default: !!r.is_default,
-    }));
-  }
+  /** Stable execution identity; the chat owns its only current source head. */
   branch(chatId: string, id?: string): Branch {
-    const b = this.branches(chatId).find((x) => (id === undefined ? x.default : x.id === id));
+    const b = this.db
+      .prepare(`SELECT b.id,b.chat_id,c.head_revision FROM branches b JOIN chats c ON c.id=b.chat_id
+        WHERE b.chat_id=?${id === undefined ? '' : ' AND b.id=?'}`)
+      .get(...(id === undefined ? [chatId] : [chatId, id])) as Row | undefined;
     if (!b) throw new HttpError(404, 'Branch not found');
-    return b;
+    return { id: b.id, chatId: b.chat_id, headRevision: b.head_revision };
   }
 
   startAttempt(
@@ -1095,7 +1038,7 @@ export class ProductStore {
       ? (
           this.db
             .prepare(
-              "SELECT json_set(json_remove(v.body,'$.package'),'$.text','') AS body, json_type(v.body,'$.package') AS packaged, (SELECT image.value FROM json_each(v.body,'$.package.images') image WHERE json_extract(image.value,'$.id')=json_extract(v.body,'$.package.portraitImageId') LIMIT 1) AS portrait FROM versions v WHERE kind='content' AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id"
+              "SELECT json_set(json_remove(v.body,'$.package'),'$.text','') AS body, json_type(v.body,'$.package') AS packaged, (SELECT image.value FROM json_each(v.body,'$.package.images') image WHERE json_extract(image.value,'$.id')=json_extract(v.body,'$.package.portraitImageId') LIMIT 1) AS portrait FROM versions v WHERE kind='content' AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id"
             )
             .all() as Row[]
         ).map((r) => ({

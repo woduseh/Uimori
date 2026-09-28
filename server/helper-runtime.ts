@@ -5,6 +5,7 @@ import { performance } from 'node:perf_hooks';
 import { HELPER_APP_TOOLS, HELPER_GATEWAY_TOOLS, describeHelperTools } from './helper-app-tools.js';
 import { HELPER_DATA_TOOLS, invokeDataTool } from './helper-data-tools.js';
 import { invokeResourceTool } from './helper-resource-tools.js';
+import { readHelperEditor } from './helper-resource-editing.js';
 import { readResource } from './resource-service.js';
 import { editableResource } from '../core/resource-editing.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -65,8 +66,6 @@ const HELPER_READ_NAMES = new Set([
   'app.tools',
   ...MAIN_READ_TOOLS.map((tool) => tool.name),
   'workspace.read',
-  'library.search',
-  'library.read',
   'resource.read',
   'illustration-preset.list',
   'illustration-preset.guide',
@@ -207,7 +206,8 @@ function completedReadReferences(previous: HelperReadReference[], events: ToolEv
     // A schema or a small exact editing field is useful working input, not prose to summarize away.
     const exact =
       (name === 'app.tools' && Array.isArray(args.names)) ||
-      (name === 'resource.read' && typeof args.path === 'string');
+      ((name === 'resource.read' || (name === 'workspace.read' && args.kind === 'editor')) &&
+        typeof args.path === 'string');
     const returned =
       event.result && typeof event.result === 'object'
         ? exact && JSON.stringify(event.result).length <= 8_000
@@ -835,7 +835,7 @@ export class HelperRuntime {
             ) {
               const args = record(call.arguments);
               const nextRead =
-                call.name === 'resource.read' || call.name === 'library.read'
+                call.name === 'resource.read'
                   ? { name: 'resource.read', arguments: { kind: args.kind, id: args.id } }
                   : {
                       name: 'data.search',
@@ -1171,11 +1171,12 @@ export class HelperRuntime {
     if (name === 'chat.read') {
       if (scope.kind !== 'chat')
         throw new HttpError(400, 'chat.list로 채팅을 찾고 chatId를 지정해 주세요.');
+      const branch = this.store.product.branch(scope.chatId, scope.branchId);
       return {
         chat: this.store.chat(scope.chatId),
-        branches: this.store.product.branches(scope.chatId),
+        branch,
         messages: this.store
-          .history(this.store.product.branch(scope.chatId, scope.branchId).headRevision)
+          .history(branch.headRevision)
           .map(({ revision, contentHash }) => ({ id: revision, hash: contentHash })),
       };
     }
@@ -1210,21 +1211,13 @@ export class HelperRuntime {
         : service.remove(scope.chatId, body, task.id);
     }
     if (name === 'workspace.read') {
-      if (args.kind === 'editor') return task.snapshot.editor ?? null;
+      if (args.kind === 'editor') return readHelperEditor(task.snapshot.editor, args);
       if (args.kind === 'settings')
         return {
           workspace: promptWorkspace(this.store),
           ...(scope.kind === 'chat' ? { chat: this.store.chat(scope.chatId) } : {}),
         };
-      return this.store.product.libraryMetadata();
-    }
-    if (name === 'library.search') return this.store.product.searchLibrary(args);
-    if (name === 'library.read') {
-      if (!['content', 'prompt-preset'].includes(args.kind))
-        throw new HttpError(400, 'Invalid library kind');
-      const id = text(args.id, 'library ID', 100);
-      this.store.product.assertAvailable(args.kind, id);
-      return this.store.product.get(args.kind, id);
+      throw new HttpError(400, 'INVALID_WORKSPACE_READ_KIND');
     }
     if (name === 'chat.rename' || name === 'chat.fork') {
       if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');

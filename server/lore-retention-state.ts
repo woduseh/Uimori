@@ -9,10 +9,15 @@ export type LoreRetentionState = {
   reads: RetainedLore[];
 };
 
-export function readLoreRetention(store: Store, run: Run): LoreRetentionState | undefined {
+export function readLoreRetention(
+  store: Store,
+  chatId: string,
+  branchId: string,
+  sourceId: string
+): LoreRetentionState | undefined {
   const row = store.db
     .prepare('SELECT body FROM chat_lore_state WHERE chat_id=? AND branch_id=? AND source_id=?')
-    .get(run.chatId, run.snapshot.branchId ?? `main:${run.chatId}`, run.sourceRevision ?? '');
+    .get(chatId, branchId, sourceId);
   return row ? (JSON.parse(String(row.body)) as LoreRetentionState) : undefined;
 }
 

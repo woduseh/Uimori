@@ -41,8 +41,6 @@ export type AgentDefinition = {
   trigger: 'before' | 'on-demand';
   tools: AgentReadScope[];
   maxCalls: number;
-  /** Accepted only when reading older presets; normalized settings drop this retired limit. */
-  maxOutputChars?: number;
 };
 export type AgentCollaboration = {
   enabled: boolean;
@@ -153,9 +151,6 @@ function definition(value: unknown, enabled: boolean): AgentDefinition {
     ['id', 'title', 'description', 'instructions', 'model', 'trigger', 'tools', 'maxCalls'],
     ['maxOutputChars']
   );
-  // Legacy character limits are not converted into tokens or applied to new responses.
-  if (Object.hasOwn(agent, 'maxOutputChars'))
-    integer(agent.maxOutputChars, 0, Number.MAX_SAFE_INTEGER);
   let model: AgentDefinition['model'] = null;
   if (agent.model !== null) {
     const ref = record(agent.model, ['id']);

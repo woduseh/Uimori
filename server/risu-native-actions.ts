@@ -221,11 +221,7 @@ export async function applyNativeRisuAction(
       if (store.run(reserved.id).status !== 'running')
         throw new HttpError(409, 'RISU_NATIVE_ACTION_CANCELLED');
       // The atomic rewind is immediately followed by copy-on-write source commits.
-      store.db
-        .prepare('UPDATE branches SET head_revision=? WHERE id=?')
-        .run(retained, captured.branch.id);
-      if (captured.branch.default)
-        store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(retained, chatId);
+      store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(retained, chatId);
       let head = retained;
       let lastRunId = reserved.id;
       for (let index = first; index < next.length; index++) {

@@ -18,6 +18,7 @@ import {
   CONTEXT_SUMMARY_SEMANTICS,
 } from '../core/context-summary-policy.js';
 import { generationFromModel } from '../core/model-capabilities.js';
+import { editableResource } from '../core/resource-editing.js';
 import { type Content, type ModelPreset, type ModelSnapshot } from '../core/product.js';
 import type { HelperEditor, HelperTask } from '../core/helper.js';
 import type { ToolEvent } from '../core/types.js';
@@ -290,7 +291,7 @@ test('helper compaction resumes completed library reads and exact writes within 
   // Keep metadata-only discovery below the soft trigger as the real tool catalog grows.
   // Keep the read under the tool-result cap while letting ordinary helper history cross its context budget.
   f.updateModel(f.helperModel.id, { inputTokenLimit: 8192 });
-  const librarySource = Array.from({ length: 1_400 }, (_, index) =>
+  const librarySource = Array.from({ length: 3_000 }, (_, index) =>
     index.toString(36).padStart(4, '0')
   ).join(' ');
   const library = f.store.product.content(
@@ -312,15 +313,14 @@ test('helper compaction resumes completed library reads and exact writes within 
       expect(continuation(request)).toBeUndefined();
       return tools(
         tool('saved', 'resource.save', { expectedRevision: 1 }),
-        tool('library-metadata', 'workspace.read', { kind: 'library' }),
-        tool('found', 'library.search', { query: library.title })
+        tool('found', 'data.search', { scope: 'library', query: library.title, patterns: ['0000'] })
       );
     }
-    if (helperCalls === 2)
-      return tools(
-        tool('missing', 'library.read', { kind: 'content', id: 'missing-library-id' }),
-        tool('read', 'library.read', { kind: 'content', id: library.id })
-      );
+    if (helperCalls === 2) {
+      const found = events(request).find((event) => event.callId === 'found')!.result as any;
+      expect(found.items).toHaveLength(1);
+      return tools(tool('read', 'data.read', { refs: [found.items[0].ref], limit: 10_000 }));
+    }
     expect(request.stable.contract).toContain(CONTEXT_CONTINUATION_GUIDANCE);
     expect(request.stable.contract).toContain(CONTEXT_RETRIEVAL_GUIDANCE);
     expect(continuation(request)).toMatchObject({
@@ -331,24 +331,16 @@ test('helper compaction resumes completed library reads and exact writes within 
       status: 'in-progress',
       reason: 'host-compaction',
       completedReads: [
-        { name: 'workspace.read', args: { kind: 'library' } },
         {
-          name: 'library.search',
-          args: { query: library.title },
-          returned: { items: [{ id: library.id, revision: 1, title: library.title }] },
+          name: 'data.search',
+          args: { scope: 'library', query: library.title, patterns: ['0000'] },
+          returned: { items: [{ ref: { id: library.id, revision: 1 }, title: library.title }] },
         },
         {
-          name: 'library.read',
-          args: { kind: 'content', id: library.id },
-          returned: { id: library.id, revision: 1, title: library.title, kind: 'bot' },
+          name: 'data.read',
+          returned: { items: [{ ref: { id: library.id, revision: 1 } }] },
         },
       ],
-    });
-    expect(continuation(request)!.completedReads[0].returned.contents).toContainEqual({
-      id: library.id,
-      revision: 1,
-      title: library.title,
-      kind: 'bot',
     });
     expect(carried(request)).toMatchObject([
       {
@@ -357,9 +349,7 @@ test('helper compaction resumes completed library reads and exact writes within 
         denied: false,
         result: { id: f.saved.id, revision: 2 },
       },
-      { callId: 'missing', name: 'library.read', denied: true },
     ]);
-    expect(JSON.stringify(continuation(request))).not.toContain('missing-library-id');
     expect(JSON.stringify(request.input)).not.toContain(librarySource);
     expect(events(request)).toEqual([]);
     expect(request).not.toHaveProperty('opaqueState');
@@ -371,6 +361,7 @@ test('helper compaction resumes completed library reads and exact writes within 
     return structuredClone(success);
   });
   const task = await f.run();
+  if (task.status !== 'completed') throw new Error(task.error ?? 'helper failed');
   expect(task.status).toBe('completed');
   expect(task.snapshot.scope).toEqual(originalSnapshot!.scope);
   expect(task.snapshot.history).toEqual([]);
@@ -539,7 +530,13 @@ test('forced compaction retains exact small scoped evidence and requested app sc
     if (request.role === 'context') return summarized();
     if (++helperCalls === 1)
       return tools(
-        tool('material', 'library.read', { kind: 'content', id: library.id }),
+        tool('material', 'data.search', {
+          scope: 'library',
+          ids: [library.id],
+          patterns: ['0'],
+          context: 1200,
+          limit: 50,
+        }),
         tool('schema', 'app.tools', { names: ['resource.read', 'resource.patch'] }),
         tool('field', 'resource.read', {
           kind: 'content',
@@ -563,6 +560,7 @@ test('forced compaction retains exact small scoped evidence and requested app sc
     return structuredClone(success);
   });
   const task = await f.run();
+  if (task.status !== 'completed') throw new Error(task.error ?? 'helper failed');
   expect(task.status, task.error ?? '').toBe('completed');
   expect(log.requests.map((request) => request.role)).toEqual(['helper', 'context', 'helper']);
   expect(compactions(f, task).map((decision) => decision.applied)).toEqual([true]);
@@ -925,51 +923,77 @@ test.each(['current failed task', 'earlier completed task'] as const)(
   }
 );
 
-test('an oversized fallback read is rejected before summarization and its body never reaches a provider', async () => {
+test('an oversized captured editor is paged before its source reaches a provider', async () => {
   const f = await fixture({ fixed: false });
   const canary = 'OVERSIZED_PRIVATE_LIBRARY_BODY';
   const library = f.store.product.content(
     fixtureBotInput('Oversized source', canary.repeat(2_000))
   ) as Content;
+  Object.assign(f.editor, {
+    kind: 'content',
+    targetId: library.id,
+    revision: library.revision,
+    title: library.title,
+    model: editableResource('content', library),
+    source: 'unsaved',
+  });
   let helperCalls = 0;
   const log = script(f, (request) => {
     expect(request.role).toBe('helper');
-    if (++helperCalls === 1)
-      return tools(tool('large-read', 'library.read', { kind: 'content', id: library.id }));
+    helperCalls++;
+    if (helperCalls === 1)
+      return tools(tool('editor-overview', 'workspace.read', { kind: 'editor' }));
+    if (helperCalls === 2) {
+      expect(events(request)).toContainEqual(
+        expect.objectContaining({
+          callId: 'editor-overview',
+          denied: false,
+          result: expect.objectContaining({
+            inputOrigin: 'unsaved-device-editor',
+            id: library.id,
+            revision: library.revision,
+            regions: expect.any(Array),
+          }),
+        })
+      );
+      return tools(
+        tool('editor-field', 'workspace.read', {
+          kind: 'editor',
+          path: '/package/nativeRisu/card/description',
+          textLimit: 80,
+        })
+      );
+    }
     expect(events(request)).toContainEqual(
       expect.objectContaining({
-        callId: 'large-read',
-        denied: true,
-        errorKind: 'recoverable',
+        callId: 'editor-field',
+        denied: false,
         result: expect.objectContaining({
-          error: 'HELPER_READ_TOO_LARGE',
-          returned: false,
-          originalResultChars: expect.any(Number),
-          nextRead: {
-            name: 'resource.read',
-            arguments: { kind: 'content', id: library.id },
-          },
+          inputOrigin: 'unsaved-device-editor',
+          text: expect.stringContaining(canary),
+          nextOffset: 80,
         }),
       })
     );
-    expect(JSON.stringify(request)).not.toContain(canary);
+    expect(JSON.stringify(request)).not.toContain(canary.repeat(2_000));
     return structuredClone(success);
   });
   const task = await f.run();
-  expect(task).toMatchObject({ status: 'completed', usage: { modelCalls: 2 } });
-  expect(log.requests.map((request) => request.role)).toEqual(['helper', 'helper']);
+  if (task.status !== 'completed') throw new Error(task.error ?? 'helper failed');
+  expect(task).toMatchObject({ status: 'completed', usage: { modelCalls: 3 } });
+  expect(log.requests.map((request) => request.role)).toEqual(['helper', 'helper', 'helper']);
   expect(compactions(f, task)).toEqual([]);
   expect(checkpointRows(f)).toEqual([]);
   const finished = f.workspace
     .events(f.conversation.id)
     .find((event) => event.taskId === task.id && event.kind === 'tool.finished');
   expect(finished?.data).toMatchObject({
-    name: 'library.read',
+    name: 'workspace.read',
     originalResultChars: expect.any(Number),
     providedResultChars: expect.any(Number),
   });
-  expect((finished!.data as any).originalResultChars).toBeGreaterThan(32_000);
-  expect((finished!.data as any).providedResultChars).toBeLessThan(2_000);
+  expect((finished!.data as any).originalResultChars).toBeLessThan(24_000);
+  expect((finished!.data as any).providedResultChars).toBeLessThan(24_000);
 });
 
 test('a concurrent helper checkpoint remains active when the current task adopts a late candidate', async () => {

@@ -7,7 +7,6 @@ export type ActivityNoticeItem = {
   startedAt: string;
   finishedAt: string | null;
   kind: string;
-  otherBranch: boolean;
   runId: string;
   sourceRevision?: string | null;
   sourceHash?: string | null;

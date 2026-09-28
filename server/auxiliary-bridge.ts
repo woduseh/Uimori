@@ -1,6 +1,7 @@
 import { stageTranslationJudgment, translationRecovery } from './source-editing.js';
 import { translationPolicy, type TranslationPolicy } from '../core/translation-settings.js';
 import type { Store } from './store.js';
+import { readRunSnapshot } from './run-projections.js';
 import { type AssetEntry } from '../core/auxiliary.js';
 import type { AuxiliaryStoreBridge } from './product-auxiliary.js';
 import type { Controls } from './controls.js';
@@ -16,7 +17,10 @@ export function auxiliaryBridge(
     load(id) {
       const job = store.job(id);
       const source = store.sourceAtHash(job.sourceRevision, job.sourceHash);
-      const snapshot = store.product.resolveJobPrompt(store.run(source.runId).snapshot, job.input);
+      const snapshot = store.product.resolveJobPrompt(
+        readRunSnapshot(store, source.runId),
+        job.input
+      );
       const assets: AssetEntry[] = store.product.assets(job.chatId).map((a) => ({
         ref: a.id,
         revision: a.revision,

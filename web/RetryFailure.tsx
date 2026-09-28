@@ -55,7 +55,7 @@ export function RetryFailure({
             type="button"
             className="secondary"
             disabled={disabled}
-            title="새 분기에서 보존된 본문을 판정해요. 본문 생성은 반복하지 않아요."
+            title="보존된 본문을 다시 판정해요. 본문 생성은 반복하지 않아요."
             onClick={onRejudge}
           >
             판정만 다시 시도

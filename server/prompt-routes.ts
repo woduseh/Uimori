@@ -1,4 +1,5 @@
 import { currentBotTranslationGuide } from './translation-guide.js';
+import { readRunSnapshot } from './run-projections.js';
 import { EXECUTION_INPUT_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
@@ -131,7 +132,9 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
               hash: createHash('sha256').update(snapshot.request).digest('hex'),
             };
         const frozen = branch.headRevision
-          ? structuredClone(store.run((source as import('../core/types.js').Source).runId).snapshot)
+          ? structuredClone(
+              readRunSnapshot(store, (source as import('../core/types.js').Source).runId)
+            )
           : snapshot;
         const selected = profile.promptPresets?.translation;
         const preset = {

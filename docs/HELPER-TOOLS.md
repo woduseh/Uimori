@@ -12,7 +12,7 @@ Use `data.search` for factual lookup. It searches authored scalar fields once ra
 {"scope":"library","query":"하린","kinds":["bot"],"patterns":["나이","Age","years old"],"match":"any"}
 ```
 
-`query` filters title/ID/kind; `patterns` searches field text. Patterns are case-insensitive literal strings by default, including two-character Korean terms and punctuation. Set `regex:true` for regular expressions. `match:"all"` requires all patterns in the same field, not necessarily the same returned excerpt. Empty/absent patterns list document references for browsing.
+Whitespace-separated `query` terms must all match title/ID/kind or, in the library, the category (`bot`, `persona`, `module`, `main`, `translation`). Library document results expose that category as `metadata.category`; prompt resources have kind `prompt` and category `main` or `translation`. `patterns` searches field text. Patterns are case-insensitive literal strings by default, including two-character Korean terms and punctuation. Set `regex:true` for regular expressions. `match:"all"` requires all patterns in the same field, not necessarily the same returned excerpt. Empty/absent patterns list document references for browsing.
 
 Use `output:"documents"` to locate resources by a name mentioned in their contents, like a filenames-only grep: each matching document appears once without body excerpts. A failed title `query` does not prove that a resource is absent; remove that filter before searching spelling variants in `patterns`. Then pass the selected `ids` and search the requested fact with the default `output:"matches"`. `paths` optionally limits both modes to exact JSON Pointer fields or their children. Human-authored descriptions and lore are searched before extensions/assets; HTML and scripts remain explicitly searchable and are not silently excluded.
 
@@ -28,6 +28,8 @@ The scopes are:
 | `editor` | Editor input captured at admission: either the exact saved revision or an unsaved device draft. Returned origin distinguishes them. |
 
 The default is `editor` when captured editor input is available, otherwise `current` for a chat helper and `library` for a library helper. A clean editor sends only an ID/revision; admission checks that revision and freezes its saved model. A dirty editor sends its prepared device input. Specify the scope when comparing that reservation with live library data. The initial helper context includes identifiers and names without full editor JSON or all source bodies. Current selection is a convenience, not a permission boundary. Unsaved input can be analyzed; writes to that same stored resource require saving the device draft first. Other resources remain usable.
+
+The discovered `workspace.read` operation accepts `kind:"settings"` or `kind:"editor"`. Editor reads use the captured model, including unsaved input, and return a compact overview by default. Follow a returned JSON Pointer `path` with `fields`, `offset`/`limit`, or `textOffset`/`textLimit` to inspect exact types, missing or empty fields, and long text in pages. Each result includes the captured revision and `inputOrigin`; it never substitutes a later saved version. `data.search/read(scope:"editor")` remains the shorter route for ordinary facts. Neither operation saves the draft.
 
 The reader's **도우미에게 물어보기** action preserves the complete selected text in the helper task's `selection`, including its source ID and hash. It does not copy the passage into the current model request a second time or replace an existing request draft. An empty draft receives a short review request. The saved conversation retains the selected passage and source identity for follow-up turns after completed-task input cleanup; the displayed and editable request remains the user's exact text. Requests and selections each accept up to 2,000,000 UTF-16 units, matching stored prose; oversized device input is retained with an explicit message. The actual model context budget still applies without silently truncating selected text.
 
@@ -54,7 +56,7 @@ Call `db.query` without `sql` to discover actual view columns and examples. The 
 | View | Purpose |
 | --- | --- |
 | `agent_resources` | Current visible bots/personas/modules/presets and their single authored JSON representation. |
-| `agent_chats` | Chat titles, branch heads, and attached package references. |
+| `agent_chats` | Chat titles, current heads, and attached package references. |
 | `agent_messages` | Live source ancestry, scene numbers, original request/text, and source hashes. |
 | `agent_usage` | Provider-reported attempt usage, role, model, helper task/purpose/segment. |
 | `agent_helper_inputs` | Small per-helper-attempt input estimates and preparation timings. |

@@ -360,7 +360,7 @@ export function BotBranch(
                     title={chat.title}
                     label="채팅 삭제"
                     disabled={busy}
-                    description="이 채팅의 모든 분기, 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요."
+                    description="이 채팅의 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요."
                     onError={onError}
                     onDeleted={onChatsChanged}
                   />

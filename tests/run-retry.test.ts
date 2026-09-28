@@ -102,7 +102,7 @@ test('successful request repeats with current settings in an independent chat an
     routes: { ...profile.routes, main: { id: model.id } },
     image: false,
   });
-  const branches = store.product.branches(chat.id).length;
+  const branch = store.product.branch(chat.id);
   const retry = store.retryRun(selected.run.id, 'repeat-once');
   expect(retry.created).toBe(true);
   expect(retry.run.id).not.toBe(selected.run.id);
@@ -111,7 +111,7 @@ test('successful request repeats with current settings in an independent chat an
   expect(store.source(retry.run.parentRevision!).text).toBe(first.source.text);
   expect(retry.run.snapshot.branchId).toBeTypeOf('string');
   expect(retry.run.snapshot.branchId).not.toBe(selected.run.snapshot.branchId);
-  expect(store.product.branches(chat.id)).toHaveLength(branches);
+  expect(store.product.branch(chat.id)).toEqual(branch);
   expect(retry.run.snapshot).toMatchObject({
     settings: { maxCalls: 12 },
     profile: {
@@ -135,7 +135,7 @@ test('successful request repeats with current settings in an independent chat an
     created: false,
     run: retry.run,
   });
-  expect(store.product.branches(chat.id)).toHaveLength(branches);
+  expect(store.product.branch(chat.id)).toEqual(branch);
   expect(store.retryRun(first.run.id, 'repeat-once').run.id).not.toBe(retry.run.id);
 });
 

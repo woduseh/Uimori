@@ -417,6 +417,65 @@ test('library filters distinguish bot/persona/module, hide retired library entri
   await expect(f.invoke('data.read', { ref: refs[0], refs })).rejects.toThrow();
 });
 
+test('library document search lists current resources by title, ID, category and prompt role', async () => {
+  const f = fixture();
+  const original = bot(f);
+  const current = f.store.product.content(
+    {
+      ...fixtureBotInput('Revised Archive Beacon', 'PRIVATE_CARD_BODY ' + 'body '.repeat(270_000)),
+      expectedRevision: original.revision,
+    },
+    original.id
+  ) as Content;
+  const main = f.store.product.promptPreset({
+    title: 'Main Archive',
+    role: 'main',
+    text: 'PRIVATE_PROMPT_BODY ' + 'prompt '.repeat(25_000),
+  });
+  f.store.product.promptPreset({
+    title: 'Translation Archive',
+    role: 'translation',
+    text: 'Translation prompt body',
+  });
+  const content = await f.invoke('data.search', {
+    scope: 'library',
+    output: 'documents',
+    query: `ＢＥＡＣＯＮ ${current.id.toUpperCase()} bot`,
+  });
+  expect(content.items).toMatchObject([
+    { id: current.id, revision: current.revision, metadata: { category: 'bot' } },
+  ]);
+  expect(content.items[0].title).toBe('Revised Archive Beacon');
+  expect(content.items[0]).not.toHaveProperty('text');
+  expect(JSON.stringify(content)).not.toContain('PRIVATE_CARD_BODY');
+  const prompts = await f.invoke('data.search', {
+    scope: 'library',
+    output: 'documents',
+    query: 'archive MAIN prompt',
+  });
+  expect(prompts.items).toMatchObject([
+    { id: main.id, kind: 'prompt', metadata: { category: 'main' } },
+  ]);
+  expect(JSON.stringify(prompts)).not.toContain('PRIVATE_PROMPT_BODY');
+  const listed = await f.invoke('data.search', {
+    scope: 'library',
+    output: 'documents',
+    limit: 5,
+  });
+  expect(listed.items).toHaveLength(3);
+  expect(JSON.stringify(listed)).not.toContain('PRIVATE_CARD_BODY');
+  expect(JSON.stringify(listed)).not.toContain('PRIVATE_PROMPT_BODY');
+  expect(
+    (
+      await f.invoke('data.search', {
+        scope: 'library',
+        output: 'documents',
+        query: 'Archive translation bot',
+      })
+    ).items
+  ).toEqual([]);
+});
+
 test('live references detect a later revision while unsaved editor input is separate and not written to the library', async () => {
   const f = fixture(),
     b = bot(f);

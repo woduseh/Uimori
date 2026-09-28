@@ -316,25 +316,6 @@
 .usage-inspector p {
   font-size: 12px;
 }
-.branch-list {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 24px;
-}
-.branch-choice {
-  display: flex;
-  align-items: flex-start;
-  text-align: left;
-  flex-direction: column;
-  gap: 4px;
-}
-.branch-choice.selected {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.branches-panel > .form-actions {
-  margin-top: 20px;
-}
 .panel-intro {
   margin-bottom: 20px;
 }
@@ -368,25 +349,6 @@
     max-width: 100%;
   }
 }
-.branch-list,
-.branch-choice {
-  min-width: 0;
-}
-.branch-choice strong {
-  overflow-wrap: anywhere;
-}
-.branch-preview {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  font-size: 12px;
-  line-height: 1.75;
-  color: var(--muted);
-  margin-top: 3px;
-}
-
 /* Marks a setting that lives in this browser only, next to ones the workspace shares. */
 .scope-badge {
   margin-left: 8px;
@@ -397,23 +359,4 @@
   font-weight: 400;
   color: var(--muted);
   vertical-align: middle;
-}
-.branch-list > .branch-entry {
-  position: relative;
-}
-.branch-list > .branch-entry:not([data-depth="0"])::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: -10px;
-  top: 0;
-  bottom: 0;
-  border-inline-start: 1px solid var(--line);
-}
-.branch-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.branch-actions > button {
-  flex: 1 1 auto;
 }

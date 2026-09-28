@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
+import { readRunSnapshot } from '../server/run-projections.js';
 import { createApp } from '../server/app.js';
 import type { Content } from '../core/product.js';
 import {
@@ -91,7 +92,10 @@ function story(store: Store, bot: Content) {
 }
 function resolved(store: Store, sourceId: string, jobId: string) {
   const source = store.source(sourceId);
-  return store.product.resolveJobPrompt(store.run(source.runId).snapshot, store.job(jobId).input);
+  return store.product.resolveJobPrompt(
+    readRunSnapshot(store, source.runId),
+    store.job(jobId).input
+  );
 }
 
 test('guide validates authored text, rejects unfinished rows and preserves unrelated extensions', () => {

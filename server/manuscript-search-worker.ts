@@ -166,8 +166,8 @@ function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
   if (long.length) params.push(long.map((term) => `"${term.replaceAll('"', '""')}"`).join(' AND '));
   const rows = db
     .prepare(`WITH RECURSIVE visible(chat_id,branch_id,source_id) AS (
-    SELECT b.chat_id,b.id,b.head_revision FROM branches b JOIN chat_organization o ON o.chat_id=b.chat_id
-      WHERE b.is_default=1 AND b.head_revision IS NOT NULL ${scope}
+    SELECT b.chat_id,b.id,c.head_revision FROM branches b JOIN chats c ON c.id=b.chat_id JOIN chat_organization o ON o.chat_id=b.chat_id
+      WHERE c.head_revision IS NOT NULL ${scope}
     UNION SELECT v.chat_id,v.branch_id,s.parent_revision FROM visible v JOIN sources s ON s.id=v.source_id WHERE s.parent_revision IS NOT NULL
   ), numbered AS (
     SELECT v.*,s.rowid AS ordinal,c.title,o.bot_id,

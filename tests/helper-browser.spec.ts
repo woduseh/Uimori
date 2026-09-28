@@ -669,7 +669,7 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
         'deleted-helper-session'
       );
     },
-    { chatId: chat.id, branchId: saved.branches!.find((branch) => branch.default)!.id }
+    { chatId: chat.id, branchId: saved.branch.id }
   );
   await openSourceActions(article);
   await article.getByRole('button', { name: '도우미에게 물어보기' }).click();

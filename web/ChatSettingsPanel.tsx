@@ -334,8 +334,8 @@ export function ChatSettingsPanel({
                 <StoryPanel
                   chatId={state.selected}
                   refreshKey={state.detail?.reader.cursor ?? 0}
-                  branchId={state.branch?.id ?? `main:${state.selected}`}
-                  headRevision={state.branch?.headRevision ?? detail.chat.headRevision}
+                  branchId={detail.branch.id}
+                  headRevision={detail.branch.headRevision}
                   settingsRevision={detail.chat.settingsRevision}
                   profileRevision={detail.profile?.revision}
                   active={active === 'story' && showingDetail}

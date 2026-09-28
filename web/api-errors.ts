@@ -132,7 +132,7 @@ for (const suffix of [
   'INVALID_GRAPH',
 ])
   messages[`CHAT_BACKUP_${suffix}`] =
-    '채팅 백업의 형식이나 분기 연결이 올바르지 않아요. 백업 파일을 확인해 주세요.';
+    '채팅 백업의 형식이나 채팅 구성이 올바르지 않아요. 백업 파일을 확인해 주세요.';
 
 const settingErrors = new Set([
   'Model disabled',

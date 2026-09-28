@@ -32,8 +32,7 @@
       "model": null,
       "trigger": "on-demand",
       "tools": ["knowledge", "notes", "story", "skills"],
-      "maxCalls": 3,
-      "maxOutputChars": 6000
+      "maxCalls": 3
     },
     {
       "id": "continuity",
@@ -43,8 +42,7 @@
       "model": null,
       "trigger": "on-demand",
       "tools": ["knowledge", "notes", "story"],
-      "maxCalls": 4,
-      "maxOutputChars": 6000
+      "maxCalls": 4
     },
     {
       "id": "narrative",
@@ -54,8 +52,7 @@
       "model": null,
       "trigger": "on-demand",
       "tools": ["knowledge", "notes", "story", "skills"],
-      "maxCalls": 3,
-      "maxOutputChars": 6000
+      "maxCalls": 3
     },
     {
       "id": "offscreen",
@@ -65,8 +62,7 @@
       "model": null,
       "trigger": "on-demand",
       "tools": ["knowledge", "notes", "story"],
-      "maxCalls": 3,
-      "maxOutputChars": 5000
+      "maxCalls": 3
     }
   ]
 }

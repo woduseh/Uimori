@@ -113,9 +113,6 @@ function fixture() {
       .run(sourceId, chat.id, runId, prior.parentRevision, text, hash(text), time);
     history.push({ revision: sourceId, text });
   }
-  store.db
-    .prepare('UPDATE branches SET head_revision=? WHERE id=?')
-    .run('source-3', `main:${chat.id}`);
   store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run('source-3', chat.id);
   const save = (index: number, value: RunSnapshot) => {
     snapshots[index] = structuredClone(value);
