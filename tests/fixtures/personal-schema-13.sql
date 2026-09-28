@@ -192,63 +192,63 @@ CREATE INDEX attempts_usage_period ON attempts(is_synthetic,started_at);
 CREATE INDEX attempts_usage_model ON attempts(connection_id,model_id,started_at);
 CREATE INDEX push_outbox_due ON push_outbox(status,next_at);
 CREATE INDEX push_outbox_chat ON push_outbox(chat_id);
-CREATE TRIGGER search_sources_insert AFTER INSERT ON sources 
-        BEGIN 
+CREATE TRIGGER search_sources_insert AFTER INSERT ON sources
+        BEGIN
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=new.id
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
-CREATE TRIGGER search_sources_update AFTER UPDATE OF text,hash ON sources 
-        BEGIN 
+CREATE TRIGGER search_sources_update AFTER UPDATE OF text,hash ON sources
+        BEGIN
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=new.id
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
-CREATE TRIGGER search_source_edits_insert AFTER INSERT ON source_edits 
-        BEGIN 
+CREATE TRIGGER search_source_edits_insert AFTER INSERT ON source_edits
+        BEGIN
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=new.source_id
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
-CREATE TRIGGER search_source_edits_update AFTER UPDATE ON source_edits 
-        BEGIN 
+CREATE TRIGGER search_source_edits_update AFTER UPDATE ON source_edits
+        BEGIN
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=new.source_id
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
-CREATE TRIGGER search_source_edits_delete AFTER DELETE ON source_edits 
-        BEGIN 
+CREATE TRIGGER search_source_edits_delete AFTER DELETE ON source_edits
+        BEGIN
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=old.source_id
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
 CREATE TRIGGER search_jobs_insert AFTER INSERT ON jobs WHEN new.kind='translation'
-        BEGIN 
+        BEGIN
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=new.source_revision
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
 CREATE TRIGGER search_jobs_update AFTER UPDATE OF status,source_hash,revision ON jobs WHEN new.kind='translation'
-        BEGIN 
+        BEGIN
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=new.source_revision
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
 CREATE TRIGGER search_jobs_delete AFTER DELETE ON jobs WHEN old.kind='translation'
-        BEGIN 
+        BEGIN
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=old.source_revision
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
 CREATE TRIGGER search_job_result_insert AFTER INSERT ON job_results WHEN EXISTS(SELECT 1 FROM jobs WHERE id=new.job_id AND kind='translation')
-      BEGIN 
+      BEGIN
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=(SELECT source_revision FROM jobs WHERE id=new.job_id AND kind='translation')
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
 CREATE TRIGGER search_job_result_update AFTER UPDATE ON job_results WHEN EXISTS(SELECT 1 FROM jobs WHERE id=new.job_id AND kind='translation')
-      BEGIN 
+      BEGIN
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=(SELECT source_revision FROM jobs WHERE id=new.job_id AND kind='translation')
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
 CREATE TRIGGER search_job_result_delete AFTER DELETE ON job_results WHEN EXISTS(SELECT 1 FROM jobs WHERE id=old.job_id AND kind='translation')
-      BEGIN 
+      BEGIN
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=(SELECT source_revision FROM jobs WHERE id=old.job_id AND kind='translation')
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
 CREATE TRIGGER search_request_update AFTER UPDATE OF request ON runs BEGIN
-      
+
     INSERT INTO search_dirty_sources(source_id,revision)
       SELECT id,1 FROM sources WHERE id=new.source_revision
       ON CONFLICT(source_id) DO UPDATE SET revision=revision+1; END;
