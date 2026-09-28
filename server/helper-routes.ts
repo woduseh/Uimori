@@ -132,7 +132,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   );
   app.post<{ Params: { id: string } }>(
     '/api/helper/conversations/:id/messages',
-    { bodyLimit: 32 * 1024 * 1024 },
+    { bodyLimit: 48 * 1024 * 1024 },
     (request) => {
       const body = record(request.body);
       fields(body, ['requestKey', 'text', 'editor', 'selection', 'retryOf', 'outline']);
@@ -154,14 +154,21 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       let editor: HelperEditor | undefined;
       if (body.editor !== undefined) {
         const input = record(body.editor);
-        fields(input, ['targetId', 'revision', 'title', 'kind', 'model']);
+        fields(input, ['targetId', 'revision', 'title', 'kind', 'model', 'source']);
         if (!['content', 'prompt-preset', 'prompt-workspace'].includes(input.kind))
           throw new HttpError(400, 'Invalid editor kind');
+        if (input.source !== undefined && !['saved', 'unsaved'].includes(input.source))
+          throw new HttpError(400, 'Invalid editor source');
+        if (input.source === 'saved' && input.model !== undefined)
+          throw new HttpError(400, '저장된 자료는 ID와 수정 번호로 보내 주세요.');
+        if (input.source === 'unsaved' && input.model === undefined)
+          throw new HttpError(400, '미저장 입력을 함께 보내 주세요.');
         editor = {
           targetId: input.targetId === null ? null : text(input.targetId, 'resource ID', 100),
           revision: input.revision === null ? null : number(input.revision, 'revision'),
           title: text(input.title, 'editor title', 200, true),
           kind: input.kind,
+          ...(input.source ? { source: input.source } : {}),
           ...(input.model === undefined
             ? {}
             : {

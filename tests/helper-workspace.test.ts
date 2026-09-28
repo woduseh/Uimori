@@ -9,7 +9,9 @@ import { HelperWorkspace } from '../server/helper-workspace.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
-import { createFixtureChat } from './fixtures/chat.js';
+import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
+import { editableResource } from '../core/resource-editing.js';
+import { readResource, saveResource } from '../server/resource-service.js';
 import * as transport from '../core/transport.js';
 import type { HelperTaskSnapshot } from '../core/helper.js';
 import Fastify from 'fastify';
@@ -76,6 +78,108 @@ const success: transport.ProviderResult = {
   usage: { inputTokens: 10, outputTokens: 4, costUsd: null, raw: null, priceRevision: null },
   opaqueState: null,
 };
+
+test('saved editor references freeze at admission and identical retries survive later saves and cleanup', async () => {
+  const f = fixture();
+  const saved = f.store.product.content(fixtureBotInput('접수할 자료', '원래 본문'));
+  const editor = {
+    kind: 'content' as const,
+    source: 'saved' as const,
+    targetId: saved.id,
+    revision: saved.revision,
+    title: saved.title,
+  };
+  let captured: transport.Json | undefined;
+  const send = mockSend((request) => {
+    captured = request.input.source;
+    return structuredClone(success);
+  });
+  const task = f.runtime.enqueue(f.conversation.id, 'saved-reference', '내용을 설명해줘', editor);
+  expect(task.snapshot.editor).toMatchObject({ ...editor, model: { text: '원래 본문' } });
+  await Promise.all(f.work);
+  expect(captured).toMatchObject({ editor: { hasUnsavedInput: false } });
+  expect(f.workspace.task(task.id).snapshot.editor).toBeUndefined();
+  const model = editableResource('content', readResource(f.store, 'content', saved.id));
+  if (!('package' in model)) throw new Error('Expected content');
+  model.package.nativeRisu!.card.description = '사용자가 나중에 고친 본문';
+  const updated = saveResource(f.store, {
+    kind: 'content',
+    id: saved.id,
+    expectedRevision: saved.revision,
+    model,
+  }).saved;
+  expect(
+    f.runtime.enqueue(f.conversation.id, 'saved-reference', '내용을 설명해줘', editor).id
+  ).toBe(task.id);
+  expect(() =>
+    f.runtime.enqueue(f.conversation.id, 'saved-reference', '내용을 설명해줘', {
+      ...editor,
+      revision: updated.revision,
+    })
+  ).toThrow('같은 요청 키');
+  expect(() =>
+    f.runtime.enqueue(f.conversation.id, 'new-request', '내용을 설명해줘', editor)
+  ).toThrow('참고하던 자료가 변경');
+  expect(send).toHaveBeenCalledTimes(1);
+});
+
+test('an unsaved editor is analysis input and only mutations of that same resource are refused', async () => {
+  const f = fixture();
+  const saved = f.store.product.content(fixtureBotInput('편집 중인 자료'));
+  const other = f.store.product.content(fixtureBotInput('다른 자료'));
+  const draft = editableResource('content', readResource(f.store, 'content', saved.id));
+  mockSend((_request, _options, index) => {
+    if (index === 0)
+      return {
+        ...structuredClone(success),
+        status: 'tool_calls',
+        toolCalls: [saved, other].map((resource) => ({
+          id: resource.id,
+          name: 'app.call',
+          arguments: {
+            name: 'resource.patch',
+            arguments: {
+              kind: 'content',
+              id: resource.id,
+              expectedRevision: resource.revision,
+              changes: [{ path: '/package/nativeRisu/card/name', op: 'set', value: '변경된 제목' }],
+            },
+          },
+        })),
+      };
+    return structuredClone(success);
+  });
+  const task = f.runtime.enqueue(f.conversation.id, 'draft-target', '다른 자료의 제목을 바꿔줘', {
+    kind: 'content',
+    source: 'unsaved',
+    targetId: saved.id,
+    revision: saved.revision,
+    title: saved.title,
+    model: draft,
+  });
+  await Promise.all(f.work);
+  expect(readResource(f.store, 'content', saved.id).revision).toBe(saved.revision);
+  expect(readResource(f.store, 'content', other.id)).toMatchObject({
+    title: '변경된 제목',
+    revision: other.revision + 1,
+  });
+  expect(f.workspace.task(task.id).status).toBe('completed');
+  expect(
+    f.store.db
+      .prepare('SELECT COUNT(*) AS count FROM helper_operations WHERE task_id=?')
+      .get(task.id)?.count
+  ).toBe(1);
+  expect(() =>
+    f.runtime.enqueue(f.conversation.id, 'draft-target', '다른 자료의 제목을 바꿔줘', {
+      kind: 'content',
+      source: 'unsaved',
+      targetId: saved.id,
+      revision: saved.revision,
+      title: saved.title,
+      model: { ...draft, description: '재전송하면서 바뀐 입력' },
+    })
+  ).toThrow('같은 요청 키');
+});
 function mockSend(
   action?: (
     request: transport.ProviderRequest,

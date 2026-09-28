@@ -288,10 +288,13 @@ function continuation(request: transport.ProviderRequest) {
 test('helper compaction resumes completed library reads and exact writes within the same task', async () => {
   const f = await fixture({ fixed: false });
   // Keep metadata-only discovery below the soft trigger as the real tool catalog grows.
-  // The long library body must still exceed the hard limit and require one compaction.
-  f.updateModel(f.helperModel.id, { inputTokenLimit: 16384 });
+  // Keep the read under the tool-result cap while letting ordinary helper history cross its context budget.
+  f.updateModel(f.helperModel.id, { inputTokenLimit: 8192 });
+  const librarySource = Array.from({ length: 1_400 }, (_, index) =>
+    index.toString(36).padStart(4, '0')
+  ).join(' ');
   const library = f.store.product.content(
-    fixtureBotInput('Read progress register', readText.repeat(9))
+    fixtureBotInput('Read progress register', librarySource)
   ) as Content;
   let helperCalls = 0;
   let originalSnapshot: HelperTask['snapshot'] | undefined;
@@ -357,7 +360,7 @@ test('helper compaction resumes completed library reads and exact writes within 
       { callId: 'missing', name: 'library.read', denied: true },
     ]);
     expect(JSON.stringify(continuation(request))).not.toContain('missing-library-id');
-    expect(JSON.stringify(request.input)).not.toContain(readText);
+    expect(JSON.stringify(request.input)).not.toContain(librarySource);
     expect(events(request)).toEqual([]);
     expect(request).not.toHaveProperty('opaqueState');
     expect(f.workspace.task(f.currentTaskId).snapshot).toEqual(originalSnapshot);
@@ -446,6 +449,7 @@ test('completed read references retain returned ranges and revisions while allow
         ...f.readValue,
         revision: 2,
         hash: 'draft-hash-two',
+        text: 'Exact changed source segment.',
         source: { revision: 'source-two', hash: 'source-hash-two', start: 60, end: 110 },
         range: { start: 60, end: 110, unit: 'utf16-code-unit' },
         keptRanges: [{ start: 60, end: 110 }],
@@ -453,7 +457,12 @@ test('completed read references retain returned ranges and revisions while allow
         nextOffset: 110,
       };
       return tools(
-        tool('changed-source', 'resource.read', { kind: 'content', id: 'read-evidence' })
+        tool('changed-source', 'resource.read', {
+          kind: 'content',
+          id: 'read-evidence',
+          path: '/package/nativeRisu/card/description',
+          textOffset: 60,
+        })
       );
     }
     const resumed = continuation(request)!;
@@ -502,6 +511,61 @@ test('completed read references retain returned ranges and revisions while allow
   ]);
   expect(compactions(f, task).map((decision) => decision.applied)).toEqual([true, true]);
   expect(task.snapshot.context).toEqual({ activeRevision: 0, checkpoint: null });
+});
+
+test('forced compaction retains exact small scoped evidence and requested app schemas', async () => {
+  const f = await fixture();
+  const compactionSource = Array.from({ length: 1_400 }, (_, index) =>
+    index.toString(36).padStart(4, '0')
+  ).join(' ');
+  const library = f.store.product.content(
+    fixtureBotInput('Read material', compactionSource)
+  ) as Content;
+  const exactSource = 'Exact small source name 🌱';
+  f.readValue = {
+    kind: 'content',
+    id: f.saved.id,
+    revision: 1,
+    path: '/package/nativeRisu/card/name',
+    exists: true,
+    type: 'string',
+    length: exactSource.length,
+    text: exactSource,
+    textOffset: 0,
+    nextOffset: null,
+  };
+  let helperCalls = 0;
+  const log = script(f, (request) => {
+    if (request.role === 'context') return summarized();
+    if (++helperCalls === 1)
+      return tools(
+        tool('material', 'library.read', { kind: 'content', id: library.id }),
+        tool('schema', 'app.tools', { names: ['resource.read', 'resource.patch'] }),
+        tool('field', 'resource.read', {
+          kind: 'content',
+          id: f.saved.id,
+          path: '/package/nativeRisu/card/name',
+        })
+      );
+    const refs = continuation(request)?.completedReads ?? [];
+    expect(JSON.stringify(request.input)).not.toContain(compactionSource);
+    expect(refs).toContainEqual(
+      expect.objectContaining({
+        name: 'resource.read',
+        returned: f.readValue,
+      })
+    );
+    const schema = refs.find((item) => item.name === 'app.tools')?.returned as {
+      tools: { name: string }[];
+    };
+    expect(schema.tools.map((item) => item.name)).toEqual(['resource.read', 'resource.patch']);
+    expect(JSON.stringify(schema).length).toBeLessThan(8_000);
+    return structuredClone(success);
+  });
+  const task = await f.run();
+  expect(task.status, task.error ?? '').toBe('completed');
+  expect(log.requests.map((request) => request.role)).toEqual(['helper', 'context', 'helper']);
+  expect(compactions(f, task).map((decision) => decision.applied)).toEqual([true]);
 });
 
 test('small helper compaction stays above 85%, preserves exact writes, and waits for new read data', async () => {
@@ -675,7 +739,7 @@ test('unhelpful helper compaction preserves actual Vertex signatures, results an
   expect(f.mutations).toBe(1);
 });
 
-test('a hard crossing retries the same material but never sends an oversized original or drops exact receipts', async () => {
+test('an oversized fixed receipt fails before another summary without losing the committed effect', async () => {
   const f = await fixture();
   let helperCalls = 0,
     summaryCalls = 0;
@@ -694,23 +758,15 @@ test('a hard crossing retries the same material but never sends an oversized ori
   const task = await f.run();
   expect(task).toMatchObject({
     status: 'failed',
-    error: 'HELPER_COMPACTION_NO_PROGRESS',
-    usage: { modelCalls: 4 },
+    error: 'HELPER_FIXED_CONTEXT_TOO_LARGE',
+    usage: { modelCalls: 3 },
     completedEffects: { count: 1 },
   });
-  expect(log.requests.map((request) => request.role)).toEqual([
-    'helper',
-    'context',
-    'helper',
-    'context',
-  ]);
+  expect(log.requests.map((request) => request.role)).toEqual(['helper', 'context', 'helper']);
   const decisions = compactions(f, task),
     limit = f.target('helper').inputTokenLimit!;
-  expect(decisions).toHaveLength(2);
+  expect(decisions).toHaveLength(1);
   expect(decisions[0].beforeTokens).toBeLessThanOrEqual(limit);
-  expect(decisions[1].beforeTokens).toBeGreaterThan(limit);
-  expect(decisions[1].afterTokens).toBeGreaterThan(limit);
-  expect(decisions[1].preservedExchanges).toBe(1);
   expect(checkpointRows(f)).toEqual([]);
   expect(f.mutations).toBe(1);
   const receipt = f.store.db
@@ -788,7 +844,12 @@ test.each(['current failed task', 'earlier completed task'] as const)(
   'a read-only retry invalidates only a checkpoint covering its replaced messages (%s)',
   async (coveredTask) => {
     const f = await fixture({ fixed: false, reviewOnly: true });
-    f.readValue = { revision: 1, text: readText.repeat(9) };
+    f.readValue = {
+      revision: 1,
+      text: Array.from({ length: 2_500 }, (_, index) => index.toString(36).padStart(4, '0')).join(
+        ' '
+      ),
+    };
     let helperCalls = 0;
     const failedCall = coveredTask === 'current failed task' ? 2 : 3;
     const log = script(f, (request) => {
@@ -864,68 +925,52 @@ test.each(['current failed task', 'earlier completed task'] as const)(
   }
 );
 
-test.each([3, 12])(
-  'chunked helper summaries honor total budget %i and reserve the final helper call',
-  async (totalCalls) => {
-    const f = await fixture({ fixed: false });
-    f.updateModel(f.contextModel.id, { inputTokenLimit: 8192 });
-    f.readValue = { revision: 1, text: '별개의 약속: 🐱🦊𐐷'.repeat(3000) };
-    f.conversation = f.workspace.persona(f.conversation.id, f.conversation.revision, '', {
-      totalCalls,
-      helperCalls: 2,
-      artifacts: 1,
-    });
-    let helperCalls = 0;
-    const log = script(f, (request) =>
-      request.role === 'context'
-        ? summarized()
-        : ++helperCalls === 1
-          ? tools(tool('large-read', 'resource.read', { kind: 'content', id: 'read-evidence' }))
-          : structuredClone(success)
-    );
-    const task = await f.run();
-    if (totalCalls === 3) {
-      expect(task).toMatchObject({
-        status: 'failed',
-        error: 'MODEL_CALL_BUDGET_EXHAUSTED',
-        usage: { modelCalls: 2 },
-      });
-      expect(checkpointRows(f)).toEqual([]);
-      expect(helperCalls).toBe(1);
-    } else {
-      expect(task.status).toBe('completed');
-      expect(helperCalls).toBe(2);
-      expect(log.requests.filter((request) => request.role === 'context').length).toBeGreaterThan(
-        1
-      );
-      expect(checkpointRows(f)).toHaveLength(1);
-      const parts = log.requests
-        .filter((request) => request.role === 'context')
-        .map((request) => String((request.input.source as Record<string, transport.Json>).part));
-      for (const part of parts)
-        expect(
-          Array.from(part).filter(
-            (character) => character.length === 1 && /[\uD800-\uDFFF]/u.test(character)
-          )
-        ).toEqual([]);
-      const original = f.workspace
-        .events(f.conversation.id)
-        .find((event) => event.taskId === task.id && event.kind === 'tool.finished')!;
-      const event = {
+test('an oversized fallback read is rejected before summarization and its body never reaches a provider', async () => {
+  const f = await fixture({ fixed: false });
+  const canary = 'OVERSIZED_PRIVATE_LIBRARY_BODY';
+  const library = f.store.product.content(
+    fixtureBotInput('Oversized source', canary.repeat(2_000))
+  ) as Content;
+  let helperCalls = 0;
+  const log = script(f, (request) => {
+    expect(request.role).toBe('helper');
+    if (++helperCalls === 1)
+      return tools(tool('large-read', 'library.read', { kind: 'content', id: library.id }));
+    expect(events(request)).toContainEqual(
+      expect.objectContaining({
         callId: 'large-read',
-        name: 'resource.read',
-        args: { kind: 'content', id: 'read-evidence' },
-        result: f.readValue,
-        denied: false,
-      };
-      expect(original.data).toMatchObject({ name: 'resource.read', detailsOmitted: true });
-      expect(original.data).not.toHaveProperty('result');
-      expect(parts.join('')).toBe(JSON.stringify({ history: [], results: [event] }));
-    }
-    expect(task.usage.modelCalls).toBe(log.requests.length);
-    expect(task.usage.modelCalls).toBeLessThanOrEqual(totalCalls);
-  }
-);
+        denied: true,
+        errorKind: 'recoverable',
+        result: expect.objectContaining({
+          error: 'HELPER_READ_TOO_LARGE',
+          returned: false,
+          originalResultChars: expect.any(Number),
+          nextRead: {
+            name: 'resource.read',
+            arguments: { kind: 'content', id: library.id },
+          },
+        }),
+      })
+    );
+    expect(JSON.stringify(request)).not.toContain(canary);
+    return structuredClone(success);
+  });
+  const task = await f.run();
+  expect(task).toMatchObject({ status: 'completed', usage: { modelCalls: 2 } });
+  expect(log.requests.map((request) => request.role)).toEqual(['helper', 'helper']);
+  expect(compactions(f, task)).toEqual([]);
+  expect(checkpointRows(f)).toEqual([]);
+  const finished = f.workspace
+    .events(f.conversation.id)
+    .find((event) => event.taskId === task.id && event.kind === 'tool.finished');
+  expect(finished?.data).toMatchObject({
+    name: 'library.read',
+    originalResultChars: expect.any(Number),
+    providedResultChars: expect.any(Number),
+  });
+  expect((finished!.data as any).originalResultChars).toBeGreaterThan(32_000);
+  expect((finished!.data as any).providedResultChars).toBeLessThan(2_000);
+});
 
 test('a concurrent helper checkpoint remains active when the current task adopts a late candidate', async () => {
   const f = await fixture();

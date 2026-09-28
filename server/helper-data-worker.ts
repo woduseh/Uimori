@@ -270,7 +270,7 @@ function* documents(
         id,
         revision: editor.revision ?? 0,
         title: editor.title,
-        origin: 'unsaved-device-editor',
+        origin: editor.source === 'saved' ? 'saved-editor-reservation' : 'unsaved-device-editor',
         fields: authored(object(editor.model)),
       };
     return;

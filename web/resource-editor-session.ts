@@ -209,6 +209,29 @@ export class ResourceEditorSession {
       throw new Error('문법 오류가 있는 입력을 확인해 주세요. 입력은 그대로 유지돼요.');
     return model;
   }
+  /** Capture the exact editable document before the caller's first asynchronous step. */
+  captureForHelper() {
+    const state = this.state;
+    if (!state.ready) return null;
+    const document = state.document;
+    const model =
+      state.dirty || !document.targetId
+        ? structuredClone(this.prepared(state.local.model))
+        : undefined;
+    return {
+      kind: this.options.kind,
+      targetId: document.targetId,
+      revision: document.baseRevision,
+      title:
+        model && 'title' in model
+          ? model.title
+          : 'title' in state.local.model
+            ? state.local.model.title
+            : '현재 프롬프트',
+      source: model ? ('unsaved' as const) : ('saved' as const),
+      ...(model ? { model } : {}),
+    };
+  }
   async flush() {
     await this.open();
     await this.queueRecovery();

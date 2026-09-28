@@ -27,7 +27,7 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
   {
     name: 'data.search',
     description:
-      'Grep authored bot/persona/module/prompt text, chat originals, notes or unsaved editor fields. Returns exact matched excerpts and data.read references, never whole editor JSON. query filters title/ID; patterns search each text field (any/all, case-insensitive literal by default). Empty patterns list documents. current = frozen current chat, library/chats = live, editor = unsaved. Default: editor when supplied, otherwise current chat or library. Follow nextOffset; absence from a search is not proof of absence.',
+      'Grep authored bot/persona/module/prompt text, chat originals, notes or captured editor fields. Returns exact matched excerpts and data.read references, never whole editor JSON. query filters title/ID; patterns search each text field (any/all, case-insensitive literal by default). Empty patterns list documents. current = frozen current chat, library/chats = live, editor = captured saved or unsaved input, distinguished by origin. Default: editor when supplied, otherwise current chat or library. Follow nextOffset; absence from a search is not proof of absence.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -50,7 +50,7 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
   {
     name: 'data.read',
     description:
-      'Read one to 16 refs from search. Always pass refs, including a one-item array for a single read. Copy references unchanged. Each item returns its own result/error; follow nextIndex for unread refs. Empty field gives a paged field directory; choose a returned ref for exact text. Text offset/limit are UTF-16 units; directory offset/limit count fields. Changed revision/hash requires searching again. Full edit models remain available through app.call resource.read or workspace.read(editor).',
+      'Read one to 16 refs from search. Always pass refs, including a one-item array for a single read. Copy references unchanged. Each item returns its own result/error; follow nextIndex for unread refs. Empty field gives a paged field directory; choose a returned ref for exact text. Text offset/limit are UTF-16 units; directory offset/limit count fields. Changed revision/hash requires searching again. For edits use app.call resource.read for small typed fields, then resource.patch; do not reconstruct a whole resource from text excerpts.',
     inputSchema: {
       type: 'object',
       properties: {

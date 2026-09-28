@@ -10,6 +10,7 @@ import type { Store } from './store.js';
 import { readResource, saveResource, undoResource } from './resource-service.js';
 import { deleteLibraryItem } from './library-deletion.js';
 import { record, number, text, HttpError } from './request-validation.js';
+import { patchHelperResource, readHelperResource } from './helper-resource-editing.js';
 
 const kind = {
   type: 'string',
@@ -45,18 +46,58 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
   {
     name: 'resource.read',
     description:
-      'Read any bot/persona/module/preset or current prompt workspace. No selected editor is required. Return includes the current revision used by save.',
+      'Read a compact resource overview, then follow JSON Pointer paths into its authored fields. Object and array pages list paths and exact small scalar values; long text uses textOffset/textLimit and nextOffset. A missing optional field returns exists:false with its patchable path. Revision is required for resource.patch.',
     inputSchema: {
       type: 'object',
-      properties: { kind, id: string },
+      properties: {
+        kind,
+        id: string,
+        path: string,
+        fields: { type: 'array', items: string, maxItems: 50 },
+        offset: { type: 'integer', minimum: 0 },
+        limit: { type: 'integer', minimum: 1, maximum: 50 },
+        textOffset: { type: 'integer', minimum: 0 },
+        textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
+      },
       required: ['kind', 'id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'resource.patch',
+    description:
+      'Edit existing native card/module authored fields with the latest resource revision. Use paths returned by resource.read. Set a simple typed value (including small scalar arrays such as lore keys), or replace a literal string that occurs exactly once. Applies all changes together with one undo. Projection fields such as package.lore/body/starts are read only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind,
+        id: string,
+        expectedRevision: revision,
+        changes: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'object',
+            properties: {
+              path: string,
+              op: { type: 'string', enum: ['set', 'replaceText'] },
+              value: {},
+              oldText: string,
+              newText: string,
+            },
+            required: ['path', 'op'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['kind', 'id', 'expectedRevision', 'changes'],
       additionalProperties: false,
     },
   },
   {
     name: 'resource.save',
     description:
-      'Create or save an application resource directly. Use the latest revision when editing an existing ID; omit id/revision to create. There is no server draft or separate apply step. For content, preserve its native Risu source and edit that source rather than only its projection. Bot translation guides live only at model.package.nativeRisu.card.extensions.uimori.translationGuide: {instructions: string, terms: [{source: string, target: string, note?: string}]}. Preserve other extensions. If the bot is a standalone module with an empty native card, edit nativeRisu.module.extensions.uimori.translationGuide instead; do not create a card. Never merge guides from mounted modules. These are translation metadata, not story facts, chat overrides, or regex replacements. A draft/proposal request does not authorize saving.',
+      'Create an application resource, or save a complete editable model for kinds without partial editing. For existing native card/module content use resource.read then resource.patch, so unrelated authored fields stay intact. Use latest revision for existing IDs; omit id/revision to create. There is no server draft or separate apply step. A draft/proposal request does not authorize saving.',
     inputSchema: {
       type: 'object',
       properties: { kind, id: string, expectedRevision: revision, model: { type: 'object' } },
@@ -183,7 +224,17 @@ export function invokeResourceTool(
     throw new HttpError(400, '자료 종류를 확인해 주세요.');
   const kind = args.kind as ResourceKind;
   const id = args.id == null ? null : text(args.id, 'resource ID', 100);
-  if (name === 'resource.read') return readResource(store, kind, id ?? 'current');
+  if (name === 'resource.read') return readHelperResource(store, kind, id ?? 'current', args);
+  if (name === 'resource.patch') {
+    if (!id) throw new HttpError(400, '자료 ID가 필요해요.');
+    return patchHelperResource(
+      store,
+      kind,
+      id,
+      number(args.expectedRevision, 'revision'),
+      args.changes
+    );
+  }
   const expectedRevision =
     args.expectedRevision === undefined ? undefined : number(args.expectedRevision, 'revision');
   if (name === 'resource.save')
