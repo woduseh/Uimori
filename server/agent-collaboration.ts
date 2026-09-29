@@ -369,9 +369,6 @@ export function createAgentCollaboration(
           .then(async () => {
             const readSignal = AbortSignal.any([signal, nativeSignal]);
             readSignal.throwIfAborted();
-            await hooks.authorize(structuredClone(target.connection));
-            if (!request.stable.tools.some((tool) => tool.name === call.name))
-              throw new ProviderContractError('ADVISOR_TOOL_NOT_ALLOWED');
             if (
               !call.arguments ||
               typeof call.arguments !== 'object' ||

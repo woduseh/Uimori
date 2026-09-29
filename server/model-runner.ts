@@ -483,9 +483,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           const signal = AbortSignal.any([hooks.signal, nativeSignal]);
           signal.throwIfAborted();
           if (nativeFinished) throw new ProviderContractError('CODEX_TURN_FINISHED');
-          await hooks.authorize(structuredClone(target.connection));
-          if (!request.stable.tools.some((tool) => tool.name === call.name))
-            throw new ProviderContractError('CODEX_INVALID_TOOL_CALL');
           if (
             !call.arguments ||
             typeof call.arguments !== 'object' ||
