@@ -393,6 +393,40 @@ async function open(page: Page) {
   return panel;
 }
 
+test('HELPUI13 completed helper response renders common Markdown and copies its exact source', async ({
+  page,
+  request,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  let panel = await open(page);
+  const view = state.current();
+  const answer = view.messages.find((message) => message.role === 'assistant')!;
+  answer.text =
+    '| 영향 | 이전 동작 | 변경 후 |\n| :--- | :---: | ---: |\n| 표 | `a|b` | **정상** |\n\n- [x] 확인됨\n\n<https://example.com/report>';
+  await page.reload();
+  panel = await open(page);
+  const message = panel.locator('.helper-message.assistant').first();
+  const table = message.getByRole('table');
+  await expect(table).toBeVisible();
+  await expect(table.getByRole('columnheader')).toHaveCount(3);
+  await expect(table.getByRole('cell').nth(1)).toHaveText('a|b');
+  await expect(message.locator('.prose-task-item input[type="checkbox"]')).toBeChecked();
+  await expect(message.getByRole('link', { name: 'https://example.com/report' })).toBeVisible();
+  expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+
+  await message.getByRole('button', { name: '도우미 응답 복사', exact: true }).click();
+  await expect(
+    message.getByRole('button', { name: '도우미 응답 복사됨', exact: true })
+  ).toBeVisible();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied.replace(/\r\n/gu, '\n')).toBe(answer.text);
+});
+
 test('HELPUI12 helper settings event refreshes an open model editor without replacing its draft', async ({
   page,
   request,

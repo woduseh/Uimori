@@ -11,7 +11,7 @@ import {
 import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
 import { hasReadingQuotes, scanReadingQuotes, type ReadingQuote } from './reading-quotes.js';
-import './prose-images.css';
+import './prose.css';
 
 /**
  * Deliberate Markdown subset for reading saved prose. This produces React nodes,
@@ -49,7 +49,7 @@ function inline(
   let offset = 0;
   while (offset < text.length) {
     const rest = text.slice(offset);
-    if (rest[0] === '\\' && /^[\\`*_{}[\]()#+.!>~-]/u.test(rest[1] ?? '')) {
+    if (rest[0] === '\\' && /^[\\`*_{}[\]()#+.!>~|-]/u.test(rest[1] ?? '')) {
       plain += rest[1];
       offset += 2;
       continue;
@@ -125,6 +125,20 @@ function inline(
       } else plain += link[0];
       offset += link[0].length;
       continue;
+    }
+    const autoLink = rest.match(/^<((?:https?:\/\/|mailto:)[^\s<>]+)>/u);
+    if (autoLink) {
+      const href = safeProseLink(autoLink[1]);
+      if (href) {
+        flush();
+        nodes.push(
+          <a key={offset} href={href} rel="noreferrer noopener">
+            {autoLink[1]}
+          </a>
+        );
+        offset += autoLink[0].length;
+        continue;
+      }
     }
     // Treat tag-shaped text as one literal, including attributes and their Markdown.
     const rawTag = rest.match(/^<\/?[A-Za-z][^>]*>/u);
@@ -298,7 +312,73 @@ const fencePattern = /^ {0,3}(`{3,}|~{3,})([\s\S]*)$/u;
 const listPattern = /^ {0,3}([-+*]|\d+[.)])\s+(.+)$/u;
 const quotePattern = /^ {0,3}>\s?(.*)$/u;
 const headingPattern = /^ {0,3}(#{1,6})\s+(.+)$/u;
+const setextPattern = /^ {0,3}(=+|-+)\s*$/u;
 const rulePattern = /^ {0,3}(?:\*\s*){3,}$|^ {0,3}(?:-\s*){3,}$|^ {0,3}(?:_\s*){3,}$/u;
+type TableAlignment = 'left' | 'center' | 'right' | null;
+
+function splitTableRow(line: string): string[] {
+  let value = line.trim();
+  if (value.startsWith('|')) value = value.slice(1);
+  if (value.endsWith('|') && !value.endsWith('\\|')) value = value.slice(0, -1);
+
+  const cells: string[] = [];
+  let current = '';
+  let codeTicks = 0;
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] === '\\' && index + 1 < value.length) {
+      current += value[index] + value[++index];
+      continue;
+    }
+    if (value[index] === '`') {
+      let end = index + 1;
+      while (value[end] === '`') end++;
+      const run = end - index;
+      if (codeTicks === 0) codeTicks = run;
+      else if (codeTicks === run) codeTicks = 0;
+      current += value.slice(index, end);
+      index = end - 1;
+      continue;
+    }
+    if (value[index] === '|' && codeTicks === 0) {
+      cells.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += value[index];
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function tableDelimiter(line: string): TableAlignment[] | null {
+  if (!line.includes('|')) return null;
+  const cells = splitTableRow(line);
+  if (!cells.length) return null;
+  const alignments: TableAlignment[] = [];
+  for (const cell of cells) {
+    const marker = cell.replace(/\s/gu, '');
+    if (!/^:?-{3,}:?$/u.test(marker)) return null;
+    alignments.push(
+      marker.startsWith(':') && marker.endsWith(':')
+        ? 'center'
+        : marker.endsWith(':')
+          ? 'right'
+          : marker.startsWith(':')
+            ? 'left'
+            : null
+    );
+  }
+  return alignments;
+}
+
+function tableStart(lines: string[], index: number) {
+  if (!lines[index]?.includes('|') || index + 1 >= lines.length) return null;
+  const alignments = tableDelimiter(lines[index + 1]);
+  if (!alignments) return null;
+  const header = splitTableRow(lines[index]);
+  return header.length === alignments.length ? { header, alignments } : null;
+}
+
 function beginsBlock(line: string): boolean {
   return (
     !line.trim() ||
@@ -352,6 +432,56 @@ function renderBlocks(
       );
       continue;
     }
+    const table = tableStart(lines, index);
+    if (table) {
+      const rows: string[][] = [];
+      index += 2;
+      while (index < lines.length && lines[index].trim() && lines[index].includes('|')) {
+        const cells = splitTableRow(lines[index++]).slice(0, table.header.length);
+        while (cells.length < table.header.length) cells.push('');
+        rows.push(cells);
+      }
+      const cellClass = (alignment: TableAlignment) =>
+        alignment ? `prose-table-${alignment}` : undefined;
+      push(
+        <div className="prose-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                {table.header.map((cell, column) => (
+                  <th key={column} scope="col" className={cellClass(table.alignments[column])}>
+                    {readableInline(cell, settings, imageUrls)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  {row.map((cell, column) => (
+                    <td key={column} className={cellClass(table.alignments[column])}>
+                      {readableInline(cell, settings, imageUrls)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+        start
+      );
+      continue;
+    }
+    const setext =
+      index + 1 < lines.length && lines[index].trim()
+        ? lines[index + 1].match(setextPattern)
+        : null;
+    if (setext && !beginsBlock(lines[index])) {
+      const Tag = setext[1][0] === '=' ? 'h1' : 'h2';
+      push(<Tag>{readableInline(lines[index], settings, imageUrls)}</Tag>, start);
+      index += 2;
+      continue;
+    }
     const heading = lines[index].match(headingPattern);
     if (heading) {
       const content = readableInline(heading[2].replace(/\s+#+\s*$/u, ''), settings, imageUrls);
@@ -390,7 +520,26 @@ function renderBlocks(
           !listPattern.test(lines[index])
         )
           content.push(lines[index++].trimStart());
-        items.push(<li key={at}>{readableInline(content.join('\n'), settings, imageUrls)}</li>);
+        const task = content[0].match(/^\[([ xX])\]\s+(.*)$/u);
+        if (task) content[0] = task[2];
+        items.push(
+          <li key={at} className={task ? 'prose-task-item' : undefined}>
+            {task && (
+              <input
+                type="checkbox"
+                checked={task[1].toLowerCase() === 'x'}
+                disabled
+                readOnly
+                aria-hidden="true"
+              />
+            )}
+            {task ? (
+              <span>{readableInline(content.join('\n'), settings, imageUrls)}</span>
+            ) : (
+              readableInline(content.join('\n'), settings, imageUrls)
+            )}
+          </li>
+        );
       }
       push(
         ordered ? <ol start={Number.parseInt(firstItem[1], 10)}>{items}</ol> : <ul>{items}</ul>,
@@ -399,7 +548,8 @@ function renderBlocks(
       continue;
     }
     const paragraph = [lines[index++]];
-    while (index < lines.length && !beginsBlock(lines[index])) paragraph.push(lines[index++]);
+    while (index < lines.length && !beginsBlock(lines[index]) && !tableStart(lines, index))
+      paragraph.push(lines[index++]);
     push(<p>{readableInline(paragraph.join('\n'), settings, imageUrls)}</p>, start);
   }
   return output;

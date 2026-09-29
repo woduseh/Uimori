@@ -69,6 +69,32 @@
 .helper-prose :is(p, li, blockquote) {
   text-wrap: pretty;
 }
+
+.helper-response-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+  opacity: 0;
+}
+.helper-message.assistant:focus-within .helper-response-actions {
+  opacity: 1;
+}
+.helper-copy-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  text-align: right;
+}
+@media (hover: hover) {
+  .helper-message.assistant:hover .helper-response-actions {
+    opacity: 1;
+  }
+}
+@media (hover: none), (pointer: coarse), (max-width: 600px) {
+  .helper-response-actions {
+    opacity: 1;
+  }
+}
+
 .streaming-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

@@ -38,6 +38,26 @@ describe('safe prose rendering', () => {
     expect(html).toContain('<ol start="3"><li>셋</li><li>넷</li></ol>');
   });
 
+  test('renders common assistant Markdown including tables, tasks, setext headings and autolinks', () => {
+    const html = render(
+      '점검 결과\n---\n\n| 영향 | 이전 동작 | 변경 후 |\n| :--- | :---: | ---: |\n| 표 | \\| 원문 \\| | **정상** |\n| 코드 | `a|b` | ~~제거~~ |\n\n- [x] 완료\n- [ ] 남음\n\n<https://example.com/report>'
+    );
+    expect(html).toContain('<h2>점검 결과</h2>');
+    expect(html).toContain('<table>');
+    expect(html).toContain('<th scope="col" class="prose-table-left">영향</th>');
+    expect(html).toContain('<th scope="col" class="prose-table-center">이전 동작</th>');
+    expect(html).toContain('<th scope="col" class="prose-table-right">변경 후</th>');
+    expect(html).toContain('<td class="prose-table-center">| 원문 |</td>');
+    expect(html).toContain('<code>a|b</code>');
+    expect(html).toContain('<del>제거</del>');
+    expect(html.match(/class="prose-task-item"/gu)).toHaveLength(2);
+    expect(html.match(/type="checkbox"/gu)).toHaveLength(2);
+    expect(html).toContain('checked=""');
+    expect(html).toContain(
+      '<a href="https://example.com/report" rel="noreferrer noopener">https://example.com/report</a>'
+    );
+  });
+
   test('escapes raw HTML, blocks executable links and never requests Markdown images', () => {
     const html = render(
       '<script>window.pwned=true</script>\n<img src=x onerror=alert(1)>\n<svg onload=alert(1)></svg>\n\n[실행](javascript:alert) ![외부 이미지](https://example.com/track.png)\n[안전한 링크](https://example.com/story)'
