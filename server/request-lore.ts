@@ -70,20 +70,20 @@ export function requestLore(
     ...options.pinned,
   ])
     resources.set(item.id, { ...resources.get(item.id), ...item });
-  const texts = wireText(wire.body);
-  // Gemini returns tool data as objects; other adapters embed it in text. Inspect both once.
-  texts.push(JSON.stringify(wire.body));
+  let texts: string[] | undefined;
+  // Only lore evidence needs this scan. Gemini uses objects; other adapters embed them in text.
+  const evidence = () => (texts ??= [...wireText(wire.body), JSON.stringify(wire.body)]);
   const contains = (value: unknown) => {
     const text = JSON.stringify(value);
     if (text === undefined) return false;
     const encoded = escaped(text);
-    return texts.some((part) => part.includes(text) || part.includes(encoded));
+    return evidence().some((part) => part.includes(text) || part.includes(encoded));
   };
   const entries: RequestLore['entries'] = [];
   const add = (
     identity: LoreIdentity,
     via: RequestLore['entries'][number]['via'],
-    delivery: RequestLore['entries'][number]['delivery']
+    delivery: () => RequestLore['entries'][number]['delivery']
   ) => {
     const resource = { ...resources.get(identity.id), ...identity };
     if (resource.kind !== 'lore' || (resource.sourceKind && resource.sourceKind !== 'lore')) return;
@@ -102,21 +102,25 @@ export function requestLore(
           }
         : {}),
       via,
-      delivery,
+      delivery: delivery(),
     };
-    if (!entries.some((item) => item.id === id && item.via === via && item.delivery === delivery))
+    if (
+      !entries.some(
+        (item) => item.id === id && item.via === via && item.delivery === entry.delivery
+      )
+    )
       entries.push(entry);
   };
   for (const item of options.pinned) {
     if (!item.text.trim()) continue;
-    add(item, 'pinned', contains(item) || hasLoreEntry(texts, item) ? 'full' : 'unverified');
+    add(item, 'pinned', () =>
+      contains(item) || hasLoreEntry(evidence(), item) ? 'full' : 'unverified'
+    );
   }
   if (request.role === 'main')
     for (const retained of snapshot.loreContext?.entries ?? []) {
       const { lastUsed: _lastUsed, ...sent } = retained;
-      add(
-        { id: retained.id, title: retained.title, kind: 'lore' },
-        'retained',
+      add({ id: retained.id, title: retained.title, kind: 'lore' }, 'retained', () =>
         contains(sent) ? 'excerpt' : 'unverified'
       );
     }
@@ -130,13 +134,18 @@ export function requestLore(
       result = object(event?.result);
     if (!event || event.denied || !result) continue;
     if (result.kind === 'host-compacted-reads') {
+      let delivery: 'summary' | 'unverified' | undefined;
       for (const rawReference of array(result.references)) {
         const reference = object(rawReference);
         if (reference?.name !== 'knowledge.read') continue;
         for (const item of array(object(reference.returned)?.items)) {
           const identity = object(object(item)?.source);
           if (typeof identity?.id !== 'string') continue;
-          add(identity as LoreIdentity, 'tool-result', contains(result) ? 'summary' : 'unverified');
+          add(
+            identity as LoreIdentity,
+            'tool-result',
+            () => (delivery ??= contains(result) ? 'summary' : 'unverified')
+          );
         }
       }
       continue;
@@ -150,9 +159,7 @@ export function requestLore(
       if (!read || typeof identity?.id !== 'string' || typeof read.text !== 'string' || !read.text)
         continue;
       const range = object(read.range);
-      add(
-        identity as LoreIdentity,
-        'tool-result',
+      add(identity as LoreIdentity, 'tool-result', () =>
         contains(read)
           ? range?.start === 0 && range.end === read.totalChars
             ? 'full'

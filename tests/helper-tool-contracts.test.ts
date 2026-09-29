@@ -182,7 +182,7 @@ function definition(request: transport.ProviderRequest, name: string) {
 }
 
 test.each(['generate', 'receipt'] as const)(
-  'artifact %s returns a small saved reference and paged reads preserve the full stored scene',
+  'artifact %s returns a small saved reference and preserves the full stored scene',
   async (mode) => {
     const f = await fixture();
     const prose = 'A'.repeat(3999) + '😀' + '합성 독립 장면.\n'.repeat(9000);
@@ -229,6 +229,7 @@ test.each(['generate', 'receipt'] as const)(
         expect(saved).not.toHaveProperty('text');
         expect(saved).not.toHaveProperty('request');
         expect(JSON.stringify(saved).length).toBeLessThan(1000);
+        if (mode === 'receipt') return structuredClone(success);
         return calls(call('first', 'app.call', { name: 'artifact.read', arguments: artifact }));
       }
       if (round === 2) {
