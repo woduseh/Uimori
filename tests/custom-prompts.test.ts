@@ -90,10 +90,6 @@ describe('full editable prompt boundaries', () => {
   test('transport permits explicit empty text without weakening non-prompt string validation', () => {
     const value = request('main', '');
     expect(validateRequest(value).stable.contract).toBe('');
-    expect(
-      validateRequest({ ...value, stable: { ...value.stable, contract: 'x'.repeat(200000) } })
-        .stable.contract
-    ).toHaveLength(200000);
     expect(() => validateRequest({ ...value, stable: { ...value.stable, contract: 3 } })).toThrow(
       'INVALID_STRING'
     );

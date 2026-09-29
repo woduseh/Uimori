@@ -71,6 +71,8 @@ CI 확인 → Oracle preflight → pinned SHA 이미지 준비
 
 호스트 control은 기존 운영 환경 파일을 read-only mount한 일회성 컨테이너에서 실행돼요. admission 제어는 정확한 Host/Origin을 가진 loopback HTTP를 사용하고, 최종 smoke는 host network에서 실제 HTTPS 주소와 인증서를 검증해요. 컨트롤러의 Tailscale 라우팅 유무는 배포 조건이 아니에요. smoke는 인증 세션과 읽기 API·HTML/JS만 확인하며 유료 모델 호출은 하지 않아요. 호스트에서의 성공이 외부 인터넷·모든 휴대폰 경로의 성공을 증명하지는 않아요.
 
+control과 smoke는 작업 성공·실패에 관계없이 자신이 만든 임시 세션만 로그아웃해요. 기존 기기 세션은 유지해요. 로그아웃을 확인하지 못하면 `sessionCleanup.status=WARN`으로 남기고, 확인된 maintenance 변경이나 smoke 결과를 뒤집지 않아요. 도구가 정상 종료하면 배포 요약의 `sessionCleanupWarnings`에도 해당 작업과 진단을 기록해요. 작업이 실패해 도구도 실패 종료하면 원래 원인과 세션 정리 진단을 비공개 명령 오류 로그에 함께 남겨요.
+
 전환 전 실패는 기존 앱을 유지해요. 전환 후 **쓰기 재개 요청 전** 실패는 maintenance 소유권·닫힘·idle을 확인한 뒤 직전 이미지/DB/환경으로 롤백해요. 쓰기 재개 요청을 보내기 전에 `REOPENING`을 저장하므로 응답을 잃어도 DB를 과거 백업으로 자동 복원하지 않아요. 사용자가 새 앱에서 저장했을 가능성이 있는 상태를 덮어쓰지 않기 위해서예요. 이 경우 `REFUSED_AFTER_REOPEN` 또는 상태 불확실성을 보고하고 `--status`로 조사해요.
 
 SSH가 끊기면 같은 명령을 바로 재실행하지 말고 알려진 run ID로 상태를 조회해요. 실제 image·volume·health와 lock이 확인되기 전에는 성공이나 실패를 추정하지 않아요. 실행 중인 작업을 자동 재개하거나 새로운 배포로 덮어쓰는 기능은 없어요.

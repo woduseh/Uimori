@@ -47,7 +47,8 @@ export function buildCodexTurn(request: ProviderRequest): {
   inputText: string;
   outputSchema: Json;
 } {
-  const prompt = request.prompt ? validateProviderPrompt(request.prompt) : undefined;
+  const prompt = request.prompt;
+  if (prompt) validateProviderPrompt(prompt);
   if (prompt?.messages.some((message) => message.completion === 'prefill'))
     fail('CODEX_PROMPT_PREFILL_UNSUPPORTED');
   if (prompt?.cachePlan.some((anchor) => anchor.policy === 'require'))

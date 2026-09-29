@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { readAccessEnv, runOracleSmoke } from './oracle-smoke.mjs';
 
@@ -45,6 +46,10 @@ function fixtureRequest(options = {}) {
       };
     }
     if (!authenticated) return { status: options.anonymousStatus ?? 401, headers: {}, body: '{}' };
+    if (pathname === '/api/session' && method === 'DELETE') {
+      assert.equal(headers.Origin, origin);
+      return { status: 200, headers: {}, body: JSON.stringify({ authenticated: false }) };
+    }
     if (pathname === '/api/health')
       return {
         status: 200,
@@ -88,7 +93,7 @@ function fixtureRequest(options = {}) {
   return { calls, request };
 }
 
-test('trusted smoke uses one login POST and otherwise read-only same-origin GET requests', async (t) => {
+test('trusted smoke reads the app and logs out only its own temporary session', async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'uimori-oracle-output-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const outputFile = path.join(directory, 'nested', 'summary.json');
@@ -102,13 +107,25 @@ test('trusted smoke uses one login POST and otherwise read-only same-origin GET 
   });
   assert.equal(summary.status, 'PASS');
   assert.equal(summary.proof, 'HTTPS/API');
-  assert.deepEqual(summary.requestCounts, { GET: 8, POST: 1 });
+  assert.deepEqual(summary.requestCounts, { GET: 8, POST: 1, DELETE: 1 });
+  assert.equal(summary.sessionCleanup.status, 'PASS');
   assert.equal(fixture.calls.filter((call) => call.method === 'POST').length, 1);
   assert.deepEqual(
     fixture.calls.filter((call) => call.method === 'POST').map((call) => call.pathname),
     ['/api/session']
   );
-  assert.ok(fixture.calls.every((call) => ['GET', 'POST'].includes(call.method)));
+  assert.deepEqual(
+    fixture.calls.filter((call) => call.method === 'DELETE'),
+    [
+      {
+        pathname: '/api/session',
+        method: 'DELETE',
+        headers: { Origin: origin, Cookie: `uimori_session=${session}` },
+        body: undefined,
+      },
+    ]
+  );
+  assert.ok(fixture.calls.every((call) => ['GET', 'POST', 'DELETE'].includes(call.method)));
   assert.ok(fixture.calls.every((call) => !/export|backup|import|model|run/u.test(call.pathname)));
   assert.equal(JSON.stringify(summary).includes(token), false);
   assert.equal(JSON.stringify(summary).includes(session), false);
@@ -166,6 +183,8 @@ test('session acceptance requires every deployed cookie security attribute', asy
   assert.equal(summary.status, 'FAIL');
   assert.match(summary.failures[0], /session cookie is missing secure/u);
   assert.equal(summary.requestCounts.POST, 1);
+  assert.equal(summary.requestCounts.DELETE, 1);
+  assert.equal(summary.sessionCleanup.status, 'PASS');
 });
 
 test('an authenticated health response must match the exact buildId', async () => {
@@ -174,6 +193,71 @@ test('an authenticated health response must match the exact buildId', async () =
   assert.equal(summary.status, 'FAIL');
   assert.match(summary.failures[0], /health identity did not match/u);
   assert.equal(summary.requestCounts.POST, 1);
+});
+
+test('logout failure stays separate from successful and failed smoke results and redacts secrets', async () => {
+  for (const badBuild of [false, true]) {
+    const fixture = fixtureRequest({ badBuild, throwAt: '/api/session' });
+    const summary = await runOracleSmoke({ origin, token, buildId, request: fixture.request });
+    assert.equal(summary.status, badBuild ? 'FAIL' : 'PASS');
+    assert.equal(summary.sessionCleanup.status, 'WARN');
+    assert.match(summary.sessionCleanup.error, /\[redacted\]/u);
+    assert.equal(JSON.stringify(summary).includes(token), false);
+    assert.equal(JSON.stringify(summary).includes(session), false);
+    if (badBuild) assert.match(summary.failures[0], /health identity did not match/u);
+    else assert.deepEqual(summary.failures, []);
+  }
+});
+
+test('real app smoke removes its session after success and failure while preserving a device login', async (t) => {
+  const { createApp } = await import('../dist/server/app.js');
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'uimori-smoke-sessions-'));
+  const dbPath = path.join(directory, 'app.sqlite');
+  const app = await createApp({
+    dbPath,
+    publicOrigin: origin,
+    accessToken: token,
+    buildId,
+    webRoot: path.resolve('dist/web'),
+  });
+  t.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const request = async ({ url, method, headers, body }) => {
+    const response = await app.inject({
+      method,
+      url: `${url.pathname}${url.search}`,
+      headers: { host: new URL(origin).host, ...headers },
+      ...(body ? { payload: body } : {}),
+    });
+    return { status: response.statusCode, headers: response.headers, body: response.payload };
+  };
+  const device = await request({
+    url: new URL('/api/session', origin),
+    method: 'POST',
+    headers: { Origin: origin, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  const deviceHeader = device.headers['set-cookie'];
+  const deviceCookie = (Array.isArray(deviceHeader) ? deviceHeader[0] : deviceHeader).split(';')[0];
+  for (const expectedBuild of [buildId, 'd'.repeat(64)]) {
+    const result = await runOracleSmoke({ origin, token, buildId: expectedBuild, request });
+    assert.equal(result.status, expectedBuild === buildId ? 'PASS' : 'FAIL');
+    assert.equal(result.sessionCleanup.status, 'PASS');
+    const db = new DatabaseSync(dbPath, { readOnly: true });
+    try {
+      assert.equal(db.prepare('SELECT count(*) AS count FROM access_sessions').get().count, 1);
+    } finally {
+      db.close();
+    }
+  }
+  const retained = await request({
+    url: new URL('/api/session', origin),
+    method: 'GET',
+    headers: { Cookie: deviceCookie },
+  });
+  assert.equal(JSON.parse(retained.body).authenticated, true);
 });
 
 test('request failures and artifacts redact both access and session secrets', async () => {

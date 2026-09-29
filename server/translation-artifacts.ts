@@ -3,7 +3,7 @@ import { TRANSLATION_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { Store } from './store.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 
-export function successfulTranslation(store: Store, source: Source) {
+export function successfulTranslation(store: Store, source: Pick<Source, 'id' | 'hash'>) {
   const row = store.db
     .prepare(
       "SELECT j.id FROM jobs j JOIN job_results r ON r.job_id=j.id WHERE j.source_revision=? AND j.source_hash=? AND j.kind='translation' AND j.status='completed' ORDER BY j.revision DESC,j.created_at DESC,j.id DESC LIMIT 1"

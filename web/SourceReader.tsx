@@ -67,6 +67,7 @@ type ReaderProps = {
   activity?: (slots: SceneHeaderSlots) => ReactNode;
   hasPackages?: boolean;
   presentationRefreshKey?: string | number;
+  nativeInteractionRevision?: number;
 };
 type AnchorPosition = { anchors: string[]; top: number; scrollport: HTMLElement };
 type EditorOrigin = { button: HTMLElement; scrollport: HTMLElement; offset: number };
@@ -155,6 +156,7 @@ function SourceReaderContent({
   activity,
   hasPackages,
   presentationRefreshKey,
+  nativeInteractionRevision,
 }: ReaderProps) {
   const onRequestEditing = useCallback(
     (editing: boolean) => {
@@ -517,7 +519,11 @@ function SourceReaderContent({
     >
       <CodexContentWarningDialog gate={codexWarning} />
       {latest && projected?.format === 'risu-html' && (
-        <RisuInteractionDialog chatId={source.chatId} onError={onError} />
+        <RisuInteractionDialog
+          chatId={source.chatId}
+          refreshKey={nativeInteractionRevision}
+          onError={onError}
+        />
       )}
       <ThemeFrame>
         <div slot="request" data-uimori-part="request">

@@ -20,7 +20,7 @@ Use `output:"documents"` to locate resources by a name mentioned in their conten
 
 Document-only discovery stops at the first qualifying hit without constructing unused excerpts, line counts or source-reference hashes. It keeps the same filters, ordering and pagination; exact match/read results still carry their original text and reference hashes.
 
-Document results retain their `scope` and, for chat sources, `chatId`. When narrowing `scope:"chats"` results, carry that identifier into the next search so a source stays associated with the selected chat. Other scopes do not accept a chat filter.
+Document results retain their `scope` and, for chat sources, `chatId`. When narrowing `scope:"chats"` results, carry that identifier into the next search so a source stays associated with the selected chat. Searches and reads with a chat ID traverse only that chat's ancestry; filtering by source ID still happens after scene numbering. Unscoped searches and the SQL view retain their all-chat behavior. Other scopes do not accept a chat filter.
 
 The scopes are:
 
@@ -148,6 +148,8 @@ Only `helper_operations` establishes a commit. Existing `tool.finished` call met
 ## Accounting and summary preparation
 
 Public task lists and task detail views read a compact projection of task status, usage, the reserved model title and committed-effect counts. They do not restore the full execution snapshot in JavaScript. The browser advances its event cursor without reloading the conversation for diagnostic-only tool/input/context/progress events; task usage/status changes still refresh the view. Execution and retry still read the original snapshot; failed-task inputs and committed-effect receipts keep their existing retention and retry rules.
+
+Execution budget checks and attempt completion read current counters directly from SQLite without loading the reserved manuscript. Attempt admission still checks the recorded limits, owner and generation in its transaction; a repeated completion cannot add usage twice. Session lists retrieve conversation metadata, running/queued counts and the latest event cursor together, preserving empty sessions and existing order.
 
 Closed helper panels and hidden browser tabs pause display timers and response-stream reads while retaining server work, drafts and the received stream cursor. Reopening or focusing the page refreshes immediately. Active work keeps short polling intervals; idle helper lists and sidebar summaries poll every ten seconds. The selected conversation reads events when the list's `latestEventSeq` advances, preserving theme/settings/artifact notifications, and accepting a local task triggers an immediate refresh.
 

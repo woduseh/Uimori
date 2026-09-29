@@ -71,6 +71,20 @@ assert 'UIMORI_IMAGE_TAG=' not in changed
 assert m.environment_values(text)['UIMORI_ACCESS_TOKEN']=='secret keep'
 `));
 
+test('host session cleanup warnings are persisted without replacing the confirmed control outcome', () =>
+  python(`
+class Fake(m.Runner):
+    def docker(self,*args,**kwargs):
+        return m.json.dumps({'status':'open','activeWork':0,'sessionCleanup':{'status':'WARN','error':'logout unavailable'}})
+    def persist(self): self.persisted=True
+r=object.__new__(Fake); r.scripts=pathlib.Path('/runner'); r.env=pathlib.Path('/private/env')
+r.owner='oracle:test'; r.old_image='sha256:old'; r.args=type('Args',(),{'build_id':'b'*64})(); r.summary={}; r.persisted=False
+result=r.control('open')
+assert result['status']=='open'
+assert r.summary['sessionCleanupWarnings']==[{'action':'open','error':'logout unavailable'}]
+assert r.persisted
+`));
+
 test('rollback stops candidate before restoring backup and uses immutable previous image override', () =>
   python(`
 events=[]

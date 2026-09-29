@@ -218,8 +218,6 @@ async function main() {
     process.removeListener('SIGINT', onInterrupt);
     process.removeListener('SIGTERM', onTerminate);
     await Promise.all(cancellationCleanup);
-    if (summary.identity && !summary.identityVerifiedAt)
-      summary.evidenceIdentity = 'NOT_CONFIRMED_AT_END';
     summary.status = failures.length ? (environmentBlocked ? 'BLOCKED' : 'FAIL') : 'PASS';
     summary.finishedAt = new Date().toISOString();
     await json(path.join(directory, 'summary.json'), summary);

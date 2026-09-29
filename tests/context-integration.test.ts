@@ -1,4 +1,5 @@
 import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import {
   modelWorkspace,
   updateModelWorkspace,
@@ -311,13 +312,13 @@ describe('automatic input summaries through real App and file SQLite', () => {
     expect(JSON.stringify(app.store.product.attempts(chatId))).not.toContain(secret);
   });
 
-  test('editing a compacted source invalidates reuse while its earlier frozen summary and source remain intact', async () => {
+  test('editing a compacted source invalidates reuse while completed metadata and original source remain intact', async () => {
     const { app, chatId, sources } = await setup(),
       bodies: Body[] = [];
     recordRequests(app, bodies);
     const first = await terminal(app, (await start(app, chatId)).id);
     expect(first.status, first.error ?? '').toBe('completed');
-    const oldSnapshot = structuredClone(first.snapshot),
+    const completedSnapshot = readStoredRunSnapshot(app.store, first.id),
       changedId = first.snapshot.contextPlan!.compacted[0].revision;
     const changed = app.store.editSource(changedId, {
       expectedRevision: 0,
@@ -332,7 +333,7 @@ describe('automatic input summaries through real App and file SQLite', () => {
     expect(
       next.snapshot.contextPlan!.compacted.find((ref) => ref.revision === changedId)?.hash
     ).toBe(changed.hash);
-    expect(observedExecution(app.store, first.id).snapshot).toEqual(oldSnapshot);
+    expect(readStoredRunSnapshot(app.store, first.id)).toEqual(completedSnapshot);
     expect(app.store.sourceOriginal(changedId).text).toBe(
       sources.find((source) => source.id === changedId)!.text
     );

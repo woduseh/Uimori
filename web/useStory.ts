@@ -148,6 +148,7 @@ export function useStory() {
   const submitLocks = useRef(new Set<string>());
   const [requestActivities, setRequestActivities] = useState<Record<string, RequestActivity>>({});
   const [connected, setConnected] = useState(false);
+  const [nativeInteractionRevision, setNativeInteractionRevision] = useState(0);
   const [profileDirty, setProfileDirty] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
   const codexWarning = useCodexContentWarning();
@@ -179,6 +180,7 @@ export function useStory() {
   const latestIntent = useRef<{ epoch: number; source: string } | null>(null);
   const readerQuery = useRef({ chat: '', source: '', key: '', epoch: 0 });
   const readerCache = useRef<{ key: string; detail: ReaderDetail } | null>(null);
+  const readerSync = useRef<ReturnType<typeof createReaderSync> | null>(null);
   const navigate = useCallback((action: ReaderNavigationAction) => {
     const previous = navigation.current;
     const next = transitionReaderNavigation(previous, action);
@@ -216,9 +218,29 @@ export function useStory() {
         readerQuery.current.epoch !== navigation.current.epoch
       )
         return;
+      if (document.hidden || navigation.current.destination !== 'story') {
+        readerSync.current?.request(0, true);
+        return;
+      }
       const version = ++refreshVersion.current;
       const epoch = navigation.current.epoch;
       const query = readerQuery.current;
+      const applicable = () => {
+        if (
+          navigation.current.chat !== id ||
+          navigation.current.epoch !== epoch ||
+          readerQuery.current.key !== query.key ||
+          refreshVersion.current !== version
+        )
+          return false;
+        if (document.hidden || navigation.current.destination !== 'story') {
+          // Explicit navigation and local actions also own reads outside the SSE scheduler.
+          // If visibility changes during one, leave a full target for the next visible screen.
+          readerSync.current?.request(0, true);
+          return false;
+        }
+        return true;
+      };
       const cached = readerCache.current?.key === query.key ? readerCache.current.detail : null;
       const params = new URLSearchParams({ source: cached?.reader?.order[0] || query.source });
       if (incremental && cached?.reader) {
@@ -233,15 +255,11 @@ export function useStory() {
         // Native card actions replace an immutable suffix. An SSE refresh can arrive
         // before the action response, while this page still names the old source.
         // Only rebase a page we already read; invalid explicit navigation stays an error.
+        if (!applicable()) return;
         if (!cached || !(error instanceof ApiError) || error.status !== 404) throw error;
-        if (
-          navigation.current.chat !== id ||
-          navigation.current.epoch !== epoch ||
-          readerQuery.current.key !== query.key
-        )
-          return;
         const rebasedParams = new URLSearchParams();
         value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
+        if (!applicable()) return;
         replacementSource =
           value.reader.navigation[Math.min(cached.reader.start, value.reader.navigation.length - 1)]
             ?.id ?? '';
@@ -250,12 +268,7 @@ export function useStory() {
           value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
         }
       }
-      if (
-        navigation.current.chat === id &&
-        navigation.current.epoch === epoch &&
-        readerQuery.current.key === query.key &&
-        refreshVersion.current === version
-      ) {
+      if (applicable()) {
         const changed = new Set(value.sources.map((source) => source.id));
         const available = new Map(
           [...(cached?.sources ?? []), ...value.sources].map((source) => [source.id, source])
@@ -390,7 +403,12 @@ export function useStory() {
       refresh: (incremental) => refresh(selected, incremental),
       cursor: () => readerCache.current?.detail.reader.cursor ?? -1,
       onError: (error) => setError(error instanceof Error ? error.message : String(error)),
+      active: navigation.current.destination === 'story' && !document.hidden,
     });
+    readerSync.current = sync;
+    const visibility = () =>
+      sync.setActive(navigation.current.destination === 'story' && !document.hidden);
+    document.addEventListener('visibilitychange', visibility);
     const openStream = () => {
       const stream = new EventSource(`/api/chats/${selected}/events`);
       stream.onopen = () => {
@@ -403,6 +421,13 @@ export function useStory() {
       stream.onmessage = (event) => {
         if (!alive || navigation.current.chat !== selected) return;
         const message = JSON.parse(event.data) as { kind: string; seq?: number; entityId?: string };
+        if (
+          message.kind === 'native.interaction.requested' ||
+          message.kind === 'native.interaction.resolved' ||
+          message.kind === 'snapshot' ||
+          /^run\.(completed|failed|cancelled|interrupted)$/u.test(message.kind)
+        )
+          setNativeInteractionRevision((revision) => revision + 1);
         if (message.kind === 'chat.deleted') {
           stream.close();
           void loadChats().catch((e) => {
@@ -438,11 +463,16 @@ export function useStory() {
     return () => {
       alive = false;
       sync.dispose();
+      if (readerSync.current === sync) readerSync.current = null;
+      document.removeEventListener('visibilitychange', visibility);
       stream?.close();
       removeEventListener('offline', offline);
       removeEventListener('online', online);
     };
   }, [selected, refresh, loadChats, loadLibrary]);
+  useEffect(() => {
+    readerSync.current?.setActive(destination === 'story' && !document.hidden);
+  }, [destination]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Address changes and committed navigation intents reload the query held by refresh's stable refs.
   useEffect(() => {
     let alive = true;
@@ -451,6 +481,10 @@ export function useStory() {
       restoredView.current = '';
       // A repeated selection needs a fresh read, but can keep its already displayed page.
       if (readerCache.current?.key !== readerQuery.current.key) setDetail(null);
+      if (document.hidden) {
+        readerSync.current?.request(0, true);
+        return;
+      }
       void refresh(selected).catch((e) => {
         if (alive && navigation.current.epoch === epoch) setError(e.message);
       });
@@ -1217,6 +1251,7 @@ export function useStory() {
     error,
     notice,
     connected,
+    nativeInteractionRevision,
     destination,
     profileDirty,
     quickBusy,

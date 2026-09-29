@@ -11,7 +11,6 @@ import { createAgentCollaboration, createAgentDefinition } from '../core/agent-c
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import type { ChatProfile, Connection, ModelPreset, PromptPreset } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
-import { libraryDeletionImpact } from '../server/library-deletion.js';
 import { buildAgentProviderRequest } from '../server/agent-collaboration.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
@@ -283,7 +282,6 @@ test('disabled collaboration and switching the main prompt restore the ordinary 
 
 test('model references, prompt role and CAS are checked before storing collaboration settings', () => {
   const f = fixture();
-  expect(libraryDeletionImpact(f.store, 'model', f.advisor.id).canDelete).toBe(true);
   expect(() =>
     f.product.promptPreset({ title: 'Wrong role', role: 'translation', program: f.program })
   ).toThrow('작문');

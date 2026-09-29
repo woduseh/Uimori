@@ -148,6 +148,45 @@ describe('chat transcript export and import', () => {
     expect(validateChatTranscript(transcript).entries).toEqual(transcript.entries);
   });
 
+  test('export keeps current edits and matching translations while respecting note and source scope', async () => {
+    const store = await database();
+    const { chat, first, second } = authoredChat(store);
+    const edited = store.editSource(first.id, {
+      expectedRevision: 0,
+      text: 'Edited first scene.\n\nPreserve these paragraphs.',
+    });
+    expect(exportChatTranscript(store, chat.id, first.id).entries).toEqual([
+      { request: 'Open the story', text: edited.text, translation: null },
+    ]);
+    editTranslation(store, first.id, {
+      text: '고친 첫 장면.',
+      expectedRevision: edited.translationRevision!,
+      expectedSourceHash: edited.hash,
+    });
+    store.story.notes.write(chat.id, {
+      text: 'A note for the second scene.',
+      author: 'user',
+      expectedRevision: 1,
+      expectedHeadRevision: second.id,
+      idempotencyKey: 'later-note',
+    });
+    const partial = exportChatTranscript(store, chat.id, first.id);
+    expect(partial.entries).toEqual([
+      { request: 'Open the story', text: edited.text, translation: '고친 첫 장면.' },
+    ]);
+    // The first note captured the old text hash; the new note belongs to a later scene.
+    expect(partial.notes).toEqual([]);
+    expect(exportChatTranscript(store, chat.id).notes).toEqual([
+      { text: 'A note for the second scene.', author: 'user', atIndex: 1, kind: 'author-note' },
+    ]);
+    expect(exportChatTranscript(store, chat.id, null)).toMatchObject({ entries: [], notes: [] });
+    const foreign = createFixtureChat(store, 'Foreign chat');
+    expect(() => exportChatTranscript(store, foreign.id, first.id)).toThrow('Source outside chat');
+    const scope = store.story.notes.scope(chat.id, second.id);
+    store.editSource(second.id, { expectedRevision: 0, text: 'A later correction.' });
+    expect(() => store.story.notes.entries(scope)).toThrow('Note source ancestry changed');
+  });
+
   test('external memory remains attributed reference data through transcript, fork and backup', async () => {
     const store = await database();
     const chat = createFixtureChat(store, 'Imported memory fixture');

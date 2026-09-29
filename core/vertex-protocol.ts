@@ -8,7 +8,12 @@ import type {
   ProviderToolCall,
   ProviderUsage,
 } from './transport.js';
-import { nativeHostInstruction, planNativeMessages } from './provider-messages.js';
+import {
+  nativeHostInstruction,
+  nativeMessageMetadata,
+  planNativeMessages,
+  type NativeMessageMetadata,
+} from './provider-messages.js';
 
 export class VertexProtocolError extends Error {
   constructor(readonly code: string) {
@@ -87,7 +92,11 @@ function readTurn(value: Json): VertexTurn {
 }
 
 /** Pure REST encoding. The host owns connection authority and executes all requested tools. */
-export function encodeVertex(request: ProviderRequest): { body: Json; context: VertexTurn } {
+export function encodeVertex(request: ProviderRequest): {
+  body: Json;
+  context: VertexTurn;
+  messageMetadata?: NativeMessageMetadata;
+} {
   const generation = request.generation;
   if (generation) validateModelOptions(generation, 'vertex-gemini-v1');
   const maxOutputTokens =
@@ -276,6 +285,7 @@ export function encodeVertex(request: ProviderRequest): { body: Json; context: V
   };
   return {
     body: copy(body, 'INVALID_VERTEX_REQUEST'),
+    messageMetadata: nativeMessageMetadata(plan),
     context: seal({
       version: VERSION,
       modelId: request.modelId,

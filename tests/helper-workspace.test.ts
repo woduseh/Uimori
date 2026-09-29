@@ -300,6 +300,62 @@ function snapshot(f: ReturnType<typeof fixture>): HelperTaskSnapshot {
   };
 }
 
+test('live helper counters preserve attempt budgets and completion without loading the manuscript', () => {
+  const f = fixture();
+  const task = f.workspace.enqueue(f.conversation.id, 'live-state', '사용량 확인', {
+    ...snapshot(f),
+    history: [{ id: 'large-history', role: 'user', text: 'Reserved prose. '.repeat(350_000) }],
+    limits: { totalCalls: 1, helperCalls: 1, artifacts: 1 },
+  });
+  const prepare = f.store.db.prepare.bind(f.store.db);
+  const returnedRows: Record<string, unknown>[] = [];
+  vi.spyOn(f.store.db, 'prepare').mockImplementation((sql) => {
+    const statement = prepare(sql);
+    const get = statement.get.bind(statement);
+    vi.spyOn(statement, 'get').mockImplementation((...args) => {
+      const row = get(...args);
+      if (row) returnedRows.push(row);
+      return row;
+    });
+    return statement;
+  });
+  expect(f.workspace.start(task.id, 'counter-owner')).toBe(true);
+  expect(f.workspace.taskState(task.id)).toMatchObject({
+    status: 'running',
+    generation: 1,
+    usage: { modelCalls: 0 },
+  });
+  const wire = {
+    connectionId: f.model.connectionId,
+    protocol: 'fixture-sse-v1' as const,
+    role: 'helper' as const,
+    modelId: f.model.modelId,
+    method: 'POST' as const,
+    url: 'http://127.0.0.1:9',
+    headers: {},
+    body: {},
+    bodySha256: 'synthetic',
+    stablePrefixSha256: 'synthetic',
+  };
+  const attempt = f.workspace.startAttempt(task.id, 'counter-owner', 1, 'helper', 0, wire);
+  expect(f.workspace.taskState(task.id).usage.modelCalls).toBe(1);
+  expect(() => f.workspace.startAttempt(task.id, 'counter-owner', 1, 'helper', 0, wire)).toThrow(
+    'MODEL_CALL_BUDGET_EXHAUSTED'
+  );
+  f.workspace.finishAttempt(task.id, attempt, success);
+  f.workspace.finishAttempt(task.id, attempt, success);
+  expect(f.workspace.taskState(task.id).usage).toEqual({
+    modelCalls: 1,
+    inputTokens: 10,
+    outputTokens: 4,
+    costUsd: null,
+  });
+  expect(f.workspace.finish(task.id, 'stale-owner', 1, 'completed', 'late', null)).toBe(false);
+  expect(f.workspace.finish(task.id, 'counter-owner', 1, 'completed', 'done', null)).toBe(true);
+  expect(f.workspace.taskState(task.id).status).toBe('completed');
+  expect(returnedRows.every((row) => !('snapshot' in row))).toBe(true);
+});
+
 test('public helper task pages preserve summaries and receipts without loading reservations per row', async () => {
   const f = fixture();
   const app = Fastify();
@@ -747,7 +803,8 @@ test('all helper sessions share two execution slots while each session preserves
   const f = fixture();
   const a = f.conversation,
     b = f.workspace.create(a.scope, 'b'),
-    c = f.workspace.create(a.scope, 'c');
+    c = f.workspace.create(a.scope, 'c'),
+    empty = f.workspace.create(a.scope, 'empty');
   const releases = new Map<string, () => void>();
   const calls: string[] = [];
   const histories = new Map<string, string[]>();
@@ -780,6 +837,12 @@ test('all helper sessions share two execution slots while each session preserves
     running: 1,
     queued: 1,
   });
+  expect(f.workspace.list({ kind: 'library' }).find((item) => item.id === empty.id)).toMatchObject({
+    activity: { running: 0, queued: 0 },
+    latestEventSeq: 0,
+  });
+  for (const session of f.workspace.list({ kind: 'library' }))
+    expect(session.latestEventSeq).toBe(f.workspace.latestEventSequence(session.id));
   releases.get('B1')!();
   await vi.waitFor(() => expect(calls).toEqual(['A1', 'B1', 'C1']));
   expect(f.workspace.task(a2.id).status).toBe('queued');

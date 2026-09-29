@@ -4,7 +4,7 @@ import { isVertexAdcReference } from './credential-reference.js';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
 import { validateVertexEndpoint } from './product.js';
 import { assertContextBudget } from './context-budget.js';
-import { createPublicTextProgress } from './provider-progress.js';
+import { createPublicTextProgress, publicProgressAllowed } from './provider-progress.js';
 import { vertexAccessToken } from './vertex-auth.js';
 import {
   encodeVertex,
@@ -261,12 +261,15 @@ export async function executeVertexProvider(
       return failure('INVALID_CONTENT_TYPE');
     }
     reader = response.body.getReader();
-    const progress = createPublicTextProgress(request, connection.protocol, { ...options, signal });
+    const progress =
+      options.onProgress && publicProgressAllowed(request, connection.protocol)
+        ? createPublicTextProgress(request, connection.protocol, { ...options, signal })
+        : undefined;
     await consumeSse(
       reader,
       async (value) => {
         decoder!.accept(value);
-        await progress(decoder!.publicText());
+        await progress?.(decoder!.publicText());
         return false;
       },
       signal

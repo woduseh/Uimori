@@ -753,7 +753,11 @@ test('live chat grep and SQL follow each actual ancestry and preserve scene numb
     id: selected.id,
     chatId: selected.chatId,
   });
-  expect((await readOne(f, narrowed.items[0].ref)).text).toContain('기록 1-1');
+  expect(narrowed.items[0].metadata.sceneNumber).toBe(2);
+  expect(await readOne(f, narrowed.items[0].ref)).toMatchObject({
+    text: '나이 기록 1-1: 27세',
+    metadata: { sceneNumber: 2 },
+  });
   const counts = await f.invoke('db.query', {
     sql: 'SELECT chat_id,COUNT(*) n FROM agent_messages GROUP BY chat_id ORDER BY chat_id',
   });

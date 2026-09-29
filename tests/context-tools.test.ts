@@ -346,6 +346,39 @@ describe('host read compaction and provider continuation inside one main run', (
     }
   );
 
+  test('oversized reads keep every fragment and Unicode boundary when the whole input does not fit', async () => {
+    const fixed = await snapshot(),
+      log = hooks();
+    fixed.profile!.contextModel = { ...model(), inputTokenLimit: 8192 };
+    const original = structuredClone(fixed),
+      event: ToolEvent = {
+        callId: 'large-unicode-read',
+        name: 'story.read',
+        args: { sceneNumber: 1 },
+        denied: false,
+        result: { text: '미라는 등불 🏮 약속을 기억한다.\n'.repeat(900) },
+      },
+      usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      bodies = script(
+        Array.from({ length: 7 }, () => (body: Body) => {
+          expect(estimateContextTokens(body)).toBeLessThanOrEqual(8192 * 0.8);
+          return completed();
+        })
+      );
+    const events = await compactToolReads(fixed, [event], log.value, usage, projectedTokens(fixed));
+    expect(bodies.length).toBeGreaterThan(1);
+    expect(bodies.map((body) => body.input.source.part).join('')).toBe(JSON.stringify([event]));
+    for (const [index, body] of bodies.entries()) {
+      const part = body.input.source.part as string;
+      expect(/[\uD800-\uDBFF]$/u.test(part)).toBe(false);
+      expect(/^[\uDC00-\uDFFF]/u.test(part)).toBe(false);
+      expect(body.input.source.previousSummary).toBe(index === 0 ? '' : finalText);
+    }
+    expect(usage.modelCalls).toBe(bodies.length);
+    expect(events[0].result).toMatchObject({ summary: finalText });
+    expect(fixed).toEqual(original);
+  });
+
   test('summary headroom includes retained source metadata and exact historical receipts in the actual fresh body', async () => {
     const fixed = await fixedHeavySnapshot(),
       log = hooks(),

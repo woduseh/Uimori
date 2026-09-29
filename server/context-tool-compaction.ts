@@ -9,6 +9,7 @@ import {
 import { generationFromModel } from '../core/model-capabilities.js';
 import {
   executeProvider,
+  ProviderContractError,
   transportConnection,
   type Json,
   type ProviderRequest,
@@ -156,21 +157,28 @@ export async function compactToolReads(
       source: { previousSummary: summary, part },
     },
   });
+  const fits = (part: string): boolean => {
+    try {
+      return (
+        estimateContextTokens(encodeMainPreview(requestFor(part), target).body) <=
+        budget.inputTokenLimit * 0.8
+      );
+    } catch (error) {
+      if (error instanceof ProviderContractError && error.code === 'REQUEST_TOO_LARGE')
+        return false;
+      throw error;
+    }
+  };
   while (remaining.length) {
     hooks.signal.throwIfAborted();
     if (usage.modelCalls + 2 > snapshot.settings.maxCalls)
       throw new Error('CONTEXT_TOOL_COMPACTION_CALL_LIMIT');
     let lo = 0,
       hi = remaining.length;
+    if (fits(remaining)) lo = hi;
     while (lo < hi) {
       const mid = Math.ceil((lo + hi) / 2);
-      if (
-        estimateContextTokens(
-          encodeMainPreview(requestFor(remaining.slice(0, mid)), target).body
-        ) <=
-        budget.inputTokenLimit * 0.8
-      )
-        lo = mid;
+      if (fits(remaining.slice(0, mid))) lo = mid;
       else hi = mid - 1;
     }
     if (lo > 0 && lo < remaining.length && /[\uD800-\uDBFF]/u.test(remaining[lo - 1])) lo--;

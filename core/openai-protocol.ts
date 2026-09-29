@@ -12,7 +12,12 @@ import type {
   ProviderToolCall,
   ProviderUsage,
 } from './transport.js';
-import { nativeHostInstruction, planNativeMessages } from './provider-messages.js';
+import {
+  nativeHostInstruction,
+  nativeMessageMetadata,
+  planNativeMessages,
+  type NativeMessageMetadata,
+} from './provider-messages.js';
 import { modelCapability, validateModelOptions } from './model-capabilities.js';
 import { planProviderCache } from './provider-cache.js';
 import { ProviderOptionsError, validateProviderOptions } from './provider-options.js';
@@ -381,7 +386,11 @@ export const openAIProtocol = {
 };
 
 /** Stateless Responses requests replay every original output item, including encrypted reasoning. */
-export function encodeResponses(request: ProviderRequest): { body: Json; context: OpenAITurn } {
+export function encodeResponses(request: ProviderRequest): {
+  body: Json;
+  context: OpenAITurn;
+  messageMetadata?: NativeMessageMetadata;
+} {
   const prepared = prepare(request, 'openai-responses-turn-v1', 'openai-responses-v1');
   const { generation, aliases, schema, previous, fresh, plan, bootstrap } = prepared;
   const cache = plan ? undefined : planProviderCache(request, 'openai-responses-v1');
@@ -502,6 +511,7 @@ export function encodeResponses(request: ProviderRequest): { body: Json; context
   };
   return {
     body: copy(body, 'INVALID_OPENAI_REQUEST'),
+    messageMetadata: nativeMessageMetadata(plan),
     context: seal({
       version: 'openai-responses-turn-v1',
       modelId: request.modelId,

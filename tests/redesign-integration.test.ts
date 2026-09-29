@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import type { Content, PromptPreset } from '../core/product.js';
 import type { RisuContent } from '../core/risu-content.js';
 import { packageContext } from '../core/package-context.js';
@@ -110,7 +111,7 @@ async function capture(store: Store, chatId: string) {
   );
   return observedExecution(store, run.id);
 }
-test('native source normalizes projections and freezes old run content after editing', async () => {
+test('native source normalizes execution input and preserves completed metadata and output after editing', async () => {
   const store = db(),
     input = packageBody(),
     saved = save(store, input);
@@ -118,7 +119,18 @@ test('native source normalizes projections and freezes old run content after edi
   expect(input.id).toBe('imported');
   const chat = createFixtureChat(store, 'Story', { botId: saved.id });
   const run = await capture(store, chat.id),
-    before = JSON.stringify(run.snapshot);
+    completedSnapshot = readStoredRunSnapshot(store, run.id),
+    completedSource = store.source(run.sourceRevision!);
+  expect(packageContext(run.snapshot, 'main')!.pinned.map((item) => item.text)).toContain(
+    'Imported body'
+  );
+  expect(run.snapshot.profile!.packages![0].nativeRisu.card.post_history_instructions).toBe(
+    'Exact original global note'
+  );
+  expect(JSON.stringify(run.snapshot.promptCompilation?.messages)).toContain(
+    'Exact original global note'
+  );
+  expect(JSON.stringify(run.snapshot)).not.toContain('RETIRED_SYSTEM_MUST_NOT_EXECUTE');
   const edited = save(
     store,
     {
@@ -135,21 +147,9 @@ test('native source normalizes projections and freezes old run content after edi
     saved
   );
   expect(edited.revision).toBe(2);
-  expect(JSON.stringify(observedExecution(store, run.id).snapshot)).toBe(before);
-  expect(
-    packageContext(observedExecution(store, run.id).snapshot, 'main')!.pinned.map(
-      (item) => item.text
-    )
-  ).toContain('Imported body');
+  expect(readStoredRunSnapshot(store, run.id)).toEqual(completedSnapshot);
+  expect(store.source(completedSource.id)).toEqual(completedSource);
   expect(edited.package.body).toBe('NEW_BODY');
-  expect(
-    observedExecution(store, run.id).snapshot.profile!.packages![0].nativeRisu.card
-      .post_history_instructions
-  ).toBe('Exact original global note');
-  expect(
-    JSON.stringify(observedExecution(store, run.id).snapshot.promptCompilation?.messages)
-  ).toContain('Exact original global note');
-  expect(before).not.toContain('RETIRED_SYSTEM_MUST_NOT_EXECUTE');
   const summary = store.product.library(true).contents.find((c) => c.id === saved.id)!;
   expect(summary.hasPackage).toBe(true);
   expect(summary.package).toBeUndefined();

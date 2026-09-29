@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, relative, isAbsolute, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import {
   emptyModelRoutes,
@@ -95,7 +96,11 @@ function complete(store: Store, chatId: string) {
     { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
     run.snapshot.settings
   );
-  return { run: observedExecution(store, run.id), source };
+  return {
+    run: observedExecution(store, run.id),
+    source,
+    completedSnapshot: readStoredRunSnapshot(store, run.id),
+  };
 }
 
 test('optional title model is independent of task routes, strict, CAS protected and preserved by omitted updates', () => {
@@ -162,7 +167,7 @@ test('the optional extension model stays outside task routes and freezes its cur
   });
 });
 
-test('current global selection is shared, CAS protected and frozen in prior Runs and reservations', () => {
+test('current global selection is shared and CAS protected while completed output and reservations remain intact', () => {
   const store = database(),
     chat = createFixtureChat(store, 'Shared'),
     a = model(store, 'A'),
@@ -179,7 +184,8 @@ test('current global selection is shared, CAS protected and frozen in prior Runs
       translationPolicy: firstSettings.translationPolicy,
     })
   ).toThrow(/새로고침/);
-  expect(observedExecution(store, first.run.id)).toEqual(first.run);
+  expect(readStoredRunSnapshot(store, first.run.id)).toEqual(first.completedSnapshot);
+  expect(store.source(first.source.id)).toMatchObject(first.source);
   expect(store.job(translation.id)).toEqual(frozen);
   expect(store.requestTranslation(first.source.id).id).toBe(translation.id);
   expect(store.product.snapshot(chat.id).models.main?.id).toBe(b.id);
@@ -367,7 +373,8 @@ test('chat pins follow the latest selected IDs while other chats and auxiliary m
   expect(store.product.snapshot(other.id).promptPresets?.main?.program).toEqual(
     promptWorkspace(store).main.program
   );
-  expect(observedExecution(store, first.run.id)).toEqual(first.run);
+  expect(readStoredRunSnapshot(store, first.run.id)).toEqual(first.completedSnapshot);
+  expect(store.source(first.source.id)).toMatchObject(first.source);
   expect(pin(store, chat.id, undefined).pinned).toEqual(pinned);
   const cleared = pin(store, chat.id, {});
   expect(cleared.pinned).toBeUndefined();
@@ -454,7 +461,8 @@ test('deleted or disabled pins block new main work while profile repair and glob
   deleteLibraryItem(store, 'model', local.id, { expectedRevision: local.revision });
   pin(store, chat.id, { mainModel: { id: local.id } });
   expect(() => store.product.snapshot(chat.id)).toThrow(/MODEL_UNAVAILABLE:main/);
-  expect(observedExecution(store, first.run.id)).toEqual(first.run);
+  expect(readStoredRunSnapshot(store, first.run.id)).toEqual(first.completedSnapshot);
+  expect(store.source(first.source.id)).toMatchObject(first.source);
   pin(store, chat.id, {});
   expect(store.product.snapshot(chat.id).models.main?.id).toBe(global.id);
 });

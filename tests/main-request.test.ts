@@ -151,6 +151,29 @@ const toolTurn = (output: Json[]): Json => ({
 });
 
 describe('Exact native main preview and terminal submission (synthetic loopback only)', () => {
+  test.each([
+    ['openai-responses-v1', 'gpt-5.6', 'CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED'],
+    ['openai-chat-v1', 'gpt-5.6', 'PROMPT_CACHE_NOT_APPLIED'],
+    ['anthropic-messages-v1', 'claude-opus-5', 'LEADING_SYSTEM_TO_DEDICATED_FIELD'],
+    ['vertex-gemini-v1', 'gemini-3.8-flash', 'LEADING_SYSTEM_TO_DEDICATED_FIELD'],
+    ['codex-app-server-v1', 'gpt-5.6', 'PROMPT_CACHE_NOT_APPLIED'],
+    ['fixture-sse-v1', 'synthetic', 'PROMPT_CACHE_NOT_APPLIED'],
+  ] as const)('preview retains native mapping evidence for %s', async (protocol, modelId, code) => {
+    const work = await snapshot();
+    const target = work.profile!.models.main!;
+    target.connection.protocol = protocol;
+    target.modelId = modelId;
+    const built = buildMainProviderRequest(work);
+    const before = structuredClone(built.request);
+    const preview = encodeMainPreview(built.request, target);
+    expect(preview.capabilityVersion).toBe('native-wire-2026-09-07');
+    expect(preview.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code, protocol, modelId })])
+    );
+    expect(built.request).toEqual(before);
+    expect(JSON.stringify(preview.body)).not.toContain('capabilityVersion');
+  });
+
   test('retired fields in an old execution snapshot never enter a custom prompt request or its host context', async () => {
     const work = await snapshot();
     const before = buildMainProviderRequest(work).request;

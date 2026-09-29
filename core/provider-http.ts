@@ -4,7 +4,7 @@ import { providerFetchOptions, transportFailureCode } from './provider-fetch.js'
 import { validateProviderEndpoint } from './product.js';
 import { validateModelOptions } from './model-capabilities.js';
 import { assertContextBudget } from './context-budget.js';
-import { createPublicTextProgress } from './provider-progress.js';
+import { createPublicTextProgress, publicProgressAllowed } from './provider-progress.js';
 import { consumeSse } from './vertex.js';
 import {
   encodeResponses,
@@ -106,7 +106,10 @@ export async function executeNativeProvider(
   try {
     const connection = validateConnection(connectionValue);
     const request = validateRequest(requestValue);
-    const progress = createPublicTextProgress(request, connection.protocol, { ...options, signal });
+    const progress =
+      options.onProgress && publicProgressAllowed(request, connection.protocol)
+        ? createPublicTextProgress(request, connection.protocol, { ...options, signal })
+        : undefined;
     if (request.generation) validateModelOptions(request.generation, connection.protocol);
     let bodyValue: Json;
     let diagnostic: Json;
@@ -194,7 +197,7 @@ export async function executeNativeProvider(
         reader,
         async (value) => {
           decoder!.accept(value);
-          await progress(decoder!.publicText());
+          await progress?.(decoder!.publicText());
           return decoder!.isTerminal();
         },
         signal,
@@ -218,7 +221,7 @@ export async function executeNativeProvider(
         type: `response.${String((value as Record<string, unknown>).status)}`,
         response: value,
       });
-      await progress(decoder.publicText());
+      await progress?.(decoder.publicText());
     } else {
       await response.body.cancel();
       return failure('INVALID_CONTENT_TYPE');

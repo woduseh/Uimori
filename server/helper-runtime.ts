@@ -602,7 +602,7 @@ export class HelperRuntime {
     this.options.track(
       this.run(id, controller)
         .catch((error) => {
-          const task = this.workspace.task(id);
+          const task = this.workspace.taskState(id);
           this.workspace.finish(
             id,
             this.options.owner,
@@ -940,7 +940,7 @@ export class HelperRuntime {
         this.workspace.assertActive(id, owner, generation);
         if (
           helperCalls >= task.snapshot.limits.helperCalls ||
-          this.workspace.task(id).usage.modelCalls >= task.snapshot.limits.totalCalls
+          this.workspace.taskState(id).usage.modelCalls >= task.snapshot.limits.totalCalls
         )
           throw new Error('MODEL_CALL_BUDGET_EXHAUSTED');
         const target = task.snapshot.model;
@@ -974,7 +974,7 @@ export class HelperRuntime {
         if (shouldCompact && hasSummaryInput) {
           const context = task.snapshot.contextModel;
           if (!context) throw new Error('MODEL_REQUIRED:context');
-          if (this.workspace.task(id).usage.modelCalls + 2 > task.snapshot.limits.totalCalls)
+          if (this.workspace.taskState(id).usage.modelCalls + 2 > task.snapshot.limits.totalCalls)
             throw new Error('MODEL_CALL_BUDGET_EXHAUSTED');
           const preserved = [
             ...completedToolHistory,
@@ -1347,7 +1347,7 @@ export class HelperRuntime {
     while (remaining.length) {
       if (
         ++calls > 16 ||
-        this.workspace.task(task.id).usage.modelCalls + 2 > task.snapshot.limits.totalCalls
+        this.workspace.taskState(task.id).usage.modelCalls + 2 > task.snapshot.limits.totalCalls
       )
         throw new Error('MODEL_CALL_BUDGET_EXHAUSTED');
       const requestFor = (part: string): ProviderRequest => ({
@@ -1650,7 +1650,7 @@ export class HelperRuntime {
     });
     try {
       const remaining =
-        task.snapshot.limits.totalCalls - this.workspace.task(task.id).usage.modelCalls - 1;
+        task.snapshot.limits.totalCalls - this.workspace.taskState(task.id).usage.modelCalls - 1;
       if (remaining < 1) throw new Error('MODEL_CALL_BUDGET_EXHAUSTED');
       snapshot.settings = {
         ...snapshot.settings,

@@ -72,13 +72,7 @@ function readerActivity(
   for (const event of timeline) eventTimes.set(`${event.entity_id}:${event.kind}`, event.at);
   return rows.map((row) => {
     const prefix =
-      row.kind === 'main'
-        ? 'run'
-        : row.kind === 'state'
-          ? 'story.job'
-          : row.kind === 'illustration'
-            ? 'illustration'
-            : 'job';
+      row.kind === 'main' ? 'run' : row.kind === 'illustration' ? 'illustration' : 'job';
     const time = (status: string) => eventTimes.get(`${row.id}:${prefix}.${status}`);
     // A retry can reuse a job ID; queue time identifies that new user-visible execution.
     const startedAt = row.kind === 'main' ? row.createdAt : (time('queued') ?? row.createdAt);

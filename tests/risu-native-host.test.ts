@@ -381,6 +381,9 @@ test('native input dialog resumes the suspended invocation and rejects duplicate
     expect(
       (await app.inject({ method: 'POST', url, payload: { answer: 'Other' } })).statusCode
     ).toBe(404);
+    expect(
+      store.events(chatId, 0).filter((event) => event.kind === 'native.interaction.resolved')
+    ).toHaveLength(1);
     await expect
       .poll(async () => {
         question = (await app.inject(`/api/chats/${chatId}/risu-interactions`)).json()
@@ -398,9 +401,60 @@ test('native input dialog resumes the suspended invocation and rejects duplicate
       ).statusCode
     ).toBe(200);
     await invocation;
+    expect(
+      store.events(chatId, 0).filter((event) => event.kind === 'native.interaction.resolved')
+    ).toHaveLength(2);
     const variables = readChatVariables(store, chatId);
     expect(variables.values).toMatchObject({ name: 'Writer', selected: '1' });
   } finally {
+    await app.close();
+  }
+});
+
+test('cancelled native input notifies other readers and cannot accept a late answer', async () => {
+  const { store, chatId } = await setup();
+  const app = Fastify();
+  nativeInteractionRoutes(app, store);
+  const controller = new AbortController();
+  const invocation = applyNativeRisuAction(
+    store,
+    chatId,
+    store.chat(chatId).headRevision!,
+    actionBody(store, chatId, 'ask', 'cancel-input'),
+    {
+      signal: controller.signal,
+      createHost: (runId) => (method, args, signal) =>
+        requestNativeInteraction(store, runId, method, args, signal),
+    }
+  ).catch((error: unknown) => error);
+  try {
+    let question: { id: string } | undefined;
+    await expect
+      .poll(async () => {
+        question = (await app.inject(`/api/chats/${chatId}/risu-interactions`)).json()
+          .interactions[0];
+        return !!question;
+      })
+      .toBe(true);
+    controller.abort();
+    expect(await invocation).toBeInstanceOf(Error);
+    expect(
+      (await app.inject(`/api/chats/${chatId}/risu-interactions`)).json().interactions
+    ).toEqual([]);
+    expect(
+      store.events(chatId, 0).filter((event) => event.kind === 'native.interaction.resolved')
+    ).toHaveLength(1);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/api/chats/${chatId}/risu-interactions/${question!.id}`,
+          payload: { answer: 'Too late' },
+        })
+      ).statusCode
+    ).toBe(404);
+  } finally {
+    controller.abort();
     await app.close();
   }
 });

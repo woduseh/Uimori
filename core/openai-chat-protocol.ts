@@ -1,5 +1,6 @@
 import { OpenAIProtocolError, openAIProtocol, type OpenAITurn } from './openai-protocol.js';
 import type { Json, ProviderRequest, ProviderResult, ProviderToolCall } from './transport.js';
+import { nativeMessageMetadata, type NativeMessageMetadata } from './provider-messages.js';
 export { OpenAIProtocolError as OpenAIChatProtocolError } from './openai-protocol.js';
 const {
   object,
@@ -57,7 +58,7 @@ function vercelProviderOptions(request: ProviderRequest): Json | undefined {
 export function encodeChat(
   request: ProviderRequest,
   protocol: 'openai-chat-v1' | 'vercel-chat-v1' | 'deepseek-chat-v1' = 'openai-chat-v1'
-): { body: Json; context: OpenAITurn } {
+): { body: Json; context: OpenAITurn; messageMetadata?: NativeMessageMetadata } {
   const prepared = prepare(request, 'openai-chat-turn-v1', protocol);
   const gatewayOptions = protocol === 'vercel-chat-v1' ? vercelProviderOptions(request) : undefined;
   const deepseek = protocol === 'deepseek-chat-v1';
@@ -187,6 +188,7 @@ export function encodeChat(
   };
   return {
     body: copy(body, 'INVALID_OPENAI_REQUEST'),
+    messageMetadata: nativeMessageMetadata(plan),
     context: seal({
       version: 'openai-chat-turn-v1',
       modelId: request.modelId,

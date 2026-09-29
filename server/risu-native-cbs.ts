@@ -212,28 +212,54 @@ export function evaluateNativeRisuFields(input: {
 
 /** One invocation reuses transport only; the worker creates a fresh CBS evaluator for each call. */
 export function createNativeRisuCbsSession(signal?: AbortSignal) {
-  const worker = createNativeRisuWorkerSession<
-    Parameters<typeof evaluateNativeRisuCbsInWorker>[0],
-    ReturnType<typeof evaluateNativeRisuCbsInWorker>
-  >(
-    new URL('./risu-native-cbs.js', import.meta.url),
-    'evaluateNativeRisuCbsInWorker',
-    undefined,
-    signal
-  );
+  const createWorker = () =>
+    createNativeRisuWorkerSession<
+      Parameters<typeof evaluateNativeRisuCbsInWorker>[0],
+      ReturnType<typeof evaluateNativeRisuCbsInWorker>
+    >(
+      new URL('./risu-native-cbs.js', import.meta.url),
+      'evaluateNativeRisuCbsInWorker',
+      undefined,
+      signal
+    );
+  let worker: ReturnType<typeof createWorker> | undefined;
+  let evaluating = false,
+    closed = false;
+  let closing: Promise<void> | undefined;
   return {
     async evaluate(text: string, context: NativeRisuCbsContext): Promise<string> {
-      const result = await worker.run({ text, context });
-      for (const [key, value] of Object.entries(result.variables))
-        Object.defineProperty(context.variables, key, {
-          value,
-          enumerable: true,
-          writable: true,
-          configurable: true,
-        });
-      return result.text;
+      if (closed) throw new Error('RISU_NATIVE_WORKER_CLOSED');
+      if (signal?.aborted) throw new Error('CANCELLED');
+      // A rejected overlapping call must not close the worker owned by the first call.
+      if (evaluating) throw new Error('RISU_NATIVE_WORKER_BUSY');
+      const current = (worker ??= createWorker());
+      evaluating = true;
+      try {
+        const result = await current.run({ text, context });
+        for (const [key, value] of Object.entries(result.variables))
+          Object.defineProperty(context.variables, key, {
+            value,
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          });
+        return result.text;
+      } catch (error) {
+        // Lua may catch this error. Only a later, distinct call gets a fresh worker.
+        try {
+          await current.close();
+        } finally {
+          worker = undefined;
+        }
+        throw error;
+      } finally {
+        evaluating = false;
+      }
     },
-    close: worker.close,
+    close() {
+      closed = true;
+      return (closing ??= worker?.close() ?? Promise.resolve());
+    },
   };
 }
 

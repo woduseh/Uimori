@@ -12,7 +12,6 @@ const names: Record<string, string> = {
   translation: '번역',
   image: '이미지',
   status: '장면 해설',
-  context: '문맥 압축',
   illustration: '삽화',
 };
 
@@ -77,7 +76,6 @@ function TurnActivityContent({
   const related = activities.filter((item) =>
     item.kind === 'main' ? item.id === run.id : !!source && item.sourceRevision === source.id
   );
-  const context = related.filter((item) => item.kind === 'context').at(-1);
   // Illustrations attach to the response text; the reader strip owns their actions.
   const illustrations = related.filter((item) => item.kind === 'illustration');
   const entries = [
@@ -90,7 +88,6 @@ function TurnActivityContent({
           ? `${job.imageTarget?.mode === 'translation' ? '번역' : '원문'} 이미지 배치`
           : names[job.kind],
     })),
-    ...(context ? [context] : []),
     ...illustrations,
   ];
   const running = active(run.status) || entries.some((item) => active(item.status));
@@ -163,12 +160,6 @@ function TurnActivityContent({
         >
           {children}
         </RunTaskDetails>
-        {context && (
-          <section aria-label="이 응답의 문맥 작업">
-            <p>문맥 압축 · {labels[context.status] ?? context.status}</p>
-            <small>요약과 작업 관리는 채팅 설정의 기억과 메모에서 확인해요.</small>
-          </section>
-        )}
         {illustrations.length > 0 && (
           <section aria-label="이 응답의 삽화 작업">
             {illustrations.map((item) => (

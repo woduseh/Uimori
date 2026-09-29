@@ -16,7 +16,12 @@ import { attachMainHostContext, requestInput } from './main-host-context.js';
 import { buildMainInput, CATALOG_READ_GUIDANCE, type MainInput } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
-import { planNativeMessages, withNativeHostContext } from '../core/provider-messages.js';
+import {
+  nativeMessageMetadata,
+  planNativeMessages,
+  withNativeHostContext,
+  type NativeMessageMetadata,
+} from '../core/provider-messages.js';
 import {
   ProviderContractError,
   validateRequest,
@@ -235,27 +240,29 @@ export function encodeMainPreview(
 ) {
   const checked = validateRequest(request),
     protocol = target.connection.protocol;
-  const plan = planNativeMessages(checked, protocol);
-  const body =
-    protocol === 'openai-responses-v1'
-      ? encodeResponses(checked).body
-      : protocol === 'anthropic-messages-v1'
-        ? encodeAnthropic(checked).body
-        : protocol === 'vertex-gemini-v1'
-          ? encodeVertex(checked).body
-          : protocol === 'openai-chat-v1' ||
-              protocol === 'vercel-chat-v1' ||
-              protocol === 'deepseek-chat-v1'
-            ? encodeChat(checked, protocol).body
-            : protocol === 'codex-app-server-v1'
-              ? buildCodexDescriptor(checked)
-              : json(checked);
+  let encoded: { body: Json; messageMetadata?: NativeMessageMetadata };
+  if (protocol === 'openai-responses-v1') encoded = encodeResponses(checked);
+  else if (protocol === 'anthropic-messages-v1') encoded = encodeAnthropic(checked);
+  else if (protocol === 'vertex-gemini-v1') encoded = encodeVertex(checked);
+  else if (
+    protocol === 'openai-chat-v1' ||
+    protocol === 'vercel-chat-v1' ||
+    protocol === 'deepseek-chat-v1'
+  )
+    encoded = encodeChat(checked, protocol);
+  else {
+    const plan = planNativeMessages(checked, protocol);
+    encoded = {
+      body: protocol === 'codex-app-server-v1' ? buildCodexDescriptor(checked) : json(checked),
+      messageMetadata: nativeMessageMetadata(plan),
+    };
+  }
   return {
     protocol,
     modelId: target.modelId,
     kind: 'exact-request-body' as const,
-    body,
-    diagnostics: plan?.diagnostics ?? [],
-    capabilityVersion: plan?.capabilityVersion ?? 'fixture-only',
+    body: encoded.body,
+    diagnostics: encoded.messageMetadata?.diagnostics ?? [],
+    capabilityVersion: encoded.messageMetadata?.capabilityVersion ?? 'fixture-only',
   };
 }

@@ -69,3 +69,48 @@ test('navigation disposes retries and ignores the late failure of an in-flight G
   expect(onError).not.toHaveBeenCalled();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+test('a hidden reader retains event and reconnect targets without reads or retry timers', async () => {
+  vi.useFakeTimers();
+  let cursor = 10;
+  let complete!: (applied: boolean) => void;
+  const refresh = vi.fn().mockImplementationOnce(
+    () =>
+      new Promise<boolean>((resolve) => {
+        complete = resolve;
+      })
+  );
+  const sync = createReaderSync({
+    refresh,
+    cursor: () => cursor,
+    onError: () => {},
+    active: false,
+  });
+  sync.request(11);
+  sync.request(12, true);
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(refresh).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBe(0);
+
+  sync.setActive(true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(refresh.mock.calls).toEqual([[false]]);
+  sync.setActive(false);
+  sync.request(13, true);
+  // The request that was already underway cannot acknowledge a later reconnect.
+  complete(true);
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(refresh).toHaveBeenCalledTimes(1);
+  expect(vi.getTimerCount()).toBe(0);
+
+  refresh.mockImplementation(async () => {
+    cursor = 13;
+    return true;
+  });
+  sync.setActive(true);
+  await vi.advanceTimersByTimeAsync(10000);
+  expect(refresh.mock.calls).toEqual([[false], [false]]);
+  expect(cursor).toBe(13);
+  expect(vi.getTimerCount()).toBe(0);
+  sync.dispose();
+});

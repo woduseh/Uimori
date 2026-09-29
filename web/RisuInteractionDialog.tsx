@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
 import { api } from './api.js';
 
@@ -10,45 +10,98 @@ type Interaction = {
 };
 export function RisuInteractionDialog({
   chatId,
+  refreshKey = 0,
   onError,
 }: {
   chatId: string;
+  refreshKey?: number;
   onError: (error: string) => void;
 }) {
   const [item, setItem] = useState<Interaction>();
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
+  const reload = useRef(() => {});
+  const invalidate = useRef(() => {});
+  const priorRefresh = useRef(refreshKey);
   useEffect(() => {
     let active = true;
+    let pending = false;
+    let requested = false;
+    let version = 0;
+    let failures = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const controller = new AbortController();
     const load = async () => {
+      if (!active || document.hidden) return;
+      clearTimeout(timer);
+      if (pending) {
+        requested = true;
+        return;
+      }
+      requested = false;
+      pending = true;
+      const attempt = version;
       try {
         const result = await api<{ interactions: Interaction[] }>(
-          `/chats/${chatId}/risu-interactions`
+          `/chats/${encodeURIComponent(chatId)}/risu-interactions`,
+          undefined,
+          'GET',
+          AbortSignal.any([controller.signal, AbortSignal.timeout(5000)])
         );
-        if (active)
+        failures = 0;
+        if (active && attempt === version)
           setItem((current) =>
             current?.id === result.interactions[0]?.id ? current : result.interactions[0]
           );
       } catch {
-        /* The normal chat connection UI owns connectivity errors. */
+        // Only a failed read retries. An idle card needs no polling or new SSE connection.
+        if (active && !document.hidden)
+          timer = setTimeout(() => void load(), Math.min(10000, 1000 * 2 ** failures++));
+      } finally {
+        pending = false;
+        if (requested && active && !document.hidden) {
+          requested = false;
+          clearTimeout(timer);
+          timer = setTimeout(() => void load(), 0);
+        }
       }
     };
+    const wake = () => {
+      clearTimeout(timer);
+      void load();
+    };
+    reload.current = wake;
+    // A late read of the answered prompt must not reopen it.
+    invalidate.current = () => version++;
+    setItem(undefined);
     void load();
-    const timer = setInterval(() => void load(), 1500);
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('focus', wake);
     return () => {
       active = false;
-      clearInterval(timer);
+      controller.abort();
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', wake);
+      window.removeEventListener('focus', wake);
     };
   }, [chatId]);
+  useEffect(() => {
+    if (priorRefresh.current === refreshKey) return;
+    priorRefresh.current = refreshKey;
+    reload.current();
+  }, [refreshKey]);
   useEffect(() => {
     if (item?.id) setValue('');
   }, [item?.id]);
   const answer = async (answer: string | boolean) => {
     if (!item || busy) return;
+    const answeredId = item.id;
     setBusy(true);
     try {
-      await api(`/chats/${chatId}/risu-interactions/${item.id}`, { answer });
-      setItem(undefined);
+      await api(`/chats/${chatId}/risu-interactions/${answeredId}`, { answer });
+      invalidate.current();
+      setItem((current) => (current?.id === answeredId ? undefined : current));
+      reload.current();
     } catch (error) {
       onError((error as Error).message);
     } finally {

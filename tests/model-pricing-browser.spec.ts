@@ -45,7 +45,7 @@ for (const width of DEFAULT_WIDTHS) {
     page.on('request', (req) => {
       if (
         req.method() === 'POST' &&
-        /\/(runs|response-test|connection-test)$/.test(new URL(req.url()).pathname)
+        /(?:\/runs|\/provider-management\/models\/[^/]+\/test)$/.test(new URL(req.url()).pathname)
       )
         providerCalls.push(req.url());
     });

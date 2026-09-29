@@ -92,7 +92,7 @@ async function harness(
         window.addEventListener('test-turn-refresh', (event) => {
           if (!this.closed)
             this.onmessage?.({
-              data: JSON.stringify({ kind: 'story.job', seq: (event as CustomEvent).detail }),
+              data: JSON.stringify({ kind: 'job.completed', seq: (event as CustomEvent).detail }),
             });
         });
       }
@@ -218,7 +218,7 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
     body.reader.responseActivity = [
       activity(source.id, 'translation', status),
       activity(source.id, 'status', status),
-      activity(source.id, 'context', status),
+      activity(source.id, 'illustration', status),
     ];
     if (status === 'completed')
       body.jobs.unshift({
@@ -234,7 +234,7 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   const other = page.locator(`[data-testid="turn-activity"][data-run-id="${otherSource.runId}"]`);
   await expect(panel.locator(':scope > summary')).toContainText(/번역.*중/);
   await expect(panel.locator(':scope > summary')).toContainText('장면 해설 진행 중');
-  await expect(panel.locator(':scope > summary')).toContainText('문맥 압축 진행 중');
+  await expect(panel.locator(':scope > summary')).toContainText('삽화 진행 중');
   await expect(panel.locator(':scope > summary')).toContainText('원문 이미지 배치 진행 중');
   await expect(panel.locator(':scope > summary')).toContainText('번역 이미지 배치 진행 중');
   await expect(panel).not.toHaveAttribute('open');
@@ -248,8 +248,8 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   await expect(panel.getByTestId('job-status').getByRole('heading')).toContainText(
     '장면 해설 실패'
   );
-  await expect(panel.getByRole('region', { name: '이 응답의 문맥 작업' })).toContainText(
-    '문맥 압축 · 실패'
+  await expect(panel.getByRole('region', { name: '이 응답의 삽화 작업' })).toContainText(
+    '삽화 · 실패'
   );
   await state.set(project('completed'));
   await expect(panel.locator(':scope > summary')).not.toContainText('실패');
