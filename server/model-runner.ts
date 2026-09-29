@@ -26,6 +26,7 @@ import {
 } from './main-request.js';
 import { createAgentCollaboration } from './agent-collaboration.js';
 import { compactableRead, compactToolReads } from './context-tool-compaction.js';
+import { requestLore } from './request-lore.js';
 
 export type MainResult = {
   status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled';
@@ -292,7 +293,16 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         target.timeoutMs ??
         (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
       onWire: async (wire, resumeAttemptId) => {
-        attemptId = await hooks.onAttemptStart(wire, resumeAttemptId);
+        attemptId = await hooks.onAttemptStart(
+          {
+            ...wire,
+            requestLore: requestLore(fixed, request, wire, {
+              pinned: input.pinnedSources ?? [],
+              catalog: input.catalog,
+            }),
+          },
+          resumeAttemptId
+        );
         // Persistence completes before fetch. A crash leaves an uncertain attempt, not a queued replay.
         usage.modelCalls++;
         mainCalls++;

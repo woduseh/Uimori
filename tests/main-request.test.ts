@@ -521,7 +521,11 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
   });
 
   test('NMR09 native pinned context slots have no duplicate host-envelope bodies', async () => {
-    const work = await snapshot();
+    const server = await loopbackProvider(async (_request, response) =>
+      writeSse(response, [complete('Synthetic final prose.'), '[DONE]'])
+    );
+    closes.push(server.close);
+    const work = await snapshot(`${server.origin}/v1`);
     work.profile!.packages = [
       nativeContent({ name: 'Bot', description: 'SYNTHETIC_PINNED_BOT' }, { id: 'bot' }),
       nativeContent(
@@ -531,6 +535,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
             entries: [
               {
                 id: 'canon',
+                comment: 'Canon fact',
                 content: 'SYNTHETIC_CANON_ALWAYS_PINNED',
                 constant: true,
                 enabled: true,
@@ -558,9 +563,22 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     expect(source.pinnedSources).toEqual([]);
     expect(source.facts).toEqual([]);
 
-    const wire = JSON.stringify(encodeMainPreview(built.request, work.profile!.models.main!).body);
+    const expected = encodeMainPreview(built.request, work.profile!.models.main!).body;
+    const wire = JSON.stringify(expected);
     for (const marker of ['SYNTHETIC_PINNED_BOT', 'SYNTHETIC_CANON_ALWAYS_PINNED'])
       expect(wire.split(marker).length - 1).toBe(1);
+    const log = hooks(server.origin);
+    expect((await runMain(built.snapshot, log.value)).status).toBe('completed');
+    expect(log.attempts[0].requestLore).toMatchObject({
+      status: 'complete',
+      entries: [
+        { title: 'Canon fact', via: 'pinned', delivery: 'full', source: { contentId: 'canon' } },
+      ],
+    });
+    expect(log.attempts[0].requestLore!.entries).toHaveLength(1);
+    expect(log.attempts[0].body).toEqual(expected);
+    expect(JSON.parse(server.requests[0].body)).toEqual(expected);
+    expect(server.requests[0].body).not.toContain('requestLore');
   });
 
   test.each(['END_SCENE', 'UNREQUESTED_SEQUENCE'])(

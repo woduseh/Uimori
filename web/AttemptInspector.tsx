@@ -1,9 +1,11 @@
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import type { Attempt } from '../core/product.js';
 import type { Run } from '../core/types.js';
+import type { RequestLore } from '../core/request-lore.js';
 import { providerCacheUsage } from '../core/provider-cache-usage.js';
 import { formatUsd, pricingRateLabels, pricingNote } from './pricing-display.js';
 import './model-pricing.css';
+import './lore-context.css';
 
 const roleLabels: Record<Attempt['role'], string> = {
   main: '원문',
@@ -17,6 +19,8 @@ const roleLabels: Record<Attempt['role'], string> = {
   illustration: '삽화',
 };
 type AttemptSummary = Omit<Attempt, 'request' | 'response' | 'rawUsage'>;
+const tokens = (value: number | null) =>
+  value === null ? '미확인' : `${value.toLocaleString('ko-KR')}토큰`;
 const total = (attempts: AttemptSummary[], field: 'inputTokens' | 'outputTokens' | 'costUsd') =>
   attempts.length === 0 || attempts.some((attempt) => attempt[field] === null)
     ? null
@@ -145,6 +149,72 @@ function CacheUsage({ attempt }: { attempt: Attempt }) {
   );
 }
 
+const loreVia = { pinned: '고정 자료', retained: '이전 요청에서 유지', 'tool-result': '도구 조회' };
+const loreDelivery = {
+  full: '전체 본문',
+  excerpt: '읽은 구간',
+  summary: '요약만',
+  unverified: '포함 여부 미확인',
+};
+function AttemptLore({ attempt }: { attempt: Attempt }) {
+  const lore = (attempt.request as { requestLore?: RequestLore } | null)?.requestLore;
+  const confirmed = lore?.entries.filter((entry) => entry.delivery !== 'unverified') ?? [];
+  const uncertain = lore?.entries.filter((entry) => entry.delivery === 'unverified') ?? [];
+  const entries = (items: RequestLore['entries']) => (
+    <ul className="lore-context-entries">
+      {items.map((entry, index) => (
+        <li key={`${entry.id}:${entry.via}:${index}`}>
+          <strong>{entry.title || entry.id}</strong>
+          <span>
+            {loreVia[entry.via]} · {loreDelivery[entry.delivery]}
+          </span>
+          {entry.source && <small>출처: {entry.source.sourceName || entry.source.contentId}</small>}
+          <small>{entry.id}</small>
+        </li>
+      ))}
+    </ul>
+  );
+  return (
+    <section className="lore-context-result attempt-lore" aria-label="요청에 포함된 로어">
+      <h4>포함된 로어{lore && confirmed.length > 0 ? ` · ${confirmed.length}건` : ''}</h4>
+      {!lore ? (
+        <p className="muted">
+          이 요청에는 로어 포함 기록이 없어요. 로어를 보내지 않았다는 뜻은 아니에요.
+        </p>
+      ) : (
+        <>
+          {confirmed.length ? (
+            <details open={confirmed.length <= 6}>
+              <summary>로어 목록 · {confirmed.length}건</summary>
+              {entries(confirmed)}
+            </details>
+          ) : (
+            <p className="muted">
+              {lore.status === 'complete'
+                ? '이 요청에 추가로 첨부한 로어가 없어요.'
+                : '포함을 확인한 로어가 없어요.'}
+            </p>
+          )}
+          {lore.status === 'partial' && (
+            <p className="muted">
+              프롬프트에서 가공된 자료 등은 포함 여부를 확정하지 못할 수 있어요.
+            </p>
+          )}
+          {uncertain.length > 0 && (
+            <details>
+              <summary>포함 여부 미확인 · {uncertain.length}건</summary>
+              {entries(uncertain)}
+            </details>
+          )}
+          <small className="muted">
+            앱이 첨부한 자료 기준이에요. 목록에 이름만 있는 로어는 제외해요.
+          </small>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function AttemptInspector({
   chatId,
   revision,
@@ -244,10 +314,27 @@ function AttemptTable({
           key={summary.id}
           path={`/attempts/${summary.id}`}
           revision={revision}
-          title={`${roleLabels[summary.role]} · ${summary.modelId} · ${summary.status}`}
+          title={
+            <>
+              {roleLabels[summary.role]} · {summary.modelId} · {summary.status}
+              <small className="attempt-token-summary">
+                입력 {tokens(summary.inputTokens)} · 출력 {tokens(summary.outputTokens)}
+              </small>
+            </>
+          }
         >
           {(attempt) => (
             <>
+              <dl className="model-pricing-rates attempt-usage" aria-label="호출 토큰 사용량">
+                <div>
+                  <dt>입력 토큰</dt>
+                  <dd>{tokens(attempt.inputTokens)}</dd>
+                </div>
+                <div>
+                  <dt>출력 토큰</dt>
+                  <dd>{tokens(attempt.outputTokens)}</dd>
+                </div>
+              </dl>
               <p>
                 {attempt.runId
                   ? `Run ${attempt.runId}`
@@ -255,26 +342,30 @@ function AttemptTable({
                 · 비용 기준 {attempt.priceRevision ?? '미확인'}
               </p>
               <CacheUsage attempt={attempt} />
+              <AttemptLore attempt={attempt} />
               <AttemptPricing attempt={attempt} />
-              <pre>
-                {JSON.stringify(
-                  {
-                    id: attempt.id,
-                    role: attempt.role,
-                    request: attempt.request,
-                    response: attempt.response,
-                    usage: {
-                      inputTokens: attempt.inputTokens,
-                      outputTokens: attempt.outputTokens,
-                      costUsd: attempt.costUsd,
-                      raw: attempt.rawUsage,
+              <details className="attempt-raw">
+                <summary>원시 요청·응답 보기</summary>
+                <pre>
+                  {JSON.stringify(
+                    {
+                      id: attempt.id,
+                      role: attempt.role,
+                      request: attempt.request,
+                      response: attempt.response,
+                      usage: {
+                        inputTokens: attempt.inputTokens,
+                        outputTokens: attempt.outputTokens,
+                        costUsd: attempt.costUsd,
+                        raw: attempt.rawUsage,
+                      },
+                      error: attempt.error,
                     },
-                    error: attempt.error,
-                  },
-                  null,
-                  2
-                )}
-              </pre>
+                    null,
+                    2
+                  )}
+                </pre>
+              </details>
             </>
           )}
         </LazyDiagnostics>
