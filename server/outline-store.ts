@@ -1,4 +1,4 @@
-import { readHelperOutline, outlineViewVersion, outlineNextRead } from './outline-read.js';
+import { readHelperOutline, outlineNextRead } from './outline-read.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { textTokenExcerpt } from '../core/text-tokens.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -351,18 +351,11 @@ export class OutlineStore {
         .all(chatId)
         .map((row) => [String(row.node_id), row])
     );
-    const viewVersion = [...reviews.values()].some((row) =>
-      String(row.plan_hash).startsWith('outline-view:')
-    )
-      ? outlineViewVersion(this.store, chatId)
-      : undefined;
     return {
       chatId,
       nodes: nodes.map((node) => {
         const review = reviews.get(node.id);
-        return review
-          ? { ...node, latestReview: this.mapReview(review, nodes, viewVersion) }
-          : node;
+        return review ? { ...node, latestReview: this.mapReview(review, nodes) } : node;
       }),
     };
   }
@@ -440,13 +433,12 @@ export class OutlineStore {
         depth: 1,
         limit: 8,
       });
-      const viewVersion = overview.version;
+      if (overview.kind !== 'nodes') throw new Error('OUTLINE_SEED_INVALID');
       const sources: OutlineHelperContext['sources'] = [];
       let partial =
-        'nodes' in overview &&
-        (overview.nextOffset !== null ||
-          overview.coverage.excludedByDepth > 0 ||
-          overview.nodes.some((item) => (item as { previewTruncated?: boolean }).previewTruncated));
+        overview.nextOffset !== null ||
+        overview.coverage.excludedByDepth > 0 ||
+        overview.nodes.some((item) => item.previewTruncated);
       if (target.purpose === 'review') {
         const page = readHelperOutline(this.store, chatId, {
           mode: 'detail',
@@ -454,12 +446,11 @@ export class OutlineStore {
           nodeId: target.nodeId,
           limit: 3,
         });
-        if (!('items' in page) || !page.items.length)
+        if (page.kind !== 'writings' || !page.items.length)
           throw new HttpError(409, '먼저 이 구성이나 하위 항목에 원문을 작성해 주세요.');
         partial ||= page.nextOffset !== null;
         let remaining = Math.min(1500, Math.floor(inputTokenLimit / 8));
-        for (const item of page.items) {
-          const ref = item as { sourceRevision: string; sourceHash: string | null };
+        for (const ref of page.items) {
           if (!ref.sourceHash) {
             partial = true;
             continue;
@@ -483,24 +474,17 @@ export class OutlineStore {
       }
       return {
         target,
-        viewVersion,
+        ...(target.purpose === 'review'
+          ? { reviewVersion: this.reviewVersion(target.nodeId!) }
+          : {}),
         sources,
         partial,
-        brief: JSON.parse(
-          JSON.stringify({
-            ...overview,
-            detailRead: outlineNextRead(chatId, {
-              mode: 'detail',
-              nodeId: target.nodeId,
-              expectedVersion: viewVersion,
-            }),
-            subtreeRead: outlineNextRead(chatId, {
-              mode: 'subtree',
-              nodeId: target.nodeId,
-              expectedVersion: viewVersion,
-            }),
-          })
-        ),
+        brief: {
+          ...overview,
+          // These enter different query scopes. Only continuations reuse a page's version.
+          detailRead: outlineNextRead(chatId, { mode: 'detail', nodeId: target.nodeId! }),
+          subtreeRead: outlineNextRead(chatId, { mode: 'subtree', nodeId: target.nodeId! }),
+        },
       };
     });
   }
@@ -511,9 +495,7 @@ export class OutlineStore {
       .run(
         taskId,
         context.target.nodeId,
-        context.viewVersion
-          ? `outline-view:${context.viewVersion}`
-          : this.planHash(context.target.nodeId),
+        context.reviewVersion ?? this.planHash(context.target.nodeId),
         JSON.stringify(context.sources.map(({ text: _text, ...ref }) => ref)),
         Number(context.partial),
         now()
@@ -528,22 +510,49 @@ export class OutlineStore {
     if (!row) return null;
     return this.mapReview(row, nodes);
   }
-  private mapReview(row: Row, nodes?: OutlineNode[], viewVersion?: string): OutlineReview {
+  /** Review freshness covers this plan's path, descendants, related plans and source hashes only.
+   * It is not a pagination token or a claim that every source was read. */
+  private reviewVersion(id: string, nodes = this.nodes(this.node(id).chatId)): string {
+    const { path, related } = outlineSelection(nodes)(id);
+    const planned = [...path, ...this.descendants(nodes, id), ...related];
+    return (
+      'review:' +
+      createHash('sha256')
+        .update(
+          JSON.stringify([
+            planned.map((node) => [
+              node.id,
+              node.parentId,
+              node.level,
+              node.position,
+              node.revision,
+              node.relatedIds,
+            ]),
+            this.unitSources(id, nodes).map((source) => [source.sourceRevision, source.sourceHash]),
+          ])
+        )
+        .digest('hex')
+    );
+  }
+  private mapReview(row: Row, nodes?: OutlineNode[]): OutlineReview {
     const id = String(row.node_id);
     const sources = JSON.parse(String(row.sources)) as OutlineReview['sources'];
-    const current = row.plan_hash.startsWith('outline-view:') ? null : this.unitSources(id, nodes);
-    const stale =
-      current === null
-        ? row.plan_hash !==
-          `outline-view:${viewVersion ?? outlineViewVersion(this.store, (nodes?.find((node) => node.id === id) ?? this.node(id)).chatId)}`
-        : row.plan_hash !== this.planHash(id, nodes) ||
-          sources.length !== current.length ||
-          sources.some(
-            (source) =>
-              !current.some(
-                (item) => item.sourceRevision === source.id && item.sourceHash === source.hash
-              )
-          );
+    let stale: boolean;
+    if (String(row.plan_hash).startsWith('review:')) {
+      stale = row.plan_hash !== this.reviewVersion(id, nodes);
+    } else {
+      // Existing reviews use the original plan hash and their supplied source references.
+      const current = this.unitSources(id, nodes);
+      stale =
+        row.plan_hash !== this.planHash(id, nodes) ||
+        sources.length !== current.length ||
+        sources.some(
+          (source) =>
+            !current.some(
+              (item) => item.sourceRevision === source.id && item.sourceHash === source.hash
+            )
+        );
+    }
     return {
       taskId: String(row.task_id),
       conversationId: String(row.conversation_id),

@@ -433,7 +433,7 @@ test('completed read references retain returned ranges and revisions while allow
         arguments: {
           nodeId: 'unit',
           mode: 'detail',
-          textOffset: 60,
+          offset: 60,
           expectedVersion: 'outline-view-one',
         },
       },
@@ -502,7 +502,7 @@ test('completed read references retain returned ranges and revisions while allow
             arguments: {
               nodeId: 'unit',
               mode: 'detail',
-              textOffset: 60,
+              offset: 60,
               expectedVersion: 'outline-view-one',
             },
           },

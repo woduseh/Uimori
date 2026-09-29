@@ -1,4 +1,4 @@
-import { readHelperOutline, smallerOutlineRead } from './outline-read.js';
+import { readHelperOutline } from './outline-read.js';
 import { OUTLINE_PLANNING_GUIDANCE, OUTLINE_REVIEW_GUIDANCE } from '../core/outline-guidance.js';
 import type { OutlineTarget } from '../core/outline.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
@@ -128,6 +128,51 @@ function helperRead(event: ToolEvent) {
     (HELPER_READ_NAMES.has(String(name)) ||
       (['chat.lore', 'library.organize'].includes(String(name)) && args?.action === 'read'))
   );
+}
+
+/** Retry the same unread range. Successful writes never pass through this helper. */
+function smallerHelperRead(
+  name: string,
+  args: Record<string, unknown>,
+  chatId: string | undefined
+) {
+  switch (name) {
+    case 'outline.read': {
+      const intent = args.mode === 'detail' && (args.section ?? 'intent') === 'intent';
+      const limit = Math.max(
+        1,
+        Math.min(intent ? 2000 : 5, Math.floor(Number(args.limit ?? (intent ? 6000 : 20)) / 2))
+      );
+      return {
+        name: 'app.call',
+        arguments: { name, arguments: { ...args, ...(chatId ? { chatId } : {}), limit } },
+      };
+    }
+    case 'knowledge.search':
+      if (args.mode === 'browse')
+        return {
+          name: 'app.call',
+          arguments: {
+            name,
+            arguments: {
+              ...args,
+              limit: Math.max(1, Math.min(5, Math.floor(Number(args.limit ?? 20) / 2))),
+            },
+          },
+        };
+      break;
+    case 'resource.read':
+      return { name, arguments: { kind: args.kind, id: args.id } };
+    case 'chat.lore':
+      return { name, arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 } };
+    case 'data.search':
+    case 'data.read':
+      return { name, arguments: { ...args, limit: name === 'data.search' ? 5 : 1000 } };
+  }
+  return {
+    name: 'data.search',
+    arguments: { scope: name === 'editor.read' ? 'editor' : 'library', patterns: [], limit: 5 },
+  };
 }
 
 function helperToolError(error: unknown, readOnly: boolean) {
@@ -879,49 +924,15 @@ export class HelperRuntime {
               roundReadChars + providedChars > MAX_HELPER_ROUND_READ_CHARS
             ) {
               const args = record(call.arguments);
-              const nextRead =
-                call.name === 'outline.read'
-                  ? smallerOutlineRead(
-                      String(
-                        args.chatId ??
-                          (task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : '')
-                      ),
-                      args
-                    )
-                  : call.name === 'knowledge.search' && args.mode === 'browse'
-                    ? {
-                        name: 'app.call',
-                        arguments: {
-                          name: 'knowledge.search',
-                          arguments: {
-                            ...args,
-                            limit: Math.max(
-                              1,
-                              Math.min(5, Math.floor(Number(args.limit ?? 20) / 2))
-                            ),
-                          },
-                        },
-                      }
-                    : call.name === 'resource.read'
-                      ? { name: 'resource.read', arguments: { kind: args.kind, id: args.id } }
-                      : call.name === 'chat.lore'
-                        ? {
-                            name: call.name,
-                            arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 },
-                          }
-                        : call.name === 'data.search' || call.name === 'data.read'
-                          ? {
-                              name: call.name,
-                              arguments: { ...args, limit: call.name === 'data.search' ? 5 : 1000 },
-                            }
-                          : {
-                              name: 'data.search',
-                              arguments: {
-                                scope: call.name === 'editor.read' ? 'editor' : 'library',
-                                patterns: [],
-                                limit: 5,
-                              },
-                            };
+              const nextRead = smallerHelperRead(
+                call.name,
+                args,
+                typeof args.chatId === 'string'
+                  ? args.chatId
+                  : task.snapshot.scope.kind === 'chat'
+                    ? task.snapshot.scope.chatId
+                    : undefined
+              );
               event.result = {
                 error: 'HELPER_READ_TOO_LARGE',
                 returned: false,
@@ -1263,7 +1274,14 @@ export class HelperRuntime {
               }
             : null,
           selection: task.snapshot.selection ?? null,
-          outline: task.snapshot.outline ?? null,
+          outline: task.snapshot.outline
+            ? {
+                target: task.snapshot.outline.target,
+                brief: task.snapshot.outline.brief,
+                sources: task.snapshot.outline.sources,
+                partial: task.snapshot.outline.partial,
+              }
+            : null,
           scope: task.snapshot.scope,
           writing: writing
             ? {

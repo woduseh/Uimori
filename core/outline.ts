@@ -82,7 +82,8 @@ export type OutlineHelperContext = {
   target: OutlineTarget;
   /** Bounded metadata/preview projection; not the writer's full frozen composition. */
   brief: import('./transport.js').Json | null;
-  viewVersion?: string;
+  /** Host-only input signature for review freshness; independent of read pagination. */
+  reviewVersion?: string;
   sources: (OutlineReview['sources'][number] & { text: string })[];
   partial: boolean;
 };
