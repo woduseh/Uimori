@@ -32,12 +32,14 @@ type DynamicToolRequest = {
   threadId: string;
   turnId: string;
   callId: string;
+  namespace: string | null;
   tool: string;
   arguments: unknown;
 };
 type DynamicToolHandler = {
   threadId: string;
   turnId(): string | undefined;
+  namespace: string;
   toolNames: readonly string[];
   handle(request: DynamicToolRequest): Promise<unknown>;
 };
@@ -227,7 +229,7 @@ export class CodexProcess {
             typeof call.callId === 'string' &&
             call.callId.length > 0 &&
             call.callId.length <= 300 &&
-            call.namespace == null &&
+            call.namespace === handler.namespace &&
             typeof call.tool === 'string' &&
             handler.toolNames.includes(call.tool) &&
             'arguments' in call &&

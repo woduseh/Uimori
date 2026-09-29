@@ -47,7 +47,16 @@ test.skipIf(process.env.UIMORI_CODEX_PREFLIGHT !== '1')(
       const schemaDirectory = join(root, 'schema');
       await runFile(
         executable!,
-        ['app-server', 'generate-json-schema', '--experimental', '--out', schemaDirectory],
+        [
+          'app-server',
+          '--strict-config',
+          '-c',
+          'code_mode.excluded_tool_namespaces=["functions"]',
+          'generate-json-schema',
+          '--experimental',
+          '--out',
+          schemaDirectory,
+        ],
         execution
       );
       const schema = async (file: string): Promise<Schema> =>
@@ -60,9 +69,15 @@ test.skipIf(process.env.UIMORI_CODEX_PREFLIGHT !== '1')(
       const functionTool = tool?.oneOf?.find((item) =>
         item.properties?.type?.enum?.includes('function')
       );
+      const namespaceTool = tool?.oneOf?.find((item) =>
+        item.properties?.type?.enum?.includes('namespace')
+      );
       expect(thread.properties).toHaveProperty('dynamicTools');
       expect(functionTool?.required).toEqual(
         expect.arrayContaining(['type', 'name', 'description', 'inputSchema'])
+      );
+      expect(namespaceTool?.required).toEqual(
+        expect.arrayContaining(['type', 'name', 'description', 'tools'])
       );
       expect(call.required).toEqual(
         expect.arrayContaining(['threadId', 'turnId', 'callId', 'tool', 'arguments'])
@@ -89,7 +104,8 @@ test.skipIf(process.env.UIMORI_CODEX_PREFLIGHT !== '1')(
             status,
             protocol: {
               experimentalDynamicTools: true,
-              toolSpec: 'function',
+              toolSpec: 'namespace/function',
+              defaultCodeModeNamespaceExcluded: true,
               clientToolCall: true,
               textToolResponse: true,
             },

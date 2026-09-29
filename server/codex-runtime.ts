@@ -171,6 +171,17 @@ export interface CodexRuntimeService {
   ): Promise<CodexImageResult>;
   close(): Promise<void>;
 }
+type CodexDynamicFunctionTool = {
+  type: 'function';
+  name: string;
+  description: string;
+  inputSchema: Json;
+};
+type CodexDynamicTool =
+  | CodexDynamicFunctionTool
+  | { type: 'namespace'; name: string; description: string; tools: CodexDynamicFunctionTool[] };
+const CODEX_HOST_TOOL_NAMESPACE = 'uimori';
+
 type TurnPlan = {
   role: ProviderRole;
   modelId: string;
@@ -186,7 +197,7 @@ type TurnPlan = {
   maxLineBytes?: number;
   maxWriteBytes?: number;
   allowedItems: readonly string[];
-  dynamicTools?: { type: 'function'; name: string; description: string; inputSchema: Json }[];
+  dynamicTools?: CodexDynamicTool[];
   onToolCall?: CodexAgentExecutionOptions['onToolCall'];
   toolNames?: Map<string, string>;
   onCommentary?: CodexAgentExecutionOptions['onCommentary'];
@@ -348,6 +359,7 @@ export const CODEX_RUNTIME_CONFIG = {
   'features.shell_tool': false,
   'features.unified_exec': false,
   'features.code_mode': CODEX_BUILTIN_TOOLS.codeMode,
+  'code_mode.excluded_tool_namespaces': ['functions'],
   'features.code_mode_only': false,
   'features.js_repl': false,
   'features.view_image': false,
@@ -746,18 +758,26 @@ export class CodexRuntime implements CodexRuntimeService {
       assertCodexConnection(connection);
       if (!boundedString(request.modelId)) error('CODEX_INVALID_MODEL');
       const toolNames = new Map<string, string>();
-      const dynamicTools = request.tools.map((tool) => {
+      const namespaceTools = request.tools.map((tool): CodexDynamicFunctionTool => {
         const name = `uimori_${tool.name.replace(/[^a-zA-Z0-9_-]/gu, '_')}`;
         if (!boundedString(tool.name, 57) || name.length > 64 || toolNames.has(name))
           error('CODEX_INVALID_TOOLS');
         toolNames.set(name, tool.name);
         return {
-          type: 'function' as const,
+          type: 'function',
           name,
           description: tool.description,
           inputSchema: tool.inputSchema,
         };
       });
+      const dynamicTools: CodexDynamicTool[] = [
+        {
+          type: 'namespace',
+          name: CODEX_HOST_TOOL_NAMESPACE,
+          description: 'Scoped Uimori application reads and saved changes for the current task.',
+          tools: namespaceTools,
+        },
+      ];
       const descriptor: Json = {
         method: 'turn/start',
         role: 'helper',
@@ -1160,6 +1180,7 @@ export class CodexRuntime implements CodexRuntimeService {
         offTools = process.onDynamicToolCall({
           threadId,
           turnId: () => turnId,
+          namespace: CODEX_HOST_TOOL_NAMESPACE,
           toolNames: [...names.keys()],
           handle: async (call) => {
             if (ended || toolSignal.aborted) return error('CANCELLED');
