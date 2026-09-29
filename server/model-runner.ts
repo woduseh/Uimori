@@ -1,3 +1,6 @@
+import { buildCodexNativeRequest } from '../core/codex-protocol.js';
+import { ProviderContractError, type ProviderExecutionOptions } from '../core/transport.js';
+import type { CodexAgentExecutionOptions } from './codex-runtime.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
 import { estimateContextTokens } from '../core/context-budget.js';
@@ -43,6 +46,8 @@ export type MainHooks = {
   reserveCalls?: number;
   executeAnthropicBatch?: import('../core/transport.js').ProviderExecutionOptions['executeAnthropicBatch'];
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
+  /** Explicitly wired for real writing Runs, not helper-generated hypothetical scenes. */
+  executeCodexAgent?: import('./codex-runtime.js').CodexRuntimeService['executeAgent'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   signal: AbortSignal;
   onInput: (input: ModelInput) => void | Promise<void>;
@@ -139,13 +144,156 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   if (replayInvalid) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
   if (!Number.isSafeInteger(maxCalls) || maxCalls < 1) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
   const collaboration = createAgentCollaboration(fixed, hooks, usage);
-  await collaboration?.prepare();
+  try {
+    await collaboration?.prepare();
+  } catch (error) {
+    throw new ModelRunError(error, structuredClone(usage));
+  }
   // Explicit cross-advisor references outlive provider compaction. Keep the
   // original completed receipts separate from the mutable projection sent to the main model.
   const advisorContext = new Map(
     (collaboration?.bootstrap ?? []).map((event) => [event.callId, structuredClone(event)])
   );
   const contextReadNames = new Set(MAIN_READ_TOOLS.map((tool) => tool.name));
+  const executeCalls = async (
+    result: ProviderResult,
+    signal: AbortSignal = hooks.signal,
+    native = false
+  ): Promise<MainResult | undefined> => {
+    // Validate the whole turn before executing: repeated IDs cannot alias earlier tool results.
+    const callIds = new Set(
+      [...results, ...(collaboration?.bootstrap ?? [])].map((event) => event.callId)
+    );
+    for (const call of result.toolCalls) {
+      if (callIds.has(call.id) || completedCallIds.has(call.id)) return fail('DUPLICATE_TOOL_ID');
+      callIds.add(call.id);
+      completedCallIds.add(call.id);
+    }
+    const terminals = result.toolCalls.filter((call) => call.name === 'story.submit');
+    if (terminals.length) {
+      const call = terminals[0],
+        content = call.arguments.content;
+      if (
+        !storySubmissionEnabled(fixed) ||
+        terminals.length !== 1 ||
+        result.toolCalls.length !== 1 ||
+        result.refusal ||
+        result.error ||
+        Object.keys(call.arguments).some((key) => key !== 'content') ||
+        typeof content !== 'string' ||
+        !content.trim() ||
+        content.length > STORY_SUBMIT_MAX_CHARS
+      )
+        return fail('INVALID_STORY_SUBMISSION');
+      if (signal.aborted) return fail('CANCELLED');
+      const preset = fixed.profile?.promptPresets?.main;
+      const event: ToolEvent = {
+        callId: call.id,
+        name: call.name,
+        args: { content },
+        denied: false,
+        result: {
+          accepted: true,
+          contentHash: createHash('sha256').update(content).digest('hex'),
+          characters: content.length,
+          host: {
+            chatId: fixed.chatId,
+            parentRevision: fixed.parentRevision,
+            settingsRevision: fixed.settingsRevision,
+            profileRevision: fixed.profile?.revision ?? null,
+            promptPreset: preset ? { id: preset.id, revision: preset.revision } : null,
+          },
+        },
+      };
+      if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
+      return { status: 'completed', text: content, error: null, usage };
+    }
+    const evaluationTerminals = result.toolCalls.filter(
+      (call) => call.name === 'eval_submit_artifact'
+    );
+    if (evaluationTerminals.length) {
+      if (
+        !evaluation ||
+        evaluationTerminals.length !== 1 ||
+        result.toolCalls.some(
+          (call) => !evaluation.allNames.includes(call.name as (typeof evaluation.allNames)[number])
+        ) ||
+        result.refusal ||
+        result.error
+      )
+        return fail('INVALID_EVALUATION_ARTIFACT');
+      for (const call of result.toolCalls.filter((call) => call.name !== 'eval_submit_artifact')) {
+        const event = evaluation.execute(call);
+        results.push(event);
+        if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
+      }
+      const submitted = evaluation.submit(
+        evaluationTerminals[0],
+        evaluationTerminals[0].recoveredFromTruncation === true
+      );
+      if (!submitted.ok) {
+        results.push(submitted.event);
+        if (!(await persistOrReplay(submitted.event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
+        opaqueState = result.opaqueState;
+        return undefined;
+      }
+      if (signal.aborted) return fail('CANCELLED');
+      const event: ToolEvent = {
+        callId: evaluationTerminals[0].id,
+        name: 'eval_submit_artifact',
+        args: {},
+        denied: false,
+        result: {
+          accepted: true,
+          sha256: submitted.artifact.sha256,
+          characters: submitted.artifact.text.length,
+          utf8Bytes: submitted.artifact.utf8Bytes,
+          noticeProvided: submitted.artifact.noticeProvided,
+          noticeCharacters: submitted.artifact.noticeCharacters,
+          correctionCount: submitted.artifact.correctionCount,
+        },
+      };
+      if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
+      return { status: 'completed', text: submitted.artifact.text, error: null, usage };
+    }
+    opaqueState = result.opaqueState;
+    for (const call of result.toolCalls) {
+      if (signal.aborted) return fail('CANCELLED');
+      // Transport only decodes. Exact frozen bindings separate state actions from read permissions.
+      const action = { callId: call.id, name: call.name, args: call.arguments };
+      const saved = takeReplay(call.id, call.name);
+      let event: ToolEvent;
+      if (saved) {
+        if (call.name === 'agents.consult' && collaboration) {
+          event = collaboration.replay(saved);
+        } else if (
+          evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
+        ) {
+          const restored = evaluation.execute(call);
+          if (!isDeepStrictEqual(restored, saved)) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
+          event = saved;
+        } else {
+          event = saved;
+        }
+      } else if (call.name === 'agents.consult' && collaboration) {
+        event = await collaboration.consult(call.id, call.arguments, [...advisorContext.values()], {
+          signal,
+          reserveWriterCall: native ? 0 : 1,
+        });
+      } else
+        event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
+          ? evaluation.execute(call)
+          : executeTool(fixed, action, signal);
+      results.push(event);
+      if (collaboration && (event.name === 'agents.consult' || contextReadNames.has(event.name)))
+        advisorContext.set(event.callId, structuredClone(event));
+      // Persist each real result immediately. Recovery reuses the durable receipt instead.
+      if (!saved) await hooks.onToolEvent(structuredClone(event));
+      const outcome = correction(event, call.arguments);
+      if (outcome === 'denied') return fail('READ_TOOL_DENIED');
+    }
+    return undefined;
+  };
   while (true) {
     if (hooks.signal.aborted) return fail('CANCELLED');
     if (
@@ -169,6 +317,17 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       authorized.protocol !== target.connection.protocol
     )
       return fail('CONNECTION_NOT_AUTHORIZED');
+    // The economized evaluation bootstrap remains a single old-style low-effort request.
+    const economizedBootstrap =
+      evaluation?.options.contextMode === 'preloaded' &&
+      evaluation.options.approvalReasoningMode === 'economized' &&
+      results.length === 0;
+    const native =
+      authorized.protocol === 'codex-app-server-v1' &&
+      hooks.executeCodexAgent &&
+      !economizedBootstrap
+        ? hooks.executeCodexAgent
+        : undefined;
     const build = (freshHistory?: ToolEvent[]) => {
       const fresh = freshHistory !== undefined;
       const history = freshHistory ?? completedToolHistory;
@@ -196,11 +355,12 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     const preview = (request: ProviderRequest) =>
       encodeMainPreview(
         request.opaqueState != null ? { ...request, prompt: continuationPrompt } : request,
-        target
+        target,
+        { codexNative: !!native }
       );
     let built = build();
     const latestRead = results.findLast(compactableRead)?.callId;
-    if (!evaluation && fixed.contextPlan && latestRead) {
+    if (!native && !evaluation && fixed.contextPlan && latestRead) {
       const before = estimateContextTokens(preview(built.request).body);
       const inputLimit = fixed.contextPlan.budget.inputTokenLimit;
       if (latestRead === lastUnhelpfulRead && before > inputLimit)
@@ -279,7 +439,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     let attemptId: string | undefined;
     const remainingTimeout = evaluation?.remainingMs();
     if (remainingTimeout === 0) return fail('TIMEOUT');
-    const result = await executeProvider(transportConnection(authorized), request, {
+    const execution: ProviderExecutionOptions = {
       signal: hooks.signal,
       resolveCredential: hooks.resolveCredential,
       executeAnthropicBatch: hooks.executeAnthropicBatch,
@@ -312,7 +472,93 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         if (attemptId !== undefined && !hooks.signal.aborted)
           await hooks.onResponseProgress?.({ ...progress, attemptId, segment: 0 });
       },
-    });
+    };
+    let nativeHostError: unknown;
+    let nativeFinished = false;
+    let nativeExchanges = 0;
+    let pendingTools = Promise.resolve();
+    const onToolCall: CodexAgentExecutionOptions['onToolCall'] = (call, nativeSignal) => {
+      const pending = pendingTools
+        .then(async () => {
+          const signal = AbortSignal.any([hooks.signal, nativeSignal]);
+          signal.throwIfAborted();
+          if (nativeFinished) throw new ProviderContractError('CODEX_TURN_FINISHED');
+          await hooks.authorize(structuredClone(target.connection));
+          if (!request.stable.tools.some((tool) => tool.name === call.name))
+            throw new ProviderContractError('CODEX_INVALID_TOOL_CALL');
+          if (
+            !call.arguments ||
+            typeof call.arguments !== 'object' ||
+            Array.isArray(call.arguments)
+          )
+            throw new ProviderContractError('CODEX_INVALID_TOOL_ARGUMENTS');
+          const submission = ['story.submit', 'eval_submit_artifact'].includes(call.name);
+          if (!submission && evaluation && nativeExchanges >= evaluation.options.maximumToolRounds)
+            throw new ProviderContractError('MODEL_CALL_BUDGET_EXHAUSTED');
+          const prior = results.length;
+          const terminal = await executeCalls(
+            {
+              status: 'tool_calls',
+              text: '',
+              toolCalls: [{ id: call.callId, name: call.name, arguments: call.arguments }],
+              refusal: null,
+              error: null,
+              opaqueState: null,
+              usage: {
+                inputTokens: null,
+                outputTokens: null,
+                costUsd: null,
+                raw: null,
+                priceRevision: null,
+              },
+            },
+            signal,
+            true
+          );
+          if (terminal) {
+            nativeFinished = true;
+            if (terminal.status !== 'completed')
+              throw new ProviderContractError(terminal.error ?? 'CODEX_TOOL_FAILED');
+            return { complete: true as const, success: true as const, text: terminal.text };
+          }
+          // Invalid submissions are correctable but not an unlimited sequence of free retries.
+          if (++nativeExchanges > (evaluation?.options.maximumToolRounds ?? Infinity))
+            throw new ProviderContractError('MODEL_CALL_BUDGET_EXHAUSTED');
+          const event = results[prior];
+          if (!event) throw new ProviderContractError('CODEX_TOOL_RESULT_MISSING');
+          return { success: !event.denied, text: JSON.stringify(event.result) };
+        })
+        .catch((error) => {
+          if (
+            !(error instanceof ProviderContractError) &&
+            !hooks.signal.aborted &&
+            !nativeSignal.aborted
+          )
+            nativeHostError = error;
+          throw error;
+        });
+      pendingTools = pending.then(
+        () => {},
+        () => {}
+      );
+      return pending;
+    };
+    let result: ProviderResult;
+    try {
+      result = native
+        ? await native(transportConnection(authorized), buildCodexNativeRequest(request), {
+            ...execution,
+            onProgress: undefined,
+            onToolCall,
+          })
+        : await executeProvider(transportConnection(authorized), request, execution);
+    } catch (error) {
+      // A native-input rejection (for example prefill) must keep its existing actionable code.
+      if (attemptId === undefined && error instanceof ProviderContractError)
+        return fail(error.code);
+      throw new ModelRunError(error, structuredClone(usage));
+    }
+    await pendingTools;
     if (attemptId !== undefined) {
       // The attempt is saved before tool authorization. Preserve actual arguments only in a
       // successful ToolEvent; a rejected operation must not leak them through this earlier copy.
@@ -320,6 +566,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       await hooks.onAttemptFinish(attemptId, diagnostic);
     }
     addUsage(usage, result);
+    if (nativeHostError) throw new ModelRunError(nativeHostError, structuredClone(usage));
     continuationPrompt = request.prompt;
     if (result.status !== 'tool_calls')
       return {
@@ -328,134 +575,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         error: result.refusal ?? result.error?.code ?? null,
         usage,
       };
-    // Validate the whole turn before executing: repeated IDs cannot alias earlier tool results.
-    const callIds = new Set(
-      [...results, ...(collaboration?.bootstrap ?? [])].map((event) => event.callId)
-    );
-    for (const call of result.toolCalls) {
-      if (callIds.has(call.id) || completedCallIds.has(call.id)) return fail('DUPLICATE_TOOL_ID');
-      callIds.add(call.id);
-      completedCallIds.add(call.id);
-    }
-    const terminals = result.toolCalls.filter((call) => call.name === 'story.submit');
-    if (terminals.length) {
-      const call = terminals[0],
-        content = call.arguments.content;
-      if (
-        !storySubmissionEnabled(fixed) ||
-        terminals.length !== 1 ||
-        result.toolCalls.length !== 1 ||
-        result.refusal ||
-        result.error ||
-        Object.keys(call.arguments).some((key) => key !== 'content') ||
-        typeof content !== 'string' ||
-        !content.trim() ||
-        content.length > STORY_SUBMIT_MAX_CHARS
-      )
-        return fail('INVALID_STORY_SUBMISSION');
-      if (hooks.signal.aborted) return fail('CANCELLED');
-      const preset = fixed.profile?.promptPresets?.main;
-      const event: ToolEvent = {
-        callId: call.id,
-        name: call.name,
-        args: { content },
-        denied: false,
-        result: {
-          accepted: true,
-          contentHash: createHash('sha256').update(content).digest('hex'),
-          characters: content.length,
-          host: {
-            chatId: fixed.chatId,
-            parentRevision: fixed.parentRevision,
-            settingsRevision: fixed.settingsRevision,
-            profileRevision: fixed.profile?.revision ?? null,
-            promptPreset: preset ? { id: preset.id, revision: preset.revision } : null,
-          },
-        },
-      };
-      if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
-      return { status: 'completed', text: content, error: null, usage };
-    }
-    const evaluationTerminals = result.toolCalls.filter(
-      (call) => call.name === 'eval_submit_artifact'
-    );
-    if (evaluationTerminals.length) {
-      if (
-        !evaluation ||
-        evaluationTerminals.length !== 1 ||
-        result.toolCalls.some(
-          (call) => !evaluation.allNames.includes(call.name as (typeof evaluation.allNames)[number])
-        ) ||
-        result.refusal ||
-        result.error
-      )
-        return fail('INVALID_EVALUATION_ARTIFACT');
-      for (const call of result.toolCalls.filter((call) => call.name !== 'eval_submit_artifact')) {
-        const event = evaluation.execute(call);
-        results.push(event);
-        if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
-      }
-      const submitted = evaluation.submit(
-        evaluationTerminals[0],
-        evaluationTerminals[0].recoveredFromTruncation === true
-      );
-      if (!submitted.ok) {
-        results.push(submitted.event);
-        if (!(await persistOrReplay(submitted.event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
-        opaqueState = result.opaqueState;
-        continue;
-      }
-      if (hooks.signal.aborted) return fail('CANCELLED');
-      const event: ToolEvent = {
-        callId: evaluationTerminals[0].id,
-        name: 'eval_submit_artifact',
-        args: {},
-        denied: false,
-        result: {
-          accepted: true,
-          sha256: submitted.artifact.sha256,
-          characters: submitted.artifact.text.length,
-          utf8Bytes: submitted.artifact.utf8Bytes,
-          noticeProvided: submitted.artifact.noticeProvided,
-          noticeCharacters: submitted.artifact.noticeCharacters,
-          correctionCount: submitted.artifact.correctionCount,
-        },
-      };
-      if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
-      return { status: 'completed', text: submitted.artifact.text, error: null, usage };
-    }
-    opaqueState = result.opaqueState;
-    for (const call of result.toolCalls) {
-      if (hooks.signal.aborted) return fail('CANCELLED');
-      // Transport only decodes. Exact frozen bindings separate state actions from read permissions.
-      const action = { callId: call.id, name: call.name, args: call.arguments };
-      const saved = takeReplay(call.id, call.name);
-      let event: ToolEvent;
-      if (saved) {
-        if (call.name === 'agents.consult' && collaboration) {
-          event = collaboration.replay(saved);
-        } else if (
-          evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
-        ) {
-          const restored = evaluation.execute(call);
-          if (!isDeepStrictEqual(restored, saved)) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
-          event = saved;
-        } else {
-          event = saved;
-        }
-      } else if (call.name === 'agents.consult' && collaboration) {
-        event = await collaboration.consult(call.id, call.arguments, [...advisorContext.values()]);
-      } else
-        event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
-          ? evaluation.execute(call)
-          : executeTool(fixed, action, hooks.signal);
-      results.push(event);
-      if (collaboration && (event.name === 'agents.consult' || contextReadNames.has(event.name)))
-        advisorContext.set(event.callId, structuredClone(event));
-      // Persist each real result immediately. Recovery reuses the durable receipt instead.
-      if (!saved) await hooks.onToolEvent(structuredClone(event));
-      const outcome = correction(event, call.arguments);
-      if (outcome === 'denied') return fail('READ_TOOL_DENIED');
-    }
+    const terminal = await executeCalls(result);
+    if (terminal) return terminal;
   }
 }

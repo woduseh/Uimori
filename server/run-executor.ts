@@ -44,6 +44,7 @@ type RunExecutorDependencies = {
   requireModel: (target: unknown, role: string) => void;
   resolveCredential: MainHooks['resolveCredential'];
   executeCodex: MainHooks['executeCodex'];
+  executeCodexAgent: MainHooks['executeCodexAgent'];
   batchPollIntervalMs?: number;
   vertexRequestTier: MainHooks['vertexRequestTier'];
   jevCredential: JevCredentialStore['resolve'];
@@ -62,6 +63,7 @@ export function createRunExecutor({
   requireModel,
   resolveCredential,
   executeCodex,
+  executeCodexAgent,
   batchPollIntervalMs = 10_000,
   vertexRequestTier,
   jevCredential,
@@ -152,6 +154,7 @@ export function createRunExecutor({
             executeAnthropicBatch: (connection, request, execution) =>
               anthropicBatch.execute(connection, request, execution),
             executeCodex,
+            executeCodexAgent,
             authorize: (connection) => store.product.authorize(connection),
             vertexRequestTier,
             cancelRemoteOnAbort: () => controller.signal.aborted && !signal.aborted,

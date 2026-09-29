@@ -229,8 +229,19 @@ test('app routes every agent role through Codex and keeps source results and rec
         opaqueState: null,
       } satisfies ProviderResult;
     },
-    executeAgent: async () => {
-      throw new Error('Unexpected executeAgent');
+    executeAgent: async (connection, request, options) => {
+      // Reuse this test's synthetic outcome; real native stdio is covered by codex-writing.
+      const packet = JSON.parse(request.text);
+      return runtime.execute(
+        connection,
+        {
+          role: request.role ?? 'helper',
+          modelId: request.modelId,
+          stable: { contract: packet.taskContract, tools: request.tools },
+          input: packet.input,
+        },
+        options
+      );
     },
   };
   const item = {

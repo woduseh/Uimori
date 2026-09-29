@@ -23,3 +23,7 @@ The run's call budget and deadline also cover evaluation rounds. Provider config
 ## Implementation
 
 Settings and runtime coverage are in `tests/evaluation-settings.test.ts`, `tests/evaluation-tools.test.ts`, and `tests/evaluation-runtime.test.ts`. `npm run verify:evaluation` exercises the settings UI with synthetic data. Select checks according to [DEVELOPMENT](DEVELOPMENT.md#verification).
+
+## Codex main native turns
+
+Real main Codex Runs keep the existing evaluation definitions, bootstrap and artifact processing in native tool callbacks. `preloaded` with `economized` keeps its first low-effort request in the old transport, then starts the native writer with the configured effort and completed results. The session and prior effects are not recreated. For native main turns, `maximumToolRounds` bounds nonterminal Uimori tool exchanges (and unsuccessful submissions), not hidden model samples; valid terminal submission is accepted separately. HTTP providers keep their existing round semantics. Helper-generated hypothetical scenes and translation retain the prior transport. See [Codex](CODEX.md#본문과-조언의-native-실행) for final submission, usage and cancellation boundaries.

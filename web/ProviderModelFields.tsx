@@ -760,6 +760,10 @@ export function ProviderModelFields({
                     setEvaluation({ ...evaluation, maximumToolRounds: event.target.value })
                   }
                 />
+                <small>
+                  Codex 본문에서는 정상 최종 제출을 제외한 도구 교환 횟수예요. 내부 추론 횟수와는
+                  달라요.
+                </small>
               </label>
               <label className="check">
                 <Switch

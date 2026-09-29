@@ -207,7 +207,15 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           if (role === 'main') {
             const built = buildMainProviderRequest({ ...snapshot, promptCompilation: compilation });
             compilation = built.snapshot.promptCompilation!;
-            provider = encodeMainPreview(built.request, target);
+            const evaluation = target.evaluationTools;
+            provider = encodeMainPreview(built.request, target, {
+              codexNative:
+                target.connection.protocol === 'codex-app-server-v1' &&
+                !(
+                  evaluation?.contextMode === 'preloaded' &&
+                  evaluation.approvalReasoningMode === 'economized'
+                ),
+            });
           } else {
             const plan = planNativeMessages(
               {
