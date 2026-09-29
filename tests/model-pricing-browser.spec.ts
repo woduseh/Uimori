@@ -310,6 +310,12 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
       .filter({ has: page.getByText('원시 요청·응답 보기', { exact: true }) })
       .last();
     await expect(raw).not.toHaveAttribute('open');
+    await expect(raw.locator('pre')).toHaveCount(0);
+    await raw.getByText('원시 요청·응답 보기', { exact: true }).click();
+    await expect(raw.locator('pre')).toContainText('"inputTokens": 1500');
+    await expect(raw.locator('pre')).toContainText('"id": "pricecost-known"');
+    await raw.getByText('원시 요청·응답 보기', { exact: true }).click();
+    await expect(raw.locator('pre')).toHaveCount(0);
     const pricing = usage.getByRole('region', { name: '호출 추정 비용' });
     await expect(pricing).toContainText('공급자 보고 비용: $0.125');
     await expect(pricing).toContainText('추정 비용: $0.004995');

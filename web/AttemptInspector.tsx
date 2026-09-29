@@ -1,4 +1,5 @@
 import { LazyDiagnostics } from './LazyDiagnostics.js';
+import { useState } from 'react';
 import type { Attempt } from '../core/product.js';
 import type { Run } from '../core/types.js';
 import type { RequestLore } from '../core/request-lore.js';
@@ -21,6 +22,35 @@ const roleLabels: Record<Attempt['role'], string> = {
 type AttemptSummary = Omit<Attempt, 'request' | 'response' | 'rawUsage'>;
 const tokens = (value: number | null) =>
   value === null ? '미확인' : `${value.toLocaleString('ko-KR')}토큰`;
+function AttemptRaw({ attempt }: { attempt: Attempt }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="attempt-raw" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>원시 요청·응답 보기</summary>
+      {open && (
+        <pre>
+          {JSON.stringify(
+            {
+              id: attempt.id,
+              role: attempt.role,
+              request: attempt.request,
+              response: attempt.response,
+              usage: {
+                inputTokens: attempt.inputTokens,
+                outputTokens: attempt.outputTokens,
+                costUsd: attempt.costUsd,
+                raw: attempt.rawUsage,
+              },
+              error: attempt.error,
+            },
+            null,
+            2
+          )}
+        </pre>
+      )}
+    </details>
+  );
+}
 const total = (attempts: AttemptSummary[], field: 'inputTokens' | 'outputTokens' | 'costUsd') =>
   attempts.length === 0 || attempts.some((attempt) => attempt[field] === null)
     ? null
@@ -344,28 +374,7 @@ function AttemptTable({
               <CacheUsage attempt={attempt} />
               <AttemptLore attempt={attempt} />
               <AttemptPricing attempt={attempt} />
-              <details className="attempt-raw">
-                <summary>원시 요청·응답 보기</summary>
-                <pre>
-                  {JSON.stringify(
-                    {
-                      id: attempt.id,
-                      role: attempt.role,
-                      request: attempt.request,
-                      response: attempt.response,
-                      usage: {
-                        inputTokens: attempt.inputTokens,
-                        outputTokens: attempt.outputTokens,
-                        costUsd: attempt.costUsd,
-                        raw: attempt.rawUsage,
-                      },
-                      error: attempt.error,
-                    },
-                    null,
-                    2
-                  )}
-                </pre>
-              </details>
+              <AttemptRaw attempt={attempt} />
             </>
           )}
         </LazyDiagnostics>
