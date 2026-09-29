@@ -79,6 +79,8 @@ test('long escaped Unicode intent round-trips with resumable UTF-16 ranges and n
     expect(page.range.start).toBe(joined.length);
     expect(page.range.unit).toBe('utf16-code-unit');
     expect(page.totalChars).toBe(expected.length);
+    expect(page.coverage).toMatchObject({ content: 'intent-range', wholeField: false });
+    expect(page.coverage).not.toHaveProperty('complete');
     expect(JSON.stringify(page).length).toBeLessThanOrEqual(24000);
     expect(page.text.isWellFormed()).toBe(true);
     joined += page.text;
@@ -86,6 +88,8 @@ test('long escaped Unicode intent round-trips with resumable UTF-16 ranges and n
     page = read(page.nextRead.arguments.arguments);
   }
   expect(joined).toBe(expected);
+  expect(page.nextOffset).toBeNull(); // Last page, but not the whole field in this one response.
+  expect(page.coverage.wholeField).toBe(false);
   expect(read({ mode: 'detail', nodeId: leaf, offset: 10 }).error).toBe('OUTLINE_VERSION_REQUIRED');
 });
 

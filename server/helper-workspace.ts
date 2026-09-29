@@ -23,6 +23,11 @@ const json = JSON.stringify;
 const now = () => new Date().toISOString();
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 
+/** Keep the existing call identity so older durable receipts can be matched to their events. */
+export function helperCallOperationId(taskId: string, callId: string): string {
+  return createHash('sha256').update(`${taskId}\0${callId}`).digest('hex');
+}
+
 function taskData(row: Row, completedEffects = 0): Omit<HelperTask, 'snapshot'> {
   return {
     id: row.id,
