@@ -1,4 +1,4 @@
-import { browseKnowledge } from './knowledge-browse.js';
+import { createKnowledgeBrowser } from './knowledge-browse.js';
 import { KNOWLEDGE_SKILL_TOOLS } from './read-tools.js';
 import { createHash } from 'node:crypto';
 import { conversationSummary } from './context-projection.js';
@@ -64,6 +64,11 @@ const budgetedCatalogLength = (catalog: MainInput['catalog']) => {
 };
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const KNOWLEDGE_SEARCH_CHARS = 24_000;
+// Frozen Run objects own their optional browse view; no persistent cache, timers or invalidation service.
+const knowledgeBrowsers = new WeakMap<
+  RunSnapshot,
+  Map<string, ReturnType<typeof createKnowledgeBrowser>>
+>();
 export function roleResources(
   snapshot: RunSnapshot,
   role: 'main' | 'translation' | 'status' | 'image' = 'main'
@@ -301,9 +306,22 @@ export function executeTool(
       : {}),
   });
   if (!ALLOWED_TOOLS.includes(action.name)) return denied('TOOL_NOT_ALLOWED');
+  const { args } = action;
+  if (action.name === 'knowledge.search' && args.mode === 'browse') {
+    let browsers = knowledgeBrowsers.get(snapshot);
+    if (!browsers) knowledgeBrowsers.set(snapshot, (browsers = new Map()));
+    let browse = browsers.get(role);
+    if (!browse) {
+      browse = createKnowledgeBrowser(roleResources(snapshot, role), {
+        chatId: snapshot.chatId,
+        role,
+      });
+      browsers.set(role, browse);
+    }
+    return browse(action);
+  }
   // Scope applies before search, counts, pagination, and individual reads alike.
   const scope = roleResources(snapshot, role);
-  const { args } = action;
 
   if (action.name === 'knowledge.read') {
     if (
@@ -331,8 +349,6 @@ export function executeTool(
     return { ...action, args: { ids: args.ids, offset, limit }, denied: false, result: { items } };
   }
 
-  if (action.name === 'knowledge.search' && args.mode === 'browse')
-    return browseKnowledge(scope, { chatId: snapshot.chatId, role }, action);
   if (args.mode !== undefined && (action.name !== 'knowledge.search' || args.mode !== 'search'))
     return denied('INVALID_ARGUMENTS');
   const search = action.name === 'knowledge.search' || action.name === 'skills.list';

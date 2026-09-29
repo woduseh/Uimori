@@ -40,14 +40,10 @@ function fixture() {
 
 test('large outline pages contain exact tree coverage, not full prose, without full detail hydration', () => {
   const { store, read, root } = fixture();
-  vi.spyOn(store.outline, 'detail').mockImplementation(() => {
-    throw new Error('full detail not allowed');
-  });
-  vi.spyOn(store.outline, 'nodes').mockImplementation(() => {
-    throw new Error('full nodes not allowed');
-  });
+  const queries = vi.spyOn(store.db, 'prepare');
   const ids: string[] = [];
   let page = read({ limit: 50 });
+  expect(queries.mock.calls.filter(([sql]) => sql.includes('substr(intent'))).toHaveLength(1);
   expect(page.coverage).toMatchObject({
     scopeTotal: 74,
     total: 74,
@@ -77,7 +73,7 @@ test('large outline pages contain exact tree coverage, not full prose, without f
 test('long escaped Unicode intent round-trips with resumable UTF-16 ranges and no split surrogate', () => {
   const { store, leaf, read } = fixture();
   const expected = store.outline.node(leaf).intent;
-  let page = read({ mode: 'detail', nodeId: leaf, textLimit: 6000 });
+  let page = read({ mode: 'detail', nodeId: leaf, limit: 5999 });
   let joined = '';
   while (true) {
     expect(page.range.start).toBe(joined.length);
@@ -90,15 +86,26 @@ test('long escaped Unicode intent round-trips with resumable UTF-16 ranges and n
     page = read(page.nextRead.arguments.arguments);
   }
   expect(joined).toBe(expected);
-  expect(read({ mode: 'detail', nodeId: leaf, textOffset: 10 }).error).toBe(
-    'OUTLINE_VERSION_REQUIRED'
-  );
+  expect(read({ mode: 'detail', nodeId: leaf, offset: 10 }).error).toBe('OUTLINE_VERSION_REQUIRED');
 });
 
-test('continuations reject changed content/structure/references but ignore another chat', () => {
+test('continuations detect changes to their scope without blocking unrelated detail reads', () => {
   const { store, chat, leaf, read } = fixture();
-  const page = read({ limit: 1 }),
-    next = page.nextRead.arguments.arguments;
+  const detail = read({ mode: 'detail', nodeId: leaf, offset: 0, limit: 20 });
+  const detailNext = detail.nextRead.arguments.arguments;
+  store.outline.applyReceipt(
+    chat.id,
+    {
+      idempotencyKey: 'unrelated',
+      operations: [{ op: 'create', level: 'arc', title: '별개의 부', intent: '' }],
+    },
+    'user'
+  );
+  expect(read(detailNext).error).toBeUndefined();
+  expect(read(detailNext).range.start).toBe(detail.range.end);
+  // The full overview changed; start that scope again, while the selected intent stays valid.
+  const overviewNext = read({ limit: 1 }).nextRead.arguments.arguments;
+
   const other = createFixtureChat(store, '다른 구성');
   store.outline.apply(
     other.id,
@@ -108,7 +115,7 @@ test('continuations reject changed content/structure/references but ignore anoth
     },
     'user'
   );
-  expect(read(next).error).toBeUndefined();
+  expect(read(overviewNext).error).toBeUndefined();
   store.outline.apply(
     chat.id,
     {
@@ -117,7 +124,8 @@ test('continuations reject changed content/structure/references but ignore anoth
     },
     'user'
   );
-  const changed = read(next);
+  expect(read(detailNext).error).toBe('OUTLINE_CHANGED');
+  const changed = read(overviewNext);
   expect(changed).toMatchObject({ error: 'OUTLINE_CHANGED', returned: false });
   expect(changed.nodes).toBeUndefined();
   expect(changed.nextRead.arguments.arguments.offset).toBe(0);
@@ -272,6 +280,17 @@ test('large initial selection and linked-reference pages do not become an unboun
   expect(page.coverage.total).toBe(ids.length);
   expect(read(page.nextRead.arguments.arguments).offset).toBe(2);
   const old = read({ mode: 'subtree', nodeId: leaf });
+  store.outline.applyReceipt(
+    chat.id,
+    {
+      idempotencyKey: 'unrelated-subtree',
+      operations: [{ op: 'create', level: 'arc', title: '관계없는 부', intent: '' }],
+    },
+    'user'
+  );
+  expect(
+    read({ mode: 'subtree', nodeId: leaf, expectedVersion: old.version }).error
+  ).toBeUndefined();
   store.outline.applyReceipt(
     chat.id,
     { idempotencyKey: 'remove', operations: [{ op: 'remove', id: leaf, expectedRevision: 2 }] },

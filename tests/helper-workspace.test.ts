@@ -1109,6 +1109,24 @@ test('selected outline review allows evidence reads, rejects writes and retains 
     ).id
   ).toBe(task.id);
   expect(requests).toHaveLength(2);
+  const sibling = f.store.outline.applyReceipt(
+    chat.id,
+    {
+      idempotencyKey: 'review-unrelated',
+      operations: [{ op: 'create', level: 'arc', title: '관계없는 부', intent: '별개 계획' }],
+    },
+    'user'
+  ).created[0].id;
+  expect(f.store.outline.latestReview(node.id)?.stale).toBe(false);
+  f.store.outline.applyReceipt(
+    chat.id,
+    {
+      idempotencyKey: 'review-unrelated-edit',
+      operations: [{ op: 'update', id: sibling, expectedRevision: 1, intent: '별개 계획 수정' }],
+    },
+    'user'
+  );
+  expect(f.store.outline.latestReview(node.id)?.stale).toBe(false);
   const { editSource } = await import('../server/source-editing.js');
   editSource(f.store, source.id, {
     expectedRevision: source.editRevision,

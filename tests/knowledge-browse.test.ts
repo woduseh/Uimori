@@ -101,7 +101,18 @@ test('folder navigation reaches an exact lore read after a vocabulary mismatch w
   const s = fixture(),
     before = structuredClone(s);
   expect((call(s, { query: '수도 허가 마법' }).result as any).total).toBe(0);
+  const resource = s.resources[0];
+  let textReads = 0;
+  const body = resource.text;
+  Object.defineProperty(resource, 'text', {
+    enumerable: true,
+    get: () => {
+      textReads++;
+      return body;
+    },
+  });
   const root = browse(s);
+  const initialReads = textReads;
   expect(root.coverage.content).toBe('metadata-only');
   expect(root.items.filter((item: any) => item.type === 'package')).toHaveLength(2);
   expect(JSON.stringify(root)).not.toContain('누출 금지');
@@ -120,6 +131,7 @@ test('folder navigation reaches an exact lore read after a vocabulary mismatch w
   const entry = law.items[0];
   expect(entry.id).toBe('package:world:bot:lore:rule');
   expect(entry).not.toHaveProperty('text');
+  expect(textReads).toBe(initialReads); // Descending folders must not reread every body.
   const read = follow(s, entry).items[0].read;
   expect(read.text).toBe(s.profile!.packages![0].lore[0].text);
   expect(read.source.hash).toBe(entry.sourceHash);
@@ -183,7 +195,7 @@ test('paging remains bounded and lossless, including oversized authored metadata
       revision: 1,
       chatId: s.chatId,
       kind: i === 139 ? 'skill' : 'lore',
-      title: '😀'.repeat(200),
+      title: '가'.repeat(199) + '😀'.repeat(100),
       description: '"\n'.repeat(10000),
       text: `원문 ${i}`,
       relatedIds: ['outside-scope', 'entry-1'],

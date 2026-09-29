@@ -158,17 +158,15 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'outline.read',
     description:
-      'Read live composition in bounded pages. Default overview returns metadata/intent previews, never full review coverage. subtree needs nodeId; depth=0 includes only that node, 1 direct children, omitted all descendants. detail needs nodeId and section=intent (default), related, or writings (subtree source references). Use offset/limit for lists, textOffset/textLimit for intent only. Later pages require expectedVersion; copy nextRead unchanged. OUTLINE_CHANGED requires restarting this scope. Intent ranges use UTF-16; overview intentCodePoints uses Unicode code points. Writings return exact data.read refs, not proof that plans were fulfilled.',
+      'Read live composition in bounded pages. Default overview returns metadata/intent previews, never full review coverage. subtree needs nodeId; depth=0 includes only that node, 1 direct children, omitted all descendants. detail needs nodeId and section=intent (default), related, or writings (subtree source references). Use offset/limit in every mode: item counts for lists (default 20, capped at 50), UTF-16 units for intent (default 6000, capped at 10000). Versions belong to the selected query; use a new first read when switching modes/sections. Later pages require expectedVersion; copy nextRead unchanged. OUTLINE_CHANGED requires restarting this scope. Intent ranges use UTF-16; overview intentCodePoints uses Unicode code points. Writings return exact data.read refs, not proof that plans were fulfilled.',
     inputSchema: schema({
       mode: { type: 'string', enum: ['overview', 'subtree', 'detail'] },
       nodeId: itemId,
       depth: { type: 'integer', minimum: 0, maximum: 4 },
       offset: { type: 'integer', minimum: 0 },
-      limit: { type: 'integer', minimum: 1, maximum: 50 },
+      limit: { type: 'integer', minimum: 1, maximum: 10000 },
       expectedVersion: { type: 'string', maxLength: 64 },
       section: { type: 'string', enum: ['intent', 'related', 'writings'] },
-      textOffset: { type: 'integer', minimum: 0 },
-      textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
     }),
   },
   {
