@@ -65,7 +65,7 @@ async function savedRoot(request: APIRequestContext, result: RisuImportResult) {
 }
 
 atWidths(
-  'NATIVEUI01 imports a Risu card as a bot and opens its authored first message',
+  'NATIVEUI01 imports a Risu card as a bot and navigates to its new chat',
   async ({ page, request }, width) => {
     const title = `NATIVEUI01 ${width} ${Date.now()}`;
     await page.goto('/');

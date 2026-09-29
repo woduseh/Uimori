@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ChatActivityCount } from '../core/chat-activity.js';
-import { api } from './api.js';
+import { activityChangedEvent, api } from './api.js';
 
 type ChatActivitySummary = { count: number; label: string };
 const kindLabels: Record<ChatActivityCount['kind'], string> = {
@@ -19,14 +19,21 @@ export function useChatActivities(): Record<string, ChatActivitySummary> {
   useEffect(() => {
     let stopped = false;
     let pending = false;
+    let requested = false;
+    let active = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const refresh = async () => {
-      if (stopped || pending || document.hidden) return;
+      if (stopped || document.hidden) return;
+      if (pending) {
+        requested = true;
+        return;
+      }
       clearTimeout(timer);
       pending = true;
       try {
         const rows = await api<ChatActivityCount[]>('/chat-activities');
         if (stopped) return;
+        active = rows.some((row) => row.count > 0);
         const next: Record<string, ChatActivitySummary> = {};
         for (const row of rows) {
           const previous = next[row.chatId];
@@ -41,20 +48,28 @@ export function useChatActivities(): Record<string, ChatActivitySummary> {
       } catch {
         // A failed read must not leave a settled task spinning indefinitely.
         if (!stopped) setActivities({});
+        active = false;
       } finally {
         pending = false;
-        if (!stopped) timer = setTimeout(() => void refresh(), 2000);
+        if (!stopped && !document.hidden)
+          timer = setTimeout(() => void refresh(), requested ? 0 : active ? 2000 : 10000);
+        requested = false;
       }
     };
-    const visible = () => void refresh();
+    const visible = () => {
+      clearTimeout(timer);
+      void refresh();
+    };
     void refresh();
     document.addEventListener('visibilitychange', visible);
     window.addEventListener('focus', visible);
+    window.addEventListener(activityChangedEvent, visible);
     return () => {
       stopped = true;
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', visible);
       window.removeEventListener('focus', visible);
+      window.removeEventListener(activityChangedEvent, visible);
     };
   }, []);
   return activities;

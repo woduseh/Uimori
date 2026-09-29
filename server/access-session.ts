@@ -70,7 +70,7 @@ export class AccessSessions {
     return token && this.authenticated(cookie) ? this.cookie(token) : undefined;
   }
 
-  login(value: string): { cookie: string; revoked: boolean } {
+  login(value: string): { cookie: string } {
     this.checkLoginAllowed();
     if (this.required && !timingSafeEqual(digest(value), this.authority)) {
       if (++this.failures >= 10) {
@@ -84,7 +84,7 @@ export class AccessSessions {
     this.db
       .prepare('INSERT INTO access_sessions VALUES(?,?)')
       .run(digest(token).toString('hex'), this.authority.toString('hex'));
-    return { cookie: this.cookie(token), revoked: false };
+    return { cookie: this.cookie(token) };
   }
 
   logout(cookie?: string): string {

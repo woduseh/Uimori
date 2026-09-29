@@ -13,14 +13,15 @@ import { validateNativeTransfer } from '../core/native-transfer-validation.js';
 import { validateImageBlob, putValidatedImageBlob } from './package-images.js';
 import { encodedImage } from './image-storage.js';
 import { fields, HttpError, record, text } from './request-validation.js';
+import { normalizeTransferImages } from './transfer-images.js';
 
 export const bundleDigest = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
-export function inspectBundle(value: unknown): NativeTransferPrepare {
+function prepareBundle(value: unknown) {
   const checked = validateNativeTransfer(value);
   for (const image of checked.file.images) validateImageBlob(image);
-  return {
+  const preview: NativeTransferPrepare = {
     digest: bundleDigest(checked.file),
     entries: checked.entries,
     modelRequirements: checked.modelRequirements,
@@ -36,6 +37,11 @@ export function inspectBundle(value: unknown): NativeTransferPrepare {
       ),
     },
   };
+  return { checked, preview };
+}
+
+export function inspectBundle(value: unknown): NativeTransferPrepare {
+  return prepareBundle(value).preview;
 }
 
 /** A saved-resource bundle, not a dump of database tables or old execution records. */
@@ -100,14 +106,36 @@ export function exportResourceBundle(
   return file;
 }
 
-/** New identities on every intentional import; a tiny request receipt only prevents a lost HTTP response duplicating it. */
-export function importResourceBundle(store: Store, value: unknown): NativeTransferReceipt {
+function prepareImport(value: unknown) {
   const body = record(value);
   fields(body, ['file', 'digest', 'modelBindings', 'idempotencyKey']);
-  const checked = validateNativeTransfer(body.file);
-  const prepared = inspectBundle(checked.file);
-  if (body.digest !== prepared.digest)
+  const bundle = prepareBundle(body.file);
+  if (body.digest !== bundle.preview.digest)
     throw new HttpError(409, '가져올 자료가 변경됐어요. 다시 확인해 주세요.');
+  return { body, bundle };
+}
+
+/** New identities on every intentional import; a tiny request receipt only prevents a lost HTTP response duplicating it. */
+export function importResourceBundle(store: Store, value: unknown): NativeTransferReceipt {
+  const { body, bundle } = prepareImport(value);
+  return applyPreparedBundle(store, body, bundle);
+}
+
+/** External input and the converted image graph each cross validation once, before any writes. */
+export async function importNormalizedResourceBundle(
+  store: Store,
+  value: unknown
+): Promise<NativeTransferReceipt> {
+  const { body, bundle } = prepareImport(value);
+  const converted = await normalizeTransferImages(bundle.checked.file);
+  return applyPreparedBundle(store, body, prepareBundle(converted));
+}
+
+function applyPreparedBundle(
+  store: Store,
+  body: Record<string, any>,
+  { checked, preview: prepared }: ReturnType<typeof prepareBundle>
+): NativeTransferReceipt {
   const supplied = body.modelBindings ?? [];
   if (!Array.isArray(supplied)) throw new HttpError(400, '모델 연결 목록을 확인해 주세요.');
   const requirements = new Set(checked.modelRequirements.map((item) => item.key));
@@ -146,8 +174,7 @@ export function importResourceBundle(store: Store, value: unknown): NativeTransf
     const contentIds = new Map(
       checked.file.contents.map((entry) => [entry.source.id, ids.get(entry.key)!])
     );
-    for (const image of checked.file.images)
-      putValidatedImageBlob(store.product, validateImageBlob(image));
+    for (const image of checked.file.images) putValidatedImageBlob(store.product, image);
     for (const key of checked.persistOrder) {
       const entry = checked.file.contents.find((item) => item.key === key)!;
       const { id: _id, revision: _revision, ...source } = structuredClone(entry.source);

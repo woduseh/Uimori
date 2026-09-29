@@ -61,7 +61,7 @@ test('test edits change evidence identity without invalidating compiled inputs; 
   assert.notEqual((await buildFingerprint(cwd)).hash, compiled.hash);
 });
 
-test('vendor edits invalidate build and release evidence while UI edits preserve verification scripts', async (t) => {
+test('vendor edits invalidate build and release evidence', async (t) => {
   const { cwd } = await fixture(t);
   await mkdir(path.join(cwd, 'third_party/vendor'), { recursive: true });
   await writeFile(path.join(cwd, 'third_party/vendor/parser.ts'), 'export const value = 1;');
@@ -70,13 +70,6 @@ test('vendor edits invalidate build and release evidence while UI edits preserve
   await writeFile(path.join(cwd, 'third_party/vendor/parser.ts'), 'export const value = 2;');
   assert.notEqual((await buildFingerprint(cwd)).hash, compiled.hash);
   assert.notEqual((await fingerprint(cwd)).hash, evidence.hash);
-  const verification = await fingerprint(cwd, { verificationOnly: true });
-  await mkdir(path.join(cwd, 'web'));
-  await writeFile(path.join(cwd, 'web/index.ts'), 'export const value = 2;');
-  assert.equal((await fingerprint(cwd, { verificationOnly: true })).hash, verification.hash);
-  await mkdir(path.join(cwd, 'scripts'));
-  await writeFile(path.join(cwd, 'scripts/test.mjs'), 'changed runner');
-  assert.notEqual((await fingerprint(cwd, { verificationOnly: true })).hash, verification.hash);
 });
 
 for (const failure of ['compiler', 'spawn', 'missing-output', 'source-change'])

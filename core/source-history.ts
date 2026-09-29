@@ -7,8 +7,6 @@ export type SourceHistoryItem = {
 };
 /** Exact ordered original-source ancestry, supplied by the host. */
 export type SourceScope = { chatId: string; history: readonly SourceHistoryItem[] };
-/** A display locator in one frozen ancestry, never a replacement for source identity. */
-export type SourceSceneAnchor = { sceneNumber: number; revision: string; hash: string };
 export function sourceSceneScope(scope: SourceScope) {
   const head = scope.history.at(-1);
   return {
@@ -17,14 +15,6 @@ export function sourceSceneScope(scope: SourceScope) {
     headHash: head ? (head.contentHash ?? sourceHash(head.text)) : null,
     numbering: 'source-ancestry-1-based' as const,
   };
-}
-/** Includes authored starts; compaction, result pagination and hidden spans never renumber sources. */
-export function sourceSceneAnchors(scope: SourceScope): SourceSceneAnchor[] {
-  return scope.history.map((source, index) => ({
-    sceneNumber: index + 1,
-    revision: source.revision,
-    hash: source.contentHash ?? sourceHash(source.text),
-  }));
 }
 export const sourceHash = (text: string): string => createHash('sha256').update(text).digest('hex');
 // Source objects bound the cache lifetime; changed text is rehashed and supplied hashes are still checked.

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RisuContentSource } from '../core/risu-native.js';
-import { evaluateNativeRisuFields, evaluateRisuNativeCbs } from '../server/risu-native-cbs.js';
+import { createNativeRisuCbsSession, evaluateNativeRisuFields } from '../server/risu-native-cbs.js';
 import { renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { cardZip } from '../server/character-card-file.js';
 import { readEmbeddedRisuModule } from '../server/risu-module-file.js';
@@ -28,10 +28,31 @@ test('native CBS preserves shared variable writes across fields and native butto
   expect(result.fields.two).toContain('risu-trigger="go"');
   expect(result.variables.route).toBe('2');
 });
-test('runtime CBS evaluates in a worker and returns variable changes to the caller', async () => {
-  const context = { native: native(), variables: {} as Record<string, string> };
-  expect(await evaluateRisuNativeCbs('{{setvar::score::3}}{{? 2+3}}', context)).toBe('5');
-  expect(context.variables.score).toBe('3');
+test('CBS sessions propagate variable writes while each call uses its latest context', async () => {
+  const session = createNativeRisuCbsSession();
+  const context = {
+    native: native(),
+    variables: {} as Record<string, string>,
+    globalVariables: { route: 'first' },
+    now: 1000,
+    charName: 'First',
+  };
+  const expression = '{{getvar::score}}|{{getglobalvar::route}}|{{unixtime}}|{{char}}';
+  try {
+    expect(await session.evaluate('{{setvar::score::3}}' + expression, context)).toBe(
+      '3|first|1|First'
+    );
+    context.globalVariables.route = 'next';
+    context.now = 2000;
+    context.charName = 'Next';
+    expect(await session.evaluate(expression, context)).toBe('3|next|2|Next');
+    expect(await session.evaluate(expression, { ...context, variables: {} })).toBe(
+      'null|next|2|Next'
+    );
+    expect(context.variables).toEqual({ score: '3' });
+  } finally {
+    await session.close();
+  }
 });
 test('native display follows CBS/regex/assets and keeps HTML CSS without mutating durable vars', async () => {
   const input = native({

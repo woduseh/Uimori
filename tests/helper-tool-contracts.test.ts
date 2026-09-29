@@ -3,7 +3,7 @@ import {
   DEFAULT_ILLUSTRATION_PRESET_ID,
 } from '../core/illustration-presets.js';
 import { illustrationPresetCatalog } from '../server/illustration-presets.js';
-import { describeHelperTools } from '../server/helper-app-tools.js';
+import { describeHelperTools, helperToolTraits } from '../server/helper-app-tools.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,6 +15,7 @@ import { ChatOverridesStore } from '../server/chat-overrides.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
+import { completedSource } from './fixtures/illustration.js';
 import { chatOverrideHash } from '../core/chat-overrides.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import type { Content } from '../core/product.js';
@@ -147,7 +148,7 @@ function event(request: transport.ProviderRequest, id: string): ToolEvent {
 }
 function result<T>(request: transport.ProviderRequest, id: string): T {
   const found = event(request, id);
-  expect(found.denied).toBe(false);
+  expect(found.denied, JSON.stringify(found)).toBe(false);
   return found.result as T;
 }
 async function submit(
@@ -179,6 +180,116 @@ function definition(request: transport.ProviderRequest, name: string) {
   return tool!.inputSchema;
 }
 
+test('targeted chat metadata and rename avoid writing projections while preserving CAS and receipts', async () => {
+  const f = await fixture('library');
+  const other = createFixtureChat(f.store, 'Other chat', { botId: f.bot.id });
+  const projections = vi.spyOn(f.store.product, 'snapshot');
+  const appCall = (id: string, name: string, args: Record<string, unknown> = {}) =>
+    call(id, 'app.call', { name, arguments: { ...args, chatId: other.id } });
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        appCall('chat', 'chat.read'),
+        appCall('lore', 'chat.lore', { action: 'read' }),
+        appCall('context', 'context.read')
+      );
+    if (round === 1) {
+      expect(result(request, 'chat')).toMatchObject({ chat: { id: other.id }, messages: [] });
+      expect(result<HelperLoreRead>(request, 'lore').items).toHaveLength(1);
+      expect(result(request, 'context')).toHaveProperty('notesRevision');
+      return calls(
+        appCall('rename', 'chat.rename', {
+          title: 'Renamed other chat',
+          expectedRevision: other.titleRevision ?? 0,
+        })
+      );
+    }
+    if (round === 2) {
+      expect(result(request, 'rename')).toMatchObject({
+        id: other.id,
+        title: 'Renamed other chat',
+      });
+      return calls(
+        appCall('stale-rename', 'chat.rename', {
+          title: 'Must not overwrite',
+          expectedRevision: other.titleRevision ?? 0,
+        })
+      );
+    }
+    expect(event(request, 'stale-rename')).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+    });
+    return structuredClone(success);
+  });
+  const task = await submit(f, '다른 채팅의 정보를 확인하고 제목을 바꿔줘');
+  expect(f.store.chat(other.id).title).toBe('Renamed other chat');
+  expect(f.store.chat(f.chat.id).title).toBe('Synthetic chat');
+  expect(
+    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 1 });
+  expect(projections).not.toHaveBeenCalled();
+});
+
+test('targeted story reads and forks use the selected chat ancestry without changing the default scope', async () => {
+  const f = await fixture();
+  const other = createFixtureChat(f.store, 'Other story', { botId: f.bot.id });
+  const source = completedSource(f.store, other.id, 'Only the other story contains this scene.');
+  let forkId = '';
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('targeted-read', 'app.call', {
+          name: 'story.read',
+          arguments: { chatId: other.id, sceneNumber: 1 },
+        }),
+        call('default-read', 'app.call', { name: 'story.search', arguments: {} })
+      );
+    if (round === 1) {
+      expect(result(request, 'targeted-read')).toMatchObject({ text: source.text });
+      expect(JSON.stringify(result(request, 'default-read'))).not.toContain(source.text);
+      return calls(
+        call('targeted-fork', 'app.call', {
+          name: 'chat.fork',
+          arguments: { chatId: other.id, sourceId: source.id, title: 'Fork of other story' },
+        }),
+        call('outside-fork', 'app.call', {
+          name: 'chat.fork',
+          arguments: { chatId: f.chat.id, sourceId: source.id },
+        })
+      );
+    }
+    forkId = result<{ id: string }>(request, 'targeted-fork').id;
+    expect(event(request, 'outside-fork')).toMatchObject({
+      denied: true,
+      result: { code: 'SOURCE_OUTSIDE_SCOPE', outcome: 'unchanged' },
+    });
+    return structuredClone(success);
+  });
+  await submit(f, '다른 이야기의 첫 장면을 읽고 그 장면에서 분기해줘');
+  const fork = f.store.chat(forkId);
+  expect(fork.title).toBe('Fork of other story');
+  expect(fork.headRevision).not.toBe(source.id);
+  expect(f.store.history(fork.headRevision).map((item) => item.text)).toEqual([source.text]);
+  expect(f.store.chat(f.chat.id).headRevision).toBeNull();
+});
+
+test('conditional reads remain distinct from writes and the narrower outline review tool set', () => {
+  for (const name of ['chat.lore', 'library.organize']) {
+    expect(helperToolTraits(name, { action: 'read' })).toMatchObject({
+      readOnly: true,
+      reviewAllowed: false,
+    });
+    for (const action of ['patch', 'remove', 'create-folder', 'move', undefined])
+      expect(helperToolTraits(name, { action }).readOnly).toBe(false);
+  }
+  expect(helperToolTraits('unknown.read').readOnly).toBe(false);
+  expect(() => describeHelperTools({ names: ['chat.lore'] }, true)).toThrow('UNKNOWN_APP_TOOL');
+  expect(describeHelperTools({ names: ['outline.read', 'story.read'] }, true).tools).toHaveLength(
+    2
+  );
+});
+
 test('helper read events retain recoverable argument and missing-scene errors', async () => {
   const f = await fixture();
   mockSend((request, round) => {
@@ -188,6 +299,7 @@ test('helper read events retain recoverable argument and missing-scene errors', 
         call('bad-args', 'story.read', { sceneNumber: 1, offset: -1 }),
         call('outside-source', 'story.read', { sceneNumber: 999 }),
         call('bad-catalog', 'app.tools', { names: [] }),
+        call('bad-envelope', 'app.call', { name: 'chat.lore', arguments: null }),
         call('missing-reference', 'knowledge.read', { ids: [] })
       );
     expect(event(request, 'valid-list')).toMatchObject({ denied: false });
@@ -209,6 +321,11 @@ test('helper read events retain recoverable argument and missing-scene errors', 
     expect(event(request, 'bad-catalog')).toMatchObject({
       denied: true,
       result: { code: 'INVALID_ARGUMENTS', retryMode: 'correct_arguments', outcome: 'unchanged' },
+    });
+    expect(event(request, 'bad-envelope')).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: { retryMode: 'correct_arguments', outcome: 'unchanged' },
     });
     // The fixture protocol has no Anthropic continuation. Its supported bootstrap
     // envelope still checks that these exact host events carry the native error flag.

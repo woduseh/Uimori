@@ -39,6 +39,7 @@ export function rememberMaintenance(next: MaintenanceStatus | undefined): void {
     window.dispatchEvent(new Event(maintenanceChangedEvent));
 }
 export const libraryChangedKey = 'uimori:library-change';
+export const activityChangedEvent = 'uimori-activity-changed';
 
 /** JSON requests and binary uploads share response errors, not mutation side effects. */
 async function readApiResponse<T>(
@@ -78,6 +79,14 @@ export async function api<T>(
         }
   );
   const result = await readApiResponse<T>(response, method, path.split('?')[0] !== '/session');
+  if (
+    body !== undefined &&
+    typeof window !== 'undefined' &&
+    /^(?:\/(?:runs|jobs|story-jobs|scene-commands|illustrations)\/|\/sources\/[^/]+\/(?:translation|retranslate|images|illustrations|status)|\/chats\/[^/]+\/(?:runs|context|extension|scene-commands)|\/helper\/(?:conversations\/[^/]+\/messages|tasks\/))/u.test(
+      path
+    )
+  )
+    window.dispatchEvent(new CustomEvent(activityChangedEvent, { detail: path }));
   const providerSettingsChanged =
     body !== undefined && /^(?:\/model-presets|\/connections)(?:\/[^/]+)?$/.test(path);
   if (

@@ -10,7 +10,7 @@ export {
 import { nativeRisuTriggers, type RisuContentSource } from '../core/risu-native.js';
 
 import { RISU_NATIVE_LUA_DISPATCH, RISU_NATIVE_LUA_PRELUDE } from './risu-native-lua.js';
-import { evaluateRisuNativeCbs } from './risu-native-cbs.js';
+import { createNativeRisuCbsSession } from './risu-native-cbs.js';
 
 export interface NativeRisuMessage {
   id?: string;
@@ -156,14 +156,14 @@ function compare(left: string, right: string, operator: string, numericEquality:
 /** Executes original trigger records. No imported BehaviorAction representation is involved. */
 async function executeNativeRisuInvocation(
   input: NativeRisuExecutionInput,
-  options: NativeRisuExecutionOptions = {}
+  options: NativeRisuExecutionOptions & { cbs: NonNullable<NativeRisuExecutionOptions['cbs']> }
 ): Promise<NativeRisuExecutionResult> {
   const state: NativeRisuExecutionInput = {
     ...input,
     variables: variables(input.variables),
     messages: messages(input.messages),
   };
-  const evaluate = options.cbs ?? evaluateRisuNativeCbs;
+  const evaluate = options.cbs;
   const output: NativeRisuExecutionResult = {
     variables: state.variables,
     messages: state.messages,
@@ -426,10 +426,16 @@ export async function executeRisuNative(
   input: NativeRisuExecutionInput,
   options: NativeRisuExecutionOptions = {}
 ): Promise<NativeRisuExecutionResult> {
+  const cbs = options.cbs ? undefined : createNativeRisuCbsSession(options.signal);
   try {
-    return await executeNativeRisuInvocation(input, options);
+    return await executeNativeRisuInvocation(input, {
+      ...options,
+      cbs: options.cbs ?? cbs!.evaluate,
+    });
   } catch (error) {
     if (options.sessionKey) disposeNativeRisuSession(options.sessionKey);
     throw error;
+  } finally {
+    await cbs?.close();
   }
 }

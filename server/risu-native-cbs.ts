@@ -8,7 +8,7 @@ import {
   normalizeRisuContentSource,
   type RisuContentSource,
 } from '../core/risu-native.js';
-import { runNativeRisuWorker } from './risu-native-worker.js';
+import { createNativeRisuWorkerSession, runNativeRisuWorker } from './risu-native-worker.js';
 
 export type NativeRisuCbsContext = {
   native: RisuContentSource;
@@ -210,24 +210,31 @@ export function evaluateNativeRisuFields(input: {
   );
 }
 
-/** Runtime-facing evaluation is isolated too: CBS itself supports authored regular expressions. */
-export async function evaluateRisuNativeCbs(
-  text: string,
-  context: NativeRisuCbsContext
-): Promise<string> {
-  const result = await runNativeRisuWorker<{ text: string; variables: Record<string, string> }>(
+/** One invocation reuses transport only; the worker creates a fresh CBS evaluator for each call. */
+export function createNativeRisuCbsSession(signal?: AbortSignal) {
+  const worker = createNativeRisuWorkerSession<
+    Parameters<typeof evaluateNativeRisuCbsInWorker>[0],
+    ReturnType<typeof evaluateNativeRisuCbsInWorker>
+  >(
     new URL('./risu-native-cbs.js', import.meta.url),
     'evaluateNativeRisuCbsInWorker',
-    { text, context }
+    undefined,
+    signal
   );
-  for (const [key, value] of Object.entries(result.variables))
-    Object.defineProperty(context.variables, key, {
-      value,
-      enumerable: true,
-      writable: true,
-      configurable: true,
-    });
-  return result.text;
+  return {
+    async evaluate(text: string, context: NativeRisuCbsContext): Promise<string> {
+      const result = await worker.run({ text, context });
+      for (const [key, value] of Object.entries(result.variables))
+        Object.defineProperty(context.variables, key, {
+          value,
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      return result.text;
+    },
+    close: worker.close,
+  };
 }
 
 function stripRisuComments(text: string): string {

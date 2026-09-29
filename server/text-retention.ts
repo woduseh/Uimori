@@ -78,13 +78,3 @@ export function pruneTranslationHistory(db: DatabaseSync, sourceId: string): voi
     else db.prepare('DELETE FROM jobs WHERE id=?').run(id);
   }
 }
-
-export function pruneSavedTextHistory(db: DatabaseSync): void {
-  pruneSourceEdits(db);
-  for (const row of db
-    .prepare(
-      "SELECT source_revision FROM jobs WHERE kind='translation' GROUP BY source_revision HAVING COUNT(*)>2"
-    )
-    .all())
-    pruneTranslationHistory(db, String(row.source_revision));
-}

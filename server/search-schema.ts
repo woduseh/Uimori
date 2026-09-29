@@ -49,16 +49,3 @@ export function initManuscriptSearch(db: DatabaseSync) {
   db.exec(`INSERT OR IGNORE INTO search_dirty_sources(source_id,revision) SELECT id,1 FROM sources
     WHERE NOT EXISTS(SELECT 1 FROM search_documents d WHERE d.source_id=sources.id);`);
 }
-
-/** Version 11 keeps per-source index invalidation but removes global pagination fences. */
-export function simplifySearchInvalidation(db: DatabaseSync) {
-  for (const row of db
-    .prepare("SELECT name FROM sqlite_schema WHERE type='trigger' AND name LIKE 'search_%'")
-    .all()) {
-    const name = String(row.name);
-    if (!name.startsWith('search_document_'))
-      db.exec(`DROP TRIGGER "${name.replaceAll('"', '""')}"`);
-  }
-  db.exec("DELETE FROM app_metadata WHERE key='search-revision'");
-  initManuscriptSearch(db);
-}

@@ -111,7 +111,6 @@ export function productRoutes(
       fields(b, ['token']);
       const value = text(b.token, 'token', 1000);
       const session = sessions.login(value);
-      if (session.revoked) options.onAuthChanged?.();
       reply.header('Set-Cookie', session.cookie);
       return {
         required: sessions.required,

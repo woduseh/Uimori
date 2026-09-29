@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks';
 import { availableParallelism } from 'node:os';
 import {
   HELPER_APP_TOOLS,
-  HELPER_REVIEW_APP_NAMES,
+  helperToolTraits,
   helperGatewayTools,
   describeHelperTools,
 } from './helper-app-tools.js';
@@ -55,7 +55,6 @@ import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { previousContextPlan, seedContextPlan } from './context-planning.js';
 import { prepareInputContext } from './context-compaction.js';
 import { runMain, type MainHooks } from './model-runner.js';
-import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { encodeMainPreview } from './main-request.js';
 import { HelperWorkspace, helperCallOperationId } from './helper-workspace.js';
 import { forkChat } from './chat-fork.js';
@@ -93,28 +92,6 @@ ${CONTEXT_DERIVED_GUIDANCE}
 ${CONTEXT_CONTINUATION_GUIDANCE} ${CONTEXT_RETRIEVAL_GUIDANCE}
 End with the result and any unresolved decision or conflict. Keep tool argument JSON and private reasoning out of public prose.`;
 
-const HELPER_READ_NAMES = new Set([
-  'settings.read',
-  'usage.read',
-  'model.list',
-  'task.inspect',
-  'task.list',
-  ...HELPER_DATA_TOOLS.map((tool) => tool.name),
-  'app.tools',
-  ...MAIN_READ_TOOLS.map((tool) => tool.name),
-  'editor.read',
-  'resource.read',
-  'illustration-preset.list',
-  'illustration-preset.guide',
-  'theme.list',
-  'theme.guide',
-  'chat.list',
-  'chat.read',
-  'context.read',
-  'outline.read',
-  'options.read',
-  'artifact.read',
-]);
 /** Unknown, denied and mutating exchanges keep their exact arguments and results. */
 function helperRead(event: ToolEvent) {
   const name = event.name === 'app.call' ? event.args.name : event.name;
@@ -122,12 +99,7 @@ function helperRead(event: ToolEvent) {
     event.name === 'app.call'
       ? (event.args.arguments as Record<string, unknown> | undefined)
       : event.args;
-  return (
-    !event.denied &&
-    !event.errorKind &&
-    (HELPER_READ_NAMES.has(String(name)) ||
-      (['chat.lore', 'library.organize'].includes(String(name)) && args?.action === 'read'))
-  );
+  return !event.denied && !event.errorKind && helperToolTraits(String(name), args ?? {}).readOnly;
 }
 
 /** Retry the same unread range. Successful writes never pass through this helper. */
@@ -741,25 +713,19 @@ export class HelperRuntime {
           }
           if (
             task.snapshot.outline?.target.purpose === 'review' &&
-            !HELPER_DATA_TOOLS.some((tool) => tool.name === call.name) &&
-            call.name !== 'app.tools' &&
-            !HELPER_REVIEW_APP_NAMES.has(call.name)
+            !helperToolTraits(call.name).reviewAllowed
           )
             throw new HttpError(403, 'OUTLINE_REVIEW_READ_ONLY');
           const arguments_ = record(call.arguments);
           // Call identity belongs to the host, never to the model's argument object.
           const operationId = helperCallOperationId(task.id, wireCall.id);
-          const dataTool = HELPER_DATA_TOOLS.some((tool) => tool.name === call.name);
-          const directTool =
-            dataTool ||
-            HELPER_SETTINGS_TOOLS.some((tool) => tool.name === call.name) ||
-            call.name.startsWith('task.');
+          const traits = helperToolTraits(call.name, arguments_);
           const targeted =
-            !directTool && arguments_.chatId !== undefined
-              ? this.targetTask(task, arguments_)
+            !traits.direct && arguments_.chatId !== undefined
+              ? this.targetTask(task, arguments_, traits.writing)
               : task;
           const { chatId: _chatId, ...appArgs } = arguments_;
-          const toolArgs = directTool ? arguments_ : appArgs;
+          const toolArgs = traits.direct ? arguments_ : appArgs;
           const editor = task.snapshot.editor;
           const editsResource =
             ['resource.save', 'resource.patch', 'resource.undo', 'resource.delete'].includes(
@@ -827,10 +793,7 @@ export class HelperRuntime {
               text: saved.text,
               usage: saved.usage,
             };
-          } else if (
-            targeted.snapshot.writing &&
-            MAIN_READ_TOOLS.some((tool) => tool.name === call.name)
-          ) {
+          } else if (targeted.snapshot.writing && traits.writingRead) {
             const read = executeTool(
               targeted.snapshot.writing!,
               { callId: call.id, name: call.name, args: toolArgs },
@@ -1442,19 +1405,19 @@ export class HelperRuntime {
     }
     return { text: summary, usage };
   }
-  private targetTask(task: HelperTask, args: Record<string, unknown>): HelperTask {
-    const current = task.snapshot.scope;
-    const chatId =
-      args.chatId === undefined && current.kind === 'chat'
-        ? current.chatId
-        : text(args.chatId, 'chat ID', 100);
+  private targetTask(
+    task: HelperTask,
+    args: Record<string, unknown>,
+    writing: boolean
+  ): HelperTask {
+    const chatId = text(args.chatId, 'chat ID', 100);
     this.store.chat(chatId);
     return {
       ...task,
       snapshot: {
         ...task.snapshot,
         scope: { kind: 'chat', chatId },
-        writing: helperWritingSnapshot(this.store, chatId, 'context'),
+        writing: writing ? helperWritingSnapshot(this.store, chatId, 'context') : undefined,
       },
     };
   }
@@ -1508,7 +1471,7 @@ export class HelperRuntime {
       name === 'image.update-metadata'
     ) {
       const invoke = () => invokeResourceTool(this.store, name, args);
-      const result = HELPER_READ_NAMES.has(name)
+      const result = helperToolTraits(name, args).readOnly
         ? invoke()
         : this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, invoke);
       if (
@@ -1567,7 +1530,7 @@ export class HelperRuntime {
           throw new HttpError(403, 'SOURCE_OUTSIDE_SCOPE');
         return forkChat(this.store, scope.chatId, {
           fromRevision: sourceId,
-          idempotencyKey: `helper:${task.id}:${operationId}`,
+          idempotencyKey: `helper:${operationId}`,
           ...(args.title === undefined ? {} : { title: text(args.title, 'chat title', 200) }),
         });
       });

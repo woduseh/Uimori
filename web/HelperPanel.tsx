@@ -80,6 +80,36 @@ function taskElapsed(task: HelperTaskView, now: number) {
   // A finished task that took under a second has no meaningful duration to show.
   return !active(task) && measured === '0초' ? '' : measured;
 }
+function HelperTaskElapsed({
+  task,
+  visible,
+  prefix = '',
+}: {
+  task: HelperTaskView;
+  visible: boolean;
+  prefix?: string;
+}) {
+  const [now, setNow] = useState(Date.now);
+  const ticking = active(task);
+  useEffect(() => {
+    if (!visible || !ticking) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const update = () => {
+      clearInterval(timer);
+      if (document.hidden) return;
+      setNow(Date.now());
+      timer = setInterval(() => setNow(Date.now()), 1000);
+    };
+    update();
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, [visible, ticking]);
+  const elapsed = taskElapsed(task, now);
+  return elapsed ? `${prefix}${elapsed}` : null;
+}
 const statusLabel: Record<string, string> = {
   queued: '요청을 접수했어요 · 앞선 작업을 기다려요',
   running: '처리 중이에요',
@@ -190,7 +220,11 @@ export function HelperPanel(props: Props) {
   const scopeKey = sessions.currentId ?? '';
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
-  const data = useHelperConversation(props.open && props.ready !== false, sessions.currentId);
+  const data = useHelperConversation(
+    props.open && props.ready !== false,
+    sessions.currentId,
+    sessions.sessions.find((session) => session.id === sessions.currentId)?.latestEventSeq
+  );
   const conversation = data.current?.conversation ?? null;
   const scope = conversation?.scope ?? props.scope;
   const scopeMismatch =
@@ -225,7 +259,6 @@ export function HelperPanel(props: Props) {
   const [editor, setEditor] = useState<ActiveEditorContext | null>(null);
   const [settings, setSettings] = useState(false);
   const [taskHistory, setTaskHistory] = useState<{ taskId?: string } | null>(null);
-  const [now, setNow] = useState(Date.now);
   const [hiddenActivity, setHiddenActivity] = useState<string[]>([]);
   const [personas, setPersonas] = useState<
     Record<string, { text: string; revision: number; limits: HelperConversation['limits'] }>
@@ -418,13 +451,6 @@ export function HelperPanel(props: Props) {
     addEventListener(editorContextChanged, update);
     return () => removeEventListener(editorContextChanged, update);
   }, []);
-  const ticking = tasks.some(active);
-  useEffect(() => {
-    if (!ticking) return;
-    // Same cadence as the reader's status row so both counters read the same second.
-    const timer = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(timer);
-  }, [ticking]);
   useEffect(() => {
     if (!props.open) return;
     const prior = document.activeElement as HTMLElement | null;
@@ -663,7 +689,13 @@ export function HelperPanel(props: Props) {
       <TurnStatus
         tone={tone(task)}
         text={statusLabel[task.status] ?? task.status}
-        elapsed={taskElapsed(task, now)}
+        elapsed={
+          active(task) ? (
+            <HelperTaskElapsed task={task} visible={props.open} />
+          ) : (
+            taskElapsed(task, Date.now())
+          )
+        }
         storageKey={`helper-task-activity:${task.conversationId}:${task.id}`}
         dataProps={{ 'data-testid': 'helper-task-activity', 'data-task-id': task.id }}
       >
@@ -691,7 +723,12 @@ export function HelperPanel(props: Props) {
               <span />
             </div>
           )}
-          <StreamingResponse taskKind="helper" taskId={task.id} taskStatus={task.status} />
+          <StreamingResponse
+            taskKind="helper"
+            taskId={task.id}
+            taskStatus={task.status}
+            visible={props.open}
+          />
         </div>
       )}
       {!active(task) && task.status !== 'completed' && (
@@ -1072,7 +1109,11 @@ export function HelperPanel(props: Props) {
                       {new Date(task.createdAt).toLocaleString()}
                     </time>{' '}
                     · 실행 요청 {task.usage.modelCalls}회
-                    {taskElapsed(task, now) && ` · ${taskElapsed(task, now)}`}
+                    <HelperTaskElapsed
+                      task={task}
+                      visible={props.open && !!taskHistory}
+                      prefix=" · "
+                    />
                   </small>
                 </div>
               </div>
@@ -1216,7 +1257,9 @@ export function HelperPanel(props: Props) {
                 ? (statusLabel[summarized.status] ?? summarized.status)
                 : `진행 중인 요청 ${pending.length}개`
             }
-            elapsed={summarized ? taskElapsed(summarized, now) : ''}
+            elapsed={
+              summarized ? <HelperTaskElapsed task={summarized} visible={props.open} /> : null
+            }
             extra={summarized && pending.length > 1 ? pending.length - 1 : 0}
             expanded={!!summarized}
             collapsed={!summarized}

@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { statusGlyph, type StatusTone } from './TurnStatus.js';
 import './activity-status.css';
 
@@ -8,7 +9,7 @@ type Props = {
   issue: boolean;
   label: string;
   /** Elapsed or measured duration; omitted when there is nothing meaningful to show. */
-  elapsed?: string;
+  elapsed?: ReactNode;
   /** Tasks represented beyond the summarized one. */
   extra?: number;
   /** Whether the control the toggle governs is open. */

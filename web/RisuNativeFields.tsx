@@ -79,13 +79,13 @@ export function RisuNativeFields({
     onDraftChange(!!draft || modulesDirty || regexDirty || triggersDirty);
   }, [draft, modulesDirty, regexDirty, triggersDirty, onDraftChange]);
   useEffect(() => () => onDraftChange(false), [onDraftChange]);
+  // Typed fields replace their own path; JSON apply and server saves normalize the document.
   const update = (input: RisuContentSource) => {
-    const next = normalizeRisuContentSource(input);
     onChange({
       ...value,
-      title: string(standalone ? next.module?.name : next.card.name),
-      nativeRisu: next,
-      imageHandoff: detectRisuImageHandoff(next, value.imageHandoff),
+      title: string(standalone ? input.module?.name : input.card.name),
+      nativeRisu: input,
+      imageHandoff: detectRisuImageHandoff(input, value.imageHandoff),
     });
   };
   const field = (key: string, next: string) =>
@@ -197,7 +197,7 @@ export function RisuNativeFields({
   function applyJson() {
     if (!draft) return;
     try {
-      update(editNativeSource(native, draft.part, draft.text));
+      update(normalizeRisuContentSource(editNativeSource(native, draft.part, draft.text)));
       setDraft(null);
       setError('');
     } catch (caught) {
@@ -219,7 +219,7 @@ export function RisuNativeFields({
     'aria-labelledby': id + '-' + key + '-tab',
     hidden: section !== key,
   });
-  const rawEditor = (
+  const rawEditor = section === 'advanced' && advanced === 'source' && (
     <div className="native-source-editor">
       <p className="muted">
         로어 {lore.length}개 · 정규식 {nativeRisuRegex(native).length}개 · 트리거{' '}

@@ -23,6 +23,7 @@ import { api } from './api.js';
 import { refValue } from './content-ref.js';
 import { nativeContentDraft, withNativeContentTitle } from './native-content-draft.js';
 import { validateRisuContent } from '../core/risu-content.js';
+import { sameEditorValue } from './editor-values.js';
 import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
 import { ContentAvatar } from './ContentAvatar.js';
@@ -1232,7 +1233,7 @@ function ContentEditor({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
-  const [baseline, setBaseline] = useState(() => JSON.stringify(initial ?? freshContent(kind)));
+  const [baseline, setBaseline] = useState(() => initial ?? freshContent(kind));
   const [nativeDraftDirty, setNativeDraftDirty] = useState(false);
   const [portraitBusy, setPortraitBusy] = useState(false);
   const hasShownEditor = useRef(false);
@@ -1264,7 +1265,7 @@ function ContentEditor({
       const model = draft.model as ContentEditModel;
       setSaved('');
       setValue(model);
-      setBaseline(JSON.stringify(draft.baseModel));
+      setBaseline(draft.baseModel as ContentEditModel);
       setSelected(
         draft.targetId
           ? {
@@ -1278,7 +1279,7 @@ function ContentEditor({
   });
   if (shared.state.ready) hasShownEditor.current = true;
   const editorUnavailable = busy || !shared.state.ready;
-  const dirty = useMemo(() => JSON.stringify(value) !== baseline, [value, baseline]);
+  const dirty = useMemo(() => !sameEditorValue(value, baseline), [value, baseline]);
   useEffect(() => {
     onDirtyChange(dirty || nativeDraftDirty || portraitBusy);
   }, [dirty, nativeDraftDirty, portraitBusy, onDirtyChange]);
@@ -1316,7 +1317,7 @@ function ContentEditor({
       } else item = (await shared.session.save(model)).saved as Content;
       setSelected(item);
       setValue(item);
-      setBaseline(JSON.stringify(item));
+      setBaseline(item);
       setSaved(item.title + ' 저장됨 · 다음 실행부터 사용해요.');
       if (!selected || copying) {
         try {

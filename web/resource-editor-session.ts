@@ -7,6 +7,7 @@ import {
   type ResourceSaveResult,
 } from '../core/resource-editing.js';
 import { readRecovery, writeRecovery } from './editor-recovery.js';
+import { sameEditorValue } from './editor-values.js';
 
 export type EditorBuffer = {
   model: ResourceModel;
@@ -168,15 +169,7 @@ export class ResourceEditorSession {
     this.timer = setTimeout(() => void this.queueRecovery(), 350);
   }
   setModel(model: ResourceModel) {
-    const previous = this.state.local.model;
-    if (
-      Object.keys(model).length === Object.keys(previous).length &&
-      (Object.entries(model).every(([key, value]) =>
-        Object.is(value, (previous as unknown as Record<string, unknown>)[key])
-      ) ||
-        JSON.stringify(model) === JSON.stringify(previous))
-    )
-      return;
+    if (sameEditorValue(model, this.state.local.model)) return;
     this.change({ ...this.state.local, model });
   }
   setField(path: string, value: string | undefined) {

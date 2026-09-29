@@ -94,10 +94,12 @@ export function NativeRisuLoreEditor({
   const folder = !!entry && isLoreFolder(entry);
   const title = entry ? loreTitle(entry) : '로어북';
   const needle = query.trim().toLocaleLowerCase();
-  const matches = entries.map((item) =>
-    `${loreTitle(item)} ${loreText(item.content)} ${loreFolderKey(item)}`
-      .toLocaleLowerCase()
-      .includes(needle)
+  const matches = entries.map(
+    (item) =>
+      !needle ||
+      `${loreTitle(item)} ${loreText(item.content)} ${loreFolderKey(item)}`
+        .toLocaleLowerCase()
+        .includes(needle)
   );
   const visible = new Set<number>();
   matches.forEach((match, i) => {

@@ -346,6 +346,14 @@ for (const viewport of viewports) {
       await rawView.click();
       let raw = definitions.getByLabel('토글 정의 원문', { exact: true });
       await expect(raw).toHaveValue(declarations);
+      const duplicateKey = `${declarations}\nshort=Duplicate key=text`;
+      await raw.fill(duplicateKey);
+      await definitions.getByRole('button', { name: '원문 적용', exact: true }).click();
+      await expect(editor.locator('.native-editor-notice.error')).toContainText(
+        'RISU_NATIVE_PRESET_TOGGLE_KEY'
+      );
+      await expect(raw).toHaveValue(duplicateKey);
+      await raw.fill(declarations);
       await editView.click();
 
       // Basic-variable strings and the untouched toggle source survive view switches byte-for-byte.
