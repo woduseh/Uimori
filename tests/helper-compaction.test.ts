@@ -423,6 +423,21 @@ test('completed read references retain returned ranges and revisions while allow
     totalChars: 500,
     truncated: true,
     nextOffset: 60,
+    version: 'outline-view-one',
+    scope: { chatId: 'story', mode: 'detail', nodeId: 'unit', section: 'intent' },
+    coverage: { content: 'intent-range', complete: false, returned: 1 },
+    nextRead: {
+      name: 'app.call',
+      arguments: {
+        name: 'outline.read',
+        arguments: {
+          nodeId: 'unit',
+          mode: 'detail',
+          textOffset: 60,
+          expectedVersion: 'outline-view-one',
+        },
+      },
+    },
   };
   let helperCalls = 0;
   const log = script(f, (request) => {
@@ -477,6 +492,21 @@ test('completed read references retain returned ranges and revisions while allow
         totalChars: 500,
         truncated: true,
         nextOffset: 60,
+        version: 'outline-view-one',
+        scope: { chatId: 'story', mode: 'detail', nodeId: 'unit', section: 'intent' },
+        coverage: { content: 'intent-range', complete: false, returned: 1 },
+        nextRead: {
+          name: 'app.call',
+          arguments: {
+            name: 'outline.read',
+            arguments: {
+              nodeId: 'unit',
+              mode: 'detail',
+              textOffset: 60,
+              expectedVersion: 'outline-view-one',
+            },
+          },
+        },
       },
     });
     expect(resumed.completedReads[1].returned).toMatchObject({

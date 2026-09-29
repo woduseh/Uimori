@@ -80,7 +80,9 @@ export type OutlineTarget = {
 };
 export type OutlineHelperContext = {
   target: OutlineTarget;
-  brief: OutlineSnapshot | null;
+  /** Bounded metadata/preview projection; not the writer's full frozen composition. */
+  brief: import('./transport.js').Json | null;
+  viewVersion?: string;
   sources: (OutlineReview['sources'][number] & { text: string })[];
   partial: boolean;
 };

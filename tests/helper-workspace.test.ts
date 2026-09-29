@@ -1003,6 +1003,8 @@ test('selected outline review allows evidence reads, rejects writes and retains 
       'data.search',
       'data.read',
       'db.query',
+      'app.tools',
+      'app.call',
     ]);
     if (index === 0)
       return {
@@ -1014,6 +1016,12 @@ test('selected outline review allows evidence reads, rejects writes and retains 
             id: 'read-evidence',
             name: 'data.search',
             arguments: { scope: 'current', ids: [source.id], patterns: ['Mira'] },
+          },
+          { id: 'discover-outline', name: 'app.tools', arguments: {} },
+          {
+            id: 'read-outline',
+            name: 'app.call',
+            arguments: { name: 'outline.read', arguments: { mode: 'detail', nodeId: node.id } },
           },
           {
             id: 'forbidden-save',
@@ -1068,8 +1076,17 @@ test('selected outline review allows evidence reads, rejects writes and retains 
   expect(input.partial).toBe(false);
   expect(requests[1].input.results).toMatchObject([
     { name: 'data.search', denied: false },
+    { name: 'app.tools', denied: false },
+    {
+      name: 'app.call',
+      denied: false,
+      result: { text: node.intent, coverage: { content: 'intent-range', complete: true } },
+    },
     { denied: true, result: { error: 'OUTLINE_REVIEW_READ_ONLY' } },
   ]);
+  const catalog = (requests[1].input.results as any[])[1].result;
+  expect(catalog.tools.some((tool: any) => tool.name === 'outline.read')).toBe(true);
+  expect(catalog.tools.some((tool: any) => tool.name === 'outline.write')).toBe(false);
   expect(JSON.stringify(requests[1].input.results)).toContain('Mira waited on the pier.');
   expect(f.store.outline.node(node.id).intent).toBe(node.intent);
   expect(f.workspace.task(task.id).status).toBe('completed');

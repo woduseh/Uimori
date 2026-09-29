@@ -1,3 +1,4 @@
+import { readHelperOutline, outlineViewVersion, outlineNextRead } from './outline-read.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { textTokenExcerpt } from '../core/text-tokens.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -350,11 +351,18 @@ export class OutlineStore {
         .all(chatId)
         .map((row) => [String(row.node_id), row])
     );
+    const viewVersion = [...reviews.values()].some((row) =>
+      String(row.plan_hash).startsWith('outline-view:')
+    )
+      ? outlineViewVersion(this.store, chatId)
+      : undefined;
     return {
       chatId,
       nodes: nodes.map((node) => {
         const review = reviews.get(node.id);
-        return review ? { ...node, latestReview: this.mapReview(review, nodes) } : node;
+        return review
+          ? { ...node, latestReview: this.mapReview(review, nodes, viewVersion) }
+          : node;
       }),
     };
   }
@@ -419,36 +427,82 @@ export class OutlineStore {
         throw new HttpError(400, '점검할 구성을 선택해 주세요.');
       return { target, brief: null, sources: [], partial: false };
     }
-    const node = this.node(target.nodeId);
-    if (node.chatId !== chatId) throw new HttpError(403, 'OUTLINE_OUTSIDE_SCOPE');
-    if (node.revision !== target.expectedRevision)
+    const node = this.db
+      .prepare('SELECT chat_id,revision FROM outline_nodes WHERE id=?')
+      .get(target.nodeId);
+    if (!node || node.chat_id !== chatId) throw new HttpError(403, 'OUTLINE_OUTSIDE_SCOPE');
+    if (Number(node.revision) !== target.expectedRevision)
       throw new HttpError(409, '선택한 구성이 변경됐어요. 다시 선택해 주세요.');
-    const brief = this.preview(node.id).outline;
-    const sources: OutlineHelperContext['sources'] = [];
-    // Seed excerpts leave room for plan/history and can be expanded with the existing read tools.
-    let remaining = Math.floor(inputTokenLimit / 4);
-    if (target.purpose === 'review') {
-      const refs = brief.sources ?? [];
-      if (!refs.length)
-        throw new HttpError(409, '먼저 이 구성이나 하위 항목에 원문을 작성해 주세요.');
-      for (const [index, ref] of refs.entries()) {
-        const source = this.store.source(ref.sourceRevision);
-        const excerpt = textTokenExcerpt(
-          source.text,
-          Math.floor(remaining / (refs.length - index))
-        );
-        remaining -= excerpt.tokens;
-        sources.push({
-          id: source.id,
-          hash: source.hash,
-          start: 0,
-          end: excerpt.text.length,
-          total: source.text.length,
-          text: excerpt.text,
+    return this.store.transaction(() => {
+      const overview = readHelperOutline(this.store, chatId, {
+        mode: 'subtree',
+        nodeId: target.nodeId,
+        depth: 1,
+        limit: 8,
+      });
+      const viewVersion = overview.version;
+      const sources: OutlineHelperContext['sources'] = [];
+      let partial =
+        'nodes' in overview &&
+        (overview.nextOffset !== null ||
+          overview.coverage.excludedByDepth > 0 ||
+          overview.nodes.some((item) => (item as { previewTruncated?: boolean }).previewTruncated));
+      if (target.purpose === 'review') {
+        const page = readHelperOutline(this.store, chatId, {
+          mode: 'detail',
+          section: 'writings',
+          nodeId: target.nodeId,
+          limit: 3,
         });
+        if (!('items' in page) || !page.items.length)
+          throw new HttpError(409, '먼저 이 구성이나 하위 항목에 원문을 작성해 주세요.');
+        partial ||= page.nextOffset !== null;
+        let remaining = Math.min(1500, Math.floor(inputTokenLimit / 8));
+        for (const item of page.items) {
+          const ref = item as { sourceRevision: string; sourceHash: string | null };
+          if (!ref.sourceHash) {
+            partial = true;
+            continue;
+          }
+          const source = this.store.source(ref.sourceRevision);
+          const excerpt = textTokenExcerpt(
+            source.text,
+            Math.floor(remaining / (page.items.length - sources.length))
+          );
+          remaining -= excerpt.tokens;
+          sources.push({
+            id: source.id,
+            hash: source.hash,
+            start: 0,
+            end: excerpt.text.length,
+            total: source.text.length,
+            text: excerpt.text,
+          });
+          partial ||= excerpt.text.length < source.text.length;
+        }
       }
-    }
-    return { target, brief, sources, partial: sources.some((source) => source.end < source.total) };
+      return {
+        target,
+        viewVersion,
+        sources,
+        partial,
+        brief: JSON.parse(
+          JSON.stringify({
+            ...overview,
+            detailRead: outlineNextRead(chatId, {
+              mode: 'detail',
+              nodeId: target.nodeId,
+              expectedVersion: viewVersion,
+            }),
+            subtreeRead: outlineNextRead(chatId, {
+              mode: 'subtree',
+              nodeId: target.nodeId,
+              expectedVersion: viewVersion,
+            }),
+          })
+        ),
+      };
+    });
   }
   recordReview(taskId: string, context: OutlineHelperContext) {
     if (context.target.purpose !== 'review' || !context.target.nodeId) return;
@@ -457,7 +511,9 @@ export class OutlineStore {
       .run(
         taskId,
         context.target.nodeId,
-        this.planHash(context.target.nodeId),
+        context.viewVersion
+          ? `outline-view:${context.viewVersion}`
+          : this.planHash(context.target.nodeId),
         JSON.stringify(context.sources.map(({ text: _text, ...ref }) => ref)),
         Number(context.partial),
         now()
@@ -472,19 +528,22 @@ export class OutlineStore {
     if (!row) return null;
     return this.mapReview(row, nodes);
   }
-  private mapReview(row: Row, nodes?: OutlineNode[]): OutlineReview {
+  private mapReview(row: Row, nodes?: OutlineNode[], viewVersion?: string): OutlineReview {
     const id = String(row.node_id);
     const sources = JSON.parse(String(row.sources)) as OutlineReview['sources'];
-    const current = this.unitSources(id, nodes);
+    const current = row.plan_hash.startsWith('outline-view:') ? null : this.unitSources(id, nodes);
     const stale =
-      row.plan_hash !== this.planHash(id, nodes) ||
-      sources.length !== current.length ||
-      sources.some(
-        (source) =>
-          !current.some(
-            (item) => item.sourceRevision === source.id && item.sourceHash === source.hash
-          )
-      );
+      current === null
+        ? row.plan_hash !==
+          `outline-view:${viewVersion ?? outlineViewVersion(this.store, (nodes?.find((node) => node.id === id) ?? this.node(id)).chatId)}`
+        : row.plan_hash !== this.planHash(id, nodes) ||
+          sources.length !== current.length ||
+          sources.some(
+            (source) =>
+              !current.some(
+                (item) => item.sourceRevision === source.id && item.sourceHash === source.hash
+              )
+          );
     return {
       taskId: String(row.task_id),
       conversationId: String(row.conversation_id),
@@ -528,6 +587,43 @@ export class OutlineStore {
     value: unknown,
     authority: OutlineAuthority
   ): { detail: OutlineDetail; created: { ref?: string; id: string }[] } {
+    return this.store.transaction(() => {
+      const created = this.applyBatch(chatId, value, authority);
+      return { detail: this.detail(chatId), created };
+    });
+  }
+  /** Small, deterministic receipt for host tools; browser callers keep their detail response. */
+  applyReceipt(chatId: string, value: unknown, authority: OutlineAuthority) {
+    return this.store.transaction(() => {
+      const body = record(value);
+      const operations = parseOutlineOperations(body.operations);
+      const created = this.applyBatch(chatId, value, authority);
+      let createdIndex = 0;
+      const changes = operations.map((operation) =>
+        operation.op === 'create'
+          ? { op: operation.op, id: created[createdIndex++].id, revisionAfterOperation: 1 }
+          : {
+              op: operation.op,
+              id: operation.id,
+              ...(operation.op === 'remove'
+                ? {}
+                : { revisionAfterOperation: operation.expectedRevision + 1 }),
+            }
+      );
+      return {
+        operationId: String(body.idempotencyKey),
+        applied: true,
+        atomic: true,
+        created,
+        changes,
+      };
+    });
+  }
+  private applyBatch(
+    chatId: string,
+    value: unknown,
+    authority: OutlineAuthority
+  ): { ref?: string; id: string }[] {
     const body = record(value);
     fields(body, ['operations', 'idempotencyKey']);
     const key = text(body.idempotencyKey, 'outline key', 120);
@@ -542,7 +638,7 @@ export class OutlineStore {
       if (prior) {
         if (prior.authority !== authority || prior.operations !== canonical)
           throw new HttpError(409, '구성 요청 키가 다른 내용이나 권한에 사용됐어요.');
-        return { detail: this.detail(chatId), created: JSON.parse(prior.created) };
+        return JSON.parse(prior.created) as { ref?: string; id: string }[];
       }
       const pending = this.db
         .prepare(
@@ -669,7 +765,7 @@ export class OutlineStore {
         )
         .run(chatId, key, authority, canonical, JSON.stringify(created), time);
       this.store.event(chatId, 'outline.updated', chatId);
-      return { detail: this.detail(chatId), created };
+      return created;
     });
   }
 
