@@ -8,13 +8,13 @@ Use this path for source installations; see [SELF-HOST](SELF-HOST.md#저장과-�
 
 Read the target release notes and [data compatibility](DATA-MIGRATIONS.md#현재-버전) before updating. Finish active generation and edits. Download the app's consistent SQLite snapshot, record the running app/image version, and preserve external Codex login files separately. Stop the server before switching code or restoring data. Do not use `reset:dev` or `docker compose down -v` to update an existing workspace.
 
-**v0.4.0 opens only empty databases or schema 15.** The v0.3.1 release used schema 12; this release does not include a direct conversion from that format. Keep older databases with their matching application version. Do not change the schema number manually or substitute an empty database to get past a compatibility error. An installation already using schema 15 can follow the update procedure below.
+**v0.5.0 keeps the same schema 15 used by v0.4.0.** A v0.4.0 workspace already on schema 15 can update in place after taking the normal backup. The v0.3.1 release used schema 12 and there is still no direct conversion from that format. Keep older databases with their matching application version. Do not change the schema number manually or substitute an empty database to get past a compatibility error.
 
 From a clean source checkout, with the existing server stopped:
 
 ```sh
 git fetch origin --tags
-git switch --detach v0.4.0
+git switch --detach v0.5.0
 npm ci
 npm run dev
 ```
@@ -23,7 +23,7 @@ A source archive without Git can instead be extracted into a separate directory;
 
 To recover, stop the new server, retain its data for inspection, and restore the **previous application/image together with its pre-update DB snapshot**. Start from a separate restored DB path/volume, or move the stopped DB and its `-wal`/`-shm` sidecars aside before replacing it; never combine a snapshot with unrelated WAL files. DB downgrade is not supported. Work saved after the snapshot is not included in that recovery point. See [backup scope](DATA-MIGRATIONS.md#복구와-자료-교환).
 
-The Oracle runner's `--source-ref` currently accepts a branch, not a release tag. For this release, deploy the verified `main` commit matching `v0.4.0`; do not pass the tag as a branch. Tag creation and GitHub release publication never deploy the running service.
+The Oracle runner's `--source-ref` currently accepts a branch, not a release tag. For this release, deploy the verified `main` commit matching `v0.5.0`; do not pass the tag as a branch. Tag creation and GitHub release publication never deploy the running service.
 
 ## Maintenance mode
 
