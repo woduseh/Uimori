@@ -1,9 +1,15 @@
+import { readHelperOutline, smallerOutlineRead } from './outline-read.js';
 import { OUTLINE_PLANNING_GUIDANCE, OUTLINE_REVIEW_GUIDANCE } from '../core/outline-guidance.js';
 import type { OutlineTarget } from '../core/outline.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
 import { performance } from 'node:perf_hooks';
 import { availableParallelism } from 'node:os';
-import { HELPER_APP_TOOLS, HELPER_GATEWAY_TOOLS, describeHelperTools } from './helper-app-tools.js';
+import {
+  HELPER_APP_TOOLS,
+  HELPER_REVIEW_APP_NAMES,
+  helperGatewayTools,
+  describeHelperTools,
+} from './helper-app-tools.js';
 import { HELPER_DATA_TOOLS, invokeDataTool } from './helper-data-tools.js';
 import { invokeResourceTool } from './helper-resource-tools.js';
 import { readHelperEditor } from './helper-resource-editing.js';
@@ -223,6 +229,23 @@ const READ_METADATA_VALUES = new Set([
   'activeRevision',
   'workspaceRevision',
   'checkpointId',
+  'version',
+  'expectedVersion',
+  'mode',
+  'nodeId',
+  'parentId',
+  'depth',
+  'section',
+  'scopeTotal',
+  'returned',
+  'excludedByDepth',
+  'intentCodePoints',
+  'childCount',
+  'previewTruncated',
+  'sourceRevision',
+  'available',
+  'changedSinceTaskStart',
+  'unavailableReason',
 ]);
 const READ_METADATA_GROUPS = new Set([
   'ref',
@@ -251,6 +274,10 @@ const READ_METADATA_GROUPS = new Set([
   'workspace',
   'chat',
   'regions',
+  'node',
+  'coverage',
+  'scope',
+  'previewRange',
 ]);
 /** Project only returned provenance and ranges; never retain body prose or infer unread coverage. */
 function helperReadMetadata(value: unknown): Json | undefined {
@@ -267,7 +294,19 @@ function helperReadMetadata(value: unknown): Json | undefined {
       : undefined;
   const metadata: Record<string, Json> = {};
   for (const [key, item] of Object.entries(value)) {
-    if (READ_METADATA_VALUES.has(key) && (item === null || typeof item !== 'object')) {
+    if (
+      key === 'nextRead' &&
+      item &&
+      typeof item === 'object' &&
+      JSON.stringify(item).length <= 2000
+    ) {
+      metadata[key] = asJson(item);
+    } else if (
+      key === 'content' &&
+      ['metadata-and-previews', 'intent-range', 'source-references-only'].includes(String(item))
+    ) {
+      metadata[key] = String(item);
+    } else if (READ_METADATA_VALUES.has(key) && (item === null || typeof item !== 'object')) {
       if (item !== undefined) metadata[key] = item as Json;
     } else if (READ_METADATA_GROUPS.has(key)) {
       const projected = helperReadMetadata(item);
@@ -645,7 +684,9 @@ export class HelperRuntime {
           }
           if (
             task.snapshot.outline?.target.purpose === 'review' &&
-            !HELPER_DATA_TOOLS.some((tool) => tool.name === call.name)
+            !HELPER_DATA_TOOLS.some((tool) => tool.name === call.name) &&
+            call.name !== 'app.tools' &&
+            !HELPER_REVIEW_APP_NAMES.has(call.name)
           )
             throw new HttpError(403, 'OUTLINE_REVIEW_READ_ONLY');
           const arguments_ = record(call.arguments);
@@ -751,6 +792,15 @@ export class HelperRuntime {
               hooks('context', toolSignal),
               operationId
             );
+          if (
+            call.name === 'outline.read' &&
+            output &&
+            typeof output === 'object' &&
+            'error' in output
+          ) {
+            denied = true;
+            errorKind = 'recoverable';
+          }
         } catch (error) {
           toolSignal.throwIfAborted();
           denied = true;
@@ -825,26 +875,34 @@ export class HelperRuntime {
             ) {
               const args = record(call.arguments);
               const nextRead =
-                call.name === 'resource.read'
-                  ? { name: 'resource.read', arguments: { kind: args.kind, id: args.id } }
-                  : call.name === 'chat.lore'
-                    ? {
-                        name: call.name,
-                        arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 },
-                      }
-                    : call.name === 'data.search' || call.name === 'data.read'
+                call.name === 'outline.read'
+                  ? smallerOutlineRead(
+                      String(
+                        args.chatId ??
+                          (task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : '')
+                      ),
+                      args
+                    )
+                  : call.name === 'resource.read'
+                    ? { name: 'resource.read', arguments: { kind: args.kind, id: args.id } }
+                    : call.name === 'chat.lore'
                       ? {
                           name: call.name,
-                          arguments: { ...args, limit: call.name === 'data.search' ? 5 : 1000 },
+                          arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 },
                         }
-                      : {
-                          name: 'data.search',
-                          arguments: {
-                            scope: call.name === 'editor.read' ? 'editor' : 'library',
-                            patterns: [],
-                            limit: 5,
-                          },
-                        };
+                      : call.name === 'data.search' || call.name === 'data.read'
+                        ? {
+                            name: call.name,
+                            arguments: { ...args, limit: call.name === 'data.search' ? 5 : 1000 },
+                          }
+                        : {
+                            name: 'data.search',
+                            arguments: {
+                              scope: call.name === 'editor.read' ? 'editor' : 'library',
+                              patterns: [],
+                              limit: 5,
+                            },
+                          };
               event.result = {
                 error: 'HELPER_READ_TOO_LARGE',
                 returned: false,
@@ -1133,10 +1191,10 @@ export class HelperRuntime {
           (task.snapshot.persona
             ? `\nOptional explanation persona (user-facing explanation only; never in saved drafts, artifacts, lore, notes, summaries, prompts, translations, code or tool arguments, and never a permission): ${task.snapshot.persona}`
             : ''),
-        tools:
-          task.snapshot.outline?.target.purpose === 'review'
-            ? HELPER_DATA_TOOLS
-            : [...HELPER_DATA_TOOLS, ...HELPER_GATEWAY_TOOLS],
+        tools: [
+          ...HELPER_DATA_TOOLS,
+          ...helperGatewayTools(task.snapshot.outline?.target.purpose === 'review'),
+        ],
       },
       input: {
         task: task.request,
@@ -1367,7 +1425,8 @@ export class HelperRuntime {
     operationId: string
   ): Promise<unknown> {
     this.workspace.assertRunning(task.id);
-    if (name === 'app.tools') return describeHelperTools(args);
+    if (name === 'app.tools')
+      return describeHelperTools(args, task.snapshot.outline?.target.purpose === 'review');
     if (HELPER_SETTINGS_TOOLS.some((tool) => tool.name === name)) {
       const chatId =
         args.chatId === undefined
@@ -1483,10 +1542,11 @@ export class HelperRuntime {
     }
     if (name === 'outline.read' || name === 'outline.write') {
       if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
-      if (name === 'outline.read') return this.store.outline.detail(scope.chatId);
+      if (name === 'outline.read')
+        return readHelperOutline(this.store, scope.chatId, args, task.snapshot.writing);
       this.workspace.assertRunning(task.id);
       return this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, () =>
-        this.store.outline.apply(
+        this.store.outline.applyReceipt(
           scope.chatId,
           {
             operations: args.operations,

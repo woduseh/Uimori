@@ -1,3 +1,6 @@
+import { chatWithSource } from './fixtures/illustration.js';
+import { readHelperOutline } from '../server/outline-read.js';
+import { editSource } from '../server/source-editing.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -812,4 +815,50 @@ test('malformed and stale refs do not discard valid batch reads', async () => {
   expect(batch.items[4].error).toBe('DATA_RESOURCE_UNAVAILABLE');
   expect(batch.items[5].read).toEqual(batch.items[2].read);
   expect(batch.nextIndex).toBeNull();
+});
+
+test('outline source nextRead works in the real data worker across frozen and edited live text', async () => {
+  const f = fixture();
+  const { chat, source } = chatWithSource(f.store, '연결 원문');
+  const id = f.store.outline.applyReceipt(
+    chat.id,
+    {
+      idempotencyKey: 'linked',
+      operations: [
+        { op: 'create', level: 'episode', title: '원문 연결', intent: '실제 본문과 대조' },
+      ],
+    },
+    'user'
+  ).created[0].id;
+  f.store.db
+    .prepare('INSERT INTO outline_writings(id,node_id,source_id,created_at) VALUES(?,?,?,?)')
+    .run('ref', id, source.id, new Date().toISOString());
+  const writing = {
+    chatId: chat.id,
+    history: [{ revision: source.id, contentHash: source.hash, text: source.text }],
+  } as RunSnapshot;
+  f.setSnapshot({ writing });
+  const args = { mode: 'detail', nodeId: id, section: 'writings' };
+  const frozen = readHelperOutline(f.store, chat.id, args, writing) as any;
+  const frozenRef = frozen.items[0].nextRead.arguments.refs[0];
+  expect((await readOne(f, frozenRef)).text).toBe(source.text);
+  const changed = editSource(f.store, source.id, {
+    expectedRevision: source.editRevision,
+    text: '새로 편집된 원문😀',
+  });
+  const live = readHelperOutline(f.store, chat.id, args, writing) as any;
+  const liveRef = live.items[0].nextRead.arguments.refs[0];
+  expect(liveRef.scope).toBe('chats');
+  expect((await readOne(f, liveRef)).text).toBe(changed.text);
+  expect((await readOne(f, frozenRef)).text).toBe(source.text);
+  const queried = await f.invoke('db.query', {
+    sql: 'SELECT hash FROM agent_messages WHERE id=?',
+    params: [source.id],
+  });
+  expect(JSON.stringify(queried)).toContain(changed.hash);
+  editSource(f.store, source.id, {
+    expectedRevision: changed.editRevision,
+    text: '다시 편집된 원문',
+  });
+  await expect(readOne(f, liveRef)).rejects.toThrow('DATA_SOURCE_CHANGED');
 });

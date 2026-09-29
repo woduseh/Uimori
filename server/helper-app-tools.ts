@@ -158,13 +158,23 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'outline.read',
     description:
-      "Read this chat's hierarchical composition: theme, main story, arcs, episodes and beats (levels may be skipped), with each item's exact id, revision, pinned flag and derived writing progress. Read before proposing or writing composition.",
-    inputSchema: schema({}),
+      'Read live composition in bounded pages. Default overview returns metadata/intent previews, never full review coverage. subtree needs nodeId; depth=0 includes only that node, 1 direct children, omitted all descendants. detail needs nodeId and section=intent (default), related, or writings (subtree source references). Use offset/limit for lists, textOffset/textLimit for intent only. Later pages require expectedVersion; copy nextRead unchanged. OUTLINE_CHANGED requires restarting this scope. Intent ranges use UTF-16; overview intentCodePoints uses Unicode code points. Writings return exact data.read refs, not proof that plans were fulfilled.',
+    inputSchema: schema({
+      mode: { type: 'string', enum: ['overview', 'subtree', 'detail'] },
+      nodeId: itemId,
+      depth: { type: 'integer', minimum: 0, maximum: 4 },
+      offset: { type: 'integer', minimum: 0 },
+      limit: { type: 'integer', minimum: 1, maximum: 50 },
+      expectedVersion: { type: 'string', maxLength: 64 },
+      section: { type: 'string', enum: ['intent', 'related', 'writings'] },
+      textOffset: { type: 'integer', minimum: 0 },
+      textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
+    }),
   },
   {
     name: 'outline.write',
     description:
-      "Apply composition changes the user requested: create, update, move or remove items. One call may build a whole tree by giving each new item a ref and naming its parent with parentRef; create a parent before the items that name it. Related IDs connect other plans in the same chat; read new IDs before linking. Fixed is an authored keep-condition for ordinary elaboration, not an edit lock. This writes composition only, never story prose, and never marks anything as written. Update, move and remove need the item's exact current revision. User-requested edits may change pinned or written plans; active generation must finish before its plan is edited.",
+      "Apply composition changes the user requested: create, update, move or remove items. One call may build a whole tree by giving each new item a ref and naming its parent with parentRef; create a parent before the items that name it. Related IDs connect other plans in the same chat; read new IDs before linking. Fixed is an authored keep-condition for ordinary elaboration, not an edit lock. The entire batch is atomic. Returns a compact applied receipt, not the whole tree. RevisionAfterOperation records that operation, not a later live revision. Never retry an uncertain write with a new call ID. This writes composition only, never story prose, and never marks anything as written. Update, move and remove need the item's exact current revision. User-requested edits may change pinned or written plans; active generation must finish before its plan is edited.",
     inputSchema: schema(
       {
         operations: {
@@ -283,16 +293,39 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
     inputSchema: schema({ name: str, arguments: { type: 'object' } }, ['name', 'arguments']),
   },
 ];
+export const HELPER_REVIEW_APP_NAMES = new Set([
+  'outline.read',
+  ...MAIN_READ_TOOLS.map((tool) => tool.name),
+]);
+export function helperGatewayTools(review: boolean): ProviderTool[] {
+  return review
+    ? HELPER_GATEWAY_TOOLS.map((tool) => ({
+        ...tool,
+        description:
+          tool.name === 'app.tools'
+            ? 'Discover the allowed read-only outline and story/reference operations. No names returns a paged catalog; names returns exact schemas. Call through app.call.'
+            : 'Execute an allowed read-only outline or story/reference operation. Writes are unavailable during review. Preserve returned versions and coverage.',
+      }))
+    : HELPER_GATEWAY_TOOLS;
+}
+
 type ToolCatalog = {
   tools: Pick<ProviderTool, 'name' | 'description'>[];
   total: number;
   nextOffset: number | null;
 };
-export function describeHelperTools(args: { names: string[] }): { tools: ProviderTool[] };
 export function describeHelperTools(
-  args: Record<string, unknown>
+  args: { names: string[] },
+  review?: boolean
+): { tools: ProviderTool[] };
+export function describeHelperTools(
+  args: Record<string, unknown>,
+  review?: boolean
 ): { tools: ProviderTool[] } | ToolCatalog;
-export function describeHelperTools(args: Record<string, unknown>) {
+export function describeHelperTools(args: Record<string, unknown>, review = false) {
+  const allowed = review
+    ? HELPER_APP_TOOLS.filter((tool) => HELPER_REVIEW_APP_NAMES.has(tool.name))
+    : HELPER_APP_TOOLS;
   if (Object.keys(args).some((key) => !['names', 'query', 'offset'].includes(key)))
     throw new HttpError(400, 'INVALID_ARGUMENTS');
   if (args.names !== undefined) {
@@ -305,7 +338,7 @@ export function describeHelperTools(args: Record<string, unknown>) {
       throw new HttpError(400, 'INVALID_ARGUMENTS');
     return {
       tools: args.names.map((name) => {
-        const tool = HELPER_APP_TOOLS.find((t) => t.name === name);
+        const tool = allowed.find((t) => t.name === name);
         if (!tool) throw new HttpError(400, `UNKNOWN_APP_TOOL:${String(name)}`);
         return tool;
       }),
@@ -321,7 +354,7 @@ export function describeHelperTools(args: Record<string, unknown>) {
   )
     throw new HttpError(400, 'INVALID_ARGUMENTS');
   const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
-  const found = HELPER_APP_TOOLS.filter((t) =>
+  const found = allowed.filter((t) =>
     terms.every((term) => `${t.name} ${t.description}`.toLowerCase().includes(term))
   );
   return {

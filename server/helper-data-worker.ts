@@ -104,9 +104,10 @@ function installViews(db: DatabaseSync) {
         UNION ALL SELECT a.chat_id,a.head_revision,s.parent_revision,a.depth+1
         FROM ancestry a JOIN sources s ON s.id=a.id WHERE s.parent_revision IS NOT NULL
       )
-      SELECT s.id,a.chat_id,a.head_revision,s.hash,s.created_at,
+      SELECT s.id,a.chat_id,a.head_revision,
+        COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AS hash,s.created_at,
         row_number() OVER (PARTITION BY a.chat_id ORDER BY a.depth DESC) scene_number,
-        r.request,s.text FROM ancestry a JOIN sources s ON s.id=a.id JOIN runs r ON r.id=s.run_id;
+        r.request,COALESCE((SELECT text FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.text) AS text FROM ancestry a JOIN sources s ON s.id=a.id JOIN runs r ON r.id=s.run_id;
     CREATE TEMP VIEW agent_helper_inputs AS
       SELECT seq,task_id, json_extract(data,'$.attemptId') attempt_id,
         json_extract(data,'$.helperCall') helper_call, json_extract(data,'$.segment') segment,
@@ -174,6 +175,7 @@ function query(db: DatabaseSync, args: Record<string, unknown>) {
     chats: ['id', 'title', 'created_at', 'head_revision'],
     profiles: ['chat_id', 'body'],
     sources: ['id', 'parent_revision', 'chat_id', 'hash', 'created_at', 'text', 'run_id'],
+    source_edits: ['source_id', 'revision', 'text', 'hash'],
     runs: ['id', 'request'],
     attempts: [
       'id',
