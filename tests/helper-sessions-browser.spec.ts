@@ -9,6 +9,7 @@ import { expect, test } from '@playwright/test';
 import type { Chat } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { openHelper } from './ui-navigation.js';
+import { visualReview } from './fixtures/visual-review.js';
 
 test('HSESSION01 sessions retain their own drafts after switching and reload, rename and delete only the selected session', async ({
   page,
@@ -54,17 +55,20 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
       .toBe(true);
-    await page.screenshot({ path: info.outputPath(`helper-sessions-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`helper-sessions-${width}.png`) });
   }
-  for (const viewport of [
-    { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
-    { width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
-  ]) {
-    await page.setViewportSize(viewport);
-    await page.screenshot({
-      path: info.outputPath(`helper-session-${viewport.width}x${viewport.height}.png`),
-    });
-  }
+  if (visualReview)
+    for (const viewport of [
+      { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
+      { width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.screenshot({
+        path: info.outputPath(`helper-session-${viewport.width}x${viewport.height}.png`),
+      });
+    }
+  if (!visualReview) await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
   await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
   await panel.getByRole('button', { name: '세션 삭제', exact: true }).click();
   const deletion = page.getByRole('dialog', { name: '도우미 세션 삭제', exact: true });

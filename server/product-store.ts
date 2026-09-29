@@ -24,6 +24,7 @@ import { estimateCost } from '../core/pricing-estimate.js';
 import { translationPolicy } from '../core/translation-settings.js';
 import {
   defaultPromptWorkspace,
+  currentModelRoutes,
   promptWorkspace,
   chatPromptWorkspace,
   freezeCurrentPrompts,
@@ -1058,7 +1059,10 @@ export class ProductStore {
 }
 
 function currentRef(product: ProductStore, kind: string, reference: ContentRef): ContentRef {
-  const current = product.get<ContentRef>(kind, reference.id);
+  const current = product.db
+    .prepare('SELECT id,revision FROM versions WHERE kind=? AND id=?')
+    .get(kind, reference.id) as ContentRef | undefined;
+  if (!current) throw new HttpError(404, `${kind} revision not found`);
   return { id: current.id, revision: current.revision };
 }
 /** Pure current-settings projection. Frozen Run/source profiles never pass through this path. */
@@ -1068,7 +1072,7 @@ function currentProfile(product: ProductStore, saved: ChatProfile): ChatProfile 
     ...current,
     imageTranslation: current.imageTranslation ?? true,
     routes: {
-      ...structuredClone(promptWorkspace(product.store).modelRoutes),
+      ...currentModelRoutes(product.store),
       ...(saved.pinned?.mainModel ? { main: structuredClone(saved.pinned.mainModel) } : {}),
     },
   };

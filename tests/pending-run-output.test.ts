@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { basename, isAbsolute, join, relative, resolve } from 'node:path';
+import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import type { RunSnapshot, Usage } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
@@ -9,8 +7,9 @@ import { Controls } from '../server/controls.js';
 import { HttpError } from '../server/request-validation.js';
 import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { createTestDirectory } from './fixtures/test-directory.js';
 
-const owned: { directory: string; store: Store }[] = [];
+const owned: (ReturnType<typeof createTestDirectory> & { store: Store })[] = [];
 const noUsage: Usage = {
   modelCalls: 1,
   inputTokens: null,
@@ -21,22 +20,14 @@ const noUsage: Usage = {
 afterEach(() => {
   for (const item of owned.splice(0).reverse()) {
     item.store.close();
-    const target = resolve(item.directory);
-    const within = relative(resolve(tmpdir()), target);
-    if (
-      isAbsolute(within) ||
-      within.startsWith('..') ||
-      !basename(target).startsWith('uimori-pending-output-')
-    )
-      throw new Error('Refusing cleanup outside owned test directory');
-    rmSync(target, { recursive: true, force: true });
+    item.remove();
   }
 });
 
 function fixture() {
-  const directory = mkdtempSync(join(tmpdir(), 'uimori-pending-output-'));
-  const store = new Store(join(directory, 'story.sqlite'));
-  owned.push({ directory, store });
+  const temporary = createTestDirectory('uimori-pending-output-');
+  const store = new Store(join(temporary.directory, 'story.sqlite'));
+  owned.push({ ...temporary, store });
   const chat = createFixtureChat(store, 'Pending main output');
   return { store, chat };
 }

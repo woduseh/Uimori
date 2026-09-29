@@ -189,6 +189,48 @@ test('export rejects missing or unsafe embedded assets without dropping them', (
   }
 });
 
+test('export rejects changed stored image bytes before returning an archive', () => {
+  const { store } = fixture(),
+    saved = imported(store);
+  const hash = saved.package.images![0].blobHash;
+  store.db
+    .prepare('UPDATE image_blobs SET bytes=? WHERE hash=?')
+    .run(Buffer.concat([png, Buffer.from('unexpected change')]), hash);
+  expect(() => exportRisuContent(store.product, saved)).toThrow('RISU_EXPORT_ASSET_UNAVAILABLE');
+});
+
+test('ZIP stores encoded image bytes while compressing authored JSON', async () => {
+  const small = await sharp({ create: { width: 1, height: 1, channels: 3, background: '#123456' } })
+    .webp()
+    .toBuffer();
+  // A valid, compressible RIFF metadata chunk exposes accidental image recompression.
+  const chunk = Buffer.alloc(8),
+    padding = Buffer.alloc(8192, 1);
+  chunk.write('JUNK');
+  chunk.writeUInt32LE(padding.length, 4);
+  const image = Buffer.concat([small, chunk, padding]);
+  image.writeUInt32LE(image.length - 8, 4);
+  const files = new Map([
+    ['card.json', exportJson({ description: 'Authored text. '.repeat(500) })],
+    ['assets/portrait.WEBP', image],
+  ]);
+  const archive = writeRisuZip(files);
+  const methods = new Map<string, number>();
+  let offset = 0;
+  for (const name of files.keys()) {
+    expect(archive.readUInt32LE(offset)).toBe(0x04034b50);
+    const nameLength = archive.readUInt16LE(offset + 26);
+    expect(archive.toString('utf8', offset + 30, offset + 30 + nameLength)).toBe(name);
+    methods.set(name, archive.readUInt16LE(offset + 8));
+    offset +=
+      30 + nameLength + archive.readUInt16LE(offset + 28) + archive.readUInt32LE(offset + 18);
+  }
+  expect(methods.get('card.json')).toBe(8);
+  expect(methods.get('assets/portrait.WEBP')).toBe(0);
+  const restored = cardZip(archive);
+  for (const [name, bytes] of files) expect(restored.get(name)!()).toEqual(bytes);
+});
+
 test('large imported images export and reimport within the same ZIP and module budgets', async () => {
   const { store } = fixture();
   const small = await sharp({ create: { width: 1, height: 1, channels: 3, background: '#123456' } })
@@ -261,9 +303,9 @@ test('large imported images export and reimport within the same ZIP and module b
   expect(analyzeNativeRisuImport(moduleInput).preview.summary.images).toBe(2);
 });
 
-test('ZIP export keeps enough compression when expanded entries exceed the upload limit', () => {
+test('ZIP export keeps enough compression for image aliases above the upload limit', () => {
   const payload = Buffer.alloc(50 * 1024 * 1024, 1);
-  const files = new Map(Array.from({ length: 6 }, (_, index) => [`assets/${index}.bin`, payload]));
+  const files = new Map(Array.from({ length: 6 }, (_, index) => [`assets/${index}.webp`, payload]));
   const exported = writeRisuZip(files);
   expect(exported.length).toBeLessThanOrEqual(256 * 1024 * 1024);
   const read = cardZip(exported);

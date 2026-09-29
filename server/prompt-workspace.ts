@@ -145,6 +145,18 @@ export function promptWorkspace(store: Store): PromptWorkspace {
   };
 }
 
+/** Reader/profile metadata does not need authored prompt programs. */
+export function currentModelRoutes(store: Store): ModelWorkspace['routes'] {
+  const row = store.db
+    .prepare(
+      "SELECT json_type(body,'$.modelRoutes') AS type,json_extract(body,'$.modelRoutes') AS routes FROM prompt_workspace WHERE id=1"
+    )
+    .get() as { type: string | null; routes: string | null };
+  return row.type === null
+    ? emptyModelRoutes()
+    : validateModelRoutes(JSON.parse(row.routes ?? 'null'));
+}
+
 type ChatPromptWorkspace = PromptWorkspace & { pinnedMainPreset?: ContentRef };
 
 /** Resolve live chat selections without changing the global working copy or historical runs. */

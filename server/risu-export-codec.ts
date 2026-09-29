@@ -37,12 +37,21 @@ export function assertExportPath(path: string): void {
 /** Bounded ZIP with UTF-8 member names, CRCs and no filesystem extraction. */
 export function writeRisuZip(files: Map<string, Buffer>): Buffer {
   if (files.size > RISU_IMPORT_MAX_ZIP_MEMBERS) throw new HttpError(413, 'RISU_EXPORT_TOO_LARGE');
+  // Already-compressed images need no second compression pass. Keep the original
+  // compression path when storing every member could exceed the upload budget.
+  const storedSize = [...files].reduce(
+    (size, [name, bytes]) => size + 76 + Buffer.byteLength(name) * 2 + bytes.length,
+    22
+  );
   let expanded = 0;
   const entries = [...files].map(([name, bytes]) => {
     assertExportPath(name);
     exportLimit(bytes.length, RISU_IMPORT_MAX_ENTRY_BYTES);
     exportLimit((expanded += bytes.length), risuImportExpandedLimit(RISU_IMPORT_MAX_UPLOAD_BYTES));
-    const compressed = deflateRawSync(bytes);
+    const compressed =
+      storedSize <= RISU_IMPORT_MAX_UPLOAD_BYTES && /\.(?:png|jpe?g|webp|avif|gif)$/iu.test(name)
+        ? bytes
+        : deflateRawSync(bytes);
     return {
       path: Buffer.from(name),
       bytes,

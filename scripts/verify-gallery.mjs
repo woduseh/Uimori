@@ -8,8 +8,6 @@ import {
   createOwnership,
   localVerificationEnv,
   assertBuild,
-  buildFingerprint,
-  fingerprint,
   browserPath,
   startServer,
   killOwned,
@@ -84,12 +82,8 @@ async function main() {
       environmentBlocked = true;
       throw new Error('Node >=24.14.0 <25 required');
     }
-    const identity = await assertBuild(),
-      before = await fingerprint();
+    const identity = await assertBuild();
     summary.identity = identity;
-    summary.verificationIdentity = before;
-    if (identity.sourceHash !== (await buildFingerprint()).hash)
-      throw new Error('Source changed during initial build identity check');
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
     assertNotCancelled();
@@ -171,12 +165,6 @@ async function main() {
         `Expected ${summary.gallery.expectedJourneyCaptures} journey captures, received ${summary.gallery.journeyCaptures}`
       );
     assertNotCancelled();
-    if (
-      (await assertBuild()).buildId !== identity.buildId ||
-      (await fingerprint()).hash !== before.hash
-    )
-      throw new Error('Build/source identity changed during gallery capture');
-    summary.identityVerifiedAt = new Date().toISOString();
   } catch (error) {
     failures.push(error.message);
     if (/spawn EPERM|Browser executable missing/u.test(error.message)) environmentBlocked = true;

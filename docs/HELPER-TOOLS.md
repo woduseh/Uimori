@@ -91,6 +91,8 @@ When an HTTP provider returns adjacent `data.search`, `data.read` or `db.query` 
 
 ## Discovering and executing app operations
 
+An explicit `chatId` selects the target chat for that operation without changing the helper conversation's default scope. Metadata reads, renames, lore operations and outline navigation do not prepare an unused writing snapshot. Only operations that consume reserved story/reference context, ancestry or a writing head prepare it for an explicit target: story/reference reads, forks, notes, context edits/compaction, independent scenes, and outline detail with `section=writings`. Calls without an explicit target retain the task's original reservation. Read/write classification, outline-review availability and writing-context needs share one helper tool policy; `chat.lore` and `library.organize` remain reads only for `action=read`.
+
 For operations unfamiliar to the helper, request their exact schemas first:
 
 ```json
@@ -146,6 +148,8 @@ Only `helper_operations` establishes a commit. Existing `tool.finished` call met
 ## Accounting and summary preparation
 
 Public task lists and task detail views read a compact projection of task status, usage, the reserved model title and committed-effect counts. They do not restore the full execution snapshot in JavaScript. The browser advances its event cursor without reloading the conversation for diagnostic-only tool/input/context/progress events; task usage/status changes still refresh the view. Execution and retry still read the original snapshot; failed-task inputs and committed-effect receipts keep their existing retention and retry rules.
+
+Closed helper panels and hidden browser tabs pause display timers and response-stream reads while retaining server work, drafts and the received stream cursor. Reopening or focusing the page refreshes immediately. Active work keeps short polling intervals; idle helper lists and sidebar summaries poll every ten seconds. The selected conversation reads events when the list's `latestEventSeq` advances, preserving theme/settings/artifact notifications, and accepting a local task triggers an immediate refresh.
 
 The helper UI labels input tokens as cumulative and counts execution requests. A native Codex request can contain several internal model calls; their count remains unknown, and the configured call limits count host requests rather than those internal calls. The selected model timeout, cancellation and existing task deadline still apply. Provider usage is accumulated across attempts; it is not the last request size. The new `input.measured` event is tied to the actual attempt ID and records local input estimates, component estimates, local preparation time and compaction time without preserving another full request copy. The component estimates are independently serialized diagnostics and do not necessarily sum to the encoded request estimate. `preparation_ms` excludes measured compaction work; `compaction_ms` includes summary work and provider waiting. Neither is a first-token or total end-to-end latency measurement.
 

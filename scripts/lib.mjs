@@ -75,16 +75,11 @@ export async function removeOwned(parent, target) {
   }
   await rm(target, { recursive: true, force: true });
 }
-export async function fingerprint(
-  sourceRoot = root,
-  { buildOnly = false, verificationOnly = false } = {}
-) {
+export async function fingerprint(sourceRoot = root, { buildOnly = false } = {}) {
   const root = sourceRoot;
-  const dirs = verificationOnly
-    ? ['tests', 'scripts', 'fixtures']
-    : buildOnly
-      ? ['core', 'server', 'web', 'src', 'third_party']
-      : ['core', 'server', 'web', 'src', 'third_party', 'tests', 'scripts', 'fixtures'];
+  const dirs = buildOnly
+    ? ['core', 'server', 'web', 'src', 'third_party']
+    : ['core', 'server', 'web', 'src', 'third_party', 'tests', 'scripts', 'fixtures'];
   const config = (await readdir(root)).filter((name) =>
     (buildOnly
       ? /^(package(?:-lock)?\.json|tsconfig(?:\.server)?\.json|vite\.config\.[cm]?[jt]s|\.gitattributes)$/

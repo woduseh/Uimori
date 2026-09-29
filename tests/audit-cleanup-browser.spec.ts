@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
+import { visualReview } from './fixtures/visual-review.js';
 
 for (const width of [412, 1440]) {
   test(`CLEANUP presentation ignores title events; source edits and one-off options work ${width}`, async ({
@@ -110,9 +111,10 @@ for (const width of [412, 1440]) {
       page.getByRole('region', { name: '다음 생성 옵션 예약', exact: true })
     ).toHaveCount(0);
     expect(errors).toEqual([]);
-    await page.screenshot({
-      path: info.outputPath(`cleanup-options-${width}.png`),
-      fullPage: true,
-    });
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`cleanup-options-${width}.png`),
+        fullPage: true,
+      });
   });
 }

@@ -2,9 +2,7 @@ import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { afterEach, expect, test } from 'vitest';
 import Fastify from 'fastify';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { basename, isAbsolute, join, relative, resolve } from 'node:path';
+import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { ChatOverridesStore, chatOverrideRoutes } from '../server/chat-overrides.js';
@@ -19,26 +17,19 @@ import type { Content } from '../core/product.js';
 import type { RisuContent, ContentAttachment } from '../core/risu-content.js';
 import { compiledPackages } from '../core/package-context.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { createTestDirectory } from './fixtures/test-directory.js';
 
-const owned: { store: Store; dir: string }[] = [];
+const owned: (ReturnType<typeof createTestDirectory> & { store: Store })[] = [];
 afterEach(() => {
-  for (const { store, dir } of owned.splice(0)) {
-    store.close();
-    const target = resolve(dir),
-      within = relative(resolve(tmpdir()), target);
-    if (
-      isAbsolute(within) ||
-      within.startsWith('..') ||
-      !basename(target).startsWith('uimori-chat-overrides-')
-    )
-      throw new Error('Unsafe cleanup');
-    rmSync(target, { recursive: true, force: true });
+  for (const item of owned.splice(0)) {
+    item.store.close();
+    item.remove();
   }
 });
 function database() {
-  const dir = mkdtempSync(join(tmpdir(), 'uimori-chat-overrides-'));
-  const store = new Store(join(dir, 'test.sqlite'));
-  owned.push({ store, dir });
+  const temporary = createTestDirectory('uimori-chat-overrides-');
+  const store = new Store(join(temporary.directory, 'test.sqlite'));
+  owned.push({ ...temporary, store });
   return store;
 }
 const requestId = 'explicit-chat-lore-edit';

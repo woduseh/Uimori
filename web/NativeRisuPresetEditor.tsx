@@ -57,7 +57,7 @@ export function NativeRisuPresetEditor({
   collaboration?: ReactNode;
   metadata?: ReactNode;
 }) {
-  const source = nativeRisuPresetSource(program.nativeRisuPreset.preset).preset;
+  const source = program.nativeRisuPreset.preset;
   const id = useId();
   const [section, setSection] = useState<Section>('blocks');
   const [selected, setSelected] = useState(0);
@@ -119,8 +119,14 @@ export function NativeRisuPresetEditor({
   }
   function update(patch: Record<string, unknown>, part?: string) {
     try {
-      const native = nativeRisuPresetSource({ ...source, ...patch });
-      onChange(validateRisuPrompt({ ...program, ...createNativeRisuPresetProgram(native) }));
+      // Controls are read during render, so a malformed declaration stays in its field buffer.
+      if (Object.hasOwn(patch, 'customPromptTemplateToggle'))
+        nativeRisuToggleItems(text(patch.customPromptTemplateToggle));
+      // The form owns these fields. Whole-program validation stays at JSON apply/save.
+      onChange({
+        ...program,
+        nativeRisuPreset: { ...program.nativeRisuPreset, preset: { ...source, ...patch } },
+      });
       setError('');
       if (part) mark(part, false);
     } catch (caught) {

@@ -1,6 +1,7 @@
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -24,6 +25,7 @@ import { createAgentCollaboration, createAgentDefinition } from '../core/agent-c
 import { promptWorkspace } from '../server/prompt-workspace.js';
 import { resolvePackageModules } from '../server/package-features.js';
 import { putImageBlob } from '../server/package-images.js';
+import { readImage } from '../server/image-storage.js';
 import { nativeContent } from './fixtures/native-content.js';
 
 const owned: { directory: string; store: Store; app: FastifyInstance }[] = [];
@@ -248,6 +250,14 @@ test('NATIVE02 prepare writes nothing; apply creates one identity graph without 
     { id: importedPersona.id, revision: 1, role: 'persona' },
   ]);
   expect(graph.attachments.map((ref) => ref.role)).toEqual(['bot', 'module', 'module', 'persona']);
+  const imageRef = graph.packages.flatMap((pkg) => pkg.images ?? [])[0];
+  const image = readImage(target.store.db, imageRef.blobHash);
+  expect(imageRef).toMatchObject({ id: 'synthetic', mime: 'image/webp' });
+  expect(image.hash).not.toBe(source.file.images[0].hash);
+  expect(image.hash).toBe(createHash('sha256').update(image.bytes).digest('hex'));
+  expect(image.mime).toBe('image/webp');
+  expect(receipt.summary).toMatchObject({ images: 1, imageBytes: image.bytes.length });
+  expect(receipt.digest).not.toBe(prepared.json().digest);
   const bot = target.store.product.get<Content>('content', importedBot.id);
   expect(bot.package!.modules![1].id).toBe(graph.attachments[2].id);
   const importedPrompt = receipt.items.find((item: any) => item.kind === 'prompt-preset');
@@ -272,6 +282,15 @@ test('NATIVE02 prepare writes nothing; apply creates one identity graph without 
   expect(original).not.toContain('SYNTHETIC_PROMPT_BODY');
   expect(original).not.toContain(source.file.images[0].base64);
   expect(target.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  const applied = snapshot(target.store);
+  const retry = await target.app.inject({
+    method: 'POST',
+    url: '/api/native-transfers/apply',
+    payload: request(source.file),
+  });
+  expect(retry.statusCode, retry.body).toBe(200);
+  expect(retry.json()).toEqual({ ...receipt, created: false });
+  expect(snapshot(target.store)).toEqual(applied);
   expect(globalThis.fetch).not.toHaveBeenCalled();
 });
 
@@ -378,9 +397,9 @@ test.each([
   'unknown-field',
   'image-hash',
   'unused-image',
-] as const)('NATIVE06 invalid graphs and metadata reject before any write: %s', (variant) => {
+] as const)('NATIVE06 invalid graphs and metadata reject before any write: %s', async (variant) => {
   const source = sourceFixture(),
-    { store } = database(),
+    { store, app } = database(),
     file = structuredClone(source.file),
     before = snapshot(store);
   const root = file.contents.find((item) => item.source.kind === 'bot')!;
@@ -407,6 +426,18 @@ test.each([
     file.images[0].base64 = Buffer.from('not an image').toString('base64');
   else file.images.push(structuredClone(file.images[0]));
   expect(() => prepareNativeTransfer({ file })).toThrow();
+  const body = {
+    file,
+    digest: createHash('sha256').update(JSON.stringify(file)).digest('hex'),
+    idempotencyKey: 'invalid-file',
+  };
+  expect(() => applyNativeTransfer(store, body)).toThrow();
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/native-transfers/apply',
+    payload: body,
+  });
+  expect(response.statusCode, response.body).toBe(400);
   expect(snapshot(store)).toEqual(before);
 });
 

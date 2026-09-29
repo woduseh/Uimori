@@ -19,7 +19,11 @@ const diagnosticEvent = (kind: string) =>
   kind.startsWith('context.');
 
 /** Retains the current and recent conversations across panel hides; idle reads use event cursors. */
-export function useHelperConversation(open: boolean, conversationId: string | null) {
+export function useHelperConversation(
+  open: boolean,
+  conversationId: string | null,
+  latestEventSeq?: number
+) {
   const scopeKey = conversationId ?? '';
   const selectedScope = useRef(scopeKey);
   selectedScope.current = scopeKey;
@@ -34,6 +38,11 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
   const alive = useRef(true);
   const earlierLock = useRef(false);
   const current = views[scopeKey];
+  const latestSequence = useRef(latestEventSeq);
+  latestSequence.current = latestEventSeq;
+  const wake = useRef<() => void>(() => {});
+  const running =
+    current?.tasks.some((task) => ['queued', 'running'].includes(task.status)) ?? false;
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -108,7 +117,9 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
       polling = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let initialized = false,
-      needsRefresh = true;
+      needsRefresh = true,
+      forceEvents = false,
+      requested = false;
     const report = (cause: unknown) => {
       if (!disposed && selectedScope.current === scopeKey)
         setError(cause instanceof Error ? cause.message : '도우미 대화를 불러오지 못했어요.');
@@ -142,43 +153,65 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
           conversationId,
           Math.max(cursors.current.get(conversationId) ?? 0, cursor)
         );
-        if (page.length < 500) break;
+        if (page.length < 500 || document.hidden) break;
       }
       if (notify) window.dispatchEvent(new Event('uimori-helper-updated'));
       return changed;
     };
     const poll = async () => {
-      if (disposed || polling) return;
+      if (disposed || document.hidden) return;
+      if (polling) {
+        requested = true;
+        return;
+      }
+      clearTimeout(timer);
       polling = true;
+      const checkEvents = forceEvents;
+      forceEvents = false;
+      const active = () =>
+        cache.current
+          .get(scopeKey)
+          ?.tasks.some((task) => ['queued', 'running'].includes(task.status));
       try {
-        if (!document.hidden) {
-          if (!initialized) {
+        if (!initialized) {
+          // A retained cursor owns side effects as well as text: catch up after a hidden panel.
+          if (cursors.current.has(conversationId)) await events();
+          if (disposed || document.hidden) return;
+          await refresh({ id: conversationId });
+          initialized = true;
+          needsRefresh = false;
+        } else if (
+          needsRefresh ||
+          checkEvents ||
+          active() ||
+          latestSequence.current === undefined ||
+          latestSequence.current > (cursors.current.get(conversationId) ?? 0)
+        ) {
+          needsRefresh = (await events()) || needsRefresh;
+          if (needsRefresh && !disposed && !document.hidden) {
             await refresh({ id: conversationId });
-            initialized = true;
             needsRefresh = false;
-          } else {
-            needsRefresh = (await events()) || needsRefresh;
-            if (needsRefresh) {
-              await refresh({ id: conversationId });
-              needsRefresh = false;
-            }
           }
-          if (!disposed && selectedScope.current === scopeKey) setError('');
         }
+        if (!disposed && selectedScope.current === scopeKey) setError('');
       } catch (cause) {
         report(cause);
       } finally {
         polling = false;
         if (!disposed) setLoading(false);
-        if (!disposed) timer = setTimeout(() => void poll(), document.hidden ? 10000 : 1200);
+        if (!disposed && !document.hidden)
+          timer = setTimeout(() => void poll(), requested ? 0 : active() ? 1200 : 10000);
+        requested = false;
       }
     };
     const visible = () => {
+      clearTimeout(timer);
       if (!document.hidden) {
-        clearTimeout(timer);
+        forceEvents = true;
         void poll();
       }
     };
+    wake.current = () => void poll();
     const cached = cache.current.get(scopeKey);
     if (cached) {
       cache.current.delete(scopeKey);
@@ -187,13 +220,19 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
     setLoading(!cached);
     setError('');
     void poll();
-    addEventListener('visibilitychange', visible);
+    document.addEventListener('visibilitychange', visible);
+    window.addEventListener('focus', visible);
     return () => {
       disposed = true;
       clearTimeout(timer);
-      removeEventListener('visibilitychange', visible);
+      document.removeEventListener('visibilitychange', visible);
+      window.removeEventListener('focus', visible);
     };
   }, [open, scopeKey, conversationId, refresh]);
+  useEffect(() => {
+    if (open && (running || (latestEventSeq ?? 0) > (cursors.current.get(scopeKey) ?? 0)))
+      wake.current();
+  }, [open, scopeKey, running, latestEventSeq]);
   const earlier = async (kind: 'messages' | 'tasks') => {
     const view = cache.current.get(scopeKey);
     if (!view || earlierLock.current) return;

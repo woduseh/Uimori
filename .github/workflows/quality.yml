@@ -56,6 +56,8 @@ jobs:
         run: node -e "require('node:child_process').execFileSync('git', ['diff','--check',process.env.UIMORI_DIFF_BASE,'HEAD'], {stdio:'inherit'})"
         env:
           UIMORI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      - if: needs.changes.outputs.docs_only == 'true'
+        run: node scripts/check-documentation.mjs
 
   tests:
     name: tests (${{ matrix.shard }}/4)

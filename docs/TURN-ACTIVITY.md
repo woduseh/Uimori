@@ -7,7 +7,7 @@
 - 원문·번역 보기 전환은 헤더 줄의 오른쪽 끝에 놓이지만 접기 요소의 summary 밖에 있어요. 전환을 눌러도 패널이 열리거나 닫히지 않고, 상태 문구에 전환 버튼 글자가 섞이지 않아요.
 - 펼침 선택은 채팅·Run ID별 sessionStorage에 보존해요. 새로고침과 생성 중 응답의 본문 전환에도 유지해요. 저장소 접근이 제한되면 현재 화면의 선택만 유지해요.
 - 접힌 줄은 본문과 진행·실패·취소된 후속 작업을 구분해요. 현재 원문 hash에 연결된 최신 번역·이미지·장면 상태 슬롯을 사용해요. 상태 작업은 현재 채팅에 연결된 최신 항목을 요약하며 이전 기록은 별도로 접어 보관해요.
-- 펼치기 자체는 모델 호출이나 재시도를 하지 않아요. 원문 취소·요청 편집·현재 설정 재시도·보조 작업 관리는 기존 명시적 제어를 사용해요. 저장하지 않은 충실성 메모는 같은 패널을 접고 다시 펼쳐도 유지해요.
+- 펼치기 자체는 모델 호출이나 재시도를 하지 않아요. 원문 취소·요청 편집·현재 설정 재시도·보조 작업 관리는 기존 명시적 제어를 사용해요.
 - 실행 snapshot과 실제 입력은 별도 진단을 펼칠 때 읽어요. 현재 수정본의 작업과 생성 당시 원문의 실행 기록을 구분해요. 동일한 컨텍스트 오류를 두 번 표시하지 않아요.
 - 사이드바의 작업 현황과 전역 진행 알림은 유지해요. `reader.activity`의 기존 활성/최근 30개 계약은 바꾸지 않고, 현재 페이지에 속한 과거 작업은 별도 `reader.responseActivity`에 메타데이터만 제공해요. 이전 응답을 조회해도 오래된 실패 알림을 다시 만들지 않아요.
 
@@ -15,6 +15,6 @@
 
 ## 검증
 
-[검증 선택](DEVELOPMENT.md#verification)에 따라 `npm run verify:turn-activity`로 응답별 펼침·진단 조회·초안 보존·생성 완료 전환을 검사해요. 화면 크기는 공통 [브라우저 설정](../fixtures/browser-viewports.json)을 사용하고 결과는 `output/playwright/turn-activity-ui-*/summary.json`에 남아요.
+[검증 선택](DEVELOPMENT.md#verification)에 따라 `npm run verify:turn-activity`로 응답별 펼침과 재접속 시 선택 유지·진단 조회·생성 완료 전환을 검사해요. 화면 크기는 공통 [브라우저 설정](../fixtures/browser-viewports.json)을 사용하고 결과는 `output/playwright/turn-activity-ui-*/summary.json`에 남아요.
 
 기존 전역 알림과 요청 재시도 회귀는 `node scripts/verify-activity.mjs`, `node scripts/verify-run-retry.mjs`로 검사해요. 실제 외부 모델이나 물리적 휴대폰 검증을 의미하지 않아요.

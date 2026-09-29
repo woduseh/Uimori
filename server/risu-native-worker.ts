@@ -74,7 +74,7 @@ export function runNativeRisuWorker<T>(
 }
 
 /**
- * One request owns one lazy, serial worker. Only stateless trusted render methods use sessions;
+ * One request owns one lazy, serial worker. Stateless trusted render/CBS methods use sessions;
  * Lua VMs and other one-shot execution remain isolated. Always close in a caller's finally.
  * Results are never cached and no worker survives its owning request. Each call keeps its budget.
  */
@@ -116,7 +116,7 @@ export function createNativeRisuWorkerSession<Input, Result>(
   return {
     run(input: Input): Promise<Result> {
       if (stopped) return Promise.reject(stopped);
-      // No queue: the caller must preserve authored display-hook/render ordering.
+      // No queue: the caller must preserve authored evaluation ordering.
       if (pending) return Promise.reject(new Error('RISU_NATIVE_WORKER_BUSY'));
       return new Promise<Result>((resolve, reject) => {
         pending = {

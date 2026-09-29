@@ -59,6 +59,16 @@ for (const width of [1440, 412]) {
     page.on('request', (req) => paths.push(new URL(req.url()).pathname));
     page.on('pageerror', (error) => errors.push(error.message));
     await openEditor(page, original.title);
+    const description = page.getByLabel('캐릭터 설정', { exact: true });
+    const originalDescription = await description.inputValue();
+    await description.fill(`${originalDescription}\nTemporary edit`);
+    await description.fill(originalDescription);
+    await page.getByRole('button', { name: '서재 목록', exact: true }).click();
+    await expect(page.getByRole('searchbox', { name: '서재 검색', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('alertdialog', { name: '미저장 자료 확인', exact: true })
+    ).toBeHidden();
+    await openEditor(page, original.title);
     await page.getByLabel('Risu 자료 이름', { exact: true }).fill(`${original.title} changed`);
     const saved = await save(page);
     expect(saved.title).toBe(`${original.title} changed`);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HelperConversation, HelperScope } from '../core/helper.js';
-import { api, ApiError } from './api.js';
+import { activityChangedEvent, api, ApiError } from './api.js';
 
 export type HelperSession = HelperConversation & {
   title?: string;
@@ -91,6 +91,7 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
         : 'kind=library';
     const values = await api<HelperSession[]>(`/helper/conversations?${query}`);
     if (!alive.current || versions.current.get(group) !== version) return;
+    const active = values.some((session) => session.activity?.running || session.activity?.queued);
     setLists((old) => ({ ...old, [group]: values }));
     const moved =
       selectionScopes.current.has(group) && selectionScopes.current.get(group) !== scopeKey;
@@ -102,7 +103,7 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
       values.find((item) => JSON.stringify(item.scope) === scopeKey);
     if (chosen) {
       if (selectedRef.current[group] !== chosen.id) select(chosen);
-      return;
+      return active;
     }
     const selectionVersion = selectionVersions.current.get(group) ?? 0;
     const created = await api<HelperConversation>('/helper/conversations', { scope: target });
@@ -114,14 +115,25 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
           [group]: [...(old[group] ?? []).filter((item) => item.id !== created.id), created],
         }));
     }
+    return active;
   }, [group, scopeKey, select]);
   useEffect(() => {
     if (!open) return;
     let disposed = false;
-    let timer: ReturnType<typeof setTimeout>;
+    let polling = false;
+    let requested = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
+      if (disposed || document.hidden) return;
+      if (polling) {
+        requested = true;
+        return;
+      }
+      clearTimeout(timer);
+      polling = true;
+      let active = false;
       try {
-        if (!document.hidden) await reload();
+        active = (await reload()) ?? false;
       } catch (cause) {
         if (!disposed)
           setErrors((old) => ({
@@ -129,19 +141,35 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
             [group]: cause instanceof Error ? cause.message : '세션을 불러오지 못했어요.',
           }));
       } finally {
-        if (!disposed) timer = setTimeout(() => void poll(), document.hidden ? 10000 : 2400);
+        polling = false;
+        if (!disposed && !document.hidden)
+          timer = setTimeout(() => void poll(), requested ? 0 : active ? 2400 : 10000);
+        requested = false;
       }
     };
+    const visible = () => {
+      clearTimeout(timer);
+      void poll();
+    };
+    const submitted = (event: Event) => {
+      if ((event as CustomEvent<string>).detail.startsWith('/helper/')) visible();
+    };
     void poll();
+    document.addEventListener('visibilitychange', visible);
+    window.addEventListener('focus', visible);
+    window.addEventListener(activityChangedEvent, submitted);
     return () => {
       disposed = true;
       clearTimeout(timer);
+      document.removeEventListener('visibilitychange', visible);
+      window.removeEventListener('focus', visible);
+      window.removeEventListener(activityChangedEvent, submitted);
       versions.current.set(group, (versions.current.get(group) ?? 0) + 1);
     };
   }, [open, group, reload]);
   const selectedSequence = sessions.find((item) => item.id === currentId)?.latestEventSeq ?? 0;
   useEffect(() => {
-    if (!open || !currentId || document.hidden) return;
+    if (!open || !currentId) return;
     const mark = () => {
       if (document.hidden) return;
       const sequence = Math.max(

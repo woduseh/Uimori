@@ -6,8 +6,12 @@ import {
 } from '../core/native-transfer.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import type { Store } from './store.js';
-import { exportResourceBundle, importResourceBundle, inspectBundle } from './resource-bundle.js';
-import { normalizeTransferImages } from './transfer-images.js';
+import {
+  exportResourceBundle,
+  importResourceBundle,
+  importNormalizedResourceBundle,
+  inspectBundle,
+} from './resource-bundle.js';
 
 export const applyNativeTransfer = importResourceBundle;
 export function prepareNativeTransfer(value: unknown): NativeTransferPrepare {
@@ -37,15 +41,7 @@ export function nativeTransferRoutes(app: FastifyInstance, store: Store) {
   app.post('/api/native-transfers/prepare', { bodyLimit: NATIVE_TRANSFER_MAX_BYTES }, (request) =>
     prepareNativeTransfer(request.body)
   );
-  app.post(
-    '/api/native-transfers/apply',
-    { bodyLimit: NATIVE_TRANSFER_MAX_BYTES },
-    async (request) => {
-      const body = record(request.body);
-      const prepared = prepareNativeTransfer({ file: body.file });
-      if (body.digest !== prepared.digest) throw new HttpError(409, '가져올 자료가 변경됐어요.');
-      const file = await normalizeTransferImages(body.file as NativeTransferFile);
-      return applyNativeTransfer(store, { ...body, file, digest: inspectBundle(file).digest });
-    }
+  app.post('/api/native-transfers/apply', { bodyLimit: NATIVE_TRANSFER_MAX_BYTES }, (request) =>
+    importNormalizedResourceBundle(store, request.body)
   );
 }

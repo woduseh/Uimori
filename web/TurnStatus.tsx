@@ -16,7 +16,7 @@ type Props = {
   /** Status sentence. It stays available to assistive technology even when `quiet`. */
   text: string;
   /** Elapsed or measured duration; omitted when there is nothing meaningful to show. */
-  elapsed?: string;
+  elapsed?: ReactNode;
   /** Scene number and other identity rendered before the glyph. */
   leading?: ReactNode;
   /** Badges shown after the status text, such as a manual-translation marker. */

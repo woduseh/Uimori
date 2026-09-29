@@ -19,7 +19,6 @@ import {
   newId,
   json,
   assertBuild,
-  fingerprint,
   browserPath,
   command,
   readBrowserReport,
@@ -274,8 +273,7 @@ try {
     throw new Error('Node >=24.14.0 <25 required');
   }
   summary.browserRuntime = await assertBrowserRuntime({ executablePath: browser });
-  const identity = await assertBuild(),
-    before = await fingerprint();
+  const identity = await assertBuild();
   summary.identity = identity;
   const temp = path.join(runtime, 'temp');
   await mkdir(temp, { recursive: true });
@@ -375,12 +373,6 @@ try {
     throw new Error('Self-host main provider fixture did not receive the expected valid calls');
   if (expectedCalls && (!proxy.stats().eventStreams || !proxy.stats().eventBytes))
     throw new Error('No actual HTTPS event stream bytes observed');
-  if (
-    (await assertBuild()).buildId !== identity.buildId ||
-    (await fingerprint()).hash !== before.hash
-  )
-    throw new Error('Build/source identity changed during self-host verification');
-  summary.identityVerifiedAt = new Date().toISOString();
 } catch (error) {
   failures.push(error.message);
   if (

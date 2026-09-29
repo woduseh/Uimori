@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { createHash } from 'node:crypto';
 import type { Content, PromptPreset } from '../core/product.js';
 import type { PackageImage } from '../core/package-images.js';
 import { validateRisuContentSource } from '../core/risu-native.js';
@@ -16,7 +17,7 @@ import {
 import type { ProductStore } from './product-store.js';
 import type { Store } from './store.js';
 import { assertLibraryVisible } from './library-deletion.js';
-import { validateImageBlob, type PackageImageBlob } from './package-images.js';
+import { readImage } from './image-storage.js';
 import { HttpError } from './request-validation.js';
 import { bundleRisuModules } from './risu-export-modules.js';
 import {
@@ -69,11 +70,13 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
     const image = pkg.images?.find((item) => item.id === imageId);
     if (!image) return failAsset();
     if (!blobs.has(image.blobHash)) {
-      const blob = validateImageBlob(
-        product.get<PackageImageBlob>('package-image', image.blobHash, 1)
-      );
-      if (blob.hash !== image.blobHash || blob.mime !== image.mime) return failAsset();
-      const bytes = Buffer.from(blob.base64, 'base64');
+      const blob = readImage(product.db, image.blobHash);
+      if (
+        blob.mime !== image.mime ||
+        createHash('sha256').update(blob.bytes).digest('hex') !== image.blobHash
+      )
+        return failAsset();
+      const bytes = blob.bytes;
       exportLimit((total += bytes.length), risuImportExpandedLimit(RISU_IMPORT_MAX_UPLOAD_BYTES));
       blobs.set(image.blobHash, bytes);
     }

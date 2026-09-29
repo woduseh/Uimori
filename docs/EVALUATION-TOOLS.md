@@ -1,6 +1,6 @@
 # Optional evaluation tools
 
-Evaluation tools are an opt-in model preset setting, disabled by default. When enabled, main, translation, status, image, state, and memory runs receive `eval_get_context`, `eval_get_reviewer`, `eval_create_case`, and `eval_submit_artifact`. The setting belongs to the preset, independently of the provider connection.
+Evaluation tools are an opt-in model preset setting, disabled by default. When enabled, main, translation, and status runs receive `eval_get_context`, `eval_get_reviewer`, `eval_create_case`, and `eval_submit_artifact`. The setting belongs to the preset, independently of the provider connection.
 
 ## Configuration and behavior
 

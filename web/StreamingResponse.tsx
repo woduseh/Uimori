@@ -14,16 +14,21 @@ export function StreamingResponse({
   taskKind,
   taskId,
   taskStatus,
+  visible = true,
 }: {
   taskKind: ResponseTaskKind;
   taskId: string;
   taskStatus?: string;
+  visible?: boolean;
 }) {
   const [chunks, setChunks] = useState<ResponseChunk[]>([]);
   const [status, setStatus] = useState('running');
   const [disconnected, setDisconnected] = useState(false);
   const currentTaskStatus = useRef(taskStatus);
   currentTaskStatus.current = taskStatus;
+  const shown = useRef(visible);
+  shown.current = visible;
+  const wake = useRef<() => void>(() => {});
   useEffect(() => {
     setChunks([]);
     setStatus('running');
@@ -32,6 +37,7 @@ export function StreamingResponse({
     let timer: ReturnType<typeof setTimeout> | undefined,
       closed = false,
       terminal = false,
+      polling = false,
       cursor = 0,
       failures = 0;
     const offsets = new Map<string, number>();
@@ -67,16 +73,18 @@ export function StreamingResponse({
       }
     };
     const retry = () => {
-      if (closed || terminal) return;
+      if (closed || terminal || !shown.current || document.hidden) return;
       setDisconnected(true);
       clearTimeout(timer);
       timer = setTimeout(() => void poll(), Math.min(10000, 1200 * 2 ** Math.min(failures++, 3)));
     };
     const poll = async () => {
-      if (closed || terminal) return;
+      if (closed || terminal || polling || !shown.current || document.hidden) return;
+      clearTimeout(timer);
+      polling = true;
       try {
         // Drain committed pages sequentially, then release the connection before the next poll.
-        // A view closing aborts only its current read; it never cancels provider work.
+        // Unmount aborts only this read; hiding pauses later reads without losing the cursor.
         let page: ResponseStreamPage;
         do {
           page = await api<ResponseStreamPage>(
@@ -90,8 +98,8 @@ export function StreamingResponse({
           receive(page);
           if (page.hasMore && cursor === previousCursor)
             throw new Error('RESPONSE_STREAM_CURSOR_STALLED');
-        } while (!terminal && page.hasMore);
-        if (closed || terminal) return;
+        } while (!terminal && page.hasMore && shown.current && !document.hidden);
+        if (closed || terminal || !shown.current || document.hidden) return;
         timer = setTimeout(() => void poll(), 300);
       } catch (error) {
         if (closed) return;
@@ -130,15 +138,30 @@ export function StreamingResponse({
           return;
         }
         retry();
+      } finally {
+        polling = false;
       }
     };
+    const resume = () => {
+      clearTimeout(timer);
+      void poll();
+    };
+    wake.current = resume;
     void poll();
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('focus', resume);
     return () => {
       closed = true;
       controller.abort();
       clearTimeout(timer);
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('focus', resume);
     };
   }, [taskKind, taskId]);
+  useEffect(() => {
+    shown.current = visible;
+    wake.current();
+  }, [visible]);
   if (!chunks.length) return null;
   const parts = new Map<string, string>();
   for (const chunk of chunks) {

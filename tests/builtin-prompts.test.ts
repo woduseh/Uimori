@@ -3,9 +3,7 @@ import {
   prepareNativeRisuTranslationPrompt,
 } from '../server/risu-native-preset.js';
 import { afterEach, expect, test, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { basename, isAbsolute, join, relative, resolve } from 'node:path';
+import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import { builtinPromptTemplate, builtinPromptTemplates } from '../server/builtin-prompts.js';
@@ -21,28 +19,21 @@ import type { RunSnapshot } from '../core/types.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { compileTranslationPrompt, translationInput } from '../core/auxiliary.js';
 import { sourceTimeContext } from '../server/product-auxiliary.js';
+import { createTestDirectory } from './fixtures/test-directory.js';
 
-const owned: { directory: string; app?: App }[] = [];
+const owned: (ReturnType<typeof createTestDirectory> & { app?: App })[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();
   for (const item of owned.splice(0).reverse()) {
     await item.app?.close();
-    const target = resolve(item.directory);
-    const within = relative(resolve(tmpdir()), target);
-    if (
-      isAbsolute(within) ||
-      within.startsWith('..') ||
-      !basename(target).startsWith('Uimori builtin prompts ')
-    )
-      throw new Error('Refusing cleanup outside owned test directory');
-    await rm(target, { recursive: true, force: true });
+    item.remove();
   }
 });
 async function application(directory?: string) {
   const entry = directory
     ? owned.find((item) => item.directory === directory)!
     : {
-        directory: await mkdtemp(join(tmpdir(), 'Uimori builtin prompts ')),
+        ...createTestDirectory('Uimori builtin prompts '),
         app: undefined as App | undefined,
       };
   if (!directory) owned.push(entry);

@@ -43,6 +43,7 @@ async function harness(page: Page, seedCount = 0) {
     loseNext = false,
     eventReads = 0,
     viewReads = 0,
+    sessionReads = 0,
     eventStreamReads = 0;
   const event = (view: View, task: HelperTaskView, kind: string) =>
     view.events.push({
@@ -129,7 +130,8 @@ async function harness(page: Page, seedCount = 0) {
       url = new URL(request.url()),
       path = url.pathname;
     const body = request.method() === 'GET' ? null : request.postDataJSON();
-    if (path === '/api/helper/conversations' && request.method() === 'GET')
+    if (path === '/api/helper/conversations' && request.method() === 'GET') {
+      sessionReads++;
       return route.fulfill({
         json: [...views.values()]
           .filter((view) => {
@@ -149,6 +151,7 @@ async function harness(page: Page, seedCount = 0) {
           }))
           .reverse(),
       });
+    }
     if (
       ['/api/helper/conversations', '/api/helper/conversations/new'].includes(path) &&
       request.method() === 'POST'
@@ -323,6 +326,9 @@ async function harness(page: Page, seedCount = 0) {
     get viewReads() {
       return viewReads;
     },
+    get sessionReads() {
+      return sessionReads;
+    },
     get eventStreamReads() {
       return eventStreamReads;
     },
@@ -456,7 +462,7 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
   expect(changed.ok()).toBe(true);
   state.emit('settings.updated');
 
-  await expect(editor.getByRole('alert')).toContainText('초안은 유지했어요');
+  await expect(editor.getByRole('alert')).toContainText('초안은 유지했어요', { timeout: 15000 });
   await expect(draft).toHaveValue('9');
   await expect(editor.getByRole('button', { name: '역할별 모델 설정 저장' })).toBeDisabled();
 });
@@ -505,6 +511,94 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
     if (width === DESKTOP_WIDTH)
       await expect(page.getByRole('button', { name: '도우미 열기', exact: true })).toBeVisible();
   }
+});
+
+test('HELPUI14 idle and hidden helper views pause reads and resume cursors, effects and drafts', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request);
+  const state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  const input = panel.getByLabel('도우미에게 요청');
+  const idleSessions = state.sessionReads;
+  const idleEvents = state.eventReads;
+  // The former 1.2/2.4-second idle loops both fired within this window.
+  await page.waitForTimeout(2800);
+  expect(state.sessionReads).toBe(idleSessions);
+  expect(state.eventReads).toBe(idleEvents);
+
+  await input.fill('화면 밖에서도 계속할 작업');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.sessionReads).toBeGreaterThan(idleSessions);
+  const task = state.current().tasks[0];
+  state.progress(task, '첫 조각', 4);
+  await expect(panel.locator('.streaming-text')).toHaveText('첫 조각');
+  await input.fill('다시 열어도 남길 초안');
+  await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+  await expect(panel).toBeHidden();
+  const closedReads = state.streamReads.get(task.id);
+  const closedEvents = state.eventReads;
+  const clock = panel.locator('.activity-elapsed');
+  const closedTime = await clock.textContent();
+  state.progress(task, '과 두 번째 조각', 13);
+  await page.waitForTimeout(1600);
+  expect(state.streamReads.get(task.id)).toBe(closedReads);
+  expect(state.eventReads).toBe(closedEvents);
+  expect(await clock.textContent()).toBe(closedTime);
+  expect(task.status).toBe('running');
+
+  await open(page);
+  await expect(input).toHaveValue('다시 열어도 남길 초안');
+  await expect(panel.locator('.streaming-text')).toHaveText('첫 조각과 두 번째 조각');
+  expect(state.streamCursors.get(task.id)?.at(-1)).toBeGreaterThan(0);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  const hiddenReads = state.streamReads.get(task.id);
+  const hiddenSessions = state.sessionReads;
+  const hiddenEvents = state.eventReads;
+  const hiddenTime = await clock.textContent();
+  await page.waitForTimeout(2800);
+  expect(state.streamReads.get(task.id)).toBe(hiddenReads);
+  expect(state.sessionReads).toBe(hiddenSessions);
+  expect(state.eventReads).toBe(hiddenEvents);
+  expect(await clock.textContent()).toBe(hiddenTime);
+
+  await page.evaluate(() => {
+    (window as unknown as { receivedHelperEffects: string[] }).receivedHelperEffects = [];
+    for (const type of [
+      'uimori-helper-updated',
+      'uimori-themes-changed',
+      'uimori-illustration-presets-changed',
+    ])
+      window.addEventListener(type, () =>
+        (window as unknown as { receivedHelperEffects: string[] }).receivedHelperEffects.push(type)
+      );
+  });
+  state.complete(task);
+  for (const kind of ['settings.updated', 'theme.updated', 'illustration-preset.updated'])
+    state.emit(kind);
+  await page.evaluate(() => {
+    delete (document as unknown as { hidden?: boolean }).hidden;
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(panel.getByText('합성 완료 응답', { exact: true })).toBeVisible();
+  await expect(input).toHaveValue('다시 열어도 남길 초안');
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { receivedHelperEffects: string[] }).receivedHelperEffects
+    )
+  ).toEqual(
+    expect.arrayContaining([
+      'uimori-helper-updated',
+      'uimori-themes-changed',
+      'uimori-illustration-presets-changed',
+    ])
+  );
+  expect(state.posts).toHaveLength(1);
 });
 
 test('HELPUI10 a full localStorage keeps helper input in IndexedDB and still admits the request', async ({
@@ -681,7 +775,10 @@ test('HELPUI03 library work selection, older pages and direct artifact edit pres
     kind: 'artifact.saved',
     data: null,
   });
-  await expect(panel.getByRole('region', { name: '독립 가정 장면' })).toBeVisible();
+  // This external change arrives while idle: allow the 10-second list poll and its follow-up reads.
+  await expect(panel.getByRole('region', { name: '독립 가정 장면' })).toBeVisible({
+    timeout: 15000,
+  });
   await panel.getByRole('button', { name: '이전 메시지 불러오기' }).click();
   await expect(panel.getByText('합성 요청 1', { exact: true }).first()).toBeVisible();
   await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();

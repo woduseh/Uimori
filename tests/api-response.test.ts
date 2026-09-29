@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import {
   api,
+  activityChangedEvent,
   apiBinary,
   ApiError,
   libraryChangedKey,
@@ -119,6 +120,22 @@ test('failed JSON edits do not announce a saved library change', async () => {
   await expect(api('/connections/synthetic', {}, 'PUT')).rejects.toBeInstanceOf(ApiError);
   expect(b.setItem).not.toHaveBeenCalled();
   expect(b.workspace).not.toHaveBeenCalled();
+});
+
+test('accepted task mutations wake activity views while reads and rejected requests stay quiet', async () => {
+  browser();
+  const changed = vi.fn();
+  window.addEventListener(activityChangedEvent, changed);
+  respond(200, { status: 'queued' });
+  await api('/chats/synthetic/runs', { request: 'write' });
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(changed.mock.calls[0][0].detail).toBe('/chats/synthetic/runs');
+  changed.mockClear();
+  respond(200, { status: 'running' });
+  await api('/runs/synthetic');
+  respond(409, { error: 'Revision conflict' });
+  await expect(api('/runs/synthetic/retry', {})).rejects.toBeInstanceOf(ApiError);
+  expect(changed).not.toHaveBeenCalled();
 });
 
 test.each(['json', 'binary'] as const)(

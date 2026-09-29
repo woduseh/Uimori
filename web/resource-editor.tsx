@@ -15,6 +15,7 @@ import {
 } from 'react';
 import type { EditorContext, ResourceKind, ResourceModel } from '../core/resource-editing.js';
 import { ResourceEditorSession, type EditorDocument } from './resource-editor-session.js';
+import { sameEditorValue } from './editor-values.js';
 import './resource-editor.css';
 
 const sessions = new Map<symbol, ResourceEditorSession>();
@@ -69,16 +70,6 @@ type Options = {
   model: ResourceModel;
   enabled?: boolean;
   onRestore: (document: EditorDocument) => void;
-};
-const sameModel = (left: ResourceModel, right: ResourceModel) => {
-  const entries = Object.entries(left);
-  return (
-    entries.length === Object.keys(right).length &&
-    (entries.every(([key, value]) =>
-      Object.is(value, (right as unknown as Record<string, unknown>)[key])
-    ) ||
-      JSON.stringify(left) === JSON.stringify(right))
-  );
 };
 export function useResourceEditor(options: Options) {
   const latest = useRef(options);
@@ -141,7 +132,7 @@ export function useResourceEditor(options: Options) {
     if (pending?.version === state.restoreVersion) {
       // Resource adoption can render before the parent has reflected onRestore. Do not feed
       // the stale parent model back into the freshly adopted session during that gap.
-      if (sameModel(pending.model, options.model)) {
+      if (sameEditorValue(pending.model, options.model)) {
         observed.current = options.model;
         pendingRestore.current = null;
       }

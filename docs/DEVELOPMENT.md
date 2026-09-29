@@ -25,7 +25,7 @@ Choose checks that can expose failures caused by the change. Completing a featur
 | UI behavior | The relevant `verify:*` command against a matching build; `verify:browser-smoke` covers basic chat and global prompt settings |
 | Verification tooling | Tests for the affected runner; `npm run test:tooling` covers the full tooling suite |
 | Cross-cutting changes beyond focused coverage | Consider `npm run quality:full` and broader browser coverage for the interactions at risk |
-| Documentation only | Check accuracy, links, commands, consistency, and `git diff --check` |
+| Documentation only | Run `node scripts/check-documentation.mjs` and `git diff --check`; review accuracy, commands and consistency |
 | Release candidate | `npm run release:check -- --area <verify:*>`; see below |
 
 Use the smallest existing tests that exercise the affected behavior and plausible failures. Add tests for gaps that matter, rather than mirroring implementation. Once the relevant checks pass, finish. Rerun or expand only for a subsequent change, failure, or unresolved risk.
@@ -81,6 +81,8 @@ Reuse results while their source, environment, and test assumptions remain appli
 
 Browser reports record the build identity checked before launch; tooling reports record selected files and actual Node test results. Local runners do not issue a second source/test certification or rehash the same inputs at the end. Finish edits and rebuild before final verification; after a later change, rerun the affected checks. Release receipts separately require unchanged full source identity. Runtime vendor inputs in `third_party` participate in the build identity.
 
+The Docker build context contains the compiler inputs, runtime vendor files, licenses and the four scripts used by the build runner. Tests, fixtures and unrelated verification scripts are excluded, so edits to them do not invalidate the Docker compile layer. Check image startup and cache behavior on a Docker host when changing this boundary; a local Node build alone does not verify Docker packaging.
+
 Actual local Risu materials are excluded from ordinary browser discovery. Set `UIMORI_RISU_SAMPLE_ROOT` for `node scripts/verify-risu-native-samples.mjs`, optionally `UIMORI_RISU_SAMPLE_PRESET` for an external `.risup`, and use `--grep` to focus cases. Source materials remain read-only; private rendered artifacts stay in ignored output directories. These loopback fixture checks do not establish live-provider quality or universal script compatibility.
 
 ## Release checks
@@ -93,7 +95,7 @@ Actual local Risu materials are excluded from ordinary browser discovery. Set `U
 
 Update README, release notes under `docs/releases/`, and any affected installation/data instructions. Check the final candidate with the release checker and focused version, startup/restart, schema/backup and About-screen tests. Synthetic model/CLI fixtures are not evidence of live-provider quality or a real Docker upgrade.
 
-Commit and push the reviewed candidate, confirm checks for that exact commit, then create an annotated `v<version>` tag and publish the matching GitHub release notes. Never move an already published release tag; corrections get a new version. Do not include local configuration, credentials, DBs or test evidence in a source release. Release publication does not deploy Oracle or operate the generic updater.
+Commit and push the reviewed candidate, confirm checks for that exact commit, then create an annotated `v<version>` tag and publish the matching GitHub release notes. Never move an already published release tag; corrections get a new version. Do not include local configuration, credentials, DBs or test evidence in a source release. Release publication does not update an installed app; use the [manual update instructions](UPDATES.md) or the dedicated Oracle deployment runner.
 
 ## Static checks and CI
 
@@ -101,7 +103,7 @@ Commit and push the reviewed candidate, confirm checks for that exact commit, th
 
 [CI](../.github/workflows/quality.yml) starts independent static, four Windows Vitest shards, Windows tooling, Linux core/recovery and Linux self-host/browser-smoke jobs after change classification. Each Vitest runner builds once because some files restart the compiled server, then `node scripts/ci-vitest.mjs 1/4` (through `4/4`) collects and runs its native Vitest shard. File isolation and serial execution inside each runner stay enabled; local `npm test` is not made more aggressive on small machines. The final `quality` job checks every required outcome and verifies that shard reports cover exactly the collected file set without duplicates, missing reports or a different commit. Pending/optional tests remain visible in counts; failed/cancelled jobs are never treated as passes.
 
-Changes limited to Markdown under `docs/`, root README/AGENTS or LICENSE keep the cheap docs-only path. A docs-only pass is not a full deployment verification; dispatch the workflow on that exact branch/SHA for all required checks. Manual `browser=true` runs three independent full-browser shards alongside the other jobs, not after them. Every shard has its own runner, server, DB, provider fixture and artifacts; Playwright stays at one worker. `npm run verify:browser -- --shard 1/3` uses the same file-level selection locally. The final aggregate checks the union of collected browser cases. No hand-maintained file lists or duration scheduler are required.
+Changes limited to Markdown under `docs/`, root README/AGENTS or LICENSE keep the cheap docs-only path, which runs `node scripts/check-documentation.mjs` and `git diff --check` without installing dependencies. The documentation checker follows local file links through README and every Markdown document under `docs/`. A docs-only pass is not a full deployment verification; dispatch the workflow on that exact branch/SHA for all required checks. Manual `browser=true` runs three independent full-browser shards alongside the other jobs, not after them. Every shard has its own runner, server, DB, provider fixture and artifacts; Playwright stays at one worker. `npm run verify:browser -- --shard 1/3` uses the same file-level selection locally. The final aggregate checks the union of collected browser cases. No hand-maintained file lists or duration scheduler are required.
 
 Node versions in CI follow `.nvmrc`. Standard JSON test reports, file counts and shard times are uploaded for seven days; failures retain synthetic browser traces. Existing Windows test coverage and the separate Linux runtime checks are preserved. Compare comparable CI runs before changing shard counts or claiming a speedup; more machines reduce wall time but can increase total runner minutes.
 
