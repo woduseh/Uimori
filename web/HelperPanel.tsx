@@ -1,7 +1,7 @@
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
 import type { OutlineTarget } from '../core/outline.js';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowUp, History, Square, X, Settings2 } from 'lucide-react';
+import { ArrowUp, Check, Copy, History, Square, X, Settings2 } from 'lucide-react';
 import { SaveIcon, SettingsIcon, CloseIcon } from './ui-icons.js';
 import type {
   HelperConversation,
@@ -88,6 +88,51 @@ const statusLabel: Record<string, string> = {
   cancelled: '작업을 취소했어요',
   interrupted: '작업이 중단됐어요',
 };
+
+function HelperResponseActions({ text }: { text: string }) {
+  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
+
+  useEffect(() => {
+    if (copyState !== 'copied') return;
+    const timer = setTimeout(() => setCopyState('idle'), 1800);
+    return () => clearTimeout(timer);
+  }, [copyState]);
+
+  const copyResponse = async () => {
+    setCopyState('copying');
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(text);
+      setCopyState('copied');
+    } catch {
+      setCopyState('failed');
+    }
+  };
+
+  return (
+    <>
+      <div className="helper-response-actions">
+        <IconButton
+          icon={copyState === 'copied' ? Check : Copy}
+          label={copyState === 'copied' ? '도우미 응답 복사됨' : '도우미 응답 복사'}
+          className="secondary"
+          size={18}
+          disabled={copyState === 'copying'}
+          onClick={() => void copyResponse()}
+        />
+        <span className="sr-only" role="status">
+          {copyState === 'copied' ? '도우미 응답을 복사했어요.' : ''}
+        </span>
+      </div>
+      {copyState === 'failed' && (
+        <p className="error helper-copy-error" role="alert">
+          응답을 복사하지 못했어요. 브라우저의 클립보드 권한을 확인해 주세요.
+        </p>
+      )}
+    </>
+  );
+}
+
 function local(key: string): string | null {
   return cachedHelperRecovery(key.replace(/^uimori:/u, '')) ?? null;
 }
@@ -972,9 +1017,12 @@ export function HelperPanel(props: Props) {
                   }
                 />
               ) : (
-                <div className="helper-prose">
-                  <Prose text={message.text} />
-                </div>
+                <>
+                  <div className="helper-prose">
+                    <Prose text={message.text} />
+                  </div>
+                  <HelperResponseActions text={message.text} />
+                </>
               )}
               {message.artifacts.map((artifact) => (
                 <HelperArtifactCard
