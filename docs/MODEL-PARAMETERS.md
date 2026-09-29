@@ -45,11 +45,12 @@
 | 프롬프트 캐시 기준점만 | 작성한 위치만 사용. 기준점이 없으면 캐시를 만들지 않음 |
 | 자동 캐싱 + 기준점 | 공급자가 최근 캐시 가능한 블록에 자동 기준점 1개를 배치하고, 작성한 기준점도 함께 사용 |
 
-자동 모드에서는 명시 기준점을 최대 3개까지 사용해요. 4개를 지정하면 전송 전에 거절하며 임의 위치를 제거하지 않아요. 미지정·명시 모드의 기존 prefer/require 지원 제한은 유지해요. 캐시 OFF는 사용자의 모델 설정이므로 필수 기준점보다 우선해요.
+자동 모드에서는 작성한 기준점이 3개 이하면 자동 기준점 1개를 함께 사용해요. 작성한 기준점이 4개면 모두 보존하고 추가 자동 기준점만 생략하며, 미리보기 진단에 남겨요. 그래서 Phēmē처럼 로어 앞뒤와 과거 사용자 메시지 두 곳을 표시한 프롬프트도 계속 사용할 수 있어요. 자동 모드에서 서로 다른 기준점이 5개 이상이면 전송 전에 거절해요. 미지정·명시 모드의 기존 prefer/require 지원 제한은 유지해요. 캐시 OFF는 사용자의 모델 설정이므로 필수 기준점보다 우선해요.
 
-도우미의 자동 모드에서는 Claude와 명시 캐시 지원이 확인된 GPT Responses 모델에 도구 정의·공통 지침까지의 기준점도 하나 배치해요. 작업 내용이나 조회 결과가 달라져도 동일한 앞부분을 재사용할 수 있게 해요. 미확인 Responses 모델은 기존 자동 동작을 유지해요. 별도의 프롬프트가 지정된 요청은 작성한 기준점을 따르고, 미지정·캐시 OFF·기준점만 모드에는 이 도우미 기준점을 추가하지 않아요. Codex의 네이티브 루프는 Codex 자체 캐시 정책을 사용해요.
+별도의 작성 프롬프트를 사용하지 않는 요청의 자동 모드에서는 Claude와 명시 캐시 지원이 확인된 GPT Responses 모델에 도구 정의·공통 지침 뒤의 기준점도 하나 배치해요. 도우미뿐 아니라 조언·요약 같은 요청도 작업 내용이 달라질 때 동일한 앞부분을 재사용할 수 있어요. 다만 Responses 요청 앞에 사전 완료된 도구 이력이 있으면 그 이력도 기준점 앞에 포함되므로, 호출 ID나 결과가 바뀌면 이 기준점의 재사용이 제한돼요. 이력 순서는 바꾸지 않아요. 미확인 Responses 모델은 기존 자동 동작을 유지해요. 작성 프롬프트가 지정된 요청은 작성한 기준점을 따르고, 미지정·캐시 OFF·기준점만 모드에는 공통 지침 기준점을 추가하지 않아요. Codex의 네이티브 루프는 Codex 자체 캐시 정책을 사용해요.
 
 - **Claude**: 5분(`5m`) 또는 60분(`1h`). 유지 시간을 생략하면 공급자 기본 5분이에요. 60분은 캐시 쓰기 비용이 더 높아요. 모든 기준점과 자동 캐시에는 같은 시간을 적용해요.
+- **Claude Opus 5.5**: 정확한 모델 ID `claude-opus-5-5`의 캐시 지원을 확인했어요. 캐시 설정을 미지정해도 작성한 기준점을 보내요. Adaptive thinking은 항상 켜지고 기본 effort는 `medium`이며 강제 도구 호출은 지원하지 않아요. 저장된 생성 설정을 자동으로 바꾸지는 않아요.
 - **GPT-5.6 이후 Responses**: 현재 확인한 TTL은 30분(`30m`)뿐이에요. 선택한 mode는 `prompt_cache_options.mode`, 기준점은 `prompt_cache_breakpoint`로 전달해요.
 - TTL을 명시하려면 명시/자동 모드를 선택해요. 캐시 OFF 또는 모드 미지정에 TTL만 남은 조합은 수정 전 저장하지 않아요.
 - **Gemini**: 기존 암묵적 캐시는 공급자가 처리해요. 이번 앱에는 `cachedContents` 생성·갱신·삭제 기능이나 프로젝트 전체 암묵적 캐시 제어가 없으므로 OFF·TTL 선택을 제공하지 않아요. Chat/Vercel/호환 프로바이더에도 캐시 지원을 추정하지 않아요.
@@ -76,6 +77,6 @@
 
 - [Google 명칭](https://docs.cloud.google.com/gemini-enterprise-agent-platform/vertex-ai-name-changes), [Gemini 3.8 Flash](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-3-8-flash), [Gemini 3.1 Pro](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-1-pro)
 - [OpenAI GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model/gpt-5.6), [Reasoning](https://developers.openai.com/api/docs/guides/reasoning), [Flex](https://developers.openai.com/api/docs/guides/flex-processing), [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
-- [Claude Opus 5](https://platform.claude.com/docs/en/models/opus-5/whats-new-opus-5), [Fable 5.1](https://platform.claude.com/docs/en/models/fable-5-1/whats-new-fable-5-1), [Effort](https://platform.claude.com/docs/en/build-with-claude/effort), [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
+- [Claude Opus 5.5](https://platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5), [Opus 5](https://platform.claude.com/docs/en/models/opus-5/whats-new-opus-5), [Fable 5.1](https://platform.claude.com/docs/en/models/fable-5-1/whats-new-fable-5-1), [Effort](https://platform.claude.com/docs/en/build-with-claude/effort), [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
 
 Vercel 요청 변환 참고: [Chat 확장 옵션](https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions/advanced), [Claude 사고 옵션](https://vercel.com/docs/ai-gateway/models-and-providers/reasoning/anthropic), [Gemini/Vertex 사고 옵션](https://vercel.com/docs/ai-gateway/models-and-providers/reasoning/google).

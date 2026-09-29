@@ -12,7 +12,7 @@ import {
 import type { Connection, ModelSnapshot } from '../core/product.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
-import { AUTHOR_NOTE_GUIDANCE } from '../core/notes.js';
+import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
 import { OUTLINE_CONTRACT } from '../core/outline.js';
 import { buildMainInput, executeTool, knowledgeReadResults } from '../core/provider.js';
 import {
@@ -53,6 +53,16 @@ export function buildAgentProviderRequest(
   );
   const sharedOptions = agentSharedOptions(snapshot);
   const controls = Object.fromEntries(sharedOptions.map(({ id, value }) => [id, value]));
+  const previous = previousConsultations.filter(
+    (advice) =>
+      !consultationContext?.references.some((event) => {
+        if (event.kind !== 'advice' || event.denied) return false;
+        const selected = event.result as AgentAdvice;
+        return (
+          selected.agentId === advice.agentId && selected.consultationId === advice.consultationId
+        );
+      })
+  );
   return {
     role: 'main',
     ...modelRequestFields(target),
@@ -70,13 +80,13 @@ export function buildAgentProviderRequest(
         parentRevision: snapshot.parentRevision,
         pinnedSources: input.pinnedSources ?? [],
         contextSummary: input.contextSummary,
-        notes: input.notes,
+        ...(input.notes ? { notes: modelAuthorNotes(input.notes) } : {}),
         ...(input.outline ? { outline: input.outline } : {}),
         ...(consultationContext ? { consultationContext: asJson(consultationContext) } : {}),
         sharedOptions,
-        ...(previousConsultations.length
+        ...(previous.length
           ? {
-              previousConsultations,
+              previousConsultations: previous,
             }
           : {}),
       }),

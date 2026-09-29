@@ -1,14 +1,20 @@
 import { KNOWLEDGE_SKILL_TOOLS } from './read-tools.js';
-export { compileTranslationPrompt } from './translation-prompt.js';
+export { compileTranslationPrompt, translationPromptContext } from './translation-prompt.js';
 import { TRANSLATION_GUIDE_POLICY, type BotTranslationGuide } from './translation-guide.js';
 import { imageCatalogPage, type ImageMetadata } from './image-catalog.js';
 import { createHash } from 'node:crypto';
 import { TRANSLATION_TEXT_MAX_CHARS } from './content-limits.js';
-import { executeTool, type ToolAction } from './provider.js';
+import {
+  executeTool,
+  resourceCatalog,
+  CATALOG_READ_GUIDANCE,
+  type ToolAction,
+} from './provider.js';
+import type { TranslationContextMode } from './translation-settings.js';
 import { createToolCorrectionPolicy } from './tool-outcome.js';
 import type { Resource, RunSnapshot, ToolEvent } from './types.js';
 import { STORY_READ_NAMES } from './story-context.js';
-import { TRANSLATION_READ_NAMES } from './translation-context.js';
+import { TRANSLATION_READ_NAMES, translationSnapshot } from './translation-context.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 import {
   compiledPackages,
@@ -137,7 +143,7 @@ export type DisplayAnnotation = {
   sourceRevision: string;
   sourceHash: string;
   kind: 'display-only';
-  entries: { anchor: string; summary: string; mood: string }[];
+  entries: { anchor: string; summary: string; mood?: string }[];
 };
 export type PresentationAnnotation = {
   sourceRevision: string;
@@ -154,10 +160,12 @@ export type AuxiliaryInput = {
   role: 'translation' | 'status' | 'presentation';
   contract: string;
   customPrompt?: boolean;
+  contextMode?: TranslationContextMode;
   sourceRevision: string;
   sourceHash: string;
   context: SourceTimeContext;
   catalog: CatalogEntry[];
+  catalogPage?: { total: number; listed: number; remaining: string };
   tools: string[];
   results: ToolEvent[];
   outputSchema: Record<string, unknown>;
@@ -172,55 +180,76 @@ const baseInput = (
   sourceRevision: string,
   sourceHash: string,
   context: SourceTimeContext,
-  snapshot: RunSnapshot
-) => ({
-  sourceRevision,
-  sourceHash,
-  context: structuredClone(context),
-  catalog: snapshot.resources
-    .filter((item) => item.chatId === snapshot.chatId)
-    .map(({ text: _text, chatId: _chatId, ...item }) => item),
-  tools: KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name),
-  results: [] as ToolEvent[],
-});
+  snapshot: RunSnapshot,
+  resources: readonly Resource[] = snapshot.resources
+) => {
+  const delivered = new Set(context.packages?.pinned.map((item) => item.id));
+  return {
+    sourceRevision,
+    sourceHash,
+    context: structuredClone(context),
+    ...resourceCatalog(
+      resources.filter((item) => item.chatId === snapshot.chatId && !delivered.has(item.id)),
+      { pinnedBodiesDelivered: false }
+    ),
+    tools: KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name),
+    results: [] as ToolEvent[],
+  };
+};
 /** The source is sent once, verbatim. The host owns identity; prose is not a schema. */
 export function translationInput(
   source: AuxiliarySource,
   context: SourceTimeContext,
-  snapshot: RunSnapshot
+  snapshot: RunSnapshot,
+  mode: TranslationContextMode = 'full'
 ): AuxiliaryInput {
   validateSourceIdentity(source);
   if (snapshot.chatId !== source.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
-  const base = baseInput(source.id, source.hash, context, snapshot);
+  snapshot = translationSnapshot(snapshot, mode);
+  if (mode === 'source-only')
+    context = {
+      ...context,
+      bot: null,
+      persona: null,
+      references: [],
+      previousSources: [],
+      packages: undefined,
+      scene: '',
+    };
   const compiled = compiledPackages(snapshot, 'translation');
   const packages = packageContextFromCompiled(compiled);
-  if (packages) {
-    const ids = new Set(base.catalog.map((r) => r.id));
-    for (const pack of compiled)
-      for (const { text: _text, chatId: _chatId, ...r } of pack.resources)
-        if (!ids.has(r.id)) {
-          base.catalog.push(structuredClone(r));
-          ids.add(r.id);
-        }
-  }
+  const resources = new Map(snapshot.resources.map((item) => [item.id, item]));
+  for (const pack of compiled)
+    for (const resource of pack.resources)
+      if (!resources.has(resource.id)) resources.set(resource.id, resource);
+  const base = baseInput(
+    source.id,
+    source.hash,
+    packages ? { ...context, packages } : context,
+    snapshot,
+    [...resources.values()]
+  );
   return {
     ...base,
     role: 'translation',
     sourceText: source.text,
     blocks: [],
-    tools: [...base.tools, ...STORY_READ_NAMES, ...TRANSLATION_READ_NAMES],
+    ...(mode === 'source-only' ? { contextMode: mode, catalog: [] } : {}),
+    tools:
+      mode === 'source-only' ? [] : [...base.tools, ...STORY_READ_NAMES, ...TRANSLATION_READ_NAMES],
     context: {
       ...base.context,
-      ...(packages ? { packages } : {}),
       ...(snapshot.translationGuide
         ? { translationGuide: structuredClone(snapshot.translationGuide) }
         : {}),
     },
     contract: '',
     referencePolicy:
-      AUTHOR_NOTE_GUIDANCE +
+      (mode === 'source-only' ? '' : AUTHOR_NOTE_GUIDANCE + '\n' + CATALOG_READ_GUIDANCE) +
       (snapshot.translationGuide ? '\n' + TRANSLATION_GUIDE_POLICY : '') +
-      ' Optional story.search/read retrieves frozen prior originals; explicit source-time notes are already supplied as context evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. A search with no matches needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
+      (mode === 'source-only'
+        ? ''
+        : ' Optional story.search/read retrieves frozen prior originals; explicit source-time notes are already supplied as context evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. A search with no matches needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.'),
     ...(snapshot.profile?.promptPresets?.translation ? { customPrompt: true } : {}),
     outputSchema: {},
   };
@@ -242,9 +271,10 @@ export function displayInput(
   return {
     ...baseInput(source.id, source.hash, packages ? { ...context, packages } : context, snapshot),
     role: 'status',
-    blocks: splitSource(source),
+    blocks: splitSource(source).map(({ anchor, text }) => ({ anchor, text })),
     contract:
-      'Create optional display-only scene summaries and mood annotations grounded in the specified source blocks. Do not invent inner motives or new events. These interpretations never become authoritative state, canon, or next-turn evidence. Return structured data; do not rewrite the source or add HTML. Use at most one entry per source anchor. Each summary is at most 600 UTF-16 code units and each mood label at most 100.',
+      'Create optional display-only scene summaries grounded in the specified source blocks. Do not invent inner motives or new events. These interpretations never become authoritative state, canon, or next-turn evidence. Return structured data; do not rewrite the source or add HTML. Use at most one entry per source anchor. Each summary is at most 600 UTF-16 code units. ' +
+      CATALOG_READ_GUIDANCE,
     outputSchema: {
       sourceRevision: 'exact input value',
       sourceHash: 'exact input value',
@@ -253,7 +283,6 @@ export function displayInput(
         {
           anchor: 'existing source anchor',
           summary: 'brief grounded description',
-          mood: 'interpretive display label',
         },
       ],
     },
@@ -281,7 +310,11 @@ export function validateDisplayAnnotation(
     if (seen.has(anchor) || !blocks.some((block) => block.anchor === anchor))
       throw new Error('ANNOTATION_ANCHOR_INVALID');
     seen.add(anchor);
-    return { anchor, summary: textField(item.summary, 600), mood: textField(item.mood, 100) };
+    return {
+      anchor,
+      summary: textField(item.summary, 600),
+      ...(item.mood === undefined ? {} : { mood: textField(item.mood, 100) }),
+    };
   });
   return { sourceRevision: source.id, sourceHash: source.hash, kind: 'display-only', entries };
 }
@@ -488,7 +521,6 @@ export const scriptedAuxiliary: AuxiliaryRequest = async (input) => {
       entries: input.blocks.slice(0, 1).map((block) => ({
         anchor: block.anchor,
         summary: '모의 표시 상태 · 원문 보존됨 · 정사에 반영하지 않음',
-        mood: '합성 표시',
       })),
     };
   throw new Error('JEV_JUDGMENT_REQUIRED');

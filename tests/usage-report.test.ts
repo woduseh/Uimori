@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../server/store.js';
 import { usageReport, usageCsv } from '../server/usage-report.js';
-import { detachAttemptUsage, inferUsageKind } from '../server/usage-accounting.js';
+import { detachAttemptUsage, helperUsageKind, inferUsageKind } from '../server/usage-accounting.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import type { WireRecord, ProviderResult } from '../core/transport.js';
@@ -183,6 +183,10 @@ test('ephemeral input translation and a late detached completion never persist d
   expect(JSON.stringify(row)).not.toContain('PRIVATE_CANARY');
   expect(Number(row.estimated_usd)).toBeCloseTo(0.003);
   expect(inferUsageKind(wire({ agentId: 'advisor' }))).toBe('advisor');
+  expect(helperUsageKind('helper', { role: 'context' })).toBe('summary');
+  expect(helperUsageKind('writing', { role: 'context' })).toBe('summary');
+  expect(helperUsageKind('writing', { role: 'helper' })).toBe('helper-artifact');
+  expect(helperUsageKind('helper', { role: 'helper' })).toBe('helper');
 });
 
 test('CSV exports one grouping, includes coverage columns and neutralizes spreadsheet formulas in model IDs', () => {

@@ -4,6 +4,7 @@ import {
   buildCodexTurn,
   CODEX_ENDPOINT,
   decodeCodexOutput,
+  TEXT_BASE_INSTRUCTIONS,
 } from '../core/codex-protocol.js';
 import { executeProvider, validateConnection, type ProviderRequest } from '../core/transport.js';
 
@@ -87,11 +88,20 @@ test('preserves ordered logical roles and explicit empty instructions while reje
       provenance: { blockId: `b${index}`, origin: 'prompt' as const },
     })),
   };
+  const before = structuredClone(r);
   const built = buildCodexTurn(r),
     input = JSON.parse(built.inputText);
   expect(input.taskContract).toBe('');
   expect(input.allowedTools).toEqual(r.stable.tools);
-  expect(input.orderedMessages).toEqual(r.prompt.messages);
+  expect(input.orderedMessages).toEqual(
+    r.prompt.messages.map(({ id, role, content }) => ({
+      id,
+      role,
+      content,
+      provenance: { origin: 'prompt' },
+    }))
+  );
+  expect(r).toEqual(before);
   expect(input.outputTokenBudget).toBe(1000);
   expect(input).not.toHaveProperty('outputTokenTarget');
   expect(built.developerInstructions).toContain('soft capacity budget');
@@ -102,7 +112,7 @@ test('preserves ordered logical roles and explicit empty instructions while reje
   expect(() => buildCodexTurn(r)).toThrow('CODEX_PROMPT_CACHE_UNSUPPORTED');
 });
 
-test('only helper decisions replace Codex base instructions in the recorded request', () => {
+test('text roles use writing base instructions while helper keeps its application-operation guidance', () => {
   const helper = { ...request(), role: 'helper' as const };
   const built = buildCodexTurn(helper);
   expect(built.baseInstructions).toContain('single-user creative-writing app');
@@ -111,8 +121,76 @@ test('only helper decisions replace Codex base instructions in the recorded requ
     baseInstructions: built.baseInstructions,
     developerInstructions: built.developerInstructions,
   });
-  expect(buildCodexTurn(request())).not.toHaveProperty('baseInstructions');
-  expect(buildCodexDescriptor(request())).not.toHaveProperty('baseInstructions');
+  for (const role of [
+    'main',
+    'translation',
+    'status',
+    'image',
+    'script',
+    'context',
+    'title',
+  ] as const) {
+    const selected = { ...request(), role };
+    expect(buildCodexTurn(selected).baseInstructions).toBe(TEXT_BASE_INSTRUCTIONS);
+    expect(buildCodexDescriptor(selected)).toMatchObject({
+      baseInstructions: TEXT_BASE_INSTRUCTIONS,
+    });
+  }
+});
+
+test('compact logical messages keep retrievable provenance and omit only an exact current user task duplicate', () => {
+  const r = request();
+  r.prompt = {
+    compilerVersion: 'risu-native-prompt-2',
+    cachePlan: [{ blockId: 'cache', afterMessageId: 'history', policy: 'prefer' }],
+    values: {},
+    messages: [
+      {
+        id: 'history',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Earlier prose.' }],
+        completion: 'complete',
+        provenance: {
+          blockId: 'chat',
+          origin: 'history',
+          sourceRevision: 'source',
+          sourceHash: 'a'.repeat(64),
+          runId: 'host-run',
+        },
+      },
+      {
+        id: 'current',
+        role: 'user',
+        content: [{ type: 'text', text: r.input.task }],
+        completion: 'complete',
+        provenance: { blockId: 'chat', origin: 'current' },
+      },
+    ],
+  };
+  const before = structuredClone(r);
+  const input = JSON.parse(buildCodexTurn(r).inputText);
+  expect(input.orderedMessages[0]).toEqual({
+    id: 'history',
+    role: 'assistant',
+    content: [{ type: 'text', text: 'Earlier prose.' }],
+    provenance: { origin: 'history', sourceRevision: 'source', sourceHash: 'a'.repeat(64) },
+  });
+  expect(input.orderedMessages[1]).toMatchObject({
+    role: 'user',
+    provenance: { origin: 'current' },
+  });
+  expect(input.input).not.toHaveProperty('task');
+  expect(input.cacheDiagnostics).toEqual([{ ...r.prompt.cachePlan[0], status: 'not-applied' }]);
+  expect(r).toEqual(before);
+
+  r.prompt.messages[1].role = 'system';
+  expect(JSON.parse(buildCodexTurn(r).inputText).input.task).toBe('Write');
+  r.prompt.messages[1].role = 'user';
+  r.prompt.messages[1].content[0].text = 'Rewritten current request';
+  expect(JSON.parse(buildCodexTurn(r).inputText).input.task).toBe('Write');
+  r.prompt.messages[1].content[0].text = 'Write';
+  r.prompt.messages[1].provenance.origin = 'history';
+  expect(JSON.parse(buildCodexTurn(r).inputText).input.task).toBe('Write');
 });
 
 test('decodes only advertised Uimori tool requests and rejects mixed, foreign, duplicate, and malformed output', () => {

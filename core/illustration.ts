@@ -120,6 +120,8 @@ export type IllustrationDiagnostic = {
   /** Automatic runs may end without an image when the planner found nothing worth drawing. */
   skipped?: string;
   prompt?: IllustrationPrompt;
+  /** Matches the complete prompt-model request, including reconstructed character notes. */
+  promptRequestHash?: string;
   revisedPrompt?: string | null;
   comfyui?: {
     promptId?: string;

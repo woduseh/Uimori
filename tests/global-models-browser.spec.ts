@@ -121,7 +121,9 @@ for (const width of DEFAULT_WIDTHS) {
     }
     await behaviorSummary.click();
     const translationLimit = editor.getByLabel('번역 작업 호출 한도', { exact: true });
+    const translationContext = editor.getByLabel('번역 참고 범위', { exact: true });
     await expect(translationLimit).toBeVisible();
+    await expect(translationContext).toHaveValue('full');
     await expect(translationRefusal.getByLabel('번역 작업 호출 한도')).toHaveCount(0);
     await expect(mainThreshold).toHaveValue('0.9');
     const mainToggle = editor.getByRole('switch', { name: '본문 서비스 거절 감지 사용' });
@@ -141,6 +143,7 @@ for (const width of DEFAULT_WIDTHS) {
       await editor.getByLabel(label, { exact: true }).selectOption(ids[0]);
     await editor.getByLabel('번역 자동 재요청 횟수').fill('2');
     await translationLimit.fill('12');
+    await translationContext.selectOption('source-only');
     await mainThreshold.fill('0.8');
     await editor.getByLabel('번역 거절 확신 기준', { exact: true }).fill('0.85');
     await mainToggle.uncheck();
@@ -153,6 +156,7 @@ for (const width of DEFAULT_WIDTHS) {
     expect(selected.mainJudgmentThreshold).toBe(0.8);
     expect(selected.translationPolicy).toEqual({
       judgment: { threshold: 0.85, enabled: false },
+      contextMode: 'source-only',
       maxRetries: 2,
       maxCalls: 12,
     });
@@ -162,6 +166,7 @@ for (const width of DEFAULT_WIDTHS) {
     await behaviorSummary.click();
     await expect(mainToggle).not.toBeChecked();
     await expect(translationToggle).not.toBeChecked();
+    await expect(translationContext).toHaveValue('source-only');
     await expect(mainThreshold).toHaveValue('0.8');
     await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toHaveValue('0.85');
     await mainToggle.check();

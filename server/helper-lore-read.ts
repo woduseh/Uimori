@@ -131,6 +131,20 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
       });
     } else {
       const { attachment, lore } = entry;
+      const scopeKey = chatAttachmentKey(attachment.scope);
+      const overrides = current.overrides
+        .filter(
+          (override) =>
+            override.selector.loreId === lore.id &&
+            chatAttachmentKey(override.selector) === scopeKey
+        )
+        .map((override) => ({
+          field: override.selector.field,
+          id: override.id,
+          conflicts: current.conflicts
+            .filter((item) => item.overrideId === override.id)
+            .map((item) => item.kind),
+        }));
       items.push({
         scope: attachment.scope,
         packageId: attachment.packageId,
@@ -144,6 +158,7 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
           description: chatOverrideHash(lore.description),
           text: chatOverrideHash(lore.text),
         },
+        ...(overrides.length ? { overrides } : {}),
       });
     }
     if (JSON.stringify(page()).length > MAX_RESULT_CHARS) {

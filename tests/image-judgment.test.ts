@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { AssetEntry } from '../core/auxiliary.js';
-import type { WireRecord } from '../core/transport.js';
+import type { Json, WireRecord } from '../core/transport.js';
 import {
   imageJudgmentRequest,
   judgeImagePlacement,
@@ -109,7 +109,38 @@ describe('JEV-only existing image placement', () => {
       judgment: { kind: 'image-selection' },
     });
     expect(JSON.stringify(wire)).not.toContain('test-jev-secret');
+    const sent = JSON.parse(String(send.mock.calls[0][1]?.body));
+    expect(sent.state).not.toHaveProperty('sourceHash');
+    expect(sent.state.assets[0]).toMatchObject({
+      id: 'asset_0',
+      name: assets[0].alt,
+      description: assets[0].caption,
+      actor: assets[0].actorId,
+      location: assets[0].location,
+      uses: assets[0].uses,
+    });
+    for (const asset of sent.state.assets) {
+      expect(asset).not.toHaveProperty('revision');
+      expect(asset).not.toHaveProperty('hash');
+    }
     expect(() => validateImageJudgmentWire(source, assets, wire!)).not.toThrow();
+    // Pending attempts from before the model projection retain the full v1 wire.
+    const originalRequest = imageJudgmentRequest(
+      source,
+      assets,
+      'Use only appropriate existing illustrations.'
+    )!;
+    expect(originalRequest.state).toMatchObject({
+      sourceHash: source.hash,
+      assets: assets.map((asset) => ({ revision: asset.revision, hash: asset.hash })),
+    });
+    const originalBody = { model: JEV_MODEL, ...originalRequest } as Json;
+    const originalWire: WireRecord = {
+      ...wire!,
+      body: originalBody,
+      bodySha256: createHash('sha256').update(JSON.stringify(originalBody)).digest('hex'),
+    };
+    expect(() => validateImageJudgmentWire(source, assets, originalWire)).not.toThrow();
     expect(() =>
       validateImageJudgmentWire(
         { ...source, id: 'restored-source', chatId: 'restored-chat' },
@@ -127,6 +158,35 @@ describe('JEV-only existing image placement', () => {
       'attempt',
       expect.objectContaining({ status: 'completed' })
     );
+  });
+  it('keeps source identity binding when a source edit leaves the semantic model input unchanged', async () => {
+    const updatedText = `${source.text}\n\n`;
+    const updated = {
+      ...source,
+      text: updatedText,
+      hash: createHash('sha256').update(updatedText).digest('hex'),
+    };
+    const wires: WireRecord[] = [];
+    const send = vi.fn(async (_url: unknown, init?: RequestInit) =>
+      typedResponse(JSON.parse(String(init?.body)))
+    );
+    for (const input of [source, updated])
+      await judgeImagePlacement(input, assets, '', {
+        signal: new AbortController().signal,
+        credential: () => 'key',
+        fetch: send,
+        onAttemptStart: (wire) => {
+          wires.push(wire);
+          return `attempt-${wires.length}`;
+        },
+        onAttemptFinish: vi.fn(),
+      });
+    expect(send.mock.calls[0][1]?.body).toBe(send.mock.calls[1][1]?.body);
+    expect(wires[0].judgment?.inputHash).not.toBe(wires[1].judgment?.inputHash);
+    expect(() => validateImageJudgmentWire(updated, assets, wires[0])).toThrow(
+      'IMAGE_JUDGMENT_ATTEMPT_MISMATCH'
+    );
+    expect(() => validateImageJudgmentWire(updated, assets, wires[1])).not.toThrow();
   });
   it('none and empty catalogs succeed without inventing images', async () => {
     const send = vi.fn(async (_url: unknown, init?: RequestInit) =>

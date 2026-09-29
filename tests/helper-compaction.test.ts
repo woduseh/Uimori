@@ -585,7 +585,13 @@ test('forced compaction retains exact small scoped evidence and requested app sc
   };
   let helperCalls = 0;
   const log = script(f, (request) => {
-    if (request.role === 'context') return summarized();
+    if (request.role === 'context') {
+      const summaryInput = String((request.input.source as { part: string }).part);
+      expect(summaryInput).toContain('schemasRetained');
+      expect(summaryInput).not.toContain('inputSchema');
+      expect(summaryInput).toContain(exactSource);
+      return summarized();
+    }
     if (++helperCalls === 1)
       return tools(
         tool('material', 'data.search', {

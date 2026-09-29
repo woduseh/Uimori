@@ -19,6 +19,9 @@ import type { RunSnapshot } from '../core/types.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { compileTranslationPrompt, translationInput } from '../core/auxiliary.js';
 import { sourceTimeContext } from '../server/product-auxiliary.js';
+import { encodeResponses } from '../core/openai-protocol.js';
+import { encodeAnthropic } from '../core/anthropic-protocol.js';
+import type { ProviderRequest } from '../core/transport.js';
 import { createTestDirectory } from './fixtures/test-directory.js';
 
 const owned: (ReturnType<typeof createTestDirectory> & { app?: App })[] = [];
@@ -123,6 +126,64 @@ test('bundled native presets are editable independent copies and compile in all 
           .promptTemplate as unknown[]
       ).length
     ).toBeGreaterThan(0);
+  }
+});
+
+test('Pheme remains usable with automatic caching after two prior user turns', async () => {
+  const workspace = defaultPromptWorkspace();
+  const snapshot: RunSnapshot = {
+    chatId: 'cache-history',
+    parentRevision: 'scene-2',
+    settingsRevision: 1,
+    settings: { status: false, maxCalls: 8 },
+    request: 'Continue the scene.',
+    history: [
+      { revision: 'scene-1', text: 'First scene.' },
+      { revision: 'scene-2', text: 'Second scene.' },
+    ],
+    logicalHistory: [
+      { id: 'user-1', role: 'user', text: 'Open the door.', sourceRevision: 'scene-1' },
+      { id: 'assistant-1', role: 'assistant', text: 'First scene.', sourceRevision: 'scene-1' },
+      { id: 'user-2', role: 'user', text: 'Enter the room.', sourceRevision: 'scene-2' },
+      { id: 'assistant-2', role: 'assistant', text: 'Second scene.', sourceRevision: 'scene-2' },
+    ],
+    resources: [],
+    profile: {
+      ...defaultProfile('cache-history'),
+      models: {},
+      ...freezeCurrentPrompts(workspace),
+    },
+  };
+  const compiled = compileSnapshotPrompt(await prepareNativeRisuPreset(snapshot))
+    .promptCompilation!;
+  expect(new Set(compiled.cachePlan.map((point) => point.afterMessageId)).size).toBe(4);
+  for (const [modelId, encode] of [
+    ['gpt-5.6-sol', encodeResponses],
+    ['claude-opus-5-5', encodeAnthropic],
+  ] as const) {
+    const request: ProviderRequest = {
+      role: 'main',
+      modelId,
+      stable: { contract: '', tools: [] },
+      generation: { maxOutputTokens: 1024, temperature: null, cacheMode: 'automatic' },
+      input: { task: snapshot.request, controls: {}, source: {} },
+      prompt: {
+        compilerVersion: compiled.compilerVersion,
+        messages: compiled.messages,
+        cachePlan: compiled.cachePlan,
+        values: compiled.values,
+      },
+    };
+    const original = structuredClone(request);
+    const automatic = encode(request);
+    expect(request).toEqual(original);
+    expect(
+      automatic.messageMetadata?.diagnostics.filter(
+        (item) => item.code === 'CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED'
+      )
+    ).toHaveLength(4);
+    request.generation!.cacheMode = 'explicit';
+    expect(automatic.body).toEqual(encode(request).body);
   }
 });
 

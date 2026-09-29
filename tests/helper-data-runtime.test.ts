@@ -960,7 +960,8 @@ test('a middle lore answer reaches the helper through search pagination and exac
         ],
         wire
       );
-    const read = toolResult(wire, 'partial').items[0].read;
+    const partial = toolResult(wire, 'partial').items[0];
+    const read = partial.read;
     if (round === 3) {
       firstRead = read.text;
       expect(firstRead).not.toContain('two witnesses');
@@ -972,7 +973,7 @@ test('a middle lore answer reaches the helper through search pagination and exac
             id: 'continued',
             name: 'data.read',
             args: {
-              refs: [read.ref],
+              refs: [partial.ref],
               offset: read.nextOffset,
               limit: sentence.length - firstRead.length,
             },

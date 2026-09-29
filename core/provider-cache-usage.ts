@@ -1,4 +1,4 @@
-/** Only counts explicitly reported by the provider; requested cache settings never imply a hit. */
+/** Uses provider usage semantics; requested cache settings never imply a hit. */
 export function providerCacheUsage(
   protocol: unknown,
   value: unknown
@@ -38,9 +38,20 @@ export function providerCacheUsage(
   if (protocol === 'openai-chat-v1' || protocol === 'vercel-chat-v1')
     return {
       readTokens: token(record(raw.prompt_tokens_details).cached_tokens),
-      writeTokens: token(record(raw.prompt_tokens_details).cache_write_tokens),
+      writeTokens: token(
+        protocol === 'vercel-chat-v1' && Object.hasOwn(raw, 'cache_creation_input_tokens')
+          ? raw.cache_creation_input_tokens
+          : record(raw.prompt_tokens_details).cache_write_tokens
+      ),
     };
   if (protocol === 'vertex-gemini-v1')
-    return { readTokens: token(raw.cachedContentTokenCount), writeTokens: null };
+    return {
+      // Vertex's proto3 scalar defaults to zero when omitted from valid usage metadata.
+      readTokens:
+        !Object.hasOwn(raw, 'cachedContentTokenCount') && token(raw.promptTokenCount) !== null
+          ? 0
+          : token(raw.cachedContentTokenCount),
+      writeTokens: null,
+    };
   return undefined;
 }

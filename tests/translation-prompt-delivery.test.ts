@@ -6,7 +6,7 @@ import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { type RisuPrompt } from '../core/risu-prompt.js';
 import { buildCodexDescriptor, decodeCodexOutput } from '../core/codex-protocol.js';
 import type { ProviderRequest } from '../core/transport.js';
-import type { ProviderProtocol } from '../core/product.js';
+import { PROVIDER_PROTOCOLS, type ProviderProtocol } from '../core/product.js';
 import { runAuxiliaryJob, type AuxiliaryBundle } from '../server/product-auxiliary.js';
 import { encodeMainPreview } from '../server/main-request.js';
 import { bridge, bundle, hooks, selectProvider } from './fixtures/translation-job.js';
@@ -101,13 +101,8 @@ async function capture(value: AuxiliaryBundle) {
 const occurrences = (value: unknown, marker: string) =>
   JSON.stringify(value).split(marker).length - 1;
 
-const deliveryProtocols: ProviderProtocol[] = [
-  'openai-responses-v1',
-  'openai-chat-v1',
-  'anthropic-messages-v1',
-  'vertex-gemini-v1',
-  'codex-app-server-v1',
-];
+// The local fixture serializes the raw host request too; it is not an LLM wire encoder.
+const deliveryProtocols = PROVIDER_PROTOCOLS.filter((protocol) => protocol !== 'fixture-sse-v1');
 
 function encodedBody(request: ProviderRequest, value: AuxiliaryBundle, protocol: ProviderProtocol) {
   const model = structuredClone(value.snapshot.profile!.models.translation!);
@@ -141,8 +136,7 @@ test('authored translation assembles frozen source, references and notes once', 
       'Observatory glossary',
     ])
       expect(occurrences(body, marker), `${protocol}: ${marker}`).toBe(1);
-    // The one note object retains both its text and matching declaration.text for provenance.
-    expect(occurrences(body, 'AUTHOR_NOTE_ONCE'), protocol).toBe(2);
+    expect(occurrences(body, 'AUTHOR_NOTE_ONCE'), protocol).toBe(1);
     expect(JSON.stringify(body), protocol).not.toContain('EXCLUDED_OTHER_CHAT');
     expect(JSON.stringify(body), protocol).toContain('instructionRevision');
     expect(JSON.stringify(body), protocol).not.toContain('actorKnowledge');
@@ -172,34 +166,126 @@ const explicitBotGuide = {
   ],
 };
 for (const variant of ['default', 'hermeneia', 'no-context-slot'] as const) {
-  test(`bot translation guide is literal and delivered once (${variant})`, async () => {
-    const program =
-      variant === 'default'
-        ? undefined
-        : variant === 'hermeneia'
-          ? builtinPromptTemplate('hermeneia')!.program
-          : nativePrompt(
-              'Translate.',
-              {
-                promptTemplate: [
-                  { type: 'plain', role: 'system', text: 'Translate the supplied source.' },
-                  {
-                    type: 'plain',
-                    role: 'user',
-                    text: 'Translate the source in the host payload.',
-                  },
-                ],
-              },
-              'translation'
-            );
-    const value = seed(program);
-    value.snapshot.translationGuide = structuredClone(explicitBotGuide);
-    const request = await capture(value);
-    const delivered = encodedBody(request, value, 'codex-app-server-v1');
-    expect(occurrences(delivered, 'BOT_GUIDE_ONCE')).toBe(1);
-    expect(occurrences(delivered, 'BOT_TERM_ONCE')).toBe(1);
-    expect(JSON.stringify(delivered)).toContain('{{setvar::unwanted::1}}');
-    expect(occurrences(delivered, 'SOURCE_ONCE')).toBe(1);
-    expect(JSON.stringify(delivered)).not.toContain('EXCLUDED_OTHER_CHAT');
-  });
+  for (const mode of ['full', 'source-only'] as const) {
+    test(`bot translation guide is literal and delivered once (${variant}, ${mode})`, async () => {
+      const program =
+        variant === 'default'
+          ? undefined
+          : variant === 'hermeneia'
+            ? builtinPromptTemplate('hermeneia')!.program
+            : nativePrompt(
+                'Translate.',
+                {
+                  promptTemplate: [
+                    { type: 'plain', role: 'system', text: 'Translate the supplied source.' },
+                    {
+                      type: 'plain',
+                      role: 'user',
+                      text: 'Translate the source in the host payload.',
+                    },
+                  ],
+                },
+                'translation'
+              );
+      const value = seed(program);
+      value.translationPolicy!.contextMode = mode;
+      value.snapshot.history = [{ revision: 'previous', text: 'EXCLUDED_PREVIOUS_SCENE' }];
+      value.snapshot.translationGuide = structuredClone(explicitBotGuide);
+      const request = await capture(value);
+      expect(request.input.controls.customPrompt).toBe(program ? true : undefined);
+      for (const protocol of deliveryProtocols) {
+        const delivered = encodedBody(request, value, protocol);
+        expect(occurrences(delivered, 'BOT_GUIDE_ONCE'), protocol).toBe(1);
+        expect(occurrences(delivered, 'BOT_TERM_ONCE'), protocol).toBe(1);
+        expect(JSON.stringify(delivered), protocol).toContain('{{setvar::unwanted::1}}');
+        expect(occurrences(delivered, 'SOURCE_ONCE'), protocol).toBe(1);
+        expect(JSON.stringify(delivered), protocol).not.toContain('EXCLUDED_OTHER_CHAT');
+        if (mode === 'source-only') {
+          for (const marker of [
+            'Mira has not learned',
+            'Mira = 미라',
+            'The identity remains unknown',
+            'Observatory glossary',
+            'AUTHOR_NOTE_ONCE',
+            'EXCLUDED_PREVIOUS_SCENE',
+          ])
+            expect(JSON.stringify(delivered), `${protocol}: ${marker}`).not.toContain(marker);
+        } else expect(JSON.stringify(delivered), protocol).toContain('EXCLUDED_PREVIOUS_SCENE');
+      }
+      if (mode === 'source-only') expect(request.stable.tools).toEqual([]);
+    });
+  }
 }
+
+test('source-only removes background before native CBS while preserving authored defaults and controls', async () => {
+  const program = nativePrompt(
+    'Translate.',
+    {
+      templateDefaultVariables: 'choice=AUTHORED_DEFAULT',
+      customPromptTemplateToggle: 'custom=Custom=text',
+      promptTemplate: [
+        {
+          type: 'plain',
+          role: 'system',
+          text: 'AUTHORED_PROMPT: {{getvar::choice}}|{{getglobalvar::toggle_custom}}|{{getvar::private}}|{{description}}|{{persona}}|{{lastmessage}}',
+        },
+        { type: 'description' },
+        { type: 'persona' },
+        { type: 'lorebook' },
+        { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+      ],
+    },
+    'translation'
+  );
+  const value = seed(program);
+  value.translationPolicy!.contextMode = 'source-only';
+  value.snapshot.profile!.variableState = {
+    revision: 1,
+    values: { private: 'EXCLUDED_VARIABLE', choice: 'EXCLUDED_OVERRIDE' },
+  };
+  value.snapshot.profile!.promptControls = {
+    'translation@1': { values: { custom: 'AUTHORED_CONTROL' }, combinations: [] },
+  };
+  value.snapshot.logicalHistory = [
+    { id: 'previous', role: 'assistant', text: 'EXCLUDED_LOGICAL_HISTORY' },
+  ];
+  const request = await capture(value);
+  const body = encodedBody(request, value, 'vertex-gemini-v1');
+  expect(JSON.stringify(body)).toContain('AUTHORED_PROMPT: AUTHORED_DEFAULT|AUTHORED_CONTROL|');
+  for (const marker of [
+    'EXCLUDED_VARIABLE',
+    'EXCLUDED_OVERRIDE',
+    'EXCLUDED_LOGICAL_HISTORY',
+    'Mira has not learned',
+    'AUTHOR_NOTE_ONCE',
+  ])
+    expect(JSON.stringify(body)).not.toContain(marker);
+  expect(occurrences(body, 'SOURCE_ONCE')).toBe(1);
+});
+
+test('large auxiliary catalogs execute with bounded discovery metadata and no duplicate pinned entries', async () => {
+  const value = seed(programs());
+  value.snapshot.resources[0].loading = 'pinned';
+  value.snapshot.resources.push(
+    ...Array.from({ length: 120 }, (_, index) => ({
+      id: `entry-${index}`,
+      chatId: 'chat-a',
+      kind: 'lore' as const,
+      revision: 1,
+      title: `Archive entry ${index}`,
+      description: 'Searchable reference. '.repeat(40),
+      text: 'Deferred body',
+    }))
+  );
+  const request = await capture(value);
+  const source = request.input.source as Record<string, unknown>;
+  expect(source.catalogPage).toMatchObject({ total: 122 });
+  expect((request.input.catalog as unknown[]).length).toBeLessThan(122);
+  expect(JSON.stringify(request.input.catalog).length).toBeLessThanOrEqual(24_000);
+  expect(JSON.stringify(request.input.catalog)).not.toContain('package:bot:bot');
+  expect(JSON.stringify(request.input.catalog)).toContain('An unprefetched name.');
+  expect(request.stable.tools.some((tool) => tool.name === 'knowledge.search')).toBe(true);
+  expect(occurrences(encodedBody(request, value, 'vertex-gemini-v1'), 'Mira has not learned')).toBe(
+    1
+  );
+});

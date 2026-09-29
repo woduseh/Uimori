@@ -56,7 +56,12 @@ test('token budgets preserve long requests and catalogs without character-based 
   input.request = 'Continue. '.repeat(600) + 'Respect the final direction.';
   input.profile!.loreContext = {
     ...DEFAULT_LORE_CONTEXT,
-    judgment: { ...DEFAULT_LORE_CONTEXT.judgment, maxInputTokens: 30_000 },
+    maxRetainedTokens: 100_000,
+    judgment: {
+      ...DEFAULT_LORE_CONTEXT.judgment,
+      maxSelectedTokens: 100_000,
+      maxInputTokens: 30_000,
+    },
   };
   input.profile!.packages![0].lore[0].text = 'a'.repeat(200_001);
   input.history = [{ revision: 'past', text: '기억할 장면 😀 '.repeat(2000) + '마지막 단서' }];

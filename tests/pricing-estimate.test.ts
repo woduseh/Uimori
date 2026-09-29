@@ -24,17 +24,23 @@ const responses = {
 const value = (result: ReturnType<typeof estimateCost>, kind: string) =>
   result.lines.find((line) => line.kind === kind);
 
-test('Gateway reported cache writes are separate from input and reads', () => {
+test.each([
+  { prompt_tokens_details: { cached_tokens: 200, cache_write_tokens: 100 } },
+  {
+    cache_creation_input_tokens: 100,
+    prompt_tokens_details: { cached_tokens: 200, cache_write_tokens: 900 },
+  },
+])('Gateway reported cache writes are separate from input and reads: %j', (raw) => {
   const priced = estimateCost(
     snapshot('vercel-chat-v1'),
     {
       inputTokens: 1000,
       outputTokens: 100,
-      raw: { prompt_tokens_details: { cached_tokens: 200, cache_write_tokens: 100 } },
+      raw,
     },
     started
   );
-  expect(priced.usd).toBeCloseTo(0.0026);
+  expect(priced.usd).toBeCloseTo(0.0026, 8);
   expect(value(priced, 'input')?.tokens).toBe(700);
   expect(value(priced, 'cacheWrite')?.tokens).toBe(100);
 });
@@ -60,7 +66,7 @@ test('Responses disjoint input/cache read/cache write and normalized reasoning o
     started
   );
   expect(result.status).toBe('estimated');
-  expect(result.usd).toBeCloseTo(0.0026);
+  expect(result.usd).toBeCloseTo(0.0026, 8);
   expect(value(result, 'input')?.tokens).toBe(700);
   expect(value(result, 'output')?.tokens).toBe(100);
 });
@@ -77,7 +83,7 @@ test.each(['openai-chat-v1', 'vercel-chat-v1'] as const)(
       },
       started
     );
-    expect(result.usd).toBeCloseTo(0.0025);
+    expect(result.usd).toBeCloseTo(0.0025, 8);
     expect(result.lines.map((line) => line.kind)).toEqual(['input', 'cacheRead', 'output']);
   }
 );
@@ -92,8 +98,48 @@ test('Vertex output is already candidates plus thoughts; cached input is include
     },
     started
   );
-  expect(result.usd).toBeCloseTo(0.0025);
+  expect(result.usd).toBeCloseTo(0.0025, 8);
   expect(value(result, 'output')?.tokens).toBe(100);
+});
+
+test('Vertex omitted zero cache scalar still prices confirmed input and output', () => {
+  const raw = { promptTokenCount: 1000, candidatesTokenCount: 100, totalTokenCount: 1100 };
+  const result = estimateCost(
+    snapshot('vertex-gemini-v1'),
+    { inputTokens: 1000, outputTokens: 100, raw },
+    started
+  );
+  expect(result.status).toBe('estimated');
+  expect(result.usd).toBeCloseTo(0.0028, 8);
+  expect(value(result, 'input')?.tokens).toBe(1000);
+  expect(value(result, 'cacheRead')).toMatchObject({ tokens: 0, usd: 0 });
+  expect(raw).not.toHaveProperty('cachedContentTokenCount');
+});
+
+test.each([
+  { tokens: 0, status: 'estimated', usd: 0.0028, cacheUsd: 0 },
+  { tokens: null, status: 'partial', usd: null, cacheUsd: null },
+  { tokens: 200, status: 'partial', usd: null, cacheUsd: null },
+])('unknown cache rate with confirmed quantity $tokens preserves cost certainty', (expected) => {
+  const pricing = snapshot('vertex-gemini-v1');
+  pricing.rates.cacheRead = null;
+  const result = estimateCost(
+    pricing,
+    {
+      inputTokens: 1000,
+      outputTokens: 100,
+      raw: { promptTokenCount: 1000, cachedContentTokenCount: expected.tokens },
+    },
+    started
+  );
+  expect(result.status).toBe(expected.status);
+  if (expected.usd === null) expect(result.usd).toBeNull();
+  else expect(result.usd).toBeCloseTo(expected.usd, 8);
+  expect(value(result, 'cacheRead')).toMatchObject({
+    tokens: expected.tokens,
+    rate: null,
+    usd: expected.cacheUsd,
+  });
 });
 
 test('DeepSeek cache hit tokens are a subset of normalized input', () => {
@@ -106,7 +152,7 @@ test('DeepSeek cache hit tokens are a subset of normalized input', () => {
     },
     started
   );
-  expect(result.usd).toBeCloseTo(0.0025);
+  expect(result.usd).toBeCloseTo(0.0025, 8);
 });
 
 const anthropic = {
@@ -123,7 +169,7 @@ test('Anthropic raw input excludes caches but adapter total includes both, inclu
   const pricing = snapshot('anthropic-messages-v1');
   pricing.rates.cacheWrite1h = 4;
   const result = estimateCost(pricing, anthropic, started);
-  expect(result.usd).toBeCloseTo(0.00264);
+  expect(result.usd).toBeCloseTo(0.00264, 8);
   expect(value(result, 'input')?.tokens).toBe(700);
   expect(value(result, 'cacheWrite')?.tokens).toBe(60);
   expect(value(result, 'cacheWrite1h')?.tokens).toBe(40);
@@ -172,7 +218,7 @@ test.each([null, undefined, -1, '200', NaN])(
     );
     expect(result.status).toBe('partial');
     expect(result.usd).toBeNull();
-    expect(result.subtotalUsd).toBeCloseTo(0.0011);
+    expect(result.subtotalUsd).toBeCloseTo(0.0011, 8);
     expect(value(result, 'input')?.tokens).toBeNull();
   }
 );
@@ -270,6 +316,27 @@ test.each(['default', 'auto', 'standard', 'ON_DEMAND'])(
     expect(estimateCost(snapshot(), responses, started, actual).status).toBe('estimated');
   }
 );
+
+test('Anthropic standard_only request accepts reported standard pricing', () => {
+  const pricing = snapshot('anthropic-messages-v1');
+  pricing.serviceTier = 'standard_only';
+  const result = estimateCost(
+    pricing,
+    {
+      inputTokens: 1000,
+      outputTokens: 100,
+      raw: {
+        input_tokens: 1000,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        service_tier: 'standard',
+      },
+    },
+    started
+  );
+  expect(result.status).toBe('estimated');
+  expect(result.usd).toBeCloseTo(0.0028, 8);
+});
 
 test('Flex price requires matching actual tier, never silently switches to standard rates', () => {
   const pricing = snapshot();

@@ -97,13 +97,15 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 ## Codex 경로
 
 - 별도 Codex 프로세스에서 `thread/start` → `turn/start` 한 턴을 실행해요. 삽화 전용 짧은 기본 지침을 사용하고 이미지 생성 도구를 직접 한 번 호출하도록 요청해요. 이 턴에서는 웹 검색·격리 JavaScript 계산을 끄고 `features.image_generation=true`를 사용해요. shell·파일·MCP·앱·외부 스킬의 환경 접근은 [Codex 실행 경계](CODEX.md)에 따라 제한해요. 텍스트 판단 턴에는 `features.image_generation=false`를 명시해 이미지 생성의 예약·귀속·저장을 삽화 경로에 유지해요.
-- 입력은 `{task, styleGuidance, characterNotes, illustrationInstructions, attachedReferences, scene}` JSON 텍스트와 참조 이미지(`{type:'image', url:'data:...'}`)예요. 패키지의 `instructions.target: 'image'` 지침과 봇·페르소나 본문을 인물 참고로 함께 넣어요. 텍스트·메타데이터 전체는 선택 모델의 입력 토큰 예산을 보내기 전에 검사해요. 이미지 내용과 Codex 내부 도구 사용의 토큰 비용은 이 로컬 텍스트 추정에 포함되지 않아요.
+- 입력은 `{task, allowSkip, styleGuidance, characterNotes, attachedReferences, scene}` JSON 텍스트와 참조 이미지(`{type:'image', url:'data:...'}`)예요. 선택한 삽화 프리셋의 그림 지침과 봇·페르소나 본문을 함께 넣어요. 텍스트·메타데이터 전체는 선택 모델의 입력 토큰 예산을 보내기 전에 검사해요. 이미지 내용과 Codex 내부 도구 사용의 토큰 비용은 이 로컬 텍스트 추정에 포함되지 않아요.
 - 결과는 `item/completed`의 `imageGeneration` 항목에서 읽어요. `result`(base64)를 우선 쓰고, 비어 있으면 전용 Codex home 안의 `savedPath` 파일을 읽은 뒤 삭제해요. 최종 `agentMessage`는 `{caption}` JSON으로 제약해요.
 - 실패 코드: `CODEX_IMAGE_USAGE_LIMIT`(항목의 `failure.usageLimitExceeded`, 자동 재요청 없음), `CODEX_IMAGE_NOT_GENERATED`(이미지 항목 없음, 재요청 가능), 기존 Codex 코드(`CODEX_LOGIN_REQUIRED`, `CODEX_TURN_FAILED` 등).
 - 삽화 턴은 텍스트 턴의 동시 실행 슬롯과 별도 슬롯(동시 1개, 대기 8개)을 써요. Codex 로그인·프로바이더 권한은 텍스트 턴과 같은 검사를 거치며 attempt는 `role: 'illustration'`으로 기록하고 첨부 bytes는 attempt에 넣지 않아요.
 - 이미지 크기·품질 옵션은 Codex가 정해요. 사용량은 ChatGPT 구독 한도에 포함되고 비용·내부 모델 호출 수는 `null`이에요. attempt의 원시 사용량에는 완료된 항목 종류별 개수와 토큰 사용량 갱신 횟수를 숫자로 남겨요. 이는 실제 이미지 API 과금량이나 내부 모델 호출 수를 뜻하지 않아요.
 
 ## ComfyUI 경로
+
+- 렌더만 실패한 동일 작업의 안전한 자동 재시도·**다시 요청**에서는 성공한 `prompt`·`negativePrompt`·`caption`을 재사용해 프롬프트 모델 비용을 줄여요. 매번 실제 요청의 지침·모델 설정·발췌된 장면·봇·페르소나를 비교하므로, 실행 시 재구성한 참고 자료가 바뀌면 다시 생성해요. 비교 정보가 없는 이전 작업이나 읽을 수 없는 프롬프트 응답은 재사용하지 않아요. **새 삽화 생성**은 별도 작업으로 프롬프트도 새로 만들고, 안전한 렌더 재시도도 seed는 새로 골라요. 접수 결과가 불확실한 원격 요청은 이 최적화와 관계없이 다시 전송하지 않아요.
 
 - 원격 주소는 `http://`·`https://`만 허용하고 인증 정보·쿼리를 포함할 수 없어요. 프록시 인증이 필요하면 서버 환경변수 이름을 **인증 헤더 환경변수**에 적어 두면 그 값을 `Authorization` 헤더로 보내요. 브라우저는 ComfyUI에 직접 접근하지 않아요.
 - 실행 순서: 프롬프트 모델 호출(장면 → `{prompt, negativePrompt, caption}` JSON, 자동 예약이면 `{decision:'skip', reason}` 허용) → 워크플로의 `{{prompt}}`·`{{negative}}`·`{{seed}}` 치환 → `POST /prompt` → `GET /history/{prompt_id}` 폴링 → `GET /view`로 이미지 다운로드.

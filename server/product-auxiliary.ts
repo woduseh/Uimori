@@ -18,6 +18,7 @@ import {
   presentationInput,
   scriptedAuxiliary,
   translationInput,
+  translationPromptContext,
   validateDisplayAnnotation,
   validatePresentation,
   type AssetEntry,
@@ -37,10 +38,16 @@ import {
 } from '../core/transport.js';
 import type { ImageTarget, RunSnapshot, ToolEvent } from '../core/types.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
-import { translationPolicy, type TranslationPolicy } from '../core/translation-settings.js';
+import {
+  translationContextMode,
+  translationPolicy,
+  type TranslationPolicy,
+} from '../core/translation-settings.js';
+import { modelAuthorNotes } from '../core/notes.js';
 import {
   translationReader,
   TRANSLATION_READ_NAMES,
+  translationSnapshot,
   type TranslationReference,
 } from '../core/translation-context.js';
 import { RisuPromptError } from '../core/risu-prompt.js';
@@ -84,7 +91,7 @@ export type AuxiliaryJobResult = {
     presentationIntent: 'inline' | 'profile';
     caption?: string;
   }[];
-  display?: { anchor: string; summary: string; mood: string }[];
+  display?: { anchor: string; summary: string; mood?: string }[];
 };
 export type AuxiliaryOutcome = {
   status: 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted';
@@ -244,7 +251,12 @@ function providerInput(
     compilation.messages.some((message) =>
       message.content.some((part) => part.text.includes(value))
     );
-  const notes = input.role === 'translation' ? snapshot.story?.notes : undefined;
+  const sourceOnly = input.contextMode === 'source-only';
+  const context = translationPromptContext(input);
+  const notes =
+    input.role === 'translation' && !sourceOnly
+      ? modelAuthorNotes(snapshot.story?.notes ?? [])
+      : undefined;
   return withNativeHostContext({
     role: input.role,
     ...modelFields,
@@ -293,15 +305,19 @@ function providerInput(
       : {}),
     input: {
       task,
-      controls: {
-        instructionRevision: input.context.instructionRevision,
-        modelPresetRevision: input.context.modelPresetRevision,
-        ...(input.customPrompt ? { customPrompt: true } : {}),
-      },
+      controls: sourceOnly
+        ? input.customPrompt
+          ? { customPrompt: true }
+          : {}
+        : {
+            instructionRevision: input.context.instructionRevision,
+            modelPresetRevision: input.context.modelPresetRevision,
+            ...(input.customPrompt ? { customPrompt: true } : {}),
+          },
       source: json({
         sourceRevision: input.sourceRevision,
         sourceHash: input.sourceHash,
-        ...(!delivered('context', JSON.stringify(input.context)) ? { context: input.context } : {}),
+        ...(!delivered('context', JSON.stringify(context)) ? { context } : {}),
         ...(input.role === 'translation'
           ? !delivered('source', input.sourceText ?? '')
             ? { text: input.sourceText }
@@ -309,6 +325,7 @@ function providerInput(
           : { blocks: input.blocks }),
         ...(notes?.length && !delivered('notes', JSON.stringify(notes)) ? { notes } : {}),
         ...(input.scenes ? { scenes: input.scenes } : {}),
+        ...(input.catalogPage ? { catalogPage: input.catalogPage } : {}),
         outputSchema: input.outputSchema,
       }),
       ...(!delivered('catalog', JSON.stringify(input.catalog))
@@ -331,7 +348,9 @@ export async function runAuxiliaryJob(
 ): Promise<AuxiliaryOutcome | null> {
   const bundle = structuredClone(await store.load(jobId));
   const { source, job } = bundle;
-  let snapshot = bundle.snapshot;
+  const policy = translationPolicy(bundle.translationPolicy);
+  const mode = job.kind === 'translation' ? translationContextMode(policy.contextMode) : 'full';
+  let snapshot = translationSnapshot(bundle.snapshot, mode);
   if (
     job.sourceRevision !== source.id ||
     job.sourceHash !== source.hash ||
@@ -368,10 +387,9 @@ export async function runAuxiliaryJob(
     }
   }
   const assets = bundle.assets ?? [];
-  const policy = translationPolicy(bundle.translationPolicy);
   const input =
     job.kind === 'translation'
-      ? translationInput(source, context, snapshot)
+      ? translationInput(source, context, snapshot, mode)
       : job.kind === 'status'
         ? displayInput(source, context, snapshot)
         : presentationInput(imageSource, context, snapshot, assets);

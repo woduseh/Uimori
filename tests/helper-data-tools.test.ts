@@ -101,6 +101,7 @@ test('grep returns authored excerpts once, supports two-character Korean queries
   expect(hit.text).toContain('나이: 27세');
   expect(hit.origin).toBe('live-library-original');
   expect(hit.ref).toMatchObject({ id: b.id, kind: 'bot', field: '/card/description', revision: 1 });
+  expect(hit.ref.hash).toBe(hash(b.package.nativeRisu.card.description as string));
   expect(hit.editTarget).toEqual({
     kind: 'content',
     id: b.id,
@@ -113,7 +114,6 @@ test('grep returns authored excerpts once, supports two-character Korean queries
     limit: 6,
   });
   expect(read.text).toBe('나이: 27');
-  expect(read.ref.hash).toBe(hash(b.package.nativeRisu.card.description as string));
   expect(read.range.start).toBe(hit.matchRange.start);
   expect(read.editTarget).toEqual(hit.editTarget);
 });
@@ -405,6 +405,11 @@ test('library filters distinguish bot/persona/module, hide retired library entri
     limit: 20,
   });
   expect(batch.items).toHaveLength(3);
+  expect(batch.items.map((item: any) => item.ref)).toEqual([
+    ...refs,
+    { ...refs[0], hash: '0'.repeat(64) },
+  ]);
+  for (const item of batch.items.slice(0, 2)) expect(item.read).not.toHaveProperty('ref');
   expect(batch.items[0].read.text).toContain('나이');
   expect(batch.items[2].error).toContain('DATA_SOURCE_CHANGED');
   expect(batch.nextIndex).toBeNull();

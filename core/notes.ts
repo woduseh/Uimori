@@ -17,6 +17,16 @@ export type AuthorNote = {
   | { kind: 'author-note'; origin?: never }
   | { kind: 'imported-memory'; origin: ImportedMemoryOrigin }
 );
+
+/** Model input keeps attribution and retrieval anchors while sending each note's body once. */
+export function modelAuthorNotes(notes: readonly AuthorNote[]) {
+  return notes.map(({ declaration, ...note }) => ({
+    ...note,
+    ...(note.origin ? { origin: { ...note.origin } } : {}),
+    declaration: { author: declaration.author },
+  }));
+}
+
 export function validateAuthorNote(value: unknown, scope: SourceScope): AuthorNote {
   const fail = (): never => {
     throw new Error('STORY_NOTE_INVALID');

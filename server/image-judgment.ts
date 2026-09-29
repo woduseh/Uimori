@@ -52,7 +52,7 @@ function candidates(source: AuxiliarySource, assets: readonly AssetEntry[]) {
     .sort((a, b) => b.score - a.score || a.index - b.index);
   return { blocks, ordered };
 }
-/** A deterministic, bounded catalog; lexical matches order candidates but never exclude synonyms. */
+/** Host-bound input also preserves the original v1 catalog selection and receipt identity. */
 export function imageJudgmentRequest(
   source: AuxiliarySource,
   assets: readonly AssetEntry[],
@@ -119,6 +119,19 @@ export function imageJudgmentRequest(
   if (!low) throw new JevError('JEV_INPUT_BUDGET');
   return build(low);
 }
+/** Integrity fields bind the host receipt; they do not help the model choose an illustration. */
+function modelRequest(request: JevRequest): JevRequest {
+  const { sourceHash: _sourceHash, assets, ...state } = request.state as Record<string, Json>;
+  return {
+    ...request,
+    state: {
+      ...state,
+      assets: (assets as Record<string, Json>[]).map(
+        ({ revision: _revision, hash: _hash, ...asset }) => asset
+      ),
+    },
+  };
+}
 export async function judgeImagePlacement(
   source: AuxiliarySource,
   assets: readonly AssetEntry[],
@@ -128,7 +141,7 @@ export async function judgeImagePlacement(
   const request = imageJudgmentRequest(source, assets, guidance);
   if (!request) return { sourceRevision: source.id, sourceHash: source.hash, entries: [] };
   const result = await executeJevJudgment(
-    request,
+    modelRequest(request),
     imageJudgmentInputHash(request),
     IMAGE_JUDGMENT_LIMITS.inputTokens,
     { ...hooks, kind: 'image-selection' }
@@ -172,6 +185,7 @@ export function validateImageJudgmentWire(
   const guidance = record(record(wire.body).state).guidance;
   const expected =
     typeof guidance === 'string' ? imageJudgmentRequest(source, assets, guidance) : null;
+  const bodyHash = digest(wire.body);
   if (
     !expected ||
     wire.judgment?.kind !== 'image-selection' ||
@@ -184,7 +198,9 @@ export function validateImageJudgmentWire(
     wire.agentId ||
     wire.nativeScript ||
     wire.judgment.inputHash !== imageJudgmentInputHash(expected) ||
-    digest(wire.body) !== digest({ model: JEV_MODEL, ...expected })
+    // Previously captured attempts keep their original full body and the same v1 input hash.
+    (bodyHash !== digest({ model: JEV_MODEL, ...modelRequest(expected) }) &&
+      bodyHash !== digest({ model: JEV_MODEL, ...expected }))
   )
     throw new HttpError(400, 'IMAGE_JUDGMENT_ATTEMPT_MISMATCH');
 }

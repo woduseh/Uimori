@@ -220,9 +220,10 @@ export function resolveModelPricing(
   }
   const standard = ['auto', 'default', 'standard', 'standard_only'].includes(tier);
   const official = (
-    data: Omit<PricingSnapshot, keyof typeof base | 'source' | 'checkedAt'>
+    data: Omit<PricingSnapshot, keyof typeof base | 'source' | 'checkedAt'>,
+    checkedAt = CHECKED_AT
   ): PricingSnapshot =>
-    validatePricingSnapshot({ ...base, source: 'official', checkedAt: CHECKED_AT, ...data });
+    validatePricingSnapshot({ ...base, source: 'official', checkedAt, ...data });
   if (
     ['openai-responses-v1', 'openai-chat-v1'].includes(connection.protocol) &&
     exactEndpoint(connection, 'api.openai.com')
@@ -279,16 +280,21 @@ export function resolveModelPricing(
         ? tokenRates(10, 0.25, 12.5, 50, 20)
         : model.modelId === 'claude-opus-5'
           ? tokenRates(5, 0.5, 6.25, 25, 10)
-          : undefined;
+          : model.modelId === 'claude-opus-5-5'
+            ? tokenRates(4, 0.2, 5, 20, 8)
+            : undefined;
     if (!value) return undefined;
-    return official({
-      rates: value,
-      sourceUrl: 'https://platform.claude.com/docs/en/about-claude/pricing',
-      notes: [
-        '1M 문맥까지 같은 단가예요. 캐시 쓰기는 5분과 1시간을 구분해요.',
-        '전역 추론 기준이며 US-only 추론과 Fast 모드의 추가 요금은 포함하지 않아요.',
-      ],
-    });
+    return official(
+      {
+        rates: value,
+        sourceUrl: 'https://platform.claude.com/docs/en/about-claude/pricing',
+        notes: [
+          '1M 문맥까지 같은 단가예요. 캐시 쓰기는 5분과 1시간을 구분해요.',
+          '전역 추론 기준이며 US-only 추론과 Fast 모드의 추가 요금은 포함하지 않아요.',
+        ],
+      },
+      model.modelId === 'claude-opus-5-5' ? '2026-09-29' : CHECKED_AT
+    );
   }
   if (connection.protocol === 'vertex-gemini-v1') {
     try {
@@ -314,10 +320,7 @@ export function resolveModelPricing(
       value = scale(tokenRates(0.3, 0.03, null, 2.5), flex ? 0.5 : 1);
     else if (model.modelId === 'gemini-3.8-flash') {
       value = scale(tokenRates(1.5, 0.15, null, 7.5), (flex ? 0.5 : 1) * (promo ? 0.5 : 1));
-      if (promo)
-        notes.push(
-          '2026-12-31까지 50% 크레딧 환급을 반영한 프로모션 단가이며 즉시 청구액과 다를 수 있어요.'
-        );
+      if (promo) notes.push('2026-12-31까지 50% 출시 할인이 적용된 단가예요.');
     } else return undefined;
     return official({
       rates: value,

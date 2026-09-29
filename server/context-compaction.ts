@@ -30,6 +30,7 @@ import {
 } from './context-planning.js';
 import { encodeMainPreview } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
+import { modelAuthorNotes } from '../core/notes.js';
 
 export type ContextCompactionHooks = MainHooks & {
   onProgress: (plan: ContextPlan) => void | Promise<void>;
@@ -126,7 +127,7 @@ function summaryRequest(
         kind: 'derived-conversation-summary',
         sceneScope,
         previousSummary,
-        userNotes: userNotes as unknown as Json,
+        userNotes: modelAuthorNotes(userNotes) as unknown as Json,
         fragments: fragments as unknown as Json,
       },
     },

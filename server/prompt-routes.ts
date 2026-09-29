@@ -18,6 +18,9 @@ import { validateLoreContextPolicy } from '../core/lore-context.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { builtinPromptTemplate, builtinPromptTemplates } from './builtin-prompts.js';
+import { promptWorkspace } from './prompt-workspace.js';
+import { translationContextMode } from '../core/translation-settings.js';
+import { translationSnapshot } from '../core/translation-context.js';
 import { prepareNativeRisuRun } from './risu-native-run.js';
 import { prepareNativeRisuTranslationPrompt } from './risu-native-preset.js';
 import {
@@ -131,24 +134,28 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           role: 'translation' as const,
           program,
         };
-        const fixed = {
-          ...frozen,
-          translationGuide,
-          profile: {
-            ...(frozen.profile ?? { ...defaultProfile(chat.id), models: {} }),
-            promptPresets: { ...frozen.profile?.promptPresets, translation: preset },
-            promptControls: {
-              ...frozen.profile?.promptControls,
-              [`${preset.id}@${preset.revision}`]: {
-                values:
-                  values ??
-                  profile.promptControls?.[`${preset.id}@${preset.revision}`]?.values ??
-                  {},
-                combinations: [],
+        const mode = translationContextMode(promptWorkspace(store).translationPolicy.contextMode);
+        const fixed = translationSnapshot(
+          {
+            ...frozen,
+            translationGuide,
+            profile: {
+              ...(frozen.profile ?? { ...defaultProfile(chat.id), models: {} }),
+              promptPresets: { ...frozen.profile?.promptPresets, translation: preset },
+              promptControls: {
+                ...frozen.profile?.promptControls,
+                [`${preset.id}@${preset.revision}`]: {
+                  values:
+                    values ??
+                    profile.promptControls?.[`${preset.id}@${preset.revision}`]?.values ??
+                    {},
+                  combinations: [],
+                },
               },
             },
           },
-        };
+          mode
+        );
         const evaluated = await prepareNativeRisuTranslationPrompt(
           nativeRisuSnapshotNeedsRefresh(fixed)
             ? await prepareNativeRisuReadOnly(fixed, 'auxiliary')
@@ -157,7 +164,8 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         const input = translationInput(
           source,
           sourceTimeContext(evaluated, 'translation'),
-          evaluated
+          evaluated,
+          mode
         );
         compilation = compileTranslationPrompt(
           input,

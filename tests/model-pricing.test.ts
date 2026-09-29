@@ -155,6 +155,13 @@ test('Claude has model-specific cache reads and both write TTLs, without a long 
     output: 25,
   });
   expect(opus?.longContext).toBeUndefined();
+  expect(resolve('claude-opus-5-5', c)?.rates).toEqual({
+    input: 4,
+    cacheRead: 0.2,
+    cacheWrite: 5,
+    cacheWrite1h: 8,
+    output: 20,
+  });
   expect(resolve('claude-opus-5', c, { serviceTier: 'flex' })).toBeUndefined();
 });
 

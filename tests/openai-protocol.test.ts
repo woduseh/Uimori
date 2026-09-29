@@ -546,7 +546,9 @@ describe('native Responses pure protocol (no live calls)', () => {
       });
       expect(wire.text.verbosity).toBe('low');
       expect(wire.text).not.toHaveProperty('format');
-      expect(JSON.stringify(wire)).not.toContain('prompt_cache_breakpoint');
+      expect(JSON.stringify(wire).includes('prompt_cache_breakpoint')).toBe(
+        cacheMode === 'automatic'
+      );
       const run = first(input);
       run.decoder.accept(terminal([call()]));
       const continued = next(input, run.decoder.finish());
@@ -558,11 +560,18 @@ describe('native Responses pure protocol (no live calls)', () => {
     }
   );
 
-  test.each([undefined, 'explicit', 'automatic', 'disabled'] as const)(
-    'helper cache %s reuses stable instructions without changing request text or continuation',
-    (cacheMode) => {
+  test.each(
+    (['helper', 'main', 'context'] as const).flatMap((role) =>
+      ([undefined, 'explicit', 'automatic', 'disabled'] as const).map((cacheMode) => ({
+        role,
+        cacheMode,
+      }))
+    )
+  )(
+    '$role cache $cacheMode reuses stable instructions without changing request text or continuation',
+    ({ role, cacheMode }) => {
       const input = request();
-      input.role = 'helper';
+      input.role = role;
       input.modelId = 'gpt-5.6-sol';
       input.generation = {
         maxOutputTokens: 8192,

@@ -254,6 +254,30 @@ export function ModelWorkspaceEditor({
           <div className="task-behavior-settings-body">
             <section aria-labelledby="translation-task-heading" className="task-behavior-section">
               <h4 id="translation-task-heading">번역 작업</h4>
+              <label>
+                번역 참고 범위
+                <select
+                  aria-label="번역 참고 범위"
+                  aria-describedby="translation-context-help"
+                  value={draft.translationPolicy.contextMode ?? 'full'}
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      translationPolicy: {
+                        ...draft.translationPolicy,
+                        contextMode: event.target.value as 'full' | 'source-only',
+                      },
+                    })
+                  }
+                >
+                  <option value="full">관련 자료 포함(기존)</option>
+                  <option value="source-only">본문과 번역 지침만</option>
+                </select>
+              </label>
+              <p id="translation-context-help" className="refusal-settings-help">
+                본문과 번역 지침만 사용하면 봇·페르소나·로어·이전 장면·메모를 참고하지 않아요.
+                선택한 번역 프롬프트, 봇 번역 지침과 원문 전체는 유지해요.
+              </p>
               <div className="refusal-field-row">
                 <label htmlFor="translation-call-limit">번역 작업 호출 한도</label>
                 <input

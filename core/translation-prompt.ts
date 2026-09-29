@@ -5,6 +5,19 @@ import { DEFAULT_TRANSLATION_PROMPT } from './prompts.js';
 import { compileRisuPrompt, type PromptCompilation } from './risu-prompt.js';
 import { executionContext } from './execution-context.js';
 import { packageSlots } from './package-context.js';
+import { modelAuthorNotes } from './notes.js';
+import { translationSnapshot } from './translation-context.js';
+
+/** Background references never enter the source-only request's slots or fallback. */
+export function translationPromptContext(input: AuxiliaryInput) {
+  return input.contextMode === 'source-only'
+    ? {
+        ...(input.context.translationGuide
+          ? { translationGuide: input.context.translationGuide }
+          : {}),
+      }
+    : input.context;
+}
 
 /** A translation job compiles its own frozen preset and values, never main-turn messages. */
 export function compileTranslationPrompt(
@@ -13,6 +26,9 @@ export function compileTranslationPrompt(
   task: string
 ): PromptCompilation | undefined {
   if (input.role !== 'translation') return undefined;
+  snapshot = translationSnapshot(snapshot, input.contextMode ?? 'full');
+  const context = translationPromptContext(input);
+  const notes = modelAuthorNotes(snapshot.story?.notes ?? []);
   const preset = snapshot.profile?.promptPresets?.translation;
   if (
     preset &&
@@ -20,19 +36,19 @@ export function compileTranslationPrompt(
       input.context.instructionRevision !== `prompt:${preset.id}@${preset.revision}`)
   )
     throw new Error('SOURCE_PROMPT_REVISION_MISMATCH');
-  const description = input.context.bot?.text ?? '';
+  const description = input.contextMode === 'source-only' ? '' : (input.context.bot?.text ?? '');
   const slots: Record<string, string> = {
     char: 'Character',
     bot: description,
     description,
-    persona: input.context.persona?.text ?? '',
+    persona: input.contextMode === 'source-only' ? '' : (input.context.persona?.text ?? ''),
     lore: '',
     lorebook: '',
     // Explicit bot terms travel once in context.translationGuide, not a second glossary path.
     glossary: '',
-    notes: snapshot.story?.notes ? JSON.stringify(snapshot.story.notes) : '',
+    notes: notes.length ? JSON.stringify(notes) : '',
     source: input.sourceText ?? JSON.stringify(input.blocks),
-    context: JSON.stringify(input.context),
+    context: JSON.stringify(context),
     outputSchema: JSON.stringify(input.outputSchema),
     catalog: JSON.stringify(input.catalog),
     controls: '{}',
@@ -48,7 +64,7 @@ export function compileTranslationPrompt(
     if (packageSlot[key]) slots[key] = [slots[key], packageSlot[key]].filter(Boolean).join('\n\n');
   slots.description = slots.bot;
   slots.lorebook = slots.lore;
-  const currentText = `${task}\n\n<Sample_Text>\n${input.sourceText ?? ''}\n</Sample_Text>\n\n<Additional_Information>\n\ncontext:\n${JSON.stringify(input.context)}\nnotes:\n${JSON.stringify(snapshot.story?.notes ?? [])}\n</Additional_Information>`;
+  const currentText = `${task}\n\n<Sample_Text>\n${input.sourceText ?? ''}\n</Sample_Text>\n\n<Additional_Information>\n\ncontext:\n${JSON.stringify(context)}${input.contextMode === 'source-only' ? '' : `\nnotes:\n${JSON.stringify(notes)}`}\n</Additional_Information>`;
   const compilation = compileRisuPrompt(
     preset?.program ?? createDefaultRisuPrompt(DEFAULT_TRANSLATION_PROMPT, 'translation'),
     {

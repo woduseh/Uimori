@@ -16,6 +16,75 @@ import {
 const selectedAdvice = 'SELECTED_A_ADVICE: the keeper could wait; this is proposed fiction.';
 const finalText = 'The keeper stopped at the locked copper door.';
 
+test('explicit cached self-advice replaces only its duplicate automatic consultation history', async () => {
+  let mainCalls = 0;
+  let advisorCalls = 0;
+  let contextHash: string | undefined;
+  const firstQuestion = 'Inspect the setting.';
+  const firstAdvice = 'SELF_ADVICE_SENTINEL: the tower is visible from the harbor.';
+  const state = await fixture(
+    async (body, target, _number, wire) => {
+      if (wire.agentId) {
+        if (++advisorCalls === 1) await send(target, [message(firstAdvice)]);
+        else {
+          const source = packet(body).source;
+          expect(source).not.toHaveProperty('previousConsultations');
+          expect(source.consultationContext.references).toMatchObject([
+            {
+              callId: 'cached-first',
+              result: {
+                agentId: 'advisor',
+                consultationId: 'first',
+                cached: true,
+                text: firstAdvice,
+              },
+            },
+          ]);
+          expect(JSON.stringify(source).split(firstAdvice)).toHaveLength(2);
+          contextHash = source.consultationContext.hash;
+          await send(target, [message('The keeper can notice that landmark.')]);
+        }
+        return;
+      }
+      if (++mainCalls === 1)
+        await send(target, [
+          call(body, 'agents.consult', { agentId: 'advisor', question: firstQuestion }, 'first'),
+        ]);
+      else if (mainCalls === 2)
+        await send(target, [
+          call(
+            body,
+            'agents.consult',
+            { agentId: 'advisor', question: firstQuestion },
+            'cached-first'
+          ),
+          call(
+            body,
+            'agents.consult',
+            {
+              agentId: 'advisor',
+              question: 'Develop that suggestion.',
+              contextRefs: ['cached-first'],
+            },
+            'follow-up'
+          ),
+        ]);
+      else await send(target, [message(finalText)]);
+    },
+    { collaboration: collaboration({ agents: [agent('advisor', { maxCalls: 2 })] }) }
+  );
+  const run = await observedCompletion(state, (await state.start()).id);
+  expect(run.status).toBe('completed');
+  expect(advisorCalls).toBe(2);
+  const opinions = consults(run).map((event) => event.result);
+  expect(opinions[0]).toMatchObject({ consultationId: 'first', text: firstAdvice });
+  expect(opinions[1]).toMatchObject({ consultationId: 'first', text: firstAdvice, cached: true });
+  expect(opinions[2]).toMatchObject({
+    contextHash,
+    basedOn: [{ agentId: 'advisor', consultationId: 'first' }],
+  });
+});
+
 test('identical explicit context caches failures; a changed reference or draft spends the shared advisor budget', async () => {
   let mainCalls = 0;
   const contextHashes: string[] = [];

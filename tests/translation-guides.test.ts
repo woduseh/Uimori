@@ -33,6 +33,8 @@ import { exportRisuContent } from '../server/risu-export.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
+import { nativeContent } from './fixtures/native-content.js';
+import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 
 const guide: TranslationGuide = {
   instructions:
@@ -245,8 +247,14 @@ test('empty guide is captured explicitly and judgment-only recovery never adopts
   const store = database();
   let current = bot(store, 'No guide', emptyTranslationGuide());
   const chat = story(store, current);
+  const workspace = promptWorkspace(store);
+  updatePromptWorkspace(store, {
+    expectedRevision: workspace.revision,
+    translationPolicy: { ...workspace.translationPolicy, contextMode: 'source-only' },
+  });
   const first = requestTranslation(store, chat.headRevision!, true);
   expect((first.input as any).translationGuide).toBeNull();
+  expect((first.input as any).translationPolicy.contextMode).toBe('source-only');
   current = save(store, current, guide);
   const frozen = resolved(store, chat.headRevision!, first.id);
   expect(frozen.translationGuide).toBeNull();
@@ -267,16 +275,22 @@ test('empty guide is captured explicitly and judgment-only recovery never adopts
       sourceHash: store.source(chat.headRevision!).hash,
     },
   });
+  const changedWorkspace = promptWorkspace(store);
+  updatePromptWorkspace(store, {
+    expectedRevision: changedWorkspace.revision,
+    translationPolicy: { ...changedWorkspace.translationPolicy, contextMode: 'full' },
+  });
   const recovered = rejudgeTranslation(store, first.id);
   expect(recovered.input).toMatchObject({
     translationGuide: null,
+    translationPolicy: { contextMode: 'source-only' },
     judgmentRecovery: { text: '판정 대기 번역' },
   });
   expect(resolved(store, chat.headRevision!, recovered.id).translationGuide).toBeNull();
   expect(currentBotTranslationGuide(store, chat.id)).toMatchObject(guide);
 });
 
-test('preview shows latest bot guidance without provider calls and main preview never delivers it', async () => {
+test('preview respects translation context selection without provider calls and main preview never delivers its guide', async () => {
   const path = mkdtempSync(join(tmpdir(), 'uimori-translation-guides-'));
   const app = await createApp({
     dbPath: join(path, 'app.sqlite'),
@@ -284,14 +298,66 @@ test('preview shows latest bot guidance without provider calls and main preview 
     testMode: true,
   });
   owned.push({ path, app });
-  const current = bot(app.store);
-  const chat = story(app.store, current);
+  const input = fixtureBotInput('Preview bot', 'BOT_REFERENCE_ONLY');
+  input.package = nativeContent(
+    withTranslationGuide(
+      {
+        name: 'Preview bot',
+        description: 'BOT_REFERENCE_ONLY',
+        character_book: {
+          entries: [
+            { id: 0, keys: [], content: 'LORE_REFERENCE_ONLY', constant: true, enabled: true },
+          ],
+        },
+      },
+      guide
+    )
+  );
+  const current = app.store.product.content(input) as Content;
+  const persona = app.store.product.content({
+    ...fixtureBotInput('Preview persona', 'PERSONA_REFERENCE_ONLY'),
+    kind: 'persona',
+    package: nativeContent(
+      { name: 'Preview persona', description: 'PERSONA_REFERENCE_ONLY' },
+      {},
+      'persona'
+    ),
+  }) as Content;
+  const sourceText = 'Rose quietly held a rose.\n\n'.repeat(20) + 'SOURCE_END';
+  const chat = importChatTranscript(app.store, {
+    idempotencyKey: randomUUID(),
+    transcript: {
+      format: 'uimori-chat-transcript',
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      title: 'Preview reference scope',
+      packageAttachments: [
+        { id: current.id, revision: current.revision, role: 'bot' },
+        { id: persona.id, revision: persona.revision, role: 'persona' },
+      ],
+      notes: [{ kind: 'author-note', author: 'user', text: 'NOTE_REFERENCE_ONLY', atIndex: 0 }],
+      entries: [
+        { request: 'Earlier scene.', text: 'HISTORY_REFERENCE_ONLY', translation: null },
+        { request: 'Current scene.', text: sourceText, translation: null },
+      ],
+    },
+  }).chat;
+  const workspace = promptWorkspace(app.store);
+  updatePromptWorkspace(app.store, {
+    expectedRevision: workspace.revision,
+    translation: {
+      ...workspace.translation,
+      program: nativePrompt('SELECTED_TRANSLATION_PROMPT', {}, 'translation'),
+    },
+  });
   const counts = () => ({
     runs: app.store.db.prepare('SELECT count(*) AS n FROM runs').get()!.n,
     jobs: app.store.db.prepare('SELECT count(*) AS n FROM jobs').get()!.n,
     attempts: app.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n,
   });
   const before = counts();
+  const writes = () => app.store.db.prepare('SELECT total_changes() AS n').get()!.n;
+  const beforePreviewWrites = writes();
   const translation = await app.inject({
     method: 'POST',
     url: `/api/chats/${chat.id}/prompt-preview`,
@@ -300,6 +366,15 @@ test('preview shows latest bot guidance without provider calls and main preview 
   expect(translation.statusCode, translation.body).toBe(200);
   expect(translation.json().translationGuide).toMatchObject({ ...guide, botId: current.id });
   expect(JSON.stringify(translation.json().compilation)).toContain('GUIDE_ONLY');
+  const referenceMarkers = [
+    'BOT_REFERENCE_ONLY',
+    'PERSONA_REFERENCE_ONLY',
+    'LORE_REFERENCE_ONLY',
+    'HISTORY_REFERENCE_ONLY',
+    'NOTE_REFERENCE_ONLY',
+  ];
+  for (const marker of referenceMarkers)
+    expect(JSON.stringify(translation.json().compilation)).toContain(marker);
   const main = await app.inject({
     method: 'POST',
     url: `/api/chats/${chat.id}/prompt-preview`,
@@ -308,6 +383,32 @@ test('preview shows latest bot guidance without provider calls and main preview 
   expect(main.statusCode, main.body).toBe(200);
   expect(main.json()).not.toHaveProperty('translationGuide');
   expect(JSON.stringify(main.json())).not.toContain('GUIDE_ONLY');
+  expect(writes()).toBe(beforePreviewWrites);
+  const currentWorkspace = promptWorkspace(app.store);
+  updatePromptWorkspace(app.store, {
+    expectedRevision: currentWorkspace.revision,
+    translationPolicy: { ...currentWorkspace.translationPolicy, contextMode: 'source-only' },
+  });
+  const beforeSourceOnlyWrites = writes();
+  const sourceOnly = await app.inject({
+    method: 'POST',
+    url: `/api/chats/${chat.id}/prompt-preview`,
+    payload: { role: 'translation', request: 'Preview' },
+  });
+  expect(sourceOnly.statusCode, sourceOnly.body).toBe(200);
+  const reduced = sourceOnly.json();
+  expect(reduced.translationGuide).toMatchObject({ ...guide, botId: current.id });
+  const deliveredText = reduced.compilation.messages
+    .flatMap((message: { content: { text?: string }[] }) =>
+      message.content.map((part) => part.text)
+    )
+    .join('\n');
+  expect(deliveredText).toContain(sourceText);
+  expect(deliveredText).toContain('SELECTED_TRANSLATION_PROMPT');
+  expect(deliveredText).toContain('GUIDE_ONLY');
+  expect(deliveredText).toContain('로즈');
+  for (const marker of referenceMarkers)
+    expect(JSON.stringify(reduced.compilation)).not.toContain(marker);
   const custom = nativePrompt(
     'Only my translation principle.',
     { promptTemplate: [{ type: 'plain', role: 'system', text: 'Translate only.' }] },
@@ -320,6 +421,7 @@ test('preview shows latest bot guidance without provider calls and main preview 
   });
   expect(withoutSlot.statusCode, withoutSlot.body).toBe(200);
   expect(withoutSlot.json().translationGuide).toMatchObject(guide);
+  expect(writes()).toBe(beforeSourceOnlyWrites);
   expect(counts()).toEqual(before);
 });
 

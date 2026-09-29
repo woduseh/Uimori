@@ -331,7 +331,9 @@ describe('Anthropic Messages request and opaque continuation', () => {
       if (cacheMode === 'automatic')
         expect(wire.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
       else expect(wire).not.toHaveProperty('cache_control');
-      expect(wire.system[1]).not.toHaveProperty('cache_control');
+      if (cacheMode === 'automatic')
+        expect(wire.system[1].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+      else expect(wire.system[1]).not.toHaveProperty('cache_control');
       expect(wire.output_config.effort).toBe('max');
       expect(wire.output_config).not.toHaveProperty('format');
       const next = continued(input, turn(input));
@@ -343,19 +345,22 @@ describe('Anthropic Messages request and opaque continuation', () => {
       expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
     }
   );
-  test('helper automatic caching marks the stable system prefix and preserves it on continuation', () => {
-    const input = request();
-    input.role = 'helper';
-    input.generation!.cacheMode = 'automatic';
-    input.generation!.cacheTtl = '1h';
-    const first = native(encodeAnthropic(input).body);
-    expect(first.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
-    expect(first.system[1].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
-    expect(first.system[0]).not.toHaveProperty('cache_control');
-    const next = native(encodeAnthropic(continued(input, turn(input))).body);
-    expect(next.system).toEqual(first.system);
-    expect(next.cache_control).toEqual(first.cache_control);
-  });
+  test.each(['helper', 'main', 'context'] as const)(
+    '%s automatic caching marks the stable system prefix and preserves it on continuation',
+    (role) => {
+      const input = request();
+      input.role = role;
+      input.generation!.cacheMode = 'automatic';
+      input.generation!.cacheTtl = '1h';
+      const first = native(encodeAnthropic(input).body);
+      expect(first.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+      expect(first.system[1].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+      expect(first.system[0]).not.toHaveProperty('cache_control');
+      const next = native(encodeAnthropic(continued(input, turn(input))).body);
+      expect(next.system).toEqual(first.system);
+      expect(next.cache_control).toEqual(first.cache_control);
+    }
+  );
   test.each(['explicit', 'disabled', undefined] as const)(
     'helper cache %s does not add a host system breakpoint',
     (cacheMode) => {

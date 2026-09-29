@@ -487,12 +487,19 @@ describe('M1 source-bound auxiliary roles', () => {
     ).toThrow('ASSET_REFERENCE_INVALID');
     const input = displayInput(raw, context(), snapshot());
     expect(input.role).toBe('status');
+    expect(input.blocks).toEqual(blocks.map(({ anchor, text }) => ({ anchor, text })));
+    expect(JSON.stringify(input.outputSchema)).not.toContain('mood');
     expect(input).not.toHaveProperty('assets');
     expect(JSON.stringify(input)).not.toContain('data:image');
     const result = await executeAuxiliary(input, snapshot(), scriptedAuxiliary);
     expect(validateDisplayAnnotation(raw, result.output)).toMatchObject({
       kind: 'display-only',
-      entries: [{ anchor: blocks[0].anchor, mood: '합성 표시' }],
+      entries: [
+        {
+          anchor: blocks[0].anchor,
+          summary: '모의 표시 상태 · 원문 보존됨 · 정사에 반영하지 않음',
+        },
+      ],
     });
     expect(() =>
       validateDisplayAnnotation(raw, { ...(result.output as object), coins: 100 })

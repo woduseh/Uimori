@@ -6,6 +6,7 @@ import { buildMainInput, pinnedSlotSources } from '../core/provider.js';
 import { compiledPackages } from '../core/package-context.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { PromptCompilerVersion } from '../core/risu-prompt.js';
+import { modelAuthorNotes } from '../core/notes.js';
 
 /** The same fixed host slots determine both CBS evaluation and message composition. */
 export function nativePromptSlots(
@@ -24,7 +25,7 @@ export function nativePromptSlots(
     persona: body('persona'),
     lore: serializeRisuLoreSources(pinnedSlotSources(input, 'lore')),
     lorebook: serializeRisuLoreSources(pinnedSlotSources(input, 'lore')),
-    notes: input.notes ? JSON.stringify(input.notes) : '',
+    notes: input.notes ? JSON.stringify(modelAuthorNotes(input.notes)) : '',
     outline: input.outline ? JSON.stringify(input.outline) : '',
     globalNote: '',
     authorNote: '',

@@ -240,60 +240,88 @@ test('Batch recovery survives closing and reopening the SQLite store', () => {
   ).toEqual({ batch_id: 'batch-reopen', status: 'in_progress' });
 });
 
-test('Batch attempts estimate Anthropic token cost at the documented half-price rate', () => {
-  const { store, chat } = fixture();
-  const run = queued(store, chat.id);
-  store.startRun(run.id);
-  const wire: WireRecord = {
-    connectionId: 'anthropic',
-    protocol: 'anthropic-messages-v1',
-    role: 'main',
-    modelId: 'claude-opus-5',
-    method: 'POST',
-    url: 'https://api.anthropic.com/v1/messages/batches',
-    headers: {},
-    body: {},
-    bodySha256: 'pricing-batch',
-    stablePrefixSha256: 'stable',
-    executionMode: 'batch',
-    pricingStartedAt: '2026-09-23T00:00:00.000Z',
-    pricingSnapshot: {
-      version: 1,
+test.each([
+  { executionMode: 'batch', reportedTier: undefined },
+  { executionMode: 'batch', reportedTier: 'batch' },
+  { executionMode: 'realtime', reportedTier: 'batch' },
+] as const)(
+  'Anthropic $executionMode attempt accounts for reported tier $reportedTier without a second discount',
+  ({ executionMode, reportedTier }) => {
+    const { store, chat } = fixture();
+    const run = queued(store, chat.id);
+    store.startRun(run.id);
+    const wire: WireRecord = {
+      connectionId: 'anthropic',
       protocol: 'anthropic-messages-v1',
+      role: 'main',
       modelId: 'claude-opus-5',
-      source: 'manual',
-      checkedAt: '2026-09-23',
-      serviceTier: 'standard',
-      rates: { input: 2, output: 8, cacheRead: 0.5, cacheWrite: 2.5 },
-      notes: [],
-    },
-  };
-  const attempt = store.product.startAttempt(chat.id, run.id, null, wire);
-  const result: ProviderResult = {
-    status: 'completed',
-    text: 'Synthetic Batch output.',
-    toolCalls: [],
-    refusal: null,
-    error: null,
-    usage: {
-      inputTokens: 1000,
-      outputTokens: 100,
-      costUsd: null,
-      raw: {
-        input_tokens: 1000,
-        output_tokens: 100,
-        cache_read_input_tokens: 0,
-        cache_creation_input_tokens: 0,
+      method: 'POST',
+      url: `https://api.anthropic.com/v1/messages${executionMode === 'batch' ? '/batches' : ''}`,
+      headers: {},
+      body: {},
+      bodySha256: 'pricing-batch',
+      stablePrefixSha256: 'stable',
+      executionMode,
+      pricingStartedAt: '2026-09-23T00:00:00.000Z',
+      pricingSnapshot: {
+        version: 1,
+        protocol: 'anthropic-messages-v1',
+        modelId: 'claude-opus-5',
+        source: 'manual',
+        checkedAt: '2026-09-23',
+        serviceTier: 'default',
+        rates: { input: 2, output: 8, cacheRead: 0.5, cacheWrite: null, cacheWrite1h: null },
+        notes: [],
       },
-      priceRevision: null,
-    },
-    opaqueState: null,
-  };
-  store.product.finishAttempt(attempt, result);
-  const saved = store.product.attempts(chat.id).find((item) => item.id === attempt)!;
-  expect(saved.estimatedCost?.usd).toBeCloseTo(0.0014, 8);
-  expect(saved.estimatedCost?.notes).toContain('ANTHROPIC_BATCH_50_PERCENT');
-});
+    };
+    const attempt = store.product.startAttempt(chat.id, run.id, null, wire);
+    const result: ProviderResult = {
+      status: 'completed',
+      text: 'Synthetic Batch output.',
+      toolCalls: [],
+      refusal: null,
+      error: null,
+      usage: {
+        inputTokens: 1000,
+        outputTokens: 100,
+        costUsd: null,
+        raw: {
+          input_tokens: 1000,
+          output_tokens: 100,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          ...(reportedTier ? { service_tier: reportedTier } : {}),
+        },
+        priceRevision: null,
+      },
+      opaqueState: null,
+    };
+    store.product.finishAttempt(attempt, result);
+    const saved = store.product.attempts(chat.id).find((item) => item.id === attempt)!;
+    expect(saved.pricingSnapshot?.serviceTier).toBe('default');
+    expect(saved.rawUsage).toEqual(result.usage.raw);
+    expect(saved.costUsd).toBeNull();
+    if (executionMode === 'batch') {
+      expect(saved.estimatedCost?.status).toBe('estimated');
+      expect(saved.estimatedCost?.usd).toBeCloseTo(0.0014, 8);
+      expect(saved.estimatedCost?.notes).toContain('ANTHROPIC_BATCH_50_PERCENT');
+      expect(saved.estimatedCost?.lines.find((line) => line.kind === 'input')?.rate).toBe(1);
+      expect(saved.estimatedCost?.lines.find((line) => line.kind === 'output')?.rate).toBe(4);
+      for (const kind of ['cacheWrite', 'cacheWrite1h'])
+        expect(saved.estimatedCost?.lines.find((line) => line.kind === kind)).toMatchObject({
+          tokens: 0,
+          rate: null,
+          usd: 0,
+        });
+    } else {
+      expect(saved.estimatedCost).toMatchObject({
+        status: 'unavailable',
+        usd: null,
+        notes: ['SERVICE_TIER_MISMATCH'],
+      });
+    }
+  }
+);
 
 test('source completion clears the staged duplicate atomically and rollback retains it', () => {
   const { store, chat } = fixture();
