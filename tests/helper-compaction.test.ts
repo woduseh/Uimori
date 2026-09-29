@@ -425,7 +425,21 @@ test('completed read references retain returned ranges and revisions while allow
     nextOffset: 60,
     version: 'outline-view-one',
     scope: { chatId: 'story', mode: 'detail', nodeId: 'unit', section: 'intent' },
-    coverage: { content: 'intent-range', complete: false, returned: 1 },
+    coverage: { content: 'intent-range', wholeField: false, returned: 1 },
+    committedEffects: {
+      total: 1,
+      offset: 0,
+      nextOffset: null,
+      items: [
+        {
+          receiptId: 'durable-save',
+          committed: true,
+          tool: 'outline.write',
+          callId: 'save-one',
+          createdAt: '2026-09-29T03:00:00Z',
+        },
+      ],
+    },
     nextRead: {
       name: 'app.call',
       arguments: {
@@ -494,7 +508,21 @@ test('completed read references retain returned ranges and revisions while allow
         nextOffset: 60,
         version: 'outline-view-one',
         scope: { chatId: 'story', mode: 'detail', nodeId: 'unit', section: 'intent' },
-        coverage: { content: 'intent-range', complete: false, returned: 1 },
+        coverage: { content: 'intent-range', wholeField: false, returned: 1 },
+        committedEffects: {
+          total: 1,
+          offset: 0,
+          nextOffset: null,
+          items: [
+            {
+              receiptId: 'durable-save',
+              committed: true,
+              tool: 'outline.write',
+              callId: 'save-one',
+              createdAt: '2026-09-29T03:00:00Z',
+            },
+          ],
+        },
         nextRead: {
           name: 'app.call',
           arguments: {

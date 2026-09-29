@@ -312,7 +312,7 @@ export function readHelperOutline(
           text: value.slice(start, end),
           totalChars: value.length,
           range: { start, end, unit: 'utf16-code-unit' },
-          coverage: { content: 'intent-range', complete: start === 0 && end === value.length },
+          coverage: { content: 'intent-range', wholeField: start === 0 && end === value.length },
           nextOffset: end < value.length ? end : null,
           nextRead: end < value.length ? next(end) : null,
         };

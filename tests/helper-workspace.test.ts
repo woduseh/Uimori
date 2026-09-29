@@ -1080,7 +1080,7 @@ test('selected outline review allows evidence reads, rejects writes and retains 
     {
       name: 'app.call',
       denied: false,
-      result: { text: node.intent, coverage: { content: 'intent-range', complete: true } },
+      result: { text: node.intent, coverage: { content: 'intent-range', wholeField: true } },
     },
     { denied: true, result: { error: 'OUTLINE_REVIEW_READ_ONLY' } },
   ]);

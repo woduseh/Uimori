@@ -1,3 +1,4 @@
+import { helperCallOperationId } from './helper-workspace.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import type { HelperTask } from '../core/helper.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
@@ -30,8 +31,13 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
   {
     name: 'task.inspect',
     description:
-      'Inspect one known run, auxiliary job, illustration job or helper task by exact ID. Returns compact status, error, usage and available actions without manuscript or execution snapshots.',
-    inputSchema: schema,
+      'Inspect one known run, auxiliary job, illustration job or helper task by exact ID. Returns compact status, error, usage and available actions without manuscript or execution snapshots. For helpers, committedEffects lists durable receipt-backed effects (20 per page); pass nextOffset as effectsOffset. It confirms the recorded commit, not current resource state or task success. Missing tool/callId is unknown, and no receipt is not proof that an uncertain action had no effect. Inspection never retries a write.',
+    inputSchema: {
+      type: 'object',
+      properties: { kind, id, effectsOffset: { type: 'integer', minimum: 0 } },
+      required: ['kind', 'id'],
+      additionalProperties: false,
+    },
   },
   {
     name: 'task.cancel',
@@ -71,6 +77,7 @@ type TaskView = {
     outputTokens: number | null;
     costUsd: number | null;
   } | null;
+  committedEffects?: ReturnType<typeof inspectCommittedEffects>;
   diagnostics?: {
     attemptsByPurpose: {
       purpose: string;
@@ -234,7 +241,64 @@ function listTasks(store: Store, current: HelperTask, args: Record<string, unkno
   return { status, ...(chatId ? { chatId } : {}), tasks };
 }
 
-function inspect(store: Store, currentTaskId: string, target: Kind, id: string): TaskView {
+type CommittedEffect = {
+  receiptId: string;
+  committed: true;
+  tool: string | null;
+  callId: string | null;
+  createdAt: string;
+};
+
+/** Receipts establish commit; retained event metadata only supplies optional attribution. */
+function inspectCommittedEffects(store: Store, taskId: string, offset: number) {
+  const total = Number(
+    store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(taskId)
+      ?.n ?? 0
+  );
+  const rows = store.db
+    .prepare(`SELECT id AS receiptId,created_at AS createdAt FROM helper_operations
+    WHERE task_id=? ORDER BY rowid LIMIT 20 OFFSET ?`)
+    .all(taskId, offset) as { receiptId: string; createdAt: string }[];
+  const items: CommittedEffect[] = rows.map((row) => ({
+    ...row,
+    committed: true,
+    tool: null,
+    callId: null,
+  }));
+  const pending = new Map(items.map((item) => [item.receiptId, item]));
+  if (pending.size) {
+    // Never load results or infer a save from a successful/streamed event. Old pruned events
+    // still retain callId/name; an interrupted save may legitimately have no event at all.
+    for (const event of store.db
+      .prepare(`SELECT json_extract(data,'$.name') AS tool,
+      json_extract(data,'$.callId') AS callId FROM helper_events WHERE task_id=? AND kind='tool.finished'
+      AND json_type(data,'$.name')='text' AND json_type(data,'$.callId')='text' ORDER BY seq`)
+      .iterate(taskId)) {
+      const callId = String(event.callId);
+      const receiptId = `${taskId}:${helperCallOperationId(taskId, callId)}`;
+      const item = pending.get(receiptId);
+      if (!item) continue;
+      item.tool = String(event.tool);
+      item.callId = callId;
+      pending.delete(receiptId);
+      if (!pending.size) break;
+    }
+  }
+  return {
+    total,
+    offset,
+    items,
+    nextOffset: offset + items.length < total ? offset + items.length : null,
+  };
+}
+
+function inspect(
+  store: Store,
+  currentTaskId: string,
+  target: Kind,
+  id: string,
+  effectsOffset = 0
+): TaskView {
   if (target === 'helper') {
     const task = row(
       store,
@@ -243,11 +307,8 @@ function inspect(store: Store, currentTaskId: string, target: Kind, id: string):
     );
     const self = id === currentTaskId;
     const eligible = ['failed', 'cancelled', 'interrupted'].includes(task.status);
-    const committed =
-      eligible &&
-      Number(
-        store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(id)?.n
-      ) > 0;
+    const committedEffects = inspectCommittedEffects(store, id, effectsOffset);
+    const committed = eligible && committedEffects.total > 0;
     const latest = eligible
       ? (
           store.db
@@ -265,6 +326,7 @@ function inspect(store: Store, currentTaskId: string, target: Kind, id: string):
       error: task.error,
       usage: JSON.parse(String(task.usage)),
       diagnostics: helperDiagnostics(store, id),
+      committedEffects,
       canCancel: !self && ['queued', 'running'].includes(task.status),
       canRetry: !self && eligible && !committed && latest,
       ...(self
@@ -360,10 +422,12 @@ export function invokeTaskTool(
   actions: TaskControlActions
 ) {
   if (name === 'task.list') return listTasks(store, current, args);
-  fields(record(args), ['kind', 'id']);
+  fields(record(args), name === 'task.inspect' ? ['kind', 'id', 'effectsOffset'] : ['kind', 'id']);
   const target = choice(args.kind, ['run', 'job', 'illustration', 'helper'], 'task kind');
   const targetId = text(args.id, 'task ID', 100);
-  const before = inspect(store, current.id, target, targetId);
+  const effectsOffset =
+    name === 'task.inspect' ? number(args.effectsOffset ?? 0, 'effects offset', 0) : 0;
+  const before = inspect(store, current.id, target, targetId, effectsOffset);
   if (name === 'task.inspect') return before;
   if (target === 'helper' && targetId === current.id)
     throw new HttpError(409, 'CURRENT_HELPER_TASK');

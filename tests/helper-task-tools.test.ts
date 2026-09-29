@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -424,4 +424,152 @@ test('a failed helper receipt rolls back a run retry before any main provider ca
     await app.close();
     rmSync(path, { recursive: true, force: true });
   }
+});
+
+// Legacy host identity: keep matching events written before receipt inspection existed.
+const receiptForCall = (taskId: string, callId: string) =>
+  `${taskId}:${createHash('sha256').update(`${taskId}\0${callId}`).digest('hex')}`;
+
+function receiptTask(f: ReturnType<typeof fixture>) {
+  const conversation = f.workspace.open({ kind: 'library', workId: 'receipts' });
+  const task = f.workspace.enqueue(conversation.id, randomUUID(), '저장 확인', {
+    scope: conversation.scope,
+    model: {} as never,
+    history: [],
+    persona: '',
+    limits: { totalCalls: 3, helperCalls: 2, artifacts: 0 },
+  });
+  f.workspace.start(task.id, 'owner');
+  return task;
+}
+
+test('helper inspection confirms durable effects even after a lost tool response, not from success events', () => {
+  const f = fixture(),
+    chat = createFixtureChat(f.store, '초기 제목'),
+    task = receiptTask(f);
+  const receiptId = receiptForCall(task.id, 'rename');
+  const input = { name: 'chat.rename', args: { title: '저장된 제목' } };
+  const first = f.workspace.operation(task.id, receiptId, input, () =>
+    f.store.renameChat(chat.id, '저장된 제목', chat.titleRevision ?? 0)
+  );
+  expect(
+    f.workspace.operation(task.id, receiptId, input, () => {
+      throw new Error('must not replay');
+    })
+  ).toEqual(first);
+  f.workspace.event(task.conversationId, task.id, 'tool.finished', {
+    name: 'chat.rename',
+    callId: 'rename',
+    denied: false,
+    result: first,
+  });
+  f.workspace.event(task.conversationId, task.id, 'tool.finished', {
+    name: 'data.read',
+    callId: 'read-only',
+    denied: false,
+    result: { text: 'PRIVATE_BODY' },
+  });
+  // Commit succeeded but the worker stopped before publishing tool.finished.
+  const orphanId = receiptForCall(task.id, 'lost-response');
+  f.workspace.operation(task.id, orphanId, { name: 'chat.rename' }, () =>
+    f.store.renameChat(chat.id, '실제로 저장된 최종 제목', first.titleRevision ?? 0)
+  );
+  expect(() =>
+    f.workspace.operation(task.id, 'rolled-back', {}, () => {
+      f.store.renameChat(chat.id, '되돌려져야 하는 제목', f.store.chat(chat.id).titleRevision ?? 0);
+      throw new Error('rollback');
+    })
+  ).toThrow('rollback');
+  f.workspace.finish(task.id, 'owner', 1, 'failed', '', 'PROVIDER_EOF');
+  const view = f.invoke('task.inspect', 'helper', task.id);
+  expect(view).toMatchObject({
+    status: 'failed',
+    canRetry: false,
+    retryBlock: 'HELPER_EFFECTS_ALREADY_COMMITTED',
+    committedEffects: {
+      total: 2,
+      offset: 0,
+      nextOffset: null,
+      items: [
+        { receiptId, committed: true, tool: 'chat.rename', callId: 'rename' },
+        { receiptId: orphanId, committed: true, tool: null, callId: null },
+      ],
+    },
+  });
+  expect(JSON.stringify(view)).not.toContain('PRIVATE_BODY');
+  expect(JSON.stringify(view)).not.toContain('실제로 저장된 최종 제목');
+  expect(f.store.chat(chat.id).title).toBe('실제로 저장된 최종 제목');
+  expect(
+    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+      ?.n
+  ).toBe(2);
+});
+
+test('committed effects stay paged and attributable after normal completed-input cleanup', () => {
+  const f = fixture(),
+    chat = createFixtureChat(f.store, '시작'),
+    task = receiptTask(f);
+  const expectedIds: string[] = [];
+  for (let i = 0; i < 21; i++) {
+    const callId = `rename-${i}`,
+      receiptId = receiptForCall(task.id, callId);
+    expectedIds.push(receiptId);
+    const result = f.workspace.operation(task.id, receiptId, { name: 'chat.rename' }, () =>
+      f.store.renameChat(chat.id, `SAVED_TITLE_${i}`, f.store.chat(chat.id).titleRevision ?? 0)
+    );
+    f.workspace.event(task.conversationId, task.id, 'tool.finished', {
+      name: 'chat.rename',
+      callId,
+      denied: false,
+      result,
+    });
+  }
+  f.workspace.finish(task.id, 'owner', 1, 'completed', '완료', null);
+  expect(
+    JSON.stringify(
+      f.store.db.prepare('SELECT result FROM helper_operations WHERE task_id=?').all(task.id)
+    )
+  ).not.toContain('SAVED_TITLE');
+  const view = f.invoke('task.inspect', 'helper', task.id) as {
+    committedEffects: {
+      total: number;
+      nextOffset: number | null;
+      items: { receiptId: string; tool: string; callId: string }[];
+    };
+  };
+  expect(view.committedEffects).toMatchObject({ total: 21, offset: 0, nextOffset: 20 });
+  expect(view.committedEffects.items.map((item) => item.receiptId)).toEqual(
+    expectedIds.slice(0, 20)
+  );
+  expect(
+    view.committedEffects.items.every((item) => item.tool === 'chat.rename' && item.callId)
+  ).toBe(true);
+  const last = invokeTaskTool(
+    f.store,
+    f.current,
+    'task.inspect',
+    {
+      kind: 'helper',
+      id: task.id,
+      effectsOffset: view.committedEffects.nextOffset,
+    },
+    'inspect',
+    f.actions
+  );
+  expect(last).toMatchObject({
+    committedEffects: {
+      total: 21,
+      offset: 20,
+      nextOffset: null,
+      items: [
+        { receiptId: expectedIds[20], committed: true, tool: 'chat.rename', callId: 'rename-20' },
+      ],
+    },
+  });
+  expect(JSON.stringify(view)).not.toContain('SAVED_TITLE');
+  expect(JSON.stringify(view).length).toBeLessThan(16000);
+  const untouched = receiptTask(f);
+  expect(f.invoke('task.inspect', 'helper', untouched.id)).toMatchObject({
+    committedEffects: { total: 0, items: [], nextOffset: null },
+  });
 });

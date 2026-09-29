@@ -57,7 +57,7 @@ import { prepareInputContext } from './context-compaction.js';
 import { runMain, type MainHooks } from './model-runner.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { encodeMainPreview } from './main-request.js';
-import { HelperWorkspace } from './helper-workspace.js';
+import { HelperWorkspace, helperCallOperationId } from './helper-workspace.js';
 import { forkChat } from './chat-fork.js';
 import { HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
@@ -257,6 +257,12 @@ const READ_METADATA_VALUES = new Set([
   'nextOffset',
   'nextIndex',
   'complete',
+  'wholeField',
+  'receiptId',
+  'committed',
+  'tool',
+  'callId',
+  'createdAt',
   'inspectedDocuments',
   'line',
   'truncatedCells',
@@ -324,6 +330,7 @@ const READ_METADATA_GROUPS = new Set([
   'regions',
   'node',
   'coverage',
+  'committedEffects',
   'scope',
   'previewRange',
 ]);
@@ -741,9 +748,7 @@ export class HelperRuntime {
             throw new HttpError(403, 'OUTLINE_REVIEW_READ_ONLY');
           const arguments_ = record(call.arguments);
           // Call identity belongs to the host, never to the model's argument object.
-          const operationId = createHash('sha256')
-            .update(`${task.id}\0${wireCall.id}`)
-            .digest('hex');
+          const operationId = helperCallOperationId(task.id, wireCall.id);
           const dataTool = HELPER_DATA_TOOLS.some((tool) => tool.name === call.name);
           const directTool =
             dataTool ||
