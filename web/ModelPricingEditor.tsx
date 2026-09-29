@@ -150,6 +150,8 @@ export function ModelPricingEditor({
   onChange: (pricing: ModelDraft['pricing']) => void;
   forcedVertexTier?: VertexRequestTier;
 }) {
+  if (connection?.protocol === 'codex-app-server-v1')
+    return <p className="muted full">Codex 구독은 API 토큰 단가로 비용을 추정하지 않아요.</p>;
   const draft = value.pricing;
   let snapshot: PricingSnapshot | undefined;
   let error = '';

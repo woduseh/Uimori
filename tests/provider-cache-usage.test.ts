@@ -30,3 +30,63 @@ test('cache usage distinguishes a confirmed read, zero, and missing data without
   });
   expect(providerCacheUsage('fixture-sse-v1', { cachedContentTokenCount: 40 })).toBeUndefined();
 });
+
+test('Vertex recognizes an omitted zero cache count only with valid reported prompt usage', () => {
+  const raw = { promptTokenCount: 1000, candidatesTokenCount: 100, totalTokenCount: 1100 };
+  expect(providerCacheUsage('vertex-gemini-v1', raw)).toEqual({
+    readTokens: 0,
+    writeTokens: null,
+  });
+  expect(raw).toEqual({ promptTokenCount: 1000, candidatesTokenCount: 100, totalTokenCount: 1100 });
+  expect(providerCacheUsage('vertex-gemini-v1', { promptTokenCount: 0 })).toEqual({
+    readTokens: 0,
+    writeTokens: null,
+  });
+
+  for (const value of [
+    null,
+    undefined,
+    {},
+    { promptTokenCount: null },
+    { promptTokenCount: -1 },
+    { promptTokenCount: '1000' },
+    ...[null, -1, '40'].map((cachedContentTokenCount) => ({
+      promptTokenCount: 1000,
+      cachedContentTokenCount,
+    })),
+  ]) {
+    expect(providerCacheUsage('vertex-gemini-v1', value)).toEqual({
+      readTokens: null,
+      writeTokens: null,
+    });
+  }
+});
+
+test('Vercel uses the top-level cache write count without adding or replacing it with nested usage', () => {
+  for (const [reported, expected] of [
+    [12, 12],
+    [0, 0],
+    [null, null],
+    [undefined, null],
+    [-1, null],
+    ['12', null],
+  ]) {
+    expect(
+      providerCacheUsage('vercel-chat-v1', {
+        cache_creation_input_tokens: reported,
+        prompt_tokens_details: { cached_tokens: 9, cache_write_tokens: 7 },
+      })
+    ).toEqual({ readTokens: 9, writeTokens: expected });
+  }
+  expect(
+    providerCacheUsage('vercel-chat-v1', {
+      prompt_tokens_details: { cached_tokens: 9, cache_write_tokens: 7 },
+    })
+  ).toEqual({ readTokens: 9, writeTokens: 7 });
+  expect(
+    providerCacheUsage('openai-chat-v1', {
+      cache_creation_input_tokens: 12,
+      prompt_tokens_details: { cached_tokens: 9, cache_write_tokens: 7 },
+    })
+  ).toEqual({ readTokens: 9, writeTokens: 7 });
+});

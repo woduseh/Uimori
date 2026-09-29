@@ -25,6 +25,7 @@ import {
   AnthropicProtocolError,
 } from './anthropic-protocol.js';
 import { ProviderContractError } from './provider-errors.js';
+import { providerCacheBoundaries } from './provider-cache-diagnostics.js';
 import { validateConnection, validateRequest } from './provider-request.js';
 import type {
   Json,
@@ -163,6 +164,7 @@ export async function executeNativeProvider(
     } else if (secret) headers.authorization = `Bearer ${secret}`;
     const url = validateProviderEndpoint(connection.protocol, connection.endpoint) + path;
     const body = JSON.stringify(bodyValue);
+    const cacheBoundaries = providerCacheBoundaries(connection.protocol, bodyValue);
     await options.onWire?.({
       connectionId: connection.id,
       protocol: connection.protocol,
@@ -179,6 +181,7 @@ export async function executeNativeProvider(
       body: scrub(diagnostic, secret),
       bodySha256: sha(body),
       stablePrefixSha256: sha(JSON.stringify(request.stable)),
+      ...(cacheBoundaries.length ? { cacheBoundaries } : {}),
     });
     if (signal.aborted) return failure('CANCELLED');
     const response = await fetch(

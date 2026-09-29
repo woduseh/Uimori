@@ -13,7 +13,8 @@ const add = (...values: (number | null)[]): number | null => {
 };
 const tier = (value: string) => {
   const normalized = value.toLowerCase();
-  if (['standard', 'auto', 'default', 'on_demand'].includes(normalized)) return 'standard';
+  if (['standard', 'standard_only', 'auto', 'default', 'on_demand'].includes(normalized))
+    return 'standard';
   return normalized === 'on_demand_flex' ? 'flex' : normalized;
 };
 const unavailable = (note: string): CostEstimate => ({
@@ -163,7 +164,8 @@ export function estimateCost(
     value: number | null | undefined
   ) => {
     const rate = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
-    const cost = tokens === null || rate === null ? null : (tokens / 1_000_000) * rate;
+    const cost =
+      tokens === 0 ? 0 : tokens === null || rate === null ? null : (tokens / 1_000_000) * rate;
     lines.push({ kind, tokens, rate, usd: cost !== null && Number.isFinite(cost) ? cost : null });
   };
   line('input', baseInput, rates.input);

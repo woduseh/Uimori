@@ -878,23 +878,24 @@ export class ProductStore {
       | Row
       | undefined;
     const request = row ? parse(row.request) : null;
+    const anthropicBatch =
+      request?.executionMode === 'batch' && request?.protocol === 'anthropic-messages-v1';
+    const rawUsage = result.usage.raw;
+    const reportedTier =
+      rawUsage !== null &&
+      typeof rawUsage === 'object' &&
+      !Array.isArray(rawUsage) &&
+      typeof rawUsage.service_tier === 'string'
+        ? rawUsage.service_tier
+        : undefined;
     let estimatedCost = estimateCost(
       request?.pricingSnapshot,
       result.usage,
       request?.pricingStartedAt ?? '',
-      typeof result.usage.raw === 'object' &&
-        result.usage.raw !== null &&
-        !Array.isArray(result.usage.raw)
-        ? typeof result.usage.raw.service_tier === 'string'
-          ? result.usage.raw.service_tier
-          : undefined
-        : undefined
+      // Batch reports its execution tier; frozen rates remain standard before the discount below.
+      anthropicBatch && reportedTier === 'batch' ? 'standard' : reportedTier
     );
-    if (
-      request?.executionMode === 'batch' &&
-      request?.protocol === 'anthropic-messages-v1' &&
-      estimatedCost.status !== 'unavailable'
-    )
+    if (anthropicBatch && estimatedCost.status !== 'unavailable')
       estimatedCost = {
         ...estimatedCost,
         usd: estimatedCost.usd === null ? null : estimatedCost.usd * 0.5,

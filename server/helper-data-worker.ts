@@ -768,7 +768,7 @@ function read(
   }
   if (offset > text.length) throw new Error('DATA_RANGE_INVALID');
   const limit = number(args.limit, 4000, 10_000, 1);
-  return excerpt(
+  const { ref: _ref, ...page } = excerpt(
     doc,
     ref.field,
     text,
@@ -777,6 +777,7 @@ function read(
     ref,
     selected?.[2]
   );
+  return page;
 }
 function runDataOperation(input: DataOperation): unknown {
   const db = new DatabaseSync(input.path, { readOnly: true, allowExtension: false });

@@ -223,7 +223,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
     }
   );
   test.each(['openai-responses-v1', 'anthropic-messages-v1'] as const)(
-    '%s reserves one automatic slot and never silently displaces a preferred point',
+    '%s retains four authored points by omitting the extra automatic point',
     (protocol) => {
       const r = request(protocol === 'openai-responses-v1' ? 'gpt-5.6-sol' : 'claude-opus-5');
       const encode = protocol === 'openai-responses-v1' ? encodeResponses : encodeAnthropic;
@@ -239,9 +239,23 @@ describe('native provider wire (synthetic, no live calls)', () => {
         afterMessageId: 'current',
         policy: 'prefer',
       });
-      expect(() => encode(r)).toThrow('PROMPT_CACHE_LIMIT');
+      const automatic = encode(r);
+      expect(automatic.messageMetadata?.diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: 'PROMPT_AUTOMATIC_CACHE_SKIPPED_FOR_AUTHORED_POINTS',
+          status: 'not-applied',
+        })
+      );
       r.generation.cacheMode = 'explicit';
-      expect(() => encode(r)).not.toThrow();
+      expect(encode(r).body).toEqual(automatic.body);
+      r.prompt!.messages.push(message('extra', 'user', 'Another authored message.'));
+      r.prompt!.cachePlan.push({
+        blockId: 'cache-extra',
+        afterMessageId: 'extra',
+        policy: 'prefer',
+      });
+      r.generation.cacheMode = 'automatic';
+      expect(() => encode(r)).toThrow('PROMPT_CACHE_LIMIT');
     }
   );
   test.each(['openai-responses-v1', 'anthropic-messages-v1'] as const)(
@@ -282,6 +296,14 @@ describe('native provider wire (synthetic, no live calls)', () => {
       r.prompt!.cachePlan = [{ blockId: 'cache', afterMessageId: 'system', policy: 'require' }];
       expect(() => planNativeMessages(r, protocol)).toThrow('PROMPT_CACHE_UNSUPPORTED');
     }
+  });
+  test('reviewed Opus 5.5 preserves an authored cache point without selecting a cache mode', () => {
+    const r = request('claude-opus-5-5');
+    r.prompt!.cachePlan = [{ blockId: 'cache', afterMessageId: 'system', policy: 'require' }];
+    const body = wire(encodeAnthropic(r).body);
+    expect(body.system.at(-1).cache_control).toEqual({ type: 'ephemeral' });
+    r.toolChoice = 'knowledge.read';
+    expect(() => encodeAnthropic(r)).toThrow('UNSUPPORTED_MODEL_TOOL_CHOICE');
   });
   test('rejects prefill while Anthropic accepts mid-system for any model ID', () => {
     for (const [encoder, model] of [

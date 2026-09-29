@@ -34,9 +34,10 @@ export function inferUsageKind(wire: Pick<WireRecord, 'role'> & Partial<WireReco
       return 'unclassified';
   }
 }
-export function helperUsageKind(purpose: string): UsageKind {
-  if (purpose.includes('context') || purpose.includes('compaction')) return 'summary';
-  if (purpose.includes('artifact')) return 'helper-artifact';
+export function helperUsageKind(purpose: string, wire?: Pick<WireRecord, 'role'>): UsageKind {
+  if (wire?.role === 'context' || purpose.includes('context') || purpose.includes('compaction'))
+    return 'summary';
+  if (purpose === 'writing' || purpose.includes('artifact')) return 'helper-artifact';
   return 'helper';
 }
 

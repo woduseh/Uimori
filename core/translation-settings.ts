@@ -2,7 +2,15 @@ export type TranslationPolicy = {
   judgment: TranslationJudgmentPolicy;
   maxRetries: number;
   maxCalls: number;
+  /** Absent in older workspaces/jobs, which keep the original full context. */
+  contextMode?: TranslationContextMode;
 };
+export type TranslationContextMode = 'full' | 'source-only';
+export function translationContextMode(value: unknown = 'full'): TranslationContextMode {
+  if (value !== 'full' && value !== 'source-only')
+    throw new Error('TRANSLATION_CONTEXT_MODE_INVALID');
+  return value;
+}
 export type TranslationJudgmentPolicy = { threshold: number; enabled?: boolean };
 export const DEFAULT_TRANSLATION_JUDGMENT: TranslationJudgmentPolicy = Object.freeze({
   threshold: 0.9,
@@ -43,7 +51,9 @@ export function translationPolicy(value?: TranslationPolicy): TranslationPolicy 
     (!value ||
       typeof value !== 'object' ||
       Array.isArray(value) ||
-      Object.keys(value).some((key) => !['judgment', 'maxRetries', 'maxCalls'].includes(key)))
+      Object.keys(value).some(
+        (key) => !['judgment', 'maxRetries', 'maxCalls', 'contextMode'].includes(key)
+      ))
   )
     throw new Error('TRANSLATION_POLICY_INVALID');
   return {
@@ -52,6 +62,9 @@ export function translationPolicy(value?: TranslationPolicy): TranslationPolicy 
     ),
     maxRetries: translationMaxRetries(value?.maxRetries),
     maxCalls: translationMaxCalls(value?.maxCalls),
+    ...(value?.contextMode === undefined
+      ? {}
+      : { contextMode: translationContextMode(value.contextMode) }),
   };
 }
 export type TranslationRefusalVerdict = 'accepted' | 'refused';

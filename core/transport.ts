@@ -26,6 +26,7 @@ import { validatePricingSnapshot } from './model-pricing.js';
 import type { PricingSnapshot } from './pricing-types.js';
 import { createPublicTextProgress, type ProviderProgress } from './provider-progress.js';
 import type { ProviderOptions } from './provider-options.js';
+import type { ProviderCacheBoundary } from './provider-cache-diagnostics.js';
 export type { ProviderProgress } from './provider-progress.js';
 export { ProviderContractError } from './provider-errors.js';
 export {
@@ -153,6 +154,8 @@ export type WireRecord = {
   body: Json;
   bodySha256: string;
   stablePrefixSha256: string;
+  /** Host-only wire fingerprints; not provider cache keys or observed cache hits. */
+  cacheBoundaries?: ProviderCacheBoundary[];
 };
 export type CatalogModel = {
   id: string;

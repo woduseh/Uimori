@@ -394,8 +394,7 @@ export function encodeResponses(request: ProviderRequest): {
   const prepared = prepare(request, 'openai-responses-turn-v1', 'openai-responses-v1');
   const { generation, aliases, schema, previous, fresh, plan, bootstrap } = prepared;
   const cache = plan ? undefined : planProviderCache(request, 'openai-responses-v1');
-  const helperCachePoint =
-    request.role === 'helper' &&
+  const stableCachePoint =
     generation?.cacheMode === 'automatic' &&
     modelCapability('openai-responses-v1', request.modelId)?.cacheModes?.includes('explicit')
       ? cache?.breakpoint
@@ -438,19 +437,19 @@ export function encodeResponses(request: ProviderRequest): {
                 role: 'user',
                 content: [
                   // Preserve a reusable tools/instructions prefix before the changing task data.
-                  ...(helperCachePoint
+                  ...(stableCachePoint
                     ? [
                         {
                           type: 'input_text',
                           text: requestLabel,
-                          [helperCachePoint.field]: helperCachePoint.value,
+                          [stableCachePoint.field]: stableCachePoint.value,
                         },
                       ]
                     : []),
                   {
                     type: 'input_text',
                     text:
-                      (helperCachePoint ? '' : requestLabel) + JSON.stringify(prepared.wireInput),
+                      (stableCachePoint ? '' : requestLabel) + JSON.stringify(prepared.wireInput),
                   },
                 ],
               },

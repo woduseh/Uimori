@@ -67,23 +67,39 @@ function source(
   );
 }
 
-function promptSetting(store: Store, title: string, maxRetries = 1) {
+function promptSetting(
+  store: Store,
+  title: string,
+  maxRetries = 1,
+  contextMode?: 'full' | 'source-only'
+) {
   const workspace = promptWorkspace(store);
   return updatePromptWorkspace(store, {
     expectedRevision: workspace.revision,
     translation: { title, program: createDefaultRisuPrompt(title, 'translation'), values: {} },
-    translationPolicy: { ...workspace.translationPolicy, maxRetries },
+    translationPolicy: {
+      ...workspace.translationPolicy,
+      maxRetries,
+      ...(contextMode ? { contextMode } : {}),
+    },
   });
 }
 
-async function translateFixture(store: Store, jobId: string) {
+async function translateFixture(
+  store: Store,
+  jobId: string,
+  expectedContextMode?: 'full' | 'source-only'
+) {
+  const contextModes: ('full' | 'source-only')[] = [];
   await runAuxiliaryJob(
     auxiliaryBridge(store, new Controls(), new AbortController().signal),
     jobId,
     'whole-source-owner',
     {
       signal: new AbortController().signal,
-
+      onInput: (_id, input) => {
+        contextModes.push(input.contextMode ?? 'full');
+      },
       authorize: (c) => c,
       onAttemptStart: () => {
         throw new Error('Live forbidden');
@@ -92,37 +108,38 @@ async function translateFixture(store: Store, jobId: string) {
     }
   );
   expect(store.job(jobId).status).toBe('completed');
+  if (expectedContextMode) expect(contextModes).toEqual([expectedContextMode]);
 }
 
-test('new translation freezes the current prompt and retry policy while pending work keeps its reservation', async () => {
+test('new translation freezes the current prompt, context and retry policy while pending work keeps its reservation', async () => {
   vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Live forbidden'));
   const store = database();
   const chat = createFixtureChat(store, 'current translation');
   const original = source(store, chat.id, 'A'.repeat(60000));
   const originalSnapshot = readStoredRunSnapshot(store, original.runId);
-  const firstSettings = promptSetting(store, 'First translation instructions');
+  const firstSettings = promptSetting(store, 'First translation instructions', 1, 'full');
   const reserved = store.requestTranslation(original.id);
   expect(reserved.input).toMatchObject({
     promptWorkspaceRevision: firstSettings.revision,
     translationPrompt: { title: 'First translation instructions' },
-    translationPolicy: { maxRetries: 1, maxCalls: 16 },
+    translationPolicy: { maxRetries: 1, maxCalls: 16, contextMode: 'full' },
   });
-  const nextSettings = promptSetting(store, 'Next instructions', 0);
+  const nextSettings = promptSetting(store, 'Next instructions', 0, 'source-only');
   expect(store.requestTranslation(original.id).input).toEqual(reserved.input);
-  await translateFixture(store, reserved.id);
+  await translateFixture(store, reserved.id, 'full');
   expect(store.job(reserved.id).result?.text).toBe(original.text);
   const next = store.retranslate(original.id);
   expect(next.id).not.toBe(reserved.id);
   expect(next.input).toMatchObject({
     promptWorkspaceRevision: nextSettings.revision,
     translationPrompt: { title: 'Next instructions' },
-    translationPolicy: { maxRetries: 0 },
+    translationPolicy: { maxRetries: 0, contextMode: 'source-only' },
   });
   expect(next.previousResult).toMatchObject({
     jobId: reserved.id,
     result: { text: original.text },
   });
-  await translateFixture(store, next.id);
+  await translateFixture(store, next.id, 'source-only');
   expect(store.job(reserved.id).result?.text).toBe(original.text);
   expect(store.job(next.id).previousResult).toBeUndefined();
   expect(readStoredRunSnapshot(store, original.runId)).toEqual(originalSnapshot);
@@ -136,6 +153,7 @@ test('explicit retry creates a new current-policy job and preserves failed candi
     expectedRevision: 0,
     expectedSourceHash: original.hash,
   });
+  promptSetting(store, 'Failed reserved instructions', 1, 'source-only');
   const job = store.retranslate(original.id);
   const active = store.claimJob(job.id, 'failed-owner', {})!;
   store.finishAuxiliary(job.id, active.generation, 'failed-owner', {
@@ -149,11 +167,12 @@ test('explicit retry creates a new current-policy job and preserves failed candi
     error: 'TRANSLATION_REFUSAL_UNCERTAIN',
   });
   const prior = store.job(job.id);
+  expect(prior.input).toMatchObject({ translationPolicy: { contextMode: 'source-only' } });
   expect(prior.previousResult).toMatchObject({
     jobId: successful.id,
     result: { text: 'Previous successful translation' },
   });
-  const settings = promptSetting(store, 'Retry current instructions', 0);
+  const settings = promptSetting(store, 'Retry current instructions', 0, 'full');
   const count = store.db.prepare('SELECT count(*) AS n FROM jobs').get();
   expect(() =>
     store.retryJob(job.id, () => {
@@ -167,12 +186,12 @@ test('explicit retry creates a new current-policy job and preserves failed candi
   expect(retried.revision).toBe(prior.revision! + 1);
   expect(retried.input).toMatchObject({
     promptWorkspaceRevision: settings.revision,
-    translationPolicy: { maxRetries: 0 },
+    translationPolicy: { maxRetries: 0, contextMode: 'full' },
   });
   expect(retried.previousResult).toMatchObject({ jobId: successful.id });
   expect(store.retryJob(job.id)).toEqual(retried);
   expect(store.job(job.id).result?.text).toBe('Uncertain candidate');
-  await translateFixture(store, retried.id);
+  await translateFixture(store, retried.id, 'full');
   expect(store.job(job.id).result?.text).toBe('Uncertain candidate');
 });
 

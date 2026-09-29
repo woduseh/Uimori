@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { executeStoryRead, STORY_RESULT_MAX_BYTES } from '../core/story-context.js';
 import { sourceHash } from '../core/source-history.js';
-import { validateAuthorNote, type AuthorNote } from '../core/notes.js';
+import { modelAuthorNotes, validateAuthorNote, type AuthorNote } from '../core/notes.js';
 import type { RunSnapshot } from '../core/types.js';
 
 const sourceText = 'Exact source evidence. '.repeat(1000);
@@ -91,6 +91,29 @@ describe('author-note validation stays separate from model read tools', () => {
     expect(() =>
       validateAuthorNote({ ...note(), declaration: { author: 'user', text: 'different' } }, scope)
     ).toThrow('STORY_NOTE_INVALID');
+  });
+  test('model notes contain each body once while preserving authorship, origins and source anchors', () => {
+    const original: AuthorNote[] = [
+      { ...note('USER_CORRECTION_BODY'), atRevision: 'source', atHash: sourceHash(sourceText) },
+      {
+        ...note('IMPORTED_MEMORY_BODY'),
+        id: 'imported',
+        kind: 'imported-memory',
+        origin: { fileHash: 'a'.repeat(64), entryId: 'entry', title: 'Imported memory' },
+      },
+    ];
+    const before = structuredClone(original);
+    const projected = modelAuthorNotes(original);
+    expect(projected).toEqual([
+      { ...original[0], declaration: { author: 'user' } },
+      { ...original[1], declaration: { author: 'user' } },
+    ]);
+    for (const body of ['USER_CORRECTION_BODY', 'IMPORTED_MEMORY_BODY'])
+      expect(JSON.stringify(projected).split(body)).toHaveLength(2);
+    projected[0].declaration.author = 'changed projection';
+    projected[1].origin!.title = 'changed projection';
+    expect(original).toEqual(before);
+    expect(validateAuthorNote(original[1], { chatId: 'chat', history: [] })).toEqual(original[1]);
   });
 });
 

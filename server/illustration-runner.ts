@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { processImage } from './image-processing.js';
 import { readRunSnapshot } from './run-projections.js';
 import {
@@ -25,6 +26,7 @@ import {
   type Illustration,
   type IllustrationDiagnostic,
   type IllustrationJobInput,
+  type IllustrationPlan,
   type IllustrationScene,
 } from '../core/illustration.js';
 import type { CodexImageRequest, CodexImageResult } from './codex-runtime.js';
@@ -182,6 +184,8 @@ export async function runIllustrationJob(
     stage: 'preparation',
     attempts: [...(job.diagnostic?.attempts ?? [])],
     retries: [...(job.diagnostic?.retries ?? [])],
+    prompt: job.diagnostic?.prompt,
+    promptRequestHash: job.diagnostic?.promptRequestHash,
   };
   const snapshot = readRunSnapshot(store, source.runId);
   const progress = async () => {
@@ -313,38 +317,45 @@ export async function runIllustrationJob(
       const workflow = parseComfyWorkflow(input.comfyui.workflow);
       const model = input.comfyui.promptModel;
       const connection = await authorizedConnection(hooks, model);
-      diagnostic.stage = 'prompt';
-      await progress();
-      const promptResult = await attempt(
-        (onWire) =>
-          executeProvider(
-            transportConnection(connection),
-            illustrationPromptRequest(model, context, generationFromModel(model)),
-            {
+      const request = illustrationPromptRequest(model, context, generationFromModel(model));
+      const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex');
+      let plan: IllustrationPlan;
+      if (diagnostic.prompt && diagnostic.promptRequestHash === requestHash) {
+        plan = { kind: 'generate', prompt: diagnostic.prompt };
+      } else {
+        // An old prompt cannot authorize reuse when today's reconstructed input changed.
+        delete diagnostic.prompt;
+        delete diagnostic.promptRequestHash;
+        diagnostic.stage = 'prompt';
+        await progress();
+        const promptResult = await attempt(
+          (onWire) =>
+            executeProvider(transportConnection(connection), request, {
               signal: hooks.signal,
               resolveCredential: hooks.resolveCredential,
               executeCodex: hooks.executeCodex,
               timeoutMs: model.timeoutMs,
               onWire,
-            }
-          ),
-        (value) => structuredClone(value)
-      );
-      if (promptResult.status !== 'completed') {
-        const code = providerCode(promptResult);
-        throw new IllustrationError(
-          code,
-          code !== 'ILLUSTRATION_PROMPT_REFUSED' &&
-            code !== 'ILLUSTRATION_CANCELLED' &&
-            code !== 'ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED' &&
-            !/HTTP_4\d\d$/u.test(code)
+            }),
+          (value) => structuredClone(value)
         );
+        if (promptResult.status !== 'completed') {
+          const code = providerCode(promptResult);
+          throw new IllustrationError(
+            code,
+            code !== 'ILLUSTRATION_PROMPT_REFUSED' &&
+              code !== 'ILLUSTRATION_CANCELLED' &&
+              code !== 'ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED' &&
+              !/HTTP_4\d\d$/u.test(code)
+          );
+        }
+        plan = parseIllustrationPlan(promptResult.text, context.allowSkip);
       }
-      const plan = parseIllustrationPlan(promptResult.text, context.allowSkip);
       if (plan.kind === 'skip') diagnostic.skipped = plan.reason;
       else {
         const prompt = plan.prompt;
         diagnostic.prompt = prompt;
+        diagnostic.promptRequestHash = requestHash;
         diagnostic.stage = 'generate';
         await progress();
         const filled = fillComfyWorkflow(workflow, {

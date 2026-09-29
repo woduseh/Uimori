@@ -36,7 +36,8 @@ const summary = (text: string) =>
 /** Discovery metadata only: identity, a short summary and the scoped relations. */
 const catalogEntry = (
   item: Resource,
-  allowedIds: Set<string>
+  allowedIds: Set<string>,
+  pinnedBodiesDelivered: boolean
 ): Omit<Resource, 'text' | 'chatId'> => {
   const pinned = item.loading === 'pinned';
   return {
@@ -45,7 +46,7 @@ const catalogEntry = (
     kind: item.kind,
     title: item.title,
     // A pinned body already reaches the request; its summary would only repeat it.
-    description: pinned ? '' : summary(item.description),
+    description: pinned && pinnedBodiesDelivered ? '' : summary(item.description),
     ...(item.sourceKind ? { sourceKind: item.sourceKind } : {}),
     ...(pinned ? { loading: 'pinned' as const } : {}),
     ...(item.relatedIds ? { relatedIds: item.relatedIds.filter((id) => allowedIds.has(id)) } : {}),
@@ -62,6 +63,28 @@ const budgetedCatalogLength = (catalog: MainInput['catalog']) => {
   }
   return listed;
 };
+/** Bounded discovery metadata; callers retain the full resources behind their read tools. */
+export function resourceCatalog(
+  resources: readonly Resource[],
+  { pinnedBodiesDelivered = true }: { pinnedBodiesDelivered?: boolean } = {}
+) {
+  const allowedIds = new Set(resources.map((item) => item.id));
+  const entries = resources.map((item) => catalogEntry(item, allowedIds, pinnedBodiesDelivered));
+  const listed = budgetedCatalogLength(entries);
+  return {
+    catalog: entries.slice(0, listed),
+    ...(listed < entries.length
+      ? {
+          catalogPage: {
+            total: entries.length,
+            listed,
+            remaining:
+              'Use knowledge.search or skills.list with pagination to discover the full approved scope.',
+          },
+        }
+      : {}),
+  };
+}
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const KNOWLEDGE_SEARCH_CHARS = 24_000;
 // Frozen Run objects own their optional browse view; no persistent cache, timers or invalidation service.
@@ -137,14 +160,13 @@ export function buildMainInput(
     throw new Error('PROMPT_INVALID_COMPILED');
   const packages = compiledPackages(snapshot, 'main'),
     resources = collectRoleResources(snapshot, packages);
-  const allowedIds = new Set(resources.map((item) => item.id));
   const input: MainInput = {
     role: 'main',
     contract: '',
     task: snapshot.nativeRisuExecution?.request ?? snapshot.request,
     facts: [],
     history: [],
-    catalog: resources.map((item) => catalogEntry(item, allowedIds)),
+    catalog: [],
     prefetch: [],
     tools: [...ALLOWED_TOOLS],
     results: structuredClone([...results]),
@@ -209,17 +231,7 @@ export function buildMainInput(
   }
   // The catalog rides uncached in every request, so a large library is listed only up to a
   // character budget. The rest stays reachable through the read tools.
-  const total = input.catalog.length,
-    listed = budgetedCatalogLength(input.catalog);
-  if (listed < total) {
-    input.catalogPage = {
-      total,
-      listed,
-      remaining:
-        'Use knowledge.search or skills.list with pagination to discover the full approved scope.',
-    };
-    input.catalog = input.catalog.slice(0, listed);
-  }
+  Object.assign(input, resourceCatalog(resources));
   return input;
 }
 

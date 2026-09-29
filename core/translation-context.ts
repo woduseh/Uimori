@@ -1,6 +1,45 @@
 import type { RunSnapshot, ToolEvent } from './types.js';
 import type { ToolAction } from './provider.js';
 import { sourceHash } from './source-history.js';
+import type { TranslationContextMode } from './translation-settings.js';
+
+/** Restrict only this translation's projection, before CBS/slots or read tools see it. */
+export function translationSnapshot(
+  snapshot: RunSnapshot,
+  mode: TranslationContextMode
+): RunSnapshot {
+  if (mode === 'full') return snapshot;
+  const profile = snapshot.profile;
+  const preset = profile?.promptPresets?.translation;
+  const controls = preset && profile?.promptControls?.[`${preset.id}@${preset.revision}`];
+  return {
+    chatId: snapshot.chatId,
+    parentRevision: null,
+    settingsRevision: snapshot.settingsRevision,
+    settings: snapshot.settings,
+    request: '',
+    history: [],
+    resources: [],
+    ...(snapshot.translationGuide === undefined
+      ? {}
+      : { translationGuide: snapshot.translationGuide }),
+    ...(profile
+      ? {
+          profile: {
+            chatId: profile.chatId,
+            revision: profile.revision,
+            image: false,
+            routes: { main: null, translation: profile.routes.translation, status: null },
+            models: profile.models.translation ? { translation: profile.models.translation } : {},
+            ...(preset ? { promptPresets: { translation: preset } } : {}),
+            ...(preset && controls
+              ? { promptControls: { [`${preset.id}@${preset.revision}`]: controls } }
+              : {}),
+          },
+        }
+      : {}),
+  };
+}
 
 export const TRANSLATION_READ_NAMES = ['translation.search', 'translation.read'];
 export type TranslationReference = {

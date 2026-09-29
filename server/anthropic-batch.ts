@@ -12,6 +12,7 @@ import {
 } from '../core/provider-http-error.js';
 import { providerFetchOptions, transportFailureCode } from '../core/provider-fetch.js';
 import { ProviderContractError } from '../core/provider-errors.js';
+import { providerCacheBoundaries } from '../core/provider-cache-diagnostics.js';
 import { validateProviderEndpoint } from '../core/product.js';
 import { validateConnection, validateRequest } from '../core/provider-request.js';
 import type {
@@ -241,6 +242,7 @@ export class AnthropicBatchRun {
       };
       const requestBody = JSON.stringify(params);
       const requestSha256 = sha(requestBody);
+      const cacheBoundaries = providerCacheBoundaries(connection.protocol, params);
       const existing = this.row(ordinal);
       if (existing && existing.requestSha256 !== requestSha256)
         return failure('ANTHROPIC_BATCH_RECOVERY_MISMATCH');
@@ -263,6 +265,7 @@ export class AnthropicBatchRun {
         },
         bodySha256: requestSha256,
         stablePrefixSha256: sha(JSON.stringify(request.stable)),
+        ...(cacheBoundaries.length ? { cacheBoundaries } : {}),
         executionMode: 'batch',
       };
       const attemptId = await options.onWire?.(wire, existing?.attemptId);

@@ -354,6 +354,12 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     const compiled = built.request.prompt!;
     const host = compiled.messages.find((m) => m.id === 'native.host-context')!;
     expect(host.content[0].text).toContain(entry.text);
+    expect(JSON.stringify(body).split(entry.text)).toHaveLength(2);
+    expect((built.request.input.source as any).notes[0]).toEqual({
+      ...entry,
+      declaration: { author: 'Synthetic author' },
+    });
+    expect(work.story.notes[0].declaration.text).toBe(entry.text);
     expect((built.request.input.source as Record<string, Json>).memory).toBeUndefined();
     expect(body.instructions).not.toContain('parentRevision');
     expect(body.instructions).not.toContain(entry.text);

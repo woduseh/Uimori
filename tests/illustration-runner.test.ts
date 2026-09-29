@@ -1,6 +1,6 @@
 import { fixtureIllustrationPreset } from './fixtures/illustration.js';
-import { afterEach, describe, expect, test } from 'vitest';
-import type { Connection, ModelPreset } from '../core/product.js';
+import { afterEach, describe, expect, test, vi } from 'vitest';
+import type { Connection, Content, ModelPreset } from '../core/product.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import type { CodexImageRequest, CodexImageResult } from '../server/codex-runtime.js';
 import {
@@ -12,11 +12,13 @@ import {
   illustrationJob,
   illustrationsForSources,
   reserveIllustration,
+  retryIllustration,
   updateIllustrationReferences,
 } from '../server/illustrations.js';
 import type { Store } from '../server/store.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { comfyUIFixture, FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
+import { fixtureBotInput } from './fixtures/chat.js';
 import {
   chatWithSource,
   fixtureSettings,
@@ -27,6 +29,7 @@ import {
 const databases = illustrationDatabases('uimori-illustration-runner-');
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const cleanup of cleanups.splice(0)) await cleanup();
   databases.cleanup();
 });
@@ -413,6 +416,117 @@ describe('illustration runner through the Codex image turn', () => {
 });
 
 describe('illustration runner through a prompt model and remote ComfyUI', () => {
+  test('reuses a successful prompt only within the same job and a recorded matching request', async () => {
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    const prompt = { prompt: 'a lantern', negativePrompt: 'text', caption: '강 위의 등불' };
+    const { provider, model } = await promptModel(store, () => JSON.stringify(prompt));
+    const comfy = await comfyUIFixture({ behavior: 'error' });
+    cleanups.push(comfy.close);
+    fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
+    const settings = fixtureSettings({
+      generator: 'comfyui',
+      maxAutoRetries: 1,
+      comfyui: {
+        baseUrl: comfy.origin,
+        promptModel: { id: model.id },
+        timeoutMs: 5000,
+        pollIntervalMs: 20,
+      },
+    });
+    const job = reserveIllustration(store, source, 'manual', { settings });
+    const observed = hooks(store);
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toMatchObject({
+      status: 'requeued',
+      code: 'COMFYUI_EXECUTION_FAILED',
+    });
+    random.mockReturnValue(0.2);
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toMatchObject({
+      status: 'failed',
+    });
+    retryIllustration(store, job.id);
+    random.mockReturnValue(0.3);
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toMatchObject({
+      status: 'failed',
+    });
+    expect(provider.requests).toHaveLength(1);
+    expect(observed.wires).toHaveLength(1);
+    expect(comfy.prompts).toHaveLength(3);
+    const seeds = comfy.prompts.map(
+      ({ workflow }) => (workflow['3'] as { inputs: { seed: number } }).inputs.seed
+    );
+    expect(new Set(seeds).size).toBe(3);
+    random.mockRestore();
+    for (const rendered of comfy.prompts) {
+      expect(rendered.workflow['6']).toMatchObject({ inputs: { text: prompt.prompt } });
+      expect(rendered.workflow['7']).toMatchObject({ inputs: { text: 'blurry, text' } });
+    }
+    expect(illustrationJob(store, job.id).diagnostic?.prompt).toEqual(prompt);
+
+    // Older saved jobs retain a prompt for display, but have no request fingerprint.
+    const legacy = illustrationJob(store, job.id).diagnostic!;
+    delete legacy.promptRequestHash;
+    store.db
+      .prepare('UPDATE illustration_jobs SET diagnostic=? WHERE id=?')
+      .run(JSON.stringify(legacy), job.id);
+    retryIllustration(store, job.id);
+    await runIllustrationJob(store, job.id, 'worker', observed.options);
+    expect(provider.requests).toHaveLength(2);
+
+    const next = reserveIllustration(store, source, 'manual', { settings });
+    await runIllustrationJob(store, next.id, 'worker', observed.options);
+    expect(provider.requests).toHaveLength(3);
+  });
+
+  test('regenerates after reconstructed character notes change and never caches an invalid plan', async () => {
+    const store = databases.create();
+    const { chat, source } = chatWithSource(store);
+    let reply = JSON.stringify({ prompt: 'a lantern', caption: '처음 장면' });
+    const { provider, model } = await promptModel(store, () => reply);
+    const comfy = await comfyUIFixture({ behavior: 'error' });
+    cleanups.push(comfy.close);
+    fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({
+        generator: 'comfyui',
+        maxAutoRetries: 2,
+        comfyui: {
+          baseUrl: comfy.origin,
+          promptModel: { id: model.id },
+          timeoutMs: 5000,
+          pollIntervalMs: 20,
+        },
+      }),
+    });
+    const observed = hooks(store);
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toMatchObject({
+      status: 'requeued',
+      code: 'COMFYUI_EXECUTION_FAILED',
+    });
+    const bot = store.product.get<Content>('content', chat.botId);
+    store.product.content(
+      { ...fixtureBotInput(bot.title, 'Mira wears a red coat.'), expectedRevision: bot.revision },
+      bot.id
+    );
+    reply = 'not a JSON illustration plan';
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toMatchObject({
+      status: 'requeued',
+      code: 'ILLUSTRATION_PROMPT_INVALID',
+    });
+    expect(JSON.parse(provider.requests[1].body).input.source.characterNotes.bot).toBe(
+      'Mira wears a red coat.'
+    );
+    reply = JSON.stringify({ prompt: 'Mira in a red coat', caption: '붉은 외투' });
+    await runIllustrationJob(store, job.id, 'worker', observed.options);
+    expect(provider.requests).toHaveLength(3);
+    expect(comfy.prompts).toHaveLength(2);
+    expect(comfy.prompts[1].workflow['6']).toMatchObject({
+      inputs: { text: 'Mira in a red coat' },
+    });
+    expect(illustrationJob(store, job.id).diagnostic?.prompt?.caption).toBe('붉은 외투');
+  });
+
   test.each(['styleGuidance', 'negativeGuidance'] as const)(
     '%s over the selected model budget stays intact and causes no model or render request',
     async (field) => {

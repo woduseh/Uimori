@@ -224,9 +224,19 @@ async function selectOne(
   const abandoned = (error: string): LoreSelectionEntry => ({ ...base, error });
   {
     if (hooks.signal.aborted) return abandoned('LORE_SELECTION_CANCELLED');
+    const entryTokenLimit = Math.min(policy.judgment.maxSelectedTokens, policy.maxRetainedTokens);
+    const eligible = payload.catalog.filter((entry) => {
+      if (
+        policy.maxRetainedEntries > 0 &&
+        selectedLoreTokens(entry.text ?? entry.summary) <= entryTokenLimit
+      )
+        return true;
+      base.omitted.push({ id: entry.id, reason: 'budget' });
+      return false;
+    });
+    if (!eligible.length) return base;
     if (usage.modelCalls >= target.snapshot.settings.maxCalls - reserveCalls)
       return abandoned('LORE_SELECTION_CALL_LIMIT');
-    if (!payload.catalog.length) return base;
     const makeRequest = (catalog: Candidate[]): JevRequest => ({
       state: {
         conversation: payload.conversation,
@@ -248,20 +258,20 @@ async function selectOne(
       ),
     });
     let lo = 0,
-      hi = payload.catalog.length;
+      hi = eligible.length;
     while (lo < hi) {
       const mid = Math.ceil((lo + hi) / 2);
       if (
         estimateContextTokens({
           model: JEV_MODEL,
-          ...makeRequest(payload.catalog.slice(0, mid)),
+          ...makeRequest(eligible.slice(0, mid)),
         }) <= policy.judgment.maxInputTokens
       )
         lo = mid;
       else hi = mid - 1;
     }
     if (!lo) return abandoned('JEV_INPUT_BUDGET');
-    const catalog = payload.catalog.slice(0, lo);
+    const catalog = eligible.slice(0, lo);
     try {
       const result = await executeJevJudgment(
         makeRequest(catalog),
@@ -287,7 +297,7 @@ async function selectOne(
         .map((entry, index) => ({ entry, probability: result.scores[`entry_${index}`]!, index }))
         .sort((a, b) => b.probability - a.probability || a.index - b.index);
       const selected: string[] = [],
-        omitted: LoreSelectionEntry['omitted'] = [];
+        omitted: LoreSelectionEntry['omitted'] = [...base.omitted];
       let selectedTokens = 0,
         retainedCost = 0;
       for (const { entry, probability } of ranked) {
@@ -313,7 +323,7 @@ async function selectOne(
         model: JEV_MODEL,
         selected,
         omitted,
-        ...(lo < payload.catalog.length ? { partial: 'catalog' as const } : {}),
+        ...(lo < eligible.length ? { partial: 'catalog' as const } : {}),
         judgment: {
           threshold: policy.judgment.threshold,
           maxSelectedTokens: policy.judgment.maxSelectedTokens,

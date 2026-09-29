@@ -575,9 +575,12 @@ describe('input context projection and durable summary calls', () => {
         generation: { maxOutputTokens: 4096 },
         input: {
           controls: { targetSummaryTokens: 1024 },
-          source: { userNotes: first.story!.notes },
+          source: {
+            userNotes: [{ ...first.story!.notes[0], declaration: { author: 'user' } }],
+          },
         },
       });
+      expect(JSON.stringify(wire.body).split(correction)).toHaveLength(2);
       return (wire.body as { input: { source: SummaryPayload } }).input.source;
     });
     expect(payloads[0].previousSummary).toBeNull();

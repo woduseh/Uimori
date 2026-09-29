@@ -96,6 +96,13 @@ test('the hint table still describes reviewed models but never gates unlisted ID
   expect(modelCapability('anthropic-messages-v1', 'claude-fable-5-1')?.thinkingModes).toEqual([
     'adaptive',
   ]);
+  expect(modelCapability('anthropic-messages-v1', 'claude-opus-5-5')).toMatchObject({
+    defaultOutputEffort: 'medium',
+    thinkingModes: ['adaptive'],
+    forcedTools: false,
+    cacheModes: ['disabled', 'explicit', 'automatic'],
+    cacheTtls: ['5m', '1h'],
+  });
   expect(modelCapability('openai-responses-v1', 'gpt-5.6-sol-future')).toBeUndefined();
   expect(modelCapability('openai-chat-v1', 'spacexai/grok-4.6')).toBeUndefined();
   expect(supportedModels('openai-chat-v1').every((item) => item.cacheModes === undefined)).toBe(

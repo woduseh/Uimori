@@ -12,7 +12,7 @@ import {
   type CodexAgentExecutionOptions,
 } from '../server/codex-runtime.js';
 import { CodexProcess } from '../server/codex-process.js';
-import { buildCodexTurn } from '../core/codex-protocol.js';
+import { buildCodexTurn, TEXT_BASE_INSTRUCTIONS } from '../core/codex-protocol.js';
 import {
   ProviderContractError,
   type ProviderRequest,
@@ -407,8 +407,8 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       },
     });
     const start = records().find((row) => row.method === 'thread/start').params;
-    expect(start).not.toHaveProperty('baseInstructions');
-    expect(wire?.body).not.toHaveProperty('baseInstructions');
+    expect(start.baseInstructions).toBe(TEXT_BASE_INSTRUCTIONS);
+    expect(wire?.body).toMatchObject({ baseInstructions: TEXT_BASE_INSTRUCTIONS });
     expect(start).toMatchObject({
       environments: [],
       selectedCapabilityRoots: [],

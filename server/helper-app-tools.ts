@@ -229,14 +229,23 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'artifact.generate',
     description:
-      'Write ONE independent what-if scene using the pinned writing prompt, model, actual story context and read-only state. Return exact artifact reference; do not rewrite its prose.',
+      'Write ONE independent what-if scene using the pinned writing prompt, model, actual story context and read-only state. Returns its saved ID/revision and textChars, not the prose. Return that reference; read artifact.read pages only when the task also requires inspecting the scene.',
     inputSchema: schema({ request: str, artifactId: str, expectedRevision: integer }, ['request']),
   },
   {
     name: 'artifact.read',
     description:
-      'Read an exact artifact revision from this conversation. It is not a played story event.',
-    inputSchema: schema({ id: str, revision: integer }, ['id', 'revision']),
+      'Read an exact artifact revision in UTF-16 pages. field=text (default) reads the hypothetical scene; field=request reads its original generation request. offset defaults to 0 and limit to 4000 (max 10000); follow nextOffset for unread text. A saved reference alone does not mean you read its prose. This artifact is not a played story event.',
+    inputSchema: schema(
+      {
+        id: str,
+        revision: integer,
+        field: { type: 'string', enum: ['text', 'request'] },
+        offset: { type: 'integer', minimum: 0 },
+        limit: { type: 'integer', minimum: 1, maximum: 10000 },
+      },
+      ['id', 'revision']
+    ),
   },
 ];
 /** Context selects default IDs, never a permission boundary. */

@@ -108,6 +108,7 @@ export type PromptWorkspace = {
   translation: CurrentPrompt;
   translationPolicy: {
     judgment: import('./translation-settings.js').TranslationJudgmentPolicy;
+    contextMode?: 'full' | 'source-only';
     maxRetries: number;
     maxCalls: number;
   };

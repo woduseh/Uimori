@@ -9,6 +9,7 @@ import { validateProviderPrompt } from '../core/risu-prompt.js';
 import { nativeHostContextText, NATIVE_HOST_CONTEXT_ID } from '../core/provider-messages.js';
 import { ProviderContractError, type ProviderRequest, type Json } from '../core/transport.js';
 import { agentSharedOptions } from './agent-shared-options.js';
+import { modelAuthorNotes } from '../core/notes.js';
 
 const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderRequest['input'] {
@@ -48,7 +49,7 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
             },
           }
         : {}),
-      ...(input.notes && !used.has('notes') ? { notes: input.notes } : {}),
+      ...(input.notes && !used.has('notes') ? { notes: modelAuthorNotes(input.notes) } : {}),
       ...(input.outline && !used.has('outline') ? { outline: input.outline } : {}),
       ...(input.catalogPage ? { catalogPage: input.catalogPage } : {}),
     }),

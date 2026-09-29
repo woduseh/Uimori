@@ -560,7 +560,7 @@ export class HelperWorkspace {
         null,
         null,
         wire,
-        { kind: helperUsageKind(purpose) }
+        { kind: helperUsageKind(purpose, wire) }
       );
       this.store.db
         .prepare(

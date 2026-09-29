@@ -8,6 +8,7 @@ export type ProviderCachePlan = {
   breakpoint?: { field: 'cache_control' | 'prompt_cache_breakpoint'; value: Record<string, Json> };
   disabled: boolean;
   explicitLimit: number;
+  automaticSuppressed?: true;
 };
 
 /** Cache policy only: the caller places authored points without rewriting content or signed turns. */
@@ -25,13 +26,14 @@ export function planProviderCache(
     modelCapability(protocol, request.modelId)?.cacheModes?.includes('explicit') === true ||
     mode !== undefined;
   const disabled = mode === 'disabled';
-  const automatic = mode === 'automatic';
   const authoredPoints = new Set(
     request.prompt?.cachePlan.map((point) => point.afterMessageId) ?? []
   ).size;
+  const automaticSuppressed = supported && mode === 'automatic' && authoredPoints === 4;
+  const automatic = mode === 'automatic' && !automaticSuppressed;
   const explicitLimit = automatic ? 3 : 4;
-  // A selected automatic point must not silently displace an authored point, even a preferred one.
-  if (supported && automatic && authoredPoints > explicitLimit)
+  // Four authored points fill the provider limit; keep them and omit only the automatic extra.
+  if (supported && mode === 'automatic' && authoredPoints > 4)
     throw new ProviderContractError('PROMPT_CACHE_LIMIT');
   const ttl: Record<string, Json> =
     generation?.cacheTtl === undefined ? {} : { ttl: generation.cacheTtl };
@@ -43,6 +45,7 @@ export function planProviderCache(
         : {}),
       disabled,
       explicitLimit,
+      ...(automaticSuppressed ? { automaticSuppressed: true } : {}),
     };
   }
   if (protocol === 'openai-responses-v1' && supported) {
@@ -58,6 +61,7 @@ export function planProviderCache(
         : {}),
       disabled,
       explicitLimit,
+      ...(automaticSuppressed ? { automaticSuppressed: true } : {}),
     };
   }
   return { options: {}, disabled: false, explicitLimit: 0 };

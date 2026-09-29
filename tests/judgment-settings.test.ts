@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from 'vitest';
+import Fastify from 'fastify';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
@@ -7,11 +8,13 @@ import {
   defaultPromptWorkspace,
   modelWorkspace,
   promptWorkspace,
+  promptWorkspaceRoutes,
   updateModelWorkspace,
   validatePromptWorkspace,
 } from '../server/prompt-workspace.js';
 import { validateTranslationJudgmentPolicy } from '../core/translation-settings.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import type { ModelWorkspace } from '../core/product.js';
 
 const stores: { store: Store; directory: string }[] = [];
 function setup() {
@@ -73,6 +76,53 @@ test('judgment flags reject non-boolean settings', () => {
       validatePromptWorkspace({ ...defaultPromptWorkspace(), mainJudgmentEnabled: invalid })
     ).toThrow();
     expect(() => validateTranslationJudgmentPolicy({ threshold: 0.9, enabled: invalid })).toThrow();
+  }
+});
+
+test('translation context choice round-trips through workspace APIs and rejects unknown values without saving', async () => {
+  const store = setup();
+  const app = Fastify();
+  promptWorkspaceRoutes(app, store, () => {});
+  try {
+    const read = async () => {
+      const response = await app.inject({ method: 'GET', url: '/api/model-workspace' });
+      expect(response.statusCode).toBe(200);
+      return response.json<ModelWorkspace>();
+    };
+    let current = await read();
+    expect(current.translationPolicy).not.toHaveProperty('contextMode');
+    const originalPolicy = current.translationPolicy;
+    for (const contextMode of ['source-only', 'full'] as const) {
+      const saved = await app.inject({
+        method: 'PUT',
+        url: '/api/model-workspace',
+        payload: {
+          expectedRevision: current.revision,
+          routes: current.routes,
+          translationPolicy: { ...current.translationPolicy, contextMode },
+        },
+      });
+      expect(saved.statusCode, saved.body).toBe(200);
+      current = await read();
+      expect(current).toEqual(saved.json());
+      expect(current.translationPolicy).toEqual({ ...originalPolicy, contextMode });
+      const prompts = await app.inject({ method: 'GET', url: '/api/prompt-workspace' });
+      expect(prompts.json().translationPolicy).toEqual(current.translationPolicy);
+    }
+    const rejected = await app.inject({
+      method: 'PUT',
+      url: '/api/model-workspace',
+      payload: {
+        expectedRevision: current.revision,
+        routes: current.routes,
+        translationPolicy: { ...current.translationPolicy, contextMode: 'unknown' },
+      },
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().message).toBe('TRANSLATION_CONTEXT_MODE_INVALID');
+    expect(await read()).toEqual(current);
+  } finally {
+    await app.close();
   }
 });
 

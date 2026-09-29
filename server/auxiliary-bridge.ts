@@ -16,6 +16,13 @@ export function auxiliaryBridge(
   return {
     load(id) {
       const job = store.job(id);
+      const policy =
+        job.kind === 'translation' &&
+        job.input &&
+        typeof job.input === 'object' &&
+        'translationPolicy' in job.input
+          ? translationPolicy(job.input.translationPolicy as TranslationPolicy)
+          : undefined;
       const source = store.sourceAtHash(job.sourceRevision, job.sourceHash);
       const snapshot = store.product.resolveJobPrompt(
         readRunSnapshot(store, source.runId),
@@ -40,21 +47,13 @@ export function auxiliaryBridge(
         ...(job.kind === 'image' ? { imageSource: imageTargetSource(store, job, true) } : {}),
         ...(job.kind === 'translation'
           ? {
-              translationReferences: translationReferences(store, snapshot),
+              translationReferences:
+                policy?.contextMode === 'source-only' ? [] : translationReferences(store, snapshot),
               judgmentRecovery: translationRecovery(job.input, source.hash),
             }
           : {}),
         assets: job.kind === 'image' ? imageCatalog(job.input) : assets,
-        ...(job.kind === 'translation' &&
-        job.input &&
-        typeof job.input === 'object' &&
-        'translationPolicy' in job.input
-          ? {
-              translationPolicy: translationPolicy(
-                job.input.translationPolicy as TranslationPolicy
-              ),
-            }
-          : {}),
+        ...(policy ? { translationPolicy: policy } : {}),
       };
     },
     async claim(id, owner, prepared) {

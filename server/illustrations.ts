@@ -678,6 +678,8 @@ export function retryIllustration(store: Store, id: string): Illustration {
     const diagnostic: IllustrationDiagnostic = {
       stage: 'preparation',
       attempts: job.diagnostic?.attempts ?? [],
+      prompt: job.diagnostic?.prompt,
+      promptRequestHash: job.diagnostic?.promptRequestHash,
       retries: [
         ...(job.diagnostic?.retries ?? []),
         { attempt: job.attempt, code: job.error ?? job.status.toUpperCase(), at: now() },

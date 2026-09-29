@@ -131,6 +131,8 @@ export function planNativeMessages(
       cacheIds.add(message.id);
       cacheCount++;
       note('CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED', message, index);
+      if (cache.automaticSuppressed && cacheCount === cache.explicitLimit)
+        note('PROMPT_AUTOMATIC_CACHE_SKIPPED_FOR_AUTHORED_POINTS', message, index, 'not-applied');
     }
     if ((anthropic || vertex) && message.role === 'system' && wasLeading) {
       system.push(...parts);
