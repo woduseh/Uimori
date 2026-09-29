@@ -116,16 +116,23 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     );
     expect(records().find((row) => row.method === 'thread/start').params.dynamicTools).toEqual([
       {
-        type: 'function',
-        name: 'uimori_data_search',
-        description: 'Find saved data',
-        inputSchema: { type: 'object' },
-      },
-      {
-        type: 'function',
-        name: 'uimori_app_call',
-        description: 'Apply an edit',
-        inputSchema: { type: 'object' },
+        type: 'namespace',
+        name: 'uimori',
+        description: 'Scoped Uimori application reads and saved changes for the current task.',
+        tools: [
+          {
+            type: 'function',
+            name: 'uimori_data_search',
+            description: 'Find saved data',
+            inputSchema: { type: 'object' },
+          },
+          {
+            type: 'function',
+            name: 'uimori_app_call',
+            description: 'Apply an edit',
+            inputSchema: { type: 'object' },
+          },
+        ],
       },
     ]);
     expect(records().filter((row) => row.id === 'tool-2')).toEqual([
@@ -135,20 +142,22 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       },
     ]);
   });
-  it.each(['agent-wrong-thread', 'agent-wrong-turn', 'agent-unknown-tool'])(
-    'rejects %s before invoking a host tool',
-    async (mode) => {
-      const { runtime } = setup(mode);
-      const onToolCall = vi.fn(async () => ({ success: true, text: 'should not run' }));
-      expect(
-        await runtime.executeAgent(connection, agentRequest(), {
-          signal: new AbortController().signal,
-          onToolCall,
-        })
-      ).toMatchObject({ status: 'error', error: { code: 'CODEX_TOOL_NOT_ALLOWED' } });
-      expect(onToolCall).not.toHaveBeenCalled();
-    }
-  );
+  it.each([
+    'agent-wrong-thread',
+    'agent-wrong-turn',
+    'agent-wrong-namespace',
+    'agent-unknown-tool',
+  ])('rejects %s before invoking a host tool', async (mode) => {
+    const { runtime } = setup(mode);
+    const onToolCall = vi.fn(async () => ({ success: true, text: 'should not run' }));
+    expect(
+      await runtime.executeAgent(connection, agentRequest(), {
+        signal: new AbortController().signal,
+        onToolCall,
+      })
+    ).toMatchObject({ status: 'error', error: { code: 'CODEX_TOOL_NOT_ALLOWED' } });
+    expect(onToolCall).not.toHaveBeenCalled();
+  });
   it('never replays a duplicate tool call or a turn that exited after a write', async () => {
     for (const mode of ['agent-duplicate', 'agent-exit-after-write']) {
       const { runtime, records } = setup(mode);
@@ -409,6 +418,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       config: {
         web_search: 'cached',
         'features.code_mode': true,
+        'code_mode.excluded_tool_namespaces': ['functions'],
         'features.shell_tool': false,
         'features.js_repl': false,
         'features.apps': false,

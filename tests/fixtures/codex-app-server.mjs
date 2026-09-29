@@ -25,10 +25,11 @@ function nativeTool(index) {
   const args = index === 1 ? { query: 'saved draft' } : { id: 'draft-1', value: 'revised' };
   const item = { type: 'dynamicToolCall', id: callId, tool, arguments: args, status: 'inProgress' };
   send({ method: 'item/started', params: { threadId, turnId, item } });
-  const params = { threadId, turnId, callId, namespace: null, tool, arguments: args };
+  const params = { threadId, turnId, callId, namespace: 'uimori', tool, arguments: args };
   if (mode === 'agent-wrong-thread') params.threadId = 'other-thread';
   if (mode === 'agent-wrong-turn') params.turnId = 'other-turn';
   if (mode === 'agent-unknown-tool') params.tool = 'shell';
+  if (mode === 'agent-wrong-namespace') params.namespace = 'functions';
   send({ id: 'tool-' + index, method: 'item/tool/call', params });
   if (mode === 'agent-duplicate') send({ id: 'tool-duplicate', method: 'item/tool/call', params });
 }
