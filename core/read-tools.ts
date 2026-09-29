@@ -10,10 +10,16 @@ export const KNOWLEDGE_SKILL_TOOLS: ProviderTool[] = [
   {
     name: 'knowledge.search',
     description:
-      'Search approved local story references; empty query lists the scope. Returns metadata and pagination within 24000 serialized characters; an oversized metadata item uses an explicit metadataPreview with original counts. Body matches also include a short exact excerpt with source/range and nextRead for a direct read around that hit; metadata-only matches have no excerpt. The excerpt can answer a narrow fact, but does not cover the complete reference or every matching term. Follow nextOffset for more references, or the supplied nextRead for context around a hit.',
+      'Search approved local story references; empty query lists the scope. Returns metadata and pagination within 24000 serialized characters; an oversized metadata item uses an explicit metadataPreview with original counts. Body matches also include a short exact excerpt with source/range and nextRead for a direct read around that hit; metadata-only matches have no excerpt. The excerpt can answer a narrow fact, but does not cover the complete reference or every matching term. Follow nextOffset for more references, or the supplied nextRead for context around a hit. Optional mode=browse (no query) lists packages, folders and unfiled references from the same frozen scope; omit nodeRef for root, or copy returned nextRead to descend/page with expectedVersion. Browse returns metadata only, never proof of reading the body. A changed/unavailable view returns a root restart. Normal mode/search and empty-query flat listings stay unchanged.',
     inputSchema: {
       type: 'object',
-      properties: { query: { type: 'string', maxLength: 512 }, ...pagination(100) },
+      properties: {
+        query: { type: 'string', maxLength: 512 },
+        mode: { type: 'string', enum: ['search', 'browse'] },
+        nodeRef: { type: 'string', maxLength: 100 },
+        expectedVersion: { type: 'string', maxLength: 64 },
+        ...pagination(100),
+      },
       additionalProperties: false,
     },
   },

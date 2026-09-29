@@ -1,3 +1,4 @@
+import { browseKnowledge } from './knowledge-browse.js';
 import { KNOWLEDGE_SKILL_TOOLS } from './read-tools.js';
 import { createHash } from 'node:crypto';
 import { conversationSummary } from './context-projection.js';
@@ -22,9 +23,10 @@ export const CATALOG_SUMMARY_CHARS = 160;
 /** Serialized length budget for the whole catalog list, which rides in every main request. */
 export const CATALOG_CHARS = 24_000;
 export const CATALOG_READ_GUIDANCE =
-  'Relevant references may already be included in the input; do not read them again. The catalog contains summaries of additional references. If the reply needs missing detail, fetch known ids with knowledge.read({ids:[...]}), using a one-item array for a single reference. Use knowledge.search only when the needed entry is not identifiable from the catalog. Retrieval is optional when the supplied context is sufficient.';
+  'Relevant references may already be included in the input; do not read them again. The catalog contains summaries of additional references. If the reply needs missing detail, fetch known ids with knowledge.read({ids:[...]}), using a one-item array for a single reference. Use knowledge.search only when the needed entry is not identifiable from the catalog. Exact names favor normal search; mode=browse follows package/folder structure when vocabulary differs. Follow returned nextRead references; folder metadata is not evidence that the underlying text was read. Retrieval is optional when the supplied context is sufficient.';
 
-const metadata = ({ text: _text, chatId: _chatId, ...item }: Resource) => item;
+const metadata = ({ text: _text, chatId: _chatId, loreFolder: _loreFolder, ...item }: Resource) =>
+  item;
 const scopedMetadata = (item: Resource, allowedIds: Set<string>) => ({
   ...metadata(item),
   ...(item.relatedIds ? { relatedIds: item.relatedIds.filter((id) => allowedIds.has(id)) } : {}),
@@ -329,10 +331,21 @@ export function executeTool(
     return { ...action, args: { ids: args.ids, offset, limit }, denied: false, result: { items } };
   }
 
+  if (action.name === 'knowledge.search' && args.mode === 'browse')
+    return browseKnowledge(scope, { chatId: snapshot.chatId, role }, action);
+  if (args.mode !== undefined && (action.name !== 'knowledge.search' || args.mode !== 'search'))
+    return denied('INVALID_ARGUMENTS');
   const search = action.name === 'knowledge.search' || action.name === 'skills.list';
   if (
     Object.keys(args).some(
-      (key) => !(search ? ['query', 'offset', 'limit'] : ['id', 'offset', 'limit']).includes(key)
+      (key) =>
+        !(
+          search
+            ? action.name === 'knowledge.search'
+              ? ['mode', 'query', 'offset', 'limit']
+              : ['query', 'offset', 'limit']
+            : ['id', 'offset', 'limit']
+        ).includes(key)
     )
   )
     return denied('INVALID_ARGUMENTS');

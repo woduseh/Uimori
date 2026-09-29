@@ -51,6 +51,7 @@ export function compileContentAttachment(
     },
     kind: 'lore',
   });
+  const folders = new Map(pkg.loreFolders?.map((folder) => [folder.id, folder]) ?? []);
   const groups = new Map<string, typeof pkg.lore>();
   for (const lore of pkg.lore) {
     const key = lore.loreContext?.group ?? '';
@@ -72,6 +73,9 @@ export function compileContentAttachment(
         chosen?.has(lore.id) ? 'pinned' : lore.loading,
         'lore'
       ),
+      ...(lore.folderId && folders.has(lore.folderId)
+        ? { loreFolder: { ...folders.get(lore.folderId)! } }
+        : {}),
       ...(lore.loreContext ? { loreContext: structuredClone(lore.loreContext) } : {}),
       ...(lore.nativeRisuPosition
         ? { nativeRisuPosition: structuredClone(lore.nativeRisuPosition) }

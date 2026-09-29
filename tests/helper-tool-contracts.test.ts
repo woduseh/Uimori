@@ -763,3 +763,40 @@ test('helper app gateway discovers and authors illustration presets without sele
       .some((event) => event.kind === 'illustration-preset.updated')
   ).toBe(true);
 });
+
+test('helper gateway follows browse results into an exact reference read without adding native tools or saving', async () => {
+  const f = await fixture();
+  mockSend((request, round) => {
+    expect(request.stable.tools.map((tool) => tool.name)).toEqual([
+      'data.search',
+      'data.read',
+      'db.query',
+      'app.tools',
+      'app.call',
+    ]);
+    if (round === 0)
+      return calls(
+        call('browse-0', 'app.call', { name: 'knowledge.search', arguments: { mode: 'browse' } })
+      );
+    const page = result<any>(request, `browse-${round - 1}`);
+    if (round === 3) {
+      expect(page.items[0].read.text).toBe('Original shared lore: Q7x-α9.');
+      return structuredClone(success);
+    }
+    expect(page.coverage.content).toBe('metadata-only');
+    const selected =
+      round === 1
+        ? page.items.find((item: any) => item.type === 'package')
+        : page.items.find((item: any) => item.id?.includes(':lore:'));
+    return calls(call(`browse-${round}`, 'app.call', selected.nextRead));
+  });
+  const task = await submit(f, '현재 자료 분류를 따라 항구의 원문을 확인해줘');
+  const names = f.workspace
+    .events(f.conversation.id)
+    .filter((item) => item.taskId === task.id && item.kind === 'tool.finished')
+    .map((item) => (item.data as { name: string }).name);
+  expect(names).toEqual(['knowledge.search', 'knowledge.search', 'knowledge.read']);
+  expect(
+    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 0 });
+});

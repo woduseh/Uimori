@@ -16,6 +16,8 @@ export type Chat = {
   sortPosition?: number;
 };
 export type Resource = {
+  /** Navigation only; never changes pinned placement, ordering or source text. */
+  loreFolder?: { id: string; name: string };
   risuSource?: import('./risu-context-source.js').RisuContextSource;
   nativeRisuPosition?: import('./risu-native.js').NativeRisuLorePosition;
   loreContext?: import('./lore-context.js').LorePlacement;

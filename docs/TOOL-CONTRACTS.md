@@ -8,7 +8,7 @@ The main writer and translation role use the shared definitions in `core/read-to
 
 | Tool | Contract |
 | --- | --- |
-| `knowledge.search {query?, offset?, limit?}` | Browse/search approved local references. Body matches include a bounded original excerpt and a ready-to-use read request at the matching location. |
+| `knowledge.search {mode?, query?, nodeRef?, expectedVersion?, offset?, limit?}` | Default/search lists or searches approved local references; browse follows the existing package/folder structure. Body matches include a bounded original excerpt and a ready-to-use read request at the matching location. |
 | `knowledge.read {ids, offset?, limit?}` | Read one to sixteen references. A single read still uses a one-item `ids` array. Each item succeeds or fails independently and returns `nextOffset`. |
 | `skills.list {query?, offset?, limit?}` | Browse/search available writing guidance. |
 | `skills.load {id, offset?, limit?}` | Read one guidance resource. |
@@ -44,6 +44,16 @@ Main reference collections use `items` or `results`, `total`, and `nextOffset`. 
 Helper `data.read` has two distinct pagination dimensions: each item's `nextOffset` continues its text or field directory, while batch `nextIndex` points to unreturned refs. Resubmit `refs.slice(nextIndex)` rather than passing that index as a text offset. The helper's streaming search reports `complete` instead of an exact total. See [Helper tools](HELPER-TOOLS.md) for its page sizes and result budgets.
 
 Batch reads keep resource failures local to each entry, including a malformed helper ref. Invalid batch structure, such as a missing or empty array, still fails the call. Mistyped scene numbers and text offsets return correctable errors; corrupt frozen story sources are still denied, never silently read.
+
+### Folder navigation
+
+`knowledge.search({mode:"browse"})` lists package/attachment scopes and standalone references from the same already-authorized Run corpus. A package contains its nonempty authored folders and unfiled entries; a folder contains references. Distinct override connection scopes are separate groups even when their package, folder and lore IDs coincide. Empty folders have no readable entries and are omitted. Folders are navigation only, not a new loading or prompt-order policy.
+
+Copy a group's `nextRead` to descend. Every page returns `version`, `scope`, metadata-only `coverage`, `total`, `offset`, `nextOffset` and a ready continuation. A later page requires `expectedVersion`; stale views return `KNOWLEDGE_VIEW_CHANGED`, unknown nodes return `RESOURCE_UNAVAILABLE`, both with a root restart. The version binds the role, scoped metadata and effective source hashes, including native rendering and chat overrides. No live library lookup or script reexecution is introduced. Body text remains behind `knowledge.read` or `skills.load`; leaf metadata includes its effective `sourceHash` and the existing read call. Browsing is not proof of a full-text read and never creates retained lore.
+
+Pages fit 24,000 serialized UTF-16 units, including JSON metadata and continuations. Leaf titles/descriptions/relations use explicit previews and original counts. Very large results can return fewer than the requested limit and resume at the actual end. Plain search, empty-query flat listings and known-ID reads remain available; query cannot be combined with mode=browse. No heading index, LLM indexing, new search provider, persistent index or cache is used. Hashing/grouping happens only on browse calls over the existing in-memory corpus; model tool-loop inference and its latency are not free.
+
+For a helper, wrap returned main read operations in `app.call({name,arguments})`. The five top-level helper tools are unchanged, including explicit review's read-only gateway. A helper round-budget rejection supplies a smaller retry of the same browse range, not an unrelated library search.
 
 ## Mutations
 

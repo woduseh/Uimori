@@ -99,7 +99,7 @@ describe('package lore organization', () => {
     expect(() => validateRisuContent(pkg)).toThrow('PACKAGE_LIST_LIMIT');
   });
 
-  it('keeps resources, order and loading identical across folder moves and renames', () => {
+  it('adds navigation metadata without changing source content, order or loading across folder moves and renames', () => {
     const bare = fixture(),
       organized = structuredClone(bare);
     organized.loreFolders = [{ id: 'private-folder-id', name: 'AUTHORING_ONLY_FOLDER' }];
@@ -107,10 +107,18 @@ describe('package lore organization', () => {
     const ref = { id: bare.id, revision: bare.revision, role: 'module' as const };
     const context = { chatId: 'chat' };
     const baseline = compileContentAttachment(bare, ref, context);
-    expect(compileContentAttachment(organized, ref, context)).toEqual(baseline);
+    const withoutNavigation = (result: typeof baseline) => ({
+      resources: result.resources.map(({ loreFolder: _folder, ...resource }) => resource),
+      pinned: result.pinned.map(({ loreFolder: _folder, ...resource }) => resource),
+    });
+    const compiled = compileContentAttachment(organized, ref, context);
+    expect(
+      compiled.resources.find((resource) => resource.id.endsWith(':lore:city'))?.loreFolder
+    ).toEqual(organized.loreFolders[0]);
+    expect(withoutNavigation(compiled)).toEqual(baseline);
     organized.loreFolders[0].name = 'RENAMED_AUTHORING_FOLDER';
     delete organized.lore[0].folderId;
     organized.lore[1].folderId = 'private-folder-id';
-    expect(compileContentAttachment(organized, ref, context)).toEqual(baseline);
+    expect(withoutNavigation(compileContentAttachment(organized, ref, context))).toEqual(baseline);
   });
 });

@@ -145,6 +145,14 @@ test('only successful main reads retain the exact observed range; search, denied
     first.id,
     executeTool(first.snapshot, { callId: 'search', name: 'knowledge.search', args: {} })
   );
+  f.store.tool(
+    first.id,
+    executeTool(first.snapshot, {
+      callId: 'folder-browse',
+      name: 'knowledge.search',
+      args: { mode: 'browse' },
+    })
+  );
   const forged = executeTool(first.snapshot, {
     callId: 'forged',
     name: 'knowledge.read',
