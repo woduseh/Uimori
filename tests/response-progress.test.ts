@@ -195,7 +195,10 @@ function encode(items: Json[]) {
     items.map((item) => `data: ${item === '[DONE]' ? item : JSON.stringify(item)}\n\n`).join('')
   );
 }
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe('public response progress through real decoders and synthetic HTTP', () => {
   test.each(variants)(
@@ -243,6 +246,94 @@ describe('public response progress through real decoders and synthetic HTTP', ()
       expect(result.text).toBe(publicText);
       expect(JSON.stringify(deltas)).not.toContain(privateText);
       expect(fetch).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  test.each(variants.filter((connection) => connection.protocol !== 'fixture-sse-v1'))(
+    '$protocol does not project public text without a permitted consumer',
+    async (connection) => {
+      const prototype =
+        connection.protocol === 'openai-responses-v1'
+          ? ResponsesDecoder.prototype
+          : connection.protocol === 'anthropic-messages-v1'
+            ? AnthropicDecoder.prototype
+            : connection.protocol === 'vertex-gemini-v1'
+              ? VertexDecoder.prototype
+              : ChatDecoder.prototype;
+      for (const mode of ['no-listener', 'forbidden']) {
+        const input = request();
+        if (mode === 'forbidden')
+          input.stable.tools.push({
+            name: 'story.submit',
+            description: 'Final submission',
+            inputSchema: { type: 'object' },
+          });
+        let body!: ReadableStreamDefaultController<Uint8Array>;
+        const [first, final] = events(connection.protocol);
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            body = controller;
+            controller.enqueue(encode(first));
+          },
+        });
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(
+            async () => new Response(stream, { headers: { 'content-type': 'text/event-stream' } })
+          )
+        );
+        const projected = vi.spyOn(prototype, 'publicText');
+        const accepted = vi.spyOn(prototype, 'accept');
+        const observed = vi.fn();
+        const resultPromise = executeProvider(connection, input, {
+          signal: new AbortController().signal,
+          resolveCredential: () => 'synthetic-only',
+          ...(mode === 'forbidden' ? { onProgress: observed } : {}),
+        });
+        try {
+          await vi.waitFor(() => expect(accepted).toHaveBeenCalledTimes(first.length));
+          expect(projected).not.toHaveBeenCalled();
+        } finally {
+          body.enqueue(encode(final));
+          body.close();
+          const result = await resultPromise;
+          expect(result.status).toBe('completed');
+          expect(result.text).toBe(publicText);
+          expect(observed).not.toHaveBeenCalled();
+          projected.mockRestore();
+          accepted.mockRestore();
+        }
+      }
+    }
+  );
+
+  test.each(['no-listener', 'forbidden'])(
+    'Responses JSON does not project public text with %s',
+    async (mode) => {
+      const input = request();
+      if (mode === 'forbidden')
+        input.stable.tools.push({
+          name: 'story.submit',
+          description: 'Final submission',
+          inputSchema: { type: 'object' },
+        });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () =>
+          Response.json({ id: 'response-1', status: 'completed', output: [message(publicText)] })
+        )
+      );
+      const projected = vi.spyOn(ResponsesDecoder.prototype, 'publicText');
+      const observed = vi.fn();
+      const result = await executeProvider(variants[1], input, {
+        signal: new AbortController().signal,
+        resolveCredential: () => 'synthetic-only',
+        ...(mode === 'forbidden' ? { onProgress: observed } : {}),
+      });
+      expect(result.status).toBe('completed');
+      expect(result.text).toBe(publicText);
+      expect(projected).not.toHaveBeenCalled();
+      expect(observed).not.toHaveBeenCalled();
     }
   );
 

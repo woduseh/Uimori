@@ -87,26 +87,54 @@ export async function controlMaintenance({ action, origin, token, owner, request
       throw new Error(`Host control ${pathname} HTTP ${response.status}`);
     return response.body;
   };
-  const state = await send('/api/maintenance');
-  if (
-    !['open', 'closed'].includes(state.status) ||
-    !Number.isInteger(state.activeWork) ||
-    state.activeWork < 0
-  )
-    throw new Error('Incomplete maintenance status');
-  if (action === 'status') return state;
-  if (!owner || !owner.startsWith('oracle:')) throw new Error('Missing release maintenance owner');
-  if (state.forcedClosed) throw new Error('Maintenance is forced by boot configuration');
-  if (state.status === 'closed' && state.reason !== owner)
-    throw new Error('Maintenance belongs to another operator');
-  if (action === 'open' && state.status === 'open') return state;
-  const changed = await send('/api/maintenance', {
-    status: action === 'close' ? 'closed' : 'open',
-    reason: owner,
-  });
-  if (changed.status !== (action === 'close' ? 'closed' : 'open'))
-    throw new Error('Maintenance change was not confirmed');
-  return changed;
+  const sessionCleanup = { status: 'PASS' };
+  let operationError;
+  try {
+    const state = await send('/api/maintenance');
+    if (
+      !['open', 'closed'].includes(state.status) ||
+      !Number.isInteger(state.activeWork) ||
+      state.activeWork < 0
+    )
+      throw new Error('Incomplete maintenance status');
+    if (action === 'status') return { ...state, sessionCleanup };
+    if (!owner || !owner.startsWith('oracle:'))
+      throw new Error('Missing release maintenance owner');
+    if (state.forcedClosed) throw new Error('Maintenance is forced by boot configuration');
+    if (state.status === 'closed' && state.reason !== owner)
+      throw new Error('Maintenance belongs to another operator');
+    if (action === 'open' && state.status === 'open') return { ...state, sessionCleanup };
+    const changed = await send('/api/maintenance', {
+      status: action === 'close' ? 'closed' : 'open',
+      reason: owner,
+    });
+    if (changed.status !== (action === 'close' ? 'closed' : 'open'))
+      throw new Error('Maintenance change was not confirmed');
+    return { ...changed, sessionCleanup };
+  } catch (error) {
+    operationError = error;
+    throw error;
+  } finally {
+    let cleanupError;
+    try {
+      const logout = await request({ origin, pathname: '/api/session', method: 'DELETE', cookie });
+      if (logout.status !== 200 || logout.body?.authenticated !== false)
+        cleanupError = new Error(`Host control logout was not confirmed (HTTP ${logout.status})`);
+    } catch (error) {
+      cleanupError = error;
+    }
+    if (cleanupError) {
+      let message = String(cleanupError.message ?? cleanupError);
+      for (const secret of [token, cookie.slice('uimori_session='.length)].filter(Boolean))
+        message = message.split(secret).join('[redacted]');
+      message = message.replace(/[\r\n]+/gu, ' ').slice(0, 1000);
+      Object.assign(sessionCleanup, { status: 'WARN', error: message });
+      if (operationError instanceof Error) {
+        operationError.message += `; temporary session cleanup: ${message}`;
+        operationError.sessionCleanup = sessionCleanup;
+      }
+    }
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

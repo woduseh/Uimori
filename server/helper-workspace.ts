@@ -23,6 +23,19 @@ const json = JSON.stringify;
 const now = () => new Date().toISOString();
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 
+function conversationData(row: Row): HelperConversation {
+  return {
+    id: row.id,
+    scope: JSON.parse(row.scope),
+    title: row.title,
+    revision: row.revision,
+    persona: row.persona,
+    limits: JSON.parse(row.limits),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 /** Keep the existing call identity so older durable receipts can be matched to their events. */
 export function helperCallOperationId(taskId: string, callId: string): string {
   return createHash('sha256').update(`${taskId}\0${callId}`).digest('hex');
@@ -69,16 +82,7 @@ export class HelperWorkspace {
       | Row
       | undefined;
     if (!row) throw new HttpError(404, '도우미 대화를 찾을 수 없어요.');
-    return {
-      id: row.id,
-      scope: JSON.parse(row.scope),
-      title: row.title,
-      revision: row.revision,
-      persona: row.persona,
-      limits: JSON.parse(row.limits),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+    return conversationData(row);
   }
   open(scope: HelperScope): HelperConversation {
     return this.create(scope, 'default');
@@ -126,36 +130,22 @@ export class HelperWorkspace {
     if (scope.kind === 'chat') {
       this.store.chat(scope.chatId);
     }
-    const rows =
-      scope.kind === 'library'
-        ? this.store.db
-            .prepare(
-              'SELECT id FROM helper_conversations WHERE chat_id IS NULL ORDER BY updated_at DESC,rowid DESC'
-            )
-            .all()
-        : this.store.db
-            .prepare(
-              'SELECT id FROM helper_conversations WHERE chat_id=? ORDER BY updated_at DESC,rowid DESC'
-            )
-            .all(scope.chatId);
-    return rows.map((row) => {
-      const activity = this.store.db
-        .prepare(
-          "SELECT COALESCE(SUM(status='running'),0) AS running,COALESCE(SUM(status='queued'),0) AS queued FROM helper_tasks WHERE conversation_id=?"
-        )
-        .get(row.id)!;
-      return {
-        ...this.conversation(String(row.id)),
-        activity: { running: Number(activity.running), queued: Number(activity.queued) },
-        latestEventSeq: Number(
-          this.store.db
-            .prepare(
-              'SELECT COALESCE(MAX(seq),0) AS seq FROM helper_events WHERE conversation_id=?'
-            )
-            .get(row.id)?.seq
-        ),
-      };
-    });
+    const rows = this.store.db
+      .prepare(
+        `SELECT c.*,
+          (SELECT json_object('running',COALESCE(SUM(status='running'),0),
+            'queued',COALESCE(SUM(status='queued'),0)) FROM helper_tasks WHERE conversation_id=c.id) AS activity,
+          (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id) AS latest_seq
+        FROM helper_conversations c
+        WHERE ${scope.kind === 'library' ? 'c.chat_id IS NULL' : 'c.chat_id=?'}
+        ORDER BY c.updated_at DESC,c.rowid DESC`
+      )
+      .all(...(scope.kind === 'chat' ? [scope.chatId] : []));
+    return rows.map((row) => ({
+      ...conversationData(row),
+      activity: JSON.parse(String(row.activity)),
+      latestEventSeq: Number(row.latest_seq),
+    }));
   }
   persona(id: string, revision: number, persona: string, limits = this.conversation(id).limits) {
     return this.update(id, revision, { persona, limits });
@@ -320,6 +310,22 @@ export class HelperWorkspace {
       snapshot: JSON.parse(row.snapshot),
     };
   }
+  /** Live execution counters and identity never need to hydrate the reserved manuscript. */
+  taskState(
+    id: string
+  ): Pick<HelperTask, 'id' | 'conversationId' | 'status' | 'generation' | 'usage'> {
+    const row = this.store.db
+      .prepare('SELECT id,conversation_id,status,generation,usage FROM helper_tasks WHERE id=?')
+      .get(id) as Row | undefined;
+    if (!row) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
+    return {
+      id: row.id,
+      conversationId: row.conversation_id,
+      status: row.status,
+      generation: row.generation,
+      usage: JSON.parse(row.usage),
+    };
+  }
   private readTaskSummaries(predicate: string, args: string[]) {
     // Only the selected page crosses into JS. Receipt counts share one scan instead of
     // loading a full reservation and querying completed effects for every task.
@@ -360,9 +366,10 @@ export class HelperWorkspace {
     const row = this.store.db
       .prepare('SELECT id,request FROM helper_tasks WHERE conversation_id=? AND request_key=?')
       .get(conversationId, key) as Row | undefined;
-    if (row && (row.request !== request || this.task(row.id).snapshot.retryOf !== retryOf))
+    const task = row ? this.task(row.id) : undefined;
+    if (task && (task.request !== request || task.snapshot.retryOf !== retryOf))
       throw new HttpError(409, '같은 요청 키로 다른 작업을 보낼 수 없어요.');
-    return row ? this.task(row.id) : undefined;
+    return task;
   }
   enqueue(conversationId: string, key: string, request: string, snapshot: HelperTaskSnapshot) {
     return this.store.transaction(() => {
@@ -447,7 +454,7 @@ export class HelperWorkspace {
       ) >= 2
     )
       return false;
-    const task = this.task(id);
+    const task = this.taskState(id);
     if (
       this.store.db
         .prepare("SELECT 1 FROM helper_tasks WHERE conversation_id=? AND status='running'")
@@ -526,9 +533,16 @@ export class HelperWorkspace {
   ) {
     return this.store.transaction(() => {
       this.assertActive(taskId, owner, generation);
-      const task = this.task(taskId),
-        usage = task.usage;
-      if (usage.modelCalls >= task.snapshot.limits.totalCalls)
+      const task = this.store.db
+        .prepare(`SELECT conversation_id,usage,
+          json_extract(snapshot,'$.limits.totalCalls') AS total_calls,
+          json_extract(snapshot,'$.limits.helperCalls') AS helper_calls,
+          CASE WHEN json_extract(snapshot,'$.scope.kind')='chat'
+            THEN json_extract(snapshot,'$.scope.chatId') END AS chat_id
+          FROM helper_tasks WHERE id=?`)
+        .get(taskId)!;
+      const usage = JSON.parse(String(task.usage)) as Usage;
+      if (usage.modelCalls >= Number(task.total_calls))
         throw new HttpError(409, 'MODEL_CALL_BUDGET_EXHAUSTED');
       if (
         purpose === 'helper' &&
@@ -538,12 +552,11 @@ export class HelperWorkspace {
               "SELECT COUNT(*) AS n FROM helper_task_attempts WHERE task_id=? AND purpose='helper'"
             )
             .get(taskId)?.n
-        ) >= task.snapshot.limits.helperCalls
+        ) >= Number(task.helper_calls)
       )
         throw new HttpError(409, 'HELPER_CALL_BUDGET_EXHAUSTED');
-      const scope = task.snapshot.scope;
       const id = this.store.product.startAttempt(
-        scope.kind === 'chat' ? scope.chatId : null,
+        task.chat_id === null ? null : String(task.chat_id),
         null,
         null,
         wire,
@@ -556,7 +569,7 @@ export class HelperWorkspace {
         .run(taskId, id, purpose, segment);
       usage.modelCalls++;
       this.store.db.prepare('UPDATE helper_tasks SET usage=? WHERE id=?').run(json(usage), taskId);
-      this.event(task.conversationId, taskId, 'attempt.started', { id, purpose, segment });
+      this.event(String(task.conversation_id), taskId, 'attempt.started', { id, purpose, segment });
       return id;
     });
   }
@@ -569,7 +582,7 @@ export class HelperWorkspace {
         .get(id, taskId) as Row | undefined;
       if (!row || row.status !== 'running') return;
       this.store.product.finishAttempt(id, result);
-      const task = this.task(taskId),
+      const task = this.taskState(taskId),
         usage = task.usage;
       for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const)
         usage[key] =
@@ -589,7 +602,7 @@ export class HelperWorkspace {
   ) {
     return this.store.transaction(() => {
       if (!this.active(id, owner, generation)) return false;
-      const task = this.task(id);
+      const task = this.taskState(id);
       this.store.db
         .prepare('UPDATE helper_tasks SET status=?,error=?,updated_at=? WHERE id=?')
         .run(status, error, now(), id);
@@ -603,7 +616,7 @@ export class HelperWorkspace {
     });
   }
   cancel(id: string) {
-    const task = this.task(id);
+    const task = this.taskState(id);
     this.store.transaction(() => {
       const changed = this.store.db
         .prepare(
@@ -666,7 +679,7 @@ export class HelperWorkspace {
       operationId,
       { kind: 'artifact', request, previous: previous ?? null },
       () => {
-        const task = this.task(taskId),
+        const task = this.taskState(taskId),
           id = previous?.id ?? randomUUID();
         if (previous) {
           const current = this.artifact(id);

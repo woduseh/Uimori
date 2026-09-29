@@ -19,6 +19,14 @@ export type NativeMessagePlan = {
   diagnostics: MessageDiagnostic[];
   capabilityVersion: 'native-wire-2026-09-07';
 };
+export type NativeMessageMetadata = Pick<NativeMessagePlan, 'diagnostics' | 'capabilityVersion'>;
+
+/** Keep preview evidence without retaining a second copy of the planned message body. */
+export function nativeMessageMetadata(plan?: NativeMessagePlan): NativeMessageMetadata | undefined {
+  return plan
+    ? { diagnostics: plan.diagnostics, capabilityVersion: plan.capabilityVersion }
+    : undefined;
+}
 // Official docs, retrieved 2026-09-07; exact aliases only. Dated or future names need a reviewed entry.
 /** Explicit wire capabilities. An encoding check does not claim account/model availability. */
 export function planNativeMessages(
@@ -26,7 +34,8 @@ export function planNativeMessages(
   protocol: ProviderProtocol
 ): NativeMessagePlan | undefined {
   if (!request.prompt) return;
-  const prompt = validateProviderPrompt(request.prompt);
+  validateProviderPrompt(request.prompt);
+  const prompt = request.prompt;
   const diagnostics: MessageDiagnostic[] = [];
   const system: Json[] = [];
   const messages: Json[] = [];

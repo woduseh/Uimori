@@ -191,7 +191,8 @@ function inspectPromptData(
     if (size > limit) fail('PROMPT_PROGRAM_LIMIT');
   }
 }
-export function validateProviderPrompt(value: unknown): ProviderPrompt {
+/** Shape validation only; owners that mutate a prompt make their own explicit copy. */
+export function validateProviderPrompt(value: unknown): asserts value is ProviderPrompt {
   inspectPromptData(value);
   const p = object(value, ['compilerVersion', 'messages', 'cachePlan', 'values']);
   if (
@@ -244,7 +245,6 @@ export function validateProviderPrompt(value: unknown): ProviderPrompt {
     controlKey(key);
     primitive(value);
   }
-  return structuredClone(value) as ProviderPrompt;
 }
 
 export function promptControls(program: RisuPrompt): PromptControl[] {

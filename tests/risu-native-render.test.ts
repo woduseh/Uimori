@@ -54,6 +54,38 @@ test('CBS sessions propagate variable writes while each call uses its latest con
     await session.close();
   }
 });
+test('overlapping CBS calls do not terminate the active evaluation', async () => {
+  const session = createNativeRisuCbsSession();
+  const context = { native: native(), variables: {} };
+  try {
+    const first = session.evaluate('{{char}}', context);
+    await expect(session.evaluate('{{user}}', context)).rejects.toThrow('RISU_NATIVE_WORKER_BUSY');
+    expect(await first).toBe('Guide');
+    expect(await session.evaluate('{{char}}', context)).toBe('Guide');
+  } finally {
+    await session.close();
+  }
+});
+test.each(['closed', 'cancelled'] as const)(
+  'a failed CBS evaluation cannot restart after its owner is %s',
+  async (state) => {
+    const controller = new AbortController();
+    const session = createNativeRisuCbsSession(controller.signal);
+    const context = { native: native(), variables: {} };
+    try {
+      await expect(session.evaluate('{{cbr::40000000}}x', context)).rejects.toThrow(
+        'RISU_CBS_OUTPUT_LIMIT'
+      );
+      if (state === 'closed') await session.close();
+      else controller.abort();
+      await expect(session.evaluate('{{char}}', context)).rejects.toThrow(
+        state === 'closed' ? 'RISU_NATIVE_WORKER_CLOSED' : 'CANCELLED'
+      );
+    } finally {
+      await session.close();
+    }
+  }
+);
 test('native display follows CBS/regex/assets and keeps HTML CSS without mutating durable vars', async () => {
   const input = native({
     assets: [{ name: 'room', uri: 'embeded://room.png', imageId: 'room' }],

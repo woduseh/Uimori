@@ -195,10 +195,11 @@ function sessionCookie(response) {
   const [pair, ...attributes] = parts;
   const match = /^uimori_session=([a-f0-9]{64})$/u.exec(pair ?? '');
   if (!match) throw new Error('session cookie is missing or malformed');
-  const normalized = new Set(attributes.map((attribute) => attribute.toLowerCase()));
-  for (const attribute of ['secure', 'httponly', 'samesite=strict', 'path=/'])
-    if (!normalized.has(attribute)) throw new Error(`session cookie is missing ${attribute}`);
-  return { header: pair, secret: match[1] };
+  return {
+    header: pair,
+    secret: match[1],
+    attributes: new Set(attributes.map((attribute) => attribute.toLowerCase())),
+  };
 }
 
 function assertLibrary(value) {
@@ -284,14 +285,15 @@ export async function runOracleSmoke({
     elapsedMs: null,
     checks: [],
     failures: [],
-    requestCounts: { GET: 0, POST: 0 },
+    requestCounts: { GET: 0, POST: 0, DELETE: 0 },
+    sessionCleanup: { status: 'NOT_NEEDED' },
     limitations: [
       'Read-only HTTPS/API deployment proof; no browser layout, GUI, physical-device or IME claim.',
-      'Only one same-origin session POST plus GET requests; no model, import, archive, settings or application-data mutation.',
+      'One same-origin session POST, read-only GET requests and logout of that temporary session; no model, import, archive, settings or application-data mutation.',
       'Does not inspect production database integrity, container identity, provider behavior or semantic quality.',
     ],
   };
-  let configuredOrigin;
+  let configuredOrigin, cookie;
   const record = async (name, action) => {
     try {
       const detail = await action();
@@ -305,10 +307,17 @@ export async function runOracleSmoke({
   };
   const send = async (pathname, options = {}) => {
     const method = options.method ?? 'GET';
-    if (method !== 'GET' && !(method === 'POST' && pathname === '/api/session'))
+    const ownLogout =
+      method === 'DELETE' &&
+      pathname === '/api/session' &&
+      cookie &&
+      options.headers?.Cookie === cookie.header;
+    if (method !== 'GET' && !(method === 'POST' && pathname === '/api/session') && !ownLogout)
       throw new Error('smoke attempted a disallowed request method or path');
     if (method === 'POST' && summary.requestCounts.POST !== 0)
       throw new Error('smoke attempted more than one POST');
+    if (method === 'DELETE' && summary.requestCounts.DELETE !== 0)
+      throw new Error('smoke attempted more than one logout');
     const url = new URL(pathname, `${configuredOrigin}/`);
     if (url.origin !== configuredOrigin || url.protocol !== 'https:')
       throw new Error('smoke attempted a request outside the configured origin');
@@ -340,7 +349,6 @@ export async function runOracleSmoke({
       return { endpoints: 3 };
     });
 
-    let cookie;
     await record('same-origin login creates a secure HttpOnly session', async () => {
       const response = await send('/api/session', {
         method: 'POST',
@@ -348,11 +356,14 @@ export async function runOracleSmoke({
         body: JSON.stringify({ token: accessToken }),
       });
       assertStatus(response, 200);
+      cookie = sessionCookie(response);
+      secrets.add(cookie.secret);
       const body = jsonBody(response);
       if (body?.required !== true || body?.authenticated !== true)
         throw new Error('session response did not confirm required authentication');
-      cookie = sessionCookie(response);
-      secrets.add(cookie.secret);
+      for (const attribute of ['secure', 'httponly', 'samesite=strict', 'path=/'])
+        if (!cookie.attributes.has(attribute))
+          throw new Error(`session cookie is missing ${attribute}`);
       return { secure: true, httpOnly: true, sameSite: 'Strict', path: '/' };
     });
 
@@ -406,6 +417,23 @@ export async function runOracleSmoke({
   } catch (error) {
     summary.failures.push(sanitize(asErrorMessage(error)));
   } finally {
+    if (cookie)
+      try {
+        const response = await send('/api/session', {
+          method: 'DELETE',
+          headers: { Origin: configuredOrigin, Cookie: cookie.header },
+        });
+        assertStatus(response, 200);
+        if (jsonBody(response)?.authenticated !== false)
+          summary.sessionCleanup = {
+            status: 'WARN',
+            error: 'logout did not confirm the temporary session was revoked',
+          };
+        else summary.sessionCleanup = { status: 'PASS' };
+      } catch (error) {
+        // Cleanup cannot replace the observed deployment result or request a replay.
+        summary.sessionCleanup = { status: 'WARN', error: sanitize(asErrorMessage(error)) };
+      }
     const finished = Date.now();
     summary.finishedAt = new Date(finished).toISOString();
     summary.elapsedMs = Math.max(0, finished - started);

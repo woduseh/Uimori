@@ -13,7 +13,12 @@ import type {
   ProviderToolArgumentDiagnostic,
   ProviderUsage,
 } from './transport.js';
-import { nativeHostInstruction, planNativeMessages } from './provider-messages.js';
+import {
+  nativeHostInstruction,
+  nativeMessageMetadata,
+  planNativeMessages,
+  type NativeMessageMetadata,
+} from './provider-messages.js';
 import { modelCapability, validateModelOptions } from './model-capabilities.js';
 import { planProviderCache } from './provider-cache.js';
 
@@ -123,7 +128,11 @@ function readTurn(value: Json): AnthropicTurn {
 }
 
 /** Pure Messages API encoding. No model name implies support for every optional feature. */
-export function encodeAnthropic(request: ProviderRequest): { body: Json; context: AnthropicTurn } {
+export function encodeAnthropic(request: ProviderRequest): {
+  body: Json;
+  context: AnthropicTurn;
+  messageMetadata?: NativeMessageMetadata;
+} {
   if (
     !nonempty(request.modelId) ||
     request.modelId.length > 200 ||
@@ -376,6 +385,7 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
   };
   return {
     body: copy(body, 'INVALID_ANTHROPIC_REQUEST'),
+    messageMetadata: nativeMessageMetadata(plan),
     context: seal({
       version: VERSION,
       modelId: request.modelId,

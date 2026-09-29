@@ -21,7 +21,7 @@ export class StoryNotes {
   scope(chatId: string, headRevision: string | null): SourceScope {
     this.store.chat(chatId);
     const history = this.store.history(headRevision);
-    if (history.some((item) => this.store.source(item.revision).chatId !== chatId))
+    if (history.some((item) => this.store.sourceMetadata(item.revision).chatId !== chatId))
       throw new HttpError(400, 'Note source outside chat');
     return { chatId, history };
   }

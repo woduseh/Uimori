@@ -10,4 +10,4 @@ Uimori is a writing and reading workspace. Keep the manuscript and composer prom
 
 Use the current components and styles as the starting point. [Library](LIBRARY.md) and [usage](USAGE.md) describe feature behavior; [DEVELOPMENT](DEVELOPMENT.md#verification) covers verification selection.
 
-Detailed editor behavior is in [LIBRARY](LIBRARY.md#unsaved-changes); helper sessions are in [READING](READING.md#helper-sessions).
+Detailed editor behavior is in [LIBRARY](LIBRARY.md#저장과-취소); helper sessions are in [READING](READING.md#helper-sessions).

@@ -39,6 +39,9 @@ function inline(
 ): ReactNode[] {
   if (depth > 8) return protectQuotes ? [<Fragment key="literal-depth">{text}</Fragment>] : [text];
   const nodes: ReactNode[] = [];
+  // A completed template advances past its closer; unfinished openers must not
+  // each search the remaining paragraph for a closer that does not exist.
+  const lastTemplateClose = text.lastIndexOf('}}');
   let plain = '';
   const flush = () => {
     if (plain) {
@@ -88,13 +91,16 @@ function inline(
       offset += ruby[0].length;
       continue;
     }
-    const protectedToken = rest.match(/^(?:\{\{[\s\S]*?\}\}|\[\[p_[a-f0-9]+_\d+\]\])/u);
+    const protectedToken =
+      (offset < lastTemplateClose && rest.startsWith('{{')
+        ? text.slice(offset, text.indexOf('}}', offset + 2) + 2)
+        : undefined) ?? rest.match(/^\[\[p_[a-f0-9]+_\d+\]\]/u)?.[0];
     if (protectedToken) {
       if (protectQuotes) {
         flush();
-        nodes.push(<Fragment key={offset}>{protectedToken[0]}</Fragment>);
-      } else plain += protectedToken[0];
-      offset += protectedToken[0].length;
+        nodes.push(<Fragment key={offset}>{protectedToken}</Fragment>);
+      } else plain += protectedToken;
+      offset += protectedToken.length;
       continue;
     }
     const link = rest.match(/^(!?)\[([^\]\n]{0,1000})\]\(([^)\s]{1,2000})\)/u);

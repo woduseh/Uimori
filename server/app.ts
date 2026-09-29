@@ -431,7 +431,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         if (!store.context.start(job.id)) return store.context.job(job.id);
         try {
           const remaining =
-            task.snapshot.limits.totalCalls - helper.workspace.task(task.id).usage.modelCalls;
+            task.snapshot.limits.totalCalls - helper.workspace.taskState(task.id).usage.modelCalls;
           const prepared = await prepareInputContext(
             {
               ...input,

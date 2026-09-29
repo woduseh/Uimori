@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { Store } from '../server/store.js';
+import { exportChatTranscript } from '../server/chat-transcript.js';
 import { captureLogicalHistory } from '../server/prompt-snapshot.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
@@ -62,8 +63,10 @@ test('history still rejects missing ancestors and ancestry cycles', () => {
   const first = append(store, chat.id, 'Original');
   const second = append(store, chat.id, 'Second');
   expect(() => store.history('missing')).toThrow('Source not found');
+  expect(() => exportChatTranscript(store, chat.id, 'missing')).toThrow('Source not found');
   store.db.prepare('UPDATE sources SET parent_revision=? WHERE id=?').run(second.id, first.id);
   expect(() => store.history(second.id)).toThrow('Source ancestry cycle');
+  expect(() => exportChatTranscript(store, chat.id)).toThrow('Source ancestry cycle');
 });
 
 test.each(['original-hash', 'original-blank', 'edit-hash', 'edit-blank'])(
@@ -93,6 +96,7 @@ test.each(['original-hash', 'original-blank', 'edit-hash', 'edit-blank'])(
         );
     }
     expect(() => store.history(source.id)).toThrow('SOURCE_IDENTITY_INVALID');
+    expect(() => exportChatTranscript(store, chat.id)).toThrow('SOURCE_IDENTITY_INVALID');
   }
 );
 

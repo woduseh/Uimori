@@ -8,10 +8,7 @@ const kindLabels: Record<ChatActivityCount['kind'], string> = {
   translation: '번역',
   status: '상태 표현',
   image: '이미지',
-  state: '상태 갱신',
-  context: '문맥 압축',
   illustration: '삽화',
-  extension: '자료 코드 작업',
 };
 
 export function useChatActivities(): Record<string, ChatActivitySummary> {

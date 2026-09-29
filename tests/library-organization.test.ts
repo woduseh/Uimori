@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
-import { deleteLibraryItem, libraryDeletionImpact } from '../server/library-deletion.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import type { Content } from '../core/product.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
@@ -131,8 +131,6 @@ test('item deletion cleans placement and retains immutable references', () => {
     folderId: dest.id,
   });
   store.createChat('Protected story', { botId: used.id });
-  expect(libraryDeletionImpact(store, 'content', unused.id).canDelete).toBe(true);
-  expect(libraryDeletionImpact(store, 'content', used.id).canDelete).toBe(true);
   const before = revision(store);
   deleteLibraryItem(store, 'content', unused.id, { expectedRevision: unused.revision });
   expect(revision(store)).toBe(before + 1);

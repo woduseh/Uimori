@@ -79,6 +79,18 @@ function authored(model: Record<string, any>): Record<string, unknown> {
     ? { title: model.title, program: model.program, values: model.values }
     : model;
 }
+function chatMessagesSql(scoped: boolean) {
+  return `WITH RECURSIVE ancestry(chat_id,head_revision,id,depth) AS (
+    SELECT c.id,c.head_revision,c.head_revision,0
+    FROM chats c WHERE c.head_revision IS NOT NULL ${scoped ? 'AND c.id=?' : ''}
+    UNION ALL SELECT a.chat_id,a.head_revision,s.parent_revision,a.depth+1
+    FROM ancestry a JOIN sources s ON s.id=a.id WHERE s.parent_revision IS NOT NULL
+  )
+  SELECT s.id,a.chat_id,a.head_revision,
+    COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AS hash,s.created_at,
+    row_number() OVER (PARTITION BY a.chat_id ORDER BY a.depth DESC) scene_number,
+    r.request,COALESCE((SELECT text FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.text) AS text FROM ancestry a JOIN sources s ON s.id=a.id JOIN runs r ON r.id=s.run_id`;
+}
 function installViews(db: DatabaseSync) {
   db.exec(`
     CREATE TEMP VIEW agent_resources AS
@@ -97,17 +109,7 @@ function installViews(db: DatabaseSync) {
       SELECT c.id,c.title,c.created_at,c.head_revision,
         json_extract(p.body,'$.packageAttachments') attachments
       FROM chats c LEFT JOIN profiles p ON p.chat_id=c.id;
-    CREATE TEMP VIEW agent_messages AS
-      WITH RECURSIVE ancestry(chat_id,head_revision,id,depth) AS (
-        SELECT c.id,c.head_revision,c.head_revision,0
-        FROM chats c WHERE c.head_revision IS NOT NULL
-        UNION ALL SELECT a.chat_id,a.head_revision,s.parent_revision,a.depth+1
-        FROM ancestry a JOIN sources s ON s.id=a.id WHERE s.parent_revision IS NOT NULL
-      )
-      SELECT s.id,a.chat_id,a.head_revision,
-        COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AS hash,s.created_at,
-        row_number() OVER (PARTITION BY a.chat_id ORDER BY a.depth DESC) scene_number,
-        r.request,COALESCE((SELECT text FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.text) AS text FROM ancestry a JOIN sources s ON s.id=a.id JOIN runs r ON r.id=s.run_id;
+    CREATE TEMP VIEW agent_messages AS ${chatMessagesSql(false)};
     CREATE TEMP VIEW agent_helper_inputs AS
       SELECT seq,task_id, json_extract(data,'$.attemptId') attempt_id,
         json_extract(data,'$.helperCall') helper_call, json_extract(data,'$.segment') segment,
@@ -406,13 +408,12 @@ function* documents(
     return;
   }
   const chatId = args.chatId === undefined ? undefined : string(args.chatId);
-  const conditions = [
-    chatId ? 'm.chat_id=?' : '',
-    ids.length ? `m.id IN (${ids.map(() => '?').join(',')})` : '',
-  ].filter(Boolean);
+  const messages = chatId ? `(${chatMessagesSql(true)})` : 'agent_messages';
+  // Scope ancestry at its seed; filter source IDs after numbering the entire selected history.
+  const condition = ids.length ? `WHERE m.id IN (${ids.map(() => '?').join(',')})` : '';
   const rows = db
     .prepare(
-      `SELECT m.*,c.title FROM agent_messages m JOIN chats c ON c.id=m.chat_id ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY m.chat_id,m.scene_number`
+      `SELECT m.*,c.title FROM ${messages} m JOIN chats c ON c.id=m.chat_id ${condition} ORDER BY m.chat_id,m.scene_number`
     )
     .iterate(...(chatId ? [chatId] : []), ...ids);
   for (const row of rows)

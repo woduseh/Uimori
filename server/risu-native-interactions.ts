@@ -65,8 +65,9 @@ export function requestNativeInteraction(
     const id = randomUUID();
     const abort = () => finish(undefined, new Error('RISU_NATIVE_INTERACTION_CANCELLED'));
     const finish = (answer?: string | boolean, error?: Error) => {
-      entries(store).delete(id);
+      if (!entries(store).delete(id)) return;
       signal.removeEventListener('abort', abort);
+      store.event(run.chatId, 'native.interaction.resolved', runId);
       if (error) reject(error);
       else resolve(answer!);
     };

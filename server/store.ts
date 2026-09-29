@@ -699,6 +699,16 @@ export class Store {
     releaseCompletedRunInputs(this.db, id);
     return source;
   }
+  /** Stored references without Reader blocks. Text integrity belongs to history/source reads. */
+  sourceMetadata(id: string): Pick<Source, 'id' | 'chatId' | 'runId' | 'hash'> {
+    const row = this.db
+      .prepare(`SELECT s.id,s.chat_id AS chatId,s.run_id AS runId,
+        COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AS hash
+        FROM sources s WHERE s.id=?`)
+      .get(id) as Pick<Source, 'id' | 'chatId' | 'runId' | 'hash'> | undefined;
+    if (!row) throw new HttpError(404, 'Source not found');
+    return row;
+  }
   sourceOriginal(id: string): Source {
     const row = this.db
       .prepare(

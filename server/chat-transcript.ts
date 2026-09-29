@@ -22,10 +22,11 @@ export function exportChatTranscript(
   const head = throughSource === undefined ? chat.headRevision : throughSource;
   const history = store.history(head);
   const profile = store.product.profile(chatId);
-  if (history.some((item) => store.source(item.revision).chatId !== chatId))
+  const sources = history.map((item) => store.sourceMetadata(item.revision));
+  if (sources.some((source) => source.chatId !== chatId))
     throw new HttpError(400, 'Source outside chat');
-  const entries = history.map((item) => {
-    const source = store.source(item.revision);
+  const entries = history.map((item, index) => {
+    const source = sources[index];
     return {
       request: String(
         store.db.prepare('SELECT request FROM runs WHERE id=?').get(source.runId)!.request

@@ -1,4 +1,5 @@
 import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { prepareNativeFixtureRun } from './fixtures/native-run.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
@@ -674,8 +675,8 @@ describe('global working prompts and independent library copies', () => {
     );
     await apply(app, first);
     const run = await prepareNativeFixtureRun(app.store, capture(app, chat.id)),
-      frozen = structuredClone(run.snapshot);
-    complete(app, run);
+      source = complete(app, run),
+      completedSnapshot = readStoredRunSnapshot(app.store, run.id);
     const nextPreset = await request<PromptPreset>(
       app,
       '/prompt-presets',
@@ -688,7 +689,8 @@ describe('global working prompts and independent library copies', () => {
     app.store.finishRun(candidate.id, 'cancelled', 'Synthetic');
     const next = capture(app, chat.id);
     expect(next.snapshot.profile!.promptPresets!.main!.program).toEqual(nextPreset.program);
-    expect(observedExecution(app.store, run.id).snapshot).toEqual(frozen);
+    expect(readStoredRunSnapshot(app.store, run.id)).toEqual(completedSnapshot);
+    expect(app.store.source(source.id)).toMatchObject(source);
   });
 
   test('translation reservations copy the current translation and a later retry keeps earlier jobs intact', async () => {
@@ -702,6 +704,9 @@ describe('global working prompts and independent library copies', () => {
     await apply(app, first);
     const run = capture(app, chat.id),
       source = complete(app, run);
+    expect(
+      observedExecution(app.store, run.id).snapshot.profile!.promptPresets!.translation!.program
+    ).toEqual(first.program);
     const job = app.store.requestTranslation(source.id);
     const frozenJob = structuredClone(job);
     const next = await request<PromptPreset>(
@@ -721,9 +726,6 @@ describe('global working prompts and independent library copies', () => {
       app.store.product.resolveJobPrompt(run.snapshot, retried.input).profile!.promptPresets!
         .translation!.program
     ).toEqual(next.program);
-    expect(
-      observedExecution(app.store, run.id).snapshot.profile!.promptPresets!.translation!.program
-    ).toEqual(first.program);
   });
 
   test('an unavailable optional translation connection does not block a main snapshot', async () => {

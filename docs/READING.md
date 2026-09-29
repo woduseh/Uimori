@@ -8,6 +8,8 @@
 
 Reader는 SSE의 목표 cursor까지 조회를 이어가며, 일시적인 조회 실패는 새 이벤트 없이도 최대 5초 간격의 백오프로 재시도해요. 전체 재동기화는 응답이 실제 적용된 뒤에만 완료로 처리하고 채팅을 떠나면 재시도를 취소해요. 손상된 읽기 위치·커서 캐시는 무시하지만 원문과 입력 초안은 유지해요. 생성 요청 기록과 초안은 채팅 ID를 기준으로 보관해요. 수락 여부가 불확실하면 저장된 같은 요청 키로 확인하며, 요청 기록 저장에 실패하면 생성 요청을 보내지 않아요.
 
+서재를 보거나 브라우저 탭이 숨겨져 있는 동안은 Reader 조회와 재시도 타이머를 멈추고, SSE의 최신 cursor와 필요한 알림만 유지해요. 원고 화면으로 돌아오면 쌓인 변경을 다시 읽어요. 서버 작업은 계속 실행되며 이미 작성한 초안이나 미확정 요청을 다시 보내지 않아요. 카드 입력창도 유휴 조회를 반복하지 않고 기존 SSE의 입력 요청·응답/취소·작업 종료 알림, 재접속, 화면 복귀 때 확인해요. 다른 기기에서 응답한 입력은 작업이 끝나기 전에도 닫히며, 이전 응답의 접수 확인이 늦게 도착해도 다음 질문에 쓰던 초안은 유지해요. 겹친 확인 요청은 순서대로 합치고 실패한 조회만 재시도하므로 카드의 대기 작업을 재실행하지 않아요.
+
 서버에 실행 중인 요청이 보이더라도 수락 여부가 불확실한 로컬 기록이 있으면 전송 버튼은 ‘이전 요청 확인’을 유지해요. 저장된 동일 요청 키로 수락을 확인한 뒤 실행 취소 버튼을 보여주므로, 확인 도중 상태 갱신이 클릭을 취소 동작으로 바꾸지 않아요.
 
 설정 → 일반 → 원고 읽기 또는 채팅 메뉴 → 읽기 설정에서 바꿔요. 읽기 스타일·간격·부호별 역할은 `uimori:readability` localStorage에 저장하며 같은 origin의 다른 탭에도 반영해요. 도우미 답변·독립 가정 장면·생성 중 공개 텍스트와 설정 예문은 앱의 인용 스타일을 사용해요. 원문·저장된 번역과 설정 미리보기의 Risu 메시지는 열린 Shadow DOM으로 표시해요. Markdown에서 생성한 일반 문단·제목·목록에는 글꼴·크기·줄간격·문단 간격과 인용 강조·줄바꿈을 적용해요. 작성자 HTML과 컨트롤의 구조는 유지하며, 임의 HTML이나 inline HTML이 포함된 문단을 일반 서술문으로 추측해 재작성하지 않아요. 입력한 요청, 편집 초안, 설정 지침, 도구 JSON, 상태·진단 카드는 적용 대상이 아니에요.
@@ -36,6 +38,8 @@ Reader는 SSE의 목표 cursor까지 조회를 이어가며, 일시적인 조회
 `web/reading-preferences.ts`가 기본값과 브라우저 저장값 검증을, `web/useReadingPreferences.ts`가 저장·탭 반영·표시 간격·읽던 블록/메시지 위치 복원을 맡아요. 설정은 `web/ReadabilitySettings.tsx`, Risu 본문·미리보기는 `web/RisuMessageSurface.tsx`, 도우미·안전한 일반 Markdown은 `web/Prose.tsx`예요. 부호 짝맞춤은 `web/reading-quotes.ts`, DOM 장식은 `web/reading-dom.ts`, 공통 인용 스타일은 `web/reading-prose.css`를 사용해요. `server/risu-reading-markdown.ts`는 표시용 Markdown 토큰에만 읽기 대상 마커를 붙이고, `web/reader-dom.ts`는 Shadow DOM의 선택 범위와 읽기 위치를 연결해요.
 
 표시용 React/DOM 요소와 CSS만 바꿔요. 저장된 원문·번역문·hash·offset·block anchor와 이미지 귀속은 바꾸지 않아요. 기존 패키지 표시 변환 뒤의 화면 텍스트에 적용하고, 모델 입력·사용량·백업·내보내기에는 읽기 설정을 넣지 않아요. 본문·가정 장면 복사 버튼은 기존 저장 텍스트를 복사해요. 드래그 선택 복사는 브라우저의 시각적 개행 처리를 따를 수 있어요.
+
+일반 Markdown과 문자 그대로 표시하는 본문 모두 `{{…}}`의 닫힘 위치를 먼저 확인해요. 닫히지 않은 `{{`가 긴 문단에서 반복돼도 매번 남은 본문 전체를 검색하지 않으며, 완성된 보호 토큰과 뒤따르는 Markdown의 표시 규칙은 유지해요.
 
 검사는 `tests/prose.test.ts`, `tests/reading-quotes.test.ts`, `tests/reading-preferences.test.ts`와 `tests/reading-browser.spec.ts`에 있어요. 관련 화면 검사는 `npm run verify:ui`에 연결해요. Shadow DOM 회귀 검사는 `tests/risu-message-surface-browser.spec.ts`와 `tests/risu-native-frame-browser.spec.ts`의 `RSURFACE` 검사에서 읽기 설정, 입력 상태, 선택, 액션 실패·리비전 잠금을 확인해요. 마커 출처는 `tests/risu-reading-markdown.test.ts`로 확인해요. 합성 브라우저 증거와 실제 휴대폰·개인 작품에서의 읽기 효과는 구분해요.
 

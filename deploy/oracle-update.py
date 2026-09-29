@@ -244,11 +244,16 @@ class Runner:
 
     def control(self, action, image=None):
         # No controller-side token, Tailscale route or browser dependencies.
-        return json.loads(self.docker("run", "--rm", "--network", "host", "--read-only", "--user", "0", "--tmpfs", "/tmp",
+        result = json.loads(self.docker("run", "--rm", "--network", "host", "--read-only", "--user", "0", "--tmpfs", "/tmp",
             "--mount", "type=bind,src=" + str(self.scripts) + ",dst=/runner,readonly",
             "--mount", "type=bind,src=" + str(self.env) + ",dst=/run/uimori.env,readonly",
             image or self.old_image, "node", "/runner/oracle-host-control.mjs", action, "/run/uimori.env", self.owner, self.args.build_id,
             timeout=90 if action == "smoke" else 20))
+        cleanup = result.get("sessionCleanup", {})
+        if cleanup.get("status") == "WARN":
+            self.summary.setdefault("sessionCleanupWarnings", []).append({"action": action, "error": cleanup["error"]})
+            self.persist()
+        return result
 
     def close_writes(self):
         self.gate_owned = True  # A lost POST response may still have closed our gate.

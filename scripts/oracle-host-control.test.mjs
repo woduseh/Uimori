@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+import { DatabaseSync } from 'node:sqlite';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -81,8 +82,24 @@ test('real built app closes admission, keeps reads, preserves gate on restart an
     return (options) => localRequest({ ...options, endpoint });
   }
   let request = await boot();
+  const device = await request({
+    origin,
+    pathname: '/api/session',
+    method: 'POST',
+    body: { token },
+  });
+  const deviceCookie = device.headers['set-cookie'][0].split(';')[0];
+  const sessions = () => {
+    const db = new DatabaseSync(join(directory, 'uimori.sqlite'), { readOnly: true });
+    try {
+      return db.prepare('SELECT count(*) AS count FROM access_sessions').get().count;
+    } finally {
+      db.close();
+    }
+  };
   const action = (name) => controlMaintenance({ action: name, origin, token, owner, request });
   assert.equal((await action('status')).status, 'open');
+  assert.equal(sessions(), 1);
   const closed = await action('close');
   assert.equal(closed.reason, owner);
   assert.equal((await action('close')).epoch, closed.epoch);
@@ -90,9 +107,45 @@ test('real built app closes admission, keeps reads, preserves gate on restart an
     controlMaintenance({ action: 'open', origin, token, owner: 'oracle:other', request }),
     /another operator/
   );
+  assert.equal(sessions(), 1);
   await app.close();
   request = await boot();
   assert.equal((await action('status')).status, 'closed');
   assert.equal((await action('open')).status, 'open');
   assert.equal((await action('status')).status, 'open');
+  assert.equal(sessions(), 1);
+  assert.equal(
+    (await request({ origin, pathname: '/api/session', cookie: deviceCookie })).body.authenticated,
+    true
+  );
+
+  const logoutUnavailable = (options) =>
+    options.method === 'DELETE' ? Promise.resolve({ status: 503, body: {} }) : request(options);
+  const confirmed = await controlMaintenance({
+    action: 'close',
+    origin,
+    token,
+    owner,
+    request: logoutUnavailable,
+  });
+  assert.equal(confirmed.status, 'closed');
+  assert.equal(confirmed.sessionCleanup.status, 'WARN');
+  assert.match(confirmed.sessionCleanup.error, /HTTP 503/u);
+  assert.equal(sessions(), 2);
+  await assert.rejects(
+    controlMaintenance({
+      action: 'open',
+      origin,
+      token,
+      owner: 'oracle:other',
+      request: logoutUnavailable,
+    }),
+    (error) => {
+      assert.match(error.message, /Maintenance belongs to another operator/u);
+      assert.match(error.message, /temporary session cleanup/u);
+      assert.equal(error.sessionCleanup.status, 'WARN');
+      return true;
+    }
+  );
+  assert.equal(sessions(), 3);
 });

@@ -72,6 +72,18 @@ const input = (
 });
 
 describe('native Risu execution', () => {
+  it('continues with a fresh CBS evaluation after Lua handles an evaluation error', async () => {
+    const content = native([
+      lua(`function choose(id)
+        local ok = pcall(cbs, '{{setvar::partial::discard}}{{cbr::40000000}}x')
+        setChatVar(id, 'caught', tostring(not ok))
+        setChatVar(id, 'result', cbs('{{char}}:{{getvar::partial}}'))
+      end`),
+    ]);
+    const result = await executeRisuNative(input(content));
+    expect(result.variables).toEqual({ caught: 'true', result: 'Test:null' });
+  });
+
   it('keeps a growing conversation intact across Lua sessions and full-chat reads and writes', async () => {
     const content = native([
       lua(`local calls = 0

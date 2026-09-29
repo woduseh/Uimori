@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { Store } from '../server/store.js';
 import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
+import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { injectWithFixtureBot, createFixtureChat } from './fixtures/chat.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -512,7 +513,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     ).toBe(0);
   });
 
-  test('an existing chat uses current model and connection settings on its next Run while its in-flight and completed snapshot stay frozen', async () => {
+  test('an existing chat uses current model and connection settings on its next Run while in-flight input and completed output remain intact', async () => {
     const app = await application(),
       connection = await request<Connection>(
         app,
@@ -582,7 +583,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       const first = await request<Run>(app, `/chats/${chat.id}/runs`, command());
       await began;
       const frozen = structuredClone(
-        observedExecution(app.store, first.id).snapshot.profile!.models.main!
+        readStoredRunSnapshot(app.store, first.id).profile!.models.main!
       );
       const editedConnection = await request<Connection>(
         app,
@@ -605,11 +606,13 @@ describe('provider settings, catalogs and archive contracts', () => {
       );
       expect(app.store.product.profile(chat.id).routes.main).toEqual({ id: model.id });
       expect(app.store.product.profile(chat.id).revision).toBe(profile.revision);
-      expect(observedExecution(app.store, first.id).snapshot.profile!.models.main).toEqual(frozen);
+      expect(readStoredRunSnapshot(app.store, first.id).profile!.models.main).toEqual(frozen);
       release!();
       await expect
         .poll(() => observedExecution(app.store, first.id).status, { timeout: 5000 })
         .toBe('completed');
+      const completedSnapshot = readStoredRunSnapshot(app.store, first.id);
+      const completedSource = app.store.source(app.store.run(first.id).sourceRevision!);
       const second = await request<Run>(app, `/chats/${chat.id}/runs`, command());
       await expect
         .poll(() => observedExecution(app.store, second.id).status, { timeout: 5000 })
@@ -628,7 +631,8 @@ describe('provider settings, catalogs and archive contracts', () => {
         ...editedModel,
         connection: editedConnection,
       });
-      expect(observedExecution(app.store, first.id).snapshot.profile!.models.main).toEqual(frozen);
+      expect(readStoredRunSnapshot(app.store, first.id)).toEqual(completedSnapshot);
+      expect(app.store.source(completedSource.id)).toEqual(completedSource);
       const disabled = await request<ModelPreset>(
         app,
         `/model-presets/${model.id}`,
@@ -645,7 +649,8 @@ describe('provider settings, catalogs and archive contracts', () => {
       expect(providerFetch).toHaveBeenCalledTimes(2);
       expect(judgments).toHaveLength(2);
       expect(app.store.product.profile(chat.id).routes.main).toEqual({ id: disabled.id });
-      expect(observedExecution(app.store, first.id).snapshot.profile!.models.main).toEqual(frozen);
+      expect(readStoredRunSnapshot(app.store, first.id)).toEqual(completedSnapshot);
+      expect(app.store.source(completedSource.id)).toEqual(completedSource);
     } finally {
       release?.();
     }

@@ -93,6 +93,13 @@ describe('safe prose rendering', () => {
     expect(html).not.toContain('<strong>');
   });
 
+  test('preserves long unfinished templates after a completed token without swallowing later Markdown', () => {
+    const unfinished = '{{'.repeat(40_000);
+    expect(render(`{{**user**}} ${unfinished} **서술** [[p_ab12_1]]`)).toBe(
+      `<p>{{**user**}} ${unfinished} <strong>서술</strong> [[p_ab12_1]]</p>\n\n`
+    );
+  });
+
   test('rejects unsafe and ambiguous URL schemes without accepting control-character obfuscation', () => {
     for (const value of [
       'javascript:alert(1)',

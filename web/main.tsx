@@ -1085,6 +1085,7 @@ function App() {
                               presentationRefreshKey={
                                 s.detail!.reader.presentationRevisions[source.id]
                               }
+                              nativeInteractionRevision={s.nativeInteractionRevision}
                               key={source.id}
                               source={source}
                               readerTarget={

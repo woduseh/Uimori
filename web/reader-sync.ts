@@ -3,6 +3,7 @@ export function createReaderSync(options: {
   refresh: (incremental: boolean) => Promise<boolean | undefined>;
   cursor: () => number;
   onError: (error: unknown) => void;
+  active?: boolean;
 }) {
   let target = -1,
     full = 0,
@@ -10,14 +11,15 @@ export function createReaderSync(options: {
     failures = 0;
   let disposed = false,
     inFlight = false;
+  let active = options.active ?? true;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const needed = () => full > acknowledged || target > options.cursor();
   const schedule = (delay: number) => {
-    if (!disposed && !inFlight && !timer && needed()) timer = setTimeout(flush, delay);
+    if (active && !disposed && !inFlight && !timer && needed()) timer = setTimeout(flush, delay);
   };
   const flush = async () => {
     timer = undefined;
-    if (disposed || !needed()) return;
+    if (!active || disposed || !needed()) return;
     inFlight = true;
     const requestedFull = full;
     try {
@@ -33,6 +35,12 @@ export function createReaderSync(options: {
     }
   };
   return {
+    setActive(next: boolean) {
+      active = next;
+      clearTimeout(timer);
+      timer = undefined;
+      if (active) schedule(0);
+    },
     request(cursor = 0, reconnect = false) {
       target = Math.max(target, cursor);
       if (reconnect) full++;

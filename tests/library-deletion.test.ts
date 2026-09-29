@@ -12,7 +12,6 @@ import { productRoutes } from '../server/product-routes.js';
 import { Store } from '../server/store.js';
 import {
   deleteLibraryItem,
-  libraryDeletionImpact,
   libraryDeletionRoutes,
   type LibraryKind,
 } from '../server/library-deletion.js';
@@ -55,7 +54,6 @@ test('removes unreferenced resources physically while enforcing revision conflic
   expect(() => deleteLibraryItem(s, 'content', a.id, { expectedRevision: 1 })).toThrow(
     '항목이 변경'
   );
-  expect(libraryDeletionImpact(s, 'content', a.id)).toMatchObject({ canDelete: true, revision: 2 });
   expect(deleteLibraryItem(s, 'content', a.id, { expectedRevision: changed.revision })).toEqual({
     deleted: true,
     id: a.id,
@@ -74,10 +72,6 @@ test('historical and current content references do not block removing a library 
     owner = s.product.content(content('Owner', [module.id]));
   s.product.content({ ...content('Unlinked now'), expectedRevision: 1 }, owner.id);
   const history = s.db.prepare('SELECT * FROM versions ORDER BY kind,id,revision').all();
-  expect(libraryDeletionImpact(s, 'content', module.id)).toMatchObject({
-    canDelete: true,
-    blockers: [],
-  });
   deleteLibraryItem(s, 'content', module.id, { expectedRevision: 1 });
   expect(s.db.prepare('SELECT * FROM versions ORDER BY kind,id,revision').all()).toEqual(
     history.filter((row) => row.id !== module.id)
@@ -124,10 +118,6 @@ test('connection deletion revokes future sends and hides dependent models while 
     .prepare('INSERT INTO provider_connection_tests VALUES(?,?,?,?,?,?,?)')
     .run('test', 'key', m.id, 1, 'running', null, JSON.stringify({ model: m, connection: c }));
   const before = s.db.prepare('SELECT * FROM provider_connection_tests').all();
-  expect(libraryDeletionImpact(s, 'connection', c.id)).toMatchObject({
-    canDelete: true,
-    blockers: [],
-  });
   deleteLibraryItem(s, 'connection', c.id, { expectedRevision: 1 });
   expect(s.product.get('connection', c.id)).toMatchObject({ enabled: false, revision: 2 });
   expect(s.product.all('model')).toEqual([]);
@@ -135,7 +125,7 @@ test('connection deletion revokes future sends and hides dependent models while 
   expect(s.db.prepare('SELECT * FROM provider_connection_tests').all()).toEqual(before);
 });
 
-test('all supported kinds expose DELETE and read-only impact routes with strict request validation', async () => {
+test('library DELETE routes enforce revision and request fields', async () => {
   const s = database(),
     app = Fastify();
   libraryDeletionRoutes(app, s);
@@ -163,14 +153,6 @@ test('all supported kinds expose DELETE and read-only impact routes with strict 
                   values: {},
                 });
               })();
-      expect(
-        (
-          await injectWithFixtureBot(app, {
-            method: 'GET',
-            url: `/api/${path}/${item.id}/deletion-impact`,
-          })
-        ).json()
-      ).toMatchObject({ canDelete: true });
       expect(
         (
           await injectWithFixtureBot(app, {

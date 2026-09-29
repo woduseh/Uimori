@@ -138,12 +138,7 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
   );
   const notes = list(body.notes, 'CHAT_TRANSCRIPT_INVALID_NOTES').map((raw): ChatTranscriptNote => {
     const item = object(raw);
-    keys(
-      item,
-      body.version === 1
-        ? ['text', 'author', 'atIndex']
-        : ['text', 'author', 'atIndex', 'kind', 'origin']
-    );
+    keys(item, ['text', 'author', 'atIndex', 'kind', 'origin']);
     const atIndex = item.atIndex;
     if (
       atIndex !== null &&
@@ -155,7 +150,7 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
       author: string(item.author, CHAT_TRANSCRIPT_LIMITS.author, 'CHAT_TRANSCRIPT_INVALID_NOTES'),
       atIndex: atIndex === null ? null : Number(atIndex),
     };
-    if (body.version === 1 || item.kind === 'author-note') {
+    if (item.kind === 'author-note') {
       if (item.origin !== undefined) fail('CHAT_TRANSCRIPT_INVALID_NOTE_ORIGIN');
       return { ...note, kind: 'author-note' };
     }

@@ -17,12 +17,6 @@ export function assertLibraryVisible(store: Store, kind: string, id: string) {
     throw new HttpError(404, 'Library item not found');
 }
 
-export function libraryDeletionImpact(store: Store, kind: LibraryKind, id: string) {
-  assertLibraryVisible(store, kind, id);
-  const item = store.product.get<{ revision: number }>(kind, id);
-  return { kind, id, revision: item.revision, canDelete: true, blockers: [] };
-}
-
 export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, value: unknown) {
   const body = record(value);
   fields(body, ['expectedRevision']);
@@ -93,9 +87,6 @@ export function libraryDeletionRoutes(app: FastifyInstance, store: Store) {
     model: 'model-presets',
   };
   for (const [kind, path] of Object.entries(routes) as [LibraryKind, string][]) {
-    app.get<{ Params: { id: string } }>(`/api/${path}/:id/deletion-impact`, async (request) =>
-      libraryDeletionImpact(store, kind, request.params.id)
-    );
     app.delete<{ Params: { id: string } }>(`/api/${path}/:id`, async (request) =>
       deleteLibraryItem(store, kind, request.params.id, request.body)
     );

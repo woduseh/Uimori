@@ -51,8 +51,8 @@ const WRITTEN_LIMIT = 40;
 const BATCH_LIMIT = 200;
 type OutlineSelection = { path: OutlineNode[]; children: OutlineNode[]; related: OutlineNode[] };
 
-/** The same path and direct children feed both a reservation check and the eventual Run. */
-function outlineSelection(nodes: readonly OutlineNode[]) {
+/** Reuse one immutable read's lookup tables; edits build a new index from their live nodes. */
+function outlineIndex(nodes: readonly OutlineNode[]) {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const children = new Map<string, OutlineNode[]>();
   for (const node of nodes) {
@@ -61,7 +61,7 @@ function outlineSelection(nodes: readonly OutlineNode[]) {
     siblings.push(node);
     children.set(node.parentId, siblings);
   }
-  return (id: string): OutlineSelection => {
+  const selection = (id: string): OutlineSelection => {
     const path: OutlineNode[] = [];
     for (let node = byId.get(id); node; ) {
       path.unshift(node);
@@ -74,6 +74,30 @@ function outlineSelection(nodes: readonly OutlineNode[]) {
       .flatMap((ref) => (byId.get(ref) ? [byId.get(ref)!] : []));
     return { path, children: direct, related };
   };
+  const descendants = (id: string): OutlineNode[] => {
+    const result: OutlineNode[] = [];
+    const walk = (parentId: string) => {
+      for (const node of children.get(parentId) ?? []) {
+        result.push(node);
+        walk(node.id);
+      }
+    };
+    walk(id);
+    return result;
+  };
+  const sources = (id: string): OutlineWriting[] => {
+    const node = byId.get(id);
+    return outlineSources([...(node ? [node] : []), ...descendants(id)]);
+  };
+  return { selection, descendants, sources };
+}
+type OutlineIndex = ReturnType<typeof outlineIndex>;
+
+function outlineSources(nodes: readonly OutlineNode[]): OutlineWriting[] {
+  const unique = new Map<string, OutlineWriting>();
+  for (const node of nodes)
+    for (const source of node.writings ?? []) unique.set(source.sourceRevision, source);
+  return [...unique.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 /** Binding a command changes revision/progress, but not the plan the request was written for. */
@@ -85,6 +109,9 @@ function plannedContent(selection: OutlineSelection) {
     related: selection.related.map(content),
   });
 }
+
+const plannedHash = (selection: OutlineSelection) =>
+  createHash('sha256').update(plannedContent(selection)).digest('hex');
 
 /** Create current tables during fresh database initialization. */
 export function initOutline(db: DatabaseSync) {
@@ -342,6 +369,7 @@ export class OutlineStore {
   detail(chatId: string): OutlineDetail {
     this.store.chat(chatId);
     const nodes = this.nodes(chatId);
+    const index = outlineIndex(nodes);
     const reviews = new Map(
       this.db
         .prepare(`SELECT r.*,t.status,t.conversation_id FROM outline_nodes n
@@ -355,7 +383,7 @@ export class OutlineStore {
       chatId,
       nodes: nodes.map((node) => {
         const review = reviews.get(node.id);
-        return review ? { ...node, latestReview: this.mapReview(review, nodes) } : node;
+        return review ? { ...node, latestReview: this.mapReview(review, index) } : node;
       }),
     };
   }
@@ -367,12 +395,8 @@ export class OutlineStore {
   }
   unitSources(id: string, nodes?: OutlineNode[]): OutlineWriting[] {
     const node = nodes?.find((item) => item.id === id) ?? this.node(id);
-    const all = nodes ?? this.nodes(node.chatId);
-    const subtree = [node, ...this.descendants(all, id)];
-    const unique = new Map<string, OutlineWriting>();
-    for (const item of subtree)
-      for (const source of item.writings ?? []) unique.set(source.sourceRevision, source);
-    return [...unique.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const index = outlineIndex(nodes ?? this.nodes(node.chatId));
+    return outlineSources([node, ...index.descendants(id)]);
   }
   private setRelated(id: string, ids: string[]) {
     const node = this.node(id);
@@ -389,23 +413,23 @@ export class OutlineStore {
   }
   planHash(id: string, nodes?: OutlineNode[]) {
     const node = nodes?.find((item) => item.id === id) ?? this.node(id);
-    return createHash('sha256')
-      .update(plannedContent(outlineSelection(nodes ?? this.nodes(node.chatId))(id)))
-      .digest('hex');
+    return plannedHash(outlineIndex(nodes ?? this.nodes(node.chatId)).selection(id));
   }
   preview(id: string) {
     const node = this.node(id),
       nodes = this.nodes(node.chatId);
-    const { path, children, related } = outlineSelection(nodes)(id);
+    const index = outlineIndex(nodes);
+    const selection = index.selection(id);
+    const { path, children, related } = selection;
     return {
       expectedRevision: node.revision,
-      planHash: this.planHash(id, nodes),
+      planHash: plannedHash(selection),
       outline: sealOutlineSnapshot({
         version: 1,
         path: path.map(outlineSnapshotNode),
         children: children.map(outlineSnapshotNode),
         related: related.map(outlineSnapshotNode),
-        sources: this.unitSources(id, nodes),
+        sources: index.sources(id),
         written: [],
       }),
     };
@@ -508,13 +532,16 @@ export class OutlineStore {
       JOIN helper_tasks t ON t.id=r.task_id WHERE r.node_id=? ORDER BY r.created_at DESC,r.rowid DESC LIMIT 1`)
       .get(id);
     if (!row) return null;
-    return this.mapReview(row, nodes);
+    return this.mapReview(row, outlineIndex(nodes ?? this.nodes(this.node(id).chatId)));
   }
   /** Review freshness covers this plan's path, descendants, related plans and source hashes only.
    * It is not a pagination token or a claim that every source was read. */
-  private reviewVersion(id: string, nodes = this.nodes(this.node(id).chatId)): string {
-    const { path, related } = outlineSelection(nodes)(id);
-    const planned = [...path, ...this.descendants(nodes, id), ...related];
+  private reviewVersion(
+    id: string,
+    index = outlineIndex(this.nodes(this.node(id).chatId))
+  ): string {
+    const { path, related } = index.selection(id);
+    const planned = [...path, ...index.descendants(id), ...related];
     return (
       'review:' +
       createHash('sha256')
@@ -528,23 +555,23 @@ export class OutlineStore {
               node.revision,
               node.relatedIds,
             ]),
-            this.unitSources(id, nodes).map((source) => [source.sourceRevision, source.sourceHash]),
+            index.sources(id).map((source) => [source.sourceRevision, source.sourceHash]),
           ])
         )
         .digest('hex')
     );
   }
-  private mapReview(row: Row, nodes?: OutlineNode[]): OutlineReview {
+  private mapReview(row: Row, index: OutlineIndex): OutlineReview {
     const id = String(row.node_id);
     const sources = JSON.parse(String(row.sources)) as OutlineReview['sources'];
     let stale: boolean;
     if (String(row.plan_hash).startsWith('review:')) {
-      stale = row.plan_hash !== this.reviewVersion(id, nodes);
+      stale = row.plan_hash !== this.reviewVersion(id, index);
     } else {
       // Existing reviews use the original plan hash and their supplied source references.
-      const current = this.unitSources(id, nodes);
+      const current = index.sources(id);
       stale =
-        row.plan_hash !== this.planHash(id, nodes) ||
+        row.plan_hash !== plannedHash(index.selection(id)) ||
         sources.length !== current.length ||
         sources.some(
           (source) =>
@@ -567,17 +594,6 @@ export class OutlineStore {
   // -------------------------------------------------------------------------
   // Writing composition
   // -------------------------------------------------------------------------
-  private descendants(nodes: readonly OutlineNode[], id: string): OutlineNode[] {
-    const result: OutlineNode[] = [];
-    const walk = (parentId: string) => {
-      for (const node of nodes.filter((item) => item.parentId === parentId)) {
-        result.push(node);
-        walk(node.id);
-      }
-    };
-    walk(id);
-    return result;
-  }
   /** Accepted writers keep their frozen inputs; do not edit their own active unit. */
   private assertIdle(node: OutlineNode) {
     if (node.progress.state === 'writing')
@@ -654,7 +670,7 @@ export class OutlineStore {
           "SELECT n.id,n.command_id FROM outline_nodes n JOIN scene_commands c ON c.id=n.command_id WHERE n.chat_id=? AND c.status='pending' AND c.run_id IS NULL"
         )
         .all(chatId) as { id: string; command_id: string }[];
-      const before = pending.length ? outlineSelection(this.nodes(chatId)) : null;
+      const before = pending.length ? outlineIndex(this.nodes(chatId)) : null;
       const created: { ref?: string; id: string }[] = [];
       const refs = new Map<string, string>();
       const time = now();
@@ -722,7 +738,7 @@ export class OutlineStore {
           if (operation.relatedIds) this.setRelated(node.id, operation.relatedIds);
         } else if (operation.op === 'move') {
           const siblings = live();
-          const descendants = this.descendants(siblings, node.id);
+          const descendants = outlineIndex(siblings).descendants(node.id);
           for (const item of [node, ...descendants]) this.assertIdle(item);
           const parentId = operation.parentId === undefined ? node.parentId : operation.parentId;
           if (parentId !== null) {
@@ -739,7 +755,7 @@ export class OutlineStore {
             )
             .run(parentId, operation.position, time, node.id, operation.expectedRevision);
         } else {
-          const subtree = [node, ...this.descendants(live(), node.id)];
+          const subtree = [node, ...outlineIndex(live()).descendants(node.id)];
           for (const item of subtree) {
             if (item.writings?.length)
               throw new HttpError(
@@ -760,11 +776,14 @@ export class OutlineStore {
         }
       }
       if (before) {
-        const after = outlineSelection(this.nodes(chatId));
+        const after = outlineIndex(this.nodes(chatId));
         for (const item of pending) {
           // Explicit node removal already deletes its unexecuted command.
-          const current = after(item.id);
-          if (current.path.length && plannedContent(before(item.id)) !== plannedContent(current))
+          const current = after.selection(item.id);
+          if (
+            current.path.length &&
+            plannedContent(before.selection(item.id)) !== plannedContent(current)
+          )
             this.store.story.cancelCommand(item.command_id);
         }
       }
@@ -880,10 +899,12 @@ export class OutlineStore {
         409,
         '구성의 집필 예약이 취소됐어요. 최신 구성을 확인하고 다시 집필해 주세요.'
       );
-    const { path, children, related } = outlineSelection(nodes)(target.id);
+    const index = outlineIndex(nodes);
+    const selection = index.selection(target.id);
+    const { path, children, related } = selection;
     this.db
       .prepare('UPDATE outline_writings SET node_revision=?,plan_hash=? WHERE command_id=?')
-      .run(target.revision, this.planHash(target.id, nodes), sceneCommandId);
+      .run(target.revision, plannedHash(selection), sceneCommandId);
     const ancestry = new Set(snapshot.history.map((entry) => entry.revision));
     const written = nodes
       .filter(
@@ -905,7 +926,7 @@ export class OutlineStore {
       path: path.map(outlineSnapshotNode),
       children: children.map(outlineSnapshotNode),
       ...(related.length ? { related: related.map(outlineSnapshotNode) } : {}),
-      sources: this.unitSources(target.id).filter((source) => ancestry.has(source.sourceRevision)),
+      sources: index.sources(target.id).filter((source) => ancestry.has(source.sourceRevision)),
       written,
     });
   }
