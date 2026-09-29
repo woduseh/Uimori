@@ -239,6 +239,9 @@ const READ_METADATA_VALUES = new Set([
   'scopeTotal',
   'returned',
   'excludedByDepth',
+  'scopeResources',
+  'nodeRef',
+  'resourceCount',
   'intentCodePoints',
   'childCount',
   'previewTruncated',
@@ -303,7 +306,9 @@ function helperReadMetadata(value: unknown): Json | undefined {
       metadata[key] = asJson(item);
     } else if (
       key === 'content' &&
-      ['metadata-and-previews', 'intent-range', 'source-references-only'].includes(String(item))
+      ['metadata-and-previews', 'intent-range', 'source-references-only', 'metadata-only'].includes(
+        String(item)
+      )
     ) {
       metadata[key] = String(item);
     } else if (READ_METADATA_VALUES.has(key) && (item === null || typeof item !== 'object')) {
@@ -883,26 +888,40 @@ export class HelperRuntime {
                       ),
                       args
                     )
-                  : call.name === 'resource.read'
-                    ? { name: 'resource.read', arguments: { kind: args.kind, id: args.id } }
-                    : call.name === 'chat.lore'
-                      ? {
-                          name: call.name,
-                          arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 },
-                        }
-                      : call.name === 'data.search' || call.name === 'data.read'
+                  : call.name === 'knowledge.search' && args.mode === 'browse'
+                    ? {
+                        name: 'app.call',
+                        arguments: {
+                          name: 'knowledge.search',
+                          arguments: {
+                            ...args,
+                            limit: Math.max(
+                              1,
+                              Math.min(5, Math.floor(Number(args.limit ?? 20) / 2))
+                            ),
+                          },
+                        },
+                      }
+                    : call.name === 'resource.read'
+                      ? { name: 'resource.read', arguments: { kind: args.kind, id: args.id } }
+                      : call.name === 'chat.lore'
                         ? {
                             name: call.name,
-                            arguments: { ...args, limit: call.name === 'data.search' ? 5 : 1000 },
+                            arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 },
                           }
-                        : {
-                            name: 'data.search',
-                            arguments: {
-                              scope: call.name === 'editor.read' ? 'editor' : 'library',
-                              patterns: [],
-                              limit: 5,
-                            },
-                          };
+                        : call.name === 'data.search' || call.name === 'data.read'
+                          ? {
+                              name: call.name,
+                              arguments: { ...args, limit: call.name === 'data.search' ? 5 : 1000 },
+                            }
+                          : {
+                              name: 'data.search',
+                              arguments: {
+                                scope: call.name === 'editor.read' ? 'editor' : 'library',
+                                patterns: [],
+                                limit: 5,
+                              },
+                            };
               event.result = {
                 error: 'HELPER_READ_TOO_LARGE',
                 returned: false,

@@ -2,11 +2,11 @@
 
 | Responsibility | Entry points | Current contract |
 | --- | --- | --- |
-| Composition, writing briefs and source-linked review | `core/outline.ts`, `server/outline-store.ts`, `server/outline-routes.ts`, `web/OutlinePanel.tsx` | [Outline workspace](OUTLINE.md) |
+| Composition, writing briefs and source-linked review | `core/outline.ts`, `server/outline-read.ts`, `server/outline-store.ts`, `server/outline-routes.ts`, `web/OutlinePanel.tsx` | [Outline workspace](OUTLINE.md) |
 | Resource editing and local recovery | `web/resource-editor-session.ts`, `web/resource-editor.tsx`, `server/resource-service.ts`, `server/resource-routes.ts` | [Editing](EDITING.md) |
 | Helper execution and app operations | `server/helper-runtime.ts`, `server/helper-app-tools.ts`, `server/helper-resource-tools.ts`, `server/helper-lore-read.ts`, `server/helper-settings-tools.ts`, `server/helper-task-tools.ts`, `server/helper-workspace.ts` | [Helper tools](HELPER-TOOLS.md) |
 | Helper grep, partial reads and SQL | `server/helper-data-tools.ts`, `server/helper-data-worker.ts` | [Helper tools](HELPER-TOOLS.md) |
-| Model-facing read/tool contracts | `core/read-tools.ts`, `core/story-read-tools.ts`, `core/provider.ts`, `server/helper-data-tools.ts`, `server/helper-app-tools.ts` | [Tool contracts](TOOL-CONTRACTS.md) |
+| Model-facing read/tool contracts | `core/read-tools.ts`, `core/knowledge-browse.ts`, `core/story-read-tools.ts`, `core/provider.ts`, `server/helper-data-tools.ts`, `server/helper-app-tools.ts` | [Tool contracts](TOOL-CONTRACTS.md) |
 | Provider/key configuration | `server/provider-connections.ts`, `server/credentials.ts`, `server/jev-credentials.ts`, `server/vertex-credentials.ts` | [Providers](PROVIDERS.md) |
 | Codex App Server connection and native turns | `core/codex-protocol.ts`, `server/codex-process.ts`, `server/codex-runtime.ts` | [Codex](CODEX.md) |
 | Illustration presets, scoped selection and frozen recipes | `core/illustration-presets.ts`, `core/illustration-workflow.ts`, `server/illustration-presets.ts`, `server/illustrations.ts`, `web/IllustrationPresetSettings.tsx` | [Illustrations](ILLUSTRATIONS.md) |
