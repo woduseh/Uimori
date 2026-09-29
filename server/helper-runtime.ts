@@ -694,6 +694,8 @@ export class HelperRuntime {
     const artifacts: { id: string; revision: number }[] = [];
     const hooks = (purpose: string, executionSignal = signal): MainHooks => ({
       ...this.options,
+      // Independent helper artifacts retain their existing writer/advisor execution path.
+      executeCodexAgent: undefined,
       signal: executionSignal,
       authorize: (connection) => this.store.product.authorize(connection),
       onInput: () => {},

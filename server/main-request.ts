@@ -33,7 +33,11 @@ import { encodeResponses } from '../core/openai-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
-import { buildCodexDescriptor } from '../core/codex-protocol.js';
+import {
+  buildCodexDescriptor,
+  buildCodexNativeRequest,
+  prepareCodexNative,
+} from '../core/codex-protocol.js';
 
 export const STORY_SUBMIT_MAX_CHARS = SOURCE_TEXT_MAX_CHARS;
 export const STORY_SUBMIT_TOOL: ProviderTool = {
@@ -236,7 +240,8 @@ export function buildMainProviderRequest(
 }
 export function encodeMainPreview(
   request: ProviderRequest,
-  target: ModelPreset & { connection: Connection }
+  target: ModelPreset & { connection: Connection },
+  options: { codexNative?: boolean } = {}
 ) {
   const checked = validateRequest(request),
     protocol = target.connection.protocol;
@@ -253,7 +258,12 @@ export function encodeMainPreview(
   else {
     const plan = planNativeMessages(checked, protocol);
     encoded = {
-      body: protocol === 'codex-app-server-v1' ? buildCodexDescriptor(checked) : json(checked),
+      body:
+        protocol === 'codex-app-server-v1'
+          ? options.codexNative
+            ? prepareCodexNative(buildCodexNativeRequest(checked)).descriptor
+            : buildCodexDescriptor(checked)
+          : json(checked),
       messageMetadata: nativeMessageMetadata(plan),
     };
   }

@@ -1,3 +1,6 @@
+import { buildCodexNativeRequest } from '../core/codex-protocol.js';
+import { ProviderContractError, type ProviderToolCall } from '../core/transport.js';
+import type { CodexAgentExecutionOptions } from './codex-runtime.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
 import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
 import type {
@@ -151,8 +154,13 @@ export function createAgentCollaboration(
   const consult = async (
     callId: string,
     args: Record<string, unknown>,
-    availableContext: readonly ToolEvent[] = []
+    availableContext: readonly ToolEvent[] = [],
+    execution: { signal?: AbortSignal; reserveWriterCall?: 0 | 1 } = {}
   ): Promise<ToolEvent> => {
+    const signal = execution.signal
+      ? AbortSignal.any([hooks.signal, execution.signal])
+      : hooks.signal;
+    const reserveWriterCall = execution.reserveWriterCall ?? 1;
     const invalid = (
       code: string,
       correction = 'Use a configured advisor and a nonempty question. contextRefs may select up to 8 completed advisor or main read call IDs from this run. Remove unavailable references or reduce the selected context.'
@@ -243,13 +251,61 @@ export function createAgentCollaboration(
     const correction = createToolCorrectionPolicy();
     let opaqueState: Json | undefined;
     const deadline = Date.now() + (hooks.timeoutMs ?? target.timeoutMs ?? 120_000);
+    const readTool = async (call: ProviderToolCall, readSignal: AbortSignal) => {
+      readSignal.throwIfAborted();
+      if (results.some((event) => event.callId === call.id))
+        throw new ProviderContractError('ADVISOR_DUPLICATE_TOOL_ID');
+      const event = executeTool(
+        snapshot,
+        { callId: call.id, name: call.name, args: call.arguments },
+        readSignal
+      );
+      await hooks.onToolEvent({
+        callId: `${callId}:${call.id}`,
+        name: 'agents.read',
+        args: { agentId: agent.id, tool: call.name, arguments: event.args },
+        result: event.result,
+        denied: event.denied,
+      });
+      const outcome = correction(event, call.arguments);
+      if (outcome === 'denied') throw new ProviderContractError('ADVISOR_READ_DENIED');
+      results.push(event);
+      if (event.denied) return event;
+      if (event.name === 'knowledge.read') {
+        for (const read of knowledgeReadResults(event)) {
+          const source = read.source;
+          evidence.push({
+            tool: event.name,
+            args: event.args,
+            reference: source.reference ?? null,
+            source,
+            range: read.range,
+            totalChars: read.totalChars,
+            nextOffset: read.nextOffset,
+          });
+        }
+        return event;
+      }
+      const read = event.result as Record<string, unknown> | null;
+      const source = read?.source as Record<string, unknown> | undefined;
+      evidence.push({
+        tool: event.name,
+        args: event.args,
+        reference: source?.reference ?? null,
+        ...(source ? { source } : {}),
+        ...(read?.range ? { range: read.range } : {}),
+        ...(read?.totalChars !== undefined ? { totalChars: read.totalChars } : {}),
+        ...(read?.nextOffset !== undefined ? { nextOffset: read.nextOffset } : {}),
+      });
+      return event;
+    };
     while (true) {
-      if (hooks.signal.aborted) return finish('cancelled', 'CANCELLED');
-      // The final remaining main call belongs to the writer, including after context compaction.
+      if (signal.aborted) return finish('cancelled', 'CANCELLED');
+      // A pending writer needs its next request; a running native writer already owns its turn.
       if (
         (spentByAgent.get(agent.id) ?? 0) >= agent.maxCalls ||
         spentCalls >= config.maxCalls ||
-        totalUsage.modelCalls >= snapshot.settings.maxCalls - 1
+        totalUsage.modelCalls >= snapshot.settings.maxCalls - reserveWriterCall
       )
         return finish('unavailable', 'ADVISOR_CALL_BUDGET_EXHAUSTED');
       if (Date.now() >= deadline) return finish('unavailable', 'ADVISOR_TIMEOUT');
@@ -290,20 +346,66 @@ export function createAgentCollaboration(
           : {}),
       });
       let attempt: string | undefined;
-      const result = await executeProvider(transportConnection(authorized), request, {
-        signal: hooks.signal,
+      const providerExecution = {
+        signal,
         resolveCredential: hooks.resolveCredential,
         executeCodex: hooks.executeCodex,
         vertexRequestTier: hooks.vertexRequestTier,
         timeoutMs: Math.max(1, deadline - Date.now()),
-        onWire: async (wire) => {
+        onWire: async (wire: import('../core/transport.js').WireRecord) => {
           attempt = await hooks.onAttemptStart({ ...wire, agentId: agent.id });
           usage.modelCalls++;
           spentByAgent.set(agent.id, (spentByAgent.get(agent.id) ?? 0) + 1);
           spentCalls++;
           totalUsage.modelCalls++;
         },
-      });
+      };
+      const native =
+        target.connection.protocol === 'codex-app-server-v1' && hooks.executeCodexAgent;
+      let nativeHostError: unknown;
+      let pendingTools = Promise.resolve();
+      const onToolCall: CodexAgentExecutionOptions['onToolCall'] = (call, nativeSignal) => {
+        const pending = pendingTools
+          .then(async () => {
+            const readSignal = AbortSignal.any([signal, nativeSignal]);
+            readSignal.throwIfAborted();
+            await hooks.authorize(structuredClone(target.connection));
+            if (!request.stable.tools.some((tool) => tool.name === call.name))
+              throw new ProviderContractError('ADVISOR_TOOL_NOT_ALLOWED');
+            if (
+              !call.arguments ||
+              typeof call.arguments !== 'object' ||
+              Array.isArray(call.arguments)
+            )
+              throw new ProviderContractError('ADVISOR_INVALID_TOOL_ARGUMENTS');
+            const event = await readTool(
+              { id: call.callId, name: call.name, arguments: call.arguments },
+              readSignal
+            );
+            return { success: !event.denied, text: JSON.stringify(event.result) };
+          })
+          .catch((error) => {
+            if (
+              !(error instanceof ProviderContractError) &&
+              !signal.aborted &&
+              !nativeSignal.aborted
+            )
+              nativeHostError = error;
+            throw error;
+          });
+        pendingTools = pending.then(
+          () => {},
+          () => {}
+        );
+        return pending;
+      };
+      const result = native
+        ? await native(transportConnection(authorized), buildCodexNativeRequest(request), {
+            ...providerExecution,
+            onToolCall,
+          })
+        : await executeProvider(transportConnection(authorized), request, providerExecution);
+      await pendingTools;
       if (attempt === undefined && result.error?.code === 'INPUT_CONTEXT_LIMIT_EXCEEDED')
         return invalid(
           'ADVISOR_CONTEXT_TOO_LARGE',
@@ -316,7 +418,8 @@ export function createAgentCollaboration(
         totalUsage[key] =
           totalUsage[key] === null || value === null ? null : totalUsage[key] + value;
       }
-      if (hooks.signal.aborted) return finish('cancelled', 'CANCELLED');
+      if (nativeHostError) throw nativeHostError;
+      if (signal.aborted) return finish('cancelled', 'CANCELLED');
       if (result.status !== 'tool_calls')
         return result.status === 'completed' && result.text.trim()
           ? finish('completed', null, result.text)
@@ -333,49 +436,13 @@ export function createAgentCollaboration(
           return finish('unavailable', 'ADVISOR_TOOL_NOT_ALLOWED');
       }
       for (const call of result.toolCalls) {
-        if (hooks.signal.aborted) return finish('cancelled', 'CANCELLED');
-        const event = executeTool(
-          snapshot,
-          { callId: call.id, name: call.name, args: call.arguments },
-          hooks.signal
-        );
-        await hooks.onToolEvent({
-          callId: `${callId}:${call.id}`,
-          name: 'agents.read',
-          args: { agentId: agent.id, tool: call.name, arguments: event.args },
-          result: event.result,
-          denied: event.denied,
-        });
-        const outcome = correction(event, call.arguments);
-        if (outcome === 'denied') return finish('unavailable', 'ADVISOR_READ_DENIED');
-        results.push(event);
-        if (event.denied) continue;
-        if (event.name === 'knowledge.read') {
-          for (const read of knowledgeReadResults(event)) {
-            const source = read.source;
-            evidence.push({
-              tool: event.name,
-              args: event.args,
-              reference: source.reference ?? null,
-              source,
-              range: read.range,
-              totalChars: read.totalChars,
-              nextOffset: read.nextOffset,
-            });
-          }
-          continue;
+        if (signal.aborted) return finish('cancelled', 'CANCELLED');
+        try {
+          await readTool(call, signal);
+        } catch (error) {
+          if (error instanceof ProviderContractError) return finish('unavailable', error.code);
+          throw error;
         }
-        const read = event.result as Record<string, unknown> | null;
-        const source = read?.source as Record<string, unknown> | undefined;
-        evidence.push({
-          tool: event.name,
-          args: event.args,
-          reference: source?.reference ?? null,
-          ...(source ? { source } : {}),
-          ...(read?.range ? { range: read.range } : {}),
-          ...(read?.totalChars !== undefined ? { totalChars: read.totalChars } : {}),
-          ...(read?.nextOffset !== undefined ? { nextOffset: read.nextOffset } : {}),
-        });
       }
       opaqueState = result.opaqueState;
     }

@@ -47,16 +47,7 @@ test.skipIf(process.env.UIMORI_CODEX_PREFLIGHT !== '1')(
       const schemaDirectory = join(root, 'schema');
       await runFile(
         executable!,
-        [
-          'app-server',
-          '--strict-config',
-          '-c',
-          'code_mode.excluded_tool_namespaces=["functions"]',
-          'generate-json-schema',
-          '--experimental',
-          '--out',
-          schemaDirectory,
-        ],
+        ['app-server', 'generate-json-schema', '--experimental', '--out', schemaDirectory],
         execution
       );
       const schema = async (file: string): Promise<Schema> =>
@@ -105,7 +96,6 @@ test.skipIf(process.env.UIMORI_CODEX_PREFLIGHT !== '1')(
             protocol: {
               experimentalDynamicTools: true,
               toolSpec: 'namespace/function',
-              defaultCodeModeNamespaceExcluded: true,
               clientToolCall: true,
               textToolResponse: true,
             },

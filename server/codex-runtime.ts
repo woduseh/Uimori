@@ -27,6 +27,8 @@ import {
 } from '../core/illustration.js';
 import {
   buildCodexDescriptor,
+  prepareCodexNative,
+  type CodexNativeRequest,
   buildCodexTurn,
   CODEX_BUILTIN_TOOLS,
   CODEX_ENDPOINT,
@@ -112,20 +114,16 @@ export type CodexRuntimeOptions = {
   launch?: { command: string; args: string[]; env?: NodeJS.ProcessEnv };
 };
 export type CodexExecutionOptions = ProviderExecutionOptions;
-export type CodexAgentRequest = {
-  modelId: string;
-  contextBudget?: ContextBudget;
-  reasoningEffort?: ModelGeneration['reasoningEffort'];
-  baseInstructions?: string;
-  developerInstructions: string;
-  text: string;
-  tools: { name: string; description: string; inputSchema: Json }[];
-};
+export type CodexAgentRequest = CodexNativeRequest;
+/** A host result either continues the turn or completes a validated final submission. */
+export type CodexToolOutcome =
+  | { success: boolean; text: string; complete?: false }
+  | { success: true; text: string; complete: true };
 export type CodexAgentExecutionOptions = CodexExecutionOptions & {
   onToolCall(
     call: { name: string; arguments: Json; callId: string },
     signal: AbortSignal
-  ): Promise<{ success: boolean; text: string }>;
+  ): Promise<CodexToolOutcome>;
   /** Intermediate public assistant messages, separate from final-answer streaming. */
   onCommentary?: (text: string) => void | Promise<void>;
 };
@@ -757,44 +755,10 @@ export class CodexRuntime implements CodexRuntimeService {
     try {
       assertCodexConnection(connection);
       if (!boundedString(request.modelId)) error('CODEX_INVALID_MODEL');
-      const toolNames = new Map<string, string>();
-      const namespaceTools = request.tools.map((tool): CodexDynamicFunctionTool => {
-        const name = `uimori_${tool.name.replace(/[^a-zA-Z0-9_-]/gu, '_')}`;
-        if (!boundedString(tool.name, 57) || name.length > 64 || toolNames.has(name))
-          error('CODEX_INVALID_TOOLS');
-        toolNames.set(name, tool.name);
-        return {
-          type: 'function',
-          name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-        };
-      });
-      const dynamicTools: CodexDynamicTool[] = [
-        {
-          type: 'namespace',
-          name: CODEX_HOST_TOOL_NAMESPACE,
-          description: 'Scoped Uimori application reads and saved changes for the current task.',
-          tools: namespaceTools,
-        },
-      ];
-      const descriptor: Json = {
-        method: 'turn/start',
-        role: 'helper',
-        model: request.modelId,
-        ...(request.reasoningEffort ? { effort: request.reasoningEffort } : {}),
-        ...(request.baseInstructions ? { baseInstructions: request.baseInstructions } : {}),
-        developerInstructions: request.developerInstructions,
-        input: [{ type: 'text', text: request.text }],
-        dynamicTools,
-        builtinTools: CODEX_BUILTIN_TOOLS,
-        environmentAccess: false,
-        ephemeral: true,
-        nativeAgentLoop: true,
-      };
+      const { descriptor, dynamicTools, toolNames } = prepareCodexNative(request);
       assertContextBudget(descriptor, request.contextBudget);
       plan = {
-        role: 'helper',
+        role: request.role ?? 'helper',
         modelId: request.modelId,
         effort: request.reasoningEffort,
         baseInstructions: request.baseInstructions,
@@ -816,7 +780,8 @@ export class CodexRuntime implements CodexRuntimeService {
     } catch (caught) {
       return failure(options.signal.aborted ? 'CANCELLED' : safeError(caught));
     }
-    const outcome = await this.runTurn(connection, plan, options, this.textSlots);
+    const slots = this.hostToolContext.getStore()?.active ? this.childTextSlots : this.textSlots;
+    const outcome = await this.runTurn(connection, plan, options, slots);
     if (!outcome.ok) return failure(outcome.code, outcome.usage);
     if (!outcome.output.trim()) return failure('CODEX_INVALID_OUTPUT', outcome.usage);
     return {
@@ -1049,6 +1014,7 @@ export class CodexRuntime implements CodexRuntimeService {
     const toolAbort = new AbortController();
     const toolSignal = AbortSignal.any([signal, toolAbort.signal]);
     let ended = false;
+    let submitted: string | undefined;
     let activeTools = 0;
     let progress = Promise.resolve();
     let progressError: unknown;
@@ -1183,7 +1149,7 @@ export class CodexRuntime implements CodexRuntimeService {
           namespace: CODEX_HOST_TOOL_NAMESPACE,
           toolNames: [...names.keys()],
           handle: async (call) => {
-            if (ended || toolSignal.aborted) return error('CANCELLED');
+            if (ended || submitted !== undefined || toolSignal.aborted) return error('CANCELLED');
             activeTools++;
             const context = { active: true };
             try {
@@ -1198,6 +1164,17 @@ export class CodexRuntime implements CodexRuntimeService {
                 )
               );
               if (ended || toolSignal.aborted) return error('CANCELLED');
+              if (result.complete) {
+                if (!result.text.trim() || result.text.length > 2_000_000)
+                  return error('CODEX_INVALID_OUTPUT');
+                // Detach before interrupting: never return a tool result that starts another sample.
+                submitted = result.text;
+                offTools();
+                await stopProcess();
+                if (signal.aborted || revision !== this.revision) return error(abortCode());
+                resolveTurn!();
+                return;
+              }
               return {
                 contentItems: [{ type: 'inputText', text: result.text }],
                 success: result.success,
@@ -1215,11 +1192,14 @@ export class CodexRuntime implements CodexRuntimeService {
       }
       // Attach the rejection handler before issuing RPC: completion may precede its reply.
       void completed.catch(() => {});
-      offExit = process.onExit(() =>
-        rejectTurn(new ProviderContractError('CODEX_EXECUTION_INTERRUPTED'))
-      );
+      offExit = process.onExit(() => {
+        if (submitted === undefined)
+          rejectTurn(new ProviderContractError('CODEX_EXECUTION_INTERRUPTED'));
+      });
       offNotification = process.onNotification((method, params) => {
         if (ended) return;
+        // Keep reported usage during submission shutdown, but accept no later output or actions.
+        if (submitted !== undefined && method !== 'thread/tokenUsage/updated') return;
         if (method === 'uimori/unsupportedRequest') {
           rejectTurn(new ProviderContractError('CODEX_TOOL_NOT_ALLOWED'));
           return;
@@ -1403,7 +1383,13 @@ export class CodexRuntime implements CodexRuntimeService {
       if (progressError) throw progressError;
       if (signal.aborted || revision !== this.revision) return fail(abortCode(), usage);
       if (toolSignal.aborted) return fail('CODEX_EXECUTION_INTERRUPTED', usage);
-      return { ok: true, output: outputItem ? output : legacyOutput, usage };
+      if (submitted !== undefined)
+        usage.raw = {
+          ...(object(usage.raw) ? (usage.raw as Record<string, Json>) : {}),
+          completion: 'host-submission',
+          usageComplete: false,
+        };
+      return { ok: true, output: submitted ?? (outputItem ? output : legacyOutput), usage };
     } catch (caught) {
       return fail(
         options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : safeError(caught),

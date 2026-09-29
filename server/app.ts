@@ -168,6 +168,25 @@ export async function createApp(options: AppOptions): Promise<App> {
       },
     });
   };
+  const executeCodexAgent: CodexRuntimeService['executeAgent'] = (
+    connection,
+    request,
+    execution
+  ) => {
+    authorizeCodex(connection);
+    return codex.executeAgent(connection, request, {
+      ...execution,
+      beforeTurn: async () => {
+        authorizeCodex(connection);
+        await execution.beforeTurn?.();
+      },
+      onWire: async (wire) => {
+        authorizeCodex(connection);
+        await execution.onWire?.(wire);
+        authorizeCodex(connection);
+      },
+    });
+  };
   /** Illustration turns share the Codex login and the same live-connection authorization. */
   const generateCodexImage = (
     connection: Connection,
@@ -282,21 +301,7 @@ export async function createApp(options: AppOptions): Promise<App> {
 
     resolveCredential,
     executeCodex,
-    executeCodexAgent: (connection, request, execution) => {
-      authorizeCodex(connection);
-      return codex.executeAgent(connection, request, {
-        ...execution,
-        beforeTurn: async () => {
-          authorizeCodex(connection);
-          await execution.beforeTurn?.();
-        },
-        onWire: async (wire) => {
-          authorizeCodex(connection);
-          await execution.onWire?.(wire);
-          authorizeCodex(connection);
-        },
-      });
-    },
+    executeCodexAgent,
     vertexRequestTier: options.vertexRequestTier,
     signal: stopping.signal,
     track,
@@ -642,6 +647,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     requireModel,
     resolveCredential,
     executeCodex,
+    executeCodexAgent,
     batchPollIntervalMs: options.testMode ? 5 : 10_000,
     vertexRequestTier: options.vertexRequestTier,
     jevCredential: jevCredentials.resolve,

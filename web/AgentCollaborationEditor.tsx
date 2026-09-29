@@ -177,7 +177,8 @@ export function AgentCollaborationEditor({
                     onChange={(event) => update({ maxCalls: Number(event.target.value) })}
                   />
                   <small id={`${id}-budget-note`} className="muted">
-                    모든 에이전트가 나눠 쓰는 한도예요. 채팅의 전체 호출 한도에도 포함돼요.
+                    모든 에이전트가 나눠 쓰는 한도예요. 채팅의 전체 호출 한도에도 포함돼요. Codex
+                    조언은 여러 자료 읽기를 포함한 실행 1건으로 세며 내부 추론 횟수는 미확인이에요.
                   </small>
                 </label>
               </details>
