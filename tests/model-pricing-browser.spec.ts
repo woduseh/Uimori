@@ -168,7 +168,29 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     costUsd: 0.125,
     priceRevision: null,
     error: null,
-    request: { protocol: 'anthropic-messages-v1' },
+    request: {
+      protocol: 'anthropic-messages-v1',
+      requestLore: {
+        status: 'partial',
+        entries: [
+          {
+            id: 'package:harbor:bot:lore:map',
+            title: '항구의 지도와 오래된 등대',
+            source: { contentId: 'harbor', sourceName: '항구 이야기' },
+            via: 'pinned',
+            delivery: 'full',
+          },
+          { id: 'letter', title: '등대지기의 편지', via: 'retained', delivery: 'excerpt' },
+          { id: 'voyage', title: '이전 항해', via: 'tool-result', delivery: 'summary' },
+          {
+            id: 'native',
+            title: '프롬프트에서 가공한 로어',
+            via: 'pinned',
+            delivery: 'unverified',
+          },
+        ],
+      },
+    },
     response: {},
     rawUsage: {
       input_tokens: 1000,
@@ -203,7 +225,11 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     ...known,
     id: 'pricecost-unknown',
     modelId: 'unpriced-fixture',
+    inputTokens: null,
+    outputTokens: 0,
     costUsd: null,
+    rawUsage: null,
+    request: { protocol: 'anthropic-messages-v1' },
     pricingSnapshot: undefined,
     estimatedCost: {
       status: 'unavailable',
@@ -265,6 +291,25 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
         .filter({ has: page.getByRole('rowheader', { name: '원문', exact: true }) })
     ).toContainText('미확인');
     await usage.locator('summary').filter({ hasText: '원문 · priced-fixture · completed' }).click();
+    const tokenUsage = usage.getByRole('definition');
+    await expect(tokenUsage.filter({ hasText: /^1,500토큰$/ })).toBeVisible();
+    await expect(tokenUsage.filter({ hasText: /^100토큰$/ })).toBeVisible();
+    const lore = usage.getByRole('region', { name: '요청에 포함된 로어' });
+    await expect(lore).toContainText('포함된 로어 · 3건');
+    await expect(lore).toContainText('항구의 지도와 오래된 등대');
+    await expect(lore).toContainText('출처: 항구 이야기');
+    await expect(lore).toContainText('전체 본문');
+    await expect(lore).toContainText('읽은 구간');
+    await expect(lore).toContainText('요약만');
+    await expect(lore.getByText('프롬프트에서 가공한 로어', { exact: true })).toBeHidden();
+    await lore.getByText('포함 여부 미확인 · 1건', { exact: true }).click();
+    await expect(lore.getByText('프롬프트에서 가공한 로어', { exact: true })).toBeVisible();
+    await lore.screenshot({ path: info.outputPath(`request-lore-${width}.png`) });
+    const raw = usage
+      .locator('details')
+      .filter({ has: page.getByText('원시 요청·응답 보기', { exact: true }) })
+      .last();
+    await expect(raw).not.toHaveAttribute('open');
     const pricing = usage.getByRole('region', { name: '호출 추정 비용' });
     await expect(pricing).toContainText('공급자 보고 비용: $0.125');
     await expect(pricing).toContainText('추정 비용: $0.004995');
@@ -286,6 +331,12 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
       .filter({ hasText: '원문 · unpriced-fixture · completed' })
       .click();
     const unavailable = usage.getByRole('region', { name: '호출 추정 비용' }).last();
+    const unknownTokens = usage.getByLabel('호출 토큰 사용량').last();
+    await expect(unknownTokens).toContainText('미확인');
+    await expect(unknownTokens).toContainText('0토큰');
+    await expect(usage.getByRole('region', { name: '요청에 포함된 로어' }).last()).toContainText(
+      '이 요청에는 로어 포함 기록이 없어요. 로어를 보내지 않았다는 뜻은 아니에요.'
+    );
     await expect(unavailable).toContainText('공급자 보고 비용: 미확인');
     await expect(unavailable).toContainText('추정 비용: 미확인');
     await expect(unavailable).toContainText('이 호출에 사용할 요금을 확인하지 못했어요');

@@ -96,6 +96,13 @@ async function capture(value: AuxiliaryBundle) {
   expect(value).toEqual(before);
   expect(observed.wire).toHaveLength(2);
   expect(observed.finishes).toHaveLength(2);
+  const attempt = observed.wire.find((wire) => wire.role === 'translation')!;
+  if (value.translationPolicy?.contextMode === 'source-only')
+    expect(attempt.requestLore).toEqual({ status: 'complete', entries: [] });
+  expect(attempt.body).toEqual(buildCodexDescriptor(requests[0]));
+  expect(attempt.bodySha256).toBe(digest(attempt.body));
+  expect(attempt.stablePrefixSha256).toBe(digest(requests[0].stable));
+  expect(attempt.body).not.toHaveProperty('requestLore');
   return requests[0];
 }
 const occurrences = (value: unknown, marker: string) =>

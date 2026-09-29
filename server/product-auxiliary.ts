@@ -1,4 +1,5 @@
 import { modelRequestFields } from '../core/model-request-fields.js';
+import { requestLore } from './request-lore.js';
 import { prepareNativeRisuTranslationPrompt } from './risu-native-preset.js';
 import {
   nativeRisuSnapshotNeedsRefresh,
@@ -449,7 +450,18 @@ export async function runAuxiliaryJob(
         target.timeoutMs ??
         (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
       onWire: async (wire) => {
-        attemptId = await hooks.onAttemptStart(wire);
+        attemptId = await hooks.onAttemptStart(
+          job.kind === 'translation'
+            ? {
+                ...wire,
+                requestLore: requestLore(executionSnapshot, body, wire, {
+                  pinned: input.context.packages?.pinned ?? [],
+                  catalog: input.catalog,
+                  sourceOnly: mode === 'source-only',
+                }),
+              }
+            : wire
+        );
         lastAttemptId = attemptId;
       },
     });

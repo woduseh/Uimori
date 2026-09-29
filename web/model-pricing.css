@@ -80,6 +80,30 @@
 .attempt-pricing p {
   margin: 0;
 }
+.attempt-token-summary {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.attempt-usage {
+  padding-block: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.attempt-usage dd {
+  font-variant-numeric: tabular-nums;
+}
+.attempt-lore {
+  margin-block: 12px;
+  overflow-wrap: anywhere;
+}
+.attempt-lore h4 {
+  margin: 0;
+  color: var(--text);
+}
+.attempt-raw > summary {
+  padding-block: 8px;
+}
 @media (max-width: 480px) {
   .model-pricing-input-grid {
     grid-template-columns: minmax(0, 1fr);

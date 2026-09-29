@@ -132,6 +132,8 @@ export type ProviderResult = {
   };
 };
 export type WireRecord = {
+  /** Host-only reference delivery evidence; absent on older or unsupported attempts. */
+  requestLore?: import('./request-lore.js').RequestLore;
   nativeScript?: { method: 'LLM' | 'axLLM' | 'simpleLLM'; event: string };
   /** Host-only typed judgment attribution; this is not a generative provider protocol. */
   judgment?: {
