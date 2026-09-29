@@ -58,7 +58,7 @@ function runtime(): CodexRuntimeService {
     planType: null,
     limits: [],
   });
-  return {
+  const runtimeValue: CodexRuntimeService = {
     status,
     login: status,
     cancelLogin: status,
@@ -68,8 +68,18 @@ function runtime(): CodexRuntimeService {
     generateImage: async () => {
       throw new Error('Unexpected generateImage');
     },
-    executeAgent: async () => {
-      throw new Error('Unexpected executeAgent');
+    executeAgent: async (connection, nativeRequest, options) => {
+      const packet = JSON.parse(nativeRequest.text);
+      return runtimeValue.execute(
+        connection,
+        {
+          role: nativeRequest.role ?? 'helper',
+          modelId: nativeRequest.modelId,
+          stable: { contract: packet.taskContract, tools: nativeRequest.tools },
+          input: packet.input,
+        },
+        options
+      );
     },
     execute: async (connection, request, options) => {
       const body = { method: 'turn/start', role: request.role, model: request.modelId };
@@ -102,6 +112,7 @@ function runtime(): CodexRuntimeService {
       } satisfies ProviderResult;
     },
   };
+  return runtimeValue;
 }
 
 test('Codex preflight warns through JEV for main and translation while remaining advisory', async () => {
