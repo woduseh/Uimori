@@ -5,6 +5,12 @@
 .app-shell {
   transition: grid-template-columns var(--motion-panel) ease;
 }
+/* Desktop width choices do not change the collapsed rail or mobile drawer. */
+@media (min-width: 1024px) {
+  :root {
+    --nav-w: var(--sidebar-w, 248px);
+  }
+}
 .app-shell.sidebar-collapsed {
   --nav-w: var(--rail-w);
 }

@@ -47,9 +47,7 @@ test('LCOM01 compact library keeps row actions aligned across mobile and desktop
   await page.goto('/');
   const panel = page.getByTestId('library-panel');
   await panel.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(stamp);
-  await panel.getByLabel('목록 관리', { exact: true }).click();
   await panel.getByRole('button', { name: '목록', exact: true }).click();
-  await panel.getByLabel('목록 관리', { exact: true }).press('Escape');
   for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
     const row = panel.locator('.library-list-item');
@@ -180,11 +178,21 @@ test('LCOM03 selection replaces list tools and retains search, view and card rat
   const search = panel.getByRole('searchbox', { name: '서재 검색', exact: true });
   await search.fill(title);
   const options = panel.getByLabel('목록 관리', { exact: true });
-  await options.click();
-  await expect(panel.getByRole('button', { name: '카드', exact: true })).toHaveAttribute(
+  const views = panel.getByRole('group', { name: '자료 보기', exact: true });
+  await expect(views).toBeVisible();
+  await expect(views.getByRole('button', { name: '카드', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true'
   );
+  await expect(views.getByRole('button', { name: '카드', exact: true })).toHaveAttribute(
+    'title',
+    '카드 보기'
+  );
+  await expect(views.getByRole('button', { name: '목록', exact: true })).toHaveAttribute(
+    'title',
+    '목록 보기'
+  );
+  await options.click();
   const ratioOptions = panel.getByRole('group', { name: '카드 비율', exact: true });
   await expect(ratioOptions).toBeVisible();
   await expect(ratioOptions.getByRole('button')).toHaveText(['1:1', '2:3', '3:4', '9:16']);
@@ -192,7 +200,13 @@ test('LCOM03 selection replaces list tools and retains search, view and card rat
     'aria-pressed',
     'true'
   );
-  await panel.getByRole('button', { name: '목록', exact: true }).click();
+  await options.press('Escape');
+  const listView = views.getByRole('button', { name: '목록', exact: true });
+  await listView.focus();
+  await listView.press('Enter');
+  await expect(listView).toBeFocused();
+  await expect(listView).toHaveAttribute('aria-pressed', 'true');
+  await options.click();
   await expect(panel.getByRole('group', { name: '카드 비율', exact: true })).toHaveCount(0);
   await options.press('Escape');
   await page.reload();
@@ -202,6 +216,7 @@ test('LCOM03 selection replaces list tools and retains search, view and card rat
   await panel.getByRole('button', { name: '선택', exact: true }).click();
   await expect(search).toHaveCount(0);
   await expect(options).toHaveCount(0);
+  await expect(views).toHaveCount(0);
   await expect(panel.getByRole('button', { name: '완료', exact: true })).toBeFocused();
   await panel.getByRole('checkbox', { name: `${item.title} 선택`, exact: true }).check();
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
@@ -216,8 +231,8 @@ test('LCOM03 selection replaces list tools and retains search, view and card rat
   await panel.getByRole('button', { name: '완료', exact: true }).click();
   await expect(search).toHaveValue(title);
   await expect(options).toBeFocused();
-  await options.press('Enter');
   await panel.getByRole('button', { name: '카드', exact: true }).click();
+  await options.press('Enter');
   for (const [ratio, expected] of [
     ['1:1', 1],
     ['2:3', 2 / 3],

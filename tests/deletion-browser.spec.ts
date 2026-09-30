@@ -48,9 +48,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   const item = await content(request);
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   const panel = await library(page, '봇');
-  await panel.getByLabel('목록 관리', { exact: true }).click();
   await panel.getByRole('button', { name: '카드', exact: true }).click();
-  await panel.getByLabel('목록 관리', { exact: true }).click();
   await page.emulateMedia({ colorScheme: 'dark' });
   const card = panel
     .locator('.library-card')
@@ -72,9 +70,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   try {
     const touchPage = await touchContext.newPage();
     const touchPanel = await library(touchPage, '봇');
-    await touchPanel.getByLabel('목록 관리', { exact: true }).click();
     await touchPanel.getByRole('button', { name: '카드', exact: true }).click();
-    await touchPanel.getByLabel('목록 관리', { exact: true }).click();
     await touchPanel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
     await expect(
       touchPanel.getByRole('button', { name: `${item.title} 삭제`, exact: true })

@@ -465,7 +465,7 @@
     color: var(--error);
   }
 }
-/* Tool row: folder chooser, search, list options. */
+/* Tool row: folders, search, visible view choices and secondary list options. */
 .library-toolbar {
   display: flex;
   align-items: center;
@@ -506,6 +506,7 @@
 }
 .library-view-buttons {
   display: flex;
+  flex: none;
   gap: 3px;
 }
 .library-view-buttons button[aria-pressed="true"],
@@ -942,7 +943,7 @@
   .library-page .library-workspace {
     gap: 8px;
   }
-  /* Compact widths: the folder chooser takes the first row, search and list options the next. */
+  /* Compact widths: folders and creation first; search and view controls next. */
   .library-page .library-toolbar {
     flex-wrap: wrap;
   }
@@ -953,12 +954,15 @@
     order: 0;
   }
   .library-page .library-toolbar .library-search-field {
-    flex: 1 1 calc(100% - 64px);
+    flex: 1 1 calc(100% - 160px);
     min-width: 0;
     order: 1;
   }
-  .library-page .library-toolbar .library-list-options {
+  .library-page .library-toolbar .library-view-buttons {
     order: 2;
+  }
+  .library-page .library-toolbar .library-list-options {
+    order: 3;
   }
   .library-page .library-list-item {
     flex-wrap: nowrap;

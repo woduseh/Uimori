@@ -256,7 +256,11 @@ const settingsCategories: SettingsCategory[] = [
     icon: SettingsIcon,
     destinations: [
       { label: '앱과 알림', terms: '알림 푸시 설치 PWA', anchor: 'services' },
-      { label: '화면과 입력', terms: '화면 테마 Enter 보내기 도우미 패널 폭', anchor: 'display' },
+      {
+        label: '화면과 입력',
+        terms: '화면 테마 Enter 보내기 도우미 패널 폭 사이드바 좌측 탐색 크기',
+        anchor: 'display',
+      },
       {
         label: '원고 읽기',
         terms: '글자 크기 글꼴 본문 폭 행간 줄 간격 문단 간격 번역 보기 응답 표시 실시간 완료',
@@ -321,6 +325,8 @@ export function AppSettingsPanel({
   setEnterSend,
   panelWidth,
   setPanelWidth,
+  sidebarWidth,
+  setSidebarWidth,
   readingSettings,
   onClose,
   onEditPrompt,
@@ -333,6 +339,8 @@ export function AppSettingsPanel({
   setEnterSend: (value: boolean) => void;
   panelWidth: number;
   setPanelWidth: (value: number) => void;
+  sidebarWidth: number;
+  setSidebarWidth: (value: number) => void;
   readingSettings: ReactNode;
   onClose: () => void;
   onEditPrompt?: (presetId?: string) => void;
@@ -620,6 +628,22 @@ export function AppSettingsPanel({
                           ? 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.'
                           : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'}{' '}
                         한글 조합 중에는 보내지 않아요.
+                      </small>
+                      <label>
+                        좌측 사이드바 폭
+                        <select
+                          aria-label="좌측 사이드바 폭"
+                          value={sidebarWidth}
+                          onChange={(event) => setSidebarWidth(Number(event.target.value))}
+                        >
+                          <option value={248}>보통</option>
+                          <option value={320}>넓게</option>
+                          <option value={400}>매우 넓게</option>
+                        </select>
+                      </label>
+                      <small>
+                        데스크톱에서 펼친 왼쪽 탐색만 바뀌어요. 공간이 부족하면 본문 폭을 지키도록
+                        줄어들어요.
                       </small>
                       <label>
                         도우미·창작 옵션 패널 폭

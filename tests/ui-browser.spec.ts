@@ -1653,7 +1653,8 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       else await openChatSettings(page);
       const dialog = page.getByRole('dialog', { name: title, exact: true });
       await expect(dialog).toBeVisible();
-      // The task list adds its inspector after loading; wait until the tab order is ready.
+      // Loaded owners must replace their placeholders before checking final geometry and focus.
+      if (title === '채팅 설정') await expect(dialog.locator('.chat-settings-panel')).toBeVisible();
       if (title === '작업 현황') await expect(dialog.getByTestId('usage-inspector')).toBeVisible();
       // A dialog that re-renders as its content loads can report no box for one frame.
       let measured = await dialog.boundingBox();
