@@ -382,10 +382,8 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
           ).status()
         ).toBe(200);
         await phone.evaluate(() => {
-          const button = [...document.querySelectorAll('button')].find(
-            (b) => b.textContent?.trim() === '원문 생성'
-          );
-          button?.click();
+          // The send control is icon-only; its accessible label owns the action name.
+          document.querySelector<HTMLButtonElement>('button[aria-label="원문 생성"]')?.click();
         });
         await expect(
           phone.getByRole('heading', { name: '개인 작업실에 연결', exact: true })
