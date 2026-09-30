@@ -13,9 +13,9 @@ import {
   type ReactNode,
   type SetStateAction,
 } from 'react';
-import type { EditorContext, ResourceKind, ResourceModel } from '../core/resource-editing.js';
-import { ResourceEditorSession, type EditorDocument } from './resource-editor-session.js';
-import { sameEditorValue } from './editor-values.js';
+import type { EditorContext, ResourceModel } from '../core/resource-editing.js';
+import type { ResourceEditorSession, EditorState } from './resource-editor-session.js';
+import { libraryChangedKey } from './api.js';
 import './resource-editor.css';
 
 const sessions = new Map<symbol, ResourceEditorSession>();
@@ -34,7 +34,7 @@ function context(session: ResourceEditorSession | null): ActiveEditorContext | n
     targetId: state.document.targetId,
     revision: state.document.baseRevision,
     title: 'title' in state.local.model ? state.local.model.title : '현재 프롬프트',
-    editorKey: session.options.editorKey,
+    editorKey: session.editorKey,
     dirty: state.dirty,
     model: state.local.model,
   };
@@ -43,7 +43,7 @@ export const getActiveEditorContext = () => context(activeSession());
 export const captureActiveEditorContext = () => activeSession()?.captureForHelper() ?? null;
 export async function discardActiveEditor(editorKey?: string) {
   const session = editorKey
-    ? [...sessions.values()].find((item) => item.options.editorKey === editorKey)
+    ? [...sessions.values()].find((item) => item.editorKey === editorKey)
     : activeSession();
   await session?.discard();
 }
@@ -63,99 +63,73 @@ export const saveActiveEditor = () => {
   return (session && saveCommands.get(session)?.()) || Promise.resolve(false);
 };
 
-type Options = {
-  editorKey: string;
-  kind: ResourceKind;
-  targetId: string | null;
-  model: ResourceModel;
-  enabled?: boolean;
-  onRestore: (document: EditorDocument) => void;
+type ResourceEditorValue = {
+  session: ResourceEditorSession;
+  state: EditorState;
+  activate: () => void;
 };
-export function useResourceEditor(options: Options) {
-  const latest = useRef(options);
-  latest.current = options;
-  const session = useMemo(
-    () =>
-      new ResourceEditorSession({
-        editorKey: options.editorKey,
-        kind: options.kind,
-        targetId: options.targetId,
-        initialModel: latest.current.model,
-      }),
-    [options.editorKey, options.kind, options.targetId]
-  );
+
+/** Subscribe to the owner; model updates never make a round trip through parent state. */
+export function useResourceEditor<Model extends ResourceModel>(session: ResourceEditorSession) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
-  const token = useMemo(() => Symbol(options.editorKey), [options.editorKey]);
-  const observed = useRef(options.model);
-  const observedRestore = useRef(0);
-  const pendingRestore = useRef<{ version: number; model: ResourceModel } | null>(null);
+  const token = useMemo(() => Symbol(session.editorKey), [session]);
   useEffect(() => {
-    if (options.enabled === false) return;
     sessions.set(token, session);
     focused = token;
     changed();
     const unsubscribe = session.subscribe(changed);
-    void session.open().catch(() => {});
+    const reopening = session.snapshot().ready;
+    void session
+      .open()
+      .then(() => {
+        if (reopening) return session.refresh();
+      })
+      .catch(() => {});
     const refresh = () => {
-      void session.refresh().catch(() => {});
+      if (!session.snapshot().saving) void session.refresh().catch(() => {});
+    };
+    const storage = (event: StorageEvent) => {
+      if (event.key === libraryChangedKey) refresh();
     };
     window.addEventListener('focus', refresh);
     window.addEventListener('uimori-helper-updated', refresh);
+    window.addEventListener('uimori-resource-saved', refresh);
+    window.addEventListener('storage', storage);
+    if (session.options.kind === 'prompt-workspace')
+      window.addEventListener('prompt-workspace-changed', refresh);
     return () => {
       window.removeEventListener('focus', refresh);
       window.removeEventListener('uimori-helper-updated', refresh);
+      window.removeEventListener('uimori-resource-saved', refresh);
+      window.removeEventListener('storage', storage);
+      window.removeEventListener('prompt-workspace-changed', refresh);
       sessions.delete(token);
       unsubscribe();
       if (focused === token) focused = null;
       session.dispose();
       changed();
     };
-  }, [session, token, options.enabled]);
-  useEffect(() => {
-    const restored = session.snapshot();
-    if (restored.ready && restored.restoreVersion === state.restoreVersion) {
-      observed.current = restored.local.model;
-      pendingRestore.current = {
-        version: restored.restoreVersion,
-        model: restored.local.model,
-      };
-      latest.current.onRestore({ ...restored.document, ...restored.local });
-    }
-  }, [session, state.restoreVersion]);
-  useEffect(() => {
-    if (observedRestore.current !== state.restoreVersion) {
-      observedRestore.current = state.restoreVersion;
-      return;
-    }
-    if (!state.ready) return;
-    const pending = pendingRestore.current;
-    if (pending?.version === state.restoreVersion) {
-      // Resource adoption can render before the parent has reflected onRestore. Do not feed
-      // the stale parent model back into the freshly adopted session during that gap.
-      if (sameEditorValue(pending.model, options.model)) {
-        observed.current = options.model;
-        pendingRestore.current = null;
-      }
-      return;
-    }
-    if (observed.current !== options.model) {
-      observed.current = options.model;
-      session.setModel(options.model);
-    }
-  }, [session, options.model, state.ready, state.restoreVersion]);
+  }, [session, token]);
   const activate = useCallback(() => {
     focused = token;
     changed();
   }, [token]);
-  return { session, state, activate };
+  const setModel = useCallback<Dispatch<SetStateAction<Model>>>(
+    (action) =>
+      session.setModel((current) =>
+        typeof action === 'function' ? action(current as Model) : action
+      ),
+    [session]
+  );
+  return { session, state, activate, model: state.local.model as Model, setModel };
 }
 
-const EditorContextValue = createContext<ReturnType<typeof useResourceEditor> | null>(null);
+const EditorContextValue = createContext<ResourceEditorValue | null>(null);
 export function ResourceEditorProvider({
   value,
   children,
 }: {
-  value: ReturnType<typeof useResourceEditor>;
+  value: ResourceEditorValue;
   children: ReactNode;
 }) {
   return (
@@ -256,7 +230,7 @@ export function ResourceEditorStatus({
   value,
   hideSyncError = false,
 }: {
-  value: ReturnType<typeof useResourceEditor>;
+  value: ResourceEditorValue;
   hideSyncError?: boolean;
 }) {
   const { state, session } = value;
@@ -287,7 +261,13 @@ export function ResourceEditorStatus({
     </div>
   );
 }
-export function ResourceEditorActions({ value }: { value: ReturnType<typeof useResourceEditor> }) {
+export function ResourceEditorActions({
+  value,
+  hideSyncError = false,
+}: {
+  value: ResourceEditorValue;
+  hideSyncError?: boolean;
+}) {
   const [error, setError] = useState('');
   const action = (work: () => Promise<unknown>) => {
     setError('');
@@ -295,7 +275,7 @@ export function ResourceEditorActions({ value }: { value: ReturnType<typeof useR
   };
   return (
     <div className="resource-editor-actions">
-      <ResourceEditorStatus value={value} />
+      <ResourceEditorStatus value={value} hideSyncError={hideSyncError} />
       {value.state.dirty && (
         <button
           type="button"
@@ -311,6 +291,7 @@ export function ResourceEditorActions({ value }: { value: ReturnType<typeof useR
           className="ghost"
           label="직전 저장 되돌리기"
           icon={UndoIcon}
+          disabled={value.state.saving}
           onClick={() => action(() => value.session.undo())}
         />
       )}

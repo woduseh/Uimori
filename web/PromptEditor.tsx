@@ -1,4 +1,3 @@
-import { api } from './api.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
@@ -7,14 +6,15 @@ import { CopyIcon, SaveIcon } from './ui-icons.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
 import { RisuExportButton } from './RisuExportButton.js';
-import type { ContentRef, Library, PromptPreset, PromptRole } from '../core/product.js';
+import type {
+  ContentRef,
+  Library,
+  PromptPreset,
+  PromptPresetSummary,
+  PromptRole,
+} from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
-import {
-  validateRisuPrompt,
-  reconcilePromptValues,
-  type ChatPromptControls,
-  type RisuPrompt,
-} from '../core/risu-prompt.js';
+import { validateRisuPrompt, reconcilePromptValues } from '../core/risu-prompt.js';
 import { AgentCollaborationEditor, agentCollaborationIssue } from './AgentCollaborationEditor.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import {
@@ -24,7 +24,8 @@ import {
   useResourceEditor,
   useEditorSaveCommand,
 } from './resource-editor.js';
-import type { PromptEditModel } from '../core/resource-editing.js';
+import { editableResource, type PromptEditModel } from '../core/resource-editing.js';
+import { ResourceEditorSession } from './resource-editor-session.js';
 import './prompt-editor.css';
 
 const labels: Record<PromptRole, string> = { main: '작문', translation: '번역' };
@@ -34,13 +35,6 @@ const defaults: Record<PromptRole, string> = {
 };
 const roles = ['main', 'translation'] as const;
 const keyOf = (value: ContentRef) => `${value.id}@${value.revision}`;
-type Draft = {
-  source: string;
-  base: PromptPreset | null;
-  title: string;
-  dirty: boolean;
-  program: RisuPrompt;
-};
 type Props = {
   heading?: ReactNode;
   headingTrailing?: ReactNode;
@@ -53,13 +47,24 @@ type Props = {
   onDirtyChange?: (dirty: boolean) => void;
   chatId?: string;
 };
-const draftFor = (role: PromptRole, preset?: PromptPreset): Draft => ({
-  source: preset ? keyOf(preset) : 'builtin',
-  base: preset ?? null,
-  title: preset?.title ?? `${labels[role]} 사용자 프롬프트`,
-  dirty: false,
-  program: preset ? structuredClone(preset.program) : createDefaultRisuPrompt(defaults[role], role),
-});
+function createSession(role: PromptRole, preset?: PromptPreset | PromptPresetSummary | null) {
+  return new ResourceEditorSession({
+    editorKey: preset
+      ? `prompt-preset:${preset.id}`
+      : `new:prompt-preset:${role}:${preset === null ? 'new' : 'builtin'}`,
+    kind: 'prompt-preset',
+    targetId: preset?.id ?? null,
+    initialModel:
+      preset && 'program' in preset
+        ? editableResource('prompt-preset', preset)
+        : {
+            title: preset?.title ?? (preset === null ? '' : `${labels[role]} 사용자 프롬프트`),
+            role,
+            program: createDefaultRisuPrompt(defaults[role], role),
+            values: {},
+          },
+  });
+}
 
 export function PromptEditor({
   heading,
@@ -74,29 +79,43 @@ export function PromptEditor({
 }: Props) {
   const [role, setRole] = useState<PromptRole>(initialRole);
   const [localPresets, setLocalPresets] = useState<PromptPreset[]>([]);
-  const [drafts, setDrafts] = useState<Record<PromptRole, Draft>>(
+  // Tabs retain session owners, never copies of their models or dirty flags.
+  const [selectedSessions, setSelectedSessions] = useState<
+    Record<PromptRole, ResourceEditorSession>
+  >(
     () =>
       Object.fromEntries(
-        roles.map((role) => {
-          if (initialPreset !== undefined && role === initialRole)
-            return [
-              role,
-              initialPreset
-                ? draftFor(role, initialPreset)
-                : { ...draftFor(role), source: 'new', title: '' },
-            ];
-          return [role, draftFor(role)];
-        })
-      ) as Record<PromptRole, Draft>
+        roles.map((role) => [
+          role,
+          createSession(role, role === initialRole ? initialPreset : undefined),
+        ])
+      ) as Record<PromptRole, ResourceEditorSession>
   );
-  const [busy, setBusy] = useState(false);
-  const [composerDirty, setComposerDirty] = useState<Record<string, boolean>>({});
-  const [pendingTemplate, setPendingTemplate] = useState(false);
+  const cache = useRef(
+    new Map(Object.values(selectedSessions).map((session) => [session.editorKey, session]))
+  );
+  const session = selectedSessions[role];
+  const shared = useResourceEditor<PromptEditModel>(session);
+  const { model, state, setModel } = shared;
+  const base: PromptPreset | null = state.document.targetId
+    ? {
+        ...(state.document.baseModel as PromptEditModel),
+        id: state.document.targetId,
+        revision: state.document.baseRevision!,
+      }
+    : null;
+  const draft = {
+    ...model,
+    base,
+    source: base ? keyOf(base) : session.options.editorKey.split(':').at(-1)!,
+    dirty: state.dirty,
+  };
+  const [placing, setPlacing] = useState(false);
+  const busy = state.saving || placing;
+  const pendingTemplate = state.local.unappliedFields.length > 0;
   const [collaborationExpanded, setCollaborationExpanded] = useState(true);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
-  const draftCache = useRef<Record<string, Draft>>({});
-  const controlDraftCache = useRef<Record<string, ChatPromptControls>>({});
   const presets = [
     ...new Map(
       [...(library.promptPresets ?? []), ...localPresets]
@@ -104,171 +123,68 @@ export function PromptEditor({
         .map((item) => [item.id, item])
     ).values(),
   ];
-  const dirty =
-    pendingTemplate ||
-    Object.values(composerDirty).some(Boolean) ||
-    [...Object.values(drafts), ...Object.values(draftCache.current)].some((draft) => draft.dirty);
+  const dirty = [...cache.current.values()].some((session) => session.snapshot().dirty);
   useEffect(() => {
     onDirtyChange?.(dirty || busy);
   }, [dirty, busy, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   useEffect(() => {
-    let cancelled = false;
-    for (const selectedRole of roles) {
-      const draft = drafts[selectedRole];
-      const latest = [...(library.promptPresets ?? []), ...localPresets]
-        .filter((item) => item.id === draft.base?.id)
-        .sort((a, b) => b.revision - a.revision)[0];
-      if (
-        !latest ||
-        draft.dirty ||
-        composerDirty[`${selectedRole}:${draft.source}`] ||
-        latest.revision === draft.base?.revision
-      )
-        continue;
-      void api<PromptPreset>(`/prompt-presets/${encodeURIComponent(latest.id)}`)
-        .then((full) => {
-          if (cancelled) return;
-          setDrafts((current) =>
-            current[selectedRole].dirty || current[selectedRole].source !== draft.source
-              ? current
-              : { ...current, [selectedRole]: draftFor(selectedRole, full) }
-          );
-        })
-        .catch((cause) => {
-          if (!cancelled) setError((cause as Error).message);
-        });
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [library.promptPresets, localPresets, composerDirty, drafts]);
-  const draft = drafts[role];
-  const model: PromptEditModel = {
-    title: draft.title,
-    role,
-    program: draft.program,
-    values:
-      controlDraftCache.current[`${role}:${draft.source}`]?.values ?? draft.base?.values ?? {},
-  };
-  const shared = useResourceEditor({
-    editorKey: draft.base
-      ? `prompt-preset:${draft.base.id}`
-      : `new:prompt-preset:${role}:${draft.source}`,
-    kind: 'prompt-preset',
-    targetId: draft.base?.id ?? null,
-    model,
-    onRestore: (restored) => {
-      const restoredModel = restored.model as PromptEditModel;
-      const base = restored.targetId
-        ? {
-            ...(restored.baseModel as PromptEditModel),
-            id: restored.targetId,
-            revision: restored.baseRevision!,
-          }
-        : null;
-      const source = base ? keyOf(base) : draft.source;
-      controlDraftCache.current[`${role}:${source}`] = {
-        values: restoredModel.values ?? {},
-        combinations: [],
-      };
-      setDrafts((current) => ({
-        ...current,
-        [role]: {
-          source,
-          base,
-          title: restoredModel.title,
-          program: restoredModel.program,
-          dirty: JSON.stringify(restoredModel) !== JSON.stringify(restored.baseModel),
-        },
-      }));
-    },
-  });
+    const document = session.snapshot().document;
+    const latest = [...(library.promptPresets ?? []), ...localPresets].find(
+      (item) => item.id === document.targetId && item.revision > (document.baseRevision ?? 0)
+    );
+    if (latest && document.baseRevision !== null)
+      void session.refresh().catch((cause) => setError((cause as Error).message));
+  }, [session, library.promptPresets, localPresets]);
   const collaborationIssue =
     role === 'main'
-      ? agentCollaborationIssue(draft.program.collaboration, promptControls(draft.program))
+      ? agentCollaborationIssue(model.program.collaboration, promptControls(model.program))
       : '';
-  const edit = (changes: Partial<Draft>) => {
-    setDrafts((current) => ({ ...current, [role]: { ...current[role], ...changes, dirty: true } }));
+  const edit = (
+    action: Partial<PromptEditModel> | ((current: PromptEditModel) => PromptEditModel)
+  ) => {
+    setModel((current) =>
+      typeof action === 'function' ? action(current) : { ...current, ...action }
+    );
     setError('');
     setStatus('');
   };
-  async function choose(source: string) {
-    if (pendingTemplate) return;
-    const selected = presets.find((item) => item.role === role && keyOf(item) === source);
-    let preset: PromptPreset | undefined;
-    if (selected) {
-      setBusy(true);
-      try {
-        preset = await api<PromptPreset>(`/prompt-presets/${encodeURIComponent(selected.id)}`);
-      } catch (cause) {
-        setError((cause as Error).message);
-        return;
-      } finally {
-        setBusy(false);
-      }
+  function choose(source: string) {
+    if (pendingTemplate || busy) return;
+    const preset = presets.find((item) => item.role === role && keyOf(item) === source);
+    const key = preset ? `prompt-preset:${preset.id}` : `new:prompt-preset:${role}:${source}`;
+    let next = cache.current.get(key);
+    if (!next) {
+      next = createSession(role, source === 'new' ? null : preset);
+      cache.current.set(next.editorKey, next);
     }
-    setDrafts((current) => {
-      draftCache.current[`${role}:${current[role].source}`] = current[role];
-      const cached = draftCache.current[`${role}:${source}`];
-      return {
-        ...current,
-        [role]:
-          cached ??
-          (source === 'new'
-            ? {
-                source: 'new',
-                base: null,
-                title: '',
-                dirty: true,
-                program: createDefaultRisuPrompt(defaults[role], role),
-              }
-            : draftFor(role, preset)),
-      };
-    });
+    setSelectedSessions((current) => ({ ...current, [role]: next }));
     setError('');
     setStatus('');
   }
   async function save(update: boolean) {
-    if (
-      busy ||
-      !shared.state.ready ||
-      collaborationIssue ||
-      !draft.title.trim() ||
-      (update && !draft.base)
-    )
+    if (busy || !state.ready || collaborationIssue || !model.title.trim() || (update && !base))
       return false;
-    setBusy(true);
     setError('');
     setStatus('');
     try {
+      const previousKey = session.editorKey;
       const saveModel: PromptEditModel = {
-        title: draft.title.trim(),
-        role,
-        program: validateRisuPrompt(draft.program),
-        values:
-          controlDraftCache.current[`${role}:${draft.source}`]?.values ?? draft.base?.values ?? {},
+        ...model,
+        title: model.title.trim(),
+        program: validateRisuPrompt(model.program),
       };
-      let accepted: PromptPreset;
-      if (!update && draft.base) {
-        accepted = (await shared.session.copy('prompt-preset', saveModel)).saved as PromptPreset;
-      } else accepted = (await shared.session.save(saveModel)).saved as PromptPreset;
+      const accepted = (await session.save(saveModel, { copy: !update && !!base }))
+        .saved as PromptPreset;
+      cache.current.delete(previousKey);
+      cache.current.set(session.editorKey, session);
       setLocalPresets((current) => [
-        ...current.filter((item) => keyOf(item) !== keyOf(accepted)),
+        ...current.filter((item) => item.id !== accepted.id),
         accepted,
       ]);
-      const controlDraft = controlDraftCache.current[`${role}:${draft.source}`];
-      if (controlDraft) controlDraftCache.current[`${role}:${keyOf(accepted)}`] = controlDraft;
-      setComposerDirty((current) => {
-        const next = { ...current };
-        delete next[`${role}:${draft.source}`];
-        return next;
-      });
-      setDrafts((current) => ({ ...current, [role]: draftFor(role, accepted) }));
-      delete draftCache.current[`${role}:${draft.source}`];
-      draftCache.current[`${role}:${keyOf(accepted)}`] = draftFor(role, accepted);
       setStatus('프롬프트를 저장했어요.');
       // Placement is a separate write; neither it nor a list read can undo this save.
+      setPlacing(true);
       const warnings: string[] = [];
       try {
         await onSaved?.(accepted, !update);
@@ -289,42 +205,29 @@ export function PromptEditor({
         setError(warning);
         onError(warning);
       }
-      return true;
+      return !session.snapshot().dirty;
     } catch (caught) {
-      const message = (caught as Error).message;
-      setError(message);
+      setError((caught as Error).message);
       return false;
     } finally {
-      setBusy(false);
+      setPlacing(false);
     }
   }
-  useEditorSaveCommand(shared.session, () => {
-    const currentKey = `${role}:${draft.source}`;
-    const otherDrafts =
-      Object.entries(drafts).some(([key, value]) => key !== role && value.dirty) ||
-      Object.entries(draftCache.current).some(
-        ([key, value]) => key !== currentKey && value.dirty
-      ) ||
-      Object.entries(composerDirty).some(([key, value]) => key !== currentKey && value);
-    if (otherDrafts)
+  useEditorSaveCommand(session, () => {
+    if ([...cache.current.values()].some((other) => other !== session && other.snapshot().dirty))
       throw new Error(
         '다른 역할이나 프리셋에도 미저장 초안이 있어요. 계속 편집에서 각 초안을 저장한 뒤 이동해 주세요.'
       );
-    return save(!!draft.base);
+    return save(!!base);
   });
-  const pendingSavedText = draft.source !== 'builtin' && draft.source !== 'new' && !draft.base;
-  if (!shared.state.ready) return <ResourceEditorStatus value={shared} />;
+  if (!state.ready) return <ResourceEditorStatus value={shared} />;
   const saveActions = (
     <div className="prompt-save-actions">
       <div className="prompt-save-buttons">
         <button
           type="button"
           disabled={
-            busy ||
-            pendingSavedText ||
-            !!collaborationIssue ||
-            !draft.title.trim() ||
-            (!!draft.base && !draft.dirty)
+            busy || !!collaborationIssue || !draft.title.trim() || (!!draft.base && !draft.dirty)
           }
           className="primary native-editor-save"
           onClick={() => void save(!!draft.base)}
@@ -345,7 +248,7 @@ export function PromptEditor({
               <button
                 type="button"
                 className="secondary"
-                disabled={pendingSavedText || !!collaborationIssue || !draft.title.trim()}
+                disabled={busy || !!collaborationIssue || !draft.title.trim()}
                 onClick={() => void save(false)}
               >
                 <CopyIcon size={18} aria-hidden="true" /> 복사본으로 저장
@@ -362,22 +265,20 @@ export function PromptEditor({
                 onDeleted={async () => {
                   const removed = draft.base!.id;
                   setLocalPresets((current) => current.filter((item) => item.id !== removed));
-                  for (const key of Object.keys(draftCache.current))
-                    if (draftCache.current[key].base?.id === removed)
-                      delete draftCache.current[key];
-                  setComposerDirty((current) =>
-                    Object.fromEntries(
-                      Object.entries(current).filter(([key]) => !key.includes(`:${removed}@`))
-                    )
-                  );
-                  setDrafts(
+                  for (const [key, cached] of cache.current) {
+                    if (cached.snapshot().document.targetId === removed) cache.current.delete(key);
+                  }
+                  setSelectedSessions(
                     (current) =>
                       Object.fromEntries(
-                        roles.map((role) => [
-                          role,
-                          current[role].base?.id === removed ? draftFor(role) : current[role],
-                        ])
-                      ) as Record<PromptRole, Draft>
+                        roles.map((role) => {
+                          if (current[role].snapshot().document.targetId !== removed)
+                            return [role, current[role]];
+                          const next = createSession(role);
+                          cache.current.set(next.editorKey, next);
+                          return [role, next];
+                        })
+                      ) as Record<PromptRole, ResourceEditorSession>
                   );
                   await reload?.();
                   setStatus('프롬프트를 삭제했어요.');
@@ -396,7 +297,7 @@ export function PromptEditor({
           역할
           <select
             aria-label="프롬프트 역할"
-            disabled={pendingTemplate || !!initialPreset}
+            disabled={busy || pendingTemplate || !!initialPreset}
             value={role}
             onChange={(event) => {
               setRole(event.target.value as PromptRole);
@@ -413,7 +314,7 @@ export function PromptEditor({
             불러올 프롬프트
             <select
               aria-label="불러올 프롬프트"
-              disabled={pendingTemplate}
+              disabled={busy || pendingTemplate}
               value={draft.source === 'builtin' || draft.source === 'new' ? '' : draft.source}
               onChange={(event) => choose(event.target.value)}
             >
@@ -427,9 +328,6 @@ export function PromptEditor({
                     {item.title}
                   </option>
                 ))}
-              {pendingSavedText && (
-                <option value={draft.source}>선택한 프롬프트 불러오는 중…</option>
-              )}
               {draft.base && !presets.some((item) => keyOf(item) === draft.source) && (
                 <option value={draft.source}>{draft.title} · 편집 중</option>
               )}
@@ -440,7 +338,7 @@ export function PromptEditor({
           <button
             type="button"
             className="secondary"
-            disabled={pendingTemplate}
+            disabled={busy || pendingTemplate}
             onClick={() => choose('new')}
           >
             새 프롬프트 생성
@@ -467,7 +365,7 @@ export function PromptEditor({
       >
         <div className="prompt-editor-heading">
           {heading ?? <h2>{draft.title || '프롬프트 편집'}</h2>}
-          <ResourceEditorActions value={shared} />
+          <ResourceEditorActions value={shared} hideSyncError />
           {saveActions}
           {headingTrailing}
         </div>
@@ -482,27 +380,20 @@ export function PromptEditor({
           disabled={busy}
         >
           {initialPreset === undefined && metadata}
-          <fieldset className="prompt-composer-frame" disabled={pendingSavedText}>
+          <fieldset className="prompt-composer-frame">
             <NativeRisuPresetEditor
-              key={`${role}:${draft.source}`}
+              key={`${role}:${session.options.editorKey}`}
               program={draft.program}
               metadata={initialPreset !== undefined ? metadata : undefined}
               values={model.values}
-              onValuesChange={(values) => {
-                controlDraftCache.current[`${role}:${draft.source}`] = {
-                  values,
-                  combinations: [],
-                };
-                edit({});
-              }}
-              onChange={(program) => {
-                controlDraftCache.current[`${role}:${draft.source}`] = {
-                  values: reconcilePromptValues(program, model.values).values,
-                  combinations: [],
-                };
-                edit({ program });
-              }}
-              onPendingDraftChange={setPendingTemplate}
+              onValuesChange={(values) => edit({ values })}
+              onChange={(program) =>
+                edit((current) => ({
+                  ...current,
+                  program,
+                  values: reconcilePromptValues(program, current.values).values,
+                }))
+              }
               collaboration={
                 role === 'main' ? (
                   <AgentCollaborationEditor
@@ -512,7 +403,10 @@ export function PromptEditor({
                     controls={promptControls(draft.program)}
                     models={library.models}
                     onChange={(collaboration) =>
-                      edit({ program: { ...draft.program, collaboration } })
+                      edit((current) => ({
+                        ...current,
+                        program: { ...current.program, collaboration },
+                      }))
                     }
                   />
                 ) : undefined

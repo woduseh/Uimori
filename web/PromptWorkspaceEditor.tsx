@@ -1,14 +1,14 @@
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { ExpandIcon, ExternalLinkIcon, ResetIcon, SaveIcon, CloseIcon } from './ui-icons.js';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
 import type { WorkspaceEditModel } from '../core/resource-editing.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { resolvePromptValues } from '../core/risu-prompt.js';
 import { api } from './api.js';
-import { usePromptWorkspace } from './usePromptWorkspace.js';
+import { ResourceEditorSession } from './resource-editor-session.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { Switch } from './BooleanControls.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -39,167 +39,102 @@ export function PromptWorkspaceEditor({
   onEditPrompt?: (presetId?: string) => void;
   navigationDisabled?: boolean;
 }) {
-  const { workspace, error, refresh } = usePromptWorkspace();
-  const [draft, setDraft] = useState<PromptWorkspace | null>(null);
-  const currentDraft = useRef(draft);
-  currentDraft.current = draft;
   const [role, setRole] = useState<PromptRole>('main');
-  const [dirty, setDirty] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [applying, setApplying] = useState(false);
-  const [saveError, setSaveError] = useState('');
+  const [applyError, setApplyError] = useState('');
   const [message, setMessage] = useState('');
-  const [generation, setGeneration] = useState(0);
-  const version = useRef(0);
-  const acknowledged = useRef(0);
-  const lock = useRef(false);
   const [comboName, setComboName] = useState('');
   const [savingCombo, setSavingCombo] = useState(false);
   const [comboOpen, setComboOpen] = useState(false);
   const [manageCombinations, setManageCombinations] = useState(false);
   const [comboError, setComboError] = useState('');
   const [selectedCombo, setSelectedCombo] = useState('');
-  const [emptyModel] = useState<WorkspaceEditModel>(() => ({
-    main: { title: '', program: createDefaultRisuPrompt('', 'main'), values: {} },
-    translation: { title: '', program: createDefaultRisuPrompt('', 'translation'), values: {} },
-  }));
-  const shared = useResourceEditor({
-    editorKey: 'prompt-workspace:current',
-    kind: 'prompt-workspace',
-    targetId: 'current',
-    model: draft ? { main: draft.main, translation: draft.translation } : emptyModel,
-    enabled: !!workspace,
-    onRestore: (restored) => {
-      if (lock.current) return;
-      const base = workspace ?? currentDraft.current;
-      if (!base) return;
-      const model = restored.model as WorkspaceEditModel;
-      const next = { ...base, ...model, revision: restored.baseRevision! };
-      currentDraft.current = next;
-      setDraft(next);
-      const restoredDirty = JSON.stringify(model) !== JSON.stringify(restored.baseModel);
-      setDirty(restoredDirty);
-      if (!restoredDirty) {
-        acknowledged.current = version.current;
-        setSaveError('');
-      }
-    },
-  });
-  useEffect(() => {
-    if (!shared.state.ready && !dirty && !busy) setDraft(workspace);
-  }, [workspace, shared.state.ready, dirty, busy]);
+  const [session] = useState(
+    () =>
+      new ResourceEditorSession({
+        editorKey: 'prompt-workspace:current',
+        kind: 'prompt-workspace',
+        targetId: 'current',
+        initialModel: {
+          main: { title: '', program: createDefaultRisuPrompt('', 'main'), values: {} },
+          translation: {
+            title: '',
+            program: createDefaultRisuPrompt('', 'translation'),
+            values: {},
+          },
+        },
+      })
+  );
+  const shared = useResourceEditor<WorkspaceEditModel>(session);
+  const { model: draft, setModel, state } = shared;
+  const { dirty, conflict } = state;
+  const busy = state.saving || applying;
+  const saveError = state.error || applyError;
   useEffect(() => {
     onDirtyChange?.(dirty || busy);
   }, [dirty, busy, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
+  const save = useCallback(async () => {
+    const current = session.snapshot();
+    if (!current.ready || current.saving || current.conflict || applying) return false;
+    setApplyError('');
+    try {
+      await session.save();
+      setMessage('변경사항을 자동 저장했어요.');
+      return !session.snapshot().dirty;
+    } catch {
+      return false;
+    }
+  }, [session, applying]);
   useSettingsSaveHandler(onSaveHandlerChange, save);
 
-  // A save acknowledges only the input it sent. Restored drafts require explicit retry.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: save reads latest input via refs; edits and completed saves alone schedule a write.
+  // The session distinguishes new edits from recovered input and acknowledges only
+  // the model sent by a save. Later edits schedule the next save when that one finishes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each model edit restarts the autosave debounce.
   useEffect(() => {
-    if (
-      !generation ||
-      generation <= acknowledged.current ||
-      busy ||
-      saveError ||
-      !shared.state.ready ||
-      shared.state.conflict
-    )
-      return;
-    const timer = setTimeout(() => {
-      void save();
-    }, 300);
+    if (!state.autosavePending || busy || saveError || conflict) return;
+    const timer = setTimeout(() => void save(), 300);
     return () => clearTimeout(timer);
-  }, [generation, busy, saveError, shared.state.ready, shared.state.conflict]);
+  }, [draft, state.autosavePending, busy, saveError, conflict, save]);
 
-  async function save() {
-    const next = currentDraft.current;
-    if (!next || lock.current || shared.state.conflict) return false;
-    lock.current = true;
-    setBusy(true);
-    setSaveError('');
-    const sentVersion = version.current;
-    try {
-      const accepted = (
-        await shared.session.save({ main: next.main, translation: next.translation })
-      ).saved as PromptWorkspace;
-      acknowledged.current = sentVersion;
-      const latest = currentDraft.current!;
-      const unsaved = shared.session.snapshot().dirty || version.current !== sentVersion;
-      if (unsaved && version.current === sentVersion) {
-        version.current++;
-        setGeneration(version.current);
-      }
-      const updated = unsaved
-        ? { ...accepted, main: latest.main, translation: latest.translation }
-        : accepted;
-      currentDraft.current = updated;
-      setDraft(updated);
-      setDirty(unsaved);
-      setMessage('변경사항을 자동 저장했어요.');
-      await refresh();
-      return !unsaved;
-    } catch (caught) {
-      setSaveError(`${(caught as Error).message} 선택한 옵션은 유지했어요.`);
-      await refresh();
-      return false;
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
-  }
-  function edit(next: PromptWorkspace) {
-    currentDraft.current = next;
-    setDraft(next);
-    setDirty(true);
+  function edit(update: (current: WorkspaceEditModel) => WorkspaceEditModel) {
+    setModel(update);
     setMessage('');
-    version.current++;
-    setGeneration(version.current);
-    shared.session.setModel({ main: next.main, translation: next.translation });
   }
   async function applyPreset(presetId: string) {
-    if (!draft || lock.current || dirty) return;
-    lock.current = true;
-    setBusy(true);
+    const current = session.snapshot();
+    if (applying || current.saving || current.dirty || current.conflict) return;
     setApplying(true);
-    setSaveError('');
+    setApplyError('');
     try {
-      await shared.session.flush();
-      const accepted = await api<PromptWorkspace>('/prompt-workspace/apply', {
-        expectedRevision: draft.revision,
+      await api<PromptWorkspace>('/prompt-workspace/apply', {
+        expectedRevision: current.document.baseRevision,
         role,
         presetId,
       });
-      await shared.session.reloadSaved();
-      const restored = shared.session.snapshot().document;
-      const reloaded = {
-        ...accepted,
-        ...(restored.model as WorkspaceEditModel),
-        revision: restored.baseRevision!,
-      };
-      currentDraft.current = reloaded;
-      setDraft(reloaded);
-      setDirty(false);
+      await session.reloadSaved();
       setSelectedCombo('');
       setMessage('프롬프트와 기본 옵션을 적용했어요.');
-      await refresh();
     } catch (caught) {
-      setSaveError((caught as Error).message);
+      setApplyError((caught as Error).message);
+      await session.refresh().catch(() => {});
     } finally {
-      lock.current = false;
-      setBusy(false);
       setApplying(false);
     }
   }
-  if (!draft || !shared.state.ready)
+  if (!state.ready)
     return (
       <p role="status">
-        {error || '현재 프롬프트를 불러오는 중이에요…'}{' '}
-        <IconButton icon={ResetIcon} label="다시 불러오기" onClick={() => void refresh()} />
+        {state.error || '현재 프롬프트를 불러오는 중이에요…'}{' '}
+        <IconButton
+          icon={ResetIcon}
+          label="다시 불러오기"
+          onClick={() => void session.open().catch(() => {})}
+        />
       </p>
     );
   const current = draft[role];
-  const conflict = !!workspace && workspace.revision > draft.revision && !busy;
   const preset = library.promptPresets?.find(
     (item) => item.id === current.presetId && item.role === role
   );
@@ -218,8 +153,7 @@ export function PromptWorkspaceEditor({
       : equalValues(defaultValues)
         ? 'default'
         : 'custom';
-  const showRecovery =
-    shared.state.conflict || !!saveError || (dirty && generation <= acknowledged.current);
+  const showRecovery = conflict || !!saveError || (dirty && !state.autosavePending);
   return (
     <ResourceEditorProvider value={shared}>
       <section aria-label="현재 프롬프트 설정" className="prompt-editor prompt-current-settings">
@@ -309,16 +243,16 @@ export function PromptWorkspaceEditor({
                         if (id === 'custom') return;
                         const item = combinations.find((entry) => entry.id === id);
                         setSelectedCombo(item?.id ?? '');
-                        edit({
-                          ...currentDraft.current!,
+                        edit((draft) => ({
+                          ...draft,
                           [role]: {
-                            ...currentDraft.current![role],
+                            ...draft[role],
                             values:
                               id === 'default'
                                 ? defaultValues
                                 : resolvePromptValues(current.program, item!.values),
                           },
-                        });
+                        }));
                       }}
                     >
                       <option value="default">기본값</option>
@@ -350,22 +284,19 @@ export function PromptWorkspaceEditor({
                     </button>
                   </ActionMenu>
                 </div>
-                <fieldset
-                  className="prompt-editor-fields"
-                  disabled={applying || conflict || shared.state.conflict}
-                >
+                <fieldset className="prompt-editor-fields" disabled={applying || conflict}>
                   <PromptControlFields
                     program={current.program}
                     values={current.values}
                     onChange={(id, value) => {
                       setSelectedCombo('');
-                      edit({
-                        ...currentDraft.current!,
+                      edit((draft) => ({
+                        ...draft,
                         [role]: {
-                          ...currentDraft.current![role],
-                          values: { ...currentDraft.current![role].values, [id]: value },
+                          ...draft[role],
+                          values: { ...draft[role].values, [id]: value },
                         },
-                      });
+                      }));
                     }}
                   />
                 </fieldset>
@@ -387,36 +318,36 @@ export function PromptWorkspaceEditor({
                 checked={current.program.collaboration?.enabled ?? false}
                 disabled={!current.program.collaboration?.agents.length || busy || conflict}
                 onChange={(event) =>
-                  edit({
+                  edit((draft) => ({
                     ...draft,
                     main: {
-                      ...current,
+                      ...draft.main,
                       program: {
-                        ...current.program,
+                        ...draft.main.program,
                         collaboration: {
-                          ...current.program.collaboration!,
+                          ...draft.main.program.collaboration!,
                           enabled: event.target.checked,
                         },
                       },
                     },
-                  })
+                  }))
                 }
               />
             </label>
           )}
         </div>
-        {(conflict || saveError || shared.state.error) && (
+        {(conflict || saveError) && (
           <p role="alert">
             {conflict
               ? '다른 곳에서 현재 프롬프트가 바뀌었어요. 현재 선택을 보존했어요. 복구 메뉴에서 저장본을 확인해 주세요.'
-              : saveError || shared.state.error}
+              : saveError}
           </p>
         )}
-        {(saveError || (dirty && !busy && generation <= acknowledged.current)) && (
+        {(saveError || (dirty && !busy && !state.autosavePending)) && (
           <button
             type="button"
             className="secondary"
-            disabled={busy || conflict || shared.state.conflict}
+            disabled={busy || conflict}
             onClick={() => void save()}
           >
             다시 저장
@@ -424,7 +355,7 @@ export function PromptWorkspaceEditor({
         )}
         {conflict && !showRecovery && <ResourceEditorStatus value={shared} hideSyncError />}
         <p role="status" className="muted">
-          {busy || (dirty && !showRecovery) ? '저장 중…' : message || error}
+          {busy || (dirty && !showRecovery) ? '저장 중…' : message}
         </p>
         <Dialog
           open={manageCombinations}
@@ -487,7 +418,7 @@ export function PromptWorkspaceEditor({
                     title: comboName.trim(),
                     role,
                     values: current.values,
-                    workspaceRevision: draft.revision,
+                    workspaceRevision: state.document.baseRevision,
                   });
                   await reload?.();
                   setComboOpen(false);

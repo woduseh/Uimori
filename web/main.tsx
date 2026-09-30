@@ -146,11 +146,11 @@ const OutlinePanel = deferredPanel('계층형 구성', async () => ({
 }));
 
 type Panel = '' | 'navigation' | 'new' | 'story' | 'tasks' | 'settings' | 'reading' | 'outline';
-/* Device layout preferences. The reader column and the right work slot are the two
-   widths a person notices, so both are choices rather than fixed numbers. */
+/* Device layout preferences share the same optional browser storage. */
 const READING_WIDTHS = [760, 880, 1040];
 const PANEL_WIDTHS = [360, 384, 480];
 const SIDEBAR_WIDTH = 248;
+const SIDEBAR_WIDTHS = [SIDEBAR_WIDTH, 320, 400];
 const RAIL_WIDTH = 56;
 /* Below this the centre column stops being comfortable to read or edit in. */
 const MIN_CENTER_WIDTH = 768;
@@ -275,6 +275,8 @@ function App() {
     writePresentationSetting('uimori:scene-navigator', String(sceneNavigatorEnabled));
   }, [sceneNavigatorEnabled]);
   const [inspectedRun, setInspectedRun] = useState('');
+  const navigationOpener = useRef<HTMLButtonElement>(null);
+  const navigationReturnFocus = useRef<HTMLButtonElement>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => readPresentationChoice('uimori:sidebar-collapsed', ['true', 'false'], 'false') === 'true'
   );
@@ -286,6 +288,13 @@ function App() {
   const [panelWidth, setPanelWidth] = useState(() =>
     readPresentationChoice('uimori:panel-width', PANEL_WIDTHS, 384)
   );
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    readPresentationChoice('uimori:sidebar-width', SIDEBAR_WIDTHS, SIDEBAR_WIDTH)
+  );
+  const desktopSidebarWidth = Math.min(
+    sidebarWidth,
+    Math.max(SIDEBAR_WIDTH, viewportWidth - MIN_CENTER_WIDTH)
+  );
   useEffect(() => {
     const resize = () => setViewportWidth(window.innerWidth);
     window.addEventListener('resize', resize);
@@ -295,7 +304,7 @@ function App() {
     helperOpen || (optionsOpen && s.destination === 'story' && !!s.selected);
   /* Dock only while the centre column keeps its minimum readable width. Collapsing
      navigation frees the sidebar down to the icon rail, not to nothing. */
-  const dockBesideSidebar = SIDEBAR_WIDTH + panelWidth + MIN_CENTER_WIDTH;
+  const dockBesideSidebar = desktopSidebarWidth + panelWidth + MIN_CENTER_WIDTH;
   const dockBesideRail = RAIL_WIDTH + panelWidth + MIN_CENTER_WIDTH;
   const autoCollapseSidebar =
     workspacePanelOpen &&
@@ -461,6 +470,12 @@ function App() {
     writePresentationSetting('uimori:response-display', responseDisplay);
   }, [responseDisplay]);
   useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-w', `${desktopSidebarWidth}px`);
+  }, [desktopSidebarWidth]);
+  useEffect(() => {
+    writePresentationSetting('uimori:sidebar-width', String(sidebarWidth));
+  }, [sidebarWidth]);
+  useEffect(() => {
     document.documentElement.style.setProperty('--panel-w', `${panelWidth}px`);
     writePresentationSetting('uimori:panel-width', String(panelWidth));
   }, [panelWidth]);
@@ -583,6 +598,7 @@ function App() {
   const navigationControls = (
     <>
       <IconButton
+        ref={navigationOpener}
         className="mobile-menu"
         label="탐색 메뉴"
         icon={Menu}
@@ -1681,7 +1697,17 @@ function App() {
       <Dialog
         open={panel === 'navigation'}
         title="탐색"
-        onClose={() => setPanel('')}
+        onClose={() => {
+          // Lazy destination loading may have replaced the native dialog's opener.
+          navigationReturnFocus.current = navigationOpener.current;
+          setPanel('');
+        }}
+        onAfterClose={() => {
+          const target = navigationReturnFocus.current;
+          navigationReturnFocus.current = null;
+          if (panel === '' && target === navigationOpener.current && target?.isConnected)
+            target.focus();
+        }}
         className="navigation-dialog"
         headerLeading={
           panel === 'navigation' ? (
@@ -1850,6 +1876,8 @@ function App() {
           setEnterSend={setEnterSend}
           panelWidth={panelWidth}
           setPanelWidth={setPanelWidth}
+          sidebarWidth={sidebarWidth}
+          setSidebarWidth={setSidebarWidth}
           readingSettings={renderReadingSettings()}
         />
       )}

@@ -7,6 +7,7 @@ export function Dialog({
   open,
   title,
   onClose,
+  onAfterClose,
   children,
   wide = false,
   variant = 'default',
@@ -19,6 +20,7 @@ export function Dialog({
   open: boolean;
   title: string;
   onClose: () => void;
+  onAfterClose?: () => void;
   children: ReactNode;
   wide?: boolean;
   variant?: 'default' | 'confirmation';
@@ -95,6 +97,7 @@ export function Dialog({
       onClose={(event) => {
         event.stopPropagation();
         if (isOpen.current) close.current();
+        else onAfterClose?.();
       }}
       onClick={(event) => {
         if (event.target === event.currentTarget) {

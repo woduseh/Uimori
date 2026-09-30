@@ -14,8 +14,9 @@ import {
   useEditorSaveCommand,
   useResourceEditor,
 } from './resource-editor.js';
-import type { ContentEditModel } from '../core/resource-editing.js';
-import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { editableResource, type ContentEditModel } from '../core/resource-editing.js';
+import { ResourceEditorSession } from './resource-editor-session.js';
+import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
@@ -23,7 +24,6 @@ import { api } from './api.js';
 import { refValue } from './content-ref.js';
 import { nativeContentDraft, withNativeContentTitle } from './native-content-draft.js';
 import { validateRisuContent } from '../core/risu-content.js';
-import { sameEditorValue } from './editor-values.js';
 import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
 import { ContentAvatar } from './ContentAvatar.js';
@@ -934,6 +934,26 @@ export function LibraryPanel({
                             onChange={(event) => setQuery(event.target.value)}
                           />
                         </label>
+                        <div className="library-view-buttons" role="group" aria-label="자료 보기">
+                          <IconButton
+                            icon={CardsIcon}
+                            size={18}
+                            label="카드"
+                            title="카드 보기"
+                            className="secondary"
+                            aria-pressed={views[tab] === 'cards'}
+                            onClick={() => setView('cards')}
+                          />
+                          <IconButton
+                            icon={ListIcon}
+                            size={18}
+                            label="목록"
+                            title="목록 보기"
+                            className="secondary"
+                            aria-pressed={views[tab] === 'list'}
+                            onClick={() => setView('list')}
+                          />
+                        </div>
                         <LibraryItemMenu
                           title="목록 관리"
                           className="library-list-options"
@@ -952,30 +972,6 @@ export function LibraryPanel({
                                 <option value="manual">수동 정렬</option>
                               </select>
                             </label>
-                            <div
-                              className="library-view-buttons"
-                              role="group"
-                              aria-label="자료 보기"
-                            >
-                              <button
-                                type="button"
-                                className="secondary"
-                                aria-pressed={views[tab] === 'cards'}
-                                onClick={() => setView('cards')}
-                              >
-                                <CardsIcon size={18} aria-hidden="true" />
-                                카드
-                              </button>
-                              <button
-                                type="button"
-                                className="secondary"
-                                aria-pressed={views[tab] === 'list'}
-                                onClick={() => setView('list')}
-                              >
-                                <ListIcon size={18} aria-hidden="true" />
-                                목록
-                              </button>
-                            </div>
                             {views[tab] === 'cards' && (
                               <div className="library-card-ratio">
                                 <span>카드 비율</span>
@@ -1226,17 +1222,31 @@ function ContentEditor({
   headerTrailing?: ReactNode;
 }) {
   const formId = useId();
-  const [selected, setSelected] = useState(initial);
-  const [value, setValue] = useState<Omit<Content, 'id' | 'revision'>>(
-    initial ?? freshContent(kind)
+  const [session] = useState(
+    () =>
+      new ResourceEditorSession({
+        editorKey: initial ? `content:${initial.id}` : `new:content:${kind}`,
+        kind: 'content',
+        targetId: initial?.id ?? null,
+        initialModel: initial ? editableResource('content', initial) : freshContent(kind),
+      })
   );
-  const [busy, setBusy] = useState(false);
+  const shared = useResourceEditor<ContentEditModel>(session);
+  const { model: value, setModel: setValue, state } = shared;
+  const { document, dirty } = state;
+  const selected = document.targetId
+    ? {
+        ...(document.baseModel as ContentEditModel),
+        id: document.targetId,
+        revision: document.baseRevision!,
+      }
+    : null;
+  const [placing, setPlacing] = useState(false);
+  const busy = state.saving || placing;
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
-  const [baseline, setBaseline] = useState(() => initial ?? freshContent(kind));
-  const [nativeDraftDirty, setNativeDraftDirty] = useState(false);
+  const nativeDraftDirty = state.local.unappliedFields.length > 0;
   const [portraitBusy, setPortraitBusy] = useState(false);
-  const hasShownEditor = useRef(false);
   const saveVersion = useRef(0);
   useEffect(
     () => () => {
@@ -1244,45 +1254,10 @@ function ContentEditor({
     },
     []
   );
-  const editableModel = useMemo<ContentEditModel>(
-    () => ({
-      kind: value.kind,
-      title: value.title,
-      description: value.description,
-      text: value.text,
-      loading: value.loading,
-      relatedIds: value.relatedIds,
-      package: value.package,
-    }),
-    [value]
-  );
-  const shared = useResourceEditor({
-    editorKey: selected ? `content:${selected.id}` : `new:content:${kind}`,
-    kind: 'content',
-    targetId: selected?.id ?? null,
-    model: editableModel,
-    onRestore: (draft) => {
-      const model = draft.model as ContentEditModel;
-      setSaved('');
-      setValue(model);
-      setBaseline(draft.baseModel as ContentEditModel);
-      setSelected(
-        draft.targetId
-          ? {
-              ...(draft.baseModel as ContentEditModel),
-              id: draft.targetId,
-              revision: draft.baseRevision!,
-            }
-          : null
-      );
-    },
-  });
-  if (shared.state.ready) hasShownEditor.current = true;
-  const editorUnavailable = busy || !shared.state.ready;
-  const dirty = useMemo(() => !sameEditorValue(value, baseline), [value, baseline]);
+  const editorUnavailable = busy || !state.ready;
   useEffect(() => {
-    onDirtyChange(dirty || nativeDraftDirty || portraitBusy);
-  }, [dirty, nativeDraftDirty, portraitBusy, onDirtyChange]);
+    onDirtyChange(dirty || busy || portraitBusy);
+  }, [dirty, busy, portraitBusy, onDirtyChange]);
   const packageSnapshot = () =>
     validateRisuContent({
       ...value.package,
@@ -1292,7 +1267,6 @@ function ContentEditor({
     });
   async function saveContent(copyKind?: 'bot' | 'persona' | 'module') {
     if (editorUnavailable || portraitBusy || !value.title.trim()) return false;
-    setBusy(true);
     const version = ++saveVersion.current;
     onError('');
     setSaved('');
@@ -1311,15 +1285,10 @@ function ContentEditor({
         relatedIds: [],
         package: pkg,
       };
-      let item: Content;
-      if (copying) {
-        item = (await shared.session.copy('content', model)).saved as Content;
-      } else item = (await shared.session.save(model)).saved as Content;
-      setSelected(item);
-      setValue(item);
-      setBaseline(item);
+      const item = (await session.save(model, { copy: copying })).saved as Content;
       setSaved(item.title + ' 저장됨 · 다음 실행부터 사용해요.');
       if (!selected || copying) {
+        setPlacing(true);
         try {
           await onCreated?.(item);
         } catch {
@@ -1334,18 +1303,18 @@ function ContentEditor({
           if (saveVersion.current === version)
             setSaved(item.title + ' 저장됨 · 서재 목록을 갱신하지 못했어요.');
         });
-      return true;
+      return !session.snapshot().dirty;
     } catch (caught) {
       const message = (caught as Error).message;
       setError(message);
       onError(message);
       return false;
     } finally {
-      setBusy(false);
+      setPlacing(false);
     }
   }
   useEditorSaveCommand(shared.session, () => saveContent());
-  if (!hasShownEditor.current) return <ResourceEditorStatus value={shared} />;
+  if (!state.ready) return <ResourceEditorStatus value={shared} />;
   return (
     <ResourceEditorProvider value={shared}>
       <section
@@ -1364,7 +1333,7 @@ function ContentEditor({
           />
           <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
           <div className="library-detail-actions">
-            <ResourceEditorActions value={shared} />
+            <ResourceEditorActions value={shared} hideSyncError />
             <button
               type="submit"
               form={formId}
@@ -1440,7 +1409,6 @@ function ContentEditor({
               onChange={(pkg) =>
                 setValue((current) => ({ ...current, title: pkg.title, package: pkg }))
               }
-              onDraftChange={setNativeDraftDirty}
               onPortraitBusy={setPortraitBusy}
             />
           </fieldset>

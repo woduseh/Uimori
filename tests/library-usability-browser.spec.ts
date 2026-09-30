@@ -42,9 +42,7 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     await page.goto('/');
     const panel = page.getByTestId('library-panel');
     await panel.getByLabel('서재 검색', { exact: true }).fill(title);
-    await panel.getByLabel('목록 관리', { exact: true }).click();
     await panel.getByRole('button', { name: '목록', exact: true }).click();
-    await panel.getByLabel('목록 관리', { exact: true }).press('Escape');
     const row = panel.locator('.library-list-item');
     await expect(row).toHaveCount(1);
     await expect(

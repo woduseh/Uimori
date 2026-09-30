@@ -68,8 +68,8 @@ async function moveItems(
   category: string,
   folder: LibraryFolder | null
 ) {
-  await revealListOptions(panel);
   await panel.getByRole('button', { name: '목록', exact: true }).click();
+  await revealListOptions(panel);
   await panel.getByRole('button', { name: '선택', exact: true }).click();
   for (const title of titles)
     await panel.getByRole('checkbox', { name: `${title} 선택`, exact: true }).check();
@@ -139,7 +139,6 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
   await expect(
     panel.getByRole('button', { name: `${a.title} 상세 보기`, exact: true })
   ).toBeVisible();
-  await revealListOptions(panel);
   await expect(panel.getByRole('button', { name: '카드', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true'
@@ -152,7 +151,6 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
     .getByTestId('library-panel')
     .getByRole('tab', { name: '페르소나', exact: true })
     .click();
-  await revealListOptions(panel);
   await expect(panel.getByRole('button', { name: '카드', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true'
@@ -475,9 +473,7 @@ for (const width of DEFAULT_WIDTHS) {
     await page.goto('/');
     const panel = page.getByTestId('library-panel');
     const search = panel.getByRole('searchbox', { name: '서재 검색', exact: true });
-    await revealListOptions(panel);
     await panel.getByRole('button', { name: '목록', exact: true }).click();
-    await panel.getByLabel('목록 관리', { exact: true }).press('Escape');
     await expect(
       panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true })
     ).toBeVisible();
@@ -496,8 +492,8 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(
       panel.locator('.library-list-item').filter({ hasText: filed.title })
     ).toContainText(folder.title);
-    await revealListOptions(panel);
     await panel.getByRole('button', { name: '카드', exact: true }).click();
+    await revealListOptions(panel);
     await panel.getByRole('button', { name: '선택', exact: true }).click();
     const card = panel.getByRole('button', { name: `${filed.title} 선택`, exact: true });
     await card.click();

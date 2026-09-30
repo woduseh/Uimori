@@ -51,7 +51,7 @@ export function RisuNativeFields({
   kind: ContentKind;
   value: RisuContent;
   onChange: (value: RisuContent) => void;
-  onDraftChange: (dirty: boolean) => void;
+  onDraftChange?: (dirty: boolean) => void;
   onPortraitBusy: (busy: boolean) => void;
 }) {
   const native = value.nativeRisu;
@@ -76,9 +76,9 @@ export function RisuNativeFields({
   useEffect(() => () => onPortraitBusy(false), [onPortraitBusy]);
   useUnappliedEditorField('package.native.source', !!draft);
   useEffect(() => {
-    onDraftChange(!!draft || modulesDirty || regexDirty || triggersDirty);
+    onDraftChange?.(!!draft || modulesDirty || regexDirty || triggersDirty);
   }, [draft, modulesDirty, regexDirty, triggersDirty, onDraftChange]);
-  useEffect(() => () => onDraftChange(false), [onDraftChange]);
+  useEffect(() => () => onDraftChange?.(false), [onDraftChange]);
   // Typed fields replace their own path; JSON apply and server saves normalize the document.
   const update = (input: RisuContentSource) => {
     onChange({

@@ -245,3 +245,99 @@ test.describe('touch sidebar', () => {
     }
   });
 });
+
+test('SIDENAV04 desktop width choices persist and preserve the rail, mobile drawer and helper docking', async ({
+  page,
+  request,
+}, info) => {
+  const fixture = await sidebarFixture(request);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(`/?chat=${fixture.chat.id}`);
+  const sidebar = page.locator('.sidebar');
+  await expect(sidebar).toHaveCSS('width', '248px');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '일반');
+  const width = page.getByRole('combobox', { name: '좌측 사이드바 폭', exact: true });
+  await expect(width).toHaveValue('248');
+  await width.selectOption('400');
+  await expect(sidebar).toHaveCSS('width', '400px');
+  await width.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+  await page.screenshot({ path: info.outputPath('sidebar-width-settings.png') });
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await page.reload();
+  await expect(sidebar).toHaveCSS('width', '400px');
+  await expect(
+    sidebar.getByRole('button', { name: fixture.chat.title, exact: true })
+  ).toBeEnabled();
+  await page.screenshot({ path: info.outputPath('sidebar-width-400-desktop.png') });
+
+  await openHelper(page);
+  await expect(page.locator('.app-shell')).toHaveClass(/panel-docked/u);
+  await expect(sidebar).toHaveCSS('width', '400px');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(sidebar).toHaveCSS('width', '56px');
+  await page.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+  await expect(sidebar).toHaveCSS('width', '400px');
+
+  await sidebar.getByRole('button', { name: '좌측 패널 접기', exact: true }).click();
+  await expect(sidebar).toHaveCSS('width', '56px');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '일반');
+  await expect(width).toHaveValue('400');
+  await width.selectOption('320');
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await expect(sidebar).toHaveCSS('width', '56px');
+  await page.reload();
+  await expect(sidebar).toHaveCSS('width', '56px');
+  await sidebar.getByRole('button', { name: '좌측 패널 펼치기', exact: true }).click();
+  await expect(sidebar).toHaveCSS('width', '320px');
+
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  await expect(sidebar).toBeHidden();
+  const mobileNavigation = await visibleNavigation(page);
+  await expect(mobileNavigation.getByRole('button', { name: '서재', exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
+  ).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: info.outputPath('sidebar-width-mobile-unchanged.png') });
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await expect(sidebar).toHaveCSS('width', '256px');
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await expect(sidebar).toHaveCSS('width', '320px');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '일반');
+  await expect(width).toHaveValue('320');
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await page.evaluate(() => localStorage.setItem('uimori:sidebar-width', '9999'));
+  await page.reload();
+  await expect(sidebar).toHaveCSS('width', '248px');
+});
+
+test('SIDENAV05 closing navigation restores the current opener after lazy library replacement', async ({
+  page,
+}) => {
+  let releaseLibrary!: () => void;
+  const libraryGate = new Promise<void>((resolve) => {
+    releaseLibrary = resolve;
+  });
+  await page.route(/\/assets\/LibraryPanel-[^/]+\.js$/u, async (route) => {
+    await libraryGate;
+    await route.continue();
+  });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const opener = page.getByRole('button', { name: '탐색 메뉴', exact: true });
+  await expect(page.getByRole('status')).toContainText('서재 화면을 불러오는 중');
+  await opener.click();
+  await expect(page.getByRole('dialog', { name: '탐색', exact: true })).toBeVisible();
+  releaseLibrary();
+  await expect(page.getByTestId('library-panel')).toBeAttached();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: '탐색', exact: true })).toBeHidden();
+  await expect(opener).toBeFocused();
+  await opener.press('Enter');
+  await expect(page.getByRole('dialog', { name: '탐색', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '탐색 닫기', exact: true }).click();
+  await expect(opener).toBeFocused();
+});

@@ -289,15 +289,18 @@ test('PWS04 shared workspace load failures recover in model and prompt settings'
 }) => {
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
   let ready = false;
-  await page.route('**/api/prompt-workspace', async (route) => {
-    if (ready) await route.continue();
-    else
-      await route.fulfill({
-        status: 503,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: '합성 일시 오류' }),
-      });
-  });
+  await page.route(
+    /\/api\/(?:prompt-workspace|resources\/prompt-workspace\/current)$/,
+    async (route) => {
+      if (ready) await route.continue();
+      else
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: '합성 일시 오류' }),
+        });
+    }
+  );
   await page.goto('/');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '역할별 모델');
