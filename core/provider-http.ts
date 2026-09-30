@@ -1,10 +1,15 @@
+import { redactDiagnosticJson } from './provider-diagnostic-json.js';
 import { readProviderHttpDiagnostic, type ProviderHttpDiagnostic } from './provider-http-error.js';
 import { createHash } from 'node:crypto';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
 import { validateProviderEndpoint } from './product.js';
 import { validateModelOptions } from './model-capabilities.js';
 import { assertContextBudget } from './context-budget.js';
-import { createPublicTextProgress, publicProgressAllowed } from './provider-progress.js';
+import {
+  createPublicTextProgress,
+  publicProgressAllowed,
+  type ProviderTextUpdate,
+} from './provider-progress.js';
 import { consumeSse } from './vertex.js';
 import {
   encodeResponses,
@@ -36,9 +41,8 @@ import type {
 } from './transport.js';
 
 type Decoder = {
-  accept(value: unknown): void;
+  accept(value: unknown): ProviderTextUpdate;
   isTerminal(): boolean;
-  publicText(): string;
   snapshot(): ProviderResult;
   finish(): ProviderResult;
 };
@@ -52,22 +56,6 @@ const empty = (): ProviderResult => ({
   usage: { inputTokens: null, outputTokens: null, costUsd: null, raw: null, priceRevision: null },
   opaqueState: null,
 });
-function scrub(value: Json, secret?: string): Json {
-  if (typeof value === 'string') return secret ? value.split(secret).join('[REDACTED]') : value;
-  if (Array.isArray(value)) return value.map((item) => scrub(item, secret));
-  if (value && typeof value === 'object')
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        /^(authorization|x-api-key|api[_-]?key|credential|secret|password|access[_-]?token)$/i.test(
-          key
-        )
-          ? '[REDACTED]'
-          : scrub(item, secret),
-      ])
-    );
-  return value;
-}
 
 /** One user-admitted provider request. The adapters never retry, redirect or change models. */
 export async function executeNativeProvider(
@@ -178,7 +166,7 @@ export async function executeNativeProvider(
           ['authorization', 'x-api-key'].includes(key) ? '[REDACTED]' : value,
         ])
       ),
-      body: scrub(diagnostic, secret),
+      body: redactDiagnosticJson(diagnostic, secret),
       bodySha256: sha(body),
       stablePrefixSha256: sha(JSON.stringify(request.stable)),
       ...(cacheBoundaries.length ? { cacheBoundaries } : {}),
@@ -199,8 +187,8 @@ export async function executeNativeProvider(
       await consumeSse(
         reader,
         async (value) => {
-          decoder!.accept(value);
-          await progress?.(decoder!.publicText());
+          const update = decoder!.accept(value);
+          await progress?.(update);
           return decoder!.isTerminal();
         },
         signal,
@@ -220,17 +208,19 @@ export async function executeNativeProvider(
         )
       )
         return failure('INVALID_JSON_RESPONSE');
-      decoder.accept({
+      const update = decoder.accept({
         type: `response.${String((value as Record<string, unknown>).status)}`,
         response: value,
       });
-      await progress?.(decoder.publicText());
+      await progress?.(update);
     } else {
       await response.body.cancel();
       return failure('INVALID_CONTENT_TYPE');
     }
     if (signal.aborted) return failure('CANCELLED');
-    return decoder.finish();
+    const result = decoder.finish();
+    progress?.finish(result.text);
+    return result;
   } catch (error) {
     const code =
       error instanceof ProviderContractError ||

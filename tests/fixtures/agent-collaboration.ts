@@ -384,24 +384,19 @@ export const message = (text: string): Json => ({
   content: [{ type: 'output_text', text }],
 });
 export async function send(target: ServerResponse, output: Json[], status = 'completed') {
-  await writeSse(
-    target,
-    [
-      {
-        type: `response.${status}`,
-        response: {
-          id: randomUUID(),
-          status,
-          output,
-          usage: { input_tokens: 7, output_tokens: 3 },
-          ...(status === 'incomplete'
-            ? { incomplete_details: { reason: 'max_output_tokens' } }
-            : {}),
-        },
+  // Transport tests cover byte fragmentation; these cases exercise collaboration policy.
+  await writeSse(target, [
+    {
+      type: `response.${status}`,
+      response: {
+        id: randomUUID(),
+        status,
+        output,
+        usage: { input_tokens: 7, output_tokens: 3 },
+        ...(status === 'incomplete' ? { incomplete_details: { reason: 'max_output_tokens' } } : {}),
       },
-    ],
-    true
-  );
+    },
+  ]);
 }
 export function consults(run: Run): (ToolEvent & { result: any })[] {
   return run.toolEvents.filter((event) => event.name === 'agents.consult');

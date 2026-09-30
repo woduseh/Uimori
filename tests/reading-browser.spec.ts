@@ -135,8 +135,12 @@ function watch(page: Page) {
   const writes: string[] = [],
     errors: string[] = [];
   page.on('request', (request) => {
-    if (new URL(request.url()).pathname.startsWith('/api/') && request.method() !== 'GET')
-      writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    const path = new URL(request.url()).pathname;
+    // Scrolling these long examples may save the reader's location, independently of styling.
+    const readingPosition =
+      request.method() === 'PUT' && /^\/api\/chats\/[^/]+\/reading-position$/u.test(path);
+    if (path.startsWith('/api/') && request.method() !== 'GET' && !readingPosition)
+      writes.push(`${request.method()} ${path}`);
   });
   page.on('pageerror', (error) => errors.push(error.message));
   return { writes, errors };

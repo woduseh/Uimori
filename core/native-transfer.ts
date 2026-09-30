@@ -2,7 +2,6 @@ import type {
   Content,
   ContentKind,
   ContentRef,
-  ModelRef,
   PromptPreset,
   PromptRole,
   SavedPromptCombination,
@@ -70,9 +69,6 @@ export type NativeTransferModelRequirement = {
   agentTitle: string;
   sourceModelId: string;
 };
-export type NativeTransferModelBinding =
-  | { requirementKey: string; mode: 'local'; model: ModelRef }
-  | { requirementKey: string; mode: 'inherit-main' };
 export type NativeTransferPrepare = {
   digest: string;
   summary: NativeTransferSummary;

@@ -210,6 +210,11 @@ test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard
   await page.getByRole('button', { name: '상위 설정 따르기', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:forest');
   await expect(other.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:forest');
+  // Saving notifies the other tab even if the saving tab's follow-up catalog read fails.
+  await page.route('**/api/themes', (route) => route.fulfill({ status: 503, body: 'unavailable' }));
+  await page.getByRole('button', { name: '벚꽃 테마 적용', exact: true }).click();
+  await expect(other.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:blossom');
+  await page.unroute('**/api/themes');
   const tabs = page.getByRole('tablist', { name: '설정 항목', exact: true });
   await other.close();
   await tabs.getByRole('tab', { name: '일반', exact: true }).click();

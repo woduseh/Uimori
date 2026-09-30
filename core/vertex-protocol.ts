@@ -1,3 +1,5 @@
+import { canonicalJson as canonical } from './canonical-json.js';
+import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
 import { CUSTOM_TRANSLATION_FORMAT_INSTRUCTION } from './provider-format.js';
 import { modelCapability, validateModelOptions } from './model-capabilities.js';
@@ -40,15 +42,6 @@ function isJson(value: unknown, depth = 0): value is Json {
 function copy(value: unknown, code = 'INVALID_VERTEX_EVENT'): Json {
   if (!isJson(value)) reject(code);
   return structuredClone(value);
-}
-function canonical(value: Json): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (object(value))
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`)
-      .join(',')}}`;
-  return JSON.stringify(value);
 }
 const hash = (value: Json): string => createHash('sha256').update(canonical(value)).digest('hex');
 const nonempty = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
@@ -367,6 +360,7 @@ export class VertexDecoder {
   private readonly pending: PendingCall[] = [];
   private readonly ids: Set<string>;
   private text = '';
+  private eventText = '';
   private finishReason: string | null = null;
   private promptBlock: string | null = null;
   private fault: string | null = null;
@@ -382,10 +376,12 @@ export class VertexDecoder {
     if (this.context.phase !== 'request') reject('INVALID_VERTEX_CONTINUATION');
     this.ids = new Set(this.context.usedIds);
   }
-  accept(event: unknown): void {
+  accept(event: unknown): ProviderTextUpdate {
     if (this.fault) reject(this.fault);
     try {
+      this.eventText = '';
       this.acceptEvent(copy(event));
+      if (this.eventText) return { text: this.eventText, offset: this.text.length };
     } catch (error) {
       this.fault = error instanceof VertexProtocolError ? error.code : 'INVALID_VERTEX_EVENT';
       throw new VertexProtocolError(this.fault);
@@ -464,7 +460,10 @@ export class VertexDecoder {
     const partIndex = this.parts.length;
     // Preserve every complete original part, including signature-only and future metadata parts.
     this.parts.push(structuredClone(part));
-    if (typeof part.text === 'string' && part.thought !== true) this.text += part.text;
+    if (typeof part.text === 'string' && part.thought !== true) {
+      this.text += part.text;
+      this.eventText += part.text;
+    }
     if (part.functionCall === undefined) return;
     const call = part.functionCall;
     if (!object(call)) reject('INVALID_TOOL_ARGUMENTS');

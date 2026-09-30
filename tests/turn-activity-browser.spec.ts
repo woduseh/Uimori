@@ -1,3 +1,6 @@
+import { nativeProse, waitForNativeLayout } from './fixtures/native-message.js';
+import { openChatMenu } from './ui-navigation.js';
+import type { ResponseStreamPage } from '../core/response-stream.js';
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -350,4 +353,152 @@ test(`TURNUI03 failed response without source keeps inline diagnostics readable 
   if (visualReview) await page.screenshot({ path: info.outputPath('turn-activity-mobile.png') });
   expect(state.writes).toEqual([]);
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
+});
+
+function pendingDisplay(body: ReaderDetail, status: Run['status']) {
+  const run = body.runs[0];
+  body.sources = [];
+  body.jobs = [];
+  body.runs = [
+    {
+      ...run,
+      sourceRevision: null,
+      status,
+      error: status === 'refused' ? 'SYNTHETIC_REFUSAL' : null,
+    },
+  ];
+  body.reader.pendingRunIds = [run.id];
+  body.reader.responseActivity = [];
+  body.reader.activity = [];
+  body.reader.order = [];
+  body.reader.navigation = [];
+  body.reader.total = 0;
+  body.reader.latest = null;
+  body.reader.activeJobs = status === 'running' ? 1 : 0;
+}
+
+test('DISPLAY main complete mode waits for the canonical source across refresh and mode changes', async ({
+  page,
+  request,
+}, info) => {
+  const seeded = await seed(request),
+    run = seeded.runs[0];
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('uimori:response-display'))
+      localStorage.setItem('uimori:response-display', 'complete');
+  });
+  let reads = 0;
+  await page.route(`**/api/response-streams/main/${run.id}?*`, async (route) => {
+    reads++;
+    await route.fulfill({
+      json: {
+        taskKind: 'main',
+        taskId: run.id,
+        status: 'completed',
+        cursor: 1,
+        hasMore: false,
+        chunks: [
+          {
+            seq: 1,
+            segment: 0,
+            attemptId: 'public',
+            text: '후처리 전 공개 응답',
+            offset: '후처리 전 공개 응답'.length,
+          },
+        ],
+      } satisfies ResponseStreamPage,
+    });
+  });
+  const state = await harness(page, seeded.chat.id, (body) => pendingDisplay(body, 'running'));
+  const pending = page.getByTestId('pending-run');
+  await expect(pending.getByTestId('turn-activity')).toContainText('장면을 쓰는 중');
+  await expect(page.getByRole('button', { name: '원문 생성 취소', exact: true })).toBeVisible();
+  await expect(pending.locator('.streaming-response')).toHaveCount(0);
+  expect(reads).toBe(0);
+  const mode = async (value: string) => {
+    const menu = await openChatMenu(page);
+    await menu.getByRole('button', { name: '읽기 설정', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '읽기 설정', exact: true });
+    await dialog.getByLabel('응답 표시 방식', { exact: true }).selectOption(value);
+    await page.keyboard.press('Escape');
+  };
+  await mode('stream');
+  await expect(pending.locator('.streaming-text')).toHaveText('후처리 전 공개 응답');
+  await mode('complete');
+  await expect(pending.locator('.streaming-response')).toHaveCount(0);
+  const previous = reads;
+  await page.reload();
+  await expect(pending).toBeVisible();
+  await state.set((body) => pendingDisplay(body, 'completed'));
+  await expect(pending).toContainText('결과 불러오는 중…');
+  expect(reads).toBe(previous);
+  await state.set(() => {});
+  await expect(pending).toHaveCount(0);
+  await expect(page.getByTestId('source')).toHaveCount(1);
+  await waitForNativeLayout(page.getByTestId('source'));
+  await expect(nativeProse(page.getByTestId('source'))).toContainText(
+    'Synthetic scene 1: a lantern lights the quiet river.'
+  );
+  await expect(page.locator('.streaming-response')).toHaveCount(0);
+  expect(reads).toBe(previous);
+  expect(state.writes).toEqual([]);
+  expect((await detail(request, seeded.chat.id)).sources).toEqual(seeded.sources);
+  await page.screenshot({ path: info.outputPath('complete-main-canonical-source.png') });
+});
+
+test('DISPLAY main incomplete response fetches every page only after opening the disclosure', async ({
+  page,
+  request,
+}, info) => {
+  const seeded = await seed(request),
+    run = seeded.runs[0];
+  await page.addInitScript(() => localStorage.setItem('uimori:response-display', 'complete'));
+  const cursors: number[] = [];
+  let release = () => {};
+  const secondPage = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/api/response-streams/main/${run.id}?*`, async (route) => {
+    const after = Number(new URL(route.request().url()).searchParams.get('after') ?? 0);
+    cursors.push(after);
+    if (after) await secondPage;
+    await route.fulfill({
+      json: {
+        taskKind: 'main',
+        taskId: run.id,
+        status: 'refused',
+        cursor: after ? 2 : 1,
+        hasMore: !after,
+        chunks: [
+          {
+            seq: after ? 2 : 1,
+            segment: 0,
+            attemptId: 'public',
+            text: after ? '와 마지막 부분' : '첫 부분',
+            offset: after ? '첫 부분와 마지막 부분'.length : '첫 부분'.length,
+          },
+        ],
+      } satisfies ResponseStreamPage,
+    });
+  });
+  const state = await harness(page, seeded.chat.id, (body) => pendingDisplay(body, 'refused'));
+  const pending = page.getByTestId('pending-run'),
+    partial = pending.locator('.partial-response');
+  await expect(partial).not.toHaveAttribute('open');
+  expect(cursors).toEqual([]);
+  await partial.locator('summary').click();
+  try {
+    await expect.poll(() => cursors.length).toBe(2);
+    await expect(partial.locator('.streaming-text')).toHaveCount(0);
+    await expect(partial).toContainText('일부 응답을 불러오는 중');
+  } finally {
+    release();
+  }
+  await expect(partial.locator('.streaming-text')).toHaveText('첫 부분와 마지막 부분');
+  expect(cursors).toEqual([0, 1]);
+  await page.screenshot({ path: info.outputPath('incomplete-main-open.png') });
+  await page.reload();
+  await expect(partial).not.toHaveAttribute('open');
+  expect(cursors).toEqual([0, 1]);
+  expect(state.writes).toEqual([]);
 });

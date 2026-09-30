@@ -30,7 +30,7 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
         };
       }
       if (snapshot.profile?.packages?.some((pkg) => pkg.nativeRisu)) {
-        const live = nativeSourceSnapshot(store, source.chatId, source.id);
+        const live = nativeSourceSnapshot(store, source.chatId, source.id, snapshot);
         const own = snapshot;
         const first = own.packageStart?.mode === 'authored' || own.nativeRisuAuthored?.greeting;
         const messages = first

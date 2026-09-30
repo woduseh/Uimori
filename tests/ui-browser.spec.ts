@@ -1480,16 +1480,25 @@ test('UI18 source and translation edits keep the current manuscript and feed fut
   await expect(scene.getByRole('combobox')).toHaveCount(0);
   await expect(scene.getByText('번역 버전', { exact: true })).toHaveCount(0);
   await expect(scene.getByRole('button', { name: '다시 번역', exact: true })).toHaveCount(0);
-  await page.getByLabel('다음 장면 요청').fill('SYNTHETIC_FUTURE_AFTER_EDIT');
-  await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+  // Completed snapshots intentionally discard historical bodies. Inspect the frozen
+  // next input while execution is held, rather than depending on retired retention.
+  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'run' } });
+  try {
+    await page.getByLabel('다음 장면 요청').fill('SYNTHETIC_FUTURE_AFTER_EDIT');
+    await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+    await expect
+      .poll(async () => {
+        const pending = await data(request, chat.id);
+        return pending.runs
+          .find((run) => !original.runs.some((previous) => previous.id === run.id))
+          ?.snapshot.history.find((item) => item.revision === source.id)?.contentHash;
+      })
+      .toBe(createHash('sha256').update(finalText).digest('hex'));
+  } finally {
+    await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
+  }
   await expect(page.getByTestId('source')).toHaveCount(3);
   const future = await data(request, chat.id);
-  const next = future.runs.find(
-    (run) => !original.runs.some((previous) => previous.id === run.id)
-  )!;
-  expect(next.snapshot.history.find((item) => item.revision === source.id)?.contentHash).toBe(
-    createHash('sha256').update(finalText).digest('hex')
-  );
   expect(
     future.runs
       .filter((run) => original.runs.some((previous) => previous.id === run.id))

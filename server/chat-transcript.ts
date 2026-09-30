@@ -1,3 +1,4 @@
+import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   CHAT_TRANSCRIPT_FORMAT,
@@ -74,13 +75,11 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
     .update(JSON.stringify({ ...transcript, exportedAt: undefined, title }))
     .digest('hex');
   return store.transaction(() => {
-    const prior = store.db
-      .prepare('SELECT digest,result FROM import_operations WHERE key=?')
-      .get(key);
-    if (prior) {
-      if (prior.digest !== digest)
-        throw new HttpError(409, '다른 채팅에 같은 가져오기 ID가 사용됐어요.');
-      const saved = JSON.parse(String(prior.result));
+    const saved = readImportReceipt<{
+      chatId: string;
+      skippedAttachments: ChatTranscriptImport['skippedAttachments'];
+    }>(store, key, digest, '다른 채팅에 같은 가져오기 ID가 사용됐어요.');
+    if (saved) {
       return {
         chat: store.chat(saved.chatId),
         created: false,
@@ -176,9 +175,7 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
       }
       notesAt(index, head);
     }
-    store.db
-      .prepare('INSERT INTO import_operations VALUES(?,?,?)')
-      .run(key, digest, JSON.stringify({ chatId: chat.id, skippedAttachments }));
+    saveImportReceipt(store, key, digest, { chatId: chat.id, skippedAttachments });
     store.event(chat.id, 'chat.imported', chat.id);
     return { chat: store.chat(chat.id), created: true, skippedAttachments };
   });

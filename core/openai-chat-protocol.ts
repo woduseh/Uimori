@@ -1,3 +1,4 @@
+import type { ProviderTextUpdate } from './provider-progress.js';
 import { OpenAIProtocolError, openAIProtocol, type OpenAITurn } from './openai-protocol.js';
 import type { Json, ProviderRequest, ProviderResult, ProviderToolCall } from './transport.js';
 import { nativeMessageMetadata, type NativeMessageMetadata } from './provider-messages.js';
@@ -333,7 +334,7 @@ export class ChatDecoder {
       this.result.error = { code: 'EMPTY_RESPONSE' };
     }
   }
-  accept(value: unknown): void {
+  accept(value: unknown): ProviderTextUpdate {
     if (this.done) reject('EVENT_AFTER_TERMINAL');
     if (value === '[DONE]') {
       if (!this.finishReason) reject('MISSING_FINISH_REASON');
@@ -393,6 +394,8 @@ export class ChatDecoder {
       this.finishReason = choice.finish_reason;
       this.finalize();
     }
+    if (typeof delta.content === 'string' && delta.content)
+      return { text: delta.content, offset: this.result.text.length };
   }
   publicText(): string {
     return this.result.text;

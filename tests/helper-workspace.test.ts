@@ -636,6 +636,30 @@ test('a saved change survives an explanation EOF and prevents whole-request retr
   expect(reopened.taskSummaries(conversation.id)).toHaveLength(1);
 });
 
+test('paged helper messages retain their task outcome outside the recent task window', () => {
+  const f = fixture();
+  const failed = f.workspace.enqueue(
+    f.conversation.id,
+    'failed-message',
+    '중단된 요청',
+    snapshot(f)
+  );
+  f.workspace.start(failed.id, 'owner');
+  f.workspace.finish(failed.id, 'owner', 1, 'failed', '완료되지 않은 응답', 'UNEXPECTED_EOF');
+  for (let index = 0; index < 51; index++)
+    f.workspace.enqueue(f.conversation.id, `later-${index}`, '나중 요청', snapshot(f));
+  expect(f.workspace.taskSummaries(f.conversation.id).some((task) => task.id === failed.id)).toBe(
+    false
+  );
+  expect(
+    f.workspace.messages(f.conversation.id).find((message) => message.role === 'assistant')
+  ).toMatchObject({
+    taskId: failed.id,
+    taskStatus: 'failed',
+    text: '완료되지 않은 응답',
+  });
+});
+
 test('a rolled-back operation does not block retry or claim a completed change', () => {
   const f = fixture(),
     chat = createFixtureChat(f.store, '원 제목');

@@ -1,3 +1,4 @@
+import { redactDiagnosticJson } from '../core/provider-diagnostic-json.js';
 import { createHash } from 'node:crypto';
 import {
   AnthropicProtocolError,
@@ -261,7 +262,7 @@ export class AnthropicBatchRun {
         },
         body: {
           execution_mode: 'batch',
-          request: diagnosticAnthropicBody(params as Json),
+          request: redactDiagnosticJson(diagnosticAnthropicBody(params as Json), secret),
         },
         bodySha256: requestSha256,
         stablePrefixSha256: sha(JSON.stringify(request.stable)),

@@ -21,7 +21,8 @@ import { elapsedLabel } from './ActivityStatus.js';
 import { TurnStatus, type StatusTone } from './TurnStatus.js';
 import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { IconButton } from './IconButton.js';
-import { StreamingResponse } from './StreamingResponse.js';
+import { PartialResponse, ResponseDisplay } from './StreamingResponse.js';
+import type { ResponseDisplayMode } from './presentation-settings.js';
 import { Prose } from './Prose.js';
 import { HelperArtifactCard } from './HelperArtifactCard.js';
 import { useHelperConversation, type HelperTaskView } from './useHelperConversation.js';
@@ -45,6 +46,7 @@ import './helper.css';
 
 type Props = {
   enterSend: boolean;
+  responseDisplay: ResponseDisplayMode;
   open: boolean;
   modal?: boolean;
   ready?: boolean;
@@ -723,7 +725,8 @@ export function HelperPanel(props: Props) {
               <span />
             </div>
           )}
-          <StreamingResponse
+          <ResponseDisplay
+            mode={props.responseDisplay}
             taskKind="helper"
             taskId={task.id}
             taskStatus={task.status}
@@ -1031,56 +1034,68 @@ export function HelperPanel(props: Props) {
               </p>
             )
           )}
-          {messages.map((message) => (
-            <article
-              key={message.id}
-              className={`helper-message ${message.role === 'user' ? 'request' : message.role}`}
-              data-message-id={message.id}
-            >
-              {message.role === 'user' ? (
-                <RequestMessage
-                  runId={message.taskId}
-                  request={message.text}
-                  maxLength={REQUEST_TEXT_MAX_CHARS}
-                  editHint="수정한 요청으로 같은 자리에서 다시 시도해요."
-                  disabled={scopeMismatch || busy || Boolean(outbox)}
-                  onSubmit={
-                    taskMap.get(message.taskId) &&
-                    !active(taskMap.get(message.taskId)!) &&
-                    !taskMap.get(message.taskId)!.completedEffects &&
-                    taskMap.get(message.taskId)!.status !== 'completed'
-                      ? (text) => retry(taskMap.get(message.taskId)!, text)
-                      : undefined
-                  }
-                />
-              ) : (
-                <>
-                  <div className="helper-prose">
-                    <Prose text={message.text} />
-                  </div>
-                  <HelperResponseActions text={message.text} />
-                </>
-              )}
-              {message.artifacts.map((artifact) => (
-                <HelperArtifactCard
-                  conversationId={conversation.id}
-                  key={`${artifact.id}:${artifact.revision}`}
-                  {...artifact}
-                  readOnly={scopeMismatch}
-                  onRevise={(value) => {
-                    editDraft(
-                      `가정 장면 ${value.id} 개정 ${value.revision}을 다음과 같이 수정해줘: `
-                    );
-                    input.current?.focus();
-                  }}
-                />
-              ))}
-              {message.role === 'user' &&
-                taskMap.get(message.taskId) &&
-                taskMap.get(message.taskId)!.status !== 'completed' &&
-                taskStatus(taskMap.get(message.taskId)!)}
-            </article>
-          ))}
+          {messages.map((message) => {
+            const task = taskMap.get(message.taskId);
+            const status = task?.status ?? message.taskStatus;
+            const response = (
+              <>
+                <div className="helper-prose">
+                  <Prose text={message.text} />
+                </div>
+                <HelperResponseActions text={message.text} />
+              </>
+            );
+            return (
+              <article
+                key={message.id}
+                className={`helper-message ${message.role === 'user' ? 'request' : message.role}`}
+                data-message-id={message.id}
+              >
+                {message.role === 'user' ? (
+                  <RequestMessage
+                    runId={message.taskId}
+                    request={message.text}
+                    maxLength={REQUEST_TEXT_MAX_CHARS}
+                    editHint="수정한 요청으로 같은 자리에서 다시 시도해요."
+                    disabled={scopeMismatch || busy || Boolean(outbox)}
+                    onSubmit={
+                      taskMap.get(message.taskId) &&
+                      !active(taskMap.get(message.taskId)!) &&
+                      !taskMap.get(message.taskId)!.completedEffects &&
+                      taskMap.get(message.taskId)!.status !== 'completed'
+                        ? (text) => retry(taskMap.get(message.taskId)!, text)
+                        : undefined
+                    }
+                  />
+                ) : props.responseDisplay === 'complete' && status !== 'completed' ? (
+                  status && !['queued', 'running'].includes(status) ? (
+                    <PartialResponse>{response}</PartialResponse>
+                  ) : null
+                ) : (
+                  response
+                )}
+                {message.artifacts.map((artifact) => (
+                  <HelperArtifactCard
+                    conversationId={conversation.id}
+                    key={`${artifact.id}:${artifact.revision}`}
+                    {...artifact}
+                    readOnly={scopeMismatch}
+                    onRevise={(value) => {
+                      editDraft(
+                        `가정 장면 ${value.id} 개정 ${value.revision}을 다음과 같이 수정해줘: `
+                      );
+                      input.current?.focus();
+                    }}
+                  />
+                ))}
+                {message.role === 'user' &&
+                  taskMap.get(message.taskId) &&
+                  (taskMap.get(message.taskId)!.status !== 'completed' ||
+                    !answered.has(message.taskId)) &&
+                  taskStatus(taskMap.get(message.taskId)!)}
+              </article>
+            );
+          })}
         </div>
       </div>
       <Dialog

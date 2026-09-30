@@ -13,7 +13,7 @@ import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import type { ModelWorkspace } from '../core/product.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { navigationAction, openSourceActions } from './ui-navigation.js';
+import { navigationAction, openSourceActions, openChatMenu } from './ui-navigation.js';
 import { openHelper } from './ui-navigation.js';
 
 test.setTimeout(60000);
@@ -211,7 +211,10 @@ async function harness(page: Page, seedCount = 0) {
         return route.fulfill({
           json: {
             conversation: view.conversation,
-            messages: view.messages.slice(-100),
+            messages: view.messages.slice(-100).map((message) => ({
+              ...message,
+              taskStatus: view.tasks.find((task) => task.id === message.taskId)?.status,
+            })),
             tasks: view.tasks.slice(0, 50),
             eventCursor: view.events.at(-1)?.seq ?? 0,
           },
@@ -317,6 +320,7 @@ async function harness(page: Page, seedCount = 0) {
     posts,
     artifacts,
     streamReads,
+    streams,
     streamCursors,
     maxPendingStreams,
     heldStreams,
@@ -1112,4 +1116,112 @@ test('HELPUI07 keeps the displayed response until the delayed final message arri
   }
   await expect(panel.getByText('합성 완료 응답', { exact: true })).toBeVisible();
   await expect(panel.locator('.streaming-text')).toHaveCount(0);
+});
+
+test('DISPLAY helper complete mode skips public reads across tools, toggles and reload until the stored final answer', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const setMode = async (mode: string) => {
+    const panel = page.locator('#helper-panel');
+    if (await panel.isVisible())
+      await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+    const menu = await openChatMenu(page);
+    await menu.getByRole('button', { name: '읽기 설정', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '읽기 설정', exact: true });
+    await dialog.getByLabel('응답 표시 방식', { exact: true }).selectOption(mode);
+    await page.keyboard.press('Escape');
+    return open(page);
+  };
+  const panel = await setMode('complete');
+  await panel.getByLabel('도우미에게 요청').fill('최종 답변까지 기다려 주세요');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  const task = state.current().tasks[0];
+  state.progress(task, '도구 실행 전 설명', '도구 실행 전 설명'.length);
+  state.emit('tool.finished');
+  const events = state.eventReads;
+  await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(events + 2);
+  expect(state.streamReads.get(task.id) ?? 0).toBe(0);
+  await expect(panel.locator('.streaming-response')).toHaveCount(0);
+  await expect(panel.getByTestId('helper-activity-status')).toContainText('처리 중');
+  await setMode('stream');
+  await expect(panel.locator('.streaming-text')).toHaveText('도구 실행 전 설명');
+  await setMode('complete');
+  const reads = state.streamReads.get(task.id);
+  await expect(panel.locator('.streaming-response')).toHaveCount(0);
+  await page.reload();
+  await open(page);
+  const reloadedEvents = state.eventReads;
+  await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(reloadedEvents + 2);
+  expect(state.streamReads.get(task.id)).toBe(reads);
+  expect(state.posts).toHaveLength(1);
+  // Transport completion alone is not the completed helper tool loop/message.
+  state.streams.get(task.id)!.status = 'completed';
+  state.emit('attempt.finished');
+  await expect.poll(() => state.viewReads).toBeGreaterThan(1);
+  await expect(panel.locator('.helper-message.assistant')).toHaveCount(0);
+  state.complete(task);
+  await expect(panel.getByText('합성 완료 응답', { exact: true })).toBeVisible();
+  await expect(panel.locator('.streaming-response')).toHaveCount(0);
+  expect(state.streamReads.get(task.id)).toBe(reads);
+  expect(state.posts).toHaveLength(1);
+});
+
+test('DISPLAY helper incomplete saved answers stay collapsed and committed changes stay visible', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.addInitScript(() => localStorage.setItem('uimori:response-display', 'complete'));
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page),
+    view = state.current();
+  const failed = state.addFailed(view);
+  failed.completedEffects = { count: 1, labels: ['채팅 제목 변경'] };
+  view.messages.push({
+    id: randomUUID(),
+    conversationId: view.conversation.id,
+    taskId: failed.id,
+    role: 'assistant',
+    text: '마지막 설명은 완성되지 않았어요',
+    artifacts: [],
+    createdAt: new Date().toISOString(),
+  });
+  state.emit('task.failed');
+  // Read the seeded terminal projection directly instead of racing the idle 10-second poll.
+  await page.reload();
+  await open(page);
+  await expect(panel.getByTestId('helper-completed-effects')).toContainText(
+    '변경 1건은 저장됐지만'
+  );
+  const partial = panel.locator('.partial-response');
+  await expect(partial).toBeVisible();
+  await expect(partial).not.toHaveAttribute('open');
+  await expect(panel.getByText('마지막 설명은 완성되지 않았어요', { exact: true })).toHaveCount(0);
+  expect(state.streamReads.get(failed.id) ?? 0).toBe(0);
+  await partial.locator('summary').click();
+  await expect(partial.getByText('마지막 설명은 완성되지 않았어요', { exact: true })).toBeVisible();
+  await page.reload();
+  await open(page);
+  await expect(partial).not.toHaveAttribute('open');
+  await expect(panel.getByTestId('helper-completed-effects')).toBeVisible();
+
+  await panel.getByLabel('도우미에게 요청').fill('취소할 다음 작업');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  const task = view.tasks[0];
+  state.progress(task, '취소 직전 받은 내용', '취소 직전 받은 내용'.length);
+  const row = panel.locator(`.helper-task[data-task-id="${task.id}"]`);
+  await row.getByTestId('helper-task-activity').locator('summary').click();
+  await row.getByRole('button', { name: '진행 중인 도우미 작업 취소', exact: true }).click();
+  await expect(row).toContainText('작업을 취소했어요');
+  expect(state.streamReads.get(task.id) ?? 0).toBe(0);
+  await row.locator('.partial-response > summary').click();
+  await expect(row.locator('.streaming-text')).toHaveText('취소 직전 받은 내용');
+  expect(state.streamReads.get(task.id)).toBe(1);
 });
