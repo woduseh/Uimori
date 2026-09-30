@@ -1,3 +1,4 @@
+import { redactDiagnosticJson } from './provider-diagnostic-json.js';
 import type { ProviderHttpDiagnostic } from './provider-http-error.js';
 import { validateModelOptions } from './model-capabilities.js';
 import type {
@@ -170,21 +171,6 @@ export type CatalogModel = {
   };
   origin: 'catalog' | 'manual';
 };
-
-function redact(value: Json, secret?: string): Json {
-  if (typeof value === 'string') return secret ? value.split(secret).join('[REDACTED]') : value;
-  if (Array.isArray(value)) return value.map((item) => redact(item, secret));
-  if (object(value))
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        /^(authorization|api[_-]?key|credential|secret|password|access[_-]?token)$/i.test(key)
-          ? '[REDACTED]'
-          : redact(item as Json, secret),
-      ])
-    );
-  return value;
-}
 
 /** Fetch + fatal UTF-8 decoder + SSE assembler. Never retries or follows redirects. */
 export type ProviderExecutionOptions = {
@@ -385,7 +371,7 @@ export async function executeProvider(
       method: 'POST',
       url: connection.endpoint,
       headers: { ...headers, ...(secret ? { authorization: '[REDACTED]' } : {}) },
-      body: redact(JSON.parse(body) as Json, secret),
+      body: redactDiagnosticJson(JSON.parse(body) as Json, secret),
       bodySha256: sha(body),
       stablePrefixSha256: sha(stablePrefix),
     });
@@ -463,7 +449,7 @@ export async function executeProvider(
             inputTokens: numeric(event.inputTokens, true),
             outputTokens: numeric(event.outputTokens, true),
             costUsd: numeric(event.costUsd),
-            raw: redact((event.raw ?? null) as Json, secret),
+            raw: redactDiagnosticJson((event.raw ?? null) as Json, secret),
             priceRevision: (event.priceRevision ?? null) as string | null,
           };
           break;

@@ -31,6 +31,30 @@ export function safeProseLink(value: string): string | undefined {
   }
 }
 
+/** Index each complete delimiter run once, including unmatched runs kept literal. */
+function backtickSpans(text: string) {
+  const runs = [...text.matchAll(/`+/gu)];
+  const next = new Map<number, number>();
+  const spans = new Map<number, { contentStart: number; contentEnd: number; end: number }>();
+  const addSpan = (start: number, length: number) => {
+    const contentStart = start + length;
+    const contentEnd = next.get(length) ?? contentStart;
+    spans.set(start, {
+      contentStart,
+      contentEnd,
+      end: contentEnd === contentStart ? contentStart : contentEnd + length,
+    });
+  };
+  for (let index = runs.length - 1; index >= 0; index--) {
+    const run = runs[index];
+    addSpan(run.index, run[0].length);
+    // Inline escaping can consume just the first tick; literal rendering consumes the whole run.
+    if (run[0].length > 1) addSpan(run.index + 1, run[0].length - 1);
+    next.set(run[0].length, run.index);
+  }
+  return spans;
+}
+
 function inline(
   text: string,
   depth = 0,
@@ -42,6 +66,8 @@ function inline(
   // A completed template advances past its closer; unfinished openers must not
   // each search the remaining paragraph for a closer that does not exist.
   const lastTemplateClose = text.lastIndexOf('}}');
+  const lastTagClose = text.lastIndexOf('>');
+  const codeSpans = backtickSpans(text);
   let plain = '';
   const flush = () => {
     if (plain) {
@@ -68,11 +94,13 @@ function inline(
       offset++;
       continue;
     }
-    const code = rest.match(/^(`+)([\s\S]*?)\1(?!`)/u);
-    if (code && code[2] && !code[2].startsWith('`')) {
-      flush();
-      nodes.push(<code key={offset}>{code[2]}</code>);
-      offset += code[0].length;
+    const code = codeSpans.get(offset);
+    if (code) {
+      if (code.contentEnd > code.contentStart) {
+        flush();
+        nodes.push(<code key={offset}>{text.slice(code.contentStart, code.contentEnd)}</code>);
+      } else plain += text.slice(offset, code.end);
+      offset = code.end;
       continue;
     }
     const ruby = rest.match(
@@ -147,7 +175,7 @@ function inline(
       }
     }
     // Treat tag-shaped text as one literal, including attributes and their Markdown.
-    const rawTag = rest.match(/^<\/?[A-Za-z][^>]*>/u);
+    const rawTag = offset < lastTagClose && rest.match(/^<\/?[A-Za-z][^>]*>/u);
     if (rawTag) {
       if (protectQuotes) {
         flush();
@@ -611,23 +639,12 @@ function literalNodes(text: string): ReactNode[] {
   const lastTemplateClose = text.lastIndexOf('}}');
   const lastTagClose = text.lastIndexOf('>');
   const lastLinkClose = text.lastIndexOf('](');
-  const backtickRuns = [...text.matchAll(/`+/gu)];
-  const nextBacktick = new Map<number, number>();
-  const codeSpans = new Map<number, number>();
-  for (let index = backtickRuns.length - 1; index >= 0; index--) {
-    const run = backtickRuns[index];
-    const closing = nextBacktick.get(run[0].length);
-    codeSpans.set(
-      run.index,
-      closing === undefined ? run.index + run[0].length : closing + run[0].length
-    );
-    nextBacktick.set(run[0].length, run.index);
-  }
+  const codeSpans = backtickSpans(text);
   let plain = '';
   let offset = 0;
   while (offset < text.length) {
     const rest = text.slice(offset);
-    const codeEnd = codeSpans.get(offset);
+    const codeEnd = codeSpans.get(offset)?.end;
     const ruby =
       offset < lastRubyClose && rest.startsWith('<ruby>')
         ? text.slice(offset, text.indexOf('</ruby>', offset + 6) + 7)

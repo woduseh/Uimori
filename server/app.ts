@@ -281,10 +281,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         try {
           flushPendingImageCleanup(store.db);
         } catch {
-          app.log.error(
-            { code: 'IMAGE_CLEANUP_DEFERRED' },
-            'Image cleanup will retry on restart or the next settled task'
-          );
+          process.stderr.write('IMAGE_CLEANUP_DEFERRED\n');
         }
       }
     };
@@ -292,7 +289,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       settled();
       // A storage/finalization failure can escape a worker's own handler. Observe
       // it without creating an unhandled child rejection or logging manuscript data.
-      app.log.error({ code: 'BACKGROUND_TASK_FAILED' }, 'Background task did not settle normally');
+      process.stderr.write('BACKGROUND_TASK_FAILED\n');
     });
   };
   const streams = new ResponseStreamStore(store);

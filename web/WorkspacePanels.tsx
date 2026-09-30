@@ -259,7 +259,7 @@ const settingsCategories: SettingsCategory[] = [
       { label: '화면과 입력', terms: '화면 테마 Enter 보내기 도우미 패널 폭', anchor: 'display' },
       {
         label: '원고 읽기',
-        terms: '글자 크기 글꼴 본문 폭 행간 줄 간격 문단 간격 번역 보기',
+        terms: '글자 크기 글꼴 본문 폭 행간 줄 간격 문단 간격 번역 보기 응답 표시 실시간 완료',
         anchor: 'reading',
       },
     ],

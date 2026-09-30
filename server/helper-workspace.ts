@@ -235,7 +235,7 @@ export class HelperWorkspace {
     return (
       this.store.db
         .prepare(
-          `SELECT m.*, t.request AS request_text, COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id) AS request_group_id, root.rowid AS request_order,
+          `SELECT m.*, t.status AS task_status, t.request AS request_text, COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id) AS request_group_id, root.rowid AS request_order,
           (SELECT latest.id FROM helper_tasks latest WHERE latest.conversation_id=m.conversation_id AND COALESCE(json_extract(latest.snapshot,'$.requestGroupId'),latest.id)=root.id ORDER BY latest.rowid DESC LIMIT 1) AS latest_task_id
           FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id JOIN helper_tasks root ON root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id)
           WHERE m.conversation_id=? ${before ? 'AND m.rowid < (SELECT rowid FROM helper_messages WHERE id=?)' : ''} ORDER BY m.rowid DESC LIMIT 100`
@@ -250,6 +250,7 @@ export class HelperWorkspace {
         id: row.id,
         conversationId: id,
         taskId: row.task_id,
+        taskStatus: row.task_status,
         role: row.role,
         text: row.role === 'user' ? row.request_text : row.text,
         artifacts: JSON.parse(row.artifacts),

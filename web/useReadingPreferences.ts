@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { readingPositionElements } from './reader-dom.js';
+import { readPresentationSetting, writePresentationSetting } from './presentation-settings.js';
 import {
   normalizeReadability,
   READABILITY_STORAGE_KEY,
@@ -9,18 +10,10 @@ import {
 function readPreferences() {
   try {
     return normalizeReadability(
-      JSON.parse(localStorage.getItem(READABILITY_STORAGE_KEY) ?? 'null')
+      JSON.parse(readPresentationSetting(READABILITY_STORAGE_KEY) ?? 'null')
     );
   } catch {
     return normalizeReadability(null);
-  }
-}
-
-function storePreference(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Keep the current reading style usable when browser storage is unavailable.
   }
 }
 
@@ -77,18 +70,19 @@ export function useReadingPreferences(font: string, fontSize: number, width: num
     positions.current = [];
   }, [font, fontSize, width, settings]);
   useEffect(() => {
-    storePreference(READABILITY_STORAGE_KEY, JSON.stringify(settings));
+    writePresentationSetting(READABILITY_STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
-  useEffect(() => storePreference('uimori:font', font), [font]);
-  useEffect(() => storePreference('uimori:font-size', String(fontSize)), [fontSize]);
-  useEffect(() => storePreference('uimori:reading-width', String(width)), [width]);
+  useEffect(() => writePresentationSetting('uimori:font', font), [font]);
+  useEffect(() => writePresentationSetting('uimori:font-size', String(fontSize)), [fontSize]);
+  useEffect(() => writePresentationSetting('uimori:reading-width', String(width)), [width]);
   useEffect(() => {
     const receive = (event: StorageEvent) => {
-      if (
-        event.storageArea === localStorage &&
-        (event.key === READABILITY_STORAGE_KEY || event.key === null)
-      )
-        changeLayout(() => setSettings(readPreferences()));
+      if (event.key !== READABILITY_STORAGE_KEY && event.key !== null) return;
+      try {
+        if (event.storageArea === localStorage) changeLayout(() => setSettings(readPreferences()));
+      } catch {
+        // Browser storage can be disabled while this page is open.
+      }
     };
     window.addEventListener('storage', receive);
     return () => window.removeEventListener('storage', receive);

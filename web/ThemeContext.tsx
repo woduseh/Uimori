@@ -67,6 +67,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const alive = useRef(true);
   const epoch = useRef(0);
   const refresh = useCallback(async (notify = false) => {
+    if (notify) {
+      try {
+        localStorage.setItem(themesChangedKey, `${Date.now()}:${Math.random()}`);
+      } catch {
+        /* The server save already succeeded. */
+      }
+    }
     const current = ++epoch.current;
     try {
       const next = await api<ThemeCatalog>('/themes');
@@ -88,13 +95,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             : { themes, preferences };
         });
         setError('');
-      }
-      if (notify) {
-        try {
-          localStorage.setItem(themesChangedKey, `${Date.now()}:${Math.random()}`);
-        } catch {
-          /* The server save already succeeded. */
-        }
       }
     } catch (cause) {
       if (alive.current && current === epoch.current) setError((cause as Error).message);

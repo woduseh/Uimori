@@ -74,6 +74,9 @@ export function ResourceBundleImport({
           · {selection.preview.summary.images}개 이미지
         </p>
       )}
+      {!!selection?.preview.modelRequirements.length && (
+        <p>가져온 조언자의 모델 지정은 주 모델 따르기로 바뀌어요.</p>
+      )}
       <button
         type="button"
         disabled={!selection || busy}

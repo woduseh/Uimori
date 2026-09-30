@@ -1,3 +1,4 @@
+import { saveImportReceipt } from '../server/import-operations.js';
 import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -299,6 +300,8 @@ describe('chat transcript export and import', () => {
     const { chat } = authoredChat(store);
     const transcript = exportChatTranscript(store, chat.id);
     const first = importChatTranscript(store, { transcript, idempotencyKey: 'same-key' });
+    for (let index = 0; index < 300; index++)
+      saveImportReceipt(store, `resource-${index}`, 'digest', { index });
     const replay = importChatTranscript(store, { transcript, idempotencyKey: 'same-key' });
     expect(replay).toEqual({ chat: first.chat, created: false, skippedAttachments: [] });
     // The original and one imported copy; the replay created nothing.

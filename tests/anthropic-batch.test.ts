@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { AnthropicBatchRun, recoverableAnthropicBatchRun } from '../server/anthropic-batch.js';
 import type { Store } from '../server/store.js';
 import type {
@@ -92,6 +92,38 @@ async function until(predicate: () => boolean) {
   }
   throw new Error('fixture condition did not settle');
 }
+
+test('Batch diagnostic copies redact accidental credential text before any network call', async () => {
+  const db = database();
+  const input = request();
+  input.stable.contract += ' synthetic-anthropic-key';
+  input.input.task += ' synthetic-anthropic-key';
+  const original = structuredClone(input);
+  let captured: WireRecord | undefined;
+  const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('No network expected'));
+  try {
+    await new AnthropicBatchRun({ db } as Store, 'run-1').execute(
+      connection('https://api.anthropic.com/v1'),
+      input,
+      {
+        ...options(db, new AbortController().signal),
+        onWire: (wire) => {
+          captured = wire;
+          throw new Error('Stop after diagnostic capture');
+        },
+      }
+    );
+    expect(captured).toBeDefined();
+    expect(JSON.stringify(captured)).not.toContain('synthetic-anthropic-key');
+    expect(JSON.stringify(captured?.body)).toContain('[REDACTED]');
+    expect(captured?.headers['x-api-key']).toBe('[REDACTED]');
+    expect(input).toEqual(original);
+    expect(fetch).not.toHaveBeenCalled();
+  } finally {
+    fetch.mockRestore();
+    db.close();
+  }
+});
 
 describe('Anthropic Batch execution', () => {
   test('restarts from the durable batch id without creating a second paid request', async () => {

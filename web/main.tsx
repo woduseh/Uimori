@@ -29,7 +29,13 @@ import { ChatPromptOptions } from './ChatPromptOptions.js';
 import { HelperPanel } from './HelperPanel.js';
 import { selectedHelperSession } from './useHelperSessions.js';
 import type { HelperScope } from '../core/helper.js';
-import { StreamingResponse } from './StreamingResponse.js';
+import { ResponseDisplay } from './StreamingResponse.js';
+import {
+  readPresentationChoice,
+  readFontSize,
+  writePresentationSetting,
+  type ResponseDisplayMode,
+} from './presentation-settings.js';
 import { discardActiveEditor, saveActiveEditor } from './resource-editor.js';
 import type { Section as ChatSettingsSection } from './ChatSettingsPanel.js';
 import { ReaderPages } from './ReaderPages.js';
@@ -200,8 +206,10 @@ function App() {
   };
   const [settingsTab, setSettingsTab] = useState('general');
   const [promptToEdit, setPromptToEdit] = useState<string | null>(null);
-  const [optionsOpen, setOptionsOpen] = useState(false),
-    [optionsDirty, setOptionsDirty] = useState(false),
+  const [workspacePanel, setWorkspacePanel] = useState<'options' | 'helper' | null>(null);
+  const optionsOpen = workspacePanel === 'options';
+  const helperOpen = workspacePanel === 'helper';
+  const [optionsDirty, setOptionsDirty] = useState(false),
     [optionsBusy, setOptionsBusy] = useState(false);
   const inputTranslationDisabled =
     optionsBusy ||
@@ -209,7 +217,6 @@ function App() {
     s.pendingProfile ||
     !!s.pendingRequest ||
     s.submitting.includes(s.viewKey);
-  const [helperOpen, setHelperOpen] = useState(false);
   const [outlineHelperRequest, setOutlineHelperRequest] = useState<OutlineHelperRequest>();
   const [helperSelection, setHelperSelection] = useState<{
     key: string;
@@ -257,42 +264,28 @@ function App() {
   }, [errorScope, s.setError]);
   const [newKey, setNewKey] = useState(0);
   const [focus, setFocus] = useState(false);
-  const [sceneNavigatorEnabled, setSceneNavigatorEnabled] = useState(() => {
-    try {
-      return localStorage.getItem('uimori:scene-navigator') !== 'false';
-    } catch {
-      return true;
-    }
-  });
+  const [sceneNavigatorEnabled, setSceneNavigatorEnabled] = useState(
+    () => readPresentationChoice('uimori:scene-navigator', ['true', 'false'], 'true') === 'true'
+  );
   const showSceneNavigator = sceneNavigatorEnabled && !focus;
   useEffect(() => {
     if (!showSceneNavigator) setSceneList(false);
   }, [showSceneNavigator]);
   useEffect(() => {
-    try {
-      localStorage.setItem('uimori:scene-navigator', String(sceneNavigatorEnabled));
-    } catch {
-      /* The current reading session still keeps the chosen visibility. */
-    }
+    writePresentationSetting('uimori:scene-navigator', String(sceneNavigatorEnabled));
   }, [sceneNavigatorEnabled]);
   const [inspectedRun, setInspectedRun] = useState('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem('uimori:sidebar-collapsed') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => readPresentationChoice('uimori:sidebar-collapsed', ['true', 'false'], 'false') === 'true'
+  );
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [panelSidebarExpanded, setPanelSidebarExpanded] = useState(false);
-  const [readingWidth, setReadingWidth] = useState(() => {
-    const value = Number(localStorage.getItem('uimori:reading-width'));
-    return READING_WIDTHS.includes(value) ? value : 880;
-  });
-  const [panelWidth, setPanelWidth] = useState(() => {
-    const value = Number(localStorage.getItem('uimori:panel-width'));
-    return PANEL_WIDTHS.includes(value) ? value : 384;
-  });
+  const [readingWidth, setReadingWidth] = useState(() =>
+    readPresentationChoice('uimori:reading-width', READING_WIDTHS, 880)
+  );
+  const [panelWidth, setPanelWidth] = useState(() =>
+    readPresentationChoice('uimori:panel-width', PANEL_WIDTHS, 384)
+  );
   useEffect(() => {
     const resize = () => setViewportWidth(window.innerWidth);
     window.addEventListener('resize', resize);
@@ -316,25 +309,23 @@ function App() {
     if (!workspacePanelOpen) setPanelSidebarExpanded(false);
   }, [workspacePanelOpen]);
   useEffect(() => {
-    try {
-      localStorage.setItem('uimori:sidebar-collapsed', String(sidebarCollapsed));
-    } catch {
-      /* Navigation still works when storage is unavailable. */
-    }
+    writePresentationSetting('uimori:sidebar-collapsed', String(sidebarCollapsed));
   }, [sidebarCollapsed]);
-  const [theme, setTheme] = useState<'system' | 'dark' | 'light'>(() => {
-    const value = localStorage.getItem('uimori:theme');
-    return value === 'dark' || value === 'light' ? value : 'system';
-  });
-  const [font, setFont] = useState(() => localStorage.getItem('uimori:font') || 'sans');
-  const [fontSize, setFontSize] = useState(() =>
-    Math.max(9, Math.min(28, Number(localStorage.getItem('uimori:font-size') || 18)))
+  const [theme, setTheme] = useState(() =>
+    readPresentationChoice('uimori:theme', ['system', 'dark', 'light'] as const, 'system')
   );
+  const [font, setFont] = useState<string>(() =>
+    readPresentationChoice('uimori:font', ['sans', 'serif'], 'sans')
+  );
+  const [fontSize, setFontSize] = useState(readFontSize);
   const [enterSend, setEnterSend] = useState(
-    () => localStorage.getItem('uimori:enter-send') === 'true'
+    () => readPresentationChoice('uimori:enter-send', ['true', 'false'], 'false') === 'true'
   );
-  const [readingLanguage, setReadingLanguage] = useState(
-    () => localStorage.getItem('uimori:reading-language') || 'translation'
+  const [readingLanguage, setReadingLanguage] = useState<string>(() =>
+    readPresentationChoice('uimori:reading-language', ['translation', 'original'], 'translation')
+  );
+  const [responseDisplay, setResponseDisplay] = useState<ResponseDisplayMode>(() =>
+    readPresentationChoice('uimori:response-display', ['stream', 'complete'] as const, 'stream')
   );
   const reading = useReadingPreferences(font, fontSize, readingWidth);
 
@@ -457,18 +448,21 @@ function App() {
     };
     apply();
     media.addEventListener('change', apply);
-    localStorage.setItem('uimori:theme', theme);
+    writePresentationSetting('uimori:theme', theme);
     return () => media.removeEventListener('change', apply);
   }, [theme]);
   useEffect(() => {
-    localStorage.setItem('uimori:enter-send', String(enterSend));
+    writePresentationSetting('uimori:enter-send', String(enterSend));
   }, [enterSend]);
   useEffect(() => {
-    localStorage.setItem('uimori:reading-language', readingLanguage);
+    writePresentationSetting('uimori:reading-language', readingLanguage);
   }, [readingLanguage]);
   useEffect(() => {
+    writePresentationSetting('uimori:response-display', responseDisplay);
+  }, [responseDisplay]);
+  useEffect(() => {
     document.documentElement.style.setProperty('--panel-w', `${panelWidth}px`);
-    localStorage.setItem('uimori:panel-width', String(panelWidth));
+    writePresentationSetting('uimori:panel-width', String(panelWidth));
   }, [panelWidth]);
   useEffect(() => {
     const viewport = visualViewport;
@@ -604,8 +598,7 @@ function App() {
       aria-expanded={helperOpen}
       aria-controls="helper-panel"
       onClick={() => {
-        setOptionsOpen(false);
-        setHelperOpen((value) => !value);
+        setWorkspacePanel((value) => (value === 'helper' ? null : 'helper'));
       }}
     />
   );
@@ -672,6 +665,24 @@ function App() {
               표시
             </label>
           </div>
+        </section>
+
+        <section className="settings-card reading-settings-group" aria-label="응답 표시">
+          <label>
+            응답 표시 방식
+            <select
+              aria-label="응답 표시 방식"
+              value={responseDisplay}
+              onChange={(event) => setResponseDisplay(event.target.value as ResponseDisplayMode)}
+            >
+              <option value="stream">실시간 표시</option>
+              <option value="complete">완료 후 한 번에 표시</option>
+            </select>
+          </label>
+          <small className="reading-group-note">
+            본문과 도우미 응답에 적용해요. 생성 방식은 그대로이며, 진행 상태와 취소는 계속 사용할 수
+            있어요.
+          </small>
         </section>
 
         <section className="settings-card reading-settings-group" aria-label="번역">
@@ -756,8 +767,7 @@ function App() {
                       aria-expanded={false}
                       aria-controls="helper-panel"
                       onClick={() => {
-                        setOptionsOpen(false);
-                        setHelperOpen(true);
+                        setWorkspacePanel('helper');
                       }}
                     />
                   )}
@@ -803,8 +813,7 @@ function App() {
                           aria-expanded={helperOpen}
                           aria-controls="helper-panel"
                           onClick={() => {
-                            setOptionsOpen(false);
-                            setHelperOpen(true);
+                            setWorkspacePanel('helper');
                           }}
                         >
                           <MessageCircle size={18} aria-hidden="true" />
@@ -1130,8 +1139,7 @@ function App() {
                                   : undefined
                               }
                               onAskHelper={(sourceId, text) => {
-                                setOptionsOpen(false);
-                                setHelperOpen(true);
+                                setWorkspacePanel('helper');
                                 if (s.selected)
                                   setHelperSelection({
                                     key: crypto.randomUUID(),
@@ -1221,7 +1229,8 @@ function App() {
                                   <span />
                                 </div>
                               )}
-                              <StreamingResponse
+                              <ResponseDisplay
+                                mode={responseDisplay}
                                 taskKind="main"
                                 taskId={run.id}
                                 taskStatus={run.status}
@@ -1469,8 +1478,7 @@ function App() {
                           aria-controls="chat-prompt-options"
                           disabled={!s.detail}
                           onClick={() => {
-                            setHelperOpen(false);
-                            setOptionsOpen((value) => !value);
+                            setWorkspacePanel((value) => (value === 'options' ? null : 'options'));
                           }}
                         >
                           <SlidersHorizontal size={14} />
@@ -1587,7 +1595,7 @@ function App() {
           s.pendingProfile
         }
         onClose={() => {
-          setOptionsOpen(false);
+          setWorkspacePanel((value) => (value === 'options' ? null : value));
           requestAnimationFrame(() => {
             const target = optionsButton.current;
             if (target?.checkVisibility()) target.focus();
@@ -1601,6 +1609,7 @@ function App() {
         ready={s.destination !== 'story' || !s.selected || !!s.detail}
         modal={panelModal}
         enterSend={enterSend}
+        responseDisplay={responseDisplay}
         modelDescription={helperDescription}
         open={helperOpen}
         selection={helperSelection}
@@ -1611,7 +1620,7 @@ function App() {
             ? { kind: 'chat', chatId: s.selected }
             : { kind: 'library', workId: `library:${libraryTab}` }
         }
-        onClose={() => setHelperOpen(false)}
+        onClose={() => setWorkspacePanel((value) => (value === 'helper' ? null : value))}
         onModelSettings={() => {
           setSettingsTab('models');
           setPanel('settings');
@@ -1786,13 +1795,11 @@ function App() {
             onClose={() => setPanel('')}
             helperVisible={helperOpen}
             onToggleHelper={() => {
-              setOptionsOpen(false);
-              setHelperOpen((value) => !value);
+              setWorkspacePanel((value) => (value === 'helper' ? null : 'helper'));
             }}
             onHelp={(request) => {
               setOutlineHelperRequest(request);
-              setOptionsOpen(false);
-              setHelperOpen(true);
+              setWorkspacePanel('helper');
             }}
           />
         </div>

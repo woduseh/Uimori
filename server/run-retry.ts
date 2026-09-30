@@ -1,3 +1,4 @@
+import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -29,14 +30,13 @@ export function retryRun(
       judgmentOnly: !!options.judgmentOnly,
     });
     const digest = createHash('sha256').update(command).digest('hex');
-    const previous = store.db
-      .prepare('SELECT digest,result FROM import_operations WHERE key=?')
-      .get(requestKey);
-    if (previous) {
-      if (previous.digest !== digest)
-        throw new HttpError(409, 'Idempotency key reused with a different retry');
-      return { run: store.run(JSON.parse(String(previous.result)).runId), created: false };
-    }
+    const previous = readImportReceipt<{ runId: string }>(
+      store,
+      requestKey,
+      digest,
+      'Idempotency key reused with a different retry'
+    );
+    if (previous) return { run: store.run(previous.runId), created: false };
     const original = store.run(runId);
     if (['queued', 'running'].includes(original.status))
       throw new HttpError(409, 'Original run is still active');
@@ -114,9 +114,7 @@ export function retryRun(
       );
       run = result.run;
     }
-    store.db
-      .prepare('INSERT INTO import_operations(key,digest,result) VALUES(?,?,?)')
-      .run(requestKey, digest, JSON.stringify({ runId: run.id }));
+    saveImportReceipt(store, requestKey, digest, { runId: run.id });
     return { run, created: true };
   });
 }

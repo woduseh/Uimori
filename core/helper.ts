@@ -75,6 +75,8 @@ export type HelperTask = {
   completedEffects?: { count: number; labels: string[] };
 };
 export type HelperMessage = {
+  /** Task outcome travels with paged messages, independently of the task-history window. */
+  taskStatus?: HelperStatus;
   requestOrder?: number;
   requestGroupId?: string;
   latestTaskId?: string;

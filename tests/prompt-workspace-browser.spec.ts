@@ -2,7 +2,7 @@ import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
-import { navigationAction, selectSettingsSection } from './ui-navigation.js';
+import { navigationAction, selectSettingsSection, openHelper } from './ui-navigation.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import type { PromptWorkspace } from '../core/product.js';
@@ -33,6 +33,20 @@ test(
     await page.getByRole('tab', { name: '모든 채팅', exact: true }).click();
     const panel = page.getByRole('tabpanel', { name: '모든 채팅 옵션', exact: true });
     await panel.getByLabel('합성 문체', { exact: true }).fill('간결하게');
+    // Switching docked panels must preserve unapplied options without leaving both open.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openHelper(page);
+    await expect(page.locator('#helper-panel')).toBeVisible();
+    await expect(page.locator('#chat-prompt-options')).toBeHidden();
+    await page.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+    await expect(page.locator('#chat-prompt-options')).toBeHidden();
+    const options = page.getByRole('button', { name: '창작 옵션', exact: true });
+    if (!(await options.isVisible()))
+      await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+    await options.click();
+    await expect(page.locator('#helper-panel')).toBeHidden();
+    await expect(panel.getByLabel('합성 문체', { exact: true })).toHaveValue('간결하게');
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
     await panel.getByRole('button', { name: '현재 옵션 적용', exact: true }).click();
     await expect(panel.getByRole('button', { name: '현재 옵션 적용' })).toBeDisabled();
     expect((await (await request.get('/api/prompt-workspace')).json()).main.values.tone).toBe(

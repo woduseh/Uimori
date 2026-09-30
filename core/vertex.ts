@@ -1,3 +1,4 @@
+import { redactDiagnosticJson } from './provider-diagnostic-json.js';
 import { readProviderHttpDiagnostic, type ProviderHttpDiagnostic } from './provider-http-error.js';
 import { createHash } from 'node:crypto';
 import { isVertexAdcReference } from './credential-reference.js';
@@ -14,12 +15,7 @@ import {
 } from './vertex-protocol.js';
 import { ProviderContractError } from './provider-errors.js';
 import { validateConnection, validateRequest } from './provider-request.js';
-import type {
-  Json,
-  ProviderConnection,
-  ProviderExecutionOptions,
-  ProviderResult,
-} from './transport.js';
+import type { ProviderConnection, ProviderExecutionOptions, ProviderResult } from './transport.js';
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const emptyResult = (): ProviderResult => ({
@@ -31,21 +27,6 @@ const emptyResult = (): ProviderResult => ({
   usage: { inputTokens: null, outputTokens: null, costUsd: null, raw: null, priceRevision: null },
   opaqueState: null,
 });
-
-function scrub(value: Json, token: string): Json {
-  if (typeof value === 'string') return value.split(token).join('[REDACTED]');
-  if (Array.isArray(value)) return value.map((item) => scrub(item, token));
-  if (value && typeof value === 'object')
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        /^(authorization|api[_-]?key|credential|secret|password|access[_-]?token)$/i.test(key)
-          ? '[REDACTED]'
-          : scrub(item, token),
-      ])
-    );
-  return value;
-}
 
 /** Strict SSE framing: byte boundaries, CRLF, comments and multiline data are independent of JSON. */
 export async function consumeSse(
@@ -214,7 +195,7 @@ export async function executeVertexProvider(
         : {};
     const body = JSON.stringify(prepared.body);
     // The diagnostic view does not become the actual request. Signatures remain byte-for-byte in body.
-    const diagnostic = scrub(diagnosticVertexBody(prepared.body), token);
+    const diagnostic = redactDiagnosticJson(diagnosticVertexBody(prepared.body), token);
     await options.onWire?.({
       connectionId: connection.id,
       protocol: connection.protocol,
@@ -268,14 +249,15 @@ export async function executeVertexProvider(
     await consumeSse(
       reader,
       async (value) => {
-        decoder!.accept(value);
-        await progress?.(decoder!.publicText());
+        const update = decoder!.accept(value);
+        await progress?.(update);
         return false;
       },
       signal
     );
     if (signal.aborted) return failure('CANCELLED');
     const result = decoder.finish();
+    progress?.finish(result.text);
     const raw = result.usage.raw;
     if (
       tier === 'flex' &&

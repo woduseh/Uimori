@@ -1,3 +1,5 @@
+import { canonicalJson as canonical } from './canonical-json.js';
+import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
 import {
   CUSTOM_TRANSLATION_FORMAT_INSTRUCTION,
@@ -51,19 +53,6 @@ function isJson(value: unknown, depth = 0): value is Json {
 function copy(value: unknown, code = 'INVALID_ANTHROPIC_EVENT'): Json {
   if (!isJson(value)) reject(code);
   return structuredClone(value);
-}
-function canonical(value: Json): string {
-  if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
-  if (object(value))
-    return (
-      '{' +
-      Object.keys(value)
-        .sort()
-        .map((key) => JSON.stringify(key) + ':' + canonical(value[key]))
-        .join(',') +
-      '}'
-    );
-  return JSON.stringify(value);
 }
 const hash = (value: Json) => createHash('sha256').update(canonical(value)).digest('hex');
 const VERSION = 'anthropic-messages-turn-v1' as const;
@@ -490,6 +479,8 @@ export class AnthropicDecoder {
   private readonly ids: Set<string>;
   private readonly calls: ProviderToolCall[] = [];
   private readonly pending: PendingCall[] = [];
+  private publicLength = 0;
+  private publicTail = -1;
   private started = false;
   private stopped = false;
   private stopReason: string | null = null;
@@ -530,10 +521,10 @@ export class AnthropicDecoder {
       parseOffset,
     };
   }
-  accept(value: unknown): void {
+  accept(value: unknown): ProviderTextUpdate {
     if (this.fault) reject(this.fault, this.faultDiagnostic ?? undefined);
     try {
-      this.acceptEvent(copy(value));
+      return this.acceptEvent(copy(value));
     } catch (error) {
       this.fault = error instanceof AnthropicProtocolError ? error.code : 'INVALID_ANTHROPIC_EVENT';
       this.faultDiagnostic =
@@ -541,7 +532,7 @@ export class AnthropicDecoder {
       throw new AnthropicProtocolError(this.fault, this.faultDiagnostic ?? undefined);
     }
   }
-  private acceptEvent(event: Json): void {
+  private acceptEvent(event: Json): ProviderTextUpdate {
     if (!object(event) || !nonempty(event.type)) reject('INVALID_ANTHROPIC_EVENT');
     if (event.type === 'ping') return;
     if (this.stopped) reject('ANTHROPIC_EVENT_AFTER_STOP');
@@ -666,6 +657,7 @@ export class AnthropicDecoder {
         invalid: null,
         invalidDiagnostic: null,
       });
+      if (content.type === 'text') return this.publicAppend(index, content.text as string);
       return;
     }
     const block = this.blocks[index];
@@ -677,9 +669,10 @@ export class AnthropicDecoder {
         delta.type === 'text_delta' &&
         block.content.type === 'text' &&
         typeof delta.text === 'string'
-      )
+      ) {
         block.content.text = (block.content.text as string) + delta.text;
-      else if (
+        return this.publicAppend(index, delta.text);
+      } else if (
         delta.type === 'thinking_delta' &&
         block.content.type === 'thinking' &&
         typeof delta.thinking === 'string'
@@ -761,6 +754,14 @@ export class AnthropicDecoder {
         index,
       });
     }
+  }
+  private publicAppend(index: number, text: string): ProviderTextUpdate {
+    if (!text) return;
+    this.publicLength += text.length;
+    // A provider can still mutate an earlier open block. Reconcile that boundary in full.
+    if (index < this.publicTail) return this.publicText();
+    this.publicTail = index;
+    return { text, offset: this.publicLength };
   }
   publicText(): string {
     return this.blocks

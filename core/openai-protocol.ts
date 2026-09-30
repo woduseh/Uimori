@@ -1,3 +1,5 @@
+import { canonicalJson as canonical } from './canonical-json.js';
+import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
 import {
   CUSTOM_TRANSLATION_FORMAT_INSTRUCTION,
@@ -44,15 +46,6 @@ function copy(value: unknown, code = 'INVALID_OPENAI_EVENT', depth = 0): Json {
       Object.entries(value).map(([key, item]) => [key, copy(item, code, depth + 1)])
     );
   return reject(code);
-}
-function canonical(value: Json): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (object(value))
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`)
-      .join(',')}}`;
-  return JSON.stringify(value);
 }
 const hash = (value: Json) => createHash('sha256').update(canonical(value)).digest('hex');
 export type OpenAIToolAlias = { name: string; providerName: string };
@@ -535,6 +528,7 @@ export class ResponsesDecoder {
   private responseId: string | undefined;
   private serviceTier: string | undefined;
   private sequence: number | undefined;
+  private publicTail: { outputIndex: number; contentIndex: number } | undefined;
   constructor(context: OpenAITurn) {
     this.context = structuredClone(context);
   }
@@ -597,9 +591,10 @@ export class ResponsesDecoder {
   private refresh(strict: boolean): void {
     let text = '';
     let refusal = '';
+    this.publicTail = undefined;
     const calls: ProviderToolCall[] = [];
     const ids = new Set<string>();
-    for (const [, state] of [...this.items].sort(([a], [b]) => a - b)) {
+    for (const [outputIndex, state] of [...this.items].sort(([a], [b]) => a - b)) {
       const item = state.item;
       if (
         strict &&
@@ -613,13 +608,15 @@ export class ResponsesDecoder {
           if (strict) reject('INVALID_OUTPUT_ITEM');
           else continue;
         }
-        for (const part of item.content as Json[]) {
+        for (const [contentIndex, part] of (item.content as Json[]).entries()) {
           if (!object(part)) {
             if (strict) reject('INVALID_OUTPUT_ITEM');
             else continue;
           }
-          if (part.type === 'output_text' && typeof part.text === 'string') text += part.text;
-          else if (part.type === 'refusal' && typeof part.refusal === 'string')
+          if (part.type === 'output_text' && typeof part.text === 'string') {
+            text += part.text;
+            if (part.text) this.publicTail = { outputIndex, contentIndex };
+          } else if (part.type === 'refusal' && typeof part.refusal === 'string')
             refusal += part.refusal;
           else if (strict) reject('UNSUPPORTED_OUTPUT_CONTENT');
         }
@@ -658,7 +655,7 @@ export class ResponsesDecoder {
       recoveredFromTruncation: true,
     };
   }
-  accept(value: unknown): void {
+  accept(value: unknown): ProviderTextUpdate {
     const event = copy(value);
     if (!object(event) || !nonempty(event.type)) reject('INVALID_OPENAI_EVENT');
     if (this.terminal) reject('EVENT_AFTER_TERMINAL');
@@ -697,11 +694,14 @@ export class ResponsesDecoder {
       this.result.error = { code: 'PROVIDER_ERROR' };
       return;
     }
+    let publicSnapshot = false;
     if (event.type === 'response.output_item.added') {
+      publicSnapshot = true;
       const index = this.index(event.output_index);
       if (this.items.has(index)) reject('DUPLICATE_OUTPUT_ITEM');
       this.mergeItem(index, event.item, false);
     } else if (event.type === 'response.output_item.done') {
+      publicSnapshot = true;
       this.mergeItem(this.index(event.output_index), event.item, true);
     } else if (
       event.type === 'response.function_call_arguments.delta' ||
@@ -717,6 +717,7 @@ export class ResponsesDecoder {
         if (!data.startsWith(state.item.arguments)) reject('TOOL_ARGUMENTS_MISMATCH');
         state.item.arguments = data;
       }
+      return;
     } else if (
       event.type === 'response.content_part.added' ||
       event.type === 'response.content_part.done'
@@ -742,6 +743,7 @@ export class ResponsesDecoder {
           )
             reject('OUTPUT_TEXT_MISMATCH');
       state.item.content[index] = copy(event.part);
+      publicSnapshot = true;
     } else if (/^response\.(output_text|refusal)\.(delta|done)$/u.test(event.type)) {
       const state = this.state(event);
       const index = this.index(event.content_index);
@@ -758,11 +760,26 @@ export class ResponsesDecoder {
         reject('OUTPUT_ITEM_MISMATCH');
       const data = event.type.endsWith('.delta') ? event.delta : event[field];
       if (typeof data !== 'string') reject('INVALID_OUTPUT_TEXT');
-      if (event.type.endsWith('.delta')) part[field] += data;
-      else {
+      if (event.type.endsWith('.delta')) {
+        part[field] += data;
+        const outputIndex = event.output_index as number;
+        if (
+          !refusal &&
+          state.item.role === 'assistant' &&
+          (!this.publicTail ||
+            outputIndex > this.publicTail.outputIndex ||
+            (outputIndex === this.publicTail.outputIndex && index >= this.publicTail.contentIndex))
+        ) {
+          if (!data) return;
+          this.result.text += data;
+          this.publicTail = { outputIndex, contentIndex: index };
+          return { text: data, offset: this.result.text.length };
+        }
+      } else {
         if (!data.startsWith(part[field] as string)) reject('OUTPUT_TEXT_MISMATCH');
         part[field] = data;
       }
+      publicSnapshot = !refusal;
     } else if (
       ['response.completed', 'response.incomplete', 'response.failed'].includes(event.type)
     ) {
@@ -810,7 +827,7 @@ export class ResponsesDecoder {
         this.result.status = 'error';
         this.result.error = { code: 'EMPTY_RESPONSE' };
       }
-      return;
+      return this.result.text;
     } else if (
       event.type.startsWith('response.reasoning_') ||
       event.type === 'response.output_text.annotation.added'
@@ -819,6 +836,7 @@ export class ResponsesDecoder {
       return;
     } else reject('UNSUPPORTED_RESPONSES_EVENT');
     this.refresh(false);
+    return publicSnapshot ? this.result.text : undefined;
   }
   publicText(): string {
     return this.result.text;

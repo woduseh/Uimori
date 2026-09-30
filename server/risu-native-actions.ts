@@ -39,14 +39,19 @@ function groupMessages(messages: NativeRisuMessage[]): NativeRisuMessage[][] {
   return groups;
 }
 /** Current chat context; the source package revision remains the one the reader rendered. */
-export function nativeSourceSnapshot(store: Store, chatId: string, sourceId: string) {
+export function nativeSourceSnapshot(
+  store: Store,
+  chatId: string,
+  sourceId: string,
+  own?: RunSnapshot
+) {
   const chat = store.chat(chatId);
   const history = store.history(chat.headRevision);
   if (!history.some((entry) => entry.revision === sourceId))
     throw new HttpError(409, 'RISU_NATIVE_SOURCE_OUTSIDE_CHAT');
   const source = store.source(sourceId);
   if (source.chatId !== chatId) throw new HttpError(404, 'Source not found');
-  const own = readRunSnapshot(store, source.runId);
+  own ??= readRunSnapshot(store, source.runId);
   const snapshot: RunSnapshot = {
     ...own,
     profile: chatVariableProfile(store, chatId, own.profile),

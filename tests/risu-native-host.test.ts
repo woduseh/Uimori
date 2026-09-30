@@ -1,4 +1,5 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
+import * as projections from '../server/run-projections.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -225,7 +226,12 @@ test('native first-message button renders, checkpoints state, and survives sourc
   packagePresentationRoutes(app, store);
   try {
     const first = store.chat(chatId).headRevision!;
+    const snapshots = vi.spyOn(projections, 'readRunSnapshot');
     const before = await app.inject(`/api/chats/${chatId}/sources/${first}/presentation`);
+    expect(
+      snapshots.mock.calls.filter(([, runId]) => runId === store.source(first).runId)
+    ).toHaveLength(1);
+    snapshots.mockRestore();
     expect(before.statusCode, before.body).toBe(200);
     expect(before.json().format).toBe('risu-html');
     expect(before.json().original.html).toContain('Choose none');

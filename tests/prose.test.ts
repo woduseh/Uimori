@@ -100,6 +100,26 @@ describe('safe prose rendering', () => {
     );
   });
 
+  test('matches whole code delimiters and keeps unmatched runs literal', () => {
+    expect(render('`a` ``b ` c``')).toContain('<code>a</code> <code>b ` c</code>');
+    expect(render('\\``foo`')).toContain('`<code>foo</code>');
+    expect(render('\\```foo``')).toContain('`<code>foo</code>');
+    expect(render('prefix ``unfinished` **next**')).toContain(
+      'prefix ``unfinished` <strong>next</strong>'
+    );
+  });
+
+  test('preserves pathological unfinished code and tags without repeated suffix searches', () => {
+    const ticks = '`'.repeat(40_000);
+    expect(render(`prefix ${ticks} **next**`)).toBe(
+      `<p>prefix ${ticks} <strong>next</strong></p>\n\n`
+    );
+    const tags = '<script'.repeat(20_000);
+    expect(render(`${tags} **next**`)).toBe(
+      `<p>${tags.replaceAll('<', '&lt;')} <strong>next</strong></p>\n\n`
+    );
+  });
+
   test('rejects unsafe and ambiguous URL schemes without accepting control-character obfuscation', () => {
     for (const value of [
       'javascript:alert(1)',
