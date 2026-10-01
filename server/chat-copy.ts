@@ -1,3 +1,4 @@
+import { captureIllustrations, restoreIllustrations } from './illustration-copy.js';
 import { captureBookmarks, restoreBookmarks } from './reading-state.js';
 import { captureChatAuthoring, restoreChatAuthoring } from './chat-copy-authoring.js';
 import {
@@ -7,10 +8,8 @@ import {
 } from './chat-copy-messages.js';
 import { independentTextMedia } from './chat-media.js';
 import { independentTranscriptMedia } from './chat-media.js';
-import { storeImage } from './image-storage.js';
-import { createHash, randomUUID } from 'node:crypto';
 import type { Store, Chat } from './store.js';
-import type { ChatCopy, PortableIllustration } from '../core/chat-backup.js';
+import type { ChatCopy } from '../core/chat-backup.js';
 import { validateChatVariableState } from '../core/chat-variables.js';
 import { exportChatTranscript, importChatTranscript } from './chat-transcript.js';
 import { readChatVariables } from './chat-variables.js';
@@ -36,20 +35,7 @@ export function captureChatCopy(store: Store, chatId: string, sourceId?: string 
       : (checkpoints.at(-1) ?? { revision: 0, values: {} });
   const messages = captureCopiedMessages(store, history);
   mapCopiedMessageTexts(messages, (text) => independentTextMedia(store, text));
-  const illustrations: PortableIllustration[] = [];
-  for (const [entry, source] of history.entries()) {
-    for (const row of store.db
-      .prepare(`SELECT i.mime,b.bytes,i.body FROM illustration_images i JOIN image_blobs b ON b.hash=i.hash
-      JOIN illustration_jobs j ON j.id=i.job_id WHERE j.source_revision=? AND j.status='completed' ORDER BY j.created_at,i.position`)
-      .all(source.revision)) {
-      illustrations.push({
-        entry,
-        mime: row.mime as PortableIllustration['mime'],
-        base64: Buffer.from(row.bytes as Uint8Array).toString('base64'),
-        title: String(JSON.parse(String(row.body)).caption ?? ''),
-      });
-    }
-  }
+  const illustrations = captureIllustrations(store, history);
   return {
     transcript,
     state: {
@@ -121,47 +107,7 @@ export function restoreChatCopy(
       history.map((source) => source.revision),
       copy.state.bookmarks
     );
-    for (const image of copy.illustrations) {
-      const source = history[image.entry];
-      if (!source) throw new HttpError(400, '삽화의 메시지가 없어요.');
-      const owner = store.source(source.revision);
-      const id = randomUUID(),
-        time = new Date().toISOString();
-      const bytes = Buffer.from(image.base64, 'base64');
-      store.db
-        .prepare(`INSERT INTO illustration_jobs(id,chat_id,source_revision,source_hash,origin,status,generation,owner,attempt,input,diagnostic,error,created_at,updated_at)
-        VALUES(?,?,?,?,'manual','completed',1,NULL,1,?,NULL,NULL,?,?)`)
-        .run(
-          id,
-          chatId,
-          owner.id,
-          owner.hash,
-          JSON.stringify({
-            version: 1,
-            generator: 'none',
-            settingsRevision: 1,
-            styleGuidance: '',
-            maxAutoRetries: 0,
-          }),
-          time,
-          time
-        );
-      const hash = createHash('sha256').update(bytes).digest('hex');
-      storeImage(store.db, { hash, mime: image.mime, bytes });
-      store.db
-        .prepare(
-          'INSERT INTO illustration_images(id,job_id,chat_id,position,mime,hash,body,created_at) VALUES(?,?,?,0,?,?,?,?)'
-        )
-        .run(
-          randomUUID(),
-          id,
-          chatId,
-          image.mime,
-          hash,
-          JSON.stringify({ caption: image.title }),
-          time
-        );
-    }
+    restoreIllustrations(store, history, copy.illustrations);
     return store.chat(chatId);
   });
 }

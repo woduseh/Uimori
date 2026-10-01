@@ -1,3 +1,15 @@
+import { splitSource } from '../core/auxiliary.js';
+import { imageTargetSource } from './package-images.js';
+import {
+  storyboardRequest,
+  parseStoryboard,
+  illustrationTargetText,
+  illustrationPlacementRequest,
+  parseIllustrationPlacement,
+  type IllustrationStoryboard,
+} from '../core/illustration-storyboard.js';
+import { completeIllustrationStoryboard, completeIllustrationPlacement } from './illustrations.js';
+import type { ProviderRequest } from '../core/transport.js';
 import { createHash } from 'node:crypto';
 import { processImage } from './image-processing.js';
 import { readRunSnapshot } from './run-projections.js';
@@ -116,8 +128,9 @@ function scene(
     );
   };
   return {
-    text: source.text,
-    allowSkip,
+    text: input.target ? illustrationTargetText(source, input.target) : source.text,
+    allowSkip: input.target ? false : allowSkip,
+    targeted: !!input.target,
     styleGuidance: input.styleGuidance,
     negativeGuidance: input.comfyui?.negativeGuidance ?? '',
     bot: body('bot'),
@@ -227,12 +240,134 @@ export async function runIllustrationJob(
     if (attemptId !== undefined) await hooks.onAttemptFinish(attemptId, toResult(value));
     return value;
   };
+  const textRequest = async (model: ModelSnapshot, request: ProviderRequest) => {
+    const connection = await authorizedConnection(hooks, model);
+    const result = await attempt(
+      (onWire) =>
+        executeProvider(transportConnection(connection), request, {
+          signal: hooks.signal,
+          resolveCredential: hooks.resolveCredential,
+          executeCodex: hooks.executeCodex,
+          timeoutMs: model.timeoutMs,
+          onWire,
+        }),
+      (value) => structuredClone(value)
+    );
+    if (result.status !== 'completed') {
+      const code = providerCode(result);
+      throw new IllustrationError(
+        code,
+        code !== 'ILLUSTRATION_PROMPT_REFUSED' &&
+          code !== 'ILLUSTRATION_CANCELLED' &&
+          code !== 'ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED' &&
+          !/HTTP_4\d\d$/u.test(code)
+      );
+    }
+    return result.text;
+  };
   try {
     if (hooks.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
     await hooks.gate?.();
     if (hooks.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
     // Only automatic runs may decide that a scene has nothing worth drawing.
     const context = scene(source, snapshot, input, job.origin === 'automatic');
+    if (input.task === 'plan') {
+      if (!input.plan) throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID');
+      diagnostic.stage = 'planning';
+      await progress();
+      let storyboard: IllustrationStoryboard;
+      if (input.generator === 'fixture' && hooks.allowFixture) {
+        const available = splitSource(source).filter(
+          (block) =>
+            !input.plan!.existingTargets.some((target) => target.endAnchor === block.anchor)
+        );
+        const targets = available.slice(0, input.plan.maxTargets).map((block) => ({
+          startAnchor: block.anchor,
+          endAnchor: block.anchor,
+          focus: `모의 삽화 · ${block.text.slice(0, 100)}`,
+          visualBrief: block.text,
+        }));
+        storyboard = {
+          heroIndex: targets.length ? Math.min(1, targets.length - 1) : null,
+          targets,
+          ...(!targets.length ? { skipReason: '새로운 시각적 순간이 없어요.' } : {}),
+        };
+      } else {
+        const model = input.comfyui?.promptModel ?? input.codex?.model;
+        if (!model) throw new IllustrationError('ILLUSTRATION_MODEL_REQUIRED');
+        const request = storyboardRequest(
+          model,
+          context,
+          source,
+          { ...input.plan, generator: input.generator },
+          generationFromModel(model)
+        );
+        const text = await textRequest(model, request);
+        storyboard = parseStoryboard(
+          text,
+          splitSource(source),
+          input.plan.maxTargets,
+          input.generator === 'comfyui',
+          context.allowSkip || input.plan.existingTargets.length > 0,
+          input.plan.existingTargets
+        );
+      }
+      hooks.signal.throwIfAborted();
+      const stored = completeIllustrationStoryboard(store, job, owner, storyboard, diagnostic);
+      await hooks.onProgress?.();
+      return {
+        status: stored ? (storyboard.targets.length ? 'completed' : 'skipped') : 'cancelled',
+        code: stored ? null : 'ILLUSTRATION_SUPERSEDED',
+        images: 0,
+      };
+    }
+    if (input.task === 'placement') {
+      if (!input.placement) throw new IllustrationError('ILLUSTRATION_PLACEMENT_INVALID');
+      diagnostic.stage = 'placement';
+      await progress();
+      const translation = imageTargetSource(store, {
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        input: { imageTarget: input.placement.target },
+      });
+      const blocks = splitSource(translation);
+      let afterByTarget: Record<string, string | null>;
+      if (input.generator === 'fixture' && hooks.allowFixture) {
+        // Deterministic synthetic mapping only; real translation alignment is a model result.
+        const originals = splitSource(source);
+        afterByTarget = Object.fromEntries(
+          input.placement.targets.map((target) => [
+            target.id,
+            blocks[originals.findIndex((block) => block.anchor === target.endAnchor)]?.anchor ??
+              null,
+          ])
+        );
+      } else {
+        const model = input.comfyui?.promptModel ?? input.codex?.model;
+        if (!model) throw new IllustrationError('ILLUSTRATION_MODEL_REQUIRED');
+        const request = illustrationPlacementRequest(
+          model,
+          context,
+          source,
+          translation,
+          input.placement,
+          generationFromModel(model)
+        );
+        afterByTarget = parseIllustrationPlacement(
+          await textRequest(model, request),
+          input.placement.targets.map((target) => target.id),
+          blocks
+        );
+      }
+      hooks.signal.throwIfAborted();
+      const stored = completeIllustrationPlacement(store, job, owner, afterByTarget, diagnostic);
+      await hooks.onProgress?.();
+      return {
+        status: stored ? 'completed' : 'cancelled',
+        code: stored ? null : 'ILLUSTRATION_SUPERSEDED',
+        images: 0,
+      };
+    }
     let generated: GeneratedIllustration[] = [];
     if (input.generator === 'fixture') {
       if (!hooks.allowFixture || !input.fixture)
@@ -320,7 +455,9 @@ export async function runIllustrationJob(
       const request = illustrationPromptRequest(model, context, generationFromModel(model));
       const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex');
       let plan: IllustrationPlan;
-      if (diagnostic.prompt && diagnostic.promptRequestHash === requestHash) {
+      if (input.target?.prompt) {
+        plan = { kind: 'generate', prompt: input.target.prompt };
+      } else if (diagnostic.prompt && diagnostic.promptRequestHash === requestHash) {
         plan = { kind: 'generate', prompt: diagnostic.prompt };
       } else {
         // An old prompt cannot authorize reuse when today's reconstructed input changed.

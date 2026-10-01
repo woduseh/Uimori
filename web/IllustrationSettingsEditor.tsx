@@ -159,6 +159,9 @@ function IllustrationEnvironmentEditor({
     Number.isInteger(draft.maxPerSource) &&
     draft.maxPerSource >= 1 &&
     draft.maxPerSource <= 8 &&
+    Number.isInteger(draft.automaticMaxTargets ?? 1) &&
+    (draft.automaticMaxTargets ?? 1) >= 1 &&
+    (draft.automaticMaxTargets ?? 1) <= 8 &&
     Number.isInteger(draft.maxAutoRetries) &&
     draft.maxAutoRetries >= 0 &&
     draft.maxAutoRetries <= 5 &&
@@ -278,10 +281,29 @@ function IllustrationEnvironmentEditor({
           />
           자동 생성
         </label>
-        <small className="full">응답이 완성되면 삽화를 만들어요.</small>
+        <small className="full">
+          서로 다른 순간을 골라 대표 컷과 문단 삽화를 만들어요. 생성 중에도 다음 채팅은 계속할 수
+          있어요.
+        </small>
         {numberField('장면당 최대 삽화 개수', draft.maxPerSource, 1, 8, (value) =>
-          change({ ...draft, maxPerSource: value })
+          change({
+            ...draft,
+            maxPerSource: value,
+            automaticMaxTargets: Math.min(value, draft.automaticMaxTargets ?? 1),
+          })
         )}
+        {draft.automatic &&
+          numberField(
+            '자동으로 고를 최대 컷 수',
+            draft.automaticMaxTargets ?? 1,
+            1,
+            draft.maxPerSource,
+            (value) => change({ ...draft, automaticMaxTargets: value })
+          )}
+        <small className="full">
+          최대 개수는 서로 다른 컷 기준이에요. 자동 생성은 기본 1컷이며, 선택한 수와 응답당 한도
+          안에서 필요한 만큼만 만들어요.
+        </small>
         {numberField('자동 재요청 횟수', draft.maxAutoRetries, 0, 5, (value) =>
           change({ ...draft, maxAutoRetries: value })
         )}

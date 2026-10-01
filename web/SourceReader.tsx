@@ -9,7 +9,7 @@ import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNod
 import type { Asset } from '../core/product.js';
 import type { Illustration } from '../core/illustration.js';
 import type { ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
-import { IllustrationStrip } from './IllustrationStrip.js';
+import { useIllustrationLayout } from './IllustrationStrip.js';
 import { illustrationActive } from './illustration-labels.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { formatUsd } from './pricing-display.js';
@@ -45,6 +45,7 @@ type ReaderProps = {
   jobs: Job[];
   /** Scene illustrations attached to this response; absent while the feature is unused. */
   illustrations?: Illustration[];
+  illustrationsCollapsed?: boolean;
   assets: Asset[];
   refresh: () => Promise<void>;
   onError: (error: string) => void;
@@ -136,6 +137,7 @@ function SourceReaderContent({
   sceneNumber,
   jobs,
   illustrations = [],
+  illustrationsCollapsed = false,
   assets,
   refresh: refreshSource,
   onError,
@@ -358,6 +360,56 @@ function SourceReaderContent({
       : [];
   const translationText = validTranslation?.text ?? '';
   const translationBlocks = displayTranslation?.translationLayout?.blocks ?? [];
+  const displayedNative = mode === 'original' ? projected?.original : projected?.translation;
+  const displayedBlocks = mode === 'original' ? blocks : translationBlocks;
+  const nativeParagraphs = displayedNative?.paragraphs;
+  const canSplitNative =
+    projected?.format === 'risu-html' &&
+    !displayedNative?.css &&
+    displayedNative?.text === (mode === 'original' ? source.text : translationText) &&
+    !!nativeParagraphs?.length &&
+    nativeParagraphs.length === displayedBlocks.length &&
+    nativeParagraphs.every((paragraph, index) => paragraph.text === displayedBlocks[index].text);
+  const illustrationLayout = useIllustrationLayout({
+    sourceId: source.id,
+    sourceHash: source.hash,
+    illustrations,
+    mode,
+    translationHash:
+      mode === 'translation' ? displayTranslation?.translationLayout?.textHash : undefined,
+    anchors: (mode === 'original' ? blocks : translationBlocks).map((block) => block.anchor),
+    canInline:
+      canSplitNative ||
+      (projected?.format !== 'risu-html' &&
+        !(mode === 'original' ? projected?.original.changed : projected?.translation?.changed)),
+    defaultCollapsed: illustrationsCollapsed,
+    refresh,
+    onError: setActionError,
+  });
+  // Preserve one native surface per uninterrupted passage, not one ShadowRoot per paragraph.
+  const nativeSegments: { html: string; anchors: string[]; after: ReactNode }[] = [];
+  if (canSplitNative) {
+    let html = '';
+    let anchors: string[] = [];
+    for (const [index, paragraph] of nativeParagraphs!.entries()) {
+      const anchor = displayedBlocks[index].anchor;
+      html += paragraph.html;
+      anchors.push(anchor);
+      const after = illustrationLayout.inline(anchor);
+      if (after || index === nativeParagraphs!.length - 1) {
+        nativeSegments.push({
+          html: `<div class="risu-chat risu-chat-text">${html}</div>`,
+          anchors,
+          after,
+        });
+        html = '';
+        anchors = [];
+      }
+    }
+  }
+  const [illustrationDialog, setIllustrationDialog] = useState(false);
+  const [illustrationCount, setIllustrationCount] = useState(1);
+  const illustrationRequestKey = useRef('');
   const status = latestStatus?.status === 'completed' ? latestStatus : undefined;
   const sceneStatus =
     status?.result?.sourceRevision === source.id && status.result.sourceHash === source.hash
@@ -570,6 +622,7 @@ function SourceReaderContent({
             />
           )}
           <div hidden={!!editor} className="source-reading-content">
+            {illustrationLayout.header}
             {validTranslation && translation?.status !== 'completed' && mode === 'translation' && (
               <p role="status">이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.</p>
             )}
@@ -582,16 +635,33 @@ function SourceReaderContent({
                 data-testid={mode === 'original' ? 'source-text' : 'translation-text'}
                 data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
               >
-                <RisuMessageSurface
-                  html={
-                    (mode === 'original' ? projected.original.html : projected.translation?.html) ??
-                    ''
-                  }
-                  css={mode === 'original' ? projected.original.css : projected.translation?.css}
-                  onAction={nativeAction}
-                  disabled={presentation?.pending}
-                  revisionKey={`${source.id}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
-                />
+                {nativeSegments.some((segment) => segment.after) ? (
+                  nativeSegments.map((segment) => (
+                    <Fragment key={segment.anchors[0]}>
+                      <div className="source-block" data-block-anchor={segment.anchors.join(' ')}>
+                        <RisuMessageSurface
+                          html={segment.html}
+                          onAction={nativeAction}
+                          disabled={presentation?.pending}
+                          revisionKey={`${source.id}:${source.hash}`}
+                        />
+                      </div>
+                      {segment.after}
+                    </Fragment>
+                  ))
+                ) : (
+                  <RisuMessageSurface
+                    html={
+                      (mode === 'original'
+                        ? projected.original.html
+                        : projected.translation?.html) ?? ''
+                    }
+                    css={mode === 'original' ? projected.original.css : projected.translation?.css}
+                    onAction={nativeAction}
+                    disabled={presentation?.pending}
+                    revisionKey={`${source.id}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
+                  />
+                )}
               </div>
             ) : mode === 'original' && projected?.original.changed ? (
               <div className="prose" data-testid="source-text">
@@ -636,6 +706,7 @@ function SourceReaderContent({
                       />
                     </div>
                     {inline(block.anchor)}
+                    {illustrationLayout.inline(block.anchor)}
                   </Fragment>
                 ))}
               </div>
@@ -658,6 +729,7 @@ function SourceReaderContent({
                           />
                         </div>
                         {inline(block.anchor)}
+                        {illustrationLayout.inline(block.anchor)}
                       </Fragment>
                     ))}
                   </>
@@ -681,14 +753,8 @@ function SourceReaderContent({
                 </button>
               </div>
             )}
+            {illustrationLayout.footer}
           </div>
-          <IllustrationStrip
-            sourceId={source.id}
-            sourceHash={source.hash}
-            illustrations={illustrations}
-            refresh={refresh}
-            onError={setActionError}
-          />
           {presentation?.error && (
             <p className="error" role="alert">
               {presentation.error}
@@ -852,20 +918,30 @@ function SourceReaderContent({
               type="button"
               className="secondary"
               data-testid="illustrate"
-              disabled={!!editor || !!pending || illustrations.some(illustrationActive)}
-              onClick={() =>
-                void action('illustrate', async () => {
-                  await api(`/sources/${source.id}/illustrations`, {
-                    expectedSourceHash: source.hash,
-                  });
-                  await refresh();
-                })
+              disabled={
+                !!editor ||
+                !!pending ||
+                illustrations.some(
+                  (item) =>
+                    item.sourceHash === source.hash &&
+                    item.task === 'plan' &&
+                    illustrationActive(item)
+                )
               }
+              onClick={() => {
+                illustrationRequestKey.current = crypto.randomUUID();
+                setIllustrationDialog(true);
+              }}
             >
               <IllustrationIcon size={18} aria-hidden="true" />
-              {pending === 'illustrate' || illustrations.some(illustrationActive)
-                ? '삽화를 만드는 중…'
-                : illustrations.some((item) => item.status === 'completed')
+              {illustrations.some(
+                (item) =>
+                  item.sourceHash === source.hash &&
+                  item.task === 'plan' &&
+                  illustrationActive(item)
+              )
+                ? '삽화 구간을 고르는 중…'
+                : illustrations.some((item) => item.images.length > 0)
                   ? '새 삽화 생성'
                   : '삽화 생성'}
             </button>
@@ -888,6 +964,71 @@ function SourceReaderContent({
               </button>
             )}
           </ActionMenu>
+          <Dialog
+            open={illustrationDialog}
+            onClose={() => {
+              if (pending !== 'illustrate') setIllustrationDialog(false);
+            }}
+            title="삽화 생성"
+          >
+            <p>
+              응답에서 서로 다른 순간을 골라요. 대표 컷은 맨 위에, 나머지는 해당 문단 뒤에 넣어요.
+            </p>
+            <label>
+              최대 컷 수
+              <select
+                aria-label="최대 컷 수"
+                value={illustrationCount}
+                disabled={pending === 'illustrate'}
+                onChange={(event) => {
+                  setIllustrationCount(Number(event.target.value));
+                  illustrationRequestKey.current = crypto.randomUUID();
+                }}
+              >
+                {Array.from({ length: 8 }, (_, index) => (
+                  <option key={index + 1} value={index + 1}>
+                    {index + 1}컷
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted">
+              그릴 만한 순간이 적으면 더 적게 만들어요. 응답당 남은 한도 안에서 예약하며, 생성
+              중에도 다음 채팅을 이어갈 수 있어요.
+            </p>
+            {actionError && (
+              <p className="error" role="alert">
+                {actionError}
+              </p>
+            )}
+            <div className="form-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={pending === 'illustrate'}
+                onClick={() => setIllustrationDialog(false)}
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                disabled={pending === 'illustrate'}
+                onClick={() =>
+                  void action('illustrate', async () => {
+                    await api(`/sources/${source.id}/illustrations`, {
+                      expectedSourceHash: source.hash,
+                      maxTargets: illustrationCount,
+                      idempotencyKey: illustrationRequestKey.current,
+                    });
+                    setIllustrationDialog(false);
+                    await refresh();
+                  })
+                }
+              >
+                {pending === 'illustrate' ? '예약 중…' : '삽화 만들기'}
+              </button>
+            </div>
+          </Dialog>
           <Dialog
             open={detailsOpen}
             onClose={() => setDetailsOpen(false)}

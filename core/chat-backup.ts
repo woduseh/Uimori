@@ -36,7 +36,21 @@ export type ChatCopyState = {
   settings: Settings;
   profile: Pick<ChatProfile, 'image' | 'imageTranslation' | 'loreContext' | 'pinned'>;
 };
+export type PortableIllustrationAnchor = { index: number; textHash: string };
 export type PortableIllustration = {
+  group?: string;
+  position?: number;
+  width?: number;
+  height?: number;
+  stale?: boolean;
+  sourceHash?: string;
+  target?: {
+    focus: string;
+    start: PortableIllustrationAnchor;
+    end: PortableIllustrationAnchor;
+    hero: boolean;
+  };
+  translation?: { textHash: string; after: PortableIllustrationAnchor };
   entry: number;
   mime: 'image/webp';
   base64: string;

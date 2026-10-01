@@ -333,6 +333,14 @@ function App() {
   const [readingLanguage, setReadingLanguage] = useState<string>(() =>
     readPresentationChoice('uimori:reading-language', ['translation', 'original'], 'translation')
   );
+  const [illustrationsCollapsed, setIllustrationsCollapsed] = useState(
+    () =>
+      readPresentationChoice('uimori:illustrations-collapsed', ['true', 'false'], 'false') ===
+      'true'
+  );
+  useEffect(() => {
+    writePresentationSetting('uimori:illustrations-collapsed', String(illustrationsCollapsed));
+  }, [illustrationsCollapsed]);
   const [responseDisplay, setResponseDisplay] = useState<ResponseDisplayMode>(() =>
     readPresentationChoice('uimori:response-display', ['stream', 'complete'] as const, 'stream')
   );
@@ -721,6 +729,22 @@ function App() {
           </small>
         </section>
 
+        <section className="settings-card reading-settings-group" aria-label="삽화 표시">
+          <label>
+            삽화 기본 표시
+            <select
+              aria-label="삽화 기본 표시"
+              value={String(illustrationsCollapsed)}
+              onChange={(event) => setIllustrationsCollapsed(event.target.value === 'true')}
+            >
+              <option value="false">펼쳐서 읽기</option>
+              <option value="true">접어서 읽기</option>
+            </select>
+          </label>
+          <small className="reading-group-note">
+            직접 접거나 펼친 컷의 선택은 유지해요. 그림 생성과 저장에는 영향을 주지 않아요.
+          </small>
+        </section>
         <ReadabilitySettings value={reading.settings} onChange={reading.update} />
         {onStartFocus && (
           <button className="secondary reading-focus-start" onClick={onStartFocus}>
@@ -1127,6 +1151,7 @@ function App() {
                               jobs={s.detail!.jobs.filter(
                                 (job) => job.sourceRevision === source.id
                               )}
+                              illustrationsCollapsed={illustrationsCollapsed}
                               illustrations={(s.detail!.illustrations ?? []).filter(
                                 (item) => item.sourceRevision === source.id
                               )}

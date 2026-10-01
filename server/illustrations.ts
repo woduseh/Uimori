@@ -1,3 +1,19 @@
+import { successfulTranslation } from './translation-artifacts.js';
+import type {
+  IllustrationStoryboard,
+  IllustrationTarget,
+  IllustrationMoment,
+} from '../core/illustration-storyboard.js';
+import {
+  illustrationPresentation,
+  newIllustrationPresentation,
+  saveIllustrationPresentation,
+  illustrationDisplay,
+  selectCompletedIllustration,
+  selectRequestedIllustration,
+  forgetIllustrationJob,
+  changeIllustrationHero,
+} from './illustration-presentation.js';
 import { detachAttemptUsage } from './usage-accounting.js';
 import { effectiveIllustrationPreset } from './illustration-presets.js';
 import { illustrationPresetStamp } from '../core/illustration-presets.js';
@@ -79,7 +95,15 @@ export function validateIllustrationSettings(
   options: { revision: number; testMode?: boolean }
 ): IllustrationSettings {
   const b = record(value);
-  fields(b, ['generator', 'automatic', 'maxPerSource', 'maxAutoRetries', 'codex', 'comfyui']);
+  fields(b, [
+    'generator',
+    'automatic',
+    'maxPerSource',
+    'automaticMaxTargets',
+    'maxAutoRetries',
+    'codex',
+    'comfyui',
+  ]);
   if (!ILLUSTRATION_GENERATORS.includes(b.generator)) throw new HttpError(400, 'Invalid generator');
   if (b.generator === 'fixture' && !options.testMode)
     throw new HttpError(400, 'Fixture generator requires test mode');
@@ -95,6 +119,12 @@ export function validateIllustrationSettings(
     revision: options.revision,
     generator: b.generator,
     automatic: boolean(b.automatic, 'automatic'),
+    automaticMaxTargets: number(
+      b.automaticMaxTargets ?? 1,
+      'automaticMaxTargets',
+      1,
+      ILLUSTRATION_MAX_PER_SOURCE
+    ),
     maxPerSource: number(b.maxPerSource, 'maxPerSource', 1, ILLUSTRATION_MAX_PER_SOURCE),
     maxAutoRetries: number(b.maxAutoRetries, 'maxAutoRetries', 0, ILLUSTRATION_MAX_AUTO_RETRIES),
     codex: {
@@ -309,14 +339,36 @@ function images(store: Store, jobId: string): IllustrationImage[] {
       hash: row.hash,
       position: Number(row.position),
       caption: typeof body.caption === 'string' ? body.caption : '',
+      ...(typeof body.width === 'number' && typeof body.height === 'number'
+        ? { width: body.width, height: body.height }
+        : {}),
       ...(typeof body.prompt === 'string' ? { prompt: body.prompt } : {}),
       ...(typeof body.revisedPrompt === 'string' ? { revisedPrompt: body.revisedPrompt } : {}),
     };
   });
 }
-export function projectIllustration(store: Store, row: IllustrationJobRow): Illustration {
+export function projectIllustration(
+  store: Store,
+  row: IllustrationJobRow,
+  presentation = illustrationPresentation(store, row.sourceRevision, row.sourceHash)
+): Illustration {
+  const target = row.input.target;
   return {
     id: row.id,
+    task: row.input.task ?? 'render',
+    ...(target
+      ? {
+          target: {
+            id: target.id,
+            planId: target.planId,
+            order: target.order,
+            startAnchor: target.startAnchor,
+            endAnchor: target.endAnchor,
+            focus: target.focus,
+          },
+        }
+      : {}),
+    ...(target && presentation ? { display: illustrationDisplay(presentation, row.input) } : {}),
     chatId: row.chatId,
     sourceRevision: row.sourceRevision,
     sourceHash: row.sourceHash,
@@ -335,13 +387,36 @@ export function projectIllustration(store: Store, row: IllustrationJobRow): Illu
 }
 export function illustrationsForSources(store: Store, sourceIds: string[]): Illustration[] {
   if (!sourceIds.length) return [];
+  const presentations = new Map(sourceIds.map((id) => [id, illustrationPresentation(store, id)]));
   return (
     store.db
       .prepare(
         `SELECT * FROM illustration_jobs WHERE source_revision IN (SELECT value FROM json_each(?)) ORDER BY created_at,id`
       )
       .all(json(sourceIds)) as Row[]
-  ).map((row) => projectIllustration(store, mapRow(row)));
+  ).map((row) => {
+    const presentation = presentations.get(row.source_revision);
+    const item = projectIllustration(
+      store,
+      mapRow(row),
+      presentation?.sourceHash === row.source_hash ? presentation : null
+    );
+    if (item.diagnostic) {
+      const {
+        prompt: _prompt,
+        promptRequestHash: _hash,
+        revisedPrompt: _revised,
+        storyboard: _board,
+        afterByTarget: _mapping,
+        ...small
+      } = item.diagnostic;
+      item.diagnostic = small;
+    }
+    item.images = item.images.map(
+      ({ prompt: _prompt, revisedPrompt: _revised, ...image }) => image
+    );
+    return item;
+  });
 }
 export function illustrationsForChat(store: Store, chatId: string): Illustration[] {
   store.chat(chatId);
@@ -356,18 +431,32 @@ export function illustrationSlots(
   store: Store,
   sourceId: string
 ): { total: number; active: number } {
-  const row = store.db
-    .prepare(
-      "SELECT SUM(status IN ('queued','running')) AS active,SUM(status='completed' AND EXISTS(SELECT 1 FROM illustration_images i WHERE i.job_id=illustration_jobs.id)) AS finished FROM illustration_jobs WHERE source_revision=?"
-    )
-    .get(sourceId) as Row;
-  const active = Number(row.active ?? 0);
-  return { total: active + Number(row.finished ?? 0), active };
+  const sourceHash = store.source(sourceId).hash;
+  const rows = store.db
+    .prepare(`SELECT id,status,input,EXISTS(SELECT 1 FROM illustration_images i WHERE i.job_id=j.id) AS hasImage
+    FROM illustration_jobs j WHERE source_revision=? AND source_hash=?`)
+    .all(sourceId, sourceHash);
+  const targets = new Set<string>();
+  let active = 0,
+    planned = 0;
+  for (const row of rows) {
+    const input = parse(row.input) as IllustrationJobInput;
+    const running = ACTIVE.includes(row.status as IllustrationStatus);
+    if (input.task === 'placement') continue;
+    if (running) active++;
+    if (input.task === 'plan') {
+      if (running) planned += input.plan?.maxTargets ?? 1;
+    } else if (running || (row.status === 'completed' && row.hasImage))
+      targets.add(input.target?.id ?? String(row.id));
+  }
+  return { total: planned + targets.size, active };
 }
 export type ReserveOptions = {
   testMode?: boolean;
   settings?: IllustrationSettings;
   fixture?: { failures?: number; delayMs?: number };
+  maxTargets?: number;
+  requestKey?: string;
 };
 function frozenInput(
   store: Store,
@@ -465,6 +554,261 @@ export function reserveIllustration(
     return illustrationJob(store, id);
   });
 }
+
+/** The plan reserves its cut budget before any model call. Existing single renders remain readable. */
+export function reserveIllustrationPlan(
+  store: Store,
+  source: Source,
+  origin: 'automatic' | 'manual',
+  options: ReserveOptions = {}
+): IllustrationJobRow {
+  return store.transaction(() => {
+    const settings = options.settings ?? illustrationSettings(store);
+    if (options.requestKey) {
+      const previous = store.db
+        .prepare(
+          "SELECT * FROM illustration_jobs WHERE source_revision=? AND json_extract(input,'$.plan.requestKey')=?"
+        )
+        .get(source.id, options.requestKey) as Row | undefined;
+      if (previous) {
+        const job = mapRow(previous);
+        if (job.sourceHash !== source.hash) throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+        return job;
+      }
+    }
+    if (
+      store.db
+        .prepare(
+          "SELECT 1 FROM illustration_jobs WHERE source_revision=? AND source_hash=? AND status IN ('queued','running') AND json_extract(input,'$.task')='plan'"
+        )
+        .get(source.id, source.hash)
+    )
+      throw new HttpError(409, 'ILLUSTRATION_PLAN_ACTIVE');
+    const available = settings.maxPerSource - illustrationSlots(store, source.id).total;
+    if (available <= 0) throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
+    const maxTargets = Math.min(available, options.maxTargets ?? 1);
+    const input: IllustrationJobInput = {
+      ...frozenInput(store, source, settings, options),
+      task: 'plan',
+      plan: {
+        maxTargets,
+        existingTargets: illustrationTargets(store, source).map(
+          ({ startAnchor, endAnchor, focus }) => ({ startAnchor, endAnchor, focus })
+        ),
+        ...(options.requestKey ? { requestKey: options.requestKey } : {}),
+      },
+    };
+    return insertIllustrationJob(store, source, origin, input);
+  });
+}
+function insertIllustrationJob(
+  store: Store,
+  source: Source,
+  origin: 'automatic' | 'manual',
+  input: IllustrationJobInput,
+  time = now()
+): IllustrationJobRow {
+  const id = randomUUID();
+  store.db
+    .prepare(
+      "INSERT INTO illustration_jobs(id,chat_id,source_revision,source_hash,origin,status,input,created_at,updated_at) VALUES(?,?,?,?,?,'queued',?,?,?)"
+    )
+    .run(id, source.chatId, source.id, source.hash, origin, json(input), time, time);
+  store.event(source.chatId, 'illustration.queued', id);
+  return illustrationJob(store, id);
+}
+export function illustrationTargets(
+  store: Store,
+  source: Pick<Source, 'id' | 'hash'>
+): IllustrationTarget[] {
+  const presentation = illustrationPresentation(store, source.id, source.hash);
+  if (!presentation) return [];
+  const ids = Object.values(presentation.targets).map((target) => target.latestRequestedJobId);
+  return store.db
+    .prepare(
+      'SELECT input FROM illustration_jobs WHERE id IN (SELECT value FROM json_each(?)) ORDER BY created_at,id'
+    )
+    .all(json(ids))
+    .map((row) => (parse(row.input) as IllustrationJobInput).target)
+    .filter((target): target is IllustrationTarget => !!target);
+}
+/** This short transaction is the only place a completed plan can create render jobs. */
+export function completeIllustrationStoryboard(
+  store: Store,
+  job: IllustrationJobRow,
+  owner: string,
+  storyboard: IllustrationStoryboard,
+  diagnostic: IllustrationDiagnostic
+): boolean {
+  return store.transaction(() => {
+    if (!owned(store, job.id, job.generation, owner)) return false;
+    const source = store.sourceAtHash(job.sourceRevision, job.sourceHash);
+    const existingAnchors = new Set(
+      illustrationTargets(store, source).map((target) => target.endAnchor)
+    );
+    if (storyboard.targets.some((target) => existingAnchors.has(target.endAnchor)))
+      throw new IllustrationError('ILLUSTRATION_TARGET_CONFLICT');
+    const previous = illustrationPresentation(store, source.id);
+    const current =
+      previous?.sourceHash === source.hash ? previous : newIllustrationPresentation(source.hash);
+    if (previous && previous.sourceHash !== source.hash) current.revision = previous.revision;
+    const queuedAt = now();
+    for (const [index, planned] of storyboard.targets.entries()) {
+      const target: IllustrationTarget = {
+        ...planned,
+        id: randomUUID(),
+        planId: job.id,
+        order: index === storyboard.heroIndex ? 0 : index + 1,
+      };
+      const { plan: _plan, ...recipe } = job.input;
+      const child = insertIllustrationJob(
+        store,
+        source,
+        job.origin,
+        { ...recipe, task: 'render', target },
+        queuedAt
+      );
+      current.targets[target.id] = { latestRequestedJobId: child.id, displayedJobId: null };
+      if (!current.heroTargetId && index === storyboard.heroIndex) current.heroTargetId = target.id;
+    }
+    // An old plan may finish after an edit; retain its images without replacing a newer layout.
+    if (store.source(source.id).hash === source.hash || previous?.sourceHash === source.hash)
+      saveIllustrationPresentation(store, source.id, current);
+    const result = {
+      ...diagnostic,
+      storyboard,
+      ...(storyboard.skipReason ? { skipped: storyboard.skipReason } : {}),
+    };
+    completeIllustrationTextJob(store, job, owner, result);
+    scheduleIllustrationPlacement(store, source.id);
+    return true;
+  });
+}
+function completeIllustrationTextJob(
+  store: Store,
+  job: IllustrationJobRow,
+  owner: string,
+  diagnostic: IllustrationDiagnostic
+): boolean {
+  if (!owned(store, job.id, job.generation, owner)) return false;
+  store.db
+    .prepare(
+      "UPDATE illustration_jobs SET status='completed',owner=NULL,error=NULL,diagnostic=?,updated_at=? WHERE id=?"
+    )
+    .run(json(diagnostic), now(), job.id);
+  store.event(job.chatId, 'illustration.completed', job.id);
+  return true;
+}
+export function illustrationTargetSet(targets: IllustrationTarget[]): {
+  moments: (IllustrationMoment & { id: string })[];
+  hash: string;
+} {
+  const moments = targets
+    .map(({ id, startAnchor, endAnchor, focus }) => ({ id, startAnchor, endAnchor, focus }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  return { moments, hash: createHash('sha256').update(json(moments)).digest('hex') };
+}
+/** Called at either completion edge, never by Reader GET. Maps all targets in one text call. */
+export function scheduleIllustrationPlacement(store: Store, sourceId: string): void {
+  const source = store.source(sourceId);
+  const presentation = illustrationPresentation(store, source.id, source.hash);
+  const translation = successfulTranslation(store, source);
+  if (!presentation || !translation?.translationLayout) return;
+  const targets = illustrationTargets(store, source);
+  if (!targets.length) return;
+  const set = illustrationTargetSet(targets);
+  const target = {
+    mode: 'translation' as const,
+    textHash: translation.translationLayout.textHash,
+    translationJobId: translation.id,
+    translationRevision: translation.revision ?? 1,
+  };
+  if (
+    presentation.translation?.targetSetHash === set.hash &&
+    presentation.translation.target.textHash === target.textHash
+  )
+    return;
+  const existing = store.db
+    .prepare(`SELECT * FROM illustration_jobs WHERE source_revision=? AND source_hash=? AND json_extract(input,'$.task')='placement'
+    AND json_extract(input,'$.placement.targetSetHash')=? AND json_extract(input,'$.placement.target.textHash')=? ORDER BY created_at DESC LIMIT 1`)
+    .get(source.id, source.hash, set.hash, target.textHash) as Row | undefined;
+  if (existing) {
+    const saved = mapRow(existing);
+    if (saved.status === 'completed' && saved.diagnostic?.afterByTarget) {
+      presentation.translation = {
+        target,
+        targetSetHash: set.hash,
+        afterByTarget: saved.diagnostic.afterByTarget,
+      };
+      saveIllustrationPresentation(store, source.id, presentation);
+    }
+    return;
+  }
+  const first = presentation.targets[targets[0].id];
+  const recipe = illustrationJob(store, first.latestRequestedJobId).input;
+  // A restored chat contains results, not credentials or runnable recipes.
+  if (!recipe.codex && !recipe.comfyui && !recipe.fixture) return;
+  const { plan: _plan, target: _target, placement: _placement, ...base } = recipe;
+  insertIllustrationJob(store, source, 'automatic', {
+    ...base,
+    task: 'placement',
+    placement: { target, targetSetHash: set.hash, targets: set.moments },
+  });
+}
+export function completeIllustrationPlacement(
+  store: Store,
+  job: IllustrationJobRow,
+  owner: string,
+  afterByTarget: Record<string, string | null>,
+  diagnostic: IllustrationDiagnostic
+): boolean {
+  return store.transaction(() => {
+    if (!completeIllustrationTextJob(store, job, owner, { ...diagnostic, afterByTarget }))
+      return false;
+    const source = store.source(job.sourceRevision);
+    const input = job.input.placement!;
+    const presentation = illustrationPresentation(store, source.id, job.sourceHash);
+    const translation = successfulTranslation(store, source);
+    if (
+      presentation &&
+      source.hash === job.sourceHash &&
+      translation?.translationLayout?.textHash === input.target.textHash &&
+      illustrationTargetSet(illustrationTargets(store, source)).hash === input.targetSetHash
+    ) {
+      presentation.translation = {
+        target: input.target,
+        targetSetHash: input.targetSetHash,
+        afterByTarget,
+      };
+      saveIllustrationPresentation(store, source.id, presentation);
+    }
+    return true;
+  });
+}
+export function regenerateIllustration(
+  store: Store,
+  id: string,
+  testMode = false
+): IllustrationJobRow {
+  return store.transaction(() => {
+    const job = illustrationJob(store, id);
+    const source = store.source(job.sourceRevision);
+    if (source.hash !== job.sourceHash) throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+    if (!job.input.target) throw new HttpError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+    if (ACTIVE.includes(job.status)) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+    assertIllustrationSlot(store, source.id, job);
+    const { prompt: _prompt, ...target } = job.input.target;
+    const input = {
+      ...frozenInput(store, source, illustrationSettings(store), { testMode }),
+      task: 'render' as const,
+      target,
+    };
+    const next = insertIllustrationJob(store, source, 'manual', input);
+    selectRequestedIllustration(store, source.id, source.hash, input, next.id);
+    return next;
+  });
+}
+
 const reservationFailureCode = (error: unknown): string => {
   if (error instanceof HttpError) {
     if (error.message.startsWith('MODEL_UNAVAILABLE:')) return 'ILLUSTRATION_MODEL_UNAVAILABLE';
@@ -477,16 +821,27 @@ export function scheduleAutomaticIllustration(store: Store, source: Source): voi
   const settings = illustrationSettings(store);
   if (!settings.automatic || settings.generator === 'none') return;
   try {
-    reserveIllustration(store, source, 'automatic', { settings, testMode: true });
+    reserveIllustrationPlan(store, source, 'automatic', {
+      settings,
+      testMode: true,
+      maxTargets: settings.automaticMaxTargets ?? 1,
+      requestKey: `automatic:${source.hash}`,
+    });
   } catch (error) {
     const code = reservationFailureCode(error);
-    if (code === 'ILLUSTRATION_LIMIT_REACHED' || code === 'ILLUSTRATION_ACTIVE') return;
+    if (
+      code === 'ILLUSTRATION_LIMIT_REACHED' ||
+      code === 'ILLUSTRATION_ACTIVE' ||
+      code === 'ILLUSTRATION_PLAN_ACTIVE'
+    )
+      return;
     const id = randomUUID(),
       time = now();
     const preset = effectiveIllustrationPreset(store, source.chatId);
     const input: IllustrationJobInput = {
       preset: illustrationPresetStamp(preset),
       version: 1,
+      task: 'plan',
       generator: settings.generator,
       settingsRevision: settings.revision,
       styleGuidance: preset.styleGuidance,
@@ -513,7 +868,9 @@ export function scheduleAutomaticIllustration(store: Store, source: Source): voi
 export function queuedIllustrations(store: Store): string[] {
   return (
     store.db
-      .prepare("SELECT id FROM illustration_jobs WHERE status='queued' ORDER BY created_at,id")
+      .prepare(
+        "SELECT id FROM illustration_jobs WHERE status='queued' ORDER BY created_at,COALESCE(json_extract(input,'$.target.order'),0),id"
+      )
       .all() as Row[]
   ).map((row) => row.id);
 }
@@ -560,6 +917,8 @@ export type GeneratedIllustration = {
   mime: IllustrationImageMime;
   bytes: Buffer;
   caption: string;
+  width?: number;
+  height?: number;
   prompt?: string;
   revisedPrompt?: string;
 };
@@ -593,6 +952,7 @@ export function completeIllustration(
           hash,
           json({
             caption: image.caption,
+            ...(image.width && image.height ? { width: image.width, height: image.height } : {}),
             ...(image.prompt ? { prompt: image.prompt } : {}),
             ...(image.revisedPrompt ? { revisedPrompt: image.revisedPrompt } : {}),
           }),
@@ -604,6 +964,14 @@ export function completeIllustration(
         "UPDATE illustration_jobs SET status='completed',owner=NULL,error=NULL,diagnostic=?,updated_at=? WHERE id=?"
       )
       .run(json(diagnostic), time, id);
+    if (generated.length)
+      selectCompletedIllustration(
+        store,
+        row.source_revision,
+        row.source_hash,
+        parse(row.input),
+        id
+      );
     store.event(row.chat_id, 'illustration.completed', id);
     return true;
   });
@@ -665,7 +1033,7 @@ export function retryIllustration(store: Store, id: string): Illustration {
     if (!job.input.codex && !job.input.comfyui && !job.input.fixture)
       throw new HttpError(409, job.error ?? 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
     store.sourceAtHash(job.sourceRevision, job.sourceHash);
-    assertIllustrationSlot(store, job.sourceRevision);
+    assertIllustrationSlot(store, job.sourceRevision, job);
     if (job.input.comfyui?.disabled) throw new HttpError(409, 'CONNECTION_NOT_AUTHORIZED');
     if (
       job.input.generator === 'comfyui' &&
@@ -690,6 +1058,7 @@ export function retryIllustration(store: Store, id: string): Illustration {
         "UPDATE illustration_jobs SET status='queued',owner=NULL,error=NULL,attempt=attempt+1,diagnostic=?,updated_at=? WHERE id=?"
       )
       .run(json(diagnostic), now(), id);
+    selectRequestedIllustration(store, job.sourceRevision, job.sourceHash, job.input, id);
     store.event(job.chatId, 'illustration.queued', id);
     return projectIllustration(store, illustrationJob(store, id));
   });
@@ -712,8 +1081,7 @@ export function claimIllustrationForReconcile(
     if (!RETRYABLE_STATUSES.includes(job.status))
       throw new HttpError(409, 'ILLUSTRATION_NOT_RECONCILABLE');
     if (job.input.comfyui.disabled) throw new HttpError(409, 'CONNECTION_NOT_AUTHORIZED');
-    if (illustrationSlots(store, job.sourceRevision).active > 0)
-      throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+    assertNoActiveIllustrationTarget(store, job);
     store.sourceAtHash(job.sourceRevision, job.sourceHash);
     store.db
       .prepare(
@@ -731,10 +1099,44 @@ export function claimIllustrationForReconcile(
     };
   });
 }
-function assertIllustrationSlot(store: Store, sourceId: string) {
-  const slots = illustrationSlots(store, sourceId);
-  if (slots.active > 0) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
-  if (slots.total >= illustrationSettings(store).maxPerSource)
+function assertNoActiveIllustrationTarget(store: Store, job: IllustrationJobRow) {
+  const target = job.input.target?.id;
+  const collision = store.db
+    .prepare(`SELECT 1 FROM illustration_jobs WHERE source_revision=? AND source_hash=? AND status IN ('queued','running')
+    AND id!=? AND ${target ? "json_extract(input,'$.target.id')=?" : "COALESCE(json_extract(input,'$.task'),'render')!='placement'"} LIMIT 1`)
+    .get(job.sourceRevision, job.sourceHash, job.id, ...(target ? [target] : []));
+  if (collision) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+}
+function assertIllustrationSlot(store: Store, sourceId: string, job: IllustrationJobRow) {
+  if (job.input.task === 'placement') return;
+  if (job.input.task === 'plan') {
+    if (
+      store.db
+        .prepare(
+          "SELECT 1 FROM illustration_jobs WHERE source_revision=? AND source_hash=? AND status IN ('queued','running') AND json_extract(input,'$.task')='plan' AND id!=?"
+        )
+        .get(sourceId, job.sourceHash, job.id)
+    )
+      throw new HttpError(409, 'ILLUSTRATION_PLAN_ACTIVE');
+    if (
+      illustrationSlots(store, sourceId).total + (job.input.plan?.maxTargets ?? 1) >
+      illustrationSettings(store).maxPerSource
+    )
+      throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
+    return;
+  }
+  assertNoActiveIllustrationTarget(store, job);
+  const target = job.input.target?.id;
+  const alreadyCounted =
+    target &&
+    store.db
+      .prepare(`SELECT 1 FROM illustration_jobs j WHERE source_revision=? AND source_hash=? AND json_extract(input,'$.target.id')=?
+    AND status='completed' AND EXISTS(SELECT 1 FROM illustration_images i WHERE i.job_id=j.id) LIMIT 1`)
+      .get(sourceId, job.sourceHash, target);
+  if (
+    !alreadyCounted &&
+    illustrationSlots(store, sourceId).total >= illustrationSettings(store).maxPerSource
+  )
     throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
 }
 function deleteIllustrationAttempts(store: Store, jobs: Row[]) {
@@ -773,10 +1175,24 @@ export function removeIllustration(
   return store.transaction(() => {
     const job = illustrationJob(store, id);
     if (ACTIVE.includes(job.status)) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
-    deleteIllustrationAttempts(store, [{ chat_id: job.chatId, diagnostic: json(job.diagnostic) }]);
-    store.db.prepare('DELETE FROM illustration_images WHERE job_id=?').run(id);
-    store.db.prepare('DELETE FROM illustration_jobs WHERE id=?').run(id);
-    store.event(job.chatId, 'source.illustrations', job.sourceRevision);
+    const targetId = job.input.target?.id;
+    const rows = targetId
+      ? (store.db
+          .prepare(
+            "SELECT * FROM illustration_jobs WHERE source_revision=? AND source_hash=? AND json_extract(input,'$.target.id')=?"
+          )
+          .all(job.sourceRevision, job.sourceHash, targetId) as Row[])
+      : [{ id, chat_id: job.chatId, diagnostic: json(job.diagnostic), status: job.status }];
+    if (rows.some((row) => ACTIVE.includes(row.status)))
+      throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+    deleteIllustrationAttempts(store, rows);
+    for (const row of rows) {
+      store.db.prepare('DELETE FROM illustration_images WHERE job_id=?').run(row.id);
+      store.db.prepare('DELETE FROM illustration_jobs WHERE id=?').run(row.id);
+    }
+    forgetIllustrationJob(store, job.sourceRevision, job.sourceHash, job.input, id);
+    scheduleIllustrationPlacement(store, job.sourceRevision);
+    store.event(job.chatId, 'illustration-layout.updated', job.sourceRevision);
     return { chatId: job.chatId, sourceRevision: job.sourceRevision };
   });
 }
@@ -873,7 +1289,7 @@ export function illustrationRoutes(
   );
   app.post<{ Params: { id: string } }>('/api/sources/:id/illustrations', async (request) => {
     const b = record(request.body ?? {});
-    fields(b, ['expectedSourceHash', 'fixture']);
+    fields(b, ['expectedSourceHash', 'fixture', 'maxTargets', 'idempotencyKey']);
     const source = store.source(request.params.id);
     if (
       b.expectedSourceHash !== undefined &&
@@ -890,7 +1306,39 @@ export function illustrationRoutes(
         ...(f.delayMs !== undefined ? { delayMs: number(f.delayMs, 'delayMs', 0, 10_000) } : {}),
       };
     }
-    const job = reserveIllustration(store, source, 'manual', { testMode: hooks.testMode, fixture });
+    const job = reserveIllustrationPlan(store, source, 'manual', {
+      testMode: hooks.testMode,
+      fixture,
+      maxTargets:
+        b.maxTargets === undefined
+          ? 1
+          : number(b.maxTargets, 'maxTargets', 1, ILLUSTRATION_MAX_PER_SOURCE),
+      requestKey:
+        b.idempotencyKey === undefined ? undefined : text(b.idempotencyKey, 'idempotencyKey', 200),
+    });
+    hooks.publish(job.chatId);
+    hooks.pump();
+    return projectIllustration(store, job);
+  });
+  app.patch<{ Params: { id: string } }>(
+    '/api/sources/:id/illustration-presentation',
+    async (request) => {
+      const b = record(request.body);
+      fields(b, ['expectedSourceHash', 'expectedRevision', 'heroTargetId']);
+      const value = changeIllustrationHero(
+        store,
+        request.params.id,
+        text(b.expectedSourceHash, 'source hash', 64),
+        number(b.expectedRevision, 'revision', 0),
+        b.heroTargetId === null ? null : text(b.heroTargetId, 'target', 100)
+      );
+      hooks.publish(store.source(request.params.id).chatId);
+      return value;
+    }
+  );
+  app.post<{ Params: { id: string } }>('/api/illustrations/:id/regenerate', async (request) => {
+    fields(record(request.body ?? {}), []);
+    const job = regenerateIllustration(store, request.params.id, hooks.testMode);
     hooks.publish(job.chatId);
     hooks.pump();
     return projectIllustration(store, job);
@@ -922,6 +1370,7 @@ export function illustrationRoutes(
   app.delete<{ Params: { id: string } }>('/api/illustrations/:id', async (request) => {
     const removed = removeIllustration(store, request.params.id);
     hooks.publish(removed.chatId);
+    hooks.pump();
     return { deleted: true };
   });
   app.get<{ Params: { id: string } }>('/api/illustration-images/:id', async (request, reply) => {

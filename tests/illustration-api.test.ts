@@ -76,11 +76,18 @@ async function setup() {
     return done.sources.find((source) => source.runId === run.id)!;
   };
   const illustrations = () => api<Illustration[]>(`/api/chats/${chat.id}/illustrations`);
-  const settle = (id: string) =>
+  const settleTask = (id: string) =>
     until(illustrations, (items) => {
       const item = items.find((entry) => entry.id === id);
       return !!item && !['queued', 'running'].includes(item.status);
     }).then((items) => items.find((entry) => entry.id === id)!);
+  const settle = async (id: string): Promise<Illustration> => {
+    const job = await settleTask(id);
+    if (job.task !== 'plan' || job.status !== 'completed' || job.diagnostic?.skipped) return job;
+    const children = (await illustrations()).filter((item) => item.target?.planId === id);
+    expect(children.length).toBeGreaterThan(0);
+    return settleTask(children[0].id);
+  };
   const settings = async (patch: Partial<Omit<IllustrationSettings, 'revision'>>) => {
     const current = await api<IllustrationSettings>('/api/illustration-settings');
     const { revision, ...body } = current;
@@ -90,7 +97,7 @@ async function setup() {
       'PUT'
     );
   };
-  return { app, api, chat, respond, illustrations, settle, settings, item };
+  return { app, api, chat, respond, illustrations, settle, settleTask, settings, item };
 }
 async function until<T>(
   read: () => Promise<T>,
@@ -136,7 +143,11 @@ describe('illustration API in test mode with the synthetic generator', () => {
       sourceRevision: source.id,
     });
     await api(`/api/sources/${source.id}/illustrations`, {}, 'POST', 409).then((body) =>
-      expect(['ILLUSTRATION_ACTIVE', 'ILLUSTRATION_LIMIT_REACHED']).toContain(body.error)
+      expect([
+        'ILLUSTRATION_PLAN_ACTIVE',
+        'ILLUSTRATION_ACTIVE',
+        'ILLUSTRATION_LIMIT_REACHED',
+      ]).toContain(body.error)
     );
     const done = await settle(queued.id);
     expect(done.status).toBe('completed');
@@ -150,7 +161,9 @@ describe('illustration API in test mode with the synthetic generator', () => {
       height: 1,
     });
     const reader = await api<ReaderDetail>(`/api/chats/${chat.id}/reader`);
-    expect(reader.illustrations?.map((item) => item.id)).toEqual([done.id]);
+    expect(
+      reader.illustrations?.filter((item) => item.task === 'render').map((item) => item.id)
+    ).toEqual([done.id]);
     expect(
       reader.reader.activity?.some(
         (item) => item.kind === 'illustration' && item.status === 'completed'
@@ -168,7 +181,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
     const detail = await api<Illustration & { input: unknown }>(`/api/illustrations/${done.id}`);
     expect(detail.input).toMatchObject({ generator: 'fixture', maxAutoRetries: 0 });
     await api(`/api/illustrations/${done.id}`, undefined, 'DELETE');
-    expect(await illustrations()).toEqual([]);
+    expect((await illustrations()).filter((item) => item.task === 'render')).toEqual([]);
     await api(`/api/illustration-images/${done.images[0].id}`, undefined, 'GET', 404);
     const again = await api<Illustration>(`/api/sources/${source.id}/illustrations`, {});
     expect((await settle(again.id)).status).toBe('completed');
@@ -178,7 +191,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
         'illustration.queued',
         'illustration.running',
         'illustration.completed',
-        'source.illustrations',
+        'illustration-layout.updated',
       ])
     );
   });
@@ -227,6 +240,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
     expect(initial.find((item) => item.sourceRevision === first.id)).toMatchObject({
       origin: 'automatic',
     });
+    await settle(initial.find((item) => item.sourceRevision === first.id)!.id);
     await api('/api/test/control', { action: 'hold', barrier: 'illustration' });
     const second = await respond('Second scene while illustration is held');
     const held = await until(illustrations, (items) =>

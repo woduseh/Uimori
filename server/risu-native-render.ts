@@ -15,7 +15,13 @@ export type NativeRisuRenderInput = {
   context: Omit<NativeRisuCbsContext, 'native' | 'random'>;
   timeoutMs?: number;
 };
-export type NativeRisuRenderResult = { html: string; css: string; issues: string[] };
+export type NativeRisuRenderResult = {
+  html: string;
+  css: string;
+  issues: string[];
+  /** Only unmodified Markdown paragraphs without authored HTML, CSS or background. */
+  paragraphs?: { text: string; html: string }[];
+};
 export type NativeRisuTextInput = NativeRisuRenderInput & {
   mode: 'editinput' | 'editoutput' | 'editprocess' | 'editdisplay';
 };
@@ -268,7 +274,35 @@ export function renderNativeRisuMessageInWorker(
   // Risu/PocketRisu allow indented authored HTML; only fenced blocks are Markdown code.
   md.disable(['code']);
   markRisuReadingProse(md);
-  let html = md.render(text);
+  const environment = {};
+  const tokens = md.parse(text, environment);
+  let html = md.renderer.render(tokens, md.options, environment);
+  let paragraphs: NativeRisuRenderResult['paragraphs'];
+  if (
+    text === input.text &&
+    !background &&
+    !styles.length &&
+    tokens.length > 0 &&
+    tokens.length % 3 === 0 &&
+    tokens.every(
+      (token, index) =>
+        token.type === ['paragraph_open', 'inline', 'paragraph_close'][index % 3] &&
+        !token.children?.some((child) => child.type === 'html_inline')
+    )
+  ) {
+    const lines = text.match(/.*(?:\r\n|\n|\r|$)/g)?.filter(Boolean) ?? [];
+    paragraphs = [];
+    for (let index = 0; index < tokens.length; index += 3) {
+      const range = tokens[index].map!;
+      paragraphs.push({
+        text: lines
+          .slice(range[0], range[1])
+          .join('')
+          .replace(/(?:\r\n|\n|\r)$/, ''),
+        html: md.renderer.render(tokens.slice(index, index + 3), md.options, environment),
+      });
+    }
+  }
   html = html.replace(
     /<risu-style data-index="(\d+)"><\/risu-style>/gu,
     (_tag, index: string) =>
@@ -280,6 +314,7 @@ export function renderNativeRisuMessageInWorker(
   return {
     html,
     css: '',
+    ...(paragraphs ? { paragraphs } : {}),
     issues: [...new Set([...issues, ...cbs.issues].filter((name) => !assetNames.has(name)))],
   };
 }

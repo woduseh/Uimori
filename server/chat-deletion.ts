@@ -110,6 +110,10 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
       (store.db.prepare(`SELECT id FROM ${table} WHERE chat_id=?`).all(chatId) as Row[]).map(
         (row) => String(row.id)
       );
+    for (const sourceId of ids('sources'))
+      store.db
+        .prepare('DELETE FROM app_metadata WHERE key=?')
+        .run(`illustration-presentation:${sourceId}`);
     removeRunArtifacts(store, ids('runs'), ids('sources'), ids('jobs'));
     store.db
       .prepare(

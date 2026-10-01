@@ -166,3 +166,122 @@
     animation: none;
   }
 }
+
+/* Finished cuts belong to the manuscript, not a diagnostic card stack. */
+.illustration-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.illustration-toolbar button,
+.illustration-actions .quiet {
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  min-height: 36px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.illustration-cut {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  gap: 8px;
+}
+.illustration-cut .illustration-head {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.illustration-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+}
+.illustration-title strong {
+  flex: none;
+  font-size: 12px;
+}
+.illustration-title > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+.illustration-head > .illustration-actions {
+  flex: none;
+  flex-wrap: nowrap;
+}
+.illustration-cut.is-collapsed {
+  border-block: 1px solid var(--line);
+  padding-block: 4px;
+}
+.illustration-cut .illustration-images {
+  grid-template-columns: 1fr;
+}
+.illustration-cut .illustration-images img {
+  object-fit: contain;
+  max-height: min(65vh, 640px);
+}
+.illustration-hero .illustration-images img {
+  max-height: min(55vh, 480px);
+}
+.illustration-cut .illustration-images figcaption {
+  text-align: center;
+  font-size: 12px;
+  margin: 0;
+}
+.illustration-variations,
+.illustration-supplement {
+  margin-block: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.illustration-variations > summary,
+.illustration-supplement > summary {
+  cursor: pointer;
+  padding-block: 8px;
+}
+.illustration-variations .illustration-images {
+  margin-top: 10px;
+}
+.illustration-supplement {
+  border-top: 1px solid var(--line);
+}
+.illustration-task,
+.illustration-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+}
+.illustration-task {
+  margin-block: 6px;
+  padding: 6px 0;
+  color: var(--muted);
+}
+.illustration-task p,
+.illustration-state p {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  margin: 0;
+  line-height: 1.6;
+}
+.illustration-state .illustration-actions button,
+.illustration-task .illustration-actions button {
+  min-height: 36px;
+}
+.illustration-task svg {
+  flex: none;
+}

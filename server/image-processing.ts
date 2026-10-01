@@ -10,7 +10,13 @@ const MAX_CONCURRENT_IMAGES = 2;
 let active = 0;
 const waiting: (() => void)[] = [];
 
-export type ProcessedImage = { bytes: Buffer; mime: 'image/webp'; hash: string };
+export type ProcessedImage = {
+  bytes: Buffer;
+  mime: 'image/webp';
+  hash: string;
+  width: number;
+  height: number;
+};
 
 /** Intake only. Renames, reads and restores of existing WebP data never re-encode the image. */
 export async function processImage(bytes: Buffer): Promise<ProcessedImage> {
@@ -43,6 +49,14 @@ export async function processImage(bytes: Buffer): Promise<ProcessedImage> {
             .webp({ quality: 90, alphaQuality: 100, effort: 4, smartSubsample: true })
             .toBuffer();
     return {
+      width:
+        metadata.format !== 'webp' && [5, 6, 7, 8].includes(metadata.orientation ?? 1)
+          ? height
+          : width,
+      height:
+        metadata.format !== 'webp' && [5, 6, 7, 8].includes(metadata.orientation ?? 1)
+          ? width
+          : height,
       bytes: output,
       mime: 'image/webp',
       hash: createHash('sha256').update(output).digest('hex'),

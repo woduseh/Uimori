@@ -563,6 +563,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             if (chatId && !stopping.signal.aborted) {
               publish(chatId);
               if (store.queuedJobs().length) queueMicrotask(pumpJobs);
+              queueMicrotask(pumpIllustrations);
             }
           }
         })()
@@ -574,6 +575,10 @@ export async function createApp(options: AppOptions): Promise<App> {
     if (stopping.signal.aborted || !admitted()) return;
     for (const id of queuedIllustrations(store)) {
       if (illustrationControllers.has(id)) continue;
+      const lane = (jobId: string) =>
+        (illustrationJob(store, jobId).input.task ?? 'render') === 'render' ? 'render' : 'text';
+      const kind = lane(id);
+      if ([...illustrationControllers.keys()].some((activeId) => lane(activeId) === kind)) continue;
       const controller = new AbortController();
       illustrationControllers.set(id, controller);
       const signal = AbortSignal.any([controller.signal, stopping.signal]);
@@ -1166,6 +1171,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       });
       jobControllers.get(job.id)?.abort(new Error('Translation edited'));
       publish(job.chatId);
+      pumpIllustrations();
       return job;
     }
   );

@@ -335,7 +335,7 @@ describe('illustration storage on the current schema', () => {
         'illustration.queued',
         'illustration.running',
         'illustration.completed',
-        'source.illustrations',
+        'illustration-layout.updated',
       ])
     );
   });
