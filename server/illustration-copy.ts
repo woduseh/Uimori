@@ -2,14 +2,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import { splitSource, type SourceBlock } from '../core/auxiliary.js';
 import type { PortableIllustration, PortableIllustrationAnchor } from '../core/chat-backup.js';
 import type { IllustrationJobInput } from '../core/illustration.js';
-import type { IllustrationTarget } from '../core/illustration-storyboard.js';
+import { illustrationTargetSet, type IllustrationTarget } from '../core/illustration-storyboard.js';
 import type { Store } from './store.js';
 import {
   illustrationPresentation,
   newIllustrationPresentation,
   saveIllustrationPresentation,
 } from './illustration-presentation.js';
-import { illustrationTargetSet } from './illustrations.js';
 import { successfulTranslation } from './translation-artifacts.js';
 import { storeImage } from './image-storage.js';
 import { HttpError } from './request-validation.js';

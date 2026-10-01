@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { splitSource, type SourceBlock } from './auxiliary.js';
 import type { ModelSnapshot } from './product.js';
 import type { ProviderRequest } from './transport.js';
@@ -57,6 +58,19 @@ export type IllustrationDisplay = {
   displayedJobId: string | null;
   translation?: { textHash: string; afterAnchor: string | null };
 };
+
+export function illustrationTargetSet(targets: IllustrationTarget[]): {
+  moments: (IllustrationMoment & { id: string })[];
+  hash: string;
+} {
+  const moments = targets
+    .map(({ id, startAnchor, endAnchor, focus }) => ({ id, startAnchor, endAnchor, focus }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  return {
+    moments,
+    hash: createHash('sha256').update(JSON.stringify(moments)).digest('hex'),
+  };
+}
 
 const STORYBOARD_CONTRACT = [
   'Plan distinct illustrations of one completed story response. Read ALL supplied blocks. Select up to maxTargets different moments actually present in the text, in narrative order. Prefer meaningful visual or emotional changes; neither evenly divide paragraphs nor fill a quota. Different camera angles of the same instant are not different moments. Avoid moments already listed in existingTargets. Do not invent actions, identities or costumes for variety.',
