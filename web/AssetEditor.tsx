@@ -249,7 +249,10 @@ export function AssetEditor({
   );
   return expanded ? (
     <section className="workspace-tools" aria-label="이 이야기의 이미지">
-      <p className="muted">등록된 이미지 {assets.length}개</p>
+      <p className="muted">채팅에 등록한 이미지 {assets.length}개</p>
+      <p className="muted">
+        봇·페르소나·모듈의 본문용 에셋은 여기서 편집하지 않지만 자동 배치 후보에는 포함돼요.
+      </p>
       {content}
     </section>
   ) : (

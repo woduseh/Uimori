@@ -56,6 +56,13 @@ describe('safe auxiliary error diagnostics', () => {
     }
   });
 
+  it('distinguishes a malformed JEV answer from a connection failure', () => {
+    const diagnostic = auxiliaryErrorDiagnostic('JEV_RESPONSE_INVALID');
+    expect(diagnostic.message).toContain('응답했지만');
+    expect(diagnostic.action).toContain('연결은 완료');
+    expect(diagnostic.action).not.toContain('연결을 확인');
+  });
+
   it('distinguishes missing classifier, failed classification, uncertainty and retry limits without replay promises', () => {
     expect(auxiliaryErrorDiagnostic('JEV_CREDENTIAL_REQUIRED').message).toContain('연결');
     const failed = auxiliaryErrorDiagnostic('TRANSLATION_REFUSAL_CHECK_FAILED');

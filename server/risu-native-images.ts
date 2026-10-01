@@ -4,7 +4,12 @@ import { nativeRisuAssetNames } from '../core/risu-native.js';
 import { randomUUID } from 'node:crypto';
 import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
-import { imageCatalog, imageTargetSource, latestImageJob } from './package-images.js';
+import {
+  imageCatalog,
+  imageTargetSource,
+  latestCompletedImageJob,
+  latestImageJob,
+} from './package-images.js';
 import { nativeRisuContext, nativeRisuPackages } from './risu-native-context.js';
 import { nativeImageTag } from './risu-native-image-tags.js';
 import { evaluateNativeRisuFields } from './risu-native-cbs.js';
@@ -87,16 +92,19 @@ export async function nativeImageDisplayText(
 ): Promise<{ text: string; issues: string[] }> {
   const source = store.source(sourceId);
   if (source.chatId !== snapshot.chatId) throw new Error('NATIVE_IMAGE_SOURCE_SCOPE');
-  const job = latestImageJob(store, sourceId, mode);
+  const latest = latestImageJob(store, sourceId, mode);
+  const job =
+    latest?.status === 'completed'
+      ? latest
+      : latestCompletedImageJob(store, sourceId, source.hash, mode);
   const fallback = mode === 'original' ? source.text : '';
-  if (
-    !job ||
-    job.status !== 'completed' ||
-    job.sourceHash !== source.hash ||
-    !job.result?.annotations
-  )
+  if (!job?.result?.annotations) return { text: fallback, issues: [] };
+  let target: ReturnType<typeof imageTargetSource>;
+  try {
+    target = imageTargetSource(store, job, true);
+  } catch {
     return { text: fallback, issues: [] };
-  const target = imageTargetSource(store, job, true);
+  }
   const context = nativeRisuContext(snapshot);
   if (!context) return { text: target.text, issues: [] };
   const catalog = imageCatalog(job.input);

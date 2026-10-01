@@ -346,7 +346,7 @@ export function ChatSettingsPanel({
               <div hidden={profileTab !== 'images'} className="chat-settings-images">
                 <details className="chat-settings-image-management">
                   <summary>
-                    이미지 관리 <small>등록된 이미지 {(detail.assets ?? []).length}개</small>
+                    이미지 관리 <small>채팅 등록 {(detail.assets ?? []).length}개</small>
                   </summary>
                   <AssetEditor
                     chatId={state.selected}

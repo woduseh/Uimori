@@ -226,7 +226,43 @@ describe('JEV-only existing image placement', () => {
     expect(authorize).not.toHaveBeenCalled();
     expect(observed.finishes).toHaveLength(1);
   });
-  it('rejects invented choices or malformed probability distributions', async () => {
+  it('accepts a valid selected choice without requiring unused distribution fields', async () => {
+    const h = {
+      signal: new AbortController().signal,
+      credential: () => 'key',
+      onAttemptStart: () => 'attempt',
+      onAttemptFinish: vi.fn(),
+    };
+    const result = await judgeImagePlacement(source, assets, '', {
+      ...h,
+      fetch: async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            model: 'jev-latest',
+            usage: { input_tokens: 120, output_tokens: 8 },
+            answers: Object.fromEntries(
+              Object.keys(body.questions).map((key) => [
+                key,
+                {
+                  type: 'choice',
+                  choice: 'asset_0',
+                  probabilities: { asset_0: 0.91 },
+                },
+              ])
+            ),
+          })
+        );
+      },
+    });
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].assetRef).toBe('mira');
+    expect(h.onAttemptFinish).toHaveBeenCalledWith(
+      'attempt',
+      expect.objectContaining({ status: 'completed' })
+    );
+  });
+  it('rejects an invented choice', async () => {
     const h = {
       signal: new AbortController().signal,
       credential: () => 'key',

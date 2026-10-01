@@ -225,7 +225,7 @@ export function ProfileEditor({
               />
             </div>
             <div hidden={tab !== 'images'} className="chat-profile-image-options">
-              <h3>등록된 이미지 자동 배치</h3>
+              <h3>사용 가능한 이미지 자동 배치</h3>
               <label className="check">
                 <Switch
                   aria-label="원문 이미지 자동 배치"
@@ -235,7 +235,8 @@ export function ProfileEditor({
                 원문 이미지 자동 배치
               </label>
               <small>
-                새 원문이 완성되면 등록된 이미지 중 어울리는 이미지를 골라 문단 사이에 배치해요.
+                새 원문이 완성되면 채팅 이미지와 봇·페르소나·모듈의 본문용 이미지 중 어울리는
+                이미지를 골라 문단 사이에 배치해요.
               </small>
               <label className="check">
                 <Switch
