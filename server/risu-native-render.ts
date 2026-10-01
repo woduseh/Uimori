@@ -14,13 +14,13 @@ export type NativeRisuRenderInput = {
   text: string;
   context: Omit<NativeRisuCbsContext, 'native' | 'random'>;
   timeoutMs?: number;
+  /** Canonical source positions, supplied only for the unchanged displayed body. */
+  illustrationBlocks?: { anchor: string; end: number }[];
 };
 export type NativeRisuRenderResult = {
   html: string;
   css: string;
   issues: string[];
-  /** Only unmodified Markdown paragraphs without authored HTML, CSS or background. */
-  paragraphs?: { text: string; html: string }[];
 };
 export type NativeRisuTextInput = NativeRisuRenderInput & {
   mode: 'editinput' | 'editoutput' | 'editprocess' | 'editdisplay';
@@ -266,43 +266,73 @@ export function renderNativeRisuMessageInWorker(
   const background = assets(cbs.parse(nativeRisuBackground(input.native)), resolveAsset, issues);
   // Styles are restored after Markdown parsing, preventing CSS content from becoming Markdown.
   const styles: string[] = [];
-  text = text.replace(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/giu, (_tag, css: string) => {
-    styles.push(css);
-    return `\n\n<risu-style data-index="${styles.length - 1}"></risu-style>\n\n`;
-  });
+  const beforeStyles = text;
+  const styleOffsets: { start: number; end: number; delta: number }[] = [];
+  let styleDelta = 0;
+  text = text.replace(
+    /<style\b[^>]*>([\s\S]*?)<\/style\s*>/giu,
+    (_tag, css: string, offset: number) => {
+      styles.push(css);
+      const replacement = `\n\n<risu-style data-index="${styles.length - 1}"></risu-style>\n\n`;
+      const start = offset + styleDelta;
+      const delta = replacement.length - _tag.length;
+      styleOffsets.push({ start, end: start + replacement.length, delta });
+      styleDelta += delta;
+      return replacement;
+    }
+  );
   const md = new MarkdownIt({ html: true, breaks: true, linkify: false, typographer: false });
   // Risu/PocketRisu allow indented authored HTML; only fenced blocks are Markdown code.
   md.disable(['code']);
   markRisuReadingProse(md);
   const environment = {};
   const tokens = md.parse(text, environment);
-  let html = md.renderer.render(tokens, md.options, environment);
-  let paragraphs: NativeRisuRenderResult['paragraphs'];
-  if (
-    text === input.text &&
-    !background &&
-    !styles.length &&
-    tokens.length > 0 &&
-    tokens.length % 3 === 0 &&
-    tokens.every(
-      (token, index) =>
-        token.type === ['paragraph_open', 'inline', 'paragraph_close'][index % 3] &&
-        !token.children?.some((child) => child.type === 'html_inline')
-    )
-  ) {
+  if (beforeStyles === input.text && input.illustrationBlocks?.length) {
     const lines = text.match(/.*(?:\r\n|\n|\r|$)/g)?.filter(Boolean) ?? [];
-    paragraphs = [];
-    for (let index = 0; index < tokens.length; index += 3) {
-      const range = tokens[index].map!;
-      paragraphs.push({
-        text: lines
-          .slice(range[0], range[1])
-          .join('')
-          .replace(/(?:\r\n|\n|\r)$/, ''),
-        html: md.renderer.render(tokens.slice(index, index + 3), md.options, environment),
-      });
+    const offsets = [0];
+    for (const line of lines) offsets.push(offsets.at(-1)! + line.length);
+    const byEnd = new Map(input.illustrationBlocks.map((block) => [block.end, block.anchor]));
+    const boundaries = new Map<string, (typeof tokens)[number]>();
+    const stack: (typeof tokens)[number][] = [];
+    const supported = new Set([
+      'paragraph_open',
+      'heading_open',
+      'blockquote_open',
+      'bullet_list_open',
+      'ordered_list_open',
+      'table_open',
+      'fence',
+      'hr',
+    ]);
+    for (const token of tokens) {
+      if (token.nesting === 1) {
+        stack.push(token);
+        continue;
+      }
+      const opening = token.nesting === -1 ? stack.pop() : token;
+      if (!opening?.map || !supported.has(opening.type)) continue;
+      // Use the outermost completed Markdown container at a shared ending position.
+      // Never put a slot directly between list items or inside a table row.
+      let endLine = opening.map[1];
+      while (endLine > opening.map[0] && !lines[endLine - 1]?.trim()) endLine--;
+      const lastLine = lines[endLine - 1] ?? '';
+      const end = offsets[endLine] - (lastLine.match(/(?:\r\n|\n|\r)$/)?.[0].length ?? 0);
+      let sourceEnd: number | null = end;
+      for (const style of styleOffsets) {
+        if (end >= style.end) sourceEnd -= style.delta;
+        else if (end > style.start) {
+          sourceEnd = null;
+          break;
+        } else break;
+      }
+      const anchor = sourceEnd === null ? undefined : byEnd.get(sourceEnd);
+      if (anchor) boundaries.set(anchor, opening);
+    }
+    for (const [anchor, token] of boundaries) {
+      token.attrSet('data-uimori-illustration-after', anchor);
     }
   }
+  let html = md.renderer.render(tokens, md.options, environment);
   html = html.replace(
     /<risu-style data-index="(\d+)"><\/risu-style>/gu,
     (_tag, index: string) =>
@@ -314,7 +344,6 @@ export function renderNativeRisuMessageInWorker(
   return {
     html,
     css: '',
-    ...(paragraphs ? { paragraphs } : {}),
     issues: [...new Set([...issues, ...cbs.issues].filter((name) => !assetNames.has(name)))],
   };
 }

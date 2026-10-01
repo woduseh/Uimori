@@ -46,6 +46,7 @@ export function RunTaskDetails({
   refresh,
   onError,
   children,
+  afterJobs,
   initiallyInspect = false,
 }: {
   run: ReaderRun;
@@ -55,6 +56,7 @@ export function RunTaskDetails({
   refresh: () => Promise<void>;
   onError: (message: string) => void;
   children?: ReactNode;
+  afterJobs?: ReactNode;
   initiallyInspect?: boolean;
 }) {
   const [cancelling, setCancelling] = useState(false);
@@ -149,6 +151,7 @@ export function RunTaskDetails({
             </LazyDiagnostics>
           )
         )}
+      {afterJobs}
       <DiagnosticReport scope={{ scope: 'chat', chatId: run.chatId, runId: run.id }} />
       <LazyDiagnostics<Run>
         path={`/runs/${run.id}`}

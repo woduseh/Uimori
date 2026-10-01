@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { splitSource } from '../core/auxiliary.js';
 import { describe, expect, test } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -249,24 +251,66 @@ describe('local native CHARX display evidence (optional private fixtures)', () =
     });
 });
 
-test('only unchanged plain Markdown paragraphs expose safe illustration boundaries', async () => {
-  const context = { variables: {}, userName: 'Reader' };
-  const text = '**Mira** opened the window.\n\nYuna took her hand.';
-  const rendered = await renderNativeRisuMessage({ native: native(), text, context });
-  expect(rendered.paragraphs?.map((paragraph) => paragraph.text)).toEqual(text.split('\n\n'));
-  expect(rendered.html).toBe(
-    `<div class="risu-chat risu-chat-text">${rendered.paragraphs!.map((paragraph) => paragraph.html).join('')}</div>`
-  );
-  const authored = await renderNativeRisuMessage({
+test.each(['\n', '\r\n'])(
+  'Markdown block boundaries survive styles, rules, lists and tables (%j)',
+  async (newline) => {
+    const text = [
+      '**Mira** opened the window.',
+      '---',
+      '# Lanterns',
+      '> A quiet voice.',
+      '- One\n- Two',
+      '| A | B |\n| - | - |\n| 1 | 2 |',
+      '```txt\nA\n\nB\n```',
+      '<style>p { letter-spacing: .01em; }</style>',
+      'Yuna took her hand. 🌙',
+    ]
+      .join('\n\n')
+      .replaceAll('\n', newline);
+    const source = {
+      id: 'scene',
+      chatId: 'chat',
+      text,
+      hash: createHash('sha256').update(text).digest('hex'),
+    };
+    const blocks = splitSource(source);
+    const input = {
+      native: native({
+        card: {
+          name: 'Guide',
+          extensions: { risuai: { backgroundHTML: '<style>p { font-family: serif; }</style>' } },
+        },
+      }),
+      text,
+      context: { variables: {}, userName: 'Reader' },
+    };
+    const before = await renderNativeRisuMessage(input);
+    const result = await renderNativeRisuMessage({ ...input, illustrationBlocks: blocks });
+    expect(
+      [...result.html.matchAll(/data-uimori-illustration-after="([^"]+)"/g)].map(
+        (match) => match[1]
+      )
+    ).toEqual(
+      blocks.filter((block) => !block.text.startsWith('<style>')).map((block) => block.anchor)
+    );
+    expect(result.html.replace(/ data-uimori-illustration-after="[^"]+"/g, '')).toBe(before.html);
+    expect(result.html).toContain('<style>p { font-family: serif; }</style>');
+  }
+);
+
+test('a native text rewrite does not claim stale canonical positions', async () => {
+  const text = '{{char}} opened the window.';
+  const source = {
+    id: 'scene',
+    chatId: 'chat',
+    text,
+    hash: createHash('sha256').update(text).digest('hex'),
+  };
+  const rendered = await renderNativeRisuMessage({
     native: native(),
-    text: '<style>p{color:red}</style>\n\nA moment.',
-    context,
+    text,
+    context: { variables: {} },
+    illustrationBlocks: splitSource(source),
   });
-  expect(authored.paragraphs).toBeUndefined();
-  const changed = await renderNativeRisuMessage({
-    native: native(),
-    text: '{{char}} opened the window.',
-    context,
-  });
-  expect(changed.paragraphs).toBeUndefined();
+  expect(rendered.html).not.toContain('data-uimori-illustration-after');
 });

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { DoneIcon, IssueIcon, RunningIcon, UncertainIcon } from './ui-icons.js';
 import './turn-activity.css';
+import './activity-status.css';
 
 /** Progress vocabulary shared by the main reader and the helper conversation. */
 export type StatusTone = 'running' | 'done' | 'issue' | 'uncertain';
@@ -61,7 +62,7 @@ export function TurnStatus({
     <span className="turn-activity-lead">
       {leading}
       <span className={`turn-status turn-status-${tone}`} aria-hidden="true">
-        <Glyph size={15} />
+        <Glyph size={15} className={tone === 'running' ? 'activity-spinner' : undefined} />
       </span>
       <span className={quiet ? 'sr-only' : 'turn-activity-text'}>
         {quiet ? `작업 현황 · ${text}` : text}

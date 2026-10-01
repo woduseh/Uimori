@@ -226,3 +226,94 @@ test('translation completion schedules once, keeps old mapping from overwriting 
   expect(saved?.target.textHash).toBe(mapping.target.textHash);
   expect(queuedIllustrations(store)).toEqual([]);
 });
+
+for (const flow of [
+  'original-only',
+  'illustration-first',
+  'translation-first',
+  'translation-edit',
+]) {
+  test(`illustration positions survive ${flow} without regenerating pictures`, async () => {
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    settings(store);
+    const translate = (text: string) =>
+      store.editTranslation(source.id, {
+        expectedRevision: store.source(source.id).translationRevision ?? 0,
+        expectedSourceHash: source.hash,
+        text,
+      });
+    if (flow === 'translation-first' || flow === 'translation-edit')
+      translate('강 위에 등불.\n\n부두에 미라.');
+    const plan = reserveIllustrationPlan(store, source, 'manual', {
+      testMode: true,
+      maxTargets: 2,
+    });
+    await runIllustrationJob(store, plan.id, 'worker', hooks(store));
+    const finish = async () => {
+      for (const id of queuedIllustrations(store))
+        await runIllustrationJob(store, id, 'worker', hooks(store));
+    };
+    await finish();
+    const pictures = () =>
+      illustrationsForSources(store, [source.id]).flatMap((job) =>
+        job.images.map((image) => image.id)
+      );
+    const before = pictures();
+    if (flow === 'illustration-first') translate('강 위에 등불.\n\n부두에 미라.');
+    if (flow === 'translation-edit')
+      translate('강 위로 흔들리는 등불.\n\n미라는 조용한 부두에서 기다렸다.');
+    await finish();
+    expect(pictures()).toEqual(before);
+    const cuts = illustrationsForSources(store, [source.id]).filter((job) => job.task === 'render');
+    expect(
+      cuts.every((job) => source.blocks!.some((block) => block.anchor === job.target?.endAnchor))
+    ).toBe(true);
+    if (flow === 'original-only')
+      expect(illustrationPresentation(store, source.id)?.translation).toBeUndefined();
+    else
+      expect(
+        Object.values(illustrationPresentation(store, source.id)!.translation!.afterByTarget).every(
+          Boolean
+        )
+      ).toBe(true);
+  });
+}
+
+test('explicit remapping replaces a cached null, deduplicates active work and never renders again', async () => {
+  const store = databases.create();
+  const { source } = chatWithSource(store);
+  settings(store);
+  const plan = reserveIllustrationPlan(store, source, 'manual', { testMode: true, maxTargets: 2 });
+  await runIllustrationJob(store, plan.id, 'worker', hooks(store));
+  for (const id of queuedIllustrations(store))
+    await runIllustrationJob(store, id, 'worker', hooks(store));
+  store.editTranslation(source.id, {
+    expectedRevision: 0,
+    expectedSourceHash: source.hash,
+    text: '등불이 흔들렸다.\n\n미라가 기다렸다.',
+  });
+  const placement = claimIllustration(store, queuedIllustrations(store)[0], 'worker')!;
+  const nulls = Object.fromEntries(
+    placement.job.input.placement!.targets.map((target) => [target.id, null])
+  );
+  completeIllustrationPlacement(store, placement.job, 'worker', nulls, {
+    ...diagnostic(),
+    stage: 'placement',
+  });
+  expect(scheduleIllustrationPlacement(store, source.id)).toBeNull();
+  const pictures = illustrationsForSources(store, [source.id]).flatMap((item) => item.images);
+  const retry = scheduleIllustrationPlacement(store, source.id, true)!;
+  expect(retry.input.task).toBe('placement');
+  expect(scheduleIllustrationPlacement(store, source.id, true)?.id).toBe(retry.id);
+  expect(queuedIllustrations(store)).toEqual([retry.id]);
+  await runIllustrationJob(store, retry.id, 'worker', hooks(store));
+  expect(
+    Object.values(illustrationPresentation(store, source.id)!.translation!.afterByTarget).every(
+      Boolean
+    )
+  ).toBe(true);
+  expect(illustrationsForSources(store, [source.id]).flatMap((item) => item.images)).toEqual(
+    pictures
+  );
+});

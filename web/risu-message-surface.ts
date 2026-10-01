@@ -30,6 +30,13 @@ export function mountRisuMessageSurface(
   content.dataset.risuDisabled = 'true';
   content.innerHTML = prepared.html;
   root.replaceChildren(authorStyle, content);
+  const slots = new Map<string, HTMLSlotElement>();
+  const boundaries = new Map(
+    [...content.querySelectorAll<HTMLElement>('[data-uimori-illustration-after]')].map((node) => [
+      node.dataset.uimoriIllustrationAfter!,
+      node.tagName === 'CODE' ? node.closest('pre')! : node,
+    ])
+  );
   const reading = createReadingDecorator(content);
   const releaseLayout = reserveFixedControls(host, content);
   let action: RisuAction | undefined;
@@ -71,6 +78,23 @@ export function mountRisuMessageSurface(
   return {
     root,
     content,
+    updateIllustrations(anchors: string[]) {
+      const requested = new Set(anchors);
+      for (const [anchor, slot] of slots) {
+        if (!requested.has(anchor)) {
+          slot.remove();
+          slots.delete(anchor);
+        }
+      }
+      for (const anchor of requested) {
+        const boundary = boundaries.get(anchor);
+        if (!boundary || slots.has(anchor)) continue;
+        const slot = document.createElement('slot');
+        slot.name = `illustration-${anchor}`;
+        boundary.after(slot);
+        slots.set(anchor, slot);
+      }
+    },
     updateAction(next: { action: RisuAction; disabled: boolean; revision: string }) {
       action = next.action;
       disabled = next.disabled;

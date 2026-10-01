@@ -63,14 +63,6 @@
   gap: 8px;
   font-size: 13px;
 }
-.illustration-progress svg {
-  animation: illustration-spin 1s linear infinite;
-}
-@keyframes illustration-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 .illustration .error {
   margin: 0;
 }
@@ -158,13 +150,6 @@
 .illustration-references select {
   width: 100%;
   font-size: 12px;
-}
-
-/* The only spinner that was left turning under reduced motion. */
-@media (prefers-reduced-motion: reduce) {
-  .illustration-progress svg {
-    animation: none;
-  }
 }
 
 /* Finished cuts belong to the manuscript, not a diagnostic card stack. */
@@ -284,4 +269,94 @@
 }
 .illustration-task svg {
   flex: none;
+}
+
+/* App-owned cards stay in light DOM; only their positions are slotted into the message. */
+.illustration-slot {
+  color: var(--text);
+  font-family: var(--font-ui, sans-serif);
+  font-size: 13px;
+}
+.illustration-phases {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.illustration-phases > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px 20px;
+  flex-wrap: wrap;
+}
+.illustration-phases dt {
+  min-width: 110px;
+  color: var(--muted);
+}
+.illustration-phases dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.illustration-usage {
+  margin: 6px 0;
+  font-variant-numeric: tabular-nums;
+}
+.illustration-placement-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.illustration-preview-trigger {
+  display: block;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  max-width: 100%;
+  line-height: 0;
+  cursor: zoom-in;
+}
+.illustration-preview-trigger:hover {
+  background: transparent;
+  filter: none;
+}
+.app-dialog.illustration-lightbox.wide {
+  width: min(1600px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+}
+.illustration-lightbox > .dialog-body {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  padding: 16px;
+}
+.illustration-lightbox .dialog-body figure {
+  width: 100%;
+  margin: 0;
+}
+.illustration-lightbox .dialog-body img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(100dvh - 170px);
+  object-fit: contain;
+  margin: 0 auto;
+  background: transparent;
+}
+.illustration-lightbox .dialog-body figcaption {
+  text-align: center;
+  color: var(--muted);
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .app-dialog.illustration-lightbox.wide {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 100dvh;
+  }
 }

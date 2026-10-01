@@ -15,6 +15,7 @@ export {
   type ComfyWorkflow,
   type ComfyWorkflowNode,
 } from './illustration-workflow.js';
+import type { Usage } from './types.js';
 import type { IllustrationPresetStamp } from './illustration-presets.js';
 import { modelRequestFields } from './model-request-fields.js';
 import type { ModelRef, ModelSnapshot } from './product.js';
@@ -189,6 +190,12 @@ export type Illustration = {
   images: IllustrationImage[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type IllustrationDetail = Illustration & { usage: Usage; modelTitle?: string };
+export type IllustrationUsageReport = {
+  total: Usage;
+  stages: Record<Illustration['task'], Usage>;
 };
 
 /** Only known-safe failures may start another render; a lost remote outcome is never replayed. */

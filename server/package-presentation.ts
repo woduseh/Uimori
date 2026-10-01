@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { splitSource } from '../core/auxiliary.js';
 import { RisuContentError } from '../core/risu-content.js';
 import type { RunSnapshot } from '../core/types.js';
 import { nativeRisuContext } from './risu-native-context.js';
@@ -53,7 +54,7 @@ export async function buildPackagePresentation(
         (snapshot.packageStart?.mode === 'authored' || snapshot.nativeRisuAuthored?.greeting
           ? -1
           : native.messages.length);
-      const display = async (value: string, index: number) => {
+      const display = async (value: string, index: number, canonical?: string) => {
         const edited = await executeRisuNative({
           ...native,
           event: 'editDisplay',
@@ -63,6 +64,14 @@ export async function buildPackagePresentation(
         const result = await renderer.run({
           native: native.native,
           text: edited.text ?? value,
+          illustrationBlocks:
+            canonical === value && (edited.text ?? value) === value
+              ? splitSource({
+                  ...source,
+                  text: value,
+                  hash: createHash('sha256').update(value).digest('hex'),
+                }).map(({ anchor, end }) => ({ anchor, end }))
+              : undefined,
           context: {
             ...native,
             variables: edited.variables,
@@ -75,8 +84,6 @@ export async function buildPackagePresentation(
           changed: true,
           applied: [] as string[],
           ...result,
-          paragraphs:
-            edited.text === undefined || edited.text === value ? result.paragraphs : undefined,
           issues: [...new Set([...result.issues, ...edited.warnings])],
         };
       };
@@ -89,7 +96,10 @@ export async function buildPackagePresentation(
         },
       ];
       const parts: Awaited<ReturnType<typeof display>>[] = [];
-      for (const message of messages) parts.push(await display(message.text, message.index));
+      for (const message of messages)
+        parts.push(
+          await display(message.text, message.index, message.primary ? source.text : undefined)
+        );
       const combine = (values: typeof parts) =>
         values.length === 1
           ? values[0]!
@@ -115,7 +125,8 @@ export async function buildPackagePresentation(
         const translated = [...parts];
         translated[primary] = await display(
           options.nativeTranslationText ?? source.translation.text,
-          messages[primary]!.index
+          messages[primary]!.index,
+          source.translation.text
         );
         translation = combine(translated);
       }

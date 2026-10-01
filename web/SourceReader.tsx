@@ -361,15 +361,15 @@ function SourceReaderContent({
   const translationText = validTranslation?.text ?? '';
   const translationBlocks = displayTranslation?.translationLayout?.blocks ?? [];
   const displayedNative = mode === 'original' ? projected?.original : projected?.translation;
-  const displayedBlocks = mode === 'original' ? blocks : translationBlocks;
-  const nativeParagraphs = displayedNative?.paragraphs;
-  const canSplitNative =
-    projected?.format === 'risu-html' &&
-    !displayedNative?.css &&
-    displayedNative?.text === (mode === 'original' ? source.text : translationText) &&
-    !!nativeParagraphs?.length &&
-    nativeParagraphs.length === displayedBlocks.length &&
-    nativeParagraphs.every((paragraph, index) => paragraph.text === displayedBlocks[index].text);
+  const [nativeAnchors, setNativeAnchors] = useState<{ html?: string; anchors: string[] }>({
+    anchors: [],
+  });
+  const receiveNativeAnchors = useCallback(
+    (anchors: string[]) => {
+      setNativeAnchors({ html: displayedNative?.html, anchors });
+    },
+    [displayedNative?.html]
+  );
   const illustrationLayout = useIllustrationLayout({
     sourceId: source.id,
     sourceHash: source.hash,
@@ -379,34 +379,18 @@ function SourceReaderContent({
       mode === 'translation' ? displayTranslation?.translationLayout?.textHash : undefined,
     anchors: (mode === 'original' ? blocks : translationBlocks).map((block) => block.anchor),
     canInline:
-      canSplitNative ||
-      (projected?.format !== 'risu-html' &&
-        !(mode === 'original' ? projected?.original.changed : projected?.translation?.changed)),
+      projected?.format === 'risu-html' ||
+      !(mode === 'original' ? projected?.original.changed : projected?.translation?.changed),
+    inlineAnchors:
+      projected?.format === 'risu-html'
+        ? nativeAnchors.html === displayedNative?.html
+          ? nativeAnchors.anchors
+          : []
+        : undefined,
     defaultCollapsed: illustrationsCollapsed,
     refresh,
     onError: setActionError,
   });
-  // Preserve one native surface per uninterrupted passage, not one ShadowRoot per paragraph.
-  const nativeSegments: { html: string; anchors: string[]; after: ReactNode }[] = [];
-  if (canSplitNative) {
-    let html = '';
-    let anchors: string[] = [];
-    for (const [index, paragraph] of nativeParagraphs!.entries()) {
-      const anchor = displayedBlocks[index].anchor;
-      html += paragraph.html;
-      anchors.push(anchor);
-      const after = illustrationLayout.inline(anchor);
-      if (after || index === nativeParagraphs!.length - 1) {
-        nativeSegments.push({
-          html: `<div class="risu-chat risu-chat-text">${html}</div>`,
-          anchors,
-          after,
-        });
-        html = '';
-        anchors = [];
-      }
-    }
-  }
   const [illustrationDialog, setIllustrationDialog] = useState(false);
   const [illustrationCount, setIllustrationCount] = useState(1);
   const illustrationRequestKey = useRef('');
@@ -633,35 +617,25 @@ function SourceReaderContent({
                 (validTranslation && projected.translation?.html !== undefined)) ? (
               <div
                 data-testid={mode === 'original' ? 'source-text' : 'translation-text'}
-                data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
+                data-block-anchor={(mode === 'original' ? blocks : translationBlocks)
+                  .map((block) => block.anchor)
+                  .join(' ')}
               >
-                {nativeSegments.some((segment) => segment.after) ? (
-                  nativeSegments.map((segment) => (
-                    <Fragment key={segment.anchors[0]}>
-                      <div className="source-block" data-block-anchor={segment.anchors.join(' ')}>
-                        <RisuMessageSurface
-                          html={segment.html}
-                          onAction={nativeAction}
-                          disabled={presentation?.pending}
-                          revisionKey={`${source.id}:${source.hash}`}
-                        />
-                      </div>
-                      {segment.after}
-                    </Fragment>
-                  ))
-                ) : (
-                  <RisuMessageSurface
-                    html={
-                      (mode === 'original'
-                        ? projected.original.html
-                        : projected.translation?.html) ?? ''
-                    }
-                    css={mode === 'original' ? projected.original.css : projected.translation?.css}
-                    onAction={nativeAction}
-                    disabled={presentation?.pending}
-                    revisionKey={`${source.id}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
-                  />
-                )}
+                <RisuMessageSurface
+                  html={displayedNative?.html ?? ''}
+                  css={displayedNative?.css}
+                  onAction={nativeAction}
+                  disabled={presentation?.pending}
+                  revisionKey={`${source.id}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
+                  onIllustrationAnchors={receiveNativeAnchors}
+                  illustrations={(nativeAnchors.html === displayedNative?.html
+                    ? nativeAnchors.anchors
+                    : []
+                  ).flatMap((anchor) => {
+                    const content = illustrationLayout.inline(anchor);
+                    return content ? [{ anchor, content }] : [];
+                  })}
+                />
               </div>
             ) : mode === 'original' && projected?.original.changed ? (
               <div className="prose" data-testid="source-text">
