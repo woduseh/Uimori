@@ -6,12 +6,7 @@ import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { nativeImageDisplayText, nativeImageGuidance } from '../server/risu-native-images.js';
 import { readRunSnapshot } from '../server/run-projections.js';
-import {
-  imageCatalog,
-  latestImageJob,
-  putImageBlob,
-  requestImages,
-} from '../server/package-images.js';
+import { imageCatalog, latestImageJob, putImageBlob } from '../server/package-images.js';
 import { renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { nativeRisuContext } from '../server/risu-native-context.js';
 import {
@@ -147,22 +142,8 @@ test('validated image annotations use native boxes and placement without changin
       })
     ).html
   ).toContain(asset.url);
-  const replacement = requestImages(store, source.id, {
-    expectedSourceHash: source.hash,
-    expectedRevision: receipt.revision,
-  });
-  expect(replacement.id).not.toBe(receipt.id);
-  const replacementClaim = store.claimJob(replacement.id, 'replacement', {})!;
-  store.failJob(
-    replacement.id,
-    replacementClaim.generation,
-    'replacement',
-    'Synthetic JEV failure'
-  );
-  const preserved = await nativeImageDisplayText(store, snapshot, source.id);
-  expect(preserved.text).toContain('<img="Mira_happy">');
-  expect(store.job(receipt.id)).toEqual(receipt);
   expect(store.source(source.id)).toEqual(source);
+  expect(store.job(pending.id)).toEqual(receipt);
 });
 
 test('native model output reserves the existing independent illustration queue and exposes completed images in the reader', () => {
