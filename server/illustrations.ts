@@ -1,3 +1,5 @@
+import type { Usage } from '../core/types.js';
+import type { IllustrationUsageReport } from '../core/illustration.js';
 import { successfulTranslation } from './translation-artifacts.js';
 import {
   illustrationTargetSet,
@@ -385,6 +387,43 @@ export function projectIllustration(
     updatedAt: row.updatedAt,
   };
 }
+/** Numeric attempts are loaded on demand, not with every reader refresh. */
+export function illustrationUsage(store: Store, jobIds: string[]): Usage {
+  const row = store.db
+    .prepare(`SELECT COUNT(*) AS modelCalls,
+    CASE WHEN COUNT(input_tokens)=COUNT(*) THEN SUM(input_tokens) END AS inputTokens,
+    CASE WHEN COUNT(output_tokens)=COUNT(*) THEN SUM(output_tokens) END AS outputTokens,
+    CASE WHEN COUNT(cost_usd)=COUNT(*) THEN SUM(cost_usd) END AS costUsd
+    FROM attempts WHERE id IN (
+      SELECT a.value FROM illustration_jobs j, json_each(j.diagnostic,'$.attempts') a
+      WHERE j.id IN (SELECT value FROM json_each(?))
+    )`)
+    .get(json(jobIds)) as Usage;
+  return row;
+}
+export function sourceIllustrationUsage(store: Store, sourceId: string): IllustrationUsageReport {
+  const source = store.source(sourceId);
+  const jobs = store.db
+    .prepare(`SELECT id,COALESCE(json_extract(input,'$.task'),'render') AS task
+    FROM illustration_jobs WHERE source_revision=? AND source_hash=?`)
+    .all(source.id, source.hash) as { id: string; task: Illustration['task'] }[];
+  return {
+    total: illustrationUsage(
+      store,
+      jobs.map((job) => job.id)
+    ),
+    stages: Object.fromEntries(
+      ['plan', 'render', 'placement'].map((task) => [
+        task,
+        illustrationUsage(
+          store,
+          jobs.filter((job) => job.task === task).map((job) => job.id)
+        ),
+      ])
+    ) as IllustrationUsageReport['stages'],
+  };
+}
+
 export function illustrationsForSources(store: Store, sourceIds: string[]): Illustration[] {
   if (!sourceIds.length) return [];
   const presentations = new Map(sourceIds.map((id) => [id, illustrationPresentation(store, id)]));
@@ -699,14 +738,18 @@ function completeIllustrationTextJob(
   store.event(job.chatId, 'illustration.completed', job.id);
   return true;
 }
-/** Called at either completion edge, never by Reader GET. Maps all targets in one text call. */
-export function scheduleIllustrationPlacement(store: Store, sourceId: string): void {
+/** Completion or explicit re-connect only, never Reader GET. Maps all targets in one text call. */
+export function scheduleIllustrationPlacement(
+  store: Store,
+  sourceId: string,
+  force = false
+): IllustrationJobRow | null {
   const source = store.source(sourceId);
   const presentation = illustrationPresentation(store, source.id, source.hash);
   const translation = successfulTranslation(store, source);
-  if (!presentation || !translation?.translationLayout) return;
+  if (!presentation || !translation?.translationLayout) return null;
   const targets = illustrationTargets(store, source);
-  if (!targets.length) return;
+  if (!targets.length) return null;
   const set = illustrationTargetSet(targets);
   const target = {
     mode: 'translation' as const,
@@ -715,17 +758,19 @@ export function scheduleIllustrationPlacement(store: Store, sourceId: string): v
     translationRevision: translation.revision ?? 1,
   };
   if (
+    !force &&
     presentation.translation?.targetSetHash === set.hash &&
     presentation.translation.target.textHash === target.textHash
   )
-    return;
+    return null;
   const existing = store.db
     .prepare(`SELECT * FROM illustration_jobs WHERE source_revision=? AND source_hash=? AND json_extract(input,'$.task')='placement'
     AND json_extract(input,'$.placement.targetSetHash')=? AND json_extract(input,'$.placement.target.textHash')=? ORDER BY created_at DESC LIMIT 1`)
     .get(source.id, source.hash, set.hash, target.textHash) as Row | undefined;
   if (existing) {
     const saved = mapRow(existing);
-    if (saved.status === 'completed' && saved.diagnostic?.afterByTarget) {
+    if (ACTIVE.includes(saved.status)) return saved;
+    if (!force && saved.status === 'completed' && saved.diagnostic?.afterByTarget) {
       presentation.translation = {
         target,
         targetSetHash: set.hash,
@@ -733,14 +778,14 @@ export function scheduleIllustrationPlacement(store: Store, sourceId: string): v
       };
       saveIllustrationPresentation(store, source.id, presentation);
     }
-    return;
+    if (!force) return null;
   }
   const first = presentation.targets[targets[0].id];
   const recipe = illustrationJob(store, first.latestRequestedJobId).input;
   // A restored chat contains results, not credentials or runnable recipes.
-  if (!recipe.codex && !recipe.comfyui && !recipe.fixture) return;
+  if (!recipe.codex && !recipe.comfyui && !recipe.fixture) return null;
   const { plan: _plan, target: _target, placement: _placement, ...base } = recipe;
-  insertIllustrationJob(store, source, 'automatic', {
+  return insertIllustrationJob(store, source, force ? 'manual' : 'automatic', {
     ...base,
     task: 'placement',
     placement: { target, targetSetHash: set.hash, targets: set.moments },
@@ -1327,6 +1372,24 @@ export function illustrationRoutes(
       return value;
     }
   );
+  app.get<{ Params: { id: string } }>('/api/sources/:id/illustration-usage', async (request) =>
+    sourceIllustrationUsage(store, request.params.id)
+  );
+  app.post<{ Params: { id: string } }>(
+    '/api/sources/:id/illustration-placement',
+    async (request) => {
+      const body = record(request.body);
+      fields(body, ['expectedSourceHash']);
+      const source = store.source(request.params.id);
+      if (source.hash !== body.expectedSourceHash)
+        throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+      const job = scheduleIllustrationPlacement(store, source.id, true);
+      if (!job) throw new HttpError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+      hooks.publish(source.chatId);
+      hooks.pump();
+      return projectIllustration(store, job);
+    }
+  );
   app.post<{ Params: { id: string } }>('/api/illustrations/:id/regenerate', async (request) => {
     fields(record(request.body ?? {}), []);
     const job = regenerateIllustration(store, request.params.id, hooks.testMode);
@@ -1336,7 +1399,12 @@ export function illustrationRoutes(
   });
   app.get<{ Params: { id: string } }>('/api/illustrations/:id', async (request) => {
     const job = illustrationJob(store, request.params.id);
-    return { ...projectIllustration(store, job), input: job.input };
+    return {
+      ...projectIllustration(store, job),
+      input: job.input,
+      usage: illustrationUsage(store, [job.id]),
+      modelTitle: job.input.codex?.model.title ?? job.input.comfyui?.promptModel.title,
+    };
   });
   app.post<{ Params: { id: string } }>('/api/illustrations/:id/retry', async (request) => {
     fields(record(request.body ?? {}), []);

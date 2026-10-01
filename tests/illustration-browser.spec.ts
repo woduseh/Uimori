@@ -3,7 +3,7 @@ import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Illustration, IllustrationSettings } from '../core/illustration.js';
-import { postFixtureChat } from './fixtures/chat.js';
+import { fixtureBotInput } from './fixtures/chat.js';
 import { navigationAction, openSourceActions, selectSettingsSection } from './ui-navigation.js';
 
 test.setTimeout(60000);
@@ -13,9 +13,13 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
   expect(response.ok()).toBeTruthy();
   return response.json();
 }
-async function seed(request: APIRequestContext) {
-  const created = await postFixtureChat(request, {
-    data: { title: `Illustration synthetic ${Date.now()}` },
+async function seed(request: APIRequestContext, backgroundHTML = '') {
+  const botInput = fixtureBotInput();
+  botInput.package.nativeRisu!.card.extensions = { risuai: { backgroundHTML } };
+  const bot = await request.post('/api/content', { data: botInput });
+  expect(bot.ok()).toBeTruthy();
+  const created = await request.post('/api/chats', {
+    data: { title: `Illustration synthetic ${Date.now()}`, botId: (await bot.json()).id },
   });
   expect(created.ok()).toBeTruthy();
   const chat = (await created.json()) as Chat;
@@ -356,18 +360,34 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
   const firstInline = scene.locator('[data-placement="inline"]').first();
   const after = await firstInline.getAttribute('data-after-anchor');
   expect(
-    await firstInline.evaluate((node) =>
-      node.previousElementSibling?.getAttribute('data-block-anchor')
+    await firstInline.evaluate(
+      (node) =>
+        node
+          .closest('[slot]')
+          ?.assignedSlot?.previousElementSibling?.getAttribute('data-uimori-illustration-after') ??
+        node.previousElementSibling?.getAttribute('data-block-anchor')
     )
   ).toBe(after);
   await hero.scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('storyboard-desktop.png') });
+  const pages = page.context().pages().length;
+  const preview = firstInline.getByRole('button', { name: '삽화 크게 보기', exact: true });
+  await preview.click();
+  const enlarged = page.getByRole('dialog', { name: '삽화 크게 보기', exact: true });
+  await expect(enlarged).toBeVisible();
+  await expect(enlarged).toHaveCSS('opacity', '1');
+  expect((await enlarged.boundingBox())!.width).toBeGreaterThan(1000);
+  expect(page.context().pages()).toHaveLength(pages);
+  await page.screenshot({ path: info.outputPath('illustration-modal-desktop.png') });
+  await page.keyboard.press('Escape');
+  await expect(enlarged).toBeHidden();
+  await expect(preview).toBeFocused();
   const cutId = await hero.getByTestId('illustration').getAttribute('data-target-id');
   await hero.getByRole('button', { name: '접기', exact: true }).click();
   await page.reload();
   const folded = scene.locator(`[data-target-id="${cutId}"]`);
   await expect(folded.getByRole('button', { name: '펼치기', exact: true })).toBeVisible();
-  await expect(folded.locator('img')).toBeHidden();
+  await expect(folded.locator('.illustration-preview-trigger img')).toBeHidden();
   await scene.getByRole('button', { name: '모두 접기', exact: true }).click();
   await expect(scene.locator('.illustration-cut.is-collapsed')).toHaveCount(3);
   await scene.getByRole('button', { name: '모두 펼치기', exact: true }).click();
@@ -382,7 +402,164 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await scene.locator('[data-placement="hero"]').scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('storyboard-mobile.png') });
+  await scene
+    .locator('[data-placement="hero"]')
+    .getByRole('button', { name: '삽화 크게 보기', exact: true })
+    .click();
+  await expect(enlarged).toBeVisible();
+  await expect(enlarged).toHaveCSS('opacity', '1');
+  const geometry = await enlarged.boundingBox();
+  expect(geometry!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
+  await page.screenshot({ path: info.outputPath('illustration-modal-mobile.png') });
+  await enlarged.getByRole('button', { name: '삽화 크게 보기 닫기', exact: true }).click();
+  await expect(enlarged).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect((await detail(request, chat.id)).sources.find((item) => item.id === source.id)?.text).toBe(
+    paragraphs.join('\n\n')
+  );
+});
+
+test('ILUI05 styled Markdown keeps its message tree, shows progress and reconnects edited translations', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, source } = await seed(
+    request,
+    '<style>.risu-chat-text p { letter-spacing: 0.3px; }</style><label>읽기 메모 <input id="reading-note"></label>'
+  );
+  const paragraphs = [
+    '강 위로 등불이 흔들렸다.',
+    '미라가 부두에 도착했다.',
+    '유나는 미라의 손을 잡았다.',
+    '---',
+    '> 저편으로 건너가자.',
+    '- 등불\n- 다리',
+    '두 사람은 함께 걸었다.',
+  ];
+  const edited = await request.put(`/api/sources/${source.id}/text`, {
+    data: { text: paragraphs.join('\n\n'), expectedRevision: 0 },
+  });
+  expect(edited.ok()).toBeTruthy();
+  const current = await edited.json();
+  await settings(request, {
+    generator: 'fixture',
+    automatic: false,
+    maxPerSource: 3,
+    maxAutoRetries: 0,
+  });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
+  const surface = scene.locator('.risu-message-surface');
+  await expect(scene.locator('#reading-note')).toBeVisible();
+  await scene.locator('#reading-note').fill('현재 본문 유지');
+  await surface.evaluate((host) => {
+    (window as any).illustrationBody = host.shadowRoot!.querySelector('.risu-chat-text');
+  });
+  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'illustration' } });
+  const planned = await request.post(`/api/sources/${source.id}/illustrations`, {
+    data: { expectedSourceHash: current.hash, maxTargets: 3 },
+  });
+  expect(planned.ok()).toBeTruthy();
+  const activity = scene.getByTestId('turn-activity');
+  await expect(activity.locator(':scope > summary')).toContainText('장면 선택 중');
+  const spinner = activity.locator(':scope > summary .activity-spinner');
+  await expect
+    .poll(() =>
+      spinner.evaluate((node) =>
+        node.getAnimations().some((animation) => animation.playState === 'running')
+      )
+    )
+    .toBe(true);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect.poll(() => spinner.evaluate((node) => node.getAnimations().length)).toBe(0);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await request.post('/api/test/control', { data: { action: 'release', barrier: 'illustration' } });
+  await expect
+    .poll(
+      async () =>
+        (await illustrations(request, chat.id)).filter(
+          (item) => item.task === 'render' && item.status === 'completed'
+        ).length
+    )
+    .toBe(3);
+  await expect(scene.locator('[data-placement="inline"]')).toHaveCount(2);
+  await expect(scene.getByTestId('illustration-supplement')).toHaveCount(0);
+  expect(
+    await surface.evaluate(
+      (host) =>
+        host.shadowRoot!.querySelector('.risu-chat-text') === (window as any).illustrationBody
+    )
+  ).toBe(true);
+  await expect(scene.locator('#reading-note')).toHaveValue('현재 본문 유지');
+  expect(
+    await scene
+      .locator('.risu-chat-text p')
+      .first()
+      .evaluate((node) => getComputedStyle(node).letterSpacing)
+  ).toBe('0.3px');
+  for (const node of await scene.locator('[data-placement="inline"]').all()) {
+    const actual = await node.evaluate((element) => {
+      const slot = element.closest('[slot]')?.assignedSlot;
+      return {
+        anchor: slot?.previousElementSibling?.getAttribute('data-uimori-illustration-after'),
+        top: element.getBoundingClientRect().top,
+        previousBottom: slot?.previousElementSibling?.getBoundingClientRect().bottom,
+      };
+    });
+    expect(actual.anchor).toBe(await node.getAttribute('data-after-anchor'));
+    expect(actual.top).toBeGreaterThanOrEqual(actual.previousBottom!);
+  }
+  await activity.locator(':scope > summary').click();
+  const progress = activity.getByRole('region', { name: '이 응답의 삽화 작업' });
+  await expect(progress).toContainText('3/3컷 완료');
+  await progress.getByText('삽화 호출과 토큰', { exact: true }).click();
+  await expect(progress).toContainText('모델 호출 0회');
+  await expect(progress).toContainText('미확인');
+  await activity.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('illustration-progress-desktop.png') });
+  const pictures = (await illustrations(request, chat.id)).flatMap((item) =>
+    item.images.map((image) => image.id)
+  );
+  const translate = async (text: string, expectedRevision: number) => {
+    const response = await request.put(`/api/sources/${source.id}/translation`, {
+      data: { text, expectedRevision, expectedSourceHash: current.hash },
+    });
+    expect(response.ok()).toBeTruthy();
+    return response.json();
+  };
+  const merged = await translate('등불 아래서 두 사람이 만나 함께 다리를 건넜다.', 0);
+  await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
+  await expect(scene.getByTestId('illustration-supplement')).toBeVisible();
+  await scene.getByTestId('illustration-supplement').locator(':scope > summary').click();
+  await expect(scene.getByTestId('illustration-supplement')).toContainText(
+    '번역문에서 이 장면의 위치를 찾지 못했어요'
+  );
+  const previousPlacements = (await illustrations(request, chat.id)).filter(
+    (item) => item.task === 'placement'
+  ).length;
+  await scene
+    .getByTestId('illustration-supplement')
+    .getByRole('button', { name: '번역 위치 다시 연결', exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await illustrations(request, chat.id)).filter(
+          (item) => item.task === 'placement' && item.status === 'completed'
+        ).length
+    )
+    .toBe(previousPlacements + 1);
+  await translate(
+    paragraphs.map((text) => (text === '---' ? text : `${text} `)).join('\n\n'),
+    merged.revision
+  );
+  await expect(scene.getByTestId('illustration-supplement')).toHaveCount(0);
+  await expect(scene.locator('[data-placement="inline"]')).toHaveCount(2);
+  expect(
+    (await illustrations(request, chat.id)).flatMap((item) => item.images.map((image) => image.id))
+  ).toEqual(pictures);
   expect((await detail(request, chat.id)).sources.find((item) => item.id === source.id)?.text).toBe(
     paragraphs.join('\n\n')
   );

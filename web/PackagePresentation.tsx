@@ -16,7 +16,6 @@ export type PackagePresentation = {
     applied: string[];
     html?: string;
     css?: string;
-    paragraphs?: { text: string; html: string }[];
   };
   request?: { text: string; changed: boolean; applied: string[] };
   translation?: {
@@ -25,7 +24,6 @@ export type PackagePresentation = {
     applied: string[];
     html?: string;
     css?: string;
-    paragraphs?: { text: string; html: string }[];
   };
   translationId: string | null;
   translationRevision: number | null;

@@ -52,8 +52,10 @@
 .activity-issue {
   color: var(--error);
 }
-.activity-spinner {
-  animation: activity-spin 1.4s linear infinite;
+@media (prefers-reduced-motion: no-preference) {
+  .activity-spinner {
+    animation: activity-spin 1.4s linear infinite;
+  }
 }
 .activity-list {
   margin-bottom: 20px;

@@ -1210,6 +1210,7 @@ function App() {
                                       run={run}
                                       source={source}
                                       jobs={s.detail!.jobs}
+                                      illustrations={s.detail!.illustrations}
                                       activities={s.detail!.reader.responseActivity ?? []}
                                       connected={s.connected}
                                       revision={s.detail!.reader.cursor}

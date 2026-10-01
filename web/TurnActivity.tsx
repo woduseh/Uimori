@@ -3,6 +3,9 @@ import type { Job, ReaderActivity, ReaderRun, Source } from '../core/types.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
 import { labels } from './api.js';
 import { elapsedLabel } from './ActivityStatus.js';
+import type { Illustration } from '../core/illustration.js';
+import { IllustrationActivity } from './IllustrationActivity.js';
+import { illustrationProgress } from './illustration-progress.js';
 import { TurnStatus } from './TurnStatus.js';
 
 const active = (status: string) => ['queued', 'running'].includes(status);
@@ -19,6 +22,7 @@ type Props = {
   run: ReaderRun;
   source?: Source;
   jobs: Job[];
+  illustrations?: Illustration[];
   activities: ReaderActivity[];
   connected: boolean;
   revision: number;
@@ -39,6 +43,7 @@ function TurnActivityContent({
   run,
   source,
   jobs,
+  illustrations: allIllustrations = [],
   activities,
   connected,
   revision,
@@ -77,19 +82,32 @@ function TurnActivityContent({
     item.kind === 'main' ? item.id === run.id : !!source && item.sourceRevision === source.id
   );
   // Illustrations attach to the response text; the reader strip owns their actions.
-  const illustrations = related.filter((item) => item.kind === 'illustration');
-  const entries = [
-    ...currentJobs.map((job) => ({
-      id: job.id,
-      kind: job.kind,
-      status: job.status,
-      label:
-        job.kind === 'image'
-          ? `${job.imageTarget?.mode === 'translation' ? '번역' : '원문'} 이미지 배치`
-          : names[job.kind],
-    })),
-    ...illustrations,
-  ];
+  const illustrations = allIllustrations.filter(
+    (item) => source && item.sourceRevision === source.id && item.sourceHash === source.hash
+  );
+  const progress = illustrations.length ? illustrationProgress(illustrations) : null;
+  const entries: { id: string; kind: string; status: string; label?: string; summary?: string }[] =
+    [
+      ...currentJobs.map((job) => ({
+        id: job.id,
+        kind: job.kind,
+        status: job.status,
+        label:
+          job.kind === 'image'
+            ? `${job.imageTarget?.mode === 'translation' ? '번역' : '원문'} 이미지 배치`
+            : names[job.kind],
+      })),
+      ...(progress
+        ? [
+            {
+              id: 'illustrations',
+              kind: 'illustration',
+              status: progress.status,
+              summary: progress.summary,
+            },
+          ]
+        : []),
+    ];
   const running = active(run.status) || entries.some((item) => active(item.status));
   useEffect(() => {
     if (!running) return;
@@ -110,13 +128,16 @@ function TurnActivityContent({
     mainLabel,
     ...important.map(
       (item) =>
-        `${'label' in item ? item.label : names[item.kind]} ${labels[item.status] ?? item.status}`
+        item.summary ?? `${item.label ?? names[item.kind]} ${labels[item.status] ?? item.status}`
     ),
   ].join(' · ');
   const timing =
     related.find((item) => item.kind === 'main' && active(item.status)) ??
     related.find(
-      (item) => active(item.status) && entries.some((current) => current.id === item.id)
+      (item) =>
+        active(item.status) &&
+        (entries.some((current) => current.id === item.id) ||
+          illustrations.some((current) => current.id === item.id))
     );
   const elapsed = connected && running && timing ? elapsedLabel(timing.startedAt, now) : '';
   const uncertain = !connected && running;
@@ -154,20 +175,23 @@ function TurnActivityContent({
           run={run}
           jobs={currentJobs}
           inlineJobs={currentJobs}
+          afterJobs={
+            source && (
+              <IllustrationActivity
+                items={illustrations}
+                sourceId={source.id}
+                sourceHash={source.hash}
+                refresh={refresh}
+                onError={onError}
+              />
+            )
+          }
           revision={visibleRevision.current}
           refresh={refresh}
           onError={onError}
         >
           {children}
         </RunTaskDetails>
-        {illustrations.length > 0 && (
-          <section aria-label="이 응답의 삽화 작업">
-            {illustrations.map((item) => (
-              <p key={item.id}>삽화 · {labels[item.status] ?? item.status}</p>
-            ))}
-            <small>삽화 결과와 다시 요청·삭제는 장면 아래 삽화 영역에서 확인해요.</small>
-          </section>
-        )}
       </>
     </TurnStatus>
   );

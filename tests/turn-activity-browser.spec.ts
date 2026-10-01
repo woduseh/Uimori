@@ -4,7 +4,7 @@ import type { ResponseStreamPage } from '../core/response-stream.js';
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
-import type { Chat, ChatDetail, Job, ReaderActivity, ReaderDetail, Run } from '../core/types.js';
+import type { Chat, ChatDetail, ReaderActivity, ReaderDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 test.setTimeout(60000);
@@ -179,7 +179,7 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
 }) => {
   const seeded = await seed(request, 2);
   const source = seeded.sources[0]!;
-  const project = (status: Job['status']) => (body: ReaderDetail) => {
+  const project = (status: 'running' | 'failed' | 'completed') => (body: ReaderDetail) => {
     body.jobs = [
       {
         id: `synthetic-translation-${source.id}`,
@@ -218,6 +218,25 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
       revision: 2,
       error: status === 'failed' ? 'SYNTHETIC_STATUS_FAILURE' : null,
     });
+    const illustrationActivity = activity(source.id, 'illustration', status);
+    body.illustrations = [
+      {
+        id: illustrationActivity.id,
+        task: 'plan',
+        chatId: seeded.chat.id,
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        generator: 'fixture',
+        origin: 'manual',
+        status,
+        attempt: 1,
+        maxAutoRetries: 0,
+        error: status === 'failed' ? 'FIXTURE_FAILURE' : null,
+        images: [],
+        createdAt: illustrationActivity.createdAt,
+        updatedAt: illustrationActivity.updatedAt,
+      },
+    ];
     body.reader.responseActivity = [
       activity(source.id, 'translation', status),
       activity(source.id, 'status', status),
@@ -237,7 +256,7 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   const other = page.locator(`[data-testid="turn-activity"][data-run-id="${otherSource.runId}"]`);
   await expect(panel.locator(':scope > summary')).toContainText(/번역.*중/);
   await expect(panel.locator(':scope > summary')).toContainText('장면 해설 진행 중');
-  await expect(panel.locator(':scope > summary')).toContainText('삽화 진행 중');
+  await expect(panel.locator(':scope > summary')).toContainText('장면 선택 중');
   await expect(panel.locator(':scope > summary')).toContainText('원문 이미지 배치 진행 중');
   await expect(panel.locator(':scope > summary')).toContainText('번역 이미지 배치 진행 중');
   await expect(panel).not.toHaveAttribute('open');
@@ -252,7 +271,7 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
     '장면 해설 실패'
   );
   await expect(panel.getByRole('region', { name: '이 응답의 삽화 작업' })).toContainText(
-    '삽화 · 실패'
+    /장면 선택.*실패/s
   );
   await state.set(project('completed'));
   await expect(panel.locator(':scope > summary')).not.toContainText('실패');

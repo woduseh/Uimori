@@ -1,6 +1,11 @@
 import DOMPurify from 'dompurify';
 
-export type PreparedRisuMessage = { html: string; css: string; actions: Set<string> };
+export type PreparedRisuMessage = {
+  html: string;
+  css: string;
+  actions: Set<string>;
+  illustrationAnchors: string[];
+};
 export const risuActionKey = (kind: string, name: string) => JSON.stringify([kind, name]);
 
 /** Trusted personal-card HTML, with the existing no-author-JavaScript contract preserved. */
@@ -46,6 +51,16 @@ export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage 
       parent = parent.parentElement;
     if (!parent?.classList.contains('risu-chat-text')) node.removeAttribute('data-uimori-prose');
   }
+  const illustrationAnchors: string[] = [];
+  for (const node of template.content.querySelectorAll('[data-uimori-illustration-after]')) {
+    let parent = node.parentElement;
+    while (parent && ['BLOCKQUOTE', 'UL', 'OL', 'LI', 'PRE'].includes(parent.tagName))
+      parent = parent.parentElement;
+    const anchor = node.getAttribute('data-uimori-illustration-after')!;
+    if (parent?.classList.contains('risu-chat-text') && /^b-[a-f0-9]+-\d+-[a-f0-9]+$/.test(anchor))
+      illustrationAnchors.push(anchor);
+    else node.removeAttribute('data-uimori-illustration-after');
+  }
   const actions = new Set<string>();
   for (const node of template.content.querySelectorAll('[risu-trigger],[risu-btn]')) {
     const kind = node.hasAttribute('risu-trigger') ? 'trigger' : 'button';
@@ -55,5 +70,5 @@ export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage 
       node.removeAttribute('risu-btn');
     } else actions.add(risuActionKey(kind, name));
   }
-  return { html: template.innerHTML, css, actions };
+  return { html: template.innerHTML, css, actions, illustrationAnchors };
 }

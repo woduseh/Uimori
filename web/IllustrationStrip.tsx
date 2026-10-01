@@ -1,5 +1,7 @@
+import { cutsFor, type Cut } from './illustration-progress.js';
+import { IllustrationUsageLine, IllustrationPlacementButton } from './IllustrationActivity.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { Illustration, IllustrationImage } from '../core/illustration.js';
+import type { Illustration, IllustrationImage, IllustrationDetail } from '../core/illustration.js';
 import { CloseIcon, RefreshIcon, RunningIcon } from './ui-icons.js';
 import { api } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -14,30 +16,9 @@ import {
   illustrationSkipped,
 } from './illustration-labels.js';
 import './illustrations.css';
+import './activity-status.css';
 
 type Actions = { refresh: () => Promise<void>; onError: (message: string) => void };
-type Cut = { key: string; job: Illustration; picture?: Illustration; stale: boolean };
-
-/** A target owns one reading position, even while a newer render is pending or failed. */
-function cutsFor(items: Illustration[], sourceHash: string): Cut[] {
-  const groups = new Map<string, Illustration[]>();
-  for (const item of items) {
-    if (item.task !== 'render') continue;
-    const key = item.target?.id ?? item.id;
-    const group = groups.get(key) ?? [];
-    group.push(item);
-    groups.set(key, group);
-  }
-  return [...groups].map(([key, attempts]) => {
-    const last = attempts.at(-1)!;
-    const display = last.display ?? attempts.find((item) => item.display)?.display;
-    const job = attempts.find((item) => item.id === display?.latestRequestedJobId) ?? last;
-    const picture = display
-      ? attempts.find((item) => item.id === display.displayedJobId && item.images.length > 0)
-      : attempts.findLast((item) => item.status === 'completed' && item.images.length > 0);
-    return { key, job, picture, stale: job.sourceHash !== sourceHash };
-  });
-}
 const collapseKey = (id: string) => `uimori:illustration-collapsed:${id}`;
 function savedCollapse(id: string): boolean | undefined {
   try {
@@ -57,6 +38,7 @@ export function useIllustrationLayout({
   translationHash,
   anchors,
   canInline,
+  inlineAnchors,
   defaultCollapsed = false,
   refresh,
   onError,
@@ -68,6 +50,7 @@ export function useIllustrationLayout({
   translationHash?: string;
   anchors: string[];
   canInline: boolean;
+  inlineAnchors?: string[];
   defaultCollapsed?: boolean;
 }) {
   const [choices, setChoices] = useState<Record<string, boolean>>({});
@@ -93,12 +76,36 @@ export function useIllustrationLayout({
         : cut.job.display?.translation?.textHash === translationHash
           ? cut.job.display?.translation?.afterAnchor
           : null;
-    return anchor && anchors.includes(anchor) ? anchor : null;
+    return anchor && anchors.includes(anchor) && (!inlineAnchors || inlineAnchors.includes(anchor))
+      ? anchor
+      : null;
+  };
+  const placementActive = items.some(
+    (item) =>
+      item.sourceHash === sourceHash && item.task === 'placement' && illustrationActive(item)
+  );
+  const needsMapping = (cut: Cut) =>
+    mode === 'translation' &&
+    !cut.stale &&
+    !!cut.job.target &&
+    cut !== hero &&
+    (cut.job.display?.translation?.textHash !== translationHash ||
+      !cut.job.display?.translation?.afterAnchor);
+  const placementNote = (cut: Cut) => {
+    if (cut === hero || after(cut)) return undefined;
+    if (cut.stale) return '원문이 수정되어 생성 당시 위치와 달라졌어요. 그림은 그대로 보관해요.';
+    if (!cut.job.target) return '문단 위치 정보가 없는 기존 삽화예요.';
+    if (needsMapping(cut))
+      return placementActive
+        ? '번역문에 삽화 위치를 연결하고 있어요. 그림은 그대로예요.'
+        : '번역문에서 이 장면의 위치를 찾지 못했어요. 위치만 다시 연결할 수 있어요.';
+    return '이 구간의 표시용 HTML 또는 본문 변환 때문에 문단 위치를 연결하지 못했어요.';
   };
   const renderCut = (cut: Cut) => (
     <IllustrationCard
       key={cut.key}
       cut={cut}
+      placementNote={placementNote(cut)}
       hero={cut === hero}
       collapsed={collapsed(cut.key)}
       onCollapse={(value, persist) => setCollapsed(cut.key, value, persist)}
@@ -183,9 +190,16 @@ export function useIllustrationLayout({
             ? ' · 확인할 작업 있음'
             : ''}
         </summary>
-        <p className="muted">
-          이 보기에서 위치를 연결하지 못했거나 수정 전 원문에 속한 삽화예요. 그림은 그대로 보관해요.
-        </p>
+        <p className="muted">본문에 연결하지 못한 삽화예요. 각 그림에 이유를 표시해요.</p>
+        {fallback.some(needsMapping) && (
+          <IllustrationPlacementButton
+            sourceId={sourceId}
+            sourceHash={sourceHash}
+            pending={placementActive}
+            refresh={refresh}
+            onError={onError}
+          />
+        )}
         <section
           className="illustrations"
           data-testid="illustrations"
@@ -275,13 +289,17 @@ function IllustrationTask({ job, refresh, onError }: Actions & { job: Illustrati
       data-status={job.status}
     >
       <p role={active ? 'status' : 'alert'}>
-        {active && <RunningIcon size={16} aria-hidden="true" />}
+        {active && <RunningIcon size={16} aria-hidden="true" className="activity-spinner" />}
         {illustrationSkipped(job)
           ? `삽화 생략 · ${job.diagnostic?.skipped}`
           : active
-            ? job.task === 'placement'
-              ? '번역문 속 삽화 위치를 연결하고 있어요.'
-              : '서로 다른 삽화 구간을 고르고 있어요.'
+            ? job.status === 'queued'
+              ? job.task === 'placement'
+                ? '번역 위치 연결을 기다리고 있어요.'
+                : '그릴 장면을 고를 차례를 기다리고 있어요.'
+              : job.task === 'placement'
+                ? '번역문 속 삽화 위치를 연결하고 있어요.'
+                : '그릴 장면을 고르고 있어요.'
             : illustrationErrorMessage(job.error)}
       </p>
       <TaskButtons job={job} busy={busy} act={act} />
@@ -300,23 +318,51 @@ function IllustrationTask({ job, refresh, onError }: Actions & { job: Illustrati
   );
 }
 function IllustrationFigure({ image, focus }: { image: IllustrationImage; focus?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const caption = image.caption || focus;
   return (
-    <figure>
-      <a href={image.url} target="_blank" rel="noreferrer" title="삽화 크게 보기">
-        <img
-          src={image.url}
-          alt={image.caption || focus || '장면 삽화'}
-          width={image.width}
-          height={image.height}
-          loading="lazy"
-        />
-      </a>
-      {(image.caption || focus) && <figcaption>{image.caption || focus}</figcaption>}
-    </figure>
+    <>
+      <figure>
+        <button
+          type="button"
+          className="illustration-preview-trigger"
+          title="삽화 크게 보기"
+          aria-label="삽화 크게 보기"
+          onClick={() => setExpanded(true)}
+        >
+          <img
+            src={image.url}
+            alt={caption || '장면 삽화'}
+            width={image.width}
+            height={image.height}
+            loading="lazy"
+          />
+        </button>
+        {caption && <figcaption>{caption}</figcaption>}
+      </figure>
+      <Dialog
+        open={expanded}
+        onClose={() => setExpanded(false)}
+        title="삽화 크게 보기"
+        className="illustration-lightbox"
+        wide
+      >
+        <figure>
+          <img
+            src={image.url}
+            alt={caption || '장면 삽화'}
+            width={image.width}
+            height={image.height}
+          />
+          {caption && <figcaption>{caption}</figcaption>}
+        </figure>
+      </Dialog>
+    </>
   );
 }
 function IllustrationCard({
   cut,
+  placementNote,
   hero,
   collapsed,
   onCollapse,
@@ -324,6 +370,7 @@ function IllustrationCard({
   onError,
 }: Actions & {
   cut: Cut;
+  placementNote?: string;
   hero: boolean;
   collapsed: boolean;
   onCollapse: (value: boolean, persist?: boolean) => void;
@@ -334,7 +381,7 @@ function IllustrationCard({
   const element = useRef<HTMLElement>(null);
   const [ready, setReady] = useState(!!picture?.images.length);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [detail, setDetail] = useState<Illustration | null>(null);
+  const [detail, setDetail] = useState<IllustrationDetail | null>(null);
   const [detailError, setDetailError] = useState('');
   // Decide before inserting the first image. An image completed above the viewport must not
   // expand behind the reader's back. This automatic fold is transient, not a saved preference.
@@ -350,12 +397,13 @@ function IllustrationCard({
       onCollapse(true, false);
     setReady(true);
   }, [ready, picture?.images.length, onCollapse]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Refresh usage when this same job progresses or settles.
   useEffect(() => {
     if (!detailOpen) return;
     let current = true;
     setDetail(null);
     setDetailError('');
-    void api<Illustration>(`/illustrations/${job.id}`)
+    void api<IllustrationDetail>(`/illustrations/${job.id}`)
       .then((value) => {
         if (current) setDetail(value);
       })
@@ -365,7 +413,7 @@ function IllustrationCard({
     return () => {
       current = false;
     };
-  }, [detailOpen, job.id]);
+  }, [detailOpen, job.id, job.status, job.updatedAt]);
   const imagesId = `illustration-images-${cut.key}`;
   const label = hero ? '대표 삽화' : '삽화';
   return (
@@ -441,19 +489,24 @@ function IllustrationCard({
           </ActionMenu>
         </div>
       </div>
+      {placementNote && <p className="illustration-placement-note">{placementNote}</p>}
       {(active || job.status !== 'completed') && (
         <div className="illustration-state">
           <p
             className={active ? 'illustration-progress' : 'error'}
             role={active ? 'status' : 'alert'}
           >
-            {active && <RunningIcon size={16} aria-hidden="true" />}
+            {active && <RunningIcon size={16} aria-hidden="true" className="activity-spinner" />}
             {active
               ? job.status === 'queued'
                 ? '그릴 차례를 기다리고 있어요.'
                 : job.diagnostic?.stage === 'prompt'
                   ? '이 순간의 그림 설명을 준비하고 있어요.'
-                  : '이 순간을 그리고 있어요.'
+                  : job.diagnostic?.stage === 'store'
+                    ? '완성된 그림을 저장하고 있어요.'
+                    : job.diagnostic?.stage === 'reconcile'
+                      ? '생성된 결과를 확인하고 있어요.'
+                      : '이 순간을 그리고 있어요.'
               : illustrationErrorMessage(job.error)}
             {picture && ' 기존 그림은 유지돼요.'}
             {!active && job.error && <small> · {job.error}</small>}
@@ -497,6 +550,20 @@ function IllustrationCard({
               {illustrationGeneratorLabels[detail.generator] ?? '가져온 삽화'} ·{' '}
               {detail.origin === 'automatic' ? '자동' : '직접 요청'} · {detail.attempt}번째 시도
             </p>
+            {detail.modelTitle && (
+              <p>
+                {detail.generator === 'comfyui' ? '프롬프트 모델' : '모델'} · {detail.modelTitle}
+              </p>
+            )}
+            {detail.usage && (
+              <>
+                <IllustrationUsageLine usage={detail.usage} />
+                <small>
+                  이번 생성 작업의 호출 기준이에요. 공통 장면 선택·번역 위치 연결은 장면 작업 현황의
+                  삽화 호출과 토큰에서 확인해요.
+                </small>
+              </>
+            )}
             {detail.preset && (
               <p>
                 프리셋 · {detail.preset.title} · 개정 {detail.preset.revision}

@@ -433,3 +433,51 @@ test('reconcile is refused for jobs without an accepted ComfyUI prompt', async (
   const stillRefused = await api(`/api/illustrations/${failed.id}/reconcile`, {}, 'POST', 409);
   expect(stillRefused.error).toBe('ILLUSTRATION_NOT_RECONCILABLE');
 });
+
+test('illustration usage is scoped to actual attempts and the placement endpoint keeps existing images', async () => {
+  const { api, chat, respond, settle, settleTask, settings, illustrations, app } = await setup();
+  await settings({ generator: 'fixture', maxPerSource: 3, maxAutoRetries: 0 });
+  const source = await respond();
+  const plan = await api<Illustration>(`/api/sources/${source.id}/illustrations`, {
+    maxTargets: 2,
+  });
+  await settle(plan.id);
+  await until(illustrations, (items) => items.every((item) => item.status === 'completed'));
+  const cut = (await illustrations()).find((item) => item.task === 'render')!;
+  const calls = [
+    { id: randomUUID(), input: 120, output: 30 },
+    { id: randomUUID(), input: 25, output: null },
+  ];
+  for (const call of calls)
+    app.store.db
+      .prepare(`INSERT INTO attempts
+    (id,chat_id,role,connection_id,model_id,status,request,input_tokens,output_tokens)
+    VALUES(?,?,'illustration','synthetic','synthetic','completed','{}',?,?)`)
+      .run(call.id, chat.id, call.input, call.output);
+  app.store.db
+    .prepare(
+      "UPDATE illustration_jobs SET diagnostic=json_set(diagnostic,'$.attempts',json(?)) WHERE id=?"
+    )
+    .run(JSON.stringify(calls.map((call) => call.id)), cut.id);
+  const full = await api(`/api/illustrations/${cut.id}`);
+  expect(full.usage).toMatchObject({ modelCalls: 2, inputTokens: 145, outputTokens: null });
+  const report = await api(`/api/sources/${source.id}/illustration-usage`);
+  expect(report.total).toEqual(full.usage);
+  expect(report.stages.render).toEqual(full.usage);
+  expect(report.stages.plan.modelCalls).toBe(0);
+  await api(
+    `/api/sources/${source.id}/translation`,
+    { text: '등불.\n\n부두.', expectedRevision: 0, expectedSourceHash: source.hash },
+    'PUT'
+  );
+  await until(illustrations, (items) =>
+    items.some((item) => item.task === 'placement' && item.status === 'completed')
+  );
+  const images = (await illustrations()).flatMap((item) => item.images);
+  const placement = await api<Illustration>(`/api/sources/${source.id}/illustration-placement`, {
+    expectedSourceHash: source.hash,
+  });
+  expect(placement.task).toBe('placement');
+  await settleTask(placement.id);
+  expect((await illustrations()).flatMap((item) => item.images)).toEqual(images);
+});

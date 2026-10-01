@@ -1,4 +1,4 @@
-import { useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
 import { prepareRisuMessage } from './risu-message.js';
@@ -15,6 +15,8 @@ export function RisuMessageSurface({
   disabled = false,
   revisionKey = '',
   reading,
+  illustrations = [],
+  onIllustrationAnchors,
 }: {
   html: string;
   css?: string;
@@ -22,6 +24,8 @@ export function RisuMessageSurface({
   disabled?: boolean;
   revisionKey?: string;
   reading?: ReadabilitySettings;
+  illustrations?: { anchor: string; content: ReactNode }[];
+  onIllustrationAnchors?: (anchors: string[]) => void;
 }) {
   const inheritedReading = useContext(ReadingPreferencesContext);
   const settings = reading ?? inheritedReading;
@@ -45,11 +49,15 @@ export function RisuMessageSurface({
     }
     const current = mounted.current;
     current.view.updateAction({ action: onAction, disabled, revision: revisionKey });
+    current.view.updateIllustrations(illustrations.map((item) => item.anchor));
     if (current.reading !== settings) {
       current.view.updateReading(settings);
       current.reading = settings;
     }
-  }, [prepared, onAction, disabled, revisionKey, settings]);
+  }, [prepared, onAction, disabled, revisionKey, settings, illustrations]);
+  useLayoutEffect(() => {
+    onIllustrationAnchors?.(prepared.illustrationAnchors);
+  }, [prepared, onIllustrationAnchors]);
   useLayoutEffect(
     () => () => {
       mounted.current?.view.destroy();
@@ -60,7 +68,13 @@ export function RisuMessageSurface({
   return (
     <div className="risu-message" aria-busy={state.busy}>
       {state.issue && <p role="alert">{state.issue}</p>}
-      <div ref={host} className="risu-message-surface" />
+      <div ref={host} className="risu-message-surface">
+        {illustrations.map(({ anchor, content }) => (
+          <div key={anchor} slot={`illustration-${anchor}`} className="illustration-slot">
+            {content}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
