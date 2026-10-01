@@ -16,7 +16,7 @@ export type JevResult = {
   scores: Record<string, number>;
   choices: Record<
     string,
-    { choice: string; probabilities: Record<string, number>; confidence: number }
+    { choice: string; probabilities: Record<string, number>; confidence: number | null }
   >;
   usage: ProviderResult['usage'];
   attemptId: string;
@@ -201,24 +201,36 @@ export async function executeJevJudgment(
       } else {
         const probabilities = object(answer.probabilities);
         const keys = Object.keys(question.criteria);
+        const selected =
+          typeof answer.choice === 'string' ? probabilities[answer.choice] : undefined;
+        const tolerant = hooks.kind === 'image-selection';
         if (
           answer.type !== 'choice' ||
           typeof answer.choice !== 'string' ||
           !keys.includes(answer.choice) ||
-          !probability(answer.confidence) ||
-          Object.keys(probabilities).length !== keys.length ||
-          keys.some((key) => !probability(probabilities[key])) ||
-          Math.abs(keys.reduce((sum, key) => sum + Number(probabilities[key]), 0) - 1) > 0.01 ||
+          !probability(selected) ||
           keys.some(
             (key) =>
-              Number(probabilities[key]) > Number(probabilities[answer.choice as string]) + 0.000001
-          )
+              probability(probabilities[key]) &&
+              Number(probabilities[key]) > Number(selected) + 0.000001
+          ) ||
+          (!tolerant &&
+            (!probability(answer.confidence) ||
+              Object.keys(probabilities).length !== keys.length ||
+              keys.some((key) => !probability(probabilities[key])) ||
+              Math.abs(keys.reduce((sum, key) => sum + Number(probabilities[key]), 0) - 1) > 0.01))
         )
           throw new JevError('JEV_RESPONSE_INVALID');
         choices[name] = {
           choice: answer.choice,
-          confidence: answer.confidence,
-          probabilities: probabilities as Record<string, number>,
+          confidence: probability(answer.confidence) ? answer.confidence : null,
+          probabilities: tolerant
+            ? Object.fromEntries(
+                keys.flatMap((key) =>
+                  probability(probabilities[key]) ? [[key, Number(probabilities[key])]] : []
+                )
+              )
+            : (probabilities as Record<string, number>),
         };
       }
     }

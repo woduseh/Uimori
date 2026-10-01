@@ -4,9 +4,11 @@ import type { PackageImage } from '../core/package-images.js';
 export function ImageMetadataFields({
   image,
   onChange,
+  portrait = false,
 }: {
   image: PackageImage;
   onChange: (image: PackageImage) => void;
+  portrait?: boolean;
 }) {
   return (
     <>
@@ -30,8 +32,25 @@ export function ImageMetadataFields({
           onChange={(event) => onChange({ ...image, description: event.target.value })}
         />
       </label>
+      <label>
+        에셋 용도
+        <select
+          aria-label="에셋 용도"
+          value={image.allowedUse}
+          onChange={(event) =>
+            onChange({ ...image, allowedUse: event.target.value as PackageImage['allowedUse'] })
+          }
+        >
+          <option value="both">대표 이미지와 본문</option>
+          <option value="profile">대표 이미지 전용</option>
+          <option value="inline" disabled={portrait}>
+            본문 전용
+          </option>
+        </select>
+      </label>
       <p className="muted">
-        이름과 설명은 JEV의 이미지 선택에 사용돼요. 자료 저장 후 다음 선택부터 반영돼요.
+        이름과 설명은 JEV의 이미지 선택에 사용돼요. 본문이 포함된 용도는 자동 이미지 배치 후보가
+        돼요.{portrait ? ' 현재 대표 이미지는 프로필 사용을 유지해야 해요.' : ''}
       </p>
     </>
   );

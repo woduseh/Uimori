@@ -231,6 +231,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
             />
             <ImageMetadataFields
               image={active}
+              portrait={active.id === value.portraitImageId}
               onChange={(next) =>
                 change({
                   ...value,

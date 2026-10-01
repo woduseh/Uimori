@@ -127,11 +127,16 @@ test('PERSONAL images retain native alias while display metadata and WebP persis
   await page.getByLabel('Risu 이미지 목록', { exact: true }).getByRole('button').first().click();
   await page.getByLabel('이미지 이름', { exact: true }).fill('우산을 든 유나');
   await page.getByLabel('이미지 설명', { exact: true }).fill('비 오는 하굣길, 투명 우산과 미소');
+  await page
+    .getByLabel('선택한 에셋', { exact: true })
+    .getByLabel('에셋 용도', { exact: true })
+    .selectOption('inline');
   const saved = await save(page);
   expect(saved.package.images![0]).toMatchObject({
     title: '우산을 든 유나',
     description: '비 오는 하굣길, 투명 우산과 미소',
     mime: 'image/webp',
+    allowedUse: 'inline',
   });
   expect(saved.package.nativeRisu.assets[0].name).toBe('script_alias');
   const response = await request.get(

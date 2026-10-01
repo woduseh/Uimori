@@ -41,9 +41,14 @@ define(
   '입력을 자르거나 자동 재호출하지 않았어요. 보존된 출력과 생성 모델의 출력 길이 설정을 확인해 주세요.'
 );
 define(
-  ['JEV_EXECUTION_FAILED', 'JEV_TIMEOUT', 'JEV_RESPONSE_INVALID', 'JEV_HTTP_429'],
+  ['JEV_RESPONSE_INVALID'],
+  'JEV가 응답했지만 판단 결과 형식이 예상과 달랐어요.',
+  '연결은 완료됐어요. 공급자 응답을 임의로 고치거나 자동 재호출하지 않았으므로 필요한 경우 작업을 다시 요청해 주세요.'
+);
+define(
+  ['JEV_EXECUTION_FAILED', 'JEV_TIMEOUT', 'JEV_HTTP_429'],
   'JEV 판단을 완료하지 못했어요.',
-  '작업 상세와 JEV 연결을 확인해 주세요. 다른 모델로 대체하거나 자동 재호출하지 않았어요.'
+  '작업 상세의 호출 상태와 JEV 연결을 확인해 주세요. 다른 모델로 대체하거나 자동 재호출하지 않았어요.'
 );
 
 define(

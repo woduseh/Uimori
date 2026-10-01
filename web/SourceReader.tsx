@@ -351,12 +351,25 @@ function SourceReaderContent({
   const attentionJobs = displayJobs.filter((job) => activeJob(job) || retryable(job.status));
   const image =
     latestImageJob && matchesImageTarget(latestImageJob.imageTarget) ? latestImageJob : undefined;
+  const displayImage =
+    image?.status === 'completed'
+      ? image
+      : jobs
+          .filter(
+            (job) =>
+              job.kind === 'image' &&
+              job.status === 'completed' &&
+              job.sourceRevision === source.id &&
+              job.sourceHash === source.hash &&
+              (job.imageTarget?.mode ?? 'original') === mode &&
+              matchesImageTarget(job.imageTarget)
+          )
+          .sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))[0];
   const annotations =
-    image?.status === 'completed' &&
-    image.result?.sourceRevision === source.id &&
-    image.result.sourceHash === source.hash &&
-    matchesImageTarget(image.result.imageTarget)
-      ? (image.result.annotations ?? [])
+    displayImage?.result?.sourceRevision === source.id &&
+    displayImage.result.sourceHash === source.hash &&
+    matchesImageTarget(displayImage.result.imageTarget)
+      ? (displayImage.result.annotations ?? [])
       : [];
   const translationText = validTranslation?.text ?? '';
   const translationBlocks = displayTranslation?.translationLayout?.blocks ?? [];
@@ -884,7 +897,7 @@ function SourceReaderContent({
               <ImagesIcon size={18} aria-hidden="true" />
               {pending === 'images' || (image && activeJob(image))
                 ? '이미지를 배치하는 중…'
-                : image?.status === 'completed'
+                : displayImage
                   ? '이미지 다시 배치'
                   : '이미지 자동 배치'}
             </button>
