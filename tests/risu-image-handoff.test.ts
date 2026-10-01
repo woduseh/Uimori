@@ -156,6 +156,41 @@ test('retired image instruction receipts are rejected instead of kept readable',
   expect(risuImageHandoffText(value, 'card:scenario')).toBe('');
 });
 
+test('src image handoff accepts quoted rules and repairs legacy unquoted templates at runtime', async () => {
+  const native = source();
+  native.card.extensions = {
+    risuai: {
+      customScripts: [
+        {
+          type: 'editdisplay',
+          in: '<img src="(.+?)">',
+          out: '{{img::$1.webp}}',
+        },
+      ],
+    },
+  };
+  const url = '/api/package-image-blobs/' + 'd'.repeat(64);
+  const context = {
+    variables: {},
+    assetUrls: Object.fromEntries(
+      nativeRisuAssetNames(native, native.assets[0]).map((name) => [name, url])
+    ),
+  };
+  expect(detectRisuImageHandoff(native)?.tagTemplates).toEqual([
+    '<img src="{asset}">',
+    '<img src={asset}>',
+  ]);
+  expect(
+    await nativeImageTag({
+      native,
+      context,
+      name: native.assets[0].name,
+      url,
+      templates: ['<img src={asset}>'],
+    })
+  ).toBe('<img src="Hinano_School_happy">');
+});
+
 test('reverse mapping preserves original image tag spelling and box instead of emitting a generic image', async () => {
   const native = source(),
     url = '/api/package-image-blobs/' + 'b'.repeat(64);

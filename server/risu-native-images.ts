@@ -1,5 +1,6 @@
 import { splitSource, validatePresentation } from '../core/auxiliary.js';
 import { imageHandoffSource } from '../core/risu-image-handoff.js';
+import { nativeRisuAssetNames } from '../core/risu-native.js';
 import { randomUUID } from 'node:crypto';
 import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
@@ -125,29 +126,43 @@ export async function nativeImageDisplayText(
       snapshot.profile?.packages?.find(
         (entry) => entry.id === owner[1] && entry.revision === asset.revision
       );
-    const original = pkg?.nativeRisu?.assets.find((entry) => entry.imageId === owner![3]);
-    if (!pkg?.imageHandoff || !original) {
-      issues.push(`native-image-tag-unavailable:${asset.ref}`);
-      continue;
-    }
-    const instructions = guidance.get(`${pkg.id}@${pkg.revision}`) ?? '';
+    const original =
+      pkg?.nativeRisu && owner
+        ? pkg.nativeRisu.assets.find((entry) => entry.imageId === owner[3])
+        : undefined;
+    const instructions = pkg?.imageHandoff ? (guidance.get(`${pkg.id}@${pkg.revision}`) ?? '') : '';
     let tag: string | null = null;
-    try {
-      tag = await nativeImageTag({
-        native: context.native,
-        context: { ...context, displaying: true, messageIndex: context.messages.length - 1 },
-        name: original.name,
-        url: asset.url,
-        templates: pkg.imageHandoff.tagTemplates,
-        guidance: instructions,
-      });
-    } catch {
-      issues.push(`native-image-tag-evaluation:${asset.ref}`);
+    if (pkg?.imageHandoff) {
+      if (!original) {
+        issues.push(`native-image-tag-unavailable:${asset.ref}`);
+        continue;
+      }
+      try {
+        tag = await nativeImageTag({
+          native: context.native,
+          context: { ...context, displaying: true, messageIndex: context.messages.length - 1 },
+          name: original.name,
+          url: asset.url,
+          templates: pkg.imageHandoff.tagTemplates,
+          guidance: instructions,
+        });
+      } catch {
+        issues.push(`native-image-tag-evaluation:${asset.ref}`);
+      }
+      if (!tag) {
+        issues.push(`native-image-tag-unavailable:${asset.ref}`);
+        continue;
+      }
+    } else if (pkg?.nativeRisu && original) {
+      const alias = nativeRisuAssetNames(pkg.nativeRisu, original).find(
+        (name) => context.assetUrls[name] === asset.url && !/[{}\r\n]/u.test(name)
+      );
+      if (alias) tag = `{{img::${alias}}}`;
     }
-    if (!tag) {
-      issues.push(`native-image-tag-unavailable:${asset.ref}`);
-      continue;
-    }
+    // Chat-level images and package images without a usable native alias still have an exact,
+    // host-validated URL. Markdown keeps them in the normal Risu message without inventing syntax.
+    if (!tag && annotation.presentationIntent === 'inline') tag = `![](${asset.url})`;
+    if (!tag) continue;
     if (target.text.includes(tag)) continue;
     const block = blocks.find((entry) => entry.anchor === annotation.blockAnchor)!;
     const before = /before (?:the )?paragraph|문단.*앞/iu.test(instructions);
