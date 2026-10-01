@@ -248,3 +248,25 @@ describe('local native CHARX display evidence (optional private fixtures)', () =
       expect(result.issues.filter((issue) => issue.startsWith('regex:'))).toEqual([]);
     });
 });
+
+test('only unchanged plain Markdown paragraphs expose safe illustration boundaries', async () => {
+  const context = { variables: {}, userName: 'Reader' };
+  const text = '**Mira** opened the window.\n\nYuna took her hand.';
+  const rendered = await renderNativeRisuMessage({ native: native(), text, context });
+  expect(rendered.paragraphs?.map((paragraph) => paragraph.text)).toEqual(text.split('\n\n'));
+  expect(rendered.html).toBe(
+    `<div class="risu-chat risu-chat-text">${rendered.paragraphs!.map((paragraph) => paragraph.html).join('')}</div>`
+  );
+  const authored = await renderNativeRisuMessage({
+    native: native(),
+    text: '<style>p{color:red}</style>\n\nA moment.',
+    context,
+  });
+  expect(authored.paragraphs).toBeUndefined();
+  const changed = await renderNativeRisuMessage({
+    native: native(),
+    text: '{{char}} opened the window.',
+    context,
+  });
+  expect(changed.paragraphs).toBeUndefined();
+});

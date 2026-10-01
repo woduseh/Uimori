@@ -12,6 +12,7 @@ export function changedReaderSources(
   const jobs = new Set<string>();
   const illustrations = new Set<string>();
   for (const event of events) {
+    if (event.kind === 'illustration-layout.updated') changed.add(event.entityId);
     if (event.kind.startsWith('source.')) changed.add(event.entityId);
     if (event.kind.startsWith('job.')) jobs.add(event.entityId);
     if (event.kind.startsWith('illustration.')) illustrations.add(event.entityId);

@@ -3,7 +3,15 @@ import type { Illustration } from '../core/illustration.js';
 /** Error codes stay stable identifiers; remote provider messages are never shown verbatim. */
 const messages: Record<string, string> = {
   ILLUSTRATION_GENERATOR_UNCONFIGURED: '설정 → 삽화에서 생성기를 선택해 주세요.',
-  ILLUSTRATION_ACTIVE: '이 장면의 삽화가 아직 생성 중이에요. 끝난 뒤 다시 요청해 주세요.',
+  ILLUSTRATION_ACTIVE: '이 컷이 아직 생성 중이에요. 다른 컷과 다음 채팅은 계속할 수 있어요.',
+  ILLUSTRATION_PLAN_ACTIVE: '이 응답의 삽화 구간을 고르고 있어요.',
+  ILLUSTRATION_STORYBOARD_INVALID: '삽화 구간 응답을 해석하지 못했어요. 다시 요청해 주세요.',
+  ILLUSTRATION_PLACEMENT_INVALID:
+    '번역문 속 삽화 위치를 연결하지 못했어요. 그림은 그대로 보관해요.',
+  ILLUSTRATION_TARGET_UNAVAILABLE: '이 삽화의 원문 구간을 확인할 수 없어요.',
+  ILLUSTRATION_TARGET_CONFLICT:
+    '그 사이에 같은 구간의 삽화가 추가됐어요. 새 삽화 생성으로 다시 골라 주세요.',
+  ILLUSTRATION_PRESENTATION_CHANGED: '삽화가 갱신됐어요. 다시 선택해 주세요.',
   ILLUSTRATION_LIMIT_REACHED:
     '이 장면의 삽화 개수 한도에 도달했어요. 삽화를 삭제하거나 설정 → 삽화에서 장면당 최대 개수를 늘려 주세요.',
   ILLUSTRATION_MODEL_REQUIRED: '설정 → 삽화에서 Codex 삽화 모델을 선택해 주세요.',

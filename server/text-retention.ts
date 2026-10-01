@@ -64,6 +64,11 @@ export function pruneTranslationHistory(db: DatabaseSync, sourceId: string): voi
     .all(sourceId))
     if (row.id) keep.add(String(row.id));
   for (const row of db
+    .prepare(`SELECT json_extract(input,'$.placement.target.translationJobId') AS id
+    FROM illustration_jobs WHERE source_revision=? AND json_extract(input,'$.task')='placement' AND status!='completed'`)
+    .all(sourceId))
+    if (row.id) keep.add(String(row.id));
+  for (const row of db
     .prepare("SELECT job_id AS id FROM attempts WHERE status='running' AND job_id IS NOT NULL")
     .iterate())
     keep.add(String(row.id));

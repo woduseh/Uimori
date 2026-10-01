@@ -52,7 +52,11 @@ import {
   scheduleTranslationImages,
   latestImageJob,
 } from './package-images.js';
-import { recoverIllustrations, scheduleAutomaticIllustration } from './illustrations.js';
+import {
+  recoverIllustrations,
+  scheduleAutomaticIllustration,
+  scheduleIllustrationPlacement,
+} from './illustrations.js';
 import { recoverableAnthropicBatchRun } from './anthropic-batch.js';
 import type {
   Settings,
@@ -776,7 +780,9 @@ export class Store {
     id: string,
     value: { text: string; expectedRevision: number; expectedSourceHash: string }
   ): Job {
-    return editTranslation(this, id, value);
+    const job = editTranslation(this, id, value);
+    scheduleIllustrationPlacement(this, id);
+    return job;
   }
   requestTranslation(id: string, validate?: (id: string) => void): Job {
     return requestTranslation(this, id, false, validate);
@@ -999,8 +1005,10 @@ export class Store {
       this.db
         .prepare('UPDATE jobs SET status=?,error=?,updated_at=? WHERE id=?')
         .run(value.status, value.error, now(), id);
-      if (row.kind === 'translation' && value.status === 'completed')
+      if (row.kind === 'translation' && value.status === 'completed') {
         scheduleTranslationImages(this, this.job(id));
+        scheduleIllustrationPlacement(this, row.source_revision);
+      }
       if (value.status === 'completed') {
         releaseCompletedJobInputs(this.db, id);
         if (row.kind === 'translation') pruneTranslationHistory(this.db, row.source_revision);

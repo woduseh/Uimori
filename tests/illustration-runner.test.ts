@@ -10,6 +10,9 @@ import {
 } from '../server/illustration-runner.js';
 import {
   illustrationJob,
+  projectIllustration,
+  reserveIllustrationPlan,
+  queuedIllustrations,
   illustrationsForSources,
   reserveIllustration,
   retryIllustration,
@@ -181,7 +184,7 @@ describe('illustration runner with the synthetic generator', () => {
       code: null,
       images: 1,
     });
-    const [item] = illustrationsForSources(store, [source.id]);
+    const item = projectIllustration(store, illustrationJob(store, job.id));
     expect(item).toMatchObject({ status: 'completed', attempt: 2, maxAutoRetries: 1 });
     expect(item.diagnostic?.retries).toEqual([
       { attempt: 1, code: 'FIXTURE_FAILURE', at: expect.any(String) },
@@ -347,7 +350,7 @@ describe('illustration runner through the Codex image turn', () => {
         }),
       },
     ]);
-    const [item] = illustrationsForSources(store, [source.id]);
+    const item = projectIllustration(store, illustrationJob(store, job.id));
     expect(item.images[0]).toMatchObject({
       caption: '강 위의 등불',
       revisedPrompt: 'A watercolor lantern above the river.',
@@ -626,7 +629,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
     expect(
       typeof (comfy.prompts[0].workflow['3'] as { inputs: { seed: unknown } }).inputs.seed
     ).toBe('number');
-    const [item] = illustrationsForSources(store, [source.id]);
+    const item = projectIllustration(store, illustrationJob(store, job.id));
     expect(item.images[0]).toMatchObject({
       mime: 'image/webp',
       caption: '강 위의 등불',
@@ -881,4 +884,68 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
       'ILLUSTRATION_NOT_RECONCILABLE'
     );
   });
+});
+
+test('one ComfyUI planning call prepares distinct prompts for every cut without further prompt calls', async () => {
+  const store = databases.create();
+  const { source } = chatWithSource(store);
+  const { provider, model } = await promptModel(store, (body) =>
+    JSON.stringify({
+      heroIndex: 1,
+      targets: body.input.source.blocks.map(
+        (block: { anchor: string; text: string }, index: number) => ({
+          startAnchor: block.anchor,
+          endAnchor: block.anchor,
+          focus: block.text,
+          visualBrief: block.text,
+          prompt: {
+            prompt: `distinct moment ${index}: ${block.text}`,
+            negativePrompt: 'text',
+            caption: `컷 ${index + 1}`,
+          },
+        })
+      ),
+    })
+  );
+  const comfy = await comfyUIFixture();
+  cleanups.push(comfy.close);
+  fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
+  const plan = reserveIllustrationPlan(store, source, 'manual', {
+    maxTargets: 2,
+    settings: fixtureSettings({
+      generator: 'comfyui',
+      comfyui: {
+        baseUrl: comfy.origin,
+        promptModel: { id: model.id },
+        timeoutMs: 5000,
+        pollIntervalMs: 20,
+      },
+    }),
+  });
+  const observed = hooks(store, {});
+  expect(await runIllustrationJob(store, plan.id, 'worker', observed.options)).toMatchObject({
+    status: 'completed',
+  });
+  const cuts = queuedIllustrations(store);
+  expect(cuts).toHaveLength(2);
+  for (const id of cuts)
+    expect(await runIllustrationJob(store, id, 'worker', observed.options)).toMatchObject({
+      status: 'completed',
+    });
+  expect(provider.requests).toHaveLength(1);
+  expect(comfy.prompts).toHaveLength(2);
+  expect(comfy.prompts[0].workflow['6']).toMatchObject({
+    inputs: { text: expect.stringContaining('distinct moment 1:') },
+  });
+  expect(comfy.prompts[1].workflow['6']).toMatchObject({
+    inputs: { text: expect.stringContaining('distinct moment 0:') },
+  });
+  const reader = illustrationsForSources(store, [source.id]);
+  expect(reader.filter((item) => item.task === 'render')).toHaveLength(2);
+  expect(reader.every((item) => !item.diagnostic?.storyboard && !item.diagnostic?.prompt)).toBe(
+    true
+  );
+  expect(illustrationJob(store, cuts[0]).diagnostic?.prompt?.prompt).toContain(
+    'distinct moment 1:'
+  );
 });

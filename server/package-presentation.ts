@@ -75,6 +75,8 @@ export async function buildPackagePresentation(
           changed: true,
           applied: [] as string[],
           ...result,
+          paragraphs:
+            edited.text === undefined || edited.text === value ? result.paragraphs : undefined,
           issues: [...new Set([...result.issues, ...edited.warnings])],
         };
       };

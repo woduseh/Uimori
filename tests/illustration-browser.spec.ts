@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
@@ -81,18 +82,28 @@ test('ILUI01 scene menu requests an illustration, shows the stored image, retrie
   const illustrate = page.getByTestId('illustrate');
   await expect(illustrate).toHaveText(/삽화 생성/u);
   await illustrate.click();
+  await page
+    .getByRole('dialog', { name: '삽화 생성', exact: true })
+    .getByRole('button', { name: '삽화 만들기', exact: true })
+    .click();
   const strip = page.getByTestId('illustrations').filter({ visible: true });
   await expect(strip).toHaveCount(1);
   const card = strip.getByTestId('illustration').first();
   await expect(card).toHaveAttribute('data-status', 'completed');
+  const expand = card.getByRole('button', { name: '펼치기', exact: true });
+  if (await expand.isVisible()) await expand.click();
   const image = card.locator('img');
   await expect(image).toBeVisible();
   expect(
     await image.evaluate((node: HTMLImageElement) => node.complete && node.naturalWidth > 0)
   ).toBe(true);
   await expect(card).toContainText('모의 삽화');
-  await expect(card).toContainText('직접 요청');
-  const stored = await illustrations(request, chat.id);
+  await card.getByLabel('삽화 작업 메뉴', { exact: true }).click();
+  await card.getByRole('button', { name: '생성 상세', exact: true }).click();
+  const detailDialog = page.getByRole('dialog', { name: '삽화 생성 상세', exact: true });
+  await expect(detailDialog).toContainText('직접 요청');
+  await page.keyboard.press('Escape');
+  const stored = (await illustrations(request, chat.id)).filter((item) => item.task === 'render');
   expect(stored).toHaveLength(1);
   expect(stored[0]).toMatchObject({
     status: 'completed',
@@ -118,13 +129,20 @@ test('ILUI01 scene menu requests an illustration, shows the stored image, retrie
   await page
     .getByTestId('illustration')
     .last()
+    .getByLabel('삽화 작업 메뉴', { exact: true })
+    .click();
+  await page
+    .getByTestId('illustration')
+    .last()
     .getByRole('button', { name: /삽화 삭제/u })
     .click();
   const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '영구 삭제', exact: true }).click();
   await expect(page.getByTestId('illustration')).toHaveCount(1);
-  expect(await illustrations(request, chat.id)).toHaveLength(1);
+  expect(
+    (await illustrations(request, chat.id)).filter((item) => item.task === 'render')
+  ).toHaveLength(1);
   await page.screenshot({ path: info.outputPath('illustration-desktop.png') });
   // The illustration strip never rewrote the story text.
   expect((await detail(request, chat.id)).sources[0].text).toBe(source.text);
@@ -258,4 +276,114 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await page.keyboard.press('Escape');
   await expect(guard).toBeHidden();
   await expect(section.getByLabel('장면당 최대 삽화 개수')).toHaveValue('5');
+});
+
+test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planning never blocks the next chat', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  const { chat, source } = await seed(request);
+  const paragraphs = [
+    '미라는 창문을 열었다. 비가 그친 도시는 아직 푸른 새벽빛 속에 잠겨 있었다. 젖은 지붕 너머에서 첫 전차가 천천히 움직였다.',
+    '옥상 문이 열리고 유나가 모습을 드러냈다. 두 사람은 잠시 서로를 바라보다가 웃음을 터뜨렸다. 미라가 내민 손을 유나는 망설임 없이 잡았다.',
+    '해가 떠오르자 두 사람은 나란히 난간에 기대었다. 도시가 깨어나는 소리 사이로 온기를 나누는 두 손만 조용히 남아 있었다.',
+  ];
+  const edited = await request.put(`/api/sources/${source.id}/text`, {
+    data: { text: paragraphs.join('\n\n'), expectedRevision: 0 },
+  });
+  expect(edited.ok()).toBe(true);
+  await settings(request, {
+    generator: 'fixture',
+    automatic: false,
+    maxPerSource: 4,
+    maxAutoRetries: 0,
+  });
+  // Visually representative synthetic image bytes + dimensions. No paid provider is contacted.
+  const picture = await sharp(
+    Buffer.from(
+      '<svg width="800" height="450" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#425e72"/><stop offset="1" stop-color="#dfcbb1"/></linearGradient></defs><rect width="800" height="450" fill="url(#g)"/><circle cx="620" cy="105" r="48" fill="#f7e7ca"/><path d="M0 310L90 260V200H155V285H260V180H330V260H425V220H510V320H620V265H720V320H800V450H0Z" fill="#283c4a"/><text x="32" y="415" font-family="sans-serif" font-size="18" fill="white">SYNTHETIC READER FIXTURE</text></svg>'
+    )
+  )
+    .webp()
+    .toBuffer();
+  await page.route('**/api/illustration-images/*', (route) =>
+    route.fulfill({ contentType: 'image/webp', body: picture })
+  );
+  await page.route('**/api/chats/*/reader?*', async (route) => {
+    const response = await route.fetch();
+    if (!response.ok()) return route.fulfill({ response });
+    const body = await response.json();
+    for (const item of body.illustrations ?? [])
+      for (const image of item.images) {
+        image.width = 800;
+        image.height = 450;
+      }
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(`/?chat=${chat.id}`);
+  const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
+  await expect(scene).toBeVisible();
+  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'illustration' } });
+  await openSourceActions(scene);
+  await page.getByTestId('illustrate').click();
+  const dialog = page.getByRole('dialog', { name: '삽화 생성', exact: true });
+  await dialog.getByLabel('최대 컷 수').selectOption('3');
+  await dialog.getByRole('button', { name: '삽화 만들기', exact: true }).click();
+  await expect(scene.getByTestId('illustration-task')).toHaveAttribute('data-status', 'running');
+  const input = page.getByLabel('다음 장면 요청', { exact: true });
+  await input.fill('두 사람의 다음 이야기를 이어줘.');
+  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+  await expect.poll(async () => (await detail(request, chat.id)).sources.length).toBe(2);
+  await request.post('/api/test/control', { data: { action: 'release', barrier: 'illustration' } });
+  await expect
+    .poll(
+      async () =>
+        (await illustrations(request, chat.id)).filter(
+          (item) => item.task === 'render' && item.status === 'completed'
+        ).length
+    )
+    .toBe(3);
+  await page.reload();
+  await expect(scene.locator('[data-placement="hero"]')).toHaveCount(1);
+  await expect(scene.locator('[data-placement="inline"]')).toHaveCount(2);
+  await expect(scene.getByTestId('illustration')).toHaveCount(3);
+  const hero = scene.locator('[data-placement="hero"]');
+  await hero.scrollIntoViewIfNeeded();
+  for (const button of await scene.getByRole('button', { name: '펼치기', exact: true }).all())
+    await button.click();
+  const firstInline = scene.locator('[data-placement="inline"]').first();
+  const after = await firstInline.getAttribute('data-after-anchor');
+  expect(
+    await firstInline.evaluate((node) =>
+      node.previousElementSibling?.getAttribute('data-block-anchor')
+    )
+  ).toBe(after);
+  await hero.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('storyboard-desktop.png') });
+  const cutId = await hero.getByTestId('illustration').getAttribute('data-target-id');
+  await hero.getByRole('button', { name: '접기', exact: true }).click();
+  await page.reload();
+  const folded = scene.locator(`[data-target-id="${cutId}"]`);
+  await expect(folded.getByRole('button', { name: '펼치기', exact: true })).toBeVisible();
+  await expect(folded.locator('img')).toBeHidden();
+  await scene.getByRole('button', { name: '모두 접기', exact: true }).click();
+  await expect(scene.locator('.illustration-cut.is-collapsed')).toHaveCount(3);
+  await scene.getByRole('button', { name: '모두 펼치기', exact: true }).click();
+  await firstInline.getByLabel('삽화 작업 메뉴', { exact: true }).click();
+  const promoted = await firstInline.getByTestId('illustration').getAttribute('data-target-id');
+  await firstInline.getByRole('button', { name: '대표 삽화로 지정', exact: true }).click();
+  await expect(scene.locator('[data-placement="hero"] [data-target-id]')).toHaveAttribute(
+    'data-target-id',
+    promoted!
+  );
+  await expect(scene.getByTestId('illustration')).toHaveCount(3);
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  await scene.locator('[data-placement="hero"]').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('storyboard-mobile.png') });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect((await detail(request, chat.id)).sources.find((item) => item.id === source.id)?.text).toBe(
+    paragraphs.join('\n\n')
+  );
 });
