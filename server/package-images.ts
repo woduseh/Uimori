@@ -282,19 +282,6 @@ export function latestImageJob(
     .get(sourceId, mode) as { id: string } | undefined;
   return row ? store.job(row.id) : null;
 }
-export function latestCompletedImageJob(
-  store: Store,
-  sourceId: string,
-  sourceHash: string,
-  mode: 'original' | 'translation'
-): Job | null {
-  const row = store.db
-    .prepare(
-      "SELECT id FROM jobs WHERE source_revision=? AND source_hash=? AND kind='image' AND status='completed' AND COALESCE(json_extract(input,'$.imageTarget.mode'),'original')=? ORDER BY revision DESC LIMIT 1"
-    )
-    .get(sourceId, sourceHash, mode) as { id: string } | undefined;
-  return row ? store.job(row.id) : null;
-}
 export function invalidateTranslationImages(store: Store, sourceId: string) {
   store.db
     .prepare(
@@ -317,11 +304,10 @@ export function reserveImageJob(
         )
         .get(source.id) as { revision: number | null }
     ).revision ?? 0;
-  const reuse = previous && previous.status !== 'completed' ? previous : null;
-  const id = reuse?.id ?? randomUUID(),
+  const id = previous?.id ?? randomUUID(),
     time = new Date().toISOString();
   const input = { ...frozen, imageTarget };
-  if (reuse) {
+  if (previous) {
     store.db.prepare('DELETE FROM job_results WHERE job_id=?').run(id);
     store.db
       .prepare(
