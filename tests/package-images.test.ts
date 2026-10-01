@@ -221,14 +221,15 @@ test('source reservation and delayed worker keep old names and removed images; e
     requestImages(store, source.id, { ...command, expectedSourceHash: 'wrong' })
   ).toThrow();
   expect(() => requestImages(store, source.id, { ...command, expectedRevision: 0 })).toThrow();
-  completeImage(store, source);
+  const completed = completeImage(store, source);
   const next = requestImages(store, source.id, command);
   expect(next).toMatchObject({
-    id: initial.id,
     status: 'queued',
     revision: initial.revision! + 1,
     result: null,
   });
+  expect(next.id).not.toBe(initial.id);
+  expect(store.job(initial.id)).toEqual(completed);
   expect(imageCatalog(next.input).some((asset) => asset.ref.startsWith('package:'))).toBe(false);
   expect(() => store.product.get<Content>('content', first.id, first.revision)).toThrow(
     'content revision not found'
