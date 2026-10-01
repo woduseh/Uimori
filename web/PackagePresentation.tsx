@@ -117,11 +117,24 @@ export function usePackagePresentation(
 }
 export function PackagePresentationIssues({ data }: { data?: PackagePresentation }) {
   if (!data) return null;
+  const messages = [
+    ...new Set(
+      data.issues.map((issue) =>
+        issue === 'native-image-guidance-evaluation'
+          ? '이미지 표시 규칙을 해석하지 못해 일부 선택 이미지를 생략했어요.'
+          : issue.startsWith('native-image-tag-evaluation:')
+            ? '카드의 이미지 표시 규칙을 적용하지 못해 일부 선택 이미지를 생략했어요.'
+            : issue.startsWith('native-image-tag-unavailable:')
+              ? '선택 이미지를 카드의 이미지 표시 규칙과 연결하지 못해 생략했어요.'
+              : issue
+      )
+    ),
+  ];
   return (
     <>
-      {data.issues.map((issue, i) => (
-        <p key={i} role="status" className="muted">
-          {issue}
+      {messages.map((message) => (
+        <p key={message} role="status" className="muted">
+          {message}
         </p>
       ))}
     </>

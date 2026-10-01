@@ -40,6 +40,17 @@ export function nativeImageTagInWorker(input: TagInput): string | null {
       Number([...prefixes].some((prefix) => b.startsWith(prefix))) -
       Number([...prefixes].some((prefix) => a.startsWith(prefix)))
   );
+  // Older imports stored the generic src template without quotes even when the authored
+  // editdisplay rule required them. Try the quoted spelling first without migrating packages.
+  const templates = [
+    ...new Set(
+      input.templates.flatMap((template) =>
+        /^<img\s+src=\{asset\}>$/iu.test(template)
+          ? [template.replace('src={asset}', 'src="{asset}"'), template]
+          : [template]
+      )
+    ),
+  ].slice(0, 8);
   for (const candidateName of orderedNames) {
     // A generic NPC rule may also accept outfit names (daily_smiling), but the authored format
     // requires an NPC name (Harper_smiling). Require the character stem to occur in its guidance.
@@ -52,7 +63,7 @@ export function nativeImageTagInWorker(input: TagInput): string | null {
       if (!input.guidance.toLowerCase().includes(stem.toLowerCase())) continue;
     }
     if (/["'<>`{}\r\n]/u.test(candidateName)) continue;
-    for (const template of input.templates.slice(0, 8)) {
+    for (const template of templates) {
       const tag = template.replace('{asset}', candidateName);
       if (
         !rules.some((rule) => {

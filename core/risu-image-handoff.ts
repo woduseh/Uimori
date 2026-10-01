@@ -52,7 +52,9 @@ export function detectRisuImageHandoff(
     .filter((rule) => rule.type === 'editdisplay')
     .map((rule) => rule.in);
   const templates = [
-    ...(patterns.some((pattern) => /img.*src=/iu.test(pattern)) ? ['<img src={asset}>'] : []),
+    ...(patterns.some((pattern) => /img.*src=/iu.test(pattern))
+      ? ['<img src="{asset}">', '<img src={asset}>']
+      : []),
     ...(patterns.some(
       (pattern) => /img/iu.test(pattern) && /=/u.test(pattern) && !/src=/u.test(pattern)
     )

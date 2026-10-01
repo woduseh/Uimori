@@ -127,6 +127,21 @@ test('validated image annotations use native boxes and placement without changin
   });
   expect(rendered.html).toContain('class="authored-image-box"');
   expect(rendered.html).toContain(asset.url);
+  const genericSnapshot = structuredClone(snapshot);
+  genericSnapshot.profile!.packages!.find((entry) => entry.nativeRisu)!.imageHandoff = undefined;
+  const genericDisplay = await nativeImageDisplayText(store, genericSnapshot, source.id);
+  expect(genericDisplay.issues).toEqual([]);
+  expect(genericDisplay.text).toContain('{{img::Mira_happy}}');
+  const genericContext = nativeRisuContext(genericSnapshot)!;
+  expect(
+    (
+      await renderNativeRisuMessage({
+        native: genericContext.native,
+        context: genericContext,
+        text: genericDisplay.text,
+      })
+    ).html
+  ).toContain(asset.url);
   expect(store.source(source.id)).toEqual(source);
   expect(store.job(pending.id)).toEqual(receipt);
 });
