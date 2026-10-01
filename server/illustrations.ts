@@ -1,8 +1,8 @@
 import { successfulTranslation } from './translation-artifacts.js';
-import type {
-  IllustrationStoryboard,
-  IllustrationTarget,
-  IllustrationMoment,
+import {
+  illustrationTargetSet,
+  type IllustrationStoryboard,
+  type IllustrationTarget,
 } from '../core/illustration-storyboard.js';
 import {
   illustrationPresentation,
@@ -527,7 +527,7 @@ function frozenInput(
     };
   throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
 }
-/** One active job per response; completed plus active jobs are bounded by the settings. */
+/** Low-level single-render reservation used by existing jobs and focused generator tests. */
 export function reserveIllustration(
   store: Store,
   source: Source,
@@ -699,15 +699,6 @@ function completeIllustrationTextJob(
   store.event(job.chatId, 'illustration.completed', job.id);
   return true;
 }
-export function illustrationTargetSet(targets: IllustrationTarget[]): {
-  moments: (IllustrationMoment & { id: string })[];
-  hash: string;
-} {
-  const moments = targets
-    .map(({ id, startAnchor, endAnchor, focus }) => ({ id, startAnchor, endAnchor, focus }))
-    .sort((a, b) => a.id.localeCompare(b.id));
-  return { moments, hash: createHash('sha256').update(json(moments)).digest('hex') };
-}
 /** Called at either completion edge, never by Reader GET. Maps all targets in one text call. */
 export function scheduleIllustrationPlacement(store: Store, sourceId: string): void {
   const source = store.source(sourceId);
@@ -824,7 +815,7 @@ export function scheduleAutomaticIllustration(store: Store, source: Source): voi
     reserveIllustrationPlan(store, source, 'automatic', {
       settings,
       testMode: true,
-      maxTargets: settings.automaticMaxTargets ?? 1,
+      maxTargets: settings.automaticMaxTargets,
       requestKey: `automatic:${source.hash}`,
     });
   } catch (error) {

@@ -159,9 +159,9 @@ function IllustrationEnvironmentEditor({
     Number.isInteger(draft.maxPerSource) &&
     draft.maxPerSource >= 1 &&
     draft.maxPerSource <= 8 &&
-    Number.isInteger(draft.automaticMaxTargets ?? 1) &&
-    (draft.automaticMaxTargets ?? 1) >= 1 &&
-    (draft.automaticMaxTargets ?? 1) <= 8 &&
+    Number.isInteger(draft.automaticMaxTargets) &&
+    draft.automaticMaxTargets >= 1 &&
+    draft.automaticMaxTargets <= 8 &&
     Number.isInteger(draft.maxAutoRetries) &&
     draft.maxAutoRetries >= 0 &&
     draft.maxAutoRetries <= 5 &&
@@ -289,13 +289,13 @@ function IllustrationEnvironmentEditor({
           change({
             ...draft,
             maxPerSource: value,
-            automaticMaxTargets: Math.min(value, draft.automaticMaxTargets ?? 1),
+            automaticMaxTargets: Math.min(value, draft.automaticMaxTargets),
           })
         )}
         {draft.automatic &&
           numberField(
             '자동으로 고를 최대 컷 수',
-            draft.automaticMaxTargets ?? 1,
+            draft.automaticMaxTargets,
             1,
             draft.maxPerSource,
             (value) => change({ ...draft, automaticMaxTargets: value })

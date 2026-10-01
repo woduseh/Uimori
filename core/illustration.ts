@@ -40,12 +40,12 @@ export const ILLUSTRATION_EXCERPT_TOKENS = { scene: 8000, bot: 2000, persona: 10
 export type IllustrationSettings = {
   revision: number;
   generator: IllustrationGenerator;
-  /** Reserve one illustration after each completed generated response. */
+  /** Plan illustrations after each completed generated response. */
   automatic: boolean;
-  /** Completed plus active illustrations allowed per response. */
+  /** Maximum distinct illustration targets kept for one response. */
   maxPerSource: number;
   /** Existing settings keep automatic generation at one cut until explicitly changed. */
-  automaticMaxTargets?: number;
+  automaticMaxTargets: number;
   /** Automatic re-queues after a retryable failure; explicit retries are unlimited. */
   maxAutoRetries: number;
   codex: { model: ModelRef | null; useReferences: boolean };
@@ -172,7 +172,7 @@ export type IllustrationImage = {
 };
 export type Illustration = {
   id: string;
-  task?: 'plan' | 'render' | 'placement';
+  task: 'plan' | 'render' | 'placement';
   target?: Omit<IllustrationTarget, 'prompt' | 'visualBrief'>;
   display?: IllustrationDisplay;
   chatId: string;

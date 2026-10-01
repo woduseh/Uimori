@@ -22,7 +22,7 @@ type Cut = { key: string; job: Illustration; picture?: Illustration; stale: bool
 function cutsFor(items: Illustration[], sourceHash: string): Cut[] {
   const groups = new Map<string, Illustration[]>();
   for (const item of items) {
-    if (item.task && item.task !== 'render') continue;
+    if (item.task !== 'render') continue;
     const key = item.target?.id ?? item.id;
     const group = groups.get(key) ?? [];
     group.push(item);
@@ -111,7 +111,6 @@ export function useIllustrationLayout({
   const tasks = items.filter(
     (item) =>
       item.sourceHash === sourceHash &&
-      item.task &&
       item.task !== 'render' &&
       (item.status !== 'completed' || illustrationSkipped(item)) &&
       (item.task !== 'placement' || item === lastPlacement)
@@ -120,31 +119,33 @@ export function useIllustrationLayout({
   return {
     header: items.length ? (
       <>
-        <div className="illustration-toolbar" aria-label="이 응답의 삽화">
-          <span>삽화 {cuts.length > 0 ? `${cuts.length}컷` : ''}</span>
-          {cuts.length > 0 && (
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                const value = !allCollapsed;
-                setChoices((old) => ({
-                  ...old,
-                  ...Object.fromEntries(cuts.map((cut) => [cut.key, value])),
-                }));
-                for (const cut of cuts) {
-                  try {
-                    localStorage.setItem(collapseKey(cut.key), String(value));
-                  } catch {
-                    /* Optional preference. */
+        {cuts.length > 0 && (
+          <div className="illustration-toolbar" aria-label="이 응답의 삽화">
+            <span>삽화 {cuts.length}컷</span>
+            {cuts.length > 1 && (
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  const value = !allCollapsed;
+                  setChoices((old) => ({
+                    ...old,
+                    ...Object.fromEntries(cuts.map((cut) => [cut.key, value])),
+                  }));
+                  for (const cut of cuts) {
+                    try {
+                      localStorage.setItem(collapseKey(cut.key), String(value));
+                    } catch {
+                      /* Optional preference. */
+                    }
                   }
-                }
-              }}
-            >
-              {allCollapsed ? '모두 펼치기' : '모두 접기'}
-            </button>
-          )}
-        </div>
+                }}
+              >
+                {allCollapsed ? '모두 펼치기' : '모두 접기'}
+              </button>
+            )}
+          </div>
+        )}
         {tasks.map((job) => (
           <IllustrationTask key={job.id} job={job} refresh={refresh} onError={onError} />
         ))}
