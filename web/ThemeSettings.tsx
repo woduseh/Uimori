@@ -23,6 +23,7 @@ import { RisuMessageSurface } from './RisuMessageSurface.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { Dialog } from './Dialog.js';
 import './themes.css';
+import './deletion.css';
 
 type Draft = { id: string | null; revision?: number; model: ThemeDefinition };
 const labels: Partial<Record<ThemeColorKey, string>> = {
@@ -61,6 +62,12 @@ export function ThemeSettings({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [deleting, setDeleting] = useState<Theme | null>(null);
+  const deleteCancel = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!deleting) return;
+    const frame = requestAnimationFrame(() => deleteCancel.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [deleting]);
   const input = useRef<HTMLInputElement>(null);
   const locked = useRef(false);
   const [backgroundDirty, setBackgroundDirty] = useState(false);
@@ -658,6 +665,8 @@ export function ThemeSettings({
       <Dialog
         open={!!deleting}
         title="테마 삭제"
+        role="alertdialog"
+        className="delete-dialog"
         onClose={() => {
           if (!busy) setDeleting(null);
         }}
@@ -666,28 +675,43 @@ export function ThemeSettings({
           {deleting?.title} 테마를 삭제할까요? 이 테마를 선택한 봇과 채팅은 상위 또는 기본 테마로
           돌아가요.
         </p>
-        <button
-          disabled={busy || backgroundDirty}
-          onClick={() => {
-            if (!deleting) return;
-            void action(async () => {
-              await api(
-                `/themes/${encodeURIComponent(deleting.id)}`,
-                { expectedRevision: deleting.revision },
-                'DELETE'
-              );
-              if (draft?.id === deleting.id) setDraft(null);
-              setPreview(null);
-              setDeleting(null);
-              await state.refresh(true);
-            });
-          }}
-        >
-          삭제
-        </button>
-        <button disabled={busy || backgroundDirty} onClick={() => setDeleting(null)}>
-          취소
-        </button>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="form-actions">
+          <button
+            type="button"
+            ref={deleteCancel}
+            className="secondary"
+            disabled={busy}
+            onClick={() => setDeleting(null)}
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            className="delete-button"
+            disabled={busy || backgroundDirty}
+            onClick={() => {
+              if (!deleting) return;
+              void action(async () => {
+                await api(
+                  `/themes/${encodeURIComponent(deleting.id)}`,
+                  { expectedRevision: deleting.revision },
+                  'DELETE'
+                );
+                if (draft?.id === deleting.id) setDraft(null);
+                setPreview(null);
+                setDeleting(null);
+                await state.refresh(true);
+              });
+            }}
+          >
+            삭제
+          </button>
+        </div>
       </Dialog>
     </section>
   );

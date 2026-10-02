@@ -363,7 +363,7 @@ export function ContextPanel({
               </label>
               <div className="form-actions">
                 <button
-                  className="secondary"
+                  className="primary"
                   disabled={busy || conflict || !current || !draft.text.trim()}
                 >
                   <CheckIcon size={18} aria-hidden="true" />

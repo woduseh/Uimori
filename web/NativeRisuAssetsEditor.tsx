@@ -14,6 +14,7 @@ import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { DeleteIcon, ImagesIcon } from './ui-icons.js';
 import './native-risu-assets.css';
+import './deletion.css';
 
 type Props = {
   value: RisuContent;
@@ -276,6 +277,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
       <Dialog
         open={!!pending}
         title="이 에셋을 자료에서 제거할까요?"
+        className="delete-dialog"
         onClose={() => setRemoving('')}
         scopeKey={scope}
         role="alertdialog"
@@ -288,13 +290,13 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
           본문·로어·HTML·스크립트에서 이 에셋을 부르는 이름은 그대로 남아요. 제거하면 해당 이미지가
           표시되지 않을 수 있어요.
         </p>
-        <div className="native-assets-actions">
+        <div className="form-actions">
           <button type="button" className="secondary" onClick={() => setRemoving('')}>
             취소
           </button>
           <button
             type="button"
-            className="danger"
+            className="delete-button"
             onClick={() => {
               if (!pending || busy) return;
               try {

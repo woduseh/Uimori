@@ -47,7 +47,7 @@
 .content-picker-choice > svg {
   flex-shrink: 0;
 }
-.content-picker-dialog {
+.app-dialog.content-picker-dialog {
   --dialog-size: 640px;
 }
 .content-picker-dialog > .dialog-body {
