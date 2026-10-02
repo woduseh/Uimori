@@ -128,6 +128,10 @@ test('ILUI01 scene menu requests an illustration, shows the stored image, retrie
   await expect(failedCard).toHaveCount(1);
   await expect(failedCard).toContainText('모의 실패예요');
   await expect(failedCard).toContainText('FIXTURE_FAILURE');
+  await expect(failedCard.getByRole('button', { name: /다시 요청/u })).toHaveAttribute(
+    'title',
+    /사용량이 추가/u
+  );
   await failedCard.getByRole('button', { name: /다시 요청/u }).click();
   await expect(page.locator(byStatus('completed'))).toHaveCount(2);
   await page

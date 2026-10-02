@@ -1,7 +1,11 @@
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { OpenAIProtocolError, openAIProtocol, type OpenAITurn } from './openai-protocol.js';
 import type { Json, ProviderRequest, ProviderResult, ProviderToolCall } from './transport.js';
-import { nativeMessageMetadata, type NativeMessageMetadata } from './provider-messages.js';
+import {
+  nativeMessageMetadata,
+  requestDataBlocks,
+  type NativeMessageMetadata,
+} from './provider-messages.js';
 export { OpenAIProtocolError as OpenAIChatProtocolError } from './openai-protocol.js';
 const {
   object,
@@ -87,6 +91,7 @@ export function encodeChat(
       }
     );
   }
+  const dataBlocks = !previous && !plan ? requestDataBlocks(prepared.wireInput, request.role) : [];
   const messages: Json[] = previous
     ? [
         ...previous.input,
@@ -104,7 +109,10 @@ export function encodeChat(
           : [
               {
                 role: 'user',
-                content: 'Request data (JSON):\n' + JSON.stringify(prepared.wireInput),
+                content:
+                  dataBlocks.length > 1
+                    ? dataBlocks.map((text) => ({ type: 'text', text }))
+                    : dataBlocks[0],
               },
             ]),
       ];

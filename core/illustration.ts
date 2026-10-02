@@ -169,7 +169,11 @@ export type IllustrationDiagnostic = {
     nodeErrors?: { nodeId: string; classType: string; messages: string[] }[];
     statusMessages?: string[];
   };
-  codex?: { usageLimit?: { limitId: string; resetsAt: number | null } };
+  codex?: {
+    usageLimit?: { limitId: string; resetsAt: number | null };
+    /** Bounded plain-text caption reason, not a raw transport error. */
+    unavailableReason?: string;
+  };
   copiedFrom?: { jobId: string; attemptIds: string[] };
 };
 export type IllustrationImage = {
@@ -211,12 +215,12 @@ export type IllustrationUsageReport = {
   stages: Record<Illustration['task'], Usage>;
 };
 
-/** Only known-safe failures may start another render; a lost remote outcome is never replayed. */
+/** Shared by text and render stages: only known-safe failures may be automatically replayed. */
 const retryableCodes = new Set([
   'COMFYUI_EXECUTION_FAILED',
   'CODEX_IMAGE_NOT_GENERATED',
   'CODEX_BUSY',
-  'ILLUSTRATION_PROMPT_FAILED',
+  'ILLUSTRATION_PROMPT_CODEX_BUSY',
   'ILLUSTRATION_PROMPT_INVALID',
   'FIXTURE_FAILURE',
 ]);
@@ -427,6 +431,7 @@ export function codexIllustrationText(
 export function parseCodexIllustrationCaption(text: string): {
   caption: string;
   unavailable: boolean;
+  unavailableReason?: string;
   skipped: string | null;
 } {
   let caption = text.trim();
@@ -437,10 +442,19 @@ export function parseCodexIllustrationCaption(text: string): {
     /* Plain text captions are accepted. */
   }
   caption = Array.from(caption).slice(0, 300).join('');
+  const unavailable = /^UNAVAILABLE:/iu.test(caption);
   const skip = /^SKIP:\s*(.*)$/isu.exec(caption);
   return {
     caption,
-    unavailable: /^UNAVAILABLE:/iu.test(caption),
+    unavailable,
+    ...(unavailable
+      ? {
+          unavailableReason: caption
+            .slice('UNAVAILABLE:'.length)
+            .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+            .trim(),
+        }
+      : {}),
     skipped: skip ? skip[1].trim() || '그릴 장면이 없다고 판단했어요.' : null,
   };
 }

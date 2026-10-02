@@ -13,6 +13,7 @@ import type {
 import {
   nativeHostInstruction,
   nativeMessageMetadata,
+  requestDataBlocks,
   planNativeMessages,
   type NativeMessageMetadata,
 } from './provider-messages.js';
@@ -208,7 +209,7 @@ export function encodeVertex(request: ProviderRequest): {
         : [
             {
               role: 'user',
-              parts: [{ text: `Request data (JSON):\n${JSON.stringify(wireInput)}` }],
+              parts: requestDataBlocks(wireInput, request.role).map((text) => ({ text })),
             },
           ]),
     ];

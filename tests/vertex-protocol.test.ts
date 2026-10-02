@@ -107,9 +107,14 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     });
     expect(wire.generationConfig).toEqual({ maxOutputTokens: 1024 });
     const { results: _results, ...data } = input.input;
-    expect(JSON.parse(wire.contents[0].parts[0].text.split('\n').slice(1).join('\n'))).toEqual(
-      data
-    );
+    expect(
+      Object.assign(
+        {},
+        ...wire.contents[0].parts.map((part: any) =>
+          JSON.parse(part.text.split('\n').slice(1).join('\n'))
+        )
+      )
+    ).toEqual(data);
     expect(JSON.stringify(body)).not.toMatch(
       /"(?:temperature|topP|topK|candidateCount|thinkingBudget)"/u
     );
@@ -132,7 +137,12 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     expect(config).not.toHaveProperty('responseSchema');
     expect(config).not.toHaveProperty('responseJsonSchema');
     expect(wire.tools[0].functionDeclarations).toHaveLength(input.stable.tools.length);
-    const packet = JSON.parse(wire.contents[0].parts[0].text.split('\n').slice(1).join('\n'));
+    const packet = Object.assign(
+      {},
+      ...wire.contents[0].parts.map((part: any) =>
+        JSON.parse(part.text.split('\n').slice(1).join('\n'))
+      )
+    );
     expect(packet.source).toEqual(input.input.source);
     const instructions = wire.systemInstruction.parts
       .map((part: { text: string }) => part.text)

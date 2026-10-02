@@ -1906,3 +1906,44 @@ test('UI chat settings close right after saving does not warn while the refresh 
 });
 
 preservePromptWorkspace();
+
+test('UI compact title remains readable when keyboard focus returns from the scene list', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await seed(request, '포커스 확인', 'A synthetic scene for title focus.');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/?chat=${chat.id}`);
+  for (const mode of ['light', 'dark']) {
+    await page.evaluate((mode) => localStorage.setItem('uimori:theme', mode), mode);
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', mode);
+    const title = page.locator('.header-title');
+    const trigger = title.getByRole('button', { name: '장면 목록 열기', exact: true });
+    await expect(trigger).toBeVisible();
+    const bounds = await trigger.boundingBox();
+    expect(bounds!.width).toBeGreaterThanOrEqual(44);
+    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+    await trigger.click();
+    const dialog = page.getByRole('dialog', { name: '장면 목록', exact: true });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    expect(await trigger.evaluate((node) => node.matches(':focus-visible'))).toBe(true);
+    await expect(trigger).toHaveCSS('outline-style', 'solid');
+    await expect(title.locator('h1')).toHaveText(chat.title);
+    await expect(title.locator('small')).toHaveText('Synthetic fixture owner');
+    expect(await title.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(
+      'rgba(0, 0, 0, 0)'
+    );
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`title-keyboard-focus-${mode}.png`) });
+    await page.mouse.move(0, 0);
+    await page.keyboard.press('Tab');
+    await trigger.hover();
+    await expect(trigger).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  }
+});

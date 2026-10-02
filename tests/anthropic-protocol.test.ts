@@ -176,9 +176,14 @@ describe('Anthropic Messages request and opaque continuation', () => {
     expect(wire.tools[0]).not.toHaveProperty('strict');
     expect(wire.tool_choice).toEqual({ type: 'auto' });
     const { results: _results, ...data } = input.input;
-    expect(JSON.parse(wire.messages[0].content[0].text.split('\n').slice(1).join('\n'))).toEqual(
-      data
-    );
+    expect(
+      Object.assign(
+        {},
+        ...wire.messages[0].content.map((part: any) =>
+          JSON.parse(part.text.split('\n').slice(1).join('\n'))
+        )
+      )
+    ).toEqual(data);
     expect(wire).not.toHaveProperty('thinking');
     expect(wire).not.toHaveProperty('temperature');
     expect(wire).not.toHaveProperty('output_config');

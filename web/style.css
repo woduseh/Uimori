@@ -466,12 +466,18 @@ input[type="checkbox"] {
   box-shadow: none;
   min-height: 0;
 }
-.header-title-hit:focus-visible {
+/* Paint behind the title; the overlaid hit target must not cover its text. */
+.header-title:has(.header-title-hit:focus-visible) {
   background: var(--hover);
+  border-radius: 6px;
 }
 @media (hover: hover) {
   .header-title-hit:hover {
+    background: transparent;
+  }
+  .header-title:has(.header-title-hit:hover) {
     background: var(--hover);
+    border-radius: 6px;
   }
 }
 .header-title-caret {

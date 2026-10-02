@@ -248,8 +248,12 @@ export async function runIllustrationJob(
     if (attemptId !== undefined) await hooks.onAttemptFinish(attemptId, toResult(value));
     return value;
   };
-  const textRequest = async (model: ModelSnapshot, request: ProviderRequest) => {
-    const connection = await authorizedConnection(hooks, model);
+  const textRequest = async (
+    model: ModelSnapshot,
+    request: ProviderRequest,
+    authorized?: Connection
+  ) => {
+    const connection = authorized ?? (await authorizedConnection(hooks, model));
     const result = await attempt(
       (onWire) =>
         executeProvider(transportConnection(connection), request, {
@@ -263,13 +267,7 @@ export async function runIllustrationJob(
     );
     if (result.status !== 'completed') {
       const code = providerCode(result);
-      throw new IllustrationError(
-        code,
-        code !== 'ILLUSTRATION_PROMPT_REFUSED' &&
-          code !== 'ILLUSTRATION_CANCELLED' &&
-          code !== 'ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED' &&
-          !/HTTP_4\d\d$/u.test(code)
-      );
+      throw new IllustrationError(code, isRetryableIllustrationCode(code));
     }
     return result.text;
   };
@@ -468,7 +466,13 @@ export async function runIllustrationJob(
       const caption = parseCodexIllustrationCaption(result.text);
       if (context.allowSkip && caption.skipped !== null && !result.images.length)
         diagnostic.skipped = caption.skipped;
-      else if (result.status !== 'completed' || !result.images.length) {
+      else if (caption.unavailable && !result.images.length) {
+        diagnostic.codex = {
+          ...diagnostic.codex,
+          unavailableReason: caption.unavailableReason,
+        };
+        throw new IllustrationError('CODEX_IMAGE_UNAVAILABLE');
+      } else if (result.status !== 'completed' || !result.images.length) {
         const code = result.error?.code ?? 'CODEX_IMAGE_NOT_GENERATED';
         throw new IllustrationError(code, isRetryableIllustrationCode(code));
       }
@@ -497,28 +501,10 @@ export async function runIllustrationJob(
         delete diagnostic.promptRequestHash;
         diagnostic.stage = 'prompt';
         await progress();
-        const promptResult = await attempt(
-          (onWire) =>
-            executeProvider(transportConnection(connection), request, {
-              signal: hooks.signal,
-              resolveCredential: hooks.resolveCredential,
-              executeCodex: hooks.executeCodex,
-              timeoutMs: model.timeoutMs,
-              onWire,
-            }),
-          (value) => structuredClone(value)
+        plan = parseIllustrationPlan(
+          await textRequest(model, request, connection),
+          context.allowSkip
         );
-        if (promptResult.status !== 'completed') {
-          const code = providerCode(promptResult);
-          throw new IllustrationError(
-            code,
-            code !== 'ILLUSTRATION_PROMPT_REFUSED' &&
-              code !== 'ILLUSTRATION_CANCELLED' &&
-              code !== 'ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED' &&
-              !/HTTP_4\d\d$/u.test(code)
-          );
-        }
-        plan = parseIllustrationPlan(promptResult.text, context.allowSkip);
       }
       if (plan.kind === 'skip') diagnostic.skipped = plan.reason;
       else {

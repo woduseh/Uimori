@@ -63,14 +63,15 @@ function returnedReadMetadata(event: ToolEvent): Json | undefined {
     };
   if (event.name === 'knowledge.read' && Array.isArray(result.items))
     return {
+      ...pick(result, ['total', 'nextIndex']),
       items: result.items.flatMap((item) => {
         const entry = record(item),
           read = record(entry?.read);
-        return entry && read
+        return entry
           ? [
               {
-                id: entry.id as Json,
-                ...pick(read, ['source', 'range', 'totalChars', 'nextOffset']),
+                ...pick(entry, ['id', 'denied', 'error']),
+                ...(read ? pick(read, ['source', 'range', 'totalChars', 'nextOffset']) : {}),
               },
             ]
           : [];

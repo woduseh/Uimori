@@ -15,6 +15,19 @@ export const COMFY_PLACEHOLDERS = {
 const isRecord = (value: unknown): value is Record<string, Json> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
+/** Validation and substitution must inspect the same input values, never keys or metadata. */
+function mapInputStrings(value: Json, visit: (input: string) => Json): Json {
+  return typeof value === 'string'
+    ? visit(value)
+    : Array.isArray(value)
+      ? value.map((item) => mapInputStrings(item, visit))
+      : isRecord(value)
+        ? Object.fromEntries(
+            Object.entries(value).map(([key, item]) => [key, mapInputStrings(item, visit)])
+          )
+        : value;
+}
+
 export function parseComfyWorkflow(text: string): ComfyWorkflow {
   let value: unknown;
   try {
@@ -31,9 +44,13 @@ export function parseComfyWorkflow(text: string): ComfyWorkflow {
     if (!isRecord(node) || typeof node.class_type !== 'string' || !isRecord(node.inputs))
       throw new IllustrationError('COMFYUI_WORKFLOW_INVALID');
   }
-  const serialized = JSON.stringify(value);
-  if (!serialized.includes(COMFY_PLACEHOLDERS.prompt))
-    throw new IllustrationError('COMFYUI_WORKFLOW_PROMPT_PLACEHOLDER_MISSING');
+  let hasPrompt = false;
+  for (const node of Object.values(value) as ComfyWorkflowNode[])
+    mapInputStrings(node.inputs, (input) => {
+      hasPrompt ||= input.includes(COMFY_PLACEHOLDERS.prompt);
+      return input;
+    });
+  if (!hasPrompt) throw new IllustrationError('COMFYUI_WORKFLOW_PROMPT_PLACEHOLDER_MISSING');
   return structuredClone(value) as ComfyWorkflow;
 }
 /** Replaces placeholders inside string inputs only; node ids, class types and links stay intact. */
@@ -53,18 +70,10 @@ export function fillComfyWorkflow(
       .split(COMFY_PLACEHOLDERS.seed)
       .join(String(values.seed));
   };
-  const fill = (value: Json): Json =>
-    typeof value === 'string'
-      ? replaceString(value)
-      : Array.isArray(value)
-        ? value.map(fill)
-        : isRecord(value)
-          ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, fill(item)]))
-          : value;
   return Object.fromEntries(
     Object.entries(structuredClone(workflow)).map(([id, node]) => [
       id,
-      { ...node, inputs: fill(node.inputs) as Record<string, Json> },
+      { ...node, inputs: mapInputStrings(node.inputs, replaceString) as Record<string, Json> },
     ])
   );
 }

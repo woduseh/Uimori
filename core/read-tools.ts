@@ -26,7 +26,7 @@ export const KNOWLEDGE_SKILL_TOOLS: ProviderTool[] = [
   {
     name: 'knowledge.read',
     description:
-      'Read one to 16 approved references by known ids. Search is not required for catalog ids. Every call uses ids, including a single-item read; each item returns an independent result or error.',
+      'Read one to 16 approved references by known ids. Search is not required for catalog ids. Every call uses ids, including a single-item read; each returned item has an independent result or error. The complete page is bounded to 6000 serialized characters. nextIndex continues unread ids: resubmit ids.slice(nextIndex) with the same offset and limit. Per-item nextOffset continues that reference text with a single-id read. These are separate dimensions; unreturned ids have not been read.',
     inputSchema: {
       type: 'object',
       properties: {

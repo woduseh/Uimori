@@ -100,7 +100,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 | 자동 생성 | 켜기/끄기 | 새 본문 저장 직후 계획 예약. 후보 응답(candidate)·작성된 도입문·포크 복사본은 예약하지 않아요. |
 | 자동으로 고를 최대 컷 수 | 1~8, 기본 1 | `automaticMaxTargets`. 응답 전체 한도 안에서 필요한 만큼만 계획해요. 기존 설정의 필드가 없어도 1이에요. |
 | 장면당 최대 삽화 개수 | 1~8 | 현재 원문의 완료·진행 중인 서로 다른 컷과 진행 중 계획의 예약분이에요. 같은 컷의 재생성·여러 결과 이미지는 추가 컷이 아니며, 위치 연결은 개수에서 제외해요. 이미 접수된 결과 확인에는 새 생성 한도를 적용하지 않아요. |
-| 자동 재요청 횟수 | 0~5 | 접수 전 연결 실패가 확인됐거나 원격 실행 실패가 확정된 경우 등 안전한 실패에만 적용해요. 전송 후 timeout·연결 단절·ComfyUI POST 5xx는 접수 불확실로 남기고 자동 재생성하지 않아요. 설정 오류·거절·사용량 한도도 바로 실패예요. |
+| 자동 재요청 횟수 | 0~5 | 접수 전 연결 실패가 확인됐거나 원격 실행 실패가 확정된 경우 등 안전한 실패에만 적용해요. 계획·번역 위치·ComfyUI 프롬프트 작성도 같은 안전한 재시도 분류를 사용해요. 전송 후 timeout·연결 단절·ComfyUI POST 5xx는 접수 불확실로 남기고 자동 재생성하지 않아요. 설정 오류·거절·사용량 한도도 바로 실패예요. |
 | 그림 지침·제외 지침 | 각 200만 자 저장 경계 | 본문과 같은 저장 보호 한도예요. 모델에 보낼 수 있는지는 전체 요청의 입력 토큰 예산으로 판단하며, 지침을 조용히 자르거나 줄이기 위한 모델 호출은 하지 않아요. |
 
 한 응답에서 컷을 고르는 계획은 하나만 진행돼요(`ILLUSTRATION_PLAN_ACTIVE`). 다른 컷은 독립 예약할 수 있지만 같은 컷의 중복 실행은 막아요(`ILLUSTRATION_ACTIVE`). 기존 삽화 pump 안에서 텍스트 작업 1개와 렌더 1개를 독립 실행하고, 같은 계획의 대표 컷부터 순서대로 그려요. 본문 작업 슬롯이나 입력 상태를 잠그지 않아요. 설정은 **예약 시점에 작업 안에 고정**되며, 저장을 바꿔도 진행 중인 작업과 과거 결과는 바뀌지 않아요. 새 삽화 생성이 실패해도 이전에 완료된 삽화는 그대로 남아요.
@@ -125,7 +125,8 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 - 계획은 선택한 Codex 모델의 텍스트 호출 한 번이에요. 계획·번역 위치 연결·ComfyUI 프롬프트 작성에 Codex를 사용하면 삽화용 텍스트 설정으로 검색·code mode·이미지 도구를 모두 꺼요. Codex용 계획에는 ComfyUI 전용 prompt/negativePrompt 작성 지침을 보내지 않아요. 각 컷의 렌더는 별도 Codex 프로세스에서 `thread/start` → `turn/start` 한 턴을 실행해요. 삽화 전용 짧은 기본 지침을 사용하고 이미지 생성 도구를 직접 한 번 호출하도록 요청해요. 이 턴에서는 웹 검색·격리 JavaScript 계산을 끄고 `features.image_generation=true`를 사용해요. shell·파일·MCP·앱·외부 스킬의 환경 접근은 [Codex 실행 경계](CODEX.md)에 따라 제한해요. 텍스트 판단 턴에는 `features.image_generation=false`를 명시해 이미지 생성의 예약·귀속·저장을 삽화 경로에 유지해요.
 - 입력은 `{task, allowSkip, styleGuidance, characterNotes, attachedReferences, scene}` JSON 텍스트와 참조 이미지(`{type:'image', url:'data:...'}`)예요. 선택한 삽화 프리셋의 그림 지침과 봇·페르소나 본문을 함께 넣어요. 텍스트·메타데이터 전체는 선택 모델의 입력 토큰 예산을 보내기 전에 검사해요. 이미지 내용과 Codex 내부 도구 사용의 토큰 비용은 이 로컬 텍스트 추정에 포함되지 않아요.
 - 결과는 `item/completed`의 `imageGeneration` 항목에서 읽어요. `result`(base64)를 우선 쓰고, 비어 있으면 전용 Codex home 안의 `savedPath` 파일을 읽은 뒤 삭제해요. 최종 `agentMessage`는 `{caption}` JSON으로 제약해요.
-- 실패 코드: `CODEX_IMAGE_USAGE_LIMIT`(항목의 `failure.usageLimitExceeded`, 자동 재요청 없음), `CODEX_IMAGE_NOT_GENERATED`(이미지 항목 없음, 재요청 가능), 기존 Codex 코드(`CODEX_LOGIN_REQUIRED`, `CODEX_TURN_FAILED` 등).
+- 실패 코드: `CODEX_IMAGE_USAGE_LIMIT`(항목의 `failure.usageLimitExceeded`, 자동 재요청 없음), `CODEX_IMAGE_UNAVAILABLE`(이미지 없이 명시적 `UNAVAILABLE:` 캡션, 자동 재요청 없음), `CODEX_IMAGE_NOT_GENERATED`(그 밖의 이미지 항목 없음, 재요청 가능), 기존 Codex 코드(`CODEX_LOGIN_REQUIRED`, `CODEX_TURN_FAILED` 등).
+- `UNAVAILABLE:`의 짧은 이유는 제어 문자를 제거한 평문으로 생성 상세에 남겨요. 결과를 알 수 없는 텍스트 호출을 수동으로 다시 요청하면 사용량이 추가될 수 있어요.
 - 삽화 턴은 텍스트 턴의 동시 실행 슬롯과 별도 슬롯(동시 1개, 대기 8개)을 써요. Codex 로그인·프로바이더 권한은 텍스트 턴과 같은 검사를 거치며 attempt는 `role: 'illustration'`으로 기록하고 첨부 bytes는 attempt에 넣지 않아요.
 - 이미지 크기·품질 옵션은 Codex가 정해요. 사용량은 ChatGPT 구독 한도에 포함되고 비용·내부 모델 호출 수는 `null`이에요. attempt의 원시 사용량에는 완료된 항목 종류별 개수와 토큰 사용량 갱신 횟수를 숫자로 남겨요. 이는 실제 이미지 API 과금량이나 내부 모델 호출 수를 뜻하지 않아요.
 
@@ -146,7 +147,7 @@ JEV 키 미설정·응답 오류·8초 시간 초과·입력 예산 초과는 `u
 - 프롬프트 모델 요청 전체는 선택 모델의 입력 토큰 예산으로 검사해요. 예산을 넘으면 모델·렌더 요청 없이 실패하며 같은 입력을 자동 재시도하지 않아요. 모델이 만든 `prompt`·`negativePrompt`는 임의의 글자 수로 자르지 않고 워크플로에 전달해요. 캡션·생략 이유는 짧은 설명을 요청하고, 생성 상세는 필요할 때만 펼쳐요.
 - 취소는 사용자의 명시 취소일 때만 원격에 닿아요. `POST /api/jobs/{prompt_id}/cancel`의 대상별 취소를 사용해요. 해당 API가 없는 서버(404/405)는 `POST /queue {delete:[id]}`로 대기 항목만 제거하고, 실행 중인 원격 렌더는 계속될 수 있어요. 전역 `/interrupt`는 호출하지 않아요. 서버 종료·timeout은 원격 취소를 보내지 않으며 로컬 generation 보호가 늦은 저장을 막아요.
 - **시간 초과(`COMFYUI_TIMEOUT`)는 원격 렌더를 건드리지 않아요.** 작업은 `prompt_id`를 보존한 채 실패로 남고, 삽화 카드의 **결과 확인**(`POST /api/illustrations/:id/reconcile`)이 `GET /history/{prompt_id}`를 한 번 읽어 끝난 결과를 저장해요. 결과 확인은 새로 그리지 않으며, 아직 결과가 없으면 이전 상태로 되돌려요. 서버 재시작으로 `interrupted`가 된 ComfyUI 작업도 같은 버튼으로 회수해요.
-- 워크플로는 API 형식(`노드 ID → {class_type, inputs}`)만 받아요. UI 형식(`nodes`/`links`)은 `COMFYUI_WORKFLOW_UI_FORMAT`으로 거절해요. 문자열 입력 안의 자리표시자만 바꾸고 노드 구조는 그대로예요. `{{seed}}`만 있는 문자열은 숫자로 바꿔요.
+- 워크플로는 API 형식(`노드 ID → {class_type, inputs}`)만 받아요. UI 형식(`nodes`/`links`)은 `COMFYUI_WORKFLOW_UI_FORMAT`으로 거절해요. `inputs` 아래 문자열 값의 자리표시자만 바꾸고 노드 구조는 그대로예요. 필수 `{{prompt}}` 확인도 같은 입력 값을 검사하므로, 노드 제목·메타데이터·키에만 있는 표시는 유효하지 않아요. `{{seed}}`만 있는 문자열은 숫자로 바꿔요.
 - 출력은 `outputs[*].images` 중 `type: 'output'`을 우선해 최대 4장까지 저장해요. 프롬프트 모델이 쓴 캡션을 삽화 캡션으로 써요.
 - 실패 코드와 진단: `COMFYUI_PROMPT_REJECTED`는 노드 오류를, `COMFYUI_EXECUTION_FAILED`는 실행 오류를 **생성 상세**에 표시해요. 접수 여부는 전송 전부터 기록하며 `COMFYUI_SUBMISSION_UNCERTAIN`은 새 렌더를 자동 제출하지 않아요. 접수 후 조회 실패는 `COMFYUI_RESULT_UNAVAILABLE`과 prompt ID를 보존해 **결과 확인**을 제공해요. 요청 전체 deadline은 응답 헤더뿐 아니라 JSON·이미지 body 읽기에도 적용해요. reader는 취소 신호를 직접 구독하며 본문·정리 응답이 멈춰도 종료가 지연되지 않아요.
 - 참조 이미지 업로드(`POST /upload/image`)는 이번 구현에 없어요. 작업 입력에는 참조 목록이 그대로 고정되므로 나중에 ComfyUI 어댑터만 확장하면 돼요.

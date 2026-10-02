@@ -21,6 +21,26 @@ export type NativeMessagePlan = {
 };
 export type NativeMessageMetadata = Pick<NativeMessagePlan, 'diagnostics' | 'capabilityVersion'>;
 
+/** Keep large reusable history/catalog ahead of the changing task, without moving data to system. */
+export function requestDataBlocks(
+  input: Record<string, Json>,
+  role: ProviderRequest['role']
+): string[] {
+  const { history, catalog, source, controls, task, ...rest } = input;
+  if (
+    !['main', 'helper'].includes(role) ||
+    history === undefined ||
+    (Array.isArray(history) && !history.length && (!Array.isArray(catalog) || !catalog.length))
+  )
+    return ['Request data (JSON):\n' + JSON.stringify(input)];
+  return [
+    'Reference data (JSON):\n' +
+      JSON.stringify({ history, ...(catalog !== undefined ? { catalog } : {}) }),
+    'Request data (JSON):\n' +
+      JSON.stringify({ ...(source !== undefined ? { source } : {}), ...rest, controls, task }),
+  ];
+}
+
 /** Keep preview evidence without retaining a second copy of the planned message body. */
 export function nativeMessageMetadata(plan?: NativeMessagePlan): NativeMessageMetadata | undefined {
   return plan

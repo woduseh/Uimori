@@ -3,7 +3,8 @@ import sharp from 'sharp';
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, openChatSettings, selectChatSettingsSection } from './ui-navigation.js';
+import { postFixtureChat } from './fixtures/chat.js';
 
 async function createBot(request: APIRequestContext, title: string): Promise<Content> {
   const pkg = nativeContent({ name: title, description: 'Synthetic story source.' });
@@ -193,7 +194,10 @@ test('PERSONAL UI accepts a direct API key for a custom LAN endpoint without res
   await page.screenshot({ path: info.outputPath('personal-provider.png'), fullPage: true });
 });
 
-test('PERSONAL chat backup UI imports independent continuing copies', async ({ page, request }) => {
+test('PERSONAL chat backup rejects malformed previews then imports independent continuing copies', async ({
+  page,
+  request,
+}, info) => {
   const bot = await createBot(request, `Backup ${randomUUID()}`);
   const created = await request.post('/api/chats/import-transcript', {
     data: {
@@ -219,6 +223,41 @@ test('PERSONAL chat backup UI imports independent continuing copies', async ({ p
   await navigationAction(page, '설정');
   await page.getByRole('tab', { name: '데이터 관리', exact: true }).click();
   const input = page.getByLabel('채팅 백업 파일 선택', { exact: true });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  for (const invalid of [
+    { chats: [{}] },
+    { chats: [null] },
+    { chats: [{ transcript: { entries: { length: 1 } } }] },
+    { title: { invalid: true }, chats: [{ transcript: { entries: [] } }] },
+  ]) {
+    await input.setInputFiles({
+      name: 'invalid-backup.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(
+        JSON.stringify({
+          format: 'uimori-personal-chat',
+          version: 1,
+          title: 'Malformed',
+          resources: {},
+          ...invalid,
+        })
+      ),
+    });
+    await expect(page.getByRole('alert')).toContainText(
+      '채팅 백업의 제목 또는 본문 목록이 올바르지 않아요.'
+    );
+    await expect(
+      page.getByRole('button', { name: '새 채팅으로 가져오기', exact: true })
+    ).toBeHidden();
+    await expect(input).toBeEnabled();
+  }
+  expect(errors).toEqual([]);
+  await page.getByRole('alert').scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: info.outputPath('personal-backup-inline-error.png'),
+    fullPage: true,
+  });
   await input.setInputFiles({ name: 'story.json', mimeType: 'application/json', buffer: backup });
   const response = page.waitForResponse(
     (response) =>
@@ -232,4 +271,145 @@ test('PERSONAL chat backup UI imports independent continuing copies', async ({ p
   const detail = await (await request.get(`/api/chats/${imported.id}`)).json();
   expect(detail.sources[0].text).toBe('Preserved source.');
   expect(detail.profile.packageAttachments[0].id).not.toBe(bot.id);
+  expect(errors).toEqual([]);
+});
+
+test('PERSONAL saving one tab preserves another tab recovery through reload', async ({
+  page,
+  context,
+  request,
+}, info) => {
+  const original = await createBot(request, `Shared recovery ${randomUUID()}`);
+  const other = await context.newPage();
+  const recoveredTitle = `Latest unsaved ${randomUUID()}`;
+  const savedTitle = `Earlier saved ${randomUUID()}`;
+  async function storedTitle() {
+    return page.evaluate(async (key) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('uimori-editor-recovery', 1);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        return await new Promise<string | undefined>((resolve, reject) => {
+          const request = db.transaction('buffers').objectStore('buffers').get(key);
+          request.onsuccess = () => resolve(request.result?.model.title);
+          request.onerror = () => reject(request.error);
+        });
+      } finally {
+        db.close();
+      }
+    }, `content:${original.id}`);
+  }
+  try {
+    await openEditor(page, original.title);
+    await openEditor(other, original.title);
+    await other.getByLabel('Risu 자료 이름', { exact: true }).fill(savedTitle);
+    await expect.poll(storedTitle).toBe(savedTitle);
+    await page.getByLabel('Risu 자료 이름', { exact: true }).fill(recoveredTitle);
+    await expect.poll(storedTitle).toBe(recoveredTitle);
+    await save(other);
+    await expect(
+      page.getByText('저장된 자료가 변경됐어요. 현재 입력은 유지돼요.', { exact: true })
+    ).toBeVisible();
+    expect(await storedTitle()).toBe(recoveredTitle);
+    await page.reload();
+    if (!(await page.getByLabel('Risu 자료 이름', { exact: true }).isVisible()))
+      await openEditor(page, savedTitle);
+    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(recoveredTitle);
+    await page.screenshot({
+      path: info.outputPath('personal-other-tab-recovery-restored.png'),
+      fullPage: true,
+    });
+    await page.getByRole('button', { name: '편집 취소', exact: true }).click();
+    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(savedTitle);
+    await expect.poll(storedTitle).toBeUndefined();
+  } finally {
+    await other.close();
+  }
+});
+
+test('PERSONAL uploaded metadata locks pending fields and retains rejected input', async ({
+  page,
+  request,
+}, info) => {
+  const created = await postFixtureChat(request, { data: { title: `Metadata ${randomUUID()}` } });
+  expect(created.ok(), await created.text()).toBe(true);
+  const chat = await created.json();
+  const image = await sharp({
+    create: { width: 80, height: 80, channels: 3, background: '#6688aa' },
+  })
+    .png()
+    .toBuffer();
+  const uploaded = await request.post(`/api/chats/${chat.id}/assets`, {
+    data: {
+      title: 'Original image',
+      description: 'Original description',
+      actor: '',
+      outfit: '',
+      location: '',
+      allowedUse: 'both',
+      mime: 'image/png',
+      base64: image.toString('base64'),
+    },
+  });
+  expect(uploaded.ok(), await uploaded.text()).toBe(true);
+  const asset = await uploaded.json();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/?chat=${chat.id}`);
+  await openChatSettings(page);
+  await selectChatSettingsSection(page, '이미지');
+  await page.locator('.chat-settings-image-management > summary').click();
+  await page.getByText('이름·설명 편집', { exact: true }).click();
+  const title = page.getByLabel('업로드 이미지 이름', { exact: true });
+  const description = page.getByLabel('업로드 이미지 설명', { exact: true });
+  const submit = page.getByRole('button', { name: '이미지 정보 저장', exact: true });
+  await title.fill('Saved image');
+  await description.fill('Saved description');
+  const path = `**/api/chats/${chat.id}/assets/${asset.id}`;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(path, async (route) => {
+    await held;
+    await route.continue();
+  });
+  const response = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/assets/${asset.id}`) && response.request().method() === 'PATCH'
+  );
+  try {
+    await submit.click();
+    await expect(title).toBeDisabled();
+    await expect(description).toBeDisabled();
+    await expect(submit).toBeDisabled();
+    await page.screenshot({
+      path: info.outputPath('personal-metadata-pending-disabled.png'),
+      fullPage: true,
+    });
+  } finally {
+    release();
+  }
+  const accepted = await response;
+  expect(accepted.ok(), await accepted.text()).toBe(true);
+  await expect(description).toBeEnabled();
+  await expect(title).toHaveValue('Saved image');
+  await expect(description).toHaveValue('Saved description');
+  await page.unroute(path);
+  await page.route(path, (route) =>
+    route.fulfill({ status: 409, json: { error: 'REVISION_CONFLICT' } })
+  );
+  await title.fill('Keep unsaved title');
+  await description.fill('Keep unsaved description');
+  await submit.click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(title).toBeEnabled();
+  await expect(description).toBeEnabled();
+  await expect(title).toHaveValue('Keep unsaved title');
+  await expect(description).toHaveValue('Keep unsaved description');
+  await page.screenshot({
+    path: info.outputPath('personal-metadata-error-retained.png'),
+    fullPage: true,
+  });
 });
