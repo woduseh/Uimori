@@ -71,12 +71,41 @@ test('PWUI02 backup settings, status, verified download and retention are reacha
   await panel.getByLabel('성공본 보관 개수').fill('6');
   await panel.getByRole('button', { name: '백업 설정 저장', exact: true }).click();
   await expect(panel.getByRole('alert')).toContainText('바뀌었어요');
-  page.once('dialog', (dialog) => dialog.dismiss());
-  await panel.getByRole('button', { name: '다시 확인', exact: true }).click();
-  await expect(panel.getByLabel('성공본 보관 개수')).toHaveValue('6');
-  page.once('dialog', (dialog) => dialog.accept());
-  await panel.getByRole('button', { name: '다시 확인', exact: true }).click();
-  await expect(panel.getByLabel('성공본 보관 개수')).toHaveValue('5');
+  const confirmation = page.getByRole('alertdialog', {
+    name: '백업 설정 변경 버리기',
+    exact: true,
+  });
+  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const dismissal of ['continue', 'Escape', 'backdrop'] as const) {
+      await panel.getByRole('button', { name: '다시 확인', exact: true }).click();
+      await expect(confirmation).toBeVisible();
+      const bounds = (await confirmation.boundingBox())!;
+      expect(Math.abs(bounds.x + bounds.width / 2 - width / 2)).toBeLessThanOrEqual(1);
+      expect(bounds.x).toBeGreaterThanOrEqual(width === MOBILE_WIDTH ? 16 : 24);
+      if (dismissal === 'continue')
+        await confirmation.getByRole('button', { name: '계속 편집', exact: true }).click();
+      else if (dismissal === 'Escape') await page.keyboard.press('Escape');
+      else await page.mouse.click(8, 8);
+      await expect(confirmation).toBeHidden();
+      await expect(panel.getByLabel('성공본 보관 개수')).toHaveValue('6');
+    }
+    await panel.getByRole('button', { name: '다시 확인', exact: true }).click();
+    await page.screenshot({ path: info.outputPath(`backup-discard-${width}.png`) });
+    await confirmation.getByRole('button', { name: '초안 버리고 불러오기', exact: true }).click();
+    await expect(confirmation).toBeHidden();
+    await expect(panel.getByLabel('성공본 보관 개수')).toHaveValue('5');
+    if (width === DESKTOP_WIDTH) {
+      const current = (await (await request.get('/api/backups')).json()).settings;
+      const changed = await request.put('/api/backups/settings', {
+        data: { expectedRevision: current.revision, enabled: false, hour: 4, minute: 0, retain: 5 },
+      });
+      expect(changed.ok(), await changed.text()).toBe(true);
+      await panel.getByLabel('성공본 보관 개수').fill('6');
+      await panel.getByRole('button', { name: '백업 설정 저장', exact: true }).click();
+      await expect(panel.getByRole('alert')).toContainText('바뀌었어요');
+    }
+  }
   await panel.getByLabel('성공본 보관 개수').fill('2');
   await panel.getByRole('button', { name: '백업 설정 저장', exact: true }).click();
   await expect(panel.getByRole('button', { name: '백업 설정 저장', exact: true })).toBeDisabled();

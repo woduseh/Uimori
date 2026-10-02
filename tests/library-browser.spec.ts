@@ -34,7 +34,10 @@ async function createFolder(page: Page, panel: Locator, title: string) {
   await panel.getByRole('button', { name: '새 폴더', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '새 폴더', exact: true });
   await dialog.getByLabel('폴더 이름', { exact: true }).fill(title);
-  await dialog.getByRole('button', { name: '폴더 만들기', exact: true }).click();
+  const create = dialog.getByRole('button', { name: '폴더 만들기', exact: true });
+  await expect(create).toHaveClass(/primary/);
+  expect((await create.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await create.click();
   await expect(dialog).toBeHidden();
   return (await organization(page.request)).folders.find((folder) => folder.title === title)!;
 }
