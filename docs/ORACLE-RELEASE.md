@@ -33,6 +33,8 @@ npm run release:oracle -- --config .local/oracle-release.json --source-ref main
 
 배포 시작 시 clean HEAD와 `origin/<sourceRef>`의 전체 SHA가 일치해야 해요. 도구는 그 SHA를 고정하고 `Quality` workflow의 해당 branch/SHA 실행을 GitHub에서 조회해요. `static`, `tests (1/4)`부터 `tests (4/4)`, `tooling`, `linux-core`, `selfhost`, 최종 `quality`가 모두 성공해야 해요. PR 임시 merge commit, 다른 SHA, docs-only 성공, 취소·누락·실패한 job은 대체 증거가 아니에요. 같은 SHA의 더 최신 실행이 실패했으면 오래된 초록불로 돌아가지 않아요. GitHub 조회 실패도 검증 생략으로 처리하지 않아요.
 
+CI 관문이 막히면 선택한 실행의 링크·ID·attempt·status·conclusion과 실패·진행 중·누락·중복된 필수 job을 함께 표시해요. job 조회 자체가 실패하면 확인 불가로 구분하고 선택한 실행 정보를 유지해요. 도구는 CI를 자동 재실행하거나 오래된 성공으로 대체하지 않아요.
+
 문서 전용 커밋을 실제 배포하려면 해당 branch의 정확한 SHA에 workflow를 수동 실행해 전체 필수 검사를 통과시켜요. `workflow_dispatch`의 `browser=true`는 전체 브라우저 회귀까지 추가해요. 다른 branch 배포도 같은 전체 검증이 필요해요. 진행 중 main이 앞서가더라도 이미 선택한 검증 SHA를 바꾸거나 정상 전환을 롤백하지 않아요.
 
 `release:check -- --area <verify:*>`는 별도의 로컬 개발 검증 명령으로 남아요. 기본 `quality`·build·선택한 synthetic 테스트와 내용 기반 영수증 재사용 규칙은 유지하지만, 이 영수증으로 Oracle의 CI 관문을 대체하지 않아요. 로컬에서 동일한 E2E를 다시 실행하거나 영수증을 수동 수정할 필요가 없어요.
