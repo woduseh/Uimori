@@ -35,7 +35,7 @@
 }
 .app-dialog.reader-portrait-dialog {
   width: fit-content;
-  max-width: min(960px, calc(100vw - 32px));
+  max-width: min(960px, calc(100vw - 2 * var(--dialog-gap)));
 }
 .reader-portrait-dialog .dialog-body {
   display: grid;
@@ -47,7 +47,7 @@
   width: auto;
   height: auto;
   max-width: 100%;
-  max-height: calc(100dvh - 170px);
+  max-height: calc(var(--app-height, 100dvh) - 170px);
   object-fit: contain;
   border-radius: 8px;
 }

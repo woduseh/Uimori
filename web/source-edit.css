@@ -28,7 +28,7 @@
 
 .source-info-dialog {
   min-width: 0;
-  width: min(620px, calc(100vw - 32px));
+  --dialog-size: 620px;
   overflow-wrap: anywhere;
 }
 .source-cost-value {

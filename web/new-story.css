@@ -1,5 +1,5 @@
 .app-dialog.new-story-dialog {
-  width: min(680px, calc(100vw - 32px));
+  --dialog-size: 680px;
 }
 .new-story-dialog > .dialog-body {
   display: flex;
@@ -38,9 +38,6 @@
   width: 100%;
 }
 @media (max-width: 760px) {
-  .app-dialog.new-story-dialog {
-    width: 100vw;
-  }
   .new-story-fields {
     padding-inline: 18px;
   }

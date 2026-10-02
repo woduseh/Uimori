@@ -1,5 +1,5 @@
 .app-dialog.bot-chat-import-dialog {
-  width: min(620px, calc(100vw - 32px));
+  --dialog-size: 620px;
 }
 .chat-import-target {
   display: flex;
