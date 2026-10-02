@@ -193,10 +193,10 @@ export function invokeResourceTool(
     return {
       colors: THEME_COLOR_KEYS,
       slots: THEME_SLOTS,
-      optionalSlots: ['portrait'],
+      optionalSlots: ['portrait', 'request-persona'],
       example: themeDefinition(BUILTIN_THEMES[1]),
       contract:
-        'Save with resource.save kind=theme. title required. colors.light/dark map the documented names without -- to hex colors. appCss styles the app; messageCss is a low-priority layer in each Risu message ShadowRoot. templateHtml needs exactly one native slot for each name: request, heading, body, actions; templateCss styles that layout ShadowRoot. Optional single portrait slot projects app-owned current bot/persona portraits and zoom controls; do not hardcode character URLs. Empty HTML uses the default. No JavaScript or CBS in themes. Preserve reading preferences and bot HTML. Use responsive CSS. Stable data-uimori-part hooks: scene, scene-frame, request, heading, body, actions, composer-input, scene-portraits, portrait-group, bot-portrait, persona-portrait. Layout and palette selection are independent server preferences; saved theme colors remain portable. External images remain URL references; data URLs travel with JSON. Saving does not select. Full guide: docs/THEME-AUTHORING.md.',
+        'Save with resource.save kind=theme. title required. colors.light/dark map the documented names without -- to hex colors. appCss styles the app; messageCss is a low-priority layer in each Risu message ShadowRoot. templateHtml needs exactly one native slot for each name: request, heading, body, actions; templateCss styles that layout ShadowRoot. Optional single portrait and request-persona slots project app-owned portraits and zoom controls; request-persona belongs beside submitted user input. An optional data-uimori-body-scroll marker on the body slot opts into bounded inner scrolling with reading/navigation support. Do not hardcode character URLs. Empty HTML uses the default. No JavaScript or CBS in themes. Preserve reading preferences and bot HTML. Use responsive CSS. Stable data-uimori-part hooks: scene, scene-frame, request, heading, body, actions, composer-input, scene-portraits, portrait-group, bot-portrait, persona-portrait. Layout and palette selection are independent server preferences; saved theme colors remain portable. External images remain URL references; data URLs travel with JSON. Saving does not select. Full guide: docs/THEME-AUTHORING.md.',
     };
   if (name === 'image.update-metadata') {
     const id = text(args.contentId, 'content ID', 100);

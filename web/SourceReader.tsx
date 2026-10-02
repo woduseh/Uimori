@@ -1,3 +1,4 @@
+import { themeBodyScroll, readerLocation } from './theme-body-scroll.js';
 import { BookmarkButton } from './Bookmarks.js';
 import { captureReaderLocation } from './useReadingSync.js';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -39,6 +40,7 @@ type ReaderMode = 'original' | 'translation';
 type SceneHeaderSlots = { leading: ReactNode; badges: ReactNode };
 type ReaderProps = {
   portrait?: ReactNode;
+  requestPersona?: ReactNode;
   readerTarget?: ReaderTarget;
   source: Source;
   index: number;
@@ -72,7 +74,13 @@ type ReaderProps = {
   nativeInteractionRevision?: number;
 };
 type AnchorPosition = { anchors: string[]; top: number; scrollport: HTMLElement };
-type EditorOrigin = { button: HTMLElement; scrollport: HTMLElement; offset: number };
+type EditorOrigin = {
+  button: HTMLElement;
+  scrollport: HTMLElement;
+  offset: number;
+  body?: HTMLElement;
+  bodyTop?: number;
+};
 
 function initialMode(sourceId: string, hasTranslation: boolean): ReaderMode {
   if (!hasTranslation) return 'original';
@@ -87,22 +95,30 @@ function initialMode(sourceId: string, hasTranslation: boolean): ReaderMode {
   }
 }
 function currentAnchor(container: HTMLElement | null): AnchorPosition | undefined {
-  const scrollport = container?.closest<HTMLElement>(
-    '[data-reader-scrollport], .reader-scrollport'
-  );
-  if (!container || !scrollport) return;
-  const viewport = scrollport.getBoundingClientRect();
-  const nearest = [...container.querySelectorAll<HTMLElement>('[data-block-anchor]')].find(
-    (element) => {
-      const rect = element.getBoundingClientRect();
-      return rect.bottom > viewport.top && rect.top < viewport.bottom;
-    }
-  );
-  return nearest
+  const outer = container?.closest<HTMLElement>('[data-reader-scrollport], .reader-scrollport');
+  if (!container || !outer) return;
+  if (!themeBodyScroll(container)) {
+    const viewport = outer.getBoundingClientRect();
+    const nearest = [...container.querySelectorAll<HTMLElement>('[data-block-anchor]')].find(
+      (element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.bottom > viewport.top && rect.top < viewport.bottom;
+      }
+    );
+    return nearest
+      ? {
+          anchors: nearest.dataset.blockAnchor!.split(' '),
+          top: nearest.getBoundingClientRect().top,
+          scrollport: outer,
+        }
+      : undefined;
+  }
+  const location = readerLocation(outer, container);
+  return location?.block
     ? {
-        anchors: nearest.dataset.blockAnchor!.split(' '),
-        top: nearest.getBoundingClientRect().top,
-        scrollport,
+        anchors: location.block.dataset.blockAnchor!.split(' '),
+        top: location.block.getBoundingClientRect().top,
+        scrollport: location.scrollport,
       }
     : undefined;
 }
@@ -133,6 +149,7 @@ function latestTranslation(source: Source, jobs: Job[]) {
 }
 function SourceReaderContent({
   portrait,
+  requestPersona,
   readerTarget,
   source,
   index,
@@ -257,6 +274,7 @@ function SourceReaderContent({
         {
           kind: 'source',
           element: button,
+          ...(origin.body?.isConnected ? { bodyTop: origin.bodyTop } : {}),
           offset: Math.max(
             0,
             Math.min(offset, scrollport.clientHeight - button.getBoundingClientRect().height - 8)
@@ -278,11 +296,13 @@ function SourceReaderContent({
     const menu = button.closest<HTMLDetailsElement>('.action-menu');
     const origin = menu?.querySelector('summary') ?? button;
     const scrollport = origin.closest<HTMLElement>('[data-reader-scrollport]');
+    const body = themeBodyScroll(container.current);
     editorOrigin.current = scrollport
       ? {
           button: origin,
           scrollport,
           offset: origin.getBoundingClientRect().top - scrollport.getBoundingClientRect().top,
+          ...(body ? { body, bodyTop: body.scrollTop } : {}),
         }
       : undefined;
     if (menu) menu.open = false;
@@ -563,7 +583,10 @@ function SourceReaderContent({
           onError={onError}
         />
       )}
-      <ThemeFrame portrait={portrait}>
+      <ThemeFrame
+        portrait={portrait}
+        requestPersona={request && packageStart?.mode !== 'authored' ? requestPersona : undefined}
+      >
         <div slot="request" data-uimori-part="request">
           {packageStart?.mode !== 'authored' && request && (
             <RequestMessage

@@ -1,3 +1,4 @@
+import { readingScrollport } from './theme-body-scroll.js';
 import { cutsFor, type Cut } from './illustration-progress.js';
 import { IllustrationUsageLine, IllustrationPlacementButton } from './IllustrationActivity.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -388,7 +389,7 @@ function IllustrationCard({
   useLayoutEffect(() => {
     if (ready || !picture?.images.length) return;
     const node = element.current;
-    const scrollport = node?.closest<HTMLElement>('[data-reader-scrollport], .reader-scrollport');
+    const scrollport = readingScrollport(node);
     if (
       node &&
       scrollport &&

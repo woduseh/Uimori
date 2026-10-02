@@ -1,3 +1,8 @@
+import {
+  readingScrollport,
+  readerLocation,
+  THEME_BODY_SCROLL_SELECTOR,
+} from './theme-body-scroll.js';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { readingPositionElements } from './reader-dom.js';
 import { readPresentationSetting, writePresentationSetting } from './presentation-settings.js';
@@ -19,14 +24,27 @@ function readPreferences() {
 
 type ReadingPosition = { element: HTMLElement; scrollport: HTMLElement; top: number };
 function readingPositions(): ReadingPosition[] {
-  return [...document.querySelectorAll<HTMLElement>('[data-reader-scrollport], .helper-messages')]
+  return [
+    ...document.querySelectorAll<HTMLElement>(
+      `[data-reader-scrollport], .helper-messages, ${THEME_BODY_SCROLL_SELECTOR}`
+    ),
+  ]
     .filter((scrollport) => scrollport.getClientRects().length > 0)
     .flatMap((scrollport) => {
       const viewport = scrollport.getBoundingClientRect();
-      const element = readingPositionElements(scrollport).find((candidate) => {
-        const rect = candidate.getBoundingClientRect();
-        return rect.bottom > viewport.top && rect.top < viewport.bottom;
-      });
+      const element =
+        readingPositionElements(scrollport).find((candidate) => {
+          const rect = candidate.getBoundingClientRect();
+          return (
+            readingScrollport(candidate) === scrollport &&
+            rect.bottom > viewport.top &&
+            rect.top < viewport.bottom
+          );
+        }) ??
+        (scrollport.matches('[data-reader-scrollport]') &&
+        scrollport.querySelector(THEME_BODY_SCROLL_SELECTOR)
+          ? readerLocation(scrollport)?.source
+          : undefined);
       return element ? [{ element, scrollport, top: element.getBoundingClientRect().top }] : [];
     });
 }

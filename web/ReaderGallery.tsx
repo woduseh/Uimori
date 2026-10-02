@@ -21,8 +21,10 @@ export const ReaderGallery = memo(function ReaderGallery({
   bot,
   persona,
   scene = false,
+  requestPersona = false,
 }: {
   scene?: boolean;
+  requestPersona?: boolean;
   bot: Content;
   persona?: Content | null;
 }) {
@@ -32,8 +34,10 @@ export const ReaderGallery = memo(function ReaderGallery({
   return (
     <>
       <aside
-        className={`reader-gallery${scene ? ' scene-portraits' : ''}`}
-        data-uimori-part={scene ? 'portrait-group' : 'gallery'}
+        className={`reader-gallery${requestPersona ? ' request-portraits' : scene ? ' scene-portraits' : ''}`}
+        data-uimori-part={
+          requestPersona ? 'request-portrait-group' : scene ? 'portrait-group' : 'gallery'
+        }
         aria-label="등장인물 갤러리"
       >
         <div className="reader-gallery-heading" aria-hidden="true">
@@ -46,7 +50,7 @@ export const ReaderGallery = memo(function ReaderGallery({
             ['persona', persona, '나의 페르소나'],
           ] as const
         ).map(([role, content, label]) => {
-          if (!content) return null;
+          if (!content || (requestPersona && role !== 'persona')) return null;
           const url = contentPortraitUrl(content);
           return (
             <figure

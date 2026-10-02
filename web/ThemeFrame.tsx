@@ -28,22 +28,36 @@ export function themeTemplate(html: string): DocumentFragment {
       (slot) =>
         slot.name &&
         slot.name !== 'portrait' &&
+        slot.name !== 'request-persona' &&
         !THEME_SLOTS.includes(slot.name as (typeof THEME_SLOTS)[number])
     )
   )
     throw new Error('알 수 없는 레이아웃 슬롯이 있어요.');
-  if (slots.filter((slot) => slot.name === 'portrait').length > 1)
+  if (
+    ['portrait', 'request-persona'].some(
+      (name) => slots.filter((slot) => slot.name === name).length > 1
+    )
+  )
     throw new Error('등장인물 슬롯은 하나만 사용할 수 있어요.');
   if (slots.filter((slot) => !slot.name).length > 1)
     throw new Error('기본 슬롯은 하나만 사용할 수 있어요.');
   if (!slots.some((slot) => !slot.name)) template.content.append(document.createElement('slot'));
   return template.content;
 }
-export function ThemeFrame({ children, portrait }: { children: ReactNode; portrait?: ReactNode }) {
+export function ThemeFrame({
+  children,
+  portrait,
+  requestPersona,
+}: {
+  children: ReactNode;
+  portrait?: ReactNode;
+  requestPersona?: ReactNode;
+}) {
   const theme = useContext(ThemeContext)?.active;
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState('');
   const [hasPortrait, setHasPortrait] = useState(false);
+  const [hasRequestPersona, setHasRequestPersona] = useState(false);
   const html = theme?.templateHtml ?? '';
   const css = theme?.templateCss ?? '';
   useLayoutEffect(() => {
@@ -55,14 +69,34 @@ export function ThemeFrame({ children, portrait }: { children: ReactNode; portra
     try {
       const template = themeTemplate(html);
       setHasPortrait(!!template.querySelector('slot[name="portrait"]'));
+      setHasRequestPersona(!!template.querySelector('slot[name="request-persona"]'));
       root.replaceChildren(style, template);
       setError('');
     } catch (cause) {
       // An invalid imported layout cannot hide the reader and its recovery controls.
       style.textContent = ':host{display:block;min-width:0}slot{display:contents}';
       setHasPortrait(false);
+      setHasRequestPersona(false);
       root.replaceChildren(style, themeTemplate(''));
       setError((cause as Error).message);
+    }
+    // Scroll the app-owned light-DOM body so native focus, event capture and anchors still work.
+    const body = host.current.querySelector<HTMLElement>('[slot="body"]');
+    if (body && root.querySelector('slot[name="body"][data-uimori-body-scroll]')) {
+      const previous = ['tabindex', 'role', 'aria-label'].map(
+        (name) => [name, body.getAttribute(name)] as const
+      );
+      body.setAttribute('data-uimori-body-scroll', '');
+      body.setAttribute('tabindex', '0');
+      body.setAttribute('role', 'region');
+      body.setAttribute('aria-label', '장면 본문');
+      return () => {
+        body.removeAttribute('data-uimori-body-scroll');
+        for (const [name, value] of previous) {
+          if (value === null) body.removeAttribute(name);
+          else body.setAttribute(name, value);
+        }
+      };
     }
     // React removes the host. Do not collapse live content between layout replacements.
   }, [html, css]);
@@ -78,10 +112,16 @@ export function ThemeFrame({ children, portrait }: { children: ReactNode; portra
         className="theme-frame"
         data-uimori-part="scene-frame"
         data-has-portrait={hasPortrait && !!portrait ? 'true' : 'false'}
+        data-has-request-persona={hasRequestPersona && !!requestPersona ? 'true' : 'false'}
       >
         {hasPortrait && portrait && (
           <div slot="portrait" data-uimori-part="scene-portraits">
             {portrait}
+          </div>
+        )}
+        {hasRequestPersona && requestPersona && (
+          <div slot="request-persona" data-uimori-part="request-persona">
+            {requestPersona}
           </div>
         )}
         {children}

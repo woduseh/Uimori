@@ -1,3 +1,4 @@
+import { readerLocation, THEME_BODY_SCROLL_SELECTOR } from './theme-body-scroll.js';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { ReaderTarget } from '../core/reader-target.js';
 import type { ReadingPosition, ReadingPositions } from '../core/reading-state.js';
@@ -11,20 +12,14 @@ export function captureReaderLocation(
   chatId: string,
   article?: HTMLElement
 ): ReaderTarget | null {
-  const top = reader.getBoundingClientRect().top + 12;
-  const scenes = article
-    ? [article]
-    : [...reader.querySelectorAll<HTMLElement>('[data-source-id][data-representation]')];
-  const source = scenes.find((item) => item.getBoundingClientRect().bottom > top);
-  if (!source?.dataset.sourceId) return null;
-  const block = [...source.querySelectorAll<HTMLElement>('[data-block-anchor]')].find(
-    (item) => item.offsetParent !== null && item.getBoundingClientRect().bottom > top
-  );
+  const location = readerLocation(reader, article);
+  if (!location?.source.dataset.sourceId) return null;
+  const { source, block, top } = location;
   const rect = block?.getBoundingClientRect();
   const anchor = block?.dataset.blockAnchor?.split(' ')[0];
   return {
     chatId,
-    sourceId: source.dataset.sourceId,
+    sourceId: source.dataset.sourceId!,
     representation: source.dataset.representation === 'translation' ? 'translation' : 'original',
     ...(source.dataset.contentHash ? { contentHash: source.dataset.contentHash } : {}),
     ...(anchor
@@ -152,14 +147,21 @@ export function useReadingSync(options: {
     };
     const scroll = (event: Event) => {
       const node = current.current.reader.current;
+      const target = event.target;
+      const body =
+        target instanceof HTMLElement && target.matches(THEME_BODY_SCROLL_SELECTOR) ? target : null;
       if (
-        event.target !== node ||
         !node ||
+        (target !== node && (!body || !node.contains(body))) ||
         performance.now() > userUntil ||
         document.visibilityState !== 'visible'
       )
         return;
-      dirty = captureReaderLocation(node, chatId);
+      dirty = captureReaderLocation(
+        node,
+        chatId,
+        body?.closest<HTMLElement>('[data-source-id][data-representation]') ?? undefined
+      );
     };
     const visibility = () => {
       if (document.visibilityState === 'hidden') void save();

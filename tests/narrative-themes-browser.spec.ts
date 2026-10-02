@@ -181,7 +181,7 @@ async function seed(
 async function openStory(
   page: Page,
   data: Awaited<ReturnType<typeof seed>>,
-  layout: Layout,
+  layout: Layout | 'forest',
   width: number,
   mode: 'light' | 'dark'
 ) {
@@ -201,6 +201,8 @@ async function openStory(
     scene,
     reader: page.locator('[data-reader-scrollport]'),
     gallery: scene.locator('[data-uimori-part="scene-portraits"] .scene-portraits'),
+    bodyScroll: scene.locator('[slot="body"][data-uimori-body-scroll]'),
+    requestPersona: scene.locator('[data-uimori-part="request-persona"]'),
   };
 }
 
@@ -250,7 +252,13 @@ for (const layout of layouts) {
           )
             generationRequests.push(new URL(value.url()).pathname);
         });
-        const { scene, reader, gallery } = await openStory(page, data, layout, width, mode);
+        const { scene, reader, gallery, bodyScroll, requestPersona } = await openStory(
+          page,
+          data,
+          layout,
+          width,
+          mode
+        );
         const source = scene.getByTestId('source-text');
         await expect(gallery).toHaveCount(1);
         await expect(gallery).toBeVisible();
@@ -266,7 +274,7 @@ for (const layout of layouts) {
               (node as HTMLImageElement).naturalWidth / (node as HTMLImageElement).naturalHeight
           )
         ).toBeCloseTo(2 / 3, 2);
-        const persona = gallery.locator('[data-uimori-part="persona-portrait"] img');
+        const persona = requestPersona.locator('[data-uimori-part="persona-portrait"] img');
         await imageLoaded(persona);
         expect(
           await persona.evaluate(
@@ -279,19 +287,38 @@ for (const layout of layouts) {
         await reader.evaluate((node) => {
           node.scrollTop = 0;
         });
-        const metrics = await reader.evaluate((node) => ({
+        await expect(bodyScroll).toHaveCount(1);
+        await expect(bodyScroll).toBeVisible();
+        const metrics = await bodyScroll.evaluate((node) => ({
           height: node.clientHeight,
           fullHeight: node.scrollHeight,
+          overflow: getComputedStyle(node).overflowY,
         }));
         expect(tokenCount).toBeGreaterThan(10000);
         expect(metrics.fullHeight).toBeGreaterThan(metrics.height * 5);
+        expect(metrics.height).toBeGreaterThan(100);
+        expect(metrics.height).toBeLessThan(width === 1440 ? 1000 : 915);
+        expect(['auto', 'scroll']).toContain(metrics.overflow);
+        await expect(gallery.locator('[data-uimori-part="persona-portrait"]')).toBeHidden();
+        await expect(gallery.locator('figcaption small').filter({ visible: true })).toHaveCount(0);
+        await expect(
+          requestPersona.locator('figcaption small').filter({ visible: true })
+        ).toHaveCount(0);
+        const requestBox = await scene.locator('[data-uimori-part="request"]').boundingBox();
+        const personaBox = await requestPersona.boundingBox();
+        expect(personaBox!.x).toBeGreaterThanOrEqual(requestBox!.x + requestBox!.width - 1);
         await noHorizontalOverflow(page, scene);
-        // Long manuscripts remain normal-flow content, rather than a nested fixed-height pane.
+        // The projected body stays intact; the theme-owned wrapper owns the inner scroll.
         expect(
           await source.evaluate(
             (node) => node.scrollHeight <= (node as HTMLElement).clientHeight + 1
           )
         ).toBe(true);
+        if (width === 1440) {
+          const manuscript = await scene.locator('.manuscript').boundingBox();
+          const composer = await page.locator('.composer-dock').boundingBox();
+          expect(manuscript!.y + manuscript!.height).toBeLessThanOrEqual(composer!.y + 1);
+        }
         await page.screenshot({ path: info.outputPath(`${layout}-${mode}-${width}.png`) });
         await info.attach('narrative-reader-measurements', {
           contentType: 'application/json',
@@ -318,6 +345,21 @@ for (const layout of layouts) {
           Math.abs((await reader.evaluate((node) => node.scrollTop)) - beforeZoom)
         ).toBeLessThan(3);
 
+        const enlargePersona = requestPersona.getByRole('button', {
+          name: '여행자 대표 이미지 확대',
+          exact: true,
+        });
+        await enlargePersona.click();
+        const personaDialog = page.getByRole('dialog', { name: '여행자 대표 이미지', exact: true });
+        await expect(personaDialog).toBeVisible();
+        await expect(personaDialog.locator('img')).toHaveAttribute(
+          'src',
+          (await persona.getAttribute('src'))!
+        );
+        await page.keyboard.press('Escape');
+        await expect(personaDialog).toBeHidden();
+        await expect(enlargePersona).toBeFocused();
+
         const clipboard: string[] = [];
         await page.exposeFunction('captureNarrativeCopy', (value: string) => clipboard.push(value));
         await page.evaluate(() => {
@@ -335,18 +377,34 @@ for (const layout of layouts) {
         });
         const copy = scene.getByRole('button', { name: '본문 복사', exact: true });
         await expect(copy).toHaveCount(1);
+        await expect(
+          bodyScroll.getByRole('button', { name: '본문 복사', exact: true })
+        ).toHaveCount(0);
+        await expect(
+          bodyScroll.getByRole('button', { name: '원문 수정', exact: true })
+        ).toHaveCount(0);
         await copy.click();
         await expect.poll(() => clipboard.at(-1)).toBe(data.text);
         const edit = scene.getByRole('button', { name: '원문 수정', exact: true });
         await expect(edit).toHaveCount(1);
+        await bodyScroll.evaluate((node) => {
+          node.scrollTop = 400;
+        });
+        const beforeEdit = await bodyScroll.evaluate((node) => node.scrollTop);
         await edit.click();
         const editor = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
         await expect(editor).toBeFocused();
+        await expect(editor).toBeInViewport();
         await expect(editor).toHaveValue(data.text);
         await editor.fill('Unsaved narrative edit');
         await page.keyboard.press('Escape');
         await expect(editor).toHaveCount(0);
         await expect(source).toContainText(endMarker);
+        await expect
+          .poll(async () =>
+            Math.abs((await bodyScroll.evaluate((node) => node.scrollTop)) - beforeEdit)
+          )
+          .toBeLessThan(3);
 
         const language = scene.getByRole('group', { name: '원문과 번역 보기' });
         await language.getByRole('button', { name: '번역 보기', exact: true }).click();
@@ -354,14 +412,33 @@ for (const layout of layouts) {
         await language.getByRole('button', { name: '원문 보기', exact: true }).click();
         await expect(source).toContainText(endMarker);
 
-        // Real wheel scrolling moves the one reader scrollport, and later scenes stay reachable.
+        // Wheel scrolling stays inside the scene body while its portrait and actions stay put.
         await reader.evaluate((node) => {
           node.scrollTop = 0;
         });
-        const bounds = await reader.boundingBox();
+        await bodyScroll.evaluate((node) => {
+          node.scrollTop = 0;
+        });
+        await bodyScroll.scrollIntoViewIfNeeded();
+        const outerPosition = await reader.evaluate((node) => node.scrollTop);
+        const portraitPosition = (await bot.boundingBox())!.y;
+        const actionPosition = (await copy.boundingBox())!.y;
+        const bounds = await bodyScroll.boundingBox();
         await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
         await page.mouse.wheel(0, 700);
-        await expect.poll(() => reader.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
+        await expect.poll(() => bodyScroll.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
+        expect(
+          Math.abs((await reader.evaluate((node) => node.scrollTop)) - outerPosition)
+        ).toBeLessThan(3);
+        expect(Math.abs((await bot.boundingBox())!.y - portraitPosition)).toBeLessThan(3);
+        await expect(bot).toBeInViewport();
+        expect(Math.abs((await copy.boundingBox())!.y - actionPosition)).toBeLessThan(3);
+        await bodyScroll.evaluate((node) => {
+          node.scrollTop = node.scrollHeight;
+        });
+        await expect(source.getByText(endMarker, { exact: true })).toBeInViewport();
+        await copy.click();
+        await expect.poll(() => clipboard.at(-1)).toBe(data.text);
         const second = page.locator(`[data-source-id="${data.secondId}"]`);
         await second.getByTestId('source-text').scrollIntoViewIfNeeded();
         await expect(second.getByTestId('source-text')).toContainText('SECOND_SCENE_END');
@@ -385,8 +462,14 @@ for (const layout of layouts) {
     request,
   }, info) => {
     test.setTimeout(90000);
-    const data = await seed(request, layout, { long: false, squareBot: true });
-    const { scene, reader, gallery } = await openStory(page, data, layout, 1440, 'light');
+    const data = await seed(request, layout, { squareBot: true });
+    const { scene, reader, gallery, bodyScroll, requestPersona } = await openStory(
+      page,
+      data,
+      layout,
+      1440,
+      'light'
+    );
     const source = scene.getByTestId('source-text');
     const frame = scene.locator('[data-uimori-part="scene-frame"]');
     await source.evaluate((node) => node.setAttribute('data-stable-body', 'preserved'));
@@ -402,7 +485,7 @@ for (const layout of layouts) {
         (node) => (node as HTMLImageElement).naturalWidth / (node as HTMLImageElement).naturalHeight
       )
     ).toBe(1);
-    const persona = gallery.locator('[data-uimori-part="persona-portrait"] img');
+    const persona = requestPersona.locator('[data-uimori-part="persona-portrait"] img');
     await imageLoaded(persona);
     expect(
       await persona.evaluate(
@@ -414,6 +497,11 @@ for (const layout of layouts) {
     const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
     await composer.fill('Keep this composer draft while I try colors.');
     const sourceText = await source.textContent();
+    await bodyScroll.evaluate((node) => {
+      node.scrollTop = 500;
+    });
+    const innerPosition = await bodyScroll.evaluate((node) => node.scrollTop);
+    expect(innerPosition).toBeGreaterThan(100);
     const position = await reader.evaluate((node) => node.scrollTop);
     const settings = await page.evaluate((keys) => {
       return Object.fromEntries(keys.map((key) => [key, localStorage.getItem(key)]));
@@ -448,6 +536,9 @@ for (const layout of layouts) {
       expect(Math.abs((await reader.evaluate((node) => node.scrollTop)) - position)).toBeLessThan(
         3
       );
+      expect(
+        Math.abs((await bodyScroll.evaluate((node) => node.scrollTop)) - innerPosition)
+      ).toBeLessThan(3);
       await noHorizontalOverflow(page, scene);
     }
     await page.screenshot({ path: info.outputPath(`${layout}-sage-square-portrait.png`) });
@@ -468,6 +559,7 @@ for (const layout of layouts) {
       '[data-uimori-part="bot-portrait"] .reader-portrait-empty'
     );
     await expect(fallback).toBeVisible();
+    await expect(missingStory.requestPersona.locator('button')).toHaveCount(0);
     await expect(missingStory.gallery.locator('[data-uimori-part="persona-portrait"]')).toHaveCount(
       0
     );
@@ -523,5 +615,61 @@ for (const width of [1440, 412]) {
       await sample.scrollIntoViewIfNeeded();
       await sample.screenshot({ path: info.outputPath(`${layout}-no-portrait-${width}.png`) });
     }
+  });
+}
+
+for (const [width, mode] of [
+  [1440, 'dark'],
+  [412, 'light'],
+] as const) {
+  test(`NARRATIVE default ${width} ${mode}: compact bot context and request-right persona`, async ({
+    page,
+    request,
+  }, info) => {
+    test.setTimeout(90000);
+    const data = await seed(request, 'cinematic');
+    await select(request, { themeId: 'builtin:forest', targetId: data.chatId });
+    const { scene, reader, bodyScroll, requestPersona } = await openStory(
+      page,
+      data,
+      'forest',
+      width,
+      mode
+    );
+    await reader.evaluate((node) => {
+      node.scrollTop = 0;
+    });
+    const context = page.locator('.story-context');
+    await expect(context).toBeVisible();
+    const bot = context.locator('.reader-bot-avatar img');
+    await imageLoaded(bot);
+    const avatar = context.locator('.reader-bot-avatar');
+    expect((await avatar.boundingBox())!.width).toBeCloseTo(width === 1440 ? 96 : 72, 0);
+    await expect(context.getByText('린 메이화', { exact: true })).toBeVisible();
+    await expect(bodyScroll).toHaveCount(0);
+    await expect(scene.locator('[data-uimori-part="scene-portraits"]')).toHaveCount(0);
+    await expect(page.locator('[data-uimori-part="gallery"]')).toBeHidden();
+    const persona = requestPersona.locator('[data-uimori-part="persona-portrait"] img');
+    await imageLoaded(persona);
+    const personaButton = requestPersona.getByRole('button', {
+      name: '여행자 대표 이미지 확대',
+      exact: true,
+    });
+    expect((await personaButton.boundingBox())!.width).toBeCloseTo(48, 0);
+    const requestBox = await scene.locator('[data-uimori-part="request"]').boundingBox();
+    const personaBox = await requestPersona.boundingBox();
+    expect(personaBox!.x).toBeGreaterThanOrEqual(requestBox!.x + requestBox!.width - 1);
+    await expect(requestPersona.locator('figcaption small').filter({ visible: true })).toHaveCount(
+      0
+    );
+    await noHorizontalOverflow(page, scene);
+    await page.screenshot({ path: info.outputPath(`default-${mode}-${width}.png`) });
+    await personaButton.click();
+    const dialog = page.getByRole('dialog', { name: '여행자 대표 이미지', exact: true });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(personaButton).toBeFocused();
+    expect((await detail(request, data.chatId)).sources).toEqual(data.before.sources);
   });
 }
