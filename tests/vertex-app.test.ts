@@ -21,6 +21,7 @@ import type { SourceTimeContext } from '../core/auxiliary.js';
 import type { Json } from '../core/transport.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
 import { translationFixtureRenderedSlot } from './fixtures/translation-job.js';
+import { waitForCompletedRun } from './fixtures/run-completion.js';
 
 const origin = 'https://aiplatform.googleapis.com';
 const endpoint = `${origin}/v1/projects/synthetic-project/locations/global/publishers/google/models`;
@@ -296,12 +297,23 @@ function command(chat: Chat, profile: ChatProfile) {
     idempotencyKey: randomUUID(),
   };
 }
-const runDone = async (app: App, runId: string) => {
-  await expect
-    .poll(async () => (await api<Run>(app, `/api/runs/${runId}`)).status, { timeout: 10000 })
-    .toBe('completed');
-  return api<Run>(app, `/api/runs/${runId}`);
-};
+const runDone = (state: Awaited<ReturnType<typeof fixture>>, runId: string) =>
+  waitForCompletedRun(() => api<Run>(state.app, `/api/runs/${runId}`), {
+    handlerErrors: state.handlerErrors,
+    secrets: [fakeBearer],
+    related: () => ({
+      jobs: state.app.store.db
+        .prepare(
+          'SELECT id,status,error,kind,generation FROM jobs WHERE source_revision IN (SELECT id FROM sources WHERE run_id=?) ORDER BY rowid DESC LIMIT 5'
+        )
+        .all(runId),
+      attempts: state.app.store.db
+        .prepare(
+          'SELECT id,status,error,role FROM attempts WHERE run_id=? OR job_id IN (SELECT id FROM jobs WHERE source_revision IN (SELECT id FROM sources WHERE run_id=?)) ORDER BY rowid DESC LIMIT 5'
+        )
+        .all(runId, runId),
+    }),
+  });
 
 // Actual createApp orchestration and file SQLite, with only the native Vertex fetch redirected locally.
 test('Vertex generation, translation and independent rewrite survive SQLite restart without replaying calls', async () => {
@@ -323,7 +335,7 @@ test('Vertex generation, translation and independent rewrite survive SQLite rest
   const selected = await setup(state.app);
   const input = command(selected.chat, selected.profile);
   const first = await runDone(
-    state.app,
+    state,
     (await api<Run>(state.app, `/api/chats/${selected.chat.id}/runs`, input)).id
   );
   const originalSource = state.app.store.source(first.sourceRevision!);
@@ -332,7 +344,7 @@ test('Vertex generation, translation and independent rewrite survive SQLite rest
   expect(state.app.store.job(job.id).result?.text).toBe('합성 번역 ' + sourceText);
   const retryBody = { idempotencyKey: randomUUID(), title: 'Independent rewrite' };
   const queued = await api<Run>(state.app, `/api/runs/${first.id}/candidate`, retryBody);
-  const second = await runDone(state.app, queued.id);
+  const second = await runDone(state, queued.id);
   expect(second.chatId).not.toBe(first.chatId);
   expect(second.sourceRevision).not.toBe(first.sourceRevision);
   expect(state.app.store.chat(first.chatId).headRevision).toBe(first.sourceRevision);
@@ -397,7 +409,7 @@ test.each(['main', 'translation'] as const)(
     const input = command(selected.chat, selected.profile);
     const run = await api<Run>(state.app, `/api/chats/${selected.chat.id}/runs`, input);
     if (stalledRole === 'translation') {
-      const completed = await runDone(state.app, run.id);
+      const completed = await runDone(state, run.id);
       expect((await api<ChatDetail>(state.app, `/api/chats/${selected.chat.id}`)).jobs).toEqual([]);
       await api(state.app, `/api/sources/${completed.sourceRevision}/translation`, {});
     }
@@ -457,3 +469,27 @@ test.each(['main', 'translation'] as const)(
     expect(reopened.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   }
 );
+
+test('failed Vertex fixture reports the run, attempt and original handler error', async () => {
+  const state = await fixture(() => {
+    throw new Error(`Synthetic handler failure: ${fakeBearer}`);
+  });
+  const selected = await setup(state.app, false);
+  const run = await api<Run>(
+    state.app,
+    `/api/chats/${selected.chat.id}/runs`,
+    command(selected.chat, selected.profile)
+  );
+  const failure = await runDone(state, run.id).then(
+    () => '',
+    (error: Error) => error.message
+  );
+  expect(failure).toContain('Run completion failed:');
+  expect(failure).toContain(run.id);
+  expect(failure).toContain('Synthetic handler failure: [redacted]');
+  expect(failure).toContain('"recentAttempts":[{');
+  expect(failure).toContain('"role":"main"');
+  expect(failure).not.toContain(fakeBearer);
+  expect(failure).not.toContain('"snapshot"');
+  expect(failure).not.toContain('"request"');
+});
