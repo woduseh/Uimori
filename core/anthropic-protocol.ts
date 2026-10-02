@@ -18,6 +18,7 @@ import type {
 import {
   nativeHostInstruction,
   nativeMessageMetadata,
+  requestDataBlocks,
   planNativeMessages,
   type NativeMessageMetadata,
 } from './provider-messages.js';
@@ -302,9 +303,18 @@ export function encodeAnthropic(request: ProviderRequest): {
         : [
             {
               role: 'user',
-              content: [
-                { type: 'text', text: 'Request data (JSON):\n' + JSON.stringify(wireInput) },
-              ],
+              content: requestDataBlocks(wireInput, request.role).map((text, index, blocks) => ({
+                type: 'text',
+                text,
+                ...(blocks.length > 1 &&
+                index === 0 &&
+                generation?.cacheMode !== undefined &&
+                directCache?.breakpoint
+                  ? {
+                      [directCache.breakpoint.field]: structuredClone(directCache.breakpoint.value),
+                    }
+                  : {}),
+              })),
             },
           ]),
     ];

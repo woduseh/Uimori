@@ -219,6 +219,19 @@ test('IPUI03 invalid recipes never save and the close guard preserves failed dra
   await expect(editor.getByLabel('ComfyUI 워크플로 JSON')).toBeFocused();
   await expect(editor.getByLabel('ComfyUI 워크플로 JSON')).toHaveAttribute('aria-invalid', 'true');
   expect((await catalog(request)).presets).toHaveLength(count);
+  await editor.getByLabel('ComfyUI 워크플로 JSON').fill(
+    JSON.stringify({
+      6: {
+        class_type: 'CLIPTextEncode',
+        inputs: { text: 'fixed text' },
+        _meta: { title: '{{prompt}}' },
+      },
+    })
+  );
+  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  await expect(section.getByRole('alert')).toContainText('inputs');
+  await expect(editor.getByLabel('ComfyUI 워크플로 JSON')).toBeFocused();
+  expect((await catalog(request)).presets).toHaveLength(count);
   await editor.getByLabel('ComfyUI 워크플로 JSON').fill('');
   await editor.getByLabel('삽화 그림 지침').fill('preserved user direction');
   await editor.getByRole('button', { name: '편집 닫기', exact: true }).click();

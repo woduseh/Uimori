@@ -1,4 +1,6 @@
 export type RecoveryBuffer<T> = {
+  /** Unique per write; optional for buffers saved by older app versions. */
+  token?: string;
   revision: number | null;
   model: T;
   rawFields: Record<string, string>;
@@ -45,10 +47,9 @@ export async function writeRecovery<T>(key: string, value?: RecoveryBuffer<T>): 
   });
 }
 
-/** Exact-value cleanup never deletes a newer buffer written by another tab. */
-export async function deleteRecoveryIfModel<T>(
+async function deleteRecoveryIf<T>(
   key: string,
-  expected: T
+  matches: (value: RecoveryBuffer<T>) => boolean
 ): Promise<RecoveryBuffer<T> | undefined> {
   const db = await open();
   return new Promise((resolve, reject) => {
@@ -58,11 +59,21 @@ export async function deleteRecoveryIfModel<T>(
     let remaining: RecoveryBuffer<T> | undefined;
     request.onsuccess = () => {
       const found = request.result as RecoveryBuffer<T> | undefined;
-      if (found?.model === expected) buffers.delete(key);
+      if (found && matches(found)) buffers.delete(key);
       else remaining = found;
     };
     transaction.oncomplete = () => resolve(remaining);
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error ?? new Error('복구 정리가 중단됐어요.'));
   });
+}
+
+/** Cleanup only the resource buffer this session read or successfully wrote. */
+export function deleteRecoveryIfToken(key: string, token: string | undefined) {
+  return deleteRecoveryIf(key, (found) => found.token === token);
+}
+
+/** Exact-value cleanup is used only for the helper's primitive text buffers. */
+export function deleteRecoveryIfModel<T>(key: string, expected: T) {
+  return deleteRecoveryIf<T>(key, (found) => found.model === expected);
 }

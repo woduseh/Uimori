@@ -6,7 +6,12 @@ import {
   type SavedResource,
   type ResourceSaveResult,
 } from '../core/resource-editing.js';
-import { readRecovery, writeRecovery, type RecoveryBuffer } from './editor-recovery.js';
+import {
+  readRecovery,
+  writeRecovery,
+  deleteRecoveryIfToken,
+  type RecoveryBuffer,
+} from './editor-recovery.js';
 import { sameEditorValue } from './editor-values.js';
 
 export type EditorBuffer = {
@@ -40,6 +45,7 @@ export class ResourceEditorSession {
   private opening: Promise<void> | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private recoveryWrites = Promise.resolve();
+  private readonly recoveryTokens = new Map<string, string | undefined>();
   private generation = 0;
   private loadVersion = 0;
   private readonly preparations = new Map<string, (model: ResourceModel) => ResourceModel>();
@@ -126,6 +132,7 @@ export class ResourceEditorSession {
           saved?.revision ?? null
         );
         if (recovered) {
+          this.recoveryTokens.set(this.editorKey, recovered.token);
           const local = {
             model: recovered.model,
             rawFields: recovered.rawFields,
@@ -157,13 +164,22 @@ export class ResourceEditorSession {
       remove || !this.state.dirty
         ? undefined
         : {
+            token: crypto.randomUUID(),
             revision: this.state.document.baseRevision,
             model: this.state.local.model,
             rawFields: this.state.local.rawFields,
           };
     this.recoveryWrites = this.recoveryWrites
       .catch(() => {})
-      .then(() => writeRecovery(key, value))
+      .then(async () => {
+        if (value) {
+          await writeRecovery(key, value);
+          this.recoveryTokens.set(key, value.token);
+        } else if (this.recoveryTokens.has(key)) {
+          await deleteRecoveryIfToken(key, this.recoveryTokens.get(key));
+          this.recoveryTokens.delete(key);
+        }
+      })
       .then(
         () => {
           if (generation === this.generation && key === this.editorKey)

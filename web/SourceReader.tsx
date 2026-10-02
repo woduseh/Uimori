@@ -1159,9 +1159,18 @@ function TextEditor({
     field?.focus({ preventScroll: true });
     // Focus stays in the user-triggered update so touch keyboards can open;
     // scrolling waits for the parent to release the composer's screen space.
-    const frame = requestAnimationFrame(() =>
-      field?.form?.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'instant' })
-    );
+    const frame = requestAnimationFrame(() => {
+      const form = field?.form;
+      const reader = form?.closest<HTMLElement>('[data-reader-scrollport], .reader-scrollport');
+      if (!form || !reader) return;
+      // scrollIntoView also moves overflow-hidden ancestors, including the app shell.
+      // Only the marked theme body and reader own this editor's scroll position.
+      const body = themeBodyScroll(form);
+      if (body)
+        body.scrollTop += form.getBoundingClientRect().top - body.getBoundingClientRect().top;
+      reader.scrollTop +=
+        form.getBoundingClientRect().top - reader.getBoundingClientRect().top - 12;
+    });
     return () => cancelAnimationFrame(frame);
   }, []);
   const title = role === 'original' ? '원문' : '번역';

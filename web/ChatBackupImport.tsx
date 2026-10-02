@@ -69,6 +69,14 @@ export function ChatBackupImport({
         );
       if (!Array.isArray(backup.chats) || !backup.chats.length || !backup.resources)
         throw new Error('채팅 백업의 필수 정보가 없어요.');
+      // Validate only what the preview reads; restoration still validates the full backup.
+      if (
+        typeof backup.title !== 'string' ||
+        !backup.chats.every((chat) => Array.isArray(chat?.transcript?.entries))
+      )
+        throw new Error(
+          '채팅 백업의 제목 또는 본문 목록이 올바르지 않아요. 원본 파일을 확인해 주세요.'
+        );
       setSelection({ backup, requestKey: crypto.randomUUID() });
     } catch (caught) {
       if (current === version.current)

@@ -282,6 +282,7 @@ function TaskButtons({
           className="secondary"
           disabled={busy}
           onClick={() => void act(`/illustrations/${job.id}/retry`)}
+          title="새 요청이 전송되며 사용량이 추가될 수 있어요."
         >
           <RefreshIcon size={16} aria-hidden="true" /> 다시 요청
         </button>
@@ -592,6 +593,9 @@ function IllustrationCard({
                     : '미확인 · 공급자 판단에 맡겼어요.'}
                 {detail.diagnostic.contentCheck.code && ` (${detail.diagnostic.contentCheck.code})`}
               </p>
+            )}
+            {detail.diagnostic?.codex?.unavailableReason && (
+              <p>Codex 응답 · {detail.diagnostic.codex.unavailableReason}</p>
             )}
             {detail.diagnostic?.prompt && (
               <>

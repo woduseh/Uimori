@@ -22,6 +22,8 @@ const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
 export const CATALOG_SUMMARY_CHARS = 160;
 /** Serialized length budget for the whole catalog list, which rides in every main request. */
 export const CATALOG_CHARS = 24_000;
+/** One read page stays near the normal single-reference size, even for 16 ids. */
+export const KNOWLEDGE_READ_CHARS = 6_000;
 export const CATALOG_READ_GUIDANCE =
   'Relevant references may already be included in the input; do not read them again. The catalog contains summaries of additional references. If the reply needs missing detail, fetch known ids with knowledge.read({ids:[...]}), using a one-item array for a single reference. Use knowledge.search only when the needed entry is not identifiable from the catalog. Exact names favor normal search; mode=browse follows package/folder structure when vocabulary differs. Follow returned nextRead references; folder metadata is not evidence that the underlying text was read. Retrieval is optional when the supplied context is sufficient.';
 
@@ -350,15 +352,38 @@ export function executeTool(
     const limit = pageNumber(args.limit, 4096, 4096);
     if (offset === null || limit === null || limit === 0) return denied('INVALID_ARGUMENTS');
 
-    const items = args.ids.map((id) => {
-      const resource = scope.find((item) => item.id === id && item.kind === 'lore');
-      if (!resource) return { id, denied: true, error: { code: 'RESOURCE_UNAVAILABLE' } };
-      if (offset > resource.text.length)
-        return { id, denied: true, error: { code: 'INVALID_ARGUMENTS' } };
-
-      return { id, denied: false, read: readResourceRange(resource, offset, limit, role) };
+    const ids = args.ids;
+    const items: unknown[] = [];
+    const result = () => ({
+      items,
+      total: ids.length,
+      nextIndex: items.length < ids.length ? items.length : null,
     });
-    return { ...action, args: { ids: args.ids, offset, limit }, denied: false, result: { items } };
+    for (const id of args.ids) {
+      const resource = scope.find((item) => item.id === id && item.kind === 'lore');
+      const entry = (size: number) =>
+        !resource
+          ? { id, denied: true, error: { code: 'RESOURCE_UNAVAILABLE' } }
+          : offset > resource.text.length
+            ? { id, denied: true, error: { code: 'INVALID_ARGUMENTS' } }
+            : { id, denied: false, read: readResourceRange(resource, offset, size, role) };
+      items.push(entry(limit));
+      if (JSON.stringify(result()).length <= KNOWLEDGE_READ_CHARS) continue;
+      items.pop();
+      if (items.length) break;
+      // Unusually escape-heavy text must still make progress within the serialized page bound.
+      let low = 1;
+      let high = limit;
+      while (low < high) {
+        const middle = Math.ceil((low + high) / 2);
+        items[0] = entry(middle);
+        if (JSON.stringify(result()).length <= KNOWLEDGE_READ_CHARS) low = middle;
+        else high = middle - 1;
+      }
+      items[0] = entry(low);
+      break;
+    }
+    return { ...action, args: { ids: args.ids, offset, limit }, denied: false, result: result() };
   }
 
   if (args.mode !== undefined && (action.name !== 'knowledge.search' || args.mode !== 'search'))

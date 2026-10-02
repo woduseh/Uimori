@@ -9,7 +9,7 @@ The main writer and translation role use the shared definitions in `core/read-to
 | Tool | Contract |
 | --- | --- |
 | `knowledge.search {mode?, query?, nodeRef?, expectedVersion?, offset?, limit?}` | Default/search lists or searches approved local references; browse follows the existing package/folder structure. Body matches include a bounded original excerpt and a ready-to-use read request at the matching location. |
-| `knowledge.read {ids, offset?, limit?}` | Read one to sixteen references. A single read still uses a one-item `ids` array. Each item succeeds or fails independently and returns `nextOffset`. |
+| `knowledge.read {ids, offset?, limit?}` | Read one to sixteen references. A single read still uses a one-item `ids` array. Each returned item succeeds or fails independently and returns `nextOffset`; batch `nextIndex` identifies unreturned IDs. |
 | `skills.list {query?, offset?, limit?}` | Browse/search available writing guidance. |
 | `skills.load {id, offset?, limit?}` | Read one guidance resource. |
 | `story.search {query?, offset?, limit?}` | With no query, browse frozen story ancestry in order; with a query, search it. Results expose stable 1-based `sceneNumber` values. |
@@ -37,9 +37,11 @@ When a semantic condition cannot be represented portably without a union, keep t
 
 Helper `resource.read` accepts either one `path` or up to sixteen `paths` from one resource/revision. Batch `nextIndex` continues unreturned paths; per-item `nextOffset` continues text. `chat.lore` lists compact items by default and reads original/override field pages through a selector. Both contracts bound the complete serialized response; they do not send full editing models by default.
 
-Main reference collections use `items` or `results`, `total`, and `nextOffset`. Text reads expose `totalChars`, the returned range, and `nextOffset`. A null `nextOffset` means no later page remains; it does not claim that an omitted earlier range was read.
+Main reference collections use `items` or `results`, `total`, and explicit `nextOffset` or batch `nextIndex` continuations. Text reads expose `totalChars`, the returned range, and `nextOffset`. A null `nextOffset` means no later page remains; it does not claim that an omitted earlier range was read.
 
 `knowledge.search` limits the complete result to 24,000 serialized characters. A body hit adds `match` with at most 240 original UTF-16 units, source identity and range, plus `nextRead` for the relevant `knowledge.read` or `skills.load` call. The first located term is an excerpt, not evidence of reading every matching term or the whole reference. Title/description-only matches and browsing keep metadata-only results. If one item's metadata would exceed the page budget, `metadataPreview` declares the reduced description/relations and a read request keeps the body reachable.
+
+`knowledge.read` bounds its complete result to 6,000 serialized characters, near an ordinary 4,096-character single read. Resubmit `ids.slice(nextIndex)` with the same offset/limit for unread IDs, and use a single-ID read at an item's `nextOffset` for its remaining text. The normal single read is unchanged unless JSON escaping alone exceeds the page bound; then its exact shorter range and continuation are explicit. This prevents one maximum batch from flooding a small model's next turn; accumulated context still uses normal admission/compaction.
 
 Helper `data.read` has two distinct pagination dimensions: each item's `nextOffset` continues its text or field directory, while batch `nextIndex` points to unreturned refs. Resubmit `refs.slice(nextIndex)` rather than passing that index as a text offset. The helper's streaming search reports `complete` instead of an exact total. See [Helper tools](HELPER-TOOLS.md) for its page sizes and result budgets.
 

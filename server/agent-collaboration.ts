@@ -76,8 +76,8 @@ export function buildAgentProviderRequest(
     generation: generationFromModel(target),
     contextBudget: contextBudgetForModel(target),
     input: {
-      task: question,
-      controls,
+      history: asJson(input.history),
+      catalog: asJson(tools.length ? input.catalog : []),
       source: asJson({
         request: snapshot.request,
         parentRevision: snapshot.parentRevision,
@@ -93,8 +93,8 @@ export function buildAgentProviderRequest(
             }
           : {}),
       }),
-      catalog: asJson(tools.length ? input.catalog : []),
-      history: asJson(input.history),
+      controls,
+      task: question,
       results: asJson(results),
     },
     ...(opaqueState !== undefined ? { opaqueState } : {}),

@@ -1222,8 +1222,6 @@ export class HelperRuntime {
         ],
       },
       input: {
-        task: task.request,
-        controls: { purpose: 'helper' },
         history: asJson(history),
         source: asJson({
           summary: {
@@ -1295,6 +1293,8 @@ export class HelperRuntime {
               }
             : null,
         }),
+        controls: { purpose: 'helper' },
+        task: task.request,
         results: asJson(results),
       },
       ...(opaqueState !== undefined ? { opaqueState } : {}),

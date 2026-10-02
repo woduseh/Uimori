@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { ContentEditModel, ResourceSaveResult } from '../core/resource-editing.js';
 import { api, ApiError } from '../web/api.js';
-import { readRecovery, writeRecovery, type RecoveryBuffer } from '../web/editor-recovery.js';
+import {
+  readRecovery,
+  writeRecovery,
+  deleteRecoveryIfToken,
+  type RecoveryBuffer,
+} from '../web/editor-recovery.js';
 import { ResourceEditorSession } from '../web/resource-editor-session.js';
 import { nativeContentDraft } from '../web/native-content-draft.js';
 
@@ -12,6 +17,7 @@ vi.mock('../web/api.js', async (original) => ({
 vi.mock('../web/editor-recovery.js', () => ({
   readRecovery: vi.fn(),
   writeRecovery: vi.fn(),
+  deleteRecoveryIfToken: vi.fn(),
 }));
 
 const model: ContentEditModel = {
@@ -32,6 +38,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 const sessions: ResourceEditorSession[] = [];
+const disk = new Map<string, RecoveryBuffer<unknown>>();
 function editor(targetId: string | null = 'one') {
   const session = new ResourceEditorSession({
     editorKey: targetId ? `content:${targetId}` : 'new:content:bot',
@@ -45,8 +52,22 @@ function editor(targetId: string | null = 'one') {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.mocked(api).mockReset().mockResolvedValue(saved());
-  vi.mocked(readRecovery).mockReset().mockResolvedValue(undefined);
-  vi.mocked(writeRecovery).mockReset().mockResolvedValue(undefined);
+  disk.clear();
+  vi.mocked(readRecovery)
+    .mockReset()
+    .mockImplementation(async (key) => structuredClone(disk.get(key)));
+  vi.mocked(writeRecovery)
+    .mockReset()
+    .mockImplementation(async (key, value) => {
+      if (value) disk.set(key, structuredClone(value));
+      else disk.delete(key);
+    });
+  vi.mocked(deleteRecoveryIfToken)
+    .mockReset()
+    .mockImplementation(async (key, token) => {
+      if (disk.get(key)?.token === token) disk.delete(key);
+      return structuredClone(disk.get(key));
+    });
   vi.stubGlobal('window', new EventTarget());
   vi.stubGlobal('localStorage', { setItem: vi.fn() });
 });
@@ -64,6 +85,9 @@ test('one owner applies consecutive updates and recognizes both form and raw-inp
   session.setModel((current) => ({ ...current, description: 'Latest' }));
   expect(session.snapshot().local.model).toMatchObject({ title: 'Edited', description: 'Latest' });
   expect(session.snapshot()).toMatchObject({ dirty: true, autosavePending: true });
+  await session.flush();
+  const token = disk.get('content:one')?.token;
+  expect(token).toEqual(expect.any(String));
   session.setModel(model);
   expect(session.snapshot().dirty).toBe(false);
   session.setField('raw', '[unfinished');
@@ -71,7 +95,8 @@ test('one owner applies consecutive updates and recognizes both form and raw-inp
   session.setField('raw', undefined);
   expect(session.snapshot()).toMatchObject({ dirty: false, autosavePending: false });
   await session.flush();
-  expect(writeRecovery).toHaveBeenLastCalledWith('content:one', undefined);
+  expect(deleteRecoveryIfToken).toHaveBeenLastCalledWith('content:one', token);
+  expect(disk.has('content:one')).toBe(false);
 });
 
 test('save acknowledges only sent input and preserves later edits with the accepted revision', async () => {
@@ -99,6 +124,7 @@ test('save acknowledges only sent input and preserves later edits with the accep
     autosavePending: true,
   });
   expect(writeRecovery).toHaveBeenLastCalledWith('content:one', {
+    token: expect.any(String),
     revision: 2,
     model: later,
     rawFields: {},
@@ -144,10 +170,13 @@ test('new resources migrate ordered recovery writes to their saved ID without lo
   await saving;
   expect(session.editorKey).toBe('content:created');
   expect(vi.mocked(writeRecovery).mock.calls).toEqual([
-    ['new:content:bot', { revision: null, model: first, rawFields: {} }],
-    ['new:content:bot', undefined],
-    ['content:created', { revision: 1, model: later, rawFields: {} }],
+    ['new:content:bot', { token: expect.any(String), revision: null, model: first, rawFields: {} }],
+    ['content:created', { token: expect.any(String), revision: 1, model: later, rawFields: {} }],
   ]);
+  expect(deleteRecoveryIfToken).toHaveBeenCalledWith(
+    'new:content:bot',
+    vi.mocked(writeRecovery).mock.calls[0][1]?.token
+  );
 });
 
 test('invalid recovered input stays local, waits for explicit save, and blocks helper capture', async () => {
@@ -269,4 +298,68 @@ test('closing after a recovery read failure does not erase unread input', async 
   session.dispose();
   await vi.runAllTimersAsync();
   expect(writeRecovery).not.toHaveBeenCalled();
+});
+
+test.each(['save', 'discard', 'revert', 'copy'] as const)(
+  '%s only clears its own recovery write, preserving another tab across reopen',
+  async (action) => {
+    const a = editor();
+    const b = editor();
+    await a.open();
+    await b.open();
+    const own = { ...model, title: 'B saved input' };
+    const newer = { ...model, title: 'A newer unsaved input' };
+    b.setModel(own);
+    await b.flush();
+    const ownToken = disk.get('content:one')?.token;
+    a.setModel(newer);
+    await a.flush();
+    const newerToken = disk.get('content:one')?.token;
+    expect(newerToken).not.toBe(ownToken);
+    if (action === 'save' || action === 'copy') {
+      vi.mocked(api).mockResolvedValueOnce({
+        saved: saved(own, 2, action === 'copy' ? 'copy' : 'one'),
+        created: action === 'copy',
+      });
+      await b.save(undefined, { copy: action === 'copy' });
+    } else if (action === 'discard') await b.discard();
+    else {
+      b.setModel(model);
+      await b.flush();
+    }
+    expect(deleteRecoveryIfToken).toHaveBeenCalledWith('content:one', ownToken);
+    expect(disk.get('content:one')).toMatchObject({ token: newerToken, model: newer });
+    const reopened = editor();
+    await reopened.open();
+    expect(reopened.snapshot()).toMatchObject({ local: { model: newer }, recovery: 'saved' });
+  }
+);
+
+test.each([undefined, 'existing-token'])(
+  'discard removes a loaded recovery buffer with token %s',
+  async (token) => {
+    disk.set('content:one', {
+      token,
+      revision: 1,
+      model: { ...model, title: 'Recovered' },
+      rawFields: {},
+    });
+    const session = editor();
+    await session.open();
+    await session.discard();
+    expect(deleteRecoveryIfToken).toHaveBeenCalledWith('content:one', token);
+    expect(disk.has('content:one')).toBe(false);
+  }
+);
+
+test('a clean session with no loaded buffer cannot clear another tab recovery', async () => {
+  const clean = editor();
+  const dirty = editor();
+  await clean.open();
+  await dirty.open();
+  dirty.setModel({ ...model, title: 'Other tab' });
+  await dirty.flush();
+  await clean.flush();
+  expect(deleteRecoveryIfToken).not.toHaveBeenCalled();
+  expect(disk.get('content:one')?.model).toMatchObject({ title: 'Other tab' });
 });

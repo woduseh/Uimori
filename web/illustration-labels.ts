@@ -43,6 +43,10 @@ const messages: Record<string, string> = {
   CONNECTION_NOT_AUTHORIZED: '연결이 비활성화됐거나 설정이 바뀌었어요.',
   CODEX_IMAGE_NOT_GENERATED:
     'Codex가 이미지를 만들지 않았어요. 모델 선택과 Codex 로그인 상태를 확인하고 다시 요청해 주세요.',
+  CODEX_IMAGE_UNAVAILABLE:
+    'Codex가 이미지 도구를 사용할 수 없거나 요청을 거절했다고 알려왔어요. 자동으로 다시 생성하지 않아요.',
+  ILLUSTRATION_PROMPT_TIMEOUT:
+    '프롬프트 모델의 제한 시간이 지나 결과를 확인하지 못했어요. 자동으로 다시 요청하지 않아요. 다시 요청하면 사용량이 추가될 수 있어요.',
   CODEX_IMAGE_USAGE_LIMIT: 'Codex 이미지 생성 사용량 한도에 도달했어요.',
   CODEX_IMAGE_INVALID_REFERENCE: '참조 이미지를 Codex에 보낼 수 없는 형식이에요.',
   CODEX_IMAGE_TOO_MANY_REFERENCES: '참조 이미지는 8개까지 보낼 수 있어요.',
@@ -63,7 +67,8 @@ const messages: Record<string, string> = {
     'ComfyUI 워크플로 JSON이 API 형식(노드 ID → class_type/inputs)이 아니에요.',
   COMFYUI_WORKFLOW_UI_FORMAT:
     'UI용 워크플로 파일이에요. ComfyUI에서 "Export (API)"로 저장한 JSON을 사용해 주세요.',
-  COMFYUI_WORKFLOW_PROMPT_PLACEHOLDER_MISSING: '워크플로에 {{prompt}} 자리표시자가 없어요.',
+  COMFYUI_WORKFLOW_PROMPT_PLACEHOLDER_MISSING:
+    '워크플로 노드의 inputs 안 문자열 값에 {{prompt}}를 넣어 주세요 (예: 6.inputs.text). 노드 제목이나 키에만 있으면 사용할 수 없어요.',
   COMFYUI_BASE_URL_INVALID:
     'ComfyUI 주소는 http:// 또는 https://로 시작하고 인증 정보·쿼리를 포함하지 않아야 해요.',
   COMFYUI_CREDENTIAL_UNAVAILABLE: 'ComfyUI 인증 환경변수를 서버에서 읽을 수 없어요.',
@@ -94,7 +99,7 @@ export function illustrationErrorMessage(code: string | null | undefined): strin
   if (!code) return '삽화 생성을 완료하지 못했어요.';
   if (messages[code]) return messages[code];
   if (code.startsWith('ILLUSTRATION_PROMPT_'))
-    return '프롬프트 모델 호출이 실패했어요. 모델·연결 상태를 확인해 주세요.';
+    return '프롬프트 모델 호출을 완료하지 못했어요. 모델·연결 상태를 확인해 주세요. 다시 요청하면 사용량이 추가될 수 있어요.';
   if (code.startsWith('MODEL_UNAVAILABLE:'))
     return '삽화 모델 또는 연결을 사용할 수 없어요. 모델 프리셋과 연결 상태를 확인해 주세요.';
   return '삽화 생성을 완료하지 못했어요.';

@@ -27,6 +27,7 @@ export function AssetMetadataEditor({
         이미지 이름
         <input
           aria-label="업로드 이미지 이름"
+          disabled={busy}
           value={draft.title}
           maxLength={200}
           onChange={(event) => setDraft({ ...draft, title: event.target.value })}
@@ -36,6 +37,7 @@ export function AssetMetadataEditor({
         설명 · 선택
         <textarea
           aria-label="업로드 이미지 설명"
+          disabled={busy}
           value={draft.description}
           maxLength={2000}
           onChange={(event) => setDraft({ ...draft, description: event.target.value })}

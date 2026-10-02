@@ -1063,3 +1063,137 @@ describe('host read compaction and provider continuation inside one main run', (
     expect(fixed).toEqual(original);
   });
 });
+
+test.each([1, 16])(
+  'an 8192-token writer receives a bounded %i-reference read without immediate summarization',
+  async (count) => {
+    const fixed = await snapshot();
+    fixed.history = [];
+    fixed.logicalHistory = [];
+    fixed.parentRevision = null;
+    fixed.settings.maxCalls = 10;
+    const target = fixed.profile!.models.main!;
+    target.inputTokenLimit = 8192;
+    target.connection.protocol = 'openai-chat-v1';
+    target.connection.endpoint = `${origin}/v1/chat/completions`;
+    fixed.profile!.contextModel = { ...structuredClone(target), modelId: 'synthetic-summary' };
+    fixed.resources = Array.from({ length: 16 }, (_, index) => ({
+      id: `lore-${index}`,
+      chatId: fixed.chatId,
+      kind: 'lore' as const,
+      revision: 1,
+      title: `Reference ${index}`,
+      description: '',
+      loading: 'discoverable' as const,
+      text:
+        `EXACT_LORE_${index}: ` +
+        '항구의 종이 울리자 소녀는 젖은 편지를 접고 등대를 바라보았다. '.repeat(200),
+    }));
+    await refreshNativeSnapshot(fixed);
+    const ready = seedContextPlan(fixed);
+    const bodies: any[] = [];
+    vi.mocked(fetch).mockImplementation(async (_url, options) => {
+      const body = JSON.parse(String(options?.body));
+      bodies.push(body);
+      const first = bodies.length === 1;
+      expect(body.model).not.toBe('synthetic-summary');
+      const name = body.tools.find((tool: any) => tool.function.name.endsWith('_knowledge_read'))
+        .function.name;
+      const delta = first
+        ? {
+            role: 'assistant',
+            tool_calls: [
+              {
+                index: 0,
+                id: 'bulk-read',
+                type: 'function',
+                function: {
+                  name,
+                  arguments: JSON.stringify({
+                    ids: ready.resources.slice(0, count).map(({ id }) => id),
+                    limit: 4096,
+                  }),
+                },
+              },
+            ],
+          }
+        : { role: 'assistant', content: finalText };
+      const response = sse(
+        {
+          id: 'synthetic-response',
+          choices: [{ index: 0, delta, finish_reason: first ? 'tool_calls' : 'stop' }],
+        },
+        {
+          id: 'synthetic-response',
+          choices: [],
+          usage: { prompt_tokens: 11, completion_tokens: 7 },
+        }
+      );
+      return new Response((await response.text()) + 'data: [DONE]\n\n', {
+        headers: response.headers,
+      });
+    });
+    const observed = hooks();
+    const result = await runMain(ready, observed.value);
+    expect(result.status, JSON.stringify(result)).toBe('completed');
+    expect(bodies).toHaveLength(2);
+    expect(bodies.every((body) => estimateContextTokens(body) <= 8192)).toBe(true);
+    expect(observed.events.some((event) => event.name === 'context.compact')).toBe(false);
+    const read = observed.events.find((event) => event.name === 'knowledge.read')!.result as any;
+    expect(read.items[0].read.text).toBe(ready.resources[0].text.slice(0, 4096));
+    expect(read.nextIndex).toBe(count === 1 ? null : 1);
+    expect(JSON.stringify(bodies[1])).toContain('EXACT_LORE_0');
+  }
+);
+
+test('read compaction keeps bounded knowledge page and per-item continuation metadata exact', async () => {
+  const fixed = await snapshot();
+  fixed.profile!.contextModel = { ...model(), inputTokenLimit: 32768 };
+  fixed.resources = Array.from({ length: 15 }, (_, index) => ({
+    id: `lore-${index}`,
+    chatId: fixed.chatId,
+    kind: 'lore' as const,
+    revision: 1,
+    title: `Reference ${index}`,
+    description: '',
+    text: 'Exact source. '.repeat(500),
+  }));
+  await refreshNativeSnapshot(fixed);
+  const event = executeTool(fixed, {
+    callId: 'page',
+    name: 'knowledge.read',
+    args: { ids: ['missing', ...fixed.resources.map(({ id }) => id)] },
+  });
+  const page = event.result as any;
+  expect(page.nextIndex).toBe(2);
+  script([() => completed()]);
+  const compacted = await compactToolReads(
+    fixed,
+    [event],
+    hooks().value,
+    { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    projectedTokens(fixed)
+  );
+  expect(compacted[0].result).toMatchObject({
+    references: [
+      {
+        name: 'knowledge.read',
+        args: event.args,
+        returned: {
+          total: 16,
+          nextIndex: 2,
+          items: [
+            { id: 'missing', denied: true, error: { code: 'RESOURCE_UNAVAILABLE' } },
+            {
+              id: 'lore-0',
+              denied: false,
+              source: page.items[1].read.source,
+              range: { start: 0, end: 4096 },
+              nextOffset: 4096,
+            },
+          ],
+        },
+      },
+    ],
+  });
+});

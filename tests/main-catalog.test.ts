@@ -5,6 +5,7 @@ import {
   CATALOG_READ_GUIDANCE,
   CATALOG_SUMMARY_CHARS,
   executeTool,
+  KNOWLEDGE_READ_CHARS,
 } from '../core/provider.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { defaultProfile, type Connection } from '../core/product.js';
@@ -207,4 +208,60 @@ test('knowledge search pages bounded exact excerpts without dropping matches or 
     offset = page.nextOffset;
   } while (offset < resources.length);
   expect(ids).toEqual(resources.map((resource) => resource.id));
+});
+
+test('knowledge read pages preserve item errors, text offsets, and every unread id', () => {
+  const resources = Array.from({ length: 15 }, (_, index) =>
+    lore(index, {
+      text: index === 0 ? '\u0001'.repeat(5000) : `EXACT_${index}: ` + '한글 원문 '.repeat(1500),
+    })
+  );
+  const fixed = snapshot(resources);
+  const ids = ['missing', ...resources.map(({ id }) => id)];
+  const seen: string[] = [];
+  let remaining = ids;
+  while (remaining.length) {
+    const event = executeTool(fixed, {
+      callId: 'page',
+      name: 'knowledge.read',
+      args: { ids: remaining },
+    });
+    expect(event.denied).toBe(false);
+    expect(JSON.stringify(event.result).length).toBeLessThanOrEqual(KNOWLEDGE_READ_CHARS);
+    const page = event.result as any;
+    expect(page.items.length).toBeGreaterThan(0);
+    for (const item of page.items) {
+      seen.push(item.id);
+      if (item.id === 'missing') {
+        expect(item).toMatchObject({ denied: true, error: { code: 'RESOURCE_UNAVAILABLE' } });
+        continue;
+      }
+      const original = resources.find((resource) => resource.id === item.id)!.text;
+      let text = item.read.text;
+      let nextOffset = item.read.nextOffset;
+      expect(text).toBe(original.slice(0, item.read.range.end));
+      while (nextOffset !== null) {
+        const next = executeTool(fixed, {
+          callId: 'text',
+          name: 'knowledge.read',
+          args: { ids: [item.id], offset: nextOffset },
+        });
+        expect(JSON.stringify(next.result).length).toBeLessThanOrEqual(KNOWLEDGE_READ_CHARS);
+        const read = (next.result as any).items[0].read;
+        expect(read.range.start).toBe(nextOffset);
+        expect(read.range.end).toBeGreaterThan(nextOffset);
+        text += read.text;
+        nextOffset = read.nextOffset;
+      }
+      expect(text).toBe(original);
+    }
+    remaining = page.nextIndex === null ? [] : remaining.slice(page.nextIndex);
+  }
+  expect(seen).toEqual(ids);
+  const common = executeTool(fixed, {
+    callId: 'common',
+    name: 'knowledge.read',
+    args: { ids: [resources[1].id] },
+  });
+  expect((common.result as any).items[0].read.text).toBe(resources[1].text.slice(0, 4096));
 });

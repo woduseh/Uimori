@@ -17,6 +17,7 @@ import type {
 import {
   nativeHostInstruction,
   nativeMessageMetadata,
+  requestDataBlocks,
   planNativeMessages,
   type NativeMessageMetadata,
 } from './provider-messages.js';
@@ -429,21 +430,33 @@ export function encodeResponses(request: ProviderRequest): {
               {
                 role: 'user',
                 content: [
-                  // Preserve a reusable tools/instructions prefix before the changing task data.
-                  ...(stableCachePoint
-                    ? [
+                  ...requestDataBlocks(prepared.wireInput, request.role).flatMap(
+                    (text, index, blocks) => {
+                      // Retain the existing tools/instructions anchor for small requests.
+                      if (blocks.length === 1 && stableCachePoint)
+                        return [
+                          {
+                            type: 'input_text',
+                            text: requestLabel,
+                            [stableCachePoint.field]: stableCachePoint.value,
+                          },
+                          { type: 'input_text', text: text.slice(requestLabel.length) },
+                        ];
+                      const point =
+                        blocks.length > 1 && index === 0
+                          ? generation?.cacheMode === 'explicit'
+                            ? cache?.breakpoint
+                            : stableCachePoint
+                          : undefined;
+                      return [
                         {
                           type: 'input_text',
-                          text: requestLabel,
-                          [stableCachePoint.field]: stableCachePoint.value,
+                          text,
+                          ...(point ? { [point.field]: point.value } : {}),
                         },
-                      ]
-                    : []),
-                  {
-                    type: 'input_text',
-                    text:
-                      (stableCachePoint ? '' : requestLabel) + JSON.stringify(prepared.wireInput),
-                  },
+                      ];
+                    }
+                  ),
                 ],
               },
             ]),

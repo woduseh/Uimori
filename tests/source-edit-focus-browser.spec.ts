@@ -61,7 +61,20 @@ async function seed(request: APIRequestContext, label: string) {
   return detail(request, chat.id);
 }
 
+async function stableShell(control: Locator) {
+  await expect
+    .poll(() =>
+      control.evaluate((element) => ({
+        shellTop: element.closest('.app-shell')!.scrollTop,
+        headerTop: document.querySelector('.workspace-header')!.getBoundingClientRect().top,
+        documentTop: document.documentElement.scrollTop,
+      }))
+    )
+    .toEqual({ shellTop: 0, headerTop: 0, documentTop: 0 });
+}
+
 async function insideReader(control: Locator) {
+  await stableShell(control);
   await expect
     .poll(() =>
       control.evaluate((element) => {
@@ -225,3 +238,128 @@ test('C04E failed source save keeps the draft available and a later save restore
   expect(after.runs).toEqual(before.runs);
   expect(after.attempts).toEqual(before.attempts);
 });
+
+for (const [width, height, mode] of [
+  [390, 844, 'light'],
+  [320, 640, 'dark'],
+] as const) {
+  test(`C04E cinematic ${width}px long translation editing keeps the app shell still and restores its passage`, async ({
+    page,
+    request,
+  }, info) => {
+    const initial = await seed(request, `cinematic ${width}px`);
+    const source = initial.sources[0];
+    const translation = `${source.text}\n\n${source.text}\n\nTranslation end marker.`;
+    const saved = await request.put(`/api/sources/${source.id}/translation`, {
+      data: {
+        text: translation,
+        expectedRevision: source.translationRevision ?? 0,
+        expectedSourceHash: source.hash,
+      },
+    });
+    expect(saved.ok()).toBe(true);
+    const catalog = await (await request.get('/api/themes')).json();
+    const selected = await request.post('/api/themes/selection', {
+      data: {
+        scope: 'chat',
+        targetId: initial.chat.id,
+        themeId: 'builtin:cinematic',
+        expectedRevision: catalog.preferences.revision,
+      },
+    });
+    expect(selected.ok()).toBe(true);
+    const before = await detail(request, initial.chat.id);
+    await page.setViewportSize({ width, height });
+    await page.addInitScript((mode) => {
+      localStorage.setItem('uimori:theme', mode);
+      localStorage.setItem('uimori:font', 'serif');
+      localStorage.setItem('uimori:font-size', '24');
+      localStorage.setItem('uimori:reading-language', 'translation');
+    }, mode);
+    await page.goto(`/?chat=${initial.chat.id}`);
+    const scene = page.getByTestId('source');
+    const body = scene.locator('[slot="body"][data-uimori-body-scroll]');
+    const trigger = scene.getByRole('button', { name: '번역 수정', exact: true });
+    const field = scene.getByRole('textbox', { name: '번역 수정 내용', exact: true });
+    await expect(scene.getByTestId('translation-text')).toContainText('Translation end marker.');
+    await waitForNativeLayout(scene.getByTestId('translation-text'));
+    await body.evaluate((node) => {
+      node.scrollTop = (node.scrollHeight - node.clientHeight) * 0.6;
+    });
+    // Start from a genuinely visible action, without asking Playwright to scroll app ancestors.
+    await trigger.evaluate((button) => {
+      const reader = button.closest<HTMLElement>('[data-reader-scrollport]')!;
+      reader.scrollTop +=
+        button.getBoundingClientRect().top -
+        reader.getBoundingClientRect().top -
+        reader.clientHeight / 2;
+    });
+    await insideReader(trigger);
+    await expect
+      .poll(() =>
+        trigger.evaluate((button) => {
+          const rect = button.getBoundingClientRect();
+          return button.contains(
+            document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+          );
+        })
+      )
+      .toBe(true);
+    const passageTop = await body.evaluate((node) => node.scrollTop);
+    expect(passageTop).toBeGreaterThan(0);
+    const offset = await readerOffset(trigger);
+    for (const action of ['Escape', 'cancel', 'save'] as const) {
+      await trigger.click();
+      await expect(field).toBeFocused();
+      await expect(field).toHaveValue(translation);
+      await insideReader(field);
+      await expect
+        .poll(() =>
+          field.evaluate((node) => {
+            const body = node.closest('[data-uimori-body-scroll]')!.getBoundingClientRect();
+            const field = node.getBoundingClientRect();
+            return field.top >= body.top - 1 && field.top < body.bottom;
+          })
+        )
+        .toBe(true);
+      await field.fill(`${translation}\n\nA temporary revision.`);
+      if (visualReview && action === 'Escape')
+        await page.screenshot({ path: info.outputPath(`cinematic-editor-${width}.png`) });
+      if (action === 'Escape') await page.keyboard.press('Escape');
+      else
+        await scene
+          .getByRole('button', {
+            name: action === 'cancel' ? '수정 취소' : '번역 저장',
+            exact: true,
+          })
+          .click();
+      await expect(field).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+      await insideReader(trigger);
+      await expect
+        .poll(async () => Math.abs((await readerOffset(trigger)) - offset))
+        .toBeLessThan(16);
+      await expect
+        .poll(async () => Math.abs((await body.evaluate((node) => node.scrollTop)) - passageTop))
+        .toBeLessThan(2);
+      const current = await detail(request, initial.chat.id);
+      expect(current.sources.map(({ id, text, hash }) => ({ id, text, hash }))).toEqual(
+        before.sources.map(({ id, text, hash }) => ({ id, text, hash }))
+      );
+      expect(current.runs).toEqual(before.runs);
+      expect(current.attempts).toEqual(before.attempts);
+      if (action !== 'save') {
+        expect(current.sources).toEqual(before.sources);
+        expect(current.jobs).toEqual(before.jobs);
+      } else {
+        const latest = current.jobs
+          .filter((job) => job.kind === 'translation' && job.sourceRevision === source.id)
+          .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0))[0];
+        expect(latest.result?.text).toBe(`${translation}\n\nA temporary revision.`);
+      }
+    }
+    await expect(page.getByLabel('다음 장면 요청', { exact: true })).toBeVisible();
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`cinematic-editor-restored-${width}.png`) });
+  });
+}

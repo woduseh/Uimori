@@ -35,6 +35,34 @@ describe('ComfyUI API-format workflow templates', () => {
     );
     expect(() => parseComfyWorkflow('﻿' + FIXTURE_WORKFLOW)).not.toThrow();
   });
+  test.each([
+    { class_type: 'CLIPTextEncode', inputs: { text: 'fixed' }, _meta: { title: '{{prompt}}' } },
+    { class_type: '{{prompt}}', inputs: { text: 'fixed' } },
+    { class_type: 'X', inputs: { '{{prompt}}': 'fixed' } },
+    { class_type: 'X', inputs: { nested: { '{{prompt}}': ['fixed'] } } },
+  ])('rejects markers outside substitutable input values: %j', (node) => {
+    expect(() => parseComfyWorkflow(JSON.stringify({ '1': node }))).toThrow(
+      'COMFYUI_WORKFLOW_PROMPT_PLACEHOLDER_MISSING'
+    );
+  });
+  test('validates nested input strings using the substitution traversal', () => {
+    const workflow = parseComfyWorkflow(
+      JSON.stringify({
+        '1': {
+          class_type: 'X',
+          inputs: { nested: [{ text: 'before {{prompt}} after', seed: '{{seed}}' }] },
+          _meta: { title: '{{prompt}}' },
+        },
+      })
+    );
+    const filled = fillComfyWorkflow(workflow, {
+      prompt: 'a red bird',
+      negativePrompt: '',
+      seed: 42,
+    });
+    expect(filled['1'].inputs.nested).toEqual([{ text: 'before a red bird after', seed: 42 }]);
+    expect(filled['1']._meta).toEqual({ title: '{{prompt}}' });
+  });
   test('fills only string inputs, turns a bare seed placeholder into a number and keeps the template intact', () => {
     const workflow = parseComfyWorkflow(FIXTURE_WORKFLOW);
     const before = JSON.stringify(workflow);
@@ -128,8 +156,22 @@ describe('prompt model output and Codex caption parsing', () => {
       skipped: null,
     });
     expect(parseCodexIllustrationCaption('{"caption":"UNAVAILABLE: tool disabled"}')).toMatchObject(
-      { unavailable: true }
+      { unavailable: true, unavailableReason: 'tool disabled' }
     );
+  });
+  test('keeps unavailable recognition explicit and bounds plain-text reasons', () => {
+    for (const text of [
+      'UNAVAILABLE',
+      'Not UNAVAILABLE: a caption',
+      '{"other":"UNAVAILABLE: no tool"}',
+    ])
+      expect(parseCodexIllustrationCaption(text).unavailable).toBe(false);
+    const parsed = parseCodexIllustrationCaption(
+      JSON.stringify({ caption: 'UNAVAILABLE: tool\u0000 refused\u202e ' + 'x'.repeat(500) })
+    );
+    expect(parsed.unavailableReason).toMatch(/^tool  refused  /u);
+    expect(parsed.unavailableReason).not.toMatch(/[\p{Cc}\p{Cf}]/u);
+    expect(Array.from(parsed.unavailableReason!)).toHaveLength(287);
   });
   test('bounds scene and character notes by tokens and carries the selected model input budget', () => {
     const request = illustrationPromptRequest(
@@ -224,9 +266,21 @@ describe('image bytes, excerpts and retry classes', () => {
     expect(new TextDecoder().decode(new TextEncoder().encode(excerpt))).toBe(excerpt);
   });
   test('retries known-safe failures and leaves uncertain remote outcomes final', () => {
-    for (const code of ['COMFYUI_EXECUTION_FAILED', 'CODEX_IMAGE_NOT_GENERATED', 'FIXTURE_FAILURE'])
+    for (const code of [
+      'COMFYUI_EXECUTION_FAILED',
+      'CODEX_IMAGE_NOT_GENERATED',
+      'FIXTURE_FAILURE',
+      'ILLUSTRATION_PROMPT_CODEX_BUSY',
+      'ILLUSTRATION_PROMPT_INVALID',
+    ])
       expect(isRetryableIllustrationCode(code)).toBe(true);
     for (const code of [
+      'CODEX_IMAGE_UNAVAILABLE',
+      'ILLUSTRATION_PROMPT_FAILED',
+      'ILLUSTRATION_PROMPT_TIMEOUT',
+      'ILLUSTRATION_PROMPT_CODEX_CLOSED',
+      'ILLUSTRATION_PROMPT_TRANSPORT_ERROR',
+      'ILLUSTRATION_PROMPT_HTTP_503',
       'COMFYUI_UNREACHABLE',
       'COMFYUI_HTTP_5XX',
       'TIMEOUT',
