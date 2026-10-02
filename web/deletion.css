@@ -12,13 +12,6 @@
   gap: 8px;
   color: var(--error);
 }
-.delete-dialog.app-dialog {
-  width: min(480px, calc(100vw - 32px));
-  height: fit-content;
-  max-height: calc(100dvh - 32px);
-  margin: auto;
-  border-radius: 14px;
-}
 .delete-dialog .dialog-body {
   display: grid;
   gap: 12px;

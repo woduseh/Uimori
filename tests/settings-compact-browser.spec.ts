@@ -208,6 +208,14 @@ test('SCUI01 settings list and details adapt at six widths with no overflow', as
     await page.setViewportSize({ width, height: 900 });
     await expect(dialog.getByLabel('앱 화면 테마')).toBeVisible();
     await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
+    const box = (await dialog.boundingBox())!;
+    const gap = width <= 760 ? 16 : 24;
+    expect(box.x).toBeGreaterThanOrEqual(gap);
+    expect(box.y).toBeGreaterThanOrEqual(gap);
+    expect(box.x + box.width).toBeLessThanOrEqual(width - gap);
+    expect(box.y + box.height).toBeLessThanOrEqual(900 - gap);
+    expect(Math.abs(box.x + box.width / 2 - width / 2)).toBeLessThanOrEqual(1);
+    expect(Math.abs(box.y + box.height / 2 - 900 / 2)).toBeLessThanOrEqual(1);
     if (width <= 760) {
       await expect(nav).toBeHidden();
       await expect(dialog.getByRole('heading', { name: '일반', exact: true })).toHaveCount(1);
@@ -215,6 +223,29 @@ test('SCUI01 settings list and details adapt at six widths with no overflow', as
       const bounds = await back.boundingBox();
       expect(bounds!.width).toBeGreaterThanOrEqual(44);
       expect(bounds!.height).toBeGreaterThanOrEqual(44);
+      if (width === MOBILE_WIDTH) {
+        await page.setViewportSize({ width, height: 480 });
+        const pane = dialog.getByRole('tabpanel');
+        const header = dialog.locator(':scope > .dialog-header');
+        const headerBox = (await header.boundingBox())!;
+        await pane.evaluate((node) => {
+          node.scrollTop = node.scrollHeight;
+        });
+        expect(await pane.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+        expect((await header.boundingBox())!.y).toBe(headerBox.y);
+        const shortBox = (await dialog.boundingBox())!;
+        expect(shortBox.y).toBeGreaterThanOrEqual(16);
+        expect(shortBox.y + shortBox.height).toBeLessThanOrEqual(480 - 16);
+        await expect(dialog.getByRole('button', { name: '설정 닫기', exact: true })).toBeInViewport(
+          { ratio: 1 }
+        );
+        if (visualReview)
+          await page.screenshot({ path: info.outputPath('settings-centered-mobile-short.png') });
+        await pane.evaluate((node) => {
+          node.scrollTop = 0;
+        });
+        await page.setViewportSize({ width, height: 900 });
+      }
     } else {
       await expect(nav).toBeVisible();
       await expect(nav.getByRole('tab')).toHaveCount(categoryCount);

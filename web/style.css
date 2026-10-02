@@ -1213,12 +1213,14 @@ input[type="checkbox"] {
   font-size: 12px;
 }
 .app-dialog {
+  --dialog-gap: 24px;
+  --dialog-max-height: min(760px, calc(var(--app-height, 100dvh) - 2 * var(--dialog-gap)));
   position: fixed;
   inset: 0;
-  width: min(var(--dialog-w), calc(100vw - 48px));
+  width: min(var(--dialog-size, var(--dialog-w)), calc(100vw - 2 * var(--dialog-gap)));
   height: fit-content;
-  max-height: min(760px, calc(var(--app-height, 100dvh) - 48px));
-  max-width: 100%;
+  max-height: var(--dialog-max-height);
+  max-width: calc(100vw - 2 * var(--dialog-gap));
   margin: auto;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -1229,7 +1231,7 @@ input[type="checkbox"] {
   overflow: hidden;
 }
 .app-dialog.wide {
-  width: min(var(--settings-w), calc(100vw - 48px));
+  --dialog-size: var(--settings-w);
 }
 .app-dialog[open] {
   display: flex;
@@ -1254,6 +1256,8 @@ input[type="checkbox"] {
   }
 }
 .dialog-header {
+  flex: none;
+  min-width: 0;
   min-height: 56px;
   padding: 10px 18px 10px 24px;
   display: flex;
@@ -1264,6 +1268,8 @@ input[type="checkbox"] {
 .dialog-header h2 {
   font-size: 18px;
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
   margin: 0;
 }
 .dialog-body {
@@ -1274,13 +1280,7 @@ input[type="checkbox"] {
 }
 /* All draft confirmation flows share the same shell, independent of their host panel. */
 .app-dialog.confirmation-dialog {
-  width: min(620px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-  height: fit-content;
-  max-height: calc(var(--app-height, 100dvh) - 32px);
-  margin: auto;
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  --dialog-size: 620px;
 }
 .confirmation-dialog > .dialog-body > p {
   margin: 0 0 8px;
@@ -1439,9 +1439,11 @@ input[type="checkbox"] {
     margin-top: 22px;
     padding-top: 16px;
   }
-  .app-dialog,
-  .app-dialog.wide {
-    inset: 0;
+  .app-dialog {
+    --dialog-gap: 16px;
+  }
+  /* App navigation remains a full-screen panel, not a content modal. */
+  .app-dialog.navigation-dialog {
     margin: 0;
     width: 100vw;
     max-width: 100vw;
@@ -1524,12 +1526,10 @@ input[type="checkbox"] {
   margin-block: 16px;
 }
 
-/* Settings keeps a stable workspace height; all dialogs share positioning and mobile sizing. */
-@media (min-width: 761px) {
-  .app-dialog.settings-dialog {
-    width: min(1160px, calc(100vw - 48px));
-    height: min(760px, calc(var(--app-height, 100dvh) - 48px));
-  }
+/* Keep category navigation stable while the settings page scrolls internally. */
+.app-dialog.settings-dialog {
+  --dialog-size: 1160px;
+  height: var(--dialog-max-height);
 }
 .settings-dialog > .dialog-body {
   display: flex;

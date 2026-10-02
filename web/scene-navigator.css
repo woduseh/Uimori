@@ -117,7 +117,7 @@
   }
 }
 .app-dialog.scene-dialog {
-  width: min(640px, calc(100vw - 32px));
+  --dialog-size: 640px;
 }
 .scene-search {
   display: flex;
@@ -211,9 +211,6 @@
   box-shadow: 0 4px 14px var(--shade);
 }
 @media (max-width: 760px) {
-  .app-dialog.scene-dialog {
-    width: 100vw;
-  }
   .reader-stage.has-scenes > .reader-scrollport {
     padding-inline: 0;
   }

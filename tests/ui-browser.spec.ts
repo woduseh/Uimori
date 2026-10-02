@@ -1638,15 +1638,45 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
   }
 });
 
-test('UI common dialogs center on desktop and fill mobile without changing dismissal or focus', async ({
+test('UI common dialogs stay centered with mobile margins, internal scrolling and native dismissal', async ({
   page,
   request,
 }, info) => {
   const chat = await seed(request, `합성 common dialog ${Date.now()}`, '', 0);
-  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
-    const height = width === MOBILE_WIDTH ? 844 : 1000;
+  for (const { width, height } of [
+    { width: DESKTOP_WIDTH, height: 1000 },
+    { width: MOBILE_WIDTH, height: 844 },
+    { width: MOBILE_WIDTH, height: 480 },
+  ]) {
     await page.setViewportSize({ width, height });
     await page.goto(`/?chat=${chat.id}`);
+    const centered = async (dialog: Locator) => {
+      await expect(dialog).toBeVisible();
+      // Lazy content can replace the dialog for one frame while loading.
+      let measured = await dialog.boundingBox();
+      await expect
+        .poll(async () => {
+          measured = await dialog.boundingBox();
+          return measured !== null;
+        })
+        .toBe(true);
+      const box = measured!;
+      const gap = width === MOBILE_WIDTH ? 16 : 24;
+      expect(box.x).toBeGreaterThanOrEqual(gap);
+      expect(box.y).toBeGreaterThanOrEqual(gap);
+      expect(box.x + box.width).toBeLessThanOrEqual(width - gap);
+      expect(box.y + box.height).toBeLessThanOrEqual(height - gap);
+      expect(Math.abs(box.x + box.width / 2 - width / 2)).toBeLessThanOrEqual(1);
+      expect(Math.abs(box.y + box.height / 2 - height / 2)).toBeLessThanOrEqual(1);
+      expect(
+        await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)
+      ).toBeLessThanOrEqual(1);
+      const close = dialog.getByRole('button', { name: / 닫기$/, exact: false }).first();
+      await expect(close).toBeInViewport({ ratio: 1 });
+      const closeBox = (await close.boundingBox())!;
+      expect(closeBox.width).toBeGreaterThanOrEqual(44);
+      expect(closeBox.height).toBeGreaterThanOrEqual(44);
+    };
     for (const title of ['채팅 설정', '작업 현황']) {
       const opener = page.getByRole('button', { name: title, exact: true });
       if (title === '작업 현황') await nav(page, title);
@@ -1656,32 +1686,7 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       // Loaded owners must replace their placeholders before checking final geometry and focus.
       if (title === '채팅 설정') await expect(dialog.locator('.chat-settings-panel')).toBeVisible();
       if (title === '작업 현황') await expect(dialog.getByTestId('usage-inspector')).toBeVisible();
-      // A dialog that re-renders as its content loads can report no box for one frame.
-      let measured = await dialog.boundingBox();
-      await expect
-        .poll(async () => {
-          measured = await dialog.boundingBox();
-          return measured !== null;
-        })
-        .toBe(true);
-      const box = measured!;
-      expect(box.x).toBeGreaterThanOrEqual(0);
-      expect(box.y).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width).toBeLessThanOrEqual(width);
-      expect(box.y + box.height).toBeLessThanOrEqual(height);
-      if (visualReview && width === MOBILE_WIDTH) {
-        expect(box.x).toBe(0);
-        expect(box.y).toBe(0);
-        expect(box.width).toBe(width);
-        expect(box.height).toBe(height);
-      } else if (visualReview) {
-        expect(Math.abs(box.x + box.width / 2 - width / 2)).toBeLessThanOrEqual(1);
-        if (visualReview)
-          expect(Math.abs(box.y + box.height / 2 - height / 2)).toBeLessThanOrEqual(1);
-        expect(box.x).toBeGreaterThan(24);
-        expect(box.y).toBeGreaterThanOrEqual(32);
-      }
-      expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      await centered(dialog);
       await dialog.getByRole('button', { name: title + ' 닫기', exact: true }).focus();
       await page.keyboard.press('Shift+Tab');
       expect(await dialog.evaluate((node) => node.contains(document.activeElement))).toBe(true);
@@ -1692,7 +1697,7 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       if (visualReview)
         await page.screenshot({
           path: info.outputPath(
-            `common-dialog-${title === '작업 현황' ? 'tasks' : 'story'}-${width}.png`
+            `common-dialog-${title === '작업 현황' ? 'tasks' : 'story'}-${width}-${height}.png`
           ),
         });
       await page.keyboard.press('Escape');
@@ -1705,27 +1710,44 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       } else if (width === DESKTOP_WIDTH) await expect(opener).toBeFocused();
       else await expect(page.locator('.chat-menu > summary')).toBeFocused();
     }
-    if (width === DESKTOP_WIDTH) {
-      await openChatMenu(page);
-      const opener = page.getByRole('button', { name: '읽기 설정', exact: true });
-      await opener.click();
-      const dialog = page.getByRole('dialog', { name: '읽기 설정', exact: true });
-      const box = (await dialog.boundingBox())!;
-      expect(box.x).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width).toBeLessThanOrEqual(width);
-      expect(box.y + box.height).toBeLessThanOrEqual(height);
-      if (visualReview)
-        expect(Math.abs(box.y + box.height / 2 - height / 2)).toBeLessThanOrEqual(1);
-      await page.mouse.click(8, 8);
-      await expect(dialog).not.toBeVisible();
-      // The opener lives in the closed ⋯ menu, so focus returns to the menu button.
-      await expect(page.locator('.chat-menu > summary')).toBeFocused();
-    } else {
+    await openChatMenu(page);
+    await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
+    const reading = page.getByRole('dialog', { name: '읽기 설정', exact: true });
+    await centered(reading);
+    if (height === 480) {
+      const body = reading.locator(':scope > .dialog-body');
+      const header = reading.locator(':scope > .dialog-header');
+      const headerBefore = (await header.boundingBox())!;
+      const pageBefore = await page.evaluate(() => window.scrollY);
+      await body.evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+      });
+      expect(await body.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+      expect((await header.boundingBox())!.y).toBe(headerBefore.y);
+      await expect(
+        reading.getByRole('button', { name: '읽기 설정 닫기', exact: true })
+      ).toBeInViewport({ ratio: 1 });
+      expect(await page.evaluate(() => window.scrollY)).toBe(pageBefore);
+      await centered(reading);
+    }
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`common-dialog-reading-${width}-${height}.png`),
+      });
+    await page.mouse.click(8, 8);
+    await expect(reading).not.toBeVisible();
+    await expect(page.locator('.chat-menu > summary')).toBeFocused();
+    await openChatMenu(page);
+    await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
+    await reading.getByRole('button', { name: '읽기 설정 닫기', exact: true }).click();
+    await expect(reading).not.toBeVisible();
+    await expect(page.locator('.chat-menu > summary')).toBeFocused();
+    if (width === MOBILE_WIDTH) {
       const opener = page.getByRole('button', { name: '탐색 메뉴', exact: true });
       await opener.click();
       const dialog = page.getByRole('dialog', { name: '탐색', exact: true });
       const box = (await dialog.boundingBox())!;
-      if (visualReview) expect(box).toEqual({ x: 0, y: 0, width, height });
+      expect(box).toEqual({ x: 0, y: 0, width, height });
       await page.keyboard.press('Escape');
       await expect(dialog).not.toBeVisible();
       await expect(opener).toBeFocused();

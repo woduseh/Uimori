@@ -48,7 +48,7 @@
   flex-shrink: 0;
 }
 .content-picker-dialog {
-  width: min(640px, calc(100vw - 32px));
+  --dialog-size: 640px;
 }
 .content-picker-dialog > .dialog-body {
   display: flex;

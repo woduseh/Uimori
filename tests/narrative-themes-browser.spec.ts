@@ -712,7 +712,7 @@ for (const [width, mode] of [
     ] as const) {
       const sourceUrl = (await thumbnail.getAttribute('src'))!;
       const scrollTop = await reader.evaluate((node) => node.scrollTop);
-      for (const dismissal of ['Escape', 'close'] as const) {
+      for (const dismissal of ['Escape', 'close', 'backdrop'] as const) {
         await button.click();
         const dialog = page.getByRole('dialog', { name: `${title} 대표 이미지`, exact: true });
         await expect(dialog).toBeVisible();
@@ -726,7 +726,30 @@ for (const [width, mode] of [
               (node as HTMLImageElement).naturalWidth / (node as HTMLImageElement).naturalHeight
           )
         ).toBeCloseTo(ratio, 2);
-        if (dismissal === 'Escape') await page.keyboard.press('Escape');
+        const viewport = page.viewportSize()!;
+        const box = (await dialog.boundingBox())!;
+        const gap = width === 412 ? 16 : 24;
+        expect(box.x).toBeGreaterThanOrEqual(gap);
+        expect(box.y).toBeGreaterThanOrEqual(gap);
+        expect(box.x + box.width).toBeLessThanOrEqual(viewport.width - gap);
+        expect(box.y + box.height).toBeLessThanOrEqual(viewport.height - gap);
+        expect(Math.abs(box.x + box.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(1);
+        expect(Math.abs(box.y + box.height / 2 - viewport.height / 2)).toBeLessThanOrEqual(1);
+        await expect(original).toBeInViewport({ ratio: 1 });
+        const imageBox = (await original.boundingBox())!;
+        expect(imageBox.width / imageBox.height).toBeCloseTo(ratio, 2);
+        const close = dialog.getByRole('button', {
+          name: `${title} 대표 이미지 닫기`,
+          exact: true,
+        });
+        await expect(close).toBeInViewport({ ratio: 1 });
+        const closeBox = (await close.boundingBox())!;
+        expect(closeBox.width).toBeGreaterThanOrEqual(44);
+        expect(closeBox.height).toBeGreaterThanOrEqual(44);
+        if (dismissal === 'Escape') {
+          await page.screenshot({ path: info.outputPath(`portrait-dialog-${title}-${width}.png`) });
+          await page.keyboard.press('Escape');
+        } else if (dismissal === 'backdrop') await page.mouse.click(8, 8);
         else
           await dialog
             .getByRole('button', { name: `${title} 대표 이미지 닫기`, exact: true })

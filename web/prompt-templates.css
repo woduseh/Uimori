@@ -18,7 +18,7 @@
   margin: 0;
 }
 .app-dialog.prompt-templates-dialog {
-  width: min(640px, calc(100vw - 32px));
+  --dialog-size: 640px;
 }
 .prompt-templates-description {
   margin-top: 0;
@@ -73,18 +73,6 @@
 }
 
 @media (max-width: 760px) {
-  /* Match the rest of the mobile app: this is a full-screen detail surface, not a narrow drawer. */
-  .app-dialog.prompt-templates-dialog {
-    inset: 0;
-    width: 100vw;
-    max-width: 100vw;
-    height: var(--app-height, 100dvh);
-    max-height: 100dvh;
-    margin: 0;
-    border: 0;
-    border-radius: 0;
-  }
-
   /* Keep prompt controls on the same two-row rhythm as the normal library. */
   .prompt-library .library-toolbar > .prompt-library-actions {
     order: 0;

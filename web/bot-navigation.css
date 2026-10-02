@@ -305,11 +305,7 @@
   margin: 7px 5px;
 }
 .bot-organize-dialog.app-dialog {
-  width: min(420px, calc(100vw - 24px));
-  height: fit-content;
-  max-height: calc(100dvh - 24px);
-  margin: auto;
-  border-radius: 12px;
+  --dialog-size: 420px;
 }
 .bot-folder-settings form,
 .bot-folder-create,

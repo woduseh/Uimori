@@ -126,6 +126,18 @@ for (const [viewportName, viewport] of [
     await expect(dialog.locator('.risu-message-surface')).toHaveCount(0);
     await expect(dialog.getByText('Harbor greets', { exact: false })).toHaveCount(0);
     await expect(dialog.getByText('미리보기', { exact: true })).toBeVisible();
+    const centered = async () => {
+      const box = (await dialog.boundingBox())!;
+      const size = page.viewportSize()!;
+      const gap = viewportName === 'mobile' ? 16 : 24;
+      expect(box.x).toBeGreaterThanOrEqual(gap);
+      expect(box.y).toBeGreaterThanOrEqual(gap);
+      expect(box.x + box.width).toBeLessThanOrEqual(size.width - gap);
+      expect(box.y + box.height).toBeLessThanOrEqual(size.height - gap);
+      expect(Math.abs(box.x + box.width / 2 - size.width / 2)).toBeLessThanOrEqual(1);
+      expect(Math.abs(box.y + box.height / 2 - size.height / 2)).toBeLessThanOrEqual(1);
+    };
+    await centered();
     if (viewportName === 'desktop') expect((await dialog.boundingBox())!.width).toBe(680);
     await dialog.getByLabel('첫 메시지 선택').selectOption('');
     await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
@@ -136,6 +148,32 @@ for (const [viewportName, viewport] of [
     await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeInViewport({
       ratio: 1,
     });
+    if (viewportName === 'mobile') {
+      await page.setViewportSize({ width: viewport.width, height: 480 });
+      await centered();
+      const header = dialog.locator(':scope > .dialog-header');
+      const submit = dialog.getByRole('button', { name: '채팅 만들기', exact: true });
+      const fields = dialog.locator('.new-story-fields');
+      const headerBox = (await header.boundingBox())!;
+      const submitBox = (await submit.boundingBox())!;
+      const closeBox = (await dialog
+        .getByRole('button', { name: '새 채팅 닫기', exact: true })
+        .boundingBox())!;
+      expect(submitBox.height).toBeGreaterThanOrEqual(44);
+      expect(closeBox.width).toBeGreaterThanOrEqual(44);
+      expect(closeBox.height).toBeGreaterThanOrEqual(44);
+      await fields.evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+      });
+      expect(await fields.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+      expect((await header.boundingBox())!.y).toBe(headerBox.y);
+      expect((await submit.boundingBox())!.y).toBe(submitBox.y);
+      await expect(submit).toBeInViewport({ ratio: 1 });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath('new-story-centered-mobile-short.png') });
+      await page.setViewportSize(viewport);
+      await centered();
+    }
     const customTitle = '추가 설정에 남긴 합성 제목';
     await dialog.getByLabel('새 채팅 이름', { exact: true }).fill(customTitle);
     await options.locator('summary').click();
