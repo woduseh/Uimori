@@ -8,6 +8,7 @@ import {
   illustrationPresetFile,
   illustrationPresetIds,
   validateIllustrationPreset,
+  normalizeIllustrationPreset,
   type IllustrationPreset,
   type IllustrationPresetCatalog,
   type IllustrationPresetPreferences,
@@ -30,11 +31,14 @@ function writePreferences(store: Store, p: IllustrationPresetPreferences) {
 export function readIllustrationPreset(store: Store, id: string): IllustrationPreset {
   return id === DEFAULT_ILLUSTRATION_PRESET_ID
     ? BUILTIN_ILLUSTRATION_PRESET
-    : store.product.get<IllustrationPreset>('illustration-preset', id);
+    : normalizeIllustrationPreset(store.product.get<IllustrationPreset>('illustration-preset', id));
 }
 export function illustrationPresetCatalog(store: Store): IllustrationPresetCatalog {
   return {
-    presets: [BUILTIN_ILLUSTRATION_PRESET, ...store.product.all('illustration-preset')],
+    presets: [
+      BUILTIN_ILLUSTRATION_PRESET,
+      ...store.product.all('illustration-preset').map(normalizeIllustrationPreset),
+    ],
     preferences: illustrationPresetPreferences(store),
   };
 }

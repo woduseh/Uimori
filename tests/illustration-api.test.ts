@@ -120,10 +120,10 @@ describe('illustration API in test mode with the synthetic generator', () => {
     const source = await respond();
     expect(await api('/api/illustration-settings')).toMatchObject({
       revision: 1,
-      generator: 'none',
+      automatic: false,
     });
     await api(`/api/sources/${source.id}/illustrations`, {}, 'POST', 409).then((body) =>
-      expect(body.error).toBe('ILLUSTRATION_GENERATOR_UNCONFIGURED')
+      expect(body.error).toBe('ILLUSTRATION_MODEL_REQUIRED')
     );
     const saved = await settings({ generator: 'fixture', maxPerSource: 1, maxAutoRetries: 0 });
     expect(saved.revision).toBe(2);
@@ -359,6 +359,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
       kind: 'illustration-preset',
       model: {
         ...emptyIllustrationPreset(),
+        generator: 'comfyui',
         styleGuidance: '빛'.repeat(2001),
         comfyui: { workflow: FIXTURE_WORKFLOW, negativeGuidance: '글'.repeat(1001) },
       },

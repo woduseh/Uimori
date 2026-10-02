@@ -376,11 +376,14 @@ export const CODEX_RUNTIME_CONFIG = {
   'features.unbounded_connection_retries': false,
   'features.image_generation': false,
 } as const;
-/** Illustration turns expose only image generation; they do not need search or code mode. */
-export const CODEX_ILLUSTRATION_CONFIG = {
+/** Illustration text decisions expose no tools. Image turns add only image generation. */
+export const CODEX_ILLUSTRATION_TEXT_CONFIG = {
   ...CODEX_RUNTIME_CONFIG,
   web_search: 'disabled',
   'features.code_mode': false,
+} as const;
+export const CODEX_ILLUSTRATION_CONFIG = {
+  ...CODEX_ILLUSTRATION_TEXT_CONFIG,
   'features.image_generation': true,
 } as const;
 const IMAGE_BASE_INSTRUCTIONS =
@@ -732,7 +735,8 @@ export class CodexRuntime implements CodexRuntimeService {
         stablePrefix: built.baseInstructions
           ? JSON.stringify([built.baseInstructions, built.developerInstructions])
           : built.developerInstructions,
-        config: CODEX_RUNTIME_CONFIG,
+        config:
+          request.role === 'illustration' ? CODEX_ILLUSTRATION_TEXT_CONFIG : CODEX_RUNTIME_CONFIG,
         allowedItems: TEXT_ITEMS,
       };
     } catch (caught) {

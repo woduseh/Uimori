@@ -172,7 +172,6 @@ describe('illustration storage on the current schema', () => {
     });
     expect(illustrationSettings(store)).toMatchObject({
       revision: 1,
-      generator: 'none',
       automatic: false,
     });
     const path = store.path;
@@ -182,7 +181,7 @@ describe('illustration storage on the current schema', () => {
       expect(reopened.db.prepare('PRAGMA user_version').get()).toEqual({
         user_version: DATABASE_SCHEMA_VERSION,
       });
-      expect(illustrationSettings(reopened).generator).toBe('none');
+      expect(illustrationSettings(reopened)).not.toHaveProperty('generator');
       expect(reopened.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
       reopened.close();
@@ -283,10 +282,10 @@ describe('illustration storage on the current schema', () => {
     expect(
       http(() =>
         reserveIllustration(store, source, 'manual', {
-          settings: fixtureSettings({ generator: 'none' }),
+          settings: fixtureSettings({ generator: undefined }),
         })
       ).message
-    ).toBe('ILLUSTRATION_GENERATOR_UNCONFIGURED');
+    ).toBe('ILLUSTRATION_MODEL_REQUIRED');
     expect(http(() => reserveIllustration(store, source, 'manual', { settings })).message).toBe(
       'ILLUSTRATION_GENERATOR_UNCONFIGURED'
     );

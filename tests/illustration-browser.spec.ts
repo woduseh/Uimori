@@ -164,8 +164,8 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await selectSettingsSection(page, '삽화');
   const section = page.getByRole('region', { name: '삽화 설정', exact: true });
   await expect(section).toBeVisible();
-  const generator = section.getByLabel('삽화 생성기', { exact: true });
-  await expect(generator).toHaveValue('none');
+  const generator = section.getByLabel('테스트 삽화 생성기', { exact: true });
+  await expect(generator).toHaveValue('');
   await generator.selectOption('fixture');
   await expect(section.getByLabel('응답 완료 후 자동 삽화 생성', { exact: true })).toBeVisible();
   const limit = section.getByLabel('장면당 최대 삽화 개수', { exact: true });
@@ -219,9 +219,10 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
   const section = page.getByRole('region', { name: '삽화 설정', exact: true });
-  await section.getByLabel('삽화 생성기', { exact: true }).selectOption('comfyui');
+  await section.locator('summary').filter({ hasText: 'ComfyUI 생성 환경' }).click();
   await page.getByRole('button', { name: '새 삽화 프리셋', exact: true }).click();
   const presetEditor = page.getByRole('region', { name: '삽화 프리셋 편집기', exact: true });
+  await presetEditor.getByLabel('프리셋 삽화 생성기').selectOption('comfyui');
   await presetEditor.locator('summary').filter({ hasText: 'ComfyUI 설정' }).click();
   for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -255,7 +256,7 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   }
   await section.getByLabel('시간 제한 (초)', { exact: true }).fill('60');
   await section.getByLabel('확인 간격 (초)', { exact: true }).fill('0.25');
-  await section.getByLabel('삽화 생성기', { exact: true }).selectOption('none');
+  await section.getByLabel('테스트 삽화 생성기', { exact: true }).selectOption('');
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
   await expect(
     section.getByRole('status').filter({ hasText: '삽화 설정을 저장했어요' })
@@ -515,7 +516,7 @@ test('ILUI05 styled Markdown keeps its message tree, shows progress and reconnec
   const progress = activity.getByRole('region', { name: '이 응답의 삽화 작업' });
   await expect(progress).toContainText('3/3컷 완료');
   await progress.getByText('삽화 호출과 토큰', { exact: true }).click();
-  await expect(progress).toContainText('모델 호출 0회');
+  await expect(progress).toContainText('모델 요청 0회');
   await expect(progress).toContainText('미확인');
   await activity.scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('illustration-progress-desktop.png') });

@@ -2,7 +2,9 @@ import type { Illustration } from '../core/illustration.js';
 
 /** Error codes stay stable identifiers; remote provider messages are never shown verbatim. */
 const messages: Record<string, string> = {
-  ILLUSTRATION_GENERATOR_UNCONFIGURED: '설정 → 삽화에서 생성기를 선택해 주세요.',
+  ILLUSTRATION_GENERATOR_UNCONFIGURED: '설정 → 삽화에서 프리셋과 생성 환경을 확인해 주세요.',
+  ILLUSTRATION_CODEX_CONTENT_BLOCKED:
+    'JEV가 이 컷을 성적으로 노골적인 이미지 요청으로 판단해 Codex 이미지 생성으로 전송하지 않았어요.',
   ILLUSTRATION_ACTIVE: '이 컷이 아직 생성 중이에요. 다른 컷과 다음 채팅은 계속할 수 있어요.',
   ILLUSTRATION_PLAN_ACTIVE: '이 응답의 삽화 구간을 고르고 있어요.',
   ILLUSTRATION_STORYBOARD_INVALID: '삽화 구간 응답을 해석하지 못했어요. 다시 요청해 주세요.',
@@ -115,9 +117,11 @@ export const illustrationActive = (item: Pick<Illustration, 'status'>) =>
 const terminalFailure = (item: Pick<Illustration, 'status'>) =>
   ['failed', 'cancelled', 'interrupted'].includes(item.status);
 export const illustrationRetryable = (
-  item: Pick<Illustration, 'status' | 'generator' | 'diagnostic'>
+  item: Pick<Illustration, 'status' | 'generator' | 'diagnostic'> & { error?: string | null }
 ) =>
   terminalFailure(item) &&
+  item.error !== 'ILLUSTRATION_CODEX_CONTENT_BLOCKED' &&
+  item.diagnostic?.code !== 'ILLUSTRATION_CODEX_CONTENT_BLOCKED' &&
   !(
     item.generator === 'comfyui' &&
     (item.diagnostic?.comfyui?.submission === 'uncertain' ||

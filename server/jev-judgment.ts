@@ -22,7 +22,7 @@ export type JevResult = {
   attemptId: string;
 };
 export type JevHooks = {
-  kind?: 'lore-selection' | 'translation-refusal' | 'image-selection' | 'main-refusal';
+  kind?: NonNullable<WireRecord['judgment']>['kind'];
   signal: AbortSignal;
   onAttemptStart: (wire: WireRecord) => string | Promise<string>;
   onAttemptFinish: (id: string, result: ProviderResult) => void | Promise<void>;
@@ -93,13 +93,15 @@ export async function executeJevJudgment(
     connectionId: 'typesafe-judgment',
     protocol: 'typesafe-systemone-v1',
     role:
-      hooks.kind === 'main-refusal'
-        ? 'main'
-        : hooks.kind === 'translation-refusal'
-          ? 'translation'
-          : hooks.kind === 'image-selection'
-            ? 'image'
-            : 'context',
+      hooks.kind === 'illustration-content'
+        ? 'illustration'
+        : hooks.kind === 'main-refusal'
+          ? 'main'
+          : hooks.kind === 'translation-refusal'
+            ? 'translation'
+            : hooks.kind === 'image-selection'
+              ? 'image'
+              : 'context',
     modelId: JEV_MODEL,
     method: 'POST',
     url: JEV_ENDPOINT,

@@ -36,11 +36,17 @@ export const ILLUSTRATION_MAX_IMAGE_BYTES = IMAGE_INPUT_MAX_BYTES;
 export const ILLUSTRATION_MAX_PER_SOURCE = 8;
 export const ILLUSTRATION_MAX_AUTO_RETRIES = 5;
 // Bound optional model context by cost, while preserving the full authored text in storage.
-export const ILLUSTRATION_EXCERPT_TOKENS = { scene: 8000, bot: 2000, persona: 1000 } as const;
+export const ILLUSTRATION_EXCERPT_TOKENS = {
+  scene: 8000,
+  target: 2000,
+  bot: 2000,
+  persona: 1000,
+} as const;
 
 export type IllustrationSettings = {
   revision: number;
-  generator: IllustrationGenerator;
+  /** Legacy field; never selects a production backend. Only test fixtures use it. */
+  generator?: IllustrationGenerator;
   /** Plan illustrations after each completed generated response. */
   automatic: boolean;
   /** Maximum distinct illustration targets kept for one response. */
@@ -63,7 +69,6 @@ export type IllustrationSettings = {
 export function defaultIllustrationSettings(): IllustrationSettings {
   return {
     revision: 1,
-    generator: 'none',
     automatic: false,
     maxPerSource: 2,
     automaticMaxTargets: 1,
@@ -130,12 +135,20 @@ export type IllustrationStatus =
 export type IllustrationStage =
   | 'preparation'
   | 'planning'
+  | 'content-check'
   | 'placement'
   | 'prompt'
   | 'generate'
   | 'store'
   | 'reconcile';
+export type IllustrationContentCheck = {
+  status: 'allowed' | 'blocked' | 'unavailable';
+  inputHash: string;
+  score?: number;
+  code?: string;
+};
 export type IllustrationDiagnostic = {
+  contentCheck?: IllustrationContentCheck;
   stage: IllustrationStage;
   storyboard?: IllustrationStoryboard;
   afterByTarget?: Record<string, string | null>;

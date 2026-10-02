@@ -106,7 +106,8 @@ export function validateIllustrationSettings(
     'codex',
     'comfyui',
   ]);
-  if (!ILLUSTRATION_GENERATORS.includes(b.generator)) throw new HttpError(400, 'Invalid generator');
+  if (b.generator !== undefined && !ILLUSTRATION_GENERATORS.includes(b.generator))
+    throw new HttpError(400, 'Invalid generator');
   if (b.generator === 'fixture' && !options.testMode)
     throw new HttpError(400, 'Fixture generator requires test mode');
   const codex = record(b.codex);
@@ -119,7 +120,9 @@ export function validateIllustrationSettings(
     throw new HttpError(400, 'Invalid ComfyUI credential env');
   return {
     revision: options.revision,
-    generator: b.generator,
+    ...(options.testMode && ['fixture', 'none'].includes(b.generator)
+      ? { generator: b.generator }
+      : {}),
     automatic: boolean(b.automatic, 'automatic'),
     automaticMaxTargets: number(
       b.automaticMaxTargets ?? 1,
@@ -156,9 +159,13 @@ export function illustrationSettings(store: Store): IllustrationSettings {
     | undefined;
   const saved = row ? (parse(row.body) as Partial<IllustrationSettings>) : {};
   const defaults = defaultIllustrationSettings();
+  const { generator, ...environment } = saved;
   return {
     ...defaults,
-    ...saved,
+    ...environment,
+    ...(generator === 'fixture' ? { generator } : {}),
+    // A legacy disabled generator must not suddenly enable automatic work.
+    ...(generator === 'none' ? { automatic: false } : {}),
     codex: { ...defaults.codex, ...(saved.codex ?? {}) },
     comfyui: { ...defaults.comfyui, ...(saved.comfyui ?? {}) },
   };
@@ -504,6 +511,12 @@ function frozenInput(
   options: ReserveOptions
 ): IllustrationJobInput {
   const preset = effectiveIllustrationPreset(store, source.chatId);
+  if (settings.generator === 'fixture' && !options.testMode)
+    throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
+  const generator =
+    options.testMode && settings.generator === 'fixture' ? 'fixture' : preset.generator;
+  if (options.testMode && settings.generator === 'none')
+    throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
   const base = {
     preset: illustrationPresetStamp(preset),
     version: 1 as const,
@@ -511,7 +524,7 @@ function frozenInput(
     styleGuidance: preset.styleGuidance,
     maxAutoRetries: settings.maxAutoRetries,
   };
-  if (settings.generator === 'codex') {
+  if (generator === 'codex') {
     if (!settings.codex.model) throw new HttpError(409, 'ILLUSTRATION_MODEL_REQUIRED');
     const model = store.product.modelSnapshot(settings.codex.model.id, 'illustration');
     if (model.connection.protocol !== 'codex-app-server-v1')
@@ -527,7 +540,7 @@ function frozenInput(
       },
     };
   }
-  if (settings.generator === 'comfyui') {
+  if (generator === 'comfyui') {
     if (!settings.comfyui.baseUrl) throw new HttpError(409, 'COMFYUI_UNCONFIGURED');
     if (!preset.comfyui.workflow.trim()) throw new HttpError(409, 'COMFYUI_WORKFLOW_MISSING');
     try {
@@ -555,7 +568,7 @@ function frozenInput(
       },
     };
   }
-  if (settings.generator === 'fixture' && options.testMode)
+  if (generator === 'fixture' && options.testMode)
     return {
       ...base,
       generator: 'fixture',
@@ -575,8 +588,6 @@ export function reserveIllustration(
 ): IllustrationJobRow {
   return store.transaction(() => {
     const settings = options.settings ?? illustrationSettings(store);
-    if (settings.generator === 'none')
-      throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
     const slots = illustrationSlots(store, source.id);
     if (slots.active > 0) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
     if (slots.total >= settings.maxPerSource)
@@ -855,7 +866,7 @@ const reservationFailureCode = (error: unknown): string => {
 /** Called inside the source commit transaction. Limits are silent; configuration errors are visible. */
 export function scheduleAutomaticIllustration(store: Store, source: Source): void {
   const settings = illustrationSettings(store);
-  if (!settings.automatic || settings.generator === 'none') return;
+  if (!settings.automatic) return;
   try {
     reserveIllustrationPlan(store, source, 'automatic', {
       settings,
@@ -878,7 +889,7 @@ export function scheduleAutomaticIllustration(store: Store, source: Source): voi
       preset: illustrationPresetStamp(preset),
       version: 1,
       task: 'plan',
-      generator: settings.generator,
+      generator: settings.generator === 'fixture' ? 'fixture' : preset.generator,
       settingsRevision: settings.revision,
       styleGuidance: preset.styleGuidance,
       maxAutoRetries: settings.maxAutoRetries,
@@ -1064,6 +1075,7 @@ export function retryIllustration(store: Store, id: string): Illustration {
     const job = illustrationJob(store, id);
     if (!RETRYABLE_STATUSES.includes(job.status))
       throw new HttpError(409, 'ILLUSTRATION_NOT_RETRYABLE');
+    if (job.error === 'ILLUSTRATION_CODEX_CONTENT_BLOCKED') throw new HttpError(409, job.error);
     if (job.error === 'ILLUSTRATION_GENERATOR_UNCONFIGURED' || !job.input.generator)
       throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
     if (!job.input.codex && !job.input.comfyui && !job.input.fixture)
@@ -1082,6 +1094,7 @@ export function retryIllustration(store: Store, id: string): Illustration {
     const diagnostic: IllustrationDiagnostic = {
       stage: 'preparation',
       attempts: job.diagnostic?.attempts ?? [],
+      contentCheck: job.diagnostic?.contentCheck,
       prompt: job.diagnostic?.prompt,
       promptRequestHash: job.diagnostic?.promptRequestHash,
       retries: [

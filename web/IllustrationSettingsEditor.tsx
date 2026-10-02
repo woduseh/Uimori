@@ -1,5 +1,8 @@
 import { IllustrationPresetSettings } from './IllustrationPresetSettings.js';
-import type { IllustrationPresetScope } from '../core/illustration-presets.js';
+import type {
+  IllustrationPresetScope,
+  IllustrationPresetGenerator,
+} from '../core/illustration-presets.js';
 import {
   useSettingsSaveHandler,
   useSettingsSaveGroup,
@@ -33,10 +36,12 @@ type TestResult =
 /** Global illustration settings. Frozen into each job at reservation; running jobs keep their copy. */
 function IllustrationEnvironmentEditor({
   library,
+  activeGenerator,
   onDirtyChange,
   onSaveHandlerChange,
 }: {
   library: Library;
+  activeGenerator: IllustrationPresetGenerator;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
@@ -249,30 +254,28 @@ function IllustrationEnvironmentEditor({
     <section aria-label="삽화 설정" className="settings-section illustration-settings">
       <h3>생성 환경·자동 생성</h3>
       <p>
-        연결과 모델, 자동 생성 정책은 모든 프리셋에서 공통으로 사용해요. 설정은 새 작업부터
-        적용해요.
+        생성기는 선택한 프리셋을 따라가요. 아래 연결·모델은 같은 생성기의 프리셋들이 함께 사용하며,
+        변경은 다음 예약부터 적용돼요.
       </p>
       <fieldset disabled={busy} className="control-grid">
-        <label>
-          삽화 생성기
-          <select
-            aria-label="삽화 생성기"
-            value={draft.generator}
-            onChange={(event) =>
-              change({
-                ...draft,
-                generator: event.target.value as IllustrationSettings['generator'],
-              })
-            }
-          >
-            <option value="none">사용 안 함</option>
-            <option value="codex">Codex · ChatGPT 구독의 이미지 생성</option>
-            <option value="comfyui">ComfyUI · 원격 PC의 API</option>
-            {(testMode || draft.generator === 'fixture') && (
+        {testMode && (
+          <label>
+            테스트 생성기
+            <select
+              aria-label="테스트 삽화 생성기"
+              value={draft.generator === 'fixture' ? 'fixture' : ''}
+              onChange={(event) =>
+                change({
+                  ...draft,
+                  generator: event.target.value === 'fixture' ? 'fixture' : undefined,
+                })
+              }
+            >
+              <option value="">선택한 프리셋 사용</option>
               <option value="fixture">모의 생성기 (테스트 모드)</option>
-            )}
-          </select>
-        </label>
+            </select>
+          </label>
+        )}
         <label className="check">
           <Switch
             aria-label="응답 완료 후 자동 삽화 생성"
@@ -308,9 +311,11 @@ function IllustrationEnvironmentEditor({
           change({ ...draft, maxAutoRetries: value })
         )}
         <small className="full">일시적인 오류가 나면 설정한 횟수만큼 다시 시도해요.</small>
-        {draft.generator === 'codex' && (
+        <details className="full illustration-preset-disclosure" open={activeGenerator === 'codex'}>
+          <summary>
+            Codex 생성 환경{activeGenerator === 'codex' && <small>현재 프리셋에서 사용</small>}
+          </summary>
           <fieldset className="control-grid full">
-            <legend>Codex</legend>
             {selector(
               'Codex 삽화 모델',
               draft.codex.model,
@@ -319,7 +324,8 @@ function IllustrationEnvironmentEditor({
               codexModels.length ? '모델 미지정' : 'Codex 프로바이더의 모델 프리셋이 없어요'
             )}
             <small className="full">
-              에이전트에서 로그인한 Codex 프로바이더의 모델을 선택해요.
+              Codex 연결에서 로그인한 모델을 선택해요. 이미지 생성 전 JEV가 노골적인 성적 묘사를
+              판정하면 해당 컷을 전송하지 않아요. JEV 미설정·판정 오류 시에는 공급자 판단에 맡겨요.
             </small>
             <label className="check">
               <Switch
@@ -335,10 +341,15 @@ function IllustrationEnvironmentEditor({
               채팅의 참조 이미지 사용
             </label>
           </fieldset>
-        )}
-        {draft.generator === 'comfyui' && (
+        </details>
+        <details
+          className="full illustration-preset-disclosure"
+          open={activeGenerator === 'comfyui'}
+        >
+          <summary>
+            ComfyUI 생성 환경{activeGenerator === 'comfyui' && <small>현재 프리셋에서 사용</small>}
+          </summary>
           <fieldset className="control-grid full">
-            <legend>ComfyUI</legend>
             <label className="full">
               ComfyUI 주소
               <input
@@ -415,7 +426,7 @@ function IllustrationEnvironmentEditor({
               0.25
             )}
           </fieldset>
-        )}
+        </details>
         <div className="form-actions settings-save-actions full">
           <IconButton
             icon={RefreshIcon}
@@ -480,6 +491,7 @@ export function IllustrationSettingsEditor({
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
+  const [activeGenerator, setActiveGenerator] = useState<IllustrationPresetGenerator>('codex');
   const [presetsDirty, setPresetsDirty] = useState(false);
   const [environmentDirty, setEnvironmentDirty] = useState(false);
   const group = useSettingsSaveGroup(illustrationSections);
@@ -494,11 +506,13 @@ export function IllustrationSettingsEditor({
     <>
       <IllustrationPresetSettings
         scope={scope}
+        onGeneratorChange={setActiveGenerator}
         onDirtyChange={setPresetsDirty}
         onSaveHandlerChange={group.registrations.presets}
       />
       <IllustrationEnvironmentEditor
         library={library}
+        activeGenerator={activeGenerator}
         onDirtyChange={setEnvironmentDirty}
         onSaveHandlerChange={group.registrations.environment}
       />

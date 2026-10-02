@@ -80,3 +80,20 @@ export async function processImageUpload(value: { base64: unknown }) {
   const image = await processImage(Buffer.from(value.base64, 'base64'));
   return { mime: image.mime, base64: image.bytes.toString('base64') };
 }
+
+/** Transmission-only copy. Originals and their hashes remain untouched in storage. */
+export async function resizeIllustrationReference(bytes: Buffer, mime: string) {
+  const input = sharp(bytes, { limitInputPixels: MAX_PIXELS, failOn: 'error' });
+  const metadata = await input.metadata();
+  const longest = Math.max(metadata.width ?? 0, metadata.height ?? 0);
+  if (longest <= 1536 && (metadata.pages ?? 1) === 1 && !metadata.orientation)
+    return { bytes, mime };
+  return {
+    bytes: await input
+      .rotate()
+      .resize({ width: 1536, height: 1536, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 90, alphaQuality: 100 })
+      .toBuffer(),
+    mime: 'image/webp',
+  };
+}
