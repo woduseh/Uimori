@@ -314,3 +314,104 @@
     flex: 1;
   }
 }
+
+.theme-intro,
+.theme-dimension-heading p,
+.theme-inherited {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+}
+.theme-dimension {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.theme-dimension + .theme-dimension {
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.theme-dimension-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.theme-dimension-heading h3 {
+  margin: 0 0 5px;
+}
+.theme-dimension-heading > div {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.theme-dimension-heading > button {
+  min-height: 44px;
+  flex: none;
+}
+.theme-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
+  gap: 12px;
+}
+.theme-palette-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.theme-palette-card.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.theme-palette-card small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.theme-palette-swatches {
+  display: flex;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+.theme-palette-swatches > span {
+  flex: 1;
+}
+.theme-swatch[data-layout="builtin:cinematic"] .theme-swatch-nav {
+  width: 12%;
+}
+.theme-swatch[data-layout="builtin:cinematic"] .theme-swatch-page {
+  border-inline: 1px solid currentColor;
+  padding-inline: 10px;
+  margin-block: 10px;
+}
+.theme-swatch[data-layout="builtin:letter"] .theme-swatch-page {
+  border-bottom: 1px solid currentColor;
+  margin-block: 10px;
+  padding-bottom: 5px;
+  font-family: Georgia, serif;
+}
+.theme-swatch[data-layout="builtin:scrapbook"] .theme-swatch-page {
+  border: 1px dashed currentColor;
+  transform: rotate(-3deg);
+  margin-block: 10px;
+  padding-inline: 10px;
+}
+@media (max-width: 600px) {
+  .theme-palette-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .theme-palette-card {
+    padding: 12px;
+  }
+}

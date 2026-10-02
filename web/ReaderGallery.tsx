@@ -20,7 +20,9 @@ function Portrait({ url, title }: { url: string; title: string }) {
 export const ReaderGallery = memo(function ReaderGallery({
   bot,
   persona,
+  scene = false,
 }: {
+  scene?: boolean;
   bot: Content;
   persona?: Content | null;
 }) {
@@ -29,7 +31,11 @@ export const ReaderGallery = memo(function ReaderGallery({
   const selectedUrl = contentPortraitUrl(selected);
   return (
     <>
-      <aside className="reader-gallery" data-uimori-part="gallery" aria-label="등장인물 갤러리">
+      <aside
+        className={`reader-gallery${scene ? ' scene-portraits' : ''}`}
+        data-uimori-part={scene ? 'portrait-group' : 'gallery'}
+        aria-label="등장인물 갤러리"
+      >
         <div className="reader-gallery-heading" aria-hidden="true">
           <span>PORTRAITS</span>
           <Sparkles size={13} aria-hidden="true" />

@@ -1,3 +1,4 @@
+import { liquidGallery } from '../core/liquid-gallery.js';
 import { test, expect, type APIRequestContext, type Locator } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -157,17 +158,22 @@ async function seed(request: APIRequestContext, squareBot = false) {
     },
   });
   expect(translated.ok(), await translated.text()).toBe(true);
+  const savedTheme = await request.post('/api/resources/save', {
+    data: { kind: 'theme', id: null, model: liquidGallery },
+  });
+  expect(savedTheme.ok(), await savedTheme.text()).toBe(true);
+  const theme = (await savedTheme.json()).saved;
   const catalog = await (await request.get('/api/themes')).json();
   const selection = await request.post('/api/themes/selection', {
     data: {
       scope: 'chat',
       targetId: chat.id,
-      themeId: 'builtin:liquid-gallery',
+      themeId: theme.id,
       expectedRevision: catalog.preferences.revision,
     },
   });
   expect(selection.ok(), await selection.text()).toBe(true);
-  return { chatId: chat.id, bot, persona, sourceId: source.id };
+  return { chatId: chat.id, bot, persona, sourceId: source.id, themeId: theme.id };
 }
 
 for (const width of [1440, 412]) {
@@ -188,10 +194,7 @@ for (const width of [1440, 412]) {
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       await page.goto(`/?chat=${data.chatId}`);
-      await expect(page.locator('html')).toHaveAttribute(
-        'data-uimori-theme',
-        'builtin:liquid-gallery'
-      );
+      await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', data.themeId);
       const gallery = page.getByRole('complementary', { name: '등장인물 갤러리' });
       await expect(gallery).toHaveCount(1);
       await expect(gallery).toBeVisible();

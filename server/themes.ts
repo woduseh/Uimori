@@ -4,6 +4,9 @@ import type { Store } from './store.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import {
   BUILTIN_THEMES,
+  LEGACY_BUILTIN_THEMES,
+  getBuiltinTheme,
+  normalizeThemePreferences,
   DEFAULT_THEME_ID,
   defaultThemePreferences,
   validateTheme,
@@ -13,13 +16,15 @@ import {
   type ThemePreferences,
 } from '../core/themes.js';
 
+import { BUILTIN_PALETTES, THEME_PALETTE_ID, isPaletteId } from '../core/theme-palettes.js';
+
 const preferenceKey = 'theme-preferences';
 export function readTheme(store: Store, id: string): Theme {
-  return BUILTIN_THEMES.find((theme) => theme.id === id) ?? store.product.get<Theme>('theme', id);
+  return getBuiltinTheme(id) ?? store.product.get<Theme>('theme', id);
 }
 export function themePreferences(store: Store): ThemePreferences {
   const row = store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get(preferenceKey);
-  return row ? JSON.parse(String(row.value)) : defaultThemePreferences();
+  return row ? normalizeThemePreferences(JSON.parse(String(row.value))) : defaultThemePreferences();
 }
 export function themeCatalog(store: Store): ThemeCatalog {
   return {
@@ -53,12 +58,29 @@ function writePreferences(store: Store, p: ThemePreferences): ThemePreferences {
 }
 export function selectTheme(store: Store, input: unknown): ThemePreferences {
   const b = record(input);
-  fields(b, ['scope', 'targetId', 'themeId', 'expectedRevision']);
+  fields(b, ['scope', 'targetId', 'dimension', 'themeId', 'paletteId', 'expectedRevision']);
+  const dimension = b.dimension === undefined ? 'theme' : text(b.dimension, 'dimension', 10);
+  if (dimension !== 'theme' && dimension !== 'palette')
+    throw new HttpError(400, '테마 또는 팔레트 선택을 확인해 주세요.');
+  if (dimension === 'theme' ? 'paletteId' in b : 'themeId' in b)
+    throw new HttpError(400, '테마와 팔레트는 각각 선택해 주세요.');
   const scope = text(b.scope, 'scope', 10);
   if (!['global', 'bot', 'chat'].includes(scope))
     throw new HttpError(400, '테마 적용 범위를 확인해 주세요.');
-  const themeId = b.themeId === null ? null : text(b.themeId, 'theme ID', 100);
-  if (themeId) readTheme(store, themeId);
+  const rawId = dimension === 'theme' ? b.themeId : b.paletteId;
+  const selectedId = rawId === null ? null : text(rawId, dimension + ' ID', 100);
+  if (selectedId !== null) {
+    if (dimension === 'theme') readTheme(store, selectedId);
+    else if (!isPaletteId(selectedId)) throw new HttpError(400, '지원하지 않는 팔레트예요.');
+  }
+  // Old clients may still submit a retired palette-only preset. Keep layout and palette
+  // dimensions independent: the layout alias must not overwrite an existing palette choice.
+  const themeId =
+    selectedId === 'builtin:midnight' || selectedId === 'builtin:blossom'
+      ? DEFAULT_THEME_ID
+      : selectedId === 'builtin:liquid-gallery'
+        ? 'builtin:cinematic'
+        : selectedId;
   const targetId = scope === 'global' ? '' : text(b.targetId, 'target ID', 100);
   if (scope === 'bot') {
     const content = store.product.get<{ kind: string }>('content', targetId);
@@ -70,7 +92,14 @@ export function selectTheme(store: Store, input: unknown): ThemePreferences {
     const p = themePreferences(store);
     if (p.revision !== expected)
       throw new HttpError(409, '다른 창에서 테마 선택을 바꿨어요. 다시 불러온 뒤 선택해 주세요.');
-    if (scope === 'global') p.defaultThemeId = themeId ?? DEFAULT_THEME_ID;
+    if (dimension === 'palette') {
+      if (scope === 'global') p.defaultPaletteId = selectedId ?? THEME_PALETTE_ID;
+      else {
+        const map = scope === 'bot' ? (p.botPalettes ??= {}) : (p.chatPalettes ??= {});
+        if (selectedId !== null) map[targetId] = selectedId;
+        else delete map[targetId];
+      }
+    } else if (scope === 'global') p.defaultThemeId = themeId ?? DEFAULT_THEME_ID;
     else {
       const map = scope === 'bot' ? p.botThemes : p.chatThemes;
       if (themeId) map[targetId] = themeId;
@@ -96,7 +125,9 @@ export function deleteTheme(store: Store, id: string, expectedRevision: number) 
   });
 }
 export function themeRoutes(app: FastifyInstance, store: Store) {
-  const builtinVersion = createHash('sha256').update(JSON.stringify(BUILTIN_THEMES)).digest('hex');
+  const builtinVersion = createHash('sha256')
+    .update(JSON.stringify([BUILTIN_THEMES, LEGACY_BUILTIN_THEMES, BUILTIN_PALETTES]))
+    .digest('hex');
   app.get('/api/themes', (request, reply) => {
     const versions = store.db
       .prepare("SELECT id,revision FROM versions WHERE kind='theme' ORDER BY id")
