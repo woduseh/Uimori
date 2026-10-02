@@ -111,6 +111,11 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
     } else if (Array.isArray(value)) value.forEach(scan);
     else if (value && typeof value === 'object') Object.values(value).forEach(scan);
   };
+  // Backgrounds are presentation-only metadata, but still own their uploaded image bytes.
+  const themePreferences = db
+    .prepare("SELECT value FROM app_metadata WHERE key='theme-preferences'")
+    .get();
+  if (typeof themePreferences?.value === 'string') scan(JSON.parse(themePreferences.value));
   for (const node of nodes.values()) if (!hidden.has(`${node.kind}:${node.id}`)) visitId(node.id);
   // Text roots and authored JSON are kept separate from disposable execution/command logs.
   for (const [table, column] of [

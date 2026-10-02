@@ -18,6 +18,7 @@ import {
 
 import { BUILTIN_PALETTES, THEME_PALETTE_ID, isPaletteId } from '../core/theme-palettes.js';
 
+import { defaultThemeBackground, validateThemeBackground } from '../core/theme-background.js';
 const preferenceKey = 'theme-preferences';
 export function readTheme(store: Store, id: string): Theme {
   return getBuiltinTheme(id) ?? store.product.get<Theme>('theme', id);
@@ -108,6 +109,43 @@ export function selectTheme(store: Store, input: unknown): ThemePreferences {
     return writePreferences(store, p);
   });
 }
+export function selectThemeBackground(store: Store, input: unknown): ThemePreferences {
+  const b = record(input);
+  fields(b, ['scope', 'targetId', 'background', 'expectedRevision']);
+  const scope = text(b.scope, 'scope', 10);
+  if (!['global', 'bot', 'chat'].includes(scope))
+    throw new HttpError(400, '배경 적용 범위를 확인해 주세요.');
+  const targetId = scope === 'global' ? '' : text(b.targetId, 'target ID', 100);
+  if (scope === 'bot') {
+    const content = store.product.get<{ kind: string }>('content', targetId);
+    if (content.kind !== 'bot') throw new HttpError(400, '봇에만 기본 배경을 지정할 수 있어요.');
+  }
+  if (scope === 'chat') store.chat(targetId);
+  let background: ReturnType<typeof validateThemeBackground> | null;
+  try {
+    background = b.background === null ? null : validateThemeBackground(b.background);
+  } catch (error) {
+    throw new HttpError(400, (error as Error).message);
+  }
+  const expected = number(b.expectedRevision, 'revision', 0);
+  return store.transaction(() => {
+    const p = themePreferences(store);
+    if (p.revision !== expected)
+      throw new HttpError(409, '다른 창에서 테마 설정을 바꿨어요. 다시 불러온 뒤 저장해 주세요.');
+    if (
+      background?.imageHash &&
+      !store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(background.imageHash)
+    )
+      throw new HttpError(400, '배경 이미지를 먼저 업로드해 주세요.');
+    if (scope === 'global') p.defaultBackground = background ?? { ...defaultThemeBackground };
+    else {
+      const map = scope === 'bot' ? (p.botBackgrounds ??= {}) : (p.chatBackgrounds ??= {});
+      if (background) map[targetId] = background;
+      else delete map[targetId];
+    }
+    return writePreferences(store, p);
+  });
+}
 export function deleteTheme(store: Store, id: string, expectedRevision: number) {
   if (id.startsWith('builtin:')) throw new HttpError(400, '기본 테마는 삭제할 수 없어요.');
   return store.transaction(() => {
@@ -141,6 +179,7 @@ export function themeRoutes(app: FastifyInstance, store: Store) {
     return themeCatalog(store);
   });
   app.post('/api/themes/selection', (request) => selectTheme(store, request.body));
+  app.post('/api/themes/background', (request) => selectThemeBackground(store, request.body));
   app.get<{ Params: { id: string } }>('/api/themes/:id/export', (request) =>
     themeFile(readTheme(store, request.params.id))
   );

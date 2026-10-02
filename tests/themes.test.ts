@@ -485,6 +485,7 @@ describe('Independent layout and palette choices', () => {
       'builtin:cinematic',
       'builtin:letter',
       'builtin:scrapbook',
+      'builtin:classic-frame',
     ]);
     choose(store, 'palette', 'sage');
     const saved = themePreferences(store);

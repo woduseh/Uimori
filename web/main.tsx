@@ -68,6 +68,7 @@ import { ContentPicker } from './ContentPicker.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ReaderGallery, ReaderPortraitButton } from './ReaderGallery.js';
 import { contentPortraitUrl } from './content-portrait.js';
+import { ThemeBackground } from './ThemeBackground.js';
 import type { ContentRole } from '../core/risu-content.js';
 import { SourceReader } from './SourceReader.js';
 import { TurnActivity } from './TurnActivity.js';
@@ -1054,6 +1055,7 @@ function App() {
             <div
               className={`reader-stage ${showSceneNavigator && s.detail?.reader.navigation.length ? 'has-scenes' : ''}`}
             >
+              <ThemeBackground />
               {s.detail?.chat.id === s.selected && s.attachmentsReady && s.bot && (
                 <ReaderGallery key={`gallery:${s.viewKey}`} bot={s.bot} persona={s.persona} />
               )}

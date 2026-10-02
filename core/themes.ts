@@ -1,4 +1,10 @@
-import { cinematicTheme, letterTheme, scrapbookTheme } from './narrative-themes.js';
+import type { ThemeBackground } from './theme-background.js';
+import {
+  cinematicTheme,
+  letterTheme,
+  scrapbookTheme,
+  classicFrameTheme,
+} from './narrative-themes.js';
 import { BUILTIN_PALETTES, THEME_PALETTE_ID, isPaletteId } from './theme-palettes.js';
 
 /** Presentation resources only. Never include these in a model request or story snapshot. */
@@ -44,6 +50,9 @@ export type ThemePreferences = {
   defaultPaletteId?: string;
   botPalettes?: Record<string, string>;
   chatPalettes?: Record<string, string>;
+  defaultBackground?: ThemeBackground;
+  botBackgrounds?: Record<string, ThemeBackground>;
+  chatBackgrounds?: Record<string, ThemeBackground>;
 };
 export type ThemeCatalog = { themes: Theme[]; preferences: ThemePreferences };
 export type ThemeScope = { botId?: string; chatId?: string };
@@ -239,6 +248,7 @@ export const BUILTIN_THEMES: Theme[] = [
   { ...cinematicTheme, id: 'builtin:cinematic', revision: 2 },
   { ...letterTheme, id: 'builtin:letter', revision: 2 },
   { ...scrapbookTheme, id: 'builtin:scrapbook', revision: 2 },
+  { ...classicFrameTheme, id: 'builtin:classic-frame', revision: 1 },
 ];
 export function getBuiltinTheme(id: string): Theme | undefined {
   const currentId = id === 'builtin:liquid-gallery' ? 'builtin:cinematic' : id;

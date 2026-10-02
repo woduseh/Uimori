@@ -42,7 +42,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | --- | --- |
 | `npm run quality:full` | Formatting, lint, types, tooling tests, fresh build and complete Vitest suite. |
 | `npm run test:tooling` | Fresh build plus build, verification and release-tooling tests, including failure detection. |
-| `npm run verify:narrative-themes` | Three narrative layouts, independent palettes, scene portraits and responsive reading controls. |
+| `npm run verify:narrative-themes` | Four narrative layouts, independent palettes, scene portraits and responsive reading controls. |
 | `npm run verify:liquid-gallery` | Legacy user-theme compatibility, opaque portraits, 10k-token outputs, light/dark controls. |
 | `npm run verify:themes` | Custom themes, palettes, portable files, reader state preservation and emergency recovery. |
 | `npm run verify:input-translation` | Manual composer translation, temporary undo, stale results, final-only submission, request copying and existing edit/recovery regressions. |
