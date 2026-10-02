@@ -25,19 +25,25 @@ export function themeTemplate(html: string): DocumentFragment {
   }
   if (
     slots.some(
-      (slot) => slot.name && !THEME_SLOTS.includes(slot.name as (typeof THEME_SLOTS)[number])
+      (slot) =>
+        slot.name &&
+        slot.name !== 'portrait' &&
+        !THEME_SLOTS.includes(slot.name as (typeof THEME_SLOTS)[number])
     )
   )
     throw new Error('알 수 없는 레이아웃 슬롯이 있어요.');
+  if (slots.filter((slot) => slot.name === 'portrait').length > 1)
+    throw new Error('등장인물 슬롯은 하나만 사용할 수 있어요.');
   if (slots.filter((slot) => !slot.name).length > 1)
     throw new Error('기본 슬롯은 하나만 사용할 수 있어요.');
   if (!slots.some((slot) => !slot.name)) template.content.append(document.createElement('slot'));
   return template.content;
 }
-export function ThemeFrame({ children }: { children: ReactNode }) {
+export function ThemeFrame({ children, portrait }: { children: ReactNode; portrait?: ReactNode }) {
   const theme = useContext(ThemeContext)?.active;
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState('');
+  const [hasPortrait, setHasPortrait] = useState(false);
   const html = theme?.templateHtml ?? '';
   const css = theme?.templateCss ?? '';
   useLayoutEffect(() => {
@@ -47,11 +53,14 @@ export function ThemeFrame({ children }: { children: ReactNode }) {
     style.textContent =
       ':host{display:block;min-width:0}slot{display:contents}::slotted(*){min-width:0}\n' + css;
     try {
-      root.replaceChildren(style, themeTemplate(html));
+      const template = themeTemplate(html);
+      setHasPortrait(!!template.querySelector('slot[name="portrait"]'));
+      root.replaceChildren(style, template);
       setError('');
     } catch (cause) {
       // An invalid imported layout cannot hide the reader and its recovery controls.
       style.textContent = ':host{display:block;min-width:0}slot{display:contents}';
+      setHasPortrait(false);
       root.replaceChildren(style, themeTemplate(''));
       setError((cause as Error).message);
     }
@@ -64,7 +73,17 @@ export function ThemeFrame({ children }: { children: ReactNode }) {
           테마 레이아웃 대신 기본 화면을 표시해요. {error}
         </p>
       )}
-      <div ref={host} className="theme-frame" data-uimori-part="scene-frame">
+      <div
+        ref={host}
+        className="theme-frame"
+        data-uimori-part="scene-frame"
+        data-has-portrait={hasPortrait && !!portrait ? 'true' : 'false'}
+      >
+        {hasPortrait && portrait && (
+          <div slot="portrait" data-uimori-part="scene-portraits">
+            {portrait}
+          </div>
+        )}
         {children}
       </div>
     </>

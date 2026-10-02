@@ -38,6 +38,7 @@ type ReaderMode = 'original' | 'translation';
 /** Scene header pieces the activity panel places inside its summary row. */
 type SceneHeaderSlots = { leading: ReactNode; badges: ReactNode };
 type ReaderProps = {
+  portrait?: ReactNode;
   readerTarget?: ReaderTarget;
   source: Source;
   index: number;
@@ -131,6 +132,7 @@ function latestTranslation(source: Source, jobs: Job[]) {
     .at(0);
 }
 function SourceReaderContent({
+  portrait,
   readerTarget,
   source,
   index,
@@ -561,7 +563,7 @@ function SourceReaderContent({
           onError={onError}
         />
       )}
-      <ThemeFrame>
+      <ThemeFrame portrait={portrait}>
         <div slot="request" data-uimori-part="request">
           {packageStart?.mode !== 'authored' && request && (
             <RequestMessage

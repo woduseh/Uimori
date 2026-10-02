@@ -1113,6 +1113,11 @@ function App() {
                           const { source, index } = entry;
                           return (
                             <SourceReader
+                              portrait={
+                                s.attachmentsReady && s.bot ? (
+                                  <ReaderGallery scene bot={s.bot} persona={s.persona} />
+                                ) : undefined
+                              }
                               latest={source.id === s.sources.at(-1)?.id}
                               onModelSettings={() => {
                                 setSettingsTab('models');

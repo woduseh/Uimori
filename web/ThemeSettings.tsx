@@ -4,7 +4,9 @@ import { Plus, Upload, Download, Copy, Trash2, Eye, RotateCcw } from 'lucide-rea
 import {
   THEME_COLOR_KEYS,
   emptyTheme,
+  getBuiltinTheme,
   parseThemeFile,
+  resolvePaletteId,
   themeFile,
   themeDefinition,
   validateTheme,
@@ -12,7 +14,8 @@ import {
   type ThemeColorKey,
   type ThemeDefinition,
 } from '../core/themes.js';
-import { api, saveDownload } from './api.js';
+import { BUILTIN_PALETTES, THEME_PALETTE_ID } from '../core/theme-palettes.js';
+import { api, ApiError, saveDownload } from './api.js';
 import { useThemes } from './ThemeContext.js';
 import { themeTemplate, ThemeFrame } from './ThemeFrame.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
@@ -85,6 +88,34 @@ export function ThemeSettings({
       : scope === 'bot'
         ? p.botThemes[state.scope.botId ?? '']
         : p.chatThemes[state.scope.chatId ?? ''];
+  const selectedPaletteId =
+    scope === 'global'
+      ? (p.defaultPaletteId ?? THEME_PALETTE_ID)
+      : scope === 'bot'
+        ? p.botPalettes?.[state.scope.botId ?? '']
+        : p.chatPalettes?.[state.scope.chatId ?? ''];
+  const activePaletteId = resolvePaletteId(state.catalog, state.scope);
+  const activePaletteTitle =
+    BUILTIN_PALETTES.find((palette) => palette.id === activePaletteId)?.title ??
+    '레이아웃 원래 색상';
+  const activeLayout =
+    state.catalog.themes.find((theme) => theme.id === state.active.id) ??
+    getBuiltinTheme(state.active.id);
+  const originalColors = activeLayout?.colors;
+  const selectedLegacyLayout = selectedId && getBuiltinTheme(selectedId);
+  const layouts =
+    selectedLegacyLayout && !state.catalog.themes.some((theme) => theme.id === selectedId)
+      ? [...state.catalog.themes, selectedLegacyLayout]
+      : state.catalog.themes;
+  const palettes = [
+    {
+      id: THEME_PALETTE_ID,
+      title: '레이아웃 원래 색상',
+      description: '선택한 레이아웃에 저장된 색상을 사용해요.',
+      colors: originalColors ?? { light: {}, dark: {} },
+    },
+    ...BUILTIN_PALETTES,
+  ];
   async function action(work: () => Promise<void>) {
     if (locked.current) return;
     locked.current = true;
@@ -94,6 +125,7 @@ export function ThemeSettings({
     try {
       await work();
     } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 409) await state.refresh();
       setError((cause as Error).message);
     } finally {
       locked.current = false;
@@ -163,8 +195,30 @@ export function ThemeSettings({
         scope === 'global' &&
           ((state.scope.chatId && p.chatThemes[state.scope.chatId]) ||
             (state.scope.botId && p.botThemes[state.scope.botId]))
-          ? '기본 테마를 바꿨어요. 현재 채팅은 별도로 지정한 테마를 사용해요.'
-          : '테마 선택을 저장했어요.'
+          ? '기본 레이아웃을 바꿨어요. 현재 채팅은 별도로 지정한 레이아웃을 사용해요.'
+          : '레이아웃 선택을 저장했어요.'
+      );
+    });
+  }
+  function choosePalette(paletteId: string | null) {
+    void action(async () => {
+      await api('/themes/selection', {
+        dimension: 'palette',
+        scope,
+        targetId:
+          scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : undefined,
+        paletteId,
+        expectedRevision: p.revision,
+      });
+      setPreview(null);
+      state.setDisabled(false);
+      await state.refresh(true);
+      setNotice(
+        scope === 'global' &&
+          ((state.scope.chatId && p.chatPalettes?.[state.scope.chatId]) ||
+            (state.scope.botId && p.botPalettes?.[state.scope.botId]))
+          ? '기본 팔레트를 바꿨어요. 현재 채팅은 별도로 지정한 팔레트를 사용해요.'
+          : '팔레트 선택을 저장했어요.'
       );
     });
   }
@@ -186,6 +240,9 @@ export function ThemeSettings({
   }
   return (
     <section className="theme-settings" aria-label="테마와 색상">
+      <p className="theme-intro">
+        레이아웃은 화면 배치를, 팔레트는 색상을 바꿔요. 화면 모드와 각각 따로 선택할 수 있어요.
+      </p>
       <div className="settings-card theme-toolbar theme-control-bar">
         <label>
           화면 모드
@@ -223,12 +280,9 @@ export function ThemeSettings({
             <option value="dark">어두운 색</option>
           </select>
         </label>
-        {scope !== 'global' && (
-          <button disabled={busy || !selectedId} onClick={() => choose(null)}>
-            상위 설정 따르기
-          </button>
-        )}
-        <span className="theme-current">현재 화면 · {state.active.title}</span>
+        <span className="theme-current">
+          현재 화면 · {state.active.title} / {state.preview ? '미리보기 색상' : activePaletteTitle}
+        </span>
       </div>
       {state.disabled && (
         <p role="status" className="theme-recovery">
@@ -241,90 +295,158 @@ export function ThemeSettings({
           {state.error} <button onClick={() => void state.refresh()}>다시 불러오기</button>
         </p>
       )}
-      <div className="theme-grid" aria-label="저장된 테마">
-        {state.catalog.themes.map((theme) => (
-          <article
-            className={`theme-card ${selectedId === theme.id ? 'selected' : ''}`}
-            key={theme.id}
-          >
-            <button
-              className="theme-card-apply"
-              aria-label={`${theme.title} 테마 적용`}
-              aria-pressed={selectedId === theme.id}
-              disabled={busy || state.loading}
-              onClick={() => choose(theme.id)}
+      <section className="theme-dimension" aria-labelledby="theme-layout-heading">
+        <div className="theme-dimension-heading">
+          <div>
+            <h3 id="theme-layout-heading">레이아웃</h3>
+            <p>본문과 요청, 도구의 배치를 골라요. 선택한 색상 팔레트는 유지돼요.</p>
+          </div>
+          {scope !== 'global' && (
+            <button disabled={busy || state.loading || !selectedId} onClick={() => choose(null)}>
+              레이아웃 상위 설정 따르기
+            </button>
+          )}
+        </div>
+        {scope !== 'global' && !selectedId && (
+          <p className="theme-inherited">이 범위의 레이아웃은 상위 설정을 따라요.</p>
+        )}
+        <div className="theme-grid" aria-label="저장된 레이아웃">
+          {layouts.map((theme) => (
+            <article
+              className={`theme-card ${selectedId === theme.id ? 'selected' : ''}`}
+              key={theme.id}
             >
-              <span
-                className="theme-swatch"
-                style={{
-                  background: theme.colors[mode].bg ?? (mode === 'light' ? '#fafbf8' : '#1a1d1b'),
-                  color: theme.colors[mode].text ?? (mode === 'light' ? '#232c22' : '#eef1eb'),
-                }}
+              <button
+                className="theme-card-apply"
+                aria-label={`${theme.title} 테마 적용`}
+                aria-pressed={selectedId === theme.id}
+                disabled={busy || state.loading}
+                onClick={() => choose(theme.id)}
               >
                 <span
-                  className="theme-swatch-nav"
+                  className="theme-swatch"
+                  data-layout={theme.id}
+                  aria-hidden="true"
                   style={{
-                    background:
-                      theme.colors[mode].nav ?? (mode === 'light' ? '#f0f2ec' : '#141715'),
+                    background: theme.colors[mode].bg ?? (mode === 'light' ? '#fafbf8' : '#1a1d1b'),
+                    color: theme.colors[mode].text ?? (mode === 'light' ? '#232c22' : '#eef1eb'),
                   }}
-                />
-                <span className="theme-swatch-page">
-                  <span>Aa</span>
-                  <i />
-                  <i />
-                  <b style={{ background: theme.colors[mode].accent ?? '#355b39' }} />
+                >
+                  <span
+                    className="theme-swatch-nav"
+                    style={{
+                      background:
+                        theme.colors[mode].nav ?? (mode === 'light' ? '#f0f2ec' : '#141715'),
+                    }}
+                  />
+                  <span className="theme-swatch-page">
+                    <span>Aa</span>
+                    <i />
+                    <i />
+                    <b style={{ background: theme.colors[mode].accent ?? '#355b39' }} />
+                  </span>
                 </span>
-              </span>
-              <strong>
-                {theme.title}
-                {selectedId === theme.id ? ' · 선택됨' : ''}
-              </strong>
-              <small>{theme.description || '사용자 테마'}</small>
-            </button>
-            <div className="theme-card-actions">
-              <button disabled={busy} onClick={() => edit(theme)}>
-                {theme.id.startsWith('builtin:') ? '복제해서 꾸미기' : '편집'}
+                <strong>
+                  {theme.title}
+                  {selectedId === theme.id ? ' · 선택됨' : ''}
+                </strong>
+                <small>{theme.description || '사용자 테마'}</small>
               </button>
-              {!theme.id.startsWith('builtin:') && (
-                <button
-                  aria-label={`${theme.title} 복제`}
-                  title="복제"
-                  disabled={busy}
-                  onClick={() => edit(theme, true)}
-                >
-                  <Copy size={16} />
+              <div className="theme-card-actions">
+                <button disabled={busy} onClick={() => edit(theme)}>
+                  {theme.id.startsWith('builtin:') ? '복제해서 꾸미기' : '편집'}
                 </button>
-              )}
+                {!theme.id.startsWith('builtin:') && (
+                  <button
+                    aria-label={`${theme.title} 복제`}
+                    title="복제"
+                    disabled={busy}
+                    onClick={() => edit(theme, true)}
+                  >
+                    <Copy size={16} />
+                  </button>
+                )}
+                <button
+                  aria-label={`${theme.title} 내보내기`}
+                  title="내보내기"
+                  onClick={() =>
+                    saveDownload(
+                      `${theme.title}.uimori-theme.json`,
+                      themeFile(themeDefinition(theme))
+                    )
+                  }
+                >
+                  <Download size={16} />
+                </button>
+                {!theme.id.startsWith('builtin:') && (
+                  <button
+                    aria-label={`${theme.title} 삭제`}
+                    title="삭제"
+                    disabled={busy || dirty}
+                    onClick={() => setDeleting(theme)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="theme-dimension" aria-labelledby="theme-palette-heading">
+        <div className="theme-dimension-heading">
+          <div>
+            <h3 id="theme-palette-heading">색상 팔레트</h3>
+            <p>배치와 읽기 설정을 유지하면서 화면 색상만 바꿔요.</p>
+          </div>
+          <button
+            disabled={
+              busy ||
+              state.loading ||
+              (scope === 'global' ? selectedPaletteId === THEME_PALETTE_ID : !selectedPaletteId)
+            }
+            onClick={() => choosePalette(null)}
+          >
+            {scope === 'global' ? '팔레트 기본값으로' : '팔레트 상위 설정 따르기'}
+          </button>
+        </div>
+        {scope !== 'global' && !selectedPaletteId && (
+          <p className="theme-inherited">이 범위의 팔레트는 상위 설정을 따라요.</p>
+        )}
+        <div className="theme-palette-grid" aria-label="색상 팔레트 선택">
+          {palettes.map((palette) => {
+            const colors = { ...baselineThemeColors[mode], ...palette.colors[mode] };
+            return (
               <button
-                aria-label={`${theme.title} 내보내기`}
-                title="내보내기"
-                onClick={() =>
-                  saveDownload(
-                    `${theme.title}.uimori-theme.json`,
-                    themeFile(themeDefinition(theme))
-                  )
-                }
+                key={palette.id}
+                className={`theme-palette-card ${selectedPaletteId === palette.id ? 'selected' : ''}`}
+                aria-label={`${palette.title} 팔레트 적용`}
+                aria-pressed={selectedPaletteId === palette.id}
+                disabled={busy || state.loading}
+                onClick={() => choosePalette(palette.id)}
               >
-                <Download size={16} />
+                <span className="theme-palette-swatches" aria-hidden="true">
+                  {(['bg', 'panel', 'accent', 'text'] as const).map((key) => (
+                    <span key={key} style={{ background: colors[key] }} />
+                  ))}
+                </span>
+                <strong>
+                  {palette.title}
+                  {selectedPaletteId === palette.id ? ' · 선택됨' : ''}
+                </strong>
+                <small>{palette.description}</small>
               </button>
-              {!theme.id.startsWith('builtin:') && (
-                <button
-                  aria-label={`${theme.title} 삭제`}
-                  title="삭제"
-                  disabled={busy || dirty}
-                  onClick={() => setDeleting(theme)}
-                >
-                  <Trash2 size={16} />
-                </button>
-              )}
-            </div>
-          </article>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      </section>
       <section className="theme-library-tools" aria-label="테마 관리">
         <div className="theme-library-copy">
           <h4>테마 관리</h4>
-          <p>커스텀 테마를 만들거나 파일에서 가져와 라이브러리에 추가해요.</p>
+          <p>
+            커스텀 테마를 만들거나 파일에서 가져와요. 내보낸 파일에는 레이아웃 자체의 색상과 코드가
+            담겨요.
+          </p>
         </div>
         <div className="theme-library-actions">
           <button className="primary" disabled={busy} onClick={() => edit()}>
@@ -409,8 +531,9 @@ export function ThemeSettings({
               ))}
             </div>
             <p className="muted">
-              지정하지 않은 색은 기본 테마에서 상속해요. 위 ‘미리보기 색상’에서 밝은 색과 어두운
-              색을 각각 편집해요.
+              위 ‘미리보기 색상’에서 밝은 색과 어두운 색을 각각 편집해요. 지정하지 않은 색은 Uimori
+              기본 색상을 따라요. 편집한 색상은 레이아웃에 저장되며, 적용할 때는 팔레트에서
+              ‘레이아웃 원래 색상’을 골라 주세요.
             </p>
             <details className="theme-code">
               <summary>CSS·HTML 직접 편집</summary>

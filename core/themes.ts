@@ -1,4 +1,5 @@
-import { liquidGallery } from './liquid-gallery.js';
+import { cinematicTheme, letterTheme, scrapbookTheme } from './narrative-themes.js';
+import { BUILTIN_PALETTES, THEME_PALETTE_ID, isPaletteId } from './theme-palettes.js';
 
 /** Presentation resources only. Never include these in a model request or story snapshot. */
 export const THEME_COLOR_KEYS = [
@@ -39,6 +40,10 @@ export type ThemePreferences = {
   defaultThemeId: string;
   botThemes: Record<string, string>;
   chatThemes: Record<string, string>;
+  /** Missing scoped selections inherit; 'theme' explicitly uses the layout's saved colors. */
+  defaultPaletteId?: string;
+  botPalettes?: Record<string, string>;
+  chatPalettes?: Record<string, string>;
 };
 export type ThemeCatalog = { themes: Theme[]; preferences: ThemePreferences };
 export type ThemeScope = { botId?: string; chatId?: string };
@@ -59,7 +64,15 @@ export function emptyTheme(title = '새 테마'): ThemeDefinition {
   };
 }
 export function defaultThemePreferences(): ThemePreferences {
-  return { revision: 0, defaultThemeId: DEFAULT_THEME_ID, botThemes: {}, chatThemes: {} };
+  return {
+    revision: 0,
+    defaultThemeId: DEFAULT_THEME_ID,
+    botThemes: {},
+    chatThemes: {},
+    defaultPaletteId: THEME_PALETTE_ID,
+    botPalettes: {},
+    chatPalettes: {},
+  };
 }
 function palette(
   bg: string,
@@ -90,7 +103,7 @@ function palette(
     user: surface,
   };
 }
-export const BUILTIN_THEMES: Theme[] = [
+const originalBuiltinThemes: Theme[] = [
   {
     ...emptyTheme('숲'),
     id: DEFAULT_THEME_ID,
@@ -191,24 +204,101 @@ export const BUILTIN_THEMES: Theme[] = [
       ),
     },
   },
-  { ...liquidGallery, id: 'builtin:liquid-gallery', revision: 1 },
 ];
+/**
+ * Palette-only presets share the default layout. The former library's distinct paper
+ * structure remains readable/exportable for existing selections, but is not a picker preset.
+ */
+export const LEGACY_BUILTIN_THEMES = originalBuiltinThemes.slice(1);
+export const BUILTIN_THEMES: Theme[] = [
+  { ...originalBuiltinThemes[0], title: '기본', description: '군더더기 없는 기본 읽기 레이아웃' },
+  { ...cinematicTheme, id: 'builtin:cinematic', revision: 1 },
+  { ...letterTheme, id: 'builtin:letter', revision: 1 },
+  { ...scrapbookTheme, id: 'builtin:scrapbook', revision: 1 },
+];
+export function getBuiltinTheme(id: string): Theme | undefined {
+  const currentId = id === 'builtin:liquid-gallery' ? 'builtin:cinematic' : id;
+  return [...BUILTIN_THEMES, ...LEGACY_BUILTIN_THEMES].find((theme) => theme.id === currentId);
+}
 export function themeDefinition(theme: Theme): ThemeDefinition {
   const { id: _id, revision: _revision, ...definition } = theme;
   return definition;
 }
+
+/**
+ * Upgrade choices in memory, without deleting or rewriting any saved theme resource.
+ * Old coupled choices establish color boundaries at each explicitly selected scope.
+ * Once a preference write occurs the independent palette fields make this idempotent.
+ */
+export function normalizeThemePreferences(value: ThemePreferences): ThemePreferences {
+  const legacy = !(
+    'defaultPaletteId' in value ||
+    'botPalettes' in value ||
+    'chatPalettes' in value
+  );
+  const p: ThemePreferences = {
+    ...value,
+    botThemes: { ...value.botThemes },
+    chatThemes: { ...value.chatThemes },
+    botPalettes: { ...value.botPalettes },
+    chatPalettes: { ...value.chatPalettes },
+  };
+  const migrate = (id: string, paletteId: string | undefined): [string, string | undefined] => {
+    if (id === 'builtin:liquid-gallery')
+      return ['builtin:cinematic', paletteId ?? (legacy ? THEME_PALETTE_ID : undefined)];
+    if (id === 'builtin:midnight' || id === 'builtin:blossom')
+      return [DEFAULT_THEME_ID, paletteId ?? (id === 'builtin:midnight' ? 'midnight' : 'rose')];
+    return [id, paletteId ?? (legacy ? THEME_PALETTE_ID : undefined)];
+  };
+  [p.defaultThemeId, p.defaultPaletteId] = migrate(p.defaultThemeId, p.defaultPaletteId);
+  p.defaultPaletteId ??= THEME_PALETTE_ID;
+  for (const [themes, palettes] of [
+    [p.botThemes, p.botPalettes!],
+    [p.chatThemes, p.chatPalettes!],
+  ]) {
+    for (const [targetId, id] of Object.entries(themes)) {
+      const [themeId, paletteId] = migrate(id, palettes[targetId]);
+      themes[targetId] = themeId;
+      if (paletteId !== undefined) palettes[targetId] = paletteId;
+    }
+  }
+  return p;
+}
+
+export function resolvePaletteId(catalog: ThemeCatalog, scope: ThemeScope): string {
+  const p = normalizeThemePreferences(catalog.preferences);
+  for (const id of [
+    scope.chatId && p.chatPalettes?.[scope.chatId],
+    scope.botId && p.botPalettes?.[scope.botId],
+    p.defaultPaletteId,
+  ]) {
+    if (isPaletteId(id)) return id;
+  }
+  return THEME_PALETTE_ID;
+}
+
 export function resolveTheme(catalog: ThemeCatalog, scope: ThemeScope): Theme {
-  const { preferences: p, themes } = catalog;
+  const p = normalizeThemePreferences(catalog.preferences);
+  let selected = BUILTIN_THEMES[0];
   for (const id of [
     scope.chatId && p.chatThemes[scope.chatId],
     scope.botId && p.botThemes[scope.botId],
     p.defaultThemeId,
     DEFAULT_THEME_ID,
   ]) {
-    const theme = id && themes.find((item) => item.id === id);
-    if (theme) return theme;
+    const theme = id && (catalog.themes.find((item) => item.id === id) ?? getBuiltinTheme(id));
+    if (theme) {
+      selected = theme;
+      break;
+    }
   }
-  return BUILTIN_THEMES[0];
+  const palette = BUILTIN_PALETTES.find((item) => item.id === resolvePaletteId(catalog, scope));
+  return palette
+    ? {
+        ...selected,
+        colors: { light: { ...palette.colors.light }, dark: { ...palette.colors.dark } },
+      }
+    : selected;
 }
 function object(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
