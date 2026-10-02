@@ -9,7 +9,7 @@ import type { PackageImage } from '../core/package-images.js';
 import type { ChatDetail } from '../core/types.js';
 import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { navigationAction, selectSettingsSection } from './ui-navigation.js';
+import { navigationAction, openChatMenu, selectSettingsSection } from './ui-navigation.js';
 
 const layouts = ['cinematic', 'letter', 'scrapbook', 'classic-frame'] as const;
 type Layout = (typeof layouts)[number];
@@ -926,3 +926,131 @@ test('BACKGROUND pending upload discard and dirty save-close preserve scope owne
     ).ok()
   ).toBe(true);
 });
+
+for (const layout of layouts) {
+  test(`NARRATIVE HEIGHT ${layout}: reader space, composer and navigator clearance`, async ({
+    page,
+    request,
+  }, info) => {
+    test.setTimeout(90000);
+    const data = await seed(request, layout);
+    const { scene, reader, gallery, bodyScroll } = await openStory(page, data, layout, 412, 'dark');
+    const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+    const measurements: object[] = [];
+    for (const width of [360, 412]) {
+      let previous = 0;
+      for (const height of [600, 700, 800, 915]) {
+        await page.setViewportSize({ width, height });
+        await expect.poll(() => page.evaluate(() => window.innerHeight)).toBe(height);
+        const bodyHeight = await bodyScroll.evaluate((node) => node.clientHeight);
+        const readerHeight = await reader.evaluate((node) => node.clientHeight);
+        expect(readerHeight).toBeGreaterThan(300);
+        expect(bodyHeight).toBeGreaterThan(230);
+        expect(bodyHeight).toBeLessThan(readerHeight - 80);
+        if (previous) expect(bodyHeight).toBeGreaterThan(previous + 40);
+        previous = bodyHeight;
+        measurements.push({ width, height, bodyHeight, readerHeight });
+        await noHorizontalOverflow(page, scene);
+      }
+    }
+    await page.setViewportSize({ width: 412, height: 700 });
+    // A short translation uses its content height, rather than stretching to the cap.
+    const language = scene.getByRole('group', { name: '원문과 번역 보기' });
+    const originalHeight = await bodyScroll.evaluate((node) => node.clientHeight);
+    await language.getByRole('button', { name: '번역 보기', exact: true }).click();
+    await expect(scene.getByTestId('translation-text')).toContainText('After the rain');
+    expect(await bodyScroll.evaluate((node) => node.clientHeight)).toBeLessThan(originalHeight);
+    await language.getByRole('button', { name: '원문 보기', exact: true }).click();
+    await expect(scene.getByTestId('source-text')).toContainText(endMarker);
+
+    await page.setViewportSize({ width: 360, height: 600 });
+    const compactBody = await bodyScroll.evaluate((node) => node.clientHeight);
+    const compactReader = await reader.evaluate((node) => node.clientHeight);
+    await composer.fill('작성 중인 여러 줄 요청\n'.repeat(12));
+    await expect(page.locator('.composer-dock > .composer')).toHaveClass(/grown/u);
+    await expect
+      .poll(() => reader.evaluate((node) => node.clientHeight))
+      .toBeLessThan(compactReader - 40);
+    const expandedBody = await bodyScroll.evaluate((node) => node.clientHeight);
+    expect(expandedBody).toBeGreaterThanOrEqual(200);
+    expect(expandedBody).toBeLessThan(compactBody - 20);
+    await noHorizontalOverflow(page, scene);
+    // Even in the smallest reader, page scrolling still reaches portrait, title and actions.
+    const portrait = gallery.getByRole('button', {
+      name: '린 메이화 대표 이미지 확대',
+      exact: true,
+    });
+    await portrait.scrollIntoViewIfNeeded();
+    await expect(portrait).toBeInViewport();
+    const copy = scene.getByRole('button', { name: '본문 복사', exact: true });
+    await copy.scrollIntoViewIfNeeded();
+    await expect(copy).toBeInViewport();
+    await bodyScroll.focus();
+    await expect(bodyScroll).toBeFocused();
+    await bodyScroll.evaluate((node) => {
+      node.scrollTop = 0;
+    });
+    await page.keyboard.press('ArrowDown');
+    await expect.poll(() => bodyScroll.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    await page.screenshot({ path: info.outputPath(`${layout}-360x600-expanded.png`) });
+    await composer.fill('');
+
+    for (const enabled of [true, false]) {
+      await page.evaluate(
+        (enabled) => localStorage.setItem('uimori:scene-navigator', String(enabled)),
+        enabled
+      );
+      await page.reload();
+      await expect(scene.getByTestId('source-text')).toContainText(endMarker);
+      await expect(page.locator('.scene-mini-navigator')).toHaveCount(enabled ? 1 : 0);
+      await page.setViewportSize({ width: 412, height: 700 });
+      await reader.evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+      });
+      const lastActions = page.locator('[data-uimori-part="actions"]').last();
+      await expect(lastActions).toBeInViewport();
+      const actionsBox = (await lastActions.boundingBox())!;
+      const composerBox = (await page.locator('.composer-dock').boundingBox())!;
+      expect(actionsBox.y + actionsBox.height).toBeLessThan(composerBox.y);
+      if (enabled) {
+        const navigatorBox = (await page.locator('.scene-mini-navigator').boundingBox())!;
+        expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(navigatorBox.y);
+      } else {
+        const padding = await page
+          .locator('.reader')
+          .evaluate((node) => parseFloat(getComputedStyle(node).paddingBottom));
+        expect(padding).toBeLessThanOrEqual(32);
+      }
+      await page.screenshot({
+        path: info.outputPath(`${layout}-412x700-navigator-${enabled}.png`),
+      });
+    }
+    await openChatMenu(page);
+    await page.getByRole('button', { name: '집중 읽기', exact: true }).click();
+    await expect(gallery).toBeHidden();
+    await expect(page.locator('.scene-mini-navigator')).toHaveCount(0);
+    await expect(bodyScroll).toBeVisible();
+    await noHorizontalOverflow(page, scene);
+    await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();
+    await expect(gallery).toBeVisible();
+    await page.setViewportSize({ width: 1000, height: 800 });
+    await noHorizontalOverflow(page, scene);
+    expect(await reader.evaluate((node) => node.clientWidth)).toBeGreaterThan(500);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await noHorizontalOverflow(page, scene);
+    expect(await bodyScroll.evaluate((node) => node.clientHeight)).toBeLessThanOrEqual(450);
+    await expect(page.locator('.reader')).toHaveCSS('padding-bottom', '48px');
+    await bodyScroll.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`${layout}-1440x900.png`) });
+
+    // The same height/containment rules do not leak into the plain-page layout.
+    await select(request, { themeId: 'builtin:forest', targetId: data.chatId });
+    await page.reload();
+    await expect(page.locator('[data-uimori-body-scroll]')).toHaveCount(0);
+    await expect(reader).toHaveCSS('container-type', 'normal');
+    await info.attach('responsive-reader-heights', {
+      contentType: 'application/json',
+      body: JSON.stringify({ layout, measurements, compactBody, expandedBody }),
+    });
+  });
+}

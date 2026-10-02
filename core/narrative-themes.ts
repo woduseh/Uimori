@@ -6,8 +6,8 @@ const commonApp = `
 .story-workspace { container: narrative-workspace / inline-size; background: var(--bg); }
 .reader-stage > [data-uimori-part="gallery"] { display: none; }
 .reader:has([data-uimori-part="scene-portraits"]) > .story-context { display: none; }
-.reader-scrollport { background: var(--bg); }
-.reader { width: min(100%, calc(var(--reading-width) + 340px)); padding: 32px 24px 80px; }
+.reader-scrollport { background: var(--bg); container: narrative-reader / size; }
+.reader { width: min(100%, calc(var(--reading-width) + 340px)); padding: 32px 24px 48px; }
 .source + .source { margin-top: 32px; padding-top: 0; border-top: 0; }
 .reader .request-message { max-width: 100%; border-radius: 3px; background: var(--user); border-left: 2px solid var(--accent); }
 .reader .source-actions { border: 0; margin: 0; padding-block: 8px; }
@@ -40,7 +40,8 @@ const commonApp = `
 .focus-reading [data-uimori-part="scene-portraits"] { display: none; }
 @media (max-width: 760px) {
   .reader-stage.has-scenes > .reader-scrollport { padding-inline: 0; }
-  .reader { padding: 18px 12px 84px; }
+  .reader { padding: 18px 12px 24px; }
+  .reader-stage:has(> .scene-mini-navigator, > .scene-latest-floating) .reader { padding-bottom: 72px; }
   .source + .source { margin-top: 24px; }
 }
 `;
@@ -57,7 +58,9 @@ const mobilePortrait = `
   .request-portraits .reader-portrait-button, .request-portraits img { width: 44px; height: 44px; }
   .request-portraits .reader-portrait-empty { min-height: 44px; }
   .request-portraits figcaption { padding: 0; }
-  .reader [data-uimori-body-scroll] { max-height: clamp(200px, calc(100dvh - 600px), 360px); }
+  /* Allocate the body from the actual reader space after the header/composer,
+     not a fixed deduction from the device viewport. Portraits remain page-scrollable. */
+  .reader [data-uimori-body-scroll] { max-height: clamp(200px, 60cqh, 560px); }
 }
 `;
 const commonTemplate = `
