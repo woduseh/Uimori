@@ -221,18 +221,19 @@ export const BUILTIN_THEMES: Theme[] = [
     templateCss:
       '.request-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:start; } :host([data-has-request-persona="false"]) .request-persona { display:none; } @media(max-width:760px) { .request-row { display:flex; flex-direction:column; gap:8px; align-items:stretch; } .request-persona { order:-1; align-self:flex-end; } }',
     appCss: `
-.reader > .story-context { display: flex; gap: 20px; margin-bottom: 28px; align-items: center; }
-.reader .profile-asset { width: 96px; height: 120px; object-fit: contain; background: var(--surface); border-radius: 8px; }
-.reader .story-context > .content-avatar { --content-avatar-size: 96px; border-radius: 8px; }
-.reader .story-context > .content-avatar img { object-position: center 20%; }
-.reader .story-context > strong { display: block; font-size: 20px; color: var(--text); font-weight: 500; }
-.request-portraits { display: block; width: 56px; }
+.reader > .story-context { display:flex; gap:12px; margin-bottom:28px; align-items:center; }
+.reader .reader-bot-avatar, .request-portraits .reader-portrait-button { width:72px; height:72px; border-radius:50%; flex-shrink:0; }
+.reader .reader-bot-avatar .profile-asset, .reader .reader-bot-avatar .content-avatar, .request-portraits .reader-portrait-button img { width:100%; height:100%; border-radius:50%; object-fit:cover; object-position:center 20%; --content-avatar-size:72px; }
+.reader .reader-bot-avatar img { object-position:center 20%; }
+.reader .story-context > strong { display:block; font-size:14px; color:var(--text); font-weight:500; }
+.request-portraits { display:block; width:auto; max-width:200px; }
 .request-portraits .reader-gallery-heading, .request-portraits .reader-gallery-caption, .request-portraits figcaption small { display:none; }
-.request-portraits .reader-portrait-button { width:48px; height:48px; border-radius:50%; margin-inline:auto; }
-.request-portraits img { width:48px; height:48px; object-fit:cover; object-position:center 20%; }
-.request-portraits .reader-portrait-empty { min-height:48px; font-size:20px; }
-.request-portraits figcaption { font-size:10px; color:var(--muted); padding-top:5px; text-align:center; overflow-wrap:anywhere; }
-@media(max-width:760px) { .request-portraits { width:auto; } .request-portraits [data-uimori-part="persona-portrait"] { display:flex; align-items:center; gap:8px; } .request-portraits figcaption { padding:0; } .reader .profile-asset { width:72px; height:90px; } .reader .story-context > .content-avatar { --content-avatar-size:72px; } .reader .story-context > strong { display: block; font-size:17px; } }
+.request-portraits [data-uimori-part="persona-portrait"] { display:flex; align-items:center; gap:12px; }
+.request-portraits .reader-portrait-empty { min-height:72px; font-size:24px; }
+.request-portraits figcaption { font-size:14px; color:var(--text); padding:0; text-align:left; overflow-wrap:anywhere; }
+.request-portraits figcaption strong { font-weight:500; }
+@media(max-width:760px) { .reader .reader-bot-avatar, .request-portraits .reader-portrait-button { width:60px; height:60px; } .reader .reader-bot-avatar .content-avatar { --content-avatar-size:60px; } .request-portraits .reader-portrait-empty { min-height:60px; } }
+
 `,
   },
   { ...cinematicTheme, id: 'builtin:cinematic', revision: 2 },

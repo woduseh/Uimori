@@ -626,7 +626,7 @@ for (const [width, mode] of [
   [1440, 'dark'],
   [412, 'light'],
 ] as const) {
-  test(`NARRATIVE default ${width} ${mode}: compact bot context and responsive request persona`, async ({
+  test(`NARRATIVE default ${width} ${mode}: equal circular portraits and reusable full-image dialogs`, async ({
     page,
     request,
   }, info) => {
@@ -648,8 +648,10 @@ for (const [width, mode] of [
     const bot = context.locator('.reader-bot-avatar img');
     await imageLoaded(bot);
     const avatar = context.locator('.reader-bot-avatar');
-    expect((await avatar.boundingBox())!.width).toBeCloseTo(width === 1440 ? 96 : 72, 0);
-    await expect(context.getByText('린 메이화', { exact: true })).toBeVisible();
+    await expect(avatar).toHaveRole('button');
+    await expect(avatar).toHaveAccessibleName('린 메이화 대표 이미지 확대');
+    const botName = context.getByText('린 메이화', { exact: true });
+    await expect(botName).toBeVisible();
     await expect(bodyScroll).toHaveCount(0);
     await expect(scene.locator('[data-uimori-part="scene-portraits"]')).toHaveCount(0);
     await expect(page.locator('[data-uimori-part="gallery"]')).toBeHidden();
@@ -659,7 +661,22 @@ for (const [width, mode] of [
       name: '여행자 대표 이미지 확대',
       exact: true,
     });
-    expect((await personaButton.boundingBox())!.width).toBeCloseTo(48, 0);
+    const portraitSize = width === 1440 ? 72 : 60;
+    const personaName = requestPersona.locator('figcaption strong');
+    await expect(personaName).toHaveText('여행자');
+    for (const [button, name] of [
+      [avatar, botName],
+      [personaButton, personaName],
+    ]) {
+      const box = (await button.boundingBox())!;
+      const nameBox = (await name.boundingBox())!;
+      expect(box.width).toBeCloseTo(portraitSize, 0);
+      expect(box.height).toBeCloseTo(portraitSize, 0);
+      await expect(button).toHaveCSS('border-radius', '50%');
+      expect(nameBox.x).toBeGreaterThanOrEqual(box.x + box.width);
+      expect(nameBox.y).toBeLessThan(box.y + box.height);
+      expect(nameBox.y + nameBox.height).toBeGreaterThan(box.y);
+    }
     const requestBox = await scene.locator('[data-uimori-part="request"]').boundingBox();
     const personaBox = await requestPersona.boundingBox();
     if (width === 412) {
@@ -672,12 +689,38 @@ for (const [width, mode] of [
     );
     await noHorizontalOverflow(page, scene);
     await page.screenshot({ path: info.outputPath(`default-${mode}-${width}.png`) });
-    await personaButton.click();
-    const dialog = page.getByRole('dialog', { name: '여행자 대표 이미지', exact: true });
-    await expect(dialog).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeHidden();
-    await expect(personaButton).toBeFocused();
+    for (const [button, thumbnail, title, ratio] of [
+      [avatar, bot, '린 메이화', 2 / 3],
+      [personaButton, persona, '여행자', 1],
+    ] as const) {
+      const sourceUrl = (await thumbnail.getAttribute('src'))!;
+      const scrollTop = await reader.evaluate((node) => node.scrollTop);
+      for (const dismissal of ['Escape', 'close'] as const) {
+        await button.click();
+        const dialog = page.getByRole('dialog', { name: `${title} 대표 이미지`, exact: true });
+        await expect(dialog).toBeVisible();
+        const original = dialog.locator('img');
+        await imageLoaded(original);
+        await expect(original).toHaveAttribute('src', sourceUrl);
+        await expect(original).toHaveCSS('object-fit', 'contain');
+        expect(
+          await original.evaluate(
+            (node) =>
+              (node as HTMLImageElement).naturalWidth / (node as HTMLImageElement).naturalHeight
+          )
+        ).toBeCloseTo(ratio, 2);
+        if (dismissal === 'Escape') await page.keyboard.press('Escape');
+        else
+          await dialog
+            .getByRole('button', { name: `${title} 대표 이미지 닫기`, exact: true })
+            .click();
+        await expect(dialog).toBeHidden();
+        await expect(button).toBeFocused();
+        expect(
+          Math.abs((await reader.evaluate((node) => node.scrollTop)) - scrollTop)
+        ).toBeLessThan(3);
+      }
+    }
     expect((await detail(request, data.chatId)).sources).toEqual(data.before.sources);
   });
 }
