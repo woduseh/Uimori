@@ -12,6 +12,7 @@ import type { ModelPreset } from '../core/product.js';
 import type { PromptControl } from '../core/risu-prompt.js';
 import { Dialog } from './Dialog.js';
 import './agent-collaboration.css';
+import './deletion.css';
 
 const templates = [
   { kind: 'character', title: '인물', description: '개성과 동기, 관계를 살펴봐요.' },
@@ -536,6 +537,7 @@ export function AgentCollaborationEditor({
         open={!!removing}
         title="에이전트 삭제 확인"
         role="alertdialog"
+        className="delete-dialog"
         onClose={() => setRemoving(null)}
       >
         <p>
@@ -549,6 +551,7 @@ export function AgentCollaborationEditor({
           </button>
           <button
             type="button"
+            className="delete-button"
             onClick={() => {
               if (!removing) return;
               update({ agents: collaboration.agents.filter((agent) => agent.id !== removing.id) });

@@ -1213,11 +1213,13 @@ input[type="checkbox"] {
   font-size: 12px;
 }
 .app-dialog {
+  /* Each shell owns its size, including dialogs nested inside wide settings. */
+  --dialog-size: var(--dialog-w);
   --dialog-gap: 24px;
   --dialog-max-height: min(760px, calc(var(--app-height, 100dvh) - 2 * var(--dialog-gap)));
   position: fixed;
   inset: 0;
-  width: min(var(--dialog-size, var(--dialog-w)), calc(100vw - 2 * var(--dialog-gap)));
+  width: min(var(--dialog-size), calc(100vw - 2 * var(--dialog-gap)));
   height: fit-content;
   max-height: var(--dialog-max-height);
   max-width: calc(100vw - 2 * var(--dialog-gap));

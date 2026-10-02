@@ -26,7 +26,7 @@
   min-height: 140px;
 }
 
-.source-info-dialog {
+.app-dialog.source-info-dialog {
   min-width: 0;
   --dialog-size: 620px;
   overflow-wrap: anywhere;

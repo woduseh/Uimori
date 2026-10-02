@@ -288,7 +288,7 @@ export function AuthorNotesEditor({
           </label>
           <div className="form-actions full">
             <button
-              className="secondary"
+              className="primary"
               disabled={busy || disabled || conflict || !draft.text.trim() || !draft.author.trim()}
             >
               {draft.originalId ? '메모 수정 저장' : '새 메모 저장'}

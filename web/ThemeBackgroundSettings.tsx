@@ -188,6 +188,7 @@ export function ThemeBackgroundSettings({
       </fieldset>
       <div className="theme-toolbar">
         <button
+          className="primary"
           disabled={disabled || busy || state.loading || !dirty}
           onClick={() => void saveValue(draft)}
         >

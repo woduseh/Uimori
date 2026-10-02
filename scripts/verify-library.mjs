@@ -12,5 +12,6 @@ await runBrowserVerification({
     'tests/new-story-browser.spec.ts',
     'tests/personal-workspace-browser.spec.ts',
     'tests/deletion-browser.spec.ts',
+    'tests/native-editor-actions-browser.spec.ts',
   ],
 });

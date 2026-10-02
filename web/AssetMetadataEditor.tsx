@@ -44,6 +44,7 @@ export function AssetMetadataEditor({
       <small>저장하면 다음 JEV 이미지 선택에 반영돼요.</small>
       <button
         type="button"
+        className="primary"
         disabled={busy || !draft.title.trim()}
         onClick={async () => {
           setBusy(true);

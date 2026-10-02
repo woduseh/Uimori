@@ -925,7 +925,7 @@ export function NativeRisuToggleEditor({
         onClose={() => setConfirmation(null)}
       >
         <p>{confirmation?.description}</p>
-        <div className="actions">
+        <div className="form-actions">
           <button type="button" onClick={() => setConfirmation(null)}>
             취소
           </button>
@@ -980,11 +980,15 @@ export function NativeRisuToggleEditor({
               onChange={(event) => setGroupName(event.target.value)}
             />
           </label>
-          <div className="actions">
+          <div className="form-actions">
             <button type="button" onClick={() => setGroupDialog(null)}>
               취소
             </button>
-            <button type="submit" disabled={!groupName.trim() || /[=\r\n]/.test(groupName)}>
+            <button
+              type="submit"
+              className="primary"
+              disabled={!groupName.trim() || /[=\r\n]/.test(groupName)}
+            >
               적용
             </button>
           </div>
