@@ -1,6 +1,14 @@
+import { countTextTokens } from '../core/text-tokens.js';
+import { ILLUSTRATION_EXCERPT_TOKENS, ILLUSTRATION_PROMPT_FIELDS } from '../core/illustration.js';
 import { afterEach, expect, test } from 'vitest';
 import { splitSource } from '../core/auxiliary.js';
-import { parseStoryboard, parseIllustrationPlacement } from '../core/illustration-storyboard.js';
+import {
+  parseStoryboard,
+  parseIllustrationPlacement,
+  storyboardRequest,
+  illustrationPlacementRequest,
+  illustrationTargetText,
+} from '../core/illustration-storyboard.js';
 import { runIllustrationJob, type IllustrationRunnerHooks } from '../server/illustration-runner.js';
 import {
   reserveIllustrationPlan,
@@ -23,7 +31,12 @@ import {
   changeIllustrationHero,
 } from '../server/illustration-presentation.js';
 import { captureChatCopy, restoreChatCopy } from '../server/chat-copy.js';
-import { fixtureSettings, chatWithSource, illustrationDatabases } from './fixtures/illustration.js';
+import {
+  fixtureSettings,
+  chatWithSource,
+  illustrationDatabases,
+  completedSource,
+} from './fixtures/illustration.js';
 import type { Store } from '../server/store.js';
 
 const databases = illustrationDatabases('uimori-storyboard-');
@@ -316,4 +329,126 @@ test('explicit remapping replaces a cached null, deduplicates active work and ne
   expect(illustrationsForSources(store, [source.id]).flatMap((item) => item.images)).toEqual(
     pictures
   );
+});
+
+test('compact wire aliases preserve every source paragraph and round-trip to canonical anchors', () => {
+  const store = databases.create();
+  const { source } = chatWithSource(store);
+  const connection = store.product.connection({
+    title: 'Synthetic',
+    protocol: 'codex-app-server-v1',
+    endpoint: 'codex://local',
+    enabled: true,
+  });
+  const selected = store.product.model({
+    title: 'Planner',
+    connectionId: connection.id,
+    modelId: 'synthetic',
+    maxOutputTokens: 1024,
+    temperature: null,
+  });
+  const model = store.product.modelSnapshot(selected.id, 'illustration');
+  const scene = {
+    text: source.text,
+    bot: null,
+    persona: null,
+    styleGuidance: 'ink',
+    negativeGuidance: 'Comfy-only',
+    allowSkip: false,
+  };
+  const blocks = splitSource(source);
+  const request = storyboardRequest(
+    model,
+    scene,
+    source,
+    { maxTargets: 2, existingTargets: [], generator: 'codex' },
+    undefined
+  );
+  const input = request.input.source as { blocks: [string, string][] };
+  expect(input.blocks).toEqual(
+    blocks.map((block, index) => [`s${index.toString(36)}`, block.text])
+  );
+  expect(JSON.stringify(request)).not.toContain(blocks[0].anchor);
+  expect(request.stable.contract).not.toContain(ILLUSTRATION_PROMPT_FIELDS);
+  expect(request.input.source).not.toHaveProperty('negativeGuidance');
+  const result = parseStoryboard(
+    JSON.stringify({
+      heroIndex: 0,
+      targets: [
+        { startAnchor: 's0', endAnchor: 's1', focus: 'A lantern', visualBrief: 'Mira on the pier' },
+      ],
+    }),
+    blocks,
+    2,
+    false,
+    false
+  );
+  expect(result.targets[0]).toMatchObject({
+    startAnchor: blocks[0].anchor,
+    endAnchor: blocks[1].anchor,
+  });
+  const target = { ...result.targets[0], id: 'target-uuid' };
+  const placement = {
+    target: {
+      mode: 'translation' as const,
+      textHash: source.hash,
+      translationJobId: 'translation-id',
+      translationRevision: 1,
+    },
+    targetSetHash: 'a'.repeat(64),
+    targets: [target],
+  };
+  const alignment = illustrationPlacementRequest(
+    model,
+    scene,
+    source,
+    source,
+    placement,
+    undefined
+  );
+  expect(alignment.input.source).toMatchObject({
+    targets: [{ id: 'i0' }],
+    translationBlocks: blocks.map((block, index) => [`t${index.toString(36)}`, block.text]),
+  });
+  expect(parseIllustrationPlacement('{"afterByTarget":{"i0":"t1"}}', [target.id], blocks)).toEqual({
+    [target.id]: blocks[1].anchor,
+  });
+  expect(parseIllustrationPlacement('{"afterByTarget":{"i0":null}}', [target.id], blocks)).toEqual({
+    [target.id]: null,
+  });
+  expect(() =>
+    parseIllustrationPlacement('{"afterByTarget":{"i0":"t999"}}', [target.id], blocks)
+  ).toThrow();
+  expect(() =>
+    parseIllustrationPlacement(
+      '{"afterByTarget":{"i0":"t1","target-uuid":"t0"}}',
+      [target.id],
+      blocks
+    )
+  ).toThrow();
+  expect(store.source(source.id)).toEqual(source);
+});
+
+test('a wide render target retains its brief and final event while bounding only the repeated source excerpt', () => {
+  const store = databases.create();
+  const { chat } = chatWithSource(store);
+  const source = completedSource(
+    store,
+    chat.id,
+    'Distant scenery. '.repeat(10000) + '\n\nThe lantern rises.'
+  );
+  const blocks = splitSource(source);
+  const target = {
+    startAnchor: blocks[0].anchor,
+    endAnchor: blocks[1].anchor,
+    focus: 'The lantern rises',
+    visualBrief: 'Mira, silver hair, blue coat, raising a lantern on the pier.',
+  };
+  const input = JSON.parse(illustrationTargetText(source, target));
+  expect(input.focus).toBe(target.focus);
+  expect(input.visualBrief).toBe(target.visualBrief);
+  expect(input.excerpt).toMatch(/^\[Earlier text omitted\]/);
+  expect(input.excerpt.endsWith('The lantern rises.')).toBe(true);
+  expect(countTextTokens(input.excerpt)).toBeLessThanOrEqual(ILLUSTRATION_EXCERPT_TOKENS.target);
+  expect(store.source(source.id).text).toBe(source.text);
 });

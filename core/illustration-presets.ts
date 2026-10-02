@@ -1,9 +1,11 @@
 import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
 import { parseComfyWorkflow } from './illustration-workflow.js';
 
-/** Portable visual direction, independent of provider credentials and execution policy. */
+/** Portable generator + visual recipe. Connection details and scheduling stay local. */
+export type IllustrationPresetGenerator = 'codex' | 'comfyui';
 export type IllustrationPresetDefinition = {
   title: string;
+  generator: IllustrationPresetGenerator;
   description: string;
   styleGuidance: string;
   comfyui: { workflow: string; negativeGuidance: string };
@@ -28,6 +30,7 @@ export const DEFAULT_ILLUSTRATION_PRESET_ID = 'builtin:illustration-default';
 export function emptyIllustrationPreset(title = '새 삽화 프리셋'): IllustrationPresetDefinition {
   return {
     title,
+    generator: 'codex',
     description: '',
     styleGuidance: '',
     comfyui: { workflow: '', negativeGuidance: '' },
@@ -37,7 +40,7 @@ export const BUILTIN_ILLUSTRATION_PRESET: IllustrationPreset = {
   ...emptyIllustrationPreset('기본'),
   id: DEFAULT_ILLUSTRATION_PRESET_ID,
   revision: 1,
-  description: '추가 화풍 지침 없이 장면과 캐릭터를 따라 그려요. ComfyUI는 워크플로가 필요해요.',
+  description: '추가 화풍 지침 없이 Codex로 장면과 캐릭터를 따라 그려요.',
 };
 export function defaultIllustrationPresetPreferences(): IllustrationPresetPreferences {
   return {
@@ -68,6 +71,16 @@ export function resolveIllustrationPreset(
   }
   return BUILTIN_ILLUSTRATION_PRESET;
 }
+/** v1 recipes had no generator. Infer once per read without rewriting saved revisions/jobs. */
+export function illustrationPresetGenerator(preset: {
+  generator?: IllustrationPresetGenerator;
+  comfyui: { workflow: string };
+}): IllustrationPresetGenerator {
+  return preset.generator ?? (preset.comfyui.workflow.trim() ? 'comfyui' : 'codex');
+}
+export function normalizeIllustrationPreset(preset: IllustrationPreset): IllustrationPreset {
+  return { ...preset, generator: illustrationPresetGenerator(preset) };
+}
 export function illustrationPresetStamp(preset: IllustrationPreset): IllustrationPresetStamp {
   return { id: preset.id, revision: preset.revision, title: preset.title };
 }
@@ -90,8 +103,13 @@ export function validateIllustrationPreset(value: unknown): IllustrationPresetDe
   const comfyui = v.comfyui === undefined ? {} : object(v.comfyui);
   const workflow = string(comfyui.workflow, 'ComfyUI 워크플로', ILLUSTRATION_WORKFLOW_MAX_CHARS);
   if (workflow.trim()) parseComfyWorkflow(workflow);
+  const generator =
+    v.generator === undefined ? (workflow.trim() ? 'comfyui' : 'codex') : v.generator;
+  if (generator !== 'codex' && generator !== 'comfyui')
+    throw new Error('삽화 생성기는 Codex 또는 ComfyUI를 선택해 주세요.');
   return {
     title,
+    generator,
     description: string(v.description, '설명', 2000),
     styleGuidance: string(v.styleGuidance, '그림 지침', SOURCE_TEXT_MAX_CHARS),
     comfyui: {
@@ -104,18 +122,27 @@ export function illustrationPresetDefinition(
   preset: IllustrationPreset
 ): IllustrationPresetDefinition {
   const { id: _id, revision: _revision, ...definition } = preset;
-  return definition;
+  return { ...definition, generator: illustrationPresetGenerator(preset) };
 }
 export function illustrationPresetFile(preset: IllustrationPresetDefinition) {
   return {
     format: ILLUSTRATION_PRESET_FORMAT,
-    version: 1,
+    version: 2,
     preset: validateIllustrationPreset(preset),
   };
 }
 export function parseIllustrationPresetFile(value: unknown): IllustrationPresetDefinition {
   const file = object(value);
-  if (file.format !== ILLUSTRATION_PRESET_FORMAT || file.version !== 1)
-    throw new Error('Uimori 삽화 프리셋 v1 파일이 아니에요.');
-  return validateIllustrationPreset(file.preset);
+  if (
+    file.format !== ILLUSTRATION_PRESET_FORMAT ||
+    ![1, 2].includes(Number(file.version)) ||
+    typeof file.version !== 'number'
+  )
+    throw new Error('Uimori 삽화 프리셋 v1 또는 v2 파일이 아니에요.');
+  const preset = object(file.preset);
+  if (file.version === 2 && preset.generator === undefined)
+    throw new Error('삽화 프리셋의 생성기가 필요해요.');
+  return validateIllustrationPreset(
+    file.version === 1 ? { ...preset, generator: undefined } : preset
+  );
 }
