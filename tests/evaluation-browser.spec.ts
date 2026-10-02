@@ -111,8 +111,8 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   ).toHaveCount(0);
   const connection = await register(page, request, title, 'llm-gateway');
   await page.getByRole('button', { name: '고급', exact: true }).click();
-  await expect(page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).not.toBeChecked();
-  await page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').check();
+  await expect(page.getByLabel('이 모델 프리셋에 평가 도구 사용')).not.toBeChecked();
+  await page.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
   await page.getByLabel('평가 문맥 제공').selectOption('preloaded');
   await page.getByLabel('첫 case 라운드 추론').selectOption('economized');
   await page.getByLabel('최대 평가 도구 라운드').fill('3');
@@ -187,8 +187,13 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
     await page.screenshot({ path: info.outputPath('evaluation-mobile-connection.png') });
   const connection = await register(page, request, title, 'vercel');
   await page.getByRole('button', { name: '고급', exact: true }).click();
-  await expect(page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).not.toBeChecked();
-  await page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').check();
+  await expect(page.getByLabel('이 모델 프리셋에 평가 도구 사용')).not.toBeChecked();
+  await page.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
+  await expect(page.getByLabel('평가 문맥 제공')).toHaveValue('model-selected');
+  await page.getByLabel('평가 문맥 제공').selectOption('preloaded');
+  await page.getByLabel('첫 case 라운드 추론').selectOption('economized');
+  await page.getByLabel('평가 문맥 제공').selectOption('source-bound');
+  await expect(page.getByLabel('첫 case 라운드 추론')).toHaveCount(0);
   const labels = [
     '모델 프리셋 이름',
     '모델 ID',
@@ -250,8 +255,8 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await expect(page.getByRole('button', { name: '모델 프리셋 등록', exact: true })).toBeEnabled();
   const model = await saveModel(page, request, connection);
   expect(model.evaluationTools).toEqual({
-    contextMode: 'model-selected',
-    approvalReasoningMode: 'configured',
+    contextMode: 'source-bound',
+    approvalReasoningMode: 'economized',
     maximumToolRounds: 8,
     terminalLateCorrections: false,
     outputRecovery: true,
@@ -266,8 +271,13 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   expect(observed.forbidden).toEqual([]);
   await openProviderModel(page, model.title);
   await page.getByRole('button', { name: '고급', exact: true }).click();
-  await expect(page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).toBeChecked();
-  await page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').uncheck();
+  await expect(page.getByLabel('이 모델 프리셋에 평가 도구 사용')).toBeChecked();
+  await expect(page.getByLabel('평가 문맥 제공')).toHaveValue('source-bound');
+  await expect(page.getByLabel('첫 case 라운드 추론')).toHaveCount(0);
+  await page.getByLabel('평가 문맥 제공').selectOption('preloaded');
+  await expect(page.getByLabel('첫 case 라운드 추론')).toHaveValue('economized');
+  await page.getByLabel('평가 문맥 제공').selectOption('source-bound');
+  await page.getByLabel('이 모델 프리셋에 평가 도구 사용').uncheck();
   await expect(page.getByLabel('평가 문맥 제공')).toHaveCount(0);
   await page.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
   await expect

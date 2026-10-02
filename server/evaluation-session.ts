@@ -36,7 +36,11 @@ export function createEvaluationToolSession(
     options,
     session,
     definitions: evaluationToolDefinitions(options),
-    allNames: [...EVALUATION_TOOL_NAMES],
+    allNames:
+      options.contextMode === 'source-bound'
+        ? ['eval_submit_artifact']
+        : [...EVALUATION_TOOL_NAMES],
+    requiresSubmission: options.contextMode === 'source-bound',
     bootstrap: options.contextMode === 'preloaded' ? evaluationBootstrap(session) : [],
     maxCalls: options.maximumToolRounds + 1,
     toolChoice: (completedToolResults: number) =>

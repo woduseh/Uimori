@@ -646,6 +646,108 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
 });
 
 describe('Batch recovery in the real main tool loop', () => {
+  test('source-bound submission keeps the original request and replays its durable receipt', async () => {
+    const work = await snapshot('https://api.anthropic.com/v1');
+    const target = work.profile!.models.main!;
+    target.connection.protocol = 'anthropic-messages-v1';
+    target.executionMode = 'batch';
+    target.modelId = 'claude-opus-5';
+    target.evaluationTools = {
+      ...defaultEvaluationToolOptions(),
+      contextMode: 'source-bound',
+    };
+    work.executionClock = { iso: '2026-09-29T00:00:00.000Z', unix: 1790640000 };
+    const before = structuredClone(work);
+    const preview = buildMainProviderRequest(work).request;
+    expect(
+      preview.stable.tools.filter((tool) => tool.name.startsWith('eval_')).map((tool) => tool.name)
+    ).toEqual(['eval_submit_artifact']);
+    expect(preview.stable.contract).toContain('Ordinary final text does not complete this mode.');
+    expect(preview.bootstrap).toBeUndefined();
+    const execute = (log: ReturnType<typeof hooks>) => {
+      const requests: string[] = [];
+      log.value.executeAnthropicBatch = async (_connection, request, options) => {
+        requests.push(JSON.stringify(request));
+        expect(request.stable.tools.map((tool) => tool.name)).toContain('knowledge.search');
+        expect(
+          request.stable.tools
+            .filter((tool) => tool.name.startsWith('eval_'))
+            .map((tool) => tool.name)
+        ).toEqual(['eval_submit_artifact']);
+        expect(request.bootstrap).toBeUndefined();
+        expect(request.toolChoice).toBeUndefined();
+        expect(JSON.stringify(request.prompt)).toContain('SYNTHETIC_CURRENT_ONCE');
+        await options.onWire?.({
+          connectionId: 'connection',
+          protocol: 'anthropic-messages-v1',
+          role: 'main',
+          modelId: 'claude-opus-5',
+          method: 'POST',
+          url: 'https://api.anthropic.com/v1/messages/batches',
+          headers: {},
+          body: {},
+          bodySha256: 'source-bound-body',
+          stablePrefixSha256: 'stable',
+          executionMode: 'batch',
+        });
+        return {
+          status: 'tool_calls',
+          text: '',
+          refusal: null,
+          error: null,
+          opaqueState: null,
+          toolCalls: [
+            {
+              id: 'source-bound-submit',
+              name: 'eval_submit_artifact',
+              arguments: {
+                content: 'Source-bound Batch artifact.',
+                internalProcessingNote: 'PRIVATE_PROCESSING_NOTE',
+              },
+            },
+          ],
+          usage: {
+            inputTokens: 10,
+            outputTokens: 2,
+            costUsd: null,
+            raw: null,
+            priceRevision: null,
+          },
+        };
+      };
+      return requests;
+    };
+    const original = hooks('');
+    original.value.evaluationRunId = 'source-bound-run';
+    const originalRequests = execute(original);
+    expect(await runMain(work, original.value)).toMatchObject({
+      status: 'completed',
+      text: 'Source-bound Batch artifact.',
+      usage: { modelCalls: 1 },
+    });
+    expect(original.events).toHaveLength(1);
+    expect(original.events[0].result).toMatchObject({
+      accepted: true,
+      processingNoteProvided: true,
+      processingNoteCharacters: 23,
+    });
+    expect(original.events[0].result).not.toHaveProperty('noticeProvided');
+    expect(JSON.stringify([original.events, original.finished])).not.toContain(
+      'PRIVATE_PROCESSING_NOTE'
+    );
+    const resumed = hooks('');
+    resumed.value.evaluationRunId = original.value.evaluationRunId;
+    resumed.value.replayToolEvents = structuredClone(original.events);
+    const replayRequests = execute(resumed);
+    expect(await runMain(work, resumed.value)).toMatchObject({
+      status: 'completed',
+      text: 'Source-bound Batch artifact.',
+    });
+    expect(replayRequests).toEqual(originalRequests);
+    expect(resumed.events).toEqual([]);
+    expect(work).toEqual(before);
+  });
+
   test.each(['model-selected', 'preloaded'] as const)(
     'replays a saved %s evaluation case with the same receipt and request',
     async (contextMode) => {

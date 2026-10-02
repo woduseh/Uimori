@@ -133,12 +133,12 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
       .filter({ hasText: '새 모델 선택에 표시' })
       .screenshot({ path: info.outputPath('model-visibility-switch.png') });
   await modelForm.getByRole('button', { name: '고급', exact: true }).click();
-  await expect(modelForm.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).not.toBeChecked();
-  await modelForm.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').check();
+  await expect(modelForm.getByLabel('이 모델 프리셋에 평가 도구 사용')).not.toBeChecked();
+  await modelForm.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
   if (visualReview)
     await modelForm
       .locator('.toggle-row')
-      .filter({ hasText: '이 모델 프리셋에 평가 도구 4개 사용' })
+      .filter({ hasText: '이 모델 프리셋에 평가 도구 사용' })
       .screenshot({ path: info.outputPath('model-evaluation-switch.png') });
 
   await modelForm.getByLabel('최대 평가 도구 라운드').fill('2');
@@ -944,7 +944,7 @@ for (const [index, item] of providerOptionCases.entries()) {
       await expect(
         mode.locator('optgroup[label="미확인 값 · 공급자가 판정"] option[value="disabled"]')
       ).toHaveCount(1);
-      await form.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').check();
+      await form.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
       await expect(
         form.getByLabel('평가 문맥 제공').locator('option[value="preloaded"]')
       ).toHaveJSProperty('disabled', true);

@@ -248,8 +248,15 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           sha256: submitted.artifact.sha256,
           characters: submitted.artifact.text.length,
           utf8Bytes: submitted.artifact.utf8Bytes,
-          noticeProvided: submitted.artifact.noticeProvided,
-          noticeCharacters: submitted.artifact.noticeCharacters,
+          ...(evaluation.requiresSubmission
+            ? {
+                processingNoteProvided: submitted.artifact.processingNoteProvided,
+                processingNoteCharacters: submitted.artifact.processingNoteCharacters,
+              }
+            : {
+                noticeProvided: submitted.artifact.noticeProvided,
+                noticeCharacters: submitted.artifact.noticeCharacters,
+              }),
           correctionCount: submitted.artifact.correctionCount,
         },
       };
@@ -565,6 +572,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     addUsage(usage, result);
     if (nativeHostError) throw new ModelRunError(nativeHostError, structuredClone(usage));
     continuationPrompt = request.prompt;
+    if (result.status === 'completed' && evaluation?.requiresSubmission && !nativeFinished)
+      return fail('EVALUATION_SUBMISSION_REQUIRED');
     if (result.status !== 'tool_calls')
       return {
         status: result.status,

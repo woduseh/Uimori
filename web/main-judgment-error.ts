@@ -1,6 +1,10 @@
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 
 export function mainJudgmentError(error: string | null | undefined): string | undefined {
+  if (error === 'EVALUATION_SUBMISSION_REQUIRED') {
+    const diagnostic = auxiliaryErrorDiagnostic(error);
+    return `${diagnostic.message} ${diagnostic.action}`;
+  }
   if (error?.startsWith('JEV_')) {
     const diagnostic = auxiliaryErrorDiagnostic(error);
     return diagnostic.code
