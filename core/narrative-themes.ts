@@ -5,6 +5,7 @@ import { BUILTIN_PALETTES } from './theme-palettes.js';
 const commonApp = `
 .story-workspace { container: narrative-workspace / inline-size; background: var(--bg); }
 .reader-stage > [data-uimori-part="gallery"] { display: none; }
+.reader:has([data-uimori-part="scene-portraits"]) > .story-context { display: none; }
 .reader-scrollport { background: var(--bg); }
 .reader { width: min(100%, calc(var(--reading-width) + 340px)); padding: 32px 24px 80px; }
 .source + .source { margin-top: 32px; padding-top: 0; border-top: 0; }
@@ -23,6 +24,17 @@ const commonApp = `
 .scene-portraits [data-uimori-part="persona-portrait"] figcaption { padding: 0; }
 .scene-portraits [data-uimori-part="persona-portrait"] figcaption strong { font-size: 12px; }
 .scene-portraits .reader-portrait-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.scene-portraits figcaption small, .scene-portraits [data-uimori-part="persona-portrait"] { display: none; }
+.request-portraits { display: block; width: 56px; }
+.request-portraits .reader-gallery-heading, .request-portraits .reader-gallery-caption, .request-portraits figcaption small { display: none; }
+.request-portraits .reader-portrait-button { width: 48px; height: 48px; border-radius: 50%; margin-inline: auto; }
+.request-portraits img { width: 48px; height: 48px; object-fit: cover; object-position: center 20%; }
+.request-portraits .reader-portrait-empty { min-height: 48px; font-size: 20px; }
+.request-portraits figcaption { padding-top: 5px; text-align: center; font-size: 10px; color: var(--muted); overflow-wrap: anywhere; }
+.request-portraits figcaption strong { font-weight: 500; }
+.reader [data-uimori-body-scroll] { max-height: clamp(220px, calc(100dvh - 560px), 520px); min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--muted) transparent; padding-right: 8px; }
+.reader [data-uimori-body-scroll]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@container narrative-workspace (max-width: 850px) { .reader [data-uimori-body-scroll] { max-height: clamp(220px, 42dvh, 400px); } }
 .composer-dock { background: var(--bg); }
 .composer { border-radius: 20px; background: var(--panel); border-color: var(--line); }
 .focus-reading [data-uimori-part="scene-portraits"] { display: none; }
@@ -39,6 +51,9 @@ const commonTemplate = `
 .heading { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
 .actions { border-top: 1px solid var(--line); margin-top: 24px; }
 .portrait { min-width: 0; }
+.request-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+.request-persona { padding-top: 4px; }
+:host([data-has-request-persona="false"]) .request-persona { display: none; }
 :host([data-has-portrait="false"]) .portrait, :host-context(.focus-reading) .portrait { display: none; }
 :host([data-has-portrait="false"]) .manuscript, :host-context(.focus-reading) .manuscript { display: block; }
 `;
@@ -56,27 +71,36 @@ export const cinematicTheme: ThemeDefinition = {
   appCss:
     commonApp +
     `
+/* The portrait shares the scene edge, rather than occupying a separate identity card. */
+.scene-portraits { position: relative; display: block; }
+.scene-portraits [data-uimori-part="bot-portrait"] { position: relative; }
 .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { border: 0; border-radius: 0; background: transparent; }
-.scene-portraits [data-uimori-part="bot-portrait"] img { max-height: 580px; object-fit: contain; mask-image: linear-gradient(to right, transparent, black 14%); }
-.scene-portraits [data-uimori-part="bot-portrait"] figcaption { border-top: 1px solid var(--line); padding-top: 16px; }
+.scene-portraits [data-uimori-part="bot-portrait"] img { width: 100%; height: auto; max-height: 680px; object-fit: cover; object-position: center 20%; mask-image: linear-gradient(to right, transparent, black 22%), linear-gradient(to bottom, black 65%, transparent 100%); mask-composite: intersect; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption { position: absolute; left: 28px; bottom: 26px; padding: 0; pointer-events: none; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: 20px; text-shadow: 0 1px 8px var(--panel); }
+.scene-portraits figcaption small { display: none; }
+.scene-portraits [data-uimori-part="persona-portrait"] { position: absolute; right: 20px; bottom: 24px; gap: 8px; }
+.scene-portraits [data-uimori-part="persona-portrait"] figcaption { display: none; }
+.scene-portraits [data-uimori-part="persona-portrait"] .reader-portrait-button { border: 2px solid var(--panel); box-shadow: 0 2px 8px var(--shade); }
 @container narrative-workspace (max-width: 850px) {
-  .scene-portraits [data-uimori-part="bot-portrait"] { display: flex; align-items: center; gap: 18px; }
-  .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { width: 100px; flex: 0 0 100px; }
-  .scene-portraits [data-uimori-part="bot-portrait"] img { height: 132px; }
-  .scene-portraits [data-uimori-part="bot-portrait"] figcaption { border: 0; }
+  .scene-portraits [data-uimori-part="bot-portrait"] img { height: 130px; object-fit: cover; object-position: center 22%; mask-image: linear-gradient(to bottom, black 65%, transparent); }
+  .scene-portraits [data-uimori-part="bot-portrait"] figcaption { left: 20px; bottom: 16px; }
+  .scene-portraits [data-uimori-part="persona-portrait"] { right: 18px; bottom: 12px; }
 }
 `,
   messageCss,
   templateHtml:
-    '<slot name="request"></slot><section class="manuscript"><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body"></slot><footer class="actions"><slot name="actions"></slot></footer></div><aside class="portrait"><slot name="portrait"></slot></aside></section>',
+    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div><aside class="portrait"><slot name="portrait"></slot></aside></section>',
   templateCss:
     commonTemplate +
     `
-.manuscript { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 30%); gap: 32px; padding: 36px; border: 1px solid var(--line); outline: 1px solid color-mix(in srgb, var(--accent) 24%, transparent); outline-offset: -7px; background: radial-gradient(ellipse at right top, var(--accent-soft), transparent 65%), var(--panel); }
-.portrait { align-self: start; padding-top: 8px; }
+.manuscript { display: grid; grid-template-columns: minmax(0, 60%) minmax(0, 40%); gap: 0; padding: 0; border: 1px solid var(--line); outline: 1px solid color-mix(in srgb, var(--accent) 24%, transparent); outline-offset: -7px; background: radial-gradient(ellipse at right top, var(--accent-soft), transparent 65%), var(--panel); }
+.copy { padding: 28px 20px 24px 32px; }
+.portrait { align-self: start; padding: 0; }
 .heading::before { content: ''; display: block; width: 6px; height: 6px; transform: rotate(45deg); background: var(--accent); margin: 3px 2px 18px; }
 @container narrative-scene (max-width: 680px) {
-  .manuscript { display: flex; flex-direction: column; padding: 24px 18px; gap: 20px; }
+  .manuscript { display: flex; flex-direction: column; padding: 0; gap: 0; }
+  .copy { padding: 12px 18px 24px; }
   .portrait { order: -1; width: 100%; }
 }
 `,
@@ -89,27 +113,32 @@ export const letterTheme: ThemeDefinition = {
     commonApp +
     `
 .reader { width: min(100%, calc(var(--reading-width) + 96px)); }
+@container narrative-workspace (min-width: 851px) { .reader [data-uimori-body-scroll] { max-height: clamp(220px, calc(100dvh - 650px), 450px); } }
 .reader-scrollport { background-image: linear-gradient(color-mix(in srgb, var(--line) 18%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--line) 18%, transparent) 1px, transparent 1px); background-size: 24px 24px; }
-.scene-portraits { flex-direction: row; align-items: center; gap: 24px; }
-.scene-portraits [data-uimori-part="bot-portrait"] { display: flex; align-items: center; gap: 20px; flex: 1; }
-.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { width: 132px; flex: 0 0 132px; border-radius: 0; background: var(--surface); }
-.scene-portraits [data-uimori-part="bot-portrait"] img { height: 96px; object-fit: cover; object-position: center 25%; }
-.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-empty { min-height: 96px; }
+.scene-portraits { flex-direction: row; align-items: center; gap: 28px; }
+.scene-portraits [data-uimori-part="bot-portrait"] { display: flex; align-items: center; gap: 18px; flex: 0 1 auto; }
+.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { width: 88px; flex: 0 0 88px; border-radius: 3px; background: var(--surface); }
+.scene-portraits [data-uimori-part="bot-portrait"] img { height: 88px; object-fit: cover; object-position: center 20%; }
+.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-empty { min-height: 88px; }
 .scene-portraits figcaption { padding: 0; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: 22px; }
+.scene-portraits [data-uimori-part="persona-portrait"] { border-left: 1px solid var(--line); padding-left: 24px; }
 @media (max-width: 760px) {
-  .scene-portraits { gap: 12px; flex-wrap: wrap; }
-  .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { width: 80px; flex-basis: 80px; }
+  .scene-portraits { gap: 16px; flex-wrap: wrap; }
+  .scene-portraits [data-uimori-part="persona-portrait"] { padding-left: 14px; }
+  .scene-portraits [data-uimori-part="persona-portrait"] figcaption { display: none; }
+  .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { width: 72px; flex-basis: 72px; }
   .scene-portraits [data-uimori-part="bot-portrait"] img { height: 72px; }
 }
 `,
   messageCss,
   templateHtml:
-    '<slot name="request"></slot><section class="manuscript"><header class="portrait"><slot name="portrait"></slot></header><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body"></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
+    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><header class="portrait"><slot name="portrait"></slot></header><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
   templateCss:
     commonTemplate +
     `
 .manuscript { border: 1px solid var(--line); box-shadow: 0 8px 24px var(--shade); }
-.portrait { padding: 20px 28px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.portrait { padding: 18px 28px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .copy { padding: 28px 32px; }
 .heading { border-bottom: 3px double var(--line); }
 .actions { position: relative; }
@@ -134,7 +163,7 @@ export const scrapbookTheme: ThemeDefinition = {
 @container narrative-workspace (max-width: 850px) {
   .scene-portraits { flex-direction: row; align-items: center; gap: 20px; }
   .scene-portraits [data-uimori-part="bot-portrait"] { width: 130px; flex: 0 0 130px; padding: 8px 8px 14px; }
-  .scene-portraits [data-uimori-part="bot-portrait"] img { max-height: 190px; }
+  .scene-portraits [data-uimori-part="bot-portrait"] img { height: 112px; object-fit: cover; object-position: center 20%; }
   .scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: 14px; }
   .scene-portraits [data-uimori-part="bot-portrait"] figcaption small { display: none; }
   .scene-portraits [data-uimori-part="persona-portrait"] { flex-direction: column; align-items: flex-start; }
@@ -142,7 +171,7 @@ export const scrapbookTheme: ThemeDefinition = {
 `,
   messageCss,
   templateHtml:
-    '<slot name="request"></slot><section class="manuscript"><aside class="portrait"><slot name="portrait"></slot></aside><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body"></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
+    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><aside class="portrait"><slot name="portrait"></slot></aside><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
   templateCss:
     commonTemplate +
     `

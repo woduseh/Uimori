@@ -1,3 +1,4 @@
+import { themeBodyScroll } from './theme-body-scroll.js';
 import { BookmarkList } from './Bookmarks.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
@@ -53,11 +54,18 @@ export function SceneNavigator({
     const update = () => {
       frame = 0;
       const distance = node.scrollHeight - node.clientHeight - node.scrollTop;
+      const sources = [...node.querySelectorAll<HTMLElement>('[data-testid="source"]')];
+      const lastBody = themeBodyScroll(sources.at(-1) ?? null);
+      const bodyDistance = lastBody
+        ? lastBody.scrollHeight - lastBody.clientHeight - lastBody.scrollTop
+        : 0;
       // Keep the mobile jump control quiet near the end. Small font/layout changes
       // should not make it linger when the reader is effectively at the latest text.
-      setAwayFromBottom(distance > Math.max(120, node.clientHeight * 0.14));
+      setAwayFromBottom(
+        distance > Math.max(120, node.clientHeight * 0.14) ||
+          bodyDistance > Math.max(24, (lastBody?.clientHeight ?? 0) * 0.08)
+      );
       const top = node.getBoundingClientRect().top + 32;
-      const sources = [...node.querySelectorAll<HTMLElement>('[data-testid="source"]')];
       // At the physical end, the last source is the scene being read even when the
       // taller floating-control layout leaves a sliver of the previous source visible.
       const visible =
@@ -73,12 +81,12 @@ export function SceneNavigator({
     const resize = new ResizeObserver(schedule);
     resize.observe(node);
     if (node.firstElementChild) resize.observe(node.firstElementChild);
-    node.addEventListener('scroll', schedule, { passive: true });
+    node.addEventListener('scroll', schedule, { passive: true, capture: true });
     schedule();
     return () => {
       cancelAnimationFrame(frame);
       resize.disconnect();
-      node.removeEventListener('scroll', schedule);
+      node.removeEventListener('scroll', schedule, true);
     };
     // Observe the mounted page again when paging replaces its source elements.
   }, [reader, orderKey]);

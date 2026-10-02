@@ -1,3 +1,4 @@
+import { readerLocation, THEME_BODY_SCROLL_SELECTOR } from './theme-body-scroll.js';
 import { captureReaderLocation, useReadingSync } from './useReadingSync.js';
 import { readerTargetFromUrl, readerTargetUrl, type ReaderTarget } from '../core/reader-target.js';
 import { readerConversation } from '../core/reader-conversation.js';
@@ -554,28 +555,53 @@ export function useStory() {
     },
     [selected, viewKey, readingSync.remember]
   );
-  const savePosition = useCallback(() => {
-    const node = reader.current;
-    if (!node || restoredView.current !== viewKey || !selected) return;
-    const box = node.getBoundingClientRect();
-    const blocks = node.querySelectorAll<HTMLElement>('[data-block-anchor]');
-    let low = 0,
-      high = blocks.length;
-    while (low < high) {
-      const mid = (low + high) >>> 1;
-      if (blocks[mid].getBoundingClientRect().bottom <= box.top + 12) low = mid + 1;
-      else high = mid;
-    }
-    const block = blocks[low];
-    const position: Position = {
-      target: readSource,
-      source: block?.closest('[data-source-id]')?.getAttribute('data-source-id') || '',
-      anchor: block?.dataset.blockAnchor?.split(' ')[0] || '',
-      offset: block ? block.getBoundingClientRect().top - box.top : 0,
-      top: node.scrollTop,
-    };
-    writeViewCache(`reading:${viewKey}`, position);
-  }, [selected, viewKey, readSource]);
+  const activeReadingSource = useRef<HTMLElement | null>(null);
+  const savePosition = useCallback(
+    (event?: { target: EventTarget | null }) => {
+      const node = reader.current;
+      if (!node || restoredView.current !== viewKey || !selected) return;
+      const target = event?.target;
+      if (target instanceof HTMLElement && target.matches(THEME_BODY_SCROLL_SELECTOR))
+        activeReadingSource.current = target.closest('[data-source-id][data-representation]');
+      else if (target === node) activeReadingSource.current = null;
+      const active = activeReadingSource.current;
+      const preferred =
+        active &&
+        node.contains(active) &&
+        active.getBoundingClientRect().bottom > node.getBoundingClientRect().top &&
+        active.getBoundingClientRect().top < node.getBoundingClientRect().bottom
+          ? active
+          : undefined;
+      const nested = !!node.querySelector(THEME_BODY_SCROLL_SELECTOR);
+      const location = nested ? readerLocation(node, preferred) : null;
+      let block = location?.block;
+      if (!nested) {
+        // Preserve the unbounded reader's logarithmic geometry lookup.
+        const top = node.getBoundingClientRect().top + 12;
+        const blocks = node.querySelectorAll<HTMLElement>('[data-block-anchor]');
+        let low = 0,
+          high = blocks.length;
+        while (low < high) {
+          const mid = (low + high) >>> 1;
+          if (blocks[mid].getBoundingClientRect().bottom <= top) low = mid + 1;
+          else high = mid;
+        }
+        block = blocks[low];
+      }
+      const position: Position = {
+        target: readSource,
+        source: block?.closest('[data-source-id]')?.getAttribute('data-source-id') || '',
+        anchor: block?.dataset.blockAnchor?.split(' ')[0] || '',
+        offset: block
+          ? block.getBoundingClientRect().top -
+            (location?.scrollport ?? node).getBoundingClientRect().top
+          : 0,
+        top: node.scrollTop,
+      };
+      writeViewCache(`reading:${viewKey}`, position);
+    },
+    [selected, viewKey, readSource]
+  );
   useLayoutEffect(() => {
     const text = sessionStorage.getItem(draftKey) || '';
     draftIdentity.current = { text, revision: draftIdentity.current.revision + 1 };
@@ -590,10 +616,20 @@ export function useStory() {
   }, [draftKey]);
   useEffect(() => {
     const before = () => savePosition();
+    const scroll = (event: Event) => {
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.matches(THEME_BODY_SCROLL_SELECTOR) &&
+        reader.current?.contains(event.target)
+      )
+        savePosition(event);
+    };
+    document.addEventListener('scroll', scroll, true);
     addEventListener('pagehide', before);
     return () => {
       savePosition();
       removeEventListener('pagehide', before);
+      document.removeEventListener('scroll', scroll, true);
     };
   }, [savePosition]);
   const rememberCursor = useCallback(() => {
@@ -704,6 +740,7 @@ export function useStory() {
             element: article,
             anchor: saved.anchor,
             offset: saved.offset,
+            outerTop: saved.top,
           });
         } else node.scrollTop = saved?.top || 0;
       }

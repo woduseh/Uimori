@@ -1077,14 +1077,23 @@ function App() {
                     <p role="status">채팅을 불러오는 중이에요…</p>
                   ) : (
                     <>
-                      {s.profileAsset && (
-                        <div className="story-context">
-                          <img
-                            className="profile-asset"
-                            data-testid="profile-asset"
-                            src={s.profileAsset.url}
-                            alt={s.profileAsset.description || s.profileAsset.title}
-                          />
+                      {(s.profileAsset ||
+                        (s.sources.length > 0 && s.attachmentsReady && s.bot)) && (
+                        <div
+                          className="story-context"
+                          data-fallback={s.profileAsset ? undefined : true}
+                        >
+                          {s.profileAsset ? (
+                            <img
+                              className="profile-asset"
+                              data-testid="profile-asset"
+                              src={s.profileAsset.url}
+                              alt={s.profileAsset.description || s.profileAsset.title}
+                            />
+                          ) : (
+                            <ContentAvatar content={s.bot} className="reader-bot-avatar" />
+                          )}
+                          {s.bot && <strong className="reader-bot-name">{s.bot.title}</strong>}
                         </div>
                       )}
                       {!s.connected && (
@@ -1116,6 +1125,11 @@ function App() {
                               portrait={
                                 s.attachmentsReady && s.bot ? (
                                   <ReaderGallery scene bot={s.bot} persona={s.persona} />
+                                ) : undefined
+                              }
+                              requestPersona={
+                                s.attachmentsReady && s.bot && s.persona ? (
+                                  <ReaderGallery requestPersona bot={s.bot} persona={s.persona} />
                                 ) : undefined
                               }
                               latest={source.id === s.sources.at(-1)?.id}

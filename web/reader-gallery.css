@@ -51,3 +51,9 @@
   object-fit: contain;
   border-radius: 8px;
 }
+
+/* The default layout opts in; existing custom themes retain their original context strip. */
+.story-context[data-fallback],
+.reader-bot-name {
+  display: none;
+}
