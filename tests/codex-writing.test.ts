@@ -267,7 +267,6 @@ test('native evaluation final submission uses existing validation and does not a
   f.work.profile!.models.main!.evaluationTools = {
     ...defaultEvaluationToolOptions(),
     maximumToolRounds: 0,
-    outputRecovery: false,
   };
   expect(await runMain(compileSnapshotPrompt(f.work), f.hooks)).toMatchObject({
     status: 'completed',
@@ -370,7 +369,6 @@ test('economized evaluation uses one legacy bootstrap then restores writer effor
     ...defaultEvaluationToolOptions(),
     contextMode: 'preloaded',
     approvalReasoningMode: 'economized',
-    outputRecovery: false,
   };
   const prepare = vi.fn(async (request) => request);
   f.hooks.prepareRequest = prepare;

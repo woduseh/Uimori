@@ -11,7 +11,6 @@ import {
   evaluationToolDefinitions,
   executeEvaluationTool,
   extractEvaluationArtifact,
-  retryableEvaluationRefusal,
 } from '../core/evaluation-tools.js';
 import type { ProviderToolCall } from '../core/transport.js';
 import type { ProviderResult } from '../core/transport.js';
@@ -43,7 +42,6 @@ export function createEvaluationToolSession(
   if (!Number.isSafeInteger(duration) || duration < 1 || duration > 1_800_000)
     throw new Error('INVALID_TIMEOUT');
   const deadline = Date.now() + duration;
-  let refusalRetryUsed = false;
   return {
     options,
     session,
@@ -105,28 +103,6 @@ export function createEvaluationToolSession(
           options,
           recoveredFromTruncation
         );
-        if (
-          options.outputRecovery &&
-          retryableEvaluationRefusal(artifact.text) &&
-          !refusalRetryUsed
-        ) {
-          refusalRetryUsed = true;
-          return {
-            ok: false as const,
-            event: {
-              callId: call.id,
-              name: call.name,
-              args: {},
-              denied: false,
-              result: {
-                error: {
-                  code: 'OUTPUT_VALIDATION_FAILED',
-                  requiredAction: 'submit-completed-artifact',
-                },
-              },
-            },
-          };
-        }
         return { ok: true as const, artifact };
       } catch {
         return {

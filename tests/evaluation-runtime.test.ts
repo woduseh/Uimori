@@ -24,6 +24,7 @@ import {
 } from '../core/evaluation-tool-config.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
 import { translationFixtureRenderedSlot } from './fixtures/translation-job.js';
+import { JEV_ENDPOINT } from '../server/jev-judgment.js';
 
 const credentialRef = 'Evaluation_Runtime_Key';
 const bearer = 'synthetic-evaluation-fixture-key';
@@ -317,6 +318,72 @@ const translated = (body: Body): string => {
     .flatMap((part) => (typeof part.text === 'string' ? [part.text] : []));
   return '합성 번역: ' + translationFixtureRenderedSlot(texts, 'source');
 };
+
+test.each(['model-selected', 'source-bound'] as const)(
+  '%s evaluation submission reaches JEV once without regex rejection or writer resubmission',
+  async (contextMode) => {
+    for (const scenario of [
+      { text: "I'm sorry, but I cannot assist with that request.", score: 0.99, status: 'refused' },
+      {
+        text: 'I cannot provide that answer, the keeper said, before opening the observatory gate.',
+        score: 0.01,
+        status: 'completed',
+      },
+    ]) {
+      const state = await fixture(
+        async (body, target) =>
+          send(target, [
+            call(
+              body,
+              'eval_submit_artifact',
+              {
+                content: scenario.text,
+                ...(contextMode === 'source-bound' ? {} : { userFacingNotice: marker }),
+              },
+              'submitted'
+            ),
+          ]),
+        { contextMode }
+      );
+      const judged: any[] = [];
+      const fallback = globalThis.fetch;
+      vi.stubGlobal('fetch', async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        if (url !== JEV_ENDPOINT) return fallback(url, init);
+        const body = JSON.parse(String(init?.body));
+        judged.push(body);
+        return new Response(
+          JSON.stringify({
+            model: 'jev-latest',
+            answers: { explicitRefusal: { type: 'noul', noul: scenario.score } },
+            usage: { input_tokens: 7, output_tokens: 3 },
+          })
+        );
+      });
+      const run = await settled(state, (await state.start()).id);
+      expect(run.status).toBe(scenario.status);
+      expect(state.provider.requests).toHaveLength(1);
+      expect(judged).toHaveLength(1);
+      expect(judged[0].state).toEqual({ response: scenario.text });
+      expect(JSON.stringify(run.toolEvents)).not.toContain('OUTPUT_VALIDATION_FAILED');
+      if (scenario.status === 'refused') {
+        expect(run.toolEvents).toHaveLength(1);
+        expect(run.toolEvents[0]).toMatchObject({
+          name: 'eval_submit_artifact',
+          denied: false,
+          result: { accepted: true },
+        });
+        expect(run.snapshot.mainJudgment).toMatchObject({
+          response: scenario.text,
+          candidateHash: createHash('sha256').update(scenario.text).digest('hex'),
+        });
+        expect(run.partialText).toBe(scenario.text);
+        expect(run.sourceRevision).toBeNull();
+        expect((await state.detail()).sources).toEqual([]);
+      } else expect((await state.detail()).sources[0].text).toBe(scenario.text);
+      expect((await state.detail()).attempts).toHaveLength(2);
+    }
+  }
+);
 
 test.each(['model-selected', 'preloaded'] as const)(
   'Responses automatically supplies matching OpenAI context/reviewer in %s without changing the saved manual choice',

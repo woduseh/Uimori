@@ -227,6 +227,35 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         results.push(event);
         if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
       }
+      // Old submitted Batches may already have a durable refusal-retry receipt.
+      // Replay that result without reinstating the retired prose classifier.
+      const terminalCall = evaluationTerminals[0];
+      const savedTerminal = replayEvents.get(JSON.stringify([terminalCall.id, terminalCall.name]));
+      if (
+        target.connection.protocol === 'anthropic-messages-v1' &&
+        target.executionMode === 'batch' &&
+        hooks.evaluationRunId &&
+        savedTerminal
+      ) {
+        const retiredFailure: ToolEvent = {
+          callId: terminalCall.id,
+          name: terminalCall.name,
+          args: {},
+          denied: false,
+          result: {
+            error: {
+              code: 'OUTPUT_VALIDATION_FAILED',
+              requiredAction: 'submit-completed-artifact',
+            },
+          },
+        };
+        if (isDeepStrictEqual(savedTerminal, retiredFailure)) {
+          if (signal.aborted) return fail('CANCELLED');
+          results.push(takeReplay(terminalCall.id, terminalCall.name)!);
+          opaqueState = result.opaqueState;
+          return undefined;
+        }
+      }
       const submitted = evaluation.submit(
         evaluationTerminals[0],
         evaluationTerminals[0].recoveredFromTruncation === true
