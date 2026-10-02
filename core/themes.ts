@@ -219,7 +219,7 @@ export const BUILTIN_THEMES: Theme[] = [
     templateHtml:
       '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><slot name="heading"></slot><slot name="body"></slot><slot name="actions"></slot>',
     templateCss:
-      '.request-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:start; } :host([data-has-request-persona="false"]) .request-persona { display:none; }',
+      '.request-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:start; } :host([data-has-request-persona="false"]) .request-persona { display:none; } @media(max-width:760px) { .request-row { display:flex; flex-direction:column; gap:8px; align-items:stretch; } .request-persona { order:-1; align-self:flex-end; } }',
     appCss: `
 .reader > .story-context { display: flex; gap: 20px; margin-bottom: 28px; align-items: center; }
 .reader .profile-asset { width: 96px; height: 120px; object-fit: contain; background: var(--surface); border-radius: 8px; }
@@ -232,7 +232,7 @@ export const BUILTIN_THEMES: Theme[] = [
 .request-portraits img { width:48px; height:48px; object-fit:cover; object-position:center 20%; }
 .request-portraits .reader-portrait-empty { min-height:48px; font-size:20px; }
 .request-portraits figcaption { font-size:10px; color:var(--muted); padding-top:5px; text-align:center; overflow-wrap:anywhere; }
-@media(max-width:760px) { .reader .profile-asset { width:72px; height:90px; } .reader .story-context > .content-avatar { --content-avatar-size:72px; } .reader .story-context > strong { display: block; font-size:17px; } }
+@media(max-width:760px) { .request-portraits { width:auto; } .request-portraits [data-uimori-part="persona-portrait"] { display:flex; align-items:center; gap:8px; } .request-portraits figcaption { padding:0; } .reader .profile-asset { width:72px; height:90px; } .reader .story-context > .content-avatar { --content-avatar-size:72px; } .reader .story-context > strong { display: block; font-size:17px; } }
 `,
   },
   { ...cinematicTheme, id: 'builtin:cinematic', revision: 2 },
