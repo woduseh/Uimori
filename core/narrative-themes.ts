@@ -44,6 +44,22 @@ const commonApp = `
   .source + .source { margin-top: 24px; }
 }
 `;
+const mobilePortrait = `
+@container narrative-workspace (max-width: 850px) {
+  .scene-portraits { display: block; }
+  .scene-portraits [data-uimori-part="bot-portrait"] { display: block; width: auto; flex: initial; }
+  .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { width: 100%; flex: initial; }
+  .scene-portraits [data-uimori-part="bot-portrait"] img { width: 100%; height: min(220px, 28dvh); max-height: 220px; object-fit: cover; object-position: center 18%; }
+  .scene-portraits [data-uimori-part="bot-portrait"] figcaption { position: static; padding: 10px 4px; text-align: center; }
+  .scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: 18px; }
+  .request-portraits { width: auto; }
+  .request-portraits [data-uimori-part="persona-portrait"] { display: flex; align-items: center; gap: 8px; }
+  .request-portraits .reader-portrait-button, .request-portraits img { width: 44px; height: 44px; }
+  .request-portraits .reader-portrait-empty { min-height: 44px; }
+  .request-portraits figcaption { padding: 0; }
+  .reader [data-uimori-body-scroll] { max-height: clamp(200px, calc(100dvh - 600px), 360px); }
+}
+`;
 const commonTemplate = `
 :host { container: narrative-scene / inline-size; }
 .manuscript { position: relative; min-width: 0; color: var(--text); background: var(--panel); }
@@ -53,6 +69,10 @@ const commonTemplate = `
 .portrait { min-width: 0; }
 .request-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
 .request-persona { padding-top: 4px; }
+@container narrative-scene (max-width: 680px) {
+  .request-row { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+  .request-persona { order: -1; align-self: flex-end; padding-top: 0; }
+}
 :host([data-has-request-persona="false"]) .request-persona { display: none; }
 :host([data-has-portrait="false"]) .portrait, :host-context(.focus-reading) .portrait { display: none; }
 :host([data-has-portrait="false"]) .manuscript, :host-context(.focus-reading) .manuscript { display: block; }
@@ -87,7 +107,8 @@ export const cinematicTheme: ThemeDefinition = {
   .scene-portraits [data-uimori-part="bot-portrait"] figcaption { left: 20px; bottom: 16px; }
   .scene-portraits [data-uimori-part="persona-portrait"] { right: 18px; bottom: 12px; }
 }
-`,
+` +
+    mobilePortrait,
   messageCss,
   templateHtml:
     '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div><aside class="portrait"><slot name="portrait"></slot></aside></section>',
@@ -130,7 +151,8 @@ export const letterTheme: ThemeDefinition = {
   .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { width: 72px; flex-basis: 72px; }
   .scene-portraits [data-uimori-part="bot-portrait"] img { height: 72px; }
 }
-`,
+` +
+    mobilePortrait,
   messageCss,
   templateHtml:
     '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><header class="portrait"><slot name="portrait"></slot></header><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
@@ -143,7 +165,7 @@ export const letterTheme: ThemeDefinition = {
 .heading { border-bottom: 3px double var(--line); }
 .actions { position: relative; }
 .actions::before { content: ''; position: absolute; top: -4px; left: calc(50% - 4px); width: 6px; height: 6px; transform: rotate(45deg); background: var(--muted); box-shadow: 0 0 0 5px var(--panel); }
-@container narrative-scene (max-width: 520px) { .copy { padding: 22px 18px; } .portrait { padding: 16px 18px; } }
+@container narrative-scene (max-width: 520px) { .copy { padding: 22px 18px; } .portrait { padding: 0; } }
 `,
 };
 export const scrapbookTheme: ThemeDefinition = {
@@ -168,7 +190,8 @@ export const scrapbookTheme: ThemeDefinition = {
   .scene-portraits [data-uimori-part="bot-portrait"] figcaption small { display: none; }
   .scene-portraits [data-uimori-part="persona-portrait"] { flex-direction: column; align-items: flex-start; }
 }
-`,
+` +
+    mobilePortrait,
   messageCss,
   templateHtml:
     '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><aside class="portrait"><slot name="portrait"></slot></aside><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
@@ -181,7 +204,7 @@ export const scrapbookTheme: ThemeDefinition = {
 .heading { border-bottom-style: dashed; }
 @container narrative-scene (max-width: 680px) {
   .manuscript { display: block; padding: 22px 18px; }
-  .portrait { border: 0; padding: 0 8px 22px; max-width: 280px; margin-inline: auto; }
+  .portrait { border: 0; padding: 0 8px 16px; max-width: none; margin-inline: auto; }
 }
 `,
 };

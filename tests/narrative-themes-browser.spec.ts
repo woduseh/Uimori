@@ -306,7 +306,11 @@ for (const layout of layouts) {
         ).toHaveCount(0);
         const requestBox = await scene.locator('[data-uimori-part="request"]').boundingBox();
         const personaBox = await requestPersona.boundingBox();
-        expect(personaBox!.x).toBeGreaterThanOrEqual(requestBox!.x + requestBox!.width - 1);
+        if (width === 412) {
+          expect(personaBox!.y + personaBox!.height).toBeLessThanOrEqual(requestBox!.y + 1);
+        } else {
+          expect(personaBox!.x).toBeGreaterThanOrEqual(requestBox!.x + requestBox!.width - 1);
+        }
         await noHorizontalOverflow(page, scene);
         // The projected body stays intact; the theme-owned wrapper owns the inner scroll.
         expect(
@@ -622,7 +626,7 @@ for (const [width, mode] of [
   [1440, 'dark'],
   [412, 'light'],
 ] as const) {
-  test(`NARRATIVE default ${width} ${mode}: compact bot context and request-right persona`, async ({
+  test(`NARRATIVE default ${width} ${mode}: compact bot context and responsive request persona`, async ({
     page,
     request,
   }, info) => {
@@ -658,7 +662,11 @@ for (const [width, mode] of [
     expect((await personaButton.boundingBox())!.width).toBeCloseTo(48, 0);
     const requestBox = await scene.locator('[data-uimori-part="request"]').boundingBox();
     const personaBox = await requestPersona.boundingBox();
-    expect(personaBox!.x).toBeGreaterThanOrEqual(requestBox!.x + requestBox!.width - 1);
+    if (width === 412) {
+      expect(personaBox!.y + personaBox!.height).toBeLessThanOrEqual(requestBox!.y + 1);
+    } else {
+      expect(personaBox!.x).toBeGreaterThanOrEqual(requestBox!.x + requestBox!.width - 1);
+    }
     await expect(requestPersona.locator('figcaption small').filter({ visible: true })).toHaveCount(
       0
     );
