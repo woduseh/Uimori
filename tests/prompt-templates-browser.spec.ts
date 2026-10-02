@@ -83,12 +83,36 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
     }
     await panel.getByRole('button', { name: '기본 프롬프트', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '기본 프롬프트', exact: true });
+    await expect(dialog).toBeVisible();
+    const bounds = (await dialog.boundingBox())!;
+    const gap = width === MOBILE_WIDTH ? 16 : 24;
+    expect(bounds.x).toBeGreaterThanOrEqual(gap);
+    expect(bounds.y).toBeGreaterThanOrEqual(gap);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width - gap);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(1000 - gap);
+    expect(Math.abs(bounds.x + bounds.width / 2 - width / 2)).toBeLessThanOrEqual(1);
+    expect(Math.abs(bounds.y + bounds.height / 2 - 500)).toBeLessThanOrEqual(1);
     if (width === MOBILE_WIDTH) {
-      const bounds = await dialog.boundingBox();
-      expect(bounds!.x).toBeLessThanOrEqual(1);
-      expect(bounds!.y).toBeLessThanOrEqual(1);
-      expect(bounds!.width).toBeGreaterThanOrEqual(MOBILE_WIDTH - 1);
-      expect(bounds!.height).toBeGreaterThanOrEqual(999);
+      await page.setViewportSize({ width, height: 480 });
+      const header = dialog.locator(':scope > .dialog-header');
+      const body = dialog.locator(':scope > .dialog-body');
+      const headerBefore = (await header.boundingBox())!;
+      await body.evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+      });
+      expect(await body.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+      expect((await header.boundingBox())!.y).toBe(headerBefore.y);
+      const shortBounds = (await dialog.boundingBox())!;
+      expect(shortBounds.y).toBeGreaterThanOrEqual(16);
+      expect(shortBounds.y + shortBounds.height).toBeLessThanOrEqual(464);
+      await expect(
+        dialog.getByRole('button', { name: '기본 프롬프트 닫기', exact: true })
+      ).toBeInViewport({ ratio: 1 });
+      await page.screenshot({ path: info.outputPath('prompt-templates-mobile-short.png') });
+      await body.evaluate((node) => {
+        node.scrollTop = 0;
+      });
+      await page.setViewportSize({ width, height: 1000 });
     }
     await expect(dialog.getByRole('listitem')).toHaveCount(5);
     await expect(dialog.getByRole('heading', { level: 3 })).toHaveText(titles);
