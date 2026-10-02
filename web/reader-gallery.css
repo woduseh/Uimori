@@ -57,3 +57,16 @@
 .reader-bot-name {
   display: none;
 }
+
+.story-context > .reader-bot-avatar {
+  display: block;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.reader-bot-avatar > .profile-asset {
+  display: block;
+}

@@ -66,7 +66,8 @@ import { refValue } from './content-ref.js';
 import { deferredPanel } from './deferredPanel.js';
 import { ContentPicker } from './ContentPicker.js';
 import { ContentAvatar } from './ContentAvatar.js';
-import { ReaderGallery } from './ReaderGallery.js';
+import { ReaderGallery, ReaderPortraitButton } from './ReaderGallery.js';
+import { contentPortraitUrl } from './content-portrait.js';
 import type { ContentRole } from '../core/risu-content.js';
 import { SourceReader } from './SourceReader.js';
 import { TurnActivity } from './TurnActivity.js';
@@ -1083,16 +1084,21 @@ function App() {
                           className="story-context"
                           data-fallback={s.profileAsset ? undefined : true}
                         >
-                          {s.profileAsset ? (
-                            <img
-                              className="profile-asset"
-                              data-testid="profile-asset"
-                              src={s.profileAsset.url}
-                              alt={s.profileAsset.description || s.profileAsset.title}
-                            />
-                          ) : (
-                            <ContentAvatar content={s.bot} className="reader-bot-avatar" />
-                          )}
+                          <ReaderPortraitButton
+                            url={s.profileAsset?.url ?? contentPortraitUrl(s.bot)}
+                            title={s.bot?.title ?? s.profileAsset?.title ?? '등장인물'}
+                          >
+                            {s.profileAsset ? (
+                              <img
+                                className="profile-asset"
+                                data-testid="profile-asset"
+                                src={s.profileAsset.url}
+                                alt={s.profileAsset.description || s.profileAsset.title}
+                              />
+                            ) : (
+                              <ContentAvatar content={s.bot} />
+                            )}
+                          </ReaderPortraitButton>
                           {s.bot && <strong className="reader-bot-name">{s.bot.title}</strong>}
                         </div>
                       )}

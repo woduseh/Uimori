@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useState, type ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { Content } from '../core/product.js';
 import { contentPortraitUrl } from './content-portrait.js';
@@ -13,6 +13,56 @@ function Portrait({ url, title }: { url: string; title: string }) {
     <span className="reader-portrait-empty" role="img" aria-label={`${title} · 대표 이미지 없음`}>
       {Array.from(title.trim())[0] ?? '◇'}
     </span>
+  );
+}
+
+function PortraitDialog({
+  open,
+  onClose,
+  url,
+  title,
+}: {
+  open: boolean;
+  onClose: () => void;
+  url: string;
+  title: string;
+}) {
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={`${title} 대표 이미지`}
+      className="reader-portrait-dialog"
+    >
+      {open && <Portrait key={url} url={url} title={title} />}
+    </Dialog>
+  );
+}
+
+/** The compact bot header shares the gallery's original-image viewer. */
+export function ReaderPortraitButton({
+  url,
+  title,
+  children,
+}: {
+  url: string;
+  title: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="reader-bot-avatar"
+        aria-label={`${title} 대표 이미지 확대`}
+        disabled={!url}
+        onClick={() => setOpen(true)}
+      >
+        {children}
+      </button>
+      <PortraitDialog open={open} onClose={() => setOpen(false)} url={url} title={title} />
+    </>
   );
 }
 
@@ -76,14 +126,12 @@ export const ReaderGallery = memo(function ReaderGallery({
         })}
         <p className="reader-gallery-caption">이미지를 눌러 크게 감상해요</p>
       </aside>
-      <Dialog
+      <PortraitDialog
         open={!!selected}
         onClose={() => setExpanded(null)}
-        title={`${selected?.title ?? '등장인물'} 대표 이미지`}
-        className="reader-portrait-dialog"
-      >
-        {selected && <Portrait key={selectedUrl} url={selectedUrl} title={selected.title} />}
-      </Dialog>
+        url={selectedUrl}
+        title={selected?.title ?? '등장인물'}
+      />
     </>
   );
 });
