@@ -1,18 +1,25 @@
 import { BackupSettings } from './BackupSettings.js';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatBackupImport } from './ChatBackupImport.js';
 import { ResourceBundleImport } from './ResourceBundleImport.js';
 import { DownloadIcon } from './ui-icons.js';
+import {
+  useSettingsSaveHandler,
+  type SettingsSaveHandler,
+  type SettingsSaveRegistration,
+} from './useSettingsSaveHandler.js';
 
 export function ArchivePanel({
   onImported,
   onError,
   onDirtyChange,
+  onSaveHandlerChange,
   expanded = false,
 }: {
   onImported: () => Promise<void>;
   onError: (error: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
   expanded?: boolean;
   active?: boolean;
 }) {
@@ -21,9 +28,21 @@ export function ArchivePanel({
   const [resourceDirty, setResourceDirty] = useState(false);
   const [backupDirty, setBackupDirty] = useState(false);
   const [error, setError] = useState('');
+  const backupSave = useRef<SettingsSaveHandler | null>(null);
+  const registerBackupSave = useCallback<SettingsSaveRegistration>((handler) => {
+    backupSave.current = handler;
+  }, []);
   useEffect(() => {
     onDirtyChange?.(busy || chatDirty || resourceDirty || backupDirty);
   }, [busy, chatDirty, resourceDirty, backupDirty, onDirtyChange]);
+  useSettingsSaveHandler(onSaveHandlerChange, async () => {
+    if (chatDirty || resourceDirty)
+      throw new Error(
+        '데이터 관리에 선택한 가져오기 파일이 있어요. 계속 편집에서 가져오기를 완료하거나 선택을 취소해 주세요.'
+      );
+    if (busy) return false;
+    return !backupDirty || !!(await backupSave.current?.());
+  });
   const Container = expanded ? 'section' : 'details';
   return (
     <Container
@@ -84,7 +103,7 @@ export function ArchivePanel({
           </p>
         )}
       </section>
-      <BackupSettings onDirtyChange={setBackupDirty} />
+      <BackupSettings onDirtyChange={setBackupDirty} onSaveHandlerChange={registerBackupSave} />
       <ResourceBundleImport onImported={onImported} onDirtyChange={setResourceDirty} />
       <ChatBackupImport onImported={onImported} onDirtyChange={setChatDirty} disabled={busy} />
     </Container>

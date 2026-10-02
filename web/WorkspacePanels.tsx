@@ -232,6 +232,7 @@ export function TasksPanel({
 }
 
 const appSaveSections = [
+  'archive',
   'connection',
   'model',
   'prompt',
@@ -751,6 +752,7 @@ export function AppSettingsPanel({
                         }}
                         onError={state.setError}
                         onDirtyChange={setArchiveDirty}
+                        onSaveHandlerChange={saveGroup.registrations.archive}
                       />
                       <details className="recovery-settings-disclosure">
                         <summary>문제 보고용 진단</summary>
@@ -820,12 +822,9 @@ export function AppSettingsPanel({
           onSavingChange={setSavingClose}
           saveLabel="저장하고 닫기"
           onSave={async () => {
-            if (archiveDirty)
-              throw new Error(
-                '데이터 관리에 선택한 가져오기 파일이 있어요. 계속 편집에서 가져오기를 완료하거나 선택을 취소해 주세요.'
-              );
             if (
               !(await saveGroup.save({
+                archive: archiveDirty,
                 connection: connectionDirty,
                 model: modelDirty,
                 prompt: promptDirty,

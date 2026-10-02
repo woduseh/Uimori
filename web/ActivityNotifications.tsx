@@ -12,6 +12,7 @@ export function ActivityNotifications({
   chatId,
   items,
   acknowledged,
+  persistenceError,
   message,
   onAcknowledge,
   onHistory,
@@ -22,6 +23,7 @@ export function ActivityNotifications({
   chatId: string;
   items: ActivityNoticeItem[];
   acknowledged: string[];
+  persistenceError: boolean;
   message: (item: ActivityNoticeItem) => string;
   onAcknowledge: (items: ActivityNoticeItem[]) => void;
   onHistory: (items: ReaderActivity[]) => void;
@@ -88,6 +90,12 @@ export function ActivityNotifications({
           모두 확인
         </button>
       </div>
+      {persistenceError && (
+        <p role="alert">
+          확인 기록을 브라우저에 저장하지 못했어요. 이 화면에서는 숨겨지지만 앱을 다시 열면 알림이
+          나타날 수 있어요.
+        </p>
+      )}
       <ul className="activity-notification-items">
         {visible.map((item) => {
           const confirmed = acknowledged.includes(item.acknowledgementKey);

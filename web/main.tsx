@@ -265,6 +265,7 @@ function App() {
     }
   }, [errorScope, s.setError]);
   const [newKey, setNewKey] = useState(0);
+  const settingsReturnToNew = useRef(false);
   const [focus, setFocus] = useState(false);
   const [sceneNavigatorEnabled, setSceneNavigatorEnabled] = useState(
     () => readPresentationChoice('uimori:scene-navigator', ['true', 'false'], 'true') === 'true'
@@ -455,6 +456,7 @@ function App() {
     s.pendingRequest && !s.submitting.includes(s.viewKey)
       ? '이전 전송의 수락을 확인해 주세요. 새 초안은 보존돼요.'
       : s.notice,
+    s.cancelling ? '원문 생성 취소 중…' : '',
     s.profileDirty ? '채팅 설정에 미저장 변경' : '',
   ]
     .filter(Boolean)
@@ -501,7 +503,10 @@ function App() {
     return () => viewport?.removeEventListener('resize', update);
   }, []);
   useEffect(() => {
-    const onPop = () => setPanel('');
+    const onPop = () => {
+      settingsReturnToNew.current = false;
+      setPanel('');
+    };
     return subscribeAppHistory(onPop);
   }, []);
   function newStory(
@@ -510,6 +515,7 @@ function App() {
     persona?: Content,
     modules: Content[] = []
   ) {
+    settingsReturnToNew.current = false;
     setInitialBot(bot);
     setInitialFolder(folder);
     setInitialPersona(persona);
@@ -1588,13 +1594,11 @@ function App() {
                       key="cancel"
                       type="button"
                       className="send-button"
-                      aria-label="원문 생성 취소"
-                      title="원문 생성 중단"
-                      onClick={() => {
-                        void api(`/runs/${s.active!.id}/cancel`, {})
-                          .then(() => s.refresh(s.selected))
-                          .catch((e) => s.setError(e.message));
-                      }}
+                      aria-label={s.cancelling ? '원문 생성 취소 중' : '원문 생성 취소'}
+                      title={s.cancelling ? '원문 생성 취소 중…' : '원문 생성 중단'}
+                      disabled={s.cancelling}
+                      aria-busy={s.cancelling}
+                      onClick={() => void s.cancelActive()}
                     >
                       <Square size={18} />
                     </button>
@@ -1631,13 +1635,11 @@ function App() {
                   <button
                     type="button"
                     className="secondary"
-                    onClick={() => {
-                      void api(`/runs/${s.active!.id}/cancel`, {})
-                        .then(() => s.refresh(s.selected))
-                        .catch((e) => s.setError(e.message));
-                    }}
+                    disabled={s.cancelling}
+                    aria-busy={s.cancelling}
+                    onClick={() => void s.cancelActive()}
                   >
-                    원문 생성 취소
+                    {s.cancelling ? '원문 생성 취소 중…' : '원문 생성 취소'}
                   </button>
                 )}
                 <p className="composer-status" role="status" hidden={sourceEditing}>
@@ -1790,6 +1792,7 @@ function App() {
             initialPersona={initialPersona}
             initialModules={initialModules}
             onModelSettings={() => {
+              settingsReturnToNew.current = true;
               setSettingsTab('models');
               setPanel('settings');
             }}
@@ -1909,6 +1912,7 @@ function App() {
       {panel === 'settings' && (
         <AppSettingsPanel
           onEditPrompt={(presetId) => {
+            settingsReturnToNew.current = false;
             const go = () => {
               setPromptToEdit(presetId ?? null);
               setLibraryTab('prompts');
@@ -1920,7 +1924,10 @@ function App() {
               setPendingNavigation(() => go);
             } else go();
           }}
-          onClose={() => setPanel('')}
+          onClose={() => {
+            setPanel(settingsReturnToNew.current ? 'new' : '');
+            settingsReturnToNew.current = false;
+          }}
           initialTab={settingsTab}
           state={s}
           theme={theme}
