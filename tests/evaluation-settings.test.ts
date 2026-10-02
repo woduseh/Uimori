@@ -62,12 +62,18 @@ test('tool options are explicit and independently validated', () => {
     outputRecovery: true,
   });
   expect(validateEvaluationToolOptions(defaults)).toEqual(defaults);
+  expect(validateEvaluationToolOptions({ ...defaults, contextMode: 'source-bound' })).toMatchObject(
+    {
+      contextMode: 'source-bound',
+    }
+  );
   for (const invalid of [
     undefined,
     null,
     {},
     { ...defaults, maximumToolRounds: 33 },
     { ...defaults, maximumToolRounds: -1 },
+    { ...defaults, contextMode: 'unknown' },
     { ...defaults, outputRecovery: undefined },
     { ...defaults, serviceTier: 'flex' },
     { ...defaults, extra: true },
@@ -84,10 +90,12 @@ test('only selected model presets persist evaluation tools and captured runs ret
     const c = connection(store, protocol),
       disabled = store.product.model(modelBody(c)) as ModelPreset;
     expect(disabled).not.toHaveProperty('evaluationTools');
-    const selected = store.product.model(
-      modelBody(c, { evaluationTools: defaultEvaluationToolOptions() })
-    ) as ModelPreset;
-    expect(selected.evaluationTools).toEqual(defaultEvaluationToolOptions());
+    const options = {
+      ...defaultEvaluationToolOptions(),
+      ...(protocol === 'anthropic-messages-v1' ? { contextMode: 'source-bound' as const } : {}),
+    };
+    const selected = store.product.model(modelBody(c, { evaluationTools: options })) as ModelPreset;
+    expect(selected.evaluationTools).toEqual(options);
     const chat = createFixtureChat(store, `Synthetic ${protocol}`),
       prior = store.product.profile(chat.id);
     updateTestProfile(store.product, chat.id, {
@@ -129,9 +137,7 @@ test('only selected model presets persist evaluation tools and captured runs ret
     );
     expect(store.product.snapshot(chat.id)?.models.main).not.toHaveProperty('evaluationTools');
     expect(store.run(run.id).snapshot).toEqual(frozen);
-    expect(store.run(run.id).snapshot.profile?.models.main?.evaluationTools).toEqual(
-      defaultEvaluationToolOptions()
-    );
+    expect(store.run(run.id).snapshot.profile?.models.main?.evaluationTools).toEqual(options);
     expect(
       store.db
         .prepare("SELECT COUNT(*) AS n FROM provider_settings WHERE kind='model' AND id=?")

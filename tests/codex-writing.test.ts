@@ -278,6 +278,82 @@ test('native evaluation final submission uses existing validation and does not a
   expect(f.events.some((event) => event.name === 'story.submit')).toBe(false);
 });
 
+test('source-bound native writer reads and consults before submitting without an evaluation case', async () => {
+  const f = await fixture({
+    writer: [
+      read(),
+      {
+        name: 'agents.consult',
+        args: { agentId: 'lore', question: 'Where is the observatory?', contextRefs: ['script-0'] },
+      },
+      {
+        name: 'eval_submit_artifact',
+        args: {
+          content: 'The keeper walked north.',
+          internalProcessingNote: 'PRIVATE_SOURCE_BOUND_NOTE',
+        },
+      },
+      { text: 'MUST_NOT_GENERATE' },
+    ],
+    advisor: [{ text: 'The observatory is north of the lake.' }],
+  });
+  f.addAdvisor();
+  f.work.profile!.models.main!.evaluationTools = {
+    ...defaultEvaluationToolOptions(),
+    contextMode: 'source-bound',
+    maximumToolRounds: 2,
+  };
+  const prepared = compileSnapshotPrompt(f.work);
+  const before = structuredClone(prepared);
+  expect(await runMain(prepared, f.hooks)).toMatchObject({
+    status: 'completed',
+    text: 'The keeper walked north.',
+    usage: { modelCalls: 2 },
+  });
+  const names = f.events.map((event) => event.name);
+  expect(names).toContain('knowledge.read');
+  expect(names).toContain('agents.consult');
+  expect(names.filter((name) => name.startsWith('eval_'))).toEqual(['eval_submit_artifact']);
+  const writerPacket = JSON.stringify(f.attempts[0].body);
+  expect(writerPacket).toContain('WRITER_PROMPT_KEPT');
+  expect(writerPacket).not.toContain('eval_create_case');
+  expect(JSON.stringify([f.events, f.finished])).not.toContain('PRIVATE_SOURCE_BOUND_NOTE');
+  expect(f.events.at(-1)?.result).toMatchObject({
+    processingNoteProvided: true,
+    processingNoteCharacters: 25,
+  });
+  expect(prepared).toEqual(before);
+});
+
+test.each([false, true])(
+  'source-bound rejects unsubmitted completed text without resending (native=%s)',
+  async (native) => {
+    const f = await fixture({
+      writer: [
+        {
+          text: native
+            ? 'Unsubmitted artifact.'
+            : JSON.stringify({ kind: 'final', text: 'Unsubmitted artifact.', toolCalls: [] }),
+        },
+        { text: 'MUST_NOT_GENERATE' },
+      ],
+    });
+    f.work.profile!.models.main!.evaluationTools = {
+      ...defaultEvaluationToolOptions(),
+      contextMode: 'source-bound',
+    };
+    if (!native) f.hooks.executeCodexAgent = undefined;
+    expect(await runMain(compileSnapshotPrompt(f.work), f.hooks)).toMatchObject({
+      status: 'error',
+      error: 'EVALUATION_SUBMISSION_REQUIRED',
+      text: '',
+      usage: { modelCalls: 1 },
+    });
+    expect(f.events).toEqual([]);
+    expect(f.finished).toHaveLength(1);
+  }
+);
+
 test('economized evaluation uses one legacy bootstrap then restores writer effort for the native turn', async () => {
   const f = await fixture({
     writer: [

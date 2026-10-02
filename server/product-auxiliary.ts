@@ -266,7 +266,9 @@ function providerInput(
         (compilation ? '' : input.contract) +
         (input.referencePolicy ? '\n' + input.referencePolicy : '') +
         (evaluation
-          ? '\nThe selected evaluation tool set is scoped to this model preset and this run. eval_submit_artifact returns content as the completed task output; userFacingNotice remains separate metadata.'
+          ? evaluation.requiresSubmission
+            ? '\nThe source-bound evaluation tool set is scoped to this model preset and this source-time task. Complete the requested translation or display annotation directly from the supplied source and task instructions; no evaluation case or continuation direction is needed. Permitted reference reads remain available. Finish by calling eval_submit_artifact with the complete task output in content, preserving the requested output format and source identity. internalProcessingNote is optional separate metadata; ordinary assistant text does not complete the task.'
+            : '\nThe selected evaluation tool set is scoped to this model preset and this run. eval_submit_artifact returns content as the completed task output; userFacingNotice remains separate metadata.'
           : ''),
       tools: [
         ...toolSchemas
@@ -509,6 +511,12 @@ export async function runAuxiliaryJob(
       stage = job.kind;
       const result = await callProvider(target, body, evaluation);
       if (result.status === 'tool_calls') {
+        if (
+          evaluation?.requiresSubmission &&
+          result.toolCalls.some((call) => call.name === 'eval_submit_artifact') &&
+          result.toolCalls.length !== 1
+        )
+          throw new AuxiliaryExecutionError('INVALID_EVALUATION_ARTIFACT');
         opaqueState = result.opaqueState;
         return {
           kind: 'tools',
@@ -531,6 +539,8 @@ export async function runAuxiliaryJob(
                 : `AUXILIARY_PROVIDER_${result.error?.code ?? 'ERROR'}`,
           result.status === 'refused' && !result.error
         );
+      if (evaluation?.requiresSubmission)
+        throw new AuxiliaryExecutionError('EVALUATION_SUBMISSION_REQUIRED');
       const output =
         job.kind === 'translation' && target.structuredOutput === true
           ? parseStructuredTranslation(source, result.text)
@@ -567,12 +577,24 @@ export async function runAuxiliaryJob(
                 sha256: submitted.artifact.sha256,
                 characters: submitted.artifact.text.length,
                 utf8Bytes: submitted.artifact.utf8Bytes,
-                noticeProvided: submitted.artifact.noticeProvided,
-                noticeCharacters: submitted.artifact.noticeCharacters,
+                ...(evaluation!.requiresSubmission
+                  ? {
+                      processingNoteProvided: submitted.artifact.processingNoteProvided,
+                      processingNoteCharacters: submitted.artifact.processingNoteCharacters,
+                    }
+                  : {
+                      noticeProvided: submitted.artifact.noticeProvided,
+                      noticeCharacters: submitted.artifact.noticeCharacters,
+                    }),
                 correctionCount: submitted.artifact.correctionCount,
               },
             },
-            terminalOutput: submitted.artifact.text,
+            terminalOutput:
+              evaluation!.requiresSubmission &&
+              job.kind === 'translation' &&
+              target?.structuredOutput === true
+                ? parseStructuredTranslation(source, submitted.artifact.text)
+                : submitted.artifact.text,
           };
         },
       },

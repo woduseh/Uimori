@@ -700,7 +700,7 @@ export function ProviderModelFields({
         <fieldset className="editor-fields full">
           <legend>평가 도구</legend>
           <ToggleRow
-            label="이 모델 프리셋에 평가 도구 4개 사용"
+            label="이 모델 프리셋에 평가 도구 사용"
             checked={value.evaluationToolsEnabled}
             onChange={(evaluationToolsEnabled) => update({ evaluationToolsEnabled })}
           />
@@ -719,13 +719,21 @@ export function ProviderModelFields({
                   }
                 >
                   <option value="model-selected">모델이 네 도구 중 선택</option>
+                  <option value="source-bound">원본 기반 직접 작성</option>
                   <option value="preloaded" disabled={capability?.forcedTools === false}>
                     문맥·검토자 결과를 먼저 제공
                     {capability?.forcedTools === false ? ' · 이 모델 미지원' : ''}
                   </option>
                 </select>
                 {capability?.forcedTools === false && (
-                  <small>이 모델은 평가 도구를 직접 선택하는 방식으로 사용해요.</small>
+                  <small>이 모델은 문맥·검토자 결과를 먼저 제공하는 방식을 지원하지 않아요.</small>
+                )}
+                {evaluation.contextMode === 'source-bound' && (
+                  <small>
+                    평가 문맥·검토자·case 단계를 생략하고 원본 문맥으로 바로 작성해요. 자료 조회와
+                    조언은 사용할 수 있고, 결과는 제출 도구로 완료해야 해요. 내부 처리 메모는
+                    선택사항이에요.
+                  </small>
                 )}
               </label>
               {evaluation.contextMode === 'preloaded' && (

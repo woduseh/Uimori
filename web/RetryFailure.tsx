@@ -23,7 +23,7 @@ export function RetryFailure({
   onHistory: () => void;
 }) {
   const settings =
-    /PROMPT_|UNSUPPORTED_OPTIONS|HTTP_40[0134]|JEV_|MAIN_RESPONSE_REFUSED|MAIN_JUDGMENT_CALL_BUDGET/u.test(
+    /PROMPT_|UNSUPPORTED_OPTIONS|HTTP_40[0134]|JEV_|MAIN_RESPONSE_REFUSED|MAIN_JUDGMENT_CALL_BUDGET|EVALUATION_SUBMISSION_REQUIRED/u.test(
       error ?? ''
     );
   const message =

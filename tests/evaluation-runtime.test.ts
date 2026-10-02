@@ -76,7 +76,14 @@ function deferred() {
 }
 async function fixture(
   handler: (body: Body, response: ServerResponse, requestNumber: number) => void | Promise<void>,
-  settings: { timeoutMs?: number; maximumToolRounds?: number; maxCalls?: number } = {}
+  settings: {
+    timeoutMs?: number;
+    maximumToolRounds?: number;
+    maxCalls?: number;
+    contextMode?: 'preloaded' | 'model-selected' | 'source-bound';
+    structuredOutput?: boolean;
+    status?: boolean;
+  } = {}
 ) {
   vi.stubEnv(credentialRef, bearer);
   installJevFixture();
@@ -122,7 +129,7 @@ async function fixture(
     {
       expectedSettingsRevision: chat.settingsRevision,
       ...chat.settings,
-      status: false,
+      status: settings.status ?? false,
       maxCalls: settings.maxCalls ?? 8,
     },
     'PATCH'
@@ -167,9 +174,11 @@ async function fixture(
     modelId: 'synthetic-evaluated-model',
     maxOutputTokens: 4096,
     temperature: null,
+    ...(settings.structuredOutput ? { structuredOutput: true } : {}),
     timeoutMs: settings.timeoutMs ?? 4000,
     evaluationTools: {
       ...defaultEvaluationToolOptions(),
+      ...(settings.contextMode ? { contextMode: settings.contextMode } : {}),
       maximumToolRounds: settings.maximumToolRounds ?? 8,
     },
   });
@@ -187,7 +196,7 @@ async function fixture(
   await setFixtureModelRoutes(app, {
     main: { id: model.id },
     translation: { id: model.id },
-    status: null,
+    status: settings.status ? { id: model.id } : null,
   });
   const profile = await api<ChatProfile>(
     app,
@@ -555,3 +564,209 @@ test('source edit CAS fences an in-flight evaluated translation without mutating
   expect(state.provider.requests).toHaveLength(2);
   expect(state.failures).toEqual([]);
 });
+
+test('source-bound translation permits reference reads, unwraps structured submission and discards optional processing notes', async () => {
+  const text = '항구의 관리인은 구리 천문대를 바라보았다.';
+  const state = await fixture(
+    async (body, target) => {
+      const source = packet(body).source;
+      expect(body.tools.some((tool) => /eval_create_case|eval_get_context/.test(tool.name))).toBe(
+        false
+      );
+      if (!source.sourceRevision) {
+        await send(target, [
+          call(
+            body,
+            'eval_submit_artifact',
+            { content: 'The keeper watched the copper observatory.' },
+            'main-submit'
+          ),
+        ]);
+        return;
+      }
+      if (!body.input.some((item) => item.type === 'function_call_output')) {
+        await send(
+          target,
+          [call(body, 'translation.search', { query: 'keeper' }, 'wording')],
+          true
+        );
+        return;
+      }
+      expect(
+        body.input
+          .filter((item) => item.type === 'function_call_output')
+          .map((item) => item.call_id)
+      ).toEqual(['wording']);
+      await send(
+        target,
+        [
+          call(
+            body,
+            'eval_submit_artifact',
+            {
+              content: JSON.stringify({
+                sourceRevision: source.sourceRevision,
+                sourceHash: source.sourceHash,
+                text,
+              }),
+              internalProcessingNote: marker,
+            },
+            'translated-submit'
+          ),
+        ],
+        true
+      );
+    },
+    { contextMode: 'source-bound', structuredOutput: true }
+  );
+  await settled(state, (await state.start()).id);
+  const source = (await state.detail()).sources[0];
+  await api(state.app, `/api/sources/${source.id}/translation`, {});
+  await expect
+    .poll(async () => (await state.detail()).jobs[0]?.status, { timeout: 6000 })
+    .toBe('completed');
+  const detail = await state.detail();
+  expect(state.failures).toEqual([]);
+  expect(detail.jobs[0]).toMatchObject({
+    result: { text, sourceRevision: source.id, sourceHash: source.hash },
+  });
+  expect(state.provider.requests).toHaveLength(3);
+  expect(JSON.stringify(detail)).not.toContain(marker);
+  expect(JSON.stringify(detail.jobs[0])).not.toContain('noticeProvided');
+});
+
+test.each(['plain', 'wrong-source', 'duplicate-submit'] as const)(
+  'source-bound translation rejects %s completion without automatic resend',
+  async (mode) => {
+    const state = await fixture(
+      async (body, target) => {
+        const source = packet(body).source;
+        if (!source.sourceRevision)
+          await send(target, [
+            call(
+              body,
+              'eval_submit_artifact',
+              { content: 'Original harbor scene.' },
+              'main-submit'
+            ),
+          ]);
+        else if (mode === 'plain') await send(target, [message('도구 밖의 번역문')], true);
+        else
+          await send(
+            target,
+            [
+              call(
+                body,
+                'eval_submit_artifact',
+                {
+                  content: JSON.stringify({
+                    sourceRevision:
+                      mode === 'wrong-source' ? 'other-source' : source.sourceRevision,
+                    sourceHash: source.sourceHash,
+                    text: '다른 원본의 번역문',
+                  }),
+                },
+                'translated-submit'
+              ),
+              ...(mode === 'duplicate-submit'
+                ? [
+                    call(
+                      body,
+                      'eval_submit_artifact',
+                      { content: 'Duplicate artifact.' },
+                      'duplicate-submit'
+                    ),
+                  ]
+                : []),
+            ],
+            true
+          );
+      },
+      { contextMode: 'source-bound', structuredOutput: true }
+    );
+    await settled(state, (await state.start()).id);
+    const source = (await state.detail()).sources[0];
+    await api(state.app, `/api/sources/${source.id}/translation`, {});
+    await expect
+      .poll(async () => (await state.detail()).jobs[0]?.status, { timeout: 6000 })
+      .toBe('failed');
+    const detail = await state.detail();
+    expect(state.failures).toEqual([]);
+    expect(detail.jobs[0]).toMatchObject({
+      error:
+        mode === 'plain'
+          ? 'EVALUATION_SUBMISSION_REQUIRED'
+          : mode === 'wrong-source'
+            ? 'SOURCE_DEPENDENCY_MISMATCH'
+            : 'INVALID_EVALUATION_ARTIFACT',
+      result: null,
+    });
+    expect(detail.sources[0]).toMatchObject({
+      id: source.id,
+      hash: source.hash,
+      text: source.text,
+    });
+    expect(state.provider.requests).toHaveLength(2);
+  }
+);
+
+test.each(['valid', 'invalid-anchor'] as const)(
+  'source-bound display submission keeps source and anchor validation: %s',
+  async (mode) => {
+    const state = await fixture(
+      async (body, target) => {
+        const source = packet(body).source;
+        if (!source.sourceRevision)
+          await send(target, [
+            call(
+              body,
+              'eval_submit_artifact',
+              { content: 'Original harbor scene.' },
+              'main-submit'
+            ),
+          ]);
+        else
+          await send(
+            target,
+            [
+              call(
+                body,
+                'eval_submit_artifact',
+                {
+                  content: JSON.stringify({
+                    sourceRevision: source.sourceRevision,
+                    sourceHash: source.sourceHash,
+                    kind: 'display-only',
+                    entries: [
+                      {
+                        anchor: mode === 'valid' ? source.blocks[0].anchor : 'missing-anchor',
+                        summary: '항구 장면',
+                      },
+                    ],
+                  }),
+                },
+                'display-submit'
+              ),
+            ],
+            true
+          );
+      },
+      { contextMode: 'source-bound', status: true }
+    );
+    await settled(state, (await state.start()).id);
+    await expect
+      .poll(async () => (await state.detail()).jobs.find((job) => job.kind === 'status')?.status, {
+        timeout: 6000,
+      })
+      .toBe(mode === 'valid' ? 'completed' : 'failed');
+    const detail = await state.detail();
+    expect(state.failures).toEqual([]);
+    const job = detail.jobs.find((job) => job.kind === 'status')!;
+    if (mode === 'valid')
+      expect(job).toMatchObject({
+        result: { label: '항구 장면', sourceHash: detail.sources[0].hash },
+      });
+    else expect(job).toMatchObject({ error: 'ANNOTATION_ANCHOR_INVALID', result: null });
+    expect(state.provider.requests).toHaveLength(2);
+  }
+);

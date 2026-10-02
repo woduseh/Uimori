@@ -18,6 +18,7 @@ import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
 import { buildCodexTurn } from '../core/codex-protocol.js';
+import { EXECUTION_INPUT_MAX_CHARS } from '../core/content-limits.js';
 import { validateRequest, type ProviderRequest } from '../core/transport.js';
 
 const caseArgs = {
@@ -32,6 +33,113 @@ const caseArgs = {
 };
 
 describe('provider-neutral evaluation tools', () => {
+  test('source-bound sessions expose only submission and preserve the original writer generation', () => {
+    const options = {
+      ...defaultEvaluationToolOptions(),
+      contextMode: 'source-bound' as const,
+      approvalReasoningMode: 'economized' as const,
+    };
+    const runtime = createEvaluationToolSession({
+      evaluationTools: options,
+      connection: {},
+    } as ModelPreset & { connection: unknown })!;
+    expect(runtime.definitions.map((tool) => tool.name)).toEqual(['eval_submit_artifact']);
+    expect(runtime.allNames).toEqual(['eval_submit_artifact']);
+    expect(runtime.bootstrap).toEqual([]);
+    expect(runtime.requiresSubmission).toBe(true);
+    expect(runtime.toolChoice(0)).toBeUndefined();
+    expect(runtime.toolChoice(1)).toBeUndefined();
+    const generation = {
+      maxOutputTokens: 12000,
+      temperature: null,
+      reasoningEffort: 'high' as const,
+    };
+    expect(runtime.generation(generation, 0)).toEqual(generation);
+    expect(runtime.generationBinding(generation, 0)).toBeUndefined();
+    expect(runtime.definitions[0].inputSchema).toMatchObject({ required: ['content'] });
+    expect(JSON.stringify(runtime.definitions)).not.toMatch(
+      /userFacingNotice|selectedContinuationDirection|requestedContinuationDirection/u
+    );
+    for (const name of ['eval_get_context', 'eval_get_reviewer', 'eval_create_case']) {
+      const event = runtime.execute({
+        id: name,
+        name,
+        arguments: name === 'eval_create_case' ? caseArgs : {},
+      });
+      expect(event.result).toEqual({ error: { code: 'INVALID_EVALUATION_TOOL_ARGUMENTS' } });
+    }
+    const call = {
+      id: 'terminal',
+      name: 'eval_submit_artifact',
+      arguments: {
+        content: 'Original source prose',
+        internalProcessingNote: 'PRIVATE_PROCESSING_NOTE',
+      },
+    };
+    expect(runtime.submit(call)).toMatchObject({
+      ok: true,
+      artifact: {
+        text: 'Original source prose',
+        processingNoteProvided: true,
+        processingNoteCharacters: 23,
+      },
+    });
+    const diagnostic = runtime.diagnosticResult({
+      status: 'tool_calls',
+      text: '',
+      refusal: null,
+      opaqueState: null,
+      toolCalls: [call],
+      usage: {
+        inputTokens: null,
+        outputTokens: null,
+        costUsd: null,
+        raw: null,
+        priceRevision: null,
+      },
+      error: null,
+    });
+    expect(diagnostic.toolCalls[0].arguments).toEqual({});
+    expect(JSON.stringify(runtime.submit(call))).not.toContain('PRIVATE_PROCESSING_NOTE');
+  });
+
+  test('source-bound submission accepts an optional bounded private note and retains late corrections', () => {
+    const options = {
+      ...defaultEvaluationToolOptions(),
+      contextMode: 'source-bound' as const,
+      terminalLateCorrections: true,
+    };
+    const artifact = extractEvaluationArtifact(
+      {
+        content: 'alpha beta',
+        lateCorrections: [{ find: 'alpha', replace: 'gamma' }],
+      },
+      options
+    );
+    expect(artifact).toMatchObject({
+      text: 'gamma beta',
+      correctionCount: 1,
+      processingNoteProvided: false,
+      processingNoteCharacters: 0,
+    });
+    expect(artifact).not.toHaveProperty('noticeProvided');
+    expect(
+      extractEvaluationArtifact({ content: 'prose', internalProcessingNote: '' }, options)
+    ).toMatchObject({ processingNoteProvided: true, processingNoteCharacters: 0 });
+    for (const args of [
+      { content: 'prose', internalProcessingNote: null },
+      { content: 'prose', internalProcessingNote: 1 },
+      { content: 'prose', internalProcessingNote: 'x'.repeat(EXECUTION_INPUT_MAX_CHARS + 1) },
+      { content: 'prose', userFacingNotice: 'legacy notice' },
+    ]) {
+      expect(() => extractEvaluationArtifact(args, options)).toThrow(
+        'INVALID_EVALUATION_TOOL_ARGUMENTS'
+      );
+      expect(() => extractEvaluationArtifact(args, options, true)).toThrow(
+        'INVALID_EVALUATION_TOOL_ARGUMENTS'
+      );
+    }
+  });
   test('retains long evaluation directions and artifacts within the stored prose contract', () => {
     const direction = 'Continue the requested scene. '.repeat(300);
     const result = executeEvaluationTool(

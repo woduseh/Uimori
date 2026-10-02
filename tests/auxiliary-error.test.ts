@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { auxiliaryErrorDiagnostic } from '../web/auxiliary-error.js';
+import { mainJudgmentError } from '../web/main-judgment-error.js';
 
 describe('safe auxiliary error diagnostics', () => {
+  it('explains missing source-bound submission in main and auxiliary tasks without suggesting an automatic resend', () => {
+    const diagnostic = auxiliaryErrorDiagnostic('EVALUATION_SUBMISSION_REQUIRED');
+    expect(diagnostic.code).toBe('EVALUATION_SUBMISSION_REQUIRED');
+    expect(diagnostic.message).toContain('결과 제출 도구');
+    expect(diagnostic.action).toContain('자동으로 다시 요청하지 않았어요');
+    expect(mainJudgmentError('EVALUATION_SUBMISSION_REQUIRED')).toContain(diagnostic.message);
+    expect(mainJudgmentError('EVALUATION_SUBMISSION_REQUIRED private text')).toBeUndefined();
+  });
   it('keeps partial response and input limit guidance in the shared message without obsolete chunking advice', () => {
     const partial = auxiliaryErrorDiagnostic('AUXILIARY_PROVIDER_PARTIAL');
     expect(partial.message).toContain('끝까지 받지 못했어요');
