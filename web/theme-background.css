@@ -1,0 +1,91 @@
+.reader-stage:has(> .theme-background) {
+  position: relative;
+  isolation: isolate;
+}
+.theme-background {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.theme-background::before,
+.theme-background-preview::before {
+  content: "";
+  position: absolute;
+  inset: -60px;
+  background-image: var(--theme-background-image);
+  background-size: cover;
+  background-position: center;
+  filter: blur(var(--theme-background-blur));
+}
+.theme-background::after,
+.theme-background-preview::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(255 255 255 / var(--theme-background-light));
+}
+html[data-theme="dark"] .theme-background::after,
+html[data-theme="dark"] .theme-background-preview::after {
+  background: rgb(0 0 0 / var(--theme-background-dark));
+}
+.reader-stage:has(> .theme-background) > .reader-scrollport {
+  background: transparent !important;
+}
+.reader-stage:has(> .theme-background) [data-uimori-part="body"] {
+  background-color: var(--panel);
+}
+.reader-stage:has(> .theme-background) .story-context {
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 8px;
+}
+.theme-background-preview {
+  position: relative;
+  overflow: hidden;
+  height: 120px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.theme-background-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.theme-background-controls label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.theme-background-controls input {
+  max-width: 100%;
+}
+
+.reader-stage:has(> .theme-background)
+  [data-uimori-part="scene"]:not(:has([data-uimori-body-scroll])) {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+fieldset.theme-background-controls {
+  border: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+.theme-background-controls input[type="range"] {
+  accent-color: var(--accent);
+}
+.theme-background-controls input[type="file"]::file-selector-button {
+  padding: 7px 10px;
+  margin-right: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}

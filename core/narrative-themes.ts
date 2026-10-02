@@ -208,3 +208,35 @@ export const scrapbookTheme: ThemeDefinition = {
 }
 `,
 };
+
+export const classicFrameTheme: ThemeDefinition = {
+  title: '클래식 프레임',
+  description: '얇은 사각 프레임 안에 인물과 이야기를 나란히 담은 정갈한 장면',
+  colors: colors('midnight'),
+  appCss:
+    commonApp +
+    `
+.scene-portraits [data-uimori-part="bot-portrait"] { position:relative; padding:7px; border:1px solid var(--line); outline:1px solid color-mix(in srgb,var(--accent) 40%,transparent); outline-offset:-5px; }
+.scene-portraits [data-uimori-part="bot-portrait"]::before, .scene-portraits [data-uimori-part="bot-portrait"]::after { content:''; position:absolute; top:7px; width:5px; height:5px; background:var(--accent); transform:rotate(45deg); z-index:1; pointer-events:none; }
+.scene-portraits [data-uimori-part="bot-portrait"]::before { left:7px; }
+.scene-portraits [data-uimori-part="bot-portrait"]::after { right:7px; }
+.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { border-radius:0; border:1px solid var(--line); }
+.scene-portraits [data-uimori-part="bot-portrait"] img { width:100%; max-height:520px; object-fit:contain; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption { padding:12px 8px 8px; text-align:center; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size:17px; }
+` +
+    mobilePortrait,
+  messageCss,
+  templateHtml:
+    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><aside class="portrait"><slot name="portrait"></slot></aside><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
+  templateCss:
+    commonTemplate +
+    `
+.manuscript { display:grid; grid-template-columns:minmax(180px,29%) minmax(0,1fr); gap:18px; padding:16px; border:1px solid var(--line); outline:1px solid color-mix(in srgb,var(--accent) 18%,transparent); outline-offset:-5px; }
+.portrait { align-self:start; }
+.copy { padding:20px; border:1px solid var(--line); box-shadow:inset -3px 0 color-mix(in srgb,var(--accent) 14%,transparent); }
+.heading { padding-bottom:12px; margin-bottom:20px; }
+.actions { margin-top:20px; }
+@container narrative-scene (max-width:680px) { .manuscript { display:block; padding:10px; } .portrait { margin-bottom:12px; } .copy { padding:18px 14px; } }
+`,
+};

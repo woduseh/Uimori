@@ -1,5 +1,6 @@
 import { baselineThemeColors, colorInputValue } from './theme-color-input.js';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ThemeBackgroundSettings } from './ThemeBackgroundSettings.js';
 import { Plus, Upload, Download, Copy, Trash2, Eye, RotateCcw } from 'lucide-react';
 import {
   THEME_COLOR_KEYS,
@@ -62,11 +63,16 @@ export function ThemeSettings({
   const [deleting, setDeleting] = useState<Theme | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const locked = useRef(false);
+  const [backgroundDirty, setBackgroundDirty] = useState(false);
+  const backgroundSave = useRef<(() => Promise<boolean>) | null>(null);
+  const registerBackgroundSave = useCallback((handler: (() => Promise<boolean>) | null) => {
+    backgroundSave.current = handler;
+  }, []);
   const dirty = !!draft && JSON.stringify(draft.model) !== baseline;
   const { setPreview } = state;
   useEffect(() => {
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
+    onDirtyChange?.(dirty || backgroundDirty);
+  }, [dirty, backgroundDirty, onDirtyChange]);
   useEffect(
     () => () => {
       setPreview(null);
@@ -154,6 +160,7 @@ export function ThemeSettings({
     setDraft((d) => (d ? { ...d, model: { ...d.model, ...next } } : d));
   }
   async function save(): Promise<boolean> {
+    if (backgroundDirty && !(await backgroundSave.current?.())) return false;
     if (!draft || locked.current) return !draft;
     let saved = false;
     await action(async () => {
@@ -261,7 +268,7 @@ export function ThemeSettings({
           <select
             aria-label="테마 적용 범위"
             value={scope}
-            disabled={busy}
+            disabled={busy || backgroundDirty}
             onChange={(e) => setScope(e.target.value as typeof scope)}
           >
             <option value="global">작업실 기본</option>
@@ -295,6 +302,16 @@ export function ThemeSettings({
           {state.error} <button onClick={() => void state.refresh()}>다시 불러오기</button>
         </p>
       )}
+      <ThemeBackgroundSettings
+        key={`${scope}:${scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : ''}`}
+        scope={scope}
+        disabled={busy}
+        targetId={
+          scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : undefined
+        }
+        onDirtyChange={setBackgroundDirty}
+        onSaveHandlerChange={registerBackgroundSave}
+      />
       <section className="theme-dimension" aria-labelledby="theme-layout-heading">
         <div className="theme-dimension-heading">
           <div>
@@ -302,7 +319,10 @@ export function ThemeSettings({
             <p>본문과 요청, 도구의 배치를 골라요. 선택한 색상 팔레트는 유지돼요.</p>
           </div>
           {scope !== 'global' && (
-            <button disabled={busy || state.loading || !selectedId} onClick={() => choose(null)}>
+            <button
+              disabled={busy || backgroundDirty || state.loading || !selectedId}
+              onClick={() => choose(null)}
+            >
               레이아웃 상위 설정 따르기
             </button>
           )}
@@ -320,7 +340,7 @@ export function ThemeSettings({
                 className="theme-card-apply"
                 aria-label={`${theme.title} 테마 적용`}
                 aria-pressed={selectedId === theme.id}
-                disabled={busy || state.loading}
+                disabled={busy || backgroundDirty || state.loading}
                 onClick={() => choose(theme.id)}
               >
                 <span
@@ -353,14 +373,14 @@ export function ThemeSettings({
                 <small>{theme.description || '사용자 테마'}</small>
               </button>
               <div className="theme-card-actions">
-                <button disabled={busy} onClick={() => edit(theme)}>
+                <button disabled={busy || backgroundDirty} onClick={() => edit(theme)}>
                   {theme.id.startsWith('builtin:') ? '복제해서 꾸미기' : '편집'}
                 </button>
                 {!theme.id.startsWith('builtin:') && (
                   <button
                     aria-label={`${theme.title} 복제`}
                     title="복제"
-                    disabled={busy}
+                    disabled={busy || backgroundDirty}
                     onClick={() => edit(theme, true)}
                   >
                     <Copy size={16} />
@@ -402,6 +422,7 @@ export function ThemeSettings({
           <button
             disabled={
               busy ||
+              backgroundDirty ||
               state.loading ||
               (scope === 'global' ? selectedPaletteId === THEME_PALETTE_ID : !selectedPaletteId)
             }
@@ -422,7 +443,7 @@ export function ThemeSettings({
                 className={`theme-palette-card ${selectedPaletteId === palette.id ? 'selected' : ''}`}
                 aria-label={`${palette.title} 팔레트 적용`}
                 aria-pressed={selectedPaletteId === palette.id}
-                disabled={busy || state.loading}
+                disabled={busy || backgroundDirty || state.loading}
                 onClick={() => choosePalette(palette.id)}
               >
                 <span className="theme-palette-swatches" aria-hidden="true">
@@ -449,10 +470,14 @@ export function ThemeSettings({
           </p>
         </div>
         <div className="theme-library-actions">
-          <button className="primary" disabled={busy} onClick={() => edit()}>
+          <button className="primary" disabled={busy || backgroundDirty} onClick={() => edit()}>
             <Plus size={16} /> 새 커스텀 테마
           </button>
-          <button className="secondary" disabled={busy} onClick={() => input.current?.click()}>
+          <button
+            className="secondary"
+            disabled={busy || backgroundDirty}
+            onClick={() => input.current?.click()}
+          >
             <Upload size={16} /> 테마 가져오기
           </button>
           <input
@@ -475,7 +500,7 @@ export function ThemeSettings({
             <h3>{draft.id ? '테마 편집' : '새 테마 만들기'}</h3>
             <span className="muted">{dirty ? '미저장 변경' : '저장됨'}</span>
           </div>
-          <fieldset disabled={busy}>
+          <fieldset disabled={busy || backgroundDirty}>
             <label>
               테마 이름
               <input
@@ -568,7 +593,7 @@ export function ThemeSettings({
               테마 저장
             </button>
             <button
-              disabled={busy}
+              disabled={busy || backgroundDirty}
               onClick={() => {
                 try {
                   const t = validateTheme(draft.model);
@@ -585,7 +610,7 @@ export function ThemeSettings({
             </button>
             {state.preview && <button onClick={() => setPreview(null)}>미리보기 끝내기</button>}
             <button
-              disabled={busy}
+              disabled={busy || backgroundDirty}
               onClick={() => {
                 setDraft(null);
                 setPreview(null);
@@ -642,7 +667,7 @@ export function ThemeSettings({
           돌아가요.
         </p>
         <button
-          disabled={busy}
+          disabled={busy || backgroundDirty}
           onClick={() => {
             if (!deleting) return;
             void action(async () => {
@@ -660,7 +685,7 @@ export function ThemeSettings({
         >
           삭제
         </button>
-        <button disabled={busy} onClick={() => setDeleting(null)}>
+        <button disabled={busy || backgroundDirty} onClick={() => setDeleting(null)}>
           취소
         </button>
       </Dialog>

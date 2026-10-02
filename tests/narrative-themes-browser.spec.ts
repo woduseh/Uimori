@@ -11,7 +11,7 @@ import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 
-const layouts = ['cinematic', 'letter', 'scrapbook'] as const;
+const layouts = ['cinematic', 'letter', 'scrapbook', 'classic-frame'] as const;
 type Layout = (typeof layouts)[number];
 const requestText = '비가 그친 아침, 두 사람이 숲길을 따라 걸어가는 장면을 이어줘.';
 const endMarker = '마지막 문장. 두 사람은 마침내 함께 문을 나섰다.';
@@ -312,6 +312,22 @@ for (const layout of layouts) {
           expect(personaBox!.x).toBeGreaterThanOrEqual(requestBox!.x + requestBox!.width - 1);
         }
         await noHorizontalOverflow(page, scene);
+        if (layout === 'classic-frame') {
+          const botButton = gallery.locator('[data-uimori-part="bot-portrait"] button');
+          await expect(botButton).toHaveCSS('border-radius', '0px');
+          await expect(botButton).toHaveCSS('mask-image', 'none');
+          await expect(bot).toHaveCSS('mask-image', 'none');
+          const portraitBox = (await bot.boundingBox())!;
+          const bodyBox = (await bodyScroll.boundingBox())!;
+          if (width === 1440) {
+            await expect(bot).toHaveCSS('object-fit', 'contain');
+            expect(portraitBox.x + portraitBox.width).toBeLessThanOrEqual(bodyBox.x);
+            expect(portraitBox.height).toBeGreaterThan(portraitBox.width);
+          } else {
+            expect(portraitBox.width).toBeGreaterThan(portraitBox.height);
+            expect(portraitBox.y + portraitBox.height).toBeLessThanOrEqual(bodyBox.y);
+          }
+        }
         // The projected body stays intact; the theme-owned wrapper owns the inner scroll.
         expect(
           await source.evaluate(
@@ -606,6 +622,7 @@ for (const width of [1440, 412]) {
       ['cinematic', '시네마틱'],
       ['letter', '편지지'],
       ['scrapbook', '스크랩북'],
+      ['classic-frame', '클래식 프레임'],
     ] as const) {
       await page.getByRole('button', { name: `${title} 테마 적용`, exact: true }).click();
       await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', `builtin:${layout}`);
@@ -724,3 +741,165 @@ for (const [width, mode] of [
     expect((await detail(request, data.chatId)).sources).toEqual(data.before.sources);
   });
 }
+
+test('BACKGROUND upload, independent scopes, overlays, clear and reload', async ({
+  page,
+  request,
+}, info) => {
+  const data = await seed(request, 'classic-frame', { long: false });
+  await openStory(page, data, 'classic-frame', 1440, 'light');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '테마·색상');
+  const bytes = await sharp(
+    Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600"><rect width="900" height="600" fill="#73a7ab"/><circle cx="680" cy="140" r="90" fill="#ffd181"/><path d="M0 600V450L240 180L500 430L700 300L900 500V600Z" fill="#456253"/></svg>'
+    )
+  )
+    .png()
+    .toBuffer();
+  await page
+    .getByLabel('배경 이미지 선택', { exact: true })
+    .setInputFiles({ name: 'landscape.png', mimeType: 'image/png', buffer: bytes });
+  await expect(page.getByRole('button', { name: '배경 저장', exact: true })).toBeEnabled();
+  await page.getByLabel('배경 흐림', { exact: true }).fill('7');
+  await page.getByLabel('밝은 모드 배경 덮개', { exact: true }).fill('25');
+  await page.getByLabel('어두운 모드 배경 덮개', { exact: true }).fill('55');
+  await page.getByRole('button', { name: '배경 저장', exact: true }).click();
+  await expect(page.getByRole('button', { name: '배경 저장', exact: true })).toBeDisabled();
+  await page.screenshot({
+    path: info.outputPath('background-settings-desktop.png'),
+    fullPage: true,
+  });
+  const catalog = await (await request.get('/api/themes')).json();
+  expect(catalog.preferences.defaultBackground).toMatchObject({
+    blur: 7,
+    lightOverlay: 25,
+    darkOverlay: 55,
+  });
+  expect(catalog.preferences.chatThemes[data.chatId]).toBe('builtin:classic-frame');
+  await page.goto(`/?chat=${data.chatId}&source=${data.sourceId}`);
+  const background = page.locator('.reader-stage > .theme-background');
+  await expect(background).toBeVisible();
+  expect(await background.evaluate((node) => getComputedStyle(node, '::before').filter)).toBe(
+    'blur(7px)'
+  );
+  expect(
+    await background.evaluate((node) => getComputedStyle(node, '::after').backgroundColor)
+  ).toBe('rgba(255, 255, 255, 0.25)');
+  expect(
+    await page
+      .locator('[data-reader-scrollport]')
+      .evaluate((node) => getComputedStyle(node).backgroundColor)
+  ).toBe('rgba(0, 0, 0, 0)');
+  const body = page.locator(`[data-source-id="${data.sourceId}"] [data-uimori-part="body"]`);
+  expect(await body.evaluate((node) => getComputedStyle(node).filter)).toBe('none');
+  expect(await body.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(
+    'rgba(0, 0, 0, 0)'
+  );
+  await expect(
+    page.locator(`[data-source-id="${data.sourceId}"]`).getByTestId('source-text')
+  ).toContainText(endMarker);
+  await page.screenshot({
+    path: info.outputPath('background-classic-light-desktop.png'),
+    fullPage: true,
+  });
+  await page.reload();
+  await expect(background).toBeVisible();
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '테마·색상');
+  await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('dark');
+  await page.getByLabel('테마 적용 범위', { exact: true }).selectOption('chat');
+  await page.getByRole('button', { name: '배경 이미지 지우기', exact: true }).click();
+  await page.getByRole('button', { name: '배경 저장', exact: true }).click();
+  await expect(page.getByRole('button', { name: '배경 저장', exact: true })).toBeDisabled();
+  await expect(background).toHaveCount(0);
+  await page.getByRole('button', { name: '배경 상위 설정 따르기', exact: true }).click();
+  await expect(background).toBeVisible();
+  expect(
+    await background.evaluate((node) => getComputedStyle(node, '::after').backgroundColor)
+  ).toBe('rgba(0, 0, 0, 0.55)');
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(background).toBeVisible();
+  await expect(
+    page.locator(`[data-source-id="${data.sourceId}"]`).getByTestId('source-text')
+  ).toContainText(endMarker);
+  await page.screenshot({
+    path: info.outputPath('background-classic-dark-desktop.png'),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.screenshot({
+    path: info.outputPath('background-classic-dark-mobile.png'),
+    fullPage: true,
+  });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+    true
+  );
+  // Restore workspace defaults for unrelated browser scenarios in the same fixture server.
+  const final = await (await request.get('/api/themes')).json();
+  expect(
+    (
+      await request.post('/api/themes/background', {
+        data: { scope: 'global', background: null, expectedRevision: final.preferences.revision },
+      })
+    ).ok()
+  ).toBe(true);
+});
+
+test('BACKGROUND pending upload discard and dirty save-close preserve scope ownership', async ({
+  page,
+  request,
+}) => {
+  const data = await seed(request, 'classic-frame', { long: false });
+  await openStory(page, data, 'classic-frame', 1440, 'light');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '테마·색상');
+  let release!: () => void;
+  const delayed = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let started!: () => void;
+  const startedPromise = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  await page.route('**/api/package-image-blobs', async (route) => {
+    started();
+    await delayed;
+    await route
+      .fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ hash: 'b'.repeat(64), mime: 'image/webp' }),
+      })
+      .catch(() => {});
+  });
+  const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#669988' } })
+    .png()
+    .toBuffer();
+  await page
+    .getByLabel('배경 이미지 선택', { exact: true })
+    .setInputFiles({ name: 'late.png', mimeType: 'image/png', buffer: image });
+  await startedPromise;
+  await expect(page.getByLabel('테마 적용 범위', { exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await page.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
+  release();
+  await page.unroute('**/api/package-image-blobs');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '테마·색상');
+  await expect(page.getByRole('button', { name: '배경 저장', exact: true })).toBeDisabled();
+  await page.getByLabel('배경 흐림', { exact: true }).fill('9');
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await page.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+  await expect(page.getByRole('button', { name: '설정 닫기', exact: true })).toHaveCount(0);
+  const catalog = await (await request.get('/api/themes')).json();
+  expect(catalog.preferences.defaultBackground).toMatchObject({ imageHash: null, blur: 9 });
+  expect(
+    (
+      await request.post('/api/themes/background', {
+        data: { scope: 'global', background: null, expectedRevision: catalog.preferences.revision },
+      })
+    ).ok()
+  ).toBe(true);
+});
