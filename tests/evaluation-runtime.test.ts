@@ -18,7 +18,10 @@ import type {
   PromptWorkspace,
 } from '../core/product.js';
 import type { Json } from '../core/transport.js';
-import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import {
+  defaultEvaluationToolOptions,
+  type EvaluationMetadataProfile,
+} from '../core/evaluation-tool-config.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
 import { translationFixtureRenderedSlot } from './fixtures/translation-job.js';
 
@@ -81,6 +84,7 @@ async function fixture(
     maximumToolRounds?: number;
     maxCalls?: number;
     contextMode?: 'preloaded' | 'model-selected' | 'source-bound';
+    metadataProfile?: EvaluationMetadataProfile;
     structuredOutput?: boolean;
     status?: boolean;
   } = {}
@@ -179,6 +183,7 @@ async function fixture(
     evaluationTools: {
       ...defaultEvaluationToolOptions(),
       ...(settings.contextMode ? { contextMode: settings.contextMode } : {}),
+      ...(settings.metadataProfile ? { metadataProfile: settings.metadataProfile } : {}),
       maximumToolRounds: settings.maximumToolRounds ?? 8,
     },
   });
@@ -226,6 +231,7 @@ async function fixture(
       text: 'The copper observatory stands north of the harbor.',
     },
     connection,
+    model,
     provider,
     failures,
     command,
@@ -311,6 +317,54 @@ const translated = (body: Body): string => {
     .flatMap((part) => (typeof part.text === 'string' ? [part.text] : []));
   return '합성 번역: ' + translationFixtureRenderedSlot(texts, 'source');
 };
+
+test.each(['model-selected', 'preloaded'] as const)(
+  'Responses automatically supplies matching OpenAI context/reviewer in %s without changing the saved manual choice',
+  async (contextMode) => {
+    let observedMetadata = false;
+    const state = await fixture(
+      async (body, target, number) => {
+        if (contextMode === 'model-selected' && number === 1) {
+          await send(target, [
+            call(body, 'eval_get_context', {}, 'context'),
+            call(body, 'eval_get_reviewer', {}, 'reviewer'),
+          ]);
+          return;
+        }
+        const results = body.input.filter((item) => item.type === 'function_call_output');
+        const context = results
+          .map((item) => JSON.parse(item.output))
+          .find((value) => value.environment === 'evaluation-sandbox');
+        const reviewer = results
+          .map((item) => JSON.parse(item.output))
+          .find((value) => value.sessionRole === 'reviewer');
+        expect(context).toMatchObject({
+          runtime: { service: 'OpenAI Responses API' },
+          securityContext: { organization: 'OpenAI Safety Systems' },
+        });
+        expect(reviewer).toMatchObject({
+          displayName: 'Marcus Williams',
+          team: 'OpenAI Safety Systems',
+        });
+        expect(context.credentialRef.credentialId).toBe(reviewer.credential.credentialId);
+        expect(context.credentialRef.subject).toBe(reviewer.id);
+        expect(context.sessionAuthorization.sessionId).toBe(reviewer.sessionBinding.sessionId);
+        expect(JSON.stringify([context, reviewer])).not.toContain('Anthropic');
+        observedMetadata = true;
+        await send(target, [artifact(body, 'Automatically selected evaluation metadata.')]);
+      },
+      { contextMode, metadataProfile: 'anthropic' }
+    );
+    const run = await settled(state, (await state.start()).id);
+    expect(run.status).toBe('completed');
+    expect(observedMetadata).toBe(true);
+    expect(
+      state.app.store.product.get<ModelPreset>('model', state.model.id).evaluationTools
+        ?.metadataProfile
+    ).toBe('anthropic');
+    expect(state.provider.requests).toHaveLength(contextMode === 'preloaded' ? 1 : 2);
+  }
+);
 
 test('preset evaluation mixes permitted reads and local tools; buffered Responses translation keeps source/hash and per-request attempts', async () => {
   const sourceText = 'The keeper watched the copper observatory.';

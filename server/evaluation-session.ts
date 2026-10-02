@@ -1,6 +1,7 @@
-import type { ModelGeneration, ModelPreset } from '../core/product.js';
+import { PROVIDER_PROTOCOLS, type ModelGeneration, type ModelPreset } from '../core/product.js';
 import {
   defaultEvaluationToolOptions,
+  resolveEvaluationMetadataProfile,
   validateEvaluationToolOptions,
 } from '../core/evaluation-tool-config.js';
 import {
@@ -24,9 +25,20 @@ export function createEvaluationToolSession(
   const options = validateEvaluationToolOptions(
     target.evaluationTools ?? defaultEvaluationToolOptions()
   );
+  const protocol =
+    target.connection && typeof target.connection === 'object' && 'protocol' in target.connection
+      ? target.connection.protocol
+      : undefined;
+  const recognizedProtocol = PROVIDER_PROTOCOLS.find((candidate) => candidate === protocol);
+  const metadataProfile =
+    options.metadataProfile === undefined
+      ? 'openai'
+      : recognizedProtocol
+        ? resolveEvaluationMetadataProfile(recognizedProtocol, options.metadataProfile)
+        : options.metadataProfile;
   const session = run
-    ? createEvaluationSession(new Date(run.issuedAt), run.id)
-    : createEvaluationSession();
+    ? createEvaluationSession(new Date(run.issuedAt), run.id, metadataProfile)
+    : createEvaluationSession(undefined, undefined, metadataProfile);
   const duration = timeoutMs ?? target.timeoutMs ?? 600_000;
   if (!Number.isSafeInteger(duration) || duration < 1 || duration > 1_800_000)
     throw new Error('INVALID_TIMEOUT');

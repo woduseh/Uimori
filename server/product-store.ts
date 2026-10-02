@@ -536,6 +536,14 @@ export class ProductStore {
       const pricingSnapshot = resolveModelPricing(model, connection);
       return structuredClone({
         ...model,
+        ...(model.evaluationTools
+          ? {
+              evaluationTools: {
+                ...model.evaluationTools,
+                metadataProfile: model.evaluationTools.metadataProfile ?? 'neutral',
+              },
+            }
+          : {}),
         connection,
         ...(pricingSnapshot ? { pricingSnapshot } : {}),
       });

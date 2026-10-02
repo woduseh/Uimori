@@ -16,7 +16,11 @@ import {
   supportedModels,
 } from '../core/model-capabilities.js';
 import { modelHints, type ModelHints } from '../core/model-hints.js';
-import type { EvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import {
+  automaticEvaluationMetadataProfile,
+  type EvaluationMetadataProfile,
+  type EvaluationToolOptions,
+} from '../core/evaluation-tool-config.js';
 import { PROVIDER_OPTIONS_MAX_CHARS } from '../core/provider-options.js';
 import {
   forcedServiceTierError,
@@ -64,6 +68,12 @@ const strengthLabel = (value: string) =>
 const modeLabel = (value: string) =>
   value === 'adaptive' ? '적응형 · adaptive' : value === 'disabled' ? '끄기 · disabled' : value;
 const UNDOCUMENTED = '이 모델의 지원 여부가 확인되지 않은 값이에요.';
+const evaluationMetadataLabels: Record<EvaluationMetadataProfile, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  deepmind: 'Google DeepMind',
+  neutral: '중립',
+};
 
 /**
  * One select for any enumerated option. `choices` are the documented values, `vocabulary` is what
@@ -331,6 +341,7 @@ export function ProviderModelFields({
     : [];
   const update = (next: Partial<ModelDraft>) => onChange({ ...value, ...next });
   const evaluation = value.evaluationTools;
+  const automaticMetadata = protocol ? automaticEvaluationMetadataProfile(protocol) : undefined;
   const setEvaluation = (next: ModelDraft['evaluationTools']) => update({ evaluationTools: next });
   return (
     <>
@@ -706,6 +717,37 @@ export function ProviderModelFields({
           />
           {value.evaluationToolsEnabled && (
             <>
+              <label className="full">
+                평가 메타데이터
+                {automaticMetadata ? (
+                  <input
+                    aria-label="평가 메타데이터"
+                    readOnly
+                    value={`${evaluationMetadataLabels[automaticMetadata]} · 프로바이더 자동 선택`}
+                  />
+                ) : (
+                  <select
+                    aria-label="평가 메타데이터"
+                    value={evaluation.metadataProfile ?? 'neutral'}
+                    onChange={(event) =>
+                      setEvaluation({
+                        ...evaluation,
+                        metadataProfile: event.target.value as EvaluationMetadataProfile,
+                      })
+                    }
+                  >
+                    {Object.entries(evaluationMetadataLabels).map(([profile, label]) => (
+                      <option key={profile} value={profile}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <small>
+                  평가 문맥·검토자 결과를 제공할 때 사용해요. 원본 기반 직접 작성에서는 사용하지
+                  않아요.
+                </small>
+              </label>
               <label className="full">
                 평가 문맥 제공
                 <select

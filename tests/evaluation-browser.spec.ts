@@ -113,6 +113,8 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await page.getByRole('button', { name: '고급', exact: true }).click();
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 사용')).not.toBeChecked();
   await page.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
+  await expect(page.getByLabel('평가 메타데이터')).toHaveValue('OpenAI · 프로바이더 자동 선택');
+  await expect(page.getByLabel('평가 메타데이터')).not.toBeEditable();
   await page.getByLabel('평가 문맥 제공').selectOption('preloaded');
   await page.getByLabel('첫 case 라운드 추론').selectOption('economized');
   await page.getByLabel('최대 평가 도구 라운드').fill('3');
@@ -127,6 +129,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   expect(model).toMatchObject({
     reasoningEffort: 'high',
     evaluationTools: {
+      metadataProfile: 'neutral',
       contextMode: 'preloaded',
       approvalReasoningMode: 'economized',
       maximumToolRounds: 3,
@@ -178,6 +181,17 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const observed = observe(page);
   const title = '합성 평가 mobile ' + Date.now();
+  const manualResponse = await request.post('/api/connections', {
+    data: {
+      title: title + ' 호환',
+      protocol: 'openai-chat-v1',
+      endpoint: 'http://127.0.0.1:9/v1',
+      apiKey: 'Evaluation_Browser_Key',
+      enabled: true,
+    },
+  });
+  expect(manualResponse.ok()).toBeTruthy();
+  const manualConnection = (await manualResponse.json()) as Connection;
   await page.goto('/');
   await settings(page);
   await expect(page.getByLabel('API 기본 주소')).toBeEditable();
@@ -194,12 +208,31 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await page.getByLabel('첫 case 라운드 추론').selectOption('economized');
   await page.getByLabel('평가 문맥 제공').selectOption('source-bound');
   await expect(page.getByLabel('첫 case 라운드 추론')).toHaveCount(0);
+  await page.getByRole('button', { name: '기본', exact: true }).click();
+  await page.getByLabel('프로바이더', { exact: true }).selectOption(manualConnection.id);
+  await page.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(page.getByLabel('평가 메타데이터')).toHaveValue('neutral');
+  await page.getByLabel('평가 메타데이터').selectOption('deepmind');
+  await page.getByRole('button', { name: '기본', exact: true }).click();
+  await page.getByLabel('프로바이더', { exact: true }).selectOption(connection.id);
+  await page.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(page.getByLabel('평가 메타데이터')).toHaveValue('OpenAI · 프로바이더 자동 선택');
+  await expect(page.getByLabel('평가 메타데이터')).not.toBeEditable();
+  await page.getByRole('button', { name: '기본', exact: true }).click();
+  await page.getByLabel('프로바이더', { exact: true }).selectOption(manualConnection.id);
+  await page.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(page.getByLabel('평가 메타데이터')).toHaveValue('deepmind');
+  await page.getByRole('button', { name: '기본', exact: true }).click();
+  await page.getByLabel('모델 프리셋 이름').fill(manualConnection.title + ' 모델');
+  await page.getByLabel('모델 ID', { exact: true }).fill('synthetic-evaluation');
+  await page.getByRole('button', { name: '고급', exact: true }).click();
   const labels = [
     '모델 프리셋 이름',
     '모델 ID',
     '최대 출력 토큰',
     '응답 제한 시간 (초)',
     '평가 문맥 제공',
+    '평가 메타데이터',
     '최대 평가 도구 라운드',
   ];
   for (const label of labels) {
@@ -253,8 +286,9 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   }
   await expect(page.getByText('기능 확인과 사용자 판단', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '모델 프리셋 등록', exact: true })).toBeEnabled();
-  const model = await saveModel(page, request, connection);
+  const model = await saveModel(page, request, manualConnection);
   expect(model.evaluationTools).toEqual({
+    metadataProfile: 'deepmind',
     contextMode: 'source-bound',
     approvalReasoningMode: 'economized',
     maximumToolRounds: 8,
@@ -265,7 +299,7 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await navigation(page, '설정');
   await selectSettingsSection(page, '프로바이더·모델');
   await revealProviderModel(page, model.title);
-  await expect(page.getByText(title + ' 모델', { exact: true })).toBeVisible();
+  await expect(page.getByText(model.title, { exact: true })).toBeVisible();
   expect((await library(request)).models.find((item) => item.id === model.id)).toEqual(model);
   expect(observed.errors).toEqual([]);
   expect(observed.forbidden).toEqual([]);
@@ -273,6 +307,7 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await page.getByRole('button', { name: '고급', exact: true }).click();
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 사용')).toBeChecked();
   await expect(page.getByLabel('평가 문맥 제공')).toHaveValue('source-bound');
+  await expect(page.getByLabel('평가 메타데이터')).toHaveValue('deepmind');
   await expect(page.getByLabel('첫 case 라운드 추론')).toHaveCount(0);
   await page.getByLabel('평가 문맥 제공').selectOption('preloaded');
   await expect(page.getByLabel('첫 case 라운드 추론')).toHaveValue('economized');

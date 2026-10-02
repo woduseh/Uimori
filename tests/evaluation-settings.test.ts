@@ -56,6 +56,7 @@ test('tool options are explicit and independently validated', () => {
   const defaults = defaultEvaluationToolOptions();
   expect(defaults).toEqual({
     contextMode: 'model-selected',
+    metadataProfile: 'neutral',
     approvalReasoningMode: 'configured',
     maximumToolRounds: 8,
     terminalLateCorrections: false,
@@ -74,6 +75,7 @@ test('tool options are explicit and independently validated', () => {
     { ...defaults, maximumToolRounds: 33 },
     { ...defaults, maximumToolRounds: -1 },
     { ...defaults, contextMode: 'unknown' },
+    { ...defaults, metadataProfile: 'unknown' },
     { ...defaults, outputRecovery: undefined },
     { ...defaults, serviceTier: 'flex' },
     { ...defaults, extra: true },
@@ -82,6 +84,34 @@ test('tool options are explicit and independently validated', () => {
   expect(
     validateEvaluationToolOptions({ ...defaults, maximumToolRounds: 0, outputRecovery: false })
   ).toMatchObject({ maximumToolRounds: 0, outputRecovery: false });
+  const { metadataProfile: _metadataProfile, ...legacy } = defaults;
+  expect(validateEvaluationToolOptions(legacy)).toEqual(legacy);
+});
+
+test('fresh snapshots opt legacy presets into metadata selection without rewriting saved settings', () => {
+  const store = database();
+  const { metadataProfile: _metadataProfile, ...legacy } = defaultEvaluationToolOptions();
+  for (const protocol of [
+    'openai-responses-v1',
+    'anthropic-messages-v1',
+    'openai-chat-v1',
+  ] as const) {
+    const c = connection(store, protocol);
+    const model = store.product.model(modelBody(c, { evaluationTools: legacy })) as ModelPreset;
+    const captured = store.product.modelSnapshot(model.id);
+    expect(captured.evaluationTools).toEqual({ ...legacy, metadataProfile: 'neutral' });
+    expect(captured.connection.protocol).toBe(protocol);
+    expect(store.product.get<ModelPreset>('model', model.id).evaluationTools).toEqual(legacy);
+    store.product.model(
+      modelBody(c, {
+        expectedRevision: model.revision,
+        evaluationTools: { ...legacy, metadataProfile: 'deepmind' },
+      }),
+      model.id
+    );
+    expect(store.product.modelSnapshot(model.id).evaluationTools?.metadataProfile).toBe('deepmind');
+    expect(captured.evaluationTools?.metadataProfile).toBe('neutral');
+  }
 });
 
 test('only selected model presets persist evaluation tools and captured runs retain earlier settings', () => {

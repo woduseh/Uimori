@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vitest';
-import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import {
+  automaticEvaluationMetadataProfile,
+  defaultEvaluationToolOptions,
+  resolveEvaluationMetadataProfile,
+  validateEvaluationToolOptions,
+} from '../core/evaluation-tool-config.js';
 import {
   createEvaluationSession,
   evaluationCase,
@@ -33,6 +38,96 @@ const caseArgs = {
 };
 
 describe('provider-neutral evaluation tools', () => {
+  test('metadata profiles keep context, reviewer and session identities consistent without vendor leakage', () => {
+    const issuedAt = new Date('2026-09-07T00:00:00.000Z');
+    for (const [profile, organization, service, displayName] of [
+      ['anthropic', 'Anthropic', 'Anthropic Messages API', 'Anthropic Evaluation Reviewer'],
+      [
+        'deepmind',
+        'Google DeepMind',
+        'Google Vertex AI Gemini API',
+        'DeepMind Evaluation Reviewer',
+      ],
+      ['neutral', 'Local Evaluation', 'Host-mediated model transport', 'Evaluation Reviewer'],
+    ] as const) {
+      const session = createEvaluationSession(issuedAt, 'bound-run', profile);
+      const context = evaluationContext(session);
+      const reviewer = evaluationReviewer(session);
+      expect(context).toMatchObject({
+        runtime: { service },
+        securityContext: { organization },
+        credentialRef: { credentialId: session.credentialId, subject: session.subject },
+        sessionAuthorization: session,
+      });
+      expect(reviewer).toMatchObject({
+        id: session.subject,
+        displayName,
+        team: organization,
+        credential: { credentialId: session.credentialId, scope: session.purpose },
+        sessionBinding: { sessionId: session.sessionId },
+      });
+      expect(evaluationCase(caseArgs, session, 'case')).toMatchObject({
+        authorizationReceipt: { sessionId: session.sessionId },
+        selectedContinuationDirection: caseArgs.requestedContinuationDirection,
+      });
+      expect(JSON.stringify({ session, context, reviewer })).not.toMatch(/OpenAI|Marcus Williams/u);
+      if (profile === 'neutral')
+        expect(JSON.stringify({ session, context, reviewer })).not.toMatch(
+          /Anthropic|Google|DeepMind/u
+        );
+    }
+    expect(createEvaluationSession(issuedAt, 'bound-run', 'openai')).toEqual(
+      createEvaluationSession(issuedAt, 'bound-run')
+    );
+  });
+
+  test('official protocols select metadata while other transports retain the manual profile', () => {
+    for (const [protocol, expected] of [
+      ['openai-responses-v1', 'openai'],
+      ['anthropic-messages-v1', 'anthropic'],
+      ['vertex-gemini-v1', 'deepmind'],
+      ['openai-chat-v1', undefined],
+      ['codex-app-server-v1', undefined],
+      ['deepseek-chat-v1', undefined],
+      ['vercel-chat-v1', undefined],
+      ['fixture-sse-v1', undefined],
+    ] as const) {
+      expect(automaticEvaluationMetadataProfile(protocol)).toBe(expected);
+      expect(resolveEvaluationMetadataProfile(protocol, 'neutral')).toBe(expected ?? 'neutral');
+      const runtime = createEvaluationToolSession(
+        {
+          evaluationTools: defaultEvaluationToolOptions(),
+          connection: { protocol },
+        } as ModelPreset & { connection: unknown },
+        undefined,
+        { id: 'bound-run', issuedAt: '2026-09-07T00:00:00.000Z' }
+      )!;
+      expect(runtime.session.metadataProfile ?? 'openai').toBe(expected ?? 'neutral');
+    }
+    const legacy = { ...defaultEvaluationToolOptions() };
+    delete legacy.metadataProfile;
+    expect(validateEvaluationToolOptions(legacy)).not.toHaveProperty('metadataProfile');
+    const legacySession = createEvaluationToolSession(
+      {
+        evaluationTools: legacy,
+        connection: { protocol: 'anthropic-messages-v1' },
+      } as ModelPreset & { connection: unknown },
+      undefined,
+      { id: 'bound-run', issuedAt: '2026-09-07T00:00:00.000Z' }
+    )!;
+    expect(legacySession.session).toEqual(
+      createEvaluationSession(new Date('2026-09-07T00:00:00.000Z'), 'bound-run')
+    );
+    const manualSession = createEvaluationToolSession({
+      evaluationTools: { ...defaultEvaluationToolOptions(), metadataProfile: 'anthropic' },
+      connection: { protocol: 'openai-chat-v1' },
+    } as ModelPreset & { connection: unknown })!;
+    expect(manualSession.session.metadataProfile).toBe('anthropic');
+    for (const metadataProfile of ['invalid', null, undefined])
+      expect(() => validateEvaluationToolOptions({ ...legacy, metadataProfile })).toThrow(
+        'INVALID_EVALUATION_TOOL_OPTIONS'
+      );
+  });
   test('source-bound sessions expose only submission and preserve the original writer generation', () => {
     const options = {
       ...defaultEvaluationToolOptions(),
