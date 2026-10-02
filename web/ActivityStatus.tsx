@@ -8,10 +8,15 @@ import {
   activitySuccess as success,
   activityAcknowledgementKey,
   canAcknowledge,
-  readAcknowledgements,
   translationResolved,
   type ActivityNoticeItem as Item,
 } from './activity-notices.js';
+import {
+  readAcknowledgements,
+  saveAcknowledgements,
+  migrateAcknowledgements,
+  isAcknowledgementStorageKey,
+} from './activity-acknowledgements.js';
 import './activity-status.css';
 
 type Notice = { item: Item; expiresAt: number | null };
@@ -107,6 +112,17 @@ export function ActivityStatus({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [history, setHistory] = useState<ReaderActivity[]>([]);
   const [acknowledged, setAcknowledged] = useState<string[]>(() => readAcknowledgements(chatId));
+  const [persistenceError, setPersistenceError] = useState(false);
+  useEffect(() => {
+    setPersistenceError(!migrateAcknowledgements(chatId));
+    const sync = (event: StorageEvent) => {
+      if (!isAcknowledgementStorageKey(chatId, event.key)) return;
+      const saved = readAcknowledgements(chatId);
+      setAcknowledged((old) => [...new Set([...old, ...saved])]);
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, [chatId]);
   const observed = useRef<Map<string, string> | null>(null);
   useEffect(() => {
     setHistory((old) => reconcileHistory(old, activities));
@@ -146,16 +162,12 @@ export function ActivityStatus({
   const resolvedKeys = JSON.stringify(resolved.map((item) => item.acknowledgementKey));
   useEffect(() => {
     const keys = JSON.parse(resolvedKeys) as string[];
-    if (keys.length) setAcknowledged((old) => [...new Set([...old, ...keys])]);
-  }, [resolvedKeys]);
-  useEffect(() => {
-    try {
-      // Do not evict old confirmations: paging or reloading must not resurrect them.
-      sessionStorage.setItem(`activity-acknowledged:${chatId}`, JSON.stringify(acknowledged));
-    } catch {
-      /* Confirmation still works in this view when browser storage is unavailable. */
+    if (keys.length) {
+      const saved = saveAcknowledgements(chatId, keys);
+      if (!saved) setPersistenceError(true);
+      setAcknowledged((old) => [...new Set([...old, ...keys])]);
     }
-  }, [acknowledged, chatId]);
+  }, [resolvedKeys, chatId]);
   // An older settled result belongs to its response. Keep active work and uncertain
   // admission visible, but do not let old failures replace the current turn's result.
   const latestMainStart = items
@@ -291,6 +303,9 @@ export function ActivityStatus({
         return current && canAcknowledge(current);
       })
       .map((item) => item.acknowledgementKey);
+    // Persist this exact displayed execution before hiding it; never save a stale whole-tab snapshot.
+    const saved = saveAcknowledgements(chatId, [...acknowledged, ...keys]);
+    setPersistenceError(!saved);
     setAcknowledged((old) => [...new Set([...old, ...keys])]);
   }
   const issueSelected = !!item && !active(item.status) && !success(item.status);
@@ -325,6 +340,7 @@ export function ActivityStatus({
         chatId={chatId}
         items={[...running, ...unresolvedNotices.map((notice) => notice.item)]}
         acknowledged={acknowledged}
+        persistenceError={persistenceError}
         message={message}
         onAcknowledge={acknowledge}
         onHistory={(page) =>

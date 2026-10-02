@@ -44,16 +44,3 @@ export function translationResolved(item: ActivityNoticeItem, items: ActivityNot
     )
   );
 }
-
-export function readAcknowledgements(scope: string): string[] {
-  try {
-    const saved: unknown = JSON.parse(
-      sessionStorage.getItem(`activity-acknowledged:${scope}`) ?? '[]'
-    );
-    return Array.isArray(saved)
-      ? saved.filter((key): key is string => typeof key === 'string')
-      : [];
-  } catch {
-    return [];
-  }
-}

@@ -7,6 +7,7 @@ import { Switch } from './BooleanControls.js';
 import { SaveButton } from './SaveButton.js';
 import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 
 const date = (value: string) =>
   new Date(value).toLocaleString('ko-KR', {
@@ -16,7 +17,13 @@ const date = (value: string) =>
     hour: 'numeric',
     minute: '2-digit',
   });
-export function BackupSettings({ onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void }) {
+export function BackupSettings({
+  onDirtyChange,
+  onSaveHandlerChange,
+}: {
+  onDirtyChange?: (dirty: boolean) => void;
+  onSaveHandlerChange?: SettingsSaveRegistration;
+}) {
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -70,8 +77,9 @@ export function BackupSettings({ onDirtyChange }: { onDirtyChange?: (dirty: bool
     setDraft((old) => old && { ...old, ...value });
     setDirty(true);
   };
-  async function save() {
-    if (!draft || invalid || busy) return;
+  async function save(): Promise<boolean> {
+    if (!draft || invalid || busy) return false;
+    if (!dirty) return true;
     setBusy(true);
     setError('');
     try {
@@ -89,12 +97,15 @@ export function BackupSettings({ onDirtyChange }: { onDirtyChange?: (dirty: bool
       setDraft(saved);
       setDirty(false);
       setReload((value) => value + 1);
+      return true;
     } catch (caught) {
       setError((caught as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
   }
+  useSettingsSaveHandler(onSaveHandlerChange, save);
   async function start() {
     if (busy) return;
     setBusy(true);

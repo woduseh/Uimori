@@ -147,6 +147,8 @@ export function useStory() {
   loreResetDraftRef.current = loreResetDraft;
   const [submitting, setSubmitting] = useState<string[]>([]);
   const submitLocks = useRef(new Set<string>());
+  const cancelLocks = useRef(new Set<string>());
+  const [cancelling, setCancelling] = useState<string[]>([]);
   const [requestActivities, setRequestActivities] = useState<Record<string, RequestActivity>>({});
   const [connected, setConnected] = useState(false);
   const [nativeInteractionRevision, setNativeInteractionRevision] = useState(0);
@@ -1224,6 +1226,26 @@ export function useStory() {
     }
   }
   const active = visibleRuns.find((run) => run.status === 'queued' || run.status === 'running');
+  async function cancelActive() {
+    if (!active || cancelLocks.current.has(active.id)) return;
+    const runId = active.id;
+    const chatId = selected;
+    const epoch = navigation.current.epoch;
+    cancelLocks.current.add(runId);
+    setCancelling([...cancelLocks.current]);
+    try {
+      await api(`/runs/${runId}/cancel`, {});
+      await refresh(chatId);
+    } catch (caught) {
+      // Cancellation belongs to the initiating reader, even after A → B → A navigation.
+      if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
+        setError(caught instanceof Error ? caught.message : '원문 생성을 취소하지 못했어요.');
+    } finally {
+      cancelLocks.current.delete(runId);
+      setCancelling([...cancelLocks.current]);
+    }
+  }
+
   const allContents = [...(library?.contents ?? []), ...archivedContents];
   const attachmentsReady =
     !!detail?.profile &&
@@ -1296,6 +1318,8 @@ export function useStory() {
     input,
     viewKey,
     active,
+    cancelling: !!active && cancelling.includes(active.id),
+    cancelActive,
     allContents,
     bot,
     persona,

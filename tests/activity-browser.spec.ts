@@ -539,3 +539,34 @@ test('ACTUI08 history cannot retain vanished active jobs or revive a previous ge
   expect(state.writes).toEqual([]);
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });
+
+test('ACTUI09 confirmations survive a fresh browser session while new executions remain visible', async ({
+  page,
+  request,
+  browser,
+}) => {
+  const seeded = await seed(request);
+  const failed = activity('reopened-failure', 'translation', 'failed');
+  await harness(page, seeded.chat.id, [failed]);
+  await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '작업 알림', exact: true });
+  await dialog.getByRole('button', { name: '모두 확인', exact: true }).click();
+  await expect(dialog.getByTestId('activity-notice')).toHaveCount(0);
+  // A fresh context restores cookies/localStorage but no tab sessionStorage.
+  const storageState = await page.context().storageState();
+  await page.close();
+  const context = await browser.newContext({ storageState });
+  try {
+    const reopened = await context.newPage();
+    const state = await harness(reopened, seeded.chat.id, [failed]);
+    await expect(reopened.getByTestId('activity-status')).toHaveCount(0);
+    await state.set([{ ...failed, generation: 2 }]);
+    await expect(reopened.getByTestId('activity-status')).toContainText('실패');
+    await reopened.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
+    await expect(reopened.getByTestId('activity-notice')).toHaveCount(1);
+    expect(state.writes).toEqual([]);
+    expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
+  } finally {
+    await context.close();
+  }
+});
