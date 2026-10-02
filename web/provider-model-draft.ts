@@ -162,6 +162,7 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     enabled: value.enabled !== false,
     evaluationToolsEnabled: value.evaluationTools !== undefined,
     evaluationTools: {
+      ...defaultEvaluationToolOptions(),
       ...structuredClone(value.evaluationTools ?? defaultEvaluationToolOptions()),
       maximumToolRounds: String(
         (value.evaluationTools ?? defaultEvaluationToolOptions()).maximumToolRounds

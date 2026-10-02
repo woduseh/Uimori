@@ -748,15 +748,26 @@ describe('Batch recovery in the real main tool loop', () => {
     expect(work).toEqual(before);
   });
 
-  test.each(['model-selected', 'preloaded'] as const)(
-    'replays a saved %s evaluation case with the same receipt and request',
-    async (contextMode) => {
+  test.each([
+    ['model-selected', undefined],
+    ['preloaded', undefined],
+    ['model-selected', 'neutral'],
+    ['preloaded', 'neutral'],
+  ] as const)(
+    'replays a saved %s evaluation case with metadata profile %s and the same receipt and request',
+    async (contextMode, metadataProfile) => {
       const work = await snapshot('https://api.anthropic.com/v1');
       const target = work.profile!.models.main!;
       target.connection.protocol = 'anthropic-messages-v1';
       target.modelId = 'claude-opus-5';
       target.executionMode = 'batch';
-      target.evaluationTools = { ...defaultEvaluationToolOptions(), contextMode };
+      const { metadataProfile: _defaultMetadataProfile, ...legacy } =
+        defaultEvaluationToolOptions();
+      target.evaluationTools = {
+        ...legacy,
+        contextMode,
+        ...(metadataProfile === undefined ? {} : { metadataProfile }),
+      };
       work.executionClock = { iso: '2026-09-29T00:00:00.000Z', unix: 1790640000 };
       const args = {
         contentType: 'other',
@@ -810,6 +821,10 @@ describe('Batch recovery in the real main tool loop', () => {
       first.value.evaluationRunId = 'evaluation-recovery-run';
       const original = execute(first);
       expect(await runMain(work, first.value)).toMatchObject({ status: 'completed' });
+      if (contextMode === 'preloaded')
+        expect(original.requests.join('\n')).toContain(
+          metadataProfile === undefined ? 'OpenAI Responses API' : 'Anthropic Messages API'
+        );
       expect(first.events).toHaveLength(1);
       expect(first.events[0]).toMatchObject({
         callId: 'eval-case',

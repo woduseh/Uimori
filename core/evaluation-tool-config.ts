@@ -1,3 +1,29 @@
+import type { ProviderProtocol } from './product.js';
+
+export type EvaluationMetadataProfile = 'openai' | 'anthropic' | 'deepmind' | 'neutral';
+
+export function automaticEvaluationMetadataProfile(
+  protocol: ProviderProtocol
+): EvaluationMetadataProfile | undefined {
+  switch (protocol) {
+    case 'openai-responses-v1':
+      return 'openai';
+    case 'anthropic-messages-v1':
+      return 'anthropic';
+    case 'vertex-gemini-v1':
+      return 'deepmind';
+    default:
+      return undefined;
+  }
+}
+
+export function resolveEvaluationMetadataProfile(
+  protocol: ProviderProtocol,
+  manual: EvaluationMetadataProfile
+): EvaluationMetadataProfile {
+  return automaticEvaluationMetadataProfile(protocol) ?? manual;
+}
+
 /** Model-preset-owned evaluation tool settings. They do not select or configure a provider. */
 export type EvaluationToolOptions = {
   contextMode: 'model-selected' | 'preloaded' | 'source-bound';
@@ -5,6 +31,7 @@ export type EvaluationToolOptions = {
   maximumToolRounds: number;
   terminalLateCorrections: boolean;
   outputRecovery: boolean;
+  metadataProfile?: EvaluationMetadataProfile;
 };
 
 export function defaultEvaluationToolOptions(): EvaluationToolOptions {
@@ -14,6 +41,7 @@ export function defaultEvaluationToolOptions(): EvaluationToolOptions {
     maximumToolRounds: 8,
     terminalLateCorrections: false,
     outputRecovery: true,
+    metadataProfile: 'neutral',
   };
 }
 
@@ -35,6 +63,7 @@ export function validateEvaluationToolOptions(value: unknown): EvaluationToolOpt
           'maximumToolRounds',
           'terminalLateCorrections',
           'outputRecovery',
+          'metadataProfile',
         ].includes(key)
     )
   )
@@ -42,6 +71,11 @@ export function validateEvaluationToolOptions(value: unknown): EvaluationToolOpt
   if (!['model-selected', 'preloaded', 'source-bound'].includes(String(input.contextMode)))
     throw new Error('INVALID_EVALUATION_TOOL_OPTIONS');
   if (!['configured', 'economized'].includes(String(input.approvalReasoningMode)))
+    throw new Error('INVALID_EVALUATION_TOOL_OPTIONS');
+  if (
+    Object.hasOwn(input, 'metadataProfile') &&
+    !['openai', 'anthropic', 'deepmind', 'neutral'].includes(String(input.metadataProfile))
+  )
     throw new Error('INVALID_EVALUATION_TOOL_OPTIONS');
   if (
     !Number.isSafeInteger(input.maximumToolRounds) ||
@@ -61,5 +95,8 @@ export function validateEvaluationToolOptions(value: unknown): EvaluationToolOpt
     maximumToolRounds: Number(input.maximumToolRounds),
     terminalLateCorrections: input.terminalLateCorrections,
     outputRecovery: input.outputRecovery,
+    ...(Object.hasOwn(input, 'metadataProfile')
+      ? { metadataProfile: input.metadataProfile as EvaluationMetadataProfile }
+      : {}),
   };
 }
