@@ -130,6 +130,32 @@ test(
           (await (await request.get('/api/prompt-workspace')).json()).translation.values.tone
       )
       .toBe('직접 수정');
+    for (const width of [1440, MOBILE_WIDTH]) {
+      await page.setViewportSize({ width, height: 900 });
+      const openCombination = async () => {
+        await editor.getByLabel('옵션 조합 메뉴', { exact: true }).click();
+        await editor
+          .getByRole('button', { name: '현재 선택을 새 조합으로 저장', exact: true })
+          .click();
+      };
+      await openCombination();
+      const combo = page.getByRole('dialog', { name: '옵션 조합 저장', exact: true });
+      await combo.getByLabel('조합 이름', { exact: true }).fill('취소할 조합');
+      await combo.getByRole('button', { name: '취소', exact: true }).click();
+      await expect(combo).toBeHidden();
+      await openCombination();
+      const title = `PWS 조합 ${width} ${crypto.randomUUID()}`;
+      await combo.getByLabel('조합 이름', { exact: true }).fill(title);
+      const save = combo.getByRole('button', { name: '저장', exact: true });
+      await expect(save).toHaveClass(/primary/);
+      expect((await save.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await page.screenshot({ path: info.outputPath(`prompt-combination-save-${width}.png`) });
+      await save.click();
+      await expect(combo).toBeHidden();
+      await expect(editor.getByLabel('옵션 조합', { exact: true }).locator('option')).toContainText(
+        [title]
+      );
+    }
     const modified = await request.put(`/api/prompt-presets/${preset.id}`, {
       data: {
         expectedRevision: preset.revision,

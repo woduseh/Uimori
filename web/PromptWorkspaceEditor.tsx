@@ -410,6 +410,7 @@ export function PromptWorkspaceEditor({
             </button>
             <button
               type="button"
+              className="primary"
               disabled={!comboName.trim() || savingCombo}
               onClick={async () => {
                 setSavingCombo(true);

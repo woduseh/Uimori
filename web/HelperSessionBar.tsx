@@ -9,6 +9,7 @@ import { CheckIcon, CloseIcon, DeleteIcon, EditIcon, StopIcon } from './ui-icons
 import { forgetHelperSession, type HelperSession } from './useHelperSessions.js';
 import type { HelperTaskView } from './useHelperConversation.js';
 import { deleteHelperSessionRecovery } from './helper-recovery.js';
+import './deletion.css';
 
 type Props = {
   sessions: HelperSession[];
@@ -220,6 +221,8 @@ export function HelperSessionBar(props: Props) {
       <Dialog
         open={!!deleting}
         title="도우미 세션 삭제"
+        role="alertdialog"
+        className="delete-dialog"
         onClose={() => {
           if (!working) setDeleting(null);
         }}
@@ -258,7 +261,7 @@ export function HelperSessionBar(props: Props) {
           )}
           <button
             type="button"
-            className="danger"
+            className="delete-button"
             disabled={working || !impact?.canDelete}
             onClick={() => {
               if (!deleting || !impact || working) return;

@@ -355,7 +355,10 @@ export function LibraryFolders({
               <CloseIcon size={18} aria-hidden="true" />
               취소
             </button>
-            <button disabled={busy || !title.trim() || edit?.revision !== organization?.revision}>
+            <button
+              className="primary"
+              disabled={busy || !title.trim() || edit?.revision !== organization?.revision}
+            >
               <CheckIcon size={18} aria-hidden="true" />
               {edit?.folder ? '이름 저장' : '폴더 만들기'}
             </button>

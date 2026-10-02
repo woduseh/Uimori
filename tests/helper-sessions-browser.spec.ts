@@ -69,12 +69,33 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
       });
     }
   if (!visualReview) await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
-  await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
-  await panel.getByRole('button', { name: '세션 삭제', exact: true }).click();
-  const deletion = page.getByRole('dialog', { name: '도우미 세션 삭제', exact: true });
-  await expect(deletion).toContainText('이미 저장한 본편');
-  await deletion.getByRole('button', { name: '계속 사용', exact: true }).click();
-  await expect(input).toHaveValue('두 번째 세션 초안');
+  const deletion = page.getByRole('alertdialog', { name: '도우미 세션 삭제', exact: true });
+  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const dismissal of ['continue', 'Escape', 'backdrop'] as const) {
+      await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
+      await panel.getByRole('button', { name: '세션 삭제', exact: true }).click();
+      await expect(deletion).toContainText('이미 저장한 본편');
+      const cancel = deletion.getByRole('button', { name: '계속 사용', exact: true });
+      const remove = deletion.getByRole('button', { name: '세션 영구 삭제', exact: true });
+      await expect(remove).toBeEnabled();
+      const cancelBox = (await cancel.boundingBox())!;
+      const removeBox = (await remove.boundingBox())!;
+      expect(cancelBox.height).toBeGreaterThanOrEqual(44);
+      expect(removeBox.height).toBeGreaterThanOrEqual(44);
+      expect(removeBox.x).toBeGreaterThan(cancelBox.x);
+      expect(await remove.evaluate((node) => getComputedStyle(node).marginRight)).toBe('0px');
+      await expect(remove).toHaveClass(/delete-button/);
+      if (dismissal === 'continue') {
+        await page.screenshot({ path: info.outputPath(`helper-delete-${width}.png`) });
+        await cancel.click();
+      } else if (dismissal === 'Escape') await page.keyboard.press('Escape');
+      else await page.mouse.click(8, 8);
+      await expect(deletion).toBeHidden();
+      await expect(input).toHaveValue('두 번째 세션 초안');
+      expect((await request.get(`/api/helper/conversations/${second}`)).ok()).toBe(true);
+    }
+  }
   await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
   await panel.getByRole('button', { name: '세션 삭제', exact: true }).click();
   await deletion.getByRole('button', { name: '세션 영구 삭제', exact: true }).click();

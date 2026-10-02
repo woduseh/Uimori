@@ -5,6 +5,8 @@ import type { BackupSettings as Settings, BackupStatus } from '../core/backups.j
 import { api } from './api.js';
 import { Switch } from './BooleanControls.js';
 import { SaveButton } from './SaveButton.js';
+import { Dialog } from './Dialog.js';
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 
 const date = (value: string) =>
   new Date(value).toLocaleString('ko-KR', {
@@ -21,6 +23,14 @@ export function BackupSettings({ onDirtyChange }: { onDirtyChange?: (dirty: bool
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
+  const [confirmReload, setConfirmReload] = useState(false);
+  function reloadSettings() {
+    setConfirmReload(false);
+    setError('');
+    setDraft(null);
+    setDirty(false);
+    setReload((value) => value + 1);
+  }
   useEffect(() => {
     onDirtyChange?.(dirty || busy);
   }, [dirty, busy, onDirtyChange]);
@@ -249,18 +259,30 @@ export function BackupSettings({ onDirtyChange }: { onDirtyChange?: (dirty: bool
             type="button"
             disabled={busy}
             onClick={() => {
-              if (dirty && !window.confirm('작성 중인 백업 설정을 버리고 최신 설정을 불러올까요?'))
-                return;
-              setError('');
-              setDraft(null);
-              setDirty(false);
-              setReload((value) => value + 1);
+              if (dirty) setConfirmReload(true);
+              else reloadSettings();
             }}
           >
             <RefreshCw size={16} aria-hidden="true" /> 다시 확인
           </button>
         </div>
       )}
+      <Dialog
+        open={confirmReload}
+        title="백업 설정 변경 버리기"
+        variant="confirmation"
+        role="alertdialog"
+        onClose={() => setConfirmReload(false)}
+      >
+        <p>작성 중인 백업 설정을 버리고 최신 설정을 불러올까요?</p>
+        <DraftDiscardActions
+          open={confirmReload}
+          disabled={busy}
+          onContinue={() => setConfirmReload(false)}
+          onDiscard={reloadSettings}
+          discardLabel="초안 버리고 불러오기"
+        />
+      </Dialog>
     </section>
   );
 }
