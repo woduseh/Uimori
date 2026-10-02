@@ -824,15 +824,6 @@ export function ProviderModelFields({
                 />
                 제출 원고의 정확한 문자열 교정 허용
               </label>
-              <label className="check">
-                <Switch
-                  checked={evaluation.outputRecovery}
-                  onChange={(event) =>
-                    setEvaluation({ ...evaluation, outputRecovery: event.target.checked })
-                  }
-                />
-                명확한 거절 제출은 한 번 재요청
-              </label>
             </>
           )}
           <small className="full">

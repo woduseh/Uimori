@@ -457,7 +457,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       approvalReasoningMode: 'configured',
       maximumToolRounds: 8,
       terminalLateCorrections: false,
-      outputRecovery: true,
     };
     expect(storySubmissionEnabled(evaluated)).toBe(false);
     expect(
@@ -646,6 +645,96 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
 });
 
 describe('Batch recovery in the real main tool loop', () => {
+  test.each(['exact', 'tampered'] as const)(
+    'replays only the durable retired refusal receipt of a submitted Batch: %s',
+    async (receipt) => {
+      const work = await snapshot('https://api.anthropic.com/v1');
+      const target = work.profile!.models.main!;
+      target.connection.protocol = 'anthropic-messages-v1';
+      target.modelId = 'claude-opus-5';
+      target.executionMode = 'batch';
+      target.evaluationTools = defaultEvaluationToolOptions();
+      const log = hooks('');
+      log.value.evaluationRunId = 'retired-refusal-run';
+      log.value.replayToolEvents = [
+        {
+          callId: 'old-submit',
+          name: 'eval_submit_artifact',
+          args: {},
+          denied: false,
+          result: {
+            error: {
+              code: 'OUTPUT_VALIDATION_FAILED',
+              requiredAction: receipt === 'exact' ? 'submit-completed-artifact' : 'tampered',
+            },
+          },
+        },
+      ];
+      let calls = 0;
+      log.value.executeAnthropicBatch = async (_connection, request, options) => {
+        calls++;
+        if (calls === 2)
+          expect(JSON.stringify(request.input.results)).toContain('OUTPUT_VALIDATION_FAILED');
+        await options.onWire?.({
+          connectionId: 'connection',
+          protocol: 'anthropic-messages-v1',
+          role: 'main',
+          modelId: 'claude-opus-5',
+          method: 'POST',
+          url: 'https://api.anthropic.com/v1/messages/batches',
+          headers: {},
+          body: {},
+          bodySha256: `body-${calls}`,
+          stablePrefixSha256: 'stable',
+          executionMode: 'batch',
+        });
+        return {
+          status: 'tool_calls',
+          text: '',
+          refusal: null,
+          error: null,
+          opaqueState: null,
+          toolCalls: [
+            {
+              id: calls === 1 ? 'old-submit' : 'continued-submit',
+              name: 'eval_submit_artifact',
+              arguments: {
+                content:
+                  calls === 1
+                    ? "I'm sorry, but I cannot assist with that request."
+                    : 'Previously requested Batch continuation.',
+                userFacingNotice: 'notice',
+              },
+            },
+          ],
+          usage: {
+            inputTokens: 10,
+            outputTokens: 2,
+            costUsd: null,
+            raw: null,
+            priceRevision: null,
+          },
+        };
+      };
+      const result = await runMain(work, log.value);
+      if (receipt === 'exact') {
+        expect(result).toMatchObject({
+          status: 'completed',
+          text: 'Previously requested Batch continuation.',
+          usage: { modelCalls: 2 },
+        });
+        expect(log.events.map((event) => event.callId)).toEqual(['continued-submit']);
+      } else {
+        expect(result).toMatchObject({
+          status: 'error',
+          error: 'BATCH_RECOVERY_TOOL_MISMATCH',
+          usage: { modelCalls: 1 },
+        });
+        expect(log.events).toEqual([]);
+      }
+    }
+  );
+
   test('source-bound submission keeps the original request and replays its durable receipt', async () => {
     const work = await snapshot('https://api.anthropic.com/v1');
     const target = work.profile!.models.main!;

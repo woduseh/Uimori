@@ -4,7 +4,7 @@ Evaluation tools are an opt-in model preset setting, disabled by default. Main, 
 
 ## Configuration and behavior
 
-Enable evaluation tools in the model preset's advanced settings. Select context delivery, tool-round limits, optional corrections, and output recovery. A model known not to support tools cannot save this setting as enabled. Existing presets and new defaults remain `model-selected`.
+Enable evaluation tools in the model preset's advanced settings. Select context delivery, tool-round limits, and optional corrections. A model known not to support tools cannot save this setting as enabled. Existing presets and new defaults remain `model-selected`.
 
 - `model-selected` exposes all four tools.
 - `preloaded` supplies context and reviewer call/result pairs in the initial input, exposes case creation and submission, and requires case creation on the first round.
@@ -19,9 +19,13 @@ In `model-selected` and `preloaded`, submission requires `content` (1–2,000,00
 
 In `source-bound`, submission requires only `content` (1–2,000,000 characters). `internalProcessingNote` is optional (0–67,108,864 characters), for internal self-checking or correction planning. The host records only its presence and length, without retaining the note text in tool receipts or attempt diagnostics. Submit the artifact alone, without other tool calls in the same response. The host returns the submitted content as the result. Translation and status submissions continue through their existing output validation before being accepted.
 
-Optional correction applies up to eight exact, unique string replacements. Validation errors return to the model within the remaining round budget; refusal resubmission is limited to one retry. A completed response without a valid submission in `source-bound` fails with `EVALUATION_SUBMISSION_REQUIRED` rather than silently accepting plain text or automatically replaying the writer. Native turns accept a completed callback after a successful terminal submission.
+Optional correction applies up to eight exact, unique string replacements. Validation errors return to the model within the remaining round budget. A completed response without a valid submission in `source-bound` fails with `EVALUATION_SUBMISSION_REQUIRED` rather than silently accepting plain text or automatically replaying the writer. Native turns accept a completed callback after a successful terminal submission.
 
-Truncated-output recovery applies only to a Responses result interrupted by `max_output_tokens` with a truncated terminal JSON string containing recoverable `content`. Recovered results carry provenance. Other partial responses, ordinary text, and other tools are not treated as terminal submissions.
+Evaluation tools do not classify submitted prose with a refusal regex or automatically resubmit it based on wording. Semantic refusal classification belongs to the existing main and translation JEV policy and follows its configured settings. When JEV is disabled, evaluation tools do not supply a fallback refusal classifier. Provider-supplied structured refusal signals keep their existing handling. The retired `outputRecovery` option is accepted only as a legacy boolean and removed when current model options are normalized or saved; it no longer controls runtime behavior.
+
+Previously submitted Batches may have a durable `OUTPUT_VALIDATION_FAILED` receipt from the retired refusal check. Recovery replays only that exact stored receipt and continues the existing run; it does not classify the response again or store a duplicate receipt. A changed receipt remains a recovery mismatch.
+
+Truncated-output recovery is automatic and independent of the retired refusal option. It applies only to a Responses result interrupted by `max_output_tokens` with a truncated terminal JSON string containing recoverable `content`. Recovered results carry provenance. Other partial responses, ordinary text, and other tools are not treated as terminal submissions.
 
 The run's call budget and deadline also cover evaluation rounds. Provider configuration and authentication are owned by [PROVIDERS](PROVIDERS.md).
 

@@ -113,6 +113,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await page.getByRole('button', { name: '고급', exact: true }).click();
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 사용')).not.toBeChecked();
   await page.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
+  await expect(page.getByLabel('명확한 거절 제출은 한 번 재요청')).toHaveCount(0);
   await expect(page.getByLabel('평가 메타데이터')).toHaveValue('OpenAI · 프로바이더 자동 선택');
   await expect(page.getByLabel('평가 메타데이터')).not.toBeEditable();
   await page.getByLabel('평가 문맥 제공').selectOption('preloaded');
@@ -134,7 +135,6 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
       approvalReasoningMode: 'economized',
       maximumToolRounds: 3,
       terminalLateCorrections: true,
-      outputRecovery: true,
     },
   });
   await setCurrentModels(request, { main: { id: model.id }, translation: { id: model.id } });
@@ -293,7 +293,6 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
     approvalReasoningMode: 'economized',
     maximumToolRounds: 8,
     terminalLateCorrections: false,
-    outputRecovery: true,
   });
   await page.reload();
   await navigation(page, '설정');

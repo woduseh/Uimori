@@ -10,6 +10,7 @@ import {
   validateEvaluationToolOptions,
 } from '../core/evaluation-tool-config.js';
 import type { Connection, ModelPreset } from '../core/product.js';
+import { modelDraft, modelPayload } from '../web/provider-model-draft.js';
 
 const owned: { directory: string; store: Store }[] = [];
 const database = () => {
@@ -60,7 +61,6 @@ test('tool options are explicit and independently validated', () => {
     approvalReasoningMode: 'configured',
     maximumToolRounds: 8,
     terminalLateCorrections: false,
-    outputRecovery: true,
   });
   expect(validateEvaluationToolOptions(defaults)).toEqual(defaults);
   expect(validateEvaluationToolOptions({ ...defaults, contextMode: 'source-bound' })).toMatchObject(
@@ -77,15 +77,30 @@ test('tool options are explicit and independently validated', () => {
     { ...defaults, contextMode: 'unknown' },
     { ...defaults, metadataProfile: 'unknown' },
     { ...defaults, outputRecovery: undefined },
+    { ...defaults, outputRecovery: 'true' },
     { ...defaults, serviceTier: 'flex' },
     { ...defaults, extra: true },
   ])
     expect(() => validateEvaluationToolOptions(invalid)).toThrow('INVALID_EVALUATION_TOOL_OPTIONS');
-  expect(
-    validateEvaluationToolOptions({ ...defaults, maximumToolRounds: 0, outputRecovery: false })
-  ).toMatchObject({ maximumToolRounds: 0, outputRecovery: false });
+  for (const outputRecovery of [true, false])
+    expect(
+      validateEvaluationToolOptions({ ...defaults, maximumToolRounds: 0, outputRecovery })
+    ).toEqual({ ...defaults, maximumToolRounds: 0 });
   const { metadataProfile: _metadataProfile, ...legacy } = defaults;
   expect(validateEvaluationToolOptions(legacy)).toEqual(legacy);
+  expect(validateEvaluationToolOptions({ ...legacy, outputRecovery: true })).toEqual(legacy);
+});
+
+test('editing a legacy preset drops retired refusal controls without rewriting the original', () => {
+  const store = database(),
+    c = connection(store),
+    model = store.product.model(modelBody(c)) as ModelPreset;
+  const { metadataProfile: _metadataProfile, ...legacy } = defaultEvaluationToolOptions();
+  const saved = { ...model, evaluationTools: { ...legacy, outputRecovery: true } };
+  const draft = modelDraft(saved);
+  expect(draft.evaluationTools).not.toHaveProperty('outputRecovery');
+  expect(modelPayload(draft, c).evaluationTools).toEqual({ ...legacy, metadataProfile: 'neutral' });
+  expect(saved.evaluationTools).toEqual({ ...legacy, outputRecovery: true });
 });
 
 test('fresh snapshots opt legacy presets into metadata selection without rewriting saved settings', () => {

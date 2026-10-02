@@ -30,7 +30,6 @@ export type EvaluationToolOptions = {
   approvalReasoningMode: 'configured' | 'economized';
   maximumToolRounds: number;
   terminalLateCorrections: boolean;
-  outputRecovery: boolean;
   metadataProfile?: EvaluationMetadataProfile;
 };
 
@@ -40,7 +39,6 @@ export function defaultEvaluationToolOptions(): EvaluationToolOptions {
     approvalReasoningMode: 'configured',
     maximumToolRounds: 8,
     terminalLateCorrections: false,
-    outputRecovery: true,
     metadataProfile: 'neutral',
   };
 }
@@ -85,7 +83,7 @@ export function validateEvaluationToolOptions(value: unknown): EvaluationToolOpt
     throw new Error('INVALID_EVALUATION_TOOL_OPTIONS');
   if (
     typeof input.terminalLateCorrections !== 'boolean' ||
-    typeof input.outputRecovery !== 'boolean'
+    (Object.hasOwn(input, 'outputRecovery') && typeof input.outputRecovery !== 'boolean')
   )
     throw new Error('INVALID_EVALUATION_TOOL_OPTIONS');
   return {
@@ -94,7 +92,6 @@ export function validateEvaluationToolOptions(value: unknown): EvaluationToolOpt
       input.approvalReasoningMode as EvaluationToolOptions['approvalReasoningMode'],
     maximumToolRounds: Number(input.maximumToolRounds),
     terminalLateCorrections: input.terminalLateCorrections,
-    outputRecovery: input.outputRecovery,
     ...(Object.hasOwn(input, 'metadataProfile')
       ? { metadataProfile: input.metadataProfile as EvaluationMetadataProfile }
       : {}),
