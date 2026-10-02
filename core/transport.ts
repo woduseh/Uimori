@@ -138,7 +138,12 @@ export type WireRecord = {
   nativeScript?: { method: 'LLM' | 'axLLM' | 'simpleLLM'; event: string };
   /** Host-only typed judgment attribution; this is not a generative provider protocol. */
   judgment?: {
-    kind: 'lore-selection' | 'translation-refusal' | 'image-selection' | 'main-refusal';
+    kind:
+      | 'lore-selection'
+      | 'translation-refusal'
+      | 'image-selection'
+      | 'main-refusal'
+      | 'illustration-content';
     inputHash: string;
   };
   pricingSnapshot?: PricingSnapshot;

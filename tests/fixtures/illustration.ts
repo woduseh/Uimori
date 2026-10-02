@@ -113,7 +113,12 @@ export function fixtureIllustrationPreset(
   const preset = saveResource(store, {
     kind: 'illustration-preset',
     id: null,
-    model: { ...base, ...overrides, comfyui: { ...base.comfyui, ...overrides.comfyui } },
+    model: {
+      ...base,
+      generator: overrides.comfyui?.workflow?.trim() ? 'comfyui' : 'codex',
+      ...overrides,
+      comfyui: { ...base.comfyui, ...overrides.comfyui },
+    },
   }).saved as IllustrationPreset;
   selectIllustrationPreset(store, {
     scope: 'global',

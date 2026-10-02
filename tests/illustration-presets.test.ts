@@ -91,7 +91,7 @@ test('portable recipes validate the workflow and preserve text, not local IDs or
       },
     })
   ).toEqual(definition);
-  for (const invalid of [null, [], { ...file, version: 2 }, { ...file, format: 'uimori-theme' }])
+  for (const invalid of [null, [], { ...file, version: 3 }, { ...file, format: 'uimori-theme' }])
     expect(() => parseIllustrationPresetFile(invalid)).toThrow();
   expect(() => validateIllustrationPreset({ ...definition, title: ' ' })).toThrow();
   expect(() =>
@@ -273,7 +273,15 @@ test('ComfyUI freezes the selected workflow with the global environment, and aut
       authorizationEnv: 'TEST_TOKEN',
     },
   });
-  const local = save(store, 'Chat override', 'watercolor');
+  const local = saveResource(store, {
+    kind: 'illustration-preset',
+    id: null,
+    model: {
+      ...emptyIllustrationPreset('Chat override'),
+      generator: 'comfyui',
+      styleGuidance: 'watercolor',
+    },
+  }).saved as IllustrationPreset;
   choose(store, local.id, 'chat', chat.id);
   const second = completedSource(store, chat.id, 'A different scene.');
   // The source commit already reserved automatically; it must fail visibly rather than silently reuse another workflow.
@@ -313,7 +321,7 @@ test('helper resource tools can author and discover recipes without selecting th
   }) as { id: string; revision: number };
   expect(invokeResourceTool(store, 'illustration-preset.list', {})).toMatchObject({
     presets: expect.arrayContaining([
-      { id: saved.id, revision: 1, title: 'Helper recipe', description: '' },
+      { id: saved.id, revision: 1, title: 'Helper recipe', description: '', generator: 'codex' },
     ]),
   });
   expect(invokeResourceTool(store, 'illustration-preset.guide', {})).toHaveProperty('example');
@@ -381,4 +389,87 @@ test('HTTP catalogue, resource save, selection, export and deletion honor separa
   expect((await app.inject('/api/illustration-presets')).json()).toMatchObject({
     preferences: { defaultPresetId: DEFAULT_ILLUSTRATION_PRESET_ID },
   });
+});
+
+test('legacy recipes infer their generator without rewriting stored versions and v2 keeps the explicit choice', () => {
+  const store = databases.create();
+  for (const workflow of ['', FIXTURE_WORKFLOW]) {
+    const { generator: _generator, ...legacy } = {
+      ...emptyIllustrationPreset('Legacy'),
+      comfyui: { workflow, negativeGuidance: '' },
+    };
+    const saved = store.product.save('illustration-preset', legacy) as IllustrationPreset;
+    const raw = store.product.get('illustration-preset', saved.id);
+    const expected = workflow ? 'comfyui' : 'codex';
+    expect(readIllustrationPreset(store, saved.id).generator).toBe(expected);
+    expect(
+      parseIllustrationPresetFile({
+        format: 'uimori-illustration-preset',
+        version: 1,
+        preset: legacy,
+      }).generator
+    ).toBe(expected);
+    expect(store.product.get('illustration-preset', saved.id)).toEqual(raw);
+    expect(raw).not.toHaveProperty('generator');
+    const file = illustrationPresetFile({ ...legacy, generator: 'codex' });
+    expect(file.version).toBe(2);
+    expect(parseIllustrationPresetFile(file).generator).toBe('codex'); // workflow presence does not override v2
+    expect(() => parseIllustrationPresetFile({ ...file, preset: legacy })).toThrow('생성기');
+    expect(() =>
+      parseIllustrationPresetFile({ ...file, preset: { ...legacy, generator: 'unknown' } })
+    ).toThrow();
+  }
+});
+
+test('preset selection chooses its shared environment without changing global settings or already queued jobs', () => {
+  const store = databases.create();
+  const { chat, source } = chatWithSource(store);
+  const connection = store.product.connection({
+    title: 'Codex',
+    protocol: 'codex-app-server-v1',
+    endpoint: 'codex://local',
+    enabled: true,
+  });
+  const model = store.product.model({
+    title: 'Synthetic',
+    connectionId: connection.id,
+    modelId: 'synthetic',
+    maxOutputTokens: 1024,
+    temperature: null,
+  });
+  const before = illustrationSettings(store);
+  const { revision, ...body } = before;
+  updateIllustrationSettings(store, {
+    ...body,
+    expectedRevision: revision,
+    codex: { ...body.codex, model: { id: model.id } },
+    comfyui: {
+      ...body.comfyui,
+      baseUrl: 'http://example.invalid:8188',
+      promptModel: { id: model.id },
+    },
+  });
+  const environment = illustrationSettings(store);
+  const codex = fixtureIllustrationPreset(store, { generator: 'codex' });
+  const original = reserveIllustration(store, source, 'manual');
+  expect(original.input.generator).toBe('codex');
+  const comfy = fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
+  const nextSource = completedSource(store, chat.id, 'Another scene.');
+  const next = reserveIllustration(store, nextSource, 'manual');
+  expect(next.input).toMatchObject({
+    generator: 'comfyui',
+    comfyui: { baseUrl: environment.comfyui.baseUrl, workflow: FIXTURE_WORKFLOW },
+  });
+  expect(illustrationSettings(store)).toEqual(environment);
+  cancelIllustration(store, original.id);
+  retryIllustration(store, original.id);
+  expect(illustrationJob(store, original.id).input).toEqual(original.input);
+  expect(original.input.preset?.id).toBe(codex.id);
+  expect(next.input.preset?.id).toBe(comfy.id);
+  // An old disabled environment remains disabled for automatic work, but cannot choose a backend.
+  store.db
+    .prepare('UPDATE illustration_settings SET body=? WHERE id=1')
+    .run(JSON.stringify({ ...environment, generator: 'none', automatic: true }));
+  expect(illustrationSettings(store).automatic).toBe(false);
+  expect(illustrationSettings(store)).not.toHaveProperty('generator');
 });

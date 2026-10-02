@@ -51,6 +51,7 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
   await editor
     .getByLabel('삽화 그림 지침', { exact: true })
     .fill('watercolor, soft light, textured paper');
+  await editor.getByLabel('프리셋 삽화 생성기', { exact: true }).selectOption('comfyui');
   const comfySettings = editor.locator('summary').filter({ hasText: 'ComfyUI 설정' });
   await expect(editor.getByLabel('ComfyUI 워크플로 JSON', { exact: true })).toBeHidden();
   await expect(comfySettings).toContainText('워크플로 없음');
@@ -68,6 +69,9 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
   await section.getByLabel('삽화 프리셋 적용 범위').selectOption('bot');
   await section.getByRole('button', { name: `${title} 삽화 프리셋 적용`, exact: true }).click();
   await expect(section.locator('.illustration-preset-current')).toContainText(title);
+  await expect(section.locator('.illustration-preset-current')).toContainText('ComfyUI');
+  await expect(page.getByLabel('ComfyUI 주소', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Codex 삽화 모델', { exact: true })).toBeHidden();
   expect((await catalog(request)).preferences.botPresets[chat.botId!]).toBe(original.id);
   await section.getByLabel('삽화 프리셋 적용 범위').selectOption('chat');
   await section.getByRole('button', { name: '기본 삽화 프리셋 적용', exact: true }).click();
@@ -97,6 +101,8 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
   expect(download.suggestedFilename()).toBe(`${title}.uimori-illustration.json`);
   const bytes = await readFile((await download.path())!);
   const file = JSON.parse(bytes.toString());
+  expect(file.version).toBe(2);
+  expect(file.preset.generator).toBe('comfyui');
   expect(file.preset.comfyui.workflow).toBe(FIXTURE_WORKFLOW);
   expect(file.preset).not.toHaveProperty('id');
   expect(file.preset).not.toHaveProperty('codex');
@@ -202,6 +208,7 @@ test('IPUI03 invalid recipes never save and the close guard preserves failed dra
   await section.getByRole('button', { name: '새 삽화 프리셋', exact: true }).click();
   const title = `저장 검증 ${Date.now().toString(36).slice(-5)}`;
   await editor.getByLabel('삽화 프리셋 이름').fill(title);
+  await editor.getByLabel('프리셋 삽화 생성기', { exact: true }).selectOption('comfyui');
   const comfySettings = editor.locator('summary').filter({ hasText: 'ComfyUI 설정' });
   await comfySettings.click();
   await editor.getByLabel('ComfyUI 워크플로 JSON').fill('{"nodes":[]}');

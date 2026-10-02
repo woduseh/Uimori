@@ -593,6 +593,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             attempt = queued.attempt;
             const outcome = await runIllustrationJob(store, id, instanceId, {
               signal,
+              resolveJevCredential: jevCredentials.resolve,
 
               resolveCredential,
               resolveComfyCredential: (name) => process.env[name],

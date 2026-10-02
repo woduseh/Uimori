@@ -641,3 +641,25 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     });
   });
 });
+
+it('illustration text requests disable native search and code in both the descriptor and actual thread config', async () => {
+  const { runtime, records } = setup();
+  const wires: WireRecord[] = [];
+  const result = await runtime.execute(
+    connection,
+    { ...request(), role: 'illustration' },
+    {
+      signal: new AbortController().signal,
+      onWire: (wire) => {
+        wires.push(wire);
+      },
+    }
+  );
+  expect(result.status).toBe('completed');
+  expect(wires[0].body).toMatchObject({ builtinTools: { codeMode: false, webSearch: 'disabled' } });
+  expect(records().find((row) => row.method === 'thread/start').params.config).toMatchObject({
+    web_search: 'disabled',
+    'features.code_mode': false,
+    'features.image_generation': false,
+  });
+});

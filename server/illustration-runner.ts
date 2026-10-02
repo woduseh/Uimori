@@ -1,3 +1,5 @@
+import { checkCodexIllustrationContent } from './illustration-content-check.js';
+import type { JevHooks } from './jev-judgment.js';
 import { splitSource } from '../core/auxiliary.js';
 import { imageTargetSource } from './package-images.js';
 import {
@@ -11,7 +13,7 @@ import {
 import { completeIllustrationStoryboard, completeIllustrationPlacement } from './illustrations.js';
 import type { ProviderRequest } from '../core/transport.js';
 import { createHash } from 'node:crypto';
-import { processImage } from './image-processing.js';
+import { processImage, resizeIllustrationReference } from './image-processing.js';
 import { readRunSnapshot } from './run-projections.js';
 import {
   executeProvider,
@@ -64,6 +66,7 @@ import type { Source, Store } from './store.js';
 type MaybePromise<T> = T | Promise<T>;
 export type IllustrationRunnerHooks = {
   signal: AbortSignal;
+  resolveJevCredential?: JevHooks['credential'];
 
   resolveCredential?: Parameters<typeof executeProvider>[2]['resolveCredential'];
   resolveComfyCredential?: ComfyUIRequestOptions['resolveCredential'];
@@ -197,6 +200,7 @@ export async function runIllustrationJob(
     stage: 'preparation',
     attempts: [...(job.diagnostic?.attempts ?? [])],
     retries: [...(job.diagnostic?.retries ?? [])],
+    contentCheck: job.diagnostic?.contentCheck,
     prompt: job.diagnostic?.prompt,
     promptRequestHash: job.diagnostic?.promptRequestHash,
   };
@@ -206,6 +210,12 @@ export async function runIllustrationJob(
     await hooks.onProgress?.();
   };
   await hooks.onProgress?.();
+  const recordAttempt = async (wire: WireRecord) => {
+    const id = await hooks.onAttemptStart(wire);
+    diagnostic.attempts.push(id);
+    updateIllustrationDiagnostic(store, jobId, generation, owner, diagnostic);
+    return id;
+  };
   const attempt = async <T extends { usage: ProviderResult['usage'] }>(
     run: (onWire: (wire: WireRecord) => Promise<void>) => Promise<T>,
     toResult: (value: T) => ProviderResult
@@ -214,9 +224,7 @@ export async function runIllustrationJob(
     let value: T;
     try {
       value = await run(async (wire) => {
-        attemptId = await hooks.onAttemptStart(wire);
-        diagnostic.attempts.push(attemptId);
-        updateIllustrationDiagnostic(store, jobId, generation, owner, diagnostic);
+        attemptId = await recordAttempt(wire);
       });
     } catch (error) {
       if (attemptId !== undefined)
@@ -398,11 +406,35 @@ export async function runIllustrationJob(
                 role: reference.role,
                 label: reference.title,
                 mime: loaded.mime,
-                base64: loaded.bytes.toString('base64'),
+                bytes: loaded.bytes,
               },
             ]
           : [];
       });
+      const imageText = codexIllustrationText(context, references);
+      diagnostic.stage = 'content-check';
+      await progress();
+      diagnostic.contentCheck = await checkCodexIllustrationContent(
+        imageText,
+        {
+          signal: hooks.signal,
+          credential: hooks.resolveJevCredential,
+          onAttemptStart: recordAttempt,
+          onAttemptFinish: hooks.onAttemptFinish,
+        },
+        diagnostic.contentCheck
+      );
+      await progress();
+      hooks.signal.throwIfAborted();
+      if (diagnostic.contentCheck.status === 'blocked')
+        throw new IllustrationError('ILLUSTRATION_CODEX_CONTENT_BLOCKED');
+      const imageReferences: { mime: string; base64: string }[] = [];
+      for (const reference of references) {
+        hooks.signal.throwIfAborted();
+        const prepared = await resizeIllustrationReference(reference.bytes, reference.mime);
+        imageReferences.push({ mime: prepared.mime, base64: prepared.bytes.toString('base64') });
+      }
+      hooks.signal.throwIfAborted();
       diagnostic.stage = 'generate';
       await progress();
       const result = await attempt(
@@ -414,9 +446,9 @@ export async function runIllustrationJob(
               contextBudget: contextBudgetForModel(model),
               reasoningEffort: model.reasoningEffort,
               developerInstructions: CODEX_ILLUSTRATION_INSTRUCTIONS,
-              text: codexIllustrationText(context, references),
+              text: imageText,
               outputSchema: CODEX_ILLUSTRATION_OUTPUT_SCHEMA,
-              references: references.map(({ mime, base64 }) => ({ mime, base64 })),
+              references: imageReferences,
             },
             { signal: hooks.signal, timeoutMs: model.timeoutMs ?? 600_000, onWire }
           ),
