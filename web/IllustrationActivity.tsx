@@ -9,7 +9,7 @@ import './illustrations.css';
 export function IllustrationUsageLine({ usage }: { usage: Usage }) {
   return (
     <p className="illustration-usage">
-      모델 호출 {usage.modelCalls}회 · 입력 {usage.inputTokens?.toLocaleString() ?? '미확인'} / 출력{' '}
+      모델 요청 {usage.modelCalls}회 · 입력 {usage.inputTokens?.toLocaleString() ?? '미확인'} / 출력{' '}
       {usage.outputTokens?.toLocaleString() ?? '미확인'} 토큰
     </p>
   );
@@ -127,9 +127,10 @@ export function IllustrationActivity({
               ))}
             </dl>
             <small>
-              이 원문의 삽화 작업 누적값이에요. 다시 그리기·위치 재연결을 포함하고, 공급자가
-              보고하지 않은 토큰은 미확인으로 표시해요. ComfyUI 그림 생성 자체는 이 모델 토큰에
-              포함되지 않아요.
+              이 원문의 삽화 작업 누적값이에요. 다시 그리기·위치 재연결을 포함하고, 공급자가 JEV
+              사전 판정도 포함해요. 요청 수는 Uimori 기준이며 Codex 내부 모델 호출 수는
+              미확인이에요. 공급자가 보고하지 않은 토큰은 미확인으로 표시하고, ComfyUI의 실제 그림
+              생성은 모델 토큰에 포함하지 않아요.
             </small>
           </>
         )}

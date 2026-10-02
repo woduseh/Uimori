@@ -265,6 +265,16 @@ function TaskButtons({
           결과 확인
         </button>
       )}
+      {job.error === 'ILLUSTRATION_CODEX_CONTENT_BLOCKED' && job.target && (
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy}
+          onClick={() => void act(`/illustrations/${job.id}/regenerate`)}
+        >
+          현재 프리셋으로 다시 그리기
+        </button>
+      )}
       {illustrationRetryable(job) && (
         <button
           type="button"
@@ -500,13 +510,15 @@ function IllustrationCard({
             {active
               ? job.status === 'queued'
                 ? '그릴 차례를 기다리고 있어요.'
-                : job.diagnostic?.stage === 'prompt'
-                  ? '이 순간의 그림 설명을 준비하고 있어요.'
-                  : job.diagnostic?.stage === 'store'
-                    ? '완성된 그림을 저장하고 있어요.'
-                    : job.diagnostic?.stage === 'reconcile'
-                      ? '생성된 결과를 확인하고 있어요.'
-                      : '이 순간을 그리고 있어요.'
+                : job.diagnostic?.stage === 'content-check'
+                  ? 'JEV가 이미지 요청을 확인하고 있어요.'
+                  : job.diagnostic?.stage === 'prompt'
+                    ? '이 순간의 그림 설명을 준비하고 있어요.'
+                    : job.diagnostic?.stage === 'store'
+                      ? '완성된 그림을 저장하고 있어요.'
+                      : job.diagnostic?.stage === 'reconcile'
+                        ? '생성된 결과를 확인하고 있어요.'
+                        : '이 순간을 그리고 있어요.'
               : illustrationErrorMessage(job.error)}
             {picture && ' 기존 그림은 유지돼요.'}
             {!active && job.error && <small> · {job.error}</small>}
@@ -567,6 +579,17 @@ function IllustrationCard({
             {detail.preset && (
               <p>
                 프리셋 · {detail.preset.title} · 개정 {detail.preset.revision}
+              </p>
+            )}
+            {detail.diagnostic?.contentCheck && (
+              <p>
+                JEV 사전 판정 ·{' '}
+                {detail.diagnostic.contentCheck.status === 'blocked'
+                  ? '차단 · Codex 이미지 생성 요청 없음'
+                  : detail.diagnostic.contentCheck.status === 'allowed'
+                    ? '통과'
+                    : '미확인 · 공급자 판단에 맡겼어요.'}
+                {detail.diagnostic.contentCheck.code && ` (${detail.diagnostic.contentCheck.code})`}
               </p>
             )}
             {detail.diagnostic?.prompt && (

@@ -892,19 +892,17 @@ test('one ComfyUI planning call prepares distinct prompts for every cut without 
   const { provider, model } = await promptModel(store, (body) =>
     JSON.stringify({
       heroIndex: 1,
-      targets: body.input.source.blocks.map(
-        (block: { anchor: string; text: string }, index: number) => ({
-          startAnchor: block.anchor,
-          endAnchor: block.anchor,
-          focus: block.text,
-          visualBrief: block.text,
-          prompt: {
-            prompt: `distinct moment ${index}: ${block.text}`,
-            negativePrompt: 'text',
-            caption: `컷 ${index + 1}`,
-          },
-        })
-      ),
+      targets: body.input.source.blocks.map(([anchor, text]: [string, string], index: number) => ({
+        startAnchor: anchor,
+        endAnchor: anchor,
+        focus: text,
+        visualBrief: text,
+        prompt: {
+          prompt: `distinct moment ${index}: ${text}`,
+          negativePrompt: 'text',
+          caption: `컷 ${index + 1}`,
+        },
+      })),
     })
   );
   const comfy = await comfyUIFixture();
@@ -948,4 +946,121 @@ test('one ComfyUI planning call prepares distinct prompts for every cut without 
   expect(illustrationJob(store, cuts[0]).diagnostic?.prompt?.prompt).toContain(
     'distinct moment 1:'
   );
+});
+
+test.each(['blocked', 'allowed', 'missing-key', 'unavailable', 'cancelled'] as const)(
+  'Codex image dispatch respects the JEV %s outcome and records its real attempts',
+  async (mode) => {
+    const store = databases.create();
+    const { source, chat } = chatWithSource(store);
+    const model = codexModel(store);
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({
+        generator: 'codex',
+        maxAutoRetries: 5,
+        codex: { model: { id: model.id } },
+      }),
+    });
+    const controller = new AbortController();
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      if (mode === 'cancelled') controller.abort();
+      if (mode === 'unavailable') return new Response('synthetic unavailable', { status: 503 });
+      return Response.json({
+        model: 'jev-latest',
+        answers: {
+          explicitSexualContent: { type: 'noul', noul: mode === 'blocked' ? 0.95 : 0.1 },
+        },
+        usage: { input_tokens: 40, output_tokens: 1 },
+      });
+    });
+    const generate = vi.fn<NonNullable<IllustrationRunnerHooks['generateCodexImage']>>(
+      async () => ({
+        status: 'completed',
+        images: [{ mime: 'image/png', bytes: PNG }],
+        text: '{"caption":"등불"}',
+        revisedPrompt: null,
+        error: null,
+        usage: { inputTokens: 20, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
+      })
+    );
+    const result = await runIllustrationJob(store, job.id, 'worker', {
+      signal: controller.signal,
+      resolveJevCredential: () => (mode === 'missing-key' ? undefined : 'synthetic-test-key'),
+      authorize: (connection) => connection,
+      onAttemptStart: (wire) => store.product.startAttempt(chat.id, null, null, wire),
+      onAttemptFinish: (id, value) => store.product.finishAttempt(id, value),
+      generateCodexImage: generate,
+    });
+    const saved = illustrationJob(store, job.id);
+    if (mode === 'blocked') {
+      expect(result).toEqual({
+        status: 'failed',
+        code: 'ILLUSTRATION_CODEX_CONTENT_BLOCKED',
+        images: 0,
+      });
+      expect(saved.attempt).toBe(1);
+      expect(saved.diagnostic?.contentCheck).toMatchObject({ status: 'blocked', score: 0.95 });
+      expect(() => retryIllustration(store, job.id)).toThrow('ILLUSTRATION_CODEX_CONTENT_BLOCKED');
+      const recorded = store.db.prepare('SELECT role,input_tokens,request FROM attempts').all();
+      expect(recorded).toHaveLength(1);
+      expect(recorded[0]).toMatchObject({ role: 'illustration', input_tokens: 40 });
+      expect(JSON.parse(String(recorded[0].request)).judgment.kind).toBe('illustration-content');
+    } else if (mode === 'cancelled') {
+      expect(result?.status).toBe('cancelled');
+    } else {
+      expect(result?.status).toBe('completed');
+      expect(saved.diagnostic?.contentCheck?.status).toBe(
+        mode === 'allowed' ? 'allowed' : 'unavailable'
+      );
+    }
+    expect(generate).toHaveBeenCalledTimes(mode === 'blocked' || mode === 'cancelled' ? 0 : 1);
+    expect(fetch).toHaveBeenCalledTimes(mode === 'missing-key' ? 0 : 1);
+    expect(store.source(source.id).text).toBe(source.text);
+  }
+);
+
+test('a safe Codex retry reuses only its identical successful JEV check', async () => {
+  const store = databases.create();
+  const { source } = chatWithSource(store);
+  const model = codexModel(store);
+  const job = reserveIllustration(store, source, 'manual', {
+    settings: fixtureSettings({
+      generator: 'codex',
+      maxAutoRetries: 1,
+      codex: { model: { id: model.id } },
+    }),
+  });
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    Response.json({
+      model: 'jev-latest',
+      answers: { explicitSexualContent: { type: 'noul', noul: 0.1 } },
+      usage: { input_tokens: 20, output_tokens: 1 },
+    })
+  );
+  let renders = 0;
+  const observed = hooks(store, {
+    resolveJevCredential: () => 'synthetic',
+    generateCodexImage: async () => ({
+      status: ++renders === 1 ? 'error' : 'completed',
+      images: renders === 1 ? [] : [{ mime: 'image/png', bytes: PNG }],
+      error: renders === 1 ? { code: 'CODEX_IMAGE_NOT_GENERATED' } : null,
+      revisedPrompt: null,
+      text: '{"caption":"등불"}',
+      usage: {
+        inputTokens: null,
+        outputTokens: null,
+        costUsd: null,
+        raw: null,
+        priceRevision: null,
+      },
+    }),
+  });
+  expect((await runIllustrationJob(store, job.id, 'worker', observed.options))?.status).toBe(
+    'requeued'
+  );
+  expect((await runIllustrationJob(store, job.id, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(renders).toBe(2);
 });

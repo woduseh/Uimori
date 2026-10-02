@@ -174,11 +174,12 @@ export function invokeResourceTool(
     const catalog = illustrationPresetCatalog(store);
     return {
       ...catalog,
-      presets: catalog.presets.map(({ id, revision, title, description }) => ({
+      presets: catalog.presets.map(({ id, revision, title, description, generator }) => ({
         id,
         revision,
         title,
         description,
+        generator,
       })),
     };
   }
@@ -186,7 +187,7 @@ export function invokeResourceTool(
     return {
       example: emptyIllustrationPreset(),
       contract:
-        'Save with resource.save kind=illustration-preset. Required title, optional description and styleGuidance, comfyui: {workflow, negativeGuidance}. workflow is API-format JSON with {{prompt}}, {{negative}}, {{seed}} placeholders; an empty workflow is valid for Codex but cannot generate with ComfyUI. No provider IDs, credentials, automatic-generation policies or chat reference images belong here. Saving an in-use preset affects future reservations; existing jobs and retries keep frozen input. Saving a new preset does not select it. User selection priority: chat, bot, global. No image generation on save.',
+        'Save with resource.save kind=illustration-preset. Required title and generator (codex or comfyui), optional description and styleGuidance, comfyui: {workflow, negativeGuidance}. workflow is API-format JSON with {{prompt}}, {{negative}}, {{seed}} placeholders; an empty workflow is valid for Codex but cannot generate with ComfyUI. The selected recipe chooses the generator and uses its shared local environment. No provider IDs, credentials, automatic-generation policies or chat reference images belong here. Portable exports are v2; v1 infers comfyui when a workflow exists, otherwise codex. Saving an in-use preset affects future reservations; existing jobs and retries keep frozen input. Saving a new preset does not select it. User selection priority: chat, bot, global. No image generation on save.',
     };
   if (name === 'theme.list') return themeCatalog(store);
   if (name === 'theme.guide')

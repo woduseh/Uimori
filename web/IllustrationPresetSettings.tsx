@@ -26,6 +26,7 @@ import {
   type IllustrationPresetCatalog,
   type IllustrationPresetDefinition,
   type IllustrationPresetScope,
+  type IllustrationPresetGenerator,
 } from '../core/illustration-presets.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { api, ApiError, saveDownload } from './api.js';
@@ -45,10 +46,12 @@ export function IllustrationPresetSettings({
   scope,
   onDirtyChange,
   onSaveHandlerChange,
+  onGeneratorChange,
 }: {
   scope: IllustrationPresetScope;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
+  onGeneratorChange?: (generator: IllustrationPresetGenerator) => void;
 }) {
   const [catalog, setCatalog] = useState<IllustrationPresetCatalog | null>(null);
   const [target, setTarget] = useState<'global' | 'bot' | 'chat'>('global');
@@ -230,6 +233,9 @@ export function IllustrationPresetSettings({
       setNotice('가져왔어요. 내용을 확인한 뒤 저장해 주세요.');
     });
   }
+  useEffect(() => {
+    if (catalog) onGeneratorChange?.(resolveIllustrationPreset(catalog, scope).generator);
+  }, [catalog, scope, onGeneratorChange]);
   if (!catalog)
     return (
       <section aria-label="삽화 프리셋">
@@ -268,7 +274,7 @@ export function IllustrationPresetSettings({
       <div className="illustration-preset-heading">
         <div>
           <h3>삽화 프리셋</h3>
-          <p>스타일과 표현 방식, 생성에 쓸 워크플로를 관리해요.</p>
+          <p>생성기와 그림 지침을 함께 선택해요. 연결과 모델은 아래 공용 환경을 사용해요.</p>
         </div>
         <div className="illustration-preset-list-actions">
           <button
@@ -312,6 +318,8 @@ export function IllustrationPresetSettings({
           title="채팅 → 봇 → 작업실 순으로 적용해요. 새 생성부터 사용돼요."
         >
           {scope.chatId ? '현재 채팅' : '작업실 기본'} · <strong>{effective.title}</strong>
+          {' · '}
+          {effective.generator === 'comfyui' ? 'ComfyUI' : 'Codex'}
         </p>
       </div>
       {(error || loadError) && (
@@ -356,9 +364,11 @@ export function IllustrationPresetSettings({
                   : preset.description || '사용자 삽화 프리셋'}
               </span>
               <small>
-                {preset.comfyui.workflow.trim()
-                  ? 'Codex · ComfyUI 워크플로 포함'
-                  : 'Codex · ComfyUI 워크플로 없음'}
+                {preset.generator === 'codex'
+                  ? 'Codex · 공용 삽화 모델'
+                  : preset.comfyui.workflow.trim()
+                    ? 'ComfyUI · 워크플로 포함'
+                    : 'ComfyUI · 워크플로 설정 필요'}
               </small>
             </button>
             <div className="illustration-preset-actions">
@@ -466,6 +476,20 @@ export function IllustrationPresetSettings({
               />
             </label>
             <label className="full">
+              생성기
+              <select
+                aria-label="프리셋 삽화 생성기"
+                value={draft.model.generator}
+                onChange={(event) =>
+                  patch({ generator: event.target.value as IllustrationPresetGenerator })
+                }
+              >
+                <option value="codex">Codex · ChatGPT 구독의 이미지 생성</option>
+                <option value="comfyui">ComfyUI · 원격 PC의 API</option>
+              </select>
+              <small>프리셋을 적용하면 해당 생성기의 공용 연결·모델을 사용해요.</small>
+            </label>
+            <label className="full">
               그림 지침
               <textarea
                 aria-label="삽화 그림 지침"
@@ -512,71 +536,75 @@ export function IllustrationPresetSettings({
                 </p>
               </div>
             </details>
-            <details className="full illustration-preset-disclosure">
-              <summary>
-                ComfyUI 설정
-                <small>
-                  {draft.model.comfyui.workflow.trim() ? '워크플로 있음' : '워크플로 없음'}
-                </small>
-              </summary>
-              <fieldset className="control-grid">
-                <small className="full">
-                  Codex는 아래 설정을 사용하지 않아요. 워크플로 있음 표시는 입력 여부이며, 실제 실행
-                  호환성을 뜻하지 않아요.
-                </small>
-                <label className="full">
-                  추가 제외 지침
-                  <textarea
-                    aria-label="ComfyUI 네거티브 프롬프트 지침"
-                    aria-describedby={`${editorId}-negative-help`}
-                    rows={3}
-                    maxLength={SOURCE_TEXT_MAX_CHARS}
-                    value={draft.model.comfyui.negativeGuidance}
-                    onChange={(event) =>
-                      patch({
-                        comfyui: { ...draft.model.comfyui, negativeGuidance: event.target.value },
-                      })
-                    }
-                  />
-                  <small id={`${editorId}-negative-help`}>
-                    그림 지침의 ‘피할 표현’에 더할 내용이에요. 반영하려면 워크플로의 적절한 제외
-                    입력에 {'{{negative}}'}를 연결해 주세요.
+            {(draft.model.generator === 'comfyui' || workflowError) && (
+              <details className="full illustration-preset-disclosure">
+                <summary>
+                  ComfyUI 설정
+                  <small>
+                    {draft.model.comfyui.workflow.trim() ? '워크플로 있음' : '워크플로 없음'}
                   </small>
-                </label>
-                <label className="full">
-                  워크플로 JSON (API 형식)
-                  <textarea
-                    aria-label="ComfyUI 워크플로 JSON"
-                    aria-invalid={workflowError ? true : undefined}
-                    aria-describedby={workflowError ? `${editorId}-workflow-error` : undefined}
-                    rows={10}
-                    maxLength={ILLUSTRATION_WORKFLOW_MAX_CHARS}
-                    value={draft.model.comfyui.workflow}
-                    placeholder="ComfyUI에서 내보낸 API 형식 JSON"
-                    onChange={(event) => {
-                      setWorkflowError('');
-                      patch({ comfyui: { ...draft.model.comfyui, workflow: event.target.value } });
-                    }}
-                  />
-                  {workflowError && (
-                    <small id={`${editorId}-workflow-error`} className="error">
-                      {workflowError}
+                </summary>
+                <fieldset className="control-grid">
+                  <small className="full">
+                    Codex는 아래 설정을 사용하지 않아요. 워크플로 있음 표시는 입력 여부이며, 실제
+                    실행 호환성을 뜻하지 않아요.
+                  </small>
+                  <label className="full">
+                    추가 제외 지침
+                    <textarea
+                      aria-label="ComfyUI 네거티브 프롬프트 지침"
+                      aria-describedby={`${editorId}-negative-help`}
+                      rows={3}
+                      maxLength={SOURCE_TEXT_MAX_CHARS}
+                      value={draft.model.comfyui.negativeGuidance}
+                      onChange={(event) =>
+                        patch({
+                          comfyui: { ...draft.model.comfyui, negativeGuidance: event.target.value },
+                        })
+                      }
+                    />
+                    <small id={`${editorId}-negative-help`}>
+                      그림 지침의 ‘피할 표현’에 더할 내용이에요. 반영하려면 워크플로의 적절한 제외
+                      입력에 {'{{negative}}'}를 연결해 주세요.
                     </small>
-                  )}
-                </label>
-                <details className="full">
-                  <summary>워크플로 작성·공유 도움말</summary>
-                  <p>
-                    문자열 입력의 {'{{prompt}}'}는 그림 설명, {'{{negative}}'}는 제외 지침,{' '}
-                    {'{{seed}}'}는 시드로 바뀌어요. 모델·해상도는 워크플로에서 정해요.
-                  </p>
-                  <p>
-                    상대 ComfyUI에도 같은 모델·LoRA·커스텀 노드가 필요해요. 워크플로 내용은 그대로
-                    내보내므로 직접 넣은 비밀값이나 개인 경로가 없는지 확인해 주세요.
-                  </p>
-                </details>
-              </fieldset>
-            </details>
+                  </label>
+                  <label className="full">
+                    워크플로 JSON (API 형식)
+                    <textarea
+                      aria-label="ComfyUI 워크플로 JSON"
+                      aria-invalid={workflowError ? true : undefined}
+                      aria-describedby={workflowError ? `${editorId}-workflow-error` : undefined}
+                      rows={10}
+                      maxLength={ILLUSTRATION_WORKFLOW_MAX_CHARS}
+                      value={draft.model.comfyui.workflow}
+                      placeholder="ComfyUI에서 내보낸 API 형식 JSON"
+                      onChange={(event) => {
+                        setWorkflowError('');
+                        patch({
+                          comfyui: { ...draft.model.comfyui, workflow: event.target.value },
+                        });
+                      }}
+                    />
+                    {workflowError && (
+                      <small id={`${editorId}-workflow-error`} className="error">
+                        {workflowError}
+                      </small>
+                    )}
+                  </label>
+                  <details className="full">
+                    <summary>워크플로 작성·공유 도움말</summary>
+                    <p>
+                      문자열 입력의 {'{{prompt}}'}는 그림 설명, {'{{negative}}'}는 제외 지침,{' '}
+                      {'{{seed}}'}는 시드로 바뀌어요. 모델·해상도는 워크플로에서 정해요.
+                    </p>
+                    <p>
+                      상대 ComfyUI에도 같은 모델·LoRA·커스텀 노드가 필요해요. 워크플로 내용은 그대로
+                      내보내므로 직접 넣은 비밀값이나 개인 경로가 없는지 확인해 주세요.
+                    </p>
+                  </details>
+                </fieldset>
+              </details>
+            )}
             <small className="full">
               저장하면 이 프리셋을 사용하는 채팅의 다음 생성부터 반영돼요. 진행 중인 작업과 기존
               삽화는 바뀌지 않아요.
@@ -638,7 +666,7 @@ export function IllustrationPresetSettings({
           ‘{deleting?.title}’ 프리셋을 삭제해요. 이 항목을 선택한 봇·채팅은 상위 설정을 따르고,
           작업실 기본이었다면 기본 프리셋으로 돌아가요. 진행 중인 작업과 기존 삽화는 유지돼요.
         </p>
-        <p>대체 프리셋에 ComfyUI 워크플로가 없다면 새 생성 전에 지정해야 해요.</p>
+        <p>다음 생성은 대체 프리셋의 생성기를 사용해요. 해당 생성기의 연결·모델을 확인해 주세요.</p>
         {error && (
           <p role="alert" className="error">
             {error}
