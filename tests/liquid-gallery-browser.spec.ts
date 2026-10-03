@@ -177,25 +177,32 @@ async function seed(request: APIRequestContext, squareBot = false) {
 }
 
 for (const width of [1440, 412]) {
-  for (const mode of ['dark', 'light'] as const) {
-    test(`GALLERY ${width} ${mode}: opaque portraits, long prose, real controls and recovery`, async ({
-      page,
-      request,
-    }, info) => {
-      test.setTimeout(90000);
-      page.setDefaultTimeout(10000);
-      const data = await seed(request);
-      await page.setViewportSize({ width, height: width === 1440 ? 1000 : 915 });
-      await page.addInitScript((mode) => {
-        localStorage.setItem('uimori:theme', mode);
-        localStorage.setItem('uimori:reading-language', 'original');
-        localStorage.setItem('uimori:reading-width', '760');
-      }, mode);
-      const errors: string[] = [];
-      page.on('pageerror', (error) => errors.push(error.message));
-      await page.goto(`/?chat=${data.chatId}`);
+  test(`GALLERY ${width}: both palettes, long prose, real controls and recovery`, async ({
+    page,
+    request,
+  }, info) => {
+    test.setTimeout(90000);
+    page.setDefaultTimeout(10000);
+    const data = await seed(request);
+    await page.setViewportSize({ width, height: width === 1440 ? 1000 : 915 });
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('uimori:theme')) localStorage.setItem('uimori:theme', 'dark');
+      localStorage.setItem('uimori:reading-language', 'original');
+      localStorage.setItem('uimori:reading-width', '760');
+    });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    // Palette checks share the same long stored manuscript; behavior runs once per viewport.
+    for (const mode of ['dark', 'light'] as const) {
+      if (mode === 'dark') await page.goto(`/?chat=${data.chatId}`);
+      else {
+        await page.evaluate(() => localStorage.setItem('uimori:theme', 'light'));
+        await page.reload();
+      }
+      await expect(page.locator('html')).toHaveAttribute('data-theme', mode);
       await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', data.themeId);
-      const gallery = page.getByRole('complementary', { name: '등장인물 갤러리' });
+      // Default reading also labels each scene's request portraits as a gallery.
+      const gallery = page.locator('aside[data-uimori-part="gallery"]');
       await expect(gallery).toHaveCount(1);
       await expect(gallery).toBeVisible();
       const bot = gallery.locator('[data-uimori-part="bot-portrait"] img');
@@ -242,7 +249,7 @@ for (const width of [1440, 412]) {
       ).toBe(true);
       expect(await source.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
       await page.screenshot({ path: info.outputPath(`liquid-gallery-${mode}-${width}.png`) });
-      await info.attach('long-reader-measurements', {
+      await info.attach(`long-reader-measurements-${mode}`, {
         body: JSON.stringify({
           tokensPerOutput: tokenCount,
           outputCount: 3,
@@ -279,6 +286,10 @@ for (const width of [1440, 412]) {
       const copy = scene.getByRole('button', { name: '본문 복사', exact: true });
       await expect(copy).toBeVisible();
       expect((await copy.boundingBox())!.y).toBeLessThan((await reader.boundingBox())!.y + 400);
+      if (mode === 'light') {
+        expect(errors).toEqual([]);
+        continue;
+      }
       const clipboard: string[] = [];
       await page.exposeFunction('galleryCopy', (value: string) => clipboard.push(value));
       await page.evaluate(() =>
@@ -313,9 +324,11 @@ for (const width of [1440, 412]) {
       const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
       await composer.fill('이 다음 장면에서는 두 사람이 함께 산책하도록 이어줘.');
       await page.keyboard.press('Control+Period');
+      await expect(page.locator('html')).not.toHaveAttribute('data-uimori-theme', data.themeId);
       await expect(gallery).toBeHidden();
       await expect(composer).toHaveValue('이 다음 장면에서는 두 사람이 함께 산책하도록 이어줘.');
       await page.keyboard.press('Control+Period');
+      await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', data.themeId);
       await expect(gallery).toHaveCount(1);
       await expect(gallery).toBeVisible();
       if (width === 1440) {
@@ -326,8 +339,8 @@ for (const width of [1440, 412]) {
         expect((await gallery.boundingBox())!.height).toBeLessThan(100);
       }
       expect(errors).toEqual([]);
-    });
-  }
+    }
+  });
 }
 
 test('GALLERY square bot, tall persona, focus reading and failed image fallback', async ({
@@ -339,7 +352,7 @@ test('GALLERY square bot, tall persona, focus reading and failed image fallback'
   const data = await seed(request, true);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/?chat=${data.chatId}`);
-  const gallery = page.getByRole('complementary', { name: '등장인물 갤러리' });
+  const gallery = page.locator('aside[data-uimori-part="gallery"]');
   await expect(gallery).toHaveCount(1);
   const bot = gallery.locator('[data-uimori-part="bot-portrait"] img');
   await expect

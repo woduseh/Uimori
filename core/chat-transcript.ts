@@ -111,7 +111,10 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
       role: item.role as ContentAttachment['role'],
     };
   });
-  if (new Set(packageAttachments.map((item) => item.id)).size !== packageAttachments.length)
+  if (
+    new Set(packageAttachments.map((item) => `${item.id}:${item.role}`)).size !==
+    packageAttachments.length
+  )
     fail('CHAT_TRANSCRIPT_DUPLICATE_REFERENCE');
   const entries = list(body.entries, 'CHAT_TRANSCRIPT_INVALID_ENTRIES').map(
     (raw): ChatTranscriptEntry => {

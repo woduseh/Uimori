@@ -189,7 +189,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     expect(result.images[0].bytes.equals(Buffer.from(PNG_BASE64, 'base64'))).toBe(true);
     expect(result.revisedPrompt).toBe('fixture revised prompt (saved)');
     const saved = join(dir, 'db.sqlite.codex', 'generated_images');
-    await new Promise((resolve) => setTimeout(resolve, 50));
     const leftovers = existsSync(saved)
       ? readdirSync(saved, { recursive: true }).filter((name) => String(name).endsWith('.png'))
       : [];

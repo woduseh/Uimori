@@ -1,12 +1,11 @@
 import { afterEach, expect, test } from 'vitest';
-import Fastify, { type FastifyInstance } from 'fastify';
 import sharp from 'sharp';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import type { Content, PromptPreset } from '../core/product.js';
-import { exportRisuContent, exportRisuPrompt, risuExportRoutes } from '../server/risu-export.js';
+import { exportRisuContent, exportRisuPrompt } from '../server/risu-export.js';
 import { exportJson, writeEmbeddedRisuModule, writeRisuZip } from '../server/risu-export-codec.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
 import { cardZip, readCharacterCard } from '../server/character-card-file.js';
@@ -20,10 +19,9 @@ import {
   replaceNativeRisuImage,
 } from '../core/risu-native-assets.js';
 
-const owned: { path: string; store: Store; app: FastifyInstance }[] = [];
-afterEach(async () => {
-  for (const { path, store, app } of owned.splice(0)) {
-    await app.close();
+const owned: { path: string; store: Store }[] = [];
+afterEach(() => {
+  for (const { path, store } of owned.splice(0)) {
     store.close();
     const target = resolve(path),
       within = relative(resolve(tmpdir()), target);
@@ -38,11 +36,9 @@ afterEach(async () => {
 });
 function fixture() {
   const path = mkdtempSync(join(tmpdir(), 'uimori-risu-export-'));
-  const store = new Store(join(path, 'test.sqlite')),
-    app = Fastify();
-  risuExportRoutes(app, store);
-  owned.push({ path, store, app });
-  return { store, app };
+  const store = new Store(join(path, 'test.sqlite'));
+  owned.push({ path, store });
+  return { store };
 }
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJr0AAAAASUVORK5CYII=',

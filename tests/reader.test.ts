@@ -604,6 +604,7 @@ describe('Reader projection and retry costs', () => {
     const initial = read();
     for (const kind of ['run.usage', 'run.running', 'job.queued', 'job.running', 'chat.renamed'])
       store.event(chat.id, kind, 'synthetic-progress');
+    expect(read()).toEqual(initial);
     store.event(chat.id, 'chat.variables.changed', chat.id);
     const variables = read();
     expect(variables).not.toEqual(initial);
