@@ -40,10 +40,12 @@ function fixture() {
 
 test('large outline pages contain exact tree coverage, not full prose, without full detail hydration', () => {
   const { store, read, root } = fixture();
-  const queries = vi.spyOn(store.db, 'prepare');
+  for (const method of ['detail', 'node'] as const)
+    vi.spyOn(store.outline, method).mockImplementation(() => {
+      throw new Error('full detail not allowed');
+    });
   const ids: string[] = [];
   let page = read({ limit: 50 });
-  expect(queries.mock.calls.filter(([sql]) => sql.includes('substr(intent'))).toHaveLength(1);
   expect(page.coverage).toMatchObject({
     scopeTotal: 74,
     total: 74,

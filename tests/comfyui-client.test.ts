@@ -407,7 +407,7 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
         pollIntervalMs: 20,
       })
     );
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    await hanging.waitForRequest('/history');
     controller.abort();
     expect((await pending).code).toBe('ILLUSTRATION_CANCELLED');
     const tail = hanging.requests.slice(-2).map((request) => `${request.method} ${request.url}`);

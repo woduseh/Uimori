@@ -207,6 +207,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
       ).id
     );
     expect(recovered).toMatchObject({ status: 'completed', attempt: 2 });
+    expect(recovered.images).toHaveLength(1);
     expect(recovered.diagnostic?.retries).toEqual([
       { attempt: 1, code: 'FIXTURE_FAILURE', at: expect.any(String) },
     ]);
@@ -218,7 +219,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
       ).id
     );
     expect(exhausted).toMatchObject({ status: 'failed', attempt: 2, error: 'FIXTURE_FAILURE' });
-    expect(recovered.images).toHaveLength(1);
+    expect(exhausted.images).toEqual([]);
     await api(`/api/illustrations/${exhausted.id}/retry`, {}, 'POST');
     const retried = await settle(exhausted.id);
     expect(retried).toMatchObject({ status: 'completed', attempt: 3 });

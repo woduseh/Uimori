@@ -114,6 +114,50 @@ const requests = (store: Store, chatId: string) =>
     .map((item) => store.run(store.source(item.revision).runId).request);
 
 describe('chat transcript export and import', () => {
+  test('one package keeps its bot and persona roles through transcript, fork and backup', async () => {
+    const store = await database();
+    const { chat } = authoredChat(store);
+    const profile = store.product.profile(chat.id);
+    const bot = profile.packageAttachments!.find((item) => item.role === 'bot')!;
+    store.product.updateProfile(chat.id, {
+      expectedRevision: profile.revision,
+      packageAttachments: [...profile.packageAttachments!, { ...bot, role: 'persona' }],
+      image: profile.image,
+    });
+    const transcript = exportChatTranscript(store, chat.id);
+    expect(transcript.packageAttachments.filter((item) => item.id === bot.id)).toEqual([
+      bot,
+      { ...bot, role: 'persona' },
+    ]);
+    expect(validateChatTranscript(transcript)).toEqual(transcript);
+    const imported = importChatTranscript(store, { transcript, idempotencyKey: 'shared-roles' });
+    expect(imported.skippedAttachments).toEqual([]);
+    const fork = forkChat(store, chat.id, {
+      fromRevision: store.chat(chat.id).headRevision!,
+      idempotencyKey: 'shared-roles-fork',
+    });
+    const destination = await database();
+    const restored = await importChatBackup(destination, {
+      backup: exportChatBackup(store, chat.id),
+      idempotencyKey: 'shared-roles-backup',
+    });
+    for (const [owner, copied] of [
+      [store, imported.chat],
+      [store, fork],
+      [destination, restored.chat],
+    ] as const) {
+      const result = exportChatTranscript(owner, copied.id);
+      expect(result.entries).toEqual(transcript.entries);
+      expect(result.notes).toEqual(transcript.notes);
+      const references = result.packageAttachments.filter((item) =>
+        ['bot', 'persona'].includes(item.role)
+      );
+      expect(references.map((item) => item.role)).toEqual(['bot', 'persona']);
+      expect(references[0].id).toBe(references[1].id);
+      expect(owner.product.attempts(copied.id)).toEqual([]);
+    }
+  });
+
   test('an app-created backup preserves more than 500 notes when restored', async () => {
     const store = await database();
     const chat = createFixtureChat(store, 'Many short notes');
@@ -377,6 +421,19 @@ describe('chat transcript export and import', () => {
       [{ ...transcript, format: 'uimori-archive' }, 'CHAT_TRANSCRIPT_INVALID_FORMAT'],
       [{ ...transcript, version: 3 }, 'CHAT_TRANSCRIPT_UNSUPPORTED_VERSION'],
       [{ ...transcript, runs: [] }, 'CHAT_TRANSCRIPT_UNKNOWN_FIELD'],
+      ...[0, 1].map((revisionOffset): [unknown, string] => [
+        {
+          ...transcript,
+          packageAttachments: [
+            ...transcript.packageAttachments,
+            {
+              ...transcript.packageAttachments[0],
+              revision: transcript.packageAttachments[0].revision + revisionOffset,
+            },
+          ],
+        },
+        'CHAT_TRANSCRIPT_DUPLICATE_REFERENCE',
+      ]),
       [
         { ...transcript, entries: [{ request: 'x', text: '   ', translation: null }] },
         'CHAT_TRANSCRIPT_INVALID_TEXT',
