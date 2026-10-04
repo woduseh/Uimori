@@ -8,6 +8,7 @@ import { changedReaderSources, readerJobIds, readerPresentationRevisions } from 
 import { providerRejection } from '../core/provider-rejection.js';
 import { readerRequestOrder } from '../core/reader-conversation.js';
 import type { SceneUsageReceipt } from '../core/scene-usage.js';
+import { outlineSceneTitles, sceneTitles } from './scene-titles.js';
 
 /** The failing attempt's stored provider diagnostic, read only for 4xx failures being displayed. */
 export function attemptRejection(store: Store, column: 'run_id' | 'job_id', id: string) {
@@ -357,6 +358,8 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   // Requests label the chat's complete index without loading off-page source bodies.
   // Authored starts have no user request; never substitute generated or hidden content.
   let sceneNumber = 0;
+  const titles = sceneTitles(store, id);
+  const outlineTitles = outlineSceneTitles(store, id);
   const navigation = chain.map((sourceId) => {
     const run = runsById.get(byId.get(sourceId)!.runId);
     const request = String(run?.request ?? '')
@@ -375,7 +378,11 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     return {
       id: sourceId,
       number: sceneNumber,
-      label,
+      label: titles.get(sourceId) || outlineTitles.get(sourceId) || label,
+      ...(titles.has(sourceId) ? { title: titles.get(sourceId)! } : {}),
+      ...(!opening && (titles.has(sourceId) || outlineTitles.has(sourceId))
+        ? { requestLabel: label }
+        : {}),
       ...(opening ? { opening: true as const } : {}),
     };
   });

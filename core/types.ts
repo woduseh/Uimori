@@ -270,7 +270,14 @@ export type ReaderActivity = {
   sourceRevision: string | null;
   generation: number;
 };
-export type ReaderNavigationItem = { id: string; number: number; label: string; opening?: true };
+export type ReaderNavigationItem = {
+  id: string;
+  number: number;
+  label: string;
+  title?: string;
+  requestLabel?: string;
+  opening?: true;
+};
 
 export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
   /** Current page, active runs and latest visible source-less responses; full task history is fetched separately. */

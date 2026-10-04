@@ -16,6 +16,7 @@ import { readerActivities, readerDetail, readerRuns } from '../server/reader.js'
 import { Store } from '../server/store.js';
 import { readRunSnapshot } from '../server/run-projections.js';
 import type { RunSnapshot } from '../core/types.js';
+import { OutlineStore } from '../server/outline-store.js';
 
 const owned: { app: App; directory: string }[] = [];
 afterEach(async () => {
@@ -296,6 +297,68 @@ test('navigation labels use bounded requests and never authored, generated, or e
   const last = readerDetail(store, chat.id, { source: items[6].id });
   expect(last.reader.navigation).toEqual(page.reader.navigation);
   expect(last.reader.order).toContain(items[6].id);
+});
+
+test('scene names use manual titles then the smallest linked outline and preserve the request for search', async () => {
+  const app = await setup();
+  const { store } = app;
+  const chat = createFixtureChat(store, 'Named scenes');
+  const written = source(store, chat.id);
+  const outline = new OutlineStore(store);
+  outline.apply(
+    chat.id,
+    {
+      idempotencyKey: randomUUID(),
+      operations: [
+        { op: 'create', level: 'episode', title: 'The winter ball', intent: 'A meeting' },
+        {
+          op: 'create',
+          level: 'beat',
+          title: 'A secret revealed',
+          intent: 'The identity is revealed',
+        },
+      ],
+    },
+    'user'
+  );
+  const nodes = outline.detail(chat.id).nodes;
+  for (const node of nodes)
+    store.db
+      .prepare('INSERT INTO outline_writings(id,node_id,source_id,created_at) VALUES(?,?,?,?)')
+      .run(randomUUID(), node.id, written.id, new Date().toISOString());
+  expect(readerDetail(store, chat.id, {}).reader.navigation[0].label).toBe('A secret revealed');
+  const first = readerDetail(store, chat.id, {});
+  const changed = await app.inject({
+    method: 'PATCH',
+    url: `/api/sources/${written.id}/title`,
+    payload: {
+      expectedTitle: '',
+      title: 'Named by the author',
+    },
+  });
+  expect(changed.statusCode).toBe(200);
+  const delta = readerDetail(store, chat.id, {
+    since: String(first.reader.cursor),
+    known: written.id,
+  });
+  expect(delta.reader.navigation[0]).toMatchObject({
+    label: 'Named by the author',
+    title: 'Named by the author',
+    requestLabel: 'Synthetic request',
+  });
+  expect(
+    (
+      await app.inject({
+        method: 'PATCH',
+        url: `/api/sources/${written.id}/title`,
+        payload: {
+          expectedTitle: '',
+          title: 'A stale tab',
+        },
+      })
+    ).statusCode
+  ).toBe(409);
+  expect(store.source(written.id).text).toBe(written.text);
 });
 
 test('new source joins an incomplete last page on delta and another chat does not dirty it', async () => {

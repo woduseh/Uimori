@@ -33,6 +33,7 @@ import { useCodexContentWarning } from './useCodexContentWarning.js';
 
 import { PackagePresentationIssues, usePackagePresentation } from './PackagePresentation.js';
 import './source-edit.css';
+import { SourceVersions } from './SourceVersions.js';
 import { RequestMessage } from './RequestMessage.js';
 import { SelectionRevision } from './SelectionRevision.js';
 import { SceneUsage } from './SceneUsage.js';
@@ -1282,6 +1283,15 @@ function TextEditor({
           }}
         />
       </label>
+      {role === 'original' && (
+        <SourceVersions
+          sourceId={source.id}
+          revision={draft.expectedRevision}
+          draft={draft.text}
+          disabled={saving || conflict}
+          onApply={(text) => persist({ ...draft, text })}
+        />
+      )}
       {role === 'original' && (
         <SelectionRevision
           sourceId={source.id}

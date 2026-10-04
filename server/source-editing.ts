@@ -11,6 +11,31 @@ import { promptWorkspace } from './prompt-workspace.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Store, Source, Job } from './store.js';
 import { SOURCE_TEXT_MAX_CHARS, TRANSLATION_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import type { SourceVersions } from '../core/source-versions.js';
+
+/** Expose the original and the two retained edits; task-pinned older edits are not a version archive. */
+export function sourceVersions(store: Store, id: string): SourceVersions {
+  const source = store.source(id);
+  const original = store.db
+    .prepare('SELECT text,created_at AS createdAt FROM sources WHERE id=?')
+    .get(id)!;
+  const versions = store.db
+    .prepare(
+      'SELECT revision,text,created_at AS createdAt FROM source_edits WHERE source_id=? ORDER BY revision DESC LIMIT 2'
+    )
+    .all(id)
+    .map((row) => ({
+      revision: Number(row.revision),
+      text: String(row.text),
+      createdAt: String(row.createdAt),
+    }));
+  versions.push({
+    revision: 0,
+    text: String(original.text),
+    createdAt: String(original.createdAt),
+  });
+  return { currentRevision: source.editRevision ?? 0, versions };
+}
 
 export function latestTranslation(store: Store, id: string): Job | null {
   const row = store.db

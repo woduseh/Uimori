@@ -1,6 +1,10 @@
 import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { readRunSnapshot, readStoredRunSnapshot } from '../server/run-projections.js';
-import { rejudgeTranslation, stageTranslationJudgment } from '../server/source-editing.js';
+import {
+  rejudgeTranslation,
+  stageTranslationJudgment,
+  sourceVersions,
+} from '../server/source-editing.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -66,6 +70,44 @@ function source(
     ).id
   );
 }
+
+test('retained original/current/previous versions can be saved through the ordinary conflict-aware edit path', () => {
+  const store = database();
+  const original = source(store);
+  expect(sourceVersions(store, original.id).versions.map((item) => item.text)).toEqual([
+    original.text,
+  ]);
+  for (let revision = 0; revision < 4; revision++)
+    store.editSource(original.id, {
+      text: `Saved version ${revision + 1}`,
+      expectedRevision: revision,
+    });
+  const versions = sourceVersions(store, original.id);
+  expect(versions.currentRevision).toBe(4);
+  expect(versions.versions.map(({ revision, text }) => ({ revision, text }))).toEqual([
+    { revision: 4, text: 'Saved version 4' },
+    { revision: 3, text: 'Saved version 3' },
+    { revision: 0, text: original.text },
+  ]);
+  expect(store.source(original.id).text).toBe('Saved version 4');
+  const restored = store.editSource(original.id, {
+    text: versions.versions[1].text,
+    expectedRevision: versions.currentRevision,
+  });
+  expect(restored.text).toBe('Saved version 3');
+  expect(restored.editRevision).toBe(5);
+  expect(() =>
+    store.editSource(original.id, {
+      text: original.text,
+      expectedRevision: versions.currentRevision,
+    })
+  ).toThrow('Source revision conflict');
+  expect(sourceVersions(store, original.id).versions.map((item) => item.text)).toEqual([
+    'Saved version 3',
+    'Saved version 4',
+    original.text,
+  ]);
+});
 
 function promptSetting(
   store: Store,

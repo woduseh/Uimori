@@ -12,6 +12,9 @@ import { forkChat } from '../server/chat-fork.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import type { Content } from '../core/product.js';
+import { setSceneTitle, sceneTitles } from '../server/scene-titles.js';
+import { readerDetail } from '../server/reader.js';
+import { deleteChat } from '../server/chat-deletion.js';
 
 const owned: { path: string; store: Store }[] = [];
 afterEach(() => {
@@ -58,6 +61,11 @@ test('independent chat copies and portable restores keep authored plans and scop
     'user'
   );
   const createdPlan = outline.detail(chat.id).nodes[0];
+  store.db
+    .prepare('INSERT INTO outline_writings(id,node_id,source_id,created_at) VALUES(?,?,?,?)')
+    .run(randomUUID(), createdPlan.id, chat.headRevision, new Date().toISOString());
+  expect(readerDetail(store, chat.id, {}).reader.navigation[0].label).toBe('Reconciliation');
+  setSceneTitle(store, chat.headRevision!, { expectedTitle: '', title: 'Winter reunion' });
   outline.apply(
     chat.id,
     {
@@ -91,6 +99,11 @@ test('independent chat copies and portable restores keep authored plans and scop
     idempotencyKey: randomUUID(),
   });
   const verify = (target: Store, id: string) => {
+    expect(readerDetail(target, id, {}).reader.navigation[0]).toMatchObject({
+      label: 'Winter reunion',
+      title: 'Winter reunion',
+      requestLabel: 'Begin',
+    });
     const nodes = new OutlineStore(target).detail(id).nodes;
     expect(nodes).toHaveLength(1);
     expect(nodes[0]).toMatchObject({
@@ -119,4 +132,24 @@ test('independent chat copies and portable restores keep authored plans and scop
   expect(new OutlineStore(target).detail(restored.chat.id).nodes[0].id).not.toBe(
     outline.detail(chat.id).nodes[0].id
   );
+  const legacy = exportChatBackup(store, chat.id);
+  delete legacy.chats[0].state.sceneTitles;
+  const withoutTitles = await importChatBackup(target, {
+    backup: legacy,
+    idempotencyKey: randomUUID(),
+  });
+  expect(readerDetail(target, withoutTitles.chat.id, {}).reader.navigation[0].label).toBe(
+    'Reconciliation'
+  );
+  setSceneTitle(store, chat.headRevision!, { expectedTitle: 'Winter reunion', title: '' });
+  expect(readerDetail(store, chat.id, {}).reader.navigation[0].label).toBe('Reconciliation');
+  expect(readerDetail(store, copy.id, {}).reader.navigation[0].label).toBe('Winter reunion');
+  const copiedSource = store.chat(copy.id).headRevision!;
+  deleteChat(store, copy.id, {});
+  expect(
+    store.db
+      .prepare('SELECT value FROM app_metadata WHERE key=?')
+      .get(`source-title:${copiedSource}`)
+  ).toBeUndefined();
+  expect(sceneTitles(target, restored.chat.id).size).toBe(1);
 });
