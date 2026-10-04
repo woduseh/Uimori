@@ -1,8 +1,8 @@
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import type { Attempt, ModelWorkspace, PromptWorkspace } from '../core/product.js';
+import type { Attempt, ChatProfile, ModelWorkspace, PromptWorkspace } from '../core/product.js';
 import type { ChatDetail, Run } from '../core/types.js';
-import type { RequestContext, LastSceneLoreDetail } from '../core/scene-usage.js';
+import type { RequestContext, LastSceneLoreDetail, SceneUsageDetail } from '../core/scene-usage.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { nativeContent } from './fixtures/native-content.js';
@@ -60,7 +60,7 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
         },
       })
     );
-    const model = await body<{ id: string }>(
+    const model = await body<{ id: string; revision: number }>(
       await request.post('/api/model-presets', {
         data: {
           title: 'Scene diagnostics writer',
@@ -105,6 +105,32 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
         data: { title: `Scene diagnostics ${randomUUID()}`, botId: bot.id },
       })
     );
+    const persona = await body<{ id: string; revision: number }>(
+      await request.post('/api/content', {
+        data: {
+          ...fixtureBotInput('Scene diagnostics persona'),
+          kind: 'persona',
+          package: nativeContent(
+            { name: '호출 당시 미라', description: 'SYNTHETIC_PERSONA' },
+            {},
+            'persona'
+          ),
+        },
+      })
+    );
+    const profile = await read<ChatProfile>(request, `/chats/${chat.id}/profile`);
+    await body(
+      await request.put(`/api/chats/${chat.id}/profile`, {
+        data: {
+          expectedRevision: profile.revision,
+          image: profile.image,
+          packageAttachments: [
+            ...(profile.packageAttachments ?? []),
+            { id: persona.id, revision: persona.revision, role: 'persona' },
+          ],
+        },
+      })
+    );
     const run = await body<Run>(
       await request.post(`/api/chats/${chat.id}/runs`, {
         data: {
@@ -140,6 +166,17 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
         tokenizer: 'gemini-gemma4',
         tokenizerFallback: false,
       },
+      requestReceipt: {
+        version: 1,
+        model: {
+          modelId: 'scene-diagnostics-writer',
+          title: 'Scene diagnostics writer',
+          presetId: model.id,
+        },
+        prompt: { title: 'Synthetic scene diagnostics prompt' },
+        persona: { id: persona.id, revision: persona.revision, name: '호출 당시 미라' },
+        summary: { status: 'absent', coveredSources: 0 },
+      },
     });
     expect(attempt.request).not.toHaveProperty('body');
     expect(attempt.response).not.toHaveProperty('text');
@@ -156,14 +193,47 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       },
     });
     expect(included.lore!.entries).toHaveLength(1);
+    expect(
+      await read<SceneUsageDetail>(request, `/attempts/${attempt.id}/scene-detail`)
+    ).toMatchObject({ lore: included.lore, cache: null });
+    // Today's model title must not rewrite the completed invocation receipt.
+    await body(
+      await request.put(`/api/model-presets/${model.id}`, {
+        data: {
+          expectedRevision: model.revision,
+          title: '오늘 바꾼 모델 이름',
+          connectionId: connection.id,
+          modelId: 'scene-diagnostics-writer',
+          tokenizer: 'gemini-gemma4',
+          inputTokenLimit: 65536,
+          maxOutputTokens: 1024,
+          temperature: null,
+        },
+      })
+    );
 
     for (const width of DEFAULT_WIDTHS) {
+      const detailRequests: string[] = [];
+      const captureDetail = (req: { url(): string }) => {
+        if (req.url().endsWith('/scene-detail')) detailRequests.push(req.url());
+      };
+      page.on('request', captureDetail);
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/?chat=${chat.id}`);
       const usage = page.getByTestId('scene-usage');
       await expect(usage).toContainText('요청 1,234 · 응답 87 토큰');
-      await expect(usage.locator('summary')).toContainText('문맥 1.9%');
-      await usage.locator('summary').click();
+      await expect(usage.locator(':scope > summary')).toContainText('문맥 1.9%');
+      expect(detailRequests).toHaveLength(0);
+      await usage.locator(':scope > summary').click();
+      await expect(usage).toContainText('전송 로어 · 1개 기록');
+      expect(detailRequests).toHaveLength(1);
+      await expect(usage).toContainText('Scene diagnostics writer · scene-diagnostics-writer');
+      await expect(usage).not.toContainText('오늘 바꾼 모델 이름');
+      await expect(usage).toContainText('프롬프트 선택');
+      await expect(usage).toContainText('Synthetic scene diagnostics prompt');
+      await expect(usage).toContainText('호출 당시 미라');
+      await expect(usage).toContainText('Gemini · Gemma 4 토크나이저');
+      await expect(usage).toContainText(`${loreTitle} · 고정 자료 · 전체 본문`);
       await expect(usage).toContainText('입력 한도 65,536 토큰');
       await expect(usage.getByRole('meter', { name: '입력 한도 대비 보고 문맥' })).toHaveAttribute(
         'value',
@@ -184,6 +254,7 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       ).toBe(true);
       await page.screenshot({ path: info.outputPath(`scene-lore-known-${width}.png`) });
       await lore.getByRole('button', { name: '현재 조회 로어 확인 닫기', exact: true }).click();
+      page.off('request', captureDetail);
     }
   } finally {
     await peer.close();

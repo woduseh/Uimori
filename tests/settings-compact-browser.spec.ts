@@ -77,9 +77,12 @@ test('SCUI04 recovery settings expose real build information and grouped data at
         await restore.locator('summary').click();
       } else if (section === 'Codex 연결') {
         await expect(pane.getByText('서버 설정 필요', { exact: true })).toBeVisible();
+        await expect(pane.locator('.codex-connection-guide')).not.toHaveAttribute('open', '');
+        await pane.getByText('연결 절차', { exact: true }).click();
         await expect(
           pane.getByRole('list', { name: 'Codex 연결 단계' }).getByRole('listitem')
         ).toHaveCount(3);
+        await pane.getByText('연결 절차', { exact: true }).click();
         await expect(
           pane.getByRole('button', { name: 'ChatGPT로 로그인', exact: true })
         ).toHaveCount(0);

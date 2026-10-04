@@ -78,7 +78,7 @@ describe('Completed execution payload retention', () => {
   });
 
   test.each([
-    { protocol: 'fixture-sse-v1', inputScope: 'request' },
+    { protocol: 'openai-chat-v1', inputScope: 'request' },
     { protocol: 'codex-app-server-v1', inputScope: 'turn' },
   ] as const)(
     'scene display retains the final $inputScope token receipt and lore metadata after body cleanup',
@@ -103,6 +103,13 @@ describe('Completed execution payload retention', () => {
         tokenizer: 'claude-legacy',
         tokenizerFallback: true,
       };
+      const receipt: NonNullable<WireRecord['requestReceipt']> = {
+        version: 1,
+        model: { modelId: 'synthetic-model', title: '호출 당시 모델', presetId: 'frozen-model' },
+        prompt: { id: 'frozen-prompt', revision: 2, title: '호출 당시 프롬프트' },
+        persona: { id: 'frozen-persona', revision: 3, title: '호출 당시 페르소나', name: '미라' },
+        summary: { status: 'included', coveredSources: 4 },
+      };
       const wire: WireRecord = {
         connectionId: 'synthetic-connection',
         protocol,
@@ -116,6 +123,7 @@ describe('Completed execution payload retention', () => {
         stablePrefixSha256: 'b'.repeat(64),
         requestLore: lore,
         requestContext: context,
+        requestReceipt: receipt,
       };
       for (const [inputTokens, outputTokens] of [
         [99, 22],
@@ -129,7 +137,13 @@ describe('Completed execution payload retention', () => {
           refusal: null,
           error: null,
           opaqueState: null,
-          usage: { inputTokens, outputTokens, costUsd: null, raw: null, priceRevision: null },
+          usage: {
+            inputTokens,
+            outputTokens,
+            costUsd: null,
+            raw: { prompt_tokens_details: { cached_tokens: 12 } },
+            priceRevision: null,
+          },
         });
       }
       const advisor = store.product.startAttempt(chat.id, source.runId, null, {
@@ -156,21 +170,32 @@ describe('Completed execution payload retention', () => {
       expect(retained[0].request).toMatchObject({
         requestLore: lore,
         requestContext: context,
+        requestReceipt: receipt,
         detailsOmitted: true,
       });
       expect(JSON.stringify(retained)).not.toContain('PRIVATE_PROMPT_BODY');
       expect(JSON.stringify(retained)).not.toContain('PRIVATE_RESPONSE_BODY');
       const runs = readerRuns(store, chat.id);
       expect(runs.find((run) => run.id === source.runId)?.sceneUsage).toEqual({
+        attemptId: retained[1].id,
         inputTokens: 30,
         outputTokens: 7,
         inputScope,
         context,
+        receipt,
       });
       expect(runs.find((run) => run.id === sources[0]!.runId)?.sceneUsage).toBeUndefined();
       const app = Fastify();
       readerRoutes(app, store);
       try {
+        const detail = await app.inject(`/api/attempts/${retained[1].id}/scene-detail`);
+        expect(detail.statusCode).toBe(200);
+        expect(detail.json()).toEqual({
+          lore,
+          cache: protocol === 'openai-chat-v1' ? { readTokens: 12, writeTokens: null } : null,
+        });
+        expect(JSON.stringify(detail.json())).not.toContain('PRIVATE_');
+        expect((await app.inject(`/api/attempts/${advisor}/scene-detail`)).statusCode).toBe(404);
         const path = `/api/chats/${chat.id}/last-scene-lore`;
         const included = await app.inject(path);
         expect(included.statusCode).toBe(200);
@@ -194,6 +219,13 @@ describe('Completed execution payload retention', () => {
           attemptId: null,
           lore: null,
         });
+        // An older attempt stays unknown; no current-library reconstruction path runs.
+        store.db
+          .prepare('UPDATE attempts SET request=? WHERE id=?')
+          .run(JSON.stringify({ protocol }), retained[1].id);
+        expect(
+          readerRuns(store, chat.id).find((run) => run.id === source.runId)?.sceneUsage?.receipt
+        ).toBeNull();
       } finally {
         await app.close();
       }

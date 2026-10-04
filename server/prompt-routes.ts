@@ -23,6 +23,7 @@ import { translationContextMode } from '../core/translation-settings.js';
 import { translationSnapshot } from '../core/translation-context.js';
 import { prepareNativeRisuRun } from './risu-native-run.js';
 import { prepareNativeRisuTranslationPrompt } from './risu-native-preset.js';
+import { requestPreviewRoutes } from './request-preview.js';
 import {
   nativeRisuSnapshotNeedsRefresh,
   prepareNativeRisuReadOnly,
@@ -30,6 +31,7 @@ import {
 
 /** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
 export function promptRoutes(app: FastifyInstance, store: Store) {
+  requestPreviewRoutes(app, store);
   app.get('/api/prompt-templates', async () => builtinPromptTemplates());
   app.get<{ Params: { id: string } }>('/api/prompt-templates/:id', async (request) => {
     const template = builtinPromptTemplate(request.params.id);

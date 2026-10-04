@@ -533,6 +533,7 @@ describe('standalone context summaries and explicit corrections', () => {
       .filter((attempt) => attempt.runId === run.id && attempt.role === 'main');
     expect(attempts.at(-1)?.request).toMatchObject({
       requestContext: { inputTokenLimit: 8192 },
+      requestReceipt: { summary: { status: 'included' } },
       detailsOmitted: true,
     });
     expect(attempts.at(-1)?.request).not.toHaveProperty('body');

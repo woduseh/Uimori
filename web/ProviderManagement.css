@@ -402,6 +402,47 @@
 .provider-model-section > label {
   min-width: 0;
 }
+.provider-setting-help,
+.provider-specified-settings {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.provider-setting-help > summary,
+.provider-specified-settings > summary {
+  cursor: pointer;
+  min-height: var(--control-h);
+  align-content: center;
+}
+.provider-setting-help p {
+  line-height: 1.6;
+  margin-block: 8px;
+}
+.provider-specified-settings ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 8px;
+}
+.provider-specified-settings li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.provider-specified-settings li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.provider-specified-settings strong {
+  color: var(--text);
+  font-weight: 500;
+}
+.provider-specified-settings button {
+  flex-shrink: 0;
+  width: auto;
+}
 .provider-catalog {
   min-width: 0;
   border-top: 1px solid var(--line);

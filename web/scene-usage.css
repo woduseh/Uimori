@@ -18,3 +18,22 @@
   width: min(100%, 24rem);
   accent-color: var(--accent);
 }
+.scene-receipt {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin-block: 10px;
+}
+.scene-receipt dt {
+  color: var(--muted);
+}
+.scene-receipt dd {
+  margin: 0;
+}
+.scene-receipt-lore {
+  padding-inline-start: 20px;
+  margin-block: 6px;
+}
+.scene-usage-help {
+  margin-top: 8px;
+}

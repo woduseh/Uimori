@@ -13,7 +13,7 @@ function releaseAttemptBodies(db: DatabaseSync, scope: 'run' | 'job' | 'helper',
   db.prepare(`UPDATE attempts SET
     request=json_object('protocol',json_extract(request,'$.protocol'),
       'role',role,'modelId',model_id,'pricingSnapshot',json_extract(request,'$.pricingSnapshot'),
-      'requestContext',json_extract(request,'$.requestContext'),'requestLore',json_extract(request,'$.requestLore'),
+      'requestContext',json_extract(request,'$.requestContext'),'requestReceipt',json_extract(request,'$.requestReceipt'),'requestLore',json_extract(request,'$.requestLore'),
       'pricingStartedAt',json_extract(request,'$.pricingStartedAt'),'executionMode',json_extract(request,'$.executionMode'),'detailsOmitted',json('true')),
     response=CASE WHEN response IS NULL THEN NULL ELSE json_object(
       'status',status,'error',json_extract(response,'$.error'),

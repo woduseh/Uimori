@@ -220,10 +220,6 @@ export function ContextPanel({
           새로 확인
         </button>
       </div>
-      <p className="muted">
-        사용할 수 있는 요약과 그 이후의 원문을 다음 요청에 사용해요.
-        {mode === 'full' && ' 지속적인 설정 정정은 아래 메모에 남겨요.'}
-      </p>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -273,9 +269,7 @@ export function ContextPanel({
               이번 압축에만 사용해요. 새 설정이나 사건을 추가하는 메모는 아니에요.
             </small>
           </details>
-          <p className="muted">
-            정리할 구간이 있으면 문맥 모델을 호출해요. 원문은 그대로 보존해요.
-          </p>
+          <p className="muted">정리할 구간이 있으면 문맥 모델을 호출해요.</p>
           <div className="form-actions">
             {mode === 'full' && !draft && (
               <button
@@ -411,6 +405,12 @@ export function ContextPanel({
           )}
         </>
       )}
+      <details className="context-help">
+        <summary>문맥 관리 도움말</summary>
+        <p className="muted">사용할 수 있는 요약과 그 이후의 원문을 다음 요청에 사용해요.</p>
+        <p className="muted">압축해도 원문은 그대로 보존해요.</p>
+        {mode === 'full' && <p className="muted">지속적인 설정 정정은 아래 메모에 남겨요.</p>}
+      </details>
       {mode === 'full' && (
         <AuthorNotesEditor
           headRevision={headRevision}

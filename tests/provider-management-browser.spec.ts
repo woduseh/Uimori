@@ -270,6 +270,7 @@ test('PMUI tokenizer advanced selection survives save and model edits and can re
   const tokenizer = form.getByLabel('토크나이저', { exact: true });
   await expect(tokenizer).toHaveValue('');
   await tokenizer.selectOption('kimi-k2');
+  await form.getByLabel('입력 컨텍스트 한도', { exact: true }).fill('64000');
   await tokenizer.scrollIntoViewIfNeeded();
   const box = await tokenizer.boundingBox();
   expect(box!.x).toBeGreaterThanOrEqual(0);
@@ -295,11 +296,20 @@ test('PMUI tokenizer advanced selection survives save and model edits and can re
   await settings(page);
   await openProviderModel(page, original.title);
   await form.getByRole('button', { name: '고급', exact: true }).click();
-  await tokenizer.selectOption('');
+  await form.locator('.provider-specified-settings > summary').click();
+  await form.getByRole('button', { name: '토크나이저 지정 해제', exact: true }).click();
+  await expect(tokenizer).toHaveValue('');
+  await expect(form.getByLabel('입력 컨텍스트 한도', { exact: true })).toHaveValue('64000');
+  await expect(form.getByLabel('최대 출력 토큰', { exact: true })).toHaveValue(
+    String(original.maxOutputTokens)
+  );
   await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
   await expect
     .poll(async () => (await api<ModelPreset>(request, `/model-presets/${original.id}`)).tokenizer)
     .toBeUndefined();
+  expect((await api<ModelPreset>(request, `/model-presets/${original.id}`)).inputTokenLimit).toBe(
+    64000
+  );
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
 });
@@ -1091,15 +1101,27 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
       path: info.outputPath('provider-parameters-preserved-invalid-desktop.png'),
     });
   await form.getByRole('button', { name: '고급', exact: true }).click();
-  await form.getByLabel('캐시 방식').selectOption('automatic');
-  await form.getByLabel('캐시 유지 시간').selectOption('30m');
-  await form.getByLabel('캐시 방식').selectOption('disabled');
+  await form.getByLabel('캐시 방식', { exact: true }).selectOption('automatic');
+  await form.getByLabel('캐시 유지 시간', { exact: true }).selectOption('30m');
+  await form.getByLabel('캐시 방식', { exact: true }).selectOption('disabled');
   await expect(form).toContainText('프롬프트의 캐시 기준점도 적용하지 않아요');
-  await expect(form.getByLabel('캐시 유지 시간')).toHaveValue('30m');
+  await expect(form.getByLabel('캐시 유지 시간', { exact: true })).toHaveValue('30m');
+  await form.getByLabel('Temperature', { exact: true }).fill('0');
+  await form.locator('.provider-specified-settings > summary').click();
+  await expect(form.locator('.provider-specified-settings')).toContainText('Temperature · 0');
+  await form.getByRole('button', { name: 'Temperature 지정 해제', exact: true }).click();
+  await expect(form.getByLabel('Temperature', { exact: true })).toHaveValue('');
+  await expect(strength).toHaveValue('none');
+  await expect(form.getByLabel('Verbosity', { exact: true })).toHaveValue('low');
+  await expect(form.getByLabel('캐시 유지 시간', { exact: true })).toHaveValue('30m');
+  await expect(form.getByLabel('캐시 유지 시간', { exact: true })).toHaveAttribute(
+    'aria-invalid',
+    'true'
+  );
   await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
-  await expect(form.getByLabel('캐시 유지 시간')).toBeFocused();
+  await expect(form.getByLabel('캐시 유지 시간', { exact: true })).toBeFocused();
   expect((await library(request)).models.some((model) => model.title === title)).toBe(false);
-  await form.getByLabel('캐시 유지 시간').selectOption('');
+  await form.getByRole('button', { name: '캐시 유지 시간 지정 해제', exact: true }).click();
   await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
   await expect
     .poll(async () => (await library(request)).models.find((model) => model.title === title))

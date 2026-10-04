@@ -21,6 +21,7 @@ import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { InputTranslationControls, InputTranslationFeedback } from './InputTranslation.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { ChatContextDialog } from './ChatContextDialog.js';
+import { RequestPreviewDialog } from './RequestPreviewDialog.js';
 import { ManuscriptExportDialog } from './ManuscriptExportDialog.js';
 import { IconButton } from './IconButton.js';
 import { PinIcon } from './ui-icons.js';
@@ -283,7 +284,7 @@ function App() {
   const [inspectedRun, setInspectedRun] = useState('');
   const [chatTool, setChatTool] = useState<{
     scope: string;
-    kind: 'lore' | 'compact' | 'export';
+    kind: 'lore' | 'compact' | 'export' | 'preview';
   } | null>(null);
   const currentChatTool = chatTool?.scope === s.viewKey ? chatTool.kind : null;
   const navigationOpener = useRef<HTMLButtonElement>(null);
@@ -1583,6 +1584,14 @@ function App() {
                       <button
                         type="button"
                         className="secondary"
+                        disabled={optionsBusy || optionsDirty || s.profileDirty || s.quickBusy}
+                        onClick={() => setChatTool({ scope: s.viewKey, kind: 'preview' })}
+                      >
+                        다음 요청 미리보기
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
                         disabled={!s.detail?.chat.headRevision}
                         onClick={() => setChatTool({ scope: s.viewKey, kind: 'lore' })}
                       >
@@ -1688,6 +1697,29 @@ function App() {
       </main>
       {s.detail && s.destination === 'story' && (
         <>
+          <RequestPreviewDialog
+            key={`request-preview:${s.selected}`}
+            open={currentChatTool === 'preview'}
+            chatId={s.detail.chat.id}
+            request={s.draft}
+            loreContextReset={s.loreContextReset}
+            refreshKey={`${s.detail.chat.headRevision}:${s.detail.chat.settingsRevision}:${s.detail.profile?.revision}:${s.detail.reader.cursor}:${s.promptWorkspace?.revision}:${s.pinnedPromptRevision}:${s.nativeInteractionRevision}`}
+            unavailable={
+              !!s.active ||
+              !!s.pendingRequest ||
+              s.pendingProfile ||
+              optionsBusy ||
+              optionsDirty ||
+              s.profileDirty ||
+              s.quickBusy
+            }
+            onClose={() => {
+              setChatTool(null);
+              requestAnimationFrame(() =>
+                document.querySelector<HTMLButtonElement>('[aria-label="입력창 더보기"]')?.focus()
+              );
+            }}
+          />
           <ChatContextDialog
             key={`context-tools:${s.selected}`}
             mode={

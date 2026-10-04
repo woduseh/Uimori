@@ -1,0 +1,63 @@
+.app-dialog.request-preview-dialog {
+  --dialog-size: 38rem;
+}
+.request-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+.request-preview-heading p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+.request-preview-heading button {
+  flex-shrink: 0;
+}
+.request-preview-facts {
+  margin: 0;
+}
+.request-preview-facts > div {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.7fr) minmax(0, 1.6fr);
+  gap: 0.75rem;
+  padding-block: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.request-preview-facts dt {
+  color: var(--muted);
+}
+.request-preview-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.request-preview-facts dd small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+}
+.request-preview-budget {
+  padding-block: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.request-preview-budget p {
+  margin-block: 0 0.4rem;
+}
+.request-preview-budget meter {
+  display: block;
+  width: 100%;
+  accent-color: var(--accent);
+  margin-bottom: 0.4rem;
+}
+.request-preview-budget > small {
+  display: block;
+  margin-block: 0.25rem;
+}
+.request-preview-help {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.request-preview-help summary {
+  cursor: pointer;
+}

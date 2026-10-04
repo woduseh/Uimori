@@ -138,25 +138,29 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
   const sceneUsage = new Map(
     (
       store.db
-        .prepare(`SELECT run_id AS runId,input_tokens AS inputTokens,output_tokens AS outputTokens,
+        .prepare(`SELECT id AS attemptId,run_id AS runId,input_tokens AS inputTokens,output_tokens AS outputTokens,
         json_extract(request,'$.requestContext') AS context,
+        json_extract(request,'$.requestReceipt') AS receipt,
         json_extract(request,'$.protocol') AS protocol
         FROM attempts WHERE rowid IN (SELECT MAX(rowid) FROM attempts
         WHERE chat_id=? AND run_id IS NOT NULL AND job_id IS NULL AND usage_kind='writing'
         ${scope ? 'AND run_id IN (SELECT value FROM json_each(?))' : ''} GROUP BY run_id)`)
         .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as {
         runId: string;
+        attemptId: string;
         inputTokens: number | null;
         outputTokens: number | null;
         context: string | null;
+        receipt: string | null;
         protocol: string | null;
       }[]
-    ).map(({ runId, context, protocol, ...tokens }) => [
+    ).map(({ runId, context, receipt, protocol, ...tokens }) => [
       runId,
       {
         ...tokens,
         inputScope: protocol === 'codex-app-server-v1' ? 'turn' : 'request',
         context: context ? JSON.parse(context) : null,
+        receipt: receipt ? JSON.parse(receipt) : null,
       } as SceneUsageReceipt,
     ])
   );
