@@ -53,6 +53,15 @@
 .model-primary-settings > legend {
   color: var(--text);
 }
+.model-role-setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+.model-role-setting > small {
+  grid-column: 1 / -1;
+}
 
 .task-behavior-settings-body {
   display: grid;
