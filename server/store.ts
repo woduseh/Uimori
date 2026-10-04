@@ -58,6 +58,7 @@ import {
   scheduleIllustrationPlacement,
 } from './illustrations.js';
 import { recoverableAnthropicBatchRun } from './anthropic-batch.js';
+import type { SynchronousResult } from './synchronous-transaction.js';
 import type {
   Settings,
   Chat as BaseChat,
@@ -163,7 +164,7 @@ export class Store {
     this.db.close();
     this.ownership.close();
   }
-  transaction<T>(fn: () => T): T {
+  transaction<T>(fn: () => SynchronousResult<T>): SynchronousResult<T> {
     if (this.db.isTransaction) {
       const savepoint = `nested_${randomUUID().replaceAll('-', '')}`;
       this.db.exec(`SAVEPOINT ${savepoint}`);
