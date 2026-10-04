@@ -23,7 +23,7 @@ export function ChatContextDialog({
 }) {
   return (
     <>
-      <Dialog open={mode === 'lore'} title="현재 조회 로어 확인" onClose={onClose}>
+      <Dialog open={mode === 'lore'} title="마지막 장면의 로어" onClose={onClose}>
         <LastSceneLore chatId={chatId} headRevision={headRevision} />
       </Dialog>
       <Dialog open={mode === 'compact'} title="수동 컨텍스트 압축" onClose={onClose}>

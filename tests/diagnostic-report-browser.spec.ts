@@ -30,6 +30,8 @@ for (const width of DEFAULT_WIDTHS) {
       .toBe('completed');
     await page.goto(`/?chat=${chat.id}`);
     await navigationAction(page, '작업 현황');
+    const inspector = page.getByText('실행과 실제 입력 확인', { exact: true }).first();
+    await inspector.click();
     await page
       .getByRole('button', { name: '문제 보고용 진단 만들기', exact: true })
       .first()
@@ -39,6 +41,36 @@ for (const width of DEFAULT_WIDTHS) {
     await dialog.getByText('파일 내용 확인', { exact: true }).click();
     await expect(dialog.locator('pre')).toContainText('uimori-diagnostic-report');
     await expect(dialog.locator('pre')).not.toContainText(privateMarker);
+    const runPath = `/api/runs/${run.id}`;
+    let refreshing = false;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(`**${runPath}`, async (route) => {
+      refreshing = true;
+      await held;
+      await route.continue();
+    });
+    const refreshed = page.waitForResponse((response) => response.url().endsWith(runPath));
+    try {
+      const current = await (await request.get(`/api/chats/${chat.id}`)).json();
+      const renamed = await request.patch(`/api/chats/${chat.id}/title`, {
+        data: {
+          title: `${privateMarker} updated`,
+          expectedTitleRevision: current.chat.titleRevision,
+        },
+      });
+      expect(renamed.ok(), await renamed.text()).toBe(true);
+      await expect.poll(() => refreshing).toBe(true);
+      // A reader event reloads the open inspector, but must not remove its independent report.
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole('status')).toContainText('선택한 실행');
+    } finally {
+      release();
+      await refreshed;
+      await page.unrouteAll({ behavior: 'wait' });
+    }
     expect(
       await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)
     ).toBeLessThanOrEqual(1);
@@ -55,7 +87,7 @@ for (const width of DEFAULT_WIDTHS) {
     for (const privateValue of [privateMarker, chat.id, run.id])
       expect(bytes.toString()).not.toContain(privateValue);
     await page.keyboard.press('Escape');
-    await page.getByText('실행과 실제 입력 확인', { exact: true }).first().click();
+    await expect(inspector.locator('..')).toHaveJSProperty('open', true);
     await expect(page.locator('.run-task-details pre').first()).toContainText(privateMarker);
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '데이터 관리');

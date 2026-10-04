@@ -223,7 +223,7 @@ export function ProviderConnectionForm({
         </label>
         <small className="full">
           {codex
-            ? '에이전트 설정에서 Codex에 로그인해 주세요.'
+            ? '설정 → Codex 연결에서 로그인해 주세요.'
             : vertex
               ? '서비스 계정 JSON을 등록하면 사용할 수 있어요.'
               : 'API 키는 서버 DB에 저장돼요. 키를 저장하면 재시작 없이 사용할 수 있어요.'}

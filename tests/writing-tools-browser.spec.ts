@@ -34,12 +34,12 @@ for (const width of [1440, 412]) {
     await composer.fill('이 요청 초안은 그대로 남겨요.');
     await expect(page.getByTestId('scene-usage').last()).toContainText('요청 미확인');
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
-    await page.getByRole('button', { name: '현재 조회 로어 확인', exact: true }).click();
-    const lore = page.getByRole('dialog', { name: '현재 조회 로어 확인', exact: true });
+    await page.getByRole('button', { name: '마지막 장면의 로어', exact: true }).click();
+    const lore = page.getByRole('dialog', { name: '마지막 장면의 로어', exact: true });
     await expect(lore).toBeVisible();
     await expect(lore).toContainText('로어를 보내지 않았다는 뜻은 아니에요.');
     await page.screenshot({ path: info.outputPath(`last-scene-lore-${width}.png`) });
-    await lore.getByRole('button', { name: '현재 조회 로어 확인 닫기', exact: true }).click();
+    await lore.getByRole('button', { name: '마지막 장면의 로어 닫기', exact: true }).click();
     await expect(composer).toHaveValue('이 요청 초안은 그대로 남겨요.');
     await expect(page.getByRole('button', { name: '입력창 더보기', exact: true })).toBeFocused();
     await openChatMenu(page);

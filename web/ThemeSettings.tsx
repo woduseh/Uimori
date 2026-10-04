@@ -309,16 +309,6 @@ export function ThemeSettings({
           {state.error} <button onClick={() => void state.refresh()}>다시 불러오기</button>
         </p>
       )}
-      <ThemeBackgroundSettings
-        key={`${scope}:${scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : ''}`}
-        scope={scope}
-        disabled={busy}
-        targetId={
-          scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : undefined
-        }
-        onDirtyChange={setBackgroundDirty}
-        onSaveHandlerChange={registerBackgroundSave}
-      />
       <section className="theme-dimension" aria-labelledby="theme-layout-heading">
         <div className="theme-dimension-heading">
           <div>
@@ -466,6 +456,16 @@ export function ThemeSettings({
           })}
         </div>
       </section>
+      <ThemeBackgroundSettings
+        key={`${scope}:${scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : ''}`}
+        scope={scope}
+        disabled={busy}
+        targetId={
+          scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : undefined
+        }
+        onDirtyChange={setBackgroundDirty}
+        onSaveHandlerChange={registerBackgroundSave}
+      />
       <section className="theme-library-tools" aria-label="테마 관리">
         <div className="theme-library-copy">
           <h4>테마 관리</h4>

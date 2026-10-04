@@ -244,8 +244,8 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       );
       await page.screenshot({ path: info.outputPath(`scene-usage-known-${width}.png`) });
       await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
-      await page.getByRole('button', { name: '현재 조회 로어 확인', exact: true }).click();
-      const lore = page.getByRole('dialog', { name: '현재 조회 로어 확인', exact: true });
+      await page.getByRole('button', { name: '마지막 장면의 로어', exact: true }).click();
+      const lore = page.getByRole('dialog', { name: '마지막 장면의 로어', exact: true });
       await expect(lore.getByText(loreTitle, { exact: true })).toBeVisible();
       await expect(lore).toContainText('고정 자료 · 전체 본문');
       await expect(lore).not.toContainText('로어 포함 기록이 없어요');
@@ -253,7 +253,7 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
       ).toBe(true);
       await page.screenshot({ path: info.outputPath(`scene-lore-known-${width}.png`) });
-      await lore.getByRole('button', { name: '현재 조회 로어 확인 닫기', exact: true }).click();
+      await lore.getByRole('button', { name: '마지막 장면의 로어 닫기', exact: true }).click();
       page.off('request', captureDetail);
     }
   } finally {

@@ -345,15 +345,6 @@ export function PromptEditor({
           </button>
         )}
       </div>
-      <label>
-        프롬프트 이름
-        <input
-          aria-label="프롬프트 이름"
-          maxLength={160}
-          value={draft.title}
-          onChange={(event) => edit({ title: event.target.value })}
-        />
-      </label>
     </div>
   );
   return (
@@ -375,10 +366,17 @@ export function PromptEditor({
             있어요.
           </p>
         )}
-        <fieldset
-          className={`prompt-editor-fields${initialPreset !== undefined ? ' prompt-preset-fields' : ''}`}
-          disabled={busy}
-        >
+        <fieldset className="prompt-editor-fields" disabled={busy}>
+          <label className="prompt-title-field">
+            프롬프트 이름 (필수)
+            <input
+              aria-label="프롬프트 이름"
+              required
+              maxLength={160}
+              value={draft.title}
+              onChange={(event) => edit({ title: event.target.value })}
+            />
+          </label>
           {initialPreset === undefined && metadata}
           <fieldset className="prompt-composer-frame">
             <NativeRisuPresetEditor
@@ -414,16 +412,15 @@ export function PromptEditor({
             />
           </fieldset>
         </fieldset>
-        <p role="status" className="prompt-status">
-          {busy ? '처리 중…' : status}
-        </p>
+        {(busy || status) && (
+          <p role="status" className="prompt-status">
+            {busy ? '처리 중…' : status}
+          </p>
+        )}
         {pendingTemplate && (
           <p className="muted">
             원문 입력은 저장할 때 함께 검증해요. 오류가 있으면 입력을 유지하고 알려드려요.
           </p>
-        )}
-        {draft.dirty && (
-          <p className="muted prompt-unsaved">편집 중인 프롬프트를 아직 저장하지 않았어요.</p>
         )}
         <DismissibleError
           message={error ? `${error} 편집 내용은 유지했어요.` : ''}

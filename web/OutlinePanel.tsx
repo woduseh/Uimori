@@ -665,7 +665,6 @@ export function OutlinePanel({
                       maxLength={OUTLINE_INTENT_MAX}
                       value={draft.intent}
                       disabled={disabled}
-                      placeholder={OUTLINE_GUIDANCE[draft.level]}
                       onChange={(event) => changeDraft({ ...draft, intent: event.target.value })}
                     />
                   </label>

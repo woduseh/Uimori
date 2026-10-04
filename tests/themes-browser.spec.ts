@@ -23,6 +23,48 @@ async function openThemes(page: Page, url = '/') {
   await selectSettingsSection(page, '테마·색상');
 }
 
+test('THEMES mobile primary choices precede background and preserve its unsaved edits', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: 412, height: 844 });
+  const before = await (await request.get('/api/themes')).json();
+  await openThemes(page);
+  const layout = page.getByRole('region', { name: '레이아웃', exact: true });
+  const palette = page.getByRole('region', { name: '색상 팔레트', exact: true });
+  const background = page.getByRole('region', { name: '배경 이미지', exact: true });
+  await expect(layout.getByRole('button', { name: '기본 테마 적용', exact: true })).toBeInViewport({
+    ratio: 0.5,
+  });
+  const layoutBox = await layout.boundingBox();
+  const paletteBox = await palette.boundingBox();
+  const backgroundBox = await background.boundingBox();
+  expect(layoutBox!.y + layoutBox!.height).toBeLessThan(paletteBox!.y);
+  expect(paletteBox!.y + paletteBox!.height).toBeLessThan(backgroundBox!.y);
+  await page.screenshot({ path: info.outputPath('theme-order.png') });
+
+  const blur = background.getByLabel('배경 흐림', { exact: true });
+  const original = await blur.inputValue();
+  const changed = original === '7' ? '8' : '7';
+  await blur.fill(changed);
+  await expect(page.getByLabel('테마 적용 범위', { exact: true })).toBeDisabled();
+  await expect(layout.getByRole('button', { name: '기본 테마 적용', exact: true })).toBeDisabled();
+  await expect(
+    palette.getByRole('button', { name: '크림 팔레트 적용', exact: true })
+  ).toBeDisabled();
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  const guard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
+  await expect(guard).toBeVisible();
+  await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(blur).toHaveValue(changed);
+  await background.getByRole('button', { name: '배경 변경 취소', exact: true }).click();
+  await expect(blur).toHaveValue(original);
+  await expect(background.getByRole('button', { name: '배경 저장', exact: true })).toBeDisabled();
+  expect((await (await request.get('/api/themes')).json()).preferences).toEqual(before.preferences);
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await expect(guard).toBeHidden();
+});
+
 for (const width of [1440, 412]) {
   test(`THEMES ${width} palette, custom editor, persistence and portable import`, async ({
     page,

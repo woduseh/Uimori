@@ -158,7 +158,6 @@ export function PackageFeaturesEditor({
             <fieldset className="package-entry" key={ref.id}>
               <legend>{status?.content?.title ?? ref.id}</legend>
               <ContentAvatar content={status?.content} title={status?.content?.title ?? ref.id} />
-              <small>현재 저장된 모듈을 사용해요.</small>
               {status?.error && (
                 <p className="error" role="alert">
                   {status.error} 자료를 다시 확인하거나 참조를 해제해 주세요.

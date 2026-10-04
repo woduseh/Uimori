@@ -152,7 +152,9 @@ export function RunTaskDetails({
           )
         )}
       {afterJobs}
-      <DiagnosticReport scope={{ scope: 'chat', chatId: run.chatId, runId: run.id }} />
+      <div className="form-actions">
+        <DiagnosticReport scope={{ scope: 'chat', chatId: run.chatId, runId: run.id }} />
+      </div>
       <LazyDiagnostics<Run>
         path={`/runs/${run.id}`}
         revision={revision}

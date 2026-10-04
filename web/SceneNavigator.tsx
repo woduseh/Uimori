@@ -16,6 +16,7 @@ export function SceneNavigator({
   onTarget,
   onLatest,
   compact = false,
+  hideControls = false,
   listOpen = false,
   onListOpenChange,
 }: {
@@ -27,6 +28,8 @@ export function SceneNavigator({
   onLatest: () => void;
   /** Compact widths show previous/current/next above the composer; the header can also open the list. */
   compact?: boolean;
+  /** Hide compact floating controls without unmounting the list or its bookmark drafts. */
+  hideControls?: boolean;
   /** Controlled list state on compact widths (the header owns the opener). */
   listOpen?: boolean;
   onListOpenChange?: (open: boolean) => void;
@@ -241,36 +244,38 @@ export function SceneNavigator({
   if (compact)
     return (
       <>
-        <nav className="scene-mini-navigator" aria-label="장면 탐색">
-          <button
-            type="button"
-            className="ghost"
-            aria-label="이전 장면"
-            disabled={index === 0}
-            onClick={() => select(entries[index - 1].id)}
-          >
-            <BackIcon size={19} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className="ghost scene-mini-current"
-            aria-label="장면 목록 열기"
-            onClick={openList}
-          >
-            <ListIcon size={19} aria-hidden="true" />
-            <span>{active.opening ? '첫 메시지' : `${active.number} / ${sceneCount}`}</span>
-          </button>
-          <button
-            type="button"
-            className="ghost"
-            aria-label="다음 장면"
-            disabled={index === entries.length - 1}
-            onClick={() => select(entries[index + 1].id)}
-          >
-            <ForwardIcon size={19} aria-hidden="true" />
-          </button>
-        </nav>
-        {last && canGoLatest && (
+        {!hideControls && (
+          <nav className="scene-mini-navigator" aria-label="장면 탐색">
+            <button
+              type="button"
+              className="ghost"
+              aria-label="이전 장면"
+              disabled={index === 0}
+              onClick={() => select(entries[index - 1].id)}
+            >
+              <BackIcon size={19} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="ghost scene-mini-current"
+              aria-label="장면 목록 열기"
+              onClick={openList}
+            >
+              <ListIcon size={19} aria-hidden="true" />
+              <span>{active.opening ? '첫 메시지' : `${active.number} / ${sceneCount}`}</span>
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              aria-label="다음 장면"
+              disabled={index === entries.length - 1}
+              onClick={() => select(entries[index + 1].id)}
+            >
+              <ForwardIcon size={19} aria-hidden="true" />
+            </button>
+          </nav>
+        )}
+        {!hideControls && last && canGoLatest && (
           <button
             type="button"
             className="scene-latest-floating"

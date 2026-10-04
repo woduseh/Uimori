@@ -319,10 +319,14 @@ export function ProfileEditor({
                     : '선택한 본문 모델을 사용할 수 없어 새 본문 실행이 차단돼요. 사용 가능한 모델을 고르거나 전체 설정을 확인해 주세요.'}
                 </p>
               )}
-              <small>
-                본문 모델의 최신 저장본을 다음 요청부터 사용해요. 진행 중이거나 과거의 작업은 바뀌지
-                않아요.
-              </small>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => onGlobalSettings('models')}
+              >
+                <SettingsIcon size={18} aria-hidden="true" />
+                전역 모델 설정
+              </button>
             </div>
             <div hidden={tab !== 'prompts'} className="chat-profile-prompt-options">
               <label>
@@ -357,8 +361,9 @@ export function ProfileEditor({
                 </p>
               )}
               <small>
-                고정한 프리셋의 최신 저장본을 다음 요청부터 사용해요. 과거와 진행 중인 작업은 바뀌지
-                않아요. 창작 옵션은 선택한 프롬프트의 정의를 따라요.
+                직접 선택하면 이 채팅에 고정하고, ‘전역 따르기’는 전체 설정을 사용해요.
+                모델·프롬프트의 최신 저장본은 다음 요청부터 적용돼요. 과거·진행 중인 작업은 바뀌지
+                않고, 창작 옵션은 선택한 프롬프트를 따라요.
               </small>
             </div>
             <div hidden={tab !== 'prompts'} className="settings-inherited">
@@ -383,14 +388,6 @@ export function ProfileEditor({
                   <dd>JEV</dd>
                 </div>
               </dl>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => onGlobalSettings('models')}
-              >
-                <SettingsIcon size={18} aria-hidden="true" />
-                전역 모델 설정
-              </button>
             </div>
             <div hidden={tab !== 'prompts'} className="settings-inherited">
               <h4>전체 채팅 설정에서 사용하는 프롬프트</h4>

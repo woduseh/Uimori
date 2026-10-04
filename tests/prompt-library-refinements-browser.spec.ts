@@ -1,9 +1,10 @@
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
-import type { Content } from '../core/product.js';
+import type { Content, PromptPreset } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { navigationAction } from './ui-navigation.js';
+import { isResourceSaveRequest, waitForResourceSave } from './fixtures/resource-save.js';
 
 async function seed(request: APIRequestContext, kind: Content['kind'], title: string) {
   const response = await request.post('/api/content', {
@@ -66,6 +67,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
   const editor = page.getByTestId('prompt-editor');
   const native = editor.getByRole('region', { name: 'Risu 프롬프트 원본 편집' });
   const selection = editor.getByLabel('불러올 프롬프트', { exact: true });
+  const presets: PromptPreset[] = [];
   for (const [role, text] of [
     ['main', DEFAULT_MAIN_PROMPT],
     ['translation', DEFAULT_TRANSLATION_PROMPT],
@@ -75,14 +77,29 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
       .getByRole('button', { name: '새 프롬프트', exact: true })
       .first()
       .click();
+    const saveState = editor.locator('.resource-editor-status').getByRole('status');
+    const name = editor.getByLabel('프롬프트 이름', { exact: true });
+    await expect(saveState).toHaveText('등록 전');
+    await expect(native.getByRole('tab', { name: '구성', exact: true })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await expect(name).toHaveCount(1);
+    await expect(name).toBeInViewport({ ratio: 1 });
+    await expect(name).toHaveAttribute('required', '');
+    await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
+    if (visualReview && role === 'main')
+      await page.screenshot({ path: info.outputPath('prompt-create-name-mobile.png') });
     await expect(selection.locator('option[value="builtin"], option[value="new"]')).toHaveCount(0);
-    await native.getByRole('tab', { name: '기본 옵션', exact: true }).click();
-    await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption(role);
-    await native.getByRole('tab', { name: '구성', exact: true }).click();
+    if (role === 'translation') {
+      await native.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption(role);
+      await native.getByRole('tab', { name: '구성', exact: true }).click();
+    }
     await expect(native.getByLabel('1번 프롬프트 본문', { exact: true })).toHaveValue(text);
     const title = `PLR 기본 ${role} ${crypto.randomUUID()}`;
-    await native.getByRole('tab', { name: '기본 옵션', exact: true }).click();
-    await editor.getByLabel('프롬프트 이름', { exact: true }).fill(title);
+    await name.fill(title);
+    await expect(saveState).toHaveText('미저장 변경');
     const savedResponse = page.waitForResponse(
       (response) =>
         /\/api\/resources\/save$/.test(response.url()) && response.request().method() === 'POST'
@@ -90,7 +107,10 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
     const response = await savedResponse;
     expect(response.ok()).toBe(true);
-    const saved = (await response.json()).saved;
+    const saved = (await response.json()).saved as PromptPreset;
+    presets.push(saved);
+    expect(saved.title).toBe(title);
+    await expect(saveState).toHaveText('저장됨');
     const persisted = await request.get(
       `/api/revisions/prompt-preset/${saved.id}/${saved.revision}`
     );
@@ -102,11 +122,41 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
   await native.getByRole('tab', { name: '정규식', exact: true }).click();
   await native.getByText('고급 JSON 편집', { exact: true }).click();
   const regex = native.getByLabel('Risu 정규식 JSON', { exact: true });
+  const savedPreset = presets.at(-1)!;
+  let saveRequests = 0;
+  page.on('request', (request) => {
+    if (isResourceSaveRequest(request)) saveRequests++;
+  });
   await regex.fill('[{"unfinished":');
-  await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
+  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  await expect(editor.getByRole('alert').filter({ hasText: /JSON/ })).toBeVisible();
   await expect(regex).toHaveValue('[{"unfinished":');
+  const unchanged = await request.get(`/api/prompt-presets/${savedPreset.id}`);
+  expect(unchanged.ok()).toBe(true);
+  expect(await unchanged.json()).toMatchObject({
+    revision: savedPreset.revision,
+    program: savedPreset.program,
+  });
+  expect(saveRequests).toBe(0);
   await regex.fill('[]');
-  await expect(native.getByRole('alert')).toHaveCount(0);
+  const restoredTitle = `${savedPreset.title} 복구`;
+  await editor.getByLabel('프롬프트 이름', { exact: true }).fill(restoredTitle);
+  const restoredResponse = waitForResourceSave(page, 'prompt-preset', savedPreset.id);
+  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  const restored = (await restoredResponse).saved as PromptPreset;
+  expect(restored.revision).toBe(savedPreset.revision + 1);
+  expect(restored.program).toEqual(savedPreset.program);
+  expect(saveRequests).toBe(1);
+  await expect(editor.getByRole('alert')).toHaveCount(0);
+  await page.reload();
+  await navigationAction(page, '프롬프트');
+  await page.getByLabel('프롬프트 검색', { exact: true }).fill(restoredTitle);
+  await page.getByRole('button', { name: `${restoredTitle} 프롬프트 편집`, exact: true }).click();
+  await expect(editor.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(restoredTitle);
+  await expect(editor.locator('.resource-editor-status').getByRole('status')).toHaveText('저장됨');
+  await native.getByRole('tab', { name: '정규식', exact: true }).click();
+  await native.getByText('고급 JSON 편집', { exact: true }).click();
+  await expect(regex).toHaveValue('[]');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
