@@ -10,7 +10,6 @@ export function InstallApp() {
       <div className="settings-service-row">
         <div className="settings-service-copy">
           <h4>앱 설치</h4>
-          <p className="muted">홈 화면에서 앱처럼 열어요. 서버 연결이 필요해요.</p>
         </div>
         {state.installed ? (
           <span className="settings-inline-status" role="status">
@@ -29,13 +28,17 @@ export function InstallApp() {
           </button>
         ) : null}
       </div>
-      {!state.installed && !state.available && (
-        <p className="muted">
-          {isSecureContext
-            ? '브라우저 메뉴에서 앱 설치 또는 홈 화면에 추가를 선택해 주세요.'
-            : 'HTTPS 또는 localhost에서 설치할 수 있어요.'}
-        </p>
-      )}
+      <details className="settings-install-help">
+        <summary>설치 안내</summary>
+        <p className="muted">홈 화면에서 앱처럼 열어요. 서버 연결이 필요해요.</p>
+        {!state.installed && !state.available && (
+          <p className="muted">
+            {isSecureContext
+              ? '브라우저 메뉴에서 앱 설치 또는 홈 화면에 추가를 선택해 주세요.'
+              : 'HTTPS 또는 localhost에서 설치할 수 있어요.'}
+          </p>
+        )}
+      </details>
       {state.error && (
         <p role="alert" className="error">
           {state.error}

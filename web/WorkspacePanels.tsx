@@ -256,7 +256,6 @@ const settingsCategories: SettingsCategory[] = [
     label: '일반',
     icon: SettingsIcon,
     destinations: [
-      { label: '앱과 알림', terms: '알림 푸시 설치 PWA', anchor: 'services' },
       {
         label: '화면과 입력',
         terms: '화면 테마 Enter 보내기 도우미 패널 폭 사이드바 좌측 탐색 크기',
@@ -267,6 +266,7 @@ const settingsCategories: SettingsCategory[] = [
         terms: '글자 크기 글꼴 본문 폭 행간 줄 간격 문단 간격 번역 보기 응답 표시 실시간 완료',
         anchor: 'reading',
       },
+      { label: '앱과 알림', terms: '알림 푸시 설치 PWA', anchor: 'services' },
     ],
   },
   { key: 'themes', label: '테마·색상', icon: Palette, terms: '밝게 어둡게 CSS HTML' },
@@ -582,20 +582,6 @@ export function AppSettingsPanel({
                   {key === 'about' && <AppAbout />}
                   {key === 'general' && (
                     <section
-                      id={`${id}-general-services`}
-                      tabIndex={-1}
-                      className="settings-section settings-services"
-                      aria-label="앱과 알림"
-                    >
-                      <h3>
-                        앱과 알림<span className="scope-badge">이 기기</span>
-                      </h3>
-                      <InstallApp />
-                      <PushSettings />
-                    </section>
-                  )}
-                  {key === 'general' && (
-                    <section
                       id={`${id}-general-display`}
                       tabIndex={-1}
                       className="settings-section"
@@ -628,8 +614,7 @@ export function AppSettingsPanel({
                       <small>
                         {enterSend
                           ? 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.'
-                          : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'}{' '}
-                        한글 조합 중에는 보내지 않아요.
+                          : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'}
                       </small>
                       <label>
                         좌측 사이드바 폭
@@ -643,10 +628,7 @@ export function AppSettingsPanel({
                           <option value={400}>매우 넓게</option>
                         </select>
                       </label>
-                      <small>
-                        데스크톱에서 펼친 왼쪽 탐색만 바뀌어요. 공간이 부족하면 본문 폭을 지키도록
-                        줄어들어요.
-                      </small>
+                      <small>데스크톱에서 펼친 사이드바에 적용돼요.</small>
                       <label>
                         도우미·창작 옵션 패널 폭
                         <select
@@ -659,10 +641,7 @@ export function AppSettingsPanel({
                           <option value={480}>넓게</option>
                         </select>
                       </label>
-                      <small>
-                        도우미와 창작 옵션이 같은 자리를 나눠 써서 폭도 함께 바뀌어요. 넓게 두면
-                        좁은 화면에서 패널이 원고 위에 겹쳐 열려요.
-                      </small>
+                      <small>공간이 부족하면 패널이 원고 위에 겹쳐 열려요.</small>
                     </section>
                   )}
                   {key === 'general' && (
@@ -676,9 +655,20 @@ export function AppSettingsPanel({
                         <span className="scope-badge">이 기기</span>
                       </h3>
                       {readingSettings}
-                      <small>
-                        채팅 메뉴의 읽기 설정과 같은 값이에요. 어느 쪽에서 바꿔도 함께 바뀌어요.
-                      </small>
+                    </section>
+                  )}
+                  {key === 'general' && (
+                    <section
+                      id={`${id}-general-services`}
+                      tabIndex={-1}
+                      className="settings-section settings-services"
+                      aria-label="앱과 알림"
+                    >
+                      <h3>
+                        앱과 알림<span className="scope-badge">이 기기</span>
+                      </h3>
+                      <InstallApp />
+                      <PushSettings />
                     </section>
                   )}
                   {key === 'usage' && <UsagePanel connections={state.library?.connections} />}

@@ -52,6 +52,15 @@ export function RisuImport({
   const unsupported = preview?.findings.some((finding) => finding.level === 'unsupported');
   const locked = busy || uncertain || !!result;
   const ready = !!source && !!preview && (uncertain || !unsupported || allowPartial);
+  const selectedKind = preview?.kind ?? kind;
+  const kindLabel =
+    selectedKind === 'module'
+      ? '모듈'
+      : selectedKind === 'persona'
+        ? '페르소나'
+        : selectedKind === 'bot'
+          ? '봇'
+          : '자동';
 
   function selectionChanged() {
     submission.current = null;
@@ -233,30 +242,9 @@ export function RisuImport({
           aria-busy={busy}
         >
           {!preview && (
-            <>
-              <p className="muted">
-                원본 파일은 그대로 보존해요. 봇·페르소나·모듈은 서재에 등록하며, 봇은 원하면 새
-                채팅도 함께 만들 수 있어요. 파일의 코드나 외부 URL을 자동으로 실행하지 않아요.
-              </p>
-              <label className="risu-import-file">
-                가져올 자료 종류
-                <select
-                  value={kind}
-                  disabled={locked}
-                  onChange={(event) => void changeKind(event.target.value as RisuImportKind | '')}
-                >
-                  <option value="">자동</option>
-                  <option value="bot">봇</option>
-                  <option value="persona">페르소나</option>
-                  <option value="module">모듈</option>
-                </select>
-              </label>
-              <p className="muted">
-                자동은 카드 파일을 봇으로, 모듈 JSON·프로젝트 ZIP을 모듈로 가져와요. 카드를
-                페르소나로 쓰거나 CharX를 모듈로 쓰려면 종류를 직접 선택해 주세요. 페르소나와 모듈은
-                새 채팅을 만들지 않아요.
-              </p>
-            </>
+            <p className="muted">
+              파일을 선택하면 내용을 미리 확인할 수 있어요. 원본은 변경하지 않아요.
+            </p>
           )}
           <label className={`risu-import-file${preview ? ' risu-import-file-ready' : ''}`}>
             <span>
@@ -277,17 +265,42 @@ export function RisuImport({
             />
             {preview && <span className="risu-import-change">파일 변경</span>}
           </label>
+          <details className="risu-import-processing">
+            <summary>
+              {preview
+                ? `${kindLabel}${preview.kind === 'bot' ? '으로' : '로'} 가져오기 · 변경`
+                : `자료 종류 · ${kindLabel}`}
+            </summary>
+            <div>
+              <label>
+                {preview ? '자료 종류' : '가져올 자료 종류'}
+                <select
+                  value={kind}
+                  disabled={locked}
+                  onChange={(event) => void changeKind(event.target.value as RisuImportKind | '')}
+                >
+                  <option value="">자동</option>
+                  <option value="bot">봇</option>
+                  <option value="persona">페르소나</option>
+                  <option value="module">모듈</option>
+                </select>
+              </label>
+              <p className="muted">
+                자동은 카드를 봇으로, 모듈 파일을 모듈로 가져와요. 카드를 페르소나로 쓰거나 CharX를
+                모듈로 쓰려면 종류를 바꿔 주세요.
+              </p>
+              {preview && preview.lore.length > 0 && (
+                <p className="muted">사용 중인 로어도 함께 가져와요.</p>
+              )}
+              <p className="muted">
+                원본 파일은 변경하지 않으며, 파일의 코드나 외부 URL을 자동으로 실행하지 않아요.
+              </p>
+            </div>
+          </details>
           {preview && (
             <>
               <div className="risu-import-summary risu-import-hero">
                 <h3>{preview.title}</h3>
-                <small className="muted">
-                  {preview.kind === 'module'
-                    ? '모듈'
-                    : preview.kind === 'persona'
-                      ? '페르소나'
-                      : '봇'}
-                </small>
                 {preview.description && <p>{preview.description}</p>}
                 <dl className="risu-import-counts">
                   <div>
@@ -304,7 +317,7 @@ export function RisuImport({
                   </div>
                 </dl>
               </div>
-              {preview.findings.length > 0 ? (
+              {preview.findings.length > 0 && (
                 <section
                   className={`risu-import-findings${unsupported ? ' warn' : ''}`}
                   aria-label="가져오기 지원 범위"
@@ -326,39 +339,7 @@ export function RisuImport({
                     ))}
                   </ul>
                 </section>
-              ) : (
-                <p className="muted">현재 파일에서 보고된 미지원 항목은 없어요.</p>
               )}
-              <p className="muted">
-                로어북의 사용 중인 항목은 별도로 선택하지 않아도{' '}
-                {preview.kind === 'module'
-                  ? '모듈'
-                  : preview.kind === 'persona'
-                    ? '페르소나'
-                    : '봇'}
-                의 설정으로 가져와요.
-              </p>
-              <details className="risu-import-processing">
-                <summary>처리 방식</summary>
-                <div>
-                  <label>
-                    자료 종류
-                    <select
-                      value={kind}
-                      disabled={locked}
-                      onChange={(event) =>
-                        void changeKind(event.target.value as RisuImportKind | '')
-                      }
-                    >
-                      <option value="">자동</option>
-                      <option value="bot">봇</option>
-                      <option value="persona">페르소나</option>
-                      <option value="module">모듈</option>
-                    </select>
-                  </label>
-                  <p className="muted">원본 보존 · 로어 선별 · 스크립트 자동 실행 안 함</p>
-                </div>
-              </details>
               {preview.imageHandoff && (
                 <RisuImageHandoffFields
                   policy={preview.imageHandoff}
