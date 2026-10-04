@@ -17,6 +17,9 @@ import { forkChat } from '../server/chat-fork.js';
 import { createApp } from '../server/app.js';
 import type { Content } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
+import { exportManuscript, manuscriptExportMetadata } from '../server/manuscript-export.js';
+import { readerDetail } from '../server/reader.js';
+import { apiErrorDiagnostic } from '../web/api-errors.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(async () => {
@@ -112,6 +115,133 @@ const requests = (store: Store, chatId: string) =>
   store
     .history(store.chat(chatId).headRevision)
     .map((item) => store.run(store.source(item.revision).runId).request);
+
+describe('Markdown manuscript export', () => {
+  test('exports only current edited source text for the chosen scene range', async () => {
+    const store = await database();
+    const { chat, first, second } = authoredChat(store);
+    store.editSource(first.id, {
+      expectedRevision: 0,
+      text: '<p>Edited scene.</p>\nStatus: ready',
+    });
+    const body = { mode: 'source', expectedHeadRevision: second.id };
+    expect(exportManuscript(store, chat.id, body)).toEqual({
+      filename: 'Original story-원문.md',
+      markdown: '<p>Edited scene.</p>\nStatus: ready\n\nScene two.\n',
+    });
+    const selected = exportManuscript(store, chat.id, { ...body, fromScene: 2, toScene: 2 });
+    expect(selected.markdown).toBe('Scene two.\n');
+    expect(selected.filename).toBe('Original story-2-2-원문.md');
+    expect(selected.markdown).not.toMatch(/Continue|Keep the narrator|modelCalls|request/);
+    expect(() => exportManuscript(store, chat.id, { ...body, fromScene: 2, toScene: 1 })).toThrow(
+      'MANUSCRIPT_RANGE_INVALID'
+    );
+    expect(() => exportManuscript(store, chat.id, { ...body, fromScene: 3 })).toThrow(
+      'MANUSCRIPT_RANGE_INVALID'
+    );
+    expect(() =>
+      exportManuscript(store, chat.id, { ...body, expectedHeadRevision: first.id })
+    ).toThrow('MANUSCRIPT_RANGE_CHANGED');
+  });
+
+  test('saved translations must match each current source and never fall back to source', async () => {
+    const store = await database();
+    const { chat, first, second } = authoredChat(store);
+    const body = { mode: 'translation', expectedHeadRevision: second.id };
+    expect(() => exportManuscript(store, chat.id, body)).toThrow(
+      'MANUSCRIPT_TRANSLATION_MISSING:2:1'
+    );
+    expect(exportManuscript(store, chat.id, { ...body, fromScene: 1, toScene: 1 }).markdown).toBe(
+      '첫 장면.\n'
+    );
+    editTranslation(store, second.id, {
+      text: '둘째 장면.',
+      expectedRevision: 0,
+      expectedSourceHash: second.hash,
+    });
+    expect(exportManuscript(store, chat.id, body).markdown).toBe('첫 장면.\n\n둘째 장면.\n');
+    store.editSource(first.id, { expectedRevision: 0, text: 'Changed source.' });
+    expect(() => exportManuscript(store, chat.id, body)).toThrow(
+      'MANUSCRIPT_TRANSLATION_MISSING:1:1'
+    );
+    const current = store.sourceMetadata(first.id);
+    editTranslation(store, first.id, {
+      text: '고친 장면.',
+      expectedRevision: store.source(first.id).translationRevision,
+      expectedSourceHash: current.hash,
+    });
+    expect(exportManuscript(store, chat.id, body).markdown).toBe('고친 장면.\n\n둘째 장면.\n');
+  });
+
+  test('opening labels and scene numbers agree with Reader and metadata excludes manuscript bodies', async () => {
+    const store = await database();
+    const { chat, first, second } = authoredChat(store);
+    store.db
+      .prepare(
+        "UPDATE runs SET snapshot=json_set(snapshot,'$.packageStart.mode','authored') WHERE id=?"
+      )
+      .run(first.runId);
+    const metadata = manuscriptExportMetadata(store, chat.id);
+    expect(metadata.scenes).toEqual([
+      { number: 0, label: '첫 메시지' },
+      { number: 1, label: '장면 1' },
+    ]);
+    expect(metadata.scenes.map((scene) => scene.number)).toEqual(
+      readerDetail(store, chat.id, {}).reader.navigation.map((scene) => scene.number)
+    );
+    expect(JSON.stringify(metadata)).not.toMatch(
+      /Scene one|Scene two|Open the story|Keep the narrator/
+    );
+    expect(
+      exportManuscript(store, chat.id, {
+        mode: 'source',
+        expectedHeadRevision: second.id,
+        fromScene: 0,
+        toScene: 0,
+      }).markdown
+    ).toBe('Scene one.\n');
+    const empty = createFixtureChat(store, 'Empty');
+    expect(manuscriptExportMetadata(store, empty.id).scenes).toEqual([]);
+    expect(() =>
+      exportManuscript(store, empty.id, { mode: 'source', expectedHeadRevision: null })
+    ).toThrow('MANUSCRIPT_EMPTY');
+  });
+
+  test('only validated scene numbers reach the missing translation message', () => {
+    expect(apiErrorDiagnostic('MANUSCRIPT_TRANSLATION_MISSING:0,2:2', 409, 'POST')).toEqual({
+      code: 'MANUSCRIPT_TRANSLATION_MISSING',
+      message:
+        '저장된 유효 번역이 없는 장면: 첫 메시지, 장면 2. 번역을 완료하거나 범위를 바꿔 주세요.',
+    });
+    const twenty = Array.from({ length: 20 }, (_, index) => index + 1).join(',');
+    expect(
+      apiErrorDiagnostic(`MANUSCRIPT_TRANSLATION_MISSING:${twenty}:23`, 409, 'POST').message
+    ).toContain('장면 20 외 3개');
+    for (const suffix of [
+      '2:0',
+      '2,1:2',
+      '1,1:2',
+      '01:1',
+      '-1:1',
+      '1,2:1',
+      'secret:1',
+      '1:1:secret',
+      '1:1\n',
+      `${twenty},21:21`,
+      '99999999999:1',
+    ]) {
+      const diagnostic = apiErrorDiagnostic(
+        `MANUSCRIPT_TRANSLATION_MISSING:${suffix}`,
+        409,
+        'POST'
+      );
+      expect(diagnostic.code).toBeNull();
+      expect(diagnostic.message).toBe(
+        '현재 상태에서는 이 요청을 완료할 수 없어요. 설정과 작업 상태를 확인해 주세요. (409)'
+      );
+    }
+  });
+});
 
 describe('chat transcript export and import', () => {
   test('one package keeps its bot and persona roles through transcript, fork and backup', async () => {
@@ -472,6 +602,28 @@ test('the transcript routes download the file and create the chat over HTTP', as
     expect(exported.headers['content-disposition']).toContain('chat-transcript.json');
     const transcript = exported.json();
     expect(transcript.format).toBe(CHAT_TRANSCRIPT_FORMAT);
+    const manuscript = await app.inject({
+      method: 'POST',
+      url: `/api/chats/${chat.id}/manuscript`,
+      headers,
+      payload: { mode: 'translation', expectedHeadRevision: app.store.chat(chat.id).headRevision },
+    });
+    expect(manuscript.statusCode).toBe(409);
+    expect(manuscript.json().error).toBe('MANUSCRIPT_TRANSLATION_MISSING:2:1');
+    expect(
+      apiErrorDiagnostic(manuscript.json().error, manuscript.statusCode, 'POST').message
+    ).toContain('장면 2');
+    const changed = await app.inject({
+      method: 'POST',
+      url: `/api/chats/${chat.id}/manuscript`,
+      headers,
+      payload: { mode: 'source', expectedHeadRevision: null },
+    });
+    expect(changed.statusCode).toBe(409);
+    expect(apiErrorDiagnostic(changed.json().error, changed.statusCode, 'POST')).toEqual({
+      code: 'MANUSCRIPT_RANGE_CHANGED',
+      message: '원고 범위가 바뀌었어요. 내보내기를 다시 열어 범위를 확인해 주세요.',
+    });
     const imported = await app.inject({
       method: 'POST',
       url: '/api/chats/import-transcript',

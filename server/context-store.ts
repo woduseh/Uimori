@@ -312,7 +312,8 @@ export class ContextStore {
   }
   schedule(chatId: string, value: unknown, snapshot: RunSnapshot): ContextJob {
     const body = record(value);
-    fields(body, ['expectedRevision', 'expectedHeadRevision', 'idempotencyKey']);
+    fields(body, ['expectedRevision', 'expectedHeadRevision', 'idempotencyKey', 'priorities']);
+    if (body.priorities !== undefined) text(body.priorities, 'compaction priorities', 4000, true);
     const key = text(body.idempotencyKey, 'request key', 120),
       command = JSON.stringify(body);
     return this.store.transaction(() => {
@@ -353,7 +354,7 @@ export class ContextStore {
   job(id: string, includeInput = true): ContextJob {
     const row = this.db
       .prepare(
-        `SELECT id,chat_id,status,checkpoint,error,noop,created_at,updated_at,${includeInput ? 'snapshot' : 'NULL'} AS snapshot FROM context_jobs WHERE id=?`
+        `SELECT id,chat_id,status,checkpoint,error,noop,created_at,updated_at,json_extract(command,'$.priorities') AS priorities,${includeInput ? 'snapshot' : 'NULL'} AS snapshot FROM context_jobs WHERE id=?`
       )
       .get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Context job not found');
@@ -367,6 +368,7 @@ export class ContextStore {
       noop: row.noop === 1,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      ...(typeof row.priorities === 'string' ? { priorities: row.priorities } : {}),
     };
   }
   start(id: string) {

@@ -70,6 +70,34 @@ const sourceOf = (value: unknown) => ({
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
 });
 
+test('a library-only bot import preserves its opening without creating a chat, including retries', async () => {
+  const store = database();
+  const source = sourceOf(card());
+  const preview = prepareRisuImport({ source });
+  const body = {
+    source,
+    digest: preview.digest,
+    allowPartial: false,
+    createChat: false,
+    idempotencyKey: 'library-only',
+  };
+  const imported = await applyRisuImport(store, body);
+  expect(imported.chat).toBeNull();
+  expect(store.chats()).toHaveLength(0);
+  const botId = imported.receipt.items.find((item) => item.key === 'bot')!.id;
+  const bot = store.product.get<Content>('content', botId);
+  expect(bot.package.starts?.[0].text).toBe('The pilot waits.');
+  expect((await applyRisuImport(store, body)).receipt).toMatchObject({
+    created: false,
+    id: imported.receipt.id,
+  });
+  expect(store.product.all('content')).toHaveLength(1);
+  await expect(applyRisuImport(store, { ...body, createChat: true })).rejects.toMatchObject({
+    statusCode: 409,
+  });
+  expect(store.chats()).toHaveLength(0);
+});
+
 test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
   'retired card fields are excluded while active global notes and source bytes remain: %s',
   async (globalNote) => {

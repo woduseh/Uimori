@@ -215,8 +215,13 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
     noop: false,
     error: null,
   };
-  await page.route(`**/api/chats/${chat.id}/context?*`, (route) =>
-    route.fulfill({ json: { ...actual, jobs: [job] } })
+  let contextReads = 0;
+  await page.route(
+    (url) => url.pathname === `/api/chats/${chat.id}/context`,
+    (route) => {
+      contextReads++;
+      return route.fulfill({ json: { ...actual, jobs: [job] } });
+    }
   );
   let cancellations = 0;
   await page.route(`**/api/chats/${chat.id}/context/jobs/${job.id}/cancel`, async (route) => {
@@ -226,6 +231,7 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
     await route.fulfill({ json: job });
   });
   await panel.getByRole('button', { name: '새로 확인', exact: true }).click();
+  await expect.poll(() => contextReads).toBeGreaterThan(0);
   await expect(panel.getByRole('button', { name: '압축 취소', exact: true })).toBeEnabled();
   await panel.getByRole('button', { name: '압축 취소', exact: true }).click();
   await expect(
@@ -237,5 +243,48 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
     'completed'
   );
 });
+
+for (const width of [1440, 412]) {
+  test(`CTXUI04 composer compaction keeps the draft and sends one-time priorities ${width}`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { chat } = await create(page, `CTXUI04 ${width}`);
+    await page
+      .getByRole('dialog', { name: '채팅 설정', exact: true })
+      .getByRole('button', { name: '채팅 설정 닫기', exact: true })
+      .click();
+    const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+    await composer.fill('다음 장면 초안');
+    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+    await page.getByRole('button', { name: '수동 컨텍스트 압축', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '수동 컨텍스트 압축', exact: true });
+    await expect(dialog).toBeVisible();
+    await dialog.getByText('이번 압축에서 우선할 내용 · 선택', { exact: true }).click();
+    const priorities = dialog.getByLabel('압축 우선순위', { exact: true });
+    await priorities.fill('미라가 아직 모르는 사실과 인물 호칭을 유지해요.');
+    const accepted = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/api/chats/${chat.id}/context/compact`) &&
+        response.request().method() === 'POST'
+    );
+    await dialog.getByRole('button', { name: '지금 압축', exact: true }).click();
+    const response = await accepted;
+    expect(response.ok(), await response.text()).toBe(true);
+    expect(response.request().postDataJSON().priorities).toBe(
+      '미라가 아직 모르는 사실과 인물 호칭을 유지해요.'
+    );
+    await expect(dialog).toContainText('정리할 구간이 없어 원문과 요약을 유지했어요.');
+    await expect(priorities).toHaveValue('');
+    expect((await read<Detail>(request, `/chats/${chat.id}/context`)).jobs[0].priorities).toBe(
+      '미라가 아직 모르는 사실과 인물 호칭을 유지해요.'
+    );
+    await page.screenshot({ path: info.outputPath(`composer-context-${width}.png`) });
+    await dialog.getByRole('button', { name: '수동 컨텍스트 압축 닫기', exact: true }).click();
+    await expect(composer).toHaveValue('다음 장면 초안');
+    await expect(page.getByRole('button', { name: '입력창 더보기', exact: true })).toBeFocused();
+  });
+}
 
 preservePromptWorkspace();

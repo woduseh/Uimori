@@ -29,6 +29,7 @@ import type { ChatFolder } from '../core/product.js';
 import { api } from './api.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
+import { BotDefaultPersona } from './BotDefaultPersona.js';
 import './bot-navigation.css';
 
 export type { ChatFolder } from '../core/product.js';
@@ -87,6 +88,7 @@ export function BotBranch(
     activities,
   } = props;
   const [searching, setSearching] = useState(false);
+  const [editingDefaults, setEditingDefaults] = useState(false);
   const [movingId, setMovingId] = useState<string | null>(null);
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -519,6 +521,15 @@ export function BotBranch(
               서재에서 관리
             </button>
             {managementActions}
+            {bot && library && (
+              <button
+                type="button"
+                onClick={(event) => openFromMenu(event, () => setEditingDefaults(true))}
+              >
+                <EditIcon size={18} aria-hidden="true" />
+                기본 페르소나
+              </button>
+            )}
             {bot && props.onImportChat && (
               <button
                 type="button"
@@ -553,6 +564,9 @@ export function BotBranch(
         <p className="error" role="alert">
           {error}
         </p>
+      )}
+      {editingDefaults && bot && library && (
+        <BotDefaultPersona bot={bot} library={library} onClose={() => setEditingDefaults(false)} />
       )}
       <Dialog
         open={searching}

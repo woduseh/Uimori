@@ -286,6 +286,101 @@ function continuation(request: transport.ProviderRequest) {
     | undefined;
 }
 
+test('a fitting recent turn does not spend a summary call when nothing older can be compacted', async () => {
+  const f = await fixture();
+  const log = script(f, (request) => {
+    expect(request.role).toBe('helper');
+    return structuredClone(success);
+  });
+  const previous = f.runtime.enqueue(f.conversation.id, randomUUID(), '이름은 바꾸지 마.');
+  await Promise.all(f.work);
+  expect(f.workspace.task(previous.id).status).toBe('completed');
+  const task = await f.run();
+  expect(task, task.error ?? '').toMatchObject({ status: 'completed', usage: { modelCalls: 1 } });
+  expect(log.requests.at(-1)?.input.history).toEqual(
+    expect.arrayContaining([expect.objectContaining({ role: 'user', text: '이름은 바꾸지 마.' })])
+  );
+  expect(compactions(f, task)).toEqual([]);
+});
+
+test.each([false, true])(
+  'helper compaction preserves a bounded exact recent suffix and reloads it (oversized recent turn: %s)',
+  async (oversizedRecent) => {
+    const f = await fixture({ fixed: false, reviewOnly: true });
+    f.updateModel(f.helperModel.id, { inputTokenLimit: 65536 });
+    const oldRequest = '먼저 이전 초안의 배경을 검토해 줘.';
+    const oldReply = 'Earlier scene evidence and resolved background details. '.repeat(1800);
+    const constraints = ['이름은 바꾸지 마. 🌱', '이번에는 제안만 해줘. 저장하지 마.'];
+    let seed = true;
+    const log = script(f, (request) => {
+      if (seed)
+        return summarized(
+          request.input.task === oldRequest ||
+            (oversizedRecent && request.input.task === constraints[1])
+            ? oldReply
+            : '그 조건을 유지할게요.'
+        );
+      if (request.role === 'context') {
+        const part = String((request.input.source as { part: string }).part);
+        expect(part).toContain(oldRequest);
+        expect(part).toContain(oldReply);
+        for (const constraint of constraints)
+          if (oversizedRecent) expect(part).toContain(constraint);
+          else expect(part).not.toContain(constraint);
+        return summarized('Earlier background reviewed; its proposed edits were not saved.');
+      }
+      expect(request.input.task).toBe(f.request);
+      expect(request.input.history).toEqual(oversizedRecent ? [] : recentMessages);
+      return structuredClone(success);
+    });
+    for (const request of [oldRequest, ...constraints]) {
+      const task = f.runtime.enqueue(f.conversation.id, randomUUID(), request);
+      await Promise.all(f.work);
+      expect(f.workspace.task(task.id).status).toBe('completed');
+    }
+    const messages = f.workspace.messages(f.conversation.id);
+    const recentMessages = messages.slice(2).map(({ id, role, text }) => ({ id, role, text }));
+    seed = false;
+    log.requests.length = 0;
+    f.updateModel(f.helperModel.id, { inputTokenLimit: 8192 });
+    const task = await f.run();
+    expect(task, task.error ?? '').toMatchObject({ status: 'completed', error: null });
+    expect(log.requests.map((request) => request.role)).toEqual(['context', 'helper']);
+    const checkpoint = JSON.parse(String(checkpointRows(f)[0].plan));
+    expect(checkpoint.compacted.map((ref: { revision: string }) => ref.revision)).toEqual(
+      (oversizedRecent ? messages : messages.slice(0, 2)).map((message) => message.id)
+    );
+    const currentMessage = f.workspace
+      .messages(f.conversation.id)
+      .find((message) => message.taskId === task.id && message.role === 'user')!;
+    expect(checkpoint.recentSourceRevisions).toEqual([
+      ...(oversizedRecent ? [] : recentMessages.map((message) => message.id)),
+      currentMessage.id,
+    ]);
+    log.spy.mockRestore();
+    const resumed = script(f, (request) => {
+      expect(request.role).toBe('helper');
+      expect(request.input.task).toBe('이제 남은 제안을 설명해 줘.');
+      expect(request.input.history).toEqual(
+        f.workspace
+          .messages(f.conversation.id)
+          .filter((message) => message.taskId !== next.id)
+          .slice(oversizedRecent ? messages.length : 2)
+          .map(({ id, role, text }) => ({ id, role, text }))
+      );
+      expect(request.input.source).toMatchObject({
+        summary: { text: 'Earlier background reviewed; its proposed edits were not saved.' },
+      });
+      return structuredClone(success);
+    });
+    const next = f.runtime.enqueue(f.conversation.id, randomUUID(), '이제 남은 제안을 설명해 줘.');
+    await Promise.all(f.work);
+    expect(f.workspace.task(next.id).status).toBe('completed');
+    expect(resumed.requests).toHaveLength(1);
+    expect(f.mutations).toBe(0);
+  }
+);
+
 test('helper compaction resumes completed library reads and exact writes within the same task', async () => {
   const f = await fixture({ fixed: false });
   // Keep metadata-only discovery below the soft trigger as the real tool catalog grows.
@@ -906,6 +1001,12 @@ test.each(['current failed task', 'earlier completed task'] as const)(
   'a read-only retry invalidates only a checkpoint covering its replaced messages (%s)',
   async (coveredTask) => {
     const f = await fixture({ fixed: false, reviewOnly: true });
+    const constraint = '이름은 바꾸지 말고 제안만 해줘. 저장하지 마.';
+    const seed = script(f, () => structuredClone(success));
+    const earlier = f.runtime.enqueue(f.conversation.id, randomUUID(), constraint);
+    await Promise.all(f.work);
+    expect(f.workspace.task(earlier.id).status).toBe('completed');
+    seed.spy.mockRestore();
     f.readValue = {
       revision: 1,
       text: Array.from({ length: 2_500 }, (_, index) => index.toString(36).padStart(4, '0')).join(
@@ -960,6 +1061,9 @@ test.each(['current failed task', 'earlier completed task'] as const)(
     });
     const retriedInput = log.requests.at(-1)!;
     expect(retriedInput.input.task).toBe('Finish the review; do not save changes.');
+    expect(retriedInput.input.history).toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: 'user', text: constraint })])
+    );
     expect(retriedInput.input.source).toMatchObject({
       summary: {
         text: coveredTask === 'earlier completed task' ? summaryText : '',

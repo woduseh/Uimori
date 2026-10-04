@@ -56,6 +56,8 @@ export type RisuImportApply = {
   kind?: RisuImportKind;
   digest: string;
   imageHandoffIds?: string[];
+  /** Omission preserves the original API behavior; library-only imports set false. */
+  createChat?: boolean;
   allowPartial: boolean;
   idempotencyKey: string;
 };

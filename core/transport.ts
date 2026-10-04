@@ -133,6 +133,8 @@ export type ProviderResult = {
   };
 };
 export type WireRecord = {
+  /** Small host receipt retained after request bodies are released. */
+  requestContext?: import('./scene-usage.js').RequestContext;
   /** Host-only reference delivery evidence; absent on older or unsupported attempts. */
   requestLore?: import('./request-lore.js').RequestLore;
   nativeScript?: { method: 'LLM' | 'axLLM' | 'simpleLLM'; event: string };

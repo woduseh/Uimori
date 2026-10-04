@@ -3,6 +3,7 @@ import { Dialog } from './Dialog.js';
 
 export function CodexContentWarningDialog({ gate }: { gate: CodexContentWarningGate }) {
   const translation = gate.warning === 'translation';
+  const revision = gate.warning === 'selection-revision';
   return (
     <Dialog
       open={gate.warning !== null}
@@ -14,7 +15,9 @@ export function CodexContentWarningDialog({ gate }: { gate: CodexContentWarningG
       <p>
         {translation
           ? '이 내용을 그대로 번역하면 성적으로 노골적인 표현이 포함될 가능성이 높아요.'
-          : '이 요청을 이어서 작성하면 성적으로 노골적인 표현이 포함될 가능성이 높아요.'}
+          : revision
+            ? '이 구절을 요청대로 퇴고하면 성적으로 노골적인 표현이 포함될 가능성이 높아요.'
+            : '이 요청을 이어서 작성하면 성적으로 노골적인 표현이 포함될 가능성이 높아요.'}
       </p>
       <p className="muted">
         Codex로 전송하면 공급자 정책에 따라 요청이 거절될 수 있어요. 이 안내는 전송을 막지 않아요.

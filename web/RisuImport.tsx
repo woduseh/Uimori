@@ -42,6 +42,7 @@ export function RisuImport({
   const [preview, setPreview] = useState<RisuImportPreview | null>(null);
   const [imageHandoffIds, setImageHandoffIds] = useState<string[]>([]);
   const [allowPartial, setAllowPartial] = useState(false);
+  const [createChat, setCreateChat] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [result, setResult] = useState<RisuImportResult | null>(null);
   const [error, setError] = useState('');
@@ -149,7 +150,9 @@ export function RisuImport({
           ? '모듈 등록은 완료했어요. 서재를 새로고침한 뒤 기존 채팅에 장착해 주세요.'
           : preview?.kind === 'persona'
             ? '페르소나 등록은 완료했어요. 서재를 새로고침한 뒤 사용할 수 있어요.'
-            : '가져오기는 완료했어요. 목록을 새로고침한 뒤 채팅을 열어 주세요.'
+            : imported.chat
+              ? '가져오기는 완료했어요. 목록을 새로고침한 뒤 채팅을 열어 주세요.'
+              : '봇 등록은 완료했어요. 서재를 새로고침한 뒤 사용할 수 있어요.'
       );
     }
   }
@@ -162,6 +165,7 @@ export function RisuImport({
       digest: preview.digest,
       allowPartial,
       imageHandoffIds,
+      createChat: preview.kind === 'bot' && createChat,
       idempotencyKey: (requestKey.current ??= crypto.randomUUID()),
     };
     submission.current = payload;
@@ -231,8 +235,8 @@ export function RisuImport({
           {!preview && (
             <>
               <p className="muted">
-                원본 파일은 그대로 보존해요. 봇 카드는 새 봇과 채팅을 만들고, 페르소나와 모듈은
-                서재에 등록해요. 파일의 코드나 외부 URL을 자동으로 실행하지 않아요.
+                원본 파일은 그대로 보존해요. 봇·페르소나·모듈은 서재에 등록하며, 봇은 원하면 새
+                채팅도 함께 만들 수 있어요. 파일의 코드나 외부 URL을 자동으로 실행하지 않아요.
               </p>
               <label className="risu-import-file">
                 가져올 자료 종류
@@ -398,6 +402,19 @@ export function RisuImport({
                   <span>위 미지원 항목이 반영되지 않는 부분 가져오기에 동의해요.</span>
                 </label>
               )}
+              {preview.kind === 'bot' && !result && (
+                <label className="risu-import-choice">
+                  <SelectionCheckbox
+                    checked={createChat}
+                    disabled={locked}
+                    onChange={(event) => {
+                      setCreateChat(event.target.checked);
+                      selectionChanged();
+                    }}
+                  />
+                  <span>가져온 뒤 새 채팅도 만들기</span>
+                </label>
+              )}
               {uncertain && (
                 <p role="status">
                   서버의 완료 여부를 확인하지 못했어요. 파일과 선택을 유지한 같은 요청으로 다시
@@ -406,7 +423,9 @@ export function RisuImport({
                     ? '모듈이'
                     : preview.kind === 'persona'
                       ? '페르소나가'
-                      : '봇과 채팅이'}{' '}
+                      : createChat
+                        ? '봇과 채팅이'
+                        : '봇이'}{' '}
                   중복 생성되지 않아요. 이 창을 닫아도 요청은 유지돼요.
                 </p>
               )}
@@ -422,7 +441,9 @@ export function RisuImport({
                         ? '페르소나를 서재에 등록했어요. 새 채팅이나 기존 채팅에서 선택할 수 있어요.'
                         : result.chat
                           ? '봇과 새 채팅을 가져왔어요.'
-                          : '자료 가져오기는 완료됐어요. 연결된 채팅이 삭제되어 열 수 없어요.'}
+                          : submission.current?.createChat === false
+                            ? '봇을 서재에 등록했어요. 서재나 왼쪽 봇 목록에서 원할 때 채팅을 시작할 수 있어요.'
+                            : '자료 가져오기는 완료됐어요. 연결된 채팅이 삭제되어 열 수 없어요.'}
                   </p>
                   {result.chat && onContinueChat && (
                     <button type="button" disabled={busy} onClick={() => void openSavedChat()}>
@@ -436,7 +457,9 @@ export function RisuImport({
                     ? '같은 요청으로 다시 확인'
                     : preview.kind !== 'bot'
                       ? `${preview.kind === 'module' ? '모듈' : '페르소나'} 가져오기`
-                      : '가져오고 새 채팅 열기'}
+                      : createChat
+                        ? '가져오고 새 채팅 열기'
+                        : '봇 가져오기'}
                 </button>
               )}
             </>

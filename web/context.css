@@ -32,6 +32,10 @@
   display: grid;
   gap: 8px;
 }
+.context-priorities label {
+  display: grid;
+  gap: 8px;
+}
 .context-panel textarea {
   width: 100%;
   min-width: 0;

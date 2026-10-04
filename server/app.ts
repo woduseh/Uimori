@@ -13,6 +13,7 @@ import { APP_VERSION } from './app-version.js';
 import { flushPendingImageCleanup } from './unused-data.js';
 import { themeRoutes } from './themes.js';
 import { inputTranslationRoutes } from './input-translation.js';
+import { selectionRevisionRoutes } from './selection-revision.js';
 import { ChatTranscriptError } from '../core/chat-transcript.js';
 import { PackageStartError } from '../core/package-start.js';
 import { RisuContentError } from '../core/risu-content.js';
@@ -779,7 +780,13 @@ export async function createApp(options: AppOptions): Promise<App> {
       };
       const prepared = await prepareInputContext(
         snapshot,
-        { ...hooks, reason: 'manual', reserveCalls: 0, onProgress: () => {} },
+        {
+          ...hooks,
+          reason: 'manual',
+          priorities: job.priorities,
+          reserveCalls: 0,
+          onProgress: () => {},
+        },
         store.context.previous(snapshot)
       );
       return prepared.snapshot;
@@ -789,6 +796,13 @@ export async function createApp(options: AppOptions): Promise<App> {
   themeRoutes(app, store);
   illustrationPresetRoutes(app, store);
   inputTranslationRoutes(app, store, {
+    signal: stopping.signal,
+    resolveCredential,
+    executeCodex,
+    vertexRequestTier: options.vertexRequestTier,
+    track,
+  });
+  selectionRevisionRoutes(app, store, {
     signal: stopping.signal,
     resolveCredential,
     executeCodex,
@@ -904,14 +918,25 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.get('/api/chat-activities', async () => chatActivities(store));
   app.post('/api/chats', async (request) => {
     const body: RecordBody = record(request.body);
-    fields(body, ['title', 'botId', 'folderId', 'autoTitle']);
+    fields(body, ['title', 'botId', 'folderId', 'autoTitle', 'persona']);
     if (body.autoTitle !== undefined && typeof body.autoTitle !== 'boolean')
       throw new HttpError(400, 'Invalid automatic title choice');
+    let persona: import('../core/product.js').ContentRef | null | undefined;
+    if (body.persona === null) persona = null;
+    else if (body.persona !== undefined) {
+      const ref = record(body.persona);
+      fields(ref, ['id', 'revision']);
+      persona = {
+        id: text(ref.id, 'persona ID', 100),
+        revision: number(ref.revision, 'persona revision'),
+      };
+    }
     const chat = store.createChat(text(body.title, 'title', 120), {
       ...(body.botId === undefined ? {} : { botId: text(body.botId, 'bot ID', 100) }),
       ...(body.folderId === undefined
         ? {}
         : { folderId: body.folderId === null ? null : text(body.folderId, 'folder ID', 100) }),
+      ...(persona === undefined ? {} : { persona }),
     });
     if (body.autoTitle === true) titles.enroll(chat.id);
     return chat;

@@ -6,47 +6,64 @@ import type {
 import { api } from './api.js';
 
 export type CodexContentWarningGate = ReturnType<typeof useCodexContentWarning>;
+type Pending = { controller: AbortController; resolve: (proceed: boolean) => void };
 
 export function useCodexContentWarning() {
   const [warning, setWarning] = useState<CodexContentWarningRole | null>(null);
-  const resolver = useRef<((proceed: boolean) => void) | null>(null);
-  const checking = useRef(false);
+  const pending = useRef<Pending | null>(null);
 
   const settle = (proceed: boolean) => {
-    const resolve = resolver.current;
-    resolver.current = null;
+    const request = pending.current;
+    if (!request) return;
+    pending.current = null;
+    request.controller.abort();
     setWarning(null);
-    resolve?.(proceed);
+    request.resolve(proceed);
   };
 
   useEffect(
     () => () => {
-      resolver.current?.(false);
-      resolver.current = null;
+      const request = pending.current;
+      pending.current = null;
+      request?.controller.abort();
+      request?.resolve(false);
     },
     []
   );
 
-  async function check(
+  function check(
     path: string,
     body: unknown,
-    role: CodexContentWarningRole
+    role: CodexContentWarningRole,
+    signal?: AbortSignal
   ): Promise<boolean> {
-    if (resolver.current || checking.current) return false;
-    checking.current = true;
-    let result: CodexContentPreflightResult;
-    try {
-      result = await api<CodexContentPreflightResult>(path, body);
-    } catch {
-      // This is an advisory preflight. Let the real request surface its own connection/error state.
-      return true;
-    } finally {
-      checking.current = false;
-    }
-    if (!result.warning) return true;
+    if (pending.current || signal?.aborted) return Promise.resolve(false);
     return new Promise<boolean>((resolve) => {
-      resolver.current = resolve;
-      setWarning(role);
+      const controller = new AbortController();
+      const onAbort = () => {
+        if (pending.current === request) settle(false);
+      };
+      const request: Pending = {
+        controller,
+        resolve: (proceed) => {
+          signal?.removeEventListener('abort', onAbort);
+          resolve(proceed);
+        },
+      };
+      pending.current = request;
+      signal?.addEventListener('abort', onAbort, { once: true });
+      void api<CodexContentPreflightResult>(path, body, 'POST', controller.signal).then(
+        (result) => {
+          if (pending.current !== request) return;
+          if (result.warning) setWarning(role);
+          else settle(true);
+        },
+        () => {
+          // A cancelled or older request cannot settle a newer warning. Other failures
+          // stay advisory: the real request surfaces its own connection/error state.
+          if (pending.current === request) settle(!controller.signal.aborted);
+        }
+      );
     });
   }
 

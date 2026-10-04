@@ -17,6 +17,7 @@ import './package-authoring.css';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import type { ContentRole } from '../core/risu-content.js';
+import { newChatPersona, type BotDefaults } from '../core/bot-defaults.js';
 import './new-story.css';
 
 type StorySelection = {
@@ -76,14 +77,11 @@ export function NewStory({
   const mainAvailable =
     !!mainModel && isModelSelectable(mainModel, library.models, library.connections);
   const [bot, setBot] = useState(initialBot ? refValue(initialBot) : '');
-  const [persona, setPersona] = useState(
-    initialPersona
-      ? refValue(initialPersona)
-      : initialFolder?.defaultPersona
-        ? refValue(initialFolder.defaultPersona)
-        : ''
-  );
+  const [persona, setPersona] = useState(initialPersona ? refValue(initialPersona) : '');
   const [modules, setModules] = useState(() => (initialModules ?? []).map(refValue));
+  const [personaChosen, setPersonaChosen] = useState(initialPersona !== undefined);
+  const [defaultsBotId, setDefaultsBotId] = useState('');
+  const [defaultsError, setDefaultsError] = useState('');
   const [title, setTitle] = useState('');
   const [loadedContents, setLoadedContents] = useState<Record<string, Content>>({});
   const [packageLoading, setPackageLoading] = useState(false);
@@ -104,6 +102,33 @@ export function NewStory({
   useEffect(() => {
     if (initialBot && !submitted.current) setBot(refValue(initialBot));
   }, [initialBot]);
+  const botId = bot ? selectedId(bot) : '';
+  useEffect(() => {
+    if (!botId || personaChosen || submitted.current) return;
+    let alive = true;
+    setDefaultsBotId('');
+    setDefaultsError('');
+    void api<BotDefaults>(`/bots/${encodeURIComponent(botId)}/defaults`)
+      .then((defaults) => {
+        if (!alive || submitted.current) return;
+        const selected = newChatPersona(defaults.persona, initialFolder?.defaultPersona);
+        const current = selected && library.contents.find((item) => item.id === selected.id);
+        if (selected && !current) {
+          setDefaultsError('기본 페르소나가 삭제됐어요. 시작 페르소나를 직접 선택해 주세요.');
+          setPersona('');
+        } else {
+          setPersona(current ? refValue(current) : '');
+          setDefaultsBotId(botId);
+        }
+      })
+      .catch((cause) => {
+        if (alive) setDefaultsError((cause as Error).message);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [botId, personaChosen, initialFolder?.defaultPersona, library.contents]);
+  const defaultsReady = personaChosen || defaultsBotId === botId;
   // biome-ignore lint/correctness/useExhaustiveDependencies: Selections and library updates refresh current content; writing the cache must not restart its own load.
   useEffect(() => {
     if (submitted.current) return;
@@ -159,6 +184,7 @@ export function NewStory({
     };
   }, [bot, persona, modules, library, initialBot, initialPersona, initialModules]);
   function captureSelection(): StorySelection {
+    if (!defaultsReady) throw new Error('기본 페르소나를 확인한 뒤 시작해 주세요.');
     if (packageLoading) throw new Error('선택한 자료를 불러온 뒤 시작해 주세요.');
     const selectedBot = bot
       ? (loadedContents[bot] ??
@@ -239,6 +265,9 @@ export function NewStory({
           autoTitle: selection.autoTitle,
           botId: selection.bot!.id,
           folderId: initialFolder?.id ?? null,
+          persona: selection.persona
+            ? { id: selection.persona.id, revision: selection.persona.revision }
+            : null,
         });
         uncertain.current = false;
       }
@@ -365,11 +394,23 @@ export function NewStory({
           label="시작 페르소나"
           value={persona}
           selectedContent={activePersona}
-          onChange={setPersona}
+          onChange={(value) => {
+            setPersonaChosen(true);
+            setDefaultsError('');
+            setPersona(value);
+          }}
           allowNone
           noneLabel="페르소나 없음"
           disabled={locked}
         />
+        {!defaultsReady && !defaultsError && (
+          <p role="status">기본 페르소나를 확인하는 중이에요…</p>
+        )}
+        {defaultsError && (
+          <p className="error" role="alert">
+            {defaultsError}
+          </p>
+        )}
         <div className="new-story-main-model" aria-label="새 채팅에 사용할 전역 설정">
           <dl className="new-story-settings-summary">
             <div>
@@ -498,7 +539,9 @@ export function NewStory({
       <div className="new-story-submit">
         <button
           className="primary"
-          disabled={busy || uncertain.current || !bot || packageLoading || !!openingError}
+          disabled={
+            busy || uncertain.current || !bot || !defaultsReady || packageLoading || !!openingError
+          }
         >
           {busy ? '채팅을 준비하는 중…' : created.current ? '설정 저장 다시 시도' : '채팅 만들기'}
         </button>

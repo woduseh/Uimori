@@ -20,6 +20,8 @@ import { DismissibleError } from './DismissibleError.js';
 import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { InputTranslationControls, InputTranslationFeedback } from './InputTranslation.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
+import { ChatContextDialog } from './ChatContextDialog.js';
+import { ManuscriptExportDialog } from './ManuscriptExportDialog.js';
 import { IconButton } from './IconButton.js';
 import { PinIcon } from './ui-icons.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -279,6 +281,11 @@ function App() {
     writePresentationSetting('uimori:scene-navigator', String(sceneNavigatorEnabled));
   }, [sceneNavigatorEnabled]);
   const [inspectedRun, setInspectedRun] = useState('');
+  const [chatTool, setChatTool] = useState<{
+    scope: string;
+    kind: 'lore' | 'compact' | 'export';
+  } | null>(null);
+  const currentChatTool = chatTool?.scope === s.viewKey ? chatTool.kind : null;
   const navigationOpener = useRef<HTMLButtonElement>(null);
   const navigationReturnFocus = useRef<HTMLButtonElement>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
@@ -873,6 +880,15 @@ function App() {
                     <button
                       type="button"
                       className="secondary"
+                      disabled={!sceneCount}
+                      onClick={() => setChatTool({ scope: s.viewKey, kind: 'export' })}
+                    >
+                      <Download size={18} aria-hidden="true" />
+                      원고 내보내기
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
                       aria-label="채팅 백업 내보내기"
                       title="원문·자료·이미지·실행 기록을 새 채팅으로 복원할 수 있는 백업을 받아요"
                       onClick={() => {
@@ -1155,6 +1171,9 @@ function App() {
                               contextSummary={
                                 s.detail!.runs.find((run) => run.id === source.runId)
                                   ?.contextSummary
+                              }
+                              sceneUsage={
+                                s.detail!.runs.find((run) => run.id === source.runId)?.sceneUsage
                               }
                               estimatedCost={
                                 s.detail!.runs.find((run) => run.id === source.runId)?.estimatedCost
@@ -1561,6 +1580,22 @@ function App() {
                           창작 옵션{optionsDirty && ' · 미적용'}
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={!s.detail?.chat.headRevision}
+                        onClick={() => setChatTool({ scope: s.viewKey, kind: 'lore' })}
+                      >
+                        현재 조회 로어 확인
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={optionsBusy || optionsDirty || s.profileDirty || s.quickBusy}
+                        onClick={() => setChatTool({ scope: s.viewKey, kind: 'compact' })}
+                      >
+                        수동 컨텍스트 압축
+                      </button>
                       {s.library && (
                         <ContentPicker
                           library={s.library}
@@ -1651,6 +1686,38 @@ function App() {
           </>
         )}
       </main>
+      {s.detail && s.destination === 'story' && (
+        <>
+          <ChatContextDialog
+            key={`context-tools:${s.selected}`}
+            mode={
+              currentChatTool === 'lore' || currentChatTool === 'compact' ? currentChatTool : null
+            }
+            chatId={s.detail.chat.id}
+            headRevision={s.detail.chat.headRevision}
+            refreshKey={s.detail.reader.cursor}
+            onClose={() => {
+              setChatTool(null);
+              requestAnimationFrame(() =>
+                document.querySelector<HTMLButtonElement>('[aria-label="입력창 더보기"]')?.focus()
+              );
+            }}
+            onRefresh={() => s.refresh(s.selected)}
+            onError={s.setError}
+          />
+          <ManuscriptExportDialog
+            key={`manuscript-export:${s.selected}`}
+            open={currentChatTool === 'export'}
+            chatId={s.detail.chat.id}
+            onClose={() => {
+              setChatTool(null);
+              requestAnimationFrame(() =>
+                document.querySelector<HTMLElement>('.chat-menu summary')?.focus()
+              );
+            }}
+          />
+        </>
+      )}
       <ChatPromptOptions
         modal={panelModal}
         chatId={s.selected || undefined}

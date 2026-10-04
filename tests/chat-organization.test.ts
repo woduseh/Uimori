@@ -7,6 +7,7 @@ import { Store } from '../server/store.js';
 import { forkChat } from '../server/chat-fork.js';
 import type { Content } from '../core/product.js';
 import { createApp } from '../server/app.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 
 const owned: { directory: string; store?: Store }[] = [];
 afterEach(async () => {
@@ -45,6 +46,74 @@ async function fixture() {
   };
 }
 const ref = (content: Content) => ({ id: content.id, revision: content.revision });
+
+test('new chats prefer explicit persona, then bot default including none, then folder', async () => {
+  const { store, bot, persona, nextPersona } = await fixture();
+  const org = store.organization;
+  const folder = org.createFolder(bot.id, {
+    title: 'Default folder',
+    defaultPersona: ref(persona),
+  });
+  const selected = (selection: { persona?: ReturnType<typeof ref> | null } = {}) => {
+    const chat = store.createChat('New', { botId: bot.id, folderId: folder.id, ...selection });
+    return (
+      store.product.profile(chat.id).packageAttachments?.find((item) => item.role === 'persona')
+        ?.id ?? null
+    );
+  };
+  expect(selected()).toBe(persona.id);
+  org.updateDefaults(bot.id, {
+    expectedRevision: 1,
+    persona: { mode: 'persona', persona: ref(nextPersona) },
+  });
+  expect(selected()).toBe(nextPersona.id);
+  expect(selected({ persona: ref(persona) })).toBe(persona.id);
+  expect(selected({ persona: null })).toBeNull();
+  const before = store.chats().map((chat) => store.product.profile(chat.id));
+  org.updateDefaults(bot.id, { expectedRevision: 2, persona: { mode: 'none' } });
+  expect(store.chats().map((chat) => store.product.profile(chat.id))).toEqual(before);
+  expect(selected()).toBeNull();
+  expect(() =>
+    org.updateDefaults(bot.id, { expectedRevision: 2, persona: { mode: 'inherit' } })
+  ).toThrow('변경됐어요');
+  org.updateDefaults(bot.id, { expectedRevision: 3, persona: { mode: 'inherit' } });
+  expect(selected()).toBe(persona.id);
+});
+
+test('bot defaults follow current persona edits and deleted defaults require an explicit choice', async () => {
+  const { store, bot, persona } = await fixture();
+  store.organization.updateDefaults(bot.id, {
+    expectedRevision: 1,
+    persona: { mode: 'persona', persona: ref(persona) },
+  });
+  const updated = store.product.content(
+    {
+      kind: persona.kind,
+      title: 'Updated persona',
+      description: persona.description,
+      text: persona.text,
+      loading: persona.loading,
+      relatedIds: persona.relatedIds,
+      expectedRevision: persona.revision,
+    },
+    persona.id
+  ) as Content;
+  const created = store.createChat('Current persona', { botId: bot.id });
+  expect(store.product.profile(created.id).packageAttachments).toContainEqual({
+    ...ref(updated),
+    role: 'persona',
+  });
+  deleteLibraryItem(store, 'content', persona.id, { expectedRevision: updated.revision });
+  const count = store.chats().length;
+  expect(() => store.createChat('Missing default', { botId: bot.id })).toThrow(
+    '기본 페르소나가 삭제됐어요'
+  );
+  expect(store.chats()).toHaveLength(count);
+  const explicit = store.createChat('Explicit none', { botId: bot.id, persona: null });
+  expect(store.product.profile(explicit.id).packageAttachments).toEqual([
+    { ...ref(bot), role: 'bot' },
+  ]);
+});
 
 test('invalid and stale order anchors roll back every position and revision', async () => {
   const { store, bot, other } = await fixture();

@@ -34,6 +34,8 @@ import { useCodexContentWarning } from './useCodexContentWarning.js';
 import { PackagePresentationIssues, usePackagePresentation } from './PackagePresentation.js';
 import './source-edit.css';
 import { RequestMessage } from './RequestMessage.js';
+import { SelectionRevision } from './SelectionRevision.js';
+import { SceneUsage } from './SceneUsage.js';
 
 type ReaderMode = 'original' | 'translation';
 /** Scene header pieces the activity panel places inside its summary row. */
@@ -66,6 +68,7 @@ type ReaderProps = {
   onAskHelper?: (sourceId: string, text: string) => void;
   contextSummary?: ReaderRun['contextSummary'];
   estimatedCost?: ReaderRun['estimatedCost'];
+  sceneUsage?: ReaderRun['sceneUsage'];
   packageStart?: { mode: 'authored'; title: string };
   /** Wraps the scene header in the per-response activity panel; falsy keeps a plain header. */
   activity?: (slots: SceneHeaderSlots) => ReactNode;
@@ -181,6 +184,7 @@ function SourceReaderContent({
   onAskHelper,
   contextSummary,
   estimatedCost,
+  sceneUsage,
   packageStart,
   activity,
   hasPackages,
@@ -620,6 +624,7 @@ function SourceReaderContent({
             <div className="scene-header-tools">{trailing}</div>
           </div>
           {!activityNode && <ContextSummaryStatus summary={contextSummary} />}
+          <SceneUsage usage={sceneUsage} />
         </div>
         <div slot="body" data-uimori-part="body">
           {editor && (
@@ -1174,6 +1179,8 @@ function TextEditor({
     readDraft(key, { text: savedText, expectedRevision: revision, expectedSourceHash: source.hash })
   );
   const [saving, setSaving] = useState(false);
+  const draftVersion = useRef(0);
+  const [selection, setSelection] = useState({ start: 0, end: 0, version: 0 });
   const [error, setError] = useState('');
   const busy = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -1199,6 +1206,7 @@ function TextEditor({
   const title = role === 'original' ? '원문' : '번역';
   const conflict = draft.expectedSourceHash !== source.hash || draft.expectedRevision !== revision;
   const persist = (next: Draft) => {
+    draftVersion.current++;
     setDraft(next);
     try {
       sessionStorage.setItem(key, JSON.stringify(next));
@@ -1264,8 +1272,35 @@ function TextEditor({
           value={draft.text}
           disabled={saving}
           onChange={(event) => persist({ ...draft, text: event.target.value })}
+          onSelect={(event) => {
+            const { selectionStart: start, selectionEnd: end } = event.currentTarget;
+            setSelection((previous) =>
+              previous.start === start && previous.end === end
+                ? previous
+                : { start, end, version: previous.version + 1 }
+            );
+          }}
         />
       </label>
+      {role === 'original' && (
+        <SelectionRevision
+          sourceId={source.id}
+          chatId={source.chatId}
+          text={draft.text}
+          draftVersion={draftVersion.current}
+          selection={selection}
+          expectedRevision={draft.expectedRevision}
+          expectedSourceHash={draft.expectedSourceHash}
+          disabled={saving || conflict}
+          onApply={(text, start, end) => {
+            persist({ ...draft, text });
+            requestAnimationFrame(() => {
+              input.current?.focus({ preventScroll: true });
+              input.current?.setSelectionRange(start, end);
+            });
+          }}
+        />
+      )}
       {conflict && (
         <div role="alert" className="error">
           <p>편집 중 저장된 내용이 바뀌었어요. 작성한 내용은 유지돼요.</p>

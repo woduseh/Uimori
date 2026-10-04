@@ -1,0 +1,20 @@
+.scene-usage {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  margin-block: 6px;
+  overflow-wrap: anywhere;
+}
+.scene-usage summary {
+  cursor: pointer;
+  width: fit-content;
+  max-width: 100%;
+}
+.scene-usage p {
+  margin-block: 6px;
+}
+.scene-usage meter {
+  display: block;
+  width: min(100%, 24rem);
+  accent-color: var(--accent);
+}

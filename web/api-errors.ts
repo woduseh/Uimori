@@ -4,11 +4,24 @@ import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-l
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const messages: Record<string, string> = {
+  MANUSCRIPT_RANGE_CHANGED: '원고 범위가 바뀌었어요. 내보내기를 다시 열어 범위를 확인해 주세요.',
+  MANUSCRIPT_EMPTY: '내보낼 원고가 아직 없어요.',
+  MANUSCRIPT_RANGE_INVALID: '내보낼 장면 범위를 확인해 주세요.',
   PUSH_SETTINGS_CHANGED: '다른 창에서 알림 설정이 바뀌었어요. 연결을 다시 확인한 뒤 변경해 주세요.',
   SEARCH_CURSOR_STALE: '검색 조건이 바뀌었어요. 처음부터 다시 검색해 주세요.',
   BACKUP_SETTINGS_CHANGED: '다른 창에서 백업 설정이 바뀌었어요. 백업 설정을 다시 열어 주세요.',
 
   INPUT_TRANSLATION_LANGUAGE_INVALID: '입력 번역 언어를 다시 선택해 주세요.',
+  SELECTION_REVISION_RANGE_INVALID: '원문에서 퇴고할 구절을 다시 선택해 주세요.',
+  SELECTION_REVISION_STALE: '저장된 원문이 바뀌었어요. 초안을 확인한 뒤 다시 요청해 주세요.',
+  SELECTION_REVISION_TIMEOUT:
+    '퇴고 제안이 제한 시간 안에 끝나지 않았어요. 다시 요청하면 새 모델 호출이 발생해요.',
+  SELECTION_REVISION_CANCELLED: '퇴고 제안 요청이 중단됐어요.',
+  SELECTION_REVISION_REFUSED: '도우미 모델이 이 구절의 퇴고를 거절했어요.',
+  SELECTION_REVISION_FAILED:
+    '퇴고 제안을 완료하지 못했어요. 도우미 모델 설정과 연결을 확인해 주세요.',
+  SELECTION_REVISION_TOO_LONG:
+    '제안을 반영하면 원문 저장 한도를 넘어요. 더 짧은 구절로 요청해 주세요.',
   INPUT_TRANSLATION_CANCELLED: '입력 번역이 중단됐어요.',
   INPUT_TRANSLATION_TIMEOUT: '입력 번역이 제한 시간 안에 끝나지 않았어요. 다시 시도해 주세요.',
   INPUT_TRANSLATION_REFUSED: '번역 모델이 이 입력의 번역을 거절했어요.',
@@ -133,6 +146,28 @@ export function apiErrorDiagnostic(
   method: string
 ): ApiErrorDiagnostic {
   if (typeof error === 'string') {
+    const missing =
+      status === 409
+        ? /^MANUSCRIPT_TRANSLATION_MISSING:((?:0|[1-9]\d{0,9})(?:,(?:0|[1-9]\d{0,9})){0,19}):([1-9]\d{0,9})$/u.exec(
+            error
+          )
+        : null;
+    if (missing && missing[0] === error) {
+      const scenes = missing[1].split(',').map(Number);
+      const total = Number(missing[2]);
+      if (
+        total <= 1e9 &&
+        total >= scenes.length &&
+        scenes.every((scene, index) => scene <= 1e9 && (index === 0 || scene > scenes[index - 1]))
+      ) {
+        const labels = scenes.map((scene) => (scene === 0 ? '첫 메시지' : `장면 ${scene}`));
+        const remaining = total > scenes.length ? ` 외 ${total - scenes.length}개` : '';
+        return {
+          code: 'MANUSCRIPT_TRANSLATION_MISSING',
+          message: `저장된 유효 번역이 없는 장면: ${labels.join(', ')}${remaining}. 번역을 완료하거나 범위를 바꿔 주세요.`,
+        };
+      }
+    }
     const code =
       error === 'PINNED_PROMPT_UNAVAILABLE' || error.startsWith('PINNED_PROMPT_UNAVAILABLE:')
         ? 'PINNED_PROMPT_UNAVAILABLE'

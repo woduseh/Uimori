@@ -284,6 +284,7 @@ test.describe('actual local native Risu cards', () => {
         expect(unsupported, 'Final acceptance requires no unsupported imported features').toEqual(
           []
         );
+      await dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' }).check();
       await expect(
         dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true })
       ).toBeEnabled();
