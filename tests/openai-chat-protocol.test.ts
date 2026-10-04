@@ -387,6 +387,10 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
       usage: { inputTokens: 9, outputTokens: 7, costUsd: null },
     });
     const continued = next(input, result);
+    continued.continuationInput = JSON.stringify({
+      controls: { helperCallsRemaining: 1 },
+      instructions: ['설명만 해줘'],
+    });
     (continued.input.results as Json[]).reverse();
     const wire = record(encodeChat(continued).body);
     const assistant = wire.messages[2];
@@ -401,16 +405,26 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
       'Call-B.Original',
     ]);
     expect(assistant.tool_calls[0]).not.toHaveProperty('index');
-    expect(wire.messages.slice(-2)).toEqual([
+    expect(wire.messages.slice(-3)).toEqual([
       { role: 'tool', tool_call_id: 'Call-A.Original', content: '0' },
       { role: 'tool', tool_call_id: 'Call-B.Original', content: 'false' },
+      { role: 'user', content: continued.continuationInput },
     ]);
     expect(JSON.stringify(diagnosticChatBody(wire))).not.toMatch(/PRIVATE_REASONING|ENCRYPTED_A/);
     expect(assistant.reasoning_content).toBe('PRIVATE_REASONING');
     const second = first(continued);
+    expect(second.context.bindingHash).toBe(run.context.bindingHash);
     second.decoder.accept(chunk({ content: 'Final story.' }, 'stop'));
     second.decoder.accept('[DONE]');
-    expect(second.decoder.finish()).toMatchObject({ status: 'completed', text: 'Final story.' });
+    const finished = second.decoder.finish();
+    expect(finished).toMatchObject({ status: 'completed', text: 'Final story.' });
+    expect(record(finished.opaqueState!).input).toContainEqual({
+      role: 'user',
+      content: continued.continuationInput,
+    });
+    expect(() => encodeChat({ ...input, continuationInput: continued.continuationInput })).toThrow(
+      'INVALID_CONTINUATION_INPUT'
+    );
   });
 
   test('requires both finish_reason and DONE; missing usage remains unknown', () => {

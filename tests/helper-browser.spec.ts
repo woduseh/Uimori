@@ -39,6 +39,7 @@ async function harness(page: Page, seedCount = 0) {
   const undoPosts: { editSeq: number }[] = [];
   let loseUndo = false;
   const posts: { requestKey: string; text: string; selection?: unknown }[] = [];
+  const steerPosts: { taskId: string; requestKey: string; text: string }[] = [];
   const streamReads = new Map<string, number>();
   const streamCursors = new Map<string, number[]>();
   const pendingStreams = new Map<string, number>();
@@ -300,12 +301,30 @@ async function harness(page: Page, seedCount = 0) {
       const start = before ? view.tasks.findIndex((task) => task.id === before) + 1 : 0;
       return route.fulfill({ json: view.tasks.slice(start, start + 50) });
     }
-    const taskMatch = /^\/api\/helper\/tasks\/([^/]+)(\/cancel|\/activity)?$/u.exec(path);
+    const taskMatch = /^\/api\/helper\/tasks\/([^/]+)(\/cancel|\/activity|\/steer)?$/u.exec(path);
     if (taskMatch) {
       const view = [...views.values()].find((view) =>
         view.tasks.some((task) => task.id === taskMatch[1])
       )!;
       const task = view.tasks.find((task) => task.id === taskMatch[1])!;
+      if (taskMatch[2] === '/steer') {
+        steerPosts.push({ taskId: task.id, requestKey: body.requestKey, text: body.text });
+        const instructions = (task.instructions ??= []);
+        if (!instructions.some((instruction) => instruction.requestKey === body.requestKey)) {
+          instructions.push({
+            id: instructions.length + 1,
+            requestKey: body.requestKey,
+            text: body.text,
+            status: 'pending',
+          });
+          event(view, task, 'instruction.added');
+        }
+        if (loseNext) {
+          loseNext = false;
+          return route.abort('failed');
+        }
+        return route.fulfill({ json: task });
+      }
       if (taskMatch[2] === '/activity')
         return route.fulfill({
           json: {
@@ -351,6 +370,7 @@ async function harness(page: Page, seedCount = 0) {
   return {
     views,
     posts,
+    steerPosts,
     artifacts,
     undoPosts,
     loseUndo: () => {
@@ -440,6 +460,64 @@ async function open(page: Page) {
   await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
   await expect(panel.getByText('대화를 불러오는 중…', { exact: true })).toHaveCount(0);
   return panel;
+}
+
+for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
+  test(`HELPSTEER adds instructions to the active task and keeps ordinary requests queued ${width}`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const chat = await create(request),
+      state = await harness(page);
+    await page.goto(`/?chat=${chat.id}`);
+    let panel = await open(page);
+    await panel.getByLabel('도우미에게 요청').fill('자료 전체를 살펴봐 주세요');
+    await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
+    await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
+    const task = state.current().tasks[0];
+    const instructionText = '우선 설명문만 살펴봐 주세요';
+    await panel.getByLabel('도우미에게 요청').fill(instructionText);
+    if (width === DESKTOP_WIDTH) state.loseNext();
+    await panel.getByRole('button', { name: '현재 작업에 추가', exact: true }).click();
+    if (width === DESKTOP_WIDTH) {
+      await expect(panel.getByRole('button', { name: '접수 확인·다시 시도' })).toBeVisible();
+      await expect(panel.getByLabel('도우미에게 요청')).toHaveValue(instructionText);
+      await page.reload();
+      panel = await open(page);
+      await panel.getByRole('button', { name: '접수 확인·다시 시도' }).click();
+      await expect(panel.locator('.helper-outbox')).toHaveCount(0);
+      expect(state.steerPosts).toHaveLength(2);
+      expect(state.steerPosts[1]).toEqual(state.steerPosts[0]);
+    }
+    await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
+    expect(state.steerPosts[0]).toMatchObject({ taskId: task.id, text: instructionText });
+    expect(state.posts).toHaveLength(1);
+    expect(state.current().tasks).toHaveLength(1);
+    expect(task.instructions).toHaveLength(1);
+    const instruction = panel
+      .locator(`.helper-task[data-task-id="${task.id}"]`)
+      .getByTestId('helper-instruction');
+    await expect(instruction).toContainText(instructionText);
+    await expect(instruction.getByRole('status')).toContainText('전달 대기');
+    task.instructions![0].status = 'delivered';
+    state.emit('instruction.updated');
+    await expect(instruction.getByRole('status')).toContainText('작업 입력에 반영');
+
+    await panel.getByLabel('도우미에게 요청').fill('그다음 첫 메시지를 검토해 주세요');
+    const send = panel.getByRole('button', { name: '도우미 요청 보내기', exact: true });
+    await expect(send).toHaveAttribute('title', '다음 요청으로 보내기');
+    await send.click();
+    await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
+    expect(state.posts).toHaveLength(2);
+    expect(state.current().tasks).toHaveLength(2);
+    expect(state.current().tasks[0]).toMatchObject({
+      request: '그다음 첫 메시지를 검토해 주세요',
+      status: 'queued',
+    });
+    expect(task.status).toBe('running');
+    await page.screenshot({ path: info.outputPath(`helper-steer-${width}.png`), fullPage: true });
+  });
 }
 
 test('HELPUI13 completed helper response renders common Markdown and copies its exact source', async ({

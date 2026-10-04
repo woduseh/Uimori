@@ -11,6 +11,7 @@ import type {
   ProviderUsage,
 } from './transport.js';
 import {
+  continuationInputText,
   nativeHostInstruction,
   nativeMessageMetadata,
   requestDataBlocks,
@@ -91,6 +92,7 @@ export function encodeVertex(request: ProviderRequest): {
   context: VertexTurn;
   messageMetadata?: NativeMessageMetadata;
 } {
+  const continuationInput = continuationInputText(request);
   const generation = request.generation;
   if (generation) validateModelOptions(generation, 'vertex-gemini-v1');
   const maxOutputTokens =
@@ -179,7 +181,16 @@ export function encodeVertex(request: ProviderRequest): {
       };
     });
     if (indexed.size) reject('TOOL_RESULT_MISMATCH');
-    contents = [...previous.contents, { role: 'user', parts: responses }];
+    contents = [
+      ...previous.contents,
+      {
+        role: 'user',
+        parts: [
+          ...responses,
+          ...(continuationInput !== undefined ? [{ text: continuationInput }] : []),
+        ],
+      },
+    ];
     usedIds = previous.usedIds;
   } else {
     if (results.length) reject('VERTEX_CONTINUATION_REQUIRED');

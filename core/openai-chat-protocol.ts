@@ -67,7 +67,8 @@ export function encodeChat(
   const prepared = prepare(request, 'openai-chat-turn-v1', protocol);
   const gatewayOptions = protocol === 'vercel-chat-v1' ? vercelProviderOptions(request) : undefined;
   const deepseek = protocol === 'deepseek-chat-v1';
-  const { generation, aliases, schema, previous, fresh, plan, bootstrap } = prepared;
+  const { generation, aliases, schema, previous, fresh, plan, bootstrap, continuationInput } =
+    prepared;
   const bootstrapMessages: Json[] = [];
   for (const item of bootstrap as Record<string, Json>[]) {
     const name = aliases.find((alias) => alias.name === item.name)?.providerName ?? item.name;
@@ -116,6 +117,7 @@ export function encodeChat(
               },
             ]),
       ];
+  if (continuationInput !== undefined) messages.push({ role: 'user', content: continuationInput });
   if (deepseek) {
     for (const message of messages) {
       if (!object(message)) continue;

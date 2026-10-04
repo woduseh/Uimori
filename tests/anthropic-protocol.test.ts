@@ -438,6 +438,10 @@ describe('Anthropic Messages request and opaque continuation', () => {
     ]);
     const next = continued(input, output);
     (next.input.results as Json[]).reverse();
+    next.continuationInput = JSON.stringify({
+      controls: { helperCallsRemaining: 2 },
+      instructions: ['설명만 해줘'],
+    });
     const { body, decoder: second } = start(next);
     const wire = native(body);
     const preserved = native(output.opaqueState).messages.at(-1);
@@ -448,10 +452,11 @@ describe('Anthropic Messages request and opaque continuation', () => {
       signature: 'SYNTHETIC_SIGNATURE',
       future_metadata: { binding: 'opaque-original' },
     });
-    expect(wire.messages[2].content.map((part: any) => part.tool_use_id)).toEqual([
+    expect(wire.messages[2].content.slice(0, 2).map((part: any) => part.tool_use_id)).toEqual([
       'call-A',
       'call-B',
     ]);
+    expect(wire.messages[2].content[2]).toEqual({ type: 'text', text: next.continuationInput });
     expect(JSON.parse(wire.messages[2].content[0].content)).toEqual({ text: 'source lore-1' });
     const diagnostic = JSON.stringify(diagnosticAnthropicBody(body));
     expect(diagnostic).not.toContain('SYNTHETIC_PRIVATE_THOUGHT');
@@ -462,9 +467,14 @@ describe('Anthropic Messages request and opaque continuation', () => {
     block(second, 0, toolPart('call-C', 'tool_1_skills_list', {}));
     const secondOutput = end(second, 'tool_use');
     const thirdInput = continued(next, secondOutput);
+    delete thirdInput.continuationInput;
     const thirdWire = native(encodeAnthropic(thirdInput).body);
     expect(thirdWire.messages.slice(0, 3)).toEqual(wire.messages);
     expect(thirdWire.messages[4].content[0].tool_use_id).toBe('call-C');
+    expect(thirdWire.messages[4].content).toHaveLength(1);
+    expect(() => encodeAnthropic({ ...input, continuationInput: next.continuationInput })).toThrow(
+      'INVALID_CONTINUATION_INPUT'
+    );
     (thirdInput.input.results as Json[])[0] = {
       callId: 'call-B',
       name: 'knowledge.read',

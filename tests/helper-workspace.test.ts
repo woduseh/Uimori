@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { Store } from '../server/store.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
+import { helperHistory } from '../server/helper-context.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
@@ -425,6 +426,193 @@ function snapshot(f: ReturnType<typeof fixture>): HelperTaskSnapshot {
     limits: { totalCalls: 24, helperCalls: 12, artifacts: 1 },
   };
 }
+
+test('helper requests expose configured artifact allowance and remaining calls at each boundary', async () => {
+  const f = fixture();
+  f.workspace.update(f.conversation.id, f.conversation.revision, {
+    limits: { helperCalls: 2, totalCalls: 3, artifacts: 4 },
+  });
+  const requests: transport.ProviderRequest[] = [];
+  mockSend((request, _options, index) => {
+    requests.push(structuredClone(request));
+    return index === 0
+      ? {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          text: '',
+          toolCalls: [{ id: 'discover', name: 'app.tools', arguments: {} }],
+        }
+      : structuredClone(success);
+  });
+  const task = f.runtime.enqueue(f.conversation.id, 'budget-guidance', '가능한 작업을 알려줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id)).toMatchObject({
+    status: 'completed',
+    usage: { modelCalls: 2 },
+  });
+  expect(requests.map((request) => request.input.controls)).toEqual([
+    expect.objectContaining({
+      helperCallsRemaining: 2,
+      totalCallsRemaining: 3,
+      artifactsRemaining: 4,
+      includesCurrentCall: true,
+      nativeInternalCalls: null,
+    }),
+    expect.objectContaining({
+      helperCallsRemaining: 1,
+      totalCallsRemaining: 2,
+      artifactsRemaining: 4,
+      includesCurrentCall: true,
+      nativeInternalCalls: null,
+    }),
+  ]);
+});
+
+test('HTTP steering skips a stale write, delivers once and retains the correction in future history', async () => {
+  const f = fixture();
+  const chat = createFixtureChat(f.store, '원래 제목');
+  const conversation = f.workspace.open({ kind: 'chat', chatId: chat.id });
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const requests: transport.ProviderRequest[] = [];
+  mockSend(async (request, _options, index) => {
+    requests.push(structuredClone(request));
+    if (index === 0) {
+      entered();
+      await gate;
+      return {
+        ...structuredClone(success),
+        status: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            id: 'stale-rename',
+            name: 'app.call',
+            arguments: {
+              name: 'chat.rename',
+              arguments: {
+                title: '바꾸면 안 되는 제목',
+                expectedRevision: chat.titleRevision ?? 0,
+              },
+            },
+          },
+        ],
+      };
+    }
+    return { ...structuredClone(success), text: '제목은 유지하고 설명했어요.' };
+  });
+  const task = f.runtime.enqueue(conversation.id, 'steer-http', '제목을 바꿔줘');
+  await started;
+  const correction = '잠깐, 제목은 그대로 두고 설명만 해줘.';
+  const accepted = f.runtime.steer(task.id, 'correction', correction);
+  expect(accepted.status).toBe('pending');
+  expect(f.runtime.steer(task.id, 'correction', correction).id).toBe(accepted.id);
+  release();
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id).status).toBe('completed');
+  expect(f.store.chat(chat.id).title).toBe('원래 제목');
+  expect(requests).toHaveLength(2);
+  expect(requests[1].input.task).toContain(correction);
+  expect(requests[1].input.results).toEqual([
+    expect.objectContaining({
+      callId: 'stale-rename',
+      denied: true,
+      errorKind: 'recoverable',
+      result: expect.objectContaining({ error: 'USER_INSTRUCTION_UPDATED' }),
+    }),
+  ]);
+  expect(f.workspace.instructions(task.id)).toEqual([
+    expect.objectContaining({ id: accepted.id, text: correction, status: 'delivered' }),
+  ]);
+  expect(f.runtime.steer(task.id, 'correction', correction)).toMatchObject({
+    id: accepted.id,
+    status: 'delivered',
+  });
+  expect(() => f.runtime.steer(task.id, 'correction', '다른 내용')).toThrow('같은 요청 키');
+  expect(() => f.runtime.steer(task.id, 'too-late', '끝난 뒤의 지시')).toThrow(
+    'HELPER_TASK_NO_LONGER_ACTIVE'
+  );
+  const next = f.runtime.enqueue(conversation.id, 'follow-up', '이제 이어서 설명해줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(next.id).status).toBe('completed');
+  const previous = (requests[2].input.history as HelperTaskSnapshot['history']).filter(
+    (message) => message.role === 'user'
+  );
+  expect(previous).toHaveLength(1);
+  expect(previous[0].text.split(correction)).toHaveLength(2);
+});
+
+test.each(['delivered', 'unconfirmed'] as const)(
+  'native steering keeps a %s receipt without replaying the instruction',
+  async (status) => {
+    const f = fixture();
+    const connection = f.store.product.connection({
+      title: 'Native steering',
+      protocol: 'codex-app-server-v1',
+      endpoint: 'codex://local',
+      enabled: true,
+    });
+    const model = f.store.product.model({
+      title: 'Native steering',
+      connectionId: connection.id,
+      modelId: 'synthetic-helper',
+      temperature: null,
+      maxOutputTokens: 1024,
+    });
+    const selected = modelWorkspace(f.store);
+    updateModelWorkspace(f.store, {
+      expectedRevision: selected.revision,
+      routes: selected.routes,
+      translationPolicy: selected.translationPolicy,
+      helperModel: { id: model.id },
+    });
+    let ready!: () => void;
+    const registered = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const send = vi.fn(async () => {
+      if (status === 'unconfirmed') throw new Error('Native process closed before acknowledgement');
+    });
+    const runtime = new HelperRuntime(f.store, {
+      owner: 'native-steering-test',
+      signal: f.controller.signal,
+      track: (work) => f.work.push(work),
+      streams: f.streams,
+      executeCodexAgent: async (_connection, _request, options) => {
+        const detach = options.onSteerReady?.(send);
+        ready();
+        await gate;
+        detach?.();
+        return structuredClone(success);
+      },
+    });
+    const task = runtime.enqueue(f.conversation.id, 'native-steer', '자료를 확인해줘');
+    await registered;
+    const correction = '지금은 설명문만 확인해줘.';
+    const accepted = runtime.steer(task.id, 'native-correction', correction);
+    await vi.waitFor(() => expect(runtime.workspace.instructions(task.id)[0].status).toBe(status));
+    expect(runtime.steer(task.id, 'native-correction', correction).id).toBe(accepted.id);
+    release();
+    await Promise.all(f.work);
+    expect(runtime.workspace.task(task.id).status).toBe('completed');
+    expect(send).toHaveBeenCalledExactlyOnceWith(correction);
+    expect(runtime.workspace.instructions(task.id)).toEqual([
+      expect.objectContaining({ id: accepted.id, status }),
+    ]);
+    const message = helperHistory(f.store, f.conversation.id).find((item) => item.role === 'user')!;
+    expect(message.text.includes(correction)).toBe(status === 'delivered');
+  }
+);
 
 test('live helper counters preserve attempt budgets and completion without loading the manuscript', () => {
   const f = fixture();

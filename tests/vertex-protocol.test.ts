@@ -295,6 +295,10 @@ describe('Vertex 3.8 request and continuation protocol', () => {
       ],
     });
     const secondInput = continued(input, output);
+    secondInput.continuationInput = JSON.stringify({
+      controls: { helperCallsRemaining: 2 },
+      instructions: ['설명만 해줘'],
+    });
     (secondInput.input.results as Json[]).reverse(); // Match by exact host ID, never by function name or result order.
     const second = start(secondInput);
     const secondBody = bodyObject(second.body);
@@ -314,14 +318,20 @@ describe('Vertex 3.8 request and continuation protocol', () => {
           response: { text: 'Read lore-2' },
         },
       },
+      { text: secondInput.continuationInput },
     ]);
     second.decoder.accept(
       event([call('Call-C', 'lore-3'), { thoughtSignature: 'AFTER_CALL_SIGNATURE' }], 'STOP')
     );
     const secondOutput = second.decoder.finish();
     const thirdInput = continued(secondInput, secondOutput);
+    delete thirdInput.continuationInput;
     const third = start(thirdInput);
     expect(bodyObject(third.body).contents.slice(0, 3)).toEqual(secondBody.contents);
+    expect(bodyObject(third.body).contents[4].parts).toHaveLength(1);
+    expect(() =>
+      encodeVertex({ ...input, continuationInput: secondInput.continuationInput })
+    ).toThrow('INVALID_CONTINUATION_INPUT');
     expect(bodyObject(third.body).contents.map((content: any) => content.role)).toEqual([
       'user',
       'model',

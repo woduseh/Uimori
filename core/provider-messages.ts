@@ -21,6 +21,15 @@ export type NativeMessagePlan = {
 };
 export type NativeMessageMetadata = Pick<NativeMessagePlan, 'diagnostics' | 'capabilityVersion'>;
 
+/** Extra user input belongs to the continued conversation, never the original binding. */
+export function continuationInputText(request: ProviderRequest): string | undefined {
+  const text = request.continuationInput;
+  if (text === undefined) return;
+  if (typeof text !== 'string' || !text.trim() || request.opaqueState == null)
+    throw new ProviderContractError('INVALID_CONTINUATION_INPUT');
+  return text;
+}
+
 /** Keep large reusable history/catalog ahead of the changing task, without moving data to system. */
 export function requestDataBlocks(
   input: Record<string, Json>,

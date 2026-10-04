@@ -64,6 +64,7 @@ type Props = {
 };
 type Outbox = {
   retryOf?: string;
+  steerTaskId?: string;
   requestKey: string;
   text: string;
   scope: string;
@@ -536,7 +537,11 @@ export function HelperPanel(props: Props) {
     observer.observe(content.current);
     return () => observer.disconnect();
   }, [props.open]);
-  async function send(saved?: Outbox, withoutStorage = false): Promise<boolean> {
+  async function send(
+    saved?: Outbox,
+    withoutStorage = false,
+    steerTaskId?: string
+  ): Promise<boolean> {
     if (
       props.ready === false ||
       !hydrated[scopeKey] ||
@@ -552,7 +557,7 @@ export function HelperPanel(props: Props) {
       return false;
     // Capture before the first await, including pending raw editor fields.
     let captured: ReturnType<typeof captureActiveEditorContext> = null;
-    if (!saved) {
+    if (!saved && !steerTaskId) {
       try {
         captured = captureActiveEditorContext();
       } catch (cause) {
@@ -581,13 +586,14 @@ export function HelperPanel(props: Props) {
           text,
           scope: owner,
           targetConversationId: conversation!.id,
+          ...(steerTaskId ? { steerTaskId } : {}),
           ...(captured
             ? {
                 editor: captured,
               }
             : {}),
-          ...(selection ? { selection } : {}),
-          ...(selectedOutline ? { outline: selectedOutline.target } : {}),
+          ...(!steerTaskId && selection ? { selection } : {}),
+          ...(!steerTaskId && selectedOutline ? { outline: selectedOutline.target } : {}),
         };
       }
       setOutbox(owner, request);
@@ -602,7 +608,9 @@ export function HelperPanel(props: Props) {
         }
       }
       const task = await api<HelperTaskView>(
-        `/helper/conversations/${encodeURIComponent(request.targetConversationId)}/messages`,
+        request.steerTaskId
+          ? `/helper/tasks/${encodeURIComponent(request.steerTaskId)}/steer`
+          : `/helper/conversations/${encodeURIComponent(request.targetConversationId)}/messages`,
         {
           requestKey: request.requestKey,
           ...(request.retryOf ? { retryOf: request.retryOf } : {}),
@@ -745,6 +753,34 @@ export function HelperPanel(props: Props) {
           </div>
         )}
       </TurnStatus>
+      {task.instructions?.map((instruction) => (
+        <div className="helper-instruction" key={instruction.id} data-testid="helper-instruction">
+          <small role="status">
+            추가 지시 ·{' '}
+            {
+              {
+                pending: '전달 대기',
+                delivered: '작업 입력에 반영',
+                unconfirmed: '전달 여부 미확인',
+                'not-delivered': '전달 전에 작업 종료',
+              }[instruction.status]
+            }
+          </small>
+          <p>{instruction.text}</p>
+          {(instruction.status === 'not-delivered' || instruction.status === 'unconfirmed') && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                editDraft(draft.trim() ? `${draft}\n\n${instruction.text}` : instruction.text);
+                input.current?.focus();
+              }}
+            >
+              입력창에 가져오기
+            </button>
+          )}
+        </div>
+      ))}
       {task.status !== 'queued' && !answered.has(task.id) && (
         <div className="run-outcome">
           {task.status === 'running' && (
@@ -1402,6 +1438,24 @@ export function HelperPanel(props: Props) {
               </button>
             </ActionMenu>
             {running && draft.trim() && (
+              <button
+                type="button"
+                className="secondary helper-steer"
+                disabled={
+                  props.ready === false ||
+                  !hydrated[scopeKey] ||
+                  scopeMismatch ||
+                  busy ||
+                  data.loading ||
+                  Boolean(outbox)
+                }
+                title="현재 작업의 참고 자료를 유지해요. 이미 시작한 작업은 완료될 수 있어요."
+                onClick={() => void send(undefined, false, running.id)}
+              >
+                현재 작업에 추가
+              </button>
+            )}
+            {running && draft.trim() && (
               <IconButton
                 label="진행 중인 도우미 작업 취소"
                 icon={Square}
@@ -1423,6 +1477,7 @@ export function HelperPanel(props: Props) {
               className="send-button"
               type="submit"
               aria-label="도우미 요청 보내기"
+              title={running ? '다음 요청으로 보내기' : '도우미 요청 보내기'}
               disabled={
                 props.ready === false ||
                 !hydrated[scopeKey] ||
