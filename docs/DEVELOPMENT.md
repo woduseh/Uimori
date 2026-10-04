@@ -57,6 +57,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run verify:gallery` | Screen and journey captures; see [UI-GALLERY](UI-GALLERY.md). |
 | `npm run verify:copy` | Warning-only scan of static UI explanations; see [UI-GALLERY](UI-GALLERY.md#copy-review-warnings). No browser, provider calls, or build required. |
 | `npm run benchmark:story` | Repeated long-story performance measurements. |
+| `npm run eval:helper` | Lists the small helper behavior cases. After building, `-- --synthetic` checks the runner; explicit live configuration is described in [Helper evaluation](HELPER-EVALUATION.md). |
 
 Feature runners using the [shared browser harness](../scripts/browser-verification.mjs) accept `--grep <pattern>` to narrow their existing selection and `--visual` to enable extra visual checks:
 

@@ -26,6 +26,7 @@
     "test": "vitest run",
     "test:tooling": "npm run build && node scripts/test-tooling.mjs",
     "benchmark:story": "node scripts/benchmark-story.mjs",
+    "eval:helper": "node scripts/helper-eval.mjs",
     "doctor": "node scripts/doctor.mjs",
     "cleanup": "node scripts/cleanup.mjs",
     "verify:ui": "node scripts/verify-ui.mjs",

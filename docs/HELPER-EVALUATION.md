@@ -32,3 +32,50 @@ Run the focused commands in [DEVELOPMENT](DEVELOPMENT.md). The native runtime fi
 For an authorized real-model comparison, keep these oracles, identical synthetic resource contents and conversation history, model/executor/version/settings, call budget and cache conditions fixed. Use the existing `HelperRuntime`/registered provider path against a temporary store. Explicitly record the authorized model, maximum calls/cost, actual helper/context calls and unknown usage. Run both candidates on the same cases, inspect final DB diffs and evidence, and report correctness, forbidden changes, completion, unnecessary questions, tool calls, cumulative provider input, local input estimates, preparation and compaction separately. Do not enable a live run using saved production credentials or another conversation's approval.
 
 If no runner/model/budget is authorized, stop at cases, execution-path coverage and synthetic checks. Keep real-model scores **unmeasured**, rather than deriving them from scripted success.
+
+## Small opt-in runner
+
+`npm run eval:helper` lists four cases without loading a store or contacting a provider: `short-fact`, `field-edit`, `review-only`, and `recent-history`. The last case uses two ordinary turns; it does not claim to test long-history compaction or history search. Use `--case short-fact,review-only` to select cases. The runner imports the built `HelperRuntime`, provider adapters and `Store`; build the candidate first.
+
+```powershell
+npm run eval:helper -- --dry-run
+npm run build
+npm run eval:helper -- --synthetic
+```
+
+The synthetic mode replaces only HTTP responses, exercises actual tool dispatch and temporary SQLite persistence, and checks that the previous user instruction reaches the second history request. It scripts the model's choices and prose. It is a runner smoke check, never a model-quality score. Data search starts a read-only child process, so a sandbox `spawn EPERM` is an environment failure; rerun where child processes are allowed.
+
+For a separately authorized live run, save this JSON configuration outside version control. Replace the example endpoint and model ID with the chosen provider's tool-capable model, and put its key in the named environment variable. `apiKeyEnv: null` explicitly selects an unauthenticated endpoint. The runner never opens the application's database or loads its saved credentials.
+
+```json
+{
+  "connection": {
+    "protocol": "openai-chat-v1",
+    "endpoint": "https://your-provider.example/v1/chat/completions"
+  },
+  "apiKeyEnv": "UIMORI_HELPER_EVAL_KEY",
+  "model": {
+    "modelId": "your-tool-capable-model",
+    "maxOutputTokens": 2048,
+    "inputTokenLimit": 32768,
+    "temperature": null
+  },
+  "limits": { "helperCalls": 8, "totalCalls": 10 },
+  "maxRequests": 40
+}
+```
+
+```powershell
+# Set UIMORI_HELPER_EVAL_KEY in this shell before the live command.
+npm run eval:helper -- --live --config output/helper-eval-config.json
+```
+
+Supported live protocols are `openai-chat-v1`, `openai-responses-v1`, `anthropic-messages-v1`, `vercel-chat-v1` and `deepseek-chat-v1`. Use each protocol's normal Uimori endpoint and model options. `contextModel` can optionally specify a separate model on the same connection; otherwise the helper model is also used for compaction. Execution is realtime. Vertex ambient credentials and Codex login are outside this runner's scope.
+
+`limits` bounds each task's model attempts, including context work; `maxRequests` stops new HTTP requests across the whole suite, including transport retries. The two history turns have separate task budgets. `maxOutputTokens` bounds each model response. These are call/token limits, not a dollar ceiling: provider pricing and missing usage prevent a guaranteed monetary cap. Choose the call allowance accordingly; an exhausted allowance leaves failed/skipped cases in the report rather than retrying them.
+
+Each case gets a fresh temporary database with two synthetic namesake bots. The database is removed after the case. JSON reports default to a unique file under `output/helper-evals/`; `--output <new-file>` selects another destination and refuses to overwrite an existing baseline. Reports contain the build identity, runner hash, configuration without key contents, fixture text, requests/replies, actual authored-table changes, tool results, input measurements and all model-attempt usage. `knownSum` is only the known subtotal; `unknownCalls` must be zero before treating it as a complete total. Synthetic token usage is fabricated. Local input estimates and preparation/compaction timing stay separate from provider usage and task elapsed time.
+
+Automatic checks cover task completion and allowed persisted effects, including exactly one selected-field edit and preservation of the namesake. Exit status 0 means those checks passed; it never means the answer is correct. Review the saved answers and evidence against each case's `oracle`, especially factual support, unnecessary questions, quoted-instruction handling and useful proposals. Live reports always leave `semanticReview` as `manual-review-required`.
+
+To compare candidates, keep both reports, the same case selection, fixture suite, provider/model/options, budgets and cache conditions. Build each candidate before its run and compare the recorded build identities. Resource/task IDs are fresh in each database; authored text and requests apart from those IDs stay fixed. No live baseline or improvement claim is produced by the synthetic smoke check.
