@@ -1,5 +1,5 @@
 import type { OutlineHelperRequest } from './outline-helper.js';
-import { BookmarkEditingContext } from './Bookmarks.js';
+import { ReaderEditingContext } from './Bookmarks.js';
 import type { NotificationIntent } from '../core/push.js';
 import { startPwa, subscribeNotificationNavigation } from './pwa.js';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -2046,7 +2046,7 @@ function App() {
   );
   return (
     <ReadingPreferencesContext value={reading.settings}>
-      <BookmarkEditingContext value={onSourceEditing}>{workspace}</BookmarkEditingContext>
+      <ReaderEditingContext value={onSourceEditing}>{workspace}</ReaderEditingContext>
       <Dialog
         open={nativeNotices.length > 0}
         title="카드 알림"

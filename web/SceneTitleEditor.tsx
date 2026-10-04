@@ -3,7 +3,7 @@ import type { ReaderNavigationItem } from '../core/types.js';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
-import { BookmarkEditingContext } from './Bookmarks.js';
+import { ReaderEditingContext } from './Bookmarks.js';
 
 export function SceneTitleEditor({
   item,
@@ -18,7 +18,7 @@ export function SceneTitleEditor({
   const [discard, setDiscard] = useState(false);
   const lock = useRef(false);
   const dirty = title !== (item.title ?? '');
-  const registerEditing = useContext(BookmarkEditingContext);
+  const registerEditing = useContext(ReaderEditingContext);
   useLayoutEffect(() => {
     if (!dirty && !busy) return;
     const id = `scene-title:${item.id}`;
