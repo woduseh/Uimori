@@ -21,6 +21,7 @@ const origins = {
 
 /** Mounted across scope refreshes so a new source or event never discards a local editor. */
 export function ContextPanel({
+  mode = 'full',
   chatId,
   headRevision,
   notes,
@@ -33,6 +34,7 @@ export function ContextPanel({
   onDirtyChange,
   onSaveHandlerChange,
 }: {
+  mode?: 'full' | 'compact';
   chatId: string;
   headRevision: string | null;
   notes?: AuthorNote[];
@@ -48,6 +50,7 @@ export function ContextPanel({
   const [detail, setDetail] = useState<ContextDetail | null>(null);
   const [draft, setDraft] = useState<SummaryDraft | null>(null);
   const [notesDirty, setNotesDirty] = useState(false);
+  const [priorities, setPriorities] = useState('');
   const notesSave = useRef<(() => Promise<boolean>) | null>(null);
   const registerNotesSave = useRef((handler: (() => Promise<boolean>) | null) => {
     notesSave.current = handler;
@@ -150,6 +153,7 @@ export function ContextPanel({
       await api(path, body, method);
       if (!alive.current) return false;
       commandKey.current = { fingerprint: '', key: crypto.randomUUID() };
+      if (path === `${base}/compact`) setPriorities('');
       if (clearDraft) setDraft(null);
       setMessage(success);
       if (generation === scope.current.generation) await load();
@@ -168,6 +172,7 @@ export function ContextPanel({
   const command = () => ({
     expectedRevision: detail!.activeRevision,
     expectedHeadRevision: headRevision,
+    ...(priorities.trim() ? { priorities } : {}),
   });
   async function refreshAll() {
     await Promise.all([load(), onRefreshStory()]);
@@ -216,8 +221,8 @@ export function ContextPanel({
         </button>
       </div>
       <p className="muted">
-        사용할 수 있는 요약과 그 이후의 원문을 다음 요청에 사용해요. 지속적인 설정 정정은 아래
-        메모에 남겨요.
+        사용할 수 있는 요약과 그 이후의 원문을 다음 요청에 사용해요.
+        {mode === 'full' && ' 지속적인 설정 정정은 아래 메모에 남겨요.'}
       </p>
       {error && (
         <p className="error" role="alert">
@@ -251,8 +256,28 @@ export function ContextPanel({
           {!current && (
             <p role="status">대상 장면의 최신 문맥을 확인하고 있어요. 작성 중인 초안은 유지해요.</p>
           )}
+          <details className="context-priorities">
+            <summary>이번 압축에서 우선할 내용 · 선택</summary>
+            <label>
+              압축 우선순위
+              <textarea
+                rows={3}
+                maxLength={4000}
+                value={priorities}
+                disabled={busy || Boolean(working)}
+                placeholder="예: 인물별로 알고 있는 사실과 아직 풀리지 않은 약속을 자세히 남겨 주세요."
+                onChange={(event) => setPriorities(event.target.value)}
+              />
+            </label>
+            <small className="muted">
+              이번 압축에만 사용해요. 새 설정이나 사건을 추가하는 메모는 아니에요.
+            </small>
+          </details>
+          <p className="muted">
+            정리할 구간이 있으면 문맥 모델을 호출해요. 원문은 그대로 보존해요.
+          </p>
           <div className="form-actions">
-            {!draft && (
+            {mode === 'full' && !draft && (
               <button
                 type="button"
                 className="secondary"
@@ -323,7 +348,7 @@ export function ContextPanel({
               </div>
             )
           )}
-          {draft && (
+          {mode === 'full' && draft && (
             <form
               className="context-summary-editor"
               onSubmit={(event) => {
@@ -386,22 +411,24 @@ export function ContextPanel({
           )}
         </>
       )}
-      <AuthorNotesEditor
-        headRevision={headRevision}
-        notes={notesCache.current.notes}
-        revision={notesCache.current.revision}
-        disabled={notes === undefined || busy}
-        onSave={async (value) => {
-          await api(`/chats/${id(chatId)}/notes`, value);
-        }}
-        onRefresh={async () => {
-          await refreshAll();
-          onChanged();
-        }}
-        onError={onError}
-        onDirtyChange={setNotesDirty}
-        onSaveHandlerChange={registerNotesSave}
-      />
+      {mode === 'full' && (
+        <AuthorNotesEditor
+          headRevision={headRevision}
+          notes={notesCache.current.notes}
+          revision={notesCache.current.revision}
+          disabled={notes === undefined || busy}
+          onSave={async (value) => {
+            await api(`/chats/${id(chatId)}/notes`, value);
+          }}
+          onRefresh={async () => {
+            await refreshAll();
+            onChanged();
+          }}
+          onError={onError}
+          onDirtyChange={setNotesDirty}
+          onSaveHandlerChange={registerNotesSave}
+        />
+      )}
     </section>
   );
 }

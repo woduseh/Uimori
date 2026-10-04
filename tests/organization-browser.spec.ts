@@ -432,8 +432,8 @@ for (const width of DEFAULT_WIDTHS) {
     const folder = nav.locator(`[data-bot-folder-id="${shared.id}"]`);
     await folder.getByRole('button', { name: `${folderTitle} 봇 폴더`, exact: true }).click();
     const branches = folder.locator('[data-bot-id]');
-    await expect(branches).toHaveCount(2);
-    await expect(nav.locator(`[data-bot-id="${unusedBot.id}"]`)).toHaveCount(0);
+    await expect(branches).toHaveCount(3);
+    await expect(nav.locator(`[data-bot-id="${unusedBot.id}"]`)).toBeVisible();
     const branchA = nav.locator(`[data-bot-id="${a.owner.id}"]`);
     await revealBotActions(branchA);
     await branchA.getByLabel(`${a.owner.title} 관리`, { exact: true }).click();
@@ -450,13 +450,13 @@ for (const width of DEFAULT_WIDTHS) {
     await branchA
       .getByLabel(`${a.owner.title} 봇 폴더 이동`, { exact: true })
       .selectOption(shared.id);
-    await expect(branches).toHaveCount(2);
+    await expect(branches).toHaveCount(3);
     await nav.locator('.bot-tree-section-heading').hover();
     await nav.getByLabel('봇 목록 메뉴', { exact: true }).click();
     await nav.getByLabel('봇 정렬 기준', { exact: true }).selectOption('manual');
     await page.keyboard.press('Escape');
     const firstId = await branches.first().getAttribute('data-bot-id');
-    const firstOwner = firstId === a.owner.id ? a.owner : b.owner;
+    const firstOwner = [a.owner, b.owner, unusedBot].find((bot) => bot.id === firstId)!;
     await revealBotActions(branches.first());
     await branches.first().getByLabel(`${firstOwner.title} 관리`, { exact: true }).click();
     await branches

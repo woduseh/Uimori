@@ -3,6 +3,22 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 
 export function readerRoutes(app: FastifyInstance, store: Store) {
+  app.get<{ Params: { id: string } }>('/api/chats/:id/last-scene-lore', async (request) => {
+    const chat = store.chat(request.params.id);
+    // A fork may still point at an ancestor's source. Its original invocation owns this receipt.
+    const row = chat.headRevision
+      ? (store.db
+          .prepare(`SELECT a.id,json_extract(a.request,'$.requestLore') AS lore
+          FROM sources s JOIN attempts a ON a.run_id=s.run_id
+          WHERE s.id=? AND a.usage_kind='writing' AND a.job_id IS NULL ORDER BY a.rowid DESC LIMIT 1`)
+          .get(chat.headRevision) as { id: string; lore: string | null } | undefined)
+      : undefined;
+    return {
+      sourceRevision: chat.headRevision,
+      attemptId: row?.id ?? null,
+      lore: row?.lore ? JSON.parse(row.lore) : null,
+    };
+  });
   app.get<{ Params: { id: string } }>('/api/chats/:id/attempts', async (request) => {
     store.chat(request.params.id);
     const rows = store.db

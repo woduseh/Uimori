@@ -7,6 +7,7 @@ import type { ReaderActivity } from '../core/types.js';
 import { changedReaderSources, readerJobIds, readerPresentationRevisions } from './reader-data.js';
 import { providerRejection } from '../core/provider-rejection.js';
 import { readerRequestOrder } from '../core/reader-conversation.js';
+import type { SceneUsageReceipt } from '../core/scene-usage.js';
 
 /** The failing attempt's stored provider diagnostic, read only for 4xx failures being displayed. */
 export function attemptRejection(store: Store, column: 'run_id' | 'job_id', id: string) {
@@ -134,6 +135,25 @@ export function readerActivities(
 export function readerRuns(store: Store, id: string, scope?: string[]) {
   store.chat(id);
   // JSON projection happens in SQLite: do not parse quadratic history or diagnostic bodies.
+  const sceneUsage = new Map(
+    (
+      store.db
+        .prepare(`SELECT run_id AS runId,input_tokens AS inputTokens,output_tokens AS outputTokens,
+        json_extract(request,'$.requestContext') AS context
+        FROM attempts WHERE rowid IN (SELECT MAX(rowid) FROM attempts
+        WHERE chat_id=? AND run_id IS NOT NULL AND job_id IS NULL AND usage_kind='writing'
+        ${scope ? 'AND run_id IN (SELECT value FROM json_each(?))' : ''} GROUP BY run_id)`)
+        .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as {
+        runId: string;
+        inputTokens: number | null;
+        outputTokens: number | null;
+        context: string | null;
+      }[]
+    ).map(({ runId, context, ...tokens }) => [
+      runId,
+      { ...tokens, context: context ? JSON.parse(context) : null } as SceneUsageReceipt,
+    ])
+  );
   const runCosts = new Map(
     (
       store.db
@@ -182,6 +202,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     canRejudge: !!row.canRejudge,
     executionMode: row.executionMode ?? undefined,
     estimatedCost: runCosts.get(row.id),
+    sceneUsage: sceneUsage.get(row.id),
     snapshot: {
       ...JSON.parse(row.snapshot),
       loreContextReset: !!JSON.parse(row.snapshot).loreContextReset,

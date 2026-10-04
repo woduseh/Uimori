@@ -117,10 +117,13 @@ export function TranslationGuideEditor({
         </p>
         <pre>{JSON.stringify(value, null, 2)}</pre>
       </details>
-      <p className="muted translation-guide-help">
-        도우미에게 ‘이 봇의 설명과 로어를 참고해 번역 지침 초안을 만들어줘’라고 요청할 수 있어요.
-        지침은 요청했을 때만 작성·저장하며, 새 용어를 자동으로 누적하지 않아요.
-      </p>
+      <details className="translation-guide-preview">
+        <summary>작성 도움말</summary>
+        <p className="muted translation-guide-help">
+          도우미에게 ‘이 봇의 설명과 로어를 참고해 번역 지침 초안을 만들어줘’라고 요청할 수 있어요.
+          지침은 요청했을 때만 작성·저장하며, 새 용어를 자동으로 누적하지 않아요.
+        </p>
+      </details>
     </section>
   );
 }

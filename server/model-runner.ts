@@ -492,6 +492,14 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         attemptId = await hooks.onAttemptStart(
           {
             ...wire,
+            ...(request.contextBudget
+              ? {
+                  requestContext: {
+                    estimatedInputTokens: estimateContextTokens(wire.body),
+                    inputTokenLimit: request.contextBudget.inputTokenLimit,
+                  },
+                }
+              : {}),
             requestLore: requestLore(fixed, request, wire, {
               pinned: input.pinnedSources ?? [],
               catalog: input.catalog,

@@ -72,7 +72,15 @@ export function helperContext(
     : null;
   if (checkpoint) {
     const plan = store.context.checkpoint(checkpoint).plan;
-    if (!isDeepStrictEqual(plan.compacted, refs(history).slice(0, plan.compacted.length)))
+    if (
+      !isDeepStrictEqual(plan.compacted, refs(history).slice(0, plan.compacted.length)) ||
+      !isDeepStrictEqual(
+        plan.recentSourceRevisions,
+        history
+          .slice(plan.compacted.length, plan.compacted.length + plan.recentSourceRevisions.length)
+          .map((message) => message.id)
+      )
+    )
       throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
   }
   return { activeRevision: Number(row?.revision ?? 0), checkpoint };
@@ -83,7 +91,8 @@ export function publishHelperContext(
   summary: string,
   usage: Usage,
   estimatedInputTokens: number,
-  base: NonNullable<HelperTaskSnapshot['context']>
+  base: NonNullable<HelperTaskSnapshot['context']>,
+  retainedHistory: HelperTaskSnapshot['history'] = []
 ) {
   return store.transaction(() => {
     if (
@@ -98,6 +107,9 @@ export function publishHelperContext(
     const prefix = all.slice(0, all.findIndex((message) => message.id === user.id) + 1);
     if (!isDeepStrictEqual(prefix.slice(0, -1), task.snapshot.history))
       throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+    const compactedCount = prefix.length - 1 - retainedHistory.length;
+    if (compactedCount < 0 || !isDeepStrictEqual(prefix.slice(compactedCount, -1), retainedHistory))
+      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
     const scopeKey = `helper:${task.conversationId}`,
       revision = base.activeRevision + 1;
     const plan: ContextPlan = {
@@ -106,8 +118,10 @@ export function publishHelperContext(
       budget: contextBudgetForModel(task.snapshot.model),
       dependencyKey: scopeKey,
       estimatedInputTokens,
-      compacted: refs(prefix),
-      recentSourceRevisions: [],
+      compacted: refs(prefix.slice(0, compactedCount)),
+      // The current request stays exact too. Its ID also binds any in-task read
+      // summary to this request, so retry cannot reuse the replaced task's work.
+      recentSourceRevisions: prefix.slice(compactedCount).map((message) => message.id),
       summary,
       summaryCalls: usage.modelCalls,
       usage,

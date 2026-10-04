@@ -12,6 +12,7 @@ import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
 import { forkChat } from './chat-fork.js';
 import { exportChatTranscript, importChatTranscript } from './chat-transcript.js';
+import { exportManuscript, manuscriptExportMetadata } from './manuscript-export.js';
 import { exportChatBackup, importChatBackup } from './chat-backup.js';
 import { CHAT_BACKUP_MAX_BYTES } from '../core/chat-backup.js';
 import { validateVertexEndpoint, type Connection } from '../core/product.js';
@@ -60,6 +61,12 @@ export function productRoutes(
     reply
       .header('Content-Disposition', 'attachment; filename="chat-transcript.json"')
       .send(exportChatTranscript(store, request.params.id))
+  );
+  app.get<{ Params: { id: string } }>('/api/chats/:id/manuscript', async (request) =>
+    manuscriptExportMetadata(store, request.params.id)
+  );
+  app.post<{ Params: { id: string } }>('/api/chats/:id/manuscript', async (request) =>
+    exportManuscript(store, request.params.id, request.body)
   );
   app.post('/api/chats/import-transcript', { bodyLimit: 64 * 1024 * 1024 }, async (request) => {
     const result = importChatTranscript(store, request.body);

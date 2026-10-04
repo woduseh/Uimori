@@ -40,7 +40,17 @@ export async function applyRisuImport(
   readStaged?: (uploadId: string) => Buffer
 ): Promise<RisuImportResult> {
   const body = record(value);
-  fields(body, ['source', 'kind', 'digest', 'imageHandoffIds', 'allowPartial', 'idempotencyKey']);
+  fields(body, [
+    'source',
+    'kind',
+    'digest',
+    'imageHandoffIds',
+    'allowPartial',
+    'createChat',
+    'idempotencyKey',
+  ]);
+  if (body.createChat !== undefined && typeof body.createChat !== 'boolean')
+    throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   const requestKey = text(body.idempotencyKey, 'request key', 100);
   // A response-loss retry must not touch the already-consumed staged upload.
   const operationKey = `risu-result:${requestKey}`;
@@ -49,6 +59,7 @@ export async function applyRisuImport(
     kind: body.kind ?? null,
     allowPartial: body.allowPartial,
     imageHandoffIds: body.imageHandoffIds ?? null,
+    ...(body.createChat === false ? { createChat: false } : {}),
   });
   const previous = () => {
     const result = readImportReceipt<RisuImportResult>(store, operationKey, commandDigest);
@@ -102,7 +113,7 @@ export async function applyRisuImport(
       modelBindings: [],
       idempotencyKey: `risu:${requestKey}`,
     });
-    if (preview.kind !== 'bot') return finish({ receipt, chat: null });
+    if (preview.kind !== 'bot' || body.createChat === false) return finish({ receipt, chat: null });
     if (!receipt.created) {
       const exists = store.db.prepare('SELECT id FROM chats WHERE id=?').get(receipt.id);
       return finish({ receipt, chat: exists ? store.chat(receipt.id) : null });

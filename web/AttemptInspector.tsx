@@ -186,8 +186,7 @@ const loreDelivery = {
   summary: '요약만',
   unverified: '포함 여부 미확인',
 };
-function AttemptLore({ attempt }: { attempt: Attempt }) {
-  const lore = (attempt.request as { requestLore?: RequestLore } | null)?.requestLore;
+export function RequestLoreView({ lore }: { lore?: RequestLore | null }) {
   const confirmed = lore?.entries.filter((entry) => entry.delivery !== 'unverified') ?? [];
   const uncertain = lore?.entries.filter((entry) => entry.delivery === 'unverified') ?? [];
   const entries = (items: RequestLore['entries']) => (
@@ -372,7 +371,9 @@ function AttemptTable({
                 · 비용 기준 {attempt.priceRevision ?? '미확인'}
               </p>
               <CacheUsage attempt={attempt} />
-              <AttemptLore attempt={attempt} />
+              <RequestLoreView
+                lore={(attempt.request as { requestLore?: RequestLore } | null)?.requestLore}
+              />
               <AttemptPricing attempt={attempt} />
               <AttemptRaw attempt={attempt} />
             </>

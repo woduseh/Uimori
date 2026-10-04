@@ -69,6 +69,17 @@ const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Js
 const MAX_HELPER_READ_CHARS = 32_000;
 const MAX_HELPER_ROUND_READ_CHARS = 64_000;
 const MAX_EXACT_HELPER_READ_CHARS = 8_000;
+/** Keep complete recent turns; an oversized turn belongs wholly to the summary. */
+function recentHelperHistory(history: HelperTask['snapshot']['history'], tokenLimit: number) {
+  let start = history.length,
+    turns = 0;
+  for (let index = history.length - 1; index >= 0; index--) {
+    if (history[index].role !== 'user') continue;
+    if (++turns > 2 || estimateContextTokens(history.slice(index)) > tokenLimit) break;
+    start = index;
+  }
+  return history.slice(start);
+}
 function nativeHelperRequest(request: ProviderRequest): CodexAgentRequest {
   return {
     modelId: request.modelId,
@@ -995,10 +1006,6 @@ export class HelperRuntime {
         if (estimate > inputLimit && !hasSummaryInput)
           throw new Error('HELPER_FIXED_CONTEXT_TOO_LARGE');
         if (shouldCompact && hasSummaryInput) {
-          const context = task.snapshot.contextModel;
-          if (!context) throw new Error('MODEL_REQUIRED:context');
-          if (this.workspace.taskState(id).usage.modelCalls + 2 > task.snapshot.limits.totalCalls)
-            throw new Error('MODEL_CALL_BUDGET_EXHAUSTED');
           const preserved = [
             ...completedToolHistory,
             ...results.filter((event) => !helperRead(event)),
@@ -1016,62 +1023,80 @@ export class HelperRuntime {
           );
           const fixedTokens = estimateRequest(fixedRequest);
           if (fixedTokens >= inputLimit) throw new Error('HELPER_FIXED_CONTEXT_TOO_LARGE');
-          const summaryStarted = performance.now();
-          const summary = await this.summarize(
-            task,
-            context,
-            previousSummary,
+          const recent = recentHelperHistory(
             history,
-            results,
-            hooks('context'),
-            fixedTokens
+            Math.floor(Math.min(2048, inputLimit / 8, (inputLimit - fixedTokens) / 2))
           );
-          summaryElapsedMs += performance.now() - summaryStarted;
-          const nextRequest = this.request(
-            task,
-            [],
-            summary.text,
-            [],
-            undefined,
-            preserved,
-            retainedReads,
-            segment + 1
-          );
-          const nextEstimate = estimateRequest(nextRequest);
-          const applied = nextEstimate < estimate && nextEstimate <= inputLimit;
-          signal.throwIfAborted();
-          this.workspace.assertActive(id, owner, generation);
-          lastCompactedReadRevision = readRevision;
-          this.workspace.event(task.conversationId, id, 'context.compaction', {
-            applied,
-            beforeTokens: estimate,
-            afterTokens: nextEstimate,
-            preservedExchanges: preserved.length,
-            completedReads: retainedReads.length,
+          const older = history.slice(0, history.length - recent.length);
+          const retainedFixedTokens = estimateRequest({
+            ...fixedRequest,
+            input: { ...fixedRequest.input, history: asJson(recent) },
           });
-          if (applied) {
-            contextBase = publishHelperContext(
-              this.store,
+          lastCompactedReadRevision = readRevision;
+          // Keeping every previous message exact leaves nothing new to summarize.
+          if (older.length || previousSummary || results.some(helperRead)) {
+            const context = task.snapshot.contextModel;
+            if (!context) throw new Error('MODEL_REQUIRED:context');
+            if (this.workspace.taskState(id).usage.modelCalls + 2 > task.snapshot.limits.totalCalls)
+              throw new Error('MODEL_CALL_BUDGET_EXHAUSTED');
+            const summaryStarted = performance.now();
+            const summary = await this.summarize(
               task,
-              summary.text,
-              summary.usage,
-              nextEstimate,
-              contextBase
+              context,
+              previousSummary,
+              older,
+              results,
+              hooks('context'),
+              retainedFixedTokens
             );
-            previousSummary = summary.text;
-            completedToolHistory = preserved;
-            completedReads = retainedReads;
-            history = [];
-            results = [];
-            opaqueState = undefined;
-            segment++;
-            request = nextRequest;
-            estimate = nextEstimate;
-            this.workspace.event(task.conversationId, id, 'context.segment', {
-              segment,
-              checkpoint: contextBase.checkpoint,
+            summaryElapsedMs += performance.now() - summaryStarted;
+            const nextRequest = this.request(
+              task,
+              recent,
+              summary.text,
+              [],
+              undefined,
+              preserved,
+              retainedReads,
+              segment + 1
+            );
+            const nextEstimate = estimateRequest(nextRequest);
+            const applied = nextEstimate < estimate && nextEstimate <= inputLimit;
+            signal.throwIfAborted();
+            this.workspace.assertActive(id, owner, generation);
+            this.workspace.event(task.conversationId, id, 'context.compaction', {
+              applied,
+              beforeTokens: estimate,
+              afterTokens: nextEstimate,
+              preservedExchanges: preserved.length,
+              completedReads: retainedReads.length,
+              retainedMessages: recent.length,
             });
-          } else if (estimate > inputLimit) throw new Error('HELPER_COMPACTION_NO_PROGRESS');
+            if (applied) {
+              contextBase = publishHelperContext(
+                this.store,
+                task,
+                summary.text,
+                summary.usage,
+                nextEstimate,
+                contextBase,
+                recent
+              );
+              previousSummary = summary.text;
+              completedToolHistory = preserved;
+              completedReads = retainedReads;
+              history = recent;
+              results = [];
+              opaqueState = undefined;
+              segment++;
+              request = nextRequest;
+              estimate = nextEstimate;
+              this.workspace.event(task.conversationId, id, 'context.segment', {
+                segment,
+                checkpoint: contextBase.checkpoint,
+              });
+            } else if (estimate > inputLimit) throw new Error('HELPER_COMPACTION_NO_PROGRESS');
+          }
         }
         const metrics = {
           segment,

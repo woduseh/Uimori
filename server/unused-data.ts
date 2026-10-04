@@ -116,6 +116,10 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
     .prepare("SELECT value FROM app_metadata WHERE key='theme-preferences'")
     .get();
   if (typeof themePreferences?.value === 'string') scan(JSON.parse(themePreferences.value));
+  for (const row of db
+    .prepare("SELECT value FROM app_metadata WHERE key LIKE 'bot-defaults:%'")
+    .iterate())
+    scan(JSON.parse(String(row.value)));
   for (const node of nodes.values()) if (!hidden.has(`${node.kind}:${node.id}`)) visitId(node.id);
   // Text roots and authored JSON are kept separate from disposable execution/command logs.
   for (const [table, column] of [

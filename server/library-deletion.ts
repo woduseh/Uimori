@@ -71,7 +71,10 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
         for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
       }
     }
-    if (kind === 'content') removeIllustrationPresetScope(store, 'bot', id);
+    if (kind === 'content') {
+      removeIllustrationPresetScope(store, 'bot', id);
+      store.db.prepare('DELETE FROM app_metadata WHERE key=?').run(`bot-defaults:${id}`);
+    }
     store.libraryOrganization.remove(kind, id);
     pruneUnusedData(store.db);
     return { deleted: true, id };

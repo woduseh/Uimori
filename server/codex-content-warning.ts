@@ -9,11 +9,12 @@ import type {
   CodexContentPreflightResult,
   CodexContentWarningRole,
 } from '../core/codex-content-warning.js';
-import type { ModelSnapshot } from '../core/product.js';
+import { workspaceModelRef, type ModelSnapshot } from '../core/product.js';
 import type { Store } from './store.js';
 import type { JevCredentialStore } from './jev-credentials.js';
 import { executeJevJudgment, type JevRequest } from './jev-judgment.js';
 import { HttpError, fields, record, text } from './request-validation.js';
+import { promptWorkspace } from './prompt-workspace.js';
 
 const RECENT_CONTEXT_CHARS = 16_000;
 const PREFLIGHT_TIMEOUT_MS = 8_000;
@@ -30,6 +31,16 @@ export function codexContentWarningRequest(
   recentContext = ''
 ): JevRequest {
   const boundary = CODEX_SEXUAL_CONTENT_BOUNDARY;
+  if (role === 'selection-revision')
+    return {
+      state: { revisionInstruction: content, selectedPassage: recentContext },
+      questions: {
+        explicitSexualContent: {
+          type: 'noul',
+          instructions: `Would revising only \`selectedPassage\` according to \`revisionInstruction\` require graphically sexual or pornographic output? The task is passage revision, not continuing the scene. ${boundary}`,
+        },
+      },
+    };
   if (role === 'translation')
     return {
       state: { source: content },
@@ -115,16 +126,23 @@ export function codexContentWarningRoutes(
 ) {
   app.post<{ Params: { id: string } }>(
     '/api/chats/:id/codex-content-preflight',
-    { bodyLimit: 16 * 1024 * 1024 },
+    { bodyLimit: 32 * 1024 * 1024 },
     async (request, reply): Promise<CodexContentPreflightResult> => {
       reply.header('Cache-Control', 'no-store');
       const body = record(request.body);
-      fields(body, ['role', 'text', 'retryRunId']);
+      fields(body, ['role', 'text', 'retryRunId', 'selection']);
       const role = body.role;
-      if (role !== 'main' && role !== 'translation')
+      if (role !== 'main' && role !== 'translation' && role !== 'selection-revision')
         throw new HttpError(400, 'CODEX_CONTENT_PREFLIGHT_ROLE_INVALID');
       const content = text(body.text, 'preflight text', REQUEST_TEXT_MAX_CHARS);
       store.chat(request.params.id);
+      if (role === 'selection-revision') {
+        const selection = text(body.selection, 'selected passage', REQUEST_TEXT_MAX_CHARS);
+        const selected = workspaceModelRef(promptWorkspace(store), 'helper');
+        if (!selected || !isCodex(store.product.modelSnapshot(selected.id, 'helper')))
+          return { warning: false };
+        return judge(role, content, selection, credentials.resolve, signal);
+      }
       const target =
         role === 'main'
           ? mainTarget(store, request.params.id, body.retryRunId)

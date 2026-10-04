@@ -479,6 +479,64 @@ async function contextTerminal(app: App, id: string) {
   return app.store.context.job(id);
 }
 describe('standalone context summaries and explicit corrections', () => {
+  test('manual priorities are bounded, frozen per command and supplied only as summary controls', async () => {
+    const { app, chatId } = await setup({ count: 4, short: true });
+    const bodies: Body[] = [];
+    recordRequests(app, bodies);
+    const before = app.store.history(app.store.chat(chatId).headRevision);
+    const detail = await contextApi(app, chatId, 'GET', '/context');
+    const priorities = 'PRIORITY_CANARY: 인물별로 알고 있는 사실을 자세히 남겨 주세요.';
+    const command = { ...contextCommand(detail), priorities };
+    expect(
+      await contextApi(
+        app,
+        chatId,
+        'POST',
+        '/context/compact',
+        { ...command, priorities: 'x'.repeat(4001) },
+        400
+      )
+    ).toMatchObject({ error: 'Invalid compaction priorities' });
+    expect(bodies).toHaveLength(0);
+    const queued = await contextApi(app, chatId, 'POST', '/context/compact', command);
+    expect(queued.priorities).toBe(priorities);
+    const result = await contextTerminal(app, queued.id);
+    expect(result.status, result.error ?? '').toBe('completed');
+    const count = bodies.length;
+    expect(await contextApi(app, chatId, 'POST', '/context/compact', command)).toMatchObject({
+      id: queued.id,
+      priorities,
+    });
+    expect(
+      await contextApi(
+        app,
+        chatId,
+        'POST',
+        '/context/compact',
+        { ...command, priorities: 'Different priorities' },
+        409
+      )
+    ).toMatchObject({ error: 'Context request key reused' });
+    expect(bodies).toHaveLength(count);
+    const summaryCalls = bodies.filter((body) => body.role === 'context');
+    expect(summaryCalls.length).toBeGreaterThan(0);
+    for (const body of summaryCalls) {
+      expect(body.input).toMatchObject({ controls: { priorities } });
+      expect(JSON.stringify(body.input.source)).not.toContain(priorities);
+    }
+    expect(app.store.history(app.store.chat(chatId).headRevision)).toEqual(before);
+    const run = await terminal(app, (await start(app, chatId)).id);
+    expect(run.status, run.error ?? '').toBe('completed');
+    expect(JSON.stringify(bodies.filter((body) => body.role === 'main'))).not.toContain(priorities);
+    const attempts = app.store.product
+      .attempts(chatId)
+      .filter((attempt) => attempt.runId === run.id && attempt.role === 'main');
+    expect(attempts.at(-1)?.request).toMatchObject({
+      requestContext: { inputTokenLimit: 8192 },
+      detailsOmitted: true,
+    });
+    expect(attempts.at(-1)?.request).not.toHaveProperty('body');
+  });
   test('summary editing admits long token-fitting text and rejects token overflow without changing the saved summary', async () => {
     const { app, chatId } = await setup({ count: 0 });
     const initial = await contextApi(app, chatId, 'GET', '/context');

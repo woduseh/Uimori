@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { crc32 } from 'node:zlib';
 import type { RisuImportApply, RisuImportResult } from '../core/risu-import.js';
 import { navigationAction } from './ui-navigation.js';
+import { visibleNavigation } from './ui-navigation.js';
 
 function card(title: string) {
   return {
@@ -127,7 +128,9 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   await dialog.getByText('로어 미리보기 (1개)', { exact: true }).click();
   await dialog.locator('.risu-import-lore-entry > summary').click();
   await expect(dialog.getByText('The sky is green.', { exact: true })).toBeVisible();
-  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+  await expect(
+    dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' })
+  ).not.toBeChecked();
   const revealKind = async () => {
     const processing = dialog.locator('.risu-import-processing');
     if ((await processing.getAttribute('open')) === null)
@@ -148,7 +151,7 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   await dialog.getByText('로어 미리보기 (1개)', { exact: true }).click();
   await dialog.locator('.risu-import-lore-entry > summary').click();
   await expect(dialog.getByText('The sky is green.', { exact: true })).toBeVisible();
-  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+  await dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' }).check();
   await dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true }).click();
   await expect(dialog.getByRole('button', { name: '같은 요청으로 다시 확인' })).toBeVisible();
   await expect(await revealKind()).toBeDisabled();
@@ -167,4 +170,43 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   expect(saved?.chat).toBeTruthy();
   const chats = (await (await request.get('/api/chats')).json()) as { id: string }[];
   expect(chats.filter((chat) => chat.id === saved?.chat?.id)).toHaveLength(1);
+});
+
+test('RISUKINDUI03 bot import defaults to the library and appears in navigation without a chat', async ({
+  page,
+  request,
+}) => {
+  const title = `Library only ${crypto.randomUUID()}`;
+  const before = await (await request.get('/api/chats')).json();
+  await page.goto('/');
+  await navigationAction(page, '서재');
+  await page.getByRole('button', { name: '자료 가져오기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '자료 가져오기', exact: true });
+  await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
+    name: 'library-bot.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(card(title))),
+  });
+  const create = dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' });
+  await expect(create).not.toBeChecked();
+  const pending = page.waitForResponse((response) =>
+    response.url().endsWith('/api/risu-imports/apply')
+  );
+  await dialog.getByRole('button', { name: '봇 가져오기', exact: true }).click();
+  const imported = (await (await pending).json()) as RisuImportResult;
+  expect(imported.chat).toBeNull();
+  await expect(dialog.getByText('봇을 서재에 등록했어요.', { exact: false })).toBeVisible();
+  expect(await (await request.get('/api/chats')).json()).toHaveLength(before.length);
+  await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
+  const nav = await visibleNavigation(page);
+  const section = nav.getByRole('button', { name: '봇', exact: true });
+  if ((await section.getAttribute('aria-expanded')) === 'false') await section.click();
+  const botId = imported.receipt.items.find((item) => item.root)!.id;
+  const branch = nav.locator(`[data-bot-id="${botId}"]`);
+  await expect(branch).toBeVisible();
+  await branch.getByRole('button', { name: `${title} 채팅 목록`, exact: true }).click();
+  await expect(branch.getByText('채팅이 없어요.', { exact: true })).toBeVisible();
+  await branch.hover();
+  await branch.getByRole('button', { name: `${title} 새 채팅`, exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '새 채팅', exact: true })).toBeVisible();
 });

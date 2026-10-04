@@ -1,4 +1,4 @@
-export type CodexContentWarningRole = 'main' | 'translation';
+export type CodexContentWarningRole = 'main' | 'translation' | 'selection-revision';
 
 export type CodexContentPreflightResult = { warning: boolean };
 

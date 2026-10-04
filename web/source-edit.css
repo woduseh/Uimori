@@ -34,3 +34,39 @@
 .source-cost-value {
   font-weight: 600;
 }
+
+.selection-revision {
+  margin-block: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.selection-revision p {
+  margin-block: 8px;
+}
+.source-text-editor .selection-revision textarea {
+  min-height: 6em;
+  height: auto;
+}
+.selection-revision-comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.selection-revision-comparison > div {
+  min-width: 0;
+}
+.selection-revision-comparison pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow: auto;
+  font-family: inherit;
+  padding: 10px;
+  background: var(--bg);
+  border-radius: 8px;
+}
+.selection-revision .form-actions {
+  flex-wrap: wrap;
+}

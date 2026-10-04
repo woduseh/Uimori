@@ -11,6 +11,147 @@ import { test, expect } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { Connection, Content, ModelPreset } from '../core/product.js';
 import { navigationAction } from './ui-navigation.js';
+import { visibleNavigation } from './ui-navigation.js';
+
+test('NSUI08 bot default persona is saved from its menu and explicit none wins when creating a chat', async ({
+  page,
+  request,
+}) => {
+  const make = async (kind: 'bot' | 'persona') => {
+    const response = await request.post('/api/content', {
+      data: {
+        kind,
+        title: `${kind} defaults ${crypto.randomUUID()}`,
+        description: '',
+        text: 'Synthetic',
+        loading: 'pinned',
+        relatedIds: [],
+      },
+    });
+    expect(response.ok()).toBe(true);
+    return response.json() as Promise<Content>;
+  };
+  const bot = await make('bot'),
+    persona = await make('persona');
+  await page.goto('/');
+  const nav = await visibleNavigation(page);
+  const section = nav.getByRole('button', { name: '봇', exact: true });
+  if ((await section.getAttribute('aria-expanded')) === 'false') await section.click();
+  const branch = nav.locator(`[data-bot-id="${bot.id}"]`);
+  await branch.hover();
+  await branch.getByLabel(`${bot.title} 관리`, { exact: true }).click();
+  await branch.getByRole('button', { name: '기본 페르소나', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: '봇 기본 페르소나', exact: true });
+  await settings.getByLabel('봇 기본 페르소나 방식').selectOption('persona');
+  await settings.getByRole('button', { name: '봇의 기본 페르소나 선택', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: '봇의 기본 페르소나 선택', exact: true });
+  await picker.getByRole('searchbox').fill(persona.title);
+  await picker
+    .getByRole('button')
+    .filter({ has: page.getByText(persona.title, { exact: true }) })
+    .click();
+  await settings.getByRole('button', { name: '기본 페르소나 저장', exact: true }).click();
+  await expect(settings).toBeHidden();
+  expect(await (await request.get(`/api/bots/${bot.id}/defaults`)).json()).toMatchObject({
+    persona: { mode: 'persona', persona: { id: persona.id } },
+  });
+  await branch.hover();
+  await branch.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toContainText(
+    persona.title
+  );
+  await dialog.getByRole('button', { name: '시작 페르소나', exact: true }).click();
+  const choice = page.getByRole('dialog', { name: '시작 페르소나', exact: true });
+  await choice.getByRole('button', { name: '페르소나 없음', exact: true }).click();
+  const created = page.waitForResponse(
+    (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
+  );
+  await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click();
+  const response = await created;
+  expect(response.ok()).toBe(true);
+  const chat = (await response.json()) as Chat;
+  await expect(dialog).toBeHidden();
+  const detail = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  expect(detail.profile!.packageAttachments).toEqual([
+    { id: bot.id, revision: bot.revision, role: 'bot' },
+  ]);
+});
+
+test('NSUI09 a deleted default discovered after library refresh requires an explicit persona choice', async ({
+  page,
+  request,
+}) => {
+  const make = async (kind: 'bot' | 'persona') => {
+    const response = await request.post('/api/content', {
+      data: {
+        kind,
+        title: `${kind} refresh ${crypto.randomUUID()}`,
+        description: '',
+        text: 'Synthetic',
+        loading: 'pinned',
+        relatedIds: [],
+      },
+    });
+    expect(response.ok()).toBe(true);
+    return response.json() as Promise<Content>;
+  };
+  const bot = await make('bot'),
+    persona = await make('persona');
+  expect(
+    (
+      await request.patch(`/api/bots/${bot.id}/defaults`, {
+        data: {
+          expectedRevision: 1,
+          persona: { mode: 'persona', persona: { id: persona.id, revision: persona.revision } },
+        },
+      })
+    ).ok()
+  ).toBe(true);
+  await page.goto('/');
+  await navigationAction(page, '새 채팅', bot.title);
+  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  const submit = dialog.getByRole('button', { name: '채팅 만들기', exact: true });
+  await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toContainText(
+    persona.title
+  );
+  await expect(submit).toBeEnabled();
+  expect(
+    (
+      await request.delete(`/api/content/${persona.id}`, {
+        data: { expectedRevision: persona.revision },
+      })
+    ).ok()
+  ).toBe(true);
+  // APIRequestContext does not notify the page; focus uses the actual library refresh path.
+  const refreshed = page.waitForResponse((response) =>
+    response.url().endsWith(`/api/bots/${bot.id}/defaults`)
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await refreshed;
+  await expect(dialog.getByRole('alert')).toContainText('기본 페르소나가 삭제됐어요');
+  await expect(dialog.getByText('시작 자료를 불러오는 중이에요…', { exact: true })).toBeHidden();
+  await expect(submit).toBeDisabled();
+
+  await dialog.getByRole('button', { name: '시작 페르소나', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '시작 페르소나', exact: true })
+    .getByRole('button', { name: '페르소나 없음', exact: true })
+    .click();
+  await expect(submit).toBeEnabled();
+  const created = page.waitForResponse(
+    (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
+  );
+  await submit.click();
+  const response = await created;
+  expect(response.ok()).toBe(true);
+  const chat = (await response.json()) as Chat;
+  await expect(dialog).toBeHidden();
+  const detail = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  expect(detail.profile!.packageAttachments).toEqual([
+    { id: bot.id, revision: bot.revision, role: 'bot' },
+  ]);
+});
 
 for (const [viewportName, viewport] of [
   ['mobile', { width: MOBILE_WIDTH, height: MOBILE_HEIGHT }],

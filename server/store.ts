@@ -247,7 +247,11 @@ export class Store {
   }
   createChat(
     title: string,
-    organization: { botId?: string; folderId?: string | null } = {},
+    organization: {
+      botId?: string;
+      folderId?: string | null;
+      persona?: import('../core/product.js').ContentRef | null;
+    } = {},
     internalId?: string
   ): Chat {
     const id = internalId === undefined ? randomUUID() : text(internalId, 'internal chat ID', 100);

@@ -48,8 +48,7 @@ function readView(): View {
     return { open: {}, sort: 'recent', order: [] };
   }
 }
-/** First row of the sidebar and the drawer: start a chat (from the library's bot tab, where bots
- *  without chats live) or find a chat across every bot. */
+/** First row of the sidebar and the drawer: choose a bot in the library or find any chat. */
 export function NavigationQuickActions({
   chats,
   library,
@@ -199,7 +198,10 @@ export function BotNavigation(
       );
     return result;
   }, [chats]);
-  const bots = library?.contents.filter((bot) => latest.has(bot.id)) ?? [];
+  const bots =
+    library?.contents.filter(
+      (bot) => libraryCategory(library, bot) === 'bot' || latest.has(bot.id)
+    ) ?? [];
   const folders =
     library?.organization?.folders.filter((folder) => folder.category === 'bot') ?? [];
   const folderOf = (bot: Content) => {

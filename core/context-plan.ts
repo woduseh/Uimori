@@ -33,6 +33,8 @@ export type ContextCheckpoint = ContextCheckpointRef & {
   activated: boolean;
 };
 export type ContextJob = {
+  /** Optional priorities for this manual compaction only; never story facts. */
+  priorities?: string;
   id: string;
   chatId: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';

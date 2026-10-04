@@ -87,8 +87,6 @@ export function SettingsEditor({
         }}
       >
         <fieldset className="editor-fields full" disabled={saving}>
-          <small className="full">한국어 번역은 각 장면의 번역 보기를 누를 때 시작해요.</small>
-          <small className="full">번역은 원문 전체를 현재 번역 프롬프트와 설정으로 요청해요.</small>
           <label className="check">
             <Switch
               aria-label="장면 해설 자동 생성"
@@ -98,8 +96,8 @@ export function SettingsEditor({
             장면 해설 자동 생성
           </label>
           <small className="full">
-            새 원고가 완성되면 장면의 요약과 분위기를 짧게 붙여요. 읽을 때만 쓰는 설명이라 이야기
-            상태나 다음 요청의 근거는 바뀌지 않아요. 모델 경로는 역할별 모델 설정을 따라요.
+            원고가 완성되면 짧은 요약과 분위기를 덧붙여요. 다음 생성의 문맥에는 쓰지 않아요. 모델은
+            역할별 모델 설정을 따라요.
           </small>
           <label className="full">
             작업당 모델 호출 한도

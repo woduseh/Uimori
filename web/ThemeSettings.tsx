@@ -323,7 +323,6 @@ export function ThemeSettings({
         <div className="theme-dimension-heading">
           <div>
             <h3 id="theme-layout-heading">레이아웃</h3>
-            <p>본문과 요청, 도구의 배치를 골라요. 선택한 색상 팔레트는 유지돼요.</p>
           </div>
           {scope !== 'global' && (
             <button
@@ -424,7 +423,6 @@ export function ThemeSettings({
         <div className="theme-dimension-heading">
           <div>
             <h3 id="theme-palette-heading">색상 팔레트</h3>
-            <p>배치와 읽기 설정을 유지하면서 화면 색상만 바꿔요.</p>
           </div>
           <button
             disabled={
@@ -574,6 +572,9 @@ export function ThemeSettings({
                 request·heading·body·actions 슬롯을 각각 하나씩 포함해야 해요. JavaScript와 Risu
                 CBS는 실행하지 않아요.
               </p>
+              <p>
+                테마 제작 규약은 저장소의 <code>docs/THEME-AUTHORING.md</code>에 있어요.
+              </p>
               {(
                 [
                   ['appCss', '앱 CSS'],
@@ -659,8 +660,7 @@ export function ThemeSettings({
       {notice && <p role="status">{notice}</p>}
       <p className="theme-help">
         꾸미다가 화면이 깨지면 <kbd>Ctrl/Cmd + .</kbd>로 이 탭의 테마를 끄세요. 주소에{' '}
-        <code>?theme-safe=1</code>을 붙여 열어도 돼요. 테마 제작 규약은 저장소의{' '}
-        <code>docs/THEME-AUTHORING.md</code>에 있어요.
+        <code>?theme-safe=1</code>을 붙여 열어도 돼요.
       </p>
       <Dialog
         open={!!deleting}

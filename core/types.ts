@@ -228,6 +228,7 @@ export type ChatDetail = {
 
 /** Reader summaries never stand in for frozen execution inputs. */
 export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
+  sceneUsage?: import('./scene-usage.js').SceneUsageReceipt;
   canRejudge?: boolean;
   /** Stable admission order of the first request in this retry chain. */
   requestOrder?: number;

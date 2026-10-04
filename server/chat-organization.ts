@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { defaultProfile, type Content, type ContentRef, type ChatFolder } from '../core/product.js';
 import type { Store } from './store.js';
 import { loreContextDefaults } from './lore-context-defaults.js';
+import { newChatPersona, type BotDefaults } from '../core/bot-defaults.js';
 
 export type { ChatFolder } from '../core/product.js';
 export type ChatOrganization = {
@@ -28,6 +29,43 @@ export class ChatOrganizationStore {
     if (bot.kind !== 'bot' && !bot.package)
       throw new HttpError(400, 'Organization owner must be a bot or package');
     return bot;
+  }
+  defaults(botId: string): BotDefaults {
+    this.bot(botId);
+    const row = this.store.db
+      .prepare('SELECT value FROM app_metadata WHERE key=?')
+      .get(`bot-defaults:${botId}`);
+    return row ? JSON.parse(String(row.value)) : { revision: 1, persona: { mode: 'inherit' } };
+  }
+  updateDefaults(botId: string, value: unknown): BotDefaults {
+    const b = record(value);
+    fields(b, ['expectedRevision', 'persona']);
+    const expected = number(b.expectedRevision, 'bot defaults revision');
+    const selection = record(b.persona);
+    fields(selection, selection.mode === 'persona' ? ['mode', 'persona'] : ['mode']);
+    if (!['inherit', 'none', 'persona'].includes(selection.mode))
+      throw new HttpError(400, '기본 페르소나 선택을 확인해 주세요.');
+    return this.store.transaction(() => {
+      const prior = this.defaults(botId);
+      if (prior.revision !== expected)
+        throw new HttpError(409, '봇 기본 설정이 변경됐어요. 다시 열어 확인해 주세요.');
+      const persona = selection.mode === 'persona' ? this.persona(selection.persona) : null;
+      if (selection.mode === 'persona' && !persona)
+        throw new HttpError(400, '기본으로 사용할 페르소나를 선택해 주세요.');
+      if (persona) this.store.product.assertAvailable('content', persona.id);
+      const next: BotDefaults = {
+        revision: prior.revision + 1,
+        persona: persona
+          ? { mode: 'persona', persona }
+          : { mode: selection.mode as 'inherit' | 'none' },
+      };
+      this.store.db
+        .prepare(
+          'INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value'
+        )
+        .run(`bot-defaults:${botId}`, JSON.stringify(next));
+      return next;
+    });
   }
   metadata(chatId: string): ChatOrganization | undefined {
     const row = this.store.db
@@ -154,7 +192,10 @@ export class ChatOrganizationStore {
     });
   }
   /** Called inside the chat creation transaction. */
-  create(chatId: string, selection: { botId?: string; folderId?: string | null } = {}) {
+  create(
+    chatId: string,
+    selection: { botId?: string; folderId?: string | null; persona?: ContentRef | null } = {}
+  ) {
     if (selection.botId === undefined) throw new HttpError(400, 'A chat requires an owning bot');
     const botId = text(selection.botId, 'bot ID', 100);
     const bot = this.bot(botId);
@@ -165,13 +206,17 @@ export class ChatOrganizationStore {
       .run(chatId, botId, folderId, this.firstPosition(botId, folderId));
     const { revision: _revision, ...loreContext } = loreContextDefaults(this.store);
     const profile = { ...defaultProfile(chatId), loreContext };
-    const persona = folder?.defaultPersona
-      ? this.store.product.get<Content>(
-          'content',
-          folder.defaultPersona.id,
-          folder.defaultPersona.revision
-        )
-      : null;
+    const personaRef = newChatPersona(
+      this.defaults(botId).persona,
+      folder?.defaultPersona,
+      selection.persona === undefined ? undefined : this.persona(selection.persona)
+    );
+    if (personaRef && this.store.product.isHidden('content', personaRef.id))
+      throw new HttpError(
+        409,
+        '기본 페르소나가 삭제됐어요. 봇 또는 폴더의 기본 페르소나를 다시 선택해 주세요.'
+      );
+    const persona = personaRef ? this.store.product.get<Content>('content', personaRef.id) : null;
     const packageAttachments = [
       ...(bot?.package ? [{ id: bot.id, revision: bot.revision, role: 'bot' as const }] : []),
       ...(persona?.package
@@ -246,6 +291,12 @@ export function chatOrganizationRoutes(
   publish: (chatId: string) => void
 ) {
   const org = store.organization;
+  app.get<{ Params: { botId: string } }>('/api/bots/:botId/defaults', async (request) =>
+    org.defaults(request.params.botId)
+  );
+  app.patch<{ Params: { botId: string } }>('/api/bots/:botId/defaults', async (request) =>
+    org.updateDefaults(request.params.botId, request.body)
+  );
   app.get<{ Params: { botId: string } }>('/api/bots/:botId/folders', async (request) =>
     org.folders(request.params.botId)
   );

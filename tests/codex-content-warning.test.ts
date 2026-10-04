@@ -8,6 +8,7 @@ import { createApp, type App } from '../server/app.js';
 import type { CodexRuntimeService } from '../server/codex-runtime.js';
 import { injectWithFixtureBot, setFixtureModelRoutes } from './fixtures/chat.js';
 import { installJevFixture } from './fixtures/jev.js';
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 
 const owned: { directory: string; app?: App }[] = [];
 
@@ -172,6 +173,24 @@ test('Codex preflight warns through JEV for main and translation while remaining
   });
   expect(inputTranslation).toEqual({ warning: true });
   expect(judgments.at(-1)?.state).toEqual({ source: 'Synthetic source text.' });
+
+  const workspace = modelWorkspace(app.store);
+  updateModelWorkspace(app.store, {
+    expectedRevision: workspace.revision,
+    routes: workspace.routes,
+    translationPolicy: workspace.translationPolicy,
+    helperModel: ref(model),
+  });
+  const revision = await api(app, `/api/chats/${chat.id}/codex-content-preflight`, {
+    role: 'selection-revision',
+    text: 'Keep the meaning and revise the phrasing.',
+    selection: 'Synthetic selected passage.',
+  });
+  expect(revision).toEqual({ warning: true });
+  expect(judgments.at(-1)?.state).toEqual({
+    revisionInstruction: 'Keep the meaning and revise the phrasing.',
+    selectedPassage: 'Synthetic selected passage.',
+  });
 
   const live = app.store.chat(chat.id);
   const run = await api(app, `/api/chats/${chat.id}/runs`, {
