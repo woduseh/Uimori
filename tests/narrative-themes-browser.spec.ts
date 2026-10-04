@@ -338,6 +338,22 @@ for (const layout of layouts) {
           const manuscript = await scene.locator('.manuscript').boundingBox();
           const composer = await page.locator('.composer-dock').boundingBox();
           expect(manuscript!.y + manuscript!.height).toBeLessThanOrEqual(composer!.y + 1);
+          // Expanded receipts use the outer reader without hiding the scene actions.
+          const usage = scene.getByTestId('scene-usage');
+          const disclosure = usage.locator('summary').first();
+          await disclosure.click();
+          await expect(usage).toHaveAttribute('open', '');
+          const actions = scene.locator('[data-uimori-part="actions"]');
+          await actions.scrollIntoViewIfNeeded();
+          await expect(actions).toBeInViewport();
+          const actionsBox = (await actions.boundingBox())!;
+          expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(composer!.y + 1);
+          await page.screenshot({ path: info.outputPath(`${layout}-${mode}-usage-expanded.png`) });
+          await disclosure.click();
+          await expect(usage).not.toHaveAttribute('open', '');
+          await reader.evaluate((node) => {
+            node.scrollTop = 0;
+          });
         }
         await page.screenshot({ path: info.outputPath(`${layout}-${mode}-${width}.png`) });
         await info.attach('narrative-reader-measurements', {
