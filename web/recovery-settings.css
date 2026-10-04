@@ -241,6 +241,13 @@
   gap: 8px;
   margin-top: 14px;
 }
+.settings-install-help > summary {
+  width: fit-content;
+  min-height: var(--control-h);
+  padding-block: 10px;
+  color: var(--muted);
+  cursor: pointer;
+}
 .settings-service-error {
   margin-top: 12px;
   display: grid;

@@ -151,14 +151,17 @@
 .risu-import-processing > summary {
   cursor: pointer;
   min-height: 46px;
-  display: flex;
-  align-items: center;
+  padding-block: 12px;
   font-weight: 600;
 }
 .risu-import-processing > div,
 .risu-import-processing > p {
   margin: 0;
   padding: 0 0 14px;
+}
+.risu-import-processing > div {
+  display: grid;
+  gap: 10px;
 }
 .risu-import-processing label {
   display: grid;
