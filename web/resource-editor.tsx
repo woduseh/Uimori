@@ -40,6 +40,17 @@ function context(session: ResourceEditorSession | null): ActiveEditorContext | n
   };
 }
 export const getActiveEditorContext = () => context(activeSession());
+/** Check every mounted editor; the focused panel may be editing a different resource. */
+export function hasUnsavedResourceEditor(kind: string, id: string) {
+  return [...sessions.values()].some((session) => {
+    const state = session.snapshot();
+    return (
+      session.options.kind === kind &&
+      (kind === 'prompt-workspace' ? id === 'current' : state.document.targetId === id) &&
+      (state.dirty || state.saving)
+    );
+  });
+}
 export const captureActiveEditorContext = () => activeSession()?.captureForHelper() ?? null;
 export async function discardActiveEditor(editorKey?: string) {
   const session = editorKey

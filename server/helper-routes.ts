@@ -2,6 +2,8 @@ import type { OutlineTarget } from '../core/outline.js';
 import type { FastifyInstance } from 'fastify';
 import type { HelperScope, HelperEditor, HelperLimits } from '../core/helper.js';
 import type { HelperRuntime } from './helper-runtime.js';
+import { lastHelperResourceEdit, undoHelperResourceEdit } from './helper-resource-undo.js';
+import { readHelperActivity } from './helper-activity.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
@@ -72,7 +74,18 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       conversation: store.conversation(id),
       messages: store.messages(id),
       tasks: store.taskSummaries(id),
+      lastResourceEdit: lastHelperResourceEdit(runtime.store, store, id),
     };
+  });
+  app.post<{ Params: { id: string } }>('/api/helper/conversations/:id/undo-resource', (request) => {
+    const body = record(request.body);
+    fields(body, ['editSeq']);
+    return undoHelperResourceEdit(
+      runtime.store,
+      store,
+      request.params.id,
+      number(body.editSeq, 'resource edit sequence', 1, Number.MAX_SAFE_INTEGER)
+    );
   });
   app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) => {
     const body = record(request.body);
@@ -197,6 +210,9 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   );
   app.get<{ Params: { id: string } }>('/api/helper/tasks/:id', (request) =>
     store.taskSummary(request.params.id)
+  );
+  app.get<{ Params: { id: string } }>('/api/helper/tasks/:id/activity', (request) =>
+    readHelperActivity(runtime.store, request.params.id)
   );
   app.post<{ Params: { id: string } }>('/api/helper/tasks/:id/cancel', (request) =>
     publicTask(runtime.cancel(request.params.id))

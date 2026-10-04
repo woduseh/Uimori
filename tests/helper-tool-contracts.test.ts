@@ -181,6 +181,70 @@ function definition(request: transport.ProviderRequest, name: string) {
   return tool!.inputSchema;
 }
 
+test.each(['resource.read', 'chat.lore'] as const)(
+  '%s round-budget recovery uses an exposed tool that can be called unchanged',
+  async (name) => {
+    const prose = 'Exact lore text. '.repeat(6000);
+    const f = await fixture('library', prose);
+    const attachment = new ChatOverridesStore(f.store).get(f.chat.id).attachments[0];
+    const selector = { ...attachment.scope, loreId: attachment.lore[0].id, field: 'text' };
+    const args =
+      name === 'resource.read'
+        ? {
+            kind: 'content',
+            id: f.bot.id,
+            path: '/package/nativeRisu/card/character_book/entries/0/content',
+            textOffset: 37,
+            textLimit: 10000,
+          }
+        : { chatId: f.chat.id, action: 'read', selector, textOffset: 37, textLimit: 10000 };
+    mockSend((request, round) => {
+      if (round === 0)
+        return calls(
+          ...Array.from({ length: 7 }, (_, index) =>
+            call(`page-${index}`, 'app.call', { name, arguments: args })
+          )
+        );
+      if (round === 1) {
+        const denied = (request.input.results as unknown as ToolEvent[]).find(
+          (item) =>
+            item.denied && (item.result as { error?: string }).error === 'HELPER_READ_TOO_LARGE'
+        );
+        expect(denied).toBeDefined();
+        const retry = (
+          denied!.result as {
+            nextRead: { name: string; arguments: Record<string, unknown> };
+          }
+        ).nextRead;
+        expect(request.stable.tools.map((tool) => tool.name)).toContain(retry.name);
+        expect(retry).toEqual({
+          name: 'app.call',
+          arguments: {
+            name,
+            arguments:
+              name === 'resource.read'
+                ? { kind: 'content', id: f.bot.id }
+                : { ...args, limit: 5, textLimit: 2000 },
+          },
+        });
+        return calls(call('retry-page', retry.name, retry.arguments));
+      }
+      const recovered = result(request, 'retry-page');
+      expect(recovered).toMatchObject(
+        name === 'resource.read'
+          ? { id: f.bot.id, revision: f.bot.revision, source: { path: '/package/nativeRisu/card' } }
+          : {
+              chatId: f.chat.id,
+              selector,
+              original: { text: prose.slice(37, 2037), offset: 37, nextOffset: 2037 },
+            }
+      );
+      return structuredClone(success);
+    });
+    await submit(f, '큰 자료에서 읽지 못한 범위를 이어서 확인해줘');
+  }
+);
+
 test.each(['generate', 'receipt'] as const)(
   'artifact %s returns a small saved reference and preserves the full stored scene',
   async (mode) => {

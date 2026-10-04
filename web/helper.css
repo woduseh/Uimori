@@ -110,6 +110,45 @@
 .helper-task .turn-activity {
   margin-bottom: 4px;
 }
+.helper-activity-details {
+  margin-block: 8px;
+  font-size: 12px;
+}
+.helper-activity-details summary {
+  min-height: 32px;
+  align-content: center;
+  cursor: pointer;
+}
+.helper-activity-stages {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0 0 0 12px;
+  border-left: 2px solid var(--line);
+}
+.helper-activity-stages > li {
+  margin-block: 6px;
+  min-width: 0;
+}
+.helper-activity-stages summary small {
+  margin-left: 8px;
+  color: var(--muted);
+}
+.helper-activity-stages > li[data-state="running"] > details > summary {
+  color: var(--accent);
+}
+.helper-activity-stages > li[data-state="issue"] > details > summary {
+  font-weight: 600;
+}
+.helper-activity-stages p {
+  margin: 4px 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.helper-activity-records {
+  padding-left: 16px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .helper-artifact {
   margin-top: 16px;
   border: 1px solid var(--line);

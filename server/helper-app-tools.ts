@@ -8,11 +8,16 @@ import { helperOptionTools } from './chat-options.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { HttpError } from './request-validation.js';
 
-const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
+const schema = (
+  properties: Record<string, Json>,
+  required: string[] = [],
+  examples?: Json[]
+): Json => ({
   type: 'object',
   properties,
   required,
   additionalProperties: false,
+  ...(examples ? { examples } : {}),
 });
 const str: Json = { type: 'string' },
   integer: Json = { type: 'integer', minimum: 1 },
@@ -130,7 +135,18 @@ const TOOLS: ProviderTool[] = [
           ['expectedRevision', 'category']
         ),
       },
-      ['action']
+      ['action'],
+      [
+        {
+          action: 'move',
+          body: {
+            expectedRevision: 1,
+            category: 'bot',
+            items: [{ kind: 'content', id: '<item-id>' }],
+            folderId: null,
+          },
+        },
+      ]
     ),
   },
   {
@@ -223,7 +239,8 @@ const TOOLS: ProviderTool[] = [
           ['expectedRevision']
         ),
       },
-      ['body']
+      ['body'],
+      [{ body: { expectedRevision: 0, text: 'The harbor closes at sunset.' } }]
     ),
   },
   {
@@ -335,17 +352,25 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
     name: 'app.tools',
     description:
       'Discover app operations for editing resources/themes, settings, notes, outlines, lore overrides, context summaries, reading original stories, or generating an independent what-if scene. No names: compact paged catalog filtered by query. With names: exact schemas for up to 4 operations. Invoke them through app.call; the native tool set never changes mid-continuation.',
-    inputSchema: schema({
-      names: { type: 'array', maxItems: 4, items: str },
-      query: str,
-      offset: { type: 'integer', minimum: 0 },
-    }),
+    inputSchema: schema(
+      {
+        names: { type: 'array', maxItems: 4, items: str },
+        query: str,
+        offset: { type: 'integer', minimum: 0 },
+      },
+      [],
+      [{ names: ['outline.read'] }]
+    ),
   },
   {
     name: 'app.call',
     description:
       'Execute a discovered app operation using its exact name and arguments. Read app.tools schema when unfamiliar. Clear user edit requests include saving; proposals do not. Existing revision checks, source scope, and successful-write receipts remain unchanged. Use data.search/read for ordinary factual lookup instead of full edit JSON.',
-    inputSchema: schema({ name: str, arguments: { type: 'object' } }, ['name', 'arguments']),
+    inputSchema: schema(
+      { name: str, arguments: { type: 'object' } },
+      ['name', 'arguments'],
+      [{ name: 'outline.read', arguments: { mode: 'overview', limit: 5 } }]
+    ),
   },
 ];
 export function helperGatewayTools(review: boolean): ProviderTool[] {

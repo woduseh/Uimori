@@ -106,3 +106,14 @@ export type HelperEvent = {
   kind: string;
   data: unknown;
 };
+export type HelperResourceEdit = {
+  editSeq: number;
+  taskId: string;
+  kind: import('./resource-editing.js').ResourceKind;
+  id: string;
+  revision: number;
+  title: string;
+  canUndo: boolean;
+  reason?: string;
+  undone?: boolean;
+};

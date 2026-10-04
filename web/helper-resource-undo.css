@@ -1,0 +1,24 @@
+.helper-resource-undo {
+  padding: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.helper-resource-undo > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.helper-resource-undo > div > span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.helper-resource-undo > div > button {
+  flex-shrink: 0;
+}
+.helper-resource-undo > small {
+  display: block;
+}
+.helper-resource-undo > p {
+  margin: 4px 0 0;
+}

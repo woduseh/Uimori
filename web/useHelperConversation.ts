@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { HelperConversation, HelperEvent, HelperMessage, HelperTask } from '../core/helper.js';
+import type {
+  HelperConversation,
+  HelperEvent,
+  HelperMessage,
+  HelperResourceEdit,
+  HelperTask,
+} from '../core/helper.js';
 import { api } from './api.js';
 import { evictHelperViews } from './helper-conversation-cache.js';
 
@@ -8,6 +14,7 @@ type View = {
   conversation: HelperConversation;
   messages: HelperMessage[];
   tasks: HelperTaskView[];
+  lastResourceEdit: HelperResourceEdit | null;
   hasOlderMessages: boolean;
   hasOlderTasks: boolean;
 };
@@ -70,11 +77,13 @@ export function useHelperConversation(
           tasks,
           conversation: latestConversation,
           eventCursor,
+          lastResourceEdit,
         } = await api<{
           messages: HelperMessage[];
           tasks: HelperTaskView[];
           conversation: HelperConversation;
           eventCursor: number;
+          lastResourceEdit: HelperResourceEdit | null;
         }>(`/helper/conversations/${id(key)}/view`);
         if (!alive.current || versions.current.get(key) !== version) return;
         // The first view starts at now. Later views must not skip effects arriving between polls.
@@ -102,6 +111,7 @@ export function useHelperConversation(
             ...messages,
           ],
           tasks: [...tasks, ...(previous?.tasks ?? []).filter((task) => !taskIds.has(task.id))],
+          lastResourceEdit: lastResourceEdit ?? null,
           hasOlderMessages: messages.length === 100 && (previous?.hasOlderMessages ?? true),
           hasOlderTasks: tasks.length === 50 && (previous?.hasOlderTasks ?? true),
         });
@@ -145,7 +155,8 @@ export function useHelperConversation(
           if (
             /^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
             event.kind === 'artifact.saved' ||
-            event.kind === 'settings.updated'
+            event.kind === 'settings.updated' ||
+            event.kind === 'resource.edit.undone'
           )
             notify = true;
         }
