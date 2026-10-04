@@ -54,6 +54,7 @@ import {
   Menu,
   MessageCircle,
   Minimize,
+  RefreshCw,
   SlidersHorizontal,
   Square,
   Type,
@@ -1621,7 +1622,7 @@ function App() {
                         (((!testMode && !mainAvailable) || !promptAvailable) && !s.pendingRequest)
                       }
                     >
-                      <ArrowUp size={21} />
+                      {s.pendingRequest ? <RefreshCw size={21} /> : <ArrowUp size={21} />}
                     </button>
                   )}
                 </ChatComposer>

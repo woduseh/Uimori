@@ -66,12 +66,18 @@ export function ConnectionEditor({
   onError,
   onDirtyChange,
   onSaveHandlerChange,
+  modelToEdit,
+  onModelEditHandled,
+  onRoleModels,
 }: {
   library: Library;
   reload: () => Promise<void>;
   onError: (error: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
+  modelToEdit?: string | null;
+  onModelEditHandled?: () => void;
+  onRoleModels?: () => void;
 }) {
   const modelTests = useProviderModelTests();
   const [forcedVertexTier, setForcedVertexTier] = useState<VertexRequestTier>();
@@ -553,6 +559,25 @@ export function ConnectionEditor({
     return true;
   };
   useSettingsSaveHandler(onSaveHandlerChange, savePending);
+
+  const handledModel = useRef<string | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A navigation request reads the current draft once; later draft or library edits must not reopen the editor.
+  useEffect(() => {
+    if (!modelToEdit) {
+      handledModel.current = null;
+      return;
+    }
+    if (busy || handledModel.current === modelToEdit) return;
+    handledModel.current = modelToEdit;
+    onModelEditHandled?.();
+    const target = library.models.find((item) => item.id === modelToEdit);
+    if (!target) {
+      setError('선택한 모델 프리셋을 찾을 수 없어요.');
+      return;
+    }
+    if (editingModel?.id === target.id) navigate('model');
+    else void showModel(target);
+  }, [modelToEdit, busy]);
 
   return (
     <section
@@ -1213,6 +1238,11 @@ export function ConnectionEditor({
               ? '지금은 새 선택에서 제외된 모델이에요. 활성화한 뒤 새로 배정할 수 있어요.'
               : '역할 선택 전에는 현재 전역 모델 설정을 바꾸지 않아요.'}
           </small>
+          {onRoleModels && (
+            <button type="button" className="secondary" onClick={onRoleModels}>
+              역할별 모델 열기 <ForwardIcon size={18} aria-hidden="true" />
+            </button>
+          )}
         </section>
       )}
     </section>

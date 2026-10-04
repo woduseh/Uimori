@@ -9,6 +9,7 @@ import type {
 import type { Chat, ChatDetail, ReaderDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
+import { visualReview } from './fixtures/visual-review.js';
 import {
   navigationAction,
   openChatSettings,
@@ -564,6 +565,123 @@ for (const width of DEFAULT_WIDTHS) {
       for (const run of reserved) await request.post(`/api/runs/${run.id}/cancel`);
       await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
     }
+  });
+}
+
+for (const width of DEFAULT_WIDTHS) {
+  test(`GMUI03 ${width} role model shortcuts target the selected preset and preserve independent drafts`, async ({
+    page,
+    request,
+  }, info) => {
+    const connectionResponse = await request.post('/api/connections', {
+      data: {
+        title: `바로 편집 연결 ${width}`,
+        protocol: 'fixture-sse-v1',
+        endpoint: 'http://127.0.0.1:9/not-called',
+        enabled: true,
+      },
+    });
+    expect(connectionResponse.ok()).toBe(true);
+    const connection = await connectionResponse.json();
+    const choices: ModelPreset[] = [];
+    for (const suffix of ['A', 'B']) {
+      const response = await request.post('/api/model-presets', {
+        data: {
+          title: `바로 편집 ${width} ${suffix}`,
+          connectionId: connection.id,
+          modelId: `synthetic-shortcut-${suffix}`,
+          maxOutputTokens: 1000,
+          temperature: null,
+        },
+      });
+      expect(response.ok()).toBe(true);
+      choices.push((await response.json()) as ModelPreset);
+    }
+    const [first, second] = choices;
+    const before = await models(request);
+    const savedRoutes = {
+      ...before.routes,
+      main: { id: first.id },
+      translation: { id: second.id },
+    };
+    expect(
+      (
+        await request.put('/api/model-workspace', {
+          data: {
+            expectedRevision: before.revision,
+            routes: savedRoutes,
+            translationPolicy: before.translationPolicy,
+          },
+        })
+      ).ok()
+    ).toBe(true);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '역할별 모델');
+    const roles = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
+    const main = roles.getByLabel('원문 모델', { exact: true });
+    const translation = roles.getByLabel('번역 모델', { exact: true });
+    await main.selectOption(second.id);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`role-model-shortcut-${width}.png`) });
+    await roles.getByRole('button', { name: '본문 모델의 선택 모델 편집', exact: true }).click();
+    const form = page.getByRole('form', { name: '모델 편집 양식', exact: true });
+    await expect(form.getByLabel('모델 프리셋 이름', { exact: true })).toHaveValue(second.title);
+    await expect(form.getByLabel('모델 ID', { exact: true })).toHaveValue(second.modelId);
+    await expect(form.getByLabel('프로바이더', { exact: true })).toHaveValue(connection.id);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`role-model-direct-edit-${width}.png`) });
+    const renamed = `보존할 모델 초안 ${width}`;
+    await form.getByLabel('모델 프리셋 이름', { exact: true }).fill(renamed);
+    await selectSettingsSection(page, '역할별 모델');
+    await expect(main).toHaveValue(second.id);
+    expect((await models(request)).routes).toEqual(savedRoutes);
+    // Reopening the same model must not reload over its unsaved editor draft.
+    await roles.getByRole('button', { name: '본문 모델의 선택 모델 편집', exact: true }).click();
+    await expect(form.getByLabel('모델 프리셋 이름', { exact: true })).toHaveValue(renamed);
+    const guard = page.getByRole('alertdialog', { name: '편집 중인 초안 확인', exact: true });
+    await expect(guard).toBeHidden();
+    await selectSettingsSection(page, '역할별 모델');
+    await translation.selectOption(first.id);
+    await roles.getByRole('button', { name: '번역 모델의 선택 모델 편집', exact: true }).click();
+    await expect(guard).toBeVisible();
+    await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
+    await expect(form.getByLabel('모델 프리셋 이름', { exact: true })).toHaveValue(renamed);
+    await selectSettingsSection(page, '역할별 모델');
+    await expect(translation).toHaveValue(first.id);
+    await roles.getByRole('button', { name: '번역 모델의 선택 모델 편집', exact: true }).click();
+    await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
+    await expect(form.getByLabel('모델 프리셋 이름', { exact: true })).toHaveValue(first.title);
+    await expect(form.getByLabel('모델 ID', { exact: true })).toHaveValue(first.modelId);
+    const updated = await request.get(`/api/model-presets/${second.id}`);
+    expect(updated.ok()).toBe(true);
+    expect((await updated.json()).title).toBe(renamed);
+    expect((await models(request)).routes).toEqual(savedRoutes);
+
+    // Registering another preset offers navigation, without assigning or saving a role.
+    await form.getByRole('button', { name: '모델 편집 끝내기', exact: true }).click();
+    const providers = page.getByTestId('connection-editor');
+    await providers.getByRole('button', { name: '새 모델 입력', exact: true }).click();
+    const newTitle = `새로 등록한 모델 ${width}`;
+    await form.getByLabel('모델 프리셋 이름', { exact: true }).fill(newTitle);
+    await form.getByLabel('프로바이더', { exact: true }).selectOption(connection.id);
+    await form.getByLabel('모델 ID', { exact: true }).fill('synthetic-shortcut-C');
+    await form.getByLabel('최대 출력 토큰', { exact: true }).fill('1000');
+    await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
+    const next = providers.getByRole('region', { name: '등록한 모델 사용 방법', exact: true });
+    await expect(next).toContainText(newTitle);
+    await next.getByRole('button', { name: '역할별 모델 열기', exact: true }).click();
+    await expect(main).toHaveValue(second.id);
+    await expect(translation).toHaveValue(first.id);
+    expect((await models(request)).routes).toEqual(savedRoutes);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    await roles.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
+    await expect
+      .poll(async () => (await models(request)).routes)
+      .toEqual({ ...savedRoutes, main: { id: second.id }, translation: { id: first.id } });
   });
 }
 

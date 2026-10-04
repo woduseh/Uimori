@@ -4,7 +4,7 @@ import type { Library, ModelRef, ModelWorkspace } from '../core/product.js';
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useModelSelection } from './model-selection.js';
-import { RefreshIcon, SettingsIcon } from './ui-icons.js';
+import { EditIcon, RefreshIcon, SettingsIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
 import { Switch } from './BooleanControls.js';
@@ -15,11 +15,13 @@ export function ModelWorkspaceEditor({
   onDirtyChange,
   onSaveHandlerChange,
   onManage,
+  onEditModel,
 }: {
   library: Library;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   onManage: () => void;
+  onEditModel: (id: string) => void;
 }) {
   const { workspace, error, refresh } = usePromptWorkspace();
   const [draft, setDraft] = useState<ModelWorkspace | null>(null);
@@ -124,37 +126,48 @@ export function ModelWorkspaceEditor({
     onChange: (ref: ModelRef | null) => void
   ) => {
     const model = library.models.find((item) => item.id === selected?.id);
+    const displayLabel = label === '원문 모델' ? '본문 모델' : label;
     return (
-      <label>
-        {label === '원문 모델' ? '본문 모델' : label}
-        <select
-          aria-label={label}
-          value={selected?.id ?? ''}
-          onChange={(event) => onChange(event.target.value ? { id: event.target.value } : null)}
-        >
-          <option value="">모델 미지정</option>
-          {selected && !model && (
-            <option value={selected.id}>선택한 모델 · 삭제되었거나 확인 필요</option>
-          )}
-          {library.models
-            .filter((item) => canSelect(item) || item.id === selected?.id)
-            .map((item) => (
-              <option key={item.id} value={item.id} disabled={!canSelect(item)}>
-                {item.title} ·{' '}
-                {canSelect(item)
-                  ? library.connections.find((connection) => connection.id === item.connectionId)
-                      ?.title
-                  : '모델 또는 프로바이더 비활성'}
-              </option>
-            ))}
-        </select>
+      <div className="model-role-setting">
+        <label>
+          {displayLabel}
+          <select
+            aria-label={label}
+            value={selected?.id ?? ''}
+            onChange={(event) => onChange(event.target.value ? { id: event.target.value } : null)}
+          >
+            <option value="">모델 미지정</option>
+            {selected && !model && (
+              <option value={selected.id}>선택한 모델 · 삭제되었거나 확인 필요</option>
+            )}
+            {library.models
+              .filter((item) => canSelect(item) || item.id === selected?.id)
+              .map((item) => (
+                <option key={item.id} value={item.id} disabled={!canSelect(item)}>
+                  {item.title} ·{' '}
+                  {canSelect(item)
+                    ? library.connections.find((connection) => connection.id === item.connectionId)
+                        ?.title
+                    : '모델 또는 프로바이더 비활성'}
+                </option>
+              ))}
+          </select>
+        </label>
+        {model && (
+          <IconButton
+            icon={EditIcon}
+            label={`${displayLabel}의 선택 모델 편집`}
+            className="secondary"
+            onClick={() => onEditModel(model.id)}
+          />
+        )}
         {selected && (!model || !canSelect(model)) && (
           <small role="status">
             이 모델을 사용할 수 없어 새 작업을 시작할 수 없어요. 모델 프리셋과 프로바이더를
             확인하거나 다른 모델을 선택해 주세요.
           </small>
         )}
-      </label>
+      </div>
     );
   };
   const configuredSummary = (values: Array<ModelRef | null | undefined>) => {

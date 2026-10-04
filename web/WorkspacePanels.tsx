@@ -349,6 +349,7 @@ export function AppSettingsPanel({
   const [signingOut, setSigningOut] = useState(false);
   const [active, setActive] = useState(initialTab);
   const [visited, setVisited] = useState([initialTab]);
+  const [modelToEdit, setModelToEdit] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const compact = useCompactLayout();
   const [detail, setDetail] = useState(initialTab !== 'general');
@@ -687,6 +688,10 @@ export function AppSettingsPanel({
                       onDirtyChange={setModelDirty}
                       onSaveHandlerChange={saveGroup.registrations.model}
                       onManage={() => select('connections')}
+                      onEditModel={(modelId) => {
+                        setModelToEdit(modelId);
+                        select('connections');
+                      }}
                     />
                   )}
                   {key === 'prompts' && state.library && (
@@ -708,6 +713,9 @@ export function AppSettingsPanel({
                           onError={state.setError}
                           onDirtyChange={setConnectionDirty}
                           onSaveHandlerChange={saveGroup.registrations.connection}
+                          modelToEdit={modelToEdit}
+                          onModelEditHandled={() => setModelToEdit(null)}
+                          onRoleModels={() => select('models')}
                         />
                       ) : (
                         <p role="status">프로바이더 목록을 불러오는 중이에요…</p>

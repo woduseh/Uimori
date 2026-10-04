@@ -131,6 +131,14 @@ const jobTitle = (job: Job) =>
     : job.kind === 'status'
       ? '장면 해설'
       : `${job.imageTarget?.mode === 'translation' ? '번역' : '원문'} 이미지 배치`;
+const translationPlaceholderMessages: Partial<Record<Job['status'], string>> = {
+  queued: '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.',
+  running: '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.',
+  failed: '한국어 번역을 완료하지 못했어요. 원문은 보존돼요.',
+  cancelled: '한국어 번역을 취소했어요. 원문은 보존돼요.',
+  interrupted: '한국어 번역이 중단됐어요. 원문은 보존돼요.',
+  partial: '한국어 번역이 일부만 생성됐어요. 원문은 보존돼요.',
+};
 
 export function SourceReader(props: ReaderProps) {
   return <SourceReaderContent key={props.source.id} {...props} />;
@@ -742,14 +750,29 @@ function SourceReaderContent({
               <div className="translation-placeholder" role="status">
                 <p>
                   {translation
-                    ? activeJob(translation)
-                      ? '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.'
-                      : '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.'
+                    ? (translationPlaceholderMessages[translation.status] ??
+                      '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.')
                     : '이 장면에는 아직 한국어 번역이 없어요.'}
                 </p>
-                <button type="button" className="secondary" onClick={() => switchMode('original')}>
-                  원문부터 읽기
-                </button>
+                <div className="form-actions">
+                  {translation && retryable(translation.status) && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!!editor || !!pending || retryDisabled}
+                      onClick={viewTranslation}
+                    >
+                      번역 다시 시도
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => switchMode('original')}
+                  >
+                    원문부터 읽기
+                  </button>
+                </div>
               </div>
             )}
             {illustrationLayout.footer}
