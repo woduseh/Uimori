@@ -243,7 +243,9 @@ export function ResourceEditorStatus({
             ? '저장 중…'
             : state.dirty
               ? '미저장 변경'
-              : '저장됨'}
+              : state.document.targetId
+                ? '저장됨'
+                : '등록 전'}
       </span>
       {state.dirty && state.recovery === 'saved' && <small>이 기기에 복구용 입력 보관됨</small>}
       {state.recovery === 'failed' && (

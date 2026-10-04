@@ -60,6 +60,8 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
       await page.screenshot({ path: info.outputPath(`library-readable-${width}.png`) });
 
     await createLibraryContent(page);
+    const saveState = panel.locator('.resource-editor-status').getByRole('status');
+    await expect(saveState).toHaveText('등록 전');
     await expect(panel.getByLabel('Risu 자료 이름', { exact: true })).toBeInViewport();
     await panel.getByLabel('캐릭터 설정', { exact: true }).scrollIntoViewIfNeeded();
     await expect(panel.getByLabel('캐릭터 설정', { exact: true })).toBeInViewport();
@@ -74,6 +76,7 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
       body = '친절한 안내자예요. 내가 고른 길을 존중하며 짧게 대답해요.';
     await panel.getByLabel('Risu 자료 이름', { exact: true }).fill(createdTitle);
     await panel.getByLabel('캐릭터 설정', { exact: true }).fill(body);
+    await expect(saveState).toHaveText('미저장 변경');
     const savedResponse = waitForContentSave(page);
     await panel.getByRole('button', { name: '자료 등록', exact: true }).click();
     const saved = await savedResponse;
@@ -84,7 +87,7 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     await start.scrollIntoViewIfNeeded();
     await expect(start).toBeInViewport();
     await expect(panel.getByRole('heading', { name: createdTitle, exact: true })).toBeVisible();
-    await expect(panel.locator('.resource-editor-status').getByRole('status')).toHaveText('저장됨');
+    await expect(saveState).toHaveText('저장됨');
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-saved-${width}.png`) });
     await start.click();

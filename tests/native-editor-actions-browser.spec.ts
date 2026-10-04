@@ -134,11 +134,11 @@ for (const viewport of [
       definitions.getByRole('heading', { name: '이름을 바꾼 초안', exact: true })
     ).toBeVisible();
 
-    // The generic confirmation is shared by deletion and order changes.
+    // Deletion keeps an explicit destructive action while retaining draft-only changes.
     const confirmation = page.getByRole('dialog', { name: '그룹 삭제', exact: true });
     await groupMenu.click();
     await definitions.getByRole('button', { name: '그룹 삭제', exact: true }).click();
-    await actionPair(confirmation, '계속', 'primary');
+    await actionPair(confirmation, '그룹 삭제', 'delete');
     await page.screenshot({ path: info.outputPath(`toggle-group-confirm-${viewport.name}.png`) });
     await confirmation.getByRole('button', { name: '취소', exact: true }).click();
     await expect(confirmation).toBeHidden();
@@ -154,7 +154,7 @@ for (const viewport of [
     ).toBeVisible();
     await groupMenu.click();
     await definitions.getByRole('button', { name: '그룹 삭제', exact: true }).click();
-    await confirmation.getByRole('button', { name: '계속', exact: true }).click();
+    await confirmation.getByRole('button', { name: '그룹 삭제', exact: true }).click();
     await expect(confirmation).toBeHidden();
     await definitions.getByRole('button', { name: '원문', exact: true }).click();
     const raw = definitions.getByLabel('토글 정의 원문', { exact: true });

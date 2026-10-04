@@ -167,6 +167,11 @@ export function TasksPanel({
           {inspectedRun ? '선택한 작업을 찾을 수 없어요.' : '아직 실행한 작업이 없어요.'}
         </p>
       )}
+      {runs.some((run) => run.sourceRevision) && (
+        <p className="muted">
+          ‘새 채팅으로 복사’는 해당 장면까지의 독립 사본을 만들어요. 모델을 호출하지 않아요.
+        </p>
+      )}
       <div className="runs">
         {runs.map((run) => (
           <article key={run.id} data-testid="run" data-run-id={run.id} className="run">
@@ -208,11 +213,6 @@ export function TasksPanel({
                   </button>
                 )}
               </div>
-              {run.sourceRevision && (
-                <small>
-                  여기까지 복사하고 새 이야기에서 이어 써요. 복사만으로 모델을 호출하지 않아요.
-                </small>
-              )}
             </RunTaskDetails>
           </article>
         ))}

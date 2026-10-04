@@ -400,6 +400,68 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
   expect(errors).toEqual([]);
 });
 
+for (const mainId of [null, 'missing-model']) {
+  test(`CSUI06 ${mainId ? 'unavailable' : 'missing'} model offers a visible resolution and guards chat drafts`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+    // Missing assignments and removed model references must both retain a route to repair them.
+    await page.route('**/api/prompt-workspace', async (route) => {
+      const response = await route.fetch();
+      const workspace = await response.json();
+      await route.fulfill({
+        response,
+        json: {
+          ...workspace,
+          modelRoutes: { ...workspace.modelRoutes, main: mainId ? { id: mainId } : null },
+        },
+      });
+    });
+    const { before, writes, errors } = await prepare(page, request, `CSUI06 ${Date.now()}`);
+    const composer = page.getByLabel('다음 장면 요청', { exact: true });
+    await composer.fill('모델 설정으로 이동해도 남길 요청 초안');
+    const dialog = await openSettings(page);
+    await selectChatSettingsSection(page, '프롬프트·모델');
+    const alert = dialog.getByRole('alert');
+    await expect(alert).toContainText(
+      mainId ? '선택한 본문 모델을 사용할 수 없어' : '본문 모델이 지정되지 않았어요'
+    );
+    const repair = dialog.getByRole('button', { name: '전역 모델 설정', exact: true });
+    await expect(repair).toBeInViewport({ ratio: 1 });
+    const alertBox = await alert.boundingBox();
+    const repairBox = await repair.boundingBox();
+    expect(repairBox!.y).toBeGreaterThanOrEqual(alertBox!.y + alertBox!.height);
+    expect(repairBox!.y - (alertBox!.y + alertBox!.height)).toBeLessThanOrEqual(32);
+    await page.screenshot({ path: info.outputPath('model-resolution.png') });
+
+    await selectChatSettingsSection(page, '이미지');
+    const image = dialog.getByRole('switch', { name: '원문 이미지 자동 배치', exact: true });
+    const original = await image.isChecked();
+    await image.setChecked(!original);
+    await selectChatSettingsSection(page, '프롬프트·모델');
+    await repair.click();
+    const guard = page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인', exact: true });
+    await expect(guard).toBeVisible();
+    await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
+    await expect(repair).toBeFocused();
+    await selectChatSettingsSection(page, '이미지');
+    await expect(image).toBeChecked({ checked: !original });
+    await selectChatSettingsSection(page, '프롬프트·모델');
+    await repair.click();
+    await guard.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    const global = page.getByRole('dialog', { name: '설정', exact: true });
+    await expect(global.getByLabel('원문 모델', { exact: true })).toBeVisible();
+    await expect
+      .poll(() => global.evaluate((node) => node.contains(document.activeElement)))
+      .toBe(true);
+    await global.getByRole('button', { name: '설정 닫기', exact: true }).click();
+    await expect(composer).toHaveValue('모델 설정으로 이동해도 남길 요청 초안');
+    await expectUnchanged(request, before, writes, errors);
+  });
+}
+
 test('CSUI05 save and close persists a valid user note and keeps an invalid note draft open', async ({
   page,
   request,

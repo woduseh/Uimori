@@ -59,7 +59,12 @@ const names: Record<NativeToggleType, string> = {
 };
 const controlTypes: NativeToggleType[] = ['toggle', 'select', 'text', 'textarea'];
 type Snapshot = { toggles: string; variables: string };
-type Confirmation = { title: string; description: string; action: () => void };
+type Confirmation = {
+  title: string;
+  description: string;
+  destructive?: boolean;
+  action: () => void;
+};
 
 export function NativeRisuToggleEditor({
   value,
@@ -742,6 +747,7 @@ export function NativeRisuToggleEditor({
                         onClick={() =>
                           setConfirmation({
                             title: '그룹 삭제',
+                            destructive: true,
                             description: `‘${current.name}’ 그룹과 안의 모든 항목을 삭제해요. 항목을 남기려면 그룹 해제를 사용하세요.`,
                             action: () =>
                               structural(() => deleteToggleGroup(value, current.id), -1),
@@ -931,13 +937,13 @@ export function NativeRisuToggleEditor({
           </button>
           <button
             type="button"
-            className="primary"
+            className={confirmation?.destructive ? 'delete-button' : 'primary'}
             onClick={() => {
               confirmation?.action();
               setConfirmation(null);
             }}
           >
-            계속
+            {confirmation?.destructive ? '그룹 삭제' : '계속'}
           </button>
         </div>
       </Dialog>

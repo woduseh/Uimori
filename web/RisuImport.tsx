@@ -262,7 +262,7 @@ export function RisuImport({
             <span>
               {preview
                 ? source?.name
-                : '.charx · 카드·모듈 JSON · 모듈 프로젝트 ZIP · 최대 256 MiB'}
+                : '.charx · .risum · 카드·모듈 JSON · 모듈 프로젝트 ZIP · 최대 256 MiB'}
             </span>
             <input
               type="file"
@@ -277,11 +277,6 @@ export function RisuImport({
             />
             {preview && <span className="risu-import-change">파일 변경</span>}
           </label>
-          {!preview && (
-            <p className="muted">
-              .charx, .risum, 카드·모듈 JSON, 모듈 프로젝트 ZIP을 가져올 수 있어요.
-            </p>
-          )}
           {preview && (
             <>
               <div className="risu-import-summary risu-import-hero">

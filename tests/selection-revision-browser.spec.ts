@@ -55,6 +55,33 @@ async function choose(field: Locator) {
     )
     .toBe(selected);
 }
+async function expectReachable(button: Locator) {
+  await button.scrollIntoViewIfNeeded();
+  await expect
+    .poll(() =>
+      button.evaluate((element) => {
+        const { left, right, top, bottom, width, height } = element.getBoundingClientRect();
+        const x = left + width / 2;
+        const y = top + height / 2;
+        return (
+          width > 0 &&
+          height > 0 &&
+          left >= 0 &&
+          right <= innerWidth &&
+          top >= 0 &&
+          bottom <= innerHeight &&
+          [
+            [x, y],
+            [left + 3, y],
+            [right - 3, y],
+            [x, top + 3],
+            [x, bottom - 3],
+          ].every(([pointX, pointY]) => element.contains(document.elementFromPoint(pointX, pointY)))
+        );
+      })
+    )
+    .toBe(true);
+}
 function gate() {
   let release!: () => void;
   const promise = new Promise<void>((resolve) => {
@@ -85,9 +112,13 @@ for (const width of [360, 1440]) {
       await route.fulfill({ json: { text: proposal } });
     });
     await page.goto(`/?chat=${before.chat.id}`);
+    const navigation = page.getByRole('navigation', { name: '장면 탐색', exact: true });
+    await expect(navigation).toBeVisible();
     const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
     await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
     const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
+    const save = scene.getByRole('button', { name: '원문 저장', exact: true });
+    const cancel = scene.getByRole('button', { name: '수정 취소', exact: true });
     const open = scene.getByRole('button', { name: '선택 구절 퇴고', exact: true });
     await expect(open).toBeDisabled();
     await choose(field);
@@ -99,6 +130,9 @@ for (const width of [360, 1440]) {
     await expect(scene.getByTestId('selection-revision-proposal')).toHaveText(proposal);
     await expect(field).toHaveValue(original);
     expect((await detail(request, before.chat.id)).sources[0].text).toBe(original);
+    await expectReachable(cancel);
+    await expectReachable(save);
+    await expect(navigation).toBeVisible({ visible: width > 760 });
     await page.screenshot({ path: info.outputPath(`selected-revision-${width}.png`) });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
@@ -114,12 +148,22 @@ for (const width of [360, 1440]) {
         source.id
       )
     ).toBe(revised);
-    await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
+    await expectReachable(save);
+    await save.click();
     await expect(field).toHaveCount(0);
+    await expect(navigation).toBeVisible();
     await page.reload();
     const after = await detail(request, before.chat.id);
     expect(after.sources[0].text).toBe(revised);
     expect(after.runs).toEqual(before.runs);
+    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+    await field.fill('저장하지 않을 수정');
+    await expect(navigation).toBeVisible({ visible: width > 760 });
+    await expectReachable(cancel);
+    await cancel.click();
+    await expect(field).toHaveCount(0);
+    await expect(navigation).toBeVisible();
+    expect((await detail(request, before.chat.id)).sources[0].text).toBe(revised);
     expect(calls).toBe(1);
   });
 }

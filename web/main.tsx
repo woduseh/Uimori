@@ -1385,6 +1385,7 @@ function App() {
                   onSelect={s.chooseSource}
                   onLatest={s.chooseLatest}
                   compact={compact}
+                  hideControls={compact && sourceEditing}
                   listOpen={sceneList}
                   onListOpenChange={setSceneList}
                 />
@@ -1595,7 +1596,7 @@ function App() {
                         disabled={!s.detail?.chat.headRevision}
                         onClick={() => setChatTool({ scope: s.viewKey, kind: 'lore' })}
                       >
-                        현재 조회 로어 확인
+                        마지막 장면의 로어
                       </button>
                       <button
                         type="button"

@@ -166,13 +166,13 @@ export const screens = [
   },
   {
     id: 'composer-last-lore',
-    title: '현재 조회 로어 확인',
+    title: '마지막 장면의 로어',
     url: chat,
     enter: [
       { click: { label: '입력창 더보기' } },
-      { click: { role: 'button', name: '현재 조회 로어 확인' } },
+      { click: { role: 'button', name: '마지막 장면의 로어' } },
     ],
-    ready: { role: 'dialog', name: '현재 조회 로어 확인' },
+    ready: { role: 'dialog', name: '마지막 장면의 로어' },
   },
   {
     id: 'composer-compaction',
