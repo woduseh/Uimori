@@ -31,6 +31,7 @@ import {
 import { createAgentCollaboration } from './agent-collaboration.js';
 import { compactableRead, compactToolReads } from './context-tool-compaction.js';
 import { requestLore } from './request-lore.js';
+import { requestReceipt } from './request-receipt.js';
 
 export type MainResult = {
   status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled';
@@ -500,6 +501,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         attemptId = await hooks.onAttemptStart(
           {
             ...wire,
+            requestReceipt: requestReceipt(fixed, wire),
             ...(request.contextBudget
               ? {
                   requestContext: {

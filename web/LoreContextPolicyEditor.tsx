@@ -219,7 +219,6 @@ export function LoreContextPolicyEditor({
       <details className="lore-context-advanced">
         <summary>선별 기준과 용량</summary>
         <h4>문맥 유지 한도</h4>
-        <p className="muted">로어를 유지할 최대 크기를 정해요.</p>
         <div className="lore-context-policy-grid">
           {tokenFields.map((field) => (
             <label key={field.key}>
@@ -231,9 +230,6 @@ export function LoreContextPolicyEditor({
                 onChange={(event) => change({ ...draft, [field.key]: event.target.value })}
                 aria-invalid={validation.startsWith(field.label)}
               />
-              <small>
-                {field.min.toLocaleString()}–{field.max.toLocaleString()} {field.unit}
-              </small>
             </label>
           ))}
         </div>
@@ -277,6 +273,15 @@ export function LoreContextPolicyEditor({
         </div>
         <details className="lore-context-units">
           <summary>단위와 예산 설명</summary>
+          <p className="muted">로어를 유지할 최대 크기를 정해요.</p>
+          <ul>
+            {tokenFields.map((field) => (
+              <li key={field.key}>
+                {field.label}: {field.min.toLocaleString()}–{field.max.toLocaleString()}{' '}
+                {field.unit}
+              </li>
+            ))}
+          </ul>
           <p className="muted">토큰은 로컬 추정값으로, 모델의 실제 사용량과 다를 수 있어요.</p>
           <p className="muted">
             조회 로어는 한도에 맞춰 정리하고, 고정 자료는 초과 시 자르지 않고 알려요.

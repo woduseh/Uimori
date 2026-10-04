@@ -41,3 +41,28 @@ test('Codex turn-wide input remains usage accounting rather than request occupan
   expect(html).toContain('공급자 내부 후속 작업은 포함하지 않아요');
   expect(html).not.toContain('보고 문맥');
 });
+
+test('recorded identities and tokenizer are shown without filling historical gaps', () => {
+  const html = render({
+    inputTokens: 100,
+    outputTokens: 20,
+    context: { ...context, tokenizer: 'gemini-gemma4' },
+    receipt: {
+      version: 1,
+      model: { modelId: 'frozen-writer', title: '당시 모델' },
+      prompt: { id: 'prompt', revision: 4, title: '당시 프롬프트' },
+      persona: { id: 'persona', revision: 2, title: '당시 페르소나', name: '미라' },
+      summary: { status: 'included', coveredSources: 3 },
+    },
+  });
+  expect(html).toContain('이번 생성');
+  expect(html).toContain('당시 모델 · frozen-writer');
+  expect(html).toContain('프롬프트 선택');
+  expect(html).toContain('당시 프롬프트 · 수정 4');
+  expect(html).toContain('미라 · 수정 2');
+  expect(html).toContain('3개 장면 요약 포함 확인');
+  expect(html).toContain('Gemini · Gemma 4 토크나이저');
+  expect(render({ inputTokens: null, outputTokens: null, context: null })).toContain(
+    '모델·프롬프트·페르소나·요약 기록이 없어요'
+  );
+});

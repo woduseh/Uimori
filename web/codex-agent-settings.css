@@ -109,7 +109,8 @@
 .codex-agent-help {
   margin-top: 20px;
 }
-.codex-agent-help summary {
+.codex-agent-help summary,
+.codex-connection-guide summary {
   cursor: pointer;
   min-height: var(--control-h);
   align-content: center;

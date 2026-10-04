@@ -341,6 +341,46 @@ export function ProviderModelFields({
       ]
     : [];
   const update = (next: Partial<ModelDraft>) => onChange({ ...value, ...next });
+  const specified: { label: string; text: string; reset: () => void }[] = (
+    [
+      ['tokenizer', '토크나이저'],
+      ['inputTokenLimit', '입력 컨텍스트 한도'],
+      ['timeoutSeconds', '응답 제한 시간 (초)'],
+      ['thinkingMode', '사고 모드'],
+      ['verbosity', 'Verbosity'],
+      ['reasoningMode', 'Reasoning Mode'],
+      ['reasoningContext', 'Reasoning Context'],
+      ['temperature', 'Temperature'],
+      ['topP', 'Top P'],
+      ['cacheMode', '캐시 방식'],
+      ['cacheTtl', '캐시 유지 시간'],
+      ['providerOptions', '추가 공급자 옵션 (JSON)'],
+    ] as const
+  )
+    .filter(([field]) => value[field] !== '' && !(field === 'timeoutSeconds' && fixture))
+    .map(([field, label]) => ({
+      label,
+      text:
+        field === 'tokenizer'
+          ? (TOKENIZER_PROFILES.find((profile) => profile.id === value.tokenizer)?.label ??
+            value.tokenizer)
+          : field === 'providerOptions'
+            ? 'JSON 직접 지정'
+            : value[field],
+      reset: () => update({ [field]: '' }),
+    }));
+  if (value.structuredOutput !== 'default')
+    specified.push({
+      label: '번역 구조화 출력',
+      text: value.structuredOutput === 'on' ? 'JSON Schema 사용' : '지침과 결과 검증만 사용',
+      reset: () => update({ structuredOutput: 'default' }),
+    });
+  if (value.stopSequences.length > 0)
+    specified.push({
+      label: '생성 중단 문자열',
+      text: `${value.stopSequences.length}개`,
+      reset: () => update({ stopSequences: [] }),
+    });
   const evaluation = value.evaluationTools;
   const automaticMetadata = protocol ? automaticEvaluationMetadataProfile(protocol) : undefined;
   const automaticTokenizer = resolveTokenizerProfile({ modelId: value.modelId, connection });
@@ -371,7 +411,6 @@ export function ProviderModelFields({
               </option>
             ))}
           </datalist>
-          <small>목록에서 고르거나 모델 ID를 직접 입력하세요.</small>
         </label>
         {connection && protocol === 'vercel-chat-v1' && (
           <label className="full">
@@ -401,9 +440,6 @@ export function ProviderModelFields({
                 </option>
               ))}
             </select>
-            <small>
-              새 모델의 옵션이 맞지 않으면 계열을 직접 고르세요. 미지정 옵션은 보내지 않아요.
-            </small>
           </label>
         )}
         <ToggleRow
@@ -428,12 +464,6 @@ export function ProviderModelFields({
             <small>상한 {hints.maxOutputTokens.toLocaleString()} 토큰</small>
           )}
         </label>
-        {codex && (
-          <small className="full">
-            소프트 예산이에요. 이 값을 채우려고 늘리지 않으며, 프롬프트에 분량 지시가 있으면 그
-            지시가 우선해요.
-          </small>
-        )}
         {hints && <ThinkingSelect hints={hints} value={value} onChange={update} />}
         {protocol === 'anthropic-messages-v1' && (
           <label>
@@ -470,12 +500,47 @@ export function ProviderModelFields({
             {tierLabel(forcedVertexTier)}로 실행돼요.
           </p>
         )}
+        <details className="provider-setting-help full">
+          <summary>모델 설정 도움말</summary>
+          <p>목록에서 고르거나 모델 ID를 직접 입력할 수 있어요.</p>
+          {protocol === 'vercel-chat-v1' && (
+            <p>새 모델의 옵션이 맞지 않으면 계열을 직접 고르세요. 미지정 옵션은 보내지 않아요.</p>
+          )}
+          {codex && (
+            <p>
+              출력 토큰은 소프트 예산이에요. 이 값을 채우려고 늘리지 않으며, 프롬프트의 분량 지시가
+              우선해요.
+            </p>
+          )}
+        </details>
       </div>
       <div
         className="provider-model-section full"
         data-model-section="advanced"
         hidden={section !== 'advanced'}
       >
+        {specified.length > 0 && (
+          <details className="provider-specified-settings full">
+            <summary>직접 지정한 설정 · {specified.length}개</summary>
+            <ul>
+              {specified.map((item) => (
+                <li key={item.label}>
+                  <span>
+                    {item.label} · <strong>{item.text}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    className="secondary"
+                    aria-label={`${item.label} 지정 해제`}
+                    onClick={item.reset}
+                  >
+                    지정 해제
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         <h4 className="provider-field-heading full">문맥과 시간 제한</h4>
         <label className="full">
           토크나이저
@@ -496,11 +561,7 @@ export function ProviderModelFields({
               </option>
             ))}
           </select>
-          <small>{tokenizer?.description}</small>
-          <small>
-            로컬에서만 계산해요. 토큰 계산 API를 호출하지 않으며, 생성 후에는 공급자가 보고한
-            사용량을 표시해요.
-          </small>
+          {value.tokenizer && <small>{tokenizer?.description}</small>}
         </label>
         <label className="full">
           입력 컨텍스트 한도
@@ -514,11 +575,9 @@ export function ProviderModelFields({
             value={value.inputTokenLimit}
             onChange={(event) => update({ inputTokenLimit: event.target.value })}
           />
-          <small>
-            기본값은 272,000토큰이에요. 한도에 가까워지면 앞선 대화를 요약해요.
-            {hints?.inputTokenLimit !== undefined &&
-              ` 공급자 목록 기준 ${hints.inputTokenLimit.toLocaleString()}토큰이에요.`}
-          </small>
+          {hints?.inputTokenLimit !== undefined && (
+            <small>공급자 목록 기준 {hints.inputTokenLimit.toLocaleString()}토큰</small>
+          )}
         </label>
         {!fixture && (
           <label>
@@ -535,6 +594,15 @@ export function ProviderModelFields({
             />
           </label>
         )}
+        <details className="provider-setting-help full">
+          <summary>문맥과 토큰 계산 도움말</summary>
+          {!value.tokenizer && <p>{tokenizer?.description}</p>}
+          <p>
+            로컬에서만 계산해요. 토큰 계산 API를 호출하지 않으며, 생성 후에는 공급자가 보고한
+            사용량을 표시해요.
+          </p>
+          <p>입력 한도를 비우면 272,000토큰을 사용해요. 한도에 가까워지면 앞선 대화를 요약해요.</p>
+        </details>
         <h4 className="provider-field-heading full">생성 옵션</h4>
         {protocol === 'vercel-chat-v1' && (
           <details className="full provider-extra-options" open={!!value.providerOptions}>
@@ -730,10 +798,13 @@ export function ProviderModelFields({
               <small className="full">Claude의 60분 캐시는 5분보다 캐시 쓰기 비용이 더 커요.</small>
             )}
             {value.cacheMode === 'automatic' && (
-              <small className="full">
-                자동 캐싱은 캐시 기준점 한 개를 사용해요. 프롬프트에서 직접 지정하는 기준점은 최대
-                3개예요.
-              </small>
+              <details className="provider-setting-help full">
+                <summary>자동 캐싱 도움말</summary>
+                <p>
+                  자동 캐싱은 캐시 기준점 한 개를 사용해요. 프롬프트에서 직접 지정하는 기준점은 최대
+                  3개예요.
+                </p>
+              </details>
             )}
           </fieldset>
         )}

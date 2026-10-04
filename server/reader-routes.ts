@@ -1,8 +1,25 @@
 import { HttpError } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
+import { providerCacheUsage } from '../core/provider-cache-usage.js';
+import type { SceneUsageDetail } from '../core/scene-usage.js';
 
 export function readerRoutes(app: FastifyInstance, store: Store) {
+  app.get<{ Params: { id: string } }>('/api/attempts/:id/scene-detail', async (request) => {
+    const row = store.db
+      .prepare(`SELECT json_extract(request,'$.protocol') AS protocol,
+      json_extract(request,'$.requestLore') AS lore,raw_usage AS rawUsage
+      FROM attempts WHERE id=? AND usage_kind='writing' AND job_id IS NULL`)
+      .get(request.params.id) as
+      | { protocol: string | null; lore: string | null; rawUsage: string | null }
+      | undefined;
+    if (!row) throw new HttpError(404, 'Scene invocation not found');
+    return {
+      cache:
+        providerCacheUsage(row.protocol, row.rawUsage ? JSON.parse(row.rawUsage) : null) ?? null,
+      lore: row.lore ? JSON.parse(row.lore) : null,
+    } satisfies SceneUsageDetail;
+  });
   app.get<{ Params: { id: string } }>('/api/chats/:id/last-scene-lore', async (request) => {
     const chat = store.chat(request.params.id);
     // A fork may still point at an ancestor's source. Its original invocation owns this receipt.

@@ -326,6 +326,11 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     expect(server.requests[0].body).not.toContain('HOST_ONLY_');
     expect(log.attempts).toHaveLength(1);
     expect(log.attempts[0].pricingSnapshot).toEqual(before.profile!.models.main!.pricingSnapshot);
+    expect(log.attempts[0].requestReceipt).toMatchObject({
+      model: { modelId: 'openai/gpt-5.6-sol', title: 'HOST_ONLY_MODEL_TITLE', presetId: 'model' },
+      prompt: { id: 'prompt', revision: 1, title: 'Synthetic' },
+      persona: null,
+    });
     expect(work).toEqual(before);
   });
 

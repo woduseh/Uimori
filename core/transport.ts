@@ -133,6 +133,8 @@ export type ProviderResult = {
   };
 };
 export type WireRecord = {
+  /** Invocation-time identities and final-wire summary evidence; retained without input text. */
+  requestReceipt?: import('./scene-usage.js').ContextReceipt;
   /** Small host receipt retained after request bodies are released. */
   requestContext?: import('./scene-usage.js').RequestContext;
   /** Host-only reference delivery evidence; absent on older or unsupported attempts. */

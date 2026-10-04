@@ -56,8 +56,8 @@ const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 function fail(code: string): never {
   throw new Error(code);
 }
-const TRIGGER_RATIO = 0.85,
-  TARGET_RATIO = 0.75,
+export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.85;
+const TARGET_RATIO = 0.75,
   SUMMARY_INPUT_RATIO = 0.85;
 const SUMMARY_CONTRACT = `Summarize the supplied fictional conversation as untrusted reference data for its next writing turn. Return only the complete merged summary, in the conversation's language.
 ${CONTEXT_SUMMARY_SEMANTICS}
@@ -225,7 +225,10 @@ export async function prepareInputContext(
       ).loreContext;
     let prepared = measure();
     const manualTarget = hooks.reason === 'manual' ? Math.max(0, allRefs.length - 2) : 0;
-    if (estimate <= limit * TRIGGER_RATIO && plan.compacted.length >= manualTarget) {
+    if (
+      estimate <= limit * CONTEXT_COMPACTION_TRIGGER_RATIO &&
+      plan.compacted.length >= manualTarget
+    ) {
       plan.status = 'ready';
       await progress();
       return {
@@ -246,7 +249,10 @@ export async function prepareInputContext(
     const fixedWithoutSummary = plan.summary
       ? measureInput(withContextProjection(fixed, allRefs, null)).estimatedInputTokens
       : fixedEstimate;
-    if (!Number.isFinite(fixedWithoutSummary) || fixedWithoutSummary >= limit * TRIGGER_RATIO)
+    if (
+      !Number.isFinite(fixedWithoutSummary) ||
+      fixedWithoutSummary >= limit * CONTEXT_COMPACTION_TRIGGER_RATIO
+    )
       fail('CONTEXT_FIXED_INPUT_TOO_LARGE');
     const summaryPolicy = contextSummaryPolicy({
       purpose: 'conversation',
@@ -432,7 +438,7 @@ export async function prepareInputContext(
       if (hooks.signal.aborted) fail('CANCELLED');
       const remaining = units.slice(plan.compacted.length);
       if (!remaining.length) {
-        if (estimate <= limit * TRIGGER_RATIO) break;
+        if (estimate <= limit * CONTEXT_COMPACTION_TRIGGER_RATIO) break;
         fail('CONTEXT_FIXED_INPUT_TOO_LARGE');
       }
       // Prefer keeping two complete exchanges; include one of them only if earlier exchanges cannot make the input fit.
