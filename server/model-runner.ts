@@ -4,6 +4,7 @@ import type { CodexAgentExecutionOptions } from './codex-runtime.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
 import { estimateContextTokens } from '../core/context-budget.js';
+import { tokenizerInfo } from '../core/text-tokens.js';
 import { executeTool } from '../core/provider.js';
 import { executeFixtureMain, type FixtureGeneration } from '../core/fixture-provider.js';
 import type { Connection } from '../core/product.js';
@@ -397,19 +398,26 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     let built = build();
     const latestRead = results.findLast(compactableRead)?.callId;
     if (!native && !evaluation && fixed.contextPlan && latestRead) {
-      const before = estimateContextTokens(preview(built.request).body);
+      const before = estimateContextTokens(
+        preview(built.request).body,
+        built.request.contextBudget
+      );
       const inputLimit = fixed.contextPlan.budget.inputTokenLimit;
       if (latestRead === lastUnhelpfulRead && before > inputLimit)
         return fail('CONTEXT_TOOL_COMPACTION_NO_PROGRESS');
       if (before > inputLimit * 0.85 && latestRead !== lastUnhelpfulRead) {
         try {
           const history = [...completedToolHistory, ...results];
-          const compacted = await compactToolReads(fixed, history, hooks, usage, (projection) =>
-            estimateContextTokens(preview(build(projection).request).body)
-          );
+          const compacted = await compactToolReads(fixed, history, hooks, usage, (projection) => {
+            const projected = build(projection).request;
+            return estimateContextTokens(preview(projected).body, projected.contextBudget);
+          });
           // Completed work becomes ordinary host reference data, not unsigned native tool calls.
           const candidate = build(compacted);
-          const after = estimateContextTokens(preview(candidate.request).body);
+          const after = estimateContextTokens(
+            preview(candidate.request).body,
+            candidate.request.contextBudget
+          );
           // 85% is a soft trigger, not a second admission limit. Keep a valid original
           // continuation when summarization fails to reduce it; never admit an oversized body.
           const applied = after < before && after <= inputLimit;
@@ -495,8 +503,16 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
             ...(request.contextBudget
               ? {
                   requestContext: {
-                    estimatedInputTokens: estimateContextTokens(wire.body),
+                    estimatedInputTokens: estimateContextTokens(wire.body, request.contextBudget),
                     inputTokenLimit: request.contextBudget.inputTokenLimit,
+                    estimator: request.contextBudget.estimator,
+                    ...(request.contextBudget.estimator === 'model-local-v1'
+                      ? {
+                          tokenizer: request.contextBudget.tokenizer,
+                          tokenizerFallback: tokenizerInfo(request.contextBudget.tokenizer)
+                            .fallback,
+                        }
+                      : {}),
                   },
                 }
               : {}),

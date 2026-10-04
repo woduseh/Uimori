@@ -87,13 +87,16 @@ export function measureMainContext(snapshot: RunSnapshot): {
     const built = buildMainProviderRequest(snapshot);
     const target = built.snapshot.profile!.models.main!;
     const body = encodeMainPreview(built.request, target).body;
-    let estimatedInputTokens = estimateContextTokens(body);
+    let estimatedInputTokens = estimateContextTokens(body, built.request.contextBudget);
     // Shared preparation also serves helper artifacts and the economized bootstrap.
     // Cover both Codex envelopes without persisting a transport mode in story state.
     if (target.connection.protocol === 'codex-app-server-v1')
       estimatedInputTokens = Math.max(
         estimatedInputTokens,
-        estimateContextTokens(encodeMainPreview(built.request, target, { codexNative: true }).body)
+        estimateContextTokens(
+          encodeMainPreview(built.request, target, { codexNative: true }).body,
+          built.request.contextBudget
+        )
       );
     return { snapshot: built.snapshot, estimatedInputTokens };
   } catch (error) {

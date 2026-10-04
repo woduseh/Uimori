@@ -12,6 +12,7 @@ import {
 } from '../core/model-capabilities.js';
 import { validCredentialRef } from '../core/credential-reference.js';
 import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import { TOKENIZER_PROFILES } from '../core/tokenizer-profiles.js';
 import { ProviderOptionsError, validateProviderOptions } from '../core/provider-options.js';
 import {
   validateProviderEndpoint,
@@ -53,6 +54,7 @@ export const modelOptionKeys = [
   'timeoutMs',
   'evaluationTools',
   'inputTokenLimit',
+  'tokenizer',
   'providerOptions',
 ];
 
@@ -101,6 +103,12 @@ export function validateModelGeneration(value: Row, protocol?: Connection['proto
   }
   if (value.inputTokenLimit !== undefined)
     number(value.inputTokenLimit, 'input context limit', 8192, 1000000);
+  if (value.tokenizer !== undefined)
+    choice(
+      value.tokenizer,
+      TOKENIZER_PROFILES.map((profile) => profile.id),
+      'tokenizer'
+    );
   if (value.evaluationTools !== undefined)
     try {
       validateEvaluationToolOptions(value.evaluationTools);

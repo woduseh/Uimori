@@ -2,12 +2,20 @@ import { countTextTokens } from './text-tokens.js';
 import { ProviderContractError } from './provider-errors.js';
 import { modelCapability } from './model-capabilities.js';
 import type { ProviderProtocol } from './product.js';
+import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
 
 export const DEFAULT_INPUT_TOKEN_LIMIT = 272_000;
 export const MIN_INPUT_TOKEN_LIMIT = 8_192;
 export const MAX_INPUT_TOKEN_LIMIT = 1_000_000;
 export const CONTEXT_ESTIMATOR = 'o200k_base-v1' as const;
-export type ContextBudget = { inputTokenLimit: number; estimator: typeof CONTEXT_ESTIMATOR };
+export const MODEL_CONTEXT_ESTIMATOR = 'model-local-v1' as const;
+export type ContextBudget =
+  | { inputTokenLimit: number; estimator: typeof CONTEXT_ESTIMATOR }
+  | {
+      inputTokenLimit: number;
+      estimator: typeof MODEL_CONTEXT_ESTIMATOR;
+      tokenizer: TokenizerProfileId;
+    };
 
 /** Host policy, never a provider generation parameter or an exact provider token count. */
 export function validateContextBudget(value: unknown): ContextBudget {
@@ -16,7 +24,6 @@ export function validateContextBudget(value: unknown): ContextBudget {
     typeof value !== 'object' ||
     Array.isArray(value) ||
     ![Object.prototype, null].includes(Object.getPrototypeOf(value)) ||
-    Object.keys(value).length !== 2 ||
     !Object.hasOwn(value, 'inputTokenLimit') ||
     !Object.hasOwn(value, 'estimator')
   ) {
@@ -24,26 +31,46 @@ export function validateContextBudget(value: unknown): ContextBudget {
   }
   const budget = value as ContextBudget;
   if (
-    budget.estimator !== CONTEXT_ESTIMATOR ||
     !Number.isSafeInteger(budget.inputTokenLimit) ||
     budget.inputTokenLimit < MIN_INPUT_TOKEN_LIMIT ||
     budget.inputTokenLimit > MAX_INPUT_TOKEN_LIMIT
   ) {
     throw new ProviderContractError('INVALID_CONTEXT_BUDGET');
   }
-  return { inputTokenLimit: budget.inputTokenLimit, estimator: CONTEXT_ESTIMATOR };
+  if (budget.estimator === CONTEXT_ESTIMATOR && Object.keys(value).length === 2)
+    return { inputTokenLimit: budget.inputTokenLimit, estimator: CONTEXT_ESTIMATOR };
+  if (
+    budget.estimator === MODEL_CONTEXT_ESTIMATOR &&
+    Object.keys(value).length === 3 &&
+    Object.hasOwn(value, 'tokenizer') &&
+    isTokenizerProfileId(budget.tokenizer)
+  )
+    return {
+      inputTokenLimit: budget.inputTokenLimit,
+      estimator: MODEL_CONTEXT_ESTIMATOR,
+      tokenizer: budget.tokenizer,
+    };
+  throw new ProviderContractError('INVALID_CONTEXT_BUDGET');
 }
 
 export function contextBudgetForModel(model: {
   inputTokenLimit?: number;
   modelId?: string;
   maxOutputTokens?: number;
+  tokenizer?: TokenizerProfileId;
   connection?: { protocol: ProviderProtocol };
 }): ContextBudget {
   const configured = validateContextBudget({
     inputTokenLimit:
       model.inputTokenLimit === undefined ? DEFAULT_INPUT_TOKEN_LIMIT : model.inputTokenLimit,
-    estimator: CONTEXT_ESTIMATOR,
+    // Missing metadata belongs to a pre-tokenizer frozen snapshot. New snapshots
+    // resolve auto when captured; never reinterpret an old continuation on replay.
+    ...(model.tokenizer === undefined
+      ? { estimator: CONTEXT_ESTIMATOR }
+      : {
+          estimator: MODEL_CONTEXT_ESTIMATOR,
+          tokenizer: model.tokenizer,
+        }),
   });
   const protocol = model.connection?.protocol;
   const capability =
@@ -78,11 +105,12 @@ export function contextBudgetForModel(model: {
   });
 }
 
-/** Preserve the persisted o200k_base-v1 request estimate: JSON body plus 10%.
+/** Serialized request estimate plus 10% admission headroom, never billed usage.
+ * An absent budget preserves the persisted o200k_base-v1 estimate.
  * Call countTextTokens for text-only sub-budgets so quoting and margin are not
  * charged per lore entry. The final request still passes this admission check.
  */
-export function estimateContextTokens(value: unknown): number {
+export function estimateContextTokens(value: unknown, budget?: ContextBudget): number {
   let serialized: string | undefined;
   try {
     serialized = JSON.stringify(value);
@@ -90,13 +118,21 @@ export function estimateContextTokens(value: unknown): number {
     throw new ProviderContractError('INVALID_CONTEXT_INPUT');
   }
   if (serialized === undefined) throw new ProviderContractError('INVALID_CONTEXT_INPUT');
-  return Math.ceil((countTextTokens(serialized) * 11) / 10);
+  const checked = budget === undefined ? undefined : validateContextBudget(budget);
+  return Math.ceil(
+    (countTextTokens(
+      serialized,
+      checked?.estimator === MODEL_CONTEXT_ESTIMATOR ? checked.tokenizer : undefined
+    ) *
+      11) /
+      10
+  );
 }
 
 /** Fail before credentials, journaling or transmission; never edit a continuation to fit. */
 export function assertContextBudget(body: unknown, budget?: ContextBudget): void {
   if (budget === undefined) return;
   const checked = validateContextBudget(budget);
-  if (estimateContextTokens(body) > checked.inputTokenLimit)
+  if (estimateContextTokens(body, checked) > checked.inputTokenLimit)
     throw new ProviderContractError('INPUT_CONTEXT_LIMIT_EXCEEDED');
 }

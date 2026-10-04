@@ -1,4 +1,5 @@
 import type { Usage } from './types.js';
+import type { ContextBudget } from './context-budget.js';
 
 export type ContextCheckpointRef = { id: string; revision: number; hash: string };
 export type ContextBase = {
@@ -12,7 +13,7 @@ export type ContextBase = {
 export type ContextPlan = {
   version: 1;
   status: 'pending' | 'ready' | 'failed';
-  budget: { inputTokenLimit: number; estimator: 'o200k_base-v1' };
+  budget: ContextBudget;
   dependencyKey: string;
   estimatedInputTokens: number | null;
   compacted: { revision: string; hash: string; viewHash?: string }[];

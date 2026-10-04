@@ -6,6 +6,7 @@ import {
   validateModelOptions,
 } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
+import { resolveTokenizerProfile } from '../core/tokenizer-profiles.js';
 import { resolveModelPricing } from '../core/model-pricing.js';
 
 /** Title policy is independent of connection probes; neither mutates the saved model. */
@@ -29,7 +30,11 @@ export function titleRequest(
       ? { providerOptions: structuredClone(model.providerOptions) }
       : {}),
     generation,
-    contextBudget: contextBudgetForModel({ ...model, connection }),
+    contextBudget: contextBudgetForModel({
+      ...model,
+      connection,
+      tokenizer: resolveTokenizerProfile({ ...model, connection }),
+    }),
     stable: { contract: input.contract, tools: [] },
     input: { task: input.task, controls: {} },
   };

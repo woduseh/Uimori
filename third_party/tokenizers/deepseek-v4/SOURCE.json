@@ -1,0 +1,60 @@
+{
+  "profile": "deepseek-v4",
+  "repository": "deepseek-ai/DeepSeek-V4-Pro",
+  "revision": "b5968e9190ef611bbf34a7229255be88a0e937c1",
+  "license": "MIT",
+  "sourceFiles": [
+    {
+      "filename": "LICENSE",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/resolve/b5968e9190ef611bbf34a7229255be88a0e937c1/LICENSE",
+      "sha256": "f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040",
+      "bytes": 1084
+    },
+    {
+      "filename": "tokenizer.json",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/resolve/b5968e9190ef611bbf34a7229255be88a0e937c1/tokenizer.json",
+      "sha256": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+      "bytes": 6367146
+    },
+    {
+      "filename": "tokenizer_config.json",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/resolve/b5968e9190ef611bbf34a7229255be88a0e937c1/tokenizer_config.json",
+      "sha256": "6ac8c8dc065ed118161d02dd532749ae3f52c243deac27872134fae2f50d8547",
+      "bytes": 801
+    }
+  ],
+  "assets": [
+    {
+      "filename": "tokenizer.json.gz",
+      "sha256": "aed77ad550af006652c561318443dec054eeb514df96ed92df62fdae9fb07787",
+      "bytes": 1866004,
+      "uncompressedSha256": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+      "uncompressedBytes": 6367146
+    },
+    {
+      "filename": "tokenizer_config.json.gz",
+      "sha256": "5e169063eb1525a8f7b3bd1215ab5cdae0ebec6dca4f0f1e9750f239a76ccda9",
+      "bytes": 280,
+      "uncompressedSha256": "6ac8c8dc065ed118161d02dd532749ae3f52c243deac27872134fae2f50d8547",
+      "uncompressedBytes": 801
+    }
+  ],
+  "licenseFile": {
+    "filename": "LICENSE",
+    "sha256": "f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040",
+    "bytes": 1084
+  },
+  "notes": [
+    "Unmodified upstream JSON bytes compressed with gzip. Text tokenization only; no provider chat envelope or multimodal billing guarantee."
+  ],
+  "parityFixture": {
+    "filename": "PARITY.json",
+    "sha256": "9a9d93bd9a9cad9a3dba493101a91723844fa51839789000344be594ac8410a7",
+    "engine": {
+      "name": "huggingface/tokenizers",
+      "version": "0.22.2",
+      "addSpecialTokens": false
+    },
+    "cases": 8
+  }
+}

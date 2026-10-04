@@ -210,7 +210,7 @@ test('model snapshots are detached from current settings and selection checks us
   ) as Connection;
   expect(isModelSelectable(m, [moved], [disabled, replacement])).toBe(true);
   expect(s.product.modelSnapshot(m.id)).toMatchObject({ ...moved, connection: replacement });
-  expect(snapshot).toEqual({ ...m, connection: c });
+  expect(snapshot).toEqual({ ...m, tokenizer: 'generic', connection: c });
   snapshot.connection.catalog.push({
     id: 'mutated-copy',
     name: 'Not stored',

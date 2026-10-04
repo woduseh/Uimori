@@ -307,12 +307,17 @@ test.each([false, true])(
   'helper compaction preserves a bounded exact recent suffix and reloads it (oversized recent turn: %s)',
   async (oversizedRecent) => {
     const f = await fixture({ fixed: false, reviewOnly: true });
-    f.updateModel(f.helperModel.id, { inputTokenLimit: 65536 });
+    f.updateModel(f.helperModel.id, { inputTokenLimit: 65536, tokenizer: 'openai-cl100k' });
+    f.updateModel(f.contextModel.id, { tokenizer: 'openai-o200k' });
     const oldRequest = '먼저 이전 초안의 배경을 검토해 줘.';
     const oldReply = 'Earlier scene evidence and resolved background details. '.repeat(1800);
     const constraints = ['이름은 바꾸지 마. 🌱', '이번에는 제안만 해줘. 저장하지 마.'];
     let seed = true;
     const log = script(f, (request) => {
+      expect(request.contextBudget).toMatchObject({
+        estimator: 'model-local-v1',
+        tokenizer: request.role === 'context' ? 'openai-o200k' : 'openai-cl100k',
+      });
       if (seed)
         return summarized(
           request.input.task === oldRequest ||
@@ -342,10 +347,15 @@ test.each([false, true])(
     const recentMessages = messages.slice(2).map(({ id, role, text }) => ({ id, role, text }));
     seed = false;
     log.requests.length = 0;
-    f.updateModel(f.helperModel.id, { inputTokenLimit: 8192 });
+    f.updateModel(f.helperModel.id, { inputTokenLimit: 8192, tokenizer: 'openai-cl100k' });
     const task = await f.run();
     expect(task, task.error ?? '').toMatchObject({ status: 'completed', error: null });
     expect(log.requests.map((request) => request.role)).toEqual(['context', 'helper']);
+    expect(
+      f.workspace
+        .events(f.conversation.id)
+        .findLast((event) => event.taskId === task.id && event.kind === 'input.measured')?.data
+    ).toMatchObject({ estimator: 'model-local-v1', tokenizer: 'openai-cl100k' });
     const checkpoint = JSON.parse(String(checkpointRows(f)[0].plan));
     expect(checkpoint.compacted.map((ref: { revision: string }) => ref.revision)).toEqual(
       (oversizedRecent ? messages : messages.slice(0, 2)).map((message) => message.id)

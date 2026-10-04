@@ -6,6 +6,7 @@ import type {
   VertexRequestTier,
 } from '../core/product.js';
 import { effectiveModelFamily, modelFamilyOptionKeys } from '../core/model-family.js';
+import { TOKENIZER_PROFILES, type TokenizerProfileId } from '../core/tokenizer-profiles.js';
 import type { ModelPricing, TokenRates } from '../core/pricing-types.js';
 import { validateModelPricing } from '../core/model-pricing.js';
 import {
@@ -80,6 +81,7 @@ export type ModelDraft = {
   modelFamily: ModelFamily | '';
   maxOutputTokens: string;
   inputTokenLimit: string;
+  tokenizer: TokenizerProfileId | '';
   temperature: string;
   topP: string;
   stopSequences: string[];
@@ -109,6 +111,7 @@ export const initialModel = (): ModelDraft => ({
   modelFamily: '',
   maxOutputTokens: '8192',
   inputTokenLimit: '',
+  tokenizer: '',
   temperature: '',
   topP: '',
   stopSequences: [],
@@ -142,6 +145,7 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     modelFamily: value.modelFamily ?? '',
     maxOutputTokens: String(value.maxOutputTokens),
     inputTokenLimit: value.inputTokenLimit === undefined ? '' : String(value.inputTokenLimit),
+    tokenizer: value.tokenizer ?? '',
     temperature: value.temperature === null ? '' : String(value.temperature),
     topP: value.topP === undefined ? '' : String(value.topP),
     stopSequences: [...(value.stopSequences ?? [])],
@@ -217,6 +221,7 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
     ...(draft.modelFamily ? { modelFamily: draft.modelFamily } : {}),
     maxOutputTokens: Number(draft.maxOutputTokens),
     ...(draft.inputTokenLimit !== '' ? { inputTokenLimit: Number(draft.inputTokenLimit) } : {}),
+    ...(draft.tokenizer ? { tokenizer: draft.tokenizer } : {}),
     temperature: draft.temperature === '' ? null : Number(draft.temperature),
     enabled: draft.enabled,
     ...(draft.topP !== '' ? { topP: Number(draft.topP) } : {}),
@@ -291,6 +296,8 @@ export function modelDraftError(
 ): string {
   const providerError = providerOptionsDraftError(draft, connection);
   if (providerError) return providerError;
+  if (draft.tokenizer && !TOKENIZER_PROFILES.some((profile) => profile.id === draft.tokenizer))
+    return '토크나이저를 자동 또는 목록의 값으로 선택해 주세요.';
   try {
     validateModelPricing(pricingPayload(draft.pricing));
     if (!draft.maxOutputTokens.trim()) return '최대 출력 토큰을 입력해 주세요.';

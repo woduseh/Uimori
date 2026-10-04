@@ -22,6 +22,7 @@ import {
   type EvaluationToolOptions,
 } from '../core/evaluation-tool-config.js';
 import { PROVIDER_OPTIONS_MAX_CHARS } from '../core/provider-options.js';
+import { TOKENIZER_PROFILES, resolveTokenizerProfile } from '../core/tokenizer-profiles.js';
 import {
   forcedServiceTierError,
   modelDraftError,
@@ -342,6 +343,10 @@ export function ProviderModelFields({
   const update = (next: Partial<ModelDraft>) => onChange({ ...value, ...next });
   const evaluation = value.evaluationTools;
   const automaticMetadata = protocol ? automaticEvaluationMetadataProfile(protocol) : undefined;
+  const automaticTokenizer = resolveTokenizerProfile({ modelId: value.modelId, connection });
+  const tokenizer = TOKENIZER_PROFILES.find(
+    (profile) => profile.id === (value.tokenizer || automaticTokenizer)
+  );
   const setEvaluation = (next: ModelDraft['evaluationTools']) => update({ evaluationTools: next });
   return (
     <>
@@ -472,6 +477,31 @@ export function ProviderModelFields({
         hidden={section !== 'advanced'}
       >
         <h4 className="provider-field-heading full">문맥과 시간 제한</h4>
+        <label className="full">
+          토크나이저
+          <select
+            aria-label="토크나이저"
+            value={value.tokenizer}
+            onChange={(event) =>
+              update({ tokenizer: event.target.value as ModelDraft['tokenizer'] })
+            }
+          >
+            <option value="">
+              자동 ·{' '}
+              {TOKENIZER_PROFILES.find((profile) => profile.id === automaticTokenizer)?.label}
+            </option>
+            {TOKENIZER_PROFILES.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.label}
+              </option>
+            ))}
+          </select>
+          <small>{tokenizer?.description}</small>
+          <small>
+            로컬에서만 계산해요. 토큰 계산 API를 호출하지 않으며, 생성 후에는 공급자가 보고한
+            사용량을 표시해요.
+          </small>
+        </label>
         <label className="full">
           입력 컨텍스트 한도
           <input

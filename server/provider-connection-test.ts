@@ -19,6 +19,7 @@ import {
   transportConnection,
 } from '../core/transport.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
+import { resolveTokenizerProfile } from '../core/tokenizer-profiles.js';
 import type { Store } from './store.js';
 import { resolveModelPricing } from '../core/model-pricing.js';
 import { estimateCost } from '../core/pricing-estimate.js';
@@ -57,7 +58,11 @@ export function connectionTestRequest(model: ModelPreset, connection: Connection
       ? { providerOptions: structuredClone(model.providerOptions) }
       : {}),
     generation,
-    contextBudget: contextBudgetForModel({ ...model, connection }),
+    contextBudget: contextBudgetForModel({
+      ...model,
+      connection,
+      tokenizer: resolveTokenizerProfile({ ...model, connection }),
+    }),
     stable: { contract: 'API 연결 테스트 중이니 OK만 답해주세요.', tools: [] },
     input: { task: 'API 연결 테스트 중이니 OK만 답해주세요.', controls: {} },
   };

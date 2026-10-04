@@ -23,6 +23,19 @@ Uimori 프로젝트 소스의 라이선스는 **GNU Affero General Public Licens
 - 적용 조건: MIT. 패키지의 원저작권 고지와 전문을 [third_party/wasmoon/LICENSE](third_party/wasmoon/LICENSE)에 보존해요.
 - 사용: 별도 Worker에서 Lua 코드를 실행하고 Uimori의 공통 Host API로 JSON 요청·결과만 교환해요. Uimori의 Worker는 포함된 WASM의 메모리 상한을 제한하며 원본 npm 패키지 파일은 수정하지 않아요.
 
+## 로컬 토크나이저
+
+모델별 로컬 계수에 사용하는 고정 자산과 라이선스·변환·검증 기록은
+[토크나이저 자산 안내](third_party/tokenizers/README.md)와 각 디렉터리의
+`SOURCE.json`에 있어요. Google Gemini용 자산은 Apache-2.0, DeepSeek·GLM 및
+Anthropic의 구형 자산은 MIT 계열, Kimi K2.5 자산은 추가 표시 조건이 있는
+Modified MIT를 따라요. 각 원저작권과 라이선스 고지를 함께 배포해요.
+
+실행 엔진은 기존 `tiktoken` 1.0.22(MIT)와
+[`@huggingface/tokenizers` 0.2.0](https://github.com/huggingface/tokenizers.js)(Apache-2.0)이에요.
+설치된 패키지의 라이선스를 보존하고, 모델 가중치나 Python 런타임은 포함하지 않아요.
+토크나이저 데이터는 실행 중 다운로드하지 않으며 선택한 계열만 로컬에서 읽어요.
+
 ## 배포와 소스 제공
 
 프로젝트 소스 저장소는 [woduseh/Uimori](https://github.com/woduseh/Uimori)예요. 배포자는 실행·배포한 빌드와 일치하는 대응 소스, 로컬 수정 사항, 빌드·설치에 필요한 파일과 라이선스 고지를 제공해야 해요. 네트워크 이용자에게도 해당 소스를 받을 수 있는 안내를 쉽게 찾을 수 있게 제공해요. 다른 revision이나 미공개 변경을 포함하지 않은 저장소 링크만으로 배포본의 대응 소스가 제공됐다고 보지 않아요. 실제 절차는 [개인 서버 안내](docs/SELF-HOST.md#라이선스와-대응-소스)를 따라요.

@@ -1,0 +1,60 @@
+{
+  "profile": "deepseek-v3",
+  "repository": "deepseek-ai/DeepSeek-V3.2",
+  "revision": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6",
+  "license": "MIT",
+  "sourceFiles": [
+    {
+      "filename": "LICENSE",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/resolve/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/LICENSE",
+      "sha256": "f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040",
+      "bytes": 1084
+    },
+    {
+      "filename": "tokenizer.json",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/resolve/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/tokenizer.json",
+      "sha256": "cd050be35cae877f8f0aa847f45aa87e23835a56ca32b29b28545597852784e5",
+      "bytes": 7847502
+    },
+    {
+      "filename": "tokenizer_config.json",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/resolve/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/tokenizer_config.json",
+      "sha256": "b5de6cc1c6758d02c0d3cec0efa062f1161654475458003f6f293f6ef28acdaa",
+      "bytes": 795
+    }
+  ],
+  "assets": [
+    {
+      "filename": "tokenizer.json.gz",
+      "sha256": "2246f194160f58ce17f23e5aaf0eea15438e675a2fa05a57d693651477919c6b",
+      "bytes": 1924680,
+      "uncompressedSha256": "cd050be35cae877f8f0aa847f45aa87e23835a56ca32b29b28545597852784e5",
+      "uncompressedBytes": 7847502
+    },
+    {
+      "filename": "tokenizer_config.json.gz",
+      "sha256": "b88b0104b6e746f709792f7ad7d118b247a75c8306b4a2bd6945ba153a71bd1a",
+      "bytes": 275,
+      "uncompressedSha256": "b5de6cc1c6758d02c0d3cec0efa062f1161654475458003f6f293f6ef28acdaa",
+      "uncompressedBytes": 795
+    }
+  ],
+  "licenseFile": {
+    "filename": "LICENSE",
+    "sha256": "f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040",
+    "bytes": 1084
+  },
+  "notes": [
+    "Unmodified upstream JSON bytes compressed with gzip. Text tokenization only; no provider chat envelope or multimodal billing guarantee."
+  ],
+  "parityFixture": {
+    "filename": "PARITY.json",
+    "sha256": "546442e6411ea3b24a1b932a8f0d4b286f15a7a51437f1c9a0f17a5936e98267",
+    "engine": {
+      "name": "huggingface/tokenizers",
+      "version": "0.22.2",
+      "addSpecialTokens": false
+    },
+    "cases": 8
+  }
+}

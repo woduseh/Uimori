@@ -77,108 +77,128 @@ describe('Completed execution payload retention', () => {
     expect(store.job(String(row.id)).result?.text).toBe('첫 장면.');
   });
 
-  test('scene display retains only the final writing token receipt and lore metadata after body cleanup', async () => {
-    const { store, chat, sources } = fixture();
-    const source = sources.at(-1)!;
-    const lore = {
-      status: 'complete' as const,
-      entries: [
-        { id: 'lore-a', title: '항구', via: 'tool-result' as const, delivery: 'excerpt' as const },
-      ],
-    };
-    const context = { estimatedInputTokens: 2048, inputTokenLimit: 8192 };
-    const wire: WireRecord = {
-      connectionId: 'synthetic-connection',
-      protocol: 'fixture-sse-v1',
-      role: 'main',
-      modelId: 'synthetic-model',
-      method: 'POST',
-      url: 'http://127.0.0.1:9',
-      headers: {},
-      body: { text: 'PRIVATE_PROMPT_BODY' },
-      bodySha256: 'a'.repeat(64),
-      stablePrefixSha256: 'b'.repeat(64),
-      requestLore: lore,
-      requestContext: context,
-    };
-    for (const [inputTokens, outputTokens] of [
-      [99, 22],
-      [30, 7],
-    ]) {
-      const id = store.product.startAttempt(chat.id, source.runId, null, wire);
-      store.product.finishAttempt(id, {
+  test.each([
+    { protocol: 'fixture-sse-v1', inputScope: 'request' },
+    { protocol: 'codex-app-server-v1', inputScope: 'turn' },
+  ] as const)(
+    'scene display retains the final $inputScope token receipt and lore metadata after body cleanup',
+    async ({ protocol, inputScope }) => {
+      const { store, chat, sources } = fixture();
+      const source = sources.at(-1)!;
+      const lore = {
+        status: 'complete' as const,
+        entries: [
+          {
+            id: 'lore-a',
+            title: '항구',
+            via: 'tool-result' as const,
+            delivery: 'excerpt' as const,
+          },
+        ],
+      };
+      const context: NonNullable<WireRecord['requestContext']> = {
+        estimatedInputTokens: 2048,
+        inputTokenLimit: 8192,
+        estimator: 'model-local-v1',
+        tokenizer: 'claude-legacy',
+        tokenizerFallback: true,
+      };
+      const wire: WireRecord = {
+        connectionId: 'synthetic-connection',
+        protocol,
+        role: 'main',
+        modelId: 'synthetic-model',
+        method: 'POST',
+        url: 'http://127.0.0.1:9',
+        headers: {},
+        body: { text: 'PRIVATE_PROMPT_BODY' },
+        bodySha256: 'a'.repeat(64),
+        stablePrefixSha256: 'b'.repeat(64),
+        requestLore: lore,
+        requestContext: context,
+      };
+      for (const [inputTokens, outputTokens] of [
+        [99, 22],
+        [30, 7],
+      ]) {
+        const id = store.product.startAttempt(chat.id, source.runId, null, wire);
+        store.product.finishAttempt(id, {
+          status: 'completed',
+          text: 'PRIVATE_RESPONSE_BODY',
+          toolCalls: [],
+          refusal: null,
+          error: null,
+          opaqueState: null,
+          usage: { inputTokens, outputTokens, costUsd: null, raw: null, priceRevision: null },
+        });
+      }
+      const advisor = store.product.startAttempt(chat.id, source.runId, null, {
+        ...wire,
+        agentId: 'advisor',
+      });
+      store.product.finishAttempt(advisor, {
         status: 'completed',
-        text: 'PRIVATE_RESPONSE_BODY',
+        text: '',
         toolCalls: [],
         refusal: null,
         error: null,
         opaqueState: null,
-        usage: { inputTokens, outputTokens, costUsd: null, raw: null, priceRevision: null },
+        usage: {
+          inputTokens: 9999,
+          outputTokens: 9999,
+          costUsd: null,
+          raw: null,
+          priceRevision: null,
+        },
       });
+      releaseCompletedRunInputs(store.db, source.runId);
+      const retained = store.product.attempts(chat.id);
+      expect(retained[0].request).toMatchObject({
+        requestLore: lore,
+        requestContext: context,
+        detailsOmitted: true,
+      });
+      expect(JSON.stringify(retained)).not.toContain('PRIVATE_PROMPT_BODY');
+      expect(JSON.stringify(retained)).not.toContain('PRIVATE_RESPONSE_BODY');
+      const runs = readerRuns(store, chat.id);
+      expect(runs.find((run) => run.id === source.runId)?.sceneUsage).toEqual({
+        inputTokens: 30,
+        outputTokens: 7,
+        inputScope,
+        context,
+      });
+      expect(runs.find((run) => run.id === sources[0]!.runId)?.sceneUsage).toBeUndefined();
+      const app = Fastify();
+      readerRoutes(app, store);
+      try {
+        const path = `/api/chats/${chat.id}/last-scene-lore`;
+        const included = await app.inject(path);
+        expect(included.statusCode).toBe(200);
+        expect(included.json()).toEqual({
+          sourceRevision: source.id,
+          attemptId: retained[1].id,
+          lore,
+        });
+        // Missing old metadata must not be filled with another scene's or today's lore.
+        store.db
+          .prepare('UPDATE chats SET head_revision=? WHERE id=?')
+          .run(sources[0]!.id, chat.id);
+        expect((await app.inject(path)).json()).toEqual({
+          sourceRevision: sources[0]!.id,
+          attemptId: null,
+          lore: null,
+        });
+        store.db.prepare('UPDATE chats SET head_revision=NULL WHERE id=?').run(chat.id);
+        expect((await app.inject(path)).json()).toEqual({
+          sourceRevision: null,
+          attemptId: null,
+          lore: null,
+        });
+      } finally {
+        await app.close();
+      }
     }
-    const advisor = store.product.startAttempt(chat.id, source.runId, null, {
-      ...wire,
-      agentId: 'advisor',
-    });
-    store.product.finishAttempt(advisor, {
-      status: 'completed',
-      text: '',
-      toolCalls: [],
-      refusal: null,
-      error: null,
-      opaqueState: null,
-      usage: {
-        inputTokens: 9999,
-        outputTokens: 9999,
-        costUsd: null,
-        raw: null,
-        priceRevision: null,
-      },
-    });
-    releaseCompletedRunInputs(store.db, source.runId);
-    const retained = store.product.attempts(chat.id);
-    expect(retained[0].request).toMatchObject({
-      requestLore: lore,
-      requestContext: context,
-      detailsOmitted: true,
-    });
-    expect(JSON.stringify(retained)).not.toContain('PRIVATE_PROMPT_BODY');
-    expect(JSON.stringify(retained)).not.toContain('PRIVATE_RESPONSE_BODY');
-    const runs = readerRuns(store, chat.id);
-    expect(runs.find((run) => run.id === source.runId)?.sceneUsage).toEqual({
-      inputTokens: 30,
-      outputTokens: 7,
-      context,
-    });
-    expect(runs.find((run) => run.id === sources[0]!.runId)?.sceneUsage).toBeUndefined();
-    const app = Fastify();
-    readerRoutes(app, store);
-    try {
-      const path = `/api/chats/${chat.id}/last-scene-lore`;
-      const included = await app.inject(path);
-      expect(included.statusCode).toBe(200);
-      expect(included.json()).toEqual({
-        sourceRevision: source.id,
-        attemptId: retained[1].id,
-        lore,
-      });
-      // Missing old metadata must not be filled with another scene's or today's lore.
-      store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(sources[0]!.id, chat.id);
-      expect((await app.inject(path)).json()).toEqual({
-        sourceRevision: sources[0]!.id,
-        attemptId: null,
-        lore: null,
-      });
-      store.db.prepare('UPDATE chats SET head_revision=NULL WHERE id=?').run(chat.id);
-      expect((await app.inject(path)).json()).toEqual({
-        sourceRevision: null,
-        attemptId: null,
-        lore: null,
-      });
-    } finally {
-      await app.close();
-    }
-  });
+  );
 
   test('successful helper messages replace cumulative inputs; failed tasks retain retry context', () => {
     const { store } = fixture();

@@ -1,2 +1,4 @@
 * text=auto eol=lf
 *.png binary
+# Pinned tokenizer hashes include original line endings and license whitespace.
+third_party/tokenizers/** -text -whitespace

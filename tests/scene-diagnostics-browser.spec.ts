@@ -66,6 +66,7 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
           title: 'Scene diagnostics writer',
           connectionId: connection.id,
           modelId: 'scene-diagnostics-writer',
+          tokenizer: 'gemini-gemma4',
           inputTokenLimit: 65536,
           maxOutputTokens: 1024,
           temperature: null,
@@ -133,7 +134,12 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
     expect(attempt).toMatchObject({ inputTokens: 1234, outputTokens: 87 });
     expect(attempt.request).toMatchObject({
       detailsOmitted: true,
-      requestContext: { inputTokenLimit: 65536 },
+      requestContext: {
+        inputTokenLimit: 65536,
+        estimator: 'model-local-v1',
+        tokenizer: 'gemini-gemma4',
+        tokenizerFallback: false,
+      },
     });
     expect(attempt.request).not.toHaveProperty('body');
     expect(attempt.response).not.toHaveProperty('text');
@@ -156,12 +162,15 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await page.goto(`/?chat=${chat.id}`);
       const usage = page.getByTestId('scene-usage');
       await expect(usage).toContainText('요청 1,234 · 응답 87 토큰');
-      await expect(usage.locator('summary')).toContainText('문맥 약');
+      await expect(usage.locator('summary')).toContainText('문맥 1.9%');
       await usage.locator('summary').click();
       await expect(usage).toContainText('입력 한도 65,536 토큰');
-      await expect(usage.getByRole('meter', { name: '입력 한도 대비 추정 문맥' })).toHaveAttribute(
+      await expect(usage.getByRole('meter', { name: '입력 한도 대비 보고 문맥' })).toHaveAttribute(
         'value',
-        String(context.estimatedInputTokens)
+        '1234'
+      );
+      await expect(usage).toContainText(
+        `전송 전 로컬 추정은 ${context.estimatedInputTokens.toLocaleString('ko-KR')} 토큰`
       );
       await page.screenshot({ path: info.outputPath(`scene-usage-known-${width}.png`) });
       await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();

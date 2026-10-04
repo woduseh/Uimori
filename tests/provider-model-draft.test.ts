@@ -37,6 +37,24 @@ const vercelConnection: Connection = {
 };
 
 describe('model numeric drafts', () => {
+  test('keeps manual tokenizers through model and connection changes and omits automatic selection', () => {
+    const manual = { ...initialModel(), tokenizer: 'glm-5' as const };
+    const changed = selectModelConnection(
+      updateModelId(manual, 'future-lab/new-model'),
+      anthropicConnection
+    );
+    expect(changed.tokenizer).toBe('glm-5');
+    const payload = modelPayload(changed, anthropicConnection);
+    expect(payload.tokenizer).toBe('glm-5');
+    const restored = modelDraft({ ...payload, id: 'model', revision: 1 } as ModelPreset);
+    expect(restored.tokenizer).toBe('glm-5');
+    const automatic = modelPayload({ ...restored, tokenizer: '' }, anthropicConnection);
+    expect(automatic).not.toHaveProperty('tokenizer');
+    expect(modelDraft({ ...automatic, id: 'model', revision: 2 } as ModelPreset).tokenizer).toBe(
+      ''
+    );
+  });
+
   test('uses a 600-second response timeout for new models', () => {
     expect(initialModel().timeoutSeconds).toBe('600');
     expect(modelPayload(initialModel(), connection).timeoutMs).toBe(600_000);

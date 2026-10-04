@@ -22,6 +22,7 @@ import {
   validateProviderSettingVersion,
 } from '../server/provider-archive.js';
 import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
+import { generationFromModel } from '../core/model-capabilities.js';
 
 const roots: Record<ProviderProtocol, string> = {
   'fixture-sse-v1': 'http://127.0.0.1:9/turn',
@@ -267,6 +268,59 @@ describe('provider settings, catalogs and archive contracts', () => {
     for (const inputTokenLimit of [8191, 1000001, 8192.5, null, '272000', false])
       await request(app, '/model-presets', modelBody(connection, { inputTokenLimit }), 400);
     expect(app.store.product.all('model')).toHaveLength(4);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('preserves local tokenizer choices, freezes automatic selections and accepts legacy snapshots', async () => {
+    const app = await application();
+    const connection = await request<Connection>(
+      app,
+      '/connections',
+      connectionBody('openai-chat-v1')
+    );
+    const automatic = await request<ModelPreset>(
+      app,
+      '/model-presets',
+      modelBody(connection, { modelId: 'gpt-4o' })
+    );
+    expect(automatic).not.toHaveProperty('tokenizer');
+    const frozen = app.store.product.modelSnapshot(automatic.id);
+    expect(frozen.tokenizer).toBe('openai-o200k');
+    expect(validateModelSnapshot({ ...automatic, connection })).not.toHaveProperty('tokenizer');
+    const manual = await request<ModelPreset>(
+      app,
+      `/model-presets/${automatic.id}`,
+      modelBody(connection, {
+        modelId: 'unlisted/synthetic',
+        tokenizer: 'glm-5',
+        expectedRevision: automatic.revision,
+      }),
+      200,
+      'PUT'
+    );
+    expect(manual.tokenizer).toBe('glm-5');
+    expect(app.store.product.modelSnapshot(manual.id).tokenizer).toBe('glm-5');
+    expect(validateModelSnapshot({ ...manual, connection }).tokenizer).toBe('glm-5');
+    expect(generationFromModel(manual)).not.toHaveProperty('tokenizer');
+    expect(frozen).toMatchObject({ modelId: 'gpt-4o', tokenizer: 'openai-o200k' });
+    const reset = await request<ModelPreset>(
+      app,
+      `/model-presets/${automatic.id}`,
+      modelBody(connection, {
+        modelId: 'unlisted/synthetic',
+        expectedRevision: manual.revision,
+      }),
+      200,
+      'PUT'
+    );
+    expect(reset).not.toHaveProperty('tokenizer');
+    expect(app.store.product.modelSnapshot(reset.id).tokenizer).toBe('generic');
+    for (const tokenizer of ['remote-api', '', null, false]) {
+      await request(app, '/model-presets', modelBody(connection, { tokenizer }), 400);
+      expect(() => validateModelSnapshot({ ...manual, tokenizer, connection })).toThrow(
+        'Invalid tokenizer'
+      );
+    }
     expect(fetch).not.toHaveBeenCalled();
   });
 

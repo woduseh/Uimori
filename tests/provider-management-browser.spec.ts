@@ -254,6 +254,56 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
   expect(updated).not.toHaveProperty('thinkingMode');
 });
 
+test('PMUI tokenizer advanced selection survives save and model edits and can return to automatic', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  const title = 'PMUI tokenizer ' + Date.now(),
+    observed = observe(page);
+  const connection = await api<Connection>(request, '/connections', connectionInput(title));
+  const original = await api<ModelPreset>(request, '/model-presets', modelInput(connection, title));
+  await settings(page);
+  await openProviderModel(page, original.title);
+  const form = page.getByRole('form', { name: '모델 편집 양식' });
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  const tokenizer = form.getByLabel('토크나이저', { exact: true });
+  await expect(tokenizer).toHaveValue('');
+  await tokenizer.selectOption('kimi-k2');
+  await tokenizer.scrollIntoViewIfNeeded();
+  const box = await tokenizer.boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('provider-tokenizer-mobile.png') });
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await api<ModelPreset>(request, `/model-presets/${original.id}`)).tokenizer)
+    .toBe('kimi-k2');
+  await settings(page);
+  await openProviderModel(page, original.title);
+  await form.getByLabel('모델 ID', { exact: true }).fill('future-lab/new-model');
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(tokenizer).toHaveValue('kimi-k2');
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await api<ModelPreset>(request, `/model-presets/${original.id}`)).modelId)
+    .toBe('future-lab/new-model');
+  expect((await api<ModelPreset>(request, `/model-presets/${original.id}`)).tokenizer).toBe(
+    'kimi-k2'
+  );
+  await settings(page);
+  await openProviderModel(page, original.title);
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await tokenizer.selectOption('');
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await api<ModelPreset>(request, `/model-presets/${original.id}`)).tokenizer)
+    .toBeUndefined();
+  expect(observed.errors).toEqual([]);
+  expect(observed.generations).toEqual([]);
+});
+
 test('PMUI02 connection clone requires review and stale edits retain their draft and CAS revision until explicit reload', async ({
   page,
   request,
