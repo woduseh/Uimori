@@ -63,6 +63,26 @@ html[data-theme="dark"] .theme-background-preview::after {
 .theme-background-controls input {
   max-width: 100%;
 }
+.theme-background-actions {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.theme-background-actions > button {
+  flex: none;
+}
+.theme-background-actions > .settings-save-button {
+  width: var(--control-h);
+  min-width: var(--control-h);
+  padding: 0;
+}
+.theme-background-actions > .theme-background-reset {
+  background: transparent;
+  color: var(--error);
+}
+.theme-background-actions > .ui-icon-button {
+  background: transparent;
+  color: var(--muted);
+}
 
 .reader-stage:has(> .theme-background)
   [data-uimori-part="scene"]:not(:has([data-uimori-body-scroll])) {

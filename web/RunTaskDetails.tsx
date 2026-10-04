@@ -152,14 +152,12 @@ export function RunTaskDetails({
           )
         )}
       {afterJobs}
-      <div className="form-actions">
-        <DiagnosticReport scope={{ scope: 'chat', chatId: run.chatId, runId: run.id }} />
-      </div>
       <LazyDiagnostics<Run>
         path={`/runs/${run.id}`}
         revision={revision}
         initiallyOpen={initiallyInspect}
         title="실행과 실제 입력 확인"
+        actions={<DiagnosticReport scope={{ scope: 'chat', chatId: run.chatId, runId: run.id }} />}
       >
         {(full) => (
           <>

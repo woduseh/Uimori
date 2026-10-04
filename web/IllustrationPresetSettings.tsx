@@ -10,7 +10,6 @@ import {
   Check,
   Pencil,
   RotateCcw,
-  Save,
   X,
 } from 'lucide-react';
 import {
@@ -32,6 +31,8 @@ import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { api, ApiError, saveDownload } from './api.js';
 import { Dialog } from './Dialog.js';
 import { ActionMenu } from './ActionMenu.js';
+import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
 import { illustrationErrorMessage } from './illustration-labels.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './illustration-presets.css';
@@ -372,18 +373,23 @@ export function IllustrationPresetSettings({
               </small>
             </button>
             <div className="illustration-preset-actions">
-              <button
-                disabled={busy || dirty}
-                aria-label={`${preset.title} 삽화 프리셋 편집`}
-                onClick={() => edit(preset)}
-              >
-                {preset.id.startsWith('builtin:') ? (
-                  <Copy size={16} aria-hidden="true" />
-                ) : (
-                  <Pencil size={16} aria-hidden="true" />
-                )}
-                {preset.id.startsWith('builtin:') ? '복제 후 편집' : '편집'}
-              </button>
+              {preset.id.startsWith('builtin:') ? (
+                <button
+                  disabled={busy || dirty}
+                  aria-label={`${preset.title} 삽화 프리셋 편집`}
+                  title={`${preset.title} 삽화 프리셋 복제 후 편집`}
+                  onClick={() => edit(preset)}
+                >
+                  <Copy size={16} aria-hidden="true" /> 복제 후 편집
+                </button>
+              ) : (
+                <IconButton
+                  disabled={busy || dirty}
+                  label={`${preset.title} 삽화 프리셋 편집`}
+                  icon={Pencil}
+                  onClick={() => edit(preset)}
+                />
+              )}
               <ActionMenu label={`${preset.title} 프리셋 메뉴`} viewport>
                 {!preset.id.startsWith('builtin:') && (
                   <button
@@ -609,27 +615,32 @@ export function IllustrationPresetSettings({
               저장하면 이 프리셋을 사용하는 채팅의 다음 생성부터 반영돼요. 진행 중인 작업과 기존
               삽화는 바뀌지 않아요.
             </small>
-            <div className="illustration-preset-actions full">
-              <button
-                className="primary"
+            <div className="illustration-preset-actions illustration-preset-editor-actions full">
+              <SaveButton
+                type="button"
+                className="ui-icon-button"
+                label="프리셋 저장"
                 disabled={!dirty || conflict || deleted}
                 onClick={() => void save()}
-              >
-                <Save size={16} aria-hidden="true" /> 프리셋 저장
-              </button>
+              />
               {draft.id && (
-                <button onClick={() => void save(true)}>
-                  <Copy size={16} aria-hidden="true" /> 사본으로 저장
+                <button
+                  className="illustration-preset-copy-save"
+                  aria-label="사본으로 저장"
+                  title="사본으로 저장"
+                  onClick={() => void save(true)}
+                >
+                  <Copy size={16} aria-hidden="true" /> 사본 저장
                 </button>
               )}
-              <button
+              <IconButton
+                label="편집 닫기"
+                icon={X}
                 onClick={() => {
                   if (dirty) setDiscard(true);
                   else setDraft(null);
                 }}
-              >
-                <X size={16} aria-hidden="true" /> 편집 닫기
-              </button>
+              />
             </div>
           </fieldset>
         </section>

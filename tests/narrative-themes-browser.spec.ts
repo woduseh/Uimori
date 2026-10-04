@@ -832,7 +832,7 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
   await selectSettingsSection(page, '테마·색상');
   await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('dark');
   await page.getByLabel('테마 적용 범위', { exact: true }).selectOption('chat');
-  await page.getByRole('button', { name: '배경 이미지 지우기', exact: true }).click();
+  await page.getByRole('button', { name: '배경 초기화', exact: true }).click();
   await page.getByRole('button', { name: '배경 저장', exact: true }).click();
   await expect(page.getByRole('button', { name: '배경 저장', exact: true })).toBeDisabled();
   await expect(background).toHaveCount(0);

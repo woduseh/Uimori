@@ -30,6 +30,9 @@ for (const width of DEFAULT_WIDTHS) {
       .toBe('completed');
     await page.goto(`/?chat=${chat.id}`);
     await navigationAction(page, '작업 현황');
+    await expect(
+      page.getByRole('button', { name: '문제 보고용 진단 만들기', exact: true })
+    ).toHaveCount(0);
     const inspector = page.getByText('실행과 실제 입력 확인', { exact: true }).first();
     await inspector.click();
     await page

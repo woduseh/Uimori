@@ -10,6 +10,9 @@ import { useThemes } from './ThemeContext.js';
 import { uploadPackageImage } from './package-image-upload.js';
 import { backgroundStyle } from './ThemeBackground.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
+import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
+import { CloseIcon, ResetIcon } from './ui-icons.js';
 
 export function ThemeBackgroundSettings({
   scope,
@@ -186,30 +189,32 @@ export function ThemeBackgroundSettings({
           />
         </label>
       </fieldset>
-      <div className="theme-toolbar">
-        <button
-          className="primary"
+      <div className="theme-toolbar theme-background-actions">
+        <SaveButton
+          type="button"
+          label="배경 저장"
           disabled={disabled || busy || state.loading || !dirty}
           onClick={() => void saveValue(draft)}
-        >
-          배경 저장
-        </button>
+        />
         <button
+          className="theme-background-reset"
+          aria-label="배경 초기화"
+          title="배경 이미지와 효과 초기화"
           disabled={disabled || busy || state.loading || !draft.imageHash}
           onClick={() => setDraft({ ...defaultThemeBackground })}
         >
-          배경 이미지 지우기
+          <ResetIcon size={18} aria-hidden="true" /> 초기화
         </button>
         {dirty && (
-          <button
+          <IconButton
+            label="배경 변경 취소"
+            icon={CloseIcon}
             disabled={disabled || busy}
             onClick={() => {
               setDraft(selected ?? inherited);
               setBaseline(JSON.stringify(selected ?? inherited));
             }}
-          >
-            배경 변경 취소
-          </button>
+          />
         )}
       </div>
       {error && (
