@@ -32,7 +32,8 @@ const commonApp = `
 .request-portraits .reader-portrait-empty { min-height: 48px; font-size: 20px; }
 .request-portraits figcaption { padding-top: 5px; text-align: center; font-size: 10px; color: var(--muted); overflow-wrap: anywhere; }
 .request-portraits figcaption strong { font-weight: 500; }
-.reader [data-uimori-body-scroll] { max-height: clamp(220px, calc(100dvh - 560px), 520px); min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--muted) transparent; padding-right: 8px; }
+/* Reserve the collapsed usage disclosure: one control row plus its block margins. */
+.reader [data-uimori-body-scroll] { max-height: clamp(220px, calc(100dvh - 560px - var(--control-h) - 12px), 520px); min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--muted) transparent; padding-right: 8px; }
 .reader [data-uimori-body-scroll]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @container narrative-workspace (max-width: 850px) { .reader [data-uimori-body-scroll] { max-height: clamp(220px, 42dvh, 400px); } }
 .composer-dock { background: var(--bg); }
@@ -137,7 +138,7 @@ export const letterTheme: ThemeDefinition = {
     commonApp +
     `
 .reader { width: min(100%, calc(var(--reading-width) + 96px)); }
-@container narrative-workspace (min-width: 851px) { .reader [data-uimori-body-scroll] { max-height: clamp(220px, calc(100dvh - 650px), 450px); } }
+@container narrative-workspace (min-width: 851px) { .reader [data-uimori-body-scroll] { max-height: clamp(220px, calc(100dvh - 650px - var(--control-h) - 12px), 450px); } }
 .reader-scrollport { background-image: linear-gradient(color-mix(in srgb, var(--line) 18%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--line) 18%, transparent) 1px, transparent 1px); background-size: 24px 24px; }
 .scene-portraits { flex-direction: row; align-items: center; gap: 28px; }
 .scene-portraits [data-uimori-part="bot-portrait"] { display: flex; align-items: center; gap: 18px; flex: 0 1 auto; }
