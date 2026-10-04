@@ -1,0 +1,67 @@
+{
+  "profile": "glm-4.7",
+  "repository": "zai-org/GLM-4.7",
+  "revision": "602d01efcdd332c5238ca4bcede555defbe83eb7",
+  "license": "MIT",
+  "sourceFiles": [
+    {
+      "filename": "README.md",
+      "url": "https://huggingface.co/zai-org/GLM-4.7/resolve/602d01efcdd332c5238ca4bcede555defbe83eb7/README.md",
+      "sha256": "ad072cbe81374f18149a107f2e1cbed93f27a6b220409a6bb34ba97a4d36757e",
+      "bytes": 13605
+    },
+    {
+      "filename": "LICENSE.reference",
+      "url": "https://huggingface.co/zai-org/GLM-5.2/resolve/cf457fa734ab149ffef225f80893eb38c6ff5cdc/LICENSE",
+      "sha256": "f4a18c6ae40b0a8e7d2b7667f52f6e1994e54a46430d2e172b73cb8c9b5eb0d7",
+      "bytes": 1065
+    },
+    {
+      "filename": "tokenizer.json",
+      "url": "https://huggingface.co/zai-org/GLM-4.7/resolve/602d01efcdd332c5238ca4bcede555defbe83eb7/tokenizer.json",
+      "sha256": "9340665016419c825c4bdabbcc9acc43b7ca2c68ce142724afa829abb1be5efd",
+      "bytes": 19970699
+    },
+    {
+      "filename": "tokenizer_config.json",
+      "url": "https://huggingface.co/zai-org/GLM-4.7/resolve/602d01efcdd332c5238ca4bcede555defbe83eb7/tokenizer_config.json",
+      "sha256": "27d01309c0ae7b5edb6511daabfcbf772b60e21c65cbb74d059acc76796f7897",
+      "bytes": 7307
+    }
+  ],
+  "assets": [
+    {
+      "filename": "tokenizer.json.gz",
+      "sha256": "52feb964f21f919d09f9bc4b3606c6a4ee0a7b93ff01b7efdb44505079836979",
+      "bytes": 2963178,
+      "uncompressedSha256": "9340665016419c825c4bdabbcc9acc43b7ca2c68ce142724afa829abb1be5efd",
+      "uncompressedBytes": 19970699
+    },
+    {
+      "filename": "tokenizer_config.json.gz",
+      "sha256": "a4734a25c528c015ca0e34925f0bf48b0210c4468a451d6969ddc5a25c0de6c6",
+      "bytes": 661,
+      "uncompressedSha256": "27d01309c0ae7b5edb6511daabfcbf772b60e21c65cbb74d059acc76796f7897",
+      "uncompressedBytes": 7307
+    }
+  ],
+  "licenseFile": {
+    "filename": "LICENSE",
+    "sha256": "a40e1e27904bafbe3ea82e71543dedd0535422da4a9d9990430b4814eeb38ef7",
+    "bytes": 1549
+  },
+  "notes": [
+    "MIT is declared in the pinned original model card. LICENSE contains the publisher's GLM-5.2 MIT notice as an explicitly identified reference.",
+    "Unmodified upstream JSON bytes compressed with gzip. Text tokenization only; no provider chat envelope or multimodal billing guarantee."
+  ],
+  "parityFixture": {
+    "filename": "PARITY.json",
+    "sha256": "cdefd31ea94b8e1e8723bfba7b8b65a6f2465016748e7e20ee658e3b8f5f1022",
+    "engine": {
+      "name": "huggingface/tokenizers",
+      "version": "0.22.2",
+      "addSpecialTokens": false
+    },
+    "cases": 8
+  }
+}

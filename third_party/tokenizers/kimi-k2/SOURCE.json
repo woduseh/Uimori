@@ -1,0 +1,72 @@
+{
+  "profile": "kimi-k2",
+  "repository": "moonshotai/Kimi-K2.5",
+  "revision": "4d01dfe0332d63057c186e0b262165819efb6611",
+  "license": "Modified MIT",
+  "sourceFiles": [
+    {
+      "filename": "LICENSE",
+      "url": "https://huggingface.co/moonshotai/Kimi-K2.5/resolve/4d01dfe0332d63057c186e0b262165819efb6611/LICENSE",
+      "sha256": "c524b41658421b8b143c5b50637ef008909da56013ad12ccaba0536139ee35b0",
+      "bytes": 1465
+    },
+    {
+      "filename": "tiktoken.model",
+      "url": "https://huggingface.co/moonshotai/Kimi-K2.5/resolve/4d01dfe0332d63057c186e0b262165819efb6611/tiktoken.model",
+      "sha256": "b6c497a7469b33ced9c38afb1ad6e47f03f5e5dc05f15930799210ec050c5103",
+      "bytes": 2795286
+    },
+    {
+      "filename": "tokenization_kimi.py",
+      "url": "https://huggingface.co/moonshotai/Kimi-K2.5/resolve/4d01dfe0332d63057c186e0b262165819efb6611/tokenization_kimi.py",
+      "sha256": "56aae6f32aa6d8604a119ed6097fd07968c3bc2fbbe225f151acbed9141add6f",
+      "bytes": 13353
+    },
+    {
+      "filename": "tokenizer_config.json",
+      "url": "https://huggingface.co/moonshotai/Kimi-K2.5/resolve/4d01dfe0332d63057c186e0b262165819efb6611/tokenizer_config.json",
+      "sha256": "12fcab43d2b6068f46769f5ff373960bf7c17a94d7abbc50e2491306b2f6cf58",
+      "bytes": 4862
+    }
+  ],
+  "assets": [
+    {
+      "filename": "tiktoken.json.gz",
+      "sha256": "8ebe07edb262fcd88f55bab39c17ced497b549d04986a0cad2315b8220032036",
+      "bytes": 1354056,
+      "uncompressedSha256": "8b740e96e035a23a0817b00ab50ccb7fa4e7533d75a751ff00d7490d80141ee5",
+      "uncompressedBytes": 2967994
+    }
+  ],
+  "licenseFile": {
+    "filename": "LICENSE",
+    "sha256": "c524b41658421b8b143c5b50637ef008909da56013ad12ccaba0536139ee35b0",
+    "bytes": 1465
+  },
+  "notes": [
+    "Derived mechanically from official ranks, all eight raw Python pattern literals, and added_tokens_decoder plus 256 reserved-token defaults. No upstream Python code executed.",
+    "Kimi K2-Instruct shares these ranks at fd1984e2b7a3350dbf7305fe73a4ede25c14de50. This asset counts text; it does not implement the provider chat template or media processing."
+  ],
+  "parityFixture": {
+    "filename": "PARITY.json",
+    "sha256": "b3cafc529ca187f5d07122ac07d03d4ae88e0f0c0deb553159e27fe95b04fe67",
+    "engine": {
+      "name": "openai/tiktoken",
+      "version": "0.12.0",
+      "specialTokens": "all"
+    },
+    "cases": 8
+  },
+  "conversion": {
+    "script": "convert.py",
+    "sha256": "539ae233c5a2f2632c2c91278e8b3ac72a88fb87d3db9fec7aecfc03b9c7368a",
+    "inputs": [
+      "tiktoken.model",
+      "tokenization_kimi.py",
+      "tokenizer_config.json"
+    ],
+    "command": "python convert.py tiktoken.model tokenization_kimi.py tokenizer_config.json output.json",
+    "payloadSha256": "8b740e96e035a23a0817b00ab50ccb7fa4e7533d75a751ff00d7490d80141ee5",
+    "verification": "Converted JSON bytes exactly match the bundled payload. Recompressing with the original Node gzip level 9 reproduces the bundled gzip SHA-256. Python gzip bytes may differ with the local zlib version."
+  }
+}

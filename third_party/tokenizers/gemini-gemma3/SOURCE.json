@@ -1,0 +1,79 @@
+{
+  "family": "gemini-gemma3",
+  "license": "Apache-2.0",
+  "officialModelMappingSource": "https://github.com/googleapis/python-genai/blob/618f0aa89c7fa61be973fabfa5747fb93a21b1bf/google/genai/_local_tokenizer_loader.py",
+  "upstreamSources": [
+    {
+      "family": "gemini-gemma3",
+      "name": "original.spiece.model",
+      "url": "https://raw.githubusercontent.com/google/gemma_pytorch/014acb7ac4563a5f77c76d7ff98f31b568c16508/tokenizer/gemma3_cleaned_262144_v2.spiece.model",
+      "expected": "1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c",
+      "revision": "014acb7ac4563a5f77c76d7ff98f31b568c16508",
+      "bytes": 4689074,
+      "sha256": "1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c"
+    },
+    {
+      "family": "gemini-gemma3",
+      "name": "upstream.LICENSE",
+      "url": "https://raw.githubusercontent.com/google/gemma_pytorch/014acb7ac4563a5f77c76d7ff98f31b568c16508/LICENSE",
+      "revision": "014acb7ac4563a5f77c76d7ff98f31b568c16508",
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    }
+  ],
+  "assets": [
+    {
+      "file": "tokenizer.json.gz",
+      "bytes": 4914171,
+      "sha256": "1da0bba87057af96eabe193dfa52d85c5bb33d832c686e3064643e3e7dec03f4",
+      "uncompressedBytes": 14298226,
+      "uncompressedSha256": "65708607d04e5fbafacb466521eea069756382165294350487fbddf478a2a058"
+    },
+    {
+      "file": "tokenizer_config.json.gz",
+      "bytes": 82,
+      "sha256": "bac91a15b2b4622a96aed5b72370d2efa3d8ac8912a1b86bfaff58ebae384086",
+      "uncompressedBytes": 74,
+      "uncompressedSha256": "1ac7a4ceec8127c4eebeb720142d925272a94312469424f01335478929135b6d"
+    },
+    {
+      "file": "reference-vectors.json",
+      "bytes": 7691,
+      "sha256": "b049a9b1a9026b6719b059dd562c8d1630b81aabe737a320e7e9bdc372cbc01f"
+    },
+    {
+      "file": "upstream.LICENSE",
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    }
+  ],
+  "referenceEncoding": {
+    "addSpecialTokens": false
+  },
+  "buildDependencies": {
+    "sentencepiece": "0.2.1",
+    "tokenizers": "0.22.2",
+    "transformers": "4.57.3",
+    "protobuf": "6.33.2"
+  },
+  "conversionSteps": [
+    "Parse the pinned original SentencePiece ModelProto; assert BPE, identity normalization, no dummy prefix, no whitespace collapse.",
+    "Retain all original vocabulary IDs. Generate scored BPE merges only from NORMAL pieces using Transformers generate_merges.",
+    "Replace literal ASCII spaces with U+2581. Enable byte fallback. Preserve USER_DEFINED pieces as normalized=true, special=false added tokens; matching after normalization preserves whitespace-only user pieces. Do not recognize CONTROL/UNUSED literals as special tokens.",
+    "Omit postprocessing and BOS/EOS. Compare token IDs with the original SentencePiece runtime for every reference vector and 256 deterministic mixed-script samples.",
+    "Compress JSON with gzip level 9 and deterministic mtime=0."
+  ],
+  "licenseSource": "https://raw.githubusercontent.com/google/gemma_pytorch/014acb7ac4563a5f77c76d7ff98f31b568c16508/LICENSE",
+  "conversionScript": {
+    "file": "convert.py",
+    "sha256": "3a650d72ce0564616012033bfd841d63acce625d516d64fec1a3af590e158002",
+    "dependencies": "buildDependencies",
+    "network": false,
+    "installsPackages": false,
+    "gzip": {
+      "level": 9,
+      "mtime": 0,
+      "osByte": 10
+    }
+  }
+}

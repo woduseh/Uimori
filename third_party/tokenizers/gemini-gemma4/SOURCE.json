@@ -1,0 +1,83 @@
+{
+  "family": "gemini-gemma4",
+  "license": "Apache-2.0",
+  "officialModelMappingSource": "https://github.com/googleapis/python-genai/blob/618f0aa89c7fa61be973fabfa5747fb93a21b1bf/google/genai/_local_tokenizer_loader.py",
+  "upstreamSources": [
+    {
+      "family": "gemini-gemma4",
+      "name": "tokenizer.json",
+      "url": "https://huggingface.co/google/gemma-4-E4B-it/resolve/ee0ef6023621cff504d758262d4e04895a5af4a2/tokenizer.json",
+      "expected": "cc8d3a0ce36466ccc1278bf987df5f71db1719b9ca6b4118264f45cb627bfe0f",
+      "revision": "ee0ef6023621cff504d758262d4e04895a5af4a2",
+      "bytes": 32169626,
+      "sha256": "cc8d3a0ce36466ccc1278bf987df5f71db1719b9ca6b4118264f45cb627bfe0f",
+      "compressed": {
+        "file": "tokenizer.json.gz",
+        "bytes": 5398643,
+        "sha256": "0b34c320fbb79511ad478c1806683ad3ed7cccc2d03d21be24b5189376876d80"
+      }
+    },
+    {
+      "family": "gemini-gemma4",
+      "name": "tokenizer_config.json",
+      "url": "https://huggingface.co/google/gemma-4-E4B-it/resolve/ee0ef6023621cff504d758262d4e04895a5af4a2/tokenizer_config.json",
+      "revision": "ee0ef6023621cff504d758262d4e04895a5af4a2",
+      "bytes": 3082,
+      "sha256": "9f4fec4b1dc6ecddf8f4a92e9caea5971c0e67d81309f3f9066a2bee8c362633",
+      "compressed": {
+        "file": "tokenizer_config.json.gz",
+        "bytes": 914,
+        "sha256": "babbf01d358687f61b9de98ef050477b1124446e3f0d70ff61d72f1559be1653"
+      }
+    },
+    {
+      "family": "gemini-gemma4",
+      "name": "upstream.README.md",
+      "url": "https://huggingface.co/google/gemma-4-E4B-it/resolve/ee0ef6023621cff504d758262d4e04895a5af4a2/README.md",
+      "revision": "ee0ef6023621cff504d758262d4e04895a5af4a2",
+      "bytes": 27956,
+      "sha256": "b21e4f69614ccd77baa2f3797d05311040dee07b989cb9f0d25111aa4b605b2c"
+    }
+  ],
+  "assets": [
+    {
+      "file": "tokenizer.json.gz",
+      "bytes": 5398643,
+      "sha256": "0b34c320fbb79511ad478c1806683ad3ed7cccc2d03d21be24b5189376876d80",
+      "uncompressedBytes": 32169626,
+      "uncompressedSha256": "cc8d3a0ce36466ccc1278bf987df5f71db1719b9ca6b4118264f45cb627bfe0f"
+    },
+    {
+      "file": "tokenizer_config.json.gz",
+      "bytes": 914,
+      "sha256": "babbf01d358687f61b9de98ef050477b1124446e3f0d70ff61d72f1559be1653",
+      "uncompressedBytes": 3082,
+      "uncompressedSha256": "9f4fec4b1dc6ecddf8f4a92e9caea5971c0e67d81309f3f9066a2bee8c362633"
+    },
+    {
+      "file": "reference-vectors.json",
+      "bytes": 7908,
+      "sha256": "663265b7157cb843dba39e8972c3dca72724e454b47e73990a04a8add252157e"
+    },
+    {
+      "file": "upstream.LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    }
+  ],
+  "referenceEncoding": {
+    "addSpecialTokens": false
+  },
+  "buildDependencies": {
+    "sentencepiece": "0.2.1",
+    "tokenizers": "0.22.2",
+    "transformers": "4.57.3",
+    "protobuf": "6.33.2"
+  },
+  "conversionSteps": [
+    "Preserve pinned upstream tokenizer.json and tokenizer_config.json bytes without conversion.",
+    "Compress JSON with gzip level 9.",
+    "Generate independent Python Hugging Face tokenizers reference vectors with add_special_tokens=false."
+  ],
+  "licenseSource": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+}

@@ -1,0 +1,60 @@
+{
+  "profile": "glm-5",
+  "repository": "zai-org/GLM-5.2",
+  "revision": "cf457fa734ab149ffef225f80893eb38c6ff5cdc",
+  "license": "MIT",
+  "sourceFiles": [
+    {
+      "filename": "LICENSE",
+      "url": "https://huggingface.co/zai-org/GLM-5.2/resolve/cf457fa734ab149ffef225f80893eb38c6ff5cdc/LICENSE",
+      "sha256": "f4a18c6ae40b0a8e7d2b7667f52f6e1994e54a46430d2e172b73cb8c9b5eb0d7",
+      "bytes": 1065
+    },
+    {
+      "filename": "tokenizer.json",
+      "url": "https://huggingface.co/zai-org/GLM-5.2/resolve/cf457fa734ab149ffef225f80893eb38c6ff5cdc/tokenizer.json",
+      "sha256": "19e773648cb4e65de8660ea6365e10acca112d42a854923df93db4a6f333a82d",
+      "bytes": 20217442
+    },
+    {
+      "filename": "tokenizer_config.json",
+      "url": "https://huggingface.co/zai-org/GLM-5.2/resolve/cf457fa734ab149ffef225f80893eb38c6ff5cdc/tokenizer_config.json",
+      "sha256": "98b1271574f41abf89427ae2dda030d94dc9478f0edc5a8bd240db213c6fd5fc",
+      "bytes": 761
+    }
+  ],
+  "assets": [
+    {
+      "filename": "tokenizer.json.gz",
+      "sha256": "af445c24e38d64db957da7d83a0141d7efe2f1b408000c509e782a9b67d1bed3",
+      "bytes": 2994078,
+      "uncompressedSha256": "19e773648cb4e65de8660ea6365e10acca112d42a854923df93db4a6f333a82d",
+      "uncompressedBytes": 20217442
+    },
+    {
+      "filename": "tokenizer_config.json.gz",
+      "sha256": "e8fc469d3affe9c779eb7ea18c3a5abd75bf08de0902a0095807effa424959c9",
+      "bytes": 329,
+      "uncompressedSha256": "98b1271574f41abf89427ae2dda030d94dc9478f0edc5a8bd240db213c6fd5fc",
+      "uncompressedBytes": 761
+    }
+  ],
+  "licenseFile": {
+    "filename": "LICENSE",
+    "sha256": "f4a18c6ae40b0a8e7d2b7667f52f6e1994e54a46430d2e172b73cb8c9b5eb0d7",
+    "bytes": 1065
+  },
+  "notes": [
+    "Unmodified upstream JSON bytes compressed with gzip. Text tokenization only; no provider chat envelope or multimodal billing guarantee."
+  ],
+  "parityFixture": {
+    "filename": "PARITY.json",
+    "sha256": "46f06dd89b542fa684c802ad986772c769ca210527774056ce9b54fa3604b53a",
+    "engine": {
+      "name": "huggingface/tokenizers",
+      "version": "0.22.2",
+      "addSpecialTokens": false
+    },
+    "cases": 8
+  }
+}

@@ -12,7 +12,7 @@ import {
   validateProviderPrompt,
   type PromptHistoryMessage,
 } from '../core/risu-prompt.js';
-import { estimateContextTokens } from '../core/context-budget.js';
+import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
 import { CONTEXT_SUMMARY_SEMANTICS } from '../core/context-summary-policy.js';
 import {
   ContextCompactionError,
@@ -205,6 +205,21 @@ afterEach(() => {
 });
 
 describe('input context projection and durable summary calls', () => {
+  test('old and new snapshots measure their frozen tokenizer without reinterpreting history', async () => {
+    const legacy = await snapshot(['안녕하세요. 오늘은 바다를 바라봐요.'.repeat(20)]);
+    const updated = structuredClone(legacy);
+    updated.profile!.models.main!.tokenizer = 'openai-cl100k';
+    const current = seedContextPlan(updated);
+    expect(() => validateContextPlan(legacy)).not.toThrow();
+    expect(() => validateContextPlan(current)).not.toThrow();
+    expect(measureMainContext(current).estimatedInputTokens).toBeGreaterThan(
+      measureMainContext(legacy).estimatedInputTokens
+    );
+    expect(legacy.contextPlan!.budget.estimator).toBe('o200k_base-v1');
+    current.contextPlan!.budget = structuredClone(legacy.contextPlan!.budget);
+    expect(() => validateContextPlan(current)).toThrow('CONTEXT_BUDGET_MISMATCH');
+    expect(fetch).not.toHaveBeenCalled();
+  });
   test('one token-fitting long exchange uses one summary call and preserves a fitting summary beyond the old character cap', async () => {
     const longSource = 'a'.repeat(600_000) + 'SOURCE_END';
     const source = await snapshot([longSource, 'Recent scene one.', 'Recent scene two.']);
@@ -886,19 +901,24 @@ describe('input context projection and durable summary calls', () => {
   });
 
   test('the frozen memory model is preferred and known accounting is accumulated without modifying either model', async () => {
-    const source = await snapshot(oldScenes()),
-      memory = model('memory-model');
+    let source = await snapshot(oldScenes());
+    const memory: ModelSnapshot = { ...model('memory-model'), tokenizer: 'openai-cl100k' };
+    source.profile!.models.main!.tokenizer = 'openai-o200k';
     source.story = {
       lineageHash: 'lineage',
       canonHash: 'canon',
       notes: [],
     };
     source.profile!.contextModel = memory;
+    source = seedContextPlan(source);
     const original = structuredClone(source),
       log = observed();
     vi.mocked(fetch).mockImplementation(async (_url, options) => {
       const wire = JSON.parse(String(options?.body));
       expect(wire.modelId).toBe(memory.modelId);
+      expect(estimateContextTokens(wire, contextBudgetForModel(memory))).toBeLessThanOrEqual(
+        memory.inputTokenLimit! * 0.85
+      );
       return completed('미라는 약속을 기억하고 진실은 미확인 상태예요.', 0.02);
     });
     const result = await prepareInputContext(source, log.hooks);

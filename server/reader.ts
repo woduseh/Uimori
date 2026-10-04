@@ -139,7 +139,8 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     (
       store.db
         .prepare(`SELECT run_id AS runId,input_tokens AS inputTokens,output_tokens AS outputTokens,
-        json_extract(request,'$.requestContext') AS context
+        json_extract(request,'$.requestContext') AS context,
+        json_extract(request,'$.protocol') AS protocol
         FROM attempts WHERE rowid IN (SELECT MAX(rowid) FROM attempts
         WHERE chat_id=? AND run_id IS NOT NULL AND job_id IS NULL AND usage_kind='writing'
         ${scope ? 'AND run_id IN (SELECT value FROM json_each(?))' : ''} GROUP BY run_id)`)
@@ -148,10 +149,15 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
         inputTokens: number | null;
         outputTokens: number | null;
         context: string | null;
+        protocol: string | null;
       }[]
-    ).map(({ runId, context, ...tokens }) => [
+    ).map(({ runId, context, protocol, ...tokens }) => [
       runId,
-      { ...tokens, context: context ? JSON.parse(context) : null } as SceneUsageReceipt,
+      {
+        ...tokens,
+        inputScope: protocol === 'codex-app-server-v1' ? 'turn' : 'request',
+        context: context ? JSON.parse(context) : null,
+      } as SceneUsageReceipt,
     ])
   );
   const runCosts = new Map(

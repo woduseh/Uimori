@@ -251,6 +251,31 @@ describe('offline host context budget', () => {
       })
     ).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
   });
+  test('freezes an explicit local profile while preserving the old missing-metadata policy', () => {
+    const legacy = contextBudgetForModel({ modelId: 'gpt-4', inputTokenLimit: 8192 });
+    const local = contextBudgetForModel({
+      modelId: 'gpt-4',
+      inputTokenLimit: 8192,
+      tokenizer: 'openai-cl100k',
+    });
+    expect(legacy).toEqual(budget());
+    expect(local).toEqual({
+      inputTokenLimit: 8192,
+      estimator: 'model-local-v1',
+      tokenizer: 'openai-cl100k',
+    });
+    // The JSON-quoted sample has 21 cl100k tokens versus 13 o200k tokens.
+    expect(estimateContextTokens('안녕하세요. 오늘은 바다를 바라봐요.', local)).toBe(24);
+    expect(estimateContextTokens('안녕하세요. 오늘은 바다를 바라봐요.', legacy)).toBe(15);
+    for (const invalid of [
+      { ...local, tokenizer: 'auto' },
+      { ...local, tokenizer: 'unknown' },
+      { ...local, estimator: 'o200k_base-v1' },
+      { ...budget(), estimator: 'model-local-v1' },
+      { ...local, extra: true },
+    ])
+      expect(() => validateContextBudget(invalid)).toThrow('INVALID_CONTEXT_BUDGET');
+  });
   test('accepts the inclusive boundary and never mutates oversized payloads or silently imposes an absent policy', () => {
     const body = { current: large, history: ['must remain complete'] },
       before = structuredClone(body);
@@ -330,6 +355,35 @@ describe('offline host context budget', () => {
 });
 
 describe('final wire body budget before credentials and transmission', () => {
+  test.each(variants.slice(0, -1))(
+    '$protocol rejects local-model overflow even when the legacy counter would admit it',
+    async (variant) => {
+      const input = request(variant);
+      input.stable.contract = large;
+      const body = encoded(input, variant).body;
+      input.contextBudget = {
+        inputTokenLimit: estimateContextTokens(body),
+        estimator: 'model-local-v1',
+        tokenizer: 'openai-cl100k',
+      };
+      expect(estimateContextTokens(body, input.contextBudget)).toBeGreaterThan(
+        input.contextBudget.inputTokenLimit
+      );
+      const fetch = vi.fn(),
+        resolveCredential = vi.fn(() => 'synthetic-secret'),
+        onWire = vi.fn();
+      vi.stubGlobal('fetch', fetch);
+      const result = await executeProvider(connection(variant), input, {
+        signal: new AbortController().signal,
+        resolveCredential,
+        onWire,
+      });
+      expect(result.error?.code).toBe('INPUT_CONTEXT_LIMIT_EXCEEDED');
+      expect(resolveCredential).not.toHaveBeenCalled();
+      expect(onWire).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    }
+  );
   test.each(variants)(
     '$protocol rejects an oversized first request with zero credential, journal and fetch calls',
     async (variant) => {
@@ -426,7 +480,15 @@ describe('final wire body budget before credentials and transmission', () => {
     '$protocol binds the budget across native continuation, including adding or removing it',
     (variant) => {
       const input = continued(request(variant), variant);
-      for (const contextBudget of [undefined, { ...budget(), inputTokenLimit: 16384 }])
+      for (const contextBudget of [
+        undefined,
+        { ...budget(), inputTokenLimit: 16384 },
+        {
+          inputTokenLimit: 8192,
+          estimator: 'model-local-v1' as const,
+          tokenizer: 'openai-o200k' as const,
+        },
+      ])
         expect(() => encoded({ ...input, contextBudget }, variant)).toThrow(
           /CONTINUATION_MISMATCH/
         );
@@ -437,6 +499,27 @@ describe('final wire body budget before credentials and transmission', () => {
         /CONTINUATION_MISMATCH/
       );
       expect(() => encoded(input, variant)).not.toThrow();
+      const selected = request(variant);
+      selected.contextBudget = {
+        inputTokenLimit: 8192,
+        estimator: 'model-local-v1',
+        tokenizer: 'openai-cl100k',
+      };
+      const localContinuation = continued(selected, variant);
+      expect(() => encoded(localContinuation, variant)).not.toThrow();
+      expect(() =>
+        encoded(
+          {
+            ...localContinuation,
+            contextBudget: {
+              inputTokenLimit: 8192,
+              estimator: 'model-local-v1',
+              tokenizer: 'openai-o200k',
+            },
+          },
+          variant
+        )
+      ).toThrow(/CONTINUATION_MISMATCH/);
     }
   );
   test('fixture continuation content is counted before credentials and journaling', async () => {

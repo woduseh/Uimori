@@ -406,7 +406,7 @@ export function createAgentCollaboration(
       if (attempt === undefined && result.error?.code === 'INPUT_CONTEXT_LIMIT_EXCEEDED')
         return invalid(
           'ADVISOR_CONTEXT_TOO_LARGE',
-          `The complete advisor input exceeds the selected model's ${request.contextBudget!.inputTokenLimit} token input budget (o200k_base estimate, including request overhead). No additional model call was sent. Reduce the question, draft or selected references; the original text was not truncated.`
+          `The complete advisor input exceeds the selected model's ${request.contextBudget!.inputTokenLimit} token input budget (local estimate, including request overhead). No additional model call was sent. Reduce the question, draft or selected references; the original text was not truncated.`
         );
       if (attempt !== undefined) await hooks.onAttemptFinish(attempt, structuredClone(result));
       for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const) {

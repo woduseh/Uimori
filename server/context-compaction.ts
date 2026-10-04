@@ -142,9 +142,9 @@ function summaryRequest(
 }
 function summaryInputTokens(request: ProviderRequest, target: ModelSnapshot): number {
   if (target.connection.protocol === 'codex-app-server-v1') {
-    return estimateContextTokens(buildCodexDescriptor(request));
+    return estimateContextTokens(buildCodexDescriptor(request), request.contextBudget);
   }
-  return estimateContextTokens(encodeMainPreview(request, target).body);
+  return estimateContextTokens(encodeMainPreview(request, target).body, request.contextBudget);
 }
 function utf16End(text: string, start: number, size: number): number {
   let end = Math.min(text.length, start + size);

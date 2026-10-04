@@ -1,0 +1,60 @@
+{
+  "profile": "claude-legacy",
+  "repository": "anthropics/anthropic-tokenizer-typescript",
+  "revision": "4d75e64d32fe5cd2b5a24d954242f9fab12e8b4b",
+  "license": "MIT",
+  "sourceFiles": [
+    {
+      "filename": "LICENSE",
+      "url": "https://raw.githubusercontent.com/anthropics/anthropic-tokenizer-typescript/4d75e64d32fe5cd2b5a24d954242f9fab12e8b4b/LICENSE",
+      "sha256": "8bf96984ff8bcfae7e48cae76a529e8a25317ba9e02abf7fd3cc64fdf95657a6",
+      "bytes": 1056
+    },
+    {
+      "filename": "claude.json",
+      "url": "https://raw.githubusercontent.com/anthropics/anthropic-tokenizer-typescript/4d75e64d32fe5cd2b5a24d954242f9fab12e8b4b/claude.json",
+      "sha256": "58dad83d85e9cd57be209172449ebfbc395df2b455c11fe8b7e5b661e6f462ad",
+      "bytes": 696615
+    },
+    {
+      "filename": "index.ts",
+      "url": "https://raw.githubusercontent.com/anthropics/anthropic-tokenizer-typescript/4d75e64d32fe5cd2b5a24d954242f9fab12e8b4b/index.ts",
+      "sha256": "3cceb3ecbbc511ba6bb8a8501ea37fd82049111d8cee37d9ee5838dad510d996",
+      "bytes": 408
+    },
+    {
+      "filename": "README.md",
+      "url": "https://raw.githubusercontent.com/anthropics/anthropic-tokenizer-typescript/4d75e64d32fe5cd2b5a24d954242f9fab12e8b4b/README.md",
+      "sha256": "aec70d19fc41582d9726b9133d9d85b2c1a034e3e43217bfc62126208edbd91a",
+      "bytes": 1400
+    }
+  ],
+  "assets": [
+    {
+      "filename": "tiktoken.json.gz",
+      "sha256": "9a2d9b3919877ac20bebd53333b0ea36000e23027f9bc91145abe2071be759a1",
+      "bytes": 312934,
+      "uncompressedSha256": "58dad83d85e9cd57be209172449ebfbc395df2b455c11fe8b7e5b661e6f462ad",
+      "uncompressedBytes": 696615
+    }
+  ],
+  "licenseFile": {
+    "filename": "LICENSE",
+    "sha256": "8bf96984ff8bcfae7e48cae76a529e8a25317ba9e02abf7fd3cc64fdf95657a6",
+    "bytes": 1056
+  },
+  "notes": [
+    "Official legacy countTokens applies text.normalize(\"NFKC\") and permits all special tokens. Upstream declares this tokenizer inaccurate beginning with Claude 3; current Claude requires an explicit approximate label."
+  ],
+  "parityFixture": {
+    "filename": "PARITY.json",
+    "sha256": "6810027e423c25764a2a6f4b70c07ab850390c1decf121ca847f9675f1653765",
+    "engine": {
+      "name": "openai/tiktoken",
+      "version": "0.12.0",
+      "normalization": "NFKC",
+      "specialTokens": "all"
+    },
+    "cases": 8
+  }
+}

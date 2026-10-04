@@ -36,6 +36,7 @@ test.each(['openai-responses-v1', 'anthropic-messages-v1', 'fixture-sse-v1'] as 
       role: 'title',
       modelId: model.modelId,
       generation: { maxOutputTokens: 256, temperature: null },
+      contextBudget: { estimator: 'model-local-v1', tokenizer: 'generic' },
       stable: { contract: input.contract, tools: [] },
       input: { task: input.task, controls: {} },
     });

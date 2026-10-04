@@ -191,6 +191,8 @@ export type ModelPreset = ContentRef &
     connectionId: string;
     modelId: string;
     inputTokenLimit?: number;
+    /** Local token accounting only; omitted presets resolve automatically for each new execution. */
+    tokenizer?: import('./tokenizer-profiles.js').TokenizerProfileId;
     capabilityProtocol?: ProviderProtocol;
     /** Host execution policy; omitted means the existing real-time provider call. */
     executionMode?: ModelExecutionMode;

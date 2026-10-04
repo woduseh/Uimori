@@ -423,7 +423,9 @@ describe('documented JEV input admission limits', () => {
   });
   const costs = (value: JevRequest) => {
     const state = estimateContextTokens(value.state);
-    const questions = Object.values(value.questions).map(estimateContextTokens);
+    const questions = Object.values(value.questions).map((question) =>
+      estimateContextTokens(question)
+    );
     return {
       longest: state + Math.max(...questions),
       total: state + questions.reduce((a, b) => a + b, 0),

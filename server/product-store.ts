@@ -20,6 +20,7 @@ import {
   text,
 } from './request-validation.js';
 import { resolveModelPricing } from '../core/model-pricing.js';
+import { resolveTokenizerProfile } from '../core/tokenizer-profiles.js';
 import { estimateCost } from '../core/pricing-estimate.js';
 import { translationPolicy } from '../core/translation-settings.js';
 import {
@@ -471,6 +472,7 @@ export class ProductStore {
         : {}),
       capabilityProtocol: connection.protocol,
       ...(b.inputTokenLimit !== undefined ? { inputTokenLimit: b.inputTokenLimit } : {}),
+      ...(b.tokenizer !== undefined ? { tokenizer: b.tokenizer } : {}),
       ...(vertex || b.timeoutMs !== undefined
         ? { timeoutMs: b.timeoutMs ?? VERTEX_GEMINI_DEFAULT_TIMEOUT_MS }
         : {}),
@@ -536,6 +538,7 @@ export class ProductStore {
       const pricingSnapshot = resolveModelPricing(model, connection);
       return structuredClone({
         ...model,
+        tokenizer: resolveTokenizerProfile({ ...model, connection }),
         ...(model.evaluationTools
           ? {
               evaluationTools: {

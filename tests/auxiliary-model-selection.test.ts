@@ -104,7 +104,7 @@ test('new auxiliary reservations use current generation models while JEV judgmen
     status: statusBundle.snapshot.profile?.models.status,
   };
   for (const [role, target] of Object.entries(targets)) {
-    expect(target).toEqual({ ...models[role], connection });
+    expect(target).toEqual({ ...models[role], tokenizer: 'gemini-gemma4', connection });
     expect(target).not.toHaveProperty('capabilityRevision');
     expect(validateModelSnapshot(target)).toEqual(target);
   }

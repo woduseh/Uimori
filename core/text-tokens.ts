@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
-import { get_encoding, type Tiktoken } from 'tiktoken';
 import { ProviderContractError } from './provider-errors.js';
+import { localTokenizer, type TokenizerInfo } from './local-tokenizers.js';
+import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
 
-let tokenizer: Tiktoken | undefined;
 // Fixed-size keys avoid retaining sliced request strings. Cache counts, not token ID arrays.
 const TOKEN_PIECE_CACHE_LIMIT = 512;
 const tokenPieces = new Map<string, number>();
@@ -11,10 +11,12 @@ const tokenPieces = new Map<string, number>();
  * 4,096-unit boundaries bound BPE work; this is not a model-specific usage count.
  * Keep this algorithm stable for the persisted o200k_base-text-v1 lore policy.
  */
-export function countTextTokens(text: string): number {
+export function countTextTokens(text: string, profile?: TokenizerProfileId): number {
   if (typeof text !== 'string') throw new ProviderContractError('INVALID_CONTEXT_INPUT');
+  if (profile !== undefined && !isTokenizerProfileId(profile))
+    throw new ProviderContractError('INVALID_CONTEXT_INPUT');
   if (!text.length) return 0;
-  tokenizer ??= get_encoding('o200k_base');
+  const tokenizer = localTokenizer(profile ?? 'openai-o200k');
   let tokens = 0;
   for (let start = 0; start < text.length; ) {
     let end = Math.min(text.length, start + 4096);
@@ -25,11 +27,12 @@ export function countTextTokens(text: string): number {
     )
       end--;
     const piece = text.slice(start, end);
-    const key = createHash('sha256').update(piece, 'utf16le').digest('hex');
+    const key = `${profile ?? 'o200k_base-text-v1'}:${tokenizer.info.effective}:${tokenizer.info.fallback}:${createHash('sha256').update(piece, 'utf16le').digest('hex')}`;
     let count = tokenPieces.get(key);
     if (count === undefined) {
-      // Authored special-token spellings are ordinary text, not tokenizer controls.
-      count = tokenizer.encode(piece, [], []).length;
+      // The legacy/default OpenAI counter treats special-token spellings as ordinary text.
+      // Other profiles follow their published tokenizer's literal encoding rules.
+      count = tokenizer.count(piece);
     } else {
       tokenPieces.delete(key);
     }
@@ -40,6 +43,11 @@ export function countTextTokens(text: string): number {
     start = end;
   }
   return tokens;
+}
+
+/** Metadata for the same local counter used by the request estimate, including fallback. */
+export function tokenizerInfo(profile?: TokenizerProfileId): TokenizerInfo {
+  return localTokenizer(profile ?? 'openai-o200k').info;
 }
 
 /** A literal prefix/suffix for reference context, including any omission marker in its budget. */
