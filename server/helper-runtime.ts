@@ -12,6 +12,7 @@ import {
 } from './helper-app-tools.js';
 import { HELPER_DATA_TOOLS, invokeDataTool } from './helper-data-tools.js';
 import { invokeResourceTool, helperResourceOperation } from './helper-resource-tools.js';
+import { applyHelperResourceMutation } from './helper-resource-undo.js';
 import { readHelperEditor } from './helper-resource-editing.js';
 import { HELPER_SETTINGS_TOOLS, invokeHelperSettingsTool } from './helper-settings-tools.js';
 import type {
@@ -155,7 +156,10 @@ function smallerHelperRead(
         };
       break;
     case 'resource.read':
-      return { name, arguments: { kind: args.kind, id: args.id } };
+      return {
+        name: 'app.call',
+        arguments: { name, arguments: { kind: args.kind, id: args.id } },
+      };
     case 'artifact.read':
       return {
         name: 'app.call',
@@ -168,7 +172,13 @@ function smallerHelperRead(
         },
       };
     case 'chat.lore':
-      return { name, arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 } };
+      return {
+        name: 'app.call',
+        arguments: {
+          name,
+          arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 },
+        },
+      };
     case 'data.search':
     case 'data.read':
       return { name, arguments: { ...args, limit: name === 'data.search' ? 5 : 1000 } };
@@ -1539,21 +1549,19 @@ export class HelperRuntime {
     if (name === 'chat.list') return this.store.chats();
     const resourceOperation = helperResourceOperation(name, args);
     if (resourceOperation) {
-      const invoke = () => invokeResourceTool(this.store, name, args);
-      const result = resourceOperation.readOnly
-        ? invoke()
-        : this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, invoke);
-      if (
-        !resourceOperation.readOnly &&
-        (resourceOperation.target?.kind === 'theme' ||
-          resourceOperation.target?.kind === 'illustration-preset')
-      )
-        this.workspace.event(
-          task.conversationId,
-          task.id,
-          `${resourceOperation.target.kind}.updated`
-        );
-      return result;
+      if (resourceOperation.readOnly) return invokeResourceTool(this.store, name, args);
+      const receiptId = `${task.id}:${operationId}`;
+      return this.workspace.operation(task.id, receiptId, { name, args }, () =>
+        applyHelperResourceMutation(
+          this.store,
+          this.workspace,
+          task,
+          receiptId,
+          name,
+          args,
+          resourceOperation.target
+        )
+      );
     }
     const scope = task.snapshot.scope;
     if (name === 'chat.read') {

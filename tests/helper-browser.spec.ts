@@ -7,12 +7,14 @@ import type {
   HelperEvent,
   HelperMessage,
   HelperScope,
+  HelperResourceEdit,
 } from '../core/helper.js';
+import type { HelperActivityEvent } from '../core/helper-activity.js';
 import type { ResponseStreamPage } from '../core/response-stream.js';
 import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import type { ModelWorkspace } from '../core/product.js';
-import { postFixtureChat } from './fixtures/chat.js';
+import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { navigationAction, openSourceActions, openChatMenu } from './ui-navigation.js';
 import { openHelper } from './ui-navigation.js';
 
@@ -24,6 +26,7 @@ type View = {
   messages: HelperMessage[];
   tasks: HelperTaskView[];
   events: HelperEvent[];
+  lastResourceEdit?: HelperResourceEdit | null;
 };
 
 /** UI projections only. Runtime/SQLite ownership and actual provider streaming have separate tests. */
@@ -32,6 +35,9 @@ async function harness(page: Page, seedCount = 0) {
   const receipts = new Map<string, HelperTaskView>();
   const streams = new Map<string, ResponseStreamPage>();
   const artifacts = new Map<string, HelperArtifactView[]>();
+  const activities = new Map<string, HelperActivityEvent[]>();
+  const undoPosts: { editSeq: number }[] = [];
+  let loseUndo = false;
   const posts: { requestKey: string; text: string; selection?: unknown }[] = [];
   const streamReads = new Map<string, number>();
   const streamCursors = new Map<string, number[]>();
@@ -189,7 +195,9 @@ async function harness(page: Page, seedCount = 0) {
       return route.fulfill({ json: view.conversation });
     }
     const conversationMatch =
-      /^\/api\/helper\/conversations\/([^/]+)(?:\/(view|messages|tasks|events))?$/u.exec(path);
+      /^\/api\/helper\/conversations\/([^/]+)(?:\/(view|messages|tasks|events|undo-resource))?$/u.exec(
+        path
+      );
     if (conversationMatch) {
       const view = views.get(conversationMatch[1]);
       if (!view)
@@ -206,6 +214,21 @@ async function harness(page: Page, seedCount = 0) {
         return route.fulfill({ json: view.conversation });
       }
       if (!kind) return route.fulfill({ json: view.conversation });
+      if (kind === 'undo-resource') {
+        undoPosts.push(body);
+        const edit = view.lastResourceEdit;
+        if (!edit || edit.editSeq !== body.editSeq || !edit.canUndo)
+          return route.fulfill({
+            status: 409,
+            json: { error: '최근 저장 이후 자료가 변경됐어요.' },
+          });
+        view.lastResourceEdit = { ...edit, canUndo: false, undone: true };
+        if (loseUndo) {
+          loseUndo = false;
+          return route.abort('failed');
+        }
+        return route.fulfill({ json: view.lastResourceEdit });
+      }
       if (kind === 'view') {
         viewReads++;
         return route.fulfill({
@@ -217,6 +240,7 @@ async function harness(page: Page, seedCount = 0) {
             })),
             tasks: view.tasks.slice(0, 50),
             eventCursor: view.events.at(-1)?.seq ?? 0,
+            lastResourceEdit: view.lastResourceEdit ?? null,
           },
         });
       }
@@ -276,12 +300,21 @@ async function harness(page: Page, seedCount = 0) {
       const start = before ? view.tasks.findIndex((task) => task.id === before) + 1 : 0;
       return route.fulfill({ json: view.tasks.slice(start, start + 50) });
     }
-    const taskMatch = /^\/api\/helper\/tasks\/([^/]+)(\/cancel)?$/u.exec(path);
+    const taskMatch = /^\/api\/helper\/tasks\/([^/]+)(\/cancel|\/activity)?$/u.exec(path);
     if (taskMatch) {
       const view = [...views.values()].find((view) =>
         view.tasks.some((task) => task.id === taskMatch[1])
       )!;
       const task = view.tasks.find((task) => task.id === taskMatch[1])!;
+      if (taskMatch[2] === '/activity')
+        return route.fulfill({
+          json: {
+            taskId: task.id,
+            status: task.status,
+            events: activities.get(task.id) ?? [],
+            hasEarlier: false,
+          },
+        });
       if (taskMatch[2]) {
         task.status = 'cancelled';
         event(view, task, 'task.cancelled');
@@ -319,6 +352,12 @@ async function harness(page: Page, seedCount = 0) {
     views,
     posts,
     artifacts,
+    undoPosts,
+    loseUndo: () => {
+      loseUndo = true;
+    },
+    activity: (task: HelperTaskView, events: HelperActivityEvent[]) =>
+      activities.set(task.id, events),
     streamReads,
     streams,
     streamCursors,
@@ -711,7 +750,7 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   expect(state.viewReads).toBe(viewsBeforeDiagnostics);
   await expect(panel.locator('.streaming-text')).toHaveText(`실제 공개 조각${continuation}`);
   const firstTaskStatus = panel.locator(`.helper-task[data-task-id="${first.id}"]`);
-  await firstTaskStatus.locator('summary').click();
+  await firstTaskStatus.locator(':scope > details > summary').click();
   first.usage = { ...first.usage, modelCalls: 2, inputTokens: 25 };
   state.emit('attempt.finished');
   state.emit('tool.finished');
@@ -931,7 +970,7 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
   const details = panel.locator(
     `[data-testid="helper-task-activity"][data-task-id="${failed.id}"]`
   );
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await expect(details.getByText('모델 · 이전 시도의 도우미 모델', { exact: true })).toBeVisible();
   await panel.getByLabel('도우미에게 요청').fill('새 요청 작성 중');
   await panel.getByRole('button', { name: '요청 편집', exact: true }).click();
@@ -995,7 +1034,7 @@ test('HELPUI06 saved effects survive response failure and cannot be replayed fro
   const details = panel.locator(
     `[data-testid="helper-task-activity"][data-task-id="${failed.id}"]`
   );
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await expect(details.getByText('저장한 작업 · 다음 요청 옵션')).toBeVisible();
   await expect(details.getByText('UNEXPECTED_EOF', { exact: true })).toBeVisible();
 });
@@ -1217,11 +1256,183 @@ test('DISPLAY helper incomplete saved answers stay collapsed and committed chang
   const task = view.tasks[0];
   state.progress(task, '취소 직전 받은 내용', '취소 직전 받은 내용'.length);
   const row = panel.locator(`.helper-task[data-task-id="${task.id}"]`);
-  await row.getByTestId('helper-task-activity').locator('summary').click();
+  await row.getByTestId('helper-task-activity').locator(':scope > summary').click();
   await row.getByRole('button', { name: '진행 중인 도우미 작업 취소', exact: true }).click();
   await expect(row).toContainText('작업을 취소했어요');
   expect(state.streamReads.get(task.id) ?? 0).toBe(0);
   await row.locator('.partial-response > summary').click();
   await expect(row.locator('.streaming-text')).toHaveText('취소 직전 받은 내용');
   expect(state.streamReads.get(task.id)).toBe(1);
+});
+
+for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
+  test(`HELPUNDO latest edit confirms once and reconciles a lost response ${width}`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const chat = await create(request),
+      state = await harness(page, 1);
+    await page.goto(`/?chat=${chat.id}`);
+    let panel = await open(page);
+    const view = state.current();
+    view.lastResourceEdit = {
+      editSeq: 37,
+      taskId: view.tasks[0].id,
+      kind: 'content',
+      id: 'saved-bot',
+      revision: 2,
+      title: '하린의 인물 설정',
+      canUndo: true,
+    };
+    await page.reload();
+    panel = await open(page);
+    await panel.getByLabel('도우미에게 요청').fill('계속 보관할 다음 요청');
+    const undo = panel.getByRole('button', { name: '마지막 자료 수정 되돌리기' });
+    await undo.click();
+    const dialog = page.getByRole('dialog', { name: '자료 수정 되돌리기', exact: true });
+    await expect(dialog).toContainText('하린의 인물 설정');
+    await dialog.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(undo).toBeFocused();
+    expect(state.undoPosts).toHaveLength(0);
+    await undo.click();
+    if (width === DESKTOP_WIDTH) state.loseUndo();
+    await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(panel.getByRole('region', { name: '도우미 최근 자료 수정' })).toContainText(
+      '수정 되돌림'
+    );
+    expect(state.undoPosts).toEqual([{ editSeq: 37 }]);
+    await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('계속 보관할 다음 요청');
+    await expect(undo).toHaveCount(0);
+    await expect(panel.getByRole('alert')).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath(`helper-undo-${width}.png`), fullPage: true });
+  });
+}
+
+test('HELPUNDO blocks a dirty editor and a changed saved revision without losing its draft', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  const response = await request.post('/api/content', {
+    data: fixtureBotInput(`Undo draft ${randomUUID()}`, 'Original source.'),
+  });
+  expect(response.ok()).toBe(true);
+  const bot = await response.json();
+  const state = await harness(page, 1);
+  const openEditor = async () => {
+    await page.goto('/');
+    await navigationAction(page, '서재');
+    await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(bot.title);
+    await page.getByRole('button', { name: `${bot.title} 상세 보기`, exact: true }).click();
+    await page.getByRole('button', { name: '편집', exact: true }).click();
+    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
+  };
+  const openEditorHelper = async () => {
+    await page
+      .getByRole('region', { name: '자료 상세', exact: true })
+      .getByRole('button', { name: '도우미 열기', exact: true })
+      .click();
+    const panel = page.locator('#helper-panel');
+    await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+    await expect(panel.getByText('대화를 불러오는 중…', { exact: true })).toHaveCount(0);
+    return panel;
+  };
+  await openEditor();
+  await openEditorHelper();
+  const view = state.current();
+  view.lastResourceEdit = {
+    editSeq: 41,
+    taskId: view.tasks[0].id,
+    kind: 'content',
+    id: bot.id,
+    revision: bot.revision,
+    title: bot.title,
+    canUndo: true,
+  };
+  await openEditor();
+  const draft = page.getByLabel('Risu 자료 이름', { exact: true });
+  await draft.fill('지키려는 미저장 입력');
+  const panel = await openEditorHelper();
+  const undo = panel.getByRole('button', { name: '마지막 자료 수정 되돌리기' });
+  await expect(undo).toBeDisabled();
+  await expect(
+    panel.getByText('이 자료의 편집을 저장하거나 취소한 뒤 되돌려 주세요.')
+  ).toBeVisible();
+  expect(state.undoPosts).toHaveLength(0);
+  await expect(draft).toHaveValue('지키려는 미저장 입력');
+  // Restoring the local value only removes the local guard; the server still owns the revision check.
+  await draft.fill(bot.title);
+  await expect(undo).toBeEnabled();
+  await undo.click();
+  view.lastResourceEdit.canUndo = false;
+  view.lastResourceEdit.reason = '최근 수정 이후 자료가 변경되어 되돌릴 수 없어요.';
+  await page
+    .getByRole('dialog', { name: '자료 수정 되돌리기', exact: true })
+    .getByRole('button', { name: '되돌리기', exact: true })
+    .click();
+  await expect(undo).toBeDisabled();
+  await expect(draft).toHaveValue(bot.title);
+  expect(state.undoPosts).toEqual([{ editSeq: 41 }]);
+  expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(bot.title);
+});
+
+test('HELPACTIVITY observed stages retain tool errors and cancellation on desktop and mobile', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  await panel.getByLabel('도우미에게 요청').fill('설정을 읽고 바꿔 주세요');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  const task = state.current().tasks[0];
+  state.activity(task, [
+    { seq: 1, kind: 'attempt.started', attemptId: 'helper', purpose: 'helper' },
+    { seq: 2, kind: 'attempt.finished', attemptId: 'helper', status: 'tool_calls' },
+    { seq: 3, kind: 'tool.finished', name: 'resource.read', denied: false },
+    { seq: 4, kind: 'tool.finished', name: 'data.search', denied: false },
+    {
+      seq: 5,
+      kind: 'tool.finished',
+      name: 'resource.patch',
+      denied: true,
+      error: 'EDITOR_SAVE_REQUIRED',
+    },
+    { seq: 6, kind: 'attempt.started', attemptId: 'context', purpose: 'context' },
+  ]);
+  await expect(panel.getByTestId('helper-activity-status').locator('.activity-label')).toHaveText(
+    '대화 내용 정리 중이에요'
+  );
+  const row = panel.locator(`.helper-task[data-task-id="${task.id}"]`);
+  await row.getByTestId('helper-task-activity').locator(':scope > summary').click();
+  const activity = row.getByTestId('helper-activity-details');
+  await activity.locator(':scope > summary').click();
+  await expect(activity.locator('.helper-activity-stages > li')).toHaveCount(4);
+  await expect(activity.locator('[data-state="running"]')).toContainText('대화 내용 정리');
+  await expect(
+    activity.getByText('resource.patch · EDITOR_SAVE_REQUIRED', { exact: true })
+  ).toBeVisible();
+  await activity.getByText('자료 확인', { exact: true }).click();
+  await expect(activity.locator('code').filter({ hasText: /^resource\.read$/u })).toBeVisible();
+  await expect(activity.locator('code').filter({ hasText: /^data\.search$/u })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('helper-activity-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  await expect(
+    activity.getByText('resource.patch · EDITOR_SAVE_REQUIRED', { exact: true })
+  ).toBeVisible();
+  expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('helper-activity-mobile.png'), fullPage: true });
+  await row.getByRole('button', { name: '진행 중인 도우미 작업 취소', exact: true }).click();
+  await expect(row.getByTestId('helper-task-activity').locator(':scope > summary')).toContainText(
+    '작업을 취소했어요'
+  );
+  await expect(activity.locator('[data-state="running"]')).toHaveCount(0);
+  await expect(
+    activity.getByText('resource.patch · EDITOR_SAVE_REQUIRED', { exact: true })
+  ).toBeVisible();
 });

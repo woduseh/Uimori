@@ -16,6 +16,8 @@ import { RetryFailure } from './RetryFailure.js';
 import { RequestMessage } from './RequestMessage.js';
 import { ActionMenu } from './ActionMenu.js';
 import { ActivityBar } from './ActivityBar.js';
+import { HelperActivityDetails, useHelperActivity } from './HelperActivity.js';
+import { helperActivitySummary } from './helper-activity.js';
 import { Dialog } from './Dialog.js';
 import { elapsedLabel } from './ActivityStatus.js';
 import { TurnStatus, type StatusTone } from './TurnStatus.js';
@@ -25,6 +27,7 @@ import { PartialResponse, ResponseDisplay } from './StreamingResponse.js';
 import type { ResponseDisplayMode } from './presentation-settings.js';
 import { Prose } from './Prose.js';
 import { HelperArtifactCard } from './HelperArtifactCard.js';
+import { HelperResourceUndo } from './HelperResourceUndo.js';
 import { useHelperConversation, type HelperTaskView } from './useHelperConversation.js';
 import { interceptAppHistory } from './app-history.js';
 import {
@@ -120,6 +123,15 @@ const statusLabel: Record<string, string> = {
   cancelled: '작업을 취소했어요',
   interrupted: '작업이 중단됐어요',
 };
+const activityKey = (task: HelperTaskView) =>
+  `helper-task-activity:${task.conversationId}:${task.id}`;
+function savedActivityOpen(task: HelperTaskView) {
+  try {
+    return sessionStorage.getItem(activityKey(task)) === 'open';
+  } catch {
+    return false;
+  }
+}
 
 function HelperResponseActions({ text }: { text: string }) {
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
@@ -262,6 +274,7 @@ export function HelperPanel(props: Props) {
   const [settings, setSettings] = useState(false);
   const [taskHistory, setTaskHistory] = useState<{ taskId?: string } | null>(null);
   const [hiddenActivity, setHiddenActivity] = useState<string[]>([]);
+  const [openTaskActivities, setOpenTaskActivities] = useState<Record<string, boolean>>({});
   const [personas, setPersonas] = useState<
     Record<string, { text: string; revision: number; limits: HelperConversation['limits'] }>
   >({});
@@ -302,6 +315,11 @@ export function HelperPanel(props: Props) {
   const pending = tasks.filter(active);
   const shownPending = pending.filter((task) => !hiddenActivity.includes(task.id));
   const summarized = shownPending.find((task) => task.status === 'running') ?? shownPending[0];
+  const liveActivity = useHelperActivity(summarized?.id, summarized?.status, props.open);
+  const activityLabel =
+    liveActivity.error || !liveActivity.data || !summarized
+      ? undefined
+      : helperActivitySummary({ ...liveActivity.data, status: summarized.status });
   const setError = (message: string) => setErrors((old) => ({ ...old, [scopeKey]: message }));
   useEffect(() => {
     if (!scopeKey) return;
@@ -690,7 +708,11 @@ export function HelperPanel(props: Props) {
     <div className="helper-task" data-task-id={task.id}>
       <TurnStatus
         tone={tone(task)}
-        text={statusLabel[task.status] ?? task.status}
+        text={
+          (task.id === summarized?.id ? activityLabel : undefined) ??
+          statusLabel[task.status] ??
+          task.status
+        }
         elapsed={
           active(task) ? (
             <HelperTaskElapsed task={task} visible={props.open} />
@@ -698,7 +720,8 @@ export function HelperPanel(props: Props) {
             taskElapsed(task, Date.now())
           )
         }
-        storageKey={`helper-task-activity:${task.conversationId}:${task.id}`}
+        storageKey={activityKey(task)}
+        onOpenChange={(open) => setOpenTaskActivities((old) => ({ ...old, [task.id]: open }))}
         dataProps={{ 'data-testid': 'helper-task-activity', 'data-task-id': task.id }}
       >
         <p>모델 · {task.modelTitle}</p>
@@ -708,6 +731,12 @@ export function HelperPanel(props: Props) {
         </p>
         {task.error && <p className="error">{task.error}</p>}
         {task.completedEffects && <p>저장한 작업 · {task.completedEffects.labels.join(' · ')}</p>}
+        <HelperActivityDetails
+          taskId={task.id}
+          status={task.status}
+          visible={props.open && (openTaskActivities[task.id] ?? savedActivityOpen(task))}
+          source={task.id === summarized?.id ? liveActivity : undefined}
+        />
         {active(task) && (
           <div className="form-actions">
             <button type="button" className="secondary" onClick={() => void cancel(task)}>
@@ -1141,6 +1170,12 @@ export function HelperPanel(props: Props) {
                   {task.completedEffects.labels.join(' · ')}
                 </p>
               )}
+              <HelperActivityDetails
+                taskId={task.id}
+                status={task.status}
+                visible={props.open && !!taskHistory}
+                source={task.id === summarized?.id ? liveActivity : undefined}
+              />
             </li>
           ))}
         </ul>
@@ -1157,6 +1192,15 @@ export function HelperPanel(props: Props) {
         )}
       </Dialog>
       <footer className="helper-composer">
+        {conversation && data.current?.lastResourceEdit && (
+          <HelperResourceUndo
+            key={`${conversation.id}:${data.current.lastResourceEdit.editSeq}`}
+            conversationId={conversation.id}
+            edit={data.current.lastResourceEdit}
+            disabled={props.ready === false || tasks.some(active) || busy || !!outbox}
+            refresh={() => data.refresh(conversation)}
+          />
+        )}
         {editor && (
           <div className="helper-editor">
             <span>편집 중 · {editor.title || '이름 없는 자료'}</span>
@@ -1269,7 +1313,7 @@ export function HelperPanel(props: Props) {
             issue={false}
             label={
               summarized
-                ? (statusLabel[summarized.status] ?? summarized.status)
+                ? (activityLabel ?? statusLabel[summarized.status] ?? summarized.status)
                 : `진행 중인 요청 ${pending.length}개`
             }
             elapsed={
